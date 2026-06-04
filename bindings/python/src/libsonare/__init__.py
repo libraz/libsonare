@@ -13,7 +13,11 @@ from ._project import (
     Project,
     Sf2InstrumentConfig,
     Sf2ProgramStatus,
+    SynthModRouting,
+    SynthPatch,
     project_abi_version,
+    synth_preset_names,
+    synth_preset_patch,
 )
 from ._runtime import SonareError
 from .analyzer import (
@@ -375,6 +379,8 @@ __all__ = [
     "SendTiming",
     "Sf2InstrumentConfig",
     "Sf2ProgramStatus",
+    "SynthModRouting",
+    "SynthPatch",
     "SonareError",
     "SpectrumReport",
     "StftResult",
@@ -427,6 +433,8 @@ __all__ = [
     "ebur128_loudness_range",
     "engine_abi_version",
     "project_abi_version",
+    "synth_preset_names",
+    "synth_preset_patch",
     "estimate_tuning",
     "voice_changer_abi_version",
     "fix_frames",

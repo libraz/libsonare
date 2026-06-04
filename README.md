@@ -461,6 +461,10 @@ with libsonare.Project() as project:
     midi_mix = project.bounce_with_builtin_instrument(
         libsonare.BuiltinSynthConfig(waveform="saw")
     )
+    # ...or the full NativeSynth via a named preset (subtractive / FM /
+    # Karplus-Strong / modal / additive / percussion / waveguide piano —
+    # see libsonare.synth_preset_names()):
+    synth_mix = project.bounce_with_synth_instrument("va:saw-lead")
 ```
 
 ### Python CLI

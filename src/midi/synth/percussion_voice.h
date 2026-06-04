@@ -34,6 +34,12 @@ inline constexpr int kMaxPercussionModes = 6;
 
 /// Percussion section of a NativeSynthPatch (used when mode == kPercussion).
 struct PercussionPatchParams {
+  /// GM kit mode: instead of playing this single kit piece on every key,
+  /// note-on resolves the struck note through the GM drum map
+  /// (gm_fallback_drum_patch), so one patch is the whole kit — the
+  /// `drum-kit` preset. The remaining fields are ignored when set.
+  bool gm_kit = false;
+
   // --- membrane/tone layer ---
   int num_modes = 0;
   /// Mode ratios to the base frequency (circular membrane: 1, 1.59, 2.14,

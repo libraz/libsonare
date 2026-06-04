@@ -197,6 +197,8 @@ _ALIAS_COVERAGE = {
     "project_bounce_with_builtin_instruments": ("bounce_with_builtin_instrument",),
     # Plural SF2-instrument bounce -> singular facade method (one or many).
     "project_bounce_with_sf2_instruments": ("bounce_with_sf2_instrument",),
+    # Plural NativeSynth-instrument bounce -> singular facade method (one or many).
+    "project_bounce_with_synth_instruments": ("bounce_with_synth_instrument",),
     # SoundFont ops: the C symbols spell "soundfont" as one word while the
     # Node/WASM camelCase methods (`loadSoundFont`) fold to `load_sound_font`.
     # An idiomatic spelling difference shared by both JS facades (Python matches

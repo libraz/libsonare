@@ -97,6 +97,7 @@ import type {
   StftDbResult,
   StftResult,
   StripRef,
+  SynthPatch,
   SynthWaveform,
   TimbreResult,
 } from './types.js';
@@ -706,6 +707,21 @@ export class RealtimeEngine {
   }
 
   /**
+   * Bind the patch-driven NativeSynth to a realtime MIDI destination. `patch`
+   * is a {@link SynthPatch} or a preset-name string (`'saw-lead'` /
+   * `'va:saw-lead'`; see {@link synthPresetNames}), resolving exactly like
+   * {@link Project.bounceWithSynthInstrument}. Live note/CC commands and
+   * scheduled MIDI clips routed to that destination render through the synth.
+   * Unknown preset names throw.
+   */
+  setSynthInstrument(
+    patch: SynthPatch | string = {},
+    destinationId = (typeof patch === 'object' ? patch.destinationId : undefined) ?? 0,
+  ): void {
+    this.native.setSynthInstrument(destinationId, patch);
+  }
+
+  /**
    * Load (parse) SoundFont 2 bytes into the engine so SF2 instruments can be
    * bound with {@link setSf2Instrument}. Replaces any previously loaded
    * SoundFont (already-bound SF2 instruments keep the SoundFont they were
@@ -900,6 +916,25 @@ export function voiceChangerAbiVersion(): number {
  */
 export function projectAbiVersion(): number {
   return addon.projectAbiVersion();
+}
+
+/**
+ * NativeSynth preset catalog names (`'sine'`, `'saw-lead'`, `'e-piano'`,
+ * `'drum-kit'`, ...). Use these to discover valid {@link SynthPatch} preset
+ * names instead of hardcoding magic strings.
+ */
+export function synthPresetNames(): string[] {
+  return addon.synthPresetNames();
+}
+
+/**
+ * Fetch a named catalog preset as a {@link SynthPatch} (the preset name plus
+ * the wrapper-section values), so hosts can inspect a preset and tweak fields
+ * before binding it. A `"va:"` routing prefix is accepted; unknown names
+ * throw.
+ */
+export function synthPresetPatch(name: string): SynthPatch {
+  return addon.synthPresetPatch(name);
 }
 
 /**
@@ -1548,6 +1583,37 @@ export class Project {
     const config: BuiltinInstrumentConfig =
       typeof instrument === 'string' ? { waveform: instrument } : instrument;
     return this.native.bounceWithBuiltinInstruments([config], options);
+  }
+
+  /**
+   * Like {@link bounce}, but renders MIDI tracks routed to a destination
+   * through the patch-driven NativeSynth — the full synthesizer (subtractive /
+   * FM / Karplus-Strong / modal / additive / percussion /
+   * extended-waveguide-piano engines plus the realism layer). Each entry of
+   * `instruments` binds a {@link SynthPatch} (or a preset-name string such as
+   * `'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}) to a
+   * `destinationId` (default `0`). An empty array renders silence. Unknown
+   * preset names throw. Deterministic for a fixed project + options + patch.
+   *
+   * Argument order is instrument-first to match the WASM and Python bindings.
+   */
+  bounceWithSynthInstruments(
+    instruments: (SynthPatch | string)[] = [],
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithSynthInstruments(instruments, options);
+  }
+
+  /**
+   * Convenience wrapper over {@link bounceWithSynthInstruments} for the common
+   * single-instrument case. Pass a {@link SynthPatch} or a bare preset name
+   * (`'saw-lead'` / `'va:saw-lead'`).
+   */
+  bounceWithSynthInstrument(
+    instrument: SynthPatch | string = {},
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithSynthInstruments([instrument], options);
   }
 
   /**
@@ -2259,6 +2325,15 @@ export type {
   StreamingPlatform,
   StreamQuantizeConfig,
   StripRef,
+  SynthBodyType,
+  SynthEngineMode,
+  SynthFilterModel,
+  SynthFilterOutput,
+  SynthModDestination,
+  SynthModRouting,
+  SynthModSource,
+  SynthOscWaveform,
+  SynthPatch,
   SynthWaveform,
   TimbreFrame,
   TimbreResult,

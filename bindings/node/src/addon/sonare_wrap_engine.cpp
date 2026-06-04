@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "engine/common.h"
+#include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node::engine;
@@ -98,6 +99,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
           InstanceMethod<&RealtimeEngineWrap::ClearParameters>("clearParameters"),
           InstanceMethod<&RealtimeEngineWrap::SetBuiltinInstrument>("setBuiltinInstrument"),
+          InstanceMethod<&RealtimeEngineWrap::SetSynthInstrument>("setSynthInstrument"),
           InstanceMethod<&RealtimeEngineWrap::LoadSoundFont>("loadSoundFont"),
           InstanceMethod<&RealtimeEngineWrap::SetSf2Instrument>("setSf2Instrument"),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiInstrument>("clearMidiInstrument"),
@@ -447,6 +449,25 @@ Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& i
     if (!ReadEngineBuiltinSynthConfig(env, obj, &config)) return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_builtin_instrument(engine_, destination_id, &config));
+  return env.Undefined();
+}
+
+// Binds the patch-driven NativeSynth to a realtime MIDI destination:
+//   setSynthInstrument(destinationId, patch)
+// where `patch` is a SynthPatch object or a preset-name string ("saw-lead" /
+// "va:saw-lead"), resolving exactly like Project.bounceWithSynthInstruments.
+Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  SonareSynthPatch patch{};
+  if (info.Length() > 1) {
+    if (!sonare_node::ReadSynthPatch(env, info[1], &patch)) {
+      return env.Undefined();  // exception already pending
+    }
+  } else {
+    patch.struct_version = 1;
+  }
+  ThrowIfError(env, sonare_engine_set_synth_instrument(engine_, destination_id, &patch));
   return env.Undefined();
 }
 

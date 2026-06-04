@@ -396,9 +396,13 @@ python = [
 # default, idiomatic representation difference — not behavioural drift.
 # set_sf2_instrument.destination_id: identical situation for the SF2 player
 # entry (same 0 default, same config-object vs keyword-arg representation).
+# set_synth_instrument.destination_id: identical situation for the NativeSynth
+# entry (same 0 default; Node/WASM read patch.destinationId when the patch is
+# an object — preset-name strings carry no routing — Python keyword arg).
 params = [
   "set_builtin_instrument.destination_id",
   "set_sf2_instrument.destination_id",
+  "set_synth_instrument.destination_id",
 ]
 
 # ---------------------------------------------------------------------------

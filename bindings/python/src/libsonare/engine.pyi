@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ._project import BuiltinSynthConfig, Sf2InstrumentConfig
+from ._project import BuiltinSynthConfig, Sf2InstrumentConfig, SynthPatch
 from .types import (
     AutomationPoint,
     EngineBounceOptions,
@@ -105,6 +105,9 @@ class RealtimeEngine:
     def push_midi_panic(self, render_frame: int = -1) -> None: ...
     def set_builtin_instrument(
         self, config: BuiltinSynthConfig | None = None, destination_id: int = 0
+    ) -> None: ...
+    def set_synth_instrument(
+        self, patch: SynthPatch | str | None = None, destination_id: int = 0
     ) -> None: ...
     def load_soundfont(self, data: bytes | bytearray | memoryview) -> None: ...
     def set_sf2_instrument(

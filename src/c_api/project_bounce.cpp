@@ -4,8 +4,10 @@
 #include <functional>
 #include <set>
 
+#include "c_api/synth_patch_common.h"
 #include "midi/builtin_synth.h"
 #include "midi/synth/sf2_player.h"
+#include "midi/synth/synth_presets.h"
 #if defined(SONARE_WITH_MIXING)
 #include "c_api/mixing_internal.h"
 #include "engine/mixing_runtime.h"
@@ -513,6 +515,70 @@ SonareError sonare_project_bounce_with_builtin_instruments(
   for (size_t i = 0; i < instrument_count; ++i) {
     owned.push_back(
         std::make_unique<sonare::midi::BuiltinSynth>(synth_config_from_c(instruments[i].config)));
+    hosted.push_back({instruments[i].destination_id, owned.back().get()});
+  }
+  return do_project_bounce(project, options, hosted, out_interleaved, out_len);
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, options, instruments, instrument_count, out_interleaved,
+                              out_len);
+#endif
+}
+
+const char* sonare_synth_preset_names(void) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  static const std::string kNames = [] {
+    std::string names;
+    for (size_t i = 0; i < sonare::midi::synth::synth_preset_count(); ++i) {
+      if (!names.empty()) names += '\n';
+      names += sonare::midi::synth::synth_preset_at(i)->name;
+    }
+    return names;
+  }();
+  return kNames.c_str();
+#else
+  return "";
+#endif
+}
+
+SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
+  if (!name || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::find_synth_preset(name);
+  if (preset == nullptr) {
+    set_last_error("unknown synth preset name");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  sonare_c_detail::synth_patch_to_c(*preset, out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(name, out);
+#endif
+}
+
+SonareError sonare_project_bounce_with_synth_instruments(
+    SonareProject* project, const SonareProjectBounceOptions* options,
+    const SonareSynthInstrumentBinding* instruments, size_t instrument_count,
+    float** out_interleaved, size_t* out_len) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
+  if (out_interleaved) *out_interleaved = nullptr;
+  if (out_len) *out_len = 0;
+  if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  std::vector<std::unique_ptr<sonare::midi::synth::NativeSynth>> owned;
+  std::vector<HostedInstrument> hosted;
+  owned.reserve(instrument_count);
+  hosted.reserve(instrument_count);
+  for (size_t i = 0; i < instrument_count; ++i) {
+    sonare::midi::synth::NativeSynthConfig cfg;
+    const char* error = nullptr;
+    if (!sonare_c_detail::synth_config_from_patch_c(instruments[i].patch, &cfg, &error)) {
+      set_last_error(error != nullptr ? error : "invalid synth patch");
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    owned.push_back(std::make_unique<sonare::midi::synth::NativeSynth>(cfg));
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);

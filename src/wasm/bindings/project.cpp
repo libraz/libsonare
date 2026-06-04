@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include "common.h"
+#include "synth_patch_val.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 // ============================================================================
@@ -576,6 +577,47 @@ struct ProjectWasm {
       sonare_free_floats(interleaved);
       throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                     "failed to bounce project with built-in instrument");
+    }
+    std::vector<float> samples(interleaved, interleaved + len);
+    sonare_free_floats(interleaved);
+    return vectorToFloat32Array(samples);
+  }
+
+  // Compiles + renders the project, routing MIDI tracks through the
+  // patch-driven NativeSynth (the full synthesizer; see the SynthPatch TS
+  // type). @p bindings is a SynthPatch object, a preset-name string
+  // ("saw-lead" / "va:saw-lead"), or an array of either (each entry may carry
+  // a destinationId). An empty array / null / undefined produces zero
+  // bindings. Unknown preset names throw.
+  val bounceWithSynthInstrument(val bindings, val options) {
+    std::vector<SonareSynthInstrumentBinding> synths;
+    if (!bindings.isUndefined() && !bindings.isNull()) {
+      auto bindingFromVal = [](val desc) {
+        SonareSynthInstrumentBinding binding{};
+        if (desc.typeOf().as<std::string>() == "object" && hasProperty(desc, "destinationId")) {
+          binding.destination_id = desc["destinationId"].as<uint32_t>();
+        }
+        binding.patch = sonare_wasm_synth::synthPatchFromVal(desc);
+        return binding;
+      };
+      if (val::global("Array").call<bool>("isArray", bindings)) {
+        const size_t count = bindings["length"].as<size_t>();
+        synths.reserve(count);
+        for (size_t i = 0; i < count; ++i) synths.push_back(bindingFromVal(bindings[i]));
+      } else {
+        synths.push_back(bindingFromVal(bindings));
+      }
+    }
+    SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
+    float* interleaved = nullptr;
+    size_t len = 0;
+    const SonareError err = sonare_project_bounce_with_synth_instruments(
+        project_.get(), &opts, synths.empty() ? nullptr : synths.data(), synths.size(),
+        &interleaved, &len);
+    if (err != SONARE_OK) {
+      sonare_free_floats(interleaved);
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to bounce project with synth instrument");
     }
     std::vector<float> samples(interleaved, interleaved + len);
     sonare_free_floats(interleaved);
@@ -1401,6 +1443,41 @@ val js_midi_route_events(val events, val config) {
 }
 #endif  // SONARE_WITH_ARRANGEMENT
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+// NativeSynth preset catalog ('\n'-joined program-lifetime string from the C
+// ABI) split into a JS string[].
+val js_synth_preset_names() {
+  val out = val::array();
+  const char* joined = sonare_synth_preset_names();
+  if (joined == nullptr || joined[0] == '\0') return out;
+  std::string names(joined);
+  size_t start = 0;
+  while (start <= names.size()) {
+    const size_t end = names.find('\n', start);
+    if (end == std::string::npos) {
+      out.call<void>("push", names.substr(start));
+      break;
+    }
+    out.call<void>("push", names.substr(start, end - start));
+    start = end + 1;
+  }
+  return out;
+}
+
+// Fetches a named catalog preset as a SynthPatch object (the preset name plus
+// its wrapper-section values). A "va:" routing prefix is accepted; unknown
+// names throw.
+val js_synth_preset_patch(const std::string& name) {
+  const std::string bare = name.rfind("va:", 0) == 0 ? name.substr(3) : name;
+  SonareSynthPatch patch{};
+  if (sonare_synth_preset_patch(bare.c_str(), &patch) != SONARE_OK) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown synth preset name: '" + name + "'");
+  }
+  return sonare_wasm_synth::synthPatchToVal(patch);
+}
+#endif  // SONARE_WITH_ARRANGEMENT
+
 void registerProjectBindings() {
 #if defined(SONARE_WITH_ARRANGEMENT)
   // Headless DAW project. fromJson is a static factory returning a
@@ -1438,6 +1515,7 @@ void registerProjectBindings() {
       .function("compile", &ProjectWasm::compile)
       .function("bounce", &ProjectWasm::bounce)
       .function("bounceWithBuiltinInstrument", &ProjectWasm::bounceWithBuiltinInstrument)
+      .function("bounceWithSynthInstrument", &ProjectWasm::bounceWithSynthInstrument)
       .function("loadSoundFont", &ProjectWasm::loadSoundFont)
       .function("clearSoundFont", &ProjectWasm::clearSoundFont)
       .function("soundFontPresetCount", &ProjectWasm::soundFontPresetCount)
@@ -1490,6 +1568,8 @@ void registerProjectBindings() {
   function("midiCcToBreakpoint", &js_midi_cc_to_breakpoint);
   function("midiParamToCc", &js_midi_param_to_cc);
   function("midiRouteEvents", &js_midi_route_events);
+  function("synthPresetNames", &js_synth_preset_names);
+  function("synthPresetPatch", &js_synth_preset_patch);
 #endif
 }
 

@@ -1,11 +1,14 @@
 #include <napi.h>
 
+#include <string>
 #include <vector>
 
 #include "sonare_c.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_project.h"
+#include "sonare_wrap_synth_patch.h"
+#include "sonare_wrap_utils.h"
 
 namespace {
 
@@ -281,6 +284,49 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
   return result;
 }
 
+// NativeSynth preset catalog: '\n'-joined program-lifetime string from the C
+// ABI, split into a JS string[] like masteringInsertNames.
+Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const char* joined = sonare_synth_preset_names();
+  Napi::Array out = Napi::Array::New(env);
+  if (joined == nullptr || joined[0] == '\0') return out;
+  std::string names(joined);
+  uint32_t index = 0;
+  size_t start = 0;
+  while (start <= names.size()) {
+    const size_t end = names.find('\n', start);
+    if (end == std::string::npos) {
+      out.Set(index++, Napi::String::New(env, names.substr(start)));
+      break;
+    }
+    out.Set(index++, Napi::String::New(env, names.substr(start, end - start)));
+    start = end + 1;
+  }
+  return out;
+}
+
+// Fetches a named catalog preset as a SynthPatch object (the preset name plus
+// its wrapper-section values), so hosts can inspect and tweak before binding.
+// A "va:" routing prefix is accepted; unknown names throw.
+Napi::Value SynthPresetPatch(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "synthPresetPatch expects a preset name string")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  if (name.rfind("va:", 0) == 0) name = name.substr(3);
+  SonareSynthPatch patch{};
+  const SonareError err = sonare_synth_preset_patch(name.c_str(), &patch);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, sonare_node::ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return sonare_node::SynthPatchToObject(env, patch);
+}
+
 }  // namespace
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -292,6 +338,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, VoiceChangerAbiVersion, "voiceChangerAbiVersion"));
   exports.Set("projectAbiVersion",
               Napi::Function::New(env, ProjectAbiVersion, "projectAbiVersion"));
+  exports.Set("synthPresetNames", Napi::Function::New(env, SynthPresetNames, "synthPresetNames"));
+  exports.Set("synthPresetPatch", Napi::Function::New(env, SynthPresetPatch, "synthPresetPatch"));
   exports.Set("midiGmInstrumentName",
               Napi::Function::New(env, MidiGmInstrumentName, "midiGmInstrumentName"));
   exports.Set("midiGmProgramForName",

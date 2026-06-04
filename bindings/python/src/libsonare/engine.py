@@ -7,7 +7,12 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ._project import BuiltinSynthConfig, Sf2InstrumentConfig
+from ._project import (
+    BuiltinSynthConfig,
+    Sf2InstrumentConfig,
+    SynthPatch,
+    _synth_patch_arg,
+)
 from ._runtime import (
     AutomationCurve,
     AutomationPoint,
@@ -617,6 +622,29 @@ class RealtimeEngine:
         _check(
             lib.sonare_engine_set_builtin_instrument(
                 self._require_handle(), int(destination_id), ctypes.byref(cfg)
+            )
+        )
+
+    def set_synth_instrument(
+        self, patch: SynthPatch | str | None = None, destination_id: int = 0
+    ) -> None:
+        """Bind the patch-driven NativeSynth to ``destination_id`` (default 0).
+
+        ``patch`` is a :class:`SynthPatch`, a preset name string
+        (``"saw-lead"`` or ``"va:saw-lead"``; see :func:`synth_preset_names`),
+        or ``None`` for the default subtractive patch. The patch resolves
+        exactly like :meth:`Project.bounce_with_synth_instrument`. After
+        binding, live MIDI input and scheduled MIDI clips routed to that
+        destination render through the synth. Raises :class:`SonareError` for
+        an unknown preset name.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_synth_instrument"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        c_patch = _synth_patch_arg(patch)._to_c()
+        _check(
+            lib.sonare_engine_set_synth_instrument(
+                self._require_handle(), int(destination_id), ctypes.byref(c_patch)
             )
         )
 

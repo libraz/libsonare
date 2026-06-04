@@ -105,6 +105,121 @@ export interface Sf2ProgramStatus {
   presetName: string;
 }
 
+/** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
+export type SynthEngineMode =
+  | 'default'
+  | 'subtractive'
+  | 'fm'
+  | 'karplus-strong'
+  | 'modal'
+  | 'additive'
+  | 'percussion'
+  | 'piano';
+
+/** NativeSynth oscillator waveform (`'default'` keeps the base patch's). */
+export type SynthOscWaveform = 'default' | 'sine' | 'saw' | 'square' | 'triangle' | 'noise';
+
+/** NativeSynth filter model — the character core (`'default'` keeps the base patch's). */
+export type SynthFilterModel = 'default' | 'svf' | 'moog-ladder' | 'diode-ladder' | 'sallen-key';
+
+/** NativeSynth filter output (SVF only; `'default'` keeps the base patch's). */
+export type SynthFilterOutput = 'default' | 'lowpass' | 'bandpass' | 'highpass';
+
+/** NativeSynth body/formant resonance voicing (`'default'` keeps the base patch's). */
+export type SynthBodyType = 'default' | 'none' | 'guitar' | 'violin' | 'wood-tube';
+
+/** {@link SynthPatch} mod-matrix source. */
+export type SynthModSource =
+  | 'none'
+  | 'amp-env'
+  | 'filter-env'
+  | 'lfo1'
+  | 'lfo2'
+  | 'velocity'
+  | 'key-track'
+  | 'mod-wheel'
+  | 'random';
+
+/** {@link SynthPatch} mod-matrix destination. */
+export type SynthModDestination =
+  | 'none'
+  | 'pitch-cents'
+  | 'cutoff-cents'
+  | 'amp-gain'
+  | 'pan-units';
+
+/** One {@link SynthPatch} mod-matrix routing (name or C ordinal per field). */
+export interface SynthModRouting {
+  source: SynthModSource | number;
+  destination: SynthModDestination | number;
+  /** Destination units at full source deflection. */
+  depth: number;
+}
+
+/**
+ * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstrument}
+ * and {@link RealtimeEngine.setSynthInstrument}.
+ *
+ * The patch starts from a BASE — the named `preset` (see
+ * {@link synthPresetNames}; a `"va:"` routing prefix is accepted) or, when
+ * `preset` is omitted, the default subtractive patch. Every numeric field then
+ * uses "0 / omit => keep the base value" (non-zero values override, clamped to
+ * their audible ranges) and the enum fields reserve `'default'` as keep. A
+ * non-empty `modRoutings` REPLACES the base mod matrix.
+ *
+ * Mode-specific deep parameters (FM operator stacks, modal mode tables,
+ * drawbar registrations, kit pieces, piano strings) travel inside the named
+ * presets; the patch exposes the wrapper sections every engine shares.
+ */
+export interface SynthPatch {
+  /** MIDI destination id this patch renders (default 0; see {@link Project.setTrackMidiDestination}). */
+  destinationId?: number;
+  /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
+  preset?: string;
+  engineMode?: SynthEngineMode | number;
+  waveform?: SynthOscWaveform | number;
+  /** Detuned-stack width [1, 7]. */
+  unison?: number;
+  detuneCents?: number;
+  /** Per-voice slow pitch drift depth (cents). */
+  driftCents?: number;
+  /** Pre-filter drive [0, 1]. */
+  drive?: number;
+  filterModel?: SynthFilterModel | number;
+  filterOutput?: SynthFilterOutput | number;
+  cutoffHz?: number;
+  resonanceQ?: number;
+  /** Cutoff keyboard tracking [0, 1]. */
+  keyTrack?: number;
+  envToCutoffCents?: number;
+  velToCutoffCents?: number;
+  ampAttackMs?: number;
+  ampDecayMs?: number;
+  ampSustain?: number;
+  ampReleaseMs?: number;
+  filterAttackMs?: number;
+  filterDecayMs?: number;
+  filterSustain?: number;
+  filterReleaseMs?: number;
+  lfoRateHz?: number;
+  lfoToPitchCents?: number;
+  lfo2RateHz?: number;
+  glideMs?: number;
+  body?: SynthBodyType | number;
+  /** Body resonance mix [0, 1]. */
+  bodyMix?: number;
+  /** Seeded per-voice pan scatter [0, 1]. */
+  stereoSpread?: number;
+  /** Mod matrix (at most 8 routings; REPLACES the base matrix when non-empty). */
+  modRoutings?: SynthModRouting[];
+  /** Master output gain (linear). */
+  gain?: number;
+  /** Max simultaneous voices [1, 64]. */
+  polyphony?: number;
+  /** Gain-neutral bus saturation [0, 1]. */
+  busDrive?: number;
+}
+
 /** Clip fade-curve for {@link Project.setClipFade}. */
 export type ProjectFadeCurve =
   | 'linear'
@@ -373,6 +488,10 @@ interface WasmProject {
     bindings: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> | undefined,
     options: ProjectBounceOptions,
   ) => Float32Array;
+  bounceWithSynthInstrument: (
+    bindings: SynthPatch | string | ReadonlyArray<SynthPatch | string> | undefined,
+    options: ProjectBounceOptions,
+  ) => Float32Array;
   loadSoundFont: (data: Uint8Array) => void;
   clearSoundFont: () => void;
   soundFontPresetCount: () => number;
@@ -433,6 +552,8 @@ interface ProjectModule {
     fromJson: (json: string) => WasmProject;
   };
   projectAbiVersion: () => number;
+  synthPresetNames: () => string[];
+  synthPresetPatch: (name: string) => SynthPatch;
   midiGmInstrumentName: (program: number) => string | null;
   midiGmProgramForName: (name: string) => number;
   midiGmFamilyName: (family: number) => string | null;
@@ -569,6 +690,25 @@ function assertProjectMidiEvents(
  */
 export function projectAbiVersion(): number {
   return projectModule().projectAbiVersion();
+}
+
+/**
+ * NativeSynth preset catalog names (`'sine'`, `'saw-lead'`, `'e-piano'`,
+ * `'drum-kit'`, ...). Use these to discover valid {@link SynthPatch} preset
+ * names instead of hardcoding magic strings.
+ */
+export function synthPresetNames(): string[] {
+  return projectModule().synthPresetNames();
+}
+
+/**
+ * Fetch a named catalog preset as a {@link SynthPatch} (the preset name plus
+ * the wrapper-section values), so hosts can inspect a preset and tweak fields
+ * before binding it. A `"va:"` routing prefix is accepted; unknown names
+ * throw.
+ */
+export function synthPresetPatch(name: string): SynthPatch {
+  return projectModule().synthPresetPatch(name);
 }
 
 /**
@@ -1041,6 +1181,24 @@ export class Project {
     options: ProjectBounceOptions = {},
   ): Float32Array {
     return this.native.bounceWithBuiltinInstrument(instrument, options);
+  }
+
+  /**
+   * Compile + render the project offline, routing MIDI tracks through the
+   * patch-driven NativeSynth — the full synthesizer (subtractive / FM /
+   * Karplus-Strong / modal / additive / percussion / extended-waveguide-piano
+   * engines plus the realism layer). Pass a {@link SynthPatch}, a preset-name
+   * string (`'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}), or
+   * an array of either; each entry may carry a `destinationId` (default 0).
+   * An explicitly empty array (or `undefined` / `null`) produces zero
+   * bindings. Unknown preset names throw. Deterministic for a fixed project +
+   * options + patch.
+   */
+  bounceWithSynthInstrument(
+    instrument: SynthPatch | string | ReadonlyArray<SynthPatch | string> = {},
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithSynthInstrument(instrument, options);
   }
 
   /**

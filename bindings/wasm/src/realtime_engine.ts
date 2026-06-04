@@ -1,4 +1,5 @@
 import { getSonareModule } from './module_state';
+import type { SynthPatch } from './project';
 import type {
   WasmEngineAutomationPoint,
   WasmEngineBounceOptions,
@@ -77,6 +78,7 @@ export function engineCapabilities(): EngineCapabilities {
 // shape so the wrapper can reach them without a stale type error.
 interface WasmRealtimeEngineExt {
   setBuiltinInstrument: (destinationId: number, config: object) => void;
+  setSynthInstrument: (destinationId: number, patch: object | string) => void;
   loadSoundFont: (data: Uint8Array) => void;
   setSf2Instrument: (destinationId: number, config: object) => void;
   clearMidiInstrument: (destinationId: number) => void;
@@ -196,6 +198,21 @@ export class RealtimeEngine {
     destinationId = config.destinationId ?? 0,
   ): void {
     this.nativeExt().setBuiltinInstrument(destinationId, config);
+  }
+
+  /**
+   * Bind the patch-driven NativeSynth to a realtime MIDI destination. `patch`
+   * is a {@link SynthPatch} or a preset-name string (`'saw-lead'` /
+   * `'va:saw-lead'`; see {@link synthPresetNames}), resolving exactly like
+   * {@link Project.bounceWithSynthInstrument}. Live note/CC commands and
+   * scheduled MIDI clips routed to that destination render through the synth.
+   * Unknown preset names throw.
+   */
+  setSynthInstrument(
+    patch: SynthPatch | string = {},
+    destinationId = (typeof patch === 'object' ? patch.destinationId : undefined) ?? 0,
+  ): void {
+    this.nativeExt().setSynthInstrument(destinationId, patch);
   }
 
   /**

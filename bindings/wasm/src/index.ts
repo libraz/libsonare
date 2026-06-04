@@ -232,8 +232,23 @@ export type {
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SourceBackend,
+  SynthBodyType,
+  SynthEngineMode,
+  SynthFilterModel,
+  SynthFilterOutput,
+  SynthModDestination,
+  SynthModRouting,
+  SynthModSource,
+  SynthOscWaveform,
+  SynthPatch,
 } from './project';
-export { EXPECTED_PROJECT_ABI_VERSION, Project, projectAbiVersion } from './project';
+export {
+  EXPECTED_PROJECT_ABI_VERSION,
+  Project,
+  projectAbiVersion,
+  synthPresetNames,
+  synthPresetPatch,
+} from './project';
 export type {
   AcousticOptions,
   AcousticResult,

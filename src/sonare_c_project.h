@@ -766,6 +766,48 @@ SonareError sonare_project_bounce_with_builtin_instruments(
     float** out_interleaved, size_t* out_len);
 
 // ============================================================================
+// NativeSynth instrument (patch-driven synthesizer; see SonareSynthPatch)
+// ============================================================================
+
+/// @brief Returns the NativeSynth preset catalog names separated by '\n'
+///        ("sine", "saw-lead", "e-piano", "drum-kit", ...). Use these to
+///        discover valid @ref SonareSynthPatch preset names instead of
+///        hardcoding magic strings.
+/// @details Pointer is owned by libsonare and remains valid for the program
+///          lifetime; the caller must NOT free it (mirrors
+///          @ref sonare_mastering_insert_names).
+const char* sonare_synth_preset_names(void);
+
+/// @brief Fills @p out with the named catalog preset: the preset name plus the
+///        wrapper-section values (oscillator / filter / envelopes / LFO /
+///        realism / bus), so hosts can inspect a preset and tweak fields
+///        before binding it. Passing the result back unchanged selects the
+///        exact preset. Unknown names return SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
+
+/// @brief Binds a NativeSynth patch to a MIDI destination id (the value set by
+///        @ref sonare_project_set_track_midi_destination; default 0).
+typedef struct {
+  uint32_t destination_id;
+  SonareSynthPatch patch;
+} SonareSynthInstrumentBinding;
+
+/// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to
+///        the given destinations through the patch-driven NativeSynth (the
+///        full synthesizer: subtractive / FM / Karplus-Strong / modal /
+///        additive / percussion / extended-waveguide piano engines plus the
+///        realism layer). Each binding resolves its @ref SonareSynthPatch via
+///        the preset catalog + field overrides; an invalid struct_version or
+///        unknown preset name fails with SONARE_ERROR_INVALID_PARAMETER.
+///        When @p options->total_frames <= 0 the render length is auto-derived
+///        from the arrangement (musical end + the patch's release tail).
+///        Deterministic for a fixed project + options + patch.
+SonareError sonare_project_bounce_with_synth_instruments(
+    SonareProject* project, const SonareProjectBounceOptions* options,
+    const SonareSynthInstrumentBinding* instruments, size_t instrument_count,
+    float** out_interleaved, size_t* out_len);
+
+// ============================================================================
 // SoundFont (SF2) instrument: host-supplied sample data, GS-compatible player
 // ============================================================================
 

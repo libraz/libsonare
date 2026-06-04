@@ -484,6 +484,19 @@ typedef struct {
 SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
                                                  uint32_t destination_id,
                                                  const SonareEngineBuiltinSynthConfig* config);
+
+/// @brief Binds/replaces the patch-driven NativeSynth on a realtime MIDI
+///        destination (the full synthesizer: subtractive / FM / Karplus-Strong
+///        / modal / additive / percussion / waveguide-piano engines). The
+///        patch resolves exactly like the project bounce surface
+///        (@ref SonareSynthPatch: preset catalog base + field overrides); an
+///        invalid struct_version or unknown preset name fails with
+///        SONARE_ERROR_INVALID_PARAMETER. Control-thread API; the engine owns
+///        the synth. Live MIDI input and scheduled MIDI clips routed to
+///        @p destination_id render through it.
+SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
+                                               uint32_t destination_id,
+                                               const SonareSynthPatch* patch);
 /// @brief Loads (parses) SF2 bytes into the realtime engine so SoundFont
 ///        instruments can be bound to destinations with
 ///        @ref sonare_engine_set_sf2_instrument. Control-thread API; replaces

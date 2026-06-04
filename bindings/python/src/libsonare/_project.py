@@ -55,6 +55,9 @@ from ._runtime import (
     SonareSf2InstrumentBinding,
     SonareSf2InstrumentConfig,
     SonareSf2ProgramStatus,
+    SonareSynthInstrumentBinding,
+    SonareSynthModRouting,
+    SonareSynthPatch,
     _check,
     _curve_value,
     _from_c_float_array,
@@ -382,6 +385,287 @@ def _synth_waveform_value(waveform: str | int) -> int:
     if key not in _SYNTH_WAVEFORM_NAMES:
         raise ValueError(f"unknown synth waveform: {waveform}")
     return _SYNTH_WAVEFORM_NAMES[key]
+
+
+# NativeSynth patch enum names (mirror the SonareSynth* enums in
+# sonare_c_types.h; 0 / "default" keeps the base patch's value).
+_SYNTH_ENGINE_MODES = {
+    "default": 0,
+    "subtractive": 1,
+    "fm": 2,
+    "karplus-strong": 3,
+    "modal": 4,
+    "additive": 5,
+    "percussion": 6,
+    "piano": 7,
+}
+_SYNTH_OSC_WAVEFORMS = {
+    "default": 0,
+    "sine": 1,
+    "saw": 2,
+    "square": 3,
+    "triangle": 4,
+    "noise": 5,
+}
+_SYNTH_FILTER_MODELS = {
+    "default": 0,
+    "svf": 1,
+    "moog-ladder": 2,
+    "diode-ladder": 3,
+    "sallen-key": 4,
+}
+_SYNTH_FILTER_OUTPUTS = {
+    "default": 0,
+    "lowpass": 1,
+    "bandpass": 2,
+    "highpass": 3,
+}
+_SYNTH_BODY_TYPES = {
+    "default": 0,
+    "none": 1,
+    "guitar": 2,
+    "violin": 3,
+    "wood-tube": 4,
+}
+_SYNTH_MOD_SOURCES = {
+    "none": 0,
+    "amp-env": 1,
+    "filter-env": 2,
+    "lfo1": 3,
+    "lfo2": 4,
+    "velocity": 5,
+    "key-track": 6,
+    "mod-wheel": 7,
+    "random": 8,
+}
+_SYNTH_MOD_DESTINATIONS = {
+    "none": 0,
+    "pitch-cents": 1,
+    "cutoff-cents": 2,
+    "amp-gain": 3,
+    "pan-units": 4,
+}
+
+
+def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
+    if isinstance(value, int):
+        return value
+    key = value.lower()
+    if key not in names:
+        raise ValueError(f"unknown {what}: {value!r} (expected one of {sorted(names)})")
+    return names[key]
+
+
+def _synth_enum_name(value: int, names: Mapping[str, int]) -> str | int:
+    for name, ordinal in names.items():
+        if ordinal == value:
+            return name
+    return value
+
+
+def _strip_va_prefix(name: str) -> str:
+    return name[3:] if name.startswith("va:") else name
+
+
+@dataclass(frozen=True)
+class SynthModRouting:
+    """One NativeSynth mod-matrix routing (see :class:`SynthPatch`).
+
+    ``source`` / ``destination`` accept the ordinal or a name (sources:
+    ``"amp-env"`` / ``"filter-env"`` / ``"lfo1"`` / ``"lfo2"`` / ``"velocity"``
+    / ``"key-track"`` / ``"mod-wheel"`` / ``"random"``; destinations:
+    ``"pitch-cents"`` / ``"cutoff-cents"`` / ``"amp-gain"`` / ``"pan-units"``).
+    ``depth`` is in destination units at full source deflection.
+    """
+
+    source: str | int
+    destination: str | int
+    depth: float
+
+
+@dataclass(frozen=True)
+class SynthPatch:
+    """Versioned NativeSynth patch (see
+    :meth:`Project.bounce_with_synth_instrument` and
+    :meth:`RealtimeEngine.set_synth_instrument`).
+
+    The patch starts from a BASE — the named ``preset`` (see
+    :func:`synth_preset_names`; a ``"va:"`` routing prefix is accepted) or,
+    when ``preset`` is empty, the default subtractive patch. Every numeric
+    field then uses "0 => keep the base value" and non-zero values override
+    (clamped to their audible ranges); enum fields accept the C ordinal or a
+    name with ``"default"`` = keep. A non-empty ``mod_routings`` REPLACES the
+    base mod matrix.
+
+    Mode-specific deep parameters (FM operator stacks, modal mode tables,
+    drawbar registrations, kit pieces, piano strings) travel inside the named
+    presets; the struct exposes the wrapper sections every engine shares.
+    """
+
+    preset: str = ""
+    engine_mode: str | int = 0
+    waveform: str | int = 0
+    unison: int = 0
+    detune_cents: float = 0.0
+    drift_cents: float = 0.0
+    drive: float = 0.0
+    filter_model: str | int = 0
+    filter_output: str | int = 0
+    cutoff_hz: float = 0.0
+    resonance_q: float = 0.0
+    key_track: float = 0.0
+    env_to_cutoff_cents: float = 0.0
+    vel_to_cutoff_cents: float = 0.0
+    amp_attack_ms: float = 0.0
+    amp_decay_ms: float = 0.0
+    amp_sustain: float = 0.0
+    amp_release_ms: float = 0.0
+    filter_attack_ms: float = 0.0
+    filter_decay_ms: float = 0.0
+    filter_sustain: float = 0.0
+    filter_release_ms: float = 0.0
+    lfo_rate_hz: float = 0.0
+    lfo_to_pitch_cents: float = 0.0
+    lfo2_rate_hz: float = 0.0
+    glide_ms: float = 0.0
+    body: str | int = 0
+    body_mix: float = 0.0
+    stereo_spread: float = 0.0
+    mod_routings: tuple[SynthModRouting, ...] = ()
+    gain: float = 0.0
+    polyphony: int = 0
+    bus_drive: float = 0.0
+
+    def _to_c(self) -> SonareSynthPatch:
+        c = SonareSynthPatch()
+        c.struct_version = 1
+        c.preset = _strip_va_prefix(self.preset).encode("utf-8")[:31]
+        c.engine_mode = _synth_enum_value(self.engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
+        c.waveform = _synth_enum_value(self.waveform, _SYNTH_OSC_WAVEFORMS, "oscillator waveform")
+        c.unison = int(self.unison)
+        c.detune_cents = float(self.detune_cents)
+        c.drift_cents = float(self.drift_cents)
+        c.drive = float(self.drive)
+        c.filter_model = _synth_enum_value(self.filter_model, _SYNTH_FILTER_MODELS, "filter model")
+        c.filter_output = _synth_enum_value(
+            self.filter_output, _SYNTH_FILTER_OUTPUTS, "filter output"
+        )
+        c.cutoff_hz = float(self.cutoff_hz)
+        c.resonance_q = float(self.resonance_q)
+        c.key_track = float(self.key_track)
+        c.env_to_cutoff_cents = float(self.env_to_cutoff_cents)
+        c.vel_to_cutoff_cents = float(self.vel_to_cutoff_cents)
+        c.amp_attack_ms = float(self.amp_attack_ms)
+        c.amp_decay_ms = float(self.amp_decay_ms)
+        c.amp_sustain = float(self.amp_sustain)
+        c.amp_release_ms = float(self.amp_release_ms)
+        c.filter_attack_ms = float(self.filter_attack_ms)
+        c.filter_decay_ms = float(self.filter_decay_ms)
+        c.filter_sustain = float(self.filter_sustain)
+        c.filter_release_ms = float(self.filter_release_ms)
+        c.lfo_rate_hz = float(self.lfo_rate_hz)
+        c.lfo_to_pitch_cents = float(self.lfo_to_pitch_cents)
+        c.lfo2_rate_hz = float(self.lfo2_rate_hz)
+        c.glide_ms = float(self.glide_ms)
+        c.body = _synth_enum_value(self.body, _SYNTH_BODY_TYPES, "body type")
+        c.body_mix = float(self.body_mix)
+        c.stereo_spread = float(self.stereo_spread)
+        routings = list(self.mod_routings)
+        if len(routings) > 8:
+            raise ValueError("a synth patch supports at most 8 mod routings")
+        c.num_mod_routings = len(routings)
+        for i, routing in enumerate(routings):
+            c.mod_routings[i] = SonareSynthModRouting(
+                source=_synth_enum_value(routing.source, _SYNTH_MOD_SOURCES, "mod source"),
+                destination=_synth_enum_value(
+                    routing.destination, _SYNTH_MOD_DESTINATIONS, "mod destination"
+                ),
+                depth=float(routing.depth),
+            )
+        c.gain = float(self.gain)
+        c.polyphony = int(self.polyphony)
+        c.bus_drive = float(self.bus_drive)
+        return c
+
+    @classmethod
+    def _from_c(cls, c: SonareSynthPatch) -> SynthPatch:
+        routings = tuple(
+            SynthModRouting(
+                source=_synth_enum_name(int(r.source), _SYNTH_MOD_SOURCES),
+                destination=_synth_enum_name(int(r.destination), _SYNTH_MOD_DESTINATIONS),
+                depth=float(r.depth),
+            )
+            for r in c.mod_routings[: int(c.num_mod_routings)]
+        )
+        return cls(
+            preset=c.preset.decode("utf-8", errors="replace"),
+            engine_mode=_synth_enum_name(int(c.engine_mode), _SYNTH_ENGINE_MODES),
+            waveform=_synth_enum_name(int(c.waveform), _SYNTH_OSC_WAVEFORMS),
+            unison=int(c.unison),
+            detune_cents=float(c.detune_cents),
+            drift_cents=float(c.drift_cents),
+            drive=float(c.drive),
+            filter_model=_synth_enum_name(int(c.filter_model), _SYNTH_FILTER_MODELS),
+            filter_output=_synth_enum_name(int(c.filter_output), _SYNTH_FILTER_OUTPUTS),
+            cutoff_hz=float(c.cutoff_hz),
+            resonance_q=float(c.resonance_q),
+            key_track=float(c.key_track),
+            env_to_cutoff_cents=float(c.env_to_cutoff_cents),
+            vel_to_cutoff_cents=float(c.vel_to_cutoff_cents),
+            amp_attack_ms=float(c.amp_attack_ms),
+            amp_decay_ms=float(c.amp_decay_ms),
+            amp_sustain=float(c.amp_sustain),
+            amp_release_ms=float(c.amp_release_ms),
+            filter_attack_ms=float(c.filter_attack_ms),
+            filter_decay_ms=float(c.filter_decay_ms),
+            filter_sustain=float(c.filter_sustain),
+            filter_release_ms=float(c.filter_release_ms),
+            lfo_rate_hz=float(c.lfo_rate_hz),
+            lfo_to_pitch_cents=float(c.lfo_to_pitch_cents),
+            lfo2_rate_hz=float(c.lfo2_rate_hz),
+            glide_ms=float(c.glide_ms),
+            body=_synth_enum_name(int(c.body), _SYNTH_BODY_TYPES),
+            body_mix=float(c.body_mix),
+            stereo_spread=float(c.stereo_spread),
+            mod_routings=routings,
+            gain=float(c.gain),
+            polyphony=int(c.polyphony),
+            bus_drive=float(c.bus_drive),
+        )
+
+
+def _synth_patch_arg(instrument: SynthPatch | str | None) -> SynthPatch:
+    if instrument is None:
+        return SynthPatch()
+    if isinstance(instrument, str):
+        return SynthPatch(preset=instrument)
+    return instrument
+
+
+def synth_preset_names() -> list[str]:
+    """NativeSynth preset catalog names (``"sine"``, ``"saw-lead"``,
+    ``"e-piano"``, ``"drum-kit"``, ...). Use these to discover valid
+    :class:`SynthPatch` preset names instead of hardcoding magic strings."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_synth_preset_names"):
+        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+    raw = lib.sonare_synth_preset_names()
+    if not raw:
+        return []
+    return [name for name in raw.decode("utf-8").split("\n") if name]
+
+
+def synth_preset_patch(name: str) -> SynthPatch:
+    """Fetch the named catalog preset as a :class:`SynthPatch` (the preset name
+    plus the wrapper-section values), so hosts can inspect a preset and tweak
+    fields before binding it. A ``"va:"`` routing prefix is accepted. Raises
+    :class:`SonareError` for unknown names."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_synth_preset_patch"):
+        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+    out = SonareSynthPatch()
+    _check(lib.sonare_synth_preset_patch(_strip_va_prefix(name).encode("utf-8"), ctypes.byref(out)))
+    return SynthPatch._from_c(out)
 
 
 class ExternalInstrument(Protocol):
@@ -2009,6 +2293,87 @@ class Project:
         out_len = ctypes.c_size_t()
         _check(
             lib.sonare_project_bounce_with_builtin_instruments(
+                self._require_handle(),
+                ctypes.byref(options),
+                c_bindings if count else None,
+                ctypes.c_size_t(count),
+                ctypes.byref(out),
+                ctypes.byref(out_len),
+            )
+        )
+        try:
+            interleaved = _from_c_float_array(out, int(out_len.value))
+        finally:
+            # Free unconditionally: the C ABI returns a non-null sentinel buffer
+            # even when out_len == 0, so a `> 0` guard would leak it.
+            if out:
+                lib.sonare_free_floats(out)
+        channels = num_channels if num_channels > 0 else 2
+        if channels > 0 and interleaved.size % channels == 0:
+            return interleaved.reshape(-1, channels)
+        return interleaved.reshape(-1, 1)
+
+    def bounce_with_synth_instrument(
+        self,
+        instrument: SynthPatch | str | None = None,
+        *,
+        destination_id: int = 0,
+        instruments: Sequence[tuple[int, SynthPatch | str]] | None = None,
+        total_frames: int = 0,
+        block_size: int = 0,
+        num_channels: int = 0,
+        sample_rate: int = 0,
+        instrument_latency_samples: int = 0,
+    ) -> np.ndarray:
+        """Compile + render the project, driving MIDI tracks through the NativeSynth.
+
+        Like :meth:`bounce_with_builtin_instrument`, but each bound destination
+        renders through the patch-driven NativeSynth — the full synthesizer
+        (subtractive / FM / Karplus-Strong / modal / additive / percussion /
+        extended-waveguide-piano engines plus the realism layer).
+
+        Args:
+            instrument: Patch bound to ``destination_id`` (default 0). Pass a
+                :class:`SynthPatch`, a preset name string (``"saw-lead"`` or
+                ``"va:saw-lead"``; see :func:`synth_preset_names`), or ``None``
+                for the default subtractive patch. Ignored when ``instruments``
+                is given.
+            destination_id: Destination id for ``instrument`` (matches
+                :meth:`set_track_midi_destination`; default 0).
+            instruments: Optional explicit list of ``(destination_id, patch)``
+                bindings, overriding ``instrument`` / ``destination_id``.
+            total_frames: Render length in frames; <= 0 auto-derives the length
+                from the arrangement (musical end + the patch's release tail).
+            block_size / num_channels / sample_rate / instrument_latency_samples:
+                As :meth:`bounce` (0 takes native defaults).
+
+        Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
+        fixed project + options + patch. Raises :class:`SonareError` for an
+        unknown preset name.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_bounce_with_synth_instruments"):
+            raise RuntimeError("libsonare was built without the NativeSynth bounce ABI")
+        if instruments is None:
+            bindings = [(int(destination_id), _synth_patch_arg(instrument))]
+        else:
+            bindings = [(int(dst), _synth_patch_arg(patch)) for dst, patch in instruments]
+        count = len(bindings)
+        c_bindings = (SonareSynthInstrumentBinding * count)()
+        for i, (dst, patch) in enumerate(bindings):
+            c_bindings[i].destination_id = dst
+            c_bindings[i].patch = patch._to_c()
+        options = SonareProjectBounceOptions(
+            total_frames=int(total_frames),
+            block_size=int(block_size),
+            num_channels=int(num_channels),
+            sample_rate=int(sample_rate),
+            instrument_latency_samples=int(instrument_latency_samples),
+        )
+        out = ctypes.POINTER(ctypes.c_float)()
+        out_len = ctypes.c_size_t()
+        _check(
+            lib.sonare_project_bounce_with_synth_instruments(
                 self._require_handle(),
                 ctypes.byref(options),
                 c_bindings if count else None,

@@ -3,8 +3,10 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "c_api/synth_patch_common.h"
 #include "common.h"
 #include "midi/midi_fx.h"
+#include "synth_patch_val.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "midi/synth/sf2_player.h"
 #endif
@@ -419,6 +421,28 @@ class RealtimeEngineWasm {
 #else
     (void)destination_id;
     (void)config;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  // Binds the patch-driven NativeSynth (the full synthesizer) on a realtime
+  // MIDI destination. patch is a SynthPatch object or a preset-name string
+  // ("saw-lead" / "va:saw-lead"), resolving exactly like
+  // Project.bounceWithSynthInstrument. Unknown preset names throw.
+  void setSynthInstrument(uint32_t destination_id, val patch) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    const SonareSynthPatch c_patch = sonare_wasm_synth::synthPatchFromVal(patch);
+    sonare::midi::synth::NativeSynthConfig cfg;
+    const char* error = nullptr;
+    if (!sonare_c_detail::synth_config_from_patch_c(c_patch, &cfg, &error)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    error != nullptr ? error : "invalid synth patch");
+    }
+    bindInstrument(destination_id, std::make_unique<sonare::midi::synth::NativeSynth>(cfg));
+#else
+    (void)destination_id;
+    (void)patch;
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1398,6 +1422,7 @@ void registerRealtimeEngineBindings() {
       .function("setParameter", &RealtimeEngineWasm::setParameter)
       .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
       .function("setBuiltinInstrument", &RealtimeEngineWasm::setBuiltinInstrument)
+      .function("setSynthInstrument", &RealtimeEngineWasm::setSynthInstrument)
       .function("loadSoundFont", &RealtimeEngineWasm::loadSoundFont)
       .function("setSf2Instrument", &RealtimeEngineWasm::setSf2Instrument)
       .function("clearMidiInstrument", &RealtimeEngineWasm::clearMidiInstrument)

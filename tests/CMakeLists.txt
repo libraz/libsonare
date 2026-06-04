@@ -364,6 +364,7 @@ if(BUILD_ARRANGEMENT)
     bindings/binding_project_editing_test.cpp
     bindings/binding_project_midi_test.cpp
     bindings/binding_project_soundfont_test.cpp
+    bindings/binding_synth_patch_test.cpp
   )
   # The headless-project C ABI sources are compiled into the test binary so the
   # parity test drives the real C surface, like the engine/voice-changer TUs.

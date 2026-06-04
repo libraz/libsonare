@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/builtin_synth.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/voice_random.h"
 #include "midi/ump.h"
 
@@ -389,8 +390,10 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   }
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
-  tail_samples_ =
-      DahdsrEnvelope::release_tail_samples(sample_rate_, config_.patch.amp_env.release_ms);
+  const bool gm_kit =
+      config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit;
+  tail_samples_ = DahdsrEnvelope::release_tail_samples(
+      sample_rate_, gm_kit ? gm_fallback_max_release_ms() : config_.patch.amp_env.release_ms);
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
   dc_r_ = 1.0f - static_cast<float>(2.0 * 3.14159265358979 * 8.0 / sample_rate_);
   dc_x1_ = {};
@@ -433,9 +436,17 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
                                                     kMaxPianoStrings * piano_string_capacity_,
                         piano_string_capacity_);
   }
+  // GM kit mode: resolve the struck note through the drum map instead of
+  // playing the single configured piece (static patches — safe to keep in the
+  // voice for its whole life; every kit piece is kPercussion, so the KS/piano
+  // slabs are never needed).
+  const NativeSynthPatch* patch = &config_.patch;
+  if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
+    patch = &gm_fallback_drum_patch(note);
+  }
   // Portamento: glide from the channel's previous note when enabled.
-  const float glide_from = config_.patch.glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;
-  voice->start(config_.patch, sample_rate_, velocity, voice_index, glide_from);
+  const float glide_from = patch->glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;
+  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from);
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
 

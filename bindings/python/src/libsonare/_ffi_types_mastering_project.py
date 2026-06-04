@@ -368,6 +368,76 @@ class SonareSf2InstrumentBinding(ctypes.Structure):
 # SonareBuiltinSynthConfig / SonareEngineBuiltinSynthConfig).
 
 
+class SonareSynthModRouting(ctypes.Structure):
+    """Maps to SonareSynthModRouting in sonare_c_types.h."""
+
+    _fields_ = [
+        ("source", ctypes.c_int),
+        ("destination", ctypes.c_int),
+        ("depth", ctypes.c_float),
+    ]
+
+
+SONARE_SYNTH_PATCH_MOD_ROUTINGS = 8
+SONARE_SYNTH_PRESET_NAME_MAX = 32
+
+
+class SonareSynthPatch(ctypes.Structure):
+    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 1).
+
+    Versioned NativeSynth patch: the base is the named ``preset`` (or the
+    default subtractive patch when empty) and every non-zero field overrides
+    the base ("0 => keep"). Enum fields reserve 0 as "keep".
+    """
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int),
+        ("preset", ctypes.c_char * SONARE_SYNTH_PRESET_NAME_MAX),
+        ("engine_mode", ctypes.c_int),
+        ("waveform", ctypes.c_int),
+        ("unison", ctypes.c_int),
+        ("detune_cents", ctypes.c_float),
+        ("drift_cents", ctypes.c_float),
+        ("drive", ctypes.c_float),
+        ("filter_model", ctypes.c_int),
+        ("filter_output", ctypes.c_int),
+        ("cutoff_hz", ctypes.c_float),
+        ("resonance_q", ctypes.c_float),
+        ("key_track", ctypes.c_float),
+        ("env_to_cutoff_cents", ctypes.c_float),
+        ("vel_to_cutoff_cents", ctypes.c_float),
+        ("amp_attack_ms", ctypes.c_float),
+        ("amp_decay_ms", ctypes.c_float),
+        ("amp_sustain", ctypes.c_float),
+        ("amp_release_ms", ctypes.c_float),
+        ("filter_attack_ms", ctypes.c_float),
+        ("filter_decay_ms", ctypes.c_float),
+        ("filter_sustain", ctypes.c_float),
+        ("filter_release_ms", ctypes.c_float),
+        ("lfo_rate_hz", ctypes.c_float),
+        ("lfo_to_pitch_cents", ctypes.c_float),
+        ("lfo2_rate_hz", ctypes.c_float),
+        ("glide_ms", ctypes.c_float),
+        ("body", ctypes.c_int),
+        ("body_mix", ctypes.c_float),
+        ("stereo_spread", ctypes.c_float),
+        ("num_mod_routings", ctypes.c_int),
+        ("mod_routings", SonareSynthModRouting * SONARE_SYNTH_PATCH_MOD_ROUTINGS),
+        ("gain", ctypes.c_float),
+        ("polyphony", ctypes.c_int),
+        ("bus_drive", ctypes.c_float),
+    ]
+
+
+class SonareSynthInstrumentBinding(ctypes.Structure):
+    """Maps to SonareSynthInstrumentBinding in sonare_c_project.h."""
+
+    _fields_ = [
+        ("destination_id", ctypes.c_uint32),
+        ("patch", SonareSynthPatch),
+    ]
+
+
 # External-instrument host shim callbacks (sonare_c_project.h
 # SonareInstrumentCallbacks). All run synchronously on the bounce's calling
 # thread, so the ctypes callbacks hold the GIL for their duration.

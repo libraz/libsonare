@@ -92,6 +92,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value LastBounceCompileResult(const Napi::CallbackInfo& info);
   Napi::Value Bounce(const Napi::CallbackInfo& info);
   Napi::Value BounceWithBuiltinInstruments(const Napi::CallbackInfo& info);
+  Napi::Value BounceWithSynthInstruments(const Napi::CallbackInfo& info);
 
   // -- SoundFont (SF2) instrument --
   void LoadSoundFont(const Napi::CallbackInfo& info);

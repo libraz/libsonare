@@ -4,6 +4,30 @@
 
 ### New features
 
+- Exposed the patch-driven NativeSynth on every binding surface:
+  - New versioned `SonareSynthPatch` C struct: the base is a named catalog
+    preset (or the default subtractive patch) and every non-zero field
+    overrides the wrapper sections all engines share (oscillator / filter
+    model / envelopes / LFOs / glide / body / stereo spread / mod matrix /
+    bus). The engine-mode field selects any of the seven synthesis engines.
+  - Named preset catalog (`sonare_synth_preset_names` /
+    `sonare_synth_preset_patch`): sine, saw-lead, square-lead, sub-bass,
+    warm-pad, e-piano, bell, brass, pluck, electric-guitar, harp, marimba,
+    glass, organ, drum-kit and acoustic-piano — data-only patches over the
+    voiced GM fallback bank. The `drum-kit` preset plays the full GM drum map
+    (note-on resolves the struck key's kit piece).
+  - Offline bounce (`sonare_project_bounce_with_synth_instruments`) and a
+    realtime engine entry (`sonare_engine_set_synth_instrument`) alongside
+    the existing built-in/SF2 instruments — live MIDI input plays NativeSynth
+    patches.
+  - Python (`SynthPatch` / `synth_preset_names()` /
+    `Project.bounce_with_synth_instrument` /
+    `RealtimeEngine.set_synth_instrument`), Node and WASM
+    (`SynthPatch` / `synthPresetNames()` /
+    `project.bounceWithSynthInstrument(s)` / `engine.setSynthInstrument`)
+    facades accept a preset-name string (a `"va:"` routing prefix is
+    accepted) or a patch object with shared enum names.
+
 - Added the NativeSynth realism-polish layer:
   - Body/formant resonance on every voice (the cheap end of commuted
     synthesis): unit-peak-normalized low-Q bandpass mode banks voiced as a

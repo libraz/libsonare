@@ -69,6 +69,26 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(ctypes.c_size_t),
             ]
 
+        if hasattr(lib, "sonare_synth_preset_names"):
+            lib.sonare_synth_preset_names.restype = ctypes.c_char_p
+            lib.sonare_synth_preset_names.argtypes = []
+
+            lib.sonare_synth_preset_patch.restype = ctypes.c_int32
+            lib.sonare_synth_preset_patch.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(SonareSynthPatch),
+            ]
+
+            lib.sonare_project_bounce_with_synth_instruments.restype = ctypes.c_int32
+            lib.sonare_project_bounce_with_synth_instruments.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareProjectBounceOptions),
+                ctypes.POINTER(SonareSynthInstrumentBinding),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+
         if hasattr(lib, "sonare_project_load_soundfont"):
             lib.sonare_project_load_soundfont.restype = ctypes.c_int32
             lib.sonare_project_load_soundfont.argtypes = [

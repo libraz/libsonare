@@ -14,6 +14,7 @@
 #include "metering/normalize.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
+#include "c_api/synth_patch_common.h"
 #include "midi/builtin_synth.h"
 #include "midi/midi_fx.h"
 #include "midi/synth/sf2_player.h"
@@ -947,6 +948,27 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 #else
   SONARE_C_TRY
   auto synth = std::make_unique<sonare::midi::BuiltinSynth>(engine_synth_config_from_c(*config));
+  return bind_engine_instrument(engine, destination_id, std::move(synth));
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
+                                               uint32_t destination_id,
+                                               const SonareSynthPatch* patch) {
+  if (!engine || !patch) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+  if (!sonare_c_detail::synth_config_from_patch_c(*patch, &cfg, &error)) {
+    set_last_error(error != nullptr ? error : "invalid synth patch");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
   return bind_engine_instrument(engine, destination_id, std::move(synth));
   SONARE_C_CATCH
 #endif

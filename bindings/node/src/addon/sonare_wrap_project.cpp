@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "sonare_wrap_options.h"
+#include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
 
 namespace {
@@ -223,6 +224,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::Bounce>("bounce"),
           InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>(
               "bounceWithBuiltinInstruments"),
+          InstanceMethod<&ProjectWrap::BounceWithSynthInstruments>("bounceWithSynthInstruments"),
           InstanceMethod<&ProjectWrap::LoadSoundFont>("loadSoundFont"),
           InstanceMethod<&ProjectWrap::ClearSoundFont>("clearSoundFont"),
           InstanceMethod<&ProjectWrap::SoundFontPresetCount>("soundFontPresetCount"),
@@ -1209,6 +1211,52 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
   float* interleaved = nullptr;
   size_t len = 0;
   ThrowIfError(env, sonare_project_bounce_with_builtin_instruments(
+                        project_, &options, bindings.empty() ? nullptr : bindings.data(),
+                        bindings.size(), &interleaved, &len));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Float32Array out = Napi::Float32Array::New(env, len);
+  if (len > 0 && interleaved != nullptr) {
+    std::memcpy(out.Data(), interleaved, len * sizeof(float));
+  }
+  if (interleaved != nullptr) sonare_free_floats(interleaved);
+  return out;
+}
+
+// Compiles + renders the project, routing MIDI tracks through the patch-driven
+// NativeSynth (the full synthesizer; see SonareSynthPatch). Argument order is
+// instrument-first to match the WASM and Python bindings:
+//   bounceWithSynthInstruments(instruments, options?)
+// Each binding is { destinationId?, ...patch } where the patch is a SynthPatch
+// object or a preset-name string ("saw-lead" / "va:saw-lead"). An unknown
+// preset name throws (the C ABI rejects it).
+Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareProjectBounceOptions options{};
+  if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
+    FillBounceOptions(info[1].As<Napi::Object>(), &options);
+  }
+  std::vector<SonareSynthInstrumentBinding> bindings;
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array arr = info[0].As<Napi::Array>();
+    bindings.reserve(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+      Napi::Value element = arr.Get(i);
+      SonareSynthInstrumentBinding binding{};
+      if (element.IsObject() && !element.IsArray()) {
+        Napi::Object obj = element.As<Napi::Object>();
+        if (obj.Has("destinationId")) {
+          binding.destination_id = obj.Get("destinationId").As<Napi::Number>().Uint32Value();
+        }
+      }
+      if (!sonare_node::ReadSynthPatch(env, element, &binding.patch)) {
+        return env.Undefined();  // exception already pending
+      }
+      bindings.push_back(binding);
+    }
+  }
+  float* interleaved = nullptr;
+  size_t len = 0;
+  ThrowIfError(env, sonare_project_bounce_with_synth_instruments(
                         project_, &options, bindings.empty() ? nullptr : bindings.data(),
                         bindings.size(), &interleaved, &len));
   if (env.IsExceptionPending()) return env.Undefined();

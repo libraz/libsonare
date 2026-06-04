@@ -1668,6 +1668,131 @@ export interface Sf2InstrumentConfig {
   polyphony?: number;
 }
 
+/** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
+export type SynthEngineMode =
+  | 'default'
+  | 'subtractive'
+  | 'fm'
+  | 'karplus-strong'
+  | 'modal'
+  | 'additive'
+  | 'percussion'
+  | 'piano';
+
+/** NativeSynth oscillator waveform (`'default'` keeps the base patch's). */
+export type SynthOscWaveform = 'default' | 'sine' | 'saw' | 'square' | 'triangle' | 'noise';
+
+/** NativeSynth filter model — the character core (`'default'` keeps the base patch's). */
+export type SynthFilterModel = 'default' | 'svf' | 'moog-ladder' | 'diode-ladder' | 'sallen-key';
+
+/** NativeSynth filter output (SVF only; `'default'` keeps the base patch's). */
+export type SynthFilterOutput = 'default' | 'lowpass' | 'bandpass' | 'highpass';
+
+/** NativeSynth body/formant resonance voicing (`'default'` keeps the base patch's). */
+export type SynthBodyType = 'default' | 'none' | 'guitar' | 'violin' | 'wood-tube';
+
+/** {@link SynthPatch} mod-matrix source. */
+export type SynthModSource =
+  | 'none'
+  | 'amp-env'
+  | 'filter-env'
+  | 'lfo1'
+  | 'lfo2'
+  | 'velocity'
+  | 'key-track'
+  | 'mod-wheel'
+  | 'random';
+
+/** {@link SynthPatch} mod-matrix destination. */
+export type SynthModDestination =
+  | 'none'
+  | 'pitch-cents'
+  | 'cutoff-cents'
+  | 'amp-gain'
+  | 'pan-units';
+
+/** One {@link SynthPatch} mod-matrix routing (name or C ordinal per field). */
+export interface SynthModRouting {
+  source: SynthModSource | number;
+  destination: SynthModDestination | number;
+  /** Destination units at full source deflection. */
+  depth: number;
+}
+
+/**
+ * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstrument} /
+ * {@link Project.bounceWithSynthInstruments} and
+ * {@link RealtimeEngine.setSynthInstrument}.
+ *
+ * The patch starts from a BASE — the named `preset` (see
+ * {@link synthPresetNames}; a `"va:"` routing prefix is accepted) or, when
+ * `preset` is omitted, the default subtractive patch. Every numeric field then
+ * uses "0 / omit => keep the base value" (non-zero values override, clamped to
+ * their audible ranges) and the enum fields reserve `'default'` as keep. A
+ * non-empty `modRoutings` REPLACES the base mod matrix.
+ *
+ * Mode-specific deep parameters (FM operator stacks, modal mode tables,
+ * drawbar registrations, kit pieces, piano strings) travel inside the named
+ * presets; the patch exposes the wrapper sections every engine shares.
+ */
+export interface SynthPatch {
+  /**
+   * MIDI destination id this patch renders (the value set by
+   * {@link Project.setTrackMidiDestination}). Defaults to `0`.
+   */
+  destinationId?: number;
+  /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
+  preset?: string;
+  engineMode?: SynthEngineMode | number;
+  // --- oscillator section (subtractive mode) ---
+  waveform?: SynthOscWaveform | number;
+  /** Detuned-stack width [1, 7]. */
+  unison?: number;
+  detuneCents?: number;
+  /** Per-voice slow pitch drift depth (cents). */
+  driftCents?: number;
+  /** Pre-filter drive [0, 1]. */
+  drive?: number;
+  // --- filter section ---
+  filterModel?: SynthFilterModel | number;
+  filterOutput?: SynthFilterOutput | number;
+  cutoffHz?: number;
+  resonanceQ?: number;
+  /** Cutoff keyboard tracking [0, 1]. */
+  keyTrack?: number;
+  envToCutoffCents?: number;
+  velToCutoffCents?: number;
+  // --- envelopes (ms / sustain in [0, 1]) ---
+  ampAttackMs?: number;
+  ampDecayMs?: number;
+  ampSustain?: number;
+  ampReleaseMs?: number;
+  filterAttackMs?: number;
+  filterDecayMs?: number;
+  filterSustain?: number;
+  filterReleaseMs?: number;
+  // --- LFOs / glide ---
+  lfoRateHz?: number;
+  lfoToPitchCents?: number;
+  lfo2RateHz?: number;
+  glideMs?: number;
+  // --- realism polish ---
+  body?: SynthBodyType | number;
+  /** Body resonance mix [0, 1]. */
+  bodyMix?: number;
+  /** Seeded per-voice pan scatter [0, 1]. */
+  stereoSpread?: number;
+  /** Mod matrix (at most 8 routings; REPLACES the base matrix when non-empty). */
+  modRoutings?: SynthModRouting[];
+  // --- voice pool / bus ---
+  /** Master output gain (linear). */
+  gain?: number;
+  /** Max simultaneous voices [1, 64]. */
+  polyphony?: number;
+  /** Gain-neutral bus saturation [0, 1]. */
+  busDrive?: number;
+}
+
 /** Source backend a resolved MIDI program renders through. */
 export type SourceBackend = 'sf2' | 'synth';
 
