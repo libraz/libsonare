@@ -645,6 +645,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/sf2_file.cpp
     midi/synth/sf2_voice.cpp
     midi/synth/sf2_player.cpp
+    midi/synth/gs_layer.cpp
   )
   target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)

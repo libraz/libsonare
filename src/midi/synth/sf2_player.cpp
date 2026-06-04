@@ -69,8 +69,7 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
 void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   pool_.prepare(config_.polyphony);
-  channels_ = {};
-  for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
+  reset_all_state(/*reverb_send_default=*/0);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
@@ -88,11 +87,50 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
 
 void Sf2Player::reset() {
   pool_.reset();
-  channels_ = {};
-  for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
+  reset_all_state(/*reverb_send_default=*/0);
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->reset();
 #endif
+}
+
+void Sf2Player::reset_all_state(uint8_t reverb_send_default) noexcept {
+  channels_ = {};
+  drum_params_ = {};
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    channels_[ch].drums = ch == kDrumChannel;
+    channels_[ch].reverb_send = reverb_send_default;
+    refresh_channel_mod(ch);
+  }
+}
+
+void Sf2Player::gs_reset() noexcept {
+  for (uint8_t ch = 0; ch < 16; ++ch) all_sound_off(ch);
+  // GS power-on: reverb send 40 (Roland default), everything else cleared.
+  reset_all_state(/*reverb_send_default=*/40);
+}
+
+void Sf2Player::gm_reset() noexcept {
+  for (uint8_t ch = 0; ch < 16; ++ch) all_sound_off(ch);
+  // GM Level 1 mandates no effects: sends stay at zero.
+  reset_all_state(/*reverb_send_default=*/0);
+}
+
+bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
+  const GsSysEx msg = parse_gs_sysex(data, size);
+  switch (msg.kind) {
+    case GsSysExKind::kGmReset:
+      gm_reset();
+      return true;
+    case GsSysExKind::kGsReset:
+      gs_reset();
+      return true;
+    case GsSysExKind::kUseForRhythm:
+      channels_[msg.channel & 0x0Fu].drums = msg.value != 0;
+      return true;
+    case GsSysExKind::kNone:
+      break;
+  }
+  return false;
 }
 
 void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
@@ -109,7 +147,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
 }
 
 uint16_t Sf2Player::effective_bank(uint8_t channel) const noexcept {
-  if ((channel & 0x0Fu) == kDrumChannel) return kDrumBank;
+  if (channels_[channel & 0x0Fu].drums) return kDrumBank;
   return channels_[channel & 0x0Fu].bank_msb;
 }
 
@@ -168,8 +206,13 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
       if (preset_global != nullptr) gens.add_relative(*preset_global);
       gens.add_relative(pzone);
 
-      const Sf2VoiceParams params =
-          resolve_voice_params(gens, sample, note, velocity, sample_rate_);
+      Sf2VoiceParams params = resolve_voice_params(gens, sample, note, velocity, sample_rate_);
+
+      // GS layer: NRPN part edits + per-note drum-kit overrides.
+      apply_gs_part_params(params, ch.gs);
+      if (ch.drums) {
+        apply_gs_drum_params(params, drum_params_[channel & 0x0Fu][note & 0x7Fu]);
+      }
 
       // Exclusive class: choke same-class voices on this channel (hi-hats).
       if (params.exclusive_class != 0) {
@@ -235,6 +278,71 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
   }
 }
 
+void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  ChannelState& st = channels_[ch];
+  const int8_t offset = static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64);
+  if (st.nrpn_msb == 0x01) {
+    // GS part parameters (relative offsets onto the SoundFont generators).
+    switch (st.nrpn_lsb) {
+      case 0x08:
+        st.gs.vibrato_rate = offset;
+        break;
+      case 0x09:
+        st.gs.vibrato_depth = offset;
+        break;
+      case 0x0A:
+        st.gs.vibrato_delay = offset;
+        break;
+      case 0x20:
+        st.gs.tvf_cutoff = offset;
+        break;
+      case 0x21:
+        st.gs.tvf_resonance = offset;
+        break;
+      case 0x63:
+        st.gs.eg_attack = offset;
+        break;
+      case 0x64:
+        st.gs.eg_decay = offset;
+        break;
+      case 0x66:
+        st.gs.eg_release = offset;
+        break;
+      default:
+        break;
+    }
+    return;
+  }
+  if (!st.drums) return;
+  // GS drum-kit NRPNs: msb selects the parameter, lsb is the drum note.
+  GsDrumNoteParams& d = drum_params_[ch][st.nrpn_lsb & 0x7Fu];
+  switch (st.nrpn_msb) {
+    case 0x18:
+      d.pitch_coarse = offset;
+      d.flags |= GsDrumNoteParams::kPitch;
+      break;
+    case 0x1A:
+      d.level = value;
+      d.flags |= GsDrumNoteParams::kLevel;
+      break;
+    case 0x1C:
+      d.pan = value;
+      d.flags |= GsDrumNoteParams::kPan;
+      break;
+    case 0x1D:
+      d.reverb = value;
+      d.flags |= GsDrumNoteParams::kReverb;
+      break;
+    case 0x1E:
+      d.chorus = value;
+      d.flags |= GsDrumNoteParams::kChorus;
+      break;
+    default:
+      break;
+  }
+}
+
 void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   // MIDI RP-015: reset performance controllers, keep program/bank/volume/pan.
   const uint8_t ch = channel & 0x0Fu;
@@ -242,8 +350,11 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   st.mod_wheel = 0;
   st.expression = 127;
   st.pitch_bend = 8192;
+  st.param_mode = ChannelState::ParamMode::kNone;
   st.rpn_msb = 127;
   st.rpn_lsb = 127;
+  st.nrpn_msb = 127;
+  st.nrpn_lsb = 127;
   sustain_pedal(ch, false);
   refresh_channel_mod(ch);
 }
@@ -262,14 +373,16 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       st.mod_wheel = value;
       refresh_channel_mod(ch);
       break;
-    case 6:  // Data entry MSB -> active RPN (bend range semitones)
-      if (st.rpn_msb == 0 && st.rpn_lsb == 0) {
+    case 6:  // Data entry MSB -> active RPN (bend range) or GS NRPN
+      if (st.param_mode == ChannelState::ParamMode::kRpn && st.rpn_msb == 0 && st.rpn_lsb == 0) {
         st.bend_range_cents = 100.0f * static_cast<float>(value);
         refresh_channel_mod(ch);
+      } else if (st.param_mode == ChannelState::ParamMode::kNrpn) {
+        apply_nrpn(ch, value);
       }
       break;
     case 38:  // Data entry LSB -> bend range cents
-      if (st.rpn_msb == 0 && st.rpn_lsb == 0) {
+      if (st.param_mode == ChannelState::ParamMode::kRpn && st.rpn_msb == 0 && st.rpn_lsb == 0) {
         st.bend_range_cents =
             100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
         refresh_channel_mod(ch);
@@ -299,11 +412,21 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       st.delay_send = value;
       refresh_channel_mod(ch);
       break;
+    case 98:  // NRPN LSB
+      st.nrpn_lsb = value;
+      st.param_mode = ChannelState::ParamMode::kNrpn;
+      break;
+    case 99:  // NRPN MSB
+      st.nrpn_msb = value;
+      st.param_mode = ChannelState::ParamMode::kNrpn;
+      break;
     case 100:  // RPN LSB
       st.rpn_lsb = value;
+      st.param_mode = ChannelState::ParamMode::kRpn;
       break;
     case 101:  // RPN MSB
       st.rpn_msb = value;
+      st.param_mode = ChannelState::ParamMode::kRpn;
       break;
     case 64:
       sustain_pedal(ch, value >= 64);

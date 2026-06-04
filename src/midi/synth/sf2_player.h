@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "midi/instrument.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
@@ -86,6 +87,20 @@ class Sf2Player final : public MidiInstrument {
   int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
 
+  /// Feeds a SysEx payload (with or without F0/F7 framing) to the GS layer:
+  /// GM System On, GS Reset and "use for rhythm part" are recognised. Hosts
+  /// that own the SysEx store call this when a SysEx event is due. Safe on
+  /// the audio thread (allocation-free); returns true if recognised.
+  bool handle_sysex(const uint8_t* data, size_t size) noexcept;
+
+  /// GS Reset semantics (also reachable via handle_sysex): GS power-on
+  /// defaults — programs/banks cleared, channel 10 drums, CC91 = 40,
+  /// NRPN part edits and drum-note overrides cleared.
+  void gs_reset() noexcept;
+  /// GM System On semantics: like GS Reset but with effect sends at zero
+  /// (GM Level 1 mandates no effects).
+  void gm_reset() noexcept;
+
   /// Currently sounding voices (test/diagnostic).
   int active_voice_count() const noexcept { return pool_.active_count(); }
 
@@ -104,10 +119,18 @@ class Sf2Player final : public MidiInstrument {
     uint8_t chorus_send = 0;   // CC93
     uint8_t delay_send = 0;    // CC94 (GS delay send; no SF2 generator)
     uint16_t pitch_bend = 8192;
-    // RPN state (bend range via RPN 0; default 2 semitones).
+    // RPN/NRPN state: CC101/100 select an RPN, CC99/98 select a GS NRPN; the
+    // data entry CCs (6/38) route to whichever was selected last.
+    enum class ParamMode : uint8_t { kNone = 0, kRpn, kNrpn };
+    ParamMode param_mode = ParamMode::kNone;
     uint8_t rpn_msb = 127;
     uint8_t rpn_lsb = 127;
+    uint8_t nrpn_msb = 127;
+    uint8_t nrpn_lsb = 127;
     float bend_range_cents = 200.0f;
+    /// GS layer: rhythm-part flag (drums resolve bank 128) and NRPN edits.
+    bool drums = false;
+    GsPartParams gs;
   };
 
   void note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
@@ -117,6 +140,10 @@ class Sf2Player final : public MidiInstrument {
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
+  /// Routes a data-entry value (CC6 MSB) to the active GS NRPN.
+  void apply_nrpn(uint8_t channel, uint8_t value) noexcept;
+  /// Shared GM/GS power-on state (programs, drums on 10, edits cleared).
+  void reset_all_state(uint8_t reverb_send_default) noexcept;
   /// Recompute the cached Sf2ChannelMod for @p channel after a CC/bend change.
   void refresh_channel_mod(uint8_t channel) noexcept;
   /// Effective SF2 bank for a channel (drum channel -> 128).
@@ -141,6 +168,8 @@ class Sf2Player final : public MidiInstrument {
 
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
+  /// GS drum-kit per-note overrides (NRPN 18/1A/1C/1D/1E), per channel.
+  std::array<std::array<GsDrumNoteParams, 128>, 16> drum_params_{};
   VoicePool<Sf2Voice> pool_;
 
   // Chunk scratch (prepared on the control thread).
