@@ -18,8 +18,11 @@ float interpolate(const Breakpoint& a, const Breakpoint& b, double ppq) noexcept
 AutomationLane::AutomationLane(uint32_t target_param_id) : target_param_id_(target_param_id) {}
 
 void AutomationLane::set_points(std::vector<Breakpoint> points) {
-  std::sort(points.begin(), points.end(),
-            [](const Breakpoint& a, const Breakpoint& b) { return a.ppq < b.ppq; });
+  // stable_sort so the duplicate-ppq policy below ("first occurrence in the
+  // supplied list wins") is deterministic; std::sort leaves the relative order
+  // of equal-ppq points unspecified.
+  std::stable_sort(points.begin(), points.end(),
+                   [](const Breakpoint& a, const Breakpoint& b) { return a.ppq < b.ppq; });
   points.erase(std::unique(points.begin(), points.end(),
                            [](const Breakpoint& a, const Breakpoint& b) { return a.ppq == b.ppq; }),
                points.end());

@@ -341,6 +341,47 @@ TEST_CASE("Track command round-trips", "[arrangement]") {
   }
 }
 
+TEST_CASE("RemoveTrack removes owned clips and restores MIDI content on undo", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+
+  EditClip second_midi = *f.project.find_clip(f.midi_clip);
+  second_midi.id = 0;
+  second_midi.start_ppq = 2400.0;
+  const ClipId second_midi_clip = f.project.add_clip(second_midi);
+  REQUIRE(second_midi_clip != 0);
+
+  store.events[f.midi_clip] = {
+      {120.0, 0x20903C64u, 0u},
+      {360.0, 0x20803C00u, 0u},
+  };
+  store.events[second_midi_clip] = {
+      {48.0, 0x20904064u, 0u},
+  };
+
+  const Project before = f.project;
+  const MidiContentStore store_before = store;
+
+  auto remove = std::make_unique<RemoveTrack>(f.midi_track);
+  RemoveTrack* raw = remove.get();
+  REQUIRE(remove->apply(f.project, store));
+
+  CHECK_FALSE(f.project.has_track(f.midi_track));
+  CHECK_FALSE(f.project.has_clip(f.midi_clip));
+  CHECK_FALSE(f.project.has_clip(second_midi_clip));
+  CHECK(f.project.has_track(f.audio_track));
+  CHECK(f.project.has_clip(f.audio_clip));
+  CHECK(store.events.find(f.midi_clip) == store.events.end());
+  CHECK(store.events.find(second_midi_clip) == store.events.end());
+
+  EditCommandPtr undo = raw->invert(before, store_before);
+  REQUIRE(undo != nullptr);
+  REQUIRE(undo->apply(f.project, store));
+
+  CHECK(project_equal(f.project, before));
+  CHECK(store.events == store_before.events);
+}
+
 TEST_CASE("Clip command round-trips", "[arrangement]") {
   Fixture f;
   MidiContentStore store;

@@ -474,6 +474,10 @@ class Project {
   std::vector<WarpMapRef> warp_maps_;
 
   // Independent, monotonic, never-reused id counters (deterministic; no rand).
+  // Never-reused holds WITHIN a project lifetime only: the counters are not
+  // serialized (serialization is a pure function of the visible arrangement so
+  // edit+undo restores exact bytes), so after a save/load round-trip an id
+  // that was allocated and deleted before the save may be allocated again.
   SourceId next_source_id_ = 1;
   TrackId next_track_id_ = 1;
   ClipId next_clip_id_ = 1;

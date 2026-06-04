@@ -34,6 +34,61 @@ bool source_matches_track_kind(const Project& project, TrackId track_id, SourceI
   return false;
 }
 
+struct RemovedTrackClipSnapshot {
+  EditClip clip;
+  size_t index = Project::kAppend;
+  MidiClipEventList events;
+  bool has_events = false;
+};
+
+class RestoreTrackWithClips final : public EditCommand {
+ public:
+  RestoreTrackWithClips(Track track, size_t track_index,
+                        std::vector<RemovedTrackClipSnapshot> clips)
+      : track_(std::move(track)), track_index_(track_index), clips_(std::move(clips)) {}
+
+  bool apply(Project& project, MidiContentStore& store) override {
+    if (track_.id == 0 || project.has_track(track_.id)) {
+      return false;
+    }
+    for (const RemovedTrackClipSnapshot& snapshot : clips_) {
+      const EditClip& clip = snapshot.clip;
+      if (clip.id == 0 || project.has_clip(clip.id) || clip.track_id != track_.id ||
+          !project.has_source(clip.source_id)) {
+        return false;
+      }
+    }
+
+    if (!project.insert_track_raw(track_, track_index_)) {
+      return false;
+    }
+    project.ensure_next_track_id(track_.id);
+
+    for (const RemovedTrackClipSnapshot& snapshot : clips_) {
+      if (!project.insert_clip_raw(snapshot.clip, snapshot.index)) {
+        return false;
+      }
+      project.ensure_next_clip_id(snapshot.clip.id);
+      if (snapshot.has_events) {
+        store.events[snapshot.clip.id] = snapshot.events;
+      }
+    }
+    return true;
+  }
+
+  EditCommandPtr invert(const Project& /*before*/,
+                        const MidiContentStore& /*store_before*/) const override {
+    return std::make_unique<RemoveTrack>(track_.id);
+  }
+
+  const char* type_name() const noexcept override { return "RestoreTrackWithClips"; }
+
+ private:
+  Track track_;
+  size_t track_index_ = Project::kAppend;
+  std::vector<RemovedTrackClipSnapshot> clips_;
+};
+
 }  // namespace
 
 // ===========================================================================
@@ -59,23 +114,48 @@ EditCommandPtr AddTrack::invert(const Project& /*before*/,
   return std::make_unique<RemoveTrack>(allocated_id_);
 }
 
-bool RemoveTrack::apply(Project& project, MidiContentStore& /*store*/) {
+bool RemoveTrack::apply(Project& project, MidiContentStore& store) {
+  if (!project.has_track(id_)) {
+    return false;
+  }
+
+  std::vector<ClipId> clip_ids;
+  for (const EditClip& clip : project.clips()) {
+    if (clip.track_id == id_) {
+      clip_ids.push_back(clip.id);
+    }
+  }
+  for (ClipId clip_id : clip_ids) {
+    if (!project.remove_clip(clip_id).second) {
+      return false;
+    }
+    store.events.erase(clip_id);
+  }
   return project.remove_track(id_).second;
 }
 
 EditCommandPtr RemoveTrack::invert(const Project& before,
-                                   const MidiContentStore& /*store_before*/) const {
+                                   const MidiContentStore& store_before) const {
   const Track* t = before.find_track(id_);
   if (t == nullptr) {
     return nullptr;
   }
-  // Restore the exact track on undo; pre-seed the id so it returns with the same
-  // stable id (and so a later redo reuses it too), and the original index so the
-  // track ordering is preserved.
-  auto cmd = std::make_unique<AddTrack>(*t);
-  cmd->reseed_id(id_);
-  cmd->reseed_index(before.track_index(id_));
-  return cmd;
+  std::vector<RemovedTrackClipSnapshot> clips;
+  for (const EditClip& clip : before.clips()) {
+    if (clip.track_id != id_) {
+      continue;
+    }
+    RemovedTrackClipSnapshot snapshot;
+    snapshot.clip = clip;
+    snapshot.index = before.clip_index(clip.id);
+    const auto events = store_before.events.find(clip.id);
+    if (events != store_before.events.end()) {
+      snapshot.events = events->second;
+      snapshot.has_events = true;
+    }
+    clips.push_back(std::move(snapshot));
+  }
+  return std::make_unique<RestoreTrackWithClips>(*t, before.track_index(id_), std::move(clips));
 }
 
 bool RenameTrack::apply(Project& project, MidiContentStore& /*store*/) {

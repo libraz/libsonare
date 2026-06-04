@@ -60,6 +60,20 @@ TEST_CASE("AutomationLane evaluates hold linear exponential and s-curve breakpoi
   REQUIRE(s_curve.next_breakpoint_after(0.25) == 1.0);
 }
 
+TEST_CASE("AutomationLane set_points keeps the first of duplicate-ppq points deterministically",
+          "[automation]") {
+  // Documented contract: duplicates at the same ppq collapse to the FIRST
+  // occurrence in the supplied list (stable sort), independent of how the
+  // surrounding points are ordered.
+  sonare::automation::AutomationLane lane(1);
+  lane.set_points({{2.0, 0.9f, sonare::automation::CurveType::Linear},
+                   {1.0, 0.25f, sonare::automation::CurveType::Linear},
+                   {1.0, 0.75f, sonare::automation::CurveType::Linear},
+                   {0.0, 0.1f, sonare::automation::CurveType::Linear}});
+  REQUIRE(lane.points().size() == 3);
+  REQUIRE_THAT(lane.value_at(1.0), WithinAbs(0.25f, 1.0e-6f));
+}
+
 TEST_CASE("Engine and mixer automation lanes share identical curve shapes", "[automation]") {
   // Regression: the mixer lane previously fell back to linear for any segment
   // whose endpoints were not both strictly positive, while the engine lane used
