@@ -69,7 +69,9 @@ jobs:
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF
       - name: Build
-        run: cmake --build build --parallel
+        # Capped at 2 jobs: unbounded parallelism OOM-kills cc1plus on the
+        # 4-core/16GB hosted runners when compiling the large Debug test TUs.
+        run: cmake --build build --parallel 2
       - name: Generate K-weighting reference fixture
         run: python3 tools/scripts/k_weighting_reference.py
       - name: Test

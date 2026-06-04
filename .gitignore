@@ -119,3 +119,6 @@ __pycache__/
 *.egg-info
 .venv/
 uv.lock
+
+# Local agent notes
+AGENT.md

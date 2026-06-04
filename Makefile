@@ -1,6 +1,6 @@
-.PHONY: all build release test test-optional-fixtures test-librosa-live clean rebuild format lint wasm coverage \
+.PHONY: all build release test test-slow test-optional-fixtures test-librosa-live clean rebuild format lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-node test-wasm parity
+       test-python test-python-slow test-node test-wasm parity
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -34,6 +34,12 @@ wasm:
 
 test: build
 	ctest --test-dir $(BUILD_DIR) --output-on-failure --parallel
+
+# Heavy cases (>~2 s each) are tagged [.][slow] and hidden from the default
+# ctest run; this runs just those. Must run from the repo root (librosa
+# fixtures load by relative path).
+test-slow: build
+	./$(BUILD_DIR)/bin/sonare_tests "[slow]"
 
 test-optional-fixtures:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
@@ -91,6 +97,12 @@ build-wasm-binding:
 test-python: build-shared
 	$(RYE) sync --pyproject bindings/python/pyproject.toml
 	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest bindings/python/tests/ -v
+
+# Tests marked @pytest.mark.slow are excluded by the default addopts
+# (-m "not slow"); the explicit -m here overrides that and runs just them.
+test-python-slow: build-shared
+	$(RYE) sync --pyproject bindings/python/pyproject.toml
+	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest bindings/python/tests/ -v -m slow
 
 test-node: build-node
 	cd bindings/node && yarn test
