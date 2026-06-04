@@ -35,6 +35,14 @@ export type EngineTransportState = WasmEngineTransportState;
 
 export const EXPECTED_ENGINE_ABI_VERSION = 3;
 
+/** Options for {@link RealtimeEngine.bindMidiCc}. All fields are optional. */
+export interface MidiCcBindOptions {
+  /** Lower end of the mapped parameter range. Default `0`. */
+  minValue?: number;
+  /** Upper end of the mapped parameter range. Default `1`. */
+  maxValue?: number;
+}
+
 export interface EngineCapabilities {
   engineAbiVersion: number;
   expectedEngineAbiVersion: number;
@@ -68,6 +76,60 @@ export function engineCapabilities(): EngineCapabilities {
 // declarations only gain after a WASM rebuild. The native handle is cast to this
 // shape so the wrapper can reach them without a stale type error.
 interface WasmRealtimeEngineExt {
+  setBuiltinInstrument: (destinationId: number, config: object) => void;
+  clearMidiInstrument: (destinationId: number) => void;
+  midiInstrumentCount: () => number;
+  bindMidiCc: (
+    channel: number,
+    controller: number,
+    paramId: number,
+    minValue: number,
+    maxValue: number,
+  ) => void;
+  clearMidiCcBindings: () => void;
+  midiCcBindingCount: () => number;
+  setMidiFx: (destinationId: number, configJson: string) => void;
+  clearMidiFx: (destinationId: number) => void;
+  setMidiInputSource: (destinationId: number) => void;
+  clearMidiInputSource: () => void;
+  midiInputPendingCount: () => number;
+  pushMidiInputNoteOn: (
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    portTimeSamples: number,
+  ) => void;
+  pushMidiInputNoteOff: (
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    portTimeSamples: number,
+  ) => void;
+  pushMidiInputCc: (
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    portTimeSamples: number,
+  ) => void;
+  pushMidiNoteOn: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    renderFrame: number,
+  ) => void;
+  pushMidiNoteOff: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    renderFrame: number,
+  ) => void;
   pushMidiCc: (
     destinationId: number,
     group: number,
@@ -125,6 +187,123 @@ export class RealtimeEngine {
   /** Queue a smoothed parameter change (engine kSetParamSmoothed). */
   setParameterSmoothed(paramId: number, value: number, renderFrame = -1): void {
     this.native.setParameterSmoothed(paramId, value, renderFrame);
+  }
+
+  setBuiltinInstrument(
+    config: { destinationId?: number } & Record<string, unknown> = {},
+    destinationId = config.destinationId ?? 0,
+  ): void {
+    this.nativeExt().setBuiltinInstrument(destinationId, config);
+  }
+
+  clearMidiInstrument(destinationId = 0): void {
+    this.nativeExt().clearMidiInstrument(destinationId);
+  }
+
+  midiInstrumentCount(): number {
+    return this.nativeExt().midiInstrumentCount();
+  }
+
+  /**
+   * Bind a live MIDI CC to an engine automation parameter. The MIDI event still
+   * reaches the destination instrument; when bound, its 7-bit value is also
+   * mapped into [minValue, maxValue] for `paramId`.
+   */
+  bindMidiCc(
+    channel: number,
+    controller: number,
+    paramId: number,
+    options: MidiCcBindOptions = {},
+  ): void {
+    this.nativeExt().bindMidiCc(
+      channel,
+      controller,
+      paramId,
+      options.minValue ?? 0,
+      options.maxValue ?? 1,
+    );
+  }
+
+  clearMidiCcBindings(): void {
+    this.nativeExt().clearMidiCcBindings();
+  }
+
+  midiCcBindingCount(): number {
+    return this.nativeExt().midiCcBindingCount();
+  }
+
+  /** Install/replace a live non-destructive MIDI-FX insert for one destination. */
+  setMidiFx(destinationId: number, configJson: string): void {
+    this.nativeExt().setMidiFx(destinationId, configJson);
+  }
+
+  clearMidiFx(destinationId = 0): void {
+    this.nativeExt().clearMidiFx(destinationId);
+  }
+
+  /** Enable the engine-owned live MIDI input source for a destination. */
+  setMidiInputSource(destinationId = 0): void {
+    this.nativeExt().setMidiInputSource(destinationId);
+  }
+
+  clearMidiInputSource(): void {
+    this.nativeExt().clearMidiInputSource();
+  }
+
+  midiInputPendingCount(): number {
+    return this.nativeExt().midiInputPendingCount();
+  }
+
+  pushMidiInputNoteOn(
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    portTimeSamples = 0,
+  ): void {
+    this.nativeExt().pushMidiInputNoteOn(group, channel, note, velocity, portTimeSamples);
+  }
+
+  pushMidiInputNoteOff(
+    group: number,
+    channel: number,
+    note: number,
+    velocity = 0,
+    portTimeSamples = 0,
+  ): void {
+    this.nativeExt().pushMidiInputNoteOff(group, channel, note, velocity, portTimeSamples);
+  }
+
+  pushMidiInputCc(
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    portTimeSamples = 0,
+  ): void {
+    this.nativeExt().pushMidiInputCc(group, channel, controller, value, portTimeSamples);
+  }
+
+  pushMidiNoteOn(
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    renderFrame = -1,
+  ): void {
+    this.nativeExt().pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
+  }
+
+  pushMidiNoteOff(
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity = 0,
+    renderFrame = -1,
+  ): void {
+    this.nativeExt().pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
   }
 
   /**

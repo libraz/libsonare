@@ -472,6 +472,97 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.c_int64,
         ]
+    if hasattr(lib, "sonare_engine_set_builtin_instrument"):
+        lib.sonare_engine_set_builtin_instrument.restype = ctypes.c_int32
+        lib.sonare_engine_set_builtin_instrument.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareBuiltinSynthConfig),
+        ]
+    if hasattr(lib, "sonare_engine_clear_midi_instrument"):
+        lib.sonare_engine_clear_midi_instrument.restype = ctypes.c_int32
+        lib.sonare_engine_clear_midi_instrument.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        ]
+    if hasattr(lib, "sonare_engine_midi_instrument_count"):
+        lib.sonare_engine_midi_instrument_count.restype = ctypes.c_int32
+        lib.sonare_engine_midi_instrument_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    if hasattr(lib, "sonare_engine_bind_midi_cc"):
+        lib.sonare_engine_bind_midi_cc.restype = ctypes.c_int32
+        lib.sonare_engine_bind_midi_cc.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_float,
+        ]
+    if hasattr(lib, "sonare_engine_clear_midi_cc_bindings"):
+        lib.sonare_engine_clear_midi_cc_bindings.restype = ctypes.c_int32
+        lib.sonare_engine_clear_midi_cc_bindings.argtypes = [ctypes.c_void_p]
+    if hasattr(lib, "sonare_engine_midi_cc_binding_count"):
+        lib.sonare_engine_midi_cc_binding_count.restype = ctypes.c_int32
+        lib.sonare_engine_midi_cc_binding_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    if hasattr(lib, "sonare_engine_clear_midi_fx"):
+        lib.sonare_engine_clear_midi_fx.restype = ctypes.c_int32
+        lib.sonare_engine_clear_midi_fx.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        ]
+    if hasattr(lib, "sonare_engine_set_midi_input_source"):
+        lib.sonare_engine_set_midi_input_source.restype = ctypes.c_int32
+        lib.sonare_engine_set_midi_input_source.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        ]
+    if hasattr(lib, "sonare_engine_clear_midi_input_source"):
+        lib.sonare_engine_clear_midi_input_source.restype = ctypes.c_int32
+        lib.sonare_engine_clear_midi_input_source.argtypes = [ctypes.c_void_p]
+    if hasattr(lib, "sonare_engine_midi_input_pending_count"):
+        lib.sonare_engine_midi_input_pending_count.restype = ctypes.c_int32
+        lib.sonare_engine_midi_input_pending_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    for _name in (
+        "sonare_engine_push_midi_input_note_on",
+        "sonare_engine_push_midi_input_note_off",
+        "sonare_engine_push_midi_input_cc",
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint8,
+                ctypes.c_uint8,
+                ctypes.c_uint8,
+                ctypes.c_uint8,
+                ctypes.c_int64,
+            ]
+    for _name in (
+        "sonare_engine_push_midi_note_on",
+        "sonare_engine_push_midi_note_off",
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.c_uint8,
+                ctypes.c_uint8,
+                ctypes.c_uint8,
+                ctypes.c_uint8,
+                ctypes.c_int64,
+            ]
     if hasattr(lib, "sonare_engine_get_transport_state"):
         lib.sonare_engine_get_transport_state.restype = ctypes.c_int32
         lib.sonare_engine_get_transport_state.argtypes = [

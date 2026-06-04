@@ -124,4 +124,8 @@ def test_scale_quantize_rejects_bad_args() -> None:
     with pytest.raises(RuntimeError):
         libsonare.scale_quantize_midi(0, 0, 60.0)
     with pytest.raises(RuntimeError):
+        libsonare.scale_quantize_midi(0, 5000, 60.0)
+    with pytest.raises(RuntimeError):
+        libsonare.scale_quantize_midi(0, -1, 60.0)
+    with pytest.raises(RuntimeError):
         libsonare.scale_pitch_class_enabled(0, C_MAJOR_MASK, 12)

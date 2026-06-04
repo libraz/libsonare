@@ -220,3 +220,28 @@ def test_cqt_and_vqt_return_cqt_result() -> None:
         assert result.n_frames > 0
         assert len(result.magnitude) == result.n_bins * result.n_frames
         assert len(result.frequencies) == result.n_bins
+
+
+def test_pseudo_and_hybrid_cqt_return_cqt_result() -> None:
+    from libsonare import CqtResult, hybrid_cqt, pseudo_cqt
+
+    samples = _generate_sine(220, 22050, 1.0)
+    for result in (
+        pseudo_cqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12),
+        hybrid_cqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12),
+    ):
+        assert isinstance(result, CqtResult)
+        assert result.n_bins == 24
+        assert result.n_frames > 0
+        assert len(result.magnitude) == result.n_bins * result.n_frames
+        assert len(result.frequencies) == result.n_bins
+
+
+def test_onset_strength_multi_returns_band_matrix() -> None:
+    from libsonare import onset_strength_multi
+
+    samples = _generate_sine(440, 22050, 1.0)
+    n_frames, data = onset_strength_multi(samples, sample_rate=22050, n_bands=4)
+    assert n_frames > 0
+    assert len(data) == 4 * n_frames
+    assert all(math.isfinite(value) for value in data)

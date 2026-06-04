@@ -9,6 +9,7 @@
 #include <numeric>
 #include <vector>
 
+#include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -162,6 +163,38 @@ TEST_CASE("STFT/iSTFT roundtrip preserves gain with symmetric synthesis window",
   REQUIRE(reconstructed.size() == original.size());
   const float snr = compute_snr(original.data(), reconstructed.data(), original.size());
   REQUIRE(snr > 60.0f);
+}
+
+TEST_CASE("Spectrogram iSTFT survives window cache eviction between analysis and synthesis windows",
+          "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 4096;
+
+  // Fill the thread-local window cache with entries that differ from the iSTFT
+  // windows below. The second iSTFT window lookup can then evict the first one
+  // if to_audio() keeps a borrowed cache reference.
+  for (int i = 0; i < 15; ++i) {
+    (void)get_window_cached(WindowType::Hann, 64 + i, true);
+  }
+
+  std::vector<float> original = generate_sine(samples, 440.0f, sr);
+  Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  StftConfig config;
+  config.n_fft = 512;
+  config.win_length = 384;
+  config.hop_length = 128;
+  config.center = true;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  Audio reconstructed = spec.to_audio(samples);
+
+  REQUIRE(reconstructed.size() == original.size());
+  for (float sample : reconstructed) {
+    REQUIRE(std::isfinite(sample));
+  }
+  const float snr = compute_snr(original.data(), reconstructed.data(), original.size());
+  REQUIRE(snr > 50.0f);
 }
 
 TEST_CASE("STFT/iSTFT with different window sizes", "[spectrum]") {
@@ -713,6 +746,28 @@ TEST_CASE("iSTFT 10s long-signal round-trip stays numerically stable", "[spectru
   const float nrmse = compute_nrmse(original.data() + skip, reconstructed.data() + skip,
                                     reconstructed.size() - 2 * skip);
   REQUIRE(nrmse < 1e-3f);
+}
+
+TEST_CASE("Spectrogram compute keeps frame offsets stable on long non-aligned input",
+          "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 250000;
+  std::vector<float> signal(samples);
+  for (int i = 0; i < samples; ++i) {
+    signal[static_cast<size_t>(i)] = 0.2f * std::sin(kTwoPi * 440.0f * i / sr);
+  }
+  Audio audio = Audio::from_vector(std::move(signal), sr);
+
+  StftConfig config;
+  config.n_fft = 1024;
+  config.hop_length = 333;
+  config.center = false;
+
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  REQUIRE(spec.n_frames() > 700);
+  REQUIRE(spec.n_bins() == config.n_fft / 2 + 1);
+  REQUIRE(spec.magnitude().size() ==
+          static_cast<size_t>(spec.n_bins()) * static_cast<size_t>(spec.n_frames()));
 }
 
 TEST_CASE("iSTFT round-trip matches between center=true and center=false", "[spectrum][istft]") {

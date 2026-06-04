@@ -45,6 +45,8 @@ class Graph {
   // value has a fractional part, Graph uses the same Lagrange3 fractional delay
   // convention as mixing::AlignmentDelay.
   int connection_delay_samples_q8(size_t connection_index) const;
+  int node_latency_samples(const std::string& node_id) const;
+  int node_latency_samples_q8(const std::string& node_id) const;
   const std::vector<std::string>& topo_order_ids() const noexcept { return topo_order_ids_; }
 
  private:
@@ -79,6 +81,7 @@ class Graph {
   std::vector<Node*> topo_order_;
   std::vector<std::string> topo_order_ids_;
   std::unordered_map<std::string, int> topo_index_;
+  std::unordered_map<std::string, int> node_latency_q8_;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   bool compiled_ = false;

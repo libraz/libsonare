@@ -1,124 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  Audio,
-  amplitudeToDb,
-  analyze,
-  analyzeBpm,
-  analyzeDynamics,
-  analyzeMelody,
-  analyzeRhythm,
-  analyzeSections,
-  analyzeTimbre,
-  analyzeWithProgress,
-  chordFunctionalAnalysis,
-  chroma,
-  cqt,
-  dbToAmplitude,
-  dbToPower,
-  deemphasis,
-  detectBeats,
-  detectBpm,
-  detectChords,
-  detectKey,
-  detectKeyCandidates,
-  detectOnsets,
-  fixFrames,
-  fixLength,
-  fourierTempogram,
-  frameSignal,
-  framesToSamples,
-  framesToTime,
-  harmonic,
-  hasFfmpegSupport,
-  hpss,
-  hzToMel,
-  hzToMidi,
-  hzToNote,
-  lufs,
-  Mixer,
-  mastering,
-  masteringAssistantSuggest,
-  masteringAudioProfile,
-  masteringChain,
-  masteringPairAnalysisNames,
-  masteringPairAnalyze,
-  masteringPairProcess,
-  masteringPairProcessorNames,
-  masteringProcess,
-  masteringProcessorNames,
-  masteringProcessStereo,
-  masteringStereoAnalysisNames,
-  masteringStereoAnalyze,
-  masteringStreamingPreview,
-  melSpectrogram,
-  melToHz,
-  mfcc,
-  midiToHz,
-  mixingScenePresetJson,
-  momentaryLufs,
-  nnlsChroma,
-  normalize,
-  noteToHz,
-  onsetEnvelope,
-  pcen,
-  peakPick,
-  percussive,
-  pitchPyin,
-  pitchShift,
-  pitchYin,
-  plp,
-  powerToDb,
-  preemphasis,
-  RealtimeEngine,
-  resample,
-  rmsEnergy,
-  StreamingEqualizer,
-  StreamingMasteringChain,
-  samplesToFrames,
-  shortTermLufs,
-  spectralBandwidth,
-  spectralCentroid,
-  spectralFlatness,
-  spectralRolloff,
-  splitSilence,
-  stft,
-  stftDb,
-  tempogram,
-  tempogramRatio,
-  timeStretch,
-  timeToFrames,
-  tonnetz,
-  trim,
-  trimSilence,
-  vectorNormalize,
-  version,
-  vqt,
-  zeroCrossingRate,
-} from '../src/index.js';
-
-function findFfmpegCli(): string | null {
-  try {
-    const result = execFileSync('which', ['ffmpeg'], { encoding: 'utf-8' }).trim();
-    return result || null;
-  } catch {
-    return null;
-  }
-}
-
-const SR = 22050;
-
-function generateSine(freq: number, sr: number, duration: number): Float32Array {
-  const n = Math.floor(sr * duration);
-  const samples = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    samples[i] = Math.sin((2 * Math.PI * freq * i) / sr);
-  }
-  return samples;
-}
+import { Mixer, mixingScenePresetJson, RealtimeEngine } from '../src/index.js';
 
 describe('RealtimeEngine', () => {
   it('processWithMonitor returns output and monitor buses', () => {
@@ -134,6 +15,47 @@ describe('RealtimeEngine', () => {
       expect(result.output[1][0]).toBeCloseTo(-0.25);
       expect(result.monitor[0][0]).toBeCloseTo(0);
       expect(result.monitor[1][0]).toBeCloseTo(0);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('exposes live MIDI CC bindings', () => {
+    const engine = new RealtimeEngine(48000, 16);
+    try {
+      expect(engine.midiCcBindingCount()).toBe(0);
+      engine.bindMidiCc(0, 74, 7, { minValue: -60, maxValue: 0 });
+      expect(engine.midiCcBindingCount()).toBe(1);
+      engine.clearMidiCcBindings();
+      expect(engine.midiCcBindingCount()).toBe(0);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('exposes live non-destructive MIDI FX inserts', () => {
+    const engine = new RealtimeEngine(48000, 16);
+    try {
+      expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}')).not.toThrow();
+      expect(() => engine.clearMidiFx(0)).not.toThrow();
+      expect(() => engine.setMidiFx(0, '{bad json')).toThrow();
+      expect(() => engine.setMidiFx(0, '{"quantize_ppq":0}')).toThrow();
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('exposes an owned live MIDI input source', () => {
+    const engine = new RealtimeEngine(48000, 16);
+    try {
+      engine.setMidiInputSource(0);
+      expect(engine.midiInputPendingCount()).toBe(0);
+      engine.pushMidiInputNoteOn(0, 0, 60, 100, 3);
+      expect(engine.midiInputPendingCount()).toBe(1);
+      engine.process([new Float32Array(16), new Float32Array(16)]);
+      expect(engine.midiInputPendingCount()).toBe(0);
+      engine.clearMidiInputSource();
+      expect(() => engine.pushMidiInputNoteOff(0, 0, 60, 0, 0)).toThrow();
     } finally {
       engine.destroy();
     }

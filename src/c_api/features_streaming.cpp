@@ -184,6 +184,14 @@ SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* ana
   SONARE_C_CATCH
 }
 
+SonareError sonare_stream_analyzer_finalize(SonareStreamAnalyzer* analyzer) {
+  if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  analyzer->analyzer->finalize();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_stream_analyzer_available_frames(SonareStreamAnalyzer* analyzer,
                                                     size_t* out_count) {
   if (!analyzer || !analyzer->analyzer || !out_count) return SONARE_ERROR_INVALID_PARAMETER;

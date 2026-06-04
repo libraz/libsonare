@@ -296,9 +296,13 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
 
   // Features - Chroma
   exports.Set("chroma", Napi::Function::New(env, &SonareWrap::ChromaFn, "chroma"));
+  exports.Set("chromaCens", Napi::Function::New(env, &SonareWrap::ChromaCens, "chromaCens"));
+  exports.Set("bassChroma", Napi::Function::New(env, &SonareWrap::BassChroma, "bassChroma"));
 
   // Features - Constant-Q / Variable-Q transforms
   exports.Set("cqt", Napi::Function::New(env, &SonareWrap::Cqt, "cqt"));
+  exports.Set("pseudoCqt", Napi::Function::New(env, &SonareWrap::PseudoCqt, "pseudoCqt"));
+  exports.Set("hybridCqt", Napi::Function::New(env, &SonareWrap::HybridCqt, "hybridCqt"));
   exports.Set("vqt", Napi::Function::New(env, &SonareWrap::Vqt, "vqt"));
 
   // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
@@ -370,6 +374,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("plp", Napi::Function::New(env, &SonareWrap::Plp, "plp"));
   exports.Set("onsetEnvelope",
               Napi::Function::New(env, &SonareWrap::OnsetEnvelope, "onsetEnvelope"));
+  exports.Set("onsetStrengthMulti",
+              Napi::Function::New(env, &SonareWrap::OnsetStrengthMulti, "onsetStrengthMulti"));
   exports.Set("fourierTempogram",
               Napi::Function::New(env, &SonareWrap::FourierTempogram, "fourierTempogram"));
   exports.Set("tempogramRatio",

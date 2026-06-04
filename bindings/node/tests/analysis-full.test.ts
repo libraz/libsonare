@@ -25,7 +25,7 @@ function generateChordTone(sr: number, duration: number): Float32Array {
   return samples;
 }
 
-describe('analyze() full result (MED-11 / MED-13)', () => {
+describe('analyze() full result', () => {
   it('returns the enriched analysis shape with all new fields', () => {
     const samples = generateChordTone(SR, 3);
     const result = analyze(samples, SR);
@@ -83,7 +83,7 @@ describe('analyze() full result (MED-11 / MED-13)', () => {
   });
 });
 
-describe('analyzeWithProgress full result (MED-11 / MED-13)', () => {
+describe('analyzeWithProgress full result', () => {
   it('fires the progress callback and returns the full shape', () => {
     const samples = generateChordTone(SR, 3);
     const progress: number[] = [];
@@ -113,10 +113,10 @@ describe('analyzeWithProgress full result (MED-11 / MED-13)', () => {
   });
 });
 
-describe('analyzeMelody pYIN / center (MED-12)', () => {
+describe('analyzeMelody pYIN / center', () => {
   it('runs with the pYIN tracker via the options object', () => {
     const samples = generateSine(220, SR, 1);
-    const melody = analyzeMelody(samples, SR, 65.0, 2093.0, 2048, 256, 0.1, { usePyin: true });
+    const melody = analyzeMelody(samples, SR, { usePyin: true });
     expect(Array.isArray(melody.points)).toBe(true);
     expect(typeof melody.meanFrequency).toBe('number');
     expect(typeof melody.pitchStability).toBe('number');
@@ -127,9 +127,17 @@ describe('analyzeMelody pYIN / center (MED-12)', () => {
     }
   });
 
-  it('accepts usePyin / center positionally', () => {
+  it('accepts explicit tuning + tracker options', () => {
     const samples = generateSine(220, SR, 1);
-    const melody = analyzeMelody(samples, SR, 65.0, 2093.0, 2048, 256, 0.1, true, false);
+    const melody = analyzeMelody(samples, SR, {
+      fmin: 65.0,
+      fmax: 2093.0,
+      frameLength: 2048,
+      hopLength: 256,
+      threshold: 0.1,
+      usePyin: true,
+      center: false,
+    });
     expect(Array.isArray(melody.points)).toBe(true);
     expect(typeof melody.meanFrequency).toBe('number');
   });

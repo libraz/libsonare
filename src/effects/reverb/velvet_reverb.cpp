@@ -12,6 +12,7 @@ using sonare::constants::kTwoPi;
 
 namespace {
 constexpr float kShelfCutoffHz = 6000.0f;
+constexpr float kShelfHighGain = 0.5f;
 constexpr float kT60Drop = 1000.0f;  // 60 dB amplitude ratio for T60.
 }  // namespace
 
@@ -122,9 +123,9 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
 
     if (config_.enable_shelf) {
       shelf_state_l_ += shelf_b0_ * (wet_l - shelf_state_l_);
-      wet_l = shelf_state_l_;
+      wet_l = shelf_state_l_ + kShelfHighGain * (wet_l - shelf_state_l_);
       shelf_state_r_ += shelf_b0_ * (wet_r - shelf_state_r_);
-      wet_r = shelf_state_r_;
+      wet_r = shelf_state_r_ + kShelfHighGain * (wet_r - shelf_state_r_);
     }
 
     if (stereo) {

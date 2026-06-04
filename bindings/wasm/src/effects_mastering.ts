@@ -3,6 +3,7 @@ import type {
   HpssResult,
   MasteringChainConfig,
   MasteringChainResult,
+  MasteringOptions,
   MasteringPreset,
   MasteringProcessorParams,
   MasteringResult,
@@ -10,6 +11,7 @@ import type {
   MasteringStereoResult,
   MixOptions,
   MixResult,
+  NoteStretchOptions,
   PairAnalysis,
   PairProcessor,
   RealtimeVoiceChangerConfigInput,
@@ -192,13 +194,24 @@ export function pitchCorrectToMidiTimevarying(
 export function noteStretch(
   samples: Float32Array,
   sampleRate = 22050,
-  onsetSample = 0,
-  offsetSample = 0,
-  stretchRatio = 1.0,
-  options: ValidateOptions = {},
+  options: NoteStretchOptions & ValidateOptions = {},
 ): Float32Array {
   assertSamples('noteStretch', samples, options.validate !== false);
-  return requireModule().noteStretch(samples, sampleRate, onsetSample, offsetSample, stretchRatio);
+  return requireModule().noteStretch(
+    samples,
+    sampleRate,
+    options.onsetSample ?? 0,
+    options.offsetSample ?? 0,
+    options.stretchRatio ?? 1.0,
+  );
+}
+
+/** Options for {@link voiceChange}. All fields are optional. */
+export interface VoiceChangeOptions extends ValidateOptions {
+  /** Pitch shift in semitones (negative = down). Default 0. */
+  pitchSemitones?: number;
+  /** Formant scale factor (>1 brightens, <1 darkens). Default 1. */
+  formantFactor?: number;
 }
 
 /**
@@ -206,19 +219,21 @@ export function noteStretch(
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
- * @param pitchSemitones - Pitch shift in semitones
- * @param formantFactor - Formant scaling factor (1.0 = unchanged)
+ * @param options - Pitch/formant settings ({@link VoiceChangeOptions})
  * @returns Voice-changed audio
  */
 export function voiceChange(
   samples: Float32Array,
   sampleRate = 22050,
-  pitchSemitones = 0.0,
-  formantFactor = 1.0,
-  options: ValidateOptions = {},
+  options: VoiceChangeOptions = {},
 ): Float32Array {
   assertSamples('voiceChange', samples, options.validate !== false);
-  return requireModule().voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
+  return requireModule().voiceChange(
+    samples,
+    sampleRate,
+    options.pitchSemitones ?? 0.0,
+    options.formantFactor ?? 1.0,
+  );
 }
 
 /** Options for the offline {@link voiceChangeRealtime} convenience wrapper. */
@@ -300,19 +315,21 @@ export function normalize(
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param targetLufs - Target integrated LUFS (default: -14)
- * @param ceilingDb - True/sample peak ceiling in dBFS (default: -1)
- * @param truePeakOversample - Oversampling factor used for peak estimation
+ * @param options - Loudness/ceiling settings ({@link MasteringOptions})
  * @returns Processed audio and loudness metadata
  */
 export function mastering(
   samples: Float32Array,
   sampleRate = 22050,
-  targetLufs = -14.0,
-  ceilingDb = -1.0,
-  truePeakOversample = 4,
+  options: MasteringOptions = {},
 ): MasteringResult {
-  return requireModule().mastering(samples, sampleRate, targetLufs, ceilingDb, truePeakOversample);
+  return requireModule().mastering(
+    samples,
+    sampleRate,
+    options.targetLufs ?? -14.0,
+    options.ceilingDb ?? -1.0,
+    options.truePeakOversample ?? 4,
+  );
 }
 
 export function masteringProcessorNames(): SoloProcessor[] {

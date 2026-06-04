@@ -268,6 +268,102 @@ export interface ChordDetectionOptions {
   chromaMethod?: 'stft' | 'nnls';
 }
 
+/** Options for `detectAcoustic`. All fields are optional. */
+export interface AcousticOptions {
+  /** Number of octave bands. Default 6. */
+  nOctaveBands?: number;
+  /** Number of 1/3-octave sub-bands. Default 24. */
+  nThirdOctaveSubbands?: number;
+  /** Minimum decay range (dB) for a valid RT60 fit. Default 30. */
+  minDecayDb?: number;
+  /** Margin (dB) above the noise floor for the decay fit. Default 10. */
+  noiseFloorMarginDb?: number;
+}
+
+/** Options for `analyzeBpm`. All fields are optional. */
+export interface AnalyzeBpmOptions {
+  /** Lowest BPM to consider. Default 30. */
+  bpmMin?: number;
+  /** Highest BPM to consider. Default 300. */
+  bpmMax?: number;
+  /** Tempo prior the tracker is biased toward. Default 120. */
+  startBpm?: number;
+  /** FFT size for the onset envelope. Default 2048. */
+  nFft?: number;
+  /** Hop length for the onset envelope. Default 512. */
+  hopLength?: number;
+  /** Number of tempo candidates to return. Default 5. */
+  maxCandidates?: number;
+}
+
+/** Options for `analyzeRhythm`. All fields are optional. */
+export interface AnalyzeRhythmOptions {
+  /** Lowest BPM to consider. Default 60. */
+  bpmMin?: number;
+  /** Highest BPM to consider. Default 200. */
+  bpmMax?: number;
+  /** Tempo prior the tracker is biased toward. Default 120. */
+  startBpm?: number;
+  /** FFT size for the onset envelope. Default 2048. */
+  nFft?: number;
+  /** Hop length for the onset envelope. Default 512. */
+  hopLength?: number;
+}
+
+/** Options for `analyzeDynamics`. All fields are optional. */
+export interface AnalyzeDynamicsOptions {
+  /** Loudness-curve window length in seconds. Default 0.4. */
+  windowSec?: number;
+  /** Hop length for the loudness curve. Default 512. */
+  hopLength?: number;
+  /** Crest-factor (dB) below which the signal is flagged as compressed. Default 6. */
+  compressionThreshold?: number;
+}
+
+/** Options for `analyzeTimbre`. All fields are optional. */
+export interface AnalyzeTimbreOptions {
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop length. Default 512. */
+  hopLength?: number;
+  /** Number of Mel bands. Default 128. */
+  nMels?: number;
+  /** Number of MFCCs. Default 13. */
+  nMfcc?: number;
+  /** Per-window analysis length in seconds. Default 0.5. */
+  windowSec?: number;
+}
+
+/** Options for `analyzeSections`. All fields are optional. */
+export interface AnalyzeSectionsOptions {
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop length. Default 512. */
+  hopLength?: number;
+  /** Minimum section duration in seconds. Default 4. */
+  minSectionSec?: number;
+}
+
+/** Options for `mastering`. All fields are optional. */
+export interface MasteringOptions {
+  /** Target integrated LUFS. Default -14. */
+  targetLufs?: number;
+  /** True/sample peak ceiling in dBFS. Default -1. */
+  ceilingDb?: number;
+  /** Oversampling factor used for peak estimation. Default 4. */
+  truePeakOversample?: number;
+}
+
+/** Options for `noteStretch`. All fields are optional. */
+export interface NoteStretchOptions {
+  /** Note onset position in samples (selects the region). Default 0. */
+  onsetSample?: number;
+  /** Note offset position in samples (selects the region). Default 0. */
+  offsetSample?: number;
+  /** Stretch ratio (0.5 = double duration, 2.0 = half duration). Default 1. */
+  stretchRatio?: number;
+}
+
 /**
  * Detected beat
  */
@@ -345,6 +441,15 @@ export interface CqtResult {
   magnitude: Float32Array;
   /** Center frequency (Hz) of each of the `nBins` bins. */
   frequencies: Float32Array;
+}
+
+/**
+ * Multi-band onset strength matrix result.
+ */
+export interface OnsetStrengthMultiResult {
+  nBands: number;
+  nFrames: number;
+  data: Float32Array;
 }
 
 /**

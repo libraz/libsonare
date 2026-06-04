@@ -385,6 +385,12 @@ export interface WasmFourierTempogramResult {
   data: Float32Array;
 }
 
+export interface WasmOnsetStrengthMultiResult {
+  nBands: number;
+  nFrames: number;
+  data: Float32Array;
+}
+
 export interface WasmNnlsChromaResult {
   nChroma: number;
   nFrames: number;
@@ -693,6 +699,67 @@ export interface WasmRealtimeEngine {
   resetCapture: () => void;
   captureStatus: () => WasmEngineCaptureStatus;
   capturedAudio: () => Float32Array[];
+  setBuiltinInstrument: (destinationId: number, config: object) => void;
+  clearMidiInstrument: (destinationId: number) => void;
+  midiInstrumentCount: () => number;
+  bindMidiCc: (
+    channel: number,
+    controller: number,
+    paramId: number,
+    minValue: number,
+    maxValue: number,
+  ) => void;
+  clearMidiCcBindings: () => void;
+  midiCcBindingCount: () => number;
+  setMidiInputSource: (destinationId: number) => void;
+  clearMidiInputSource: () => void;
+  midiInputPendingCount: () => number;
+  pushMidiInputNoteOn: (
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    portTimeSamples: number,
+  ) => void;
+  pushMidiInputNoteOff: (
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    portTimeSamples: number,
+  ) => void;
+  pushMidiInputCc: (
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    portTimeSamples: number,
+  ) => void;
+  pushMidiNoteOn: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    renderFrame: number,
+  ) => void;
+  pushMidiNoteOff: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    renderFrame: number,
+  ) => void;
+  pushMidiCc: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    renderFrame: number,
+  ) => void;
+  pushMidiPanic: (renderFrame: number) => void;
   process: (channels: Float32Array[]) => Float32Array[];
   prepareChannels: (numChannels: number, maxFrames: number) => void;
   getChannelBuffer: (channel: number, numFrames: number) => Float32Array;
@@ -1489,8 +1556,36 @@ export interface SonareModule {
     tempoMax: number,
     winLength: number,
   ) => Float32Array;
+  chromaCens: (
+    samples: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    nChroma: number,
+  ) => WasmChromaResult;
+  bassChroma: (
+    samples: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    nChroma: number,
+  ) => WasmChromaResult;
   nnlsChroma: (samples: Float32Array, sampleRate: number) => WasmNnlsChromaResult;
   cqt: (
+    samples: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    fmin: number,
+    nBins: number,
+    binsPerOctave: number,
+  ) => WasmCqtResult;
+  pseudoCqt: (
+    samples: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    fmin: number,
+    nBins: number,
+    binsPerOctave: number,
+  ) => WasmCqtResult;
+  hybridCqt: (
     samples: Float32Array,
     sampleRate: number,
     hopLength: number,
@@ -1532,6 +1627,14 @@ export interface SonareModule {
     hopLength: number,
     nMels: number,
   ) => Float32Array;
+  onsetStrengthMulti: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nMels: number,
+    nBands: number,
+  ) => WasmOnsetStrengthMultiResult;
   fourierTempogram: (
     onsetEnvelope: Float32Array,
     sampleRate: number,
@@ -1819,6 +1922,12 @@ export interface WasmMixer {
   removeVcaGroup: (id: string) => void;
   vcaGroupCount: () => number;
   toSceneJson: () => string;
+  tailSamples: () => number;
+  drainTailStereo: (numSamples: number) => {
+    left: Float32Array;
+    right: Float32Array;
+    sampleRate: number;
+  };
   delete: () => void;
 }
 
@@ -1923,6 +2032,7 @@ export interface WasmStreamFramesI16 {
 export interface WasmStreamAnalyzer {
   process: (samples: Float32Array) => void;
   processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
+  finalize: () => void;
   availableFrames: () => number;
   readFramesSoa: (maxFrames: number) => WasmFrameBuffer;
   readFramesU8: (maxFrames: number, quantizeConfig?: unknown) => WasmStreamFramesU8;

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+import numpy as np
+
 from ._analyzer_helpers import *
 
 
@@ -70,9 +72,9 @@ def test_audio_from_file_decodes_m4a() -> None:
             assert audio.length > 1000
             assert audio.sample_rate > 0
             data = audio.data
-            assert isinstance(data, list)
+            assert isinstance(data, np.ndarray)
             assert len(data) == audio.length
-            peak = max(abs(v) for v in data)
+            peak = float(np.max(np.abs(data)))
             assert 0.01 < peak <= 1.0
         finally:
             audio.close()

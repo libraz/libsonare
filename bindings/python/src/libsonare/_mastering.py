@@ -295,10 +295,12 @@ def mastering_chain(
     Args:
         samples: Mono audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        config: Either a flat dict using dot-notation keys (e.g.
-            ``{"dynamics.compressor.thresholdDb": -24}``) or a nested dict
-            (``{"dynamics": {"compressor": {"thresholdDb": -24}}}``). The
-            two forms can be freely mixed.
+        config: A nested dict of module -> processor -> parameter, e.g.
+            ``{"dynamics": {"compressor": {"thresholdDb": -24}},
+            "loudness": {"targetLufs": -14}}``. A boolean toggles a
+            module/processor's ``enabled`` flag. (Flat dot-notation keys such
+            as ``{"dynamics.compressor.thresholdDb": -24}`` are also accepted
+            and may be mixed in.)
         on_progress: Optional callback ``(progress, stage)`` invoked after
             each enabled stage completes. ``progress`` is in ``[0.0, 1.0]``
             and ``stage`` is the stage identifier (e.g.
@@ -436,8 +438,8 @@ def master_audio(
         samples: Mono audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         preset_name: Preset identifier from :func:`mastering_preset_names`.
-        overrides: Optional flat / nested overrides applied on top of the preset
-            defaults. Keys use the same dot-notation as :func:`mastering_chain`.
+        overrides: Optional nested overrides applied on top of the preset
+            defaults. Uses the same config shape as :func:`mastering_chain`.
         on_progress: Optional callback ``(progress, stage)`` invoked after each
             enabled stage completes. See :func:`mastering_chain` for details.
 

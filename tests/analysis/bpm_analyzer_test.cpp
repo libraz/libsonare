@@ -261,6 +261,27 @@ TEST_CASE("BpmAnalyzer degrades gracefully on degenerate onset envelopes", "[bpm
   REQUIRE_NOTHROW(BpmAnalyzer(empty_onset, sr, hop, config));
 }
 
+TEST_CASE("BpmAnalyzer builds weighted tempo histograms without expanding candidate votes",
+          "[bpm_analyzer]") {
+  const int sr = 22050;
+  const int hop = 128;
+  const int n_frames = 4096;
+  std::vector<float> onset(static_cast<size_t>(n_frames), 0.0f);
+  for (int i = 0; i < n_frames; i += 7) {
+    onset[static_cast<size_t>(i)] = 1.0f;
+  }
+
+  BpmConfig config;
+  config.bpm_min = 1.0f;
+  config.bpm_max = 320.0f;
+  config.hop_length = hop;
+
+  BpmAnalyzer analyzer(onset, sr, hop, config);
+  REQUIRE(analyzer.bpm() >= config.bpm_min);
+  REQUIRE(analyzer.bpm() <= config.bpm_max);
+  REQUIRE_FALSE(analyzer.candidates(5).empty());
+}
+
 TEST_CASE("BpmAnalyzer detects a tempo at the bpm_max boundary", "[bpm_analyzer]") {
   const int sr = 22050;
   const int hop = 512;

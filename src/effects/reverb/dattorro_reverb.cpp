@@ -65,6 +65,22 @@ void DattorroReverb::ModAllpass::prepare(size_t base_len, size_t max_depth, floa
   index = 0;
 }
 
+void DattorroReverb::ModAllpass::ensure_capacity(size_t max_depth) {
+  const size_t required = base + max_depth + 2;
+  if (capacity >= required) return;
+
+  std::vector<float> grown(required, 0.0f);
+  const size_t samples_to_keep = std::min(capacity - 1, required - 1);
+  for (size_t delay = 1; delay <= samples_to_keep; ++delay) {
+    const size_t old_pos = (index + capacity - delay) % capacity;
+    const size_t new_pos = (required - delay) % required;
+    grown[new_pos] = buf[old_pos];
+  }
+  buf = std::move(grown);
+  capacity = required;
+  index = 0;
+}
+
 void DattorroReverb::ModAllpass::reset() {
   std::fill(buf.begin(), buf.end(), 0.0f);
   index = 0;
@@ -280,15 +296,21 @@ bool DattorroReverb::set_parameter(unsigned int param_id, float value) {
       lfo_inc_ = static_cast<float>(kTwoPi * config_.mod_rate_hz / sample_rate_);
       return true;
     case 4:
-      // Rescale the modulation depth to the working rate. The tank allpass
-      // clamps reads to the guard buffer sized at prepare(), so growing the
-      // depth never overruns.
       config_.mod_depth_samples = std::max(0.0f, value);
       mod_depth_ = static_cast<float>(config_.mod_depth_samples * sample_rate_ / kRefRate);
+      {
+        const size_t max_depth = static_cast<size_t>(std::lround(mod_depth_)) + 1;
+        mod_ap_l_.ensure_capacity(max_depth);
+        mod_ap_r_.ensure_capacity(max_depth);
+      }
       return true;
     default:
       return false;
   }
+}
+
+bool DattorroReverb::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return param_id != 4u;
 }
 
 void DattorroReverb::reset() {

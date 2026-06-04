@@ -277,7 +277,7 @@ SonareError sonare_strip_remove_send(SonareStrip* strip, unsigned int index) {
   SONARE_C_TRY
   const size_t send_index = static_cast<size_t>(index);
   // Drop the send from BOTH the live strip and the scene_strip mirror so the two
-  // counters stay consistent (LOW-63). Erasing shifts higher sends down by one
+  // counters stay consistent. Erasing shifts higher sends down by one
   // index on both sides, keeping them index-parallel.
   strip->strip.remove_send(send_index);
   if (send_index < strip->scene_strip.sends.size()) {

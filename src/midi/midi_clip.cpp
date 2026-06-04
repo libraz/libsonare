@@ -44,28 +44,30 @@ void MidiClip::sort_stable() {
 
 NotePairValidation MidiClip::validate_note_pairs() const {
   NotePairValidation result;
-  // Count of currently-open note-ons per (channel, note). 16 channels x 128
-  // notes is fixed-size; control thread only.
-  std::array<std::array<int, 128>, 16> open{};
-  for (auto& ch : open) ch.fill(0);
+  // Count of currently-open note-ons per (group, channel, note). UMP group is
+  // part of the MIDI endpoint identity and must not match across groups.
+  std::array<std::array<std::array<int, 128>, 16>, 16> open{};
 
   for (const MidiClipEvent& ev : events_) {
+    const uint8_t group = ev.ump.group;
     const uint8_t channel = ev.ump.channel();
     const uint8_t note = ev.ump.note_number();
-    if (channel >= 16 || note >= 128) continue;
+    if (group >= 16 || channel >= 16 || note >= 128) continue;
     if (ev.ump.is_note_on()) {
-      open[channel][note]++;
+      open[group][channel][note]++;
     } else if (ev.ump.is_note_off()) {
-      if (open[channel][note] > 0) {
-        open[channel][note]--;
+      if (open[group][channel][note] > 0) {
+        open[group][channel][note]--;
       } else {
         result.unmatched_note_offs++;
       }
     }
   }
-  for (auto& ch : open) {
-    for (int count : ch) {
-      if (count > 0) result.unmatched_note_ons += static_cast<uint32_t>(count);
+  for (const auto& group : open) {
+    for (const auto& ch : group) {
+      for (int count : ch) {
+        if (count > 0) result.unmatched_note_ons += static_cast<uint32_t>(count);
+      }
     }
   }
   result.ok = result.unmatched_note_ons == 0 && result.unmatched_note_offs == 0;

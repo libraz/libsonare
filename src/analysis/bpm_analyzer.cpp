@@ -448,8 +448,11 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
 
   /// Use harmonic clustering for octave error handling
 
-  /// Generate tempo candidates from all local maxima, weighted by autocorrelation
-  std::vector<float> tempo_candidates;
+  /// Generate a weighted tempo histogram from all local maxima without expanding
+  /// each peak into repeated candidate values.
+  const int n_hist_bins =
+      static_cast<int>((config_.bpm_max - config_.bpm_min) / bpm_constants::kBinWidth) + 1;
+  std::vector<int> tempo_hist(n_hist_bins > 0 ? static_cast<size_t>(n_hist_bins) : 0u, 0);
   int lag_min = bpm_to_lag(config_.bpm_max, sr, hop_length);
   int lag_max_inner = bpm_to_lag(config_.bpm_min, sr, hop_length);
   lag_min = std::max(1, lag_min);
@@ -464,27 +467,35 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
         autocorr_[lag] > 0.0f) {
       float bpm = lag_to_bpm(refine_peak_lag(autocorr_, lag), sr, hop_length);
       if (bpm >= config_.bpm_min && bpm <= config_.bpm_max) {
-        /// Add candidate multiple times based on autocorrelation strength.
+        /// Add weighted votes based on autocorrelation strength.
         /// Clamp the upper bound to 100 so a pure-tone signal with an
-        /// extremely strong autocorrelation peak (e.g. autocorr * 100 > 100)
-        /// cannot blow up `tempo_candidates` memory.
+        /// extremely strong autocorrelation peak cannot dominate unboundedly.
         int weight = std::min(100, std::max(1, static_cast<int>(autocorr_[lag] * 100.0f)));
-        for (int w = 0; w < weight; ++w) {
-          tempo_candidates.push_back(bpm);
+        if (!tempo_hist.empty()) {
+          int bin_idx = static_cast<int>((bpm - config_.bpm_min) / bpm_constants::kBinWidth);
+          bin_idx = std::clamp(bin_idx, 0, static_cast<int>(tempo_hist.size()) - 1);
+          tempo_hist[static_cast<size_t>(bin_idx)] += weight;
         }
       }
     }
   }
 
-  if (tempo_candidates.empty()) {
+  std::vector<BpmHistogramBin> histogram;
+  histogram.reserve(tempo_hist.size());
+  for (size_t i = 0; i < tempo_hist.size(); ++i) {
+    if (tempo_hist[i] > 0) {
+      histogram.push_back(
+          {config_.bpm_min + static_cast<float>(i) * bpm_constants::kBinWidth, tempo_hist[i]});
+    }
+  }
+  std::sort(histogram.begin(), histogram.end(),
+            [](const BpmHistogramBin& a, const BpmHistogramBin& b) { return a.votes > b.votes; });
+
+  if (histogram.empty()) {
     /// Fall back to highest confidence candidate
     bpm_ = candidates_[0].bpm;
     confidence_ = candidates_[0].confidence;
   } else {
-    /// Build histogram with 0.5 BPM resolution
-    auto histogram = build_bpm_histogram(tempo_candidates, config_.bpm_min, config_.bpm_max,
-                                         bpm_constants::kBinWidth);
-
     /// Take top bins for clustering
     std::vector<BpmHistogramBin> top_bins;
     int n_top = std::min(bpm_constants::kTopBins, static_cast<int>(histogram.size()));

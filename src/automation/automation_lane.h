@@ -14,6 +14,11 @@ struct Breakpoint {
   double ppq = 0.0;
   float value = 0.0f;
   CurveType curve_to_next = CurveType::Linear;
+
+  bool operator==(const Breakpoint& o) const noexcept {
+    return ppq == o.ppq && value == o.value && curve_to_next == o.curve_to_next;
+  }
+  bool operator!=(const Breakpoint& o) const noexcept { return !(*this == o); }
 };
 
 class AutomationLane {

@@ -40,6 +40,46 @@ val js_chroma(val samples, int sample_rate, int n_fft, int hop_length) {
   return out;
 }
 
+val chromaToVal(const Chroma& chroma) {
+  val out = val::object();
+  out.set("nChroma", chroma.n_chroma());
+  out.set("nFrames", chroma.n_frames());
+  out.set("sampleRate", chroma.sample_rate());
+  out.set("hopLength", chroma.hop_length());
+
+  std::vector<float> features_vec(chroma.data(),
+                                  chroma.data() + chroma.n_chroma() * chroma.n_frames());
+  out.set("features", vectorToFloat32Array(features_vec));
+
+  auto mean = chroma.mean_energy();
+  val mean_arr = val::array();
+  for (int i = 0; i < 12; ++i) {
+    mean_arr.call<void>("push", mean[static_cast<size_t>(i)]);
+  }
+  out.set("meanEnergy", mean_arr);
+  return out;
+}
+
+val js_chroma_cens(val samples, int sample_rate, int hop_length, int n_chroma) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  ChromaCensConfig config;
+  config.base.cqt.hop_length = hop_length;
+  config.base.n_chroma = n_chroma;
+  return chromaToVal(chroma_cens(audio, config));
+}
+
+val js_bass_chroma(val samples, int sample_rate, int hop_length, int n_chroma) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  BassChromaConfig config;
+  config.cqt.hop_length = hop_length;
+  config.n_chroma = n_chroma;
+  return chromaToVal(bass_chroma(audio, config));
+}
+
 val js_nnls_chroma(val samples, int sample_rate) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
@@ -168,6 +208,34 @@ val js_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
   return cqtResultToVal(cqt(audio, config));
 }
 
+val js_pseudo_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
+                  int bins_per_octave) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  CqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+
+  return cqtResultToVal(pseudo_cqt(audio, config));
+}
+
+val js_hybrid_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
+                  int bins_per_octave) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  CqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+
+  return cqtResultToVal(hybrid_cqt(audio, config));
+}
+
 val js_vqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
            int bins_per_octave, float gamma) {
   std::vector<float> data = float32ArrayToVector(samples);
@@ -185,8 +253,12 @@ val js_vqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
 
 void registerFeatureMusicBindings() {
   function("chroma", &js_chroma);
+  function("chromaCens", &js_chroma_cens);
+  function("bassChroma", &js_bass_chroma);
   function("nnlsChroma", &js_nnls_chroma);
   function("cqt", &js_cqt);
+  function("pseudoCqt", &js_pseudo_cqt);
+  function("hybridCqt", &js_hybrid_cqt);
   function("vqt", &js_vqt);
   function("analyzeSections", &js_analyze_sections);
   function("analyzeMelody", &js_analyze_melody);

@@ -13,6 +13,10 @@
 #include "automation/parameter.h"
 #include "core/audio.h"
 #include "engine/realtime_engine.h"
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "host/midi_io.h"
+#include "midi/builtin_synth.h"
+#endif
 #include "sonare_c.h"
 #include "util/exception.h"
 #include "util/types.h"
@@ -30,6 +34,11 @@ struct SonareRealtimeEngine {
   std::deque<std::string> parameter_strings;
   std::deque<std::string> marker_strings;
   std::vector<sonare::automation::AutomationLane> automation_lanes;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  std::vector<std::pair<uint32_t, std::unique_ptr<sonare::midi::BuiltinSynth>>> builtin_instruments;
+  sonare::host::FixedMidiInputSource<512> midi_input_source;
+  bool midi_input_source_enabled = false;
+#endif
 };
 
 namespace sonare_c_detail {

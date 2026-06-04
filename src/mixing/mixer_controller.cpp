@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "mixing/solo_mute.h"
+
 namespace sonare::mixing {
 
 bool MixerController::add_strip(ChannelStrip* strip) {
@@ -45,7 +47,7 @@ void MixerController::recompute_solo_mutes() {
     // A solo-safe strip (e.g. a reverb-return or talkback bus) is never
     // implied-muted by another strip's solo, matching effectively_muted()'s
     // `implied_mute() && !solo_safe()` guard.
-    strip->set_implied_mute(any_solo && !strip->soloed() && !strip->solo_safe());
+    strip->set_implied_mute(solo_implies_mute(any_solo, strip->soloed(), strip->solo_safe()));
   }
 }
 

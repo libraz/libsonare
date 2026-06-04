@@ -1,6 +1,7 @@
 /// @file mixing_bus_control_test.cpp
 /// @brief Mixing bus, VCA, controller, delay, width, and meter tests.
 
+#include "mixing/solo_mute.h"
 #include "mixing_test_helpers.h"
 
 TEST_CASE("SendProcessor exposes pre and post fader timing", "[mixing]") {
@@ -65,6 +66,15 @@ TEST_CASE("MixerController computes solo implied mute outside audio thread", "[m
   REQUIRE_FALSE(vocal.effectively_muted());
   REQUIRE(drums.effectively_muted());
   REQUIRE_FALSE(reverb.effectively_muted());
+}
+
+TEST_CASE("solo implied mute rule is shared for solo-safe strips", "[mixing]") {
+  using sonare::mixing::solo_implies_mute;
+
+  REQUIRE_FALSE(solo_implies_mute(false, false, false));
+  REQUIRE_FALSE(solo_implies_mute(true, true, false));
+  REQUIRE_FALSE(solo_implies_mute(true, false, true));
+  REQUIRE(solo_implies_mute(true, false, false));
 }
 
 TEST_CASE("AlignmentDelay reports and applies integer latency", "[mixing]") {

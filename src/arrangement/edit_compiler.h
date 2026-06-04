@@ -140,6 +140,16 @@ struct MixerStripBinding {
   }
 };
 
+struct MixerAutomationBinding {
+  TrackId track_id = 0;
+  automation::AutomationLane lane;
+
+  bool operator==(const MixerAutomationBinding& o) const {
+    return track_id == o.track_id && lane.target_param_id() == o.lane.target_param_id() &&
+           lane.points() == o.lane.points();
+  }
+};
+
 /// Mixer scene/binding request: a copy of the Project's Scene plus the resolved
 /// Track->Strip bindings. The Scene is pure data and is always carried (even when
 /// mixing runtime is disabled); the actual bind happens in the caller under
@@ -147,6 +157,7 @@ struct MixerStripBinding {
 struct MixerRequest {
   mixing::api::Scene scene;
   std::vector<MixerStripBinding> bindings;
+  std::vector<MixerAutomationBinding> automation_bindings;
   /// True when bindings exist but this build lacks SONARE_WITH_MIXING.
   bool unavailable_in_build = false;
 };

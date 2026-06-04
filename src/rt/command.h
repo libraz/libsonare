@@ -20,7 +20,8 @@ inline constexpr uint32_t kEngineAbiVersion = 3;
 //      perform in-place, allocation-free updates:
 //        kSetParam, kSetParamSmoothed, kTransportPlay, kTransportStop,
 //        kTransportSeekSample, kTransportSeekPpq, kSeekMarker,
-//        kMidiCcImmediate, kMidiAllNotesOff (a.k.a. MIDI panic).
+//        kMidiNoteOnImmediate, kMidiNoteOffImmediate, kMidiCcImmediate,
+//        kMidiAllNotesOff (a.k.a. MIDI panic).
 //
 //      Live scalar MIDI commands stay strictly POD: they synthesize a UMP from
 //      packed scalar fields (no pointer, no variable-length payload) and route
@@ -64,6 +65,13 @@ enum class CommandType : uint16_t {
   kSetMarker,
   // -- Group (1) continued --
   kSeekMarker,
+  // Immediate (live) MIDI note events routed to a destination. Field encoding:
+  //   target_id   = MIDI destination id.
+  //   sample_time = render frame to fire at.
+  //   arg.i       = packed bytes: bits[0..6]=velocity, bits[8..14]=note,
+  //                 bits[16..19]=channel(0..15), bits[24..27]=group(0..15).
+  kMidiNoteOnImmediate,
+  kMidiNoteOffImmediate,
   // Immediate (live) MIDI control change routed to the host instrument via the
   // MidiSequencer's injection path. Strictly POD/scalar -- no pointer, no
   // variable-length payload. Field encoding:

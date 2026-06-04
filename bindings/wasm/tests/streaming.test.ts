@@ -856,7 +856,9 @@ describe('StreamAnalyzer', () => {
       const config = { sampleRate, nFft: 1024, hopLength: 256, nMels: 32 };
       const sine = (freq: number, n: number): Float32Array => {
         const out = new Float32Array(n);
-        for (let i = 0; i < n; i++) out[i] = Math.sin((2 * Math.PI * freq * i) / sampleRate) * 0.3;
+        for (let i = 0; i < n; i++) {
+          out[i] = Math.sin((2 * Math.PI * freq * i) / sampleRate) * 0.3;
+        }
         return out;
       };
 

@@ -175,6 +175,10 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_m
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "scaleQuantizer: modeMask must be non-zero");
   }
+  if (mode_mask < 0 || mode_mask > 4095) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "scaleQuantizer: modeMask must be in [0, 4095]");
+  }
   editing::pitch_editor::ScaleQuantizerConfig cfg;
   cfg.root = root;
   cfg.mode_mask = static_cast<uint16_t>(mode_mask);

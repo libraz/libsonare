@@ -186,6 +186,9 @@ SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* ana
                                                        const float* samples, size_t n_samples,
                                                        size_t sample_offset);
 
+/// @brief Flushes the final partial frame with zero-padding.
+SonareError sonare_stream_analyzer_finalize(SonareStreamAnalyzer* analyzer);
+
 /// @brief Returns the number of frames available to read.
 SonareError sonare_stream_analyzer_available_frames(SonareStreamAnalyzer* analyzer,
                                                     size_t* out_count);

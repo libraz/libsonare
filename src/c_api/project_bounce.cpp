@@ -6,6 +6,8 @@
 
 #include "midi/builtin_synth.h"
 #if defined(SONARE_WITH_MIXING)
+#include "c_api/mixing_internal.h"
+#include "engine/mixing_runtime.h"
 #include "mixing/api/scene.h"
 #include "sonare_c_mixing.h"
 #endif
@@ -113,6 +115,10 @@ void render_timeline(const arr::CompiledTimeline& timeline,
 }
 
 #if defined(SONARE_WITH_MIXING)
+sonare::mixing::AutomationCurveType to_mixing_curve(sonare::automation::CurveType curve) noexcept {
+  return static_cast<sonare::mixing::AutomationCurveType>(static_cast<int>(curve));
+}
+
 // Resolved Track->Strip routing for a channel-strip bounce: the scene strip ids
 // in their canonical order (= the mixer's process_stereo input index order),
 // each strip's set of source tracks, and the union of all bound tracks.
@@ -142,7 +148,72 @@ MixerRouting resolve_mixer_routing(const arr::CompiledTimeline& timeline) {
   return routing;
 }
 
-// Channel-strip bounce (HIGH-02): renders each bound track as an isolated dry
+void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const MixerRouting& routing,
+                               double sample_rate, SonareMixer* mixer) {
+  if (mixer == nullptr) return;
+  std::map<uint32_t, std::string> strip_for_track;
+  for (size_t i = 0; i < routing.strip_ids.size(); ++i) {
+    for (uint32_t track_id : routing.strip_tracks[i]) {
+      strip_for_track.emplace(track_id, routing.strip_ids[i]);
+    }
+  }
+
+  sonare::transport::TempoMap tempo_map;
+  tempo_map.prepare(sample_rate);
+  if (!timeline.tempo_segments.empty()) {
+    tempo_map.set_segments(timeline.tempo_segments);
+  }
+  if (!timeline.time_signatures.empty()) {
+    tempo_map.set_time_signatures(timeline.time_signatures);
+  }
+
+  for (const auto& binding : timeline.mixer.automation_bindings) {
+    const auto route = strip_for_track.find(binding.track_id);
+    if (route == strip_for_track.end()) continue;
+    SonareStrip* strip = sonare_mixer_strip_by_id(mixer, route->second.c_str());
+    if (strip == nullptr) continue;
+    const auto& lane = binding.lane;
+    const auto& points = lane.points();
+    if (points.empty()) continue;
+    const float initial_value = lane.value_at(0.0);
+
+    switch (lane.target_param_id()) {
+      case sonare::engine::MixingRuntime::kFaderDb:
+        strip->strip.set_fader_db(initial_value);
+        break;
+      case sonare::engine::MixingRuntime::kPan:
+        strip->strip.set_pan(initial_value);
+        break;
+      case sonare::engine::MixingRuntime::kWidth:
+        strip->strip.set_width(initial_value);
+        break;
+      default:
+        break;
+    }
+
+    const auto schedule = [&](int64_t sample, float value,
+                              sonare::mixing::AutomationCurveType curve) {
+      switch (lane.target_param_id()) {
+        case sonare::engine::MixingRuntime::kFaderDb:
+          return strip->strip.schedule_fader_automation(sample, value, curve);
+        case sonare::engine::MixingRuntime::kPan:
+          return strip->strip.schedule_pan_automation(sample, value, curve);
+        case sonare::engine::MixingRuntime::kWidth:
+          return strip->strip.schedule_width_automation(sample, value, curve);
+        default:
+          return false;
+      }
+    };
+
+    schedule(0, initial_value, sonare::mixing::AutomationCurveType::Hold);
+    for (const auto& point : points) {
+      const int64_t sample = std::max<int64_t>(0, tempo_map.ppq_to_sample(point.ppq));
+      schedule(sample, point.value, to_mixing_curve(point.curve_to_next));
+    }
+  }
+}
+
+// Channel-strip bounce: renders each bound track as an isolated dry
 // stereo stem and sums the stems through the scene's mixer so per-track EQ,
 // inserts, pan, fader, sends and buses are applied. Tracks bound to no scene
 // strip are rendered into a separate dry stem and summed straight into the
@@ -192,6 +263,8 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   SonareMixer* mixer =
       sonare_mixer_from_scene_json(scene_json.c_str(), static_cast<int>(sample_rate), block_size);
   if (mixer == nullptr) return SONARE_ERROR_INVALID_STATE;
+  sonare_c_mixing_detail::build_and_compile(mixer);
+  schedule_mixer_automation(timeline, routing, sample_rate, mixer);
 
   std::vector<float> master_l(static_cast<size_t>(frames), 0.0f);
   std::vector<float> master_r(static_cast<size_t>(frames), 0.0f);
@@ -258,6 +331,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
   if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
+  project->last_bounce_diagnostics.clear();
 
   SonareProjectBounceOptions opts{};
   if (options) opts = *options;
@@ -277,6 +351,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   config.instrument_latency_samples = opts.instrument_latency_samples;
   arr::CompileResult compiled = arr::compile(
       project->history.project(), project->history.midi_content(), project->audio, config);
+  project->last_bounce_diagnostics = compiled.diagnostics;
   if (!compiled.timeline.has_value()) return SONARE_ERROR_INVALID_STATE;
 
   // Validate the hosted instruments and derive the project's PDC + longest tail

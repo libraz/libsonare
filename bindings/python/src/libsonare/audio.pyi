@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
+import numpy as np
+
 from .analyzer import MasteringParams, MasteringPreset, SoloProcessor
 from .types import (
     AcousticResult,
@@ -38,7 +40,7 @@ class Audio:
     @classmethod
     def from_memory(cls, data: bytes) -> Audio: ...
     @property
-    def data(self) -> list[float]: ...
+    def data(self) -> np.ndarray: ...
     @property
     def length(self) -> int: ...
     @property

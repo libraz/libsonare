@@ -142,6 +142,18 @@ TEST_CASE("estimate_key_from_chords scores minor cadence/bookend bonuses symmetr
   REQUIRE(bookend_key.mode == Mode::Minor);
 }
 
+TEST_CASE("estimate_key_from_chords does not bias zero-score progressions to C major",
+          "[key_analyzer][synthetic_matrix]") {
+  std::vector<Chord> zero_duration = {
+      chord(PitchClass::Fs, ChordQuality::Minor, 0.0f, 0.0f),
+      chord(PitchClass::B, ChordQuality::Minor, 0.0f, 0.0f),
+  };
+  Key key = estimate_key_from_chords(zero_duration);
+  REQUIRE(key.root == PitchClass::Fs);
+  REQUIRE(key.mode == Mode::Minor);
+  REQUIRE(key.confidence == 0.0f);
+}
+
 TEST_CASE("KeyAnalyzer modal synthetic matrix is opt-in", "[key_analyzer][synthetic_matrix]") {
   const Mode modes[] = {Mode::Dorian, Mode::Phrygian, Mode::Lydian, Mode::Mixolydian,
                         Mode::Locrian};

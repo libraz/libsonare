@@ -13,18 +13,18 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { BuiltinSynthConfig } from '../dist/index.js';
 import {
   decomposeWithInit,
   init,
+  Mixer,
   meteringPhaseScopeDecimated,
   meteringSpectrumFrame,
   meteringVectorscopeDecimated,
-  mixStereo,
-  Mixer,
   mixingScenePresetJson,
+  mixStereo,
   Project,
 } from '../dist/index.js';
-import type { BuiltinSynthConfig } from '../dist/index.js';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -33,7 +33,9 @@ function maxAbs(buffer: Float32Array): number {
   let peak = 0;
   for (let i = 0; i < buffer.length; i++) {
     const v = Math.abs(buffer[i]);
-    if (v > peak) peak = v;
+    if (v > peak) {
+      peak = v;
+    }
   }
   return peak;
 }
@@ -147,7 +149,9 @@ describe('WASM cross-binding consistency', () => {
         const vocal = mixer.stripById('vocal');
         mixer.compile();
         const block = new Float32Array(BLOCK);
-        for (let i = 0; i < BLOCK; i++) block[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
+        for (let i = 0; i < BLOCK; i++) {
+          block[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
+        }
         mixer.processStereo([block, new Float32Array(BLOCK)], [block, new Float32Array(BLOCK)]);
         const post = mixer.stripMeter(vocal);
         const postTap = mixer.stripMeter(vocal, 'postFader');
@@ -182,7 +186,9 @@ describe('WASM cross-binding consistency', () => {
       const nFeatures = 8;
       const nFrames = 6;
       const s = new Float32Array(nFeatures * nFrames);
-      for (let i = 0; i < s.length; i++) s[i] = Math.abs(Math.sin(i * 0.7)) + 0.01;
+      for (let i = 0; i < s.length; i++) {
+        s[i] = Math.abs(Math.sin(i * 0.7)) + 0.01;
+      }
       const { w, h } = decomposeWithInit(s, nFeatures, nFrames, 2, 20, 2.0, 'nndsvd');
       expect(w).toBeInstanceOf(Float32Array);
       expect(h).toBeInstanceOf(Float32Array);
@@ -222,7 +228,9 @@ describe('WASM cross-binding consistency', () => {
     it('meteringSpectrumFrame returns a single-frame spectrum snapshot', () => {
       const n = 4096;
       const samples = new Float32Array(n);
-      for (let i = 0; i < n; i++) samples[i] = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / SR);
+      for (let i = 0; i < n; i++) {
+        samples[i] = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / SR);
+      }
       const report = meteringSpectrumFrame(samples, SR, 0, { nFft: 2048 });
       expect(report.frequencies).toBeInstanceOf(Float32Array);
       expect(report.magnitude).toBeInstanceOf(Float32Array);

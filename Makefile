@@ -51,13 +51,21 @@ clean:
 
 rebuild: clean build
 
+# `format` applies every auto-fixable change the CI lint gate checks, then runs
+# `lint` to verify. The binding steps use `lint:fix` (biome check --write), not
+# `yarn format` (biome format --write): the former also applies import
+# organization and the safe lint fixes that `yarn lint` (biome check) enforces in
+# CI, so `make format` can no longer succeed while CI lint would fail. Anything
+# left (e.g. unused imports, an unsafe fix biome will not auto-apply) surfaces in
+# the final `lint` step for manual resolution.
 format:
 	git ls-files -z --cached --others --exclude-standard -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' | python3 -c 'import os, sys; paths = [p for p in sys.stdin.buffer.read().split(b"\0") if p and os.path.exists(os.fsdecode(p))]; sys.stdout.buffer.write(b"\0".join(paths) + (b"\0" if paths else b""))' | xargs -0 clang-format -i
-	cd bindings/wasm && yarn format
-	cd bindings/node && yarn format
+	cd bindings/wasm && yarn lint:fix
+	cd bindings/node && yarn lint:fix
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format bindings/python/src bindings/python/tests
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
+	$(MAKE) lint
 
 lint:
 	cd bindings/wasm && yarn lint

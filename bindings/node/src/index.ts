@@ -1,13 +1,36 @@
+import {
+  analyzeBpm as analyzeBpmFn,
+  analyzeDynamics as analyzeDynamicsFn,
+  analyzeRhythm as analyzeRhythmFn,
+  analyzeTimbre as analyzeTimbreFn,
+  chordFunctionalAnalysis as chordFunctionalAnalysisFn,
+  detectAcoustic as detectAcousticFn,
+  detectChords as detectChordsFn,
+} from './analysis.js';
+import type { VoiceChangeOptions } from './effects_mastering.js';
+import {
+  masterAudio as masterAudioFn,
+  masteringChain as masteringChainFn,
+  mastering as masteringFn,
+  noteStretch as noteStretchFn,
+  voiceChange as voiceChangeFn,
+} from './effects_mastering.js';
+import { addon } from './native.js';
 import type {
+  AcousticOptions,
   AcousticResult,
-  AnalysisProgressCallback,
   AnalysisResult,
+  AnalyzeBpmOptions,
+  AnalyzeDynamicsOptions,
+  AnalyzeRhythmOptions,
+  AnalyzeTimbreOptions,
   AutomationCurve,
   BpmAnalysisResult,
+  BuiltinInstrumentConfig,
+  BuiltinSynthConfig,
   ChordAnalysisResult,
-  ChordChromaMethod,
+  ChordDetectionOptions,
   ChromaResult,
-  CqtResult,
   DynamicsResult,
   EngineAutomationPoint,
   EngineBounceOptions,
@@ -23,41 +46,34 @@ import type {
   EngineParameterInfo,
   EngineTelemetry,
   EngineTransportState,
-  EqBandInput,
-  EqSpectrumSnapshot,
   GoniometerPoint,
   HpssResult,
-  InverseMelResult,
-  InverseStftResult,
   Key,
   KeyCandidate,
   KeyDetectionOptions,
   LufsResult,
+  MasteringChainConfig,
   MasteringChainResult,
-  MasteringChainStereoResult,
+  MasteringOptions,
   MasteringPreset,
   MasteringResult,
-  MasteringStereoResult,
-  Matrix2D,
-  MelodyResult,
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
+  MidiCcBindOptions,
+  MidiCcLearnOptions,
   MixerProcessResult,
   MixMeterSnapshot,
   MixOptions,
   MixResult,
-  PairAnalysis,
-  PairProcessor,
+  NoteStretchOptions,
   PanLaw,
   PanMode,
   PitchResult,
-  BuiltinInstrumentConfig,
-  BuiltinSynthConfig,
-  SynthWaveform,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
   ProjectAutomationLaneDesc,
+  ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
   ProjectClipDesc,
@@ -65,40 +81,25 @@ import type {
   ProjectCompileResult,
   ProjectKeySegment,
   ProjectLoopMode,
+  ProjectMidiCcBinding,
   ProjectMidiClipResult,
   ProjectMidiEvent,
+  ProjectMidiRouteConfig,
+  ProjectMidiRouteResult,
+  ProjectTempoSegment,
+  ProjectTimeSignatureSegment,
   ProjectTrackDesc,
-  RealtimeVoiceChangerConfig,
-  RealtimeVoiceChangerConfigInput,
-  RealtimeVoiceChangerOptions,
   RhythmResult,
-  RirResult,
-  RirSynthOptions,
-  RoomEstimateOptions,
-  RoomEstimateResult,
-  RoomMorphOptions,
-  Section,
   SendTiming,
   SoloProcessor,
-  StereoAnalysis,
   StftDbResult,
   StftResult,
-  StreamAnalyzerConfig,
-  StreamAnalyzerStats,
-  StreamFramesI16,
-  StreamFramesSoa,
-  StreamFramesU8,
-  StreamQuantizeConfig,
-  StreamingPlatform,
   StripRef,
-  TempogramMode,
+  SynthWaveform,
   TimbreResult,
-  VoicePresetId,
 } from './types.js';
-
 // Runtime value re-exported from types (the rest of `./types.js` is type-only).
 import { EXPECTED_PROJECT_ABI_VERSION } from './types.js';
-import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
 import {
   assertFiniteScalar,
@@ -107,25 +108,16 @@ import {
   midi1Event,
 } from './validation.js';
 
-export { EXPECTED_PROJECT_ABI_VERSION };
-export type { ValidateOptions } from './validation.js';
-export * from './features.js';
 export * from './analysis.js';
-export * from './metering.js';
 export * from './effects_mastering.js';
-
-function chordChromaMethodValue(method: ChordChromaMethod): number {
-  switch (method) {
-    case 'stft':
-      return 0;
-    case 'nnls':
-      return 1;
-  }
-  throw new Error(`Invalid chord chroma method: ${method}`);
-}
+export * from './features.js';
+export * from './metering.js';
+export type { ValidateOptions } from './validation.js';
+export { EXPECTED_PROJECT_ABI_VERSION };
 
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
+  private disposed = false;
 
   private constructor(native: InstanceType<typeof addon.Audio>) {
     this.native = native;
@@ -164,7 +156,16 @@ export class Audio {
   }
 
   destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     this.native.destroy();
+  }
+
+  /** Releases the native handle; lets `using` (Node 22+) free it automatically. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 
   // -- Analysis --
@@ -197,161 +198,45 @@ export class Audio {
     return this.native.analyze();
   }
 
-  analyzeBpm(
-    bpmMin = 30.0,
-    bpmMax = 300.0,
-    startBpm = 120.0,
-    nFft = 2048,
-    hopLength = 512,
-    maxCandidates = 5,
-  ): BpmAnalysisResult {
-    return addon.analyzeBpm(
-      this.getData(),
-      this.getSampleRate(),
-      bpmMin,
-      bpmMax,
-      startBpm,
-      nFft,
-      hopLength,
-      maxCandidates,
-    );
+  analyzeBpm(options: AnalyzeBpmOptions = {}): BpmAnalysisResult {
+    return analyzeBpmFn(this.getData(), this.getSampleRate(), options);
   }
 
   analyzeImpulseResponse(nOctaveBands = 6): AcousticResult {
     return addon.analyzeImpulseResponse(this.getData(), this.getSampleRate(), nOctaveBands);
   }
 
-  detectAcoustic(
-    nOctaveBands = 6,
-    nThirdOctaveSubbands = 24,
-    minDecayDb = 30.0,
-    noiseFloorMarginDb = 10.0,
-  ): AcousticResult {
-    return addon.detectAcoustic(
-      this.getData(),
-      this.getSampleRate(),
-      nOctaveBands,
-      nThirdOctaveSubbands,
-      minDecayDb,
-      noiseFloorMarginDb,
-    );
+  detectAcoustic(options: AcousticOptions = {}): AcousticResult {
+    return detectAcousticFn(this.getData(), this.getSampleRate(), options);
   }
 
-  analyzeRhythm(
-    bpmMin = 60.0,
-    bpmMax = 200.0,
-    startBpm = 120.0,
-    nFft = 2048,
-    hopLength = 512,
-  ): RhythmResult {
-    return addon.analyzeRhythm(
-      this.getData(),
-      this.getSampleRate(),
-      bpmMin,
-      bpmMax,
-      startBpm,
-      nFft,
-      hopLength,
-    );
+  analyzeRhythm(options: AnalyzeRhythmOptions = {}): RhythmResult {
+    return analyzeRhythmFn(this.getData(), this.getSampleRate(), options);
   }
 
-  analyzeDynamics(windowSec = 0.4, hopLength = 512, compressionThreshold = 6.0): DynamicsResult {
-    return addon.analyzeDynamics(
-      this.getData(),
-      this.getSampleRate(),
-      windowSec,
-      hopLength,
-      compressionThreshold,
-    );
+  analyzeDynamics(options: AnalyzeDynamicsOptions = {}): DynamicsResult {
+    return analyzeDynamicsFn(this.getData(), this.getSampleRate(), options);
   }
 
-  analyzeTimbre(
-    nFft = 2048,
-    hopLength = 512,
-    nMels = 128,
-    nMfcc = 13,
-    windowSec = 0.5,
-  ): TimbreResult {
-    return addon.analyzeTimbre(
-      this.getData(),
-      this.getSampleRate(),
-      nFft,
-      hopLength,
-      nMels,
-      nMfcc,
-      windowSec,
-    );
+  analyzeTimbre(options: AnalyzeTimbreOptions = {}): TimbreResult {
+    return analyzeTimbreFn(this.getData(), this.getSampleRate(), options);
   }
 
-  detectChords(
-    minDuration = 0.3,
-    smoothingWindow = 2.0,
-    threshold = 0.5,
-    useTriadsOnly = false,
-    nFft = 2048,
-    hopLength = 512,
-    useBeatSync = true,
-    useHmm = false,
-    hmmBeamWidth = 24,
-    useKeyContext = false,
-    keyRoot = 0,
-    keyMode = 0,
-    detectInversions = false,
-    chromaMethod: ChordChromaMethod = 'stft',
-  ): ChordAnalysisResult {
-    return addon.detectChords(
-      this.getData(),
-      this.getSampleRate(),
-      minDuration,
-      smoothingWindow,
-      threshold,
-      useTriadsOnly,
-      nFft,
-      hopLength,
-      useBeatSync,
-      useHmm,
-      hmmBeamWidth,
-      useKeyContext,
-      keyRoot,
-      keyMode,
-      detectInversions,
-      chordChromaMethodValue(chromaMethod),
-    );
+  detectChords(options: ChordDetectionOptions = {}): ChordAnalysisResult {
+    return detectChordsFn(this.getData(), this.getSampleRate(), options);
   }
 
   chordFunctionalAnalysis(
     keyRoot: number,
     keyMode = 0,
-    minDuration = 0.3,
-    smoothingWindow = 2.0,
-    threshold = 0.5,
-    useTriadsOnly = false,
-    nFft = 2048,
-    hopLength = 512,
-    useBeatSync = true,
-    useHmm = false,
-    hmmBeamWidth = 24,
-    useKeyContext = false,
-    detectInversions = false,
-    chromaMethod: ChordChromaMethod = 'stft',
+    options: ChordDetectionOptions = {},
   ): string[] {
-    return addon.chordFunctionalAnalysis(
+    return chordFunctionalAnalysisFn(
       this.getData(),
       keyRoot,
       keyMode,
       this.getSampleRate(),
-      minDuration,
-      smoothingWindow,
-      threshold,
-      useTriadsOnly,
-      nFft,
-      hopLength,
-      useBeatSync,
-      useHmm,
-      hmmBeamWidth,
-      useKeyContext,
-      detectInversions,
-      chordChromaMethodValue(chromaMethod),
+      options,
     );
   }
 
@@ -381,38 +266,20 @@ export class Audio {
     return addon.pitchCorrectToMidi(this.getData(), this.getSampleRate(), currentMidi, targetMidi);
   }
 
-  noteStretch(onsetSample = 0, offsetSample = 0, stretchRatio = 1.0): Float32Array {
-    return addon.noteStretch(
-      this.getData(),
-      this.getSampleRate(),
-      onsetSample,
-      offsetSample,
-      stretchRatio,
-    );
+  noteStretch(options: NoteStretchOptions = {}): Float32Array {
+    return noteStretchFn(this.getData(), this.getSampleRate(), options);
   }
 
-  voiceChange(
-    pitchSemitones = 0.0,
-    formantFactor = 1.0,
-    options: ValidateOptions = {},
-  ): Float32Array {
-    const data = this.getData();
-    assertSamples('voiceChange', data, options.validate !== false);
-    return addon.voiceChange(data, this.getSampleRate(), pitchSemitones, formantFactor);
+  voiceChange(options: VoiceChangeOptions = {}): Float32Array {
+    return voiceChangeFn(this.getData(), this.getSampleRate(), options);
   }
 
   normalize(targetDb = 0.0): Float32Array {
     return addon.normalize(this.getData(), this.getSampleRate(), targetDb);
   }
 
-  mastering(targetLufs = -14.0, ceilingDb = -1.0, truePeakOversample = 4): MasteringResult {
-    return addon.mastering(
-      this.getData(),
-      this.getSampleRate(),
-      targetLufs,
-      ceilingDb,
-      truePeakOversample,
-    );
+  mastering(options: MasteringOptions = {}): MasteringResult {
+    return masteringFn(this.getData(), this.getSampleRate(), options);
   }
 
   masteringProcess(
@@ -423,35 +290,18 @@ export class Audio {
   }
 
   masteringChain(
-    config: Record<string, number | boolean> = {},
+    config: MasteringChainConfig = {},
     onProgress?: (progress: number, stage: string) => void,
   ): MasteringChainResult {
-    if (onProgress) {
-      return addon.masteringChainWithProgress(
-        this.getData(),
-        this.getSampleRate(),
-        config,
-        onProgress,
-      );
-    }
-    return addon.masteringChain(this.getData(), this.getSampleRate(), config);
+    return masteringChainFn(this.getData(), this.getSampleRate(), config, onProgress);
   }
 
   masterAudio(
     preset: MasteringPreset = 'pop',
-    overrides: Record<string, number | boolean> = {},
+    overrides: MasteringChainConfig = {},
     onProgress?: (progress: number, stage: string) => void,
   ): MasteringChainResult {
-    if (onProgress) {
-      return addon.masterAudioWithProgress(
-        preset,
-        this.getData(),
-        this.getSampleRate(),
-        overrides,
-        onProgress,
-      );
-    }
-    return addon.masterAudio(preset, this.getData(), this.getSampleRate(), overrides);
+    return masterAudioFn(this.getData(), this.getSampleRate(), preset, overrides, onProgress);
   }
 
   trim(thresholdDb = -60.0): Float32Array {
@@ -617,6 +467,7 @@ export class Audio {
 
 export class RealtimeEngine {
   private native: InstanceType<typeof addon.RealtimeEngine>;
+  private disposed = false;
 
   constructor(
     sampleRate = 48000,
@@ -839,6 +690,127 @@ export class RealtimeEngine {
   }
 
   /**
+   * Bind a built-in synth to a realtime MIDI destination. Live note/CC commands
+   * and scheduled MIDI clips routed to that destination render through it.
+   */
+  setBuiltinInstrument(
+    config: BuiltinSynthConfig = {},
+    destinationId = config.destinationId ?? 0,
+  ): void {
+    this.native.setBuiltinInstrument(destinationId, config);
+  }
+
+  clearMidiInstrument(destinationId = 0): void {
+    this.native.clearMidiInstrument(destinationId);
+  }
+
+  midiInstrumentCount(): number {
+    return this.native.midiInstrumentCount();
+  }
+
+  /**
+   * Bind a live MIDI CC to an engine automation parameter. The MIDI event still
+   * reaches the destination instrument; when bound, its 7-bit value is also
+   * mapped into [minValue, maxValue] for `paramId`.
+   */
+  bindMidiCc(
+    channel: number,
+    controller: number,
+    paramId: number,
+    options: MidiCcBindOptions = {},
+  ): void {
+    this.native.bindMidiCc(
+      channel,
+      controller,
+      paramId,
+      options.minValue ?? 0,
+      options.maxValue ?? 1,
+    );
+  }
+
+  clearMidiCcBindings(): void {
+    this.native.clearMidiCcBindings();
+  }
+
+  midiCcBindingCount(): number {
+    return this.native.midiCcBindingCount();
+  }
+
+  /** Install/replace a live non-destructive MIDI-FX insert for one destination. */
+  setMidiFx(destinationId: number, configJson: string): void {
+    this.native.setMidiFx(destinationId, configJson);
+  }
+
+  clearMidiFx(destinationId = 0): void {
+    this.native.clearMidiFx(destinationId);
+  }
+
+  /** Enable the engine-owned live MIDI input source for a destination. */
+  setMidiInputSource(destinationId = 0): void {
+    this.native.setMidiInputSource(destinationId);
+  }
+
+  clearMidiInputSource(): void {
+    this.native.clearMidiInputSource();
+  }
+
+  midiInputPendingCount(): number {
+    return this.native.midiInputPendingCount();
+  }
+
+  pushMidiInputNoteOn(
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputNoteOn(group, channel, note, velocity, portTimeSamples);
+  }
+
+  pushMidiInputNoteOff(
+    group: number,
+    channel: number,
+    note: number,
+    velocity = 0,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputNoteOff(group, channel, note, velocity, portTimeSamples);
+  }
+
+  pushMidiInputCc(
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputCc(group, channel, controller, value, portTimeSamples);
+  }
+
+  pushMidiNoteOn(
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
+  }
+
+  pushMidiNoteOff(
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity = 0,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
+  }
+
+  /**
    * Queue an immediate (live) MIDI control change to a MIDI destination. Values
    * are 7-bit; channel 0..15, group 0..15. `renderFrame` is the render-frame
    * time to apply, or -1 for immediate.
@@ -868,7 +840,16 @@ export class RealtimeEngine {
   }
 
   destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     this.native.destroy();
+  }
+
+  /** Releases the native handle; lets `using` (Node 22+) free it automatically. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 }
 
@@ -912,6 +893,7 @@ export function projectAbiVersion(): number {
  */
 export class Project {
   private native: InstanceType<typeof addon.Project>;
+  private disposed = false;
 
   private constructor(native: InstanceType<typeof addon.Project>) {
     this.native = native;
@@ -976,6 +958,120 @@ export class Project {
     return midi1Event('Project.midiProgram', ppq, group, 0xc, channel, program, 0);
   }
 
+  /** Return the General MIDI instrument name for `program`, or `null` when out of range. */
+  static gmInstrumentName(program: number): string | null {
+    return addon.midiGmInstrumentName(program);
+  }
+
+  /** Return the General MIDI program number for a canonical instrument name, or `-1`. */
+  static gmProgramForName(name: string): number {
+    return addon.midiGmProgramForName(name);
+  }
+
+  /** Return the General MIDI family name for `family`, or `null` when out of range. */
+  static gmFamilyName(family: number): string | null {
+    return addon.midiGmFamilyName(family);
+  }
+
+  /** Return the first General MIDI program number in `family`, or `-1`. */
+  static gmFamilyFirstProgram(family: number): number {
+    return addon.midiGmFamilyFirstProgram(family);
+  }
+
+  /** Return the GM2 bank/program instrument variation name, or `null` when unavailable. */
+  static gm2InstrumentName(bankLsb: number, program: number): string | null {
+    return addon.midiGm2InstrumentName(bankLsb, program);
+  }
+
+  /** Return the General MIDI drum name for `note`, or `null` when out of range. */
+  static gmDrumName(note: number): string | null {
+    return addon.midiGmDrumName(note);
+  }
+
+  /** Return the General MIDI drum note for a canonical drum name, or `-1`. */
+  static gmDrumNoteForName(name: string): number {
+    return addon.midiGmDrumNoteForName(name);
+  }
+
+  /** Return the GM2 drum-set name for `bankLsb`, or `null` when unavailable. */
+  static gm2DrumSetName(bankLsb: number): string | null {
+    return addon.midiGm2DrumSetName(bankLsb);
+  }
+
+  /** Return the GM2 drum name for `bankLsb`/`note`, or `null` when unavailable. */
+  static gm2DrumName(bankLsb: number, note: number): string | null {
+    return addon.midiGm2DrumName(bankLsb, note);
+  }
+
+  /** Return the MIDI CC name for `controller`, or `null` when out of range. */
+  static midiCcName(controller: number): string | null {
+    return addon.midiCcName(controller);
+  }
+
+  /** Return the MIDI CC number for a canonical controller name, or `-1`. */
+  static midiCcIndexForName(name: string): number {
+    return addon.midiCcIndexForName(name);
+  }
+
+  /** Return the MIDI 2.0 per-note controller name for `index`, or `null`. */
+  static perNoteControllerName(index: number): string | null {
+    return addon.midiPerNoteControllerName(index);
+  }
+
+  /** Expand bank-select + program-change into MIDI events accepted by {@link setMidiEvents}. */
+  static midiBankProgram(
+    ppq: number,
+    group: number,
+    channel: number,
+    bankMsb: number,
+    bankLsb: number,
+    program: number,
+  ): ProjectMidiEvent[] {
+    return addon.midiBankProgram(ppq, group, channel, bankMsb, bankLsb, program);
+  }
+
+  /** Route MIDI events through the native MidiRouter filter/remap/thru logic. */
+  static midiRouteEvents(
+    events: ReadonlyArray<ProjectMidiEvent>,
+    config: ProjectMidiRouteConfig = {},
+  ): ProjectMidiRouteResult {
+    return addon.midiRouteEvents(events, config);
+  }
+
+  /** Run native MIDI learn over an event stream; returns `null` when nothing is learned. */
+  static midiCcLearn(
+    events: ReadonlyArray<ProjectMidiEvent>,
+    paramId: number,
+    options: MidiCcLearnOptions = {},
+  ): ProjectMidiCcBinding | null {
+    return addon.midiCcLearn(
+      events,
+      paramId,
+      options.minValue ?? 0,
+      options.maxValue ?? 1,
+      options.minMovement ?? 0,
+    );
+  }
+
+  /** Convert one CC event to an automation breakpoint using native CcMap. */
+  static midiCcToBreakpoint(
+    bindings: ReadonlyArray<ProjectMidiCcBinding>,
+    event: ProjectMidiEvent,
+  ): ProjectAutomationPoint | null {
+    return addon.midiCcToBreakpoint(bindings, event);
+  }
+
+  /** Convert one automation value back to a CC UMP event using native CcMap. */
+  static midiParamToCc(
+    bindings: ReadonlyArray<ProjectMidiCcBinding>,
+    paramId: number,
+    unitValue: number,
+    group: number,
+    ppq = 0,
+  ): ProjectMidiEvent | null {
+    return addon.midiParamToCc(bindings, paramId, unitValue, group, ppq);
+  }
+
   /** Pack a MIDI 1.0 channel-pressure event. */
   static midiChannelPressure(
     ppq: number,
@@ -1019,6 +1115,61 @@ export class Project {
     this.native.setSampleRate(sampleRate);
   }
 
+  /** Read the project sample rate in Hz. */
+  getSampleRate(): number {
+    return this.native.getSampleRate();
+  }
+
+  /** Set the project's clip-overlap policy (ordinal). */
+  setOverlapPolicy(policy: number): void {
+    this.native.setOverlapPolicy(policy);
+  }
+
+  /** Read the project's clip-overlap policy (ordinal). */
+  getOverlapPolicy(): number {
+    return this.native.getOverlapPolicy();
+  }
+
+  /** Replace the project's mixer scene from scene JSON (see {@link Mixer.fromSceneJson}). */
+  setMixerSceneJson(sceneJson: string): void {
+    this.native.setMixerSceneJson(sceneJson);
+  }
+
+  /** Add or replace a marker; `markerId` 0 allocates a new id. Returns the marker id. */
+  setMarker(markerId: number, ppq: number, name: string): number {
+    return this.native.setMarker(markerId, ppq, name);
+  }
+
+  /** Replace the project's tempo segment list. */
+  setTempoSegments(segments: ReadonlyArray<ProjectTempoSegment>): void {
+    this.native.setTempoSegments(segments);
+  }
+
+  /** Replace the project's time-signature segment list. */
+  setTimeSignatures(segments: ReadonlyArray<ProjectTimeSignatureSegment>): void {
+    this.native.setTimeSignatures(segments);
+  }
+
+  /** Number of tracks in the project value model. */
+  trackCount(): number {
+    return this.native.trackCount();
+  }
+
+  /** Number of sources in the project value model. */
+  sourceCount(): number {
+    return this.native.sourceCount();
+  }
+
+  /** Number of tempo segments in the project value model. */
+  tempoSegmentCount(): number {
+    return this.native.tempoSegmentCount();
+  }
+
+  /** Number of time-signature segments in the project value model. */
+  timeSignatureCount(): number {
+    return this.native.timeSignatureCount();
+  }
+
   // -- edit --
 
   /** Add a track and return its allocated stable id. */
@@ -1051,9 +1202,24 @@ export class Project {
     this.native.moveClip(clipId, newStartPpq, newTrackId);
   }
 
+  /** Change a track kind via an undoable edit. */
+  setTrackKind(trackId: number, kind: ProjectTrackDesc['kind']): void {
+    this.native.setTrackKind(trackId, trackKindValue(kind));
+  }
+
   /** Set a clip's warp reference id (0 clears it). */
   setClipWarpRef(clipId: number, warpRefId: number): void {
     this.native.setClipWarpRef(clipId, warpRefId);
+  }
+
+  /** Add or replace a first-class warp map referenced by clip warp ids. */
+  setWarpMap(map: import('./types.js').ProjectWarpMapDesc): void {
+    this.native.setWarpMap(map);
+  }
+
+  /** Remove a first-class warp map by id. */
+  removeWarpMap(warpRefId: number): void {
+    this.native.removeWarpMap(warpRefId);
   }
 
   /** Route a track's MIDI clips to a host/instrument destination id. */
@@ -1213,9 +1379,14 @@ export class Project {
     this.native.setProgramOnChannel(clipId, group, channel, program, bank);
   }
 
-  /** Configure and apply a clip's MIDI-FX chain from JSON. */
+  /** Destructively bake a MIDI-FX chain into a clip's stored MIDI events. */
+  bakeMidiFx(clipId: number, configJson: string): void {
+    this.native.bakeMidiFx(clipId, configJson);
+  }
+
+  /** Backward alias for {@link bakeMidiFx}. */
   setMidiFx(clipId: number, configJson: string): void {
-    this.native.setMidiFx(clipId, configJson);
+    this.bakeMidiFx(clipId, configJson);
   }
 
   /**
@@ -1294,6 +1465,11 @@ export class Project {
     return this.native.compile();
   }
 
+  /** Retrieve the compile result captured by the most recent {@link bounce}. */
+  lastBounceCompileResult(): ProjectCompileResult {
+    return this.native.lastBounceCompileResult();
+  }
+
   /**
    * Compile + render the project offline to an interleaved float buffer
    * (`totalFrames * channels` samples). Deterministic: the same project +
@@ -1343,13 +1519,22 @@ export class Project {
     return this.native.bounceWithBuiltinInstruments([config], options);
   }
 
-  /** Release the underlying native project. Safe to call only once. */
+  /** Release the underlying native project. Idempotent. */
   destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     this.native.destroy();
   }
 
   /** Alias for {@link destroy}, provided for cross-binding (WASM) compatibility. */
   delete(): void {
+    this.destroy();
+  }
+
+  /** Releases the native project; lets `using` (Node 22+) free it automatically. */
+  [Symbol.dispose](): void {
     this.destroy();
   }
 }
@@ -1530,6 +1715,7 @@ function sendTimingValue(timing: SendTiming | number): number {
  */
 export class Mixer {
   private native: InstanceType<typeof addon.Mixer>;
+  private disposed = false;
 
   private constructor(native: InstanceType<typeof addon.Mixer>) {
     this.native = native;
@@ -1548,6 +1734,20 @@ export class Mixer {
   /** Number of strips in the mixer. */
   stripCount(): number {
     return this.native.stripCount();
+  }
+
+  /** Maximum processor tail length (samples) currently in the compiled graph. */
+  tailSamples(): number {
+    return this.native.tailSamples();
+  }
+
+  /**
+   * Process a zero-input block to drain delayed / tail audio after the host has
+   * stopped feeding strip inputs. `numSamples` must not exceed the configured
+   * block size.
+   */
+  drainTailStereo(numSamples: number): MixerProcessResult {
+    return this.native.drainTailStereo(numSamples);
   }
 
   /**
@@ -1812,13 +2012,22 @@ export class Mixer {
     return this.native.toSceneJson();
   }
 
-  /** Release the underlying native mixer. Safe to call only once. */
+  /** Release the underlying native mixer. Idempotent. */
   destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     this.native.destroy();
   }
 
   /** Alias for {@link destroy}, provided for cross-binding (WASM) compatibility. */
   delete(): void {
+    this.destroy();
+  }
+
+  /** Releases the native mixer; lets `using` (Node 22+) free it automatically. */
+  [Symbol.dispose](): void {
     this.destroy();
   }
 }
@@ -1843,6 +2052,7 @@ export function mixStereo(
 }
 
 export type {
+  AcousticOptions,
   AcousticResult,
   AnalysisBeat,
   AnalysisChord,
@@ -1854,12 +2064,20 @@ export type {
   AnalysisRhythm,
   AnalysisSection,
   AnalysisTimbre,
+  AnalyzeBpmOptions,
+  AnalyzeDynamicsOptions,
+  AnalyzeRhythmOptions,
+  AnalyzeSectionsOptions,
+  AnalyzeTimbreOptions,
   AutomationCurve,
   BpmAnalysisResult,
   BpmCandidate,
+  BuiltinInstrumentConfig,
+  BuiltinSynthConfig,
   Chord,
   ChordAnalysisResult,
   ChordChromaMethod,
+  ChordDetectionOptions,
   ChromaResult,
   CqtResult,
   DynamicsResult,
@@ -1892,8 +2110,11 @@ export type {
   KeyDetectionOptions,
   KeyMode,
   LufsResult,
+  MasteringChainConfig,
   MasteringChainResult,
+  MasteringChainSection,
   MasteringChainStereoResult,
+  MasteringOptions,
   MasteringResult,
   MasteringStereoResult,
   MelodyOptions,
@@ -1902,16 +2123,17 @@ export type {
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
+  MidiCcBindOptions,
+  MidiCcLearnOptions,
   MixerProcessResult,
   MixMeterSnapshot,
   MixOptions,
   MixResult,
+  NoteStretchOptions,
   PanLaw,
   PanMode,
   PitchResult,
-  BuiltinInstrumentConfig,
-  BuiltinSynthConfig,
-  SynthWaveform,
+  ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectClipDesc,
   ProjectCompileResult,
@@ -1920,6 +2142,8 @@ export type {
   ProjectMidiEvent,
   ProjectTrackDesc,
   ProjectTrackKind,
+  ProjectWarpAnchor,
+  ProjectWarpMapDesc,
   RhythmResult,
   RirResult,
   RirSynthOptions,
@@ -1937,9 +2161,10 @@ export type {
   StreamFramesI16,
   StreamFramesSoa,
   StreamFramesU8,
-  StreamQuantizeConfig,
   StreamingPlatform,
+  StreamQuantizeConfig,
   StripRef,
+  SynthWaveform,
   TimbreFrame,
   TimbreResult,
   TimeSignature,

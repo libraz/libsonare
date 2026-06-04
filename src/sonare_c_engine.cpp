@@ -12,6 +12,11 @@
 #include "engine/realtime_engine.h"
 #include "metering/lufs.h"
 #include "metering/normalize.h"
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "midi/builtin_synth.h"
+#include "midi/midi_fx.h"
+#include "util/json.h"
+#endif
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/final/dither.h"
 #endif
@@ -28,6 +33,10 @@
 
 using namespace sonare;
 using namespace sonare_c_detail;
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace json = sonare::util::json;
+#endif
 
 #if defined(SONARE_WITH_GRAPH)
 namespace {
@@ -167,6 +176,136 @@ engine::MetronomeConfig metronome_from_c(const SonareEngineMetronomeConfig& conf
   }
   return out;
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+sonare::midi::BuiltinSynthConfig engine_synth_config_from_c(
+    const SonareEngineBuiltinSynthConfig& c) noexcept {
+  sonare::midi::BuiltinSynthConfig cfg;
+  cfg.waveform = static_cast<sonare::midi::SynthWaveform>(c.waveform);
+  cfg.gain = c.gain;
+  cfg.attack_ms = c.attack_ms;
+  cfg.decay_ms = c.decay_ms;
+  cfg.sustain = c.sustain;
+  cfg.release_ms = c.release_ms;
+  cfg.polyphony = c.polyphony;
+  return sonare::midi::clamp_synth_config(cfg);
+}
+
+uint64_t pack_midi_note(uint8_t group, uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
+  return static_cast<uint64_t>(velocity) | (static_cast<uint64_t>(note) << 8) |
+         (static_cast<uint64_t>(channel) << 16) | (static_cast<uint64_t>(group) << 24);
+}
+
+bool valid_midi_note_args(uint8_t group, uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
+  return group <= 15 && channel <= 15 && note <= 127 && velocity <= 127;
+}
+
+double json_number_or(const json::Value& obj, const char* key, double fallback) {
+  const json::Value* value = obj.find(key);
+  return value != nullptr && value->is_number() ? value->as_number() : fallback;
+}
+
+bool json_has_number(const json::Value& obj, const char* key) {
+  const json::Value* value = obj.find(key);
+  return value != nullptr && value->is_number();
+}
+
+int json_int_or(const json::Value& obj, const char* key, int fallback) {
+  const double value = json_number_or(obj, key, static_cast<double>(fallback));
+  if (!std::isfinite(value)) return fallback;
+  return static_cast<int>(std::lround(value));
+}
+
+SonareError engine_midi_fx_chain_from_json(const char* config_json,
+                                           sonare::midi::MidiFxChain* chain) {
+  if (config_json == nullptr || chain == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  json::Value root;
+  try {
+    root = json::parse_strict(config_json);
+  } catch (const json::JsonError&) {
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+  if (!root.is_object()) return SONARE_ERROR_INVALID_PARAMETER;
+
+  sonare::midi::TransposeConfig transpose;
+  if (json_has_number(root, "transpose_semitones")) {
+    transpose.enabled = true;
+    transpose.semitones = json_int_or(root, "transpose_semitones", 0);
+    chain->set_transpose(transpose);
+  }
+
+  sonare::midi::VelocityCurveConfig velocity;
+  const bool has_velocity = json_has_number(root, "velocity_scale") ||
+                            json_has_number(root, "velocity_offset") ||
+                            json_has_number(root, "velocity_gamma");
+  if (has_velocity) {
+    velocity.enabled = true;
+    velocity.scale = static_cast<float>(json_number_or(root, "velocity_scale", 1.0));
+    velocity.offset = static_cast<float>(json_number_or(root, "velocity_offset", 0.0));
+    velocity.gamma = static_cast<float>(json_number_or(root, "velocity_gamma", 1.0));
+    if (!std::isfinite(velocity.scale) || !std::isfinite(velocity.offset) ||
+        !std::isfinite(velocity.gamma) || velocity.gamma <= 0.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    chain->set_velocity_curve(velocity);
+  }
+
+  if (json_has_number(root, "quantize_ppq")) {
+    const double grid_ppq = json_number_or(root, "quantize_ppq", 0.0);
+    const double strength = json_number_or(root, "quantize_strength", 1.0);
+    if (!std::isfinite(grid_ppq) || grid_ppq <= 0.0 || !std::isfinite(strength) || strength < 0.0 ||
+        strength > 1.0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    sonare::midi::QuantizeConfig quantize;
+    quantize.enabled = true;
+    constexpr int64_t kPpqFxScale = 960000;
+    quantize.grid_frames =
+        std::max<int64_t>(1, static_cast<int64_t>(std::llround(grid_ppq * kPpqFxScale)));
+    quantize.strength = static_cast<float>(strength);
+    chain->set_quantize(quantize);
+  }
+
+  if (const json::Value* intervals = root.find("chord_intervals")) {
+    if (!intervals->is_array()) return SONARE_ERROR_INVALID_PARAMETER;
+    sonare::midi::ChordConfig chord;
+    chord.enabled = true;
+    const auto& values = intervals->as_array();
+    if (values.empty() || values.size() > sonare::midi::ChordConfig::kMaxChordNotes) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    chord.count = values.size();
+    for (size_t i = 0; i < values.size(); ++i) {
+      if (!values[i].is_number()) return SONARE_ERROR_INVALID_PARAMETER;
+      chord.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
+    }
+    chain->set_chord(chord);
+  }
+
+  const bool has_humanize = json_has_number(root, "humanize_ppq") ||
+                            json_has_number(root, "humanize_velocity") ||
+                            json_has_number(root, "seed");
+  if (has_humanize) {
+    const double timing_ppq = json_number_or(root, "humanize_ppq", 0.0);
+    const int velocity_amount = json_int_or(root, "humanize_velocity", 0);
+    const int seed = json_int_or(root, "seed", 0);
+    if (!std::isfinite(timing_ppq) || timing_ppq < 0.0 || velocity_amount < 0 ||
+        velocity_amount > 127 || seed < 0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    sonare::midi::HumanizeConfig humanize;
+    humanize.enabled = true;
+    humanize.seed = static_cast<uint32_t>(seed);
+    constexpr int64_t kPpqFxScale = 960000;
+    humanize.timing_frames = static_cast<int64_t>(std::llround(timing_ppq * kPpqFxScale));
+    humanize.velocity_amount = velocity_amount;
+    chain->set_humanize(humanize);
+  }
+
+  chain->prepare();
+  return SONARE_OK;
+}
+#endif
 
 }  // namespace
 
@@ -869,6 +1008,277 @@ SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, u
   command.sample_time = render_frame;
   command.arg.f = value;
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+}
+
+SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
+                                                 uint32_t destination_id,
+                                                 const SonareEngineBuiltinSynthConfig* config) {
+  if (!engine || !config) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  auto synth = std::make_unique<sonare::midi::BuiltinSynth>(engine_synth_config_from_c(*config));
+  for (auto& entry : engine->builtin_instruments) {
+    if (entry.first == destination_id) {
+      sonare::midi::BuiltinSynth* raw = synth.get();
+      if (!engine->engine.set_midi_instrument(destination_id, raw)) {
+        return SONARE_ERROR_OUT_OF_MEMORY;
+      }
+      entry.second = std::move(synth);
+      return SONARE_OK;
+    }
+  }
+  engine->builtin_instruments.emplace_back(destination_id, std::move(synth));
+  sonare::midi::BuiltinSynth* raw = engine->builtin_instruments.back().second.get();
+  if (!engine->engine.set_midi_instrument(destination_id, raw)) {
+    engine->builtin_instruments.pop_back();
+    return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
+                                                uint32_t destination_id) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  engine->engine.set_midi_instrument(destination_id, nullptr);
+  engine->builtin_instruments.erase(
+      std::remove_if(engine->builtin_instruments.begin(), engine->builtin_instruments.end(),
+                     [&](const auto& entry) { return entry.first == destination_id; }),
+      engine->builtin_instruments.end());
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  *out_count = engine->engine.midi_instrument_count();
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t channel,
+                                       uint8_t controller, uint32_t param_id, float min_value,
+                                       float max_value) {
+  if (!engine || channel > 15 || controller > 127 || param_id == 0 || !std::isfinite(min_value) ||
+      !std::isfinite(max_value) || max_value < min_value) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return engine->engine.bind_midi_cc(controller, channel, param_id, min_value, max_value)
+             ? SONARE_OK
+             : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_clear_midi_cc_bindings(SonareRealtimeEngine* engine) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  engine->engine.clear_midi_cc_bindings();
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_midi_cc_binding_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  *out_count = engine->engine.midi_cc_binding_count();
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_set_midi_fx(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                      const char* config_json) {
+  if (!engine || !config_json) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  sonare::midi::MidiFxChain chain;
+  const SonareError parse_err = engine_midi_fx_chain_from_json(config_json, &chain);
+  if (parse_err != SONARE_OK) return parse_err;
+  return engine->engine.set_midi_fx(destination_id, chain) ? SONARE_OK : SONARE_ERROR_INVALID_STATE;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_clear_midi_fx(SonareRealtimeEngine* engine, uint32_t destination_id) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  engine->engine.clear_midi_fx(destination_id);
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_set_midi_input_source(SonareRealtimeEngine* engine,
+                                                uint32_t destination_id) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  engine->engine.set_midi_input_source(&engine->midi_input_source, destination_id);
+  engine->midi_input_source_enabled = true;
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_clear_midi_input_source(SonareRealtimeEngine* engine) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  engine->engine.set_midi_input_source(nullptr, 0);
+  engine->midi_input_source_enabled = false;
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_midi_input_pending_count(SonareRealtimeEngine* engine,
+                                                   size_t* out_count) {
+  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  *out_count = engine->midi_input_source.pending_count();
+  return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, uint8_t group,
+                                                  uint8_t channel, uint8_t note, uint8_t velocity,
+                                                  int64_t port_time_samples) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)group;
+  (void)channel;
+  (void)note;
+  (void)velocity;
+  (void)port_time_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!engine->midi_input_source_enabled || !valid_midi_note_args(group, channel, note, velocity)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return engine->midi_input_source.push_event(
+             midi::make_midi1_note_on(group, channel, note, velocity), port_time_samples)
+             ? SONARE_OK
+             : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine, uint8_t group,
+                                                   uint8_t channel, uint8_t note, uint8_t velocity,
+                                                   int64_t port_time_samples) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)group;
+  (void)channel;
+  (void)note;
+  (void)velocity;
+  (void)port_time_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!engine->midi_input_source_enabled || !valid_midi_note_args(group, channel, note, velocity)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return engine->midi_input_source.push_event(
+             midi::make_midi1_note_off(group, channel, note, velocity), port_time_samples)
+             ? SONARE_OK
+             : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8_t group,
+                                             uint8_t channel, uint8_t controller, uint8_t value,
+                                             int64_t port_time_samples) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)group;
+  (void)channel;
+  (void)controller;
+  (void)value;
+  (void)port_time_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!engine->midi_input_source_enabled || group > 15 || channel > 15 || controller > 127 ||
+      value > 127) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return engine->midi_input_source.push_event(
+             midi::make_midi1_control_change(group, channel, controller, value), port_time_samples)
+             ? SONARE_OK
+             : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_push_midi_note_on(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                            uint8_t group, uint8_t channel, uint8_t note,
+                                            uint8_t velocity, int64_t render_frame) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)group;
+  (void)channel;
+  (void)note;
+  (void)velocity;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!valid_midi_note_args(group, channel, note, velocity)) return SONARE_ERROR_INVALID_PARAMETER;
+  rt::Command command{};
+  command.type = rt::CommandType::kMidiNoteOnImmediate;
+  command.target_id = destination_id;
+  command.sample_time = render_frame;
+  command.arg.i = static_cast<int64_t>(pack_midi_note(group, channel, note, velocity));
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_push_midi_note_off(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                             uint8_t group, uint8_t channel, uint8_t note,
+                                             uint8_t velocity, int64_t render_frame) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)group;
+  (void)channel;
+  (void)note;
+  (void)velocity;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!valid_midi_note_args(group, channel, note, velocity)) return SONARE_ERROR_INVALID_PARAMETER;
+  rt::Command command{};
+  command.type = rt::CommandType::kMidiNoteOffImmediate;
+  command.target_id = destination_id;
+  command.sample_time = render_frame;
+  command.arg.i = static_cast<int64_t>(pack_midi_note(group, channel, note, velocity));
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
 }
 
 SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t destination_id,

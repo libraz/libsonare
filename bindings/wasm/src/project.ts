@@ -113,6 +113,28 @@ export interface ProjectAutomationLaneDesc {
   points: ReadonlyArray<ProjectAutomationPoint>;
 }
 
+/** One tempo segment for {@link Project.setTempoSegments}. */
+export interface ProjectTempoSegment {
+  /** Segment start in PPQ. */
+  startPpq: number;
+  /** Tempo in beats per minute at the segment start. */
+  bpm: number;
+  /** Optional segment start in samples (default 0). */
+  startSample?: number;
+  /** Optional ramp end tempo in BPM (0 = constant tempo over the segment). */
+  endBpm?: number;
+}
+
+/** One time-signature segment for {@link Project.setTimeSignatures}. */
+export interface ProjectTimeSignatureSegment {
+  /** Segment start in PPQ. */
+  startPpq: number;
+  /** Beats per bar (time-signature numerator). */
+  numerator: number;
+  /** Beat unit (time-signature denominator, e.g. 4 or 8). */
+  denominator: number;
+}
+
 /** Key segment for {@link Project.annotateKeys}. */
 export interface ProjectKeySegment {
   startPpq: number;
@@ -160,6 +182,17 @@ export interface ProjectTrackDesc {
   name?: string;
 }
 
+export interface ProjectWarpAnchor {
+  warpSample: number;
+  sourceSample: number;
+}
+
+export interface ProjectWarpMapDesc {
+  id: number;
+  name?: string;
+  anchors: ProjectWarpAnchor[];
+}
+
 /** Descriptor for {@link Project.addClip}. */
 export interface ProjectClipDesc {
   trackId: number;
@@ -185,6 +218,48 @@ export interface ProjectMidiEvent {
   ppq: number;
   data0: number;
   data1?: number;
+}
+
+/** Options for {@link Project.midiRouteEvents}. `null`/omitted filter fields mean any/no remap. */
+export interface ProjectMidiRouteConfig {
+  filterGroup?: number | null;
+  filterChannel?: number | null;
+  remapChannel?: number | null;
+  thru?: boolean;
+}
+
+/** Result of {@link Project.midiRouteEvents}. */
+export interface ProjectMidiRouteResult {
+  events: ProjectMidiEvent[];
+  overflowed: boolean;
+  overflowCount: number;
+}
+
+export type ProjectMidiCcBindingKind = 0 | 1 | 2 | 3;
+
+/** Options for {@link Project.midiCcLearn}. All fields are optional. */
+export interface MidiCcLearnOptions {
+  /** Lower end of the mapped parameter range. Default `0`. */
+  minValue?: number;
+  /** Upper end of the mapped parameter range. Default `1`. */
+  maxValue?: number;
+  /** Minimum normalized CC movement required to learn a binding. Default `0`. */
+  minMovement?: number;
+}
+
+/** MIDI CC <-> automation binding descriptor used by CC learn/conversion helpers. */
+export interface ProjectMidiCcBinding {
+  ccNumber: number;
+  /** MIDI channel 0..15, or 255 for any channel. */
+  channel: number;
+  /** 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. */
+  kind: ProjectMidiCcBindingKind;
+  ccLsbNumber?: number;
+  selectorMsb?: number;
+  selectorLsb?: number;
+  paramId: number;
+  minValue: number;
+  maxValue: number;
 }
 
 /** Result of {@link Project.validateMidiNotes}. */
@@ -229,7 +304,10 @@ interface WasmProject {
   splitClip: (clipId: number, splitPpq: number) => number;
   trimClip: (clipId: number, newStartPpq: number, newLengthPpq: number) => void;
   moveClip: (clipId: number, newStartPpq: number, newTrackId: number) => void;
+  setTrackKind: (trackId: number, kind: number) => void;
   setClipWarpRef: (clipId: number, warpRefId: number) => void;
+  setWarpMap: (map: ProjectWarpMapDesc) => void;
+  removeWarpMap: (warpRefId: number) => void;
   setTrackMidiDestination: (trackId: number, destinationId: number) => void;
   undo: () => void;
   redo: () => void;
@@ -249,6 +327,7 @@ interface WasmProject {
     program: number,
     bank: number,
   ) => void;
+  bakeMidiFx: (clipId: number, configJson: string) => void;
   setMidiFx: (clipId: number, configJson: string) => void;
   validateMidiNotes: (clipId: number) => ProjectNotePairValidation;
   autoTempo: (audio: Float32Array, sampleRate: number) => number;
@@ -290,6 +369,18 @@ interface WasmProject {
   ) => void;
   assistSidecarCount: () => number;
   getAssistSidecar: (index: number) => ProjectAssistSidecar;
+  setOverlapPolicy: (policy: number) => void;
+  getOverlapPolicy: () => number;
+  getSampleRate: () => number;
+  setMixerSceneJson: (sceneJson: string) => void;
+  setMarker: (markerId: number, ppq: number, name: string) => number;
+  trackCount: () => number;
+  sourceCount: () => number;
+  tempoSegmentCount: () => number;
+  timeSignatureCount: () => number;
+  setTempoSegments: (segments: ReadonlyArray<ProjectTempoSegment>) => void;
+  setTimeSignatures: (segments: ReadonlyArray<ProjectTimeSignatureSegment>) => void;
+  lastBounceCompileResult: () => ProjectCompileResult;
   delete: () => void;
 }
 
@@ -299,6 +390,48 @@ interface ProjectModule {
     fromJson: (json: string) => WasmProject;
   };
   projectAbiVersion: () => number;
+  midiGmInstrumentName: (program: number) => string | null;
+  midiGmProgramForName: (name: string) => number;
+  midiGmFamilyName: (family: number) => string | null;
+  midiGmFamilyFirstProgram: (family: number) => number;
+  midiGm2InstrumentName: (bankLsb: number, program: number) => string | null;
+  midiGmDrumName: (note: number) => string | null;
+  midiGmDrumNoteForName: (name: string) => number;
+  midiGm2DrumSetName: (bankLsb: number) => string | null;
+  midiGm2DrumName: (bankLsb: number, note: number) => string | null;
+  midiCcName: (controller: number) => string | null;
+  midiCcIndexForName: (name: string) => number;
+  midiPerNoteControllerName: (index: number) => string | null;
+  midiBankProgram: (
+    ppq: number,
+    group: number,
+    channel: number,
+    bankMsb: number,
+    bankLsb: number,
+    program: number,
+  ) => ProjectMidiEvent[];
+  midiRouteEvents: (
+    events: ReadonlyArray<ProjectMidiEvent>,
+    config: ProjectMidiRouteConfig,
+  ) => ProjectMidiRouteResult;
+  midiCcLearn: (
+    events: ReadonlyArray<ProjectMidiEvent>,
+    paramId: number,
+    minValue: number,
+    maxValue: number,
+    minMovement: number,
+  ) => ProjectMidiCcBinding | null;
+  midiCcToBreakpoint: (
+    bindings: ReadonlyArray<ProjectMidiCcBinding>,
+    event: ProjectMidiEvent,
+  ) => ProjectAutomationPoint | null;
+  midiParamToCc: (
+    bindings: ReadonlyArray<ProjectMidiCcBinding>,
+    paramId: number,
+    unitValue: number,
+    group: number,
+    ppq: number,
+  ) => ProjectMidiEvent | null;
 }
 
 function projectModule(): ProjectModule {
@@ -482,6 +615,120 @@ export class Project {
     return projectMidi1Event('Project.midiProgram', ppq, group, 0xc, channel, program, 0);
   }
 
+  /** Return the General MIDI instrument name for `program`, or `null` when out of range. */
+  static gmInstrumentName(program: number): string | null {
+    return projectModule().midiGmInstrumentName(program);
+  }
+
+  /** Return the General MIDI program number for a canonical instrument name, or `-1`. */
+  static gmProgramForName(name: string): number {
+    return projectModule().midiGmProgramForName(name);
+  }
+
+  /** Return the General MIDI family name for `family`, or `null` when out of range. */
+  static gmFamilyName(family: number): string | null {
+    return projectModule().midiGmFamilyName(family);
+  }
+
+  /** Return the first General MIDI program number in `family`, or `-1`. */
+  static gmFamilyFirstProgram(family: number): number {
+    return projectModule().midiGmFamilyFirstProgram(family);
+  }
+
+  /** Return the GM2 bank/program instrument variation name, or `null` when unavailable. */
+  static gm2InstrumentName(bankLsb: number, program: number): string | null {
+    return projectModule().midiGm2InstrumentName(bankLsb, program);
+  }
+
+  /** Return the General MIDI drum name for `note`, or `null` when out of range. */
+  static gmDrumName(note: number): string | null {
+    return projectModule().midiGmDrumName(note);
+  }
+
+  /** Return the General MIDI drum note for a canonical drum name, or `-1`. */
+  static gmDrumNoteForName(name: string): number {
+    return projectModule().midiGmDrumNoteForName(name);
+  }
+
+  /** Return the GM2 drum-set name for `bankLsb`, or `null` when unavailable. */
+  static gm2DrumSetName(bankLsb: number): string | null {
+    return projectModule().midiGm2DrumSetName(bankLsb);
+  }
+
+  /** Return the GM2 drum name for `bankLsb`/`note`, or `null` when unavailable. */
+  static gm2DrumName(bankLsb: number, note: number): string | null {
+    return projectModule().midiGm2DrumName(bankLsb, note);
+  }
+
+  /** Return the MIDI CC name for `controller`, or `null` when out of range. */
+  static midiCcName(controller: number): string | null {
+    return projectModule().midiCcName(controller);
+  }
+
+  /** Return the MIDI CC number for a canonical controller name, or `-1`. */
+  static midiCcIndexForName(name: string): number {
+    return projectModule().midiCcIndexForName(name);
+  }
+
+  /** Return the MIDI 2.0 per-note controller name for `index`, or `null`. */
+  static perNoteControllerName(index: number): string | null {
+    return projectModule().midiPerNoteControllerName(index);
+  }
+
+  /** Expand bank-select + program-change into MIDI events accepted by {@link setMidiEvents}. */
+  static midiBankProgram(
+    ppq: number,
+    group: number,
+    channel: number,
+    bankMsb: number,
+    bankLsb: number,
+    program: number,
+  ): ProjectMidiEvent[] {
+    return projectModule().midiBankProgram(ppq, group, channel, bankMsb, bankLsb, program);
+  }
+
+  /** Route MIDI events through the native MidiRouter filter/remap/thru logic. */
+  static midiRouteEvents(
+    events: ReadonlyArray<ProjectMidiEvent>,
+    config: ProjectMidiRouteConfig = {},
+  ): ProjectMidiRouteResult {
+    return projectModule().midiRouteEvents(events, config);
+  }
+
+  /** Run native MIDI learn over an event stream; returns `null` when nothing is learned. */
+  static midiCcLearn(
+    events: ReadonlyArray<ProjectMidiEvent>,
+    paramId: number,
+    options: MidiCcLearnOptions = {},
+  ): ProjectMidiCcBinding | null {
+    return projectModule().midiCcLearn(
+      events,
+      paramId,
+      options.minValue ?? 0,
+      options.maxValue ?? 1,
+      options.minMovement ?? 0,
+    );
+  }
+
+  /** Convert one CC event to an automation breakpoint using native CcMap. */
+  static midiCcToBreakpoint(
+    bindings: ReadonlyArray<ProjectMidiCcBinding>,
+    event: ProjectMidiEvent,
+  ): ProjectAutomationPoint | null {
+    return projectModule().midiCcToBreakpoint(bindings, event);
+  }
+
+  /** Convert one automation value back to a CC UMP event using native CcMap. */
+  static midiParamToCc(
+    bindings: ReadonlyArray<ProjectMidiCcBinding>,
+    paramId: number,
+    unitValue: number,
+    group: number,
+    ppq = 0,
+  ): ProjectMidiEvent | null {
+    return projectModule().midiParamToCc(bindings, paramId, unitValue, group, ppq);
+  }
+
   /** Pack a MIDI 1.0 channel-pressure event. */
   static midiChannelPressure(
     ppq: number,
@@ -575,9 +822,24 @@ export class Project {
     this.native.moveClip(clipId, newStartPpq, newTrackId);
   }
 
+  /** Change a track kind via an undoable edit. */
+  setTrackKind(trackId: number, kind: ProjectTrackKind): void {
+    this.native.setTrackKind(trackId, projectTrackKindValue(kind));
+  }
+
   /** Set a clip's warp reference id (0 clears it). */
   setClipWarpRef(clipId: number, warpRefId: number): void {
     this.native.setClipWarpRef(clipId, warpRefId);
+  }
+
+  /** Add or replace a first-class warp map referenced by clip warp ids. */
+  setWarpMap(map: ProjectWarpMapDesc): void {
+    this.native.setWarpMap(map);
+  }
+
+  /** Remove a first-class warp map by id. */
+  removeWarpMap(warpRefId: number): void {
+    this.native.removeWarpMap(warpRefId);
   }
 
   /**
@@ -658,9 +920,14 @@ export class Project {
     this.native.setProgramOnChannel(clipId, group, channel, program, bank);
   }
 
-  /** Configure and apply a clip's MIDI-FX chain from JSON. */
+  /** Destructively bake a MIDI-FX chain into a clip's stored MIDI events. */
+  bakeMidiFx(clipId: number, configJson: string): void {
+    this.native.bakeMidiFx(clipId, configJson);
+  }
+
+  /** Backward alias for {@link bakeMidiFx}. */
   setMidiFx(clipId: number, configJson: string): void {
-    this.native.setMidiFx(clipId, configJson);
+    this.bakeMidiFx(clipId, configJson);
   }
 
   /**
@@ -836,6 +1103,73 @@ export class Project {
   /** Read one assist sidecar by stable project order. */
   getAssistSidecar(index: number): ProjectAssistSidecar {
     return this.native.getAssistSidecar(index);
+  }
+
+  /** Set the project's clip-overlap policy (SonareProjectOverlapPolicy ordinal). */
+  setOverlapPolicy(policy: number): void {
+    this.native.setOverlapPolicy(policy);
+  }
+
+  /** Read the project's clip-overlap policy (SonareProjectOverlapPolicy ordinal). */
+  getOverlapPolicy(): number {
+    return this.native.getOverlapPolicy();
+  }
+
+  /** Read the project sample rate in Hz. */
+  getSampleRate(): number {
+    return this.native.getSampleRate();
+  }
+
+  /** Replace the project's mixer scene from a scene JSON string. */
+  setMixerSceneJson(sceneJson: string): void {
+    this.native.setMixerSceneJson(sceneJson);
+  }
+
+  /**
+   * Add or replace a marker. Pass `markerId` 0 to allocate a new id; returns the
+   * stable marker id (the allocated id when 0 was passed).
+   */
+  setMarker(markerId: number, ppq: number, name: string): number {
+    return this.native.setMarker(markerId, ppq, name);
+  }
+
+  /** Number of tracks in the project. */
+  trackCount(): number {
+    return this.native.trackCount();
+  }
+
+  /** Number of audio sources registered on the project. */
+  sourceCount(): number {
+    return this.native.sourceCount();
+  }
+
+  /** Number of tempo-map segments on the project. */
+  tempoSegmentCount(): number {
+    return this.native.tempoSegmentCount();
+  }
+
+  /** Number of time-signature segments on the project. */
+  timeSignatureCount(): number {
+    return this.native.timeSignatureCount();
+  }
+
+  /** Replace the project's tempo map with the given segments. */
+  setTempoSegments(segments: ReadonlyArray<ProjectTempoSegment>): void {
+    this.native.setTempoSegments(segments);
+  }
+
+  /** Replace the project's time-signature map with the given segments. */
+  setTimeSignatures(segments: ReadonlyArray<ProjectTimeSignatureSegment>): void {
+    this.native.setTimeSignatures(segments);
+  }
+
+  /**
+   * Compile diagnostics produced by the most recent bounce on this project
+   * (e.g. MIDI clips rendering silently without a bound instrument). When no
+   * bounce has run, the result is empty with `hasTimeline` set.
+   */
+  lastBounceCompileResult(): ProjectCompileResult {
+    return this.native.lastBounceCompileResult();
   }
 
   /** Release the underlying WASM object. Safe to call only once. */

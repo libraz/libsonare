@@ -195,6 +195,21 @@ _ALIAS_COVERAGE = {
     "eq_set_sidechain": ("set_sidechain_mono", "set_sidechain_stereo"),
     # Plural builtin-instrument bounce -> singular facade method (one or many).
     "project_bounce_with_builtin_instruments": ("bounce_with_builtin_instrument",),
+    # GM / GM2 naming helpers: every facade (Python `gm_instrument_name`, Node
+    # `gmInstrumentName`, WASM `gmInstrumentName`) drops the `midi_` prefix the C
+    # symbol carries. An idiomatic rename shared by all three facades, not an
+    # omission -- credit it against the facade member that exists.
+    "midi_gm_instrument_name": ("gm_instrument_name",),
+    "midi_gm_program_for_name": ("gm_program_for_name",),
+    "midi_gm_family_name": ("gm_family_name",),
+    "midi_gm_family_first_program": ("gm_family_first_program",),
+    "midi_gm2_instrument_name": ("gm2_instrument_name",),
+    "midi_gm_drum_name": ("gm_drum_name",),
+    "midi_gm_drum_note_for_name": ("gm_drum_note_for_name",),
+    "midi_gm2_drum_set_name": ("gm2_drum_set_name",),
+    "midi_gm2_drum_name": ("gm2_drum_name",),
+    # Per-note controller name likewise drops the `midi_` prefix on every facade.
+    "midi_per_note_controller_name": ("per_note_controller_name",),
 }
 
 

@@ -97,7 +97,7 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
     root["timbre"] = Value(std::move(t));
   }
 
-  // Dynamics (peakDb/rmsDb were omitted from the WASM unified result, LOW-59)
+  // Dynamics fields shared by native and WASM unified results.
   {
     Object d;
     d["dynamicRangeDb"] = Value(result.dynamics.dynamic_range_db);
@@ -109,7 +109,7 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
     root["dynamics"] = Value(std::move(d));
   }
 
-  // Rhythm (timeSignature + tempoStability were omitted from WASM, LOW-59)
+  // Rhythm fields shared by native and WASM unified results.
   {
     Object r;
     r["timeSignature"] = time_signature_to_value(result.rhythm.time_signature);

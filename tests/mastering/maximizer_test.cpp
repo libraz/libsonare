@@ -110,6 +110,25 @@ TEST_CASE("TruePeakLimiter keeps polyphase detector state across blocks",
   REQUIRE(split.last_gain_reduction_db() < -1.0f);
 }
 
+TEST_CASE("TruePeakLimiter keeps mono channel state across stereo alternation",
+          "[mastering][maximizer]") {
+  TruePeakLimiter limiter({-6.0f, 1.0f, 0.0f, 4, true});
+  limiter.prepare(1000.0, 1);
+
+  float first_left[] = {1.0f};
+  float* first_mono[] = {first_left};
+  limiter.process(first_mono, 1, 1);
+  REQUIRE_THAT(first_left[0], WithinAbs(0.0f, 0.0001f));
+
+  float second_left[] = {0.0f};
+  float second_right[] = {0.0f};
+  float* second_stereo[] = {second_left, second_right};
+  limiter.process(second_stereo, 2, 1);
+
+  REQUIRE(second_left[0] > 0.2f);
+  REQUIRE(second_left[0] <= 0.502f);
+}
+
 TEST_CASE("SoftKneeMax softens drive and respects ceiling", "[mastering][maximizer]") {
   SoftKneeMax maximizer({6.0f, -3.0f, 6.0f, 0.0f});
   maximizer.prepare(48000.0, 512);

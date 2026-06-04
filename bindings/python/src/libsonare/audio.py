@@ -6,6 +6,8 @@ import ctypes
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from ._ffi import SONARE_OK, load_library
 from ._runtime import _to_c_float_array
 from .analyzer import (
@@ -273,11 +275,18 @@ class Audio:
         return cls(handle, lib)
 
     @property
-    def data(self) -> list[float]:
-        """Return audio samples as a list of floats."""
+    def data(self) -> np.ndarray:
+        """Return audio samples as a ``float32`` numpy array.
+
+        The returned array owns its memory (a copy of the native buffer), so it
+        stays valid after the :class:`Audio` handle is closed.
+        """
         ptr = self._lib.sonare_audio_data(self._handle)
-        length = self._lib.sonare_audio_length(self._handle)
-        return [ptr[i] for i in range(length)]
+        length = int(self._lib.sonare_audio_length(self._handle))
+        if length == 0:
+            return np.empty(0, dtype=np.float32)
+        view = np.ctypeslib.as_array(ptr, shape=(length,))
+        return np.array(view, dtype=np.float32, copy=True)
 
     @property
     def length(self) -> int:

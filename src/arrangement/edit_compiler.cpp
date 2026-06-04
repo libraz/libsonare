@@ -194,6 +194,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   for (const auto& track : project.tracks()) {
     for (const auto& lane : track.automation_lanes) {
       timeline.automation_lanes.push_back(lane);
+      timeline.mixer.automation_bindings.push_back(MixerAutomationBinding{track.id, lane});
     }
   }
 

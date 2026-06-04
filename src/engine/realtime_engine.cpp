@@ -412,6 +412,10 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
     }
     process(render_block_channels_.data(), num_channels, frames);
   }
+#if defined(SONARE_WITH_ARRANGEMENT)
+  midi_sequencer_.all_notes_off(transport_.render_frame());
+  flush_pdc_delays();
+#endif
 }
 
 bool RealtimeEngine::push_command(const rt::Command& command) noexcept {
@@ -558,6 +562,15 @@ void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int nu
     const midi::MidiEvent& event = live_midi_input_events_[i];
     if (event.render_frame < render_start_frame) continue;
     if (event.render_frame >= render_end_frame) break;
+    uint8_t cc = 0;
+    float norm = 0.0f;
+    uint32_t param_id = 0;
+    float mapped_value = 0.0f;
+    if (midi::cc_number_of(event.ump, &cc) && midi::cc_normalized_value(event.ump, &norm) &&
+        midi_cc_map_.lookup_param(cc, event.ump.channel(), &param_id) &&
+        midi_cc_map_.value_to_unit(cc, event.ump.channel(), norm, &mapped_value)) {
+      automation_.set_parameter(param_id, mapped_value);
+    }
     midi_sequencer_.inject_event(midi_input_destination_id_, event.render_frame, event.ump);
   }
 }
@@ -813,6 +826,21 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #endif
       }
       break;
+    case rt::CommandType::kMidiNoteOnImmediate:
+    case rt::CommandType::kMidiNoteOffImmediate: {
+#if defined(SONARE_WITH_ARRANGEMENT)
+      const uint64_t packed = static_cast<uint64_t>(command.arg.i);
+      const uint8_t velocity = static_cast<uint8_t>(packed & 0x7Fu);
+      const uint8_t note = static_cast<uint8_t>((packed >> 8) & 0x7Fu);
+      const uint8_t channel = static_cast<uint8_t>((packed >> 16) & 0x0Fu);
+      const uint8_t group = static_cast<uint8_t>((packed >> 24) & 0x0Fu);
+      const midi::Ump ump = command.type == rt::CommandType::kMidiNoteOnImmediate
+                                ? midi::make_midi1_note_on(group, channel, note, velocity)
+                                : midi::make_midi1_note_off(group, channel, note, velocity);
+      midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
+#endif
+      break;
+    }
     case rt::CommandType::kMidiCcImmediate: {
       // Group (1) queueable scalar MIDI: synthesize a MIDI 1.0 CC UMP from the
       // packed scalar fields and route it through the sequencer's host-injection
@@ -826,6 +854,13 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const uint8_t channel = static_cast<uint8_t>((packed >> 16) & 0x0Fu);
       const uint8_t group = static_cast<uint8_t>((packed >> 24) & 0x0Fu);
       const midi::Ump ump = midi::make_midi1_control_change(group, channel, controller, value7);
+      uint32_t param_id = 0;
+      float mapped_value = 0.0f;
+      if (midi_cc_map_.lookup_param(controller, channel, &param_id) &&
+          midi_cc_map_.value_to_unit(controller, channel, static_cast<float>(value7) / 127.0f,
+                                     &mapped_value)) {
+        automation_.set_parameter(param_id, mapped_value);
+      }
       midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
 #endif
       break;

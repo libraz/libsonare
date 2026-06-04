@@ -55,6 +55,42 @@ TEST_CASE("StreamAnalyzer basic processing", "[streaming]") {
   }
 }
 
+TEST_CASE("StreamAnalyzer finalize flushes a partial tail frame", "[streaming]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_mels = 32;
+  config.emit_every_n_frames = 3;
+
+  StreamAnalyzer analyzer(config);
+
+  std::vector<float> tail(600, 0.0f);
+  analyzer.process(tail.data(), tail.size());
+  REQUIRE(analyzer.available_frames() == 0);
+  REQUIRE(analyzer.frame_count() == 0);
+
+  analyzer.finalize();
+  REQUIRE(analyzer.available_frames() == 1);
+  REQUIRE(analyzer.frame_count() == 1);
+  REQUIRE_THAT(analyzer.current_time(), WithinAbs(600.0f / 22050.0f, 1.0e-4f));
+
+  analyzer.finalize();
+  REQUIRE(analyzer.available_frames() == 1);
+  REQUIRE(analyzer.frame_count() == 1);
+
+  auto frames = analyzer.read_frames(2);
+  REQUIRE(frames.size() == 1);
+  REQUIRE(frames[0].frame_index == 0);
+  REQUIRE_THAT(frames[0].timestamp, WithinAbs(0.0f, 1.0e-6f));
+
+  analyzer.reset();
+  analyzer.process(tail.data(), tail.size());
+  analyzer.finalize();
+  REQUIRE(analyzer.available_frames() == 1);
+  REQUIRE(analyzer.frame_count() == 1);
+}
+
 TEST_CASE("StreamAnalyzer overlap handling", "[streaming]") {
   StreamConfig config;
   config.sample_rate = 22050;

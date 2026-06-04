@@ -318,6 +318,16 @@ python = [
 # from the f0_hz array length — passing both the contour array and a redundant
 # frame count would let them disagree. Remapped to C order internally (ctypes /
 # addon / embind wrappers). Documented ergonomic convenience, not order drift.
+# midi_cc_learn (node/wasm/python): C is (events, count, param_id, min_value,
+# max_value, min_movement). The facades DERIVE `count` from the events array
+# length; Node/WASM additionally fold the optional (min_value, max_value,
+# min_movement) range params into a MidiCcLearnOptions bag (Python keeps them as
+# keyword args). Passing both the array and a redundant count would let them
+# disagree. Remapped to C order internally; ergonomic convenience, not order drift.
+# midi_route_events (all): C is (events, count, config). Every facade exposes
+# (events, config) and DERIVES `count` from the events array length — same
+# array-length derivation as lufs_interleaved. (The facade method is
+# `midiRouteEvents` / `route_midi_events`, mapped to this C key.)
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -329,6 +339,8 @@ node = [
   "chord_functional_analysis",
   "analyze_melody",
   "pitch_correct_to_midi_timevarying",
+  "midi_cc_learn",
+  "midi_route_events",
 ]
 wasm = [
   "scale_quantize_midi",
@@ -340,6 +352,8 @@ wasm = [
   "lufs_interleaved",
   "chord_functional_analysis",
   "pitch_correct_to_midi_timevarying",
+  "midi_cc_learn",
+  "midi_route_events",
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -359,6 +373,8 @@ python = [
   "chord_functional_analysis",
   "analyze_melody",
   "pitch_correct_to_midi_timevarying",
+  "midi_cc_learn",
+  "midi_route_events",
 ]
 
 # ---------------------------------------------------------------------------
@@ -372,7 +388,15 @@ python = [
 # normalize.canonical_default, so they are NOT allowlisted per-key here. That
 # covers mastering_streaming_preview.platforms, add_vca_group.members, and the
 # add_send/meter_tap/strip_meter/schedule_*_automation enum defaults generally.
-params = []
+#
+# set_builtin_instrument.destination_id: all three facades default it to 0.
+# Node/WASM read it from the config object (`config.destinationId ?? 0`) while
+# Python takes it as a separate `destination_id=0` keyword arg (the dataclass
+# config is the synth patch; the routing target is a distinct concern). Same
+# default, idiomatic representation difference — not behavioural drift.
+params = [
+  "set_builtin_instrument.destination_id",
+]
 
 # ---------------------------------------------------------------------------
 # [core_default] — "key.param" entries whose facade default is ALLOWED to differ

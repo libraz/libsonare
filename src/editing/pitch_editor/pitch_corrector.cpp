@@ -4,15 +4,15 @@
 #include <cmath>
 #include <vector>
 
+#include "core/convert.h"
 #include "effects/pitch_shift.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare::editing::pitch_editor {
 
-using constants::kA4Hz;
 using constants::kCentsPerSemitone;
-using constants::kMidiA4;
 using constants::kSemitonesPerOctave;
 using constants::kSpectrumEpsilon;
 using constants::kTwoPi;
@@ -74,12 +74,7 @@ float PitchCorrector::estimate_median_midi(const F0Track& track) const {
   }
   SONARE_CHECK(!midi_values.empty(), ErrorCode::InvalidParameter);
 
-  std::sort(midi_values.begin(), midi_values.end());
-  const size_t mid = midi_values.size() / 2;
-  if (midi_values.size() % 2 == 0) {
-    return 0.5f * (midi_values[mid - 1] + midi_values[mid]);
-  }
-  return midi_values[mid];
+  return sonare::median(midi_values.data(), midi_values.size());
 }
 
 float PitchCorrector::correction_to_midi(const F0Track& track, float target_midi) const {
@@ -95,15 +90,9 @@ float PitchCorrector::correction_to_scale(const F0Track& track) const {
                       config_.retune_amount);
 }
 
-float PitchCorrector::hz_to_midi(float hz) {
-  SONARE_CHECK(hz > 0.0f && std::isfinite(hz), ErrorCode::InvalidParameter);
-  return kMidiA4 + kSemitonesPerOctave * std::log2(hz / kA4Hz);
-}
+float PitchCorrector::hz_to_midi(float hz) { return sonare::hz_to_midi(hz); }
 
-float PitchCorrector::midi_to_hz(float midi) {
-  SONARE_CHECK(std::isfinite(midi), ErrorCode::InvalidParameter);
-  return kA4Hz * std::pow(2.0f, (midi - kMidiA4) / kSemitonesPerOctave);
-}
+float PitchCorrector::midi_to_hz(float midi) { return sonare::midi_to_hz(midi); }
 
 float PitchCorrector::apply_limits(float semitones) const noexcept {
   if (!std::isfinite(semitones)) {
@@ -344,8 +333,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       }
     }
     if (!big.empty()) {
-      std::sort(big.begin(), big.end());
-      const float med = big[big.size() / 2];
+      const float med = sonare::median(big.data(), big.size());
       PitchShiftConfig shift_config;
       shift_config.backend = config_.backend;
       fallback_audio = pitch_shift(audio, apply_limits(med), shift_config);

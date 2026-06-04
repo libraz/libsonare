@@ -139,6 +139,13 @@ class StreamAnalyzer:
             )
         )
 
+    def finalize(self) -> None:
+        """Flush the final partial frame with zero-padding."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_stream_analyzer_finalize"):
+            raise RuntimeError("libsonare was built without StreamAnalyzer.finalize support")
+        _check(lib.sonare_stream_analyzer_finalize(self._require_handle()))
+
     def available_frames(self) -> int:
         """Return the number of frames available to read."""
         out = ctypes.c_size_t()

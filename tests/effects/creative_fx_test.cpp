@@ -120,6 +120,21 @@ TEST_CASE("Modulation processors keep output finite", "[fx]") {
   REQUIRE(all_finite(right));
 }
 
+TEST_CASE("Phaser parameter updates before prepare stay finite", "[fx]") {
+  std::vector<float> left(256, 0.1f);
+  std::vector<float> right(256, -0.1f);
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::effects::modulation::Phaser phaser;
+  REQUIRE(phaser.set_parameter(1, 20000.0f));
+  REQUIRE(phaser.set_parameter(2, 400.0f));
+  phaser.prepare(0.0, static_cast<int>(left.size()));
+  phaser.process(channels, 2, static_cast<int>(left.size()));
+
+  REQUIRE(all_finite(left));
+  REQUIRE(all_finite(right));
+}
+
 TEST_CASE("DattorroReverb produces a finite delayed tail", "[fx]") {
   // ~0.5 s so the tank has time to build up and then audibly decay.
   std::vector<float> left(24000, 0.0f);
@@ -152,6 +167,51 @@ TEST_CASE("DattorroReverb produces a finite delayed tail", "[fx]") {
     channel_diff += std::abs(static_cast<double>(left[i]) - static_cast<double>(right[i]));
   }
   REQUIRE(channel_diff > 1e-3);
+}
+
+TEST_CASE("DattorroReverb grows modulation buffers for depth changes", "[fx]") {
+  constexpr size_t kSamples = 12000;
+  sonare::effects::reverb::DattorroReverbConfig high_depth;
+  high_depth.decay = 0.7f;
+  high_depth.damping = 0.4f;
+  high_depth.dry_wet = 1.0f;
+  high_depth.mod_rate_hz = 12.0f;
+  high_depth.mod_depth_samples = 1200.0f;
+
+  sonare::effects::reverb::DattorroReverbConfig low_depth = high_depth;
+  low_depth.mod_depth_samples = 0.0f;
+
+  std::vector<float> high_left(kSamples, 0.0f);
+  std::vector<float> high_right(kSamples, 0.0f);
+  std::vector<float> grown_left(kSamples, 0.0f);
+  std::vector<float> grown_right(kSamples, 0.0f);
+  high_left[0] = grown_left[0] = 1.0f;
+  high_right[0] = grown_right[0] = 1.0f;
+
+  float* high_channels[] = {high_left.data(), high_right.data()};
+  float* grown_channels[] = {grown_left.data(), grown_right.data()};
+
+  sonare::effects::reverb::DattorroReverb high_reverb(high_depth);
+  high_reverb.prepare(48000.0, static_cast<int>(kSamples));
+
+  sonare::effects::reverb::DattorroReverb grown_reverb(low_depth);
+  grown_reverb.prepare(48000.0, static_cast<int>(kSamples));
+  REQUIRE_FALSE(grown_reverb.parameter_is_realtime_safe(4));
+  REQUIRE(grown_reverb.set_parameter(4, high_depth.mod_depth_samples));
+
+  high_reverb.process(high_channels, 2, static_cast<int>(kSamples));
+  grown_reverb.process(grown_channels, 2, static_cast<int>(kSamples));
+
+  REQUIRE(all_finite(grown_left));
+  REQUIRE(all_finite(grown_right));
+  float max_left_error = 0.0f;
+  float max_right_error = 0.0f;
+  for (size_t i = 0; i < kSamples; ++i) {
+    max_left_error = std::max(max_left_error, std::abs(grown_left[i] - high_left[i]));
+    max_right_error = std::max(max_right_error, std::abs(grown_right[i] - high_right[i]));
+  }
+  REQUIRE_THAT(max_left_error, WithinAbs(0.0f, 1e-6f));
+  REQUIRE_THAT(max_right_error, WithinAbs(0.0f, 1e-6f));
 }
 
 TEST_CASE("DcBlocker attenuates sustained DC", "[fx]") {
@@ -219,6 +279,36 @@ TEST_CASE("VelvetReverb produces a sparse decaying tail", "[fx]") {
   const double late = window_energy(left, 6000, 8000);
   REQUIRE(early > 1e-6);
   REQUIRE(late < early);
+}
+
+TEST_CASE("VelvetReverb shelf damps highs without replacing the wet tail", "[fx]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 8192;
+  sonare::effects::reverb::VelvetReverbConfig shelf_config;
+  shelf_config.dry_wet = 1.0f;
+  shelf_config.enable_shelf = true;
+  sonare::effects::reverb::VelvetReverbConfig flat_config = shelf_config;
+  flat_config.enable_shelf = false;
+
+  std::vector<float> shelf(kSamples, 0.0f);
+  std::vector<float> flat(kSamples, 0.0f);
+  shelf[0] = 1.0f;
+  flat[0] = 1.0f;
+  float* shelf_ch[] = {shelf.data()};
+  float* flat_ch[] = {flat.data()};
+
+  sonare::effects::reverb::VelvetReverb shelf_fx(shelf_config);
+  shelf_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  shelf_fx.process(shelf_ch, 1, kSamples);
+
+  sonare::effects::reverb::VelvetReverb flat_fx(flat_config);
+  flat_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  flat_fx.process(flat_ch, 1, kSamples);
+
+  REQUIRE(all_finite(shelf));
+  REQUIRE(all_finite(flat));
+  REQUIRE(hf_energy(shelf, 512, kSamples) < hf_energy(flat, 512, kSamples));
+  REQUIRE(peak_abs(shelf, 512) > 0.65f * peak_abs(flat, 512));
 }
 
 TEST_CASE("ConvolutionReverb partitioned-convolves with reported latency", "[fx]") {

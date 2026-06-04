@@ -33,16 +33,17 @@ class DattorroReverb : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
-  // Automatable parameters (RT-safe, no allocation, no state reset):
+  // Automatable parameters:
   //   0 = decay (clamped to [0, 0.98] in process())
   //   1 = damping (clamped to [0, 1] in process())
   //   2 = dry_wet (clamped to [0, 1] in process())
   //   3 = mod_rate_hz (recomputes the LFO increment in place)
-  //   4 = mod_depth_samples (recomputes scaled depth; process() clamps the
-  //       read to the buffer guard sized at prepare())
+  //   4 = mod_depth_samples (may grow the modulated allpass buffers when the
+  //       requested depth exceeds the prepared guard)
   // Note: pre_delay_samples is not automatable; changing it resizes the
   // pre-delay buffer and requires prepare().
   bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:
   /// @brief Schroeder allpass: out = -g*in + buf[read]; buf[write] = in + g*out.
@@ -67,6 +68,7 @@ class DattorroReverb : public rt::ProcessorBase {
     float gain = 0.0f;
 
     void prepare(size_t base_len, size_t max_depth, float g);
+    void ensure_capacity(size_t max_depth);
     void reset();
     float process(float in, float mod_offset);
   };

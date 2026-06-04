@@ -97,6 +97,16 @@ TEST_CASE("frames_to_samples saturates instead of overflowing int", "[convert]")
   REQUIRE(frames_to_samples(10, 512, 2048) == 5120 + 1024);
 }
 
+TEST_CASE("time_to_samples saturates instead of overflowing int", "[convert]") {
+  REQUIRE(time_to_samples(1.5f, 48000) == 72000);
+  REQUIRE(time_to_samples(1.0e20f, 48000) == std::numeric_limits<int>::max());
+  REQUIRE(time_to_samples(-1.0e20f, 48000) == std::numeric_limits<int>::min());
+  REQUIRE(time_to_samples(std::numeric_limits<float>::infinity(), 48000) ==
+          std::numeric_limits<int>::max());
+  REQUIRE(time_to_samples(-std::numeric_limits<float>::infinity(), 48000) ==
+          std::numeric_limits<int>::min());
+}
+
 TEST_CASE("hz_to_note / note_to_hz", "[convert]") {
   REQUIRE(hz_to_note(440.0f) == "A4");
   REQUIRE(hz_to_note(261.63f) == "C4");

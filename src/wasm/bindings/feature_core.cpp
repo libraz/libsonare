@@ -222,6 +222,24 @@ val js_onset_envelope(val samples, int sample_rate, int n_fft, int hop_length, i
   return vectorToFloat32Array(compute_onset_strength(audio, mel_config, OnsetConfig()));
 }
 
+val js_onset_strength_multi(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
+                            int n_bands) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  MelConfig mel_config;
+  mel_config.n_fft = n_fft;
+  mel_config.hop_length = hop_length;
+  mel_config.n_mels = n_mels;
+  MelSpectrogram mel = MelSpectrogram::compute(audio, mel_config);
+  std::vector<float> env = onset_strength_multi(mel, n_bands, OnsetConfig());
+
+  val out = val::object();
+  out.set("nBands", n_bands);
+  out.set("nFrames", mel.n_frames());
+  out.set("data", vectorToFloat32Array(env));
+  return out;
+}
+
 val js_fourier_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   TempogramConfig config;
@@ -271,6 +289,7 @@ void registerFeatureCoreBindings() {
   function("cyclicTempogram", &js_cyclic_tempogram);
   function("plp", &js_plp);
   function("onsetEnvelope", &js_onset_envelope);
+  function("onsetStrengthMulti", &js_onset_strength_multi);
   function("fourierTempogram", &js_fourier_tempogram);
   function("tempogramRatio", &js_tempogram_ratio);
 }

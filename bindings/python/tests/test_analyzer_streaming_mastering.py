@@ -131,7 +131,10 @@ def test_mastering_chain_invokes_progress_callback() -> None:
     result = mastering_chain(
         samples=[0.1] * 22050,
         sample_rate=22050,
-        config={"eq.tilt.tiltDb": 1.0, "dynamics.compressor.thresholdDb": -24.0},
+        config={
+            "eq": {"tilt": {"tiltDb": 1.0}},
+            "dynamics": {"compressor": {"thresholdDb": -24.0}},
+        },
         on_progress=on_progress,
     )
     assert len(result.samples) == 22050
@@ -141,6 +144,29 @@ def test_mastering_chain_invokes_progress_callback() -> None:
     assert "dynamics.compressor" in stages
     # Final progress reaches 1.0.
     assert calls[-1][0] == pytest.approx(1.0, abs=1e-5)
+
+
+def test_mastering_chain_nested_and_flat_config_equivalent() -> None:
+    """The nested (canonical) and flat dot-notation configs select the same stages."""
+    from libsonare import mastering_chain
+
+    samples = [0.1] * 22050
+    nested = mastering_chain(
+        samples=samples,
+        sample_rate=22050,
+        config={
+            "eq": {"tilt": {"tiltDb": 1.0}},
+            "dynamics": {"compressor": {"thresholdDb": -24.0}},
+        },
+    )
+    flat = mastering_chain(
+        samples=samples,
+        sample_rate=22050,
+        config={"eq.tilt.tiltDb": 1.0, "dynamics.compressor.thresholdDb": -24.0},
+    )
+    assert nested.stages == flat.stages
+    assert "eq.tilt" in nested.stages
+    assert "dynamics.compressor" in nested.stages
 
 
 def test_color_saturation_stages_engage_only_when_meaningful() -> None:

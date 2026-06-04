@@ -9,7 +9,10 @@
 
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -20,10 +23,12 @@
 
 namespace {
 
+using Catch::Matchers::WithinAbs;
 using sonare::mastering::api::chain_config_from_json;
 using sonare::mastering::api::chain_config_to_json;
 using sonare::mastering::api::insert_factory_names;
 using sonare::mastering::api::make_insert;
+using sonare::mastering::api::make_insert_with_ir;
 using sonare::mastering::api::MasteringChainConfig;
 using sonare::mastering::api::Preset;
 using sonare::mastering::api::preset_config;
@@ -33,6 +38,54 @@ bool ListContains(const std::vector<std::string>& names, const std::string& targ
     if (name == target) return true;
   }
   return false;
+}
+
+std::string Base64Encode(const std::vector<uint8_t>& bytes) {
+  static constexpr char kAlphabet[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  out.reserve(((bytes.size() + 2) / 3) * 4);
+  size_t i = 0;
+  while (i + 3 <= bytes.size()) {
+    const uint32_t triple = (static_cast<uint32_t>(bytes[i]) << 16) |
+                            (static_cast<uint32_t>(bytes[i + 1]) << 8) |
+                            static_cast<uint32_t>(bytes[i + 2]);
+    out.push_back(kAlphabet[(triple >> 18) & 0x3F]);
+    out.push_back(kAlphabet[(triple >> 12) & 0x3F]);
+    out.push_back(kAlphabet[(triple >> 6) & 0x3F]);
+    out.push_back(kAlphabet[triple & 0x3F]);
+    i += 3;
+  }
+  const size_t remaining = bytes.size() - i;
+  if (remaining == 1) {
+    const uint32_t triple = static_cast<uint32_t>(bytes[i]) << 16;
+    out.push_back(kAlphabet[(triple >> 18) & 0x3F]);
+    out.push_back(kAlphabet[(triple >> 12) & 0x3F]);
+    out.push_back('=');
+    out.push_back('=');
+  } else if (remaining == 2) {
+    const uint32_t triple =
+        (static_cast<uint32_t>(bytes[i]) << 16) | (static_cast<uint32_t>(bytes[i + 1]) << 8);
+    out.push_back(kAlphabet[(triple >> 18) & 0x3F]);
+    out.push_back(kAlphabet[(triple >> 12) & 0x3F]);
+    out.push_back(kAlphabet[(triple >> 6) & 0x3F]);
+    out.push_back('=');
+  }
+  return out;
+}
+
+std::string F32Base64(std::initializer_list<float> samples) {
+  std::vector<uint8_t> bytes;
+  bytes.reserve(samples.size() * sizeof(float));
+  for (float sample : samples) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &sample, sizeof(bits));
+    bytes.push_back(static_cast<uint8_t>(bits & 0xFFu));
+    bytes.push_back(static_cast<uint8_t>((bits >> 8) & 0xFFu));
+    bytes.push_back(static_cast<uint8_t>((bits >> 16) & 0xFFu));
+    bytes.push_back(static_cast<uint8_t>((bits >> 24) & 0xFFu));
+  }
+  return Base64Encode(bytes);
 }
 
 }  // namespace
@@ -180,6 +233,53 @@ TEST_CASE("decaySec maps to a comparable RT60 across the time-tunable reverbs",
   REQUIRE(dattorro < 2.5 * fdn);
 }
 
+TEST_CASE("effects.reverb.convolution loads user IR from JSON params",
+          "[mastering][insert_factory][effects][reverb]") {
+  const std::string ir = F32Base64({0.0f, 1.0f});
+  auto processor = make_insert("effects.reverb.convolution",
+                               std::string(R"({"dryWet":1.0,"irF32Base64":")") + ir + R"("})");
+  REQUIRE(processor != nullptr);
+
+  constexpr int block = 256;
+  processor->prepare(48000.0, block);
+  const int latency = processor->latency_samples();
+  REQUIRE(latency > 0);
+
+  std::vector<float> buf(static_cast<size_t>(block) * 4, 0.0f);
+  buf[0] = 1.0f;
+  for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(block)) {
+    float* blk = buf.data() + off;
+    processor->process(&blk, 1, block);
+  }
+
+  REQUIRE_THAT(buf[static_cast<size_t>(latency + 1)], WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("effects.reverb.convolution make_insert_with_ir honors dryWet",
+          "[mastering][insert_factory][effects][reverb]") {
+  const float ir[] = {0.0f, 1.0f};
+  auto processor = make_insert_with_ir("effects.reverb.convolution", R"({"dryWet":0.0})", ir, 2);
+  REQUIRE(processor != nullptr);
+
+  constexpr int block = 256;
+  processor->prepare(48000.0, block);
+  const int latency = processor->latency_samples();
+  std::vector<float> buf(static_cast<size_t>(block) * 4, 0.0f);
+  buf[0] = 1.0f;
+  for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(block)) {
+    float* blk = buf.data() + off;
+    processor->process(&blk, 1, block);
+  }
+
+  REQUIRE_THAT(buf[static_cast<size_t>(latency)], WithinAbs(1.0f, 0.0001f));
+  REQUIRE_THAT(buf[static_cast<size_t>(latency + 1)], WithinAbs(0.0f, 0.0001f));
+}
+
+TEST_CASE("effects.reverb.convolution rejects malformed JSON IR payload",
+          "[mastering][insert_factory][effects][reverb]") {
+  REQUIRE_THROWS(make_insert("effects.reverb.convolution", R"({"irF32Base64":"!!!"})"));
+}
+
 TEST_CASE("effects.reverb.room passes through cleanly when geometry is invalid",
           "[mastering][insert_factory][effects][acoustic]") {
   // Source outside the room => validate_shoebox errors => empty RIR. The insert
@@ -205,7 +305,7 @@ TEST_CASE("effects.acoustic.roomMorph adds a target-room tail as a streaming ins
 
   auto processor =
       make_insert("effects.acoustic.roomMorph",
-                  R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.08,"wet":0.8,)"
+                  R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.08,"dryWet":0.8,)"
                   R"("sourceTailSuppression":0.4})");
   REQUIRE(processor != nullptr);
 
@@ -224,6 +324,36 @@ TEST_CASE("effects.acoustic.roomMorph adds a target-room tail as a streaming ins
     late_energy += static_cast<double>(buf[i]) * buf[i];
   }
   REQUIRE(late_energy > 0.0);
+}
+
+TEST_CASE("effects.acoustic.roomMorph insert uses dryWet like other FX",
+          "[mastering][insert_factory][effects][acoustic]") {
+  auto render_tail = [](const char* params) {
+    auto processor = make_insert("effects.acoustic.roomMorph", params);
+    REQUIRE(processor != nullptr);
+    const int block = 512;
+    processor->prepare(48000.0, block);
+    std::vector<float> buf(static_cast<size_t>(block) * 12, 0.0f);
+    buf[0] = 1.0f;
+    for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(block)) {
+      float* blk = buf.data() + off;
+      processor->process(&blk, 1, block);
+    }
+    double tail = 0.0;
+    for (size_t i = static_cast<size_t>(block); i < buf.size(); ++i) {
+      tail += std::abs(buf[i]);
+    }
+    return tail;
+  };
+
+  const double dry_tail =
+      render_tail(R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.08,"dryWet":0.0,)"
+                  R"("sourceTailSuppression":0.0})");
+  const double wet_tail =
+      render_tail(R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.08,"dryWet":1.0,)"
+                  R"("sourceTailSuppression":0.0})");
+
+  REQUIRE(wet_tail > dry_tail + 1.0e-5);
 }
 #endif  // SONARE_WITH_ACOUSTIC_SIM
 #endif  // SONARE_WITH_FX

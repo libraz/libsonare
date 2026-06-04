@@ -230,3 +230,13 @@ def test_methods_after_close_raise(mixer) -> None:
         mixer.strip_count()
     with pytest.raises(RuntimeError):
         mixer.set_soloed("vocal", True)
+
+
+def test_tail_samples_and_drain_tail_stereo(mixer) -> None:
+    tail = mixer.tail_samples()
+    assert isinstance(tail, int)
+    assert tail >= 0
+    result = mixer.drain_tail_stereo(128)
+    assert len(result.left) == 128
+    assert len(result.right) == 128
+    assert result.sample_rate == 48000

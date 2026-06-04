@@ -87,6 +87,13 @@ export class StreamAnalyzer {
   }
 
   /**
+   * Flush the final partial frame with zero-padding.
+   */
+  finalize(): void {
+    this.analyzer.finalize();
+  }
+
+  /**
    * Get the number of frames available to read.
    */
   availableFrames(): number {

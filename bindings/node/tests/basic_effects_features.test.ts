@@ -1,113 +1,42 @@
-import { execFileSync } from 'node:child_process';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
-  amplitudeToDb,
-  analyze,
-  analyzeBpm,
-  analyzeDynamics,
-  analyzeMelody,
-  analyzeRhythm,
-  analyzeSections,
-  analyzeTimbre,
-  analyzeWithProgress,
-  chordFunctionalAnalysis,
+  bassChroma,
   chroma,
-  cqt,
-  dbToAmplitude,
-  dbToPower,
-  deemphasis,
-  detectBeats,
-  detectBpm,
-  detectChords,
-  detectKey,
-  detectKeyCandidates,
-  detectOnsets,
-  fixFrames,
-  fixLength,
-  fourierTempogram,
-  frameSignal,
-  framesToSamples,
+  chromaCens,
   framesToTime,
   harmonic,
-  hasFfmpegSupport,
   hpss,
   hzToMel,
   hzToMidi,
   hzToNote,
-  lufs,
-  Mixer,
   mastering,
-  masteringAssistantSuggest,
-  masteringAudioProfile,
-  masteringChain,
-  masteringPairAnalysisNames,
-  masteringPairAnalyze,
-  masteringPairProcess,
-  masteringPairProcessorNames,
   masteringProcess,
   masteringProcessorNames,
   masteringProcessStereo,
-  masteringStereoAnalysisNames,
-  masteringStereoAnalyze,
-  masteringStreamingPreview,
   melSpectrogram,
   melToHz,
   mfcc,
   midiToHz,
-  mixingScenePresetJson,
-  momentaryLufs,
-  nnlsChroma,
   normalize,
   noteToHz,
-  onsetEnvelope,
-  pcen,
-  peakPick,
   percussive,
   pitchPyin,
   pitchShift,
   pitchYin,
-  plp,
-  powerToDb,
-  preemphasis,
-  RealtimeEngine,
   resample,
   rmsEnergy,
-  StreamingEqualizer,
-  StreamingMasteringChain,
-  samplesToFrames,
-  shortTermLufs,
   spectralBandwidth,
   spectralCentroid,
   spectralFlatness,
   spectralRolloff,
-  splitSilence,
   stft,
   stftDb,
-  tempogram,
-  tempogramRatio,
   timeStretch,
   timeToFrames,
-  tonnetz,
   trim,
-  trimSilence,
-  vectorNormalize,
-  version,
-  vqt,
   zeroCrossingRate,
 } from '../src/index.js';
-
-function findFfmpegCli(): string | null {
-  try {
-    const result = execFileSync('which', ['ffmpeg'], { encoding: 'utf-8' }).trim();
-    return result || null;
-  } catch {
-    return null;
-  }
-}
 
 const SR = 22050;
 
@@ -178,7 +107,11 @@ describe('effects', () => {
       quiet[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / SR);
     }
 
-    const result = mastering(quiet, SR, -18.0, -1.0, 4);
+    const result = mastering(quiet, SR, {
+      targetLufs: -18.0,
+      ceilingDb: -1.0,
+      truePeakOversample: 4,
+    });
     expect(result.samples).toBeInstanceOf(Float32Array);
     expect(result.samples.length).toBe(quiet.length);
     expect(result.sampleRate).toBe(SR);
@@ -189,7 +122,11 @@ describe('effects', () => {
 
     const audio = Audio.fromBuffer(quiet, SR);
     try {
-      const fromAudio = audio.mastering(-18.0, -1.0, 4);
+      const fromAudio = audio.mastering({
+        targetLufs: -18.0,
+        ceilingDb: -1.0,
+        truePeakOversample: 4,
+      });
       expect(fromAudio.samples.length).toBe(quiet.length);
       expect(fromAudio.sampleRate).toBe(SR);
     } finally {
@@ -338,6 +275,16 @@ describe('features', () => {
     expect(result.nFrames).toBeGreaterThan(0);
     expect(result.features).toBeInstanceOf(Float32Array);
     expect(result.meanEnergy.length).toBe(12);
+  });
+
+  it('chromaCens and bassChroma return 12 pitch classes', () => {
+    for (const result of [chromaCens(tone, SR), bassChroma(tone, SR)]) {
+      expect(result.nChroma).toBe(12);
+      expect(result.nFrames).toBeGreaterThan(0);
+      expect(result.features).toBeInstanceOf(Float32Array);
+      expect(result.features.length).toBe(result.nChroma * result.nFrames);
+      expect(result.meanEnergy.length).toBe(12);
+    }
   });
 
   it('spectralCentroid returns Float32Array', () => {

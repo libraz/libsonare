@@ -275,4 +275,19 @@ describe('Mixer argument validation', () => {
     expect(() => mixer.addVcaGroup('test-vca-empty', 0)).not.toThrow();
     mixer.removeVcaGroup('test-vca-empty');
   });
+
+  it('reports a numeric tail length', () => {
+    mixer.compile();
+    const tail = mixer.tailSamples();
+    expect(typeof tail).toBe('number');
+    expect(tail).toBeGreaterThanOrEqual(0);
+  });
+
+  it('drains a stereo tail block of the requested length', () => {
+    mixer.compile();
+    const result = mixer.drainTailStereo(BLOCK_SIZE);
+    expect(result.left).toHaveLength(BLOCK_SIZE);
+    expect(result.right).toHaveLength(BLOCK_SIZE);
+    expect(result.sampleRate).toBe(SAMPLE_RATE);
+  });
 });

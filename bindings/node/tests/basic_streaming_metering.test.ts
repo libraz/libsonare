@@ -1,114 +1,20 @@
-import { execFileSync } from 'node:child_process';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
-  amplitudeToDb,
-  analyze,
-  analyzeBpm,
-  analyzeDynamics,
-  analyzeMelody,
-  analyzeRhythm,
-  analyzeSections,
-  analyzeTimbre,
-  analyzeWithProgress,
-  chordFunctionalAnalysis,
-  chroma,
-  cqt,
-  dbToAmplitude,
-  dbToPower,
-  deemphasis,
-  detectBeats,
-  detectBpm,
-  detectChords,
-  detectKey,
-  detectKeyCandidates,
-  detectOnsets,
-  fixFrames,
-  fixLength,
   fourierTempogram,
-  frameSignal,
-  framesToSamples,
-  framesToTime,
-  harmonic,
-  hasFfmpegSupport,
-  hpss,
-  hzToMel,
-  hzToMidi,
-  hzToNote,
   lufs,
-  Mixer,
-  mastering,
-  masteringAssistantSuggest,
-  masteringAudioProfile,
   masteringChain,
-  masteringPairAnalysisNames,
-  masteringPairAnalyze,
-  masteringPairProcess,
-  masteringPairProcessorNames,
-  masteringProcess,
-  masteringProcessorNames,
-  masteringProcessStereo,
-  masteringStereoAnalysisNames,
-  masteringStereoAnalyze,
-  masteringStreamingPreview,
-  melSpectrogram,
-  melToHz,
-  mfcc,
-  midiToHz,
-  mixingScenePresetJson,
   momentaryLufs,
   nnlsChroma,
-  normalize,
-  noteToHz,
   onsetEnvelope,
-  pcen,
-  peakPick,
-  percussive,
-  pitchPyin,
-  pitchShift,
-  pitchYin,
-  plp,
-  powerToDb,
-  preemphasis,
-  RealtimeEngine,
-  resample,
-  rmsEnergy,
+  StreamAnalyzer,
   StreamingEqualizer,
   StreamingMasteringChain,
-  samplesToFrames,
   shortTermLufs,
-  spectralBandwidth,
-  spectralCentroid,
-  spectralFlatness,
-  spectralRolloff,
-  splitSilence,
-  StreamAnalyzer,
-  stft,
-  stftDb,
   tempogram,
   tempogramRatio,
-  timeStretch,
-  timeToFrames,
-  tonnetz,
-  trim,
-  trimSilence,
-  vectorNormalize,
-  version,
-  vqt,
-  zeroCrossingRate,
 } from '../src/index.js';
-
-function findFfmpegCli(): string | null {
-  try {
-    const result = execFileSync('which', ['ffmpeg'], { encoding: 'utf-8' }).trim();
-    return result || null;
-  } catch {
-    return null;
-  }
-}
+import type { MasteringChainConfig } from '../src/types.js';
 
 const SR = 22050;
 
@@ -130,8 +36,8 @@ describe('progress callback', () => {
       samples,
       22050,
       {
-        'eq.tilt.tiltDb': 1.0,
-        'dynamics.compressor.thresholdDb': -24,
+        eq: { tilt: { tiltDb: 1.0 } },
+        dynamics: { compressor: { thresholdDb: -24 } },
       },
       (progress, stage) => {
         progresses.push(progress);
@@ -145,33 +51,35 @@ describe('progress callback', () => {
 });
 
 describe('color saturation stages engage only when meaningful', () => {
-  const stagesFor = (config: Record<string, number | boolean>): string[] =>
+  const stagesFor = (config: MasteringChainConfig): string[] =>
     masteringChain(new Float32Array(22050).fill(0.1), 22050, config).stages;
 
   it('does not engage the exciter when amount is zero', () => {
-    expect(stagesFor({ 'saturation.exciter.amount': 0 })).not.toContain('saturation.exciter');
+    expect(stagesFor({ saturation: { exciter: { amount: 0 } } })).not.toContain(
+      'saturation.exciter',
+    );
   });
 
   it('does not engage tape when drive and saturation are zero', () => {
-    expect(
-      stagesFor({ 'saturation.tape.driveDb': 0, 'saturation.tape.saturation': 0 }),
-    ).not.toContain('saturation.tape');
+    expect(stagesFor({ saturation: { tape: { driveDb: 0, saturation: 0 } } })).not.toContain(
+      'saturation.tape',
+    );
   });
 
   it('engages the exciter when amount is positive', () => {
-    expect(stagesFor({ 'saturation.exciter.amount': 0.2 })).toContain('saturation.exciter');
+    expect(stagesFor({ saturation: { exciter: { amount: 0.2 } } })).toContain('saturation.exciter');
   });
 
   it('honors an explicit enabled:false even with meaningful params', () => {
-    expect(
-      stagesFor({ 'saturation.tape.driveDb': 3, 'saturation.tape.enabled': false }),
-    ).not.toContain('saturation.tape');
+    expect(stagesFor({ saturation: { tape: { driveDb: 3, enabled: false } } })).not.toContain(
+      'saturation.tape',
+    );
   });
 
   it('honors an explicit enabled:true even with zero amount', () => {
-    expect(
-      stagesFor({ 'saturation.exciter.amount': 0, 'saturation.exciter.enabled': true }),
-    ).toContain('saturation.exciter');
+    expect(stagesFor({ saturation: { exciter: { amount: 0, enabled: true } } })).toContain(
+      'saturation.exciter',
+    );
   });
 });
 

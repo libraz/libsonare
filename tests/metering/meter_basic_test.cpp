@@ -18,6 +18,7 @@
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
 using namespace sonare;
 
 namespace {
@@ -636,6 +637,30 @@ TEST_CASE("spectrum windows and averages across the whole signal", "[meter]") {
   const size_t peak_index = static_cast<size_t>(std::distance(result.magnitude.begin(), max_it));
   REQUIRE_THAT(result.frequencies[peak_index], WithinAbs(1000.0f, 25.0f));
   REQUIRE(std::isfinite(result.db[peak_index]));
+}
+
+TEST_CASE("spectrum_frame uses Hann coherent-gain amplitude normalization", "[meter]") {
+  const int sample_rate = 48000;
+  metering::SpectrumConfig config;
+  config.n_fft = 4096;
+  const int bin = 128;
+  const float freq = static_cast<float>(bin * sample_rate) / static_cast<float>(config.n_fft);
+
+  std::vector<float> samples(static_cast<size_t>(config.n_fft), 0.0f);
+  for (int i = 0; i < config.n_fft; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[static_cast<size_t>(i)] =
+        std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  const auto result = metering::spectrum_frame(audio, 0, config);
+  REQUIRE_THAT(result.magnitude[static_cast<size_t>(bin)],
+               WithinRel(static_cast<float>(config.n_fft) * 0.5f, 0.01f));
+  REQUIRE_THAT(result.power[static_cast<size_t>(bin)],
+               WithinRel(result.magnitude[static_cast<size_t>(bin)] *
+                             result.magnitude[static_cast<size_t>(bin)],
+                         1e-5f));
 }
 
 TEST_CASE("LUFS short-term uses the spec 100 ms hop, not 150 ms", "[meter][lufs][spec]") {

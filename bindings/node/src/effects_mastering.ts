@@ -1,15 +1,17 @@
 import { addon } from './native.js';
-import { assertSamples } from './validation.js';
-import type { ValidateOptions } from './validation.js';
 import type {
   EqBandInput,
   EqSpectrumSnapshot,
   HpssResult,
+  MasteringChainConfig,
   MasteringChainResult,
+  MasteringChainSection,
   MasteringChainStereoResult,
+  MasteringOptions,
   MasteringPreset,
   MasteringResult,
   MasteringStereoResult,
+  NoteStretchOptions,
   PairAnalysis,
   PairProcessor,
   RealtimeVoiceChangerConfig,
@@ -22,13 +24,16 @@ import type {
   StreamFramesI16,
   StreamFramesSoa,
   StreamFramesU8,
-  StreamQuantizeConfig,
   StreamingPlatform,
+  StreamQuantizeConfig,
   VoicePresetId,
 } from './types.js';
+import type { ValidateOptions } from './validation.js';
+import { assertSamples } from './validation.js';
 
 export class RealtimeVoiceChanger {
   private native: InstanceType<typeof addon.RealtimeVoiceChanger>;
+  private disposed = false;
 
   constructor(options: RealtimeVoiceChangerOptions) {
     this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
@@ -78,12 +83,21 @@ export class RealtimeVoiceChanger {
   }
 
   destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     // N-API ObjectWrap instances do not have a `.delete` method, so this guard
     // is purely defensive in case the native binding ever exposes one. The
     // real lifecycle is GC-driven via the C++ destructor.
     if (typeof this.native.delete === 'function') {
       this.native.delete();
     }
+  }
+
+  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 }
 
@@ -165,23 +179,37 @@ export function pitchCorrectToMidiTimevarying(
 export function noteStretch(
   samples: Float32Array,
   sampleRate = 22050,
-  onsetSample = 0,
-  offsetSample = 0,
-  stretchRatio = 1.0,
+  options: NoteStretchOptions = {},
 ): Float32Array {
-  return addon.noteStretch(samples, sampleRate, onsetSample, offsetSample, stretchRatio);
+  return addon.noteStretch(
+    samples,
+    sampleRate,
+    options.onsetSample ?? 0,
+    options.offsetSample ?? 0,
+    options.stretchRatio ?? 1.0,
+  );
+}
+
+/** Options for {@link voiceChange}. All fields are optional. */
+export interface VoiceChangeOptions extends ValidateOptions {
+  /** Pitch shift in semitones (negative = down). Default 0. */
+  pitchSemitones?: number;
+  /** Formant scale factor (>1 brightens, <1 darkens). Default 1. */
+  formantFactor?: number;
 }
 
 export function voiceChange(
   samples: Float32Array,
   sampleRate = 22050,
-  pitchSemitones = 0.0,
-  formantFactor = 1.0,
-  options: ValidateOptions = {},
+  options: VoiceChangeOptions = {},
 ): Float32Array {
-  const validate = options.validate !== false;
-  assertSamples('voiceChange', samples, validate);
-  return addon.voiceChange(samples, sampleRate, pitchSemitones, formantFactor);
+  assertSamples('voiceChange', samples, options.validate !== false);
+  return addon.voiceChange(
+    samples,
+    sampleRate,
+    options.pitchSemitones ?? 0.0,
+    options.formantFactor ?? 1.0,
+  );
 }
 
 export interface VoiceChangeRealtimeOptions extends ValidateOptions {
@@ -298,11 +326,15 @@ export function normalize(samples: Float32Array, sampleRate = 22050, targetDb = 
 export function mastering(
   samples: Float32Array,
   sampleRate = 22050,
-  targetLufs = -14.0,
-  ceilingDb = -1.0,
-  truePeakOversample = 4,
+  options: MasteringOptions = {},
 ): MasteringResult {
-  return addon.mastering(samples, sampleRate, targetLufs, ceilingDb, truePeakOversample);
+  return addon.mastering(
+    samples,
+    sampleRate,
+    options.targetLufs ?? -14.0,
+    options.ceilingDb ?? -1.0,
+    options.truePeakOversample ?? 4,
+  );
 }
 
 export function masteringProcess(
@@ -324,29 +356,52 @@ export function masteringProcessStereo(
   return addon.masteringProcessStereo(processorName, left, right, sampleRate, params);
 }
 
+/**
+ * Flattens a nested {@link MasteringChainConfig} into the dot-notation
+ * `{ "module.processor.param": value }` map the native core consumes. Internal
+ * helper shared by the mastering-chain / master-audio entry points.
+ */
+function flattenChainConfig(config: MasteringChainConfig): Record<string, number | boolean> {
+  const out: Record<string, number | boolean> = {};
+  const walk = (node: MasteringChainSection, prefix: string): void => {
+    for (const [key, value] of Object.entries(node)) {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (typeof value === 'number' || typeof value === 'boolean') {
+        out[path] = value;
+      } else if (value !== null && typeof value === 'object') {
+        walk(value, path);
+      }
+    }
+  };
+  walk(config as MasteringChainSection, '');
+  return out;
+}
+
 export function masteringChain(
   samples: Float32Array,
   sampleRate = 22050,
-  config: Record<string, number | boolean> = {},
+  config: MasteringChainConfig = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
+  const flat = flattenChainConfig(config);
   if (onProgress) {
-    return addon.masteringChainWithProgress(samples, sampleRate, config, onProgress);
+    return addon.masteringChainWithProgress(samples, sampleRate, flat, onProgress);
   }
-  return addon.masteringChain(samples, sampleRate, config);
+  return addon.masteringChain(samples, sampleRate, flat);
 }
 
 export function masteringChainStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate = 22050,
-  config: Record<string, number | boolean> = {},
+  config: MasteringChainConfig = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
+  const flat = flattenChainConfig(config);
   if (onProgress) {
-    return addon.masteringChainStereoWithProgress(left, right, sampleRate, config, onProgress);
+    return addon.masteringChainStereoWithProgress(left, right, sampleRate, flat, onProgress);
   }
-  return addon.masteringChainStereo(left, right, sampleRate, config);
+  return addon.masteringChainStereo(left, right, sampleRate, flat);
 }
 
 /**
@@ -470,6 +525,11 @@ export class StreamAnalyzer {
   /** Feed a mono block anchored at an absolute sample offset. */
   processWithOffset(samples: Float32Array, sampleOffset: number): void {
     this.native.processWithOffset(samples, sampleOffset);
+  }
+
+  /** Flush the final partial frame with zero-padding. */
+  finalize(): void {
+    this.native.finalize();
   }
 
   /** Number of analysis frames ready to read. */
@@ -682,13 +742,14 @@ export function masterAudio(
   samples: Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
-  overrides: Record<string, number | boolean> = {},
+  overrides: MasteringChainConfig = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
+  const flat = flattenChainConfig(overrides);
   if (onProgress) {
-    return addon.masterAudioWithProgress(presetName, samples, sampleRate, overrides, onProgress);
+    return addon.masterAudioWithProgress(presetName, samples, sampleRate, flat, onProgress);
   }
-  return addon.masterAudio(presetName, samples, sampleRate, overrides);
+  return addon.masterAudio(presetName, samples, sampleRate, flat);
 }
 
 /**
@@ -702,9 +763,9 @@ export function masterAudioAsync(
   samples: Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
-  overrides: Record<string, number | boolean> = {},
+  overrides: MasteringChainConfig = {},
 ): Promise<MasteringChainResult> {
-  return addon.masterAudioAsync(presetName, samples, sampleRate, overrides);
+  return addon.masterAudioAsync(presetName, samples, sampleRate, flattenChainConfig(overrides));
 }
 
 export function masterAudioStereo(
@@ -712,20 +773,21 @@ export function masterAudioStereo(
   right: Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
-  overrides: Record<string, number | boolean> = {},
+  overrides: MasteringChainConfig = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
+  const flat = flattenChainConfig(overrides);
   if (onProgress) {
     return addon.masterAudioStereoWithProgress(
       presetName,
       left,
       right,
       sampleRate,
-      overrides,
+      flat,
       onProgress,
     );
   }
-  return addon.masterAudioStereo(presetName, left, right, sampleRate, overrides);
+  return addon.masterAudioStereo(presetName, left, right, sampleRate, flat);
 }
 
 /**
@@ -736,9 +798,15 @@ export function masterAudioStereoAsync(
   right: Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
-  overrides: Record<string, number | boolean> = {},
+  overrides: MasteringChainConfig = {},
 ): Promise<MasteringChainStereoResult> {
-  return addon.masterAudioStereoAsync(presetName, left, right, sampleRate, overrides);
+  return addon.masterAudioStereoAsync(
+    presetName,
+    left,
+    right,
+    sampleRate,
+    flattenChainConfig(overrides),
+  );
 }
 
 export function masteringProcessorNames(): SoloProcessor[] {

@@ -23,7 +23,10 @@
 #include "arrangement/edit_source.h"
 #include "core/audio.h"
 #include "engine/realtime_engine.h"
+#include "midi/cc_map.h"
 #include "midi/midi_fx.h"
+#include "midi/program_map.h"
+#include "midi/routing.h"
 #include "midi/smf.h"
 #include "midi/smf2.h"
 #include "midi/ump.h"
@@ -53,6 +56,7 @@ static_assert(static_cast<int>(arr::Track::Kind::kAux) == SONARE_TRACK_AUX,
 struct SonareProject {
   arr::EditHistory history;
   arr::AudioContentStore audio;
+  std::vector<arr::Diagnostic> last_bounce_diagnostics;
 };
 
 #if defined(__clang__)
@@ -125,6 +129,27 @@ SonareMidiEventPod pod_from_ump(double ppq, const sonare::midi::Ump& ump) {
   out.data0 = ump.words[0];
   out.data1 = ump.words[1];
   return out;
+}
+
+void fill_compile_result_from_diagnostics(const std::vector<arr::Diagnostic>& diagnostics,
+                                          bool has_timeline, SonareProjectCompileResult* out) {
+  if (out == nullptr) return;
+  *out = {};
+  out->has_timeline = has_timeline ? 1 : 0;
+  out->diagnostic_count = diagnostics.size();
+  if (diagnostics.empty()) return;
+
+  out->diagnostics = new SonareProjectDiagnostic[diagnostics.size()];
+  std::ostringstream stream;
+  for (size_t i = 0; i < diagnostics.size(); ++i) {
+    const arr::Diagnostic& d = diagnostics[i];
+    out->diagnostics[i].code = static_cast<uint32_t>(d.code);
+    out->diagnostics[i].severity = static_cast<uint32_t>(d.severity);
+    out->diagnostics[i].target_id = d.target_id;
+    if (i > 0) stream << '\n';
+    stream << d.message;
+  }
+  out->messages = copy_string(stream.str());
 }
 
 bool valid_midi_event_pod(const SonareMidiEventPod& event) noexcept {

@@ -19,13 +19,23 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
-/// @brief Center-pad the onset envelope by win_length/2 with reflect-equivalent
-///        zero edges (librosa uses reflect padding; we use constant zeros which
-///        is adequate for tempogram parity within tolerance).
+int reflect_index(int index, int size) {
+  if (size <= 1) return 0;
+  const int period = 2 * size - 2;
+  int wrapped = index % period;
+  if (wrapped < 0) wrapped += period;
+  return wrapped < size ? wrapped : period - wrapped;
+}
+
+/// @brief Center-pad the onset envelope by win_length/2 with NumPy/librosa-style
+///        reflect padding (edge values are not duplicated).
 std::vector<float> pad_envelope(const std::vector<float>& env, int pad, bool center) {
   if (!center || pad <= 0) return env;
+  const int size = static_cast<int>(env.size());
   std::vector<float> padded(env.size() + 2 * static_cast<std::size_t>(pad), 0.0f);
-  std::copy(env.begin(), env.end(), padded.begin() + pad);
+  for (int i = 0; i < static_cast<int>(padded.size()); ++i) {
+    padded[static_cast<size_t>(i)] = env[static_cast<size_t>(reflect_index(i - pad, size))];
+  }
   return padded;
 }
 

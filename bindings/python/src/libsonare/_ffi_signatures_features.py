@@ -106,6 +106,26 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareChromaResult),
     ]
 
+    lib.sonare_chroma_cens.restype = ctypes.c_int32
+    lib.sonare_chroma_cens.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChromaResult),
+    ]
+
+    lib.sonare_bass_chroma.restype = ctypes.c_int32
+    lib.sonare_bass_chroma.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChromaResult),
+    ]
+
     # --- Features - Spectral ---
 
     # sonare_spectral_centroid
@@ -461,6 +481,20 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_onset_strength_multi.restype = ctypes.c_int32
+    lib.sonare_onset_strength_multi.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int),
     ]
 
     # sonare_fourier_tempogram

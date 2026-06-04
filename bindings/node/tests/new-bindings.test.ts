@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  analyzeBpm,
+  analyzeDynamics,
+  analyzeRhythm,
   analyzeTimbre,
   decompose,
+  detectAcoustic,
   ebur128LoudnessRange,
   estimateTuning,
   hpssWithResidual,
@@ -247,5 +251,18 @@ describe('newly exposed Node functions', () => {
       expect(Number.isFinite(frame.roughness)).toBe(true);
       expect(Number.isFinite(frame.complexity)).toBe(true);
     }
+  });
+
+  it('analysis functions accept options objects', () => {
+    const x = sine(2, 440);
+    // maxCandidates is honoured through the options bag.
+    expect(analyzeBpm(x, SR, { maxCandidates: 2 }).candidates.length).toBeLessThanOrEqual(2);
+    // nMfcc widens the MFCC matrix exposed by the timbre result.
+    const timbre = analyzeTimbre(x, SR, { nFft: 1024, hopLength: 256, nMfcc: 20 });
+    expect(timbre.spectralCentroid).toBeInstanceOf(Float32Array);
+    // Remaining options-based entry points run without throwing on defaults+overrides.
+    expect(analyzeRhythm(x, SR, { bpmMin: 80, bpmMax: 160 }).bpm).toBeGreaterThan(0);
+    expect(analyzeDynamics(x, SR, { windowSec: 0.2 }).loudnessTimes).toBeInstanceOf(Float32Array);
+    expect(detectAcoustic(x, SR, { nOctaveBands: 4 }).rt60Bands).toBeInstanceOf(Float32Array);
   });
 });

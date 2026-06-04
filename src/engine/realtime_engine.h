@@ -27,6 +27,7 @@
 #include "engine/channel_delay.h"
 #include "engine/instrument_rack.h"
 #include "host/midi_io.h"
+#include "midi/cc_map.h"
 #include "midi/clock_sync.h"
 #include "midi/instrument.h"
 #include "midi/midi_clip.h"
@@ -143,6 +144,18 @@ class RealtimeEngine {
     midi_input_source_ = source;
     midi_input_destination_id_ = destination_id;
   }
+  bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
+                    float max_value) noexcept {
+    midi::CcBinding binding{};
+    binding.cc_number = controller;
+    binding.channel = channel;
+    binding.param_id = param_id;
+    binding.min_value = min_value;
+    binding.max_value = max_value;
+    return midi_cc_map_.bind(binding);
+  }
+  void clear_midi_cc_bindings() noexcept { midi_cc_map_.clear(); }
+  size_t midi_cc_binding_count() const noexcept { return midi_cc_map_.binding_count(); }
   void set_midi_output_sink(host::MidiOutputSink* sink) noexcept {
     midi_dispatch_sink_.output = sink;
   }
@@ -296,6 +309,7 @@ class RealtimeEngine {
   MidiSyncSink* midi_sync_sink_ = nullptr;
   host::MidiInputSource* midi_input_source_ = nullptr;
   uint32_t midi_input_destination_id_ = 0;
+  midi::CcMap midi_cc_map_{};
   static constexpr size_t kMaxLiveMidiInputEvents = 256;
   std::array<midi::MidiEvent, kMaxLiveMidiInputEvents> live_midi_input_events_{};
   size_t live_midi_input_count_ = 0;

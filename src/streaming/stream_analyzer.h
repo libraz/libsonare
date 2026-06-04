@@ -112,6 +112,13 @@ class StreamAnalyzer {
   ///          an external timeline (e.g., AudioContext).
   void process(const float* samples, size_t n_samples, size_t sample_offset);
 
+  /// @brief Finalizes the current stream by analyzing the remaining partial frame.
+  /// @details If the stream ends with fewer than @ref StreamConfig::n_fft
+  ///          samples buffered, this zero-pads that tail and emits one final
+  ///          frame. Calling finalize() more than once is idempotent. Call
+  ///          reset() before reusing the analyzer for another stream.
+  void finalize();
+
   /// @brief Returns number of frames available to read.
   size_t available_frames() const;
 
@@ -239,6 +246,7 @@ class StreamAnalyzer {
   double cumulative_samples_exact_ = 0.0;
   int frame_count_ = 0;
   int emitted_frame_count_ = 0;  // For emit_every_n_frames
+  bool finalized_ = false;
 
   // Overlap buffer (stores last n_fft - hop_length samples).
   // overlap_read_pos_ is the index of the current frame start within
@@ -366,6 +374,7 @@ class StreamAnalyzer {
   void correct_voted_pattern_by_known_patterns();
   void detect_progression_pattern();
   void process_internal(const float* samples, size_t n_samples);
+  void emit_frame(const float* frame_start, size_t frame_sample_offset, bool force_emit);
   /// @brief Copies @p n_samples from @p src into @p dst, replacing any NaN/Inf
   ///        with 0. Returns dst.data(). Used to keep one bad input sample from
   ///        poisoning every downstream estimate (FFT, mel, chroma, onset).

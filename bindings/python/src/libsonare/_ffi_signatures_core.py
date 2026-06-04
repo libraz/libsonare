@@ -423,6 +423,28 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(SonareCqtResult),
         ]
+        lib.sonare_pseudo_cqt.restype = ctypes.c_int32
+        lib.sonare_pseudo_cqt.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareCqtResult),
+        ]
+        lib.sonare_hybrid_cqt.restype = ctypes.c_int32
+        lib.sonare_hybrid_cqt.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareCqtResult),
+        ]
         lib.sonare_vqt.restype = ctypes.c_int32
         lib.sonare_vqt.argtypes = [
             ctypes.POINTER(ctypes.c_float),
@@ -519,6 +541,9 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.c_size_t,
         ]
+        if hasattr(lib, "sonare_stream_analyzer_finalize"):
+            lib.sonare_stream_analyzer_finalize.restype = ctypes.c_int32
+            lib.sonare_stream_analyzer_finalize.argtypes = [ctypes.c_void_p]
         lib.sonare_stream_analyzer_available_frames.restype = ctypes.c_int32
         lib.sonare_stream_analyzer_available_frames.argtypes = [
             ctypes.c_void_p,

@@ -37,15 +37,14 @@ SpectrumResult make_empty_result(const Audio& audio, const SpectrumConfig& confi
   return result;
 }
 
-// Periodic Hann RMS-gain compensation so a windowed magnitude is comparable to an
-// unwindowed FFT. Shared by the Welch-averaged and single-frame paths.
-float hann_window_norm(const std::vector<float>& window, size_t n_fft) {
-  double window_power = 0.0;
-  for (float w : window) window_power += static_cast<double>(w) * static_cast<double>(w);
-  const float window_rms =
-      window_power > 0.0 ? static_cast<float>(std::sqrt(window_power / static_cast<double>(n_fft)))
-                         : 1.0f;
-  return window_rms > 0.0f ? 1.0f / window_rms : 1.0f;
+// Periodic Hann coherent-gain compensation so a bin-centered sinusoid reports
+// the same FFT magnitude as an unwindowed frame. RMS gain would under-report the
+// amplitude by ~1.76 dB for Hann and would carry that error into power=magnitude^2.
+float window_coherent_norm(const std::vector<float>& window) {
+  double window_sum = 0.0;
+  for (float w : window) window_sum += static_cast<double>(w);
+  return window_sum > 0.0 ? static_cast<float>(static_cast<double>(window.size()) / window_sum)
+                          : 1.0f;
 }
 
 // Shared post-processing: derive power, optional fractional-octave smoothing, and
@@ -85,7 +84,7 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   // (which leaks energy and ignores most of the input).
   const size_t n_fft = static_cast<size_t>(config.n_fft);
   const std::vector<float>& window = get_window_cached(WindowType::Hann, config.n_fft, true);
-  const float window_norm = hann_window_norm(window, n_fft);
+  const float window_norm = window_coherent_norm(window);
 
   const size_t hop = std::max<size_t>(1, n_fft / 2);
 
@@ -137,7 +136,7 @@ SpectrumResult spectrum_frame(const Audio& audio, size_t frame_offset,
   // the end of the buffer. No averaging, so transients are preserved.
   const size_t n_fft = static_cast<size_t>(config.n_fft);
   const std::vector<float>& window = get_window_cached(WindowType::Hann, config.n_fft, true);
-  const float window_norm = hann_window_norm(window, n_fft);
+  const float window_norm = window_coherent_norm(window);
 
   std::vector<float> frame(n_fft, 0.0f);
   std::vector<std::complex<float>> bins(n_bins);

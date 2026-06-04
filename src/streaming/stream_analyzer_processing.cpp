@@ -27,6 +27,7 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t samp
 }
 
 void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
+  finalized_ = false;
   if (samples == nullptr || n_samples == 0) {
     return;
   }
@@ -80,16 +81,7 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
     /// Calculate sample offset for this frame (in original sample rate)
     size_t frame_sample_offset = cumulative_samples_;
 
-    /// Process single frame
-    StreamFrame frame =
-        process_single_frame(overlap_buffer_.data() + overlap_read_pos_, frame_sample_offset);
-
-    /// Check emit_every_n_frames
-    ++emitted_frame_count_;
-    if (emitted_frame_count_ >= config_.emit_every_n_frames) {
-      emitted_frame_count_ = 0;
-      output_buffer_.push_back(std::move(frame));
-    }
+    emit_frame(overlap_buffer_.data() + overlap_read_pos_, frame_sample_offset, false);
 
     /// Slide read position by hop_length (deferred compaction below)
     overlap_read_pos_ += static_cast<size_t>(hop_length);
@@ -127,6 +119,46 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
     const size_t drop = overlap_buffer_.size() - kMaxOverlapSamples;
     overlap_buffer_.erase(overlap_buffer_.begin(),
                           overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(drop));
+  }
+}
+
+void StreamAnalyzer::finalize() {
+  if (finalized_) {
+    return;
+  }
+  finalized_ = true;
+
+  if (overlap_read_pos_ > 0) {
+    overlap_buffer_.erase(overlap_buffer_.begin(),
+                          overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(overlap_read_pos_));
+    overlap_read_pos_ = 0;
+  }
+  if (overlap_buffer_.empty()) {
+    return;
+  }
+
+  std::vector<float> padded(static_cast<size_t>(config_.n_fft), 0.0f);
+  const size_t copy_count = std::min(overlap_buffer_.size(), padded.size());
+  std::copy(overlap_buffer_.begin(),
+            overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(copy_count), padded.begin());
+
+  emit_frame(padded.data(), cumulative_samples_, true);
+  cumulative_samples_exact_ +=
+      static_cast<double>(copy_count) / static_cast<double>(resample_ratio_);
+  cumulative_samples_ = static_cast<size_t>(std::llround(cumulative_samples_exact_));
+  ++frame_count_;
+  update_progressive_estimate(static_cast<float>(cumulative_samples_) / config_.sample_rate);
+  overlap_buffer_.clear();
+}
+
+void StreamAnalyzer::emit_frame(const float* frame_start, size_t frame_sample_offset,
+                                bool force_emit) {
+  StreamFrame frame = process_single_frame(frame_start, frame_sample_offset);
+
+  ++emitted_frame_count_;
+  if (force_emit || emitted_frame_count_ >= config_.emit_every_n_frames) {
+    emitted_frame_count_ = 0;
+    output_buffer_.push_back(std::move(frame));
   }
 }
 

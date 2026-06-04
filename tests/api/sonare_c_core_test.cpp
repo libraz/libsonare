@@ -309,6 +309,37 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     sonare_stream_analyzer_destroy(analyzer);
   }
 
+  SECTION("finalize flushes a partial tail frame") {
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+    REQUIRE(analyzer != nullptr);
+
+    std::vector<float> samples(600, 0.0f);
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+
+    size_t available = 0;
+    REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
+    REQUIRE(available == 0);
+
+    REQUIRE(sonare_stream_analyzer_finalize(analyzer) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
+    REQUIRE(available == 1);
+
+    REQUIRE(sonare_stream_analyzer_finalize(analyzer) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
+    REQUIRE(available == 1);
+
+    SonareStreamFrames frames = {};
+    REQUIRE(sonare_stream_analyzer_read_frames(analyzer, 2, &frames) == SONARE_OK);
+    REQUIRE(frames.n_frames == 1);
+    REQUIRE(frames.n_mels == config.n_mels);
+    REQUIRE(frames.timestamps != nullptr);
+    REQUIRE(frames.timestamps[0] == Catch::Approx(0.0f));
+    sonare_free_stream_frames(&frames);
+
+    sonare_stream_analyzer_destroy(analyzer);
+  }
+
   SECTION("quantize-config override widens the saturating range") {
     SonareStreamQuantizeConfig qdefault = {};
     REQUIRE(sonare_stream_quantize_config_default(&qdefault) == SONARE_OK);
@@ -517,7 +548,7 @@ TEST_CASE("sonare_analyze_json", "[c_api]") {
     if (root["beats"].size() > 0) {
       REQUIRE(root["beats"][static_cast<std::size_t>(0)].contains("strength"));
     }
-    // Dynamics exposes peakDb/rmsDb; rhythm exposes tempoStability (LOW-59).
+    // Dynamics exposes peakDb/rmsDb; rhythm exposes tempoStability.
     REQUIRE(root["dynamics"].contains("peakDb"));
     REQUIRE(root["dynamics"].contains("rmsDb"));
     REQUIRE(root["rhythm"].contains("tempoStability"));

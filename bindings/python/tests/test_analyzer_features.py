@@ -290,6 +290,20 @@ def test_chroma() -> None:
     assert len(result.mean_energy) == 12
 
 
+def test_chroma_cens_and_bass_chroma() -> None:
+    from libsonare import bass_chroma, chroma_cens
+
+    tone = _generate_sine(110, 22050, 1.0)
+    for result in (
+        chroma_cens(tone, sample_rate=22050),
+        bass_chroma(tone, sample_rate=22050),
+    ):
+        assert result.n_chroma == 12
+        assert result.n_frames > 0
+        assert len(result.features) == result.n_chroma * result.n_frames
+        assert len(result.mean_energy) == 12
+
+
 def test_spectral_centroid() -> None:
     """spectral_centroid returns non-empty list."""
     from libsonare import spectral_centroid

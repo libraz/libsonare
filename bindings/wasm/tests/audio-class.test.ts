@@ -169,7 +169,7 @@ describe('Audio class', () => {
 
     it('should master to target loudness', () => {
       const audio = Audio.fromBuffer(sine(), SR);
-      const result = audio.mastering(-18.0, -1.0, 4);
+      const result = audio.mastering({ targetLufs: -18.0, ceilingDb: -1.0, truePeakOversample: 4 });
       expect(result.samples).toBeInstanceOf(Float32Array);
       expect(result.samples.length).toBe(audio.length);
       expect(result.sampleRate).toBe(SR);

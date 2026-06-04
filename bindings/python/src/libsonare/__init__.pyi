@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from ._project import BuiltinSynthConfig as BuiltinSynthConfig
 from ._project import ExternalInstrument as ExternalInstrument
+from ._project import MidiCcBinding as MidiCcBinding
+from ._project import MidiRouteResult as MidiRouteResult
 from ._project import NotePairValidation as NotePairValidation
 from ._project import Project as Project
 from ._project import project_abi_version as project_abi_version
@@ -57,10 +59,16 @@ from .analyzer import (
     analyze_with_progress as analyze_with_progress,
 )
 from .analyzer import (
+    bass_chroma as bass_chroma,
+)
+from .analyzer import (
     chord_functional_analysis as chord_functional_analysis,
 )
 from .analyzer import (
     chroma as chroma,
+)
+from .analyzer import (
+    chroma_cens as chroma_cens,
 )
 from .analyzer import (
     cqt as cqt,
@@ -145,6 +153,9 @@ from .analyzer import (
 )
 from .analyzer import (
     hpss_with_residual as hpss_with_residual,
+)
+from .analyzer import (
+    hybrid_cqt as hybrid_cqt,
 )
 from .analyzer import (
     hz_to_mel as hz_to_mel,
@@ -294,6 +305,9 @@ from .analyzer import (
     note_to_hz as note_to_hz,
 )
 from .analyzer import (
+    onset_strength_multi as onset_strength_multi,
+)
+from .analyzer import (
     pad_center as pad_center,
 )
 from .analyzer import (
@@ -337,6 +351,9 @@ from .analyzer import (
 )
 from .analyzer import (
     preemphasis as preemphasis,
+)
+from .analyzer import (
+    pseudo_cqt as pseudo_cqt,
 )
 from .analyzer import (
     realtime_voice_changer_preset_config as realtime_voice_changer_preset_config,

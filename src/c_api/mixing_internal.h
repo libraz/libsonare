@@ -41,6 +41,8 @@ struct SonareMixer {
   std::string master_id;
   sonare::graph::Graph graph;
   bool compiled_dirty = true;
+  int latency_samples = 0;
+  int tail_samples = 0;
   std::vector<float> scratch_left;
   std::vector<float> scratch_right;
 };

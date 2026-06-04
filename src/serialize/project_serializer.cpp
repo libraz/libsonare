@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -131,6 +132,18 @@ uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback) {
   if (!v || !v->is_number()) return fallback;
   const double d = v->as_number();
   return d < 0.0 ? fallback : static_cast<uint32_t>(d);
+}
+
+bool parse_uint32_key(const std::string& key, uint32_t* out) {
+  if (out == nullptr || key.empty()) return false;
+  uint64_t value = 0;
+  for (const char c : key) {
+    if (c < '0' || c > '9') return false;
+    value = value * 10u + static_cast<uint64_t>(c - '0');
+    if (value > std::numeric_limits<uint32_t>::max()) return false;
+  }
+  *out = static_cast<uint32_t>(value);
+  return true;
 }
 
 std::string str_or(const Value& obj, const char* key, const std::string& fallback) {
@@ -970,8 +983,27 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     std::vector<transport::TimeSignatureSegment> sigs;
     if (const auto* arr = array_at(root, "time_signatures")) {
+      size_t index = 0;
       for (const auto& sv : *arr) {
-        if (sv.is_object()) sigs.push_back(time_signature_from_json(sv));
+        if (!sv.is_object()) {
+          ++index;
+          continue;
+        }
+        transport::TimeSignatureSegment s = time_signature_from_json(sv);
+        if (!std::isfinite(s.start_ppq)) {
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kError, "invalid_time_signature_start_ppq",
+               "time signature segment " + std::to_string(index) + " has non-finite start_ppq"});
+          return result;
+        }
+        if (s.time_sig.numerator <= 0 || s.time_sig.denominator <= 0) {
+          result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_time_signature",
+                                        "time signature segment " + std::to_string(index) +
+                                            " has non-positive numerator or denominator"});
+          return result;
+        }
+        sigs.push_back(s);
+        ++index;
       }
     }
     project.set_time_signatures(std::move(sigs));
@@ -1106,9 +1138,10 @@ DeserializeResult project_from_json(const std::string& json_text) {
           for (const auto& [handle_key, payload_value] : value.as_object()) {
             if (!payload_value.is_string()) continue;
             arrangement::ClipId handle = 0;
-            try {
-              handle = static_cast<arrangement::ClipId>(std::stoul(handle_key));
-            } catch (...) {
+            if (!parse_uint32_key(handle_key, &handle)) {
+              result.diagnostics.push_back({DiagnosticSeverity::kWarning, "invalid_sysex_handle",
+                                            "MIDI SysEx payload handle key \"" + handle_key +
+                                                "\" is outside uint32 range; entry ignored"});
               continue;
             }
             std::vector<uint8_t> payload;
@@ -1123,10 +1156,11 @@ DeserializeResult project_from_json(const std::string& json_text) {
         }
         if (!value.is_array()) continue;
         arrangement::ClipId clip_id = 0;
-        try {
-          clip_id = static_cast<arrangement::ClipId>(std::stoul(key));
-        } catch (...) {
-          continue;  // Non-numeric key: ignore (forward-compat).
+        if (!parse_uint32_key(key, &clip_id)) {
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kWarning, "invalid_midi_content_key",
+               "MIDI content clip key \"" + key + "\" is outside uint32 range; entry ignored"});
+          continue;
         }
         arrangement::MidiClipEventList events;
         for (const auto& ev : value.as_array()) {

@@ -10,6 +10,45 @@
 
 using namespace sonare_node::engine;
 
+namespace {
+
+int WaveformFromName(const std::string& name) {
+  if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
+  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
+  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
+  if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
+  return -1;
+}
+
+bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
+                                  SonareEngineBuiltinSynthConfig* config) {
+  Napi::Value waveform = obj.Get("waveform");
+  if (waveform.IsString()) {
+    const std::string name = waveform.As<Napi::String>().Utf8Value();
+    const int mapped = WaveformFromName(name);
+    if (mapped < 0) {
+      Napi::TypeError::New(env, "Unknown synth waveform name: '" + name +
+                                    "' (expected sine, saw, square, or triangle)")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    config->waveform = mapped;
+  } else if (waveform.IsNumber()) {
+    config->waveform = waveform.As<Napi::Number>().Int32Value();
+  }
+  if (obj.Has("gain")) config->gain = obj.Get("gain").As<Napi::Number>().FloatValue();
+  if (obj.Has("attackMs")) config->attack_ms = obj.Get("attackMs").As<Napi::Number>().FloatValue();
+  if (obj.Has("decayMs")) config->decay_ms = obj.Get("decayMs").As<Napi::Number>().FloatValue();
+  if (obj.Has("sustain")) config->sustain = obj.Get("sustain").As<Napi::Number>().FloatValue();
+  if (obj.Has("releaseMs"))
+    config->release_ms = obj.Get("releaseMs").As<Napi::Number>().FloatValue();
+  if (obj.Has("polyphony"))
+    config->polyphony = obj.Get("polyphony").As<Napi::Number>().Int32Value();
+  return true;
+}
+
+}  // namespace
+
 Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "RealtimeEngine",
@@ -58,6 +97,22 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetParameter>("setParameter"),
           InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
           InstanceMethod<&RealtimeEngineWrap::ClearParameters>("clearParameters"),
+          InstanceMethod<&RealtimeEngineWrap::SetBuiltinInstrument>("setBuiltinInstrument"),
+          InstanceMethod<&RealtimeEngineWrap::ClearMidiInstrument>("clearMidiInstrument"),
+          InstanceMethod<&RealtimeEngineWrap::MidiInstrumentCount>("midiInstrumentCount"),
+          InstanceMethod<&RealtimeEngineWrap::BindMidiCc>("bindMidiCc"),
+          InstanceMethod<&RealtimeEngineWrap::ClearMidiCcBindings>("clearMidiCcBindings"),
+          InstanceMethod<&RealtimeEngineWrap::MidiCcBindingCount>("midiCcBindingCount"),
+          InstanceMethod<&RealtimeEngineWrap::SetMidiFx>("setMidiFx"),
+          InstanceMethod<&RealtimeEngineWrap::ClearMidiFx>("clearMidiFx"),
+          InstanceMethod<&RealtimeEngineWrap::SetMidiInputSource>("setMidiInputSource"),
+          InstanceMethod<&RealtimeEngineWrap::ClearMidiInputSource>("clearMidiInputSource"),
+          InstanceMethod<&RealtimeEngineWrap::MidiInputPendingCount>("midiInputPendingCount"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiInputNoteOn>("pushMidiInputNoteOn"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiInputNoteOff>("pushMidiInputNoteOff"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiInputCc>("pushMidiInputCc"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiNoteOn>("pushMidiNoteOn"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiNoteOff>("pushMidiNoteOff"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiCc>("pushMidiCc"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiPanic>("pushMidiPanic"),
           InstanceMethod<&RealtimeEngineWrap::GetTransportState>("getTransportState"),
@@ -378,6 +433,174 @@ Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::ClearParameters(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_engine_clear_parameters(engine_));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  SonareEngineBuiltinSynthConfig config{};
+  if (info.Length() > 1 && info[1].IsObject()) {
+    Napi::Object obj = info[1].As<Napi::Object>();
+    if (!ReadEngineBuiltinSynthConfig(env, obj, &config)) return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_builtin_instrument(engine_, destination_id, &config));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::ClearMidiInstrument(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  ThrowIfError(env, sonare_engine_clear_midi_instrument(engine_, destination_id));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::MidiInstrumentCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t count = 0;
+  ThrowIfError(env, sonare_engine_midi_instrument_count(engine_, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiNoteOn(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint8_t group =
+      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t channel =
+      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t note =
+      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t velocity =
+      info.Length() > 4 ? static_cast<uint8_t>(info[4].As<Napi::Number>().Uint32Value()) : 0;
+  ThrowIfError(env, sonare_engine_push_midi_note_on(engine_, destination_id, group, channel, note,
+                                                    velocity, OptionalInt64(info, 5, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint8_t channel =
+      info.Length() > 0 ? static_cast<uint8_t>(info[0].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t controller =
+      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
+  const uint32_t param_id = info.Length() > 2 ? info[2].As<Napi::Number>().Uint32Value() : 0;
+  const float min_value = info.Length() > 3 ? info[3].As<Napi::Number>().FloatValue() : 0.0f;
+  const float max_value = info.Length() > 4 ? info[4].As<Napi::Number>().FloatValue() : 1.0f;
+  ThrowIfError(env, sonare_engine_bind_midi_cc(engine_, channel, controller, param_id, min_value,
+                                               max_value));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::ClearMidiCcBindings(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_engine_clear_midi_cc_bindings(engine_));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::MidiCcBindingCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t count = 0;
+  ThrowIfError(env, sonare_engine_midi_cc_binding_count(engine_, &count));
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value RealtimeEngineWrap::SetMidiFx(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  std::string config = info.Length() > 1 && info[1].IsString()
+                           ? info[1].As<Napi::String>().Utf8Value()
+                           : std::string();
+  ThrowIfError(env, sonare_engine_set_midi_fx(engine_, destination_id, config.c_str()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::ClearMidiFx(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  ThrowIfError(env, sonare_engine_clear_midi_fx(engine_, destination_id));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetMidiInputSource(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  ThrowIfError(env, sonare_engine_set_midi_input_source(engine_, destination_id));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::ClearMidiInputSource(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_engine_clear_midi_input_source(engine_));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::MidiInputPendingCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t count = 0;
+  ThrowIfError(env, sonare_engine_midi_input_pending_count(engine_, &count));
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiInputNoteOn(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint8_t group =
+      info.Length() > 0 ? static_cast<uint8_t>(info[0].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t channel =
+      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t note =
+      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t velocity =
+      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  ThrowIfError(env, sonare_engine_push_midi_input_note_on(engine_, group, channel, note, velocity,
+                                                          OptionalInt64(info, 4, 0)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiInputNoteOff(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint8_t group =
+      info.Length() > 0 ? static_cast<uint8_t>(info[0].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t channel =
+      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t note =
+      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t velocity =
+      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  ThrowIfError(env, sonare_engine_push_midi_input_note_off(engine_, group, channel, note, velocity,
+                                                           OptionalInt64(info, 4, 0)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint8_t group =
+      info.Length() > 0 ? static_cast<uint8_t>(info[0].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t channel =
+      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t controller =
+      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t value =
+      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  ThrowIfError(env, sonare_engine_push_midi_input_cc(engine_, group, channel, controller, value,
+                                                     OptionalInt64(info, 4, 0)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint8_t group =
+      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t channel =
+      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t note =
+      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t velocity =
+      info.Length() > 4 ? static_cast<uint8_t>(info[4].As<Napi::Number>().Uint32Value()) : 0;
+  ThrowIfError(env, sonare_engine_push_midi_note_off(engine_, destination_id, group, channel, note,
+                                                     velocity, OptionalInt64(info, 5, -1)));
   return env.Undefined();
 }
 

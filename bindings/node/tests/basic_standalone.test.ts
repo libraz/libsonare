@@ -1,10 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  Audio,
   amplitudeToDb,
   analyze,
   analyzeBpm,
@@ -15,7 +10,6 @@ import {
   analyzeTimbre,
   analyzeWithProgress,
   chordFunctionalAnalysis,
-  chroma,
   cqt,
   dbToAmplitude,
   dbToPower,
@@ -24,90 +18,38 @@ import {
   detectBpm,
   detectChords,
   detectKey,
-  detectKeyCandidates,
   detectOnsets,
   fixFrames,
   fixLength,
-  fourierTempogram,
   frameSignal,
   framesToSamples,
-  framesToTime,
-  harmonic,
-  hasFfmpegSupport,
-  hpss,
-  hzToMel,
-  hzToMidi,
-  hzToNote,
-  lufs,
-  Mixer,
-  mastering,
+  hybridCqt,
   masteringAssistantSuggest,
   masteringAudioProfile,
-  masteringChain,
   masteringPairAnalysisNames,
   masteringPairAnalyze,
   masteringPairProcess,
   masteringPairProcessorNames,
-  masteringProcess,
-  masteringProcessorNames,
-  masteringProcessStereo,
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
   masteringStreamingPreview,
-  melSpectrogram,
-  melToHz,
-  mfcc,
-  midiToHz,
-  mixingScenePresetJson,
-  momentaryLufs,
-  nnlsChroma,
-  normalize,
-  noteToHz,
-  onsetEnvelope,
+  onsetStrengthMulti,
   pcen,
   peakPick,
-  percussive,
-  pitchPyin,
-  pitchShift,
-  pitchYin,
   plp,
   powerToDb,
   preemphasis,
-  RealtimeEngine,
-  resample,
-  rmsEnergy,
-  StreamingEqualizer,
-  StreamingMasteringChain,
+  pseudoCqt,
   samplesToFrames,
-  shortTermLufs,
-  spectralBandwidth,
-  spectralCentroid,
-  spectralFlatness,
-  spectralRolloff,
   splitSilence,
-  stft,
-  stftDb,
   tempogram,
-  tempogramRatio,
   timeStretch,
-  timeToFrames,
   tonnetz,
-  trim,
   trimSilence,
   vectorNormalize,
   version,
   vqt,
-  zeroCrossingRate,
 } from '../src/index.js';
-
-function findFfmpegCli(): string | null {
-  try {
-    const result = execFileSync('which', ['ffmpeg'], { encoding: 'utf-8' }).trim();
-    return result || null;
-  } catch {
-    return null;
-  }
-}
 
 const SR = 22050;
 
@@ -213,6 +155,27 @@ describe('standalone functions', () => {
     expect(vqtResult.nBins).toBe(84);
     expect(vqtResult.magnitude.length).toBe(vqtResult.nBins * vqtResult.nFrames);
     expect(vqtResult.frequencies.length).toBe(vqtResult.nBins);
+  });
+
+  it('pseudoCqt and hybridCqt return magnitude matrices', () => {
+    const samples = generateSine(220, SR, 1);
+    for (const result of [
+      pseudoCqt(samples, SR, 512, 32.70319566257483, 24, 12),
+      hybridCqt(samples, SR, 512, 32.70319566257483, 24, 12),
+    ]) {
+      expect(result.nBins).toBe(24);
+      expect(result.nFrames).toBeGreaterThan(0);
+      expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
+      expect(result.frequencies.length).toBe(result.nBins);
+    }
+  });
+
+  it('onsetStrengthMulti returns a band matrix', () => {
+    const samples = generateSine(440, SR, 1);
+    const result = onsetStrengthMulti(samples, SR, 2048, 512, 64, 4);
+    expect(result.nBands).toBe(4);
+    expect(result.nFrames).toBeGreaterThan(0);
+    expect(result.data.length).toBe(result.nBands * result.nFrames);
   });
 
   it('analysis primitives expose detailed BPM and rhythm data', () => {

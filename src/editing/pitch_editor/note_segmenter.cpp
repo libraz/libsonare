@@ -2,8 +2,22 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
+
+#include "util/math_utils.h"
 
 namespace sonare::editing::pitch_editor {
+namespace {
+
+int saturated_sample_offset(int frame, int hop_length) noexcept {
+  if (frame <= 0 || hop_length <= 0) return 0;
+  const int64_t samples = static_cast<int64_t>(frame) * static_cast<int64_t>(hop_length);
+  if (samples > std::numeric_limits<int>::max()) return std::numeric_limits<int>::max();
+  return static_cast<int>(samples);
+}
+
+}  // namespace
 
 NoteSegmenter::NoteSegmenter(NoteSegmenterConfig config) : config_(config) {}
 
@@ -89,14 +103,10 @@ NoteRegion NoteSegmenter::make_region(const F0Track& track, int start, int end) 
       cents.push_back(hz_to_cents(track.f0_hz[static_cast<size_t>(frame)], config_.reference_hz));
     }
   }
-  std::sort(cents.begin(), cents.end());
-  float median = 0.0f;
-  if (!cents.empty()) {
-    const size_t mid = cents.size() / 2;
-    median = cents.size() % 2 == 0 ? 0.5f * (cents[mid - 1] + cents[mid]) : cents[mid];
-  }
+  const float median = sonare::median(cents.data(), cents.size());
 
-  return {start * track.hop_length, end * track.hop_length, median, start, end};
+  return {saturated_sample_offset(start, track.hop_length),
+          saturated_sample_offset(end, track.hop_length), median, start, end};
 }
 
 }  // namespace sonare::editing::pitch_editor

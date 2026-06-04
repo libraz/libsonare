@@ -134,6 +134,7 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   cumulative_samples_exact_ = static_cast<double>(base_sample_offset);
   frame_count_ = 0;
   emitted_frame_count_ = 0;
+  finalized_ = false;
 
   overlap_buffer_.clear();
   overlap_read_pos_ = 0;

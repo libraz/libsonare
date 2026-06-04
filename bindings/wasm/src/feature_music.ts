@@ -1,8 +1,16 @@
 import { getSonareModule } from './module_state';
-import type { CqtResult, LufsResult, MelodyResult, Section, SectionType } from './public_types';
+import type {
+  AnalyzeSectionsOptions,
+  CqtResult,
+  LufsResult,
+  MelodyResult,
+  OnsetStrengthMultiResult,
+  Section,
+  SectionType,
+} from './public_types';
 import type { WasmFourierTempogramResult, WasmNnlsChromaResult } from './sonare.js';
-import { assertSamples } from './validation';
 import type { ValidateOptions } from './validation';
+import { assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -42,6 +50,50 @@ export function cqt(
 }
 
 /**
+ * Compute the pseudo Constant-Q Transform magnitude.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
+ * @param nBins - Number of frequency bins (default: 84)
+ * @param binsPerOctave - Bins per octave (default: 12)
+ * @returns CQT magnitude result
+ */
+export function pseudoCqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  nBins = 84,
+  binsPerOctave = 12,
+): CqtResult {
+  return requireModule().pseudoCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+}
+
+/**
+ * Compute the hybrid Constant-Q Transform magnitude.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
+ * @param nBins - Number of frequency bins (default: 84)
+ * @param binsPerOctave - Bins per octave (default: 12)
+ * @returns CQT magnitude result
+ */
+export function hybridCqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  nBins = 84,
+  binsPerOctave = 12,
+): CqtResult {
+  return requireModule().hybridCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+}
+
+/**
  * Compute the Variable-Q Transform magnitude (gamma controls Q).
  *
  * @param samples - Audio samples (mono, float32)
@@ -78,20 +130,31 @@ export function vqt(
 export function analyzeSections(
   samples: Float32Array,
   sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  minSectionSec = 4.0,
+  options: AnalyzeSectionsOptions = {},
 ): Section[] {
   return requireModule()
-    .analyzeSections(samples, sampleRate, nFft, hopLength, minSectionSec)
+    .analyzeSections(
+      samples,
+      sampleRate,
+      options.nFft ?? 2048,
+      options.hopLength ?? 512,
+      options.minSectionSec ?? 4.0,
+    )
     .map((s) => ({ ...s, type: s.type as SectionType }));
 }
 
-/**
- * Options selecting the melody tracker. Both default to the historical
- * behaviour for backward compatibility.
- */
+/** Options for {@link analyzeMelody}. All fields are optional. */
 export interface MelodyOptions {
+  /** Lowest f0 (Hz) the tracker will consider. Default 65 (≈ C2). */
+  fmin?: number;
+  /** Highest f0 (Hz) the tracker will consider. Default 2093 (≈ C7). */
+  fmax?: number;
+  /** Analysis frame length in samples. Default 2048. */
+  frameLength?: number;
+  /** Hop length between frames in samples. Default 256. */
+  hopLength?: number;
+  /** Voicing confidence threshold in [0,1]; frames below are unvoiced. Default 0.1. */
+  threshold?: number;
   /**
    * Use the pYIN tracker (Viterbi-smoothed) instead of plain per-frame YIN.
    * Produces a less octave-jumpy contour. Defaults to `false`.
@@ -110,32 +173,22 @@ export interface MelodyOptions {
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param fmin - Minimum frequency in Hz (default: 65.0)
- * @param fmax - Maximum frequency in Hz (default: 2093.0)
- * @param frameLength - Frame length in samples (default: 2048)
- * @param hopLength - Hop length (default: 512)
- * @param threshold - YIN threshold; lower is stricter (default: 0.1)
- * @param options - Tracker options ({@link MelodyOptions.usePyin} / {@link MelodyOptions.center})
+ * @param options - Tracker + tuning options ({@link MelodyOptions})
  * @returns Melody contour with per-frame pitch points and summary stats
  */
 export function analyzeMelody(
   samples: Float32Array,
   sampleRate = 22050,
-  fmin = 65.0,
-  fmax = 2093.0,
-  frameLength = 2048,
-  hopLength = 256,
-  threshold = 0.1,
   options: MelodyOptions = {},
 ): MelodyResult {
   return requireModule().analyzeMelody(
     samples,
     sampleRate,
-    fmin,
-    fmax,
-    frameLength,
-    hopLength,
-    threshold,
+    options.fmin ?? 65.0,
+    options.fmax ?? 2093.0,
+    options.frameLength ?? 2048,
+    options.hopLength ?? 256,
+    options.threshold ?? 0.1,
     options.usePyin ?? false,
     options.center ?? true,
   );
@@ -159,6 +212,28 @@ export function onsetEnvelope(
   nMels = 128,
 ): Float32Array {
   return requireModule().onsetEnvelope(samples, sampleRate, nFft, hopLength, nMels);
+}
+
+/**
+ * Compute multi-band onset strength envelopes.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param nFft - FFT size (default: 2048)
+ * @param hopLength - Hop length (default: 512)
+ * @param nMels - Number of Mel bands (default: 128)
+ * @param nBands - Number of onset bands (default: 3)
+ * @returns Multi-band onset matrix
+ */
+export function onsetStrengthMulti(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+  nBands = 3,
+): OnsetStrengthMultiResult {
+  return requireModule().onsetStrengthMulti(samples, sampleRate, nFft, hopLength, nMels, nBands);
 }
 
 /**

@@ -19,6 +19,7 @@ namespace {
 // sustained material. The per-sample gain is the minimum of the two.
 constexpr float kFastAttackMs = 0.1f;
 constexpr float kSlowAttackMs = 1.0f;
+constexpr int kDefaultPreparedChannels = 2;
 
 float sanitize_sample(float sample, float ceiling) {
   if (std::isnan(sample)) return 0.0f;
@@ -51,14 +52,17 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
       static_cast<size_t>(std::max(1, lookahead_samples_ + 1) * true_peak_filter_.factor()));
   const size_t max_oversampled_samples = static_cast<size_t>(std::max(0, max_block_size_)) *
                                          static_cast<size_t>(true_peak_filter_.factor());
-  input_ptrs_.assign(2, nullptr);
-  oversampled_ptrs_.assign(2, nullptr);
-  oversampled_buffers_.assign(2, std::vector<float>(max_oversampled_samples, 0.0f));
-  limited_oversampled_buffers_.assign(2, std::vector<float>(max_oversampled_samples, 0.0f));
-  true_peak_scratch_.assign(2, {});
+  input_ptrs_.assign(kDefaultPreparedChannels, nullptr);
+  oversampled_ptrs_.assign(kDefaultPreparedChannels, nullptr);
+  oversampled_buffers_.assign(kDefaultPreparedChannels,
+                              std::vector<float>(max_oversampled_samples, 0.0f));
+  limited_oversampled_buffers_.assign(kDefaultPreparedChannels,
+                                      std::vector<float>(max_oversampled_samples, 0.0f));
+  true_peak_scratch_.assign(kDefaultPreparedChannels, {});
   const size_t true_peak_history_size =
       static_cast<size_t>(std::max(0, true_peak_filter_.latency_samples() * 2));
-  true_peak_history_.assign(2, std::vector<float>(true_peak_history_size, 0.0f));
+  true_peak_history_.assign(kDefaultPreparedChannels,
+                            std::vector<float>(true_peak_history_size, 0.0f));
   for (auto& scratch : true_peak_scratch_) {
     scratch.assign(true_peak_history_size + static_cast<size_t>(std::max(0, max_block_size_)),
                    0.0f);
@@ -66,6 +70,7 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
   linked_abs_.assign(max_oversampled_samples, 0.0f);
   input_rate_gain_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 1.0f);
   downsampled_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
+  prepare_buffers(kDefaultPreparedChannels);
   prepared_ = true;
   reset();
 }
@@ -323,21 +328,47 @@ int TruePeakLimiter::latency_samples() const noexcept {
 }
 
 void TruePeakLimiter::prepare_buffers(int num_channels) {
-  if (lookahead_.size() == static_cast<size_t>(num_channels)) return;
-  lookahead_.assign(static_cast<size_t>(num_channels), {});
-  oversampled_lookahead_.assign(static_cast<size_t>(num_channels), {});
-  for (auto& buffer : lookahead_) {
+  const size_t requested_channels = static_cast<size_t>(num_channels);
+  if (lookahead_.size() >= requested_channels &&
+      oversampled_lookahead_.size() >= requested_channels)
+    return;
+  const size_t old_size = lookahead_.size();
+  const size_t new_size = requested_channels;
+  lookahead_.resize(new_size);
+  oversampled_lookahead_.resize(new_size);
+  for (size_t ch = old_size; ch < new_size; ++ch) {
+    auto& buffer = lookahead_[ch];
     buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
   }
-  for (auto& buffer : oversampled_lookahead_) {
+  for (size_t ch = old_size; ch < new_size; ++ch) {
+    auto& buffer = oversampled_lookahead_[ch];
     buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0) *
                                        std::max(true_peak_filter_.factor(), 1)));
   }
-  fast_gain_ = 1.0f;
-  slow_gain_ = 1.0f;
-  crest_peak_ = 0.0f;
-  crest_rms_ = 0.0f;
-  oversampled_peak_window_.reset();
+  if (input_ptrs_.size() < new_size) input_ptrs_.resize(new_size, nullptr);
+  if (oversampled_ptrs_.size() < new_size) oversampled_ptrs_.resize(new_size, nullptr);
+  const int factor = std::max(true_peak_filter_.factor(), 1);
+  const size_t max_oversampled_samples =
+      static_cast<size_t>(std::max(0, max_block_size_)) * static_cast<size_t>(factor);
+  if (oversampled_buffers_.size() < new_size) {
+    oversampled_buffers_.resize(new_size, std::vector<float>(max_oversampled_samples, 0.0f));
+  }
+  if (limited_oversampled_buffers_.size() < new_size) {
+    limited_oversampled_buffers_.resize(new_size,
+                                        std::vector<float>(max_oversampled_samples, 0.0f));
+  }
+  const size_t true_peak_history_size =
+      static_cast<size_t>(std::max(0, true_peak_filter_.latency_samples() * 2));
+  if (true_peak_history_.size() < new_size) {
+    true_peak_history_.resize(new_size, std::vector<float>(true_peak_history_size, 0.0f));
+  }
+  if (true_peak_scratch_.size() < new_size) {
+    true_peak_scratch_.resize(
+        new_size,
+        std::vector<float>(
+            true_peak_history_size + static_cast<size_t>(std::max(0, max_block_size_)), 0.0f));
+  }
+  reset();
 }
 
 void TruePeakLimiter::update_time_constants() {

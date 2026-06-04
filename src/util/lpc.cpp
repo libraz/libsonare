@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 namespace {
@@ -34,50 +35,63 @@ LpcResult lpc_burg(const float* x, size_t n, int order) {
     return result;
   }
 
-  std::vector<float> ef(x, x + n);
-  std::vector<float> eb(x, x + n);
-  std::vector<float> a(static_cast<size_t>(order + 1), 0.0f);
-  a[0] = 1.0f;
+  std::vector<double> y(x, x + n);
+  std::vector<double> ar(static_cast<size_t>(order + 1), 0.0);
+  std::vector<double> ar_prev(static_cast<size_t>(order + 1), 0.0);
+  ar[0] = 1.0;
+  ar_prev[0] = 1.0;
 
-  double error = 0.0;
-  for (size_t i = 0; i < n; ++i) error += static_cast<double>(x[i]) * x[i];
-  error /= static_cast<double>(n);
+  std::vector<double> fwd(y.begin() + 1, y.end());
+  std::vector<double> bwd(y.begin(), y.end() - 1);
+  size_t fwd_start = 0;
+  size_t active_len = fwd.size();
 
-  for (int m = 1; m <= order; ++m) {
-    double numerator = 0.0;
-    double denominator = 0.0;
-    for (size_t i = static_cast<size_t>(m); i < n; ++i) {
-      numerator += static_cast<double>(ef[i]) * eb[i - 1];
-      denominator +=
-          static_cast<double>(ef[i]) * ef[i] + static_cast<double>(eb[i - 1]) * eb[i - 1];
-    }
-    if (denominator <= 1.0e-20) {
-      break;
-    }
-
-    const float reflection = static_cast<float>(-2.0 * numerator / denominator);
-    std::vector<float> next_a = a;
-    for (int i = 1; i < m; ++i) {
-      next_a[static_cast<size_t>(i)] =
-          a[static_cast<size_t>(i)] + reflection * a[static_cast<size_t>(m - i)];
-    }
-    next_a[static_cast<size_t>(m)] = reflection;
-    a = next_a;
-
-    for (size_t i = n - 1; i >= static_cast<size_t>(m); --i) {
-      const float f = ef[i];
-      const float b = eb[i - 1];
-      ef[i] = f + reflection * b;
-      eb[i - 1] = b + reflection * f;
-      if (i == static_cast<size_t>(m)) break;
-    }
-
-    error *= 1.0 - static_cast<double>(reflection) * reflection;
-    error = std::max(error, 0.0);
+  double den = 0.0;
+  for (size_t i = 0; i < active_len; ++i) {
+    const double f = fwd[fwd_start + i];
+    const double b = bwd[i];
+    den += f * f + b * b;
   }
 
-  result.ar = std::move(a);
-  result.variance = static_cast<float>(error);
+  constexpr double kTiny = 1.0e-300;
+  for (int i = 0; i < order; ++i) {
+    double dot = 0.0;
+    for (size_t k = 0; k < active_len; ++k) {
+      dot += bwd[k] * fwd[fwd_start + k];
+    }
+    const double reflection = -2.0 * dot / (den + kTiny);
+
+    std::swap(ar, ar_prev);
+    ar[0] = ar_prev[0];
+    for (int j = 1; j <= i + 1; ++j) {
+      ar[static_cast<size_t>(j)] =
+          ar_prev[static_cast<size_t>(j)] + reflection * ar_prev[static_cast<size_t>(i - j + 1)];
+    }
+
+    for (size_t k = 0; k < active_len; ++k) {
+      const double f = fwd[fwd_start + k];
+      const double b = bwd[k];
+      fwd[fwd_start + k] = f + reflection * b;
+      bwd[k] = b + reflection * f;
+    }
+
+    if (active_len > 0) {
+      const double q = 1.0 - reflection * reflection;
+      const double bwd_back = bwd[active_len - 1];
+      const double fwd_front = fwd[fwd_start];
+      den = q * den - bwd_back * bwd_back - fwd_front * fwd_front;
+    }
+
+    if (active_len > 0) {
+      ++fwd_start;
+      --active_len;
+    }
+  }
+
+  for (int i = 0; i <= order; ++i) {
+    result.ar[static_cast<size_t>(i)] = static_cast<float>(ar[static_cast<size_t>(i)]);
+  }
+  result.variance = static_cast<float>(std::max(den, 0.0) / static_cast<double>(n));
   return result;
 }
 
@@ -93,12 +107,11 @@ LpcResult lpc_autocorrelation(const float* x, size_t n, int order) {
     return result;
   }
 
+  const std::vector<float> raw = unnormalized_autocorrelation(x, n, static_cast<size_t>(order + 1));
   std::vector<double> r(static_cast<size_t>(order + 1), 0.0);
   for (int lag = 0; lag <= order; ++lag) {
-    for (size_t i = static_cast<size_t>(lag); i < n; ++i) {
-      r[static_cast<size_t>(lag)] += static_cast<double>(x[i]) * x[i - static_cast<size_t>(lag)];
-    }
-    r[static_cast<size_t>(lag)] /= static_cast<double>(n);
+    r[static_cast<size_t>(lag)] =
+        static_cast<double>(raw[static_cast<size_t>(lag)]) / static_cast<double>(n);
   }
 
   std::vector<double> a(static_cast<size_t>(order + 1), 0.0);

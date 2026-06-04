@@ -35,6 +35,17 @@ constexpr float kPdrNormalizationDb = 24.0f;
 // we apply half of it as a conservative perceptual compromise.
 constexpr float kAutoMakeupFraction = 0.5f;
 
+DetectorMode detector_mode_from_param(float value) {
+  switch (static_cast<int>(std::lround(value))) {
+    case 0:
+      return DetectorMode::Peak;
+    case 2:
+      return DetectorMode::LogRms;
+    default:
+      return DetectorMode::Rms;
+  }
+}
+
 // Computes the total makeup gain in dB. Auto-makeup and an explicit
 // makeup_gain_db are mutually exclusive to avoid double-compensation: if the
 // user has dialed in any manual makeup, it overrides the auto heuristic.
@@ -250,6 +261,27 @@ bool Compressor::set_parameter(unsigned int param_id, float value) {
       break;
     case 4:
       config_.makeup_gain_db = value;
+      break;
+    case 5:
+      config_.knee_db = std::max(0.0f, value);
+      break;
+    case 6:
+      config_.auto_makeup = value != 0.0f;
+      break;
+    case 7:
+      config_.detector = detector_mode_from_param(value);
+      break;
+    case 8:
+      config_.sidechain_hpf_enabled = value != 0.0f;
+      break;
+    case 9:
+      config_.sidechain_hpf_hz = std::max(1.0f, value);
+      break;
+    case 10:
+      config_.pdr_time_ms = std::max(0.0f, value);
+      break;
+    case 11:
+      config_.pdr_release_scale = std::max(1.0f, value);
       break;
     default:
       return false;

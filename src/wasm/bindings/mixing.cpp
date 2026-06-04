@@ -559,6 +559,38 @@ class MixerWasm {
     }
   }
 
+  // Reports the maximum processor tail length in the compiled mixer graph
+  // (samples). Lazily compiles if the topology is dirty.
+  int tailSamples() {
+    int out = 0;
+    SonareError err = sonare_mixer_tail_samples(mixer_, &out);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to read mixer tail samples: ") + sonare_error_message(err));
+    }
+    return out;
+  }
+
+  // Drains delayed/tail audio by processing a zero-input block of num_samples
+  // frames. Returns { left, right, sampleRate } mirroring processStereo.
+  val drainTailStereo(size_t num_samples) {
+    std::vector<float> out_left(num_samples, 0.0f);
+    std::vector<float> out_right(num_samples, 0.0f);
+    SonareError err =
+        sonare_mixer_drain_tail_stereo(mixer_, out_left.data(), out_right.data(), num_samples);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("mixer drain tail failed: ") + sonare_error_message(err));
+    }
+    val out = val::object();
+    out.set("left", vectorToFloat32Array(out_left));
+    out.set("right", vectorToFloat32Array(out_right));
+    out.set("sampleRate", sample_rate_);
+    return out;
+  }
+
  private:
   static void checkStripError(SonareError err, const char* what) {
     if (err != SONARE_OK) {
@@ -925,7 +957,9 @@ void registerMixingBindings() {
       .function("addVcaGroup", &MixerWasm::addVcaGroup)
       .function("removeVcaGroup", &MixerWasm::removeVcaGroup)
       .function("vcaGroupCount", &MixerWasm::vcaGroupCount)
-      .function("toSceneJson", &MixerWasm::toSceneJson);
+      .function("toSceneJson", &MixerWasm::toSceneJson)
+      .function("tailSamples", &MixerWasm::tailSamples)
+      .function("drainTailStereo", &MixerWasm::drainTailStereo);
   function("createMixerFromSceneJson", &createMixerFromSceneJson, allow_raw_pointers());
 #endif
 }

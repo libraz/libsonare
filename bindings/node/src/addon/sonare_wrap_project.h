@@ -22,6 +22,19 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value ToJson(const Napi::CallbackInfo& info);
   static Napi::Value FromJson(const Napi::CallbackInfo& info);
   Napi::Value SetSampleRate(const Napi::CallbackInfo& info);
+  Napi::Value GetSampleRate(const Napi::CallbackInfo& info);
+  Napi::Value SetOverlapPolicy(const Napi::CallbackInfo& info);
+  Napi::Value GetOverlapPolicy(const Napi::CallbackInfo& info);
+  Napi::Value SetMixerSceneJson(const Napi::CallbackInfo& info);
+  Napi::Value SetMarker(const Napi::CallbackInfo& info);
+  Napi::Value SetTempoSegments(const Napi::CallbackInfo& info);
+  Napi::Value SetTimeSignatures(const Napi::CallbackInfo& info);
+
+  // -- value-model counts --
+  Napi::Value TrackCount(const Napi::CallbackInfo& info);
+  Napi::Value SourceCount(const Napi::CallbackInfo& info);
+  Napi::Value TempoSegmentCount(const Napi::CallbackInfo& info);
+  Napi::Value TimeSignatureCount(const Napi::CallbackInfo& info);
 
   // -- edit --
   Napi::Value AddTrack(const Napi::CallbackInfo& info);
@@ -30,7 +43,10 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SplitClip(const Napi::CallbackInfo& info);
   Napi::Value TrimClip(const Napi::CallbackInfo& info);
   Napi::Value MoveClip(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackKind(const Napi::CallbackInfo& info);
   Napi::Value SetClipWarpRef(const Napi::CallbackInfo& info);
+  Napi::Value SetWarpMap(const Napi::CallbackInfo& info);
+  Napi::Value RemoveWarpMap(const Napi::CallbackInfo& info);
   Napi::Value SetTrackMidiDestination(const Napi::CallbackInfo& info);
   Napi::Value RemoveClip(const Napi::CallbackInfo& info);
   Napi::Value SetClipGain(const Napi::CallbackInfo& info);
@@ -55,6 +71,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value ExportClipFile(const Napi::CallbackInfo& info);
   Napi::Value SetProgram(const Napi::CallbackInfo& info);
   Napi::Value SetProgramOnChannel(const Napi::CallbackInfo& info);
+  Napi::Value BakeMidiFx(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);
   Napi::Value ValidateMidiNotes(const Napi::CallbackInfo& info);
 
@@ -72,6 +89,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 
   // -- compile / render --
   Napi::Value Compile(const Napi::CallbackInfo& info);
+  Napi::Value LastBounceCompileResult(const Napi::CallbackInfo& info);
   Napi::Value Bounce(const Napi::CallbackInfo& info);
   Napi::Value BounceWithBuiltinInstruments(const Napi::CallbackInfo& info);
 

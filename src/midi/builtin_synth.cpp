@@ -87,6 +87,7 @@ void BuiltinSynth::reset() {
 }
 
 void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity) noexcept {
+  if (!prepared_) return;
   if (voices_.empty()) return;
   // Pick a free voice; else steal the oldest (smallest age) voice deterministically.
   Voice* target = nullptr;
@@ -114,6 +115,7 @@ void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity) noexce
 }
 
 void BuiltinSynth::note_off(uint8_t channel, uint8_t note) noexcept {
+  if (!prepared_) return;
   for (auto& v : voices_) {
     if (v.active && v.note == note && v.channel == channel && v.stage != Stage::kRelease) {
       v.stage = Stage::kRelease;
@@ -122,18 +124,21 @@ void BuiltinSynth::note_off(uint8_t channel, uint8_t note) noexcept {
 }
 
 void BuiltinSynth::all_notes_off(uint8_t channel) noexcept {
+  if (!prepared_) return;
   for (auto& v : voices_) {
     if (v.active && v.channel == channel && v.stage != Stage::kRelease) v.stage = Stage::kRelease;
   }
 }
 
 void BuiltinSynth::all_sound_off(uint8_t channel) noexcept {
+  if (!prepared_) return;
   for (auto& v : voices_) {
     if (v.active && v.channel == channel) v = Voice{};
   }
 }
 
 void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) noexcept {
+  if (!prepared_) return;
   const Ump& u = event.ump;
   if (u.message_type() != UmpMessageType::kMidi1ChannelVoice &&
       u.message_type() != UmpMessageType::kMidi2ChannelVoice) {

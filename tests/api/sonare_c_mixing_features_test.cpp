@@ -39,6 +39,23 @@ TEST_CASE("sonare_strip_schedule_send_automation error mapping", "[c_api][mixing
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("sonare_mixer_compile success leaves last_error empty for unpatched explicit buses",
+          "[c_api][mixing]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 512);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
+  REQUIRE(strip != nullptr);
+  REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
+
+  size_t send_index = 0;
+  REQUIRE(sonare_strip_add_send(strip, "send0", "sub", -6.0f, 0, &send_index) == SONARE_OK);
+
+  REQUIRE(sonare_mixer_compile(mixer) == SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()) == "");
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("sonare_metering stereo pair validates both channels", "[c_api][mixing]") {
   const int sr = 48000;
   auto left = generate_sine(440.0f, sr, 0.25f);

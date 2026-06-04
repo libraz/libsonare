@@ -59,8 +59,9 @@ class MidiClip {
   /// deterministically). Idempotent. No clock/random.
   void sort_stable();
 
-  /// Validates that every note-on has a matching note-off (per channel+note,
-  /// FIFO matching). Reports unmatched counts; does not mutate the clip.
+  /// Validates that every note-on has a matching note-off (per
+  /// group+channel+note, FIFO matching). Reports unmatched counts; does not
+  /// mutate the clip.
   NotePairValidation validate_note_pairs() const;
 
   /// Converts the (sorted) PPQ events to absolute render-frame MidiEvents via

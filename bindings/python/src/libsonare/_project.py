@@ -20,7 +20,7 @@ from __future__ import annotations
 import ctypes
 import math
 import numbers
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol, SupportsFloat, cast
 
@@ -36,7 +36,9 @@ from ._runtime import (
     SonareInstrumentOnEventCallback,
     SonareInstrumentPrepareCallback,
     SonareInstrumentRenderCallback,
+    SonareMidiCcBinding,
     SonareMidiEventPod,
+    SonareMidiRouteConfig,
     SonareNotePairValidation,
     SonareProjectAssistSidecar,
     SonareProjectBounceOptions,
@@ -45,13 +47,22 @@ from ._runtime import (
     SonareProjectClipFade,
     SonareProjectCompileResult,
     SonareProjectKeySegment,
+    SonareProjectTempoSegment,
+    SonareProjectTimeSignatureSegment,
     SonareProjectTrackDesc,
+    SonareProjectWarpAnchor,
+    SonareProjectWarpMapDesc,
     _check,
     _curve_value,
     _from_c_float_array,
     _get_lib,
     _to_c_float_array,
 )
+
+# Mirrors SONARE_ERROR_INVALID_STATE in sonare_c.h. The pure MIDI conversion
+# helpers return this when no result is produced (e.g. learn found no binding);
+# the Python wrappers translate it to ``None`` rather than raising.
+SONARE_ERROR_INVALID_STATE = 7
 
 # Built-in synth waveform ordinals (mirror SonareSynthWaveform).
 SYNTH_WAVEFORM_SINE = 0
@@ -202,6 +213,92 @@ class NotePairValidation:
     ok: bool
     unmatched_note_ons: int
     unmatched_note_offs: int
+
+
+@dataclass(frozen=True)
+class MidiCcBinding:
+    """A MIDI CC <-> automation-parameter binding (see :meth:`Project.midi_cc_learn`).
+
+    ``kind`` is a :data:`MIDI_CC_*` ordinal (0=7-bit CC, 1=14-bit CC,
+    2=RPN, 3=NRPN). For a 14-bit binding ``cc_lsb_number`` carries the LSB
+    controller; for RPN/NRPN ``selector_msb`` / ``selector_lsb`` carry the
+    parameter selector. ``param_id`` is the bound automation parameter; the
+    unit-interval automation range maps onto ``[min_value, max_value]``.
+    """
+
+    cc_number: int
+    channel: int
+    kind: int
+    cc_lsb_number: int
+    selector_msb: int
+    selector_lsb: int
+    param_id: int
+    min_value: float
+    max_value: float
+
+
+@dataclass(frozen=True)
+class MidiRouteResult:
+    """Result of :meth:`Project.midi_route_events`.
+
+    ``events`` is the filtered / remapped event stream (``(ppq, data0, data1)``
+    tuples). ``overflowed`` is True when the router or caller capacity dropped
+    events; ``overflow_count`` is how many were dropped.
+    """
+
+    events: list[tuple[float, int, int]]
+    overflowed: bool
+    overflow_count: int
+
+
+# MIDI CC binding kind ordinals (mirror SonareMidiCcBindingKind).
+MIDI_CC_CONTROL_CHANGE_7 = 0
+MIDI_CC_CONTROL_CHANGE_14 = 1
+MIDI_CC_RPN = 2
+MIDI_CC_NRPN = 3
+
+
+def _cc_binding_to_c(binding: MidiCcBinding | Mapping[str, object]) -> SonareMidiCcBinding:
+    """Marshal a :class:`MidiCcBinding` (or a Mapping with the same keys) into C.
+
+    ``channel`` defaults to ``0xFF`` (any channel) when unset, matching the
+    native binding's "wildcard channel" sentinel.
+    """
+    if isinstance(binding, Mapping):
+
+        def _get(key: str, default: object) -> object:
+            return binding.get(key, default)
+    else:
+
+        def _get(key: str, default: object) -> object:
+            return getattr(binding, key, default)
+
+    return SonareMidiCcBinding(
+        cc_number=int(cast(int, _get("cc_number", 0))) & 0xFF,
+        channel=int(cast(int, _get("channel", 0xFF))) & 0xFF,
+        kind=int(cast(int, _get("kind", MIDI_CC_CONTROL_CHANGE_7))) & 0xFF,
+        cc_lsb_number=int(cast(int, _get("cc_lsb_number", 0))) & 0xFF,
+        selector_msb=int(cast(int, _get("selector_msb", 0))) & 0xFF,
+        selector_lsb=int(cast(int, _get("selector_lsb", 0))) & 0xFF,
+        reserved=0,
+        param_id=int(cast(int, _get("param_id", 0))) & 0xFFFFFFFF,
+        min_value=float(cast(float, _get("min_value", 0.0))),
+        max_value=float(cast(float, _get("max_value", 1.0))),
+    )
+
+
+def _cc_binding_from_c(b: SonareMidiCcBinding) -> MidiCcBinding:
+    return MidiCcBinding(
+        cc_number=int(b.cc_number),
+        channel=int(b.channel),
+        kind=int(b.kind),
+        cc_lsb_number=int(b.cc_lsb_number),
+        selector_msb=int(b.selector_msb),
+        selector_lsb=int(b.selector_lsb),
+        param_id=int(b.param_id),
+        min_value=float(b.min_value),
+        max_value=float(b.max_value),
+    )
 
 
 @dataclass(frozen=True)
@@ -646,12 +743,52 @@ class Project:
             )
         )
 
+    def set_track_kind(self, track_id: int, kind: str | int) -> None:
+        """Change a track kind via an undoable edit command."""
+        _check(
+            _get_lib().sonare_project_set_track_kind(
+                self._require_handle(),
+                int(track_id),
+                _track_kind_value(kind),
+            )
+        )
+
     def set_clip_warp_ref(self, clip_id: int, warp_ref_id: int) -> None:
         """Set a clip's warp reference id (``0`` clears it)."""
         _check(
             _get_lib().sonare_project_set_clip_warp_ref(
                 self._require_handle(),
                 int(clip_id),
+                int(warp_ref_id),
+            )
+        )
+
+    def set_warp_map(
+        self,
+        warp_ref_id: int,
+        anchors: Sequence[tuple[float, float]],
+        name: str | None = None,
+    ) -> None:
+        """Add or replace a first-class project warp map."""
+        count = len(anchors)
+        c_anchors = (SonareProjectWarpAnchor * count)()
+        for i, (warp_sample, source_sample) in enumerate(anchors):
+            c_anchors[i].warp_sample = float(warp_sample)
+            c_anchors[i].source_sample = float(source_sample)
+        encoded_name = name.encode("utf-8") if name else None
+        desc = SonareProjectWarpMapDesc(
+            id=int(warp_ref_id),
+            name=encoded_name,
+            anchors=c_anchors,
+            anchor_count=count,
+        )
+        _check(_get_lib().sonare_project_set_warp_map(self._require_handle(), ctypes.byref(desc)))
+
+    def remove_warp_map(self, warp_ref_id: int) -> None:
+        """Remove a first-class project warp map by id."""
+        _check(
+            _get_lib().sonare_project_remove_warp_map(
+                self._require_handle(),
                 int(warp_ref_id),
             )
         )
@@ -998,6 +1135,21 @@ class Project:
             )
         )
 
+    def bake_midi_fx(self, clip_id: int, config_json: str) -> None:
+        """Destructively bake a clip's MIDI-FX chain from JSON.
+
+        Canonical name matching the Node / WASM ``bakeMidiFx`` surface; unlike
+        :meth:`set_midi_fx` (a non-destructive insert) this rewrites the clip's
+        stored events in place.
+        """
+        _check(
+            _get_lib().sonare_project_bake_midi_fx(
+                self._require_handle(),
+                int(clip_id),
+                config_json.encode("utf-8"),
+            )
+        )
+
     def validate_midi_notes(self, clip_id: int) -> NotePairValidation:
         """Check a MIDI clip for hanging / unmatched notes before bouncing."""
         result = SonareNotePairValidation()
@@ -1058,6 +1210,277 @@ class Project:
     def midi_pitch_bend(ppq: float, group: int, channel: int, bend: int) -> tuple[float, int, int]:
         """Pack a MIDI 1.0 pitch-bend event tuple (`bend` is unsigned 14-bit)."""
         return _midi_event_tuple("sonare_midi_pitch_bend", ppq, group, channel, bend)
+
+    # -- MIDI naming / GM tables (static-lifetime lookups) ------------------
+
+    @staticmethod
+    def gm_instrument_name(program: int) -> str | None:
+        """GM Level 1 instrument name for ``program`` [0,127], or ``None``."""
+        r = _get_lib().sonare_midi_gm_instrument_name(int(program))
+        return r.decode("utf-8") if r else None
+
+    @staticmethod
+    def gm_program_for_name(name: str | None) -> int:
+        """Reverse GM instrument lookup; ``-1`` when unknown / ``None``."""
+        return int(
+            _get_lib().sonare_midi_gm_program_for_name(name.encode("utf-8") if name else None)
+        )
+
+    @staticmethod
+    def gm_family_name(family: int) -> str | None:
+        """GM family name for ``family`` [0,15], or ``None``."""
+        r = _get_lib().sonare_midi_gm_family_name(int(family))
+        return r.decode("utf-8") if r else None
+
+    @staticmethod
+    def gm_family_first_program(family: int) -> int:
+        """First GM program in ``family`` [0,15], or ``-1``."""
+        return int(_get_lib().sonare_midi_gm_family_first_program(int(family)))
+
+    @staticmethod
+    def gm2_instrument_name(bank_lsb: int, program: int) -> str | None:
+        """GM2 melodic instrument name for ``bank_lsb`` + ``program``, or ``None``."""
+        r = _get_lib().sonare_midi_gm2_instrument_name(int(bank_lsb), int(program))
+        return r.decode("utf-8") if r else None
+
+    @staticmethod
+    def gm_drum_name(note: int) -> str | None:
+        """GM drum name for ``note`` [35,81], or ``None``."""
+        r = _get_lib().sonare_midi_gm_drum_name(int(note))
+        return r.decode("utf-8") if r else None
+
+    @staticmethod
+    def gm_drum_note_for_name(name: str | None) -> int:
+        """Reverse GM drum lookup; ``-1`` when unknown / ``None``."""
+        return int(
+            _get_lib().sonare_midi_gm_drum_note_for_name(name.encode("utf-8") if name else None)
+        )
+
+    @staticmethod
+    def gm2_drum_set_name(bank_lsb: int) -> str | None:
+        """GM2 drum-set name for ``bank_lsb``, or ``None``."""
+        r = _get_lib().sonare_midi_gm2_drum_set_name(int(bank_lsb))
+        return r.decode("utf-8") if r else None
+
+    @staticmethod
+    def gm2_drum_name(bank_lsb: int, note: int) -> str | None:
+        """GM2 drum name for ``bank_lsb`` + ``note``, or ``None``."""
+        r = _get_lib().sonare_midi_gm2_drum_name(int(bank_lsb), int(note))
+        return r.decode("utf-8") if r else None
+
+    @staticmethod
+    def midi_cc_name(controller: int) -> str | None:
+        """Standard MIDI CC name for ``controller`` [0,127], or ``None``."""
+        r = _get_lib().sonare_midi_cc_name(int(controller))
+        return r.decode("utf-8") if r else None
+
+    @staticmethod
+    def midi_cc_index_for_name(name: str | None) -> int:
+        """Reverse standard MIDI CC lookup; ``-1`` when unknown / ``None``."""
+        return int(_get_lib().sonare_midi_cc_index_for_name(name.encode("utf-8") if name else None))
+
+    @staticmethod
+    def per_note_controller_name(index: int) -> str | None:
+        """MIDI 2.0 registered per-note controller name for ``index``, or ``None``."""
+        r = _get_lib().sonare_midi_per_note_controller_name(int(index))
+        return r.decode("utf-8") if r else None
+
+    # -- MIDI pure conversion helpers ---------------------------------------
+
+    @staticmethod
+    def midi_bank_program(
+        ppq: float,
+        group: int,
+        channel: int,
+        bank_msb: int,
+        bank_lsb: int,
+        program: int,
+    ) -> list[tuple[float, int, int]]:
+        """Lower a bank/program selection to MIDI 1.0 bank-select + program events.
+
+        Returns the emitted ``(ppq, data0, data1)`` events (Bank MSB CC, Bank LSB
+        CC, then Program Change) at ``ppq``.
+        """
+        lib = _get_lib()
+        events = (SonareMidiEventPod * 3)()
+        out_count = ctypes.c_size_t()
+        _check(
+            lib.sonare_midi_bank_program(
+                float(ppq),
+                int(group),
+                int(channel),
+                int(bank_msb),
+                int(bank_lsb),
+                int(program),
+                events,
+                ctypes.c_size_t(3),
+                ctypes.byref(out_count),
+            )
+        )
+        return [
+            (float(events[i].ppq), int(events[i].data0), int(events[i].data1))
+            for i in range(int(out_count.value))
+        ]
+
+    @staticmethod
+    def midi_route_events(
+        events: Sequence[tuple[float, int, int]] | Sequence[Sequence[float]],
+        config: Mapping[str, int] | None = None,
+    ) -> MidiRouteResult:
+        """Route events through the RT MidiRouter filter / remap / thru logic.
+
+        ``config`` is an optional mapping with ``filter_group`` /
+        ``filter_channel`` (``-1`` = any), ``remap_channel`` (``-1`` = no remap)
+        and ``thru`` (1 = pass non-matching events through, default).
+        """
+        lib = _get_lib()
+        rows = list(events)
+        n = len(rows)
+        c_in = (SonareMidiEventPod * n)()
+        for i, ev in enumerate(rows):
+            seq = tuple(ev)
+            if len(seq) < 3:
+                raise ValueError(f"events[{i}] must contain (ppq, data0, data1)")
+            c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
+            c_in[i].data0 = _validate_midi_event_word(seq[1], f"events[{i}].data0")
+            c_in[i].data1 = _validate_midi_event_word(seq[2], f"events[{i}].data1")
+        cfg_map: Mapping[str, int] = config or {}
+        cfg = SonareMidiRouteConfig(
+            filter_group=int(cfg_map.get("filter_group", -1)),
+            filter_channel=int(cfg_map.get("filter_channel", -1)),
+            remap_channel=int(cfg_map.get("remap_channel", -1)),
+            thru=int(cfg_map.get("thru", 1)),
+        )
+        out = (SonareMidiEventPod * n)() if n else None
+        out_count = ctypes.c_size_t()
+        overflowed = ctypes.c_int()
+        overflow_count = ctypes.c_uint32()
+        _check(
+            lib.sonare_midi_route_events(
+                c_in if n else None,
+                ctypes.c_size_t(n),
+                ctypes.byref(cfg),
+                out,
+                ctypes.c_size_t(n),
+                ctypes.byref(out_count),
+                ctypes.byref(overflowed),
+                ctypes.byref(overflow_count),
+            )
+        )
+        routed = [
+            (float(out[i].ppq), int(out[i].data0), int(out[i].data1))
+            for i in range(int(out_count.value))
+        ]
+        return MidiRouteResult(
+            events=routed,
+            overflowed=bool(overflowed.value),
+            overflow_count=int(overflow_count.value),
+        )
+
+    @staticmethod
+    def midi_cc_learn(
+        events: Sequence[tuple[float, int, int]] | Sequence[Sequence[float]],
+        param_id: int,
+        min_value: float = 0.0,
+        max_value: float = 1.0,
+        min_movement: int = 0,
+    ) -> MidiCcBinding | None:
+        """Run MIDI learn over ``events`` and return the learned binding.
+
+        Returns ``None`` when no binding is learned (native
+        ``SONARE_ERROR_INVALID_STATE``).
+        """
+        lib = _get_lib()
+        rows = list(events)
+        n = len(rows)
+        c_in = (SonareMidiEventPod * n)()
+        for i, ev in enumerate(rows):
+            seq = tuple(ev)
+            if len(seq) < 3:
+                raise ValueError(f"events[{i}] must contain (ppq, data0, data1)")
+            c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
+            c_in[i].data0 = _validate_midi_event_word(seq[1], f"events[{i}].data0")
+            c_in[i].data1 = _validate_midi_event_word(seq[2], f"events[{i}].data1")
+        out_binding = SonareMidiCcBinding()
+        rc = lib.sonare_midi_cc_learn(
+            c_in if n else None,
+            ctypes.c_size_t(n),
+            ctypes.c_uint32(int(param_id) & 0xFFFFFFFF),
+            ctypes.c_float(float(min_value)),
+            ctypes.c_float(float(max_value)),
+            ctypes.c_uint8(int(min_movement) & 0xFF),
+            ctypes.byref(out_binding),
+        )
+        if rc == SONARE_ERROR_INVALID_STATE:
+            return None
+        _check(rc)
+        return _cc_binding_from_c(out_binding)
+
+    @staticmethod
+    def midi_cc_to_breakpoint(
+        bindings: Sequence[MidiCcBinding | Mapping[str, object]],
+        event: tuple[float, int, int] | Sequence[float],
+    ) -> tuple[float, float, int] | None:
+        """Convert one CC ``event`` to an automation breakpoint via a binding table.
+
+        Returns ``(ppq, value, curve_to_next)`` or ``None`` when the event does
+        not match any binding (native ``SONARE_ERROR_INVALID_STATE``).
+        """
+        lib = _get_lib()
+        rows = list(bindings)
+        m = len(rows)
+        c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
+        seq = tuple(event)
+        if len(seq) < 3:
+            raise ValueError("event must contain (ppq, data0, data1)")
+        ev = SonareMidiEventPod(
+            ppq=_validate_midi_event_ppq(seq[0], "event.ppq"),
+            data0=_validate_midi_event_word(seq[1], "event.data0"),
+            data1=_validate_midi_event_word(seq[2], "event.data1"),
+        )
+        pt = SonareAutomationPoint()
+        rc = lib.sonare_midi_cc_to_breakpoint(
+            c_bindings if m else None,
+            ctypes.c_size_t(m),
+            ctypes.byref(ev),
+            ctypes.byref(pt),
+        )
+        if rc == SONARE_ERROR_INVALID_STATE:
+            return None
+        _check(rc)
+        return (float(pt.ppq), float(pt.value), int(pt.curve_to_next))
+
+    @staticmethod
+    def midi_param_to_cc(
+        bindings: Sequence[MidiCcBinding | Mapping[str, object]],
+        param_id: int,
+        unit_value: float,
+        group: int,
+        ppq: float = 0.0,
+    ) -> tuple[float, int, int] | None:
+        """Convert an automation parameter value back to a CC event.
+
+        Returns ``(ppq, data0, data1)`` or ``None`` when ``param_id`` is not
+        bound (native ``SONARE_ERROR_INVALID_STATE``).
+        """
+        lib = _get_lib()
+        rows = list(bindings)
+        m = len(rows)
+        c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
+        out_event = SonareMidiEventPod()
+        rc = lib.sonare_midi_param_to_cc(
+            c_bindings if m else None,
+            ctypes.c_size_t(m),
+            ctypes.c_uint32(int(param_id) & 0xFFFFFFFF),
+            ctypes.c_float(float(unit_value)),
+            ctypes.c_uint8(int(group) & 0xFF),
+            ctypes.c_double(float(ppq)),
+            ctypes.byref(out_event),
+        )
+        if rc == SONARE_ERROR_INVALID_STATE:
+            return None
+        _check(rc)
+        return (float(out_event.ppq), int(out_event.data0), int(out_event.data1))
 
     # -- MIR ----------------------------------------------------------------
 
@@ -1231,7 +1654,177 @@ class Project:
         """Return all stored assist sidecars as a list of :class:`AssistSidecar`."""
         return [self.get_assist_sidecar(i) for i in range(self.assist_sidecar_count())]
 
+    # -- project getters / setters ------------------------------------------
+
+    def get_sample_rate(self) -> float:
+        """Return the project sample rate in Hz."""
+        out = ctypes.c_double()
+        _check(_get_lib().sonare_project_get_sample_rate(self._require_handle(), ctypes.byref(out)))
+        return float(out.value)
+
+    def get_overlap_policy(self) -> int:
+        """Return the project's clip-overlap policy ordinal."""
+        out = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_project_get_overlap_policy(self._require_handle(), ctypes.byref(out))
+        )
+        return int(out.value)
+
+    def set_overlap_policy(self, policy: int) -> None:
+        """Set the project's clip-overlap policy ordinal."""
+        _check(_get_lib().sonare_project_set_overlap_policy(self._require_handle(), int(policy)))
+
+    def set_marker(self, marker_id: int, ppq: float, name: str) -> int:
+        """Add or replace a marker; return its (possibly newly allocated) id.
+
+        Pass ``marker_id == 0`` to allocate a new marker id.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_project_set_marker(
+                self._require_handle(),
+                int(marker_id),
+                float(ppq),
+                name.encode("utf-8") if name is not None else None,
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
+    def set_mixer_scene_json(self, scene_json: str) -> None:
+        """Replace the project's mixer scene from scene JSON."""
+        _check(
+            _get_lib().sonare_project_set_mixer_scene_json(
+                self._require_handle(),
+                scene_json.encode("utf-8"),
+            )
+        )
+
+    def set_tempo_segments(
+        self,
+        segments: Sequence[Mapping[str, float] | Sequence[float]],
+    ) -> None:
+        """Replace the project's tempo map.
+
+        Each segment is a mapping (``start_ppq`` / ``bpm`` / optional
+        ``start_sample`` / ``end_bpm``) or a tuple
+        ``(start_ppq, bpm, start_sample=0.0, end_bpm=0.0)``. ``end_bpm`` 0 means
+        a constant-tempo segment. Pass an empty sequence to clear.
+        """
+        rows = list(segments)
+        count = len(rows)
+        c_segments = (SonareProjectTempoSegment * count)() if count else None
+        for i, seg in enumerate(rows):
+            if isinstance(seg, Mapping):
+                start_ppq = float(seg["start_ppq"])
+                bpm = float(seg["bpm"])
+                start_sample = float(seg.get("start_sample", 0.0))
+                end_bpm = float(seg.get("end_bpm", 0.0))
+            else:
+                tup = tuple(seg)
+                if len(tup) < 2:
+                    raise ValueError(f"segments[{i}] must contain (start_ppq, bpm)")
+                start_ppq = float(tup[0])
+                bpm = float(tup[1])
+                start_sample = float(tup[2]) if len(tup) >= 3 else 0.0
+                end_bpm = float(tup[3]) if len(tup) >= 4 else 0.0
+            c_segments[i].start_ppq = start_ppq
+            c_segments[i].bpm = bpm
+            c_segments[i].start_sample = start_sample
+            c_segments[i].end_bpm = end_bpm
+        _check(
+            _get_lib().sonare_project_set_tempo_segments(
+                self._require_handle(), c_segments, ctypes.c_size_t(count)
+            )
+        )
+
+    def set_time_signatures(
+        self,
+        segments: Sequence[Mapping[str, float] | Sequence[float]],
+    ) -> None:
+        """Replace the project's time-signature map.
+
+        Each segment is a mapping (``start_ppq`` / ``numerator`` /
+        ``denominator``) or a tuple ``(start_ppq, numerator, denominator)``.
+        Pass an empty sequence to clear.
+        """
+        rows = list(segments)
+        count = len(rows)
+        c_segments = (SonareProjectTimeSignatureSegment * count)() if count else None
+        for i, seg in enumerate(rows):
+            if isinstance(seg, Mapping):
+                start_ppq = float(seg["start_ppq"])
+                numerator = int(seg["numerator"])
+                denominator = int(seg["denominator"])
+            else:
+                tup = tuple(seg)
+                if len(tup) < 3:
+                    raise ValueError(
+                        f"segments[{i}] must contain (start_ppq, numerator, denominator)"
+                    )
+                start_ppq = float(tup[0])
+                numerator = int(tup[1])
+                denominator = int(tup[2])
+            c_segments[i].start_ppq = start_ppq
+            c_segments[i].numerator = numerator
+            c_segments[i].denominator = denominator
+        _check(
+            _get_lib().sonare_project_set_time_signatures(
+                self._require_handle(), c_segments, ctypes.c_size_t(count)
+            )
+        )
+
+    def _count(self, fn_name: str) -> int:
+        out = ctypes.c_size_t()
+        _check(getattr(_get_lib(), fn_name)(self._require_handle(), ctypes.byref(out)))
+        return int(out.value)
+
+    def source_count(self) -> int:
+        """Number of registered audio sources in the project."""
+        return self._count("sonare_project_source_count")
+
+    def tempo_segment_count(self) -> int:
+        """Number of tempo-map segments in the project."""
+        return self._count("sonare_project_tempo_segment_count")
+
+    def time_signature_count(self) -> int:
+        """Number of time-signature segments in the project."""
+        return self._count("sonare_project_time_signature_count")
+
+    def track_count(self) -> int:
+        """Number of tracks in the project."""
+        return self._count("sonare_project_track_count")
+
     # -- compile / render ---------------------------------------------------
+
+    def last_bounce_compile_result(self) -> ProjectCompileResult:
+        """Return the compile result captured by the most recent bounce.
+
+        Mirrors :meth:`compile`'s structured :class:`ProjectCompileResult` but
+        reads the timeline + diagnostics recorded during the last
+        ``bounce*`` call instead of recompiling.
+        """
+        lib = _get_lib()
+        result = SonareProjectCompileResult()
+        _check(
+            lib.sonare_project_last_bounce_compile_result(
+                self._require_handle(), ctypes.byref(result)
+            )
+        )
+        try:
+            has_timeline = bool(result.has_timeline)
+            messages = result.messages.decode("utf-8") if result.messages else ""
+            diagnostics = tuple(
+                ProjectDiagnostic(
+                    code=int(result.diagnostics[i].code),
+                    severity=int(result.diagnostics[i].severity),
+                    target_id=int(result.diagnostics[i].target_id),
+                )
+                for i in range(int(result.diagnostic_count))
+            )
+            return ProjectCompileResult(has_timeline, messages, diagnostics)
+        finally:
+            lib.sonare_project_free_compile_result(ctypes.byref(result))
 
     def compile(self) -> ProjectCompileResult:
         """Compile the project into an RT-readable timeline.

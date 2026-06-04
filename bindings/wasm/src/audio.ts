@@ -1,3 +1,4 @@
+import type { VoiceChangeOptions } from './effects_mastering';
 import {
   harmonic,
   hpss,
@@ -14,7 +15,6 @@ import {
   voiceChange,
 } from './effects_mastering';
 import {
-  analyzeMelody,
   chroma,
   lufs,
   melSpectrogram,
@@ -48,13 +48,14 @@ import type {
   LufsResult,
   MasteringChainConfig,
   MasteringChainResult,
+  MasteringOptions,
   MasteringPreset,
   MasteringProcessorParams,
   MasteringResult,
-  MelodyResult,
   MelSpectrogramResult,
   MfccResult,
   Mode,
+  NoteStretchOptions,
   PitchClass,
   PitchResult,
   SoloProcessor,
@@ -206,20 +207,20 @@ export class Audio {
     return pitchCorrectToMidi(this._samples, this._sampleRate, currentMidi, targetMidi);
   }
 
-  noteStretch(onsetSample = 0, offsetSample = 0, stretchRatio = 1.0): Float32Array {
-    return noteStretch(this._samples, this._sampleRate, onsetSample, offsetSample, stretchRatio);
+  noteStretch(options: NoteStretchOptions = {}): Float32Array {
+    return noteStretch(this._samples, this._sampleRate, options);
   }
 
-  voiceChange(pitchSemitones = 0.0, formantFactor = 1.0): Float32Array {
-    return voiceChange(this._samples, this._sampleRate, pitchSemitones, formantFactor);
+  voiceChange(options: VoiceChangeOptions = {}): Float32Array {
+    return voiceChange(this._samples, this._sampleRate, options);
   }
 
   normalize(targetDb = 0.0): Float32Array {
     return normalize(this._samples, this._sampleRate, targetDb);
   }
 
-  mastering(targetLufs = -14.0, ceilingDb = -1.0, truePeakOversample = 4): MasteringResult {
-    return mastering(this._samples, this._sampleRate, targetLufs, ceilingDb, truePeakOversample);
+  mastering(options: MasteringOptions = {}): MasteringResult {
+    return mastering(this._samples, this._sampleRate, options);
   }
 
   masteringChain(config: MasteringChainConfig): MasteringChainResult {

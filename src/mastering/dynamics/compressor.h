@@ -73,6 +73,13 @@ class Compressor : public rt::ProcessorBase {
   //   2 = attack_ms (clamped to >= 0)
   //   3 = release_ms (clamped to >= 0)
   //   4 = makeup_gain_db
+  //   5 = knee_db (clamped to >= 0)
+  //   6 = auto_makeup (value != 0)
+  //   7 = detector (0=Peak, 1=Rms, 2=LogRms)
+  //   8 = sidechain_hpf_enabled (value != 0)
+  //   9 = sidechain_hpf_hz (clamped to > 0)
+  //  10 = pdr_time_ms (clamped to >= 0)
+  //  11 = pdr_release_scale (clamped to >= 1)
   //
   // set_parameter mutates the control-thread mirror (config_) and publishes it
   // as a new snapshot for the audio thread to adopt on the next block. It is

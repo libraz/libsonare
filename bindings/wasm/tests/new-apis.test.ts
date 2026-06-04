@@ -9,8 +9,11 @@ import {
   Audio,
   analyzeMelody,
   analyzeSections,
+  bassChroma,
+  chromaCens,
   cqt,
   fourierTempogram,
+  hybridCqt,
   init,
   lufs,
   Mixer,
@@ -24,9 +27,11 @@ import {
   nnlsChroma,
   noteStretch,
   onsetEnvelope,
+  onsetStrengthMulti,
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
   plp,
+  pseudoCqt,
   RealtimeEngine,
   StreamingEqualizer,
   shortTermLufs,
@@ -71,6 +76,18 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(env.length).toBeGreaterThanOrEqual(expectedFrames - 2);
       expect(env.length).toBeLessThanOrEqual(expectedFrames + 2);
       expect(allFinite(env)).toBe(true);
+    });
+
+    it('returns finite multi-band onset strength aligned to frames', () => {
+      const nBands = 4;
+      const result = onsetStrengthMulti(signal, SR, 1024, 256, 48, nBands);
+      expect(result.nBands).toBe(nBands);
+      expect(result.nFrames).toBeGreaterThan(0);
+      expect(result.data.length).toBe(result.nBands * result.nFrames);
+      expect(allFinite(result.data)).toBe(true);
+      for (const v of result.data) {
+        expect(v).toBeGreaterThanOrEqual(0);
+      }
     });
   });
 
@@ -126,6 +143,26 @@ describe('v1.2 feature additions (WASM)', () => {
         expect(v).toBeGreaterThanOrEqual(0);
         expect(v).toBeLessThanOrEqual(1.0 + 1e-5);
       }
+    });
+
+    it('computes CENS and bass chroma matrices', () => {
+      const cens = chromaCens(signal, SR, 512, 12);
+      expect(cens.nChroma).toBe(12);
+      expect(cens.nFrames).toBeGreaterThan(0);
+      expect(cens.features.length).toBe(cens.nChroma * cens.nFrames);
+      expect(cens.sampleRate).toBe(SR);
+      expect(cens.hopLength).toBe(512);
+      expect(allFinite(cens.features)).toBe(true);
+      expect(allFinite(cens.meanEnergy)).toBe(true);
+
+      const bass = bassChroma(signal, SR, 512, 12);
+      expect(bass.nChroma).toBe(12);
+      expect(bass.nFrames).toBeGreaterThan(0);
+      expect(bass.features.length).toBe(bass.nChroma * bass.nFrames);
+      expect(bass.sampleRate).toBe(SR);
+      expect(bass.hopLength).toBe(512);
+      expect(allFinite(bass.features)).toBe(true);
+      expect(allFinite(bass.meanEnergy)).toBe(true);
     });
   });
 
@@ -209,7 +246,11 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('noteStretch lengthens the buffer by the stretch ratio', () => {
-      const out = noteStretch(signal, SR, 0, signal.length, 1.5);
+      const out = noteStretch(signal, SR, {
+        onsetSample: 0,
+        offsetSample: signal.length,
+        stretchRatio: 1.5,
+      });
       expect(out).toBeInstanceOf(Float32Array);
       expect(allFinite(out)).toBe(true);
       // Stretching by 1.5 must lengthen the output (allow ±2% for windowing).
@@ -222,7 +263,7 @@ describe('v1.2 feature additions (WASM)', () => {
     });
 
     it('voiceChange preserves length and amplitude range', () => {
-      const out = voiceChange(signal, SR, 2, 1.1);
+      const out = voiceChange(signal, SR, { pitchSemitones: 2, formantFactor: 1.1 });
       expect(out).toBeInstanceOf(Float32Array);
       expect(allFinite(out)).toBe(true);
       // Voice changer is duration-preserving; allow a tiny boundary slack.
@@ -236,8 +277,12 @@ describe('v1.2 feature additions (WASM)', () => {
     it('exposes the editing methods on the Audio class with the same shapes', () => {
       const audio = Audio.fromBuffer(signal, SR);
       const corrected = audio.pitchCorrectToMidi(57, 60);
-      const stretched = audio.noteStretch(0, signal.length, 1.5);
-      const voiced = audio.voiceChange(2, 1.1);
+      const stretched = audio.noteStretch({
+        onsetSample: 0,
+        offsetSample: signal.length,
+        stretchRatio: 1.5,
+      });
+      const voiced = audio.voiceChange({ pitchSemitones: 2, formantFactor: 1.1 });
       expect(corrected.length).toBe(signal.length);
       expect(stretched.length).toBeGreaterThan(signal.length);
       expect(voiced.length).toBeGreaterThanOrEqual(signal.length - 4);
@@ -489,9 +534,25 @@ describe('v1.2 feature additions (WASM)', () => {
       // Sample-accurate + smoothed parameter changes queue without throwing.
       expect(() => engine.setParameter(5, 6)).not.toThrow();
       expect(() => engine.setParameterSmoothed(5, -3, -1)).not.toThrow();
+      expect(engine.midiCcBindingCount()).toBe(0);
+      expect(() => engine.bindMidiCc(0, 74, 5, { minValue: -60, maxValue: 12 })).not.toThrow();
+      expect(engine.midiCcBindingCount()).toBe(1);
+      engine.clearMidiCcBindings();
+      expect(engine.midiCcBindingCount()).toBe(0);
+      expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}')).not.toThrow();
+      expect(() => engine.clearMidiFx(0)).not.toThrow();
+      expect(() => engine.setMidiFx(0, '{bad json')).toThrow();
+      expect(() => engine.setMidiFx(0, '{"quantize_ppq":0}')).toThrow();
+      engine.setMidiInputSource(0);
+      expect(engine.midiInputPendingCount()).toBe(0);
+      engine.pushMidiInputNoteOn(0, 0, 60, 100, 3);
+      expect(engine.midiInputPendingCount()).toBe(1);
 
       engine.play();
       engine.process([new Float32Array(128), new Float32Array(128)]);
+      expect(engine.midiInputPendingCount()).toBe(0);
+      engine.clearMidiInputSource();
+      expect(() => engine.pushMidiInputNoteOff(0, 0, 60, 0, 0)).toThrow();
 
       const state = engine.getTransportState();
       expect(state.playing).toBe(true);
@@ -607,6 +668,20 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(vqtResult.nBins).toBe(24);
       expect(vqtResult.magnitude.length).toBe(vqtResult.nBins * vqtResult.nFrames);
       expect(allFinite(vqtResult.magnitude)).toBe(true);
+
+      const pseudo = pseudoCqt(signal, SR, 512, 32.7, 24, 12);
+      expect(pseudo.nBins).toBe(24);
+      expect(pseudo.frequencies.length).toBe(24);
+      expect(pseudo.magnitude.length).toBe(pseudo.nBins * pseudo.nFrames);
+      expect(pseudo.sampleRate).toBe(SR);
+      expect(allFinite(pseudo.magnitude)).toBe(true);
+
+      const hybrid = hybridCqt(signal, SR, 512, 32.7, 24, 12);
+      expect(hybrid.nBins).toBe(24);
+      expect(hybrid.frequencies.length).toBe(24);
+      expect(hybrid.magnitude.length).toBe(hybrid.nBins * hybrid.nFrames);
+      expect(hybrid.sampleRate).toBe(SR);
+      expect(allFinite(hybrid.magnitude)).toBe(true);
     });
 
     it('analyzes melody contour with summary stats', () => {

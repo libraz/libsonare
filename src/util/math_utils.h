@@ -122,6 +122,15 @@ float pearson_correlation(const float* a, const float* b, size_t size);
 /// @return Median value (0 if empty)
 float median(const float* data, size_t size);
 
+/// @brief Computes unnormalized one-sided autocorrelation.
+/// @details Returns `sum_i input[i] * input[i + lag]` for lags `0..max_lag-1`.
+///          The output is truncated to `min(max_lag, n)`.
+/// @param input Input signal
+/// @param n Length of input
+/// @param max_lag Number of lags to compute
+/// @return Unnormalized autocorrelation values
+std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag);
+
 /// @brief Computes the p-th percentile.
 /// @param data Pointer to data array
 /// @param size Number of elements

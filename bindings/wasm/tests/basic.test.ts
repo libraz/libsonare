@@ -497,7 +497,11 @@ describe('Sonare WASM Module', () => {
         samples[i] = 0.2 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
       }
 
-      const result = mastering(samples, sampleRate, -18.0, -1.0, 4);
+      const result = mastering(samples, sampleRate, {
+        targetLufs: -18.0,
+        ceilingDb: -1.0,
+        truePeakOversample: 4,
+      });
       expect(result.samples).toBeInstanceOf(Float32Array);
       expect(result.samples.length).toBe(samples.length);
       expect(result.sampleRate).toBe(sampleRate);

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <type_traits>
 #include <vector>
 
 #include "core/audio.h"
@@ -88,6 +89,35 @@ inline float loudness_gain_db_with_ceiling(const std::vector<float>& left,
       sonare::mastering::common::measure_true_peak_dbtp(left_audio, true_peak_oversample),
       sonare::mastering::common::measure_true_peak_dbtp(right_audio, true_peak_oversample));
   return loudness_gain_db_with_ceiling(current_lufs, target_lufs, ceiling_db, peak_db);
+}
+
+template <typename RepairFn>
+inline void apply_shared_mono_transfer_repair(std::vector<float>& left, std::vector<float>& right,
+                                              int sample_rate, RepairFn&& repair) {
+  static_assert(std::is_invocable_r_v<sonare::Audio, RepairFn, const sonare::Audio&>,
+                "repair must accept const Audio& and return Audio");
+  std::vector<float> mono = mono_mix(left, right);
+  if (mono.empty()) return;
+
+  const Audio mono_audio = Audio::from_buffer(mono.data(), mono.size(), sample_rate);
+  const Audio repaired_audio = repair(mono_audio);
+  if (repaired_audio.size() != mono.size()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "shared stereo repair produced mismatched length");
+  }
+
+  constexpr float kEpsilon = 1.0e-6f;
+  for (std::size_t index = 0; index < mono.size(); ++index) {
+    const float in = mono[index];
+    const float out = repaired_audio[index];
+    float gain = 1.0f;
+    if (std::abs(in) > kEpsilon) {
+      gain = out / in;
+    }
+    gain = std::clamp(gain, 0.0f, 1.0f);
+    left[index] *= gain;
+    right[index] *= gain;
+  }
 }
 
 }  // namespace sonare::mastering::api::detail

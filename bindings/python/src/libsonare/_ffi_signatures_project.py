@@ -128,10 +128,28 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
         ]
 
+        lib.sonare_project_set_track_kind.restype = ctypes.c_int32
+        lib.sonare_project_set_track_kind.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+        ]
+
         lib.sonare_project_set_clip_warp_ref.restype = ctypes.c_int32
         lib.sonare_project_set_clip_warp_ref.argtypes = [
             ctypes.c_void_p,
             ctypes.c_uint32,
+            ctypes.c_uint32,
+        ]
+
+        lib.sonare_project_set_warp_map.restype = ctypes.c_int32
+        lib.sonare_project_set_warp_map.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectWarpMapDesc),
+        ]
+        lib.sonare_project_remove_warp_map.restype = ctypes.c_int32
+        lib.sonare_project_remove_warp_map.argtypes = [
+            ctypes.c_void_p,
             ctypes.c_uint32,
         ]
 
@@ -424,3 +442,189 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         # Heap byte-buffer free helper (SMF export).
         lib.sonare_free_bytes.restype = None
         lib.sonare_free_bytes.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
+
+    _configure_midi_naming_signatures(lib)
+    _configure_project_extra_signatures(lib)
+
+
+def _configure_midi_naming_signatures(lib: ctypes.CDLL) -> None:
+    # GM / GM2 / CC naming helpers — all static-lifetime, no project handle.
+    for _name in (
+        "sonare_midi_gm_instrument_name",
+        "sonare_midi_gm_family_name",
+        "sonare_midi_gm_drum_name",
+        "sonare_midi_gm2_drum_set_name",
+        "sonare_midi_cc_name",
+        "sonare_midi_per_note_controller_name",
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_char_p
+            _fn.argtypes = [ctypes.c_int]
+
+    for _name in (
+        "sonare_midi_gm2_instrument_name",
+        "sonare_midi_gm2_drum_name",
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_char_p
+            _fn.argtypes = [ctypes.c_int, ctypes.c_int]
+
+    for _name in (
+        "sonare_midi_gm_program_for_name",
+        "sonare_midi_gm_drum_note_for_name",
+        "sonare_midi_cc_index_for_name",
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int
+            _fn.argtypes = [ctypes.c_char_p]
+
+    if hasattr(lib, "sonare_midi_gm_family_first_program"):
+        lib.sonare_midi_gm_family_first_program.restype = ctypes.c_int
+        lib.sonare_midi_gm_family_first_program.argtypes = [ctypes.c_int]
+
+    # Pure conversion helpers (no project handle).
+    if hasattr(lib, "sonare_midi_bank_program"):
+        lib.sonare_midi_bank_program.restype = ctypes.c_int32
+        lib.sonare_midi_bank_program.argtypes = [
+            ctypes.c_double,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMidiEventPod),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
+    if hasattr(lib, "sonare_midi_route_events"):
+        lib.sonare_midi_route_events.restype = ctypes.c_int32
+        lib.sonare_midi_route_events.argtypes = [
+            ctypes.POINTER(SonareMidiEventPod),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareMidiRouteConfig),
+            ctypes.POINTER(SonareMidiEventPod),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+
+    if hasattr(lib, "sonare_midi_cc_learn"):
+        lib.sonare_midi_cc_learn.restype = ctypes.c_int32
+        lib.sonare_midi_cc_learn.argtypes = [
+            ctypes.POINTER(SonareMidiEventPod),
+            ctypes.c_size_t,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_uint8,
+            ctypes.POINTER(SonareMidiCcBinding),
+        ]
+
+    if hasattr(lib, "sonare_midi_cc_to_breakpoint"):
+        lib.sonare_midi_cc_to_breakpoint.restype = ctypes.c_int32
+        lib.sonare_midi_cc_to_breakpoint.argtypes = [
+            ctypes.POINTER(SonareMidiCcBinding),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareMidiEventPod),
+            ctypes.POINTER(SonareAutomationPoint),
+        ]
+
+    if hasattr(lib, "sonare_midi_param_to_cc"):
+        lib.sonare_midi_param_to_cc.restype = ctypes.c_int32
+        lib.sonare_midi_param_to_cc.argtypes = [
+            ctypes.POINTER(SonareMidiCcBinding),
+            ctypes.c_size_t,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_uint8,
+            ctypes.c_double,
+            ctypes.POINTER(SonareMidiEventPod),
+        ]
+
+
+def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
+    # Project getters / setters added for full Python parity.
+    if hasattr(lib, "sonare_project_bake_midi_fx"):
+        lib.sonare_project_bake_midi_fx.restype = ctypes.c_int32
+        lib.sonare_project_bake_midi_fx.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+        ]
+
+    if hasattr(lib, "sonare_project_get_sample_rate"):
+        lib.sonare_project_get_sample_rate.restype = ctypes.c_int32
+        lib.sonare_project_get_sample_rate.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_double),
+        ]
+
+    if hasattr(lib, "sonare_project_get_overlap_policy"):
+        lib.sonare_project_get_overlap_policy.restype = ctypes.c_int32
+        lib.sonare_project_get_overlap_policy.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+
+    if hasattr(lib, "sonare_project_set_overlap_policy"):
+        lib.sonare_project_set_overlap_policy.restype = ctypes.c_int32
+        lib.sonare_project_set_overlap_policy.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        ]
+
+    if hasattr(lib, "sonare_project_set_marker"):
+        lib.sonare_project_set_marker.restype = ctypes.c_int32
+        lib.sonare_project_set_marker.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_double,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+
+    if hasattr(lib, "sonare_project_set_mixer_scene_json"):
+        lib.sonare_project_set_mixer_scene_json.restype = ctypes.c_int32
+        lib.sonare_project_set_mixer_scene_json.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+        ]
+
+    if hasattr(lib, "sonare_project_set_tempo_segments"):
+        lib.sonare_project_set_tempo_segments.restype = ctypes.c_int32
+        lib.sonare_project_set_tempo_segments.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectTempoSegment),
+            ctypes.c_size_t,
+        ]
+
+    if hasattr(lib, "sonare_project_set_time_signatures"):
+        lib.sonare_project_set_time_signatures.restype = ctypes.c_int32
+        lib.sonare_project_set_time_signatures.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectTimeSignatureSegment),
+            ctypes.c_size_t,
+        ]
+
+    for _name in (
+        "sonare_project_source_count",
+        "sonare_project_tempo_segment_count",
+        "sonare_project_time_signature_count",
+        "sonare_project_track_count",
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
+
+    if hasattr(lib, "sonare_project_last_bounce_compile_result"):
+        lib.sonare_project_last_bounce_compile_result.restype = ctypes.c_int32
+        lib.sonare_project_last_bounce_compile_result.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectCompileResult),
+        ]

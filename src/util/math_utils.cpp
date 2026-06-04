@@ -11,6 +11,7 @@
 
 #include "core/db_convert.h"
 #include "core/fft.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -67,6 +68,58 @@ float median(const float* data, size_t size) {
     return (sorted[size / 2 - 1] + sorted[size / 2]) / 2.0f;
   }
   return sorted[size / 2];
+}
+
+std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag) {
+  if (n > 0 && input == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unnormalized_autocorrelation: null input with non-zero length");
+  }
+
+  const size_t out_size = std::min(max_lag, n);
+  std::vector<float> out(out_size, 0.0f);
+  if (out_size == 0) return out;
+
+  constexpr size_t kFftThreshold = 64;
+  if (n < kFftThreshold) {
+    for (size_t lag = 0; lag < out_size; ++lag) {
+      double acc = 0.0;
+      for (size_t i = 0; i + lag < n; ++i) {
+        acc += static_cast<double>(input[i]) * static_cast<double>(input[i + lag]);
+      }
+      out[lag] = static_cast<float>(acc);
+    }
+    return out;
+  }
+
+  constexpr size_t kMaxAutocorrN = (static_cast<size_t>(1) << 29);
+  if (n > kMaxAutocorrN) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unnormalized_autocorrelation: input too large");
+  }
+
+  size_t fft_size = 1;
+  while (fft_size < 2 * n - 1) fft_size *= 2;
+
+  std::vector<float> padded(fft_size, 0.0f);
+  std::copy(input, input + n, padded.begin());
+
+  FFT fft(static_cast<int>(fft_size));
+  const int n_bins = fft.n_bins();
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(n_bins));
+  fft.forward(padded.data(), spectrum.data());
+
+  for (int i = 0; i < n_bins; ++i) {
+    const size_t index = static_cast<size_t>(i);
+    const float re = spectrum[index].real();
+    const float im = spectrum[index].imag();
+    spectrum[index] = std::complex<float>(re * re + im * im, 0.0f);
+  }
+
+  std::vector<float> raw(fft_size);
+  fft.inverse(spectrum.data(), raw.data());
+  std::copy(raw.begin(), raw.begin() + static_cast<std::ptrdiff_t>(out_size), out.begin());
+  return out;
 }
 
 float percentile(const float* data, size_t size, float p) {
@@ -126,38 +179,16 @@ void compute_autocorrelation(const float* input, int n, int max_lag, float* outp
     return;
   }
 
-  // Zero-pad to at least 2*n to avoid circular correlation artifacts
-  int fft_size = next_power_of_2(2 * n);
-
-  // Prepare zero-mean, zero-padded signal
-  std::vector<float> padded(fft_size, 0.0f);
+  std::vector<float> zero_mean(static_cast<size_t>(n), 0.0f);
   for (int i = 0; i < n; ++i) {
-    padded[i] = input[i] - mean_val;
+    zero_mean[static_cast<size_t>(i)] = input[i] - mean_val;
   }
 
-  // FFT-based autocorrelation
-  FFT fft(fft_size);
-  int n_bins = fft.n_bins();
-
-  std::vector<std::complex<float>> spectrum(n_bins);
-  fft.forward(padded.data(), spectrum.data());
-
-  // Compute power spectrum (|FFT(x)|^2)
-  for (int i = 0; i < n_bins; ++i) {
-    float re = spectrum[i].real();
-    float im = spectrum[i].imag();
-    spectrum[i] = std::complex<float>(re * re + im * im, 0.0f);
-  }
-
-  // Inverse FFT to get autocorrelation
-  std::vector<float> raw_autocorr(fft_size);
-  fft.inverse(spectrum.data(), raw_autocorr.data());
-
+  const std::vector<float> raw_autocorr = unnormalized_autocorrelation(
+      zero_mean.data(), zero_mean.size(), static_cast<size_t>(max_lag));
   // Normalize by variance (unnormalized sum of squared deviations).
-  // IFFT already applied 1/fft_size scaling, and by Parseval's theorem
-  // the raw autocorrelation at lag 0 equals var (the unnormalized variance).
   // Dividing by var gives output[0] = 1.0 (normalized autocorrelation).
-  for (int lag = 0; lag < max_lag && lag < n; ++lag) {
+  for (size_t lag = 0; lag < raw_autocorr.size(); ++lag) {
     output[lag] = raw_autocorr[lag] / var;
   }
 }

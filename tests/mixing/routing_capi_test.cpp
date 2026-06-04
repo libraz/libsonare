@@ -61,6 +61,43 @@ TEST_CASE("C-API strip runtime setters validate NULL and bad enums", "[mixing][c
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("C-API mixer reports latency and drains delayed output", "[mixing][capi]") {
+  constexpr int kBlock = 8;
+  SonareMixer* mixer = sonare_mixer_create(48000, kBlock);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "src");
+  REQUIRE(strip != nullptr);
+  REQUIRE(sonare_strip_set_channel_delay_samples(strip, 10) == SONARE_OK);
+
+  int latency = -1;
+  REQUIRE(sonare_mixer_latency_samples(mixer, &latency) == SONARE_OK);
+  REQUIRE(latency == 10);
+  int tail = -1;
+  REQUIRE(sonare_mixer_tail_samples(mixer, &tail) == SONARE_OK);
+  REQUIRE(tail >= 0);
+  REQUIRE(sonare_mixer_latency_samples(nullptr, &latency) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_tail_samples(mixer, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  std::vector<float> in_l(kBlock, 0.0f);
+  std::vector<float> in_r(kBlock, 0.0f);
+  in_l[0] = 1.0f;
+  in_r[0] = 1.0f;
+  const float* inputs_l[] = {in_l.data()};
+  const float* inputs_r[] = {in_r.data()};
+  std::vector<float> out_l(kBlock, 0.0f);
+  std::vector<float> out_r(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                      kBlock) == SONARE_OK);
+  REQUIRE(block_energy(out_l, out_r) == 0.0);
+
+  REQUIRE(sonare_mixer_drain_tail_stereo(mixer, out_l.data(), out_r.data(), kBlock) == SONARE_OK);
+  REQUIRE(block_energy(out_l, out_r) > 0.0);
+  REQUIRE(sonare_mixer_drain_tail_stereo(mixer, nullptr, out_r.data(), kBlock) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("C-API strip setters reflect into scene JSON for cached fields", "[mixing][capi]") {
   // Load a two-strip scene, mutate a strip through the runtime setters, then
   // serialize and re-parse. Fields that the C layer caches into scene_strip

@@ -17,7 +17,7 @@ struct VelvetReverbConfig {
   float dry_wet = 0.3f;
   float reverb_time_s = 1.5f;  ///< Base T60 in seconds.
   float density_hz = 2000.0f;  ///< Velvet pulse density, clamped to [1000, 3000].
-  bool enable_shelf = true;    ///< Post one-pole HF damping at 6 kHz.
+  bool enable_shelf = true;    ///< Post one-pole high-shelf HF damping at 6 kHz.
 };
 
 class VelvetReverb : public rt::ProcessorBase {
@@ -69,7 +69,8 @@ class VelvetReverb : public rt::ProcessorBase {
   std::vector<Tap> taps_l_;
   std::vector<Tap> taps_r_;
 
-  // Post HF shelf (one-pole low-pass) inline state.
+  // Post high-shelf damping state. The one-pole state tracks the low band;
+  // process() recombines it with an attenuated high band.
   float shelf_b0_ = 0.0f;
   float shelf_pole_ = 0.0f;
   float shelf_state_l_ = 0.0f;

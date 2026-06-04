@@ -611,6 +611,12 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
     }
   }
 
+  if (best_score <= 0.0f) {
+    const ChordQuality triad = reduce_to_triad(chords.front().quality);
+    const Mode fallback_mode = triad == ChordQuality::Minor ? Mode::Minor : Mode::Major;
+    return Key{chords.front().root, fallback_mode, 0.0f};
+  }
+
   // Calculate confidence based on how much of the progression is diatonic
   float confidence = (total_duration > 0.0f) ? (best_score / total_duration) : 0.0f;
   confidence = std::min(confidence, 1.0f);

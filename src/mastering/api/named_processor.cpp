@@ -597,6 +597,41 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
       result.right = std::vector<float>(result.right.begin() + range.first,
                                         result.right.begin() + range.last_exclusive);
     }
+  } else if (name == "repair.denoiseClassical" || name == "repair.denoise") {
+    repair::DenoiseClassicalConfig config;
+    config.mode = checked_enum<repair::DenoiseMode>(i(map, "mode", 0), 3, "denoise mode");
+    config.noise_estimator = checked_enum<repair::DenoiseNoiseEstimator>(
+        i(map, "noiseEstimator", 0), 3, "denoise noise estimator");
+    config.n_fft = i(map, "nFft", config.n_fft);
+    config.hop_length = i(map, "hopLength", config.hop_length);
+    config.dd_alpha = f(map, "ddAlpha", config.dd_alpha);
+    config.gain_floor = f(map, "gainFloor", config.gain_floor);
+    config.over_subtraction = f(map, "overSubtraction", config.over_subtraction);
+    config.spectral_floor = f(map, "spectralFloor", config.spectral_floor);
+    config.noise_estimation_quantile =
+        f(map, "noiseEstimationQuantile", config.noise_estimation_quantile);
+    config.speech_presence_gain = b(map, "speechPresenceGain", config.speech_presence_gain);
+    config.gain_smoothing = b(map, "gainSmoothing", config.gain_smoothing);
+    detail::apply_shared_mono_transfer_repair(
+        result.left, result.right, sample_rate,
+        [&config](const Audio& audio) { return repair::denoise_classical(audio, config); });
+  } else if (name == "repair.dereverbClassical") {
+    repair::DereverbClassicalConfig config;
+    config.threshold = f(map, "threshold", config.threshold);
+    config.attenuation = f(map, "attenuation", config.attenuation);
+    config.n_fft = i(map, "nFft", config.n_fft);
+    config.hop_length = i(map, "hopLength", config.hop_length);
+    config.t60_sec = f(map, "t60Sec", config.t60_sec);
+    config.late_delay_ms = f(map, "lateDelayMs", config.late_delay_ms);
+    config.over_subtraction = f(map, "overSubtraction", config.over_subtraction);
+    config.spectral_floor = f(map, "spectralFloor", config.spectral_floor);
+    config.wpe_enabled = b(map, "wpeEnabled", config.wpe_enabled);
+    config.wpe_iterations = i(map, "wpeIterations", config.wpe_iterations);
+    config.wpe_taps = i(map, "wpeTaps", config.wpe_taps);
+    config.wpe_strength = f(map, "wpeStrength", config.wpe_strength);
+    detail::apply_shared_mono_transfer_repair(
+        result.left, result.right, sample_rate,
+        [&config](const Audio& audio) { return repair::dereverb_classical(audio, config); });
   } else {
     int left_latency = 0;
     int right_latency = 0;

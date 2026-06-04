@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+import numpy as np
+
 from ._analyzer_helpers import *
 
 
@@ -162,7 +164,24 @@ def test_audio_properties() -> None:
     assert audio.sample_rate == sr
     assert abs(audio.duration - 1.0) < 0.01
     data = audio.data
+    assert isinstance(data, np.ndarray)
+    assert data.dtype == np.float32
     assert len(data) == len(samples)
+
+
+def test_audio_data_owns_memory_after_close() -> None:
+    """Audio.data returns an owning copy that survives the handle closing."""
+    from libsonare import Audio
+
+    sr = 22050
+    samples = _generate_sine(440, sr, 0.25)
+    audio = Audio.from_buffer(samples, sample_rate=sr)
+    data = audio.data
+    snapshot = data.copy()
+    audio.close()
+    # The array still holds valid samples after the native handle is freed.
+    assert np.array_equal(data, snapshot)
+    assert float(np.max(np.abs(data))) > 0.0
 
 
 def test_audio_from_file() -> None:

@@ -64,6 +64,42 @@ export function stftDb(
   return requireModule().stftDb(samples, sampleRate, nFft, hopLength);
 }
 
+/**
+ * Compute Chroma Energy Normalized Statistics.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @param nChroma - Number of chroma bins (default: 12)
+ * @returns Chroma result
+ */
+export function chromaCens(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  nChroma = 12,
+): ChromaResult {
+  return requireModule().chromaCens(samples, sampleRate, hopLength, nChroma);
+}
+
+/**
+ * Compute low-frequency bass chroma.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @param nChroma - Number of chroma bins (default: 12)
+ * @returns Chroma result
+ */
+export function bassChroma(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  nChroma = 12,
+): ChromaResult {
+  return requireModule().bassChroma(samples, sampleRate, hopLength, nChroma);
+}
+
 // ============================================================================
 // Features - Mel Spectrogram
 // ============================================================================

@@ -180,9 +180,9 @@ std::string replace_first(std::string text, const std::string& from, const std::
 }
 
 // Peak absolute amplitude of an interleaved buffer.
-float buffer_peak(const float* data, size_t len) {
+float buffer_peak(const float* data, size_t len, size_t start = 0) {
   float peak = 0.0f;
-  for (size_t i = 0; i < len; ++i) peak = std::max(peak, std::abs(data[i]));
+  for (size_t i = std::min(start, len); i < len; ++i) peak = std::max(peak, std::abs(data[i]));
   return peak;
 }
 
@@ -198,7 +198,7 @@ SonareProject* deserialize_project(const std::string& json) {
 
 }  // namespace
 
-TEST_CASE("bounce renders per-track channel-strip effects (HIGH-02)", "[project]") {
+TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   // A single MIDI track routed to the built-in synth, bound to a mixer channel
   // strip. Before the fix the bounce dropped the strip entirely; now it renders
   // the track's stem through the scene's mixer, so a muted strip silences the
@@ -220,6 +220,16 @@ TEST_CASE("bounce renders per-track channel-strip effects (HIGH-02)", "[project]
   events[1].data1 = 0u;
   REQUIRE(sonare_project_set_midi_events(base, clip, events, 2) == SONARE_OK);
   REQUIRE(sonare_project_set_track_midi_destination(base, track, 0) == SONARE_OK);
+  SonareAutomationPoint fader_point{};
+  fader_point.ppq = 0.0;
+  fader_point.value = -80.0f;
+  fader_point.curve_to_next = SONARE_CURVE_HOLD;
+  SonareAutomationLaneDesc fader_lane{};
+  fader_lane.target_param_id = 1;  // engine::MixingRuntime::kFaderDb
+  fader_lane.points = &fader_point;
+  fader_lane.point_count = 1;
+  size_t lane_index = 0;
+  REQUIRE(sonare_project_add_automation_lane(base, track, &fader_lane, &lane_index) == SONARE_OK);
   const std::string json_plain = serialize(base);
   sonare_project_destroy(base);
 
@@ -231,20 +241,22 @@ TEST_CASE("bounce renders per-track channel-strip effects (HIGH-02)", "[project]
   SonareBuiltinInstrumentBinding binding{};
   binding.destination_id = 0;
 
-  auto builtin_bounce_peak = [&](const std::string& json) {
+  auto builtin_bounce_peak = [&](const std::string& json, size_t skip_samples = 0) {
     SonareProject* project = deserialize_project(json);
     float* out = nullptr;
     size_t out_len = 0;
     REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
                                                            &out_len) == SONARE_OK);
-    const float peak = buffer_peak(out, out_len);
+    const float peak = buffer_peak(out, out_len, skip_samples);
     sonare_free_floats(out);
     sonare_project_destroy(project);
     return peak;
   };
 
-  // Reference: the unmodified project auditions the synth audibly.
-  REQUIRE(builtin_bounce_peak(json_plain) > 0.0f);
+  // Reference: the unmodified project auditions the synth audibly. The fader
+  // automation lane has no bound strip here, so it cannot affect the direct path.
+  const float direct_peak = builtin_bounce_peak(json_plain, 12000);
+  REQUIRE(direct_peak > 0.0f);
 
   // Bind the track to a muted strip; the bounce must now fall silent.
   const std::string json_muted = replace_first(
@@ -252,12 +264,14 @@ TEST_CASE("bounce renders per-track channel-strip effects (HIGH-02)", "[project]
       "\"channel_strip_ref\":\"\"", "\"channel_strip_ref\":\"s0\"");
   REQUIRE(builtin_bounce_peak(json_muted) == Catch::Approx(0.0f).margin(1e-6));
 
-  // A transparent (unity-fader) strip must keep the audio flowing through the
-  // mixer path rather than dropping it.
+  // A transparent strip bound to the track must also bind the track automation:
+  // the fader lane drives the strip to -80 dB instead of being silently ignored.
   const std::string json_unity = replace_first(
       replace_first(json_plain, "\"strips\":[]", "\"strips\":[{\"id\":\"s0\",\"faderDb\":0.0}]"),
       "\"channel_strip_ref\":\"\"", "\"channel_strip_ref\":\"s0\"");
-  REQUIRE(builtin_bounce_peak(json_unity) > 0.0f);
+  const float automated_peak = builtin_bounce_peak(json_unity, 12000);
+  REQUIRE(automated_peak > 0.0f);
+  REQUIRE(automated_peak < direct_peak * 0.001f);
 }
 
 TEST_CASE("bounce_with_instruments PDC-compensates a latency-bearing instrument", "[project]") {

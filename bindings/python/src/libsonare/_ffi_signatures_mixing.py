@@ -180,6 +180,20 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_float),
             ctypes.c_size_t,
         ]
+        if hasattr(lib, "sonare_mixer_tail_samples"):
+            lib.sonare_mixer_tail_samples.restype = ctypes.c_int32
+            lib.sonare_mixer_tail_samples.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_int),
+            ]
+        if hasattr(lib, "sonare_mixer_drain_tail_stereo"):
+            lib.sonare_mixer_drain_tail_stereo.restype = ctypes.c_int32
+            lib.sonare_mixer_drain_tail_stereo.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+            ]
         lib.sonare_mixing_scene_preset_names.restype = ctypes.c_char_p
         lib.sonare_mixing_scene_preset_names.argtypes = []
         lib.sonare_mixing_scene_preset_json.restype = ctypes.c_int32

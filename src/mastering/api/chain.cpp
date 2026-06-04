@@ -338,29 +338,19 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     report("repair.dehum");
   }
 
-  // 5. repair.dereverb (per-channel)
+  // 5. repair.dereverb
   if (config_.repair.dereverb.enabled) {
-    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    Audio left_repaired =
-        mastering::repair::dereverb_classical(left_audio, config_.repair.dereverb.config);
-    Audio right_repaired =
-        mastering::repair::dereverb_classical(right_audio, config_.repair.dereverb.config);
-    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
-    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    detail::apply_shared_mono_transfer_repair(left, right, sample_rate, [this](const Audio& audio) {
+      return mastering::repair::dereverb_classical(audio, config_.repair.dereverb.config);
+    });
     report("repair.dereverb");
   }
 
-  // 6. repair.denoise (per-channel)
+  // 6. repair.denoise
   if (config_.repair.denoise.enabled) {
-    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    Audio left_repaired =
-        mastering::repair::denoise_classical(left_audio, config_.repair.denoise.config);
-    Audio right_repaired =
-        mastering::repair::denoise_classical(right_audio, config_.repair.denoise.config);
-    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
-    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    detail::apply_shared_mono_transfer_repair(left, right, sample_rate, [this](const Audio& audio) {
+      return mastering::repair::denoise_classical(audio, config_.repair.denoise.config);
+    });
     report("repair.denoise");
   }
 

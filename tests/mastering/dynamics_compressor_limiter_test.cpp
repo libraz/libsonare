@@ -149,6 +149,45 @@ TEST_CASE("Compressor set_config is safe to call concurrently with process",
   REQUIRE(compressor.config().ratio == 3.0f);
 }
 
+TEST_CASE("Compressor set_parameter exposes full insert parameter surface",
+          "[mastering][dynamics]") {
+  Compressor compressor({-18.0f, 2.0f, 5.0f, 50.0f, 0.0f, 0.0f, false, DetectorMode::Rms});
+  compressor.prepare(48000.0, 256);
+
+  REQUIRE(compressor.set_parameter(0, -30.0f));
+  REQUIRE(compressor.set_parameter(1, 5.0f));
+  REQUIRE(compressor.set_parameter(2, 1.0f));
+  REQUIRE(compressor.set_parameter(3, 80.0f));
+  REQUIRE(compressor.set_parameter(4, 2.0f));
+  REQUIRE(compressor.set_parameter(5, 6.0f));
+  REQUIRE(compressor.set_parameter(6, 1.0f));
+  REQUIRE(compressor.set_parameter(7, 2.0f));
+  REQUIRE(compressor.set_parameter(8, 1.0f));
+  REQUIRE(compressor.set_parameter(9, 250.0f));
+  REQUIRE(compressor.set_parameter(10, 30.0f));
+  REQUIRE(compressor.set_parameter(11, 1.75f));
+  REQUIRE_FALSE(compressor.set_parameter(12, 0.0f));
+
+  std::vector<float> block = generate_sine_samples(1000.0f, 48000, 256, 0.8f);
+  float* channels[] = {block.data()};
+  compressor.process(channels, 1, static_cast<int>(block.size()));
+
+  const auto& cfg = compressor.config();
+  REQUIRE(cfg.threshold_db == -30.0f);
+  REQUIRE(cfg.ratio == 5.0f);
+  REQUIRE(cfg.attack_ms == 1.0f);
+  REQUIRE(cfg.release_ms == 80.0f);
+  REQUIRE(cfg.makeup_gain_db == 2.0f);
+  REQUIRE(cfg.knee_db == 6.0f);
+  REQUIRE(cfg.auto_makeup);
+  REQUIRE(cfg.detector == DetectorMode::LogRms);
+  REQUIRE(cfg.sidechain_hpf_enabled);
+  REQUIRE(cfg.sidechain_hpf_hz == 250.0f);
+  REQUIRE(cfg.pdr_time_ms == 30.0f);
+  REQUIRE(cfg.pdr_release_scale == 1.75f);
+  REQUIRE(compressor.last_gain_reduction_db() < 0.0f);
+}
+
 TEST_CASE("Compressor sidechain HPF ignores low-frequency detector energy",
           "[mastering][dynamics]") {
   auto input = generate_sine_samples(40.0f, 48000, 48000, 0.8f);

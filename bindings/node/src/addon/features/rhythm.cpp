@@ -150,6 +150,36 @@ Napi::Value SonareWrap::OnsetEnvelope(const Napi::CallbackInfo& info) {
   return FloatResult(env, out, count);
 }
 
+Napi::Value SonareWrap::OnsetStrengthMulti(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected audio Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto arr = info[0].As<Napi::Float32Array>();
+  int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  int n_fft =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
+  int hop =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int n_mels =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 128;
+  int n_bands =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 6;
+  float* out = nullptr;
+  size_t count = 0;
+  int n_frames = 0;
+  SonareError err = sonare_onset_strength_multi(arr.Data(), arr.ElementLength(), sr, n_fft, hop,
+                                                n_mels, n_bands, &out, &count, &n_frames);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("nBands", Napi::Number::New(env, n_bands));
+  result.Set("nFrames", Napi::Number::New(env, n_frames));
+  result.Set("data", FloatResult(env, out, count));
+  return result;
+}
+
 Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {

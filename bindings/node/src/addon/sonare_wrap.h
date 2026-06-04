@@ -159,9 +159,13 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
 
   // Features - Chroma
   static Napi::Value ChromaFn(const Napi::CallbackInfo& info);
+  static Napi::Value ChromaCens(const Napi::CallbackInfo& info);
+  static Napi::Value BassChroma(const Napi::CallbackInfo& info);
 
   // Features - Constant-Q / Variable-Q transforms
   static Napi::Value Cqt(const Napi::CallbackInfo& info);
+  static Napi::Value PseudoCqt(const Napi::CallbackInfo& info);
+  static Napi::Value HybridCqt(const Napi::CallbackInfo& info);
   static Napi::Value Vqt(const Napi::CallbackInfo& info);
 
   // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
@@ -218,6 +222,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value CyclicTempogram(const Napi::CallbackInfo& info);
   static Napi::Value Plp(const Napi::CallbackInfo& info);
   static Napi::Value OnsetEnvelope(const Napi::CallbackInfo& info);
+  static Napi::Value OnsetStrengthMulti(const Napi::CallbackInfo& info);
   static Napi::Value FourierTempogram(const Napi::CallbackInfo& info);
   static Napi::Value TempogramRatio(const Napi::CallbackInfo& info);
   static Napi::Value NnlsChroma(const Napi::CallbackInfo& info);

@@ -17,6 +17,11 @@ static_assert(static_cast<int>(arr::LoopMode::kOff) == SONARE_LOOP_MODE_OFF,
               "SonareProjectLoopMode off ordinal drift");
 static_assert(static_cast<int>(arr::LoopMode::kLoop) == SONARE_LOOP_MODE_LOOP,
               "SonareProjectLoopMode loop ordinal drift");
+static_assert(static_cast<uint32_t>(arr::OverlapPolicy::kDisallow) ==
+                  SONARE_PROJECT_OVERLAP_DISALLOW,
+              "SonareProjectOverlapPolicy disallow ordinal drift");
+static_assert(static_cast<uint32_t>(arr::OverlapPolicy::kAllow) == SONARE_PROJECT_OVERLAP_ALLOW,
+              "SonareProjectOverlapPolicy allow ordinal drift");
 static_assert(static_cast<int>(sonare::AutomationCurve::Linear) == SONARE_CURVE_LINEAR,
               "SonareProjectAutomationCurve linear ordinal drift");
 static_assert(static_cast<int>(sonare::AutomationCurve::Exponential) == SONARE_CURVE_EXPONENTIAL,
@@ -25,6 +30,12 @@ static_assert(static_cast<int>(sonare::AutomationCurve::Hold) == SONARE_CURVE_HO
               "SonareProjectAutomationCurve hold ordinal drift");
 static_assert(static_cast<int>(sonare::AutomationCurve::SCurve) == SONARE_CURVE_SCURVE,
               "SonareProjectAutomationCurve scurve ordinal drift");
+static_assert(static_cast<int>(arr::Track::Kind::kAudio) == SONARE_TRACK_AUDIO,
+              "SonareProjectTrackKind audio ordinal drift");
+static_assert(static_cast<int>(arr::Track::Kind::kMidi) == SONARE_TRACK_MIDI,
+              "SonareProjectTrackKind midi ordinal drift");
+static_assert(static_cast<int>(arr::Track::Kind::kAux) == SONARE_TRACK_AUX,
+              "SonareProjectTrackKind aux ordinal drift");
 
 namespace {
 
@@ -213,6 +224,119 @@ SonareError sonare_project_add_midi_clip(SonareProject* project, double start_pp
 #endif
 }
 
+SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t overlap_policy) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || overlap_policy > SONARE_PROJECT_OVERLAP_ALLOW) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  auto command =
+      std::make_unique<arr::SetOverlapPolicy>(static_cast<arr::OverlapPolicy>(overlap_policy));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, overlap_policy);
+#endif
+}
+
+SonareError sonare_project_set_tempo_segments(SonareProject* project,
+                                              const SonareProjectTempoSegment* segments,
+                                              size_t segment_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  std::vector<sonare::transport::TempoSegment> out;
+  out.reserve(segment_count);
+  for (size_t i = 0; i < segment_count; ++i) {
+    const SonareProjectTempoSegment& in = segments[i];
+    if (!finite_non_negative(in.start_ppq) || !finite_non_negative(in.start_sample) ||
+        !finite_positive(in.bpm) || !std::isfinite(in.end_bpm) || in.end_bpm < 0.0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    sonare::transport::TempoSegment seg;
+    seg.start_ppq = in.start_ppq;
+    seg.bpm = in.bpm;
+    seg.start_sample = in.start_sample;
+    seg.end_bpm = in.end_bpm;
+    out.push_back(seg);
+  }
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::SetTempoSegment>(std::move(out));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, segments, segment_count);
+#endif
+}
+
+SonareError sonare_project_set_time_signatures(SonareProject* project,
+                                               const SonareProjectTimeSignatureSegment* segments,
+                                               size_t segment_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  std::vector<sonare::transport::TimeSignatureSegment> out;
+  out.reserve(segment_count);
+  for (size_t i = 0; i < segment_count; ++i) {
+    const SonareProjectTimeSignatureSegment& in = segments[i];
+    if (!finite_non_negative(in.start_ppq) || in.numerator <= 0 || in.denominator <= 0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    sonare::transport::TimeSignatureSegment seg;
+    seg.start_ppq = in.start_ppq;
+    seg.time_sig.numerator = in.numerator;
+    seg.time_sig.denominator = in.denominator;
+    out.push_back(seg);
+  }
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::SetTimeSignatureSegment>(std::move(out));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, segments, segment_count);
+#endif
+}
+
+SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id, double ppq,
+                                      const char* name, uint32_t* out_marker_id) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_marker_id) *out_marker_id = 0;
+  if (!project || !out_marker_id || !finite_non_negative(ppq)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::SetMarker>(marker_id, ppq, name ? name : "");
+  arr::SetMarker* raw = command.get();
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  *out_marker_id = raw->allocated_id() != 0 ? raw->allocated_id() : marker_id;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, marker_id, ppq, name, out_marker_id);
+#endif
+}
+
+SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json) {
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
+  if (!project || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  auto scene = sonare::mixing::api::scene_from_json(scene_json);
+  auto command = std::make_unique<arr::SetScene>(std::move(scene));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#elif defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_STUB_NOT_SUPPORTED(project, scene_json);
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, scene_json);
+#endif
+}
+
 SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, double split_ppq,
                                       uint32_t* out_new_clip_id) {
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -263,6 +387,21 @@ SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, d
 #endif
 }
 
+SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track_id,
+                                          uint32_t kind) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || track_id == 0 || kind > SONARE_TRACK_AUX) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::SetTrackKind>(track_id, static_cast<arr::Track::Kind>(kind));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, kind);
+#endif
+}
+
 SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t clip_id,
                                              uint32_t warp_ref_id) {
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -277,6 +416,57 @@ SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t cl
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, warp_ref_id);
+#endif
+}
+
+SonareError sonare_project_set_warp_map(SonareProject* project,
+                                        const SonareProjectWarpMapDesc* desc) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !desc || desc->id == 0 || desc->anchor_count < 2 || !desc->anchors ||
+      desc->anchor_count > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  std::vector<arr::WarpAnchorRef> anchors;
+  anchors.reserve(desc->anchor_count);
+  for (size_t i = 0; i < desc->anchor_count; ++i) {
+    const SonareProjectWarpAnchor& in = desc->anchors[i];
+    if (!finite_non_negative(in.warp_sample) || !finite_non_negative(in.source_sample)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (!anchors.empty()) {
+      const auto& prev = anchors.back();
+      if (!(in.warp_sample > prev.warp_sample && in.source_sample > prev.source_sample)) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+    }
+    anchors.push_back(arr::WarpAnchorRef{in.warp_sample, in.source_sample});
+  }
+
+  SONARE_C_TRY
+  arr::WarpMapRef map;
+  map.id = desc->id;
+  map.name = desc->name ? desc->name : "";
+  map.anchors = std::move(anchors);
+  auto command = std::make_unique<arr::SetWarpMap>(std::move(map));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, desc);
+#endif
+}
+
+SonareError sonare_project_remove_warp_map(SonareProject* project, uint32_t warp_ref_id) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || warp_ref_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project->history.project().has_warp_map(warp_ref_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::RemoveWarpMap>(warp_ref_id);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, warp_ref_id);
 #endif
 }
 

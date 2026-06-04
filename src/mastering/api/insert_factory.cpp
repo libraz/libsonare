@@ -1,5 +1,7 @@
 #include "mastering/api/insert_factory.h"
 
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -91,6 +93,87 @@ using detail::f;
 using detail::limiter_config;
 using detail::ParamMap;
 
+uint8_t base64_value(char c) {
+  if (c >= 'A' && c <= 'Z') return static_cast<uint8_t>(c - 'A');
+  if (c >= 'a' && c <= 'z') return static_cast<uint8_t>(c - 'a' + 26);
+  if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0' + 52);
+  if (c == '+') return 62;
+  if (c == '/') return 63;
+  return 0xFF;
+}
+
+bool base64_decode(const std::string& text, std::vector<uint8_t>* out) {
+  out->clear();
+  if (text.size() % 4 != 0) return false;
+  out->reserve((text.size() / 4) * 3);
+  for (size_t i = 0; i < text.size(); i += 4) {
+    const char c0 = text[i];
+    const char c1 = text[i + 1];
+    const char c2 = text[i + 2];
+    const char c3 = text[i + 3];
+    const uint8_t v0 = base64_value(c0);
+    const uint8_t v1 = base64_value(c1);
+    if (v0 == 0xFF || v1 == 0xFF) return false;
+    const bool pad2 = c2 == '=';
+    const bool pad3 = c3 == '=';
+    if ((pad2 || pad3) && i + 4 != text.size()) return false;
+    if (pad2 && !pad3) return false;
+    uint32_t triple = (static_cast<uint32_t>(v0) << 18) | (static_cast<uint32_t>(v1) << 12);
+    out->push_back(static_cast<uint8_t>((triple >> 16) & 0xFF));
+    if (!pad2) {
+      const uint8_t v2 = base64_value(c2);
+      if (v2 == 0xFF) return false;
+      triple |= static_cast<uint32_t>(v2) << 6;
+      out->push_back(static_cast<uint8_t>((triple >> 8) & 0xFF));
+      if (!pad3) {
+        const uint8_t v3 = base64_value(c3);
+        if (v3 == 0xFF) return false;
+        triple |= static_cast<uint32_t>(v3);
+        out->push_back(static_cast<uint8_t>(triple & 0xFF));
+      }
+    }
+  }
+  return true;
+}
+
+std::vector<float> parse_ir_f32_base64_json(const std::string& json_params) {
+  if (json_params.empty()) return {};
+  const auto root = sonare::util::json::parse_strict(json_params);
+  if (!root.is_object()) {
+    throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
+  }
+  const auto* value = root.find("irF32Base64");
+  if (value == nullptr) return {};
+  if (!value->is_string()) {
+    throw SonareException(ErrorCode::InvalidParameter, "irF32Base64 must be a string");
+  }
+
+  std::vector<uint8_t> bytes;
+  if (!base64_decode(value->as_string(), &bytes)) {
+    throw SonareException(ErrorCode::InvalidParameter, "irF32Base64 is malformed");
+  }
+  if (bytes.size() % sizeof(float) != 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "irF32Base64 byte length must be f32 aligned");
+  }
+
+  std::vector<float> ir(bytes.size() / sizeof(float), 0.0f);
+  for (size_t i = 0; i < ir.size(); ++i) {
+    const size_t offset = i * sizeof(float);
+    const uint32_t bits = static_cast<uint32_t>(bytes[offset]) |
+                          (static_cast<uint32_t>(bytes[offset + 1]) << 8) |
+                          (static_cast<uint32_t>(bytes[offset + 2]) << 16) |
+                          (static_cast<uint32_t>(bytes[offset + 3]) << 24);
+    float sample = 0.0f;
+    std::memcpy(&sample, &bits, sizeof(sample));
+    if (!std::isfinite(sample)) {
+      throw SonareException(ErrorCode::InvalidParameter, "irF32Base64 contains non-finite samples");
+    }
+    ir[i] = sample;
+  }
+  return ir;
+}
+
 std::vector<Param> parse_insert_params_json(const std::string& json_params) {
   try {
     if (json_params.empty()) return {};
@@ -107,6 +190,8 @@ std::vector<Param> parse_insert_params_json(const std::string& json_params) {
         params.push_back(Param{key, value.as_bool() ? 1.0 : 0.0});
       } else if (value.is_number()) {
         params.push_back(Param{key, value.as_number()});
+      } else if (key == "irF32Base64" && value.is_string()) {
+        continue;
       } else {
         throw SonareException(ErrorCode::InvalidParameter,
                               "JSON params values must be numbers or booleans");
@@ -373,7 +458,8 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
 }
 
 #ifdef SONARE_HAVE_FX
-std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap& params) {
+std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap& params,
+                                         const std::string* json_params) {
   using namespace sonare::effects::reverb;
   // "effects.reverb.plate" is an alias for "effects.reverb.dattorro": both names
   // construct the same DattorroReverb processor with identical parameters.
@@ -458,7 +544,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     }
     config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
-    return make<ConvolutionReverb>(config);
+    auto reverb = std::make_unique<ConvolutionReverb>(config);
+    std::vector<float> ir =
+        json_params ? parse_ir_f32_base64_json(*json_params) : std::vector<float>{};
+    if (!ir.empty()) {
+      reverb->load_ir(ir);
+    }
+    return reverb;
   }
 #ifdef SONARE_HAVE_ACOUSTIC
   if (name == "effects.reverb.room") {
@@ -493,7 +585,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
                                  f(params, "listenerZ", 1.7f)};
     config.source_tail_suppression =
         f(params, "sourceTailSuppression", config.source_tail_suppression);
-    config.wet = f(params, "wet", config.wet);
+    config.wet = f(params, "dryWet", config.wet);
     config.ism_order = std::max(0, detail::i(params, "ismOrder", config.ism_order));
     config.seed = static_cast<unsigned>(
         std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
@@ -544,7 +636,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
 
 namespace {
 
-std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params) {
+std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params,
+                                        const std::string* json_params = nullptr) {
   if (auto p = build_dynamics(name, params)) return p;
   if (auto p = build_eq(name, params)) return p;
   if (auto p = build_saturation(name, params)) return p;
@@ -553,7 +646,7 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
   if (auto p = build_maximizer(name, params)) return p;
   if (auto p = build_multiband(name, params)) return p;
 #ifdef SONARE_HAVE_FX
-  if (auto p = build_effects(name, params)) return p;
+  if (auto p = build_effects(name, params, json_params)) return p;
 #endif
   return nullptr;
 }
@@ -564,7 +657,7 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
                                                        const std::string& json_params) {
   const std::vector<Param> param_list = parse_insert_params_json(json_params);
   const ParamMap params = detail::make_map(param_list);
-  return build_insert(name, params);
+  return build_insert(name, params, &json_params);
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
@@ -585,8 +678,11 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string
     // Validate params for malformed JSON parity with make_insert(), then build a
     // real, IR-loaded convolution insert. load_ir() stores the IR and is safe to
     // call before prepare(); prepare() reapplies it to the FFT convolvers.
-    (void)parse_insert_params_json(json_params);
-    auto reverb = std::make_unique<effects::reverb::ConvolutionReverb>();
+    const std::vector<Param> param_list = parse_insert_params_json(json_params);
+    const ParamMap params = detail::make_map(param_list);
+    effects::reverb::ConvolutionReverbConfig config;
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    auto reverb = std::make_unique<effects::reverb::ConvolutionReverb>(config);
     reverb->load_ir(impulse_response, ir_num_samples);
     return reverb;
   }

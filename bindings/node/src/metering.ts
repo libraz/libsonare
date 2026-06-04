@@ -18,6 +18,26 @@ export interface ClippingReport {
   regions: ClippingRegion[];
 }
 
+/** Options for {@link meteringDetectClipping}. All fields are optional. */
+export interface MeteringDetectClippingOptions extends ValidateOptions {
+  /** Linear absolute threshold. Default 0.999. */
+  threshold?: number;
+  /** Minimum run length to report. Default 1. */
+  minRegionSamples?: number;
+}
+
+/** Options for {@link meteringDynamicRange}. All fields are optional. */
+export interface MeteringDynamicRangeOptions extends ValidateOptions {
+  /** Window length in seconds (0 = library default, 3 s). Default 0. */
+  windowSec?: number;
+  /** Hop length in seconds (0 = library default, 1 s). Default 0. */
+  hopSec?: number;
+  /** Low percentile in [0,1] (negative = library default, 0.10). Default -1. */
+  lowPercentile?: number;
+  /** High percentile in [0,1] (negative = library default, 0.95). Default -1. */
+  highPercentile?: number;
+}
+
 /** Sliding-window dynamic range report (mirrors C SonareDynamicRangeResult). */
 export interface DynamicRangeReport {
   dynamicRangeDb: number;
@@ -85,12 +105,15 @@ export function meteringTruePeakDb(
 export function meteringDetectClipping(
   samples: Float32Array,
   sampleRate = 22050,
-  threshold = 0.999,
-  minRegionSamples = 1,
-  options: ValidateOptions = {},
+  options: MeteringDetectClippingOptions = {},
 ): ClippingReport {
   assertSamples('meteringDetectClipping', samples, options.validate !== false);
-  return addon.meteringDetectClipping(samples, sampleRate, threshold, minRegionSamples);
+  return addon.meteringDetectClipping(
+    samples,
+    sampleRate,
+    options.threshold ?? 0.999,
+    options.minRegionSamples ?? 1,
+  );
 }
 
 /**
@@ -103,20 +126,16 @@ export function meteringDetectClipping(
 export function meteringDynamicRange(
   samples: Float32Array,
   sampleRate = 22050,
-  windowSec = 0,
-  hopSec = 0,
-  lowPercentile = -1,
-  highPercentile = -1,
-  options: ValidateOptions = {},
+  options: MeteringDynamicRangeOptions = {},
 ): DynamicRangeReport {
   assertSamples('meteringDynamicRange', samples, options.validate !== false);
   return addon.meteringDynamicRange(
     samples,
     sampleRate,
-    windowSec,
-    hopSec,
-    lowPercentile,
-    highPercentile,
+    options.windowSec ?? 0,
+    options.hopSec ?? 0,
+    options.lowPercentile ?? -1,
+    options.highPercentile ?? -1,
   );
 }
 

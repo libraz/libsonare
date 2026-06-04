@@ -5,11 +5,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <vector>
 
-#include "core/fft.h"
 #include "util/exception.h"
+#include "util/lpc.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -97,57 +97,7 @@ std::vector<float> autocorrelate(const float* y, std::size_t n, int max_size) {
 
   const std::size_t out_size =
       (max_size <= 0) ? n : std::min(static_cast<std::size_t>(max_size), n);
-  std::vector<float> out(out_size, 0.0f);
-  if (n == 0) return out;
-
-  // For small inputs the direct O(n^2) path is faster than FFT setup overhead
-  // and avoids power-of-two padding overhead.
-  constexpr std::size_t kFftThreshold = 64;
-  if (n < kFftThreshold) {
-    for (std::size_t k = 0; k < out_size; ++k) {
-      double acc = 0.0;
-      for (std::size_t i = 0; i + k < n; ++i) {
-        acc += static_cast<double>(y[i]) * static_cast<double>(y[i + k]);
-      }
-      out[k] = static_cast<float>(acc);
-    }
-    return out;
-  }
-
-  // FFT path. Zero-pad to next power of two of (2n - 1) so that the circular
-  // autocorrelation of the padded signal equals the linear autocorrelation
-  // restricted to non-negative lags. Reject sizes so large that 2n-1 or the
-  // power-of-two padding would overflow the int FFT length.
-  constexpr std::size_t kMaxAutocorrN = (static_cast<std::size_t>(1) << 29);
-  if (n > kMaxAutocorrN) {
-    throw SonareException(ErrorCode::InvalidParameter, "autocorrelate: input too large");
-  }
-  std::size_t n_pad = 1;
-  while (n_pad < 2 * n - 1) n_pad *= 2;
-
-  std::vector<float> y_padded(n_pad, 0.0f);
-  std::copy(y, y + n, y_padded.begin());
-
-  FFT fft(static_cast<int>(n_pad));
-  const std::size_t n_bins = n_pad / 2 + 1;
-  std::vector<std::complex<float>> Y(n_bins);
-  fft.forward(y_padded.data(), Y.data());
-
-  // Power spectrum |Y|^2 (real, kept as complex with zero imaginary).
-  std::vector<std::complex<float>> psd(n_bins);
-  for (std::size_t k = 0; k < n_bins; ++k) {
-    const float re = Y[k].real();
-    const float im = Y[k].imag();
-    psd[k] = std::complex<float>(re * re + im * im, 0.0f);
-  }
-
-  // FFT::inverse applies a 1/n_pad scaling, which is exactly the normalisation
-  // needed so that out[0] == sum_i y[i]^2 (Wiener-Khinchin / Parseval).
-  std::vector<float> r(n_pad);
-  fft.inverse(psd.data(), r.data());
-
-  std::copy(r.begin(), r.begin() + out_size, out.begin());
-  return out;
+  return unnormalized_autocorrelation(y, n, out_size);
 }
 
 std::vector<float> autocorrelate(const std::vector<float>& y, int max_size) {
@@ -163,89 +113,7 @@ std::vector<float> lpc(const float* y, std::size_t n, int order) {
     throw SonareException(ErrorCode::InvalidParameter, "lpc: input length must exceed order");
   }
 
-  // Burg's method - direct translation of librosa's __lpc.
-  // Use double precision internally for stability.
-  std::vector<double> y_d(n);
-  for (std::size_t i = 0; i < n; ++i) y_d[i] = static_cast<double>(y[i]);
-
-  std::vector<double> ar_coeffs(order + 1, 0.0);
-  std::vector<double> ar_coeffs_prev(order + 1, 0.0);
-  ar_coeffs[0] = 1.0;
-  ar_coeffs_prev[0] = 1.0;
-
-  // fwd_pred_error = y[1:], bwd_pred_error = y[:-1].
-  // Rather than erase the front of `fwd` / pop the back of `bwd` each iteration
-  // (an O(n) shift per step -> O(n^2) overall), keep the buffers intact and walk
-  // the active window with index offsets: active forward errors are
-  // fwd[fwd_start .. fwd_start + active_len - 1] and active backward errors are
-  // bwd[0 .. active_len - 1]. Dropping the forward front is `++fwd_start`;
-  // dropping the backward back is `--active_len`. This keeps results identical
-  // while making the loop O(n * order).
-  std::vector<double> fwd(y_d.begin() + 1, y_d.end());
-  std::vector<double> bwd(y_d.begin(), y_d.end() - 1);
-  std::size_t fwd_start = 0;
-  std::size_t active_len = fwd.size();
-
-  // den = sum(fwd^2 + bwd^2)
-  double den = 0.0;
-  for (std::size_t k = 0; k < active_len; ++k) {
-    const double f = fwd[fwd_start + k];
-    const double b = bwd[k];
-    den += f * f + b * b;
-  }
-
-  // tiny / epsilon for stability (librosa uses util.tiny - the smallest normal).
-  const double epsilon = 1e-300;
-
-  for (int i = 0; i < order; ++i) {
-    // reflect_coeff = -2 * sum(bwd * fwd) / (den + epsilon)
-    double dot = 0.0;
-    for (std::size_t k = 0; k < active_len; ++k) {
-      dot += bwd[k] * fwd[fwd_start + k];
-    }
-    double reflect_coeff = -2.0 * dot / (den + epsilon);
-
-    // Swap ar_coeffs and ar_coeffs_prev
-    std::swap(ar_coeffs, ar_coeffs_prev);
-    ar_coeffs[0] = ar_coeffs_prev[0];
-
-    // Update ar_coeffs: a_M[j] = a_{M-1}[j] + reflect_coeff * a_{M-1}[i - j + 1]
-    for (int j = 1; j <= i + 1; ++j) {
-      ar_coeffs[j] = ar_coeffs_prev[j] + reflect_coeff * ar_coeffs_prev[i - j + 1];
-    }
-
-    // Update forward and backward prediction errors in place over the active
-    // window. fwd_prev = fwd before the update; computed sample-by-sample so no
-    // separate copy of the whole buffer is needed.
-    for (std::size_t k = 0; k < active_len; ++k) {
-      const double fwd_prev = fwd[fwd_start + k];
-      const double bwd_prev = bwd[k];
-      fwd[fwd_start + k] = fwd_prev + reflect_coeff * bwd_prev;
-      bwd[k] = bwd_prev + reflect_coeff * fwd_prev;
-    }
-
-    // Compute new den via recursion (eqn 17):
-    //   q = 1 - reflect_coeff^2
-    //   den = q * den - bwd[-1]^2 - fwd[0]^2
-    if (active_len > 0) {
-      const double q = 1.0 - reflect_coeff * reflect_coeff;
-      const double bwd_back = bwd[active_len - 1];
-      const double fwd_front = fwd[fwd_start];
-      den = q * den - bwd_back * bwd_back - fwd_front * fwd_front;
-    }
-
-    // Shift up forward error (drop front) / down backward error (drop back).
-    if (active_len > 0) {
-      ++fwd_start;
-      --active_len;
-    }
-  }
-
-  std::vector<float> result(order + 1);
-  for (int i = 0; i <= order; ++i) {
-    result[static_cast<std::size_t>(i)] = static_cast<float>(ar_coeffs[i]);
-  }
-  return result;
+  return lpc_burg(y, n, order).ar;
 }
 
 std::vector<float> lpc(const std::vector<float>& y, int order) {

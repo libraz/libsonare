@@ -371,6 +371,22 @@ def cqt(
     n_bins: int = 84,
     bins_per_octave: int = 12,
 ) -> CqtResult: ...
+def pseudo_cqt(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566257483,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+) -> CqtResult: ...
+def hybrid_cqt(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566257483,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+) -> CqtResult: ...
 def vqt(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -778,6 +794,12 @@ def mfcc(
 def chroma(
     samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
 ) -> ChromaResult: ...
+def chroma_cens(
+    samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
+) -> ChromaResult: ...
+def bass_chroma(
+    samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
+) -> ChromaResult: ...
 def spectral_centroid(
     samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
 ) -> list[float]: ...
@@ -1024,6 +1046,14 @@ def tempogram_ratio(
     factors: FloatSamples | None = None,
 ) -> list[float]: ...
 def nnls_chroma(samples: FloatSamples, sample_rate: int = 22050) -> tuple[int, list[float]]: ...
+def onset_strength_multi(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_mels: int = 128,
+    n_bands: int = 3,
+) -> tuple[int, list[float]]: ...
 def mastering_repair_declick(
     samples: FloatSamples,
     sample_rate: int = 22050,

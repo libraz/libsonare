@@ -64,6 +64,12 @@ typedef enum {
   SONARE_TRACK_AUX = 2
 } SonareProjectTrackKind;
 
+/// Project clip-overlap policy ordinals.
+typedef enum {
+  SONARE_PROJECT_OVERLAP_DISALLOW = 0,
+  SONARE_PROJECT_OVERLAP_ALLOW = 1
+} SonareProjectOverlapPolicy;
+
 /// @brief Description for @ref sonare_project_add_track. The track name is an
 ///        optional NUL-terminated C string (NULL = empty name).
 typedef struct {
@@ -140,6 +146,76 @@ static_assert(offsetof(SonareProjectClipDesc, source_uri) == 48u + 2u * sizeof(v
 static_assert(sizeof(SonareProjectClipDesc) ==
                   ((48u + 3u * sizeof(void*) + 7u) & ~static_cast<size_t>(7u)),
               "SonareProjectClipDesc layout drift");
+#endif
+
+/// @brief One warp-map anchor for @ref sonare_project_set_warp_map.
+typedef struct {
+  double warp_sample;
+  double source_sample;
+} SonareProjectWarpAnchor;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectWarpAnchor, warp_sample) == 0, "WarpAnchor.warp_sample offset");
+static_assert(offsetof(SonareProjectWarpAnchor, source_sample) == sizeof(double),
+              "WarpAnchor.source_sample offset");
+static_assert(sizeof(SonareProjectWarpAnchor) == 2u * sizeof(double),
+              "SonareProjectWarpAnchor layout drift");
+#endif
+
+/// @brief First-class project warp-map descriptor.
+typedef struct {
+  uint32_t id;
+  const char* name;
+  const SonareProjectWarpAnchor* anchors;
+  size_t anchor_count;
+} SonareProjectWarpMapDesc;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectWarpMapDesc, id) == 0, "WarpMapDesc.id offset");
+static_assert(offsetof(SonareProjectWarpMapDesc, name) == sizeof(void*), "WarpMapDesc.name offset");
+static_assert(offsetof(SonareProjectWarpMapDesc, anchors) == 2u * sizeof(void*),
+              "WarpMapDesc.anchors offset");
+static_assert(offsetof(SonareProjectWarpMapDesc, anchor_count) == 3u * sizeof(void*),
+              "WarpMapDesc.anchor_count offset");
+static_assert(sizeof(SonareProjectWarpMapDesc) == 3u * sizeof(void*) + sizeof(size_t),
+              "SonareProjectWarpMapDesc layout drift");
+#endif
+
+/// @brief Project tempo segment descriptor for @ref sonare_project_set_tempo_segments.
+typedef struct {
+  double start_ppq;
+  double bpm;
+  double start_sample;
+  double end_bpm; /* 0 = constant tempo */
+} SonareProjectTempoSegment;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectTempoSegment, start_ppq) == 0, "TempoSegment.start_ppq offset");
+static_assert(offsetof(SonareProjectTempoSegment, bpm) == 8, "TempoSegment.bpm offset");
+static_assert(offsetof(SonareProjectTempoSegment, start_sample) == 16,
+              "TempoSegment.start_sample offset");
+static_assert(offsetof(SonareProjectTempoSegment, end_bpm) == 24, "TempoSegment.end_bpm offset");
+static_assert(sizeof(SonareProjectTempoSegment) == 4u * sizeof(double),
+              "SonareProjectTempoSegment layout drift");
+#endif
+
+/// @brief Project time-signature segment descriptor.
+typedef struct {
+  double start_ppq;
+  int numerator;
+  int denominator;
+} SonareProjectTimeSignatureSegment;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectTimeSignatureSegment, start_ppq) == 0,
+              "TimeSignatureSegment.start_ppq offset");
+static_assert(offsetof(SonareProjectTimeSignatureSegment, numerator) == sizeof(double),
+              "TimeSignatureSegment.numerator offset");
+static_assert(offsetof(SonareProjectTimeSignatureSegment, denominator) ==
+                  sizeof(double) + sizeof(int),
+              "TimeSignatureSegment.denominator offset");
+static_assert(sizeof(SonareProjectTimeSignatureSegment) == 2u * sizeof(double),
+              "SonareProjectTimeSignatureSegment layout drift");
 #endif
 
 /// @brief One compile diagnostic surfaced by @ref sonare_project_compile.
@@ -346,6 +422,67 @@ static_assert(offsetof(SonareMidiEventPod, data0) == 8, "MidiEventPod.data0 offs
 static_assert(offsetof(SonareMidiEventPod, data1) == 12, "MidiEventPod.data1 offset");
 #endif
 
+/// @brief MIDI route config for @ref sonare_midi_route_events.
+/// @details `-1` means any group/channel for filters and no remap for
+///          `remap_channel`. Otherwise values must be in [0, 15].
+typedef struct {
+  int filter_group;
+  int filter_channel;
+  int remap_channel;
+  int thru;
+} SonareMidiRouteConfig;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareMidiRouteConfig, filter_group) == 0,
+              "MidiRouteConfig.filter_group offset");
+static_assert(offsetof(SonareMidiRouteConfig, filter_channel) == sizeof(int),
+              "MidiRouteConfig.filter_channel offset");
+static_assert(offsetof(SonareMidiRouteConfig, remap_channel) == 2u * sizeof(int),
+              "MidiRouteConfig.remap_channel offset");
+static_assert(offsetof(SonareMidiRouteConfig, thru) == 3u * sizeof(int),
+              "MidiRouteConfig.thru offset");
+static_assert(sizeof(SonareMidiRouteConfig) == 4u * sizeof(int),
+              "SonareMidiRouteConfig layout drift");
+#endif
+
+/// @brief MIDI CC binding kind ordinals. Mirrors midi::CcBindingKind.
+typedef enum {
+  SONARE_MIDI_CC_CONTROL_CHANGE_7 = 0,
+  SONARE_MIDI_CC_CONTROL_CHANGE_14 = 1,
+  SONARE_MIDI_CC_RPN = 2,
+  SONARE_MIDI_CC_NRPN = 3
+} SonareMidiCcBindingKind;
+
+/// @brief MIDI CC <-> automation binding descriptor for pure conversion helpers.
+typedef struct {
+  uint8_t cc_number;
+  uint8_t channel;
+  uint8_t kind;
+  uint8_t cc_lsb_number;
+  uint8_t selector_msb;
+  uint8_t selector_lsb;
+  uint16_t reserved;
+  uint32_t param_id;
+  float min_value;
+  float max_value;
+} SonareMidiCcBinding;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareMidiCcBinding, cc_number) == 0, "MidiCcBinding.cc_number offset");
+static_assert(offsetof(SonareMidiCcBinding, channel) == 1, "MidiCcBinding.channel offset");
+static_assert(offsetof(SonareMidiCcBinding, kind) == 2, "MidiCcBinding.kind offset");
+static_assert(offsetof(SonareMidiCcBinding, cc_lsb_number) == 3,
+              "MidiCcBinding.cc_lsb_number offset");
+static_assert(offsetof(SonareMidiCcBinding, selector_msb) == 4,
+              "MidiCcBinding.selector_msb offset");
+static_assert(offsetof(SonareMidiCcBinding, selector_lsb) == 5,
+              "MidiCcBinding.selector_lsb offset");
+static_assert(offsetof(SonareMidiCcBinding, param_id) == 8, "MidiCcBinding.param_id offset");
+static_assert(offsetof(SonareMidiCcBinding, min_value) == 12, "MidiCcBinding.min_value offset");
+static_assert(offsetof(SonareMidiCcBinding, max_value) == 16, "MidiCcBinding.max_value offset");
+static_assert(sizeof(SonareMidiCcBinding) == 20, "SonareMidiCcBinding layout drift");
+#endif
+
 /// @brief Result of @ref sonare_project_validate_midi_notes. @p ok is 1 when
 ///        every note-on in the clip has a matching note-off and vice versa, else
 ///        0; the unmatched counts are diagnostic.
@@ -459,11 +596,56 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
 /// @brief Sets the project sample rate (Hz). Must be > 0.
 SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate);
 
+/// @brief Sets the project's clip-overlap policy.
+SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t overlap_policy);
+
+/// @brief Replaces the project tempo segment list.
+SonareError sonare_project_set_tempo_segments(SonareProject* project,
+                                              const SonareProjectTempoSegment* segments,
+                                              size_t segment_count);
+
+/// @brief Replaces the project time-signature segment list.
+SonareError sonare_project_set_time_signatures(SonareProject* project,
+                                               const SonareProjectTimeSignatureSegment* segments,
+                                               size_t segment_count);
+
+/// @brief Adds or replaces a marker. @p marker_id 0 allocates a new id.
+SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id, double ppq,
+                                      const char* name, uint32_t* out_marker_id);
+
+/// @brief Replaces the project's mixer scene from scene JSON.
+SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);
+
+/// @brief Reads the project sample rate (Hz).
+SonareError sonare_project_get_sample_rate(const SonareProject* project, double* out_sample_rate);
+
+/// @brief Reads the project overlap policy (SonareProjectOverlapPolicy ordinal).
+SonareError sonare_project_get_overlap_policy(const SonareProject* project,
+                                              uint32_t* out_overlap_policy);
+
+/// @brief Counts value-model entities without requiring JSON serialization.
+SonareError sonare_project_track_count(const SonareProject* project, size_t* out_count);
+SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_count);
+SonareError sonare_project_source_count(const SonareProject* project, size_t* out_count);
+SonareError sonare_project_marker_count(const SonareProject* project, size_t* out_count);
+SonareError sonare_project_tempo_segment_count(const SonareProject* project, size_t* out_count);
+SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count);
+
 /// @brief Compiles the project into an RT-readable timeline, surfacing
 ///        diagnostics. Never throws; bad input yields error diagnostics.
 /// @param out Zero-initialized result; free with
 ///        @ref sonare_project_free_compile_result.
 SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out);
+
+/// @brief Returns compile diagnostics produced by the most recent
+///        @ref sonare_project_bounce / instrument bounce on this project.
+/// @details This surfaces non-fatal warnings from the bounce's internal compile
+///          step, such as MIDI clips rendering silently without a bound
+///          instrument. If no bounce has run, the result is empty with
+///          @p has_timeline set non-zero. Free with
+///          @ref sonare_project_free_compile_result.
+SonareError sonare_project_last_bounce_compile_result(const SonareProject* project,
+                                                      SonareProjectCompileResult* out);
 
 /// @brief Frees the heap buffers held by a compile result and zeroes it.
 void sonare_project_free_compile_result(SonareProjectCompileResult* result);
@@ -615,13 +797,24 @@ SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, d
 SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, double new_start_ppq,
                                      uint32_t new_track_id);
 
+/// @brief Changes a track kind via an undoable edit command.
+SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track_id, uint32_t kind);
+
 /// @brief Sets a clip's warp reference id via an undoable edit command.
 ///
-/// The project model stores the reference id only; the host/authoring layer owns
-/// the actual warp-map payload until first-class project warp-map storage exists.
-/// Use @p warp_ref_id = 0 to clear the reference.
+/// Use @p warp_ref_id = 0 to clear the reference. Non-zero ids are intended to
+/// reference a map registered with @ref sonare_project_set_warp_map.
 SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t clip_id,
                                              uint32_t warp_ref_id);
+
+/// @brief Adds or replaces a first-class project warp map via an undoable edit.
+///        @p desc->id must be non-zero and @p anchors must contain at least two
+///        finite, strictly increasing anchor pairs.
+SonareError sonare_project_set_warp_map(SonareProject* project,
+                                        const SonareProjectWarpMapDesc* desc);
+
+/// @brief Removes a first-class project warp map via an undoable edit command.
+SonareError sonare_project_remove_warp_map(SonareProject* project, uint32_t warp_ref_id);
 
 /// @brief Routes a track's MIDI to host-instrument destination @p destination_id
 ///        (0 = the default destination). The arrangement compiler stamps every
@@ -746,6 +939,67 @@ SonareError sonare_midi_poly_pressure(double ppq, uint8_t group, uint8_t channel
 SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint8_t program,
                                 SonareMidiEventPod* out);
 
+/// @brief Returns the General MIDI Level 1 instrument name for @p program.
+/// @details Returns NULL when @p program is outside [0,127]. The returned
+///          pointer is owned by libsonare and valid for the program lifetime.
+const char* sonare_midi_gm_instrument_name(int program);
+/// @brief Reverse GM instrument lookup. Returns -1 when @p name is NULL or unknown.
+int sonare_midi_gm_program_for_name(const char* name);
+/// @brief Returns the GM family name for @p family [0,15], or NULL.
+const char* sonare_midi_gm_family_name(int family);
+/// @brief Returns the first GM program in @p family [0,15], or -1.
+int sonare_midi_gm_family_first_program(int family);
+/// @brief Returns the GM2 melodic instrument name for bank LSB + program.
+const char* sonare_midi_gm2_instrument_name(int bank_lsb, int program);
+/// @brief Returns the GM drum name for note [35,81], or NULL.
+const char* sonare_midi_gm_drum_name(int note);
+/// @brief Reverse GM drum lookup. Returns -1 when @p name is NULL or unknown.
+int sonare_midi_gm_drum_note_for_name(const char* name);
+/// @brief Returns the GM2 drum set name for bank LSB, or NULL.
+const char* sonare_midi_gm2_drum_set_name(int bank_lsb);
+/// @brief Returns the GM2 drum name for bank LSB + note, or NULL.
+const char* sonare_midi_gm2_drum_name(int bank_lsb, int note);
+/// @brief Returns the standard MIDI CC name for controller [0,127], or NULL.
+const char* sonare_midi_cc_name(int controller);
+/// @brief Reverse standard MIDI CC lookup. Returns -1 when @p name is NULL or unknown.
+int sonare_midi_cc_index_for_name(const char* name);
+/// @brief Returns a MIDI 2.0 registered per-note controller name, or NULL.
+const char* sonare_midi_per_note_controller_name(int index);
+/// @brief Lowers a bank/program selection to MIDI 1.0 bank MSB, bank LSB,
+///        program-change events at @p ppq.
+SonareError sonare_midi_bank_program(double ppq, uint8_t group, uint8_t channel, int bank_msb,
+                                     int bank_lsb, int program, SonareMidiEventPod* out_events,
+                                     size_t out_capacity, size_t* out_count);
+
+/// @brief Routes MIDI events through the RT MidiRouter filter/remap/thru logic.
+/// @details `out_events` receives at most `out_capacity` events. Overflow due to
+///          the router fixed capacity or caller capacity is reported through
+///          `out_overflowed` / `out_overflow_count` when those pointers are not
+///          NULL. `out_count` is always required.
+SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t count,
+                                     const SonareMidiRouteConfig* config,
+                                     SonareMidiEventPod* out_events, size_t out_capacity,
+                                     size_t* out_count, int* out_overflowed,
+                                     uint32_t* out_overflow_count);
+
+/// @brief Runs MIDI learn over an event stream and returns the learned binding.
+/// @details Observes events in order using the native CcMap learn logic,
+///          including 14-bit CC pair and RPN/NRPN selector assembly. Returns
+///          SONARE_ERROR_INVALID_STATE if no binding is learned.
+SonareError sonare_midi_cc_learn(const SonareMidiEventPod* events, size_t count, uint32_t param_id,
+                                 float min_value, float max_value, uint8_t min_movement,
+                                 SonareMidiCcBinding* out_binding);
+
+/// @brief Converts a CC event to one automation breakpoint using a binding table.
+SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, size_t binding_count,
+                                         const SonareMidiEventPod* event,
+                                         SonareAutomationPoint* out_point);
+
+/// @brief Converts an automation parameter value back to a CC UMP event.
+SonareError sonare_midi_param_to_cc(const SonareMidiCcBinding* bindings, size_t binding_count,
+                                    uint32_t param_id, float unit_value, uint8_t group, double ppq,
+                                    SonareMidiEventPod* out_event);
+
 /// @brief Packs a MIDI 1.0 channel-pressure event POD at @p ppq.
 SonareError sonare_midi_channel_pressure(double ppq, uint8_t group, uint8_t channel,
                                          uint8_t pressure, SonareMidiEventPod* out);
@@ -815,10 +1069,16 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
 ///   - chord_intervals: array of up to 8 integer semitone offsets
 ///   - humanize_ppq / humanize_velocity / seed: deterministic jitter controls
 ///
-/// This is an offline/control-plane destructive transform over the clip's event
-/// list, not a live RT insert chain. Malformed JSON returns
+/// This is an offline/control-plane destructive bake over the clip's event list,
+/// not a live RT insert chain. Malformed JSON returns
 /// SONARE_ERROR_INVALID_FORMAT; invalid values return
 /// SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id,
+                                        const char* config_json);
+
+/// @brief Backward alias for @ref sonare_project_bake_midi_fx.
+/// @deprecated Use @ref sonare_project_bake_midi_fx for destructive clip edits,
+///             or RealtimeEngine MIDI-FX APIs for live non-destructive inserts.
 SonareError sonare_project_set_midi_fx(SonareProject* project, uint32_t clip_id,
                                        const char* config_json);
 

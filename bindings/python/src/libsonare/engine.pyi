@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ._project import BuiltinSynthConfig
 from .types import (
     AutomationPoint,
     EngineBounceOptions,
@@ -91,5 +92,76 @@ class RealtimeEngine:
     def set_parameter(self, param_id: int, value: float, render_frame: int = -1) -> None: ...
     def set_parameter_smoothed(
         self, param_id: int, value: float, render_frame: int = -1
+    ) -> None: ...
+    def push_midi_cc(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        controller: int,
+        value: int,
+        render_frame: int = -1,
+    ) -> None: ...
+    def push_midi_panic(self, render_frame: int = -1) -> None: ...
+    def set_builtin_instrument(
+        self, config: BuiltinSynthConfig | None = None, destination_id: int = 0
+    ) -> None: ...
+    def clear_midi_instrument(self, destination_id: int = 0) -> None: ...
+    def midi_instrument_count(self) -> int: ...
+    def bind_midi_cc(
+        self,
+        channel: int,
+        controller: int,
+        param_id: int,
+        min_value: float = 0.0,
+        max_value: float = 1.0,
+    ) -> None: ...
+    def clear_midi_cc_bindings(self) -> None: ...
+    def midi_cc_binding_count(self) -> int: ...
+    def clear_midi_fx(self, destination_id: int = 0) -> None: ...
+    def set_midi_input_source(self, destination_id: int = 0) -> None: ...
+    def clear_midi_input_source(self) -> None: ...
+    def midi_input_pending_count(self) -> int: ...
+    def push_midi_input_note_on(
+        self,
+        group: int,
+        channel: int,
+        note: int,
+        velocity: int,
+        port_time_samples: int = 0,
+    ) -> None: ...
+    def push_midi_input_note_off(
+        self,
+        group: int,
+        channel: int,
+        note: int,
+        velocity: int = 0,
+        port_time_samples: int = 0,
+    ) -> None: ...
+    def push_midi_input_cc(
+        self,
+        group: int,
+        channel: int,
+        controller: int,
+        value: int,
+        port_time_samples: int = 0,
+    ) -> None: ...
+    def push_midi_note_on(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        note: int,
+        velocity: int,
+        render_frame: int = -1,
+    ) -> None: ...
+    def push_midi_note_off(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        note: int,
+        velocity: int = 0,
+        render_frame: int = -1,
     ) -> None: ...
     def transport_state(self) -> TransportState: ...

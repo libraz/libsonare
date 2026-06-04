@@ -207,6 +207,12 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
 // sonare_mixer_process_stereo also compiles lazily as a fallback when the
 // topology is dirty.
 SonareError sonare_mixer_compile(SonareMixer* mixer);
+// Reports the compiled mixer's latency at the master output. Lazily compiles if
+// the topology is dirty. Returns INVALID_PARAMETER for NULL arguments.
+SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_samples);
+// Reports the maximum processor tail length currently present in the compiled
+// mixer graph. Lazily compiles if the topology is dirty.
+SonareError sonare_mixer_tail_samples(SonareMixer* mixer, int* out_tail_samples);
 // Processes one stereo block through the compiled mixer graph.
 //
 // Buffers:
@@ -230,6 +236,11 @@ SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* 
                                         const float* const* input_right, size_t input_count,
                                         float* output_left, float* output_right,
                                         size_t num_samples);
+// Processes a zero-input block through the mixer to drain delayed/tail audio
+// after the host has stopped feeding strip inputs. Equivalent to process_stereo
+// with input_count=0 and NULL input arrays, but explicit for offline renderers.
+SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_left,
+                                           float* output_right, size_t num_samples);
 const char* sonare_mixing_scene_preset_names(void);
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out);
 void sonare_mixer_destroy(SonareMixer* mixer);

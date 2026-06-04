@@ -115,6 +115,15 @@ TEST_CASE("MidiClip validate_note_pairs reports matched and unmatched notes", "[
     REQUIRE(report.unmatched_note_ons == 1);
     REQUIRE(report.unmatched_note_offs == 1);
   }
+  {
+    MidiClip clip;
+    clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    clip.add_event(ev(1.0, sonare::midi::make_midi1_note_off(1, 0, 60, 0)));
+    const auto report = clip.validate_note_pairs();
+    REQUIRE_FALSE(report.ok);
+    REQUIRE(report.unmatched_note_ons == 1);
+    REQUIRE(report.unmatched_note_offs == 1);
+  }
 }
 
 TEST_CASE("MidiClip to_render_events converts PPQ to render frames via the tempo map", "[midi]") {

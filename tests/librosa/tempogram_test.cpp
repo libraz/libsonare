@@ -124,6 +124,26 @@ TEST_CASE("fourier_tempogram shape sanity", "[librosa][tempogram]") {
   REQUIRE(ftg.size() % static_cast<size_t>(expected_bins) == 0);
 }
 
+TEST_CASE("tempogram center padding reflects onset edges", "[tempogram][unit]") {
+  const std::vector<float> env = {1.0f, 2.0f, 3.0f};
+  TempogramConfig cfg;
+  cfg.win_length = 6;
+  cfg.window = WindowType::Rectangular;
+  cfg.center = true;
+  cfg.norm = false;
+
+  const auto tg = tempogram(env, 22050, cfg);
+  REQUIRE(tg.size() == static_cast<size_t>(cfg.win_length) * env.size());
+  // First centered frame should see reflected samples [2,3,2,1,2,3], so lag-0
+  // autocorrelation is 31. Zero padding would produce only 1^2+2^2+3^2 = 14.
+  REQUIRE(tg[0] == Catch::Approx(31.0f).margin(1e-6f));
+
+  const auto ftg = fourier_tempogram(env, 22050, cfg);
+  REQUIRE(ftg.size() == static_cast<size_t>(cfg.win_length / 2 + 1) * env.size());
+  // The DC bin of the same reflected first frame is sum([2,3,2,1,2,3]) = 13.
+  REQUIRE(ftg[0] == Catch::Approx(13.0f).margin(1e-6f));
+}
+
 TEST_CASE("PLP pulse statistics match librosa reference", "[librosa][plp]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/plp.json");
   const auto& d = json["data"];

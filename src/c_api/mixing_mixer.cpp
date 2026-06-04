@@ -327,6 +327,32 @@ SonareError sonare_mixer_compile(SonareMixer* mixer) {
   SONARE_C_CATCH
 }
 
+SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_samples) {
+  if (!mixer || !out_latency_samples) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  if (mixer->compiled_dirty) {
+    build_and_compile(mixer);
+  }
+  *out_latency_samples = mixer->latency_samples;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_tail_samples(SonareMixer* mixer, int* out_tail_samples) {
+  if (!mixer || !out_tail_samples) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  if (mixer->compiled_dirty) {
+    build_and_compile(mixer);
+  }
+  *out_tail_samples = mixer->tail_samples;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* input_left,
                                         const float* const* input_right, size_t input_count,
                                         float* output_left, float* output_right,
@@ -372,6 +398,12 @@ SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* 
   }
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_left,
+                                           float* output_right, size_t num_samples) {
+  return sonare_mixer_process_stereo(mixer, nullptr, nullptr, 0, output_left, output_right,
+                                     num_samples);
 }
 
 const char* sonare_mixing_scene_preset_names(void) {

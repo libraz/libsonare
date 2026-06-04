@@ -526,6 +526,40 @@ def onset_envelope(
     )
 
 
+def onset_strength_multi(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_mels: int = 128,
+    n_bands: int = 3,
+) -> tuple[int, list[float]]:
+    """Compute multi-band onset strength. Returns (n_frames, [n_bands x n_frames])."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    n_frames = ctypes.c_int()
+    rc = lib.sonare_onset_strength_multi(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(n_mels),
+        ctypes.c_int(n_bands),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+        ctypes.byref(n_frames),
+    )
+    _check(rc)
+    try:
+        return (int(n_frames.value), _float_array_result(out, out_length.value))
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
 def fourier_tempogram(
     onset_envelope: Sequence[float] | list[float],
     sample_rate: int = 22050,

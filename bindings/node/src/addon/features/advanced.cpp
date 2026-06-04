@@ -45,9 +45,9 @@ Napi::Value CqtResultToObject(Napi::Env env, const SonareCqtResult& result) {
   return out;
 }
 
-}  // namespace
+using CqtFn = SonareError (*)(const float*, size_t, int, int, float, int, int, SonareCqtResult*);
 
-Napi::Value SonareWrap::Cqt(const Napi::CallbackInfo& info) {
+Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
@@ -69,8 +69,8 @@ Napi::Value SonareWrap::Cqt(const Napi::CallbackInfo& info) {
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 12;
 
   SonareCqtResult result{};
-  SonareError err = sonare_cqt(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
-                               bins_per_octave, &result);
+  SonareError err = fn(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
+                       bins_per_octave, &result);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();
@@ -78,6 +78,18 @@ Napi::Value SonareWrap::Cqt(const Napi::CallbackInfo& info) {
   Napi::Value out = CqtResultToObject(env, result);
   sonare_free_cqt_result(&result);
   return out;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::Cqt(const Napi::CallbackInfo& info) { return CqtLike(info, sonare_cqt); }
+
+Napi::Value SonareWrap::PseudoCqt(const Napi::CallbackInfo& info) {
+  return CqtLike(info, sonare_pseudo_cqt);
+}
+
+Napi::Value SonareWrap::HybridCqt(const Napi::CallbackInfo& info) {
+  return CqtLike(info, sonare_hybrid_cqt);
 }
 
 Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {

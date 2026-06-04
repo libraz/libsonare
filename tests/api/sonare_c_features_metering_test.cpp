@@ -35,6 +35,70 @@ TEST_CASE("sonare_onset_strength", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare_onset_strength_multi", "[c_api]") {
+  auto samples = generate_clicks(120.0f, 22050, 2.0f);
+  float* env = nullptr;
+  size_t count = 0;
+  int frames = 0;
+
+  REQUIRE(sonare_onset_strength_multi(samples.data(), samples.size(), 22050, 1024, 256, 64, 4, &env,
+                                      &count, &frames) == SONARE_OK);
+  REQUIRE(frames > 0);
+  REQUIRE(count == static_cast<size_t>(frames) * 4u);
+  REQUIRE(env != nullptr);
+  for (size_t i = 0; i < count; ++i) REQUIRE(std::isfinite(env[i]));
+  sonare_free_floats(env);
+
+  REQUIRE(sonare_onset_strength_multi(samples.data(), samples.size(), 22050, 1024, 256, 64, 0, &env,
+                                      &count, &frames) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare pseudo/hybrid CQT C API", "[c_api]") {
+  auto samples = generate_sine(440.0f, 22050, 1.0f);
+  SonareCqtResult result{};
+
+  REQUIRE(sonare_pseudo_cqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, &result) ==
+          SONARE_OK);
+  REQUIRE(result.n_bins == 36);
+  REQUIRE(result.n_frames > 0);
+  REQUIRE(result.magnitude != nullptr);
+  REQUIRE(result.frequencies != nullptr);
+  sonare_free_cqt_result(&result);
+  REQUIRE(result.magnitude == nullptr);
+
+  REQUIRE(sonare_hybrid_cqt(samples.data(), samples.size(), 22050, 256, 55.0f, 36, 12, &result) ==
+          SONARE_OK);
+  REQUIRE(result.n_bins == 36);
+  REQUIRE(result.n_frames > 0);
+  REQUIRE(result.magnitude != nullptr);
+  sonare_free_cqt_result(&result);
+
+  REQUIRE(sonare_pseudo_cqt(samples.data(), samples.size(), 22050, 0, 55.0f, 36, 12, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare chroma_cens and bass_chroma C API", "[c_api]") {
+  auto samples = generate_sine(110.0f, 22050, 1.0f);
+  SonareChromaResult result{};
+
+  REQUIRE(sonare_chroma_cens(samples.data(), samples.size(), 22050, 512, 12, &result) == SONARE_OK);
+  REQUIRE(result.n_chroma == 12);
+  REQUIRE(result.n_frames > 0);
+  REQUIRE(result.features != nullptr);
+  REQUIRE(result.mean_energy != nullptr);
+  sonare_free_chroma_result(&result);
+  REQUIRE(result.features == nullptr);
+
+  REQUIRE(sonare_bass_chroma(samples.data(), samples.size(), 22050, 512, 12, &result) == SONARE_OK);
+  REQUIRE(result.n_chroma == 12);
+  REQUIRE(result.n_frames > 0);
+  REQUIRE(result.features != nullptr);
+  sonare_free_chroma_result(&result);
+
+  REQUIRE(sonare_chroma_cens(samples.data(), samples.size(), 22050, 0, 12, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+}
+
 TEST_CASE("sonare_fourier_tempogram", "[c_api]") {
   SECTION("returns an [n_bins x n_frames] magnitude matrix") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);
@@ -554,8 +618,12 @@ TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
     REQUIRE(sonare_scale_quantize_midi(-1, kCMajorMask, 0.0f, 60.0f, &out) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_scale_quantize_midi(0, 0, 0.0f, 60.0f, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_scale_quantize_midi(0, 0x1000u, 0.0f, 60.0f, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
     int enabled = -1;
     REQUIRE(sonare_scale_pitch_class_enabled(0, kCMajorMask, 12, &enabled) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_scale_pitch_class_enabled(0, 0xFFFFu, 0, &enabled) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 }

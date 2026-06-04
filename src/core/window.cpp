@@ -6,9 +6,9 @@
 #include <cmath>
 #include <map>
 #include <tuple>
-#include <utility>
 
 #include "util/constants.h"
+#include "util/thread_local_cache.h"
 
 namespace sonare {
 
@@ -46,19 +46,8 @@ std::vector<float> create_window(WindowType type, int length, bool periodic) {
 
 const std::vector<float>& get_window_cached(WindowType type, int length, bool periodic) {
   auto key = std::make_tuple(type, length, periodic);
-  auto it = g_window_cache.find(key);
-  if (it != g_window_cache.end()) {
-    return it->second;
-  }
-
-  /// Clear cache if it exceeds the size limit
-  if (g_window_cache.size() >= kMaxWindowCacheSize) {
-    g_window_cache.clear();
-  }
-
-  // Create and cache the window
-  auto result = g_window_cache.emplace(key, create_window(type, length, periodic));
-  return result.first->second;
+  return get_or_create_bounded_cache_entry(g_window_cache, key, kMaxWindowCacheSize,
+                                           [&] { return create_window(type, length, periodic); });
 }
 
 std::vector<float> hann_window(int length, bool periodic) {

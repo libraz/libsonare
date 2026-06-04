@@ -169,6 +169,7 @@ class StreamAnalyzerWrap : public Napi::ObjectWrap<StreamAnalyzerWrap> {
  private:
   Napi::Value Process(const Napi::CallbackInfo& info);
   Napi::Value ProcessWithOffset(const Napi::CallbackInfo& info);
+  Napi::Value Finalize(const Napi::CallbackInfo& info);
   Napi::Value AvailableFrames(const Napi::CallbackInfo& info);
   Napi::Value ReadFramesSoa(const Napi::CallbackInfo& info);
   Napi::Value ReadFramesU8(const Napi::CallbackInfo& info);

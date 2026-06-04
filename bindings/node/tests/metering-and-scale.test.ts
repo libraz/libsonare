@@ -63,7 +63,7 @@ describe('Offline metering wrappers', () => {
     for (let i = 1000; i < 1064; i++) {
       samples[i] = 1.0;
     }
-    const report = meteringDetectClipping(samples, SR, 0.999);
+    const report = meteringDetectClipping(samples, SR, { threshold: 0.999 });
     expect(report.clippedSamples).toBeGreaterThanOrEqual(1);
     expect(report.regions.length).toBeGreaterThanOrEqual(1);
     expect(report.maxClippedPeak).toBeGreaterThanOrEqual(1.0);
@@ -104,7 +104,9 @@ describe('Offline metering wrappers', () => {
 
   it('dynamic range rejects inverted percentiles', () => {
     const samples = sine(440, 1);
-    expect(() => meteringDynamicRange(samples, SR, 0, 0, 0.9, 0.1)).toThrow();
+    expect(() =>
+      meteringDynamicRange(samples, SR, { lowPercentile: 0.9, highPercentile: 0.1 }),
+    ).toThrow();
   });
 });
 

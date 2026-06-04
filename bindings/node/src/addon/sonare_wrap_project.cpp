@@ -146,6 +146,35 @@ bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
   return true;
 }
 
+bool FillWarpMapDesc(Napi::Env env, const Napi::Object& obj,
+                     std::vector<SonareProjectWarpAnchor>* anchors,
+                     SonareProjectWarpMapDesc* desc) {
+  desc->id = obj.Get("id").As<Napi::Number>().Uint32Value();
+  desc->name = nullptr;
+  Napi::Value value = obj.Get("anchors");
+  if (!value.IsArray()) {
+    Napi::TypeError::New(env, "warp map anchors must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  Napi::Array input = value.As<Napi::Array>();
+  anchors->reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value entry = input.Get(i);
+    if (!entry.IsObject()) {
+      Napi::TypeError::New(env, "warp map anchor must be an object").ThrowAsJavaScriptException();
+      return false;
+    }
+    Napi::Object anchor = entry.As<Napi::Object>();
+    SonareProjectWarpAnchor out{};
+    out.warp_sample = anchor.Get("warpSample").As<Napi::Number>().DoubleValue();
+    out.source_sample = anchor.Get("sourceSample").As<Napi::Number>().DoubleValue();
+    anchors->push_back(out);
+  }
+  desc->anchors = anchors->empty() ? nullptr : anchors->data();
+  desc->anchor_count = anchors->size();
+  return true;
+}
+
 }  // namespace
 
 Napi::FunctionReference ProjectWrap::constructor;
@@ -162,7 +191,10 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SplitClip>("splitClip"),
           InstanceMethod<&ProjectWrap::TrimClip>("trimClip"),
           InstanceMethod<&ProjectWrap::MoveClip>("moveClip"),
+          InstanceMethod<&ProjectWrap::SetTrackKind>("setTrackKind"),
           InstanceMethod<&ProjectWrap::SetClipWarpRef>("setClipWarpRef"),
+          InstanceMethod<&ProjectWrap::SetWarpMap>("setWarpMap"),
+          InstanceMethod<&ProjectWrap::RemoveWarpMap>("removeWarpMap"),
           InstanceMethod<&ProjectWrap::SetTrackMidiDestination>("setTrackMidiDestination"),
           InstanceMethod<&ProjectWrap::RemoveClip>("removeClip"),
           InstanceMethod<&ProjectWrap::SetClipGain>("setClipGain"),
@@ -185,6 +217,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::ExportClipFile>("exportClipFile"),
           InstanceMethod<&ProjectWrap::SetProgram>("setProgram"),
           InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel"),
+          InstanceMethod<&ProjectWrap::BakeMidiFx>("bakeMidiFx"),
           InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx"),
           InstanceMethod<&ProjectWrap::ValidateMidiNotes>("validateMidiNotes"),
           InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo"),
@@ -196,9 +229,21 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::GetAssistSidecar>("getAssistSidecar"),
           InstanceMethod<&ProjectWrap::AssistSidecars>("assistSidecars"),
           InstanceMethod<&ProjectWrap::Compile>("compile"),
+          InstanceMethod<&ProjectWrap::LastBounceCompileResult>("lastBounceCompileResult"),
           InstanceMethod<&ProjectWrap::Bounce>("bounce"),
           InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>(
               "bounceWithBuiltinInstruments"),
+          InstanceMethod<&ProjectWrap::GetSampleRate>("getSampleRate"),
+          InstanceMethod<&ProjectWrap::SetOverlapPolicy>("setOverlapPolicy"),
+          InstanceMethod<&ProjectWrap::GetOverlapPolicy>("getOverlapPolicy"),
+          InstanceMethod<&ProjectWrap::SetMixerSceneJson>("setMixerSceneJson"),
+          InstanceMethod<&ProjectWrap::SetMarker>("setMarker"),
+          InstanceMethod<&ProjectWrap::SetTempoSegments>("setTempoSegments"),
+          InstanceMethod<&ProjectWrap::SetTimeSignatures>("setTimeSignatures"),
+          InstanceMethod<&ProjectWrap::TrackCount>("trackCount"),
+          InstanceMethod<&ProjectWrap::SourceCount>("sourceCount"),
+          InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount"),
+          InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount"),
           InstanceMethod<&ProjectWrap::Destroy>("destroy"),
           StaticMethod<&ProjectWrap::FromJson>("fromJson"),
       });
@@ -404,10 +449,41 @@ Napi::Value ProjectWrap::MoveClip(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
+Napi::Value ProjectWrap::SetTrackKind(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(
+      env, sonare_project_set_track_kind(project_, Uint32Arg(info, 0, 0), Uint32Arg(info, 1, 0)));
+  return env.Undefined();
+}
+
 Napi::Value ProjectWrap::SetClipWarpRef(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_project_set_clip_warp_ref(project_, Uint32Arg(info, 0, 0),
                                                      Uint32Arg(info, 1, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetWarpMap(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "Expected warp map object").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::vector<SonareProjectWarpAnchor> anchors;
+  SonareProjectWarpMapDesc desc{};
+  std::string name_storage;
+  Napi::Object obj = info[0].As<Napi::Object>();
+  Napi::Value name = obj.Get("name");
+  if (name.IsString()) name_storage = name.As<Napi::String>().Utf8Value();
+  if (!FillWarpMapDesc(env, obj, &anchors, &desc)) return env.Undefined();
+  desc.name = name_storage.empty() ? nullptr : name_storage.c_str();
+  ThrowIfError(env, sonare_project_set_warp_map(project_, &desc));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::RemoveWarpMap(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_remove_warp_map(project_, Uint32Arg(info, 0, 0)));
   return env.Undefined();
 }
 
@@ -698,15 +774,17 @@ Napi::Value ProjectWrap::SetProgramOnChannel(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
-Napi::Value ProjectWrap::SetMidiFx(const Napi::CallbackInfo& info) {
+Napi::Value ProjectWrap::BakeMidiFx(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t clip_id = Uint32Arg(info, 0, 0);
   std::string config = info.Length() > 1 && info[1].IsString()
                            ? info[1].As<Napi::String>().Utf8Value()
                            : std::string();
-  ThrowIfError(env, sonare_project_set_midi_fx(project_, clip_id, config.c_str()));
+  ThrowIfError(env, sonare_project_bake_midi_fx(project_, clip_id, config.c_str()));
   return env.Undefined();
 }
+
+Napi::Value ProjectWrap::SetMidiFx(const Napi::CallbackInfo& info) { return BakeMidiFx(info); }
 
 Napi::Value ProjectWrap::ValidateMidiNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -912,25 +990,180 @@ Napi::Value ProjectWrap::AssistSidecars(const Napi::CallbackInfo& info) {
   return out;
 }
 
+namespace {
+
+// Marshals a heap-owned SonareProjectCompileResult into the JS compile-result
+// object shape and frees its heap fields (consuming the struct).
+Napi::Object CompileResultToObject(Napi::Env env, SonareProjectCompileResult* result) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("hasTimeline", Napi::Boolean::New(env, result->has_timeline != 0));
+  out.Set("messages", Napi::String::New(env, result->messages != nullptr ? result->messages : ""));
+  Napi::Array diagnostics = Napi::Array::New(env, result->diagnostic_count);
+  for (size_t i = 0; i < result->diagnostic_count; ++i) {
+    Napi::Object diag = Napi::Object::New(env);
+    diag.Set("code", Napi::Number::New(env, result->diagnostics[i].code));
+    diag.Set("severity", Napi::Number::New(env, result->diagnostics[i].severity));
+    diag.Set("targetId", Napi::Number::New(env, result->diagnostics[i].target_id));
+    diagnostics.Set(static_cast<uint32_t>(i), diag);
+  }
+  out.Set("diagnostics", diagnostics);
+  sonare_project_free_compile_result(result);
+  return out;
+}
+
+}  // namespace
+
 Napi::Value ProjectWrap::Compile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SonareProjectCompileResult result{};
   ThrowIfError(env, sonare_project_compile(project_, &result));
   if (env.IsExceptionPending()) return env.Undefined();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("hasTimeline", Napi::Boolean::New(env, result.has_timeline != 0));
-  out.Set("messages", Napi::String::New(env, result.messages != nullptr ? result.messages : ""));
-  Napi::Array diagnostics = Napi::Array::New(env, result.diagnostic_count);
-  for (size_t i = 0; i < result.diagnostic_count; ++i) {
-    Napi::Object diag = Napi::Object::New(env);
-    diag.Set("code", Napi::Number::New(env, result.diagnostics[i].code));
-    diag.Set("severity", Napi::Number::New(env, result.diagnostics[i].severity));
-    diag.Set("targetId", Napi::Number::New(env, result.diagnostics[i].target_id));
-    diagnostics.Set(static_cast<uint32_t>(i), diag);
+  return CompileResultToObject(env, &result);
+}
+
+Napi::Value ProjectWrap::LastBounceCompileResult(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareProjectCompileResult result{};
+  ThrowIfError(env, sonare_project_last_bounce_compile_result(project_, &result));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return CompileResultToObject(env, &result);
+}
+
+Napi::Value ProjectWrap::GetSampleRate(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  double out = 0.0;
+  ThrowIfError(env, sonare_project_get_sample_rate(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, out);
+}
+
+Napi::Value ProjectWrap::SetOverlapPolicy(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_overlap_policy(project_, Uint32Arg(info, 0, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::GetOverlapPolicy(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  uint32_t out = 0;
+  ThrowIfError(env, sonare_project_get_overlap_policy(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, out);
+}
+
+Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  std::string scene = info.Length() > 0 && info[0].IsString()
+                          ? info[0].As<Napi::String>().Utf8Value()
+                          : std::string();
+  ThrowIfError(env, sonare_project_set_mixer_scene_json(project_, scene.c_str()));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t marker_id = Uint32Arg(info, 0, 0);
+  const double ppq = NumberArg(info, 1, 0.0);
+  std::string name = info.Length() > 2 && info[2].IsString()
+                         ? info[2].As<Napi::String>().Utf8Value()
+                         : std::string();
+  uint32_t out_id = 0;
+  ThrowIfError(env, sonare_project_set_marker(project_, marker_id, ppq, name.c_str(), &out_id));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, out_id);
+}
+
+Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  std::vector<SonareProjectTempoSegment> segments;
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array input = info[0].As<Napi::Array>();
+    segments.reserve(input.Length());
+    for (uint32_t i = 0; i < input.Length(); ++i) {
+      Napi::Value entry = input.Get(i);
+      if (!entry.IsObject()) {
+        Napi::TypeError::New(env, "tempo segment must be an object").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object obj = entry.As<Napi::Object>();
+      SonareProjectTempoSegment seg{};
+      seg.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
+      seg.bpm = obj.Get("bpm").As<Napi::Number>().DoubleValue();
+      Napi::Value start_sample = obj.Get("startSample");
+      seg.start_sample =
+          start_sample.IsUndefined() ? 0.0 : start_sample.As<Napi::Number>().DoubleValue();
+      Napi::Value end_bpm = obj.Get("endBpm");
+      seg.end_bpm = end_bpm.IsUndefined() ? 0.0 : end_bpm.As<Napi::Number>().DoubleValue();
+      segments.push_back(seg);
+    }
+  } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
+    Napi::TypeError::New(env, "setTempoSegments expects an array").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
-  out.Set("diagnostics", diagnostics);
-  sonare_project_free_compile_result(&result);
-  return out;
+  ThrowIfError(env, sonare_project_set_tempo_segments(
+                        project_, segments.empty() ? nullptr : segments.data(), segments.size()));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  std::vector<SonareProjectTimeSignatureSegment> segments;
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array input = info[0].As<Napi::Array>();
+    segments.reserve(input.Length());
+    for (uint32_t i = 0; i < input.Length(); ++i) {
+      Napi::Value entry = input.Get(i);
+      if (!entry.IsObject()) {
+        Napi::TypeError::New(env, "time-signature segment must be an object")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object obj = entry.As<Napi::Object>();
+      SonareProjectTimeSignatureSegment seg{};
+      seg.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
+      seg.numerator = obj.Get("numerator").As<Napi::Number>().Int32Value();
+      seg.denominator = obj.Get("denominator").As<Napi::Number>().Int32Value();
+      segments.push_back(seg);
+    }
+  } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
+    Napi::TypeError::New(env, "setTimeSignatures expects an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_time_signatures(
+                        project_, segments.empty() ? nullptr : segments.data(), segments.size()));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::TrackCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t out = 0;
+  ThrowIfError(env, sonare_project_track_count(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out));
+}
+
+Napi::Value ProjectWrap::SourceCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t out = 0;
+  ThrowIfError(env, sonare_project_source_count(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out));
+}
+
+Napi::Value ProjectWrap::TempoSegmentCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t out = 0;
+  ThrowIfError(env, sonare_project_tempo_segment_count(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out));
+}
+
+Napi::Value ProjectWrap::TimeSignatureCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t out = 0;
+  ThrowIfError(env, sonare_project_time_signature_count(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out));
 }
 
 Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {

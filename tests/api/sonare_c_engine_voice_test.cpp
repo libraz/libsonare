@@ -3,6 +3,16 @@
 
 #include "sonare_c_test_helpers.h"
 
+namespace {
+
+float peak_abs(const std::vector<float>& data) {
+  float peak = 0.0f;
+  for (float value : data) peak = std::max(peak, std::abs(value));
+  return peak;
+}
+
+}  // namespace
+
 TEST_CASE("sonare_error_message", "[c_api]") {
   SECTION("returns messages for all error codes") {
     REQUIRE(std::strcmp(sonare_error_message(SONARE_OK), "OK") == 0);
@@ -41,6 +51,180 @@ TEST_CASE("sonare_engine MIDI scalar commands respect arrangement feature flag",
 #endif
   REQUIRE(sonare_engine_push_midi_cc(engine, 0, 16, 0, 74, 100, -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
+
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_GRAPH)
+  SonareParameterInfo parameter{};
+  parameter.id = 7;
+  std::strncpy(parameter.name, "gain", sizeof(parameter.name) - 1);
+  parameter.min_value = -60.0f;
+  parameter.max_value = 0.0f;
+  parameter.default_value = 0.0f;
+  parameter.rt_safe = 1;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+
+  SonareEngineGraphNode nodes[3]{};
+  std::strncpy(nodes[0].id, "in", sizeof(nodes[0].id) - 1);
+  nodes[0].type = 0;
+  nodes[0].num_ports = 1;
+  std::strncpy(nodes[1].id, "gain", sizeof(nodes[1].id) - 1);
+  nodes[1].type = 1;
+  nodes[1].gain_db = 0.0f;
+  nodes[1].num_ports = 1;
+  std::strncpy(nodes[2].id, "out", sizeof(nodes[2].id) - 1);
+  nodes[2].type = 0;
+  nodes[2].num_ports = 1;
+
+  SonareEngineGraphConnection connections[2]{};
+  std::strncpy(connections[0].source_node, "in", sizeof(connections[0].source_node) - 1);
+  std::strncpy(connections[0].dest_node, "gain", sizeof(connections[0].dest_node) - 1);
+  connections[0].mix = 1.0f;
+  std::strncpy(connections[1].source_node, "gain", sizeof(connections[1].source_node) - 1);
+  std::strncpy(connections[1].dest_node, "out", sizeof(connections[1].dest_node) - 1);
+  connections[1].mix = 1.0f;
+
+  SonareEngineGraphParameterBinding binding{};
+  binding.param_id = 7;
+  std::strncpy(binding.node_id, "gain", sizeof(binding.node_id) - 1);
+
+  SonareEngineGraphSpec graph{};
+  graph.nodes = nodes;
+  graph.node_count = 3;
+  graph.connections = connections;
+  graph.connection_count = 2;
+  graph.parameter_bindings = &binding;
+  graph.parameter_binding_count = 1;
+  std::strncpy(graph.input_node, "in", sizeof(graph.input_node) - 1);
+  std::strncpy(graph.output_node, "out", sizeof(graph.output_node) - 1);
+  graph.num_channels = 1;
+  REQUIRE(sonare_engine_set_graph(engine, &graph) == SONARE_OK);
+
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_OK);
+  size_t binding_count = 0;
+  REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
+  REQUIRE(binding_count == 1);
+
+  std::array<float, 64> audio{};
+  audio.fill(1.0f);
+  float* channels[] = {audio.data()};
+  REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 74, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(audio[0] < 0.01f);
+
+  REQUIRE(sonare_engine_clear_midi_cc_bindings(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
+  REQUIRE(binding_count == 0);
+#else
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 16, 74, 7, 0.0f, 1.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 128, 7, 0.0f, 1.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 0, 0.0f, 1.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SonareEngineBuiltinSynthConfig synth{};
+  synth.gain = 0.5f;
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_OK);
+  size_t count = 0;
+  REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
+  REQUIRE(count == 1);
+
+  REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -1) == SONARE_OK);
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(std::max(peak_abs(left), peak_abs(right)) > 0.0f);
+
+  REQUIRE(sonare_engine_push_midi_note_off(engine, 7, 0, 0, 60, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_clear_midi_instrument(engine, 7) == SONARE_OK);
+  REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
+  REQUIRE(count == 0);
+#else
+  SonareEngineBuiltinSynthConfig synth{};
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 7, &synth) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -1) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine owned MIDI input source drains into instruments", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 64, 100, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareEngineBuiltinSynthConfig synth{};
+  synth.gain = 0.5f;
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 3, &synth) == SONARE_OK);
+  REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
+
+  REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 64, 100, 4) == SONARE_OK);
+  size_t pending = 0;
+  REQUIRE(sonare_engine_midi_input_pending_count(engine, &pending) == SONARE_OK);
+  REQUIRE(pending == 1);
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 64) == SONARE_OK);
+  REQUIRE(peak_abs(left) > 0.01f);
+  REQUIRE(sonare_engine_midi_input_pending_count(engine, &pending) == SONARE_OK);
+  REQUIRE(pending == 0);
+
+  REQUIRE(sonare_engine_clear_midi_input_source(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_input_note_off(engine, 0, 0, 64, 0, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+#else
+  REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 64, 100, 4) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") == SONARE_OK);
+  REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantize_ppq\":0}") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+#else
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
 
   sonare_engine_destroy(engine);
 }

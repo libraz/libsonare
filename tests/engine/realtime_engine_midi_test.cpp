@@ -468,6 +468,63 @@ TEST_CASE("binding a latency instrument reports and applies graph latency (PDC)"
   engine.set_midi_instrument(nullptr);
 }
 
+TEST_CASE("render_offline releases held MIDI notes at the end", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int64_t kFrames = 256;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  CountingInstrument inst;
+  engine.set_midi_instrument(&inst);
+  engine.set_midi_clips(held_note_clip());
+
+  push_play(engine);
+  std::vector<float> out_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kFrames), 0.0f);
+  float* out[] = {out_l.data(), out_r.data()};
+  engine.render_offline(out, 2, kFrames, kBlock);
+
+  REQUIRE(inst.note_on_count_ == 1);
+  REQUIRE(inst.note_off_count_ >= 1);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+
+  std::vector<float> next_l(static_cast<size_t>(kBlock), 0.0f);
+  std::vector<float> next_r(static_cast<size_t>(kBlock), 0.0f);
+  float* next[] = {next_l.data(), next_r.data()};
+  engine.process(next, 2, kBlock);
+  REQUIRE(block_peak(next_l) == Catch::Approx(0.0f));
+
+  engine.set_midi_instrument(nullptr);
+}
+
+TEST_CASE("render_offline flushes PDC delay tails before returning", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 64;
+  constexpr int kLatency = 96;
+  constexpr int64_t kFrames = 32;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  FractionalLatencyInstrument inst(kLatency << 8);
+  engine.set_midi_instrument(&inst);
+  engine.set_clips({impulse_clip(kFrames)});
+
+  push_play(engine);
+  std::vector<float> out_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kFrames), 0.0f);
+  float* out[] = {out_l.data(), out_r.data()};
+  engine.render_offline(out, 2, kFrames, kBlock);
+  REQUIRE(block_peak(out_l) == Catch::Approx(0.0f));
+
+  engine.set_clips({});
+  std::vector<float> next_l(static_cast<size_t>(kLatency + kBlock), 0.0f);
+  std::vector<float> next_r(static_cast<size_t>(kLatency + kBlock), 0.0f);
+  float* next[] = {next_l.data(), next_r.data()};
+  engine.render_offline(next, 2, static_cast<int64_t>(next_l.size()), kBlock);
+  REQUIRE(block_peak(next_l) == Catch::Approx(0.0f));
+
+  engine.set_midi_instrument(nullptr);
+}
+
 TEST_CASE("PDC threads and applies fractional (Q8) instrument latency", "[engine][midi]") {
   constexpr double kSr = 48000.0;
   constexpr int kBlock = 256;

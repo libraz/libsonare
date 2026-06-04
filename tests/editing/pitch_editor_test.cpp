@@ -4,9 +4,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
+#include "core/convert.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -103,6 +105,40 @@ TEST_CASE("NoteSegmenter splits sustained pitch changes without silence", "[pitc
   REQUIRE(regions[1].frame_end == 6);
 }
 
+TEST_CASE("NoteSegmenter uses the shared even-sized median for note cents", "[pitch_editor]") {
+  F0Track track;
+  track.sample_rate = 1000;
+  track.hop_length = 10;
+  track.f0_hz = {440.0f, 880.0f};
+  track.voiced.assign(track.f0_hz.size(), true);
+  track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
+
+  NoteSegmenter segmenter({2000.0f, 1.0f, 440.0f});
+  const auto regions = segmenter.segment(track);
+
+  REQUIRE(regions.size() == 1);
+  REQUIRE_THAT(regions[0].median_cents, WithinAbs(600.0f, 0.001f));
+}
+
+TEST_CASE("NoteSegmenter saturates long-track sample offsets instead of overflowing",
+          "[pitch_editor]") {
+  F0Track track;
+  track.sample_rate = 1000;
+  track.hop_length = std::numeric_limits<int>::max() / 2 + 100;
+  track.f0_hz = {440.0f, 550.0f};
+  track.voiced.assign(track.f0_hz.size(), true);
+  track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
+
+  NoteSegmenter segmenter({50.0f, 1.0f, 440.0f});
+  const auto regions = segmenter.segment(track);
+
+  REQUIRE(regions.size() == 2);
+  REQUIRE(regions[0].onset_sample == 0);
+  REQUIRE(regions[0].offset_sample == track.hop_length);
+  REQUIRE(regions[1].onset_sample == track.hop_length);
+  REQUIRE(regions[1].offset_sample == std::numeric_limits<int>::max());
+}
+
 TEST_CASE("ScaleQuantizer maps all chroma to enabled scale degrees", "[pitch_editor]") {
   const ScaleQuantizer quantizer({0, 0b101010110101, 69.0f});
 
@@ -144,6 +180,37 @@ TEST_CASE("PitchCorrector estimates and limits semitone corrections", "[pitch_ed
 
   REQUIRE_THAT(corrector.estimate_median_midi(track), WithinAbs(69.0f, 0.001f));
   REQUIRE_THAT(corrector.correction_to_midi(track, 70.0f), WithinAbs(0.5f, 0.001f));
+}
+
+TEST_CASE("PitchCorrector uses the shared even-sized median for detected MIDI", "[pitch_editor]") {
+  F0Track track = constant_track(440.0f, 22050, 256, 4);
+  track.f0_hz = {
+      PitchCorrector::midi_to_hz(60.0f),
+      PitchCorrector::midi_to_hz(62.0f),
+      PitchCorrector::midi_to_hz(64.0f),
+      PitchCorrector::midi_to_hz(66.0f),
+  };
+
+  PitchCorrector corrector;
+  REQUIRE_THAT(corrector.estimate_median_midi(track), WithinAbs(63.0f, 0.001f));
+}
+
+TEST_CASE("PitchCorrector pitch conversion wrappers match core conversion contract",
+          "[pitch_editor]") {
+  REQUIRE_THAT(PitchCorrector::hz_to_midi(440.0f), WithinAbs(sonare::hz_to_midi(440.0f), 0.0f));
+  REQUIRE_THAT(PitchCorrector::midi_to_hz(69.0f), WithinAbs(sonare::midi_to_hz(69.0f), 0.0f));
+
+  const float zero_hz_midi = PitchCorrector::hz_to_midi(0.0f);
+  REQUIRE(std::isinf(zero_hz_midi));
+  REQUIRE(zero_hz_midi < 0.0f);
+
+  const float negative_hz_midi = PitchCorrector::hz_to_midi(-440.0f);
+  REQUIRE(std::isinf(negative_hz_midi));
+  REQUIRE(negative_hz_midi < 0.0f);
+
+  const float c_minus1_hz = PitchCorrector::midi_to_hz(0.0f);
+  REQUIRE(std::isfinite(PitchCorrector::hz_to_midi(c_minus1_hz)));
+  REQUIRE_THAT(PitchCorrector::hz_to_midi(c_minus1_hz), WithinAbs(0.0f, 0.01f));
 }
 
 TEST_CASE("PitchCorrector applies pYIN-verifiable one semitone correction", "[pitch_editor]") {

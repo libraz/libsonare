@@ -10,8 +10,8 @@ import type {
   AutomationCurve,
   GoniometerPoint,
   MeterTap,
-  MixMeterSnapshot,
   MixerProcessResult,
+  MixMeterSnapshot,
   PanLaw,
   PanMode,
   SendTiming,
@@ -487,6 +487,23 @@ export class Mixer {
   /** Serialize the current scene (strips, buses, sends, connections) to JSON. */
   toSceneJson(): string {
     return this.mixer.toSceneJson();
+  }
+
+  /**
+   * Maximum processor tail length (samples) in the compiled mixer graph. Lazily
+   * compiles the routing graph if the topology is dirty.
+   */
+  tailSamples(): number {
+    return this.mixer.tailSamples();
+  }
+
+  /**
+   * Drain delayed / tail audio by processing a zero-input block of `numSamples`
+   * frames after the host stops feeding strip inputs. Returns the mixed stereo
+   * master (`left`, `right`, `sampleRate`).
+   */
+  drainTailStereo(numSamples: number): MixerProcessResult {
+    return this.mixer.drainTailStereo(numSamples);
   }
 
   /** Release the underlying WASM object. Safe to call only once. */

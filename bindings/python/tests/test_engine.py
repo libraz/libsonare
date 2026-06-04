@@ -10,6 +10,7 @@ import pytest
 from libsonare import (
     AutomationCurve,
     AutomationPoint,
+    BuiltinSynthConfig,
     EngineBounceOptions,
     EngineClip,
     EngineFreezeOptions,
@@ -314,3 +315,45 @@ def test_realtime_engine_offline_render_matches_process() -> None:
 
     assert frozen_render[0][0] == pytest.approx(0.125, abs=0.0001)
     assert frozen_render[1][0] == pytest.approx(-0.25, abs=0.0001)
+
+
+# ---------------------------------------------------------------------------
+# Live-MIDI parity surface (built-in instrument bind, CC bindings, queued
+# input source, immediate note/CC injection) added for Node/WASM parity.
+# ---------------------------------------------------------------------------
+
+
+def test_engine_builtin_instrument_bind_and_clear() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(waveform="saw", gain=0.5), 0)
+        assert engine.midi_instrument_count() == 1
+        engine.set_builtin_instrument()  # default sine patch on destination 0
+        assert engine.midi_instrument_count() == 1
+        engine.clear_midi_instrument(0)
+        assert engine.midi_instrument_count() == 0
+
+
+def test_engine_midi_cc_bindings() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.bind_midi_cc(0, 1, 42, min_value=0.0, max_value=1.0)
+        assert engine.midi_cc_binding_count() == 1
+        engine.clear_midi_cc_bindings()
+        assert engine.midi_cc_binding_count() == 0
+
+
+def test_engine_live_midi_input_source_queue() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
+        engine.set_midi_input_source(0)
+        engine.push_midi_input_note_on(0, 0, 60, 100, 0)
+        engine.push_midi_input_cc(0, 0, 1, 64, 0)
+        engine.push_midi_input_note_off(0, 0, 60, 0, 0)
+        assert engine.midi_input_pending_count() == 3
+        engine.clear_midi_input_source()
+
+
+def test_engine_push_immediate_notes_do_not_raise() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
+        engine.push_midi_note_on(0, 0, 0, 60, 100)
+        engine.push_midi_note_off(0, 0, 0, 60, 0)

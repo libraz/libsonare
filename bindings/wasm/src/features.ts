@@ -1,16 +1,4 @@
 export {
-  chroma,
-  melSpectrogram,
-  melToAudio,
-  melToStft,
-  mfcc,
-  mfccToAudio,
-  mfccToMel,
-  stft,
-  stftDb,
-  trim,
-} from './feature_spectrogram';
-export {
   amplitudeToDb,
   cyclicTempogram,
   dbToAmplitude,
@@ -46,10 +34,13 @@ export {
   analyzeSections,
   cqt,
   fourierTempogram,
+  hybridCqt,
   lufs,
   momentaryLufs,
   nnlsChroma,
   onsetEnvelope,
+  onsetStrengthMulti,
+  pseudoCqt,
   shortTermLufs,
   tempogramRatio,
   vqt,
@@ -77,3 +68,17 @@ export {
   zeroCrossingRate,
   zeroCrossings,
 } from './feature_spectral';
+export {
+  bassChroma,
+  chroma,
+  chromaCens,
+  melSpectrogram,
+  melToAudio,
+  melToStft,
+  mfcc,
+  mfccToAudio,
+  mfccToMel,
+  stft,
+  stftDb,
+  trim,
+} from './feature_spectrogram';

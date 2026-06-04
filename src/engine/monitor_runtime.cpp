@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "mixing/solo_mute.h"
 #include "util/constants.h"
 
 namespace sonare::engine {
@@ -160,8 +161,9 @@ void MonitorRuntime::recompute_solo_mutes() noexcept {
     any_solo = any_solo || strips_[i].soloed.load(std::memory_order_relaxed);
   }
   for (size_t i = 0; i < count; ++i) {
-    const bool implied = any_solo && !strips_[i].soloed.load(std::memory_order_relaxed) &&
-                         !strips_[i].solo_safe.load(std::memory_order_relaxed);
+    const bool implied =
+        mixing::solo_implies_mute(any_solo, strips_[i].soloed.load(std::memory_order_relaxed),
+                                  strips_[i].solo_safe.load(std::memory_order_relaxed));
     strips_[i].implied_mute.store(implied, std::memory_order_release);
     update_target(strips_[i]);
   }

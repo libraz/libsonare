@@ -38,6 +38,8 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
  private:
   Napi::Value Compile(const Napi::CallbackInfo& info);
   Napi::Value ProcessStereo(const Napi::CallbackInfo& info);
+  Napi::Value DrainTailStereo(const Napi::CallbackInfo& info);
+  Napi::Value TailSamples(const Napi::CallbackInfo& info);
   Napi::Value StripCount(const Napi::CallbackInfo& info);
   Napi::Value ScheduleInsertAutomation(const Napi::CallbackInfo& info);
   Napi::Value ToSceneJson(const Napi::CallbackInfo& info);

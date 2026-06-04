@@ -214,20 +214,7 @@ float yin_find_pitch(const std::vector<float>& cmndf, float threshold, int min_p
     }
   }
 
-  if (best_tau < 0) {
-    // No pitch found below threshold, find global minimum
-    float min_val = std::numeric_limits<float>::max();
-    for (int tau = min_period; tau < max_period; ++tau) {
-      if (cmndf[tau] < min_val) {
-        min_val = cmndf[tau];
-        best_tau = tau;
-      }
-    }
-    // Only accept if reasonably low
-    if (min_val > 0.5f) {
-      return 0.0f;  // Unvoiced
-    }
-  }
+  if (best_tau < 0) return 0.0f;
 
   if (best_tau <= 0 || best_tau >= n - 1) {
     return static_cast<float>(best_tau);
@@ -744,7 +731,12 @@ float estimate_tuning(const Audio& audio, int n_fft, int hop_length, float resol
   const std::size_t mid = pitch_mags.size() / 2;
   std::nth_element(pitch_mags.begin(), pitch_mags.begin() + static_cast<std::ptrdiff_t>(mid),
                    pitch_mags.end());
-  const float global_threshold = pitch_mags[mid];
+  float global_threshold = pitch_mags[mid];
+  if (pitch_mags.size() % 2 == 0 && mid > 0) {
+    const float lower = *std::max_element(pitch_mags.begin(),
+                                          pitch_mags.begin() + static_cast<std::ptrdiff_t>(mid));
+    global_threshold = 0.5f * (lower + global_threshold);
+  }
 
   std::vector<float> freqs;
   freqs.reserve(pp.pitches.size());

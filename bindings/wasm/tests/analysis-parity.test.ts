@@ -174,7 +174,12 @@ describe('WASM wave3 analysis parity', () => {
   describe('analyzeMelody pYIN / center options', () => {
     it('runs with usePyin: true and returns a contour', () => {
       const samples = makeSine(2, 440); // A4
-      const result = analyzeMelody(samples, SR, 65.0, 2093.0, 2048, 256, 0.1, {
+      const result = analyzeMelody(samples, SR, {
+        fmin: 65.0,
+        fmax: 2093.0,
+        frameLength: 2048,
+        hopLength: 256,
+        threshold: 0.1,
         usePyin: true,
         center: true,
       });

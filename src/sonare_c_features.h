@@ -101,6 +101,12 @@ typedef struct {
 /// @brief Computes the Constant-Q Transform magnitude.
 SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                        float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out);
+/// @brief Computes a faster pseudo-CQT magnitude approximation.
+SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                              float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out);
+/// @brief Computes a hybrid CQT magnitude.
+SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                              float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out);
 /// @brief Computes the Variable-Q Transform magnitude (gamma controls Q).
 SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
                        float fmin, int n_bins, int bins_per_octave, float gamma,
@@ -270,6 +276,10 @@ void sonare_free_inverse_result(SonareInverseResult* result);
 
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
                           int hop_length, SonareChromaResult* out);
+SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
+                               int n_chroma, SonareChromaResult* out);
+SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
+                               int n_chroma, SonareChromaResult* out);
 
 // ============================================================================
 // Features - Spectral (each returns a float array of per-frame values)
@@ -447,6 +457,12 @@ SonareError sonare_plp(const float* onset_envelope, size_t length, int sample_ra
 ///   rectified onset strength envelope. Output length is the number of frames.
 SonareError sonare_onset_strength(const float* samples, size_t length, int sr, int n_fft,
                                   int hop_length, int n_mels, float** out, size_t* out_length);
+/// @brief Multi-band onset strength envelope from audio.
+/// @details Output is [n_bands x n_frames] row-major. @p out_n_frames receives
+///   the frame count so callers can derive the matrix shape.
+SonareError sonare_onset_strength_multi(const float* samples, size_t length, int sr, int n_fft,
+                                        int hop_length, int n_mels, int n_bands, float** out,
+                                        size_t* out_length, int* out_n_frames);
 
 /// @brief Fourier (FFT-based) tempogram of an onset envelope.
 /// @details Returns a magnitude matrix [n_bins x n_frames] row-major, where

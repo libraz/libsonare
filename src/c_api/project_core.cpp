@@ -111,6 +111,92 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, double sample
 #endif
 }
 
+SonareError sonare_project_get_sample_rate(const SonareProject* project, double* out_sample_rate) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out_sample_rate) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_sample_rate = project->history.project().sample_rate();
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out_sample_rate);
+#endif
+}
+
+SonareError sonare_project_get_overlap_policy(const SonareProject* project,
+                                              uint32_t* out_overlap_policy) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out_overlap_policy) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_overlap_policy = static_cast<uint32_t>(project->history.project().overlap_policy());
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out_overlap_policy);
+#endif
+}
+
+namespace {
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+template <typename CountFn>
+SonareError project_count(const SonareProject* project, size_t* out_count, CountFn count_fn) {
+  if (!project || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = count_fn(project->history.project());
+  return SONARE_OK;
+}
+#endif
+
+}  // namespace
+
+SonareError sonare_project_track_count(const SonareProject* project, size_t* out_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return project_count(project, out_count, [](const arr::Project& p) { return p.tracks().size(); });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+#endif
+}
+
+SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return project_count(project, out_count, [](const arr::Project& p) { return p.clips().size(); });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+#endif
+}
+
+SonareError sonare_project_source_count(const SonareProject* project, size_t* out_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return project_count(project, out_count,
+                       [](const arr::Project& p) { return p.sources().size(); });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+#endif
+}
+
+SonareError sonare_project_marker_count(const SonareProject* project, size_t* out_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return project_count(project, out_count,
+                       [](const arr::Project& p) { return p.markers().size(); });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+#endif
+}
+
+SonareError sonare_project_tempo_segment_count(const SonareProject* project, size_t* out_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return project_count(project, out_count,
+                       [](const arr::Project& p) { return p.tempo_segments().size(); });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+#endif
+}
+
+SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return project_count(project, out_count,
+                       [](const arr::Project& p) { return p.time_signatures().size(); });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
+#endif
+}
+
 SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out) *out = {};
@@ -118,21 +204,21 @@ SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileR
   SONARE_C_TRY
   arr::CompileResult result =
       arr::compile(project->history.project(), project->history.midi_content(), project->audio);
-  out->has_timeline = result.timeline.has_value() ? 1 : 0;
-  out->diagnostic_count = result.diagnostics.size();
-  if (!result.diagnostics.empty()) {
-    out->diagnostics = new SonareProjectDiagnostic[result.diagnostics.size()];
-    std::ostringstream stream;
-    for (size_t i = 0; i < result.diagnostics.size(); ++i) {
-      const arr::Diagnostic& d = result.diagnostics[i];
-      out->diagnostics[i].code = static_cast<uint32_t>(d.code);
-      out->diagnostics[i].severity = static_cast<uint32_t>(d.severity);
-      out->diagnostics[i].target_id = d.target_id;
-      if (i > 0) stream << '\n';
-      stream << d.message;
-    }
-    out->messages = copy_string(stream.str());
-  }
+  fill_compile_result_from_diagnostics(result.diagnostics, result.timeline.has_value(), out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, out);
+#endif
+}
+
+SonareError sonare_project_last_bounce_compile_result(const SonareProject* project,
+                                                      SonareProjectCompileResult* out) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out) *out = {};
+  if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  fill_compile_result_from_diagnostics(project->last_bounce_diagnostics, true, out);
   return SONARE_OK;
   SONARE_C_CATCH
 #else

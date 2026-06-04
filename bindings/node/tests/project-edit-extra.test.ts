@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Project, RealtimeEngine, masteringInsertNames } from '../src/index.js';
+import { masteringInsertNames, Project, RealtimeEngine } from '../src/index.js';
 
 /** A small project with one audio track + clip; returns the ids alongside it. */
 function buildProject(): { project: Project; track: number; clip: number } {

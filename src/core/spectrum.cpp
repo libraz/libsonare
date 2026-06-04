@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <random>
 
 #include "core/db_convert.h"
@@ -99,8 +100,11 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   /// Calculate number of frames
   int n_frames = 1;
   if (signal_length >= static_cast<size_t>(n_fft)) {
-    n_frames = 1 + static_cast<int>((signal_length - static_cast<size_t>(n_fft)) /
-                                    static_cast<size_t>(hop_length));
+    const size_t frames =
+        1 + (signal_length - static_cast<size_t>(n_fft)) / static_cast<size_t>(hop_length);
+    SONARE_CHECK(frames <= static_cast<size_t>(std::numeric_limits<int>::max()),
+                 ErrorCode::InvalidParameter);
+    n_frames = static_cast<int>(frames);
   }
 
   int n_bins = n_fft / 2 + 1;
@@ -125,20 +129,21 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 
   /// Process each frame
   for (int t = 0; t < n_frames; ++t) {
-    int start = t * hop_length;
+    const size_t start = static_cast<size_t>(t) * static_cast<size_t>(hop_length);
 
     /// Extract and window frame - optimized by moving boundary check outside loop
-    int valid_samples = std::min(n_fft, static_cast<int>(signal_length) - start);
+    const size_t remaining = start < signal_length ? signal_length - start : 0;
+    const int valid_samples = static_cast<int>(std::min(static_cast<size_t>(n_fft), remaining));
 
     if (valid_samples >= n_fft) {
       // Fast path: no boundary handling needed (most common case)
       for (int i = 0; i < n_fft; ++i) {
-        frame[i] = signal[start + i] * padded_window[i];
+        frame[i] = signal[start + static_cast<size_t>(i)] * padded_window[i];
       }
     } else if (valid_samples > 0) {
       // Copy valid samples with windowing
       for (int i = 0; i < valid_samples; ++i) {
-        frame[i] = signal[start + i] * padded_window[i];
+        frame[i] = signal[start + static_cast<size_t>(i)] * padded_window[i];
       }
       // Zero-fill remainder
       std::fill(frame.begin() + valid_samples, frame.end(), 0.0f);
@@ -257,9 +262,8 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   // STFT analysis uses a periodic window (fftbins=True). iSTFT uses a symmetric
   // synthesis window and normalizes by analysis*synthesis overlap to preserve
   // reconstruction gain when the two window shapes differ.
-  const std::vector<float>& analysis_win_short = get_window_cached(window_type, win_length_, true);
-  const std::vector<float>& synthesis_win_short =
-      get_window_cached(window_type, win_length_, false);
+  const std::vector<float> analysis_win_short = get_window_cached(window_type, win_length_, true);
+  const std::vector<float> synthesis_win_short = get_window_cached(window_type, win_length_, false);
 
   // Zero-pad window to n_fft if win_length < n_fft (matches analysis padding)
   std::vector<float> analysis_window(n_fft_, 0.0f);

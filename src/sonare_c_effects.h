@@ -464,6 +464,77 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
 /// @brief Pushes a live parameter value to the engine using a smoothed ramp.
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame);
+/// @brief Built-in realtime synth patch for @ref sonare_engine_set_builtin_instrument.
+/// @details Same zero-init contract as project bounce built-in instruments:
+///          non-positive fields use the default sine patch values.
+typedef struct {
+  int waveform;     /* 0=sine, 1=saw, 2=square, 3=triangle */
+  float gain;       /* 0 => 0.2 */
+  float attack_ms;  /* 0 => 5 */
+  float decay_ms;   /* 0 => 60 */
+  float sustain;    /* 0 => 0.7 */
+  float release_ms; /* 0 => 120 */
+  int polyphony;    /* 0 => 16, clamped to [1,64] */
+} SonareEngineBuiltinSynthConfig;
+
+/// @brief Binds/replaces a built-in synth on a realtime MIDI destination.
+/// @details Control-thread API. The engine owns the synth instance. Live MIDI
+///          note/CC commands and scheduled MIDI clips routed to @p destination_id
+///          render through this instrument.
+SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
+                                                 uint32_t destination_id,
+                                                 const SonareEngineBuiltinSynthConfig* config);
+/// @brief Clears any realtime instrument bound to @p destination_id.
+SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
+                                                uint32_t destination_id);
+SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Binds a live MIDI CC to an engine automation parameter.
+/// @details Control-thread API. After binding, @ref sonare_engine_push_midi_cc
+///          still routes the MIDI event to the destination instrument, and also
+///          maps the 7-bit CC value into [min_value, max_value] for @p param_id.
+SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t channel,
+                                       uint8_t controller, uint32_t param_id, float min_value,
+                                       float max_value);
+/// @brief Clears all live MIDI CC to parameter bindings.
+SonareError sonare_engine_clear_midi_cc_bindings(SonareRealtimeEngine* engine);
+/// @brief Returns the number of live MIDI CC bindings.
+SonareError sonare_engine_midi_cc_binding_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Installs/replaces a live non-destructive MIDI-FX insert for one destination.
+/// @details Control-thread API. The JSON accepts the same fields as
+///          @ref sonare_project_bake_midi_fx, but scheduled/live MIDI events are
+///          transformed at dispatch time and clip contents are not modified.
+SonareError sonare_engine_set_midi_fx(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                      const char* config_json);
+/// @brief Clears the live MIDI-FX insert on one destination.
+SonareError sonare_engine_clear_midi_fx(SonareRealtimeEngine* engine, uint32_t destination_id);
+/// @brief Enables the engine-owned live MIDI input source for a destination.
+/// @details Hosts can push timestamped input events with
+///          `sonare_engine_push_midi_input_*`; the engine drains them at block
+///          start through the same `set_midi_input_source` path used by native
+///          C++ hosts. `destination_id` selects the realtime MIDI destination.
+SonareError sonare_engine_set_midi_input_source(SonareRealtimeEngine* engine,
+                                                uint32_t destination_id);
+/// @brief Clears the engine-owned live MIDI input source.
+SonareError sonare_engine_clear_midi_input_source(SonareRealtimeEngine* engine);
+/// @brief Number of queued events in the engine-owned live MIDI input source.
+SonareError sonare_engine_midi_input_pending_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, uint8_t group,
+                                                  uint8_t channel, uint8_t note, uint8_t velocity,
+                                                  int64_t port_time_samples);
+SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine, uint8_t group,
+                                                   uint8_t channel, uint8_t note, uint8_t velocity,
+                                                   int64_t port_time_samples);
+SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8_t group,
+                                             uint8_t channel, uint8_t controller, uint8_t value,
+                                             int64_t port_time_samples);
+/// @brief Queues an immediate live MIDI note-on to a MIDI destination.
+SonareError sonare_engine_push_midi_note_on(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                            uint8_t group, uint8_t channel, uint8_t note,
+                                            uint8_t velocity, int64_t render_frame);
+/// @brief Queues an immediate live MIDI note-off to a MIDI destination.
+SonareError sonare_engine_push_midi_note_off(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                             uint8_t group, uint8_t channel, uint8_t note,
+                                             uint8_t velocity, int64_t render_frame);
 /// @brief Queues an immediate (live) MIDI control change to a MIDI destination.
 /// @details Routed through the engine's queueable scalar MIDI command path; the
 ///          synthesized MIDI 1.0 CC reaches the registered host instrument at

@@ -138,11 +138,12 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
     throw SonareException(ErrorCode::InvalidParameter, "output must not be null");
   }
   const size_t history_size = static_cast<size_t>(std::max(0, fir_.taps_per_phase));
-  if (history.size() != static_cast<size_t>(num_channels)) {
-    history.assign(static_cast<size_t>(num_channels), std::vector<float>(history_size, 0.0f));
+  const size_t requested_channels = static_cast<size_t>(num_channels);
+  if (history.size() < requested_channels) {
+    history.resize(requested_channels, std::vector<float>(history_size, 0.0f));
   }
-  if (scratch.size() != static_cast<size_t>(num_channels)) {
-    scratch.assign(static_cast<size_t>(num_channels), {});
+  if (scratch.size() < requested_channels) {
+    scratch.resize(requested_channels);
   }
 
   for (int ch = 0; ch < num_channels; ++ch) {

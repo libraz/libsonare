@@ -1,8 +1,14 @@
 import { addon } from './native.js';
 import type {
+  AcousticOptions,
   AcousticResult,
   AnalysisProgressCallback,
   AnalysisResult,
+  AnalyzeBpmOptions,
+  AnalyzeDynamicsOptions,
+  AnalyzeRhythmOptions,
+  AnalyzeSectionsOptions,
+  AnalyzeTimbreOptions,
   BpmAnalysisResult,
   ChordAnalysisResult,
   ChordChromaMethod,
@@ -121,11 +127,15 @@ export function analyzeWithProgress(
 export function analyzeSections(
   samples: Float32Array,
   sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  minSectionSec = 4.0,
+  options: AnalyzeSectionsOptions = {},
 ): Section[] {
-  return addon.analyzeSections(samples, sampleRate, nFft, hopLength, minSectionSec);
+  return addon.analyzeSections(
+    samples,
+    sampleRate,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+    options.minSectionSec ?? 4.0,
+  );
 }
 
 /**
@@ -141,73 +151,66 @@ export function analyzeSections(
 export function analyzeMelody(
   samples: Float32Array,
   sampleRate = 22050,
-  fmin = 65.0,
-  fmax = 2093.0,
-  frameLength = 2048,
-  hopLength = 256,
-  threshold = 0.1,
-  usePyinOrOptions: boolean | MelodyOptions = false,
-  center = true,
+  options: MelodyOptions = {},
 ): MelodyResult {
-  const usePyin =
-    typeof usePyinOrOptions === 'object' ? (usePyinOrOptions.usePyin ?? false) : usePyinOrOptions;
-  const centerResolved =
-    typeof usePyinOrOptions === 'object' ? (usePyinOrOptions.center ?? true) : center;
   return addon.analyzeMelody(
     samples,
     sampleRate,
-    fmin,
-    fmax,
-    frameLength,
-    hopLength,
-    threshold,
-    usePyin,
-    centerResolved,
+    options.fmin ?? 65.0,
+    options.fmax ?? 2093.0,
+    options.frameLength ?? 2048,
+    options.hopLength ?? 256,
+    options.threshold ?? 0.1,
+    options.usePyin ?? false,
+    options.center ?? true,
   );
 }
 
 export function analyzeBpm(
   samples: Float32Array,
   sampleRate = 22050,
-  bpmMin = 30.0,
-  bpmMax = 300.0,
-  startBpm = 120.0,
-  nFft = 2048,
-  hopLength = 512,
-  maxCandidates = 5,
+  options: AnalyzeBpmOptions = {},
 ): BpmAnalysisResult {
   return addon.analyzeBpm(
     samples,
     sampleRate,
-    bpmMin,
-    bpmMax,
-    startBpm,
-    nFft,
-    hopLength,
-    maxCandidates,
+    options.bpmMin ?? 30.0,
+    options.bpmMax ?? 300.0,
+    options.startBpm ?? 120.0,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+    options.maxCandidates ?? 5,
   );
 }
 
 export function analyzeRhythm(
   samples: Float32Array,
   sampleRate = 22050,
-  bpmMin = 60.0,
-  bpmMax = 200.0,
-  startBpm = 120.0,
-  nFft = 2048,
-  hopLength = 512,
+  options: AnalyzeRhythmOptions = {},
 ): RhythmResult {
-  return addon.analyzeRhythm(samples, sampleRate, bpmMin, bpmMax, startBpm, nFft, hopLength);
+  return addon.analyzeRhythm(
+    samples,
+    sampleRate,
+    options.bpmMin ?? 60.0,
+    options.bpmMax ?? 200.0,
+    options.startBpm ?? 120.0,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+  );
 }
 
 export function analyzeDynamics(
   samples: Float32Array,
   sampleRate = 22050,
-  windowSec = 0.4,
-  hopLength = 512,
-  compressionThreshold = 6.0,
+  options: AnalyzeDynamicsOptions = {},
 ): DynamicsResult {
-  return addon.analyzeDynamics(samples, sampleRate, windowSec, hopLength, compressionThreshold);
+  return addon.analyzeDynamics(
+    samples,
+    sampleRate,
+    options.windowSec ?? 0.4,
+    options.hopLength ?? 512,
+    options.compressionThreshold ?? 6.0,
+  );
 }
 
 export function analyzeImpulseResponse(
@@ -221,31 +224,32 @@ export function analyzeImpulseResponse(
 export function detectAcoustic(
   samples: Float32Array,
   sampleRate = 48000,
-  nOctaveBands = 6,
-  nThirdOctaveSubbands = 24,
-  minDecayDb = 30.0,
-  noiseFloorMarginDb = 10.0,
+  options: AcousticOptions = {},
 ): AcousticResult {
   return addon.detectAcoustic(
     samples,
     sampleRate,
-    nOctaveBands,
-    nThirdOctaveSubbands,
-    minDecayDb,
-    noiseFloorMarginDb,
+    options.nOctaveBands ?? 6,
+    options.nThirdOctaveSubbands ?? 24,
+    options.minDecayDb ?? 30.0,
+    options.noiseFloorMarginDb ?? 10.0,
   );
 }
 
 export function analyzeTimbre(
   samples: Float32Array,
   sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nMels = 128,
-  nMfcc = 13,
-  windowSec = 0.5,
+  options: AnalyzeTimbreOptions = {},
 ): TimbreResult {
-  return addon.analyzeTimbre(samples, sampleRate, nFft, hopLength, nMels, nMfcc, windowSec);
+  return addon.analyzeTimbre(
+    samples,
+    sampleRate,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+    options.nMels ?? 128,
+    options.nMfcc ?? 13,
+    options.windowSec ?? 0.5,
+  );
 }
 
 /**

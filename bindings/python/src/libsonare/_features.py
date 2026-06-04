@@ -305,6 +305,59 @@ def chroma(
         lib.sonare_free_chroma_result(ctypes.byref(out))
 
 
+def _chroma_variant(
+    fn_name: str,
+    samples: Sequence[float] | list[float],
+    sample_rate: int,
+    hop_length: int,
+    n_chroma: int,
+) -> ChromaResult:
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareChromaResult()
+    rc = getattr(lib, fn_name)(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(n_chroma),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        total = out.n_chroma * out.n_frames
+        return ChromaResult(
+            n_chroma=out.n_chroma,
+            n_frames=out.n_frames,
+            sample_rate=out.sample_rate,
+            hop_length=out.hop_length,
+            features=[float(out.features[i]) for i in range(total)],
+            mean_energy=[float(out.mean_energy[i]) for i in range(out.n_chroma)],
+        )
+    finally:
+        lib.sonare_free_chroma_result(ctypes.byref(out))
+
+
+def chroma_cens(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    n_chroma: int = 12,
+) -> ChromaResult:
+    """Compute CENS chroma features."""
+    return _chroma_variant("sonare_chroma_cens", samples, sample_rate, hop_length, n_chroma)
+
+
+def bass_chroma(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    n_chroma: int = 12,
+) -> ChromaResult:
+    """Compute bass-focused chroma features."""
+    return _chroma_variant("sonare_bass_chroma", samples, sample_rate, hop_length, n_chroma)
+
+
 # ============================================================================
 # Features - Spectral
 # ============================================================================
@@ -1690,6 +1743,65 @@ def cqt(
         return _cqt_result_from_c(out)
     finally:
         lib.sonare_free_cqt_result(ctypes.byref(out))
+
+
+def _cqt_variant(
+    fn_name: str,
+    samples: Sequence[float] | list[float],
+    sample_rate: int,
+    hop_length: int,
+    fmin: float,
+    n_bins: int,
+    bins_per_octave: int,
+) -> CqtResult:
+    lib = _get_lib()
+    if not hasattr(lib, fn_name):
+        raise RuntimeError(f"libsonare was built without {fn_name} support")
+    c_array, length = _to_c_float_array(samples)
+    out = SonareCqtResult()
+    rc = getattr(lib, fn_name)(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_int(n_bins),
+        ctypes.c_int(bins_per_octave),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return _cqt_result_from_c(out)
+    finally:
+        lib.sonare_free_cqt_result(ctypes.byref(out))
+
+
+def pseudo_cqt(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566257483,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+) -> CqtResult:
+    """Compute the pseudo-CQT magnitude approximation."""
+    return _cqt_variant(
+        "sonare_pseudo_cqt", samples, sample_rate, hop_length, fmin, n_bins, bins_per_octave
+    )
+
+
+def hybrid_cqt(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566257483,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+) -> CqtResult:
+    """Compute the hybrid CQT magnitude."""
+    return _cqt_variant(
+        "sonare_hybrid_cqt", samples, sample_rate, hop_length, fmin, n_bins, bins_per_octave
+    )
 
 
 # ============================================================================

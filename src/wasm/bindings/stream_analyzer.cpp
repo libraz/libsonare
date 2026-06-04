@@ -104,6 +104,8 @@ class StreamAnalyzerWrapper {
     analyzer_->process(data.data(), data.size(), sample_offset);
   }
 
+  void finalize() { analyzer_->finalize(); }
+
   size_t availableFrames() const { return analyzer_->available_frames(); }
 
   /// @brief Reads frames in Float32 SOA format.
@@ -282,6 +284,7 @@ void registerStreamAnalyzerBindings() {
                    float, float, int, int>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
+      .function("finalize", &StreamAnalyzerWrapper::finalize)
       .function("availableFrames", &StreamAnalyzerWrapper::availableFrames)
       .function("readFramesSoa", &StreamAnalyzerWrapper::readFramesSoa)
       .function("readFramesU8", &StreamAnalyzerWrapper::readFramesU8)

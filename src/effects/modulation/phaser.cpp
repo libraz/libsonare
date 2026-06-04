@@ -9,14 +9,26 @@ namespace sonare::effects::modulation {
 
 using sonare::constants::kPi;
 
+namespace {
+
+double effective_sample_rate(double sample_rate) noexcept {
+  return sample_rate > 0.0 && std::isfinite(sample_rate) ? sample_rate : 48000.0;
+}
+
+float max_sweep_hz(double sample_rate) noexcept {
+  return static_cast<float>(effective_sample_rate(sample_rate) * 0.49);
+}
+
+}  // namespace
+
 Phaser::Phaser(PhaserConfig config) : config_(config) {}
 
 void Phaser::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = effective_sample_rate(sample_rate);
   // Clamp/order the sweep range here so construction-time config honors the same
   // invariant the automation path (set_parameter) enforces, keeping
   // tan(pi*freq/sr) well-defined (freq in [1, sr*0.49], min_hz <= max_hz).
-  const float nyquist = static_cast<float>(sample_rate_ * 0.49);
+  const float nyquist = max_sweep_hz(sample_rate_);
   config_.min_hz = std::clamp(config_.min_hz, 1.0f, nyquist);
   config_.max_hz = std::clamp(config_.max_hz, 1.0f, nyquist);
   config_.min_hz = std::min(config_.min_hz, config_.max_hz);
@@ -63,12 +75,12 @@ bool Phaser::set_parameter(unsigned int param_id, float value) {
       lfo_.set_rate_hz(config_.rate_hz);
       return true;
     case 1:
-      config_.min_hz = std::clamp(value, 1.0f, static_cast<float>(sample_rate_ * 0.49));
+      config_.min_hz = std::clamp(value, 1.0f, max_sweep_hz(sample_rate_));
       // Keep the sweep range ordered (min <= max) to avoid inverted/NaN coeffs.
       config_.min_hz = std::min(config_.min_hz, config_.max_hz);
       return true;
     case 2:
-      config_.max_hz = std::clamp(value, 1.0f, static_cast<float>(sample_rate_ * 0.49));
+      config_.max_hz = std::clamp(value, 1.0f, max_sweep_hz(sample_rate_));
       // Keep the sweep range ordered (min <= max) to avoid inverted/NaN coeffs.
       config_.max_hz = std::max(config_.max_hz, config_.min_hz);
       return true;

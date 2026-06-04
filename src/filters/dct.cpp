@@ -7,6 +7,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/thread_local_cache.h"
 
 namespace sonare {
 
@@ -45,19 +46,8 @@ std::vector<float> create_dct_matrix(int n_output, int n_input) {
 
 const std::vector<float>& get_dct_matrix_cached(int n_output, int n_input) {
   auto key = std::make_pair(n_output, n_input);
-  auto it = g_dct_cache.find(key);
-  if (it != g_dct_cache.end()) {
-    return it->second;
-  }
-
-  // Clear cache if it exceeds the size limit
-  if (g_dct_cache.size() >= kMaxDctCacheSize) {
-    g_dct_cache.clear();
-  }
-
-  // Create and cache the matrix
-  auto result = g_dct_cache.emplace(key, create_dct_matrix(n_output, n_input));
-  return result.first->second;
+  return get_or_create_bounded_cache_entry(g_dct_cache, key, kMaxDctCacheSize,
+                                           [&] { return create_dct_matrix(n_output, n_input); });
 }
 
 std::vector<float> dct_ii(const float* input, int n_input, int n_output) {

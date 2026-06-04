@@ -105,6 +105,128 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(sonare_midi_note_on(0.0, 16, 0, 60, 100, &event) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_midi_pitch_bend(0.0, 0, 0, 16384, &event) == SONARE_ERROR_INVALID_PARAMETER);
 
+  REQUIRE(std::strcmp(sonare_midi_gm_instrument_name(0), "Acoustic Grand Piano") == 0);
+  REQUIRE(std::strcmp(sonare_midi_gm_instrument_name(40), "Violin") == 0);
+  REQUIRE(sonare_midi_gm_instrument_name(128) == nullptr);
+  REQUIRE(sonare_midi_gm_program_for_name("Violin") == 40);
+  REQUIRE(sonare_midi_gm_program_for_name("No Such Instrument") == -1);
+  REQUIRE(std::strcmp(sonare_midi_gm_family_name(4), "Bass") == 0);
+  REQUIRE(sonare_midi_gm_family_first_program(4) == 32);
+  REQUIRE(std::strcmp(sonare_midi_gm2_instrument_name(1, 24), "Ukulele") == 0);
+  REQUIRE(std::strcmp(sonare_midi_gm_drum_name(38), "Acoustic Snare") == 0);
+  REQUIRE(sonare_midi_gm_drum_note_for_name("Open Triangle") == 81);
+  REQUIRE(std::strcmp(sonare_midi_gm2_drum_set_name(40), "Brush") == 0);
+  REQUIRE(std::strcmp(sonare_midi_gm2_drum_name(40, 40), "Brush Swirl") == 0);
+  REQUIRE(std::strcmp(sonare_midi_cc_name(74), "Brightness") == 0);
+  REQUIRE(sonare_midi_cc_index_for_name("Pan (MSB)") == 10);
+  REQUIRE(std::strcmp(sonare_midi_per_note_controller_name(11), "Expression") == 0);
+
+  SonareMidiEventPod program_events[3]{};
+  size_t program_event_count = 0;
+  REQUIRE(sonare_midi_bank_program(0.0, 0, 3, 0x79, 1, 24, program_events, 3,
+                                   &program_event_count) == SONARE_OK);
+  REQUIRE(program_event_count == 3);
+  sonare::midi::Ump program_umps[3]{};
+  for (size_t i = 0; i < program_event_count; ++i) {
+    program_umps[i].words[0] = program_events[i].data0;
+    program_umps[i].words[1] = program_events[i].data1;
+    program_umps[i].word_count = program_events[i].data1 != 0 ? 2 : 1;
+  }
+  REQUIRE(program_umps[0].status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange));
+  REQUIRE(program_umps[1].status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange));
+  REQUIRE(program_umps[2].status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kProgramChange));
+  REQUIRE(sonare_midi_bank_program(0.0, 0, 3, 0x79, 1, 24, program_events, 2,
+                                   &program_event_count) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareMidiEventPod route_input[3]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 3, 60, 100, &route_input[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(0.5, 0, 3, 60, 0, &route_input[1]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_on(1.0, 0, 2, 61, 100, &route_input[2]) == SONARE_OK);
+  SonareMidiRouteConfig route_config{-1, 3, 7, 1};
+  SonareMidiEventPod routed[2]{};
+  size_t routed_count = 0;
+  int route_overflowed = 0;
+  uint32_t route_overflow_count = 0;
+  REQUIRE(sonare_midi_route_events(route_input, 3, &route_config, routed, 2, &routed_count,
+                                   &route_overflowed, &route_overflow_count) == SONARE_OK);
+  REQUIRE(routed_count == 2);
+  REQUIRE(route_overflowed == 0);
+  REQUIRE(route_overflow_count == 0);
+  sonare::midi::Ump routed_umps[2]{};
+  for (size_t i = 0; i < routed_count; ++i) {
+    routed_umps[i].words[0] = routed[i].data0;
+    routed_umps[i].words[1] = routed[i].data1;
+    routed_umps[i].word_count = routed[i].data1 != 0 ? 2 : 1;
+  }
+  REQUIRE(routed[0].ppq == 0.0);
+  REQUIRE(routed[1].ppq == 0.5);
+  REQUIRE(routed_umps[0].channel() == 7);
+  REQUIRE(routed_umps[1].channel() == 7);
+  REQUIRE(routed_umps[0].note_number() == 60);
+  REQUIRE(routed_umps[1].is_note_off());
+
+  route_config.thru = 0;
+  REQUIRE(sonare_midi_route_events(route_input, 3, &route_config, routed, 2, &routed_count,
+                                   &route_overflowed, &route_overflow_count) == SONARE_OK);
+  REQUIRE(routed_count == 0);
+  REQUIRE(route_overflowed == 0);
+
+  route_config = SonareMidiRouteConfig{-1, -1, -1, 1};
+  REQUIRE(sonare_midi_route_events(route_input, 3, &route_config, routed, 1, &routed_count,
+                                   &route_overflowed, &route_overflow_count) == SONARE_OK);
+  REQUIRE(routed_count == 1);
+  REQUIRE(route_overflowed == 1);
+  REQUIRE(route_overflow_count == 2);
+
+  SonareMidiEventPod learn_events[2]{};
+  REQUIRE(sonare_midi_cc(0.0, 0, 2, 1, 64, &learn_events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_cc(0.1, 0, 2, 33, 12, &learn_events[1]) == SONARE_OK);
+  SonareMidiCcBinding learned{};
+  REQUIRE(sonare_midi_cc_learn(learn_events, 2, 77, -1.0f, 1.0f, 0, &learned) == SONARE_OK);
+  REQUIRE(learned.kind == SONARE_MIDI_CC_CONTROL_CHANGE_14);
+  REQUIRE(learned.cc_number == 1);
+  REQUIRE(learned.cc_lsb_number == 33);
+  REQUIRE(learned.channel == 2);
+  REQUIRE(learned.param_id == 77);
+
+  SonareMidiEventPod rpn_events[3]{};
+  REQUIRE(sonare_midi_cc(0.0, 0, 3, 101, 0, &rpn_events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_cc(0.1, 0, 3, 100, 1, &rpn_events[1]) == SONARE_OK);
+  REQUIRE(sonare_midi_cc(0.2, 0, 3, 6, 64, &rpn_events[2]) == SONARE_OK);
+  REQUIRE(sonare_midi_cc_learn(rpn_events, 3, 78, 0.0f, 1.0f, 0, &learned) == SONARE_OK);
+  REQUIRE(learned.kind == SONARE_MIDI_CC_RPN);
+  REQUIRE(learned.selector_msb == 0);
+  REQUIRE(learned.selector_lsb == 1);
+  REQUIRE(learned.param_id == 78);
+
+  SonareMidiCcBinding cc_binding{};
+  cc_binding.cc_number = 74;
+  cc_binding.channel = 4;
+  cc_binding.kind = SONARE_MIDI_CC_CONTROL_CHANGE_7;
+  cc_binding.param_id = 88;
+  cc_binding.min_value = -60.0f;
+  cc_binding.max_value = 0.0f;
+  SonareMidiEventPod cc_event{};
+  REQUIRE(sonare_midi_cc(2.0, 0, 4, 74, 127, &cc_event) == SONARE_OK);
+  SonareAutomationPoint point{};
+  REQUIRE(sonare_midi_cc_to_breakpoint(&cc_binding, 1, &cc_event, &point) == SONARE_OK);
+  REQUIRE(point.ppq == 2.0);
+  REQUIRE(point.value == Catch::Approx(0.0f));
+  REQUIRE(point.curve_to_next == 0);
+  SonareMidiEventPod back_cc{};
+  REQUIRE(sonare_midi_param_to_cc(&cc_binding, 1, 88, -60.0f, 0, 3.0, &back_cc) == SONARE_OK);
+  sonare::midi::Ump back_ump{};
+  back_ump.words[0] = back_cc.data0;
+  back_ump.words[1] = back_cc.data1;
+  back_ump.word_count = back_cc.data1 != 0 ? 2 : 1;
+  REQUIRE(back_cc.ppq == 3.0);
+  REQUIRE(back_ump.channel() == 4);
+  REQUIRE(back_ump.note_number() == 74);
+  REQUIRE((back_ump.words[0] & 0x7Fu) == 0u);
+
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   uint32_t track = 0;
@@ -348,7 +470,7 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   const char* config =
       "{\"transpose_semitones\":12,\"quantize_ppq\":0.25,\"quantize_strength\":1.0,"
       "\"velocity_scale\":0.5,\"chord_intervals\":[0,7]}";
-  REQUIRE(sonare_project_set_midi_fx(project, clip, config) == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, config) == SONARE_OK);
 
   uint8_t* bytes = nullptr;
   size_t len = 0;
@@ -375,6 +497,7 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   REQUIRE(sonare_project_set_midi_fx(project, clip, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_set_midi_fx(project, clip, "{\"quantize_ppq\":0}") ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
 
   sonare_free_bytes(bytes);
   sonare_project_destroy(project);
@@ -414,6 +537,18 @@ TEST_CASE("project C surface validates MIDI note pairing", "[project]") {
   REQUIRE(sonare_project_validate_midi_notes(project, clip, &report) == SONARE_OK);
   REQUIRE(report.ok == 0);
   REQUIRE(report.unmatched_note_ons == 1);
+  REQUIRE(report.unmatched_note_offs == 0);
+
+  // UMP group is part of note identity: same channel/note across groups must
+  // not pair.
+  SonareMidiEventPod cross_group[2]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 67, 100, &cross_group[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0, 1, 0, 67, 0, &cross_group[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, cross_group, 2) == SONARE_OK);
+  REQUIRE(sonare_project_validate_midi_notes(project, clip, &report) == SONARE_OK);
+  REQUIRE(report.ok == 0);
+  REQUIRE(report.unmatched_note_ons == 1);
+  REQUIRE(report.unmatched_note_offs == 1);
 
   sonare_project_destroy(project);
 }
@@ -481,6 +616,30 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   }
   REQUIRE(warned);
   sonare_project_free_compile_result(&result);
+
+  SonareProjectBounceOptions options{};
+  options.sample_rate = 48000;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.total_frames = 256;
+  float* bounced = nullptr;
+  size_t bounced_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &bounced, &bounced_len) == SONARE_OK);
+  REQUIRE(bounced != nullptr);
+  sonare_free_floats(bounced);
+
+  SonareProjectCompileResult bounce_result{};
+  REQUIRE(sonare_project_last_bounce_compile_result(project, &bounce_result) == SONARE_OK);
+  bool bounce_warned = false;
+  for (size_t i = 0; i < bounce_result.diagnostic_count; ++i) {
+    if (bounce_result.diagnostics[i].code == 10u) {
+      bounce_warned = true;
+      REQUIRE(bounce_result.diagnostics[i].severity == 1u);
+    }
+  }
+  REQUIRE(bounce_warned);
+  REQUIRE(bounce_result.messages != nullptr);
+  sonare_project_free_compile_result(&bounce_result);
 
   sonare_project_destroy(project);
 }

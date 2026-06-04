@@ -115,3 +115,17 @@ TEST_CASE("dct_ii energy preservation", "[dct]") {
 
   REQUIRE_THAT(output_energy, WithinAbs(input_energy, 1e-4f));
 }
+
+TEST_CASE("DCT matrix cache survives bounded cache eviction", "[dct]") {
+  const std::vector<float> baseline = get_dct_matrix_cached(4, 8);
+
+  for (int i = 0; i < 8; ++i) {
+    (void)get_dct_matrix_cached(5 + i, 9 + i);
+  }
+
+  const std::vector<float> after_eviction = get_dct_matrix_cached(4, 8);
+  REQUIRE(after_eviction.size() == baseline.size());
+  for (size_t i = 0; i < baseline.size(); ++i) {
+    REQUIRE_THAT(after_eviction[i], WithinAbs(baseline[i], 0.0f));
+  }
+}

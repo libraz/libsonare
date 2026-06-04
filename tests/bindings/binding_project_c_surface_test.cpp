@@ -8,6 +8,106 @@ TEST_CASE("project ABI version is positive and matches the macro", "[project]") 
   REQUIRE(sonare_project_abi_version() > 0u);
 }
 
+TEST_CASE("project C surface exposes read-only project state without JSON", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  double sample_rate = 0.0;
+  REQUIRE(sonare_project_get_sample_rate(project, &sample_rate) == SONARE_OK);
+  CHECK(sample_rate == 48000.0);
+  REQUIRE(sonare_project_set_sample_rate(project, 44100.0) == SONARE_OK);
+  REQUIRE(sonare_project_get_sample_rate(project, &sample_rate) == SONARE_OK);
+  CHECK(sample_rate == 44100.0);
+
+  uint32_t overlap_policy = 99;
+  REQUIRE(sonare_project_get_overlap_policy(project, &overlap_policy) == SONARE_OK);
+  CHECK(overlap_policy == 0u);
+  REQUIRE(sonare_project_set_overlap_policy(project, SONARE_PROJECT_OVERLAP_ALLOW) == SONARE_OK);
+  REQUIRE(sonare_project_get_overlap_policy(project, &overlap_policy) == SONARE_OK);
+  CHECK(overlap_policy == SONARE_PROJECT_OVERLAP_ALLOW);
+
+  size_t count = 99;
+  REQUIRE(sonare_project_track_count(project, &count) == SONARE_OK);
+  CHECK(count == 0);
+  REQUIRE(sonare_project_clip_count(project, &count) == SONARE_OK);
+  CHECK(count == 0);
+  REQUIRE(sonare_project_source_count(project, &count) == SONARE_OK);
+  CHECK(count == 0);
+  REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
+  CHECK(count == 0);
+  REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
+  CHECK(count == 0);
+  REQUIRE(sonare_project_time_signature_count(project, &count) == SONARE_OK);
+  CHECK(count == 0);
+
+  SonareProjectTempoSegment tempos[2]{};
+  tempos[0].start_ppq = 0.0;
+  tempos[0].bpm = 120.0;
+  tempos[1].start_ppq = 960.0;
+  tempos[1].bpm = 132.0;
+  tempos[1].end_bpm = 144.0;
+  REQUIRE(sonare_project_set_tempo_segments(project, tempos, 2) == SONARE_OK);
+  REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
+  CHECK(count == 2);
+
+  SonareProjectTimeSignatureSegment sig{};
+  sig.start_ppq = 0.0;
+  sig.numerator = 7;
+  sig.denominator = 8;
+  REQUIRE(sonare_project_set_time_signatures(project, &sig, 1) == SONARE_OK);
+  REQUIRE(sonare_project_time_signature_count(project, &count) == SONARE_OK);
+  CHECK(count == 1);
+
+  uint32_t marker_id = 0;
+  REQUIRE(sonare_project_set_marker(project, 0, 12.0, "Verse", &marker_id) == SONARE_OK);
+  REQUIRE(marker_id != 0);
+  REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
+  CHECK(count == 1);
+  uint32_t replaced_id = 0;
+  REQUIRE(sonare_project_set_marker(project, marker_id, 16.0, "Chorus", &replaced_id) == SONARE_OK);
+  CHECK(replaced_id == marker_id);
+  REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
+  CHECK(count == 1);
+
+  const char* scene_json =
+      "{\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],\"connections\":[],\"strips\":[{"
+      "\"id\":\"lead\",\"faderDb\":-3.0}]}";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+  CHECK(sonare_project_set_mixer_scene_json(project, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  uint32_t track_id = 0;
+  uint32_t clip_id = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track_id, &clip_id) == SONARE_OK);
+  REQUIRE(sonare_project_track_count(project, &count) == SONARE_OK);
+  CHECK(count == 1);
+  REQUIRE(sonare_project_clip_count(project, &count) == SONARE_OK);
+  CHECK(count == 1);
+  REQUIRE(sonare_project_source_count(project, &count) == SONARE_OK);
+  CHECK(count == 1);
+
+  CHECK(sonare_project_get_sample_rate(project, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_track_count(project, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_clip_count(nullptr, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_overlap_policy(project, 99) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_tempo_segments(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  tempos[0].bpm = 0.0;
+  CHECK(sonare_project_set_tempo_segments(project, tempos, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_time_signatures(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  sig.denominator = 0;
+  CHECK(sonare_project_set_time_signatures(project, &sig, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_marker(project, 0, -1.0, "bad", &marker_id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
+  const std::string json = serialize(project);
+  CHECK(json.find("\"overlap_policy\":1") != std::string::npos);
+  CHECK(json.find("\"bpm\":132") != std::string::npos);
+  CHECK(json.find("\"denominator\":8") != std::string::npos);
+  CHECK(json.find("\"name\":\"Chorus\"") != std::string::npos);
+  CHECK(json.find("\"id\":\"lead\"") != std::string::npos);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface stores and retrieves AssistSidecar", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

@@ -1,6 +1,4 @@
 import { addon } from './native.js';
-import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
 import type {
   ChromaResult,
   CqtResult,
@@ -15,6 +13,8 @@ import type {
   StftResult,
   TempogramMode,
 } from './types.js';
+import type { ValidateOptions } from './validation.js';
+import { assertSamples } from './validation.js';
 
 export function trim(samples: Float32Array, sampleRate = 22050, thresholdDb = -60.0): Float32Array {
   return addon.trim(samples, sampleRate, thresholdDb);
@@ -76,6 +76,24 @@ export function chroma(
   return addon.chroma(samples, sampleRate, nFft, hopLength);
 }
 
+export function chromaCens(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  nChroma = 12,
+): ChromaResult {
+  return addon.chromaCens(samples, sampleRate, hopLength, nChroma);
+}
+
+export function bassChroma(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  nChroma = 12,
+): ChromaResult {
+  return addon.bassChroma(samples, sampleRate, hopLength, nChroma);
+}
+
 /** Compute the Constant-Q Transform magnitude. */
 export function cqt(
   samples: Float32Array,
@@ -86,6 +104,30 @@ export function cqt(
   binsPerOctave = 12,
 ): CqtResult {
   return addon.cqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+}
+
+/** Compute a faster pseudo-CQT magnitude approximation. */
+export function pseudoCqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  nBins = 84,
+  binsPerOctave = 12,
+): CqtResult {
+  return addon.pseudoCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
+}
+
+/** Compute the hybrid CQT magnitude. */
+export function hybridCqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  nBins = 84,
+  binsPerOctave = 12,
+): CqtResult {
+  return addon.hybridCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
 }
 
 /** Compute the Variable-Q Transform magnitude (`gamma` controls Q). */
@@ -608,6 +650,17 @@ export function onsetEnvelope(
   nMels = 128,
 ): Float32Array {
   return addon.onsetEnvelope(samples, sampleRate, nFft, hopLength, nMels);
+}
+
+export function onsetStrengthMulti(
+  samples: Float32Array,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nMels = 128,
+  nBands = 3,
+): { nBands: number; nFrames: number; data: Float32Array } {
+  return addon.onsetStrengthMulti(samples, sampleRate, nFft, hopLength, nMels, nBands);
 }
 
 export function fourierTempogram(

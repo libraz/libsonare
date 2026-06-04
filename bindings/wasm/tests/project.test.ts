@@ -285,7 +285,7 @@ describe('Sonare WASM Project', () => {
         Project.midiPitchBend(0.4, 0, 0, 8192),
         Project.midiNoteOff(1.1, 0, 0, 60, 0),
       ]);
-      project.setMidiFx(
+      project.bakeMidiFx(
         clipId,
         '{"transpose_semitones":12,"quantize_ppq":0.25,"quantize_strength":1.0}',
       );
@@ -386,6 +386,16 @@ describe('Sonare WASM Project', () => {
       expect(hanging.ok).toBe(false);
       expect(hanging.unmatchedNoteOns).toBe(1);
       expect(hanging.unmatchedNoteOffs).toBe(0);
+
+      // UMP groups are independent endpoint namespaces.
+      project.setMidiEvents(clipId, [
+        Project.midiNoteOn(0, 0, 0, 60, 100),
+        Project.midiNoteOff(1, 1, 0, 60, 0),
+      ]);
+      const crossGroup = project.validateMidiNotes(clipId);
+      expect(crossGroup.ok).toBe(false);
+      expect(crossGroup.unmatchedNoteOns).toBe(1);
+      expect(crossGroup.unmatchedNoteOffs).toBe(1);
     } finally {
       project.delete();
     }
@@ -422,6 +432,97 @@ describe('Sonare WASM Project', () => {
       expect(Project.midiChannelPressure(0, 0, 0, 90).data0 >>> 0).toBe(0x20d05a00);
       // Group and channel nibbles land in their own fields.
       expect(Project.midiNoteOn(0, 0xa, 0x3, 60, 100).data0 >>> 0).toBe(0x2a933c64);
+    });
+
+    it('exposes ProgramMap names and bank/program lowering', () => {
+      expect(Project.gmInstrumentName(0)).toBe('Acoustic Grand Piano');
+      expect(Project.gmInstrumentName(40)).toBe('Violin');
+      expect(Project.gmInstrumentName(128)).toBeNull();
+      expect(Project.gmProgramForName('Violin')).toBe(40);
+      expect(Project.gmProgramForName('No Such Instrument')).toBe(-1);
+      expect(Project.gmFamilyName(4)).toBe('Bass');
+      expect(Project.gmFamilyFirstProgram(4)).toBe(32);
+      expect(Project.gm2InstrumentName(1, 24)).toBe('Ukulele');
+      expect(Project.gmDrumName(38)).toBe('Acoustic Snare');
+      expect(Project.gmDrumNoteForName('Open Triangle')).toBe(81);
+      expect(Project.gm2DrumSetName(40)).toBe('Brush');
+      expect(Project.gm2DrumName(40, 40)).toBe('Brush Swirl');
+      expect(Project.midiCcName(74)).toBe('Brightness');
+      expect(Project.midiCcIndexForName('Pan (MSB)')).toBe(10);
+      expect(Project.perNoteControllerName(11)).toBe('Expression');
+
+      const events = Project.midiBankProgram(0, 0, 3, 0x79, 1, 24);
+      expect(events.map((event) => event.data0 >>> 0)).toEqual([
+        0x20b30079, 0x20b32001, 0x20c31800,
+      ]);
+      expect(events.every((event) => event.ppq === 0 && event.data1 === 0)).toBe(true);
+    });
+
+    it('routes MIDI events through the native MidiRouter', () => {
+      const routed = Project.midiRouteEvents(
+        [
+          Project.midiNoteOn(0, 0, 3, 60, 100),
+          Project.midiNoteOff(0.5, 0, 3, 60, 0),
+          Project.midiNoteOn(1, 0, 2, 61, 100),
+        ],
+        { filterChannel: 3, remapChannel: 7 },
+      );
+      expect(routed.overflowed).toBe(false);
+      expect(routed.overflowCount).toBe(0);
+      expect(routed.events).toHaveLength(2);
+      expect(routed.events.map((event) => event.ppq)).toEqual([0, 0.5]);
+      expect(routed.events.map((event) => (event.data0 >>> 16) & 0xf)).toEqual([7, 7]);
+      expect((routed.events[1].data0 >>> 20) & 0xf).toBe(0x8);
+
+      const muted = Project.midiRouteEvents([Project.midiNoteOn(0, 0, 0, 60, 100)], {
+        thru: false,
+      });
+      expect(muted.events).toHaveLength(0);
+      expect(muted.overflowed).toBe(false);
+    });
+
+    it('exposes native CcMap learn and CC/automation conversion helpers', () => {
+      const learned14 = Project.midiCcLearn(
+        [Project.midiCc(0, 0, 2, 1, 64), Project.midiCc(0.1, 0, 2, 33, 12)],
+        77,
+        { minValue: -1, maxValue: 1 },
+      );
+      expect(learned14).toMatchObject({
+        kind: 1,
+        ccNumber: 1,
+        ccLsbNumber: 33,
+        channel: 2,
+        paramId: 77,
+        minValue: -1,
+        maxValue: 1,
+      });
+
+      const learnedRpn = Project.midiCcLearn(
+        [
+          Project.midiCc(0, 0, 3, 101, 0),
+          Project.midiCc(0.1, 0, 3, 100, 1),
+          Project.midiCc(0.2, 0, 3, 6, 64),
+        ],
+        78,
+      );
+      expect(learnedRpn).toMatchObject({ kind: 2, selectorMsb: 0, selectorLsb: 1, paramId: 78 });
+
+      const binding = {
+        ccNumber: 74,
+        channel: 4,
+        kind: 0 as const,
+        paramId: 88,
+        minValue: -60,
+        maxValue: 0,
+      };
+      const point = Project.midiCcToBreakpoint([binding], Project.midiCc(2, 0, 4, 74, 127));
+      expect(point).toEqual({ ppq: 2, value: 0, curveToNext: 0 });
+
+      const event = Project.midiParamToCc([binding], 88, -60, 0, 3);
+      expect(event?.ppq).toBe(3);
+      expect(((event?.data0 ?? 0) >>> 16) & 0xf).toBe(4);
+      expect(((event?.data0 ?? 0) >>> 8) & 0x7f).toBe(74);
+      expect((event?.data0 ?? 0) & 0x7f).toBe(0);
     });
   });
 });

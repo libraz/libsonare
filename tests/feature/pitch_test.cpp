@@ -164,6 +164,13 @@ TEST_CASE("yin_with_confidence", "[pitch]") {
   REQUIRE(confidence <= 1.0f);
 }
 
+TEST_CASE("yin_find_pitch honors the configured voicing threshold", "[pitch]") {
+  const std::vector<float> cmndf = {1.0f, 0.9f, 0.7f, 0.4f, 0.45f, 0.8f};
+
+  REQUIRE(yin_find_pitch(cmndf, 0.3f, 1, 6) == 0.0f);
+  REQUIRE_THAT(yin_find_pitch(cmndf, 0.5f, 1, 6), WithinAbs(3.36f, 0.01f));
+}
+
 TEST_CASE("yin_track - constant pitch", "[pitch]") {
   Audio audio = generate_sine(440.0f, 1.0f, 22050);
 
@@ -487,6 +494,21 @@ TEST_CASE("estimate_tuning uses a global magnitude median", "[pitch]") {
 
   const float tuning = estimate_tuning(audio);
   // The loud in-tune segment dominates the global-median-thresholded peaks.
+  REQUIRE_THAT(tuning, WithinAbs(0.0f, 0.1f));
+}
+
+TEST_CASE("estimate_tuning handles even-sized peak magnitude medians", "[pitch]") {
+  const int sr = 22050;
+  const int n_samples = 4096;
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    samples[static_cast<size_t>(i)] =
+        0.7f * std::sin(2.0f * sonare::constants::kPiD * sonare::constants::kA4Hz * t);
+  }
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  const float tuning = estimate_tuning(audio, 2048, 2048);
   REQUIRE_THAT(tuning, WithinAbs(0.0f, 0.1f));
 }
 

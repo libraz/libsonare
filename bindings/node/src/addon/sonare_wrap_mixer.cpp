@@ -42,6 +42,8 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
       {
           InstanceMethod<&MixerWrap::Compile>("compile"),
           InstanceMethod<&MixerWrap::ProcessStereo>("processStereo"),
+          InstanceMethod<&MixerWrap::DrainTailStereo>("drainTailStereo"),
+          InstanceMethod<&MixerWrap::TailSamples>("tailSamples"),
           InstanceMethod<&MixerWrap::StripCount>("stripCount"),
           InstanceMethod<&MixerWrap::ScheduleInsertAutomation>("scheduleInsertAutomation"),
           InstanceMethod<&MixerWrap::ToSceneJson>("toSceneJson"),
@@ -197,6 +199,61 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
                                                 left_out.Data(), right_out.Data(), length);
   if (err != SONARE_OK) {
     Napi::Error::New(env, std::string("mixer process failed: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left_out);
+  out.Set("right", right_out);
+  out.Set("sampleRate", sample_rate_);
+  return out;
+}
+
+Napi::Value MixerWrap::TailSamples(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  int tail = 0;
+  SonareError err = sonare_mixer_tail_samples(mixer_, &tail);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("failed to query mixer tail: ") + ErrorMessageForCode(err))
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, tail);
+}
+
+Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (numSamples: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int64_t requested = info[0].As<Napi::Number>().Int64Value();
+  if (requested < 0) {
+    Napi::TypeError::New(env, "numSamples must be non-negative").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const size_t num_samples = static_cast<size_t>(requested);
+  if (num_samples > static_cast<size_t>(block_size_)) {
+    Napi::TypeError::New(env, "numSamples exceeds the mixer's configured block size")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Float32Array left_out = Napi::Float32Array::New(env, num_samples);
+  Napi::Float32Array right_out = Napi::Float32Array::New(env, num_samples);
+  SonareError err =
+      sonare_mixer_drain_tail_stereo(mixer_, left_out.Data(), right_out.Data(), num_samples);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, std::string("mixer drain failed: ") + ErrorMessageForCode(err))
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

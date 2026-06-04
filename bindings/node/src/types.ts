@@ -254,11 +254,18 @@ export interface AnalysisResult {
 /** Progress callback for {@link analyzeWithProgress}. */
 export type AnalysisProgressCallback = (progress: number, stage: string) => void;
 
-/**
- * Options-object form for {@link analyzeMelody}'s tracker selection. Mirrors the
- * trailing positional `usePyin` / `center` arguments.
- */
+/** Options for {@link analyzeMelody}. All fields are optional. */
 export interface MelodyOptions {
+  /** Lowest f0 (Hz) the tracker will consider. Default 65 (≈ C2). */
+  fmin?: number;
+  /** Highest f0 (Hz) the tracker will consider. Default 2093 (≈ C7). */
+  fmax?: number;
+  /** Analysis frame length in samples. Default 2048. */
+  frameLength?: number;
+  /** Hop length between frames in samples. Default 256. */
+  hopLength?: number;
+  /** Voicing confidence threshold in [0,1]; frames below are unvoiced. Default 0.1. */
+  threshold?: number;
   /** Select the Viterbi-smoothed pYIN tracker instead of plain YIN. Default false. */
   usePyin?: boolean;
   /**
@@ -267,6 +274,102 @@ export interface MelodyOptions {
    * for plain YIN. Default true.
    */
   center?: boolean;
+}
+
+/** Options for {@link analyzeBpm}. All fields are optional. */
+export interface AnalyzeBpmOptions {
+  /** Lowest BPM to consider. Default 30. */
+  bpmMin?: number;
+  /** Highest BPM to consider. Default 300. */
+  bpmMax?: number;
+  /** Tempo prior the tracker is biased toward. Default 120. */
+  startBpm?: number;
+  /** FFT size for the onset envelope. Default 2048. */
+  nFft?: number;
+  /** Hop length for the onset envelope. Default 512. */
+  hopLength?: number;
+  /** Number of tempo candidates to return. Default 5. */
+  maxCandidates?: number;
+}
+
+/** Options for {@link analyzeRhythm}. All fields are optional. */
+export interface AnalyzeRhythmOptions {
+  /** Lowest BPM to consider. Default 60. */
+  bpmMin?: number;
+  /** Highest BPM to consider. Default 200. */
+  bpmMax?: number;
+  /** Tempo prior the tracker is biased toward. Default 120. */
+  startBpm?: number;
+  /** FFT size for the onset envelope. Default 2048. */
+  nFft?: number;
+  /** Hop length for the onset envelope. Default 512. */
+  hopLength?: number;
+}
+
+/** Options for {@link analyzeDynamics}. All fields are optional. */
+export interface AnalyzeDynamicsOptions {
+  /** Analysis window length in seconds. Default 0.4. */
+  windowSec?: number;
+  /** Hop length in samples. Default 512. */
+  hopLength?: number;
+  /** Threshold (dB) above which compression is flagged. Default 6. */
+  compressionThreshold?: number;
+}
+
+/** Options for {@link detectAcoustic}. All fields are optional. */
+export interface AcousticOptions {
+  /** Number of octave bands. Default 6. */
+  nOctaveBands?: number;
+  /** Number of third-octave sub-bands. Default 24. */
+  nThirdOctaveSubbands?: number;
+  /** Minimum decay range (dB) for a valid RT estimate. Default 30. */
+  minDecayDb?: number;
+  /** Noise-floor margin (dB) above the measured floor. Default 10. */
+  noiseFloorMarginDb?: number;
+}
+
+/** Options for {@link analyzeTimbre}. All fields are optional. */
+export interface AnalyzeTimbreOptions {
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop length in samples. Default 512. */
+  hopLength?: number;
+  /** Number of mel bands. Default 128. */
+  nMels?: number;
+  /** Number of MFCC coefficients. Default 13. */
+  nMfcc?: number;
+  /** Per-frame statistics window in seconds. Default 0.5. */
+  windowSec?: number;
+}
+
+/** Options for {@link analyzeSections}. All fields are optional. */
+export interface AnalyzeSectionsOptions {
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop length in samples. Default 512. */
+  hopLength?: number;
+  /** Minimum section length in seconds. Default 4. */
+  minSectionSec?: number;
+}
+
+/** Options for the high-level {@link mastering} one-shot. All fields are optional. */
+export interface MasteringOptions {
+  /** Integrated-loudness target in LUFS. Default -14. */
+  targetLufs?: number;
+  /** True-peak ceiling in dBTP. Default -1. */
+  ceilingDb?: number;
+  /** True-peak oversampling factor. Default 4. */
+  truePeakOversample?: number;
+}
+
+/** Options for {@link noteStretch}. All fields are optional. */
+export interface NoteStretchOptions {
+  /** First sample of the note to stretch. Default 0. */
+  onsetSample?: number;
+  /** Last sample of the note to stretch. Default 0. */
+  offsetSample?: number;
+  /** Stretch ratio (1 = unchanged). Default 1. */
+  stretchRatio?: number;
 }
 
 /** Song-structure section type ordinal (mirrors the C `SonareSectionType`). */
@@ -871,6 +974,40 @@ export interface MasteringStereoResult {
   latencySamples: number;
 }
 
+/**
+ * A nested processor / parameter sub-tree of a {@link MasteringChainConfig}.
+ * Leaf values are numbers or booleans; nest deeper for processor parameters.
+ */
+export interface MasteringChainSection {
+  [key: string]: number | boolean | MasteringChainSection;
+}
+
+/**
+ * Nested mastering-chain configuration. Top-level keys are the processing
+ * modules; nest processor and parameter names beneath them, e.g.
+ *
+ * ```ts
+ * masteringChain(samples, sr, {
+ *   dynamics: { compressor: { thresholdDb: -24 } },
+ *   loudness: { targetLufs: -14 },
+ * });
+ * ```
+ *
+ * A boolean toggles a module/processor's `enabled` flag; setting any field
+ * implicitly enables its module unless `enabled: false` is also given. Unknown
+ * keys throw at apply time. (`stereo.*` modules apply on the stereo path only.)
+ */
+export interface MasteringChainConfig {
+  repair?: MasteringChainSection;
+  eq?: MasteringChainSection;
+  dynamics?: MasteringChainSection;
+  saturation?: MasteringChainSection;
+  spectral?: MasteringChainSection;
+  stereo?: MasteringChainSection;
+  maximizer?: MasteringChainSection;
+  loudness?: MasteringChainSection;
+}
+
 export interface MasteringChainResult {
   samples: Float32Array;
   sampleRate: number;
@@ -1303,6 +1440,19 @@ export interface ProjectTrackDesc {
   name?: string;
 }
 
+/** One first-class warp-map anchor. Sample positions must be finite and monotonic. */
+export interface ProjectWarpAnchor {
+  warpSample: number;
+  sourceSample: number;
+}
+
+/** First-class project warp map referenced by clip `warpRefId`. */
+export interface ProjectWarpMapDesc {
+  id: number;
+  name?: string;
+  anchors: ProjectWarpAnchor[];
+}
+
 /**
  * Descriptor for {@link Project.addClip}. All musical positions are PPQ
  * (quarter notes); `lengthPpq` must be > 0.
@@ -1352,6 +1502,56 @@ export interface ProjectMidiEvent {
   data1?: number;
 }
 
+/** Options for {@link Project.midiRouteEvents}. `null`/omitted filter fields mean any/no remap. */
+export interface ProjectMidiRouteConfig {
+  filterGroup?: number | null;
+  filterChannel?: number | null;
+  remapChannel?: number | null;
+  thru?: boolean;
+}
+
+/** Result of {@link Project.midiRouteEvents}. */
+export interface ProjectMidiRouteResult {
+  events: ProjectMidiEvent[];
+  overflowed: boolean;
+  overflowCount: number;
+}
+
+export type ProjectMidiCcBindingKind = 0 | 1 | 2 | 3;
+
+/** Options for {@link Project.midiCcLearn}. All fields are optional. */
+export interface MidiCcLearnOptions {
+  /** Lower end of the mapped parameter range. Default `0`. */
+  minValue?: number;
+  /** Upper end of the mapped parameter range. Default `1`. */
+  maxValue?: number;
+  /** Minimum normalized CC movement required to learn a binding. Default `0`. */
+  minMovement?: number;
+}
+
+/** Options for {@link RealtimeEngine.bindMidiCc}. All fields are optional. */
+export interface MidiCcBindOptions {
+  /** Lower end of the mapped parameter range. Default `0`. */
+  minValue?: number;
+  /** Upper end of the mapped parameter range. Default `1`. */
+  maxValue?: number;
+}
+
+/** MIDI CC <-> automation binding descriptor used by CC learn/conversion helpers. */
+export interface ProjectMidiCcBinding {
+  ccNumber: number;
+  /** MIDI channel 0..15, or 255 for any channel. */
+  channel: number;
+  /** 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. */
+  kind: ProjectMidiCcBindingKind;
+  ccLsbNumber?: number;
+  selectorMsb?: number;
+  selectorLsb?: number;
+  paramId: number;
+  minValue: number;
+  maxValue: number;
+}
+
 /** One compile diagnostic (mirrors SonareProjectDiagnostic). */
 export interface ProjectDiagnostic {
   code: number;
@@ -1368,6 +1568,28 @@ export interface ProjectCompileResult {
   /** Newline-joined human-readable diagnostic detail. */
   messages: string;
   diagnostics: ProjectDiagnostic[];
+}
+
+/** One tempo segment for {@link Project.setTempoSegments}. */
+export interface ProjectTempoSegment {
+  /** Segment start position in PPQ. */
+  startPpq: number;
+  /** Tempo in BPM at the segment start. */
+  bpm: number;
+  /** Segment start in absolute samples. Default `0`. */
+  startSample?: number;
+  /** Tempo in BPM at the segment end for a ramp; `0` / omitted = constant tempo. */
+  endBpm?: number;
+}
+
+/** One time-signature segment for {@link Project.setTimeSignatures}. */
+export interface ProjectTimeSignatureSegment {
+  /** Segment start position in PPQ. */
+  startPpq: number;
+  /** Beats per bar. */
+  numerator: number;
+  /** Beat unit (e.g. `4` for quarter note). */
+  denominator: number;
 }
 
 /** Options for {@link Project.bounce}. Zero / omitted fields take native defaults. */

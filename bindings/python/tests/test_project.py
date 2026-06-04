@@ -582,3 +582,116 @@ def test_set_midi_events_validates_event_shape_and_words() -> None:
             project.set_midi_events(clip_id, [(0.0, 0)])
     finally:
         project.close()
+
+
+# ---------------------------------------------------------------------------
+# Parity surface added for Node/WASM cross-binding coverage: MIDI helper
+# tables (ProgramMap / MidiRouter / CcMap), project getters/setters, and the
+# bake / last-bounce-compile-result accessors.
+# ---------------------------------------------------------------------------
+
+
+def test_gm_program_and_cc_name_tables_round_trip() -> None:
+    assert Project.gm_instrument_name(0) == "Acoustic Grand Piano"
+    assert Project.gm_program_for_name("Acoustic Grand Piano") == 0
+    assert Project.gm_instrument_name(9999) is None
+    assert Project.gm_program_for_name("not a real instrument") == -1
+    assert isinstance(Project.gm_family_name(0), str)
+    assert Project.gm_family_first_program(0) >= 0
+    assert isinstance(Project.gm2_instrument_name(0, 0), (str, type(None)))
+    assert isinstance(Project.gm_drum_name(35), (str, type(None)))
+    assert Project.gm_drum_note_for_name("not a drum") == -1
+    assert isinstance(Project.gm2_drum_set_name(0), (str, type(None)))
+    assert isinstance(Project.gm2_drum_name(0, 35), (str, type(None)))
+    assert Project.midi_cc_name(7) is not None
+    assert Project.midi_cc_index_for_name("not a cc") == -1
+    assert isinstance(Project.per_note_controller_name(0), (str, type(None)))
+
+
+def test_midi_bank_program_lowers_to_events() -> None:
+    events = Project.midi_bank_program(0.0, 0, 0, 0, 0, 5)
+    assert isinstance(events, list)
+    assert 1 <= len(events) <= 3
+    for ev in events:
+        assert len(ev) == 3  # (ppq, data0, data1)
+
+
+def test_midi_route_events_filters_and_reports_overflow() -> None:
+    events = [Project.midi_cc(0.0, 0, 2, 1, 64), Project.midi_cc(0.1, 0, 5, 1, 20)]
+    result = Project.midi_route_events(events, {"filter_channel": 2})
+    assert result.overflowed is False
+    assert isinstance(result.overflow_count, int)
+    # Only the channel-2 event survives the filter.
+    assert len(result.events) == 1
+
+
+def test_midi_cc_learn_and_conversion_helpers() -> None:
+    # A 14-bit CC pair (MSB controller 1 + LSB controller 33) learns kind 1.
+    events = [Project.midi_cc(0.0, 0, 2, 1, 64), Project.midi_cc(0.1, 0, 2, 33, 12)]
+    binding = Project.midi_cc_learn(events, 77, min_value=-1.0, max_value=1.0)
+    assert binding is not None
+    assert binding.kind == 1
+    assert binding.param_id == 77
+    assert binding.min_value == -1.0
+
+    # RPN selector assembly learns kind 2.
+    rpn = [
+        Project.midi_cc(0.0, 0, 3, 101, 0),
+        Project.midi_cc(0.1, 0, 3, 100, 1),
+        Project.midi_cc(0.2, 0, 3, 6, 64),
+    ]
+    rpn_binding = Project.midi_cc_learn(rpn, 78)
+    assert rpn_binding is not None
+    assert rpn_binding.kind == 2
+
+    # No learnable CC stream -> None sentinel (INVALID_STATE), not an exception.
+    assert Project.midi_cc_learn([], 99) is None
+
+    # cc_to_breakpoint converts a matching CC to an automation point.
+    point = Project.midi_cc_to_breakpoint([binding], Project.midi_cc(0.0, 0, 2, 1, 100))
+    assert point is None or len(point) == 3
+    # param_to_cc converts a parameter value back to a CC event (or None if unbound).
+    back = Project.midi_param_to_cc([binding], 77, 0.5, 0)
+    assert back is None or len(back) == 3
+
+
+def test_project_getters_setters_and_counts() -> None:
+    project = Project()
+    try:
+        project.set_sample_rate(44100.0)
+        assert project.get_sample_rate() == 44100.0
+
+        project.set_overlap_policy(1)
+        assert project.get_overlap_policy() == 1
+
+        project.set_tempo_segments([(0.0, 120.0), (480.0, 140.0)])
+        assert project.tempo_segment_count() == 2
+        project.set_time_signatures([(0.0, 4, 4), (1920.0, 3, 4)])
+        assert project.time_signature_count() == 2
+
+        marker_id = project.set_marker(0, 1.0, "intro")
+        assert marker_id > 0
+
+        assert project.track_count() == 0
+        assert project.source_count() == 0
+    finally:
+        project.close()
+
+
+def test_bake_midi_fx_and_last_bounce_compile_result() -> None:
+    project = Project()
+    try:
+        project.set_sample_rate(48000.0)
+        _track, clip = project.add_midi_clip(0.0, 4.0)
+        project.set_midi_events(
+            clip,
+            [Project.midi_note_on(0.0, 0, 0, 60, 100), Project.midi_note_off(2.0, 0, 0, 60, 0)],
+        )
+        # A MIDI-only bounce with no instrument compiles to silence but records
+        # the no-instrument diagnostic, retrievable after the bounce.
+        project.bounce(total_frames=48000, num_channels=2, sample_rate=48000)
+        result = project.last_bounce_compile_result()
+        assert result.has_timeline is True
+        assert isinstance(result.diagnostics, (list, tuple))
+    finally:
+        project.close()

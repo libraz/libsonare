@@ -8,8 +8,13 @@ import {
 } from './analysis_helpers';
 import { getSonareModule } from './module_state';
 import type {
+  AcousticOptions,
   AcousticResult,
   AnalysisResult,
+  AnalyzeBpmOptions,
+  AnalyzeDynamicsOptions,
+  AnalyzeRhythmOptions,
+  AnalyzeTimbreOptions,
   ChordAnalysisResult,
   ChordDetectionOptions,
   Key,
@@ -234,18 +239,15 @@ export function analyzeImpulseResponse(
 export function detectAcoustic(
   samples: Float32Array,
   sampleRate = 48000,
-  nOctaveBands = 6,
-  nThirdOctaveSubbands = 24,
-  minDecayDb = 30.0,
-  noiseFloorMarginDb = 10.0,
+  options: AcousticOptions = {},
 ): AcousticResult {
   const result: WasmAcousticResult = requireModule().detectAcoustic(
     samples,
     sampleRate,
-    nOctaveBands,
-    nThirdOctaveSubbands,
-    minDecayDb,
-    noiseFloorMarginDb,
+    options.nOctaveBands ?? 6,
+    options.nThirdOctaveSubbands ?? 24,
+    options.minDecayDb ?? 30.0,
+    options.noiseFloorMarginDb ?? 10.0,
   );
   return result;
 }
@@ -372,22 +374,17 @@ export interface TimbreAnalysisResult extends TimbreFrame {
 export function analyzeBpm(
   samples: Float32Array,
   sampleRate = 22050,
-  bpmMin = 30.0,
-  bpmMax = 300.0,
-  startBpm = 120.0,
-  nFft = 2048,
-  hopLength = 512,
-  maxCandidates = 5,
+  options: AnalyzeBpmOptions = {},
 ): BpmAnalysisResult {
   return requireModule().analyzeBpm(
     samples,
     sampleRate,
-    bpmMin,
-    bpmMax,
-    startBpm,
-    nFft,
-    hopLength,
-    maxCandidates,
+    options.bpmMin ?? 30.0,
+    options.bpmMax ?? 300.0,
+    options.startBpm ?? 120.0,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+    options.maxCandidates ?? 5,
   );
 }
 
@@ -397,20 +394,16 @@ export function analyzeBpm(
 export function analyzeRhythm(
   samples: Float32Array,
   sampleRate = 22050,
-  bpmMin = 60.0,
-  bpmMax = 200.0,
-  startBpm = 120.0,
-  nFft = 2048,
-  hopLength = 512,
+  options: AnalyzeRhythmOptions = {},
 ): RhythmAnalysisResult {
   return requireModule().analyzeRhythm(
     samples,
     sampleRate,
-    bpmMin,
-    bpmMax,
-    startBpm,
-    nFft,
-    hopLength,
+    options.bpmMin ?? 60.0,
+    options.bpmMax ?? 200.0,
+    options.startBpm ?? 120.0,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
   );
 }
 
@@ -420,16 +413,14 @@ export function analyzeRhythm(
 export function analyzeDynamics(
   samples: Float32Array,
   sampleRate = 22050,
-  windowSec = 0.4,
-  hopLength = 512,
-  compressionThreshold = 6.0,
+  options: AnalyzeDynamicsOptions = {},
 ): DynamicsAnalysisResult {
   return requireModule().analyzeDynamics(
     samples,
     sampleRate,
-    windowSec,
-    hopLength,
-    compressionThreshold,
+    options.windowSec ?? 0.4,
+    options.hopLength ?? 512,
+    options.compressionThreshold ?? 6.0,
   );
 }
 
@@ -440,20 +431,16 @@ export function analyzeDynamics(
 export function analyzeTimbre(
   samples: Float32Array,
   sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nMels = 128,
-  nMfcc = 13,
-  windowSec = 0.5,
+  options: AnalyzeTimbreOptions = {},
 ): TimbreAnalysisResult {
   return requireModule().analyzeTimbre(
     samples,
     sampleRate,
-    nFft,
-    hopLength,
-    nMels,
-    nMfcc,
-    windowSec,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+    options.nMels ?? 128,
+    options.nMfcc ?? 13,
+    options.windowSec ?? 0.5,
   );
 }
 

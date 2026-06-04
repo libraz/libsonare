@@ -25,6 +25,30 @@ TEST_CASE("TruePeakLimiter process performs no heap allocation after prepare",
   REQUIRE(guard.count() == 0);
 }
 
+TEST_CASE("TruePeakLimiter mono stereo alternation is allocation free after prepare",
+          "[mastering][maximizer][rt]") {
+  constexpr int kBlock = 64;
+  sonare::mastering::maximizer::TruePeakLimiter limiter({-6.0f, 1.0f, 50.0f, 4});
+  limiter.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left[0] = 1.2f;
+  right[0] = -1.1f;
+  float* stereo[] = {left.data(), right.data()};
+  float* mono[] = {left.data()};
+
+  limiter.process(stereo, 2, kBlock);
+  limiter.process(mono, 1, kBlock);
+  limiter.reset();
+
+  AllocationGuard guard;
+  limiter.process(mono, 1, kBlock);
+  limiter.process(stereo, 2, kBlock);
+  limiter.process(mono, 1, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
 TEST_CASE("MultibandExciter process performs no heap allocation after prepare",
           "[mastering][saturation][rt]") {
   constexpr int kBlock = 256;

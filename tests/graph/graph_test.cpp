@@ -5,8 +5,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <vector>
+
+#if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86)
+#include <xmmintrin.h>
+#endif
 
 #ifdef SONARE_WITH_GRAPH
 #include "engine/graph_runtime.h"
@@ -93,6 +98,33 @@ class FixedQ8LatencyProcessor final : public sonare::rt::ProcessorBase {
   int latency_q8_ = 0;
 };
 
+#if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86) || \
+    defined(__aarch64__)
+class DenormalFlagProbeProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit DenormalFlagProbeProcessor(bool* observed) : observed_(observed) {}
+
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {
+#if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86)
+    constexpr unsigned int kFlushToZero = 0x8000;
+    constexpr unsigned int kDenormalsAreZero = 0x0040;
+    const unsigned int mxcsr = _mm_getcsr();
+    *observed_ = (mxcsr & kFlushToZero) != 0 && (mxcsr & kDenormalsAreZero) != 0;
+#elif defined(__aarch64__)
+    constexpr std::uint64_t kFlushToZero = 1u << 24;
+    std::uint64_t fpcr = 0;
+    __asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr));
+    *observed_ = (fpcr & kFlushToZero) != 0;
+#endif
+  }
+  void reset() override {}
+
+ private:
+  bool* observed_ = nullptr;
+};
+#endif
+
 std::unique_ptr<sonare::rt::ProcessorBase> pass() {
   return std::make_unique<PassthroughProcessor>();
 }
@@ -162,6 +194,21 @@ TEST_CASE("Graph audio-thread methods are no-ops on an uncompiled graph", "[grap
   REQUIRE_NOTHROW(graph.clear_inputs(8));
   REQUIRE_NOTHROW(graph.process_block(8));
 }
+
+#if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86) || \
+    defined(__aarch64__)
+TEST_CASE("Graph process_block enables denormal flushing for processors", "[graph]") {
+  sonare::graph::Graph graph;
+  bool observed = false;
+  REQUIRE(graph.add_node("probe", std::make_unique<DenormalFlagProbeProcessor>(&observed), 1));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, 8);
+
+  graph.process_block(8);
+
+  REQUIRE(observed);
+}
+#endif
 
 #ifdef SONARE_WITH_GRAPH
 TEST_CASE("GraphRuntime refuses to swap in an uncompiled graph", "[graph][noexcept]") {

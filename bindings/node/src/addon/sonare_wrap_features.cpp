@@ -252,6 +252,63 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+using ChromaFn = SonareError (*)(const float*, size_t, int, int, int, SonareChromaResult*);
+
+Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  const int hop_length =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
+  const int n_chroma =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 12;
+
+  SonareChromaResult result{};
+  const SonareError err =
+      fn(typed.Data(), typed.ElementLength(), sr, hop_length, n_chroma, &result);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("nChroma", Napi::Number::New(env, result.n_chroma));
+  out.Set("nFrames", Napi::Number::New(env, result.n_frames));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("hopLength", Napi::Number::New(env, result.hop_length));
+  const size_t total = static_cast<size_t>(result.n_chroma) * static_cast<size_t>(result.n_frames);
+  auto features = Napi::Float32Array::New(env, total);
+  if (total > 0 && result.features != nullptr) {
+    std::memcpy(features.Data(), result.features, total * sizeof(float));
+  }
+  out.Set("features", features);
+  Napi::Array mean = Napi::Array::New(env, static_cast<size_t>(result.n_chroma));
+  for (int i = 0; i < result.n_chroma; ++i) {
+    mean.Set(static_cast<uint32_t>(i),
+             Napi::Number::New(env, result.mean_energy ? result.mean_energy[i] : 0.0f));
+  }
+  out.Set("meanEnergy", mean);
+  sonare_free_chroma_result(&result);
+  return out;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::ChromaCens(const Napi::CallbackInfo& info) {
+  return ChromaVariant(info, sonare_chroma_cens);
+}
+
+Napi::Value SonareWrap::BassChroma(const Napi::CallbackInfo& info) {
+  return ChromaVariant(info, sonare_bass_chroma);
+}
+
 // ============================================================================
 // Features - Spectral
 // ============================================================================

@@ -124,6 +124,62 @@ TEST_CASE("Named stereo fallback processes mono processors per channel", "[maste
   }
 }
 
+TEST_CASE("Named stereo classical repair applies a shared stereo transfer",
+          "[mastering][chain][repair]") {
+  std::vector<float> left = {0.2f, 0.05f, 0.05f, 0.0f, -0.05f, -0.05f, 0.05f, 0.05f};
+  std::vector<float> right(left.size());
+  for (size_t i = 0; i < left.size(); ++i) {
+    right[i] = 0.2f * left[i];
+  }
+
+  const auto result = apply_named_processor_stereo(
+      "repair.dereverbClassical", left.data(), right.data(), left.size(), 48000,
+      {{"threshold", 0.04}, {"attenuation", 0.5}, {"nFft", 1024.0}, {"hopLength", 256.0}});
+
+  REQUIRE(result.left.size() == left.size());
+  REQUIRE(result.right.size() == right.size());
+  bool attenuated = false;
+  for (size_t i = 0; i < left.size(); ++i) {
+    if (std::abs(left[i]) > 1.0e-6f) {
+      REQUIRE_THAT(result.right[i], WithinAbs(0.2f * result.left[i], 1.0e-6f));
+    }
+    if (std::abs(result.left[i]) < std::abs(left[i])) {
+      attenuated = true;
+    }
+  }
+  REQUIRE(attenuated);
+}
+
+TEST_CASE("MasteringChain stereo denoise applies a shared stereo transfer",
+          "[mastering][chain][repair]") {
+  constexpr int sample_rate = 22050;
+  std::vector<float> left(static_cast<size_t>(sample_rate / 4));
+  std::vector<float> right(left.size());
+  for (size_t i = 0; i < left.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    left[i] = 0.12f * std::sin(2.0f * 3.14159265358979323846f * 440.0f * t) +
+              0.02f * std::sin(2.0f * 3.14159265358979323846f * 3000.0f * t);
+    right[i] = 0.35f * left[i];
+  }
+
+  MasteringChainConfig config;
+  config.repair.denoise.enabled = true;
+  config.repair.denoise.config.n_fft = 1024;
+  config.repair.denoise.config.hop_length = 256;
+  config.repair.denoise.config.over_subtraction = 4.0f;
+  config.repair.denoise.config.gain_floor = 0.05f;
+  MasteringChain chain(config);
+  auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
+
+  REQUIRE(result.left.size() == left.size());
+  REQUIRE(result.right.size() == right.size());
+  for (size_t i = 0; i < left.size(); ++i) {
+    if (std::abs(result.left[i]) > 1.0e-5f) {
+      REQUIRE_THAT(result.right[i], WithinAbs(0.35f * result.left[i], 1.0e-5f));
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // StreamingMasteringChain
 // ---------------------------------------------------------------------------

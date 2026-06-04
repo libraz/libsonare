@@ -412,13 +412,16 @@ editing::pitch_editor::ScaleQuantizerConfig make_scale_config(int root, uint16_t
   return cfg;
 }
 
+bool valid_scale_args(int root, uint16_t mode_mask) noexcept {
+  return root >= 0 && root <= 11 && mode_mask != 0 && (mode_mask & ~uint16_t{0x0FFF}) == 0;
+}
+
 }  // namespace
 
 SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float reference_midi,
                                        float midi, float* out_quantized_midi) {
   if (!out_quantized_midi) return SONARE_ERROR_INVALID_PARAMETER;
-  if (root < 0 || root > 11) return SONARE_ERROR_INVALID_PARAMETER;
-  if (mode_mask == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_scale_args(root, mode_mask)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, reference_midi));
   *out_quantized_midi = q.quantize_midi(midi);
@@ -429,8 +432,7 @@ SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float refer
 SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, float reference_midi,
                                               float midi, float* out_semitones) {
   if (!out_semitones) return SONARE_ERROR_INVALID_PARAMETER;
-  if (root < 0 || root > 11) return SONARE_ERROR_INVALID_PARAMETER;
-  if (mode_mask == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_scale_args(root, mode_mask)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, reference_midi));
   *out_semitones = q.correction_semitones(midi);
@@ -441,9 +443,8 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, floa
 SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int pitch_class,
                                              int* out_enabled) {
   if (!out_enabled) return SONARE_ERROR_INVALID_PARAMETER;
-  if (root < 0 || root > 11) return SONARE_ERROR_INVALID_PARAMETER;
   if (pitch_class < 0 || pitch_class > 11) return SONARE_ERROR_INVALID_PARAMETER;
-  if (mode_mask == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_scale_args(root, mode_mask)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, 0.0f));
   *out_enabled = q.pitch_class_enabled(pitch_class) ? 1 : 0;

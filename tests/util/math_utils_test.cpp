@@ -181,3 +181,33 @@ TEST_CASE("compute_autocorrelation", "[math_utils]") {
     }
   }
 }
+
+TEST_CASE("unnormalized_autocorrelation is the shared raw autocorrelation primitive",
+          "[math_utils]") {
+  SECTION("small input uses direct summation contract") {
+    const std::vector<float> signal = {1.0f, -2.0f, 3.0f, 4.0f};
+    const std::vector<float> result =
+        unnormalized_autocorrelation(signal.data(), signal.size(), signal.size());
+
+    REQUIRE(result.size() == signal.size());
+    REQUIRE_THAT(result[0], WithinAbs(30.0f, 1e-6f));
+    REQUIRE_THAT(result[1], WithinAbs(4.0f, 1e-6f));
+    REQUIRE_THAT(result[2], WithinAbs(-5.0f, 1e-6f));
+    REQUIRE_THAT(result[3], WithinAbs(4.0f, 1e-6f));
+  }
+
+  SECTION("FFT path preserves lag-zero energy and truncates output") {
+    std::vector<float> signal(128, 0.0f);
+    for (size_t i = 0; i < signal.size(); ++i) {
+      signal[i] = std::sin(0.1f * static_cast<float>(i)) + 0.25f;
+    }
+
+    const std::vector<float> result =
+        unnormalized_autocorrelation(signal.data(), signal.size(), 16);
+    double energy = 0.0;
+    for (float sample : signal) energy += static_cast<double>(sample) * sample;
+
+    REQUIRE(result.size() == 16);
+    REQUIRE_THAT(result[0], WithinRel(static_cast<float>(energy), 1e-4f));
+  }
+}

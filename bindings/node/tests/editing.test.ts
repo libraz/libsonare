@@ -51,13 +51,17 @@ describe('editing effects', () => {
   });
 
   it('noteStretch returns a non-empty Float32Array', () => {
-    const result = noteStretch(tone, SR, 0, tone.length, 1.5);
+    const result = noteStretch(tone, SR, {
+      onsetSample: 0,
+      offsetSample: tone.length,
+      stretchRatio: 1.5,
+    });
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
   });
 
   it('voiceChange returns a non-empty Float32Array', () => {
-    const result = voiceChange(tone, SR, 2, 1.1);
+    const result = voiceChange(tone, SR, { pitchSemitones: 2, formantFactor: 1.1 });
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
   });
@@ -110,8 +114,12 @@ describe('editing effects', () => {
   it('exposes editing methods on the Audio class', () => {
     const audio = Audio.fromBuffer(tone, SR);
     expect(audio.pitchCorrectToMidi(69, 71)).toBeInstanceOf(Float32Array);
-    expect(audio.noteStretch(0, audio.getLength(), 1.5)).toBeInstanceOf(Float32Array);
-    expect(audio.voiceChange(2, 1.1)).toBeInstanceOf(Float32Array);
+    expect(
+      audio.noteStretch({ onsetSample: 0, offsetSample: audio.getLength(), stretchRatio: 1.5 }),
+    ).toBeInstanceOf(Float32Array);
+    expect(audio.voiceChange({ pitchSemitones: 2, formantFactor: 1.1 })).toBeInstanceOf(
+      Float32Array,
+    );
     audio.destroy();
   });
 

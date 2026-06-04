@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "rt/fractional_delay.h"
+#include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
 namespace sonare::graph {
@@ -93,6 +94,7 @@ bool Graph::compile() {
   topo_index_.clear();
   runtime_connections_.clear();
   incoming_by_topo_.clear();
+  node_latency_q8_.clear();
 
   std::unordered_map<std::string, int> indegree;
   std::unordered_map<std::string, std::vector<std::string>> outgoing;
@@ -171,7 +173,6 @@ bool Graph::compile() {
     });
   }
 
-  std::unordered_map<std::string, int> latency_to_node_q8;
   for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {
     Node* current = topo_order_[topo_position];
     int max_incoming_latency_q8 = 0;
@@ -179,11 +180,11 @@ bool Graph::compile() {
       const Connection& connection = connections_[static_cast<size_t>(connection_index)];
       const Node* source = node_map_.at(connection.source_node);
       const int path_latency_q8 =
-          latency_to_node_q8[connection.source_node] +
+          node_latency_q8_[connection.source_node] +
           source->processor().output_latency_samples_q8(connection.source_port);
       max_incoming_latency_q8 = std::max(max_incoming_latency_q8, path_latency_q8);
     }
-    latency_to_node_q8[current->id()] = max_incoming_latency_q8;
+    node_latency_q8_[current->id()] = max_incoming_latency_q8;
   }
 
   for (const Connection& connection : connections_) {
@@ -192,10 +193,10 @@ bool Graph::compile() {
     runtime_connection.source = node_map_.at(connection.source_node);
     runtime_connection.dest = node_map_.at(connection.dest_node);
     const int source_path_latency_q8 =
-        latency_to_node_q8[connection.source_node] +
+        node_latency_q8_[connection.source_node] +
         runtime_connection.source->processor().output_latency_samples_q8(connection.source_port);
     runtime_connection.delay_samples_q8 =
-        std::max(0, latency_to_node_q8[connection.dest_node] - source_path_latency_q8);
+        std::max(0, node_latency_q8_[connection.dest_node] - source_path_latency_q8);
     runtime_connection.delay_samples = runtime_connection.delay_samples_q8 >> 8;
     if (max_block_size_ > 0) {
       prepare_delay_lines(runtime_connection);
@@ -268,6 +269,8 @@ void Graph::set_input(const std::string& node_id, int port, const float* samples
 }
 
 void Graph::process_block(int num_samples) noexcept {
+  rt::ScopedNoDenormals no_denormals;
+
   // Audio-thread path: an uncompiled graph or out-of-range size is a safe
   // no-op rather than a throw. GraphRuntime guarantees only compiled graphs
   // ever reach the audio thread (see GraphRuntime::swap), so this is purely
@@ -347,6 +350,18 @@ int Graph::connection_delay_samples_q8(size_t connection_index) const {
     throw SonareException(ErrorCode::InvalidParameter, "connection index out of range");
   }
   return runtime_connections_[connection_index].delay_samples_q8;
+}
+
+int Graph::node_latency_samples(const std::string& node_id) const {
+  return node_latency_samples_q8(node_id) >> 8;
+}
+
+int Graph::node_latency_samples_q8(const std::string& node_id) const {
+  const auto found = node_latency_q8_.find(node_id);
+  if (found == node_latency_q8_.end()) {
+    throw SonareException(ErrorCode::InvalidParameter, "node id out of range");
+  }
+  return found->second;
 }
 
 bool Graph::validate_connection(const Connection& connection) const {

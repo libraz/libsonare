@@ -163,6 +163,26 @@ class SonareProjectClipDesc(ctypes.Structure):
     ]
 
 
+class SonareProjectWarpAnchor(ctypes.Structure):
+    """Maps to SonareProjectWarpAnchor in sonare_c_project.h."""
+
+    _fields_ = [
+        ("warp_sample", ctypes.c_double),
+        ("source_sample", ctypes.c_double),
+    ]
+
+
+class SonareProjectWarpMapDesc(ctypes.Structure):
+    """Maps to SonareProjectWarpMapDesc in sonare_c_project.h."""
+
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("name", ctypes.c_char_p),
+        ("anchors", ctypes.POINTER(SonareProjectWarpAnchor)),
+        ("anchor_count", ctypes.c_size_t),
+    ]
+
+
 class SonareProjectDiagnostic(ctypes.Structure):
     """Maps to SonareProjectDiagnostic in sonare_c_project.h."""
 
@@ -213,6 +233,59 @@ class SonareNotePairValidation(ctypes.Structure):
         ("ok", ctypes.c_int32),
         ("unmatched_note_ons", ctypes.c_uint32),
         ("unmatched_note_offs", ctypes.c_uint32),
+    ]
+
+
+class SonareMidiRouteConfig(ctypes.Structure):
+    """Maps to SonareMidiRouteConfig in sonare_c_project.h (sizeof 16)."""
+
+    _fields_ = [
+        ("filter_group", ctypes.c_int),
+        ("filter_channel", ctypes.c_int),
+        ("remap_channel", ctypes.c_int),
+        ("thru", ctypes.c_int),
+    ]
+
+
+class SonareMidiCcBinding(ctypes.Structure):
+    """Maps to SonareMidiCcBinding in sonare_c_project.h (sizeof 20).
+
+    The `reserved` uint16 at offset 6 is load-bearing: drop it and every
+    field after it misaligns, which segfaults on access.
+    """
+
+    _fields_ = [
+        ("cc_number", ctypes.c_uint8),
+        ("channel", ctypes.c_uint8),
+        ("kind", ctypes.c_uint8),
+        ("cc_lsb_number", ctypes.c_uint8),
+        ("selector_msb", ctypes.c_uint8),
+        ("selector_lsb", ctypes.c_uint8),
+        ("reserved", ctypes.c_uint16),
+        ("param_id", ctypes.c_uint32),
+        ("min_value", ctypes.c_float),
+        ("max_value", ctypes.c_float),
+    ]
+
+
+class SonareProjectTempoSegment(ctypes.Structure):
+    """Maps to SonareProjectTempoSegment in sonare_c_project.h (sizeof 32)."""
+
+    _fields_ = [
+        ("start_ppq", ctypes.c_double),
+        ("bpm", ctypes.c_double),
+        ("start_sample", ctypes.c_double),
+        ("end_bpm", ctypes.c_double),
+    ]
+
+
+class SonareProjectTimeSignatureSegment(ctypes.Structure):
+    """Maps to SonareProjectTimeSignatureSegment in sonare_c_project.h (sizeof 16)."""
+
+    _fields_ = [
+        ("start_ppq", ctypes.c_double),
+        ("numerator", ctypes.c_int),
+        ("denominator", ctypes.c_int),
     ]
 
 

@@ -305,6 +305,86 @@ TEST_CASE("C-ABI set_track_route with undo", "[project][c-abi-edit]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("C-ABI set_track_kind with undo", "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "utility";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+  const std::string before = serialize(project);
+
+  REQUIRE(sonare_project_set_track_kind(project, track, SONARE_TRACK_AUX) == SONARE_OK);
+  const std::string aux = serialize(project);
+  REQUIRE(aux != before);
+  REQUIRE(aux.find("\"kind\":2") != std::string::npos);
+
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == aux);
+
+  REQUIRE(sonare_project_set_track_kind(project, 0, SONARE_TRACK_AUDIO) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_kind(project, 999999, SONARE_TRACK_AUDIO) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_kind(project, track, 99) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
+          "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  AudioFixture fx = add_audio_track_clip(project, 0.0, 4.0);
+  const std::string before = serialize(project);
+
+  SonareProjectWarpAnchor anchors[] = {{0.0, 0.0}, {48000.0, 44100.0}};
+  SonareProjectWarpMapDesc map{};
+  map.id = 77;
+  map.name = "manual warp";
+  map.anchors = anchors;
+  map.anchor_count = 2;
+  REQUIRE(sonare_project_set_warp_map(project, &map) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_warp_ref(project, fx.clip, 77) == SONARE_OK);
+  const std::string mapped = serialize(project);
+  REQUIRE(mapped.find("\"warp_maps\"") != std::string::npos);
+  REQUIRE(mapped.find("\"id\":77") != std::string::npos);
+  REQUIRE(mapped.find("\"name\":\"manual warp\"") != std::string::npos);
+  REQUIRE(mapped.find("\"warp_ref_id\":77") != std::string::npos);
+
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project).find("\"warp_ref_id\":0") != std::string::npos);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == mapped);
+
+  REQUIRE(sonare_project_remove_warp_map(project, 77) == SONARE_OK);
+  const std::string removed = serialize(project);
+  REQUIRE(removed.find("\"name\":\"manual warp\"") == std::string::npos);
+  REQUIRE(removed.find("\"warp_ref_id\":77") != std::string::npos);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == mapped);
+
+  SonareProjectWarpAnchor non_monotonic[] = {{0.0, 0.0}, {10.0, 10.0}, {5.0, 12.0}};
+  SonareProjectWarpMapDesc bad = map;
+  bad.id = 78;
+  bad.anchors = non_monotonic;
+  bad.anchor_count = 3;
+  REQUIRE(sonare_project_set_warp_map(project, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  bad.anchors = anchors;
+  bad.anchor_count = 1;
+  REQUIRE(sonare_project_set_warp_map(project, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_remove_warp_map(project, 999999) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

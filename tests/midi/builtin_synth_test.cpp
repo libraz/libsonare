@@ -52,6 +52,22 @@ TEST_CASE("BuiltinSynth CC#123 (All Notes Off) releases sounding voices", "[midi
   REQUIRE(render_peak(&synth, 256) == 0.0f);
 }
 
+TEST_CASE("BuiltinSynth ignores events before prepare without poisoning later render",
+          "[midi][synth]") {
+  BuiltinSynth synth({});
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 64)));
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 123, 0)));
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+
+  synth.prepare(48000.0, 128);
+  REQUIRE(render_peak(&synth, 256) == 0.0f);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  REQUIRE(render_peak(&synth, 256) > 0.0f);
+}
+
 TEST_CASE("BuiltinSynth CC#120 (All Sound Off) silences voices immediately", "[midi][synth]") {
   BuiltinSynthConfig config;
   config.release_ms = 2000.0f;  // Long release: only an immediate kill silences it fast.

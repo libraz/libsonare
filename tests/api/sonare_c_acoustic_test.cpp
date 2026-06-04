@@ -101,7 +101,7 @@ TEST_CASE("sonare acoustic C API zero-init late_model selects the Eyring default
   // A {}-zeroed config leaves late_model == SONARE_REVERB_MODEL_DEFAULT (0). It
   // must resolve to the C++ library default (Eyring) on every surface: identical
   // to an explicit Eyring selection and different from an explicit Sabine. This
-  // pins LOW-72 / MED-31 (zero-init must NOT silently select Sabine).
+  // pins the zero-init contract: it must not silently select Sabine.
   SonareRirSynthConfig base = valid_rir_config();
   base.absorption = 0.4f;  // absorptive enough that Sabine and Eyring diverge
   base.max_seconds = 0.3f;
@@ -209,7 +209,7 @@ TEST_CASE("sonare acoustic C API morph zero-init late_model matches Eyring", "[c
 TEST_CASE("sonare acoustic C API morph honours the mixing-time / crossfade controls",
           "[c_api][acoustic]") {
   // A different crossfade width must change the rendered tail, proving the morph
-  // now plumbs mixing_time_ms / crossfade_ms (MED-32). Use a fixed Eyring model
+  // now plumbs mixing_time_ms / crossfade_ms. Use a fixed Eyring model
   // so only the crossfade differs.
   std::vector<float> input(4000, 0.0f);
   input[0] = 1.0f;

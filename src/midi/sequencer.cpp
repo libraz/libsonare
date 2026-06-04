@@ -140,19 +140,15 @@ void MidiSequencer::enqueue_pending(uint32_t destination_id, const MidiEvent& ev
 }
 
 void MidiSequencer::dispatch_pending(int64_t block_start_frame, int64_t block_end_frame) noexcept {
+  (void)block_start_frame;
   size_t i = 0;
   while (i < pending_fx_count_) {
     const PendingFxEvent pending = pending_fx_[i];
-    if (pending.event.render_frame < block_start_frame) {
-      dispatch_transformed(pending.destination_id, pending.event, pending.from_clip,
-                           pending.clip_id);
-    } else if (pending.event.render_frame < block_end_frame) {
-      dispatch_transformed(pending.destination_id, pending.event, pending.from_clip,
-                           pending.clip_id);
-    } else {
+    if (pending.event.render_frame >= block_end_frame) {
       ++i;
       continue;
     }
+    dispatch_transformed(pending.destination_id, pending.event, pending.from_clip, pending.clip_id);
     pending_fx_[i] = pending_fx_[pending_fx_count_ - 1];
     --pending_fx_count_;
   }

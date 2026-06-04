@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "util/exception.h"
+#include "util/lpc.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -82,6 +83,22 @@ TEST_CASE("lpc deterministic order-1 matches reference", "[audio_ops][util]") {
   REQUIRE(coeffs.size() == 2);
   REQUIRE(coeffs[0] == 1.0f);
   REQUIRE_THAT(coeffs[1], WithinAbs(-0.93023256f, 1e-6f));
+}
+
+TEST_CASE("lpc delegates Burg coefficients to the shared util implementation",
+          "[audio_ops][util]") {
+  std::vector<float> y{0.1f, -0.4f, 0.7f, 0.2f, -0.3f, 0.5f, -0.2f, 0.1f};
+  const int order = 3;
+
+  const auto coeffs = lpc(y, order);
+  const auto model = lpc_burg(y.data(), y.size(), order);
+
+  REQUIRE(coeffs.size() == model.ar.size());
+  for (size_t i = 0; i < coeffs.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE_THAT(coeffs[i], WithinAbs(model.ar[i], 0.0f));
+  }
+  REQUIRE(model.variance >= 0.0f);
 }
 
 TEST_CASE("lpc rejects invalid order", "[audio_ops][util][edge]") {

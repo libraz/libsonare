@@ -587,6 +587,50 @@ class Mixer:
             sample_rate=int(self._sample_rate),
         )
 
+    def tail_samples(self) -> int:
+        """Return the mixer's reverb/delay tail length in samples.
+
+        This is how many additional samples should be drained with
+        :meth:`drain_tail_stereo` after the last input block to capture the
+        decaying effect tails (reverb, delay) left in the routing graph.
+        """
+        self._require()
+        out = ctypes.c_int()
+        _check(_get_lib().sonare_mixer_tail_samples(self._handle, ctypes.byref(out)))
+        return int(out.value)
+
+    def drain_tail_stereo(self, num_samples: int) -> MixerStereoResult:
+        """Drain ``num_samples`` of trailing effect-tail audio with no new input.
+
+        Pushes silence through the compiled graph so the stereo master keeps
+        emitting the decaying reverb / delay tails. ``num_samples`` must be
+        ``> 0`` and not exceed the mixer's block size. Returns a
+        :class:`MixerStereoResult` matching :meth:`process_stereo`.
+        """
+        self._require()
+        count = int(num_samples)
+        if count <= 0:
+            raise ValueError("num_samples must be > 0")
+        if count > self._block_size:
+            raise ValueError(
+                f"num_samples ({count}) must not exceed the mixer block size ({self._block_size})"
+            )
+        out_left = (ctypes.c_float * count)()
+        out_right = (ctypes.c_float * count)()
+        _check(
+            _get_lib().sonare_mixer_drain_tail_stereo(
+                self._handle,
+                out_left,
+                out_right,
+                ctypes.c_size_t(count),
+            )
+        )
+        return MixerStereoResult(
+            left=[float(out_left[i]) for i in range(count)],
+            right=[float(out_right[i]) for i in range(count)],
+            sample_rate=int(self._sample_rate),
+        )
+
     def to_scene_json(self) -> str:
         """Serialize the current scene (strips, buses, sends, connections)."""
         self._require()

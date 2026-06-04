@@ -667,6 +667,19 @@ TEST_CASE("non-positive tempo bpm is rejected with a diagnostic", "[serialize]")
   CHECK(found);
 }
 
+TEST_CASE("invalid time signature is rejected with a diagnostic", "[serialize]") {
+  auto result = project_from_json(
+      "{\"version\": 1, \"time_signatures\": [{\"start_ppq\": 0.0, \"numerator\": 4, "
+      "\"denominator\": 0}]}");
+  CHECK_FALSE(result.ok());
+  REQUIRE(result.has_error());
+  bool found = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "invalid_time_signature") found = true;
+  }
+  CHECK(found);
+}
+
 TEST_CASE("out-of-range MIDI data word is clamped with a warning, not silently zeroed",
           "[serialize]") {
   // data0 below zero clamps to 0; data1 above uint32 max clamps to 0xFFFFFFFF.
@@ -685,6 +698,27 @@ TEST_CASE("out-of-range MIDI data word is clamped with a warning, not silently z
     if (d.code == "midi_word_out_of_range") ++warnings;
   }
   CHECK(warnings == 2);
+}
+
+TEST_CASE("out-of-range MIDI content keys are ignored instead of truncating to uint32",
+          "[serialize]") {
+  const std::string in =
+      "{\"version\": 1, \"midi_content\": {"
+      "\"4294967296\": [{\"ppq\": 0.0, \"data0\": 1.0, \"data1\": 2.0}],"
+      "\"__sysex_payloads\": {\"4294967296\": \"AQI=\"}}}";
+  auto result = project_from_json(in);
+  REQUIRE(result.ok());
+  CHECK(result.midi.events.empty());
+  CHECK(result.midi.sysex_payloads.empty());
+
+  bool found_clip_key = false;
+  bool found_sysex_key = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "invalid_midi_content_key") found_clip_key = true;
+    if (d.code == "invalid_sysex_handle") found_sysex_key = true;
+  }
+  CHECK(found_clip_key);
+  CHECK(found_sysex_key);
 }
 
 TEST_CASE("dangling clip references and source-kind mismatch emit diagnostics", "[serialize]") {

@@ -105,6 +105,7 @@
 #include "metering/spectrum.h"
 #include "metering/stereo.h"
 #include "metering/true_peak.h"
+#include "midi/builtin_synth.h"
 #include "mixing/api/presets.h"
 #include "mixing/channel_strip.h"
 #include "quick.h"

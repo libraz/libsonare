@@ -4,6 +4,10 @@
 #ifdef __EMSCRIPTEN__
 
 #include "common.h"
+#include "midi/midi_fx.h"
+#include "util/json.h"
+
+namespace wasm_json = sonare::util::json;
 
 // Canonical AutomationCurve ordinals (Linear=0, Exp=1, Hold=2, SCurve=3) are
 // shared with the C ABI and other bindings; conversion is a direct cast.
@@ -15,6 +19,136 @@ sonare::automation::CurveType automationCurveFromInt(int curve) {
 }
 
 int automationCurveToInt(sonare::automation::CurveType curve) { return static_cast<int>(curve); }
+
+int waveformFromName(const std::string& name) {
+  if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
+  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
+  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
+  if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
+  return -1;
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+double wasmJsonNumberOr(const wasm_json::Value& obj, const char* key, double fallback) {
+  const wasm_json::Value* value = obj.find(key);
+  return value != nullptr && value->is_number() ? value->as_number() : fallback;
+}
+
+bool wasmJsonHasNumber(const wasm_json::Value& obj, const char* key) {
+  const wasm_json::Value* value = obj.find(key);
+  return value != nullptr && value->is_number();
+}
+
+int wasmJsonIntOr(const wasm_json::Value& obj, const char* key, int fallback) {
+  const double value = wasmJsonNumberOr(obj, key, static_cast<double>(fallback));
+  if (!std::isfinite(value)) return fallback;
+  return static_cast<int>(std::lround(value));
+}
+
+void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiFxChain* chain) {
+  if (chain == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "MIDI-FX chain output is null");
+  }
+  wasm_json::Value root;
+  try {
+    root = wasm_json::parse_strict(config_json);
+  } catch (const wasm_json::JsonError&) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid MIDI-FX JSON");
+  }
+  if (!root.is_object()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "MIDI-FX config must be an object");
+  }
+
+  sonare::midi::TransposeConfig transpose;
+  if (wasmJsonHasNumber(root, "transpose_semitones")) {
+    transpose.enabled = true;
+    transpose.semitones = wasmJsonIntOr(root, "transpose_semitones", 0);
+    chain->set_transpose(transpose);
+  }
+
+  sonare::midi::VelocityCurveConfig velocity;
+  const bool has_velocity = wasmJsonHasNumber(root, "velocity_scale") ||
+                            wasmJsonHasNumber(root, "velocity_offset") ||
+                            wasmJsonHasNumber(root, "velocity_gamma");
+  if (has_velocity) {
+    velocity.enabled = true;
+    velocity.scale = static_cast<float>(wasmJsonNumberOr(root, "velocity_scale", 1.0));
+    velocity.offset = static_cast<float>(wasmJsonNumberOr(root, "velocity_offset", 0.0));
+    velocity.gamma = static_cast<float>(wasmJsonNumberOr(root, "velocity_gamma", 1.0));
+    if (!std::isfinite(velocity.scale) || !std::isfinite(velocity.offset) ||
+        !std::isfinite(velocity.gamma) || velocity.gamma <= 0.0f) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid MIDI-FX velocity curve");
+    }
+    chain->set_velocity_curve(velocity);
+  }
+
+  if (wasmJsonHasNumber(root, "quantize_ppq")) {
+    const double grid_ppq = wasmJsonNumberOr(root, "quantize_ppq", 0.0);
+    const double strength = wasmJsonNumberOr(root, "quantize_strength", 1.0);
+    if (!std::isfinite(grid_ppq) || grid_ppq <= 0.0 || !std::isfinite(strength) || strength < 0.0 ||
+        strength > 1.0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid MIDI-FX quantize config");
+    }
+    sonare::midi::QuantizeConfig quantize;
+    quantize.enabled = true;
+    constexpr int64_t kPpqFxScale = 960000;
+    quantize.grid_frames =
+        std::max<int64_t>(1, static_cast<int64_t>(std::llround(grid_ppq * kPpqFxScale)));
+    quantize.strength = static_cast<float>(strength);
+    chain->set_quantize(quantize);
+  }
+
+  if (const wasm_json::Value* intervals = root.find("chord_intervals")) {
+    if (!intervals->is_array()) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "MIDI-FX chord intervals must be an array");
+    }
+    sonare::midi::ChordConfig chord;
+    chord.enabled = true;
+    const auto& values = intervals->as_array();
+    if (values.empty() || values.size() > sonare::midi::ChordConfig::kMaxChordNotes) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid MIDI-FX chord interval count");
+    }
+    chord.count = values.size();
+    for (size_t i = 0; i < values.size(); ++i) {
+      if (!values[i].is_number()) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "MIDI-FX chord intervals must be numeric");
+      }
+      chord.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
+    }
+    chain->set_chord(chord);
+  }
+
+  const bool has_humanize = wasmJsonHasNumber(root, "humanize_ppq") ||
+                            wasmJsonHasNumber(root, "humanize_velocity") ||
+                            wasmJsonHasNumber(root, "seed");
+  if (has_humanize) {
+    const double timing_ppq = wasmJsonNumberOr(root, "humanize_ppq", 0.0);
+    const int velocity_amount = wasmJsonIntOr(root, "humanize_velocity", 0);
+    const int seed = wasmJsonIntOr(root, "seed", 0);
+    if (!std::isfinite(timing_ppq) || timing_ppq < 0.0 || velocity_amount < 0 ||
+        velocity_amount > 127 || seed < 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid MIDI-FX humanize config");
+    }
+    sonare::midi::HumanizeConfig humanize;
+    humanize.enabled = true;
+    humanize.seed = static_cast<uint32_t>(seed);
+    constexpr int64_t kPpqFxScale = 960000;
+    humanize.timing_frames = static_cast<int64_t>(std::llround(timing_ppq * kPpqFxScale));
+    humanize.velocity_amount = velocity_amount;
+    chain->set_humanize(humanize);
+  }
+
+  chain->prepare();
+}
+#endif
 
 #if defined(SONARE_WITH_GRAPH)
 
@@ -248,6 +382,219 @@ class RealtimeEngineWasm {
       throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                     "failed to queue set parameter command");
     }
+  }
+
+  void setBuiltinInstrument(uint32_t destination_id, val config) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    sonare::midi::BuiltinSynthConfig cfg;
+    if (!config.isUndefined() && !config.isNull()) {
+      if (hasProperty(config, "waveform")) {
+        val wf = config["waveform"];
+        if (wf.typeOf().as<std::string>() == "string") {
+          const std::string name = wf.as<std::string>();
+          const int mapped = waveformFromName(name);
+          if (mapped < 0) {
+            throw sonare::SonareException(
+                sonare::ErrorCode::InvalidParameter,
+                "Unknown synth waveform name: '" + name +
+                    "' (expected sine, saw, sawtooth, square, or triangle)");
+          }
+          cfg.waveform = static_cast<sonare::midi::SynthWaveform>(mapped);
+        } else {
+          cfg.waveform = static_cast<sonare::midi::SynthWaveform>(wf.as<int>());
+        }
+      }
+      cfg.gain = floatProperty(config, "gain", 0.0f);
+      cfg.attack_ms = floatProperty(config, "attackMs", 0.0f);
+      cfg.decay_ms = floatProperty(config, "decayMs", 0.0f);
+      cfg.sustain = floatProperty(config, "sustain", 0.0f);
+      cfg.release_ms = floatProperty(config, "releaseMs", 0.0f);
+      cfg.polyphony = intProperty(config, "polyphony", 0);
+    }
+    auto synth =
+        std::make_unique<sonare::midi::BuiltinSynth>(sonare::midi::clamp_synth_config(cfg));
+    for (auto& entry : builtin_instruments_) {
+      if (entry.first == destination_id) {
+        sonare::midi::BuiltinSynth* raw = synth.get();
+        if (!engine_.set_midi_instrument(destination_id, raw)) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                        "failed to bind built-in MIDI instrument");
+        }
+        entry.second = std::move(synth);
+        return;
+      }
+    }
+    builtin_instruments_.emplace_back(destination_id, std::move(synth));
+    sonare::midi::BuiltinSynth* raw = builtin_instruments_.back().second.get();
+    if (!engine_.set_midi_instrument(destination_id, raw)) {
+      builtin_instruments_.pop_back();
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to bind built-in MIDI instrument");
+    }
+#else
+    (void)destination_id;
+    (void)config;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  void clearMidiInstrument(uint32_t destination_id) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    engine_.set_midi_instrument(destination_id, nullptr);
+    builtin_instruments_.erase(
+        std::remove_if(builtin_instruments_.begin(), builtin_instruments_.end(),
+                       [&](const auto& entry) { return entry.first == destination_id; }),
+        builtin_instruments_.end());
+#else
+    (void)destination_id;
+#endif
+  }
+
+  size_t midiInstrumentCount() const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    return engine_.midi_instrument_count();
+#else
+    return 0;
+#endif
+  }
+
+  void bindMidiCc(int channel, int controller, uint32_t param_id, float min_value,
+                  float max_value) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    if (channel < 0 || channel > 15 || controller < 0 || controller > 127 || param_id == 0 ||
+        !std::isfinite(min_value) || !std::isfinite(max_value) || max_value < min_value) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "bindMidiCc: channel in [0,15], controller in [0,127], paramId non-zero, range finite");
+    }
+    if (!engine_.bind_midi_cc(static_cast<uint8_t>(controller), static_cast<uint8_t>(channel),
+                              param_id, min_value, max_value)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to bind MIDI CC");
+    }
+#else
+    (void)channel;
+    (void)controller;
+    (void)param_id;
+    (void)min_value;
+    (void)max_value;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  void clearMidiCcBindings() {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    engine_.clear_midi_cc_bindings();
+#endif
+  }
+
+  size_t midiCcBindingCount() const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    return engine_.midi_cc_binding_count();
+#else
+    return 0;
+#endif
+  }
+
+  void setMidiFx(uint32_t destination_id, const std::string& config_json) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    sonare::midi::MidiFxChain chain;
+    wasmMidiFxChainFromJson(config_json, &chain);
+    if (!engine_.set_midi_fx(destination_id, chain)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to install MIDI-FX insert");
+    }
+#else
+    (void)destination_id;
+    (void)config_json;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  void clearMidiFx(uint32_t destination_id) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    engine_.clear_midi_fx(destination_id);
+#else
+    (void)destination_id;
+#endif
+  }
+
+  void setMidiInputSource(uint32_t destination_id) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    engine_.set_midi_input_source(&midi_input_source_, destination_id);
+    midi_input_source_enabled_ = true;
+#else
+    (void)destination_id;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  void clearMidiInputSource() {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    engine_.set_midi_input_source(nullptr, 0);
+    midi_input_source_enabled_ = false;
+#endif
+  }
+
+  size_t midiInputPendingCount() const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    return midi_input_source_.pending_count();
+#else
+    return 0;
+#endif
+  }
+
+  void pushMidiInputNoteOn(int group, int channel, int note, int velocity,
+                           int64_t port_time_samples) {
+    pushMidiInputEvent(group, channel, note, velocity, port_time_samples, true);
+  }
+
+  void pushMidiInputNoteOff(int group, int channel, int note, int velocity,
+                            int64_t port_time_samples) {
+    pushMidiInputEvent(group, channel, note, velocity, port_time_samples, false);
+  }
+
+  void pushMidiInputCc(int group, int channel, int controller, int value,
+                       int64_t port_time_samples) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    if (!midi_input_source_enabled_ || group < 0 || group > 15 || channel < 0 || channel > 15 ||
+        controller < 0 || controller > 127 || value < 0 || value > 127) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "pushMidiInputCc: source enabled, group/channel in [0,15], controller/value in [0,127]");
+    }
+    if (!midi_input_source_.push_event(
+            sonare::midi::make_midi1_control_change(
+                static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
+                static_cast<uint8_t>(controller), static_cast<uint8_t>(value)),
+            port_time_samples)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to enqueue MIDI input CC");
+    }
+#else
+    (void)group;
+    (void)channel;
+    (void)controller;
+    (void)value;
+    (void)port_time_samples;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  void pushMidiNoteOn(uint32_t destination_id, int group, int channel, int note, int velocity,
+                      int64_t render_frame) {
+    pushMidiNote(destination_id, group, channel, note, velocity, render_frame,
+                 sonare::rt::CommandType::kMidiNoteOnImmediate);
+  }
+
+  void pushMidiNoteOff(uint32_t destination_id, int group, int channel, int note, int velocity,
+                       int64_t render_frame) {
+    pushMidiNote(destination_id, group, channel, note, velocity, render_frame,
+                 sonare::rt::CommandType::kMidiNoteOffImmediate);
   }
 
   // Queues an immediate (live) MIDI control change to a MIDI destination. Mirrors
@@ -906,6 +1253,10 @@ class RealtimeEngineWasm {
   }
 
   sonare::engine::RealtimeEngine engine_{};
+  std::vector<std::pair<uint32_t, std::unique_ptr<sonare::midi::BuiltinSynth>>>
+      builtin_instruments_{};
+  sonare::host::FixedMidiInputSource<512> midi_input_source_{};
+  bool midi_input_source_enabled_ = false;
   sonare::automation::ParameterRegistry parameters_{};
   std::vector<sonare::automation::AutomationLane> automation_lanes_;
   std::deque<std::string> parameter_strings_;
@@ -919,6 +1270,60 @@ class RealtimeEngineWasm {
   std::vector<float*> prepared_ptrs_;
   int prepared_channels_ = 0;
   int prepared_capacity_ = 0;
+
+  void pushMidiNote(uint32_t destination_id, int group, int channel, int note, int velocity,
+                    int64_t render_frame, sonare::rt::CommandType type) {
+    if (group < 0 || group > 15 || channel < 0 || channel > 15 || note < 0 || note > 127 ||
+        velocity < 0 || velocity > 127) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "pushMidiNote: group/channel in [0,15], note/velocity in [0,127]");
+    }
+    const uint64_t packed = static_cast<uint64_t>(velocity) | (static_cast<uint64_t>(note) << 8) |
+                            (static_cast<uint64_t>(channel) << 16) |
+                            (static_cast<uint64_t>(group) << 24);
+    sonare::rt::Command command{};
+    command.type = type;
+    command.target_id = destination_id;
+    command.sample_time = render_frame;
+    command.arg.i = static_cast<int64_t>(packed);
+    if (!engine_.push_command(command)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue MIDI note command");
+    }
+  }
+
+  void pushMidiInputEvent(int group, int channel, int note, int velocity, int64_t port_time_samples,
+                          bool note_on) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    if (!midi_input_source_enabled_ || group < 0 || group > 15 || channel < 0 || channel > 15 ||
+        note < 0 || note > 127 || velocity < 0 || velocity > 127) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "pushMidiInputNote: source enabled, group/channel in [0,15], note/velocity in [0,127]");
+    }
+    const sonare::midi::Ump ump =
+        note_on ? sonare::midi::make_midi1_note_on(
+                      static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
+                      static_cast<uint8_t>(note), static_cast<uint8_t>(velocity))
+                : sonare::midi::make_midi1_note_off(
+                      static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
+                      static_cast<uint8_t>(note), static_cast<uint8_t>(velocity));
+    if (!midi_input_source_.push_event(ump, port_time_samples)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to enqueue MIDI input note");
+    }
+#else
+    (void)group;
+    (void)channel;
+    (void)note;
+    (void)velocity;
+    (void)port_time_samples;
+    (void)note_on;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
 };
 
 void registerRealtimeEngineBindings() {
@@ -927,6 +1332,22 @@ void registerRealtimeEngineBindings() {
       .function("prepare", &RealtimeEngineWasm::prepare)
       .function("setParameter", &RealtimeEngineWasm::setParameter)
       .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
+      .function("setBuiltinInstrument", &RealtimeEngineWasm::setBuiltinInstrument)
+      .function("clearMidiInstrument", &RealtimeEngineWasm::clearMidiInstrument)
+      .function("midiInstrumentCount", &RealtimeEngineWasm::midiInstrumentCount)
+      .function("bindMidiCc", &RealtimeEngineWasm::bindMidiCc)
+      .function("clearMidiCcBindings", &RealtimeEngineWasm::clearMidiCcBindings)
+      .function("midiCcBindingCount", &RealtimeEngineWasm::midiCcBindingCount)
+      .function("setMidiFx", &RealtimeEngineWasm::setMidiFx)
+      .function("clearMidiFx", &RealtimeEngineWasm::clearMidiFx)
+      .function("setMidiInputSource", &RealtimeEngineWasm::setMidiInputSource)
+      .function("clearMidiInputSource", &RealtimeEngineWasm::clearMidiInputSource)
+      .function("midiInputPendingCount", &RealtimeEngineWasm::midiInputPendingCount)
+      .function("pushMidiInputNoteOn", &RealtimeEngineWasm::pushMidiInputNoteOn)
+      .function("pushMidiInputNoteOff", &RealtimeEngineWasm::pushMidiInputNoteOff)
+      .function("pushMidiInputCc", &RealtimeEngineWasm::pushMidiInputCc)
+      .function("pushMidiNoteOn", &RealtimeEngineWasm::pushMidiNoteOn)
+      .function("pushMidiNoteOff", &RealtimeEngineWasm::pushMidiNoteOff)
       .function("pushMidiCc", &RealtimeEngineWasm::pushMidiCc)
       .function("pushMidiPanic", &RealtimeEngineWasm::pushMidiPanic)
       .function("clearParameters", &RealtimeEngineWasm::clearParameters)

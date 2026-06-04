@@ -154,7 +154,12 @@ int time_to_samples(float time, int sr) {
   if (sr <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "time_to_samples: sr must be positive");
   }
-  return static_cast<int>(time * sr);
+  const double samples = static_cast<double>(time) * static_cast<double>(sr);
+  if (!std::isfinite(samples)) {
+    return samples < 0.0 ? std::numeric_limits<int>::min() : std::numeric_limits<int>::max();
+  }
+  return static_cast<int>(std::clamp<double>(samples, std::numeric_limits<int>::min(),
+                                             std::numeric_limits<int>::max()));
 }
 
 namespace {
