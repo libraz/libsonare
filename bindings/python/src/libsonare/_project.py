@@ -22,7 +22,7 @@ import math
 import numbers
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import SupportsFloat, cast
+from typing import Protocol, SupportsFloat, cast
 
 import numpy as np
 
@@ -31,6 +31,11 @@ from ._runtime import (
     SonareAutomationPoint,
     SonareBuiltinInstrumentBinding,
     SonareBuiltinSynthConfig,
+    SonareInstrumentBinding,
+    SonareInstrumentCallbacks,
+    SonareInstrumentOnEventCallback,
+    SonareInstrumentPrepareCallback,
+    SonareInstrumentRenderCallback,
     SonareMidiEventPod,
     SonareNotePairValidation,
     SonareProjectAssistSidecar,
@@ -237,6 +242,101 @@ def _synth_waveform_value(waveform: str | int) -> int:
     if key not in _SYNTH_WAVEFORM_NAMES:
         raise ValueError(f"unknown synth waveform: {waveform}")
     return _SYNTH_WAVEFORM_NAMES[key]
+
+
+class ExternalInstrument(Protocol):
+    """A host-supplied instrument driven during :meth:`Project.bounce_with_instruments`.
+
+    The object models a MIDI instrument the bounce engine hosts in place of the
+    built-in synth. Only :meth:`render` is required; ``prepare``, ``on_event``
+    and a ``latency_samples`` attribute are optional (duck-typed). Every method
+    is called synchronously on the thread that invokes the bounce, so no
+    cross-thread state sharing is involved.
+
+    Optional members::
+
+        def prepare(self, sample_rate: float, max_block_size: int) -> None: ...
+        def on_event(self, destination_id: int,
+                     ump_words: tuple[int, ...], render_frame: int) -> None: ...
+        latency_samples: int  # reported plugin-delay (PDC); defaults to 0
+    """
+
+    def render(self, channels: np.ndarray, num_frames: int) -> None:
+        """Add ``num_frames`` of audio into the planar ``(channels, num_frames)``
+        float32 array (already zero-filled). Sum into it; do not overwrite
+        unrelated frames."""
+        ...
+
+
+def _make_instrument_callbacks(
+    instrument: ExternalInstrument,
+    errors: list[BaseException],
+    keepalive: list[object],
+) -> SonareInstrumentCallbacks:
+    """Build the C callback table for one external instrument.
+
+    The returned closures capture ``instrument`` directly (so ``user_data`` is
+    unused) and record the first exception raised by any user callback into
+    ``errors`` instead of propagating through the C frames (ctypes would only
+    print it). The ``ctypes`` callback objects are appended to ``keepalive``;
+    the caller MUST keep that list referenced for the whole bounce call, since
+    copying the struct into the bindings array does not pin the closures.
+    """
+    cbs = SonareInstrumentCallbacks()
+    cbs.user_data = None
+    latency = getattr(instrument, "latency_samples", 0)
+    cbs.latency_samples = int(latency) if latency else 0
+
+    prepare = getattr(instrument, "prepare", None)
+    if callable(prepare):
+
+        def _prepare(_user, sample_rate, max_block_size, _fn=prepare):  # type: ignore[no-untyped-def]
+            try:
+                _fn(float(sample_rate), int(max_block_size))
+            except BaseException as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        cb_prepare = SonareInstrumentPrepareCallback(_prepare)
+        keepalive.append(cb_prepare)
+        cbs.prepare = cb_prepare
+
+    on_event = getattr(instrument, "on_event", None)
+    if callable(on_event):
+
+        def _on_event(_user, dest, words, count, frame, _fn=on_event):  # type: ignore[no-untyped-def]
+            try:
+                ump = tuple(int(words[i]) for i in range(int(count)))
+                _fn(int(dest), ump, int(frame))
+            except BaseException as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        cb_event = SonareInstrumentOnEventCallback(_on_event)
+        keepalive.append(cb_event)
+        cbs.on_event = cb_event
+
+    render = instrument.render
+
+    def _render(_user, channels, num_channels, num_frames, _fn=render):  # type: ignore[no-untyped-def]
+        try:
+            nch = int(num_channels)
+            nfr = int(num_frames)
+            if nch <= 0 or nfr <= 0:
+                return
+            # The engine zero-fills the C scratch before this call; the
+            # instrument sums into `block`, and we add `block` back into each
+            # planar channel buffer (a view that shares the C memory).
+            block = np.zeros((nch, nfr), dtype=np.float32)
+            _fn(block, nfr)
+            for ch in range(nch):
+                dst = np.ctypeslib.as_array(channels[ch], shape=(nfr,))
+                dst += block[ch]
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    cb_render = SonareInstrumentRenderCallback(_render)
+    keepalive.append(cb_render)
+    cbs.render = cb_render
+    return cbs
 
 
 @dataclass(frozen=True)
@@ -1283,6 +1383,96 @@ class Project:
         finally:
             # Free unconditionally: the C ABI returns a non-null sentinel buffer
             # even when out_len == 0, so a `> 0` guard would leak it.
+            if out:
+                lib.sonare_free_floats(out)
+        channels = num_channels if num_channels > 0 else 2
+        if channels > 0 and interleaved.size % channels == 0:
+            return interleaved.reshape(-1, channels)
+        return interleaved.reshape(-1, 1)
+
+    def bounce_with_instruments(
+        self,
+        instrument: ExternalInstrument | None = None,
+        *,
+        destination_id: int = 0,
+        instruments: Sequence[tuple[int, ExternalInstrument]] | None = None,
+        total_frames: int = 0,
+        block_size: int = 0,
+        num_channels: int = 0,
+        sample_rate: int = 0,
+        instrument_latency_samples: int = 0,
+    ) -> np.ndarray:
+        """Compile + render the project, driving MIDI tracks through host instruments.
+
+        Unlike :meth:`bounce_with_builtin_instrument`, each bound destination is
+        rendered by a caller-supplied :class:`ExternalInstrument` (a real
+        sampler/synth), letting MIDI tracks route through your own sound source.
+        The instrument's callbacks run synchronously on the calling thread for
+        the duration of this method, so no thread-safety machinery is required.
+
+        Args:
+            instrument: Instrument bound to ``destination_id`` (default 0).
+                Ignored when ``instruments`` is given.
+            destination_id: Destination id for ``instrument`` (matches
+                :meth:`set_track_midi_destination`; default 0).
+            instruments: Optional explicit list of ``(destination_id, instrument)``
+                bindings, overriding ``instrument`` / ``destination_id``.
+            total_frames / block_size / num_channels / sample_rate /
+                instrument_latency_samples: As :meth:`bounce` (0 takes native
+                defaults; an instrument's own ``latency_samples`` attribute adds
+                per-instrument PDC).
+
+        Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
+        fixed project + options + instrument behaviour. Raises the first
+        exception raised inside any instrument callback.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_bounce_with_instruments"):
+            raise RuntimeError("libsonare was built without the external-instrument bounce ABI")
+        if instruments is None:
+            if instrument is None:
+                raise ValueError("bounce_with_instruments requires `instrument` or `instruments`")
+            bindings = [(int(destination_id), instrument)]
+        else:
+            bindings = [(int(dst), inst) for dst, inst in instruments]
+        count = len(bindings)
+
+        errors: list[BaseException] = []
+        keepalive: list[object] = []
+        c_bindings = (SonareInstrumentBinding * count)()
+        for i, (dst, inst) in enumerate(bindings):
+            if not callable(getattr(inst, "render", None)):
+                raise TypeError(
+                    "each instrument must provide a render(channels, num_frames) method"
+                )
+            c_bindings[i].destination_id = dst
+            c_bindings[i].callbacks = _make_instrument_callbacks(inst, errors, keepalive)
+
+        options = SonareProjectBounceOptions(
+            total_frames=int(total_frames),
+            block_size=int(block_size),
+            num_channels=int(num_channels),
+            sample_rate=int(sample_rate),
+            instrument_latency_samples=int(instrument_latency_samples),
+        )
+        out = ctypes.POINTER(ctypes.c_float)()
+        out_len = ctypes.c_size_t()
+        rc = lib.sonare_project_bounce_with_instruments(
+            self._require_handle(),
+            ctypes.byref(options),
+            c_bindings if count else None,
+            ctypes.c_size_t(count),
+            ctypes.byref(out),
+            ctypes.byref(out_len),
+        )
+        # `keepalive` pins the ctypes trampolines until the bounce returns.
+        keepalive.clear()
+        try:
+            _check(rc)
+            if errors:
+                raise errors[0]
+            interleaved = _from_c_float_array(out, int(out_len.value))
+        finally:
             if out:
                 lib.sonare_free_floats(out)
         channels = num_channels if num_channels > 0 else 2

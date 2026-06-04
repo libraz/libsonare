@@ -69,6 +69,17 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(ctypes.c_size_t),
             ]
 
+        if hasattr(lib, "sonare_project_bounce_with_instruments"):
+            lib.sonare_project_bounce_with_instruments.restype = ctypes.c_int32
+            lib.sonare_project_bounce_with_instruments.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareProjectBounceOptions),
+                ctypes.POINTER(SonareInstrumentBinding),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+
         # Edit.
         lib.sonare_project_add_track.restype = ctypes.c_int32
         lib.sonare_project_add_track.argtypes = [

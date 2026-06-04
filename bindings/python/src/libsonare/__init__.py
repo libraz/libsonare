@@ -6,6 +6,7 @@ from importlib.metadata import version as _pkg_version
 from ._project import (
     AssistSidecar,
     BuiltinSynthConfig,
+    ExternalInstrument,
     NotePairValidation,
     Project,
     project_abi_version,
@@ -325,6 +326,7 @@ __all__ = [
     "EngineGraphSpec",
     "EngineMarker",
     "EngineMetronomeConfig",
+    "ExternalInstrument",
     "GoniometerPoint",
     "HpssResult",
     "InverseResult",

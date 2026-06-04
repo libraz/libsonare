@@ -14,8 +14,9 @@ import math
 import numpy as np
 import pytest
 
-from libsonare import BuiltinSynthConfig, Project, project_abi_version
+from libsonare import BuiltinSynthConfig, ExternalInstrument, Project, project_abi_version
 from libsonare._project import EXPECTED_PROJECT_ABI_VERSION
+from libsonare._runtime import _get_lib
 
 
 def _make_stereo_sine(frames: int, sample_rate: float = 48000.0) -> np.ndarray:
@@ -199,6 +200,107 @@ def test_bounce_with_builtin_instrument_accepts_waveform_patch() -> None:
             patch, total_frames=24000, num_channels=2, sample_rate=48000
         )
         assert float(np.max(np.abs(audio))) > 0.0
+    finally:
+        project.close()
+
+
+class _ConstantInstrument:
+    """An :class:`ExternalInstrument` that emits a constant DC level and records
+    every dispatched MIDI event, so a test can assert both audible output and
+    sample-accurate event delivery."""
+
+    def __init__(self, level: float = 0.25) -> None:
+        self.level = float(level)
+        self.prepared: tuple[float, int] | None = None
+        self.events: list[tuple[int, tuple[int, ...], int]] = []
+        self.render_calls = 0
+
+    def prepare(self, sample_rate: float, max_block_size: int) -> None:
+        self.prepared = (sample_rate, max_block_size)
+
+    def on_event(self, destination_id: int, ump_words: tuple[int, ...], render_frame: int) -> None:
+        self.events.append((destination_id, ump_words, render_frame))
+
+    def render(self, channels: np.ndarray, num_frames: int) -> None:
+        self.render_calls += 1
+        channels += self.level
+
+
+def test_bounce_with_instruments_hosts_external_callback() -> None:
+    """Flagship: a MIDI-only project routes through a host-supplied instrument."""
+    if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):
+        pytest.skip("libsonare built without the external-instrument bounce ABI")
+    project = _build_midi_only_project()
+    instrument = _ConstantInstrument(level=0.25)
+    try:
+        audio = project.bounce_with_instruments(
+            instrument, total_frames=48000, block_size=128, num_channels=2, sample_rate=48000
+        )
+        assert audio.shape == (48000, 2)
+        assert audio.dtype == np.float32
+        # The instrument emits a constant 0.25 DC, so every rendered frame is audible.
+        assert float(np.min(audio)) == pytest.approx(0.25, abs=1e-6)
+        assert instrument.prepared is not None
+        assert instrument.render_calls > 0
+        # The note-on / note-off were delivered as dispatched UMP events.
+        assert len(instrument.events) >= 2
+        statuses = [(words[0] >> 20) & 0xF for _dst, words, _frame in instrument.events if words]
+        assert 0x9 in statuses  # note-on
+        assert 0x8 in statuses  # note-off
+    finally:
+        project.close()
+
+
+def test_bounce_with_instruments_render_only_instrument() -> None:
+    """Only render() is required; prepare/on_event are optional (duck-typed)."""
+    if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):
+        pytest.skip("libsonare built without the external-instrument bounce ABI")
+
+    class RenderOnly:
+        def render(self, channels: np.ndarray, num_frames: int) -> None:
+            channels += 0.1
+
+    project = _build_midi_only_project()
+    try:
+        audio = project.bounce_with_instruments(
+            RenderOnly(), total_frames=4800, num_channels=2, sample_rate=48000
+        )
+        assert audio.shape[0] > 0
+        assert float(np.max(np.abs(audio))) > 0.0
+    finally:
+        project.close()
+
+
+def test_bounce_with_instruments_propagates_callback_error() -> None:
+    """An exception raised inside a callback surfaces to the caller, not silenced."""
+    if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):
+        pytest.skip("libsonare built without the external-instrument bounce ABI")
+
+    class Boom:
+        def render(self, channels: np.ndarray, num_frames: int) -> None:
+            raise ValueError("synthesis failed")
+
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(ValueError, match="synthesis failed"):
+            project.bounce_with_instruments(
+                Boom(), total_frames=4800, num_channels=2, sample_rate=48000
+            )
+    finally:
+        project.close()
+
+
+def test_external_instrument_is_exported() -> None:
+    import libsonare
+
+    assert libsonare.ExternalInstrument is ExternalInstrument
+
+
+def test_bounce_with_instruments_requires_an_instrument() -> None:
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(ValueError, match="requires"):
+            project.bounce_with_instruments(num_channels=2, sample_rate=48000)
     finally:
         project.close()
 

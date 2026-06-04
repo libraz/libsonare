@@ -250,6 +250,59 @@ class SonareBuiltinInstrumentBinding(ctypes.Structure):
     ]
 
 
+# External-instrument host shim callbacks (sonare_c_project.h
+# SonareInstrumentCallbacks). All run synchronously on the bounce's calling
+# thread, so the ctypes callbacks hold the GIL for their duration.
+#
+# prepare: void(void* user_data, double sample_rate, int max_block_size)
+SonareInstrumentPrepareCallback = ctypes.CFUNCTYPE(
+    None,
+    ctypes.c_void_p,
+    ctypes.c_double,
+    ctypes.c_int,
+)
+# on_event: void(void* user_data, uint32_t destination_id,
+#                const uint32_t* ump_words, int word_count, int64_t render_frame)
+SonareInstrumentOnEventCallback = ctypes.CFUNCTYPE(
+    None,
+    ctypes.c_void_p,
+    ctypes.c_uint32,
+    ctypes.POINTER(ctypes.c_uint32),
+    ctypes.c_int,
+    ctypes.c_int64,
+)
+# render: void(void* user_data, float* const* channels,
+#              int num_channels, int num_frames)
+SonareInstrumentRenderCallback = ctypes.CFUNCTYPE(
+    None,
+    ctypes.c_void_p,
+    ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+    ctypes.c_int,
+    ctypes.c_int,
+)
+
+
+class SonareInstrumentCallbacks(ctypes.Structure):
+    """Maps to SonareInstrumentCallbacks in sonare_c_project.h."""
+
+    _fields_ = [
+        ("user_data", ctypes.c_void_p),
+        ("prepare", SonareInstrumentPrepareCallback),
+        ("on_event", SonareInstrumentOnEventCallback),
+        ("render", SonareInstrumentRenderCallback),
+        ("latency_samples", ctypes.c_int),
+    ]
+
+
+class SonareInstrumentBinding(ctypes.Structure):
+    """Maps to SonareInstrumentBinding in sonare_c_project.h."""
+
+    _fields_ = [
+        ("destination_id", ctypes.c_uint32),
+        ("callbacks", SonareInstrumentCallbacks),
+    ]
+
+
 # Clip fade-curve ordinals (mirror SonareProjectFadeCurve).
 SONARE_FADE_CURVE_LINEAR = 0
 SONARE_FADE_CURVE_EQUAL_POWER = 1
