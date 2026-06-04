@@ -99,10 +99,10 @@ python = [
 #     into the facade `detect_key` / `detect_key_candidates` extended params
 #     (modes / profile / genre_hint).
 #   tempogram_with_mode: folded into `tempogram`'s `mode` selector.
-#   mel_spectrogram_ex / mfcc_ex: C-ABI convenience variants that add an explicit
-#     Mel range (fmin/fmax/htk) to the pure-C forward transform. The bindings
-#     already expose the full Mel range through their native mel/mfcc config
-#     objects, so the `_ex` form is covered by the base facade, not missing.
+#   (mel_spectrogram_ex / mfcc_ex are credited by _ALIAS_COVERAGE in compare.py,
+#    anchored to the base mel_spectrogram / mfcc facade which now exposes the
+#    fmin/fmax/htk arguments and routes to the _ex C entry point — so they are
+#    not allowlisted here.)
 #   onset_strength: exposed by the facades under the ergonomic name
 #     `onset_envelope`.
 #   error_message / last_error_message: C-ABI error-string helpers consumed
@@ -124,8 +124,6 @@ node = [
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
-  "mel_spectrogram_ex",
-  "mfcc_ex",
   "onset_strength",
   "error_message",
   "last_error_message",
@@ -136,18 +134,21 @@ node = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
-  # Independent source/reference-length pair variants: Node has no pair facade at
-  # all (same as the base mastering_apply_pair_processor / mastering_analyze_pair
-  # above), so the _ex forms are likewise unexposed here.
+  # Independent source/reference-length pair variants. Node DOES expose a pair
+  # facade (masteringPairProcess / masteringPairAnalyze) and it accepts
+  # independent source/reference lengths, but it binds the C++ core api::
+  # apply_named_pair_processor / analyze_named_pair (two-length overload)
+  # directly, so the C-ABI _ex symbols themselves are not mirrored as named
+  # functions. Same capability, core-bound rather than C-ABI-bound.
   "mastering_apply_pair_processor_ex",
   "mastering_analyze_pair_ex",
   # Node folds these into a base free function via an extra parameter rather than
   # exposing a separately-named function (Python/WASM expose them by name):
-  #   decompose_with_init            -> decompose(...) wraps sonare_decompose_with_init
   #   metering_vectorscope_decimated -> meteringVectorscope(left, right, sr, maxPoints)
   #   metering_phase_scope_decimated -> meteringPhaseScope(left, right, sr, maxPoints)
   # (metering_spectrum_frame IS exposed by name as meteringSpectrumFrame.)
-  "decompose_with_init",
+  # (decompose_with_init -> the base decompose() facade, which exposes the `init`
+  #  initialiser argument; credited by _ALIAS_COVERAGE in compare.py.)
   "metering_phase_scope_decimated",
   "metering_vectorscope_decimated",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
@@ -185,8 +186,6 @@ wasm = [
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
-  "mel_spectrogram_ex",
-  "mfcc_ex",
   "onset_strength",
   "error_message",
   "last_error_message",
@@ -195,8 +194,10 @@ wasm = [
   "mastering_apply_processor",
   "mastering_apply_pair_processor",
   "mastering_apply_processor_stereo",
-  # Independent source/reference-length pair variants: WASM has no pair facade
-  # (same as the base mastering_apply_pair_processor / mastering_analyze_pair).
+  # Independent source/reference-length pair variants. WASM DOES expose a pair
+  # facade (masteringPairProcess / masteringPairAnalyze) accepting independent
+  # source/reference lengths; it binds the C++ core api:: two-length overload
+  # directly, so the C-ABI _ex symbols are not mirrored as named functions.
   "mastering_apply_pair_processor_ex",
   "mastering_analyze_pair_ex",
   # C-ABI-internal length-checked inverse variants (see node note above).
@@ -244,8 +245,6 @@ python = [
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
-  "mel_spectrogram_ex",
-  "mfcc_ex",
   "onset_strength",
   "error_message",
   "last_error_message",

@@ -92,6 +92,20 @@ describe('newly exposed Node functions', () => {
     expect(allFinite(r.w.data) && allFinite(r.h.data)).toBe(true);
   });
 
+  it('decompose accepts an nndsvd warm-start initialiser', () => {
+    const nF = 16;
+    const nT = 24;
+    const nC = 3;
+    const s = new Float32Array(nF * nT);
+    for (let i = 0; i < s.length; i++) {
+      s[i] = Math.abs(Math.sin(i));
+    }
+    const r = decompose(s, nF, nT, nC, 20, 2.0, 'nndsvd');
+    expect(r.w.data.length).toBe(nF * nC);
+    expect(r.h.data.length).toBe(nC * nT);
+    expect(allFinite(r.w.data) && allFinite(r.h.data)).toBe(true);
+  });
+
   it('nnFilter preserves shape', () => {
     const nF = 12;
     const nT = 20;

@@ -238,6 +238,22 @@ def test_mel_spectrogram() -> None:
     assert result.n_frames > 0
 
 
+def test_mel_spectrogram_explicit_range() -> None:
+    """fmin/fmax/htk change the Mel filterbank, so the power output differs."""
+    from libsonare import mel_spectrogram
+
+    tone = _generate_sine(440, 22050, 1.0)
+    base = mel_spectrogram(tone, sample_rate=22050, n_mels=40)
+    ranged = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin=500.0, fmax=4000.0)
+    htk = mel_spectrogram(tone, sample_rate=22050, n_mels=40, htk=True)
+
+    assert base.n_mels == ranged.n_mels == 40
+    assert len(base.power) == len(ranged.power) == len(htk.power)
+    # An explicit Mel range / HTK formula yields a measurably different filterbank.
+    assert sum((a - b) ** 2 for a, b in zip(base.power, ranged.power, strict=True)) > 1e-6
+    assert sum((a - b) ** 2 for a, b in zip(base.power, htk.power, strict=True)) > 1e-6
+
+
 def test_mfcc() -> None:
     """mfcc returns correct coefficient dimensions."""
     from libsonare import mfcc
@@ -247,6 +263,20 @@ def test_mfcc() -> None:
     assert result.n_mfcc == 13
     assert result.n_frames > 0
     assert len(result.coefficients) == result.n_mfcc * result.n_frames
+
+
+def test_mfcc_explicit_range() -> None:
+    """fmin/fmax change the underlying Mel range, so the coefficients differ."""
+    from libsonare import mfcc
+
+    tone = _generate_sine(440, 22050, 1.0)
+    base = mfcc(tone, sample_rate=22050, n_mels=64, n_mfcc=13)
+    ranged = mfcc(tone, sample_rate=22050, n_mels=64, n_mfcc=13, fmin=500.0, fmax=4000.0)
+    assert len(base.coefficients) == len(ranged.coefficients)
+    assert (
+        sum((a - b) ** 2 for a, b in zip(base.coefficients, ranged.coefficients, strict=True))
+        > 1e-6
+    )
 
 
 def test_chroma() -> None:

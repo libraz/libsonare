@@ -254,12 +254,27 @@ export class Audio {
     return stftDb(this._samples, this._sampleRate, nFft, hopLength);
   }
 
-  melSpectrogram(nFft = 2048, hopLength = 512, nMels = 128): MelSpectrogramResult {
-    return melSpectrogram(this._samples, this._sampleRate, nFft, hopLength, nMels);
+  melSpectrogram(
+    nFft = 2048,
+    hopLength = 512,
+    nMels = 128,
+    fmin = 0,
+    fmax = 0,
+    htk = false,
+  ): MelSpectrogramResult {
+    return melSpectrogram(this._samples, this._sampleRate, nFft, hopLength, nMels, fmin, fmax, htk);
   }
 
-  mfcc(nFft = 2048, hopLength = 512, nMels = 128, nMfcc = 20): MfccResult {
-    return mfcc(this._samples, this._sampleRate, nFft, hopLength, nMels, nMfcc);
+  mfcc(
+    nFft = 2048,
+    hopLength = 512,
+    nMels = 128,
+    nMfcc = 20,
+    fmin = 0,
+    fmax = 0,
+    htk = false,
+  ): MfccResult {
+    return mfcc(this._samples, this._sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
   }
 
   chroma(nFft = 2048, hopLength = 512): ChromaResult {

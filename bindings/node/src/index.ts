@@ -468,12 +468,46 @@ export class Audio {
     return addon.stftDb(this.getData(), this.getSampleRate(), nFft, hopLength);
   }
 
-  melSpectrogram(nFft = 2048, hopLength = 512, nMels = 128): MelSpectrogramResult {
-    return addon.melSpectrogram(this.getData(), this.getSampleRate(), nFft, hopLength, nMels);
+  melSpectrogram(
+    nFft = 2048,
+    hopLength = 512,
+    nMels = 128,
+    fmin = 0,
+    fmax = 0,
+    htk = false,
+  ): MelSpectrogramResult {
+    return addon.melSpectrogram(
+      this.getData(),
+      this.getSampleRate(),
+      nFft,
+      hopLength,
+      nMels,
+      fmin,
+      fmax,
+      htk,
+    );
   }
 
-  mfcc(nFft = 2048, hopLength = 512, nMels = 128, nMfcc = 20): MfccResult {
-    return addon.mfcc(this.getData(), this.getSampleRate(), nFft, hopLength, nMels, nMfcc);
+  mfcc(
+    nFft = 2048,
+    hopLength = 512,
+    nMels = 128,
+    nMfcc = 20,
+    fmin = 0,
+    fmax = 0,
+    htk = false,
+  ): MfccResult {
+    return addon.mfcc(
+      this.getData(),
+      this.getSampleRate(),
+      nFft,
+      hopLength,
+      nMels,
+      nMfcc,
+      fmin,
+      fmax,
+      htk,
+    );
   }
 
   chroma(nFft = 2048, hopLength = 512): ChromaResult {

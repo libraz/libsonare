@@ -76,6 +76,10 @@ export function stftDb(
  * @param nFft - FFT size (default: 2048)
  * @param hopLength - Hop length (default: 512)
  * @param nMels - Number of Mel bands (default: 128)
+ * @param fmin - Minimum Mel frequency in Hz (default: 0 = librosa default).
+ *   Set with `fmax` to round-trip with `melToStft` / `melToAudio`.
+ * @param fmax - Maximum Mel frequency in Hz (default: 0 = sampleRate / 2)
+ * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
  * @returns Mel spectrogram result
  */
 export function melSpectrogram(
@@ -84,8 +88,20 @@ export function melSpectrogram(
   nFft = 2048,
   hopLength = 512,
   nMels = 128,
+  fmin = 0,
+  fmax = 0,
+  htk = false,
 ): MelSpectrogramResult {
-  return requireModule().melSpectrogram(samples, sampleRate, nFft, hopLength, nMels);
+  return requireModule().melSpectrogram(
+    samples,
+    sampleRate,
+    nFft,
+    hopLength,
+    nMels,
+    fmin,
+    fmax,
+    htk,
+  );
 }
 
 /**
@@ -97,6 +113,9 @@ export function melSpectrogram(
  * @param hopLength - Hop length (default: 512)
  * @param nMels - Number of Mel bands (default: 128)
  * @param nMfcc - Number of MFCC coefficients (default: 20)
+ * @param fmin - Minimum Mel frequency in Hz (default: 0 = librosa default)
+ * @param fmax - Maximum Mel frequency in Hz (default: 0 = sampleRate / 2)
+ * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
  * @returns MFCC result
  */
 export function mfcc(
@@ -106,8 +125,11 @@ export function mfcc(
   hopLength = 512,
   nMels = 128,
   nMfcc = 20,
+  fmin = 0,
+  fmax = 0,
+  htk = false,
 ): MfccResult {
-  return requireModule().mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc);
+  return requireModule().mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
 }
 
 // ============================================================================

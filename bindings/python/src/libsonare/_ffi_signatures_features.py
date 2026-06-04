@@ -49,6 +49,21 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareMelResult),
     ]
 
+    # sonare_mel_spectrogram_ex (explicit Mel range: fmin/fmax/htk)
+    lib.sonare_mel_spectrogram_ex.restype = ctypes.c_int32
+    lib.sonare_mel_spectrogram_ex.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(SonareMelResult),
+    ]
+
     # sonare_mfcc
     lib.sonare_mfcc.restype = ctypes.c_int32
     lib.sonare_mfcc.argtypes = [
@@ -58,6 +73,22 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareMfccResult),
+    ]
+
+    # sonare_mfcc_ex (explicit Mel range: fmin/fmax/htk)
+    lib.sonare_mfcc_ex.restype = ctypes.c_int32
+    lib.sonare_mfcc_ex.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
         ctypes.c_int,
         ctypes.POINTER(SonareMfccResult),
     ]

@@ -427,6 +427,22 @@ describe('standalone functions', () => {
     expect(stereoJson).toContain('"correlation"');
   });
 
+  it('accepts independent source/reference lengths for pair mastering', () => {
+    const sampleRate = 44100;
+    const source = generateSine(440, sampleRate, 0.25);
+    const reference = generateSine(880, sampleRate, 0.6); // different duration
+
+    const paired = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
+      mix: 0.25,
+    });
+    expect(paired.samples).toBeInstanceOf(Float32Array);
+    expect(paired.samples.length).toBe(source.length);
+
+    const pairJson = masteringPairAnalyze('match.referenceLoudness', source, reference, sampleRate);
+    expect(pairJson).toContain('"sourceLufs"');
+    expect(pairJson).toContain('"referenceLufs"');
+  });
+
   it('exposes mastering assistant suggestions', () => {
     const sampleRate = 22050;
     const samples = generateSine(220, sampleRate, 3);

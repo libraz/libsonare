@@ -151,6 +151,9 @@ def mel_spectrogram(
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
+    fmin: float = 0.0,
+    fmax: float = 0.0,
+    htk: bool = False,
 ) -> MelSpectrogramResult:
     """Compute a Mel spectrogram.
 
@@ -160,6 +163,11 @@ def mel_spectrogram(
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         n_mels: Number of Mel bands (default 128).
+        fmin: Minimum Mel frequency in Hz (default 0.0 = librosa default).
+            Set together with ``fmax`` to round-trip with ``mel_to_stft`` /
+            ``mel_to_audio``.
+        fmax: Maximum Mel frequency in Hz (default 0.0 = sample_rate / 2).
+        htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
         MelSpectrogramResult with power and dB spectrograms.
@@ -167,13 +175,16 @@ def mel_spectrogram(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareMelResult()
-    rc = lib.sonare_mel_spectrogram(
+    rc = lib.sonare_mel_spectrogram_ex(
         c_array,
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
         ctypes.c_int(n_fft),
         ctypes.c_int(hop_length),
         ctypes.c_int(n_mels),
+        ctypes.c_float(fmin),
+        ctypes.c_float(fmax),
+        ctypes.c_int(1 if htk else 0),
         ctypes.byref(out),
     )
     _check(rc)
@@ -198,6 +209,9 @@ def mfcc(
     hop_length: int = 512,
     n_mels: int = 128,
     n_mfcc: int = 20,
+    fmin: float = 0.0,
+    fmax: float = 0.0,
+    htk: bool = False,
 ) -> MfccResult:
     """Compute Mel-frequency cepstral coefficients.
 
@@ -208,6 +222,9 @@ def mfcc(
         hop_length: Hop length in samples (default 512).
         n_mels: Number of Mel bands (default 128).
         n_mfcc: Number of MFCC coefficients (default 20).
+        fmin: Minimum Mel frequency in Hz (default 0.0 = librosa default).
+        fmax: Maximum Mel frequency in Hz (default 0.0 = sample_rate / 2).
+        htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
         MfccResult with coefficient matrix.
@@ -215,7 +232,7 @@ def mfcc(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareMfccResult()
-    rc = lib.sonare_mfcc(
+    rc = lib.sonare_mfcc_ex(
         c_array,
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
@@ -223,6 +240,9 @@ def mfcc(
         ctypes.c_int(hop_length),
         ctypes.c_int(n_mels),
         ctypes.c_int(n_mfcc),
+        ctypes.c_float(fmin),
+        ctypes.c_float(fmax),
+        ctypes.c_int(1 if htk else 0),
         ctypes.byref(out),
     )
     _check(rc)

@@ -364,6 +364,11 @@ export function masteringProcessStereo(
   return requireModule().masteringProcessStereo(processorName, left, right, sampleRate, params);
 }
 
+/**
+ * Apply a two-input `match.*` processor. `source` and `reference` may have
+ * independent lengths — the match primitives consume each buffer at its own
+ * length.
+ */
 export function masteringPairProcess(
   processorName: PairProcessor,
   source: Float32Array,
@@ -374,6 +379,10 @@ export function masteringPairProcess(
   return requireModule().masteringPairProcess(processorName, source, reference, sampleRate, params);
 }
 
+/**
+ * Analyze a `source` against a `reference` with a two-input analysis. The two
+ * buffers may have independent lengths.
+ */
 export function masteringPairAnalyze(
   analysisName: PairAnalysis,
   source: Float32Array,

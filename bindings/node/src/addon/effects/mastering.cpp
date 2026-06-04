@@ -721,17 +721,15 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto source = info[1].As<Napi::Float32Array>();
   auto reference = info[2].As<Napi::Float32Array>();
-  if (source.ElementLength() != reference.ElementLength()) {
-    Napi::TypeError::New(env, "source and reference lengths must match")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject())
     params = ParamsFromObject(info[4].As<Napi::Object>());
+  // source and reference may have independent lengths; the match primitives
+  // consume each buffer at its own length.
   auto result = sonare::mastering::api::apply_named_pair_processor(
       info[0].As<Napi::String>().Utf8Value(), source.Data(), reference.Data(),
-      source.ElementLength(), info[3].As<Napi::Number>().Int32Value(), params);
+      source.ElementLength(), reference.ElementLength(), info[3].As<Napi::Number>().Int32Value(),
+      params);
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -754,17 +752,14 @@ Napi::Value SonareWrap::MasteringPairAnalyze(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto source = info[1].As<Napi::Float32Array>();
   auto reference = info[2].As<Napi::Float32Array>();
-  if (source.ElementLength() != reference.ElementLength()) {
-    Napi::TypeError::New(env, "source and reference lengths must match")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject())
     params = ParamsFromObject(info[4].As<Napi::Object>());
+  // source and reference may have independent lengths.
   auto json = sonare::mastering::api::analyze_named_pair(
       info[0].As<Napi::String>().Utf8Value(), source.Data(), reference.Data(),
-      source.ElementLength(), info[3].As<Napi::Number>().Int32Value(), params);
+      source.ElementLength(), reference.ElementLength(), info[3].As<Napi::Number>().Int32Value(),
+      params);
   return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
 }

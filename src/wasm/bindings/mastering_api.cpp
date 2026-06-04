@@ -229,8 +229,9 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
                               int sample_rate, val params) {
   std::vector<float> source = float32ArrayToVector(source_samples);
   std::vector<float> reference = float32ArrayToVector(reference_samples);
+  // source and reference may have independent lengths.
   auto result = mastering::api::apply_named_pair_processor(
-      processor_name, source.data(), reference.data(), source.size(), sample_rate,
+      processor_name, source.data(), reference.data(), source.size(), reference.size(), sample_rate,
       masteringParamsFromObject(params));
   val out = val::object();
   out.set("samples", vectorToFloat32Array(result.samples));
@@ -246,8 +247,9 @@ std::string js_mastering_pair_analyze(std::string analysis_name, val source_samp
                                       val reference_samples, int sample_rate, val params) {
   std::vector<float> source = float32ArrayToVector(source_samples);
   std::vector<float> reference = float32ArrayToVector(reference_samples);
+  // source and reference may have independent lengths.
   return mastering::api::analyze_named_pair(analysis_name, source.data(), reference.data(),
-                                            source.size(), sample_rate,
+                                            source.size(), reference.size(), sample_rate,
                                             masteringParamsFromObject(params));
 }
 

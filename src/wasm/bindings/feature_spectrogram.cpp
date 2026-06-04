@@ -53,7 +53,8 @@ val js_stft_db(val samples, int sample_rate, int n_fft, int hop_length) {
 // Features - Mel Spectrogram
 // ============================================================================
 
-val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, int n_mels) {
+val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
+                       float fmin, float fmax, bool htk) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
@@ -61,6 +62,9 @@ val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, 
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.htk = htk;
 
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
 
@@ -80,7 +84,8 @@ val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, 
   return out;
 }
 
-val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels, int n_mfcc) {
+val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels, int n_mfcc,
+            float fmin, float fmax, bool htk) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
@@ -88,6 +93,9 @@ val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.htk = htk;
 
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
   std::vector<float> mfcc = mel.mfcc(n_mfcc);

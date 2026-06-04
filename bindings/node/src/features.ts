@@ -46,8 +46,11 @@ export function melSpectrogram(
   nFft = 2048,
   hopLength = 512,
   nMels = 128,
+  fmin = 0,
+  fmax = 0,
+  htk = false,
 ): MelSpectrogramResult {
-  return addon.melSpectrogram(samples, sampleRate, nFft, hopLength, nMels);
+  return addon.melSpectrogram(samples, sampleRate, nFft, hopLength, nMels, fmin, fmax, htk);
 }
 
 export function mfcc(
@@ -57,8 +60,11 @@ export function mfcc(
   hopLength = 512,
   nMels = 128,
   nMfcc = 20,
+  fmin = 0,
+  fmax = 0,
+  htk = false,
 ): MfccResult {
-  return addon.mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc);
+  return addon.mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
 }
 
 export function chroma(
@@ -225,7 +231,12 @@ export function estimateTuning(
   return addon.estimateTuning(samples, sampleRate, nFft, hopLength, resolution, binsPerOctave);
 }
 
-/** NMF of a flattened [nFeatures x nFrames] spectrogram (librosa.decompose.decompose). */
+/**
+ * NMF of a flattened [nFeatures x nFrames] spectrogram (librosa.decompose.decompose).
+ *
+ * `init` selects the initialiser: `'random'` (default, deterministic seed) or
+ * `'nndsvd'` (SVD-based warm start, which tends to converge in fewer iterations).
+ */
 export function decompose(
   s: Float32Array,
   nFeatures: number,
@@ -233,8 +244,9 @@ export function decompose(
   nComponents: number,
   nIter = 50,
   beta = 2.0,
+  init: 'random' | 'nndsvd' = 'random',
 ): { w: Matrix2D; h: Matrix2D } {
-  return addon.decompose(s, nFeatures, nFrames, nComponents, nIter, beta);
+  return addon.decompose(s, nFeatures, nFrames, nComponents, nIter, beta, init);
 }
 
 /** Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram. */

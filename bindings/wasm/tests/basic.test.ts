@@ -807,6 +807,33 @@ describe('Sonare WASM Module', () => {
       expect(stereoJson).toContain('"correlation"');
     });
 
+    it('should accept independent source/reference lengths for pair mastering', () => {
+      const sampleRate = 44100;
+      const source = new Float32Array(Math.floor(sampleRate * 0.25));
+      const reference = new Float32Array(Math.floor(sampleRate * 0.6)); // different duration
+      for (let i = 0; i < source.length; i++) {
+        source[i] = 0.18 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+      }
+      for (let i = 0; i < reference.length; i++) {
+        reference[i] = 0.12 * Math.sin((2 * Math.PI * 880 * i) / sampleRate);
+      }
+
+      const paired = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
+        mix: 0.25,
+      });
+      expect(paired.samples).toBeInstanceOf(Float32Array);
+      expect(paired.samples.length).toBe(source.length);
+
+      const pairJson = masteringPairAnalyze(
+        'match.referenceLoudness',
+        source,
+        reference,
+        sampleRate,
+      );
+      expect(pairJson).toContain('"sourceLufs"');
+      expect(pairJson).toContain('"referenceLufs"');
+    });
+
     it('should expose mastering assistant suggestions in WASM', () => {
       const sampleRate = 22050;
       const samples = new Float32Array(sampleRate * 3);

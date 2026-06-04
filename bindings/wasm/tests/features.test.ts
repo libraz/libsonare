@@ -231,6 +231,23 @@ describe('Feature API precision (reference compatibility)', () => {
       }
       expect(hasFinite).toBe(true);
     });
+
+    it('should honour an explicit Mel range (fmin/fmax/htk)', () => {
+      const tone = generateSine(440, SR, DURATION);
+      const base = melSpectrogram(tone, SR, 2048, 512, 40);
+      const ranged = melSpectrogram(tone, SR, 2048, 512, 40, 500, 4000);
+      const htk = melSpectrogram(tone, SR, 2048, 512, 40, 0, 0, true);
+
+      expect(ranged.power.length).toBe(base.power.length);
+      let dRange = 0;
+      let dHtk = 0;
+      for (let i = 0; i < base.power.length; i++) {
+        dRange += (base.power[i] - ranged.power[i]) ** 2;
+        dHtk += (base.power[i] - htk.power[i]) ** 2;
+      }
+      expect(dRange).toBeGreaterThan(1e-6);
+      expect(dHtk).toBeGreaterThan(1e-6);
+    });
   });
 
   describe('MFCC', () => {

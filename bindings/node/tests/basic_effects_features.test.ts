@@ -293,12 +293,38 @@ describe('features', () => {
     expect(result.db).toBeInstanceOf(Float32Array);
   });
 
+  it('melSpectrogram honours an explicit Mel range (fmin/fmax/htk)', () => {
+    const base = melSpectrogram(tone, SR, 2048, 512, 40);
+    const ranged = melSpectrogram(tone, SR, 2048, 512, 40, 500, 4000);
+    const htk = melSpectrogram(tone, SR, 2048, 512, 40, 0, 0, true);
+    expect(ranged.power.length).toBe(base.power.length);
+    let dRange = 0;
+    let dHtk = 0;
+    for (let i = 0; i < base.power.length; i++) {
+      dRange += (base.power[i] - ranged.power[i]) ** 2;
+      dHtk += (base.power[i] - htk.power[i]) ** 2;
+    }
+    expect(dRange).toBeGreaterThan(1e-6);
+    expect(dHtk).toBeGreaterThan(1e-6);
+  });
+
   it('mfcc returns coefficients', () => {
     const result = mfcc(tone, SR, 2048, 512, 64, 20);
     expect(result.nMfcc).toBe(20);
     expect(result.nFrames).toBeGreaterThan(0);
     expect(result.coefficients).toBeInstanceOf(Float32Array);
     expect(result.coefficients.length).toBe(result.nMfcc * result.nFrames);
+  });
+
+  it('mfcc honours an explicit Mel range (fmin/fmax)', () => {
+    const base = mfcc(tone, SR, 2048, 512, 64, 13);
+    const ranged = mfcc(tone, SR, 2048, 512, 64, 13, 500, 4000);
+    expect(ranged.coefficients.length).toBe(base.coefficients.length);
+    let d = 0;
+    for (let i = 0; i < base.coefficients.length; i++) {
+      d += (base.coefficients[i] - ranged.coefficients[i]) ** 2;
+    }
+    expect(d).toBeGreaterThan(1e-6);
   });
 
   it('mfcc defaults nMfcc to 20', () => {

@@ -117,12 +117,20 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
   int n_mels =
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 128;
+  float fmin =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 0.0f;
+  float fmax =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
+  bool htk = info.Length() >= 8 && info[7].IsBoolean() && info[7].As<Napi::Boolean>().Value();
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.htk = htk;
 
   sonare::MelSpectrogram mel = sonare::MelSpectrogram::compute(audio, config);
 
@@ -165,12 +173,20 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 128;
   int n_mfcc =
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 20;
+  float fmin =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
+  float fmax =
+      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
+  bool htk = info.Length() >= 9 && info[8].IsBoolean() && info[8].As<Napi::Boolean>().Value();
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::MelConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.htk = htk;
 
   sonare::MelSpectrogram mel = sonare::MelSpectrogram::compute(audio, config);
   std::vector<float> mfcc_coeffs = mel.mfcc(n_mfcc);

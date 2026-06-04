@@ -1259,6 +1259,9 @@ export interface SonareModule {
     nFft: number,
     hopLength: number,
     nMels: number,
+    fmin: number,
+    fmax: number,
+    htk: boolean,
   ) => WasmMelResult;
   mfcc: (
     samples: Float32Array,
@@ -1267,6 +1270,9 @@ export interface SonareModule {
     hopLength: number,
     nMels: number,
     nMfcc: number,
+    fmin: number,
+    fmax: number,
+    htk: boolean,
   ) => WasmMfccResult;
 
   // Features - Inverse reconstruction

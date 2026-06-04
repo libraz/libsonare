@@ -176,6 +176,18 @@ _ALIAS_COVERAGE = {
     # Quantized read _ex variants -> the public read_frames_{i16,u8}.
     "stream_analyzer_read_frames_i16_ex": ("read_frames_i16",),
     "stream_analyzer_read_frames_u8_ex": ("read_frames_u8",),
+    # Explicit-Mel-range forward transforms -> the base mel_spectrogram / mfcc
+    # facade, which exposes the fmin/fmax/htk arguments and routes to the _ex C
+    # entry point. Anchored to the base member so the credit holds only while the
+    # base facade actually exists (and, by the params it now carries, exposes the
+    # explicit Mel range needed to round-trip with mel_to_stft / mel_to_audio).
+    "mel_spectrogram_ex": ("mel_spectrogram",),
+    "mfcc_ex": ("mfcc",),
+    # NMF warm-start variant -> the base decompose facade, which exposes the
+    # `init` initialiser argument and routes to sonare_decompose_with_init.
+    # (Python / WASM expose decompose_with_init by name, matched directly before
+    # this; the alias credits the Node fold onto the base decompose() function.)
+    "decompose_with_init": ("decompose",),
     # Progress-callback mastering variants -> base fn with an optional callback.
     "master_audio_with_progress": ("master_audio",),
     "master_audio_stereo_with_progress": ("master_audio_stereo",),
@@ -523,20 +535,30 @@ _SAMPLE_RATE_NAMES = {"sample_rate", "sr"}
 # naming check so the buffer names line up.
 _BUFFER_COMPANION_NAMES = {"length", "size", "len"}
 
-# detect_chords is exposed by the facades in its EXTENDED form: the facade
-# config is the 7 base params of C ``sonare_detect_chords`` plus the extra
-# fields of ``SonareChordDetectionOptions`` (the struct used by the
-# ``sonare_detect_chords_ex`` variant). These trailing extended fields are
-# legitimate, so the order check accepts the base C order as a prefix.
-_CHORD_EXTENDED_FIELDS = (
-    "use_hmm",
-    "hmm_beam_width",
-    "use_key_context",
-    "key_root",
-    "key_mode",
-    "detect_inversions",
-    "chroma_method",
-)
+# Some facades are exposed in their EXTENDED (``_ex``) form: the facade config is
+# the base C function's order followed by the extra fields the ``_ex`` variant
+# adds. These trailing extended fields are legitimate, so the order check accepts
+# the base C order as a prefix and the known tail after it.
+#   detect_chords  -> base + the SonareChordDetectionOptions fields used by
+#                     sonare_detect_chords_ex.
+#   mel_spectrogram / mfcc -> base + the explicit Mel range (fmin/fmax/htk) used
+#                     by sonare_mel_spectrogram_ex / sonare_mfcc_ex.
+#   decompose -> base + the NMF initialiser (init) used by
+#                     sonare_decompose_with_init.
+_EXTENDED_FIELD_TAILS = {
+    "detect_chords": (
+        "use_hmm",
+        "hmm_beam_width",
+        "use_key_context",
+        "key_root",
+        "key_mode",
+        "detect_inversions",
+        "chroma_method",
+    ),
+    "mel_spectrogram": ("fmin", "fmax", "htk"),
+    "mfcc": ("fmin", "fmax", "htk"),
+    "decompose": ("init",),
+}
 
 
 def _order_drift(
@@ -565,12 +587,13 @@ def _order_drift(
             # facade exposing a STRICT PREFIX of the C config order is fine.
             if s_cfg == c_cfg[: len(s_cfg)]:
                 continue
-            # detect_chords is exposed in its EXTENDED (``_ex``) form: C base
-            # order followed by the SonareChordDetectionOptions extra fields.
+            # Facades exposed in their EXTENDED (``_ex``) form: C base order
+            # followed by the known extra-field tail of the _ex variant.
+            tail = _EXTENDED_FIELD_TAILS.get(key)
             if (
-                key == "detect_chords"
+                tail is not None
                 and s_cfg[: len(c_cfg)] == c_cfg
-                and tuple(s_cfg[len(c_cfg) :]) == _CHORD_EXTENDED_FIELDS
+                and tuple(s_cfg[len(c_cfg) :]) == tail
             ):
                 continue
             rep.findings.append(

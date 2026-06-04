@@ -760,6 +760,9 @@ def mel_spectrogram(
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
+    fmin: float = 0.0,
+    fmax: float = 0.0,
+    htk: bool = False,
 ) -> MelSpectrogramResult: ...
 def mfcc(
     samples: FloatSamples,
@@ -768,6 +771,9 @@ def mfcc(
     hop_length: int = 512,
     n_mels: int = 128,
     n_mfcc: int = 20,
+    fmin: float = 0.0,
+    fmax: float = 0.0,
+    htk: bool = False,
 ) -> MfccResult: ...
 def chroma(
     samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
