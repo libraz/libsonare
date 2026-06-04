@@ -57,7 +57,7 @@ def mixing_scene_preset_json(preset_name: str) -> str:
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixing_scene_preset_json"):
         raise RuntimeError("libsonare was built without mixing support")
-    json_ptr = ctypes.c_void_p()
+    json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mixing_scene_preset_json(preset_name.encode("utf-8"), ctypes.byref(json_ptr))
     _check(rc)
     try:
@@ -635,7 +635,7 @@ class Mixer:
         """Serialize the current scene (strips, buses, sends, connections)."""
         self._require()
         lib = _get_lib()
-        json_ptr = ctypes.c_void_p()
+        json_ptr = ctypes.c_char_p()
         _check(lib.sonare_mixer_to_scene_json(self._handle, ctypes.byref(json_ptr)))
         try:
             return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""

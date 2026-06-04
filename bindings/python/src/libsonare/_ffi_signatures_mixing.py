@@ -92,7 +92,7 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_mixer_to_scene_json.restype = ctypes.c_int32
         lib.sonare_mixer_to_scene_json.argtypes = [
             ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(ctypes.c_char_p),
         ]
         if hasattr(lib, "sonare_mixer_compile"):
             lib.sonare_mixer_compile.restype = ctypes.c_int32
@@ -199,7 +199,7 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_mixing_scene_preset_json.restype = ctypes.c_int32
         lib.sonare_mixing_scene_preset_json.argtypes = [
             ctypes.c_char_p,
-            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(ctypes.c_char_p),
         ]
         lib.sonare_mixer_destroy.restype = None
         lib.sonare_mixer_destroy.argtypes = [ctypes.c_void_p]

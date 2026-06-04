@@ -13,6 +13,7 @@ from ._project import (
     Project,
     project_abi_version,
 )
+from ._runtime import SonareError
 from .analyzer import (
     Mixer,
     MixerStereoResult,
@@ -370,6 +371,7 @@ __all__ = [
     "SectionResult",
     "SectionType",
     "SendTiming",
+    "SonareError",
     "SpectrumReport",
     "StftResult",
     "StreamAnalyzer",

@@ -812,7 +812,7 @@ class RealtimeVoiceChanger:
         Useful for syncing UI state or roundtripping the post-normalize
         configuration into a different language binding.
         """
-        out = ctypes.c_void_p()
+        out = ctypes.c_char_p()
         rc = self._lib.sonare_realtime_voice_changer_config_json(self._handle, ctypes.byref(out))
         _check(rc)
         try:
@@ -1014,7 +1014,7 @@ def realtime_voice_changer_preset_names() -> list[str]:
 
 def realtime_voice_changer_preset_json(name: str) -> str:
     lib = _get_lib()
-    out = ctypes.c_void_p()
+    out = ctypes.c_char_p()
     rc = lib.sonare_realtime_voice_changer_preset_json(name.encode("utf-8"), ctypes.byref(out))
     _check(rc)
     try:
@@ -1026,8 +1026,8 @@ def realtime_voice_changer_preset_json(name: str) -> str:
 
 def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]:
     lib = _get_lib()
-    normalized = ctypes.c_void_p()
-    error = ctypes.c_void_p()
+    normalized = ctypes.c_char_p()
+    error = ctypes.c_char_p()
     rc = lib.sonare_realtime_voice_changer_validate_preset_json(
         json_text.encode("utf-8"), ctypes.byref(normalized), ctypes.byref(error)
     )

@@ -7,6 +7,7 @@ from ._project import MidiRouteResult as MidiRouteResult
 from ._project import NotePairValidation as NotePairValidation
 from ._project import Project as Project
 from ._project import project_abi_version as project_abi_version
+from ._runtime import SonareError as SonareError
 from .analyzer import (
     Mixer as Mixer,
 )

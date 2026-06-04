@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ._ffi import SONARE_OK, load_library
-from ._runtime import _to_c_float_array
+from ._runtime import SonareError, _to_c_float_array
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
@@ -185,9 +185,9 @@ def _check(rc: int) -> None:
         detail = lib.sonare_last_error_message()
         detail_str = detail.decode("utf-8") if detail else ""
         if detail_str:
-            raise RuntimeError(detail_str)
+            raise SonareError(rc, detail_str)
         msg = lib.sonare_error_message(rc)
-        raise RuntimeError(msg.decode("utf-8") if msg else f"sonare error {rc}")
+        raise SonareError(rc, msg.decode("utf-8") if msg else f"sonare error {rc}")
 
 
 class Audio:

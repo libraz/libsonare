@@ -71,6 +71,12 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Heavy cases (>~2 s each: full RIR morph, bass-chroma CQT) are opt-in via
+# `-m slow` (see `make test-python-slow`); the default run excludes them.
+addopts = '-m "not slow"'
+markers = [
+    "slow: heavy test excluded from the default run (run with -m slow)",
+]
 
 [tool.ruff]
 line-length = 100

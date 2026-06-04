@@ -1003,7 +1003,7 @@ def mastering_pair_analyze(
     source_array, source_length = _to_c_float_array(source)
     reference_array, reference_length = _to_c_float_array(reference)
     param_array, param_count = _mastering_params(params)
-    json_ptr = ctypes.c_void_p()
+    json_ptr = ctypes.c_char_p()
     # Independent source/reference lengths (see mastering_pair_process).
     rc = lib.sonare_mastering_analyze_pair_ex(
         analysis_name.encode("utf-8"),
@@ -1040,7 +1040,7 @@ def mastering_stereo_analyze(
     if left_length != right_length:
         raise ValueError("left and right channel lengths must match")
     param_array, param_count = _mastering_params(params)
-    json_ptr = ctypes.c_void_p()
+    json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_analyze_stereo(
         analysis_name.encode("utf-8"),
         left_array,
@@ -1090,7 +1090,7 @@ def mastering_streaming_preview(
             ]
         )
 
-    json_ptr = ctypes.c_void_p()
+    json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_streaming_preview(
         c_array,
         ctypes.c_size_t(length),
@@ -1118,7 +1118,7 @@ def mastering_assistant_suggest(
         raise RuntimeError("libsonare was built without mastering assistant support")
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _mastering_params(params)
-    json_ptr = ctypes.c_void_p()
+    json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_assistant_suggest(
         c_array,
         ctypes.c_size_t(length),
@@ -1146,7 +1146,7 @@ def mastering_audio_profile(
         raise RuntimeError("libsonare was built without mastering audio profile support")
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _mastering_params(params)
-    json_ptr = ctypes.c_void_p()
+    json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_audio_profile(
         c_array,
         ctypes.c_size_t(length),

@@ -22,7 +22,7 @@ import math
 import numbers
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol, SupportsFloat, cast
+from typing import Any, Protocol, SupportsFloat, cast
 
 import numpy as np
 
@@ -469,6 +469,19 @@ def project_abi_version() -> int:
     return int(lib.sonare_project_abi_version())
 
 
+def _check_project_abi(lib: Any) -> None:
+    if not hasattr(lib, "sonare_project_abi_version"):
+        raise RuntimeError("libsonare was built without arrangement support")
+    abi = int(lib.sonare_project_abi_version())
+    if abi != EXPECTED_PROJECT_ABI_VERSION:
+        raise RuntimeError(
+            f"libsonare project ABI mismatch: native binary reports {abi}, "
+            f"expected {EXPECTED_PROJECT_ABI_VERSION}. The installed shared "
+            "library is incompatible with this Python binding (0 = arrangement "
+            "support not compiled in)."
+        )
+
+
 def _track_kind_value(kind: str | int) -> int:
     if isinstance(kind, int):
         return kind
@@ -515,16 +528,7 @@ class Project:
 
     def __init__(self) -> None:
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_abi_version"):
-            raise RuntimeError("libsonare was built without arrangement support")
-        abi = int(lib.sonare_project_abi_version())
-        if abi != EXPECTED_PROJECT_ABI_VERSION:
-            raise RuntimeError(
-                f"libsonare project ABI mismatch: native binary reports {abi}, "
-                f"expected {EXPECTED_PROJECT_ABI_VERSION}. The installed shared "
-                "library is incompatible with this Python binding (0 = arrangement "
-                "support not compiled in)."
-            )
+        _check_project_abi(lib)
         handle = ctypes.c_void_p()
         _check(lib.sonare_project_create(ctypes.byref(handle)))
         self._handle: ctypes.c_void_p | None = handle
@@ -593,8 +597,7 @@ class Project:
         diagnostic messages), never crashing.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_abi_version"):
-            raise RuntimeError("libsonare was built without arrangement support")
+        _check_project_abi(lib)
         data = json.encode("utf-8") if isinstance(json, str) else bytes(json)
         handle = ctypes.c_void_p()
         diag = ctypes.c_char_p()

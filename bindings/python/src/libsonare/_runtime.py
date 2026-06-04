@@ -22,6 +22,14 @@ PAN_MODE_DUAL_PAN = 2
 _lib: ctypes.CDLL | None = None
 
 
+class SonareError(RuntimeError):
+    """Exception raised for non-OK Sonare C API return codes."""
+
+    def __init__(self, code: int, message: str) -> None:
+        self.code = int(code)
+        super().__init__(f"[{self.code}] {message}")
+
+
 def _get_lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
@@ -41,9 +49,9 @@ def _check(rc: int) -> None:
         detail = lib.sonare_last_error_message()
         detail_str = detail.decode("utf-8") if detail else ""
         if detail_str:
-            raise RuntimeError(detail_str)
+            raise SonareError(rc, detail_str)
         msg = lib.sonare_error_message(rc)
-        raise RuntimeError(msg.decode("utf-8") if msg else f"sonare error {rc}")
+        raise SonareError(rc, msg.decode("utf-8") if msg else f"sonare error {rc}")
 
 
 def _validate_samples(
