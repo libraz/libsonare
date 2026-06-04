@@ -62,6 +62,18 @@ class Sf2Player final : public MidiInstrument {
     uint8_t bank_msb = 0;  // CC0; GS variation bank select
     uint8_t bank_lsb = 0;  // CC32
     bool sustain = false;
+    // Default-modulator controller state.
+    uint8_t volume = 100;      // CC7
+    uint8_t expression = 127;  // CC11
+    uint8_t pan = 64;          // CC10
+    uint8_t mod_wheel = 0;     // CC1
+    uint8_t reverb_send = 40;  // CC91 (GS power-on default)
+    uint8_t chorus_send = 0;   // CC93
+    uint16_t pitch_bend = 8192;
+    // RPN state (bend range via RPN 0; default 2 semitones).
+    uint8_t rpn_msb = 127;
+    uint8_t rpn_lsb = 127;
+    float bend_range_cents = 200.0f;
   };
 
   void note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
@@ -70,6 +82,9 @@ class Sf2Player final : public MidiInstrument {
   void sustain_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
+  void reset_controllers(uint8_t channel) noexcept;
+  /// Recompute the cached Sf2ChannelMod for @p channel after a CC/bend change.
+  void refresh_channel_mod(uint8_t channel) noexcept;
   /// Effective SF2 bank for a channel (drum channel -> 128).
   uint16_t effective_bank(uint8_t channel) const noexcept;
   /// Preset index for (bank, program) with GS-style fallbacks, or -1.
@@ -84,6 +99,7 @@ class Sf2Player final : public MidiInstrument {
   int32_t max_release_timecents_ = -12000;
 
   std::array<ChannelState, 16> channels_{};
+  std::array<Sf2ChannelMod, 16> channel_mods_{};
   VoicePool<Sf2Voice> pool_;
 };
 

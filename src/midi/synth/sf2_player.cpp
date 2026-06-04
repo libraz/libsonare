@@ -13,12 +13,10 @@ namespace {
 constexpr uint8_t kDrumChannel = 9;  // MIDI channel 10
 constexpr uint16_t kDrumBank = 128;
 
-/// MVP velocity curve: concave power law approximating the SF2 default
-/// velocity->attenuation modulator (P3 replaces this with the modulator set).
-float velocity_to_gain(uint8_t velocity) noexcept {
-  const float v = static_cast<float>(velocity) / 127.0f;
-  return v * v;
-}
+/// Default modulator: full CC1 adds 50 cents of vibrato LFO pitch depth.
+constexpr float kModWheelVibratoCents = 50.0f;
+/// Default modulator: full CC91/CC93 contributes 200/1000 send level.
+constexpr float kCcSendDepth = 0.2f;
 
 }  // namespace
 
@@ -62,6 +60,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   pool_.prepare(config_.polyphony);
   channels_ = {};
+  for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
   const float release_ms = std::max(5.0f, 1000.0f * timecents_to_seconds(max_release_timecents_));
   tail_samples_ = DahdsrEnvelope::release_tail_samples(sample_rate_, release_ms);
   prepared_ = true;
@@ -70,6 +69,19 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
 void Sf2Player::reset() {
   pool_.reset();
   channels_ = {};
+  for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
+}
+
+void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  const ChannelState& st = channels_[ch];
+  Sf2ChannelMod& mod = channel_mods_[ch];
+  mod.pitch_cents = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
+  mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression);
+  mod.extra_vibrato_cents = kModWheelVibratoCents * static_cast<float>(st.mod_wheel) / 127.0f;
+  mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
+  mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
+  mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;
 }
 
 uint16_t Sf2Player::effective_bank(uint8_t channel) const noexcept {
@@ -103,7 +115,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
   const Sf2Preset& preset = soundfont_->presets()[static_cast<size_t>(preset_idx)];
   const auto& instruments = soundfont_->instruments();
   const float* pool_data = soundfont_->sample_pool().data();
-  const float vel_gain = velocity_to_gain(velocity);
+  const float vel_gain = sf2_velocity_gain(velocity);
 
   const Sf2Zone* preset_global =
       !preset.zones.empty() && preset.zones[0].is_global() ? &preset.zones[0] : nullptr;
@@ -132,7 +144,8 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
       if (preset_global != nullptr) gens.add_relative(*preset_global);
       gens.add_relative(pzone);
 
-      const Sf2VoiceParams params = resolve_voice_params(gens, sample, note, sample_rate_);
+      const Sf2VoiceParams params =
+          resolve_voice_params(gens, sample, note, velocity, sample_rate_);
 
       // Exclusive class: choke same-class voices on this channel (hi-hats).
       if (params.exclusive_class != 0) {
@@ -198,14 +211,71 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
   }
 }
 
+void Sf2Player::reset_controllers(uint8_t channel) noexcept {
+  // MIDI RP-015: reset performance controllers, keep program/bank/volume/pan.
+  const uint8_t ch = channel & 0x0Fu;
+  ChannelState& st = channels_[ch];
+  st.mod_wheel = 0;
+  st.expression = 127;
+  st.pitch_bend = 8192;
+  st.rpn_msb = 127;
+  st.rpn_lsb = 127;
+  sustain_pedal(ch, false);
+  refresh_channel_mod(ch);
+}
+
 void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
   const uint8_t ch = channel & 0x0Fu;
+  ChannelState& st = channels_[ch];
   switch (controller) {
     case 0:  // Bank select MSB (GS variation bank)
-      channels_[ch].bank_msb = value;
+      st.bank_msb = value;
       break;
     case 32:  // Bank select LSB
-      channels_[ch].bank_lsb = value;
+      st.bank_lsb = value;
+      break;
+    case 1:
+      st.mod_wheel = value;
+      refresh_channel_mod(ch);
+      break;
+    case 6:  // Data entry MSB -> active RPN (bend range semitones)
+      if (st.rpn_msb == 0 && st.rpn_lsb == 0) {
+        st.bend_range_cents = 100.0f * static_cast<float>(value);
+        refresh_channel_mod(ch);
+      }
+      break;
+    case 38:  // Data entry LSB -> bend range cents
+      if (st.rpn_msb == 0 && st.rpn_lsb == 0) {
+        st.bend_range_cents =
+            100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
+        refresh_channel_mod(ch);
+      }
+      break;
+    case 7:
+      st.volume = value;
+      refresh_channel_mod(ch);
+      break;
+    case 10:
+      st.pan = value;
+      refresh_channel_mod(ch);
+      break;
+    case 11:
+      st.expression = value;
+      refresh_channel_mod(ch);
+      break;
+    case 91:
+      st.reverb_send = value;
+      refresh_channel_mod(ch);
+      break;
+    case 93:
+      st.chorus_send = value;
+      refresh_channel_mod(ch);
+      break;
+    case 100:  // RPN LSB
+      st.rpn_lsb = value;
+      break;
+    case 101:  // RPN MSB
+      st.rpn_msb = value;
       break;
     case 64:
       sustain_pedal(ch, value >= 64);
@@ -213,8 +283,8 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
     case 120:
       all_sound_off(ch);
       break;
-    case 121:  // Reset All Controllers: lift damper, keep program/bank.
-      sustain_pedal(ch, false);
+    case 121:
+      reset_controllers(ch);
       break;
     case 123:
     case 124:
@@ -224,7 +294,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       all_notes_off(ch);
       break;
     default:
-      break;  // P3 wires the default modulator controllers (CC1/7/10/11/91/93)
+      break;
   }
 }
 
@@ -248,6 +318,17 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     note_off(u.channel(), u.note_number());
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
     channels_[u.channel() & 0x0Fu].program = u.note_number();  // data1 slot
+  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
+    const uint8_t ch = u.channel() & 0x0Fu;
+    if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
+      // MIDI 1.0: 14-bit value, LSB in data1 (bits 8..14), MSB in data2.
+      channels_[ch].pitch_bend =
+          static_cast<uint16_t>((static_cast<uint16_t>(u.data2_7bit()) << 7) | u.note_number());
+    } else {
+      // MIDI 2.0: 32-bit value in word[1]; keep the top 14 bits.
+      channels_[ch].pitch_bend = static_cast<uint16_t>(u.words[1] >> 18);
+    }
+    refresh_channel_mod(ch);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
     const uint8_t controller = u.note_number();
     const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
@@ -268,9 +349,9 @@ void Sf2Player::process(float* const* channels, int num_channels, int num_sample
     float mix_r = 0.0f;
     for (Sf2Voice& v : pool_) {
       if (!v.active) continue;
-      const float s = v.render();
-      mix_l += s * v.params.gain_left;
-      mix_r += s * v.params.gain_right;
+      const float s = v.render(channel_mods_[v.channel & 0x0Fu]);
+      mix_l += s * v.gain_left;
+      mix_r += s * v.gain_right;
     }
     mix_l *= config_.gain;
     mix_r *= config_.gain;
