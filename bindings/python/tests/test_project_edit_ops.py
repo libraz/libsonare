@@ -1,4 +1,4 @@
-"""Tests for the newly-exposed headless-DAW edit ops + annotation / assist /
+"""Tests for the headless-DAW edit ops + annotation / assist /
 realtime helpers on the Python :class:`Project` wrapper.
 
 These mirror the C-ABI keystone coverage (tests/arrangement/c_abi_edit_ops_test.cpp):

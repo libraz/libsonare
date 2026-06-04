@@ -204,6 +204,14 @@ export function chordFunctionalAnalysis(
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Complete analysis result
+ *
+ * @remarks
+ * This call is synchronous and blocks until analysis completes. Unlike the
+ * Node binding (which offers `analyzeAsync` on a libuv worker thread), the
+ * WASM build runs on a single thread, so there is no non-blocking variant —
+ * the DSP pipeline always runs to completion on the calling thread. To keep
+ * the UI responsive for long inputs, drive this from a Web Worker and use
+ * {@link analyzeWithProgress} to report progress.
  */
 export function analyze(samples: Float32Array, sampleRate = 22050): AnalysisResult {
   const result = requireModule().analyze(samples, sampleRate);

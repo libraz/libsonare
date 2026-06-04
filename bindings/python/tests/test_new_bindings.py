@@ -1,4 +1,4 @@
-"""Smoke tests for the newly-exposed C-ABI functions (Wave 2.2b exposure).
+"""Smoke tests for the C-ABI functions surfaced through the Python facade.
 
 Each function is implemented + tested at the C ABI; these guard that the Python
 facade wiring (ctypes signature, out-buffer copy, free, re-export) is correct and

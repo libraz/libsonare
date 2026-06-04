@@ -1,6 +1,6 @@
 """Tests for the full analyze() JSON path, melody pYIN/center, and progress.
 
-These cover the Wave 3 analysis enrichments:
+These cover the full analysis result surface:
 - ``analyze()`` returning the full result (chords/sections/timbre/dynamics/
   rhythm/melody/form plus per-beat strengths) via ``sonare_analyze_json``.
 - ``analyze_melody(use_pyin=...)`` / ``center=...`` routing through

@@ -1,5 +1,5 @@
 /**
- * WASM coverage for the newly-exposed headless-DAW edit operations, MIR
+ * WASM coverage for the headless-DAW edit operations, MIR
  * annotations, assist sidecars, the realtime-engine MIDI/parameter ops, and
  * masteringInsertNames. These mirror the Node/Python surface and drive the same
  * C ABI / core through embind.

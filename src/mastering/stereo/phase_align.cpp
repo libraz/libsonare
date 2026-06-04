@@ -104,8 +104,8 @@ float PhaseAlign::process_delay(float input) {
   // interpolation ripple, but it shifts the impulse-response peak location and
   // is therefore deferred: the existing "PhaseAlign supports fractional sample
   // delay" regression encodes the current edge-stencil group-delay shape, and
-  // re-centering cannot be done without updating that test. See the audit note
-  // for item 3 (documented + skipped) rather than risk a silent behavior change.
+  // re-centering cannot be done without updating that test, so the edge stencil
+  // is kept rather than risk a silent behavior change.
   float delayed = 0.0f;
   for (int tap = 0; tap < 5; ++tap) {
     float weight = 1.0f;

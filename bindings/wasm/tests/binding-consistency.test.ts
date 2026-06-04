@@ -1,5 +1,5 @@
 /**
- * WASM coverage for the Wave 2b cross-binding consistency fixes:
+ * WASM coverage for cross-binding consistency with Node/Python:
  *  - unknown built-in synth waveform names throw (matching Node/Python) and
  *    "sawtooth" is accepted as an alias of "saw";
  *  - an explicitly empty instrument array bounces to silence (not a default
@@ -7,7 +7,7 @@
  *  - setPan with no panMode keeps the strip's current pan mode;
  *  - stripMeter accepts an optional tap argument;
  *  - one-shot mixStereo routes through the real graph (master output);
- *  - the four functions previously missing from WASM but present in Node/Python:
+ *  - the four functions that round out WASM parity with Node/Python:
  *    decomposeWithInit, meteringVectorscopeDecimated,
  *    meteringPhaseScopeDecimated, meteringSpectrumFrame.
  */
@@ -49,7 +49,7 @@ function buildMidiOnlyProject(): Project {
   return project;
 }
 
-describe('Wave 2b WASM consistency', () => {
+describe('WASM cross-binding consistency', () => {
   beforeAll(async () => {
     await init();
   });
@@ -177,7 +177,7 @@ describe('Wave 2b WASM consistency', () => {
     });
   });
 
-  describe('functions previously missing from WASM', () => {
+  describe('functions matching the Node/Python surface', () => {
     it('decomposeWithInit returns W and H factor matrices', () => {
       const nFeatures = 8;
       const nFrames = 6;

@@ -1,7 +1,7 @@
 /**
- * Wave 3 analysis parity tests for the WASM binding.
+ * Analysis parity tests for the WASM binding.
  *
- * Covers the gaps closed in this wave:
+ * Covers the full analysis surface shared with Node / Python / C-ABI:
  *  - the unified `analyze()` result now exposes `dynamics.peakDb` /
  *    `dynamics.rmsDb`, `rhythm.tempoStability` / `rhythm.timeSignature`, and a
  *    `melody` contour (matching the Node / Python / C-ABI `analyze()` surface);
