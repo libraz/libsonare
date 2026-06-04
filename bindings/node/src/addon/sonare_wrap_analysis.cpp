@@ -8,28 +8,10 @@
 #include "core/audio.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_key_options.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
-
-namespace {
-
-int int_option(const Napi::Object& object, const char* key, int fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().Int32Value() : fallback;
-}
-
-float float_option(const Napi::Object& object, const char* key, float fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().FloatValue() : fallback;
-}
-
-bool bool_option(const Napi::Object& object, const char* key, bool fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
-}
-
-}  // namespace
 
 Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -85,11 +67,11 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   std::string genre_hint;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    n_fft = int_option(options, "nFft", n_fft);
-    hop_length = int_option(options, "hopLength", hop_length);
-    use_hpss = bool_option(options, "useHpss", use_hpss);
-    loudness_weighted = bool_option(options, "loudnessWeighted", loudness_weighted);
-    high_pass_hz = float_option(options, "highPassHz", high_pass_hz);
+    n_fft = node_int_option(options, "nFft", n_fft);
+    hop_length = node_int_option(options, "hopLength", hop_length);
+    use_hpss = node_bool_option(options, "useHpss", use_hpss);
+    loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     Napi::Value genre = options.Get("genreHint");
@@ -135,11 +117,11 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   std::string genre_hint;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    n_fft = int_option(options, "nFft", n_fft);
-    hop_length = int_option(options, "hopLength", hop_length);
-    use_hpss = bool_option(options, "useHpss", use_hpss);
-    loudness_weighted = bool_option(options, "loudnessWeighted", loudness_weighted);
-    high_pass_hz = float_option(options, "highPassHz", high_pass_hz);
+    n_fft = node_int_option(options, "nFft", n_fft);
+    hop_length = node_int_option(options, "hopLength", hop_length);
+    use_hpss = node_bool_option(options, "useHpss", use_hpss);
+    loudness_weighted = node_bool_option(options, "loudnessWeighted", loudness_weighted);
+    high_pass_hz = node_float_option(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     Napi::Value genre = options.Get("genreHint");

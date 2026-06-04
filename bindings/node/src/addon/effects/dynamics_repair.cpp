@@ -38,21 +38,6 @@ using namespace sonare_node;
 
 namespace {
 
-int repair_int_option(const Napi::Object& object, const char* key, int fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().Int32Value() : fallback;
-}
-
-float repair_float_option(const Napi::Object& object, const char* key, float fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().FloatValue() : fallback;
-}
-
-bool repair_bool_option(const Napi::Object& object, const char* key, bool fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
-}
-
 sonare::mastering::repair::DenoiseMode parse_denoise_mode(
     const Napi::Object& options, sonare::mastering::repair::DenoiseMode fallback) {
   Napi::Value value = options.Get("mode");
@@ -265,19 +250,19 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
   sonare::mastering::repair::DeclickConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = repair_float_option(options, "threshold", config.threshold);
-    config.neighbor_ratio = repair_float_option(options, "neighborRatio", config.neighbor_ratio);
+    config.threshold = node_float_option(options, "threshold", config.threshold);
+    config.neighbor_ratio = node_float_option(options, "neighborRatio", config.neighbor_ratio);
     if (options.Has("maxClickSamples")) {
       const int max_click_samples =
-          repair_int_option(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
+          node_int_option(options, "maxClickSamples", static_cast<int>(config.max_click_samples));
       if (max_click_samples <= 0) {
         Napi::RangeError::New(env, "maxClickSamples must be positive").ThrowAsJavaScriptException();
         return env.Undefined();
       }
       config.max_click_samples = static_cast<size_t>(max_click_samples);
     }
-    config.lpc_order = repair_int_option(options, "lpcOrder", config.lpc_order);
-    config.residual_ratio = repair_float_option(options, "residualRatio", config.residual_ratio);
+    config.lpc_order = node_int_option(options, "lpcOrder", config.lpc_order);
+    config.residual_ratio = node_float_option(options, "residualRatio", config.residual_ratio);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::declick(audio, config);
@@ -302,18 +287,18 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
     Napi::Object options = info[2].As<Napi::Object>();
     config.mode = parse_denoise_mode(options, config.mode);
     config.noise_estimator = parse_denoise_noise_estimator(options, config.noise_estimator);
-    config.n_fft = repair_int_option(options, "nFft", config.n_fft);
-    config.hop_length = repair_int_option(options, "hopLength", config.hop_length);
-    config.dd_alpha = repair_float_option(options, "ddAlpha", config.dd_alpha);
-    config.gain_floor = repair_float_option(options, "gainFloor", config.gain_floor);
+    config.n_fft = node_int_option(options, "nFft", config.n_fft);
+    config.hop_length = node_int_option(options, "hopLength", config.hop_length);
+    config.dd_alpha = node_float_option(options, "ddAlpha", config.dd_alpha);
+    config.gain_floor = node_float_option(options, "gainFloor", config.gain_floor);
     config.over_subtraction =
-        repair_float_option(options, "overSubtraction", config.over_subtraction);
-    config.spectral_floor = repair_float_option(options, "spectralFloor", config.spectral_floor);
+        node_float_option(options, "overSubtraction", config.over_subtraction);
+    config.spectral_floor = node_float_option(options, "spectralFloor", config.spectral_floor);
     config.noise_estimation_quantile =
-        repair_float_option(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
+        node_float_option(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
     config.speech_presence_gain =
-        repair_bool_option(options, "speechPresenceGain", config.speech_presence_gain);
-    config.gain_smoothing = repair_bool_option(options, "gainSmoothing", config.gain_smoothing);
+        node_bool_option(options, "speechPresenceGain", config.speech_presence_gain);
+    config.gain_smoothing = node_bool_option(options, "gainSmoothing", config.gain_smoothing);
   }
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
     Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
@@ -378,10 +363,10 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   sonare::mastering::repair::DeclipConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.clip_threshold = repair_float_option(options, "clipThreshold", config.clip_threshold);
-    config.lpc_order = repair_int_option(options, "lpcOrder", config.lpc_order);
-    config.iterations = repair_int_option(options, "iterations", config.iterations);
-    config.lpc_blend = repair_float_option(options, "lpcBlend", config.lpc_blend);
+    config.clip_threshold = node_float_option(options, "clipThreshold", config.clip_threshold);
+    config.lpc_order = node_int_option(options, "lpcOrder", config.lpc_order);
+    config.iterations = node_int_option(options, "iterations", config.iterations);
+    config.lpc_blend = node_float_option(options, "lpcBlend", config.lpc_blend);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::declip(audio, config);
@@ -404,9 +389,9 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
   sonare::mastering::repair::DecrackleConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = repair_float_option(options, "threshold", config.threshold);
+    config.threshold = node_float_option(options, "threshold", config.threshold);
     config.mode = parse_decrackle_mode(options, config.mode);
-    config.levels = repair_int_option(options, "levels", config.levels);
+    config.levels = node_int_option(options, "levels", config.levels);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::decrackle(audio, config);
@@ -429,14 +414,14 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
   sonare::mastering::repair::DehumConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.fundamental_hz = repair_float_option(options, "fundamentalHz", config.fundamental_hz);
-    config.harmonics = repair_int_option(options, "harmonics", config.harmonics);
-    config.q = repair_float_option(options, "q", config.q);
-    config.adaptive = repair_bool_option(options, "adaptive", config.adaptive);
-    config.search_range_hz = repair_float_option(options, "searchRangeHz", config.search_range_hz);
-    config.adaptation = repair_float_option(options, "adaptation", config.adaptation);
-    config.frame_size = repair_int_option(options, "frameSize", config.frame_size);
-    config.pll_bandwidth = repair_float_option(options, "pllBandwidth", config.pll_bandwidth);
+    config.fundamental_hz = node_float_option(options, "fundamentalHz", config.fundamental_hz);
+    config.harmonics = node_int_option(options, "harmonics", config.harmonics);
+    config.q = node_float_option(options, "q", config.q);
+    config.adaptive = node_bool_option(options, "adaptive", config.adaptive);
+    config.search_range_hz = node_float_option(options, "searchRangeHz", config.search_range_hz);
+    config.adaptation = node_float_option(options, "adaptation", config.adaptation);
+    config.frame_size = node_int_option(options, "frameSize", config.frame_size);
+    config.pll_bandwidth = node_float_option(options, "pllBandwidth", config.pll_bandwidth);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::dehum(audio, config);
@@ -459,19 +444,19 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
   sonare::mastering::repair::DereverbClassicalConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = repair_float_option(options, "threshold", config.threshold);
-    config.attenuation = repair_float_option(options, "attenuation", config.attenuation);
-    config.n_fft = repair_int_option(options, "nFft", config.n_fft);
-    config.hop_length = repair_int_option(options, "hopLength", config.hop_length);
-    config.t60_sec = repair_float_option(options, "t60Sec", config.t60_sec);
-    config.late_delay_ms = repair_float_option(options, "lateDelayMs", config.late_delay_ms);
+    config.threshold = node_float_option(options, "threshold", config.threshold);
+    config.attenuation = node_float_option(options, "attenuation", config.attenuation);
+    config.n_fft = node_int_option(options, "nFft", config.n_fft);
+    config.hop_length = node_int_option(options, "hopLength", config.hop_length);
+    config.t60_sec = node_float_option(options, "t60Sec", config.t60_sec);
+    config.late_delay_ms = node_float_option(options, "lateDelayMs", config.late_delay_ms);
     config.over_subtraction =
-        repair_float_option(options, "overSubtraction", config.over_subtraction);
-    config.spectral_floor = repair_float_option(options, "spectralFloor", config.spectral_floor);
-    config.wpe_enabled = repair_bool_option(options, "wpeEnabled", config.wpe_enabled);
-    config.wpe_iterations = repair_int_option(options, "wpeIterations", config.wpe_iterations);
-    config.wpe_taps = repair_int_option(options, "wpeTaps", config.wpe_taps);
-    config.wpe_strength = repair_float_option(options, "wpeStrength", config.wpe_strength);
+        node_float_option(options, "overSubtraction", config.over_subtraction);
+    config.spectral_floor = node_float_option(options, "spectralFloor", config.spectral_floor);
+    config.wpe_enabled = node_bool_option(options, "wpeEnabled", config.wpe_enabled);
+    config.wpe_iterations = node_int_option(options, "wpeIterations", config.wpe_iterations);
+    config.wpe_taps = node_int_option(options, "wpeTaps", config.wpe_taps);
+    config.wpe_strength = node_float_option(options, "wpeStrength", config.wpe_strength);
   }
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {
     Napi::RangeError::New(env, "nFft must be a positive power of two").ThrowAsJavaScriptException();
@@ -502,10 +487,10 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
   sonare::mastering::repair::TrimSilenceConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
-    config.threshold = repair_float_option(options, "threshold", config.threshold);
+    config.threshold = node_float_option(options, "threshold", config.threshold);
     if (options.Has("paddingSamples")) {
       const int padding_samples =
-          repair_int_option(options, "paddingSamples", static_cast<int>(config.padding_samples));
+          node_int_option(options, "paddingSamples", static_cast<int>(config.padding_samples));
       if (padding_samples < 0) {
         Napi::RangeError::New(env, "paddingSamples must be non-negative")
             .ThrowAsJavaScriptException();
@@ -514,8 +499,8 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
       config.padding_samples = static_cast<size_t>(padding_samples);
     }
     config.mode = parse_trim_silence_mode(options, config.mode);
-    config.gate_lufs = repair_float_option(options, "gateLufs", config.gate_lufs);
-    config.window_ms = repair_float_option(options, "windowMs", config.window_ms);
+    config.gate_lufs = node_float_option(options, "gateLufs", config.gate_lufs);
+    config.window_ms = node_float_option(options, "windowMs", config.window_ms);
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::trim_silence(audio, config);

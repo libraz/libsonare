@@ -463,7 +463,7 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
 
-  int sample_rate = 22050;
+  int sample_rate = 48000;
   if (info.Length() >= 2 && info[1].IsNumber()) {
     sample_rate = info[1].As<Napi::Number>().Int32Value();
   }

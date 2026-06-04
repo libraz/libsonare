@@ -175,13 +175,19 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   if (result.sample_count > 0 && result.interleaved != nullptr) {
     std::memcpy(interleaved.Data(), result.interleaved, result.sample_count * sizeof(float));
   }
+  // Capture scalars before freeing: the free contract only promises to release
+  // the owned buffers, not to keep scalar fields readable afterwards.
+  const int64_t frames = result.frames;
+  const int num_channels = result.num_channels;
+  const int sample_rate = result.sample_rate;
+  const float integrated_lufs = result.integrated_lufs;
   sonare_free_bounce_result(&result);
   Napi::Object out = Napi::Object::New(env);
   out.Set("interleaved", interleaved);
-  out.Set("frames", Napi::Number::New(env, static_cast<double>(result.frames)));
-  out.Set("numChannels", Napi::Number::New(env, result.num_channels));
-  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
-  out.Set("integratedLufs", Napi::Number::New(env, result.integrated_lufs));
+  out.Set("frames", Napi::Number::New(env, static_cast<double>(frames)));
+  out.Set("numChannels", Napi::Number::New(env, num_channels));
+  out.Set("sampleRate", Napi::Number::New(env, sample_rate));
+  out.Set("integratedLufs", Napi::Number::New(env, integrated_lufs));
   return out;
 }
 

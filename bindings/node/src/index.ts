@@ -175,11 +175,14 @@ export class Audio {
   }
 
   detectKey(options: KeyDetectionOptions = {}): Key {
-    return addon.detectKey(this.getData(), this.getSampleRate(), options);
+    // Native instance method reads the handle's buffer directly (same options
+    // and result shape as the standalone addon.detectKey); routing through
+    // getData() would copy the whole buffer out of native memory first.
+    return this.native.detectKey(options);
   }
 
   detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
-    return addon.detectKeyCandidates(this.getData(), this.getSampleRate(), options);
+    return this.native.detectKeyCandidates(options);
   }
 
   detectBeats(): Float32Array {

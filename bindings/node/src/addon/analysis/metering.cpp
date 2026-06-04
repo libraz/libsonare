@@ -9,26 +9,12 @@
 #include "core/audio.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_key_options.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
 
 namespace {
-
-int int_option(const Napi::Object& object, const char* key, int fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().Int32Value() : fallback;
-}
-
-float float_option(const Napi::Object& object, const char* key, float fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsNumber() ? value.As<Napi::Number>().FloatValue() : fallback;
-}
-
-bool bool_option(const Napi::Object& object, const char* key, bool fallback) {
-  Napi::Value value = object.Get(key);
-  return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
-}
 
 // Marshals a SonareSpectrumResult into the JS spectrum object shape shared by
 // meteringSpectrum (Welch-averaged) and meteringSpectrumFrame (single frame).
@@ -584,11 +570,11 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
   float db_amin = 0.0f;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object opts = info[2].As<Napi::Object>();
-    n_fft = int_option(opts, "nFft", 0);
-    smooth = bool_option(opts, "applyOctaveSmoothing", false) ? 1 : 0;
-    octave = int_option(opts, "octaveFraction", 0);
-    db_ref = float_option(opts, "dbRef", 0.0f);
-    db_amin = float_option(opts, "dbAmin", 0.0f);
+    n_fft = node_int_option(opts, "nFft", 0);
+    smooth = node_bool_option(opts, "applyOctaveSmoothing", false) ? 1 : 0;
+    octave = node_int_option(opts, "octaveFraction", 0);
+    db_ref = node_float_option(opts, "dbRef", 0.0f);
+    db_amin = node_float_option(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
   SonareError err = sonare_metering_spectrum(typed.Data(), typed.ElementLength(), sr, n_fft, smooth,
@@ -622,11 +608,11 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   float db_amin = 0.0f;
   if (info.Length() >= 4 && info[3].IsObject()) {
     Napi::Object opts = info[3].As<Napi::Object>();
-    n_fft = int_option(opts, "nFft", 0);
-    smooth = bool_option(opts, "applyOctaveSmoothing", false) ? 1 : 0;
-    octave = int_option(opts, "octaveFraction", 0);
-    db_ref = float_option(opts, "dbRef", 0.0f);
-    db_amin = float_option(opts, "dbAmin", 0.0f);
+    n_fft = node_int_option(opts, "nFft", 0);
+    smooth = node_bool_option(opts, "applyOctaveSmoothing", false) ? 1 : 0;
+    octave = node_int_option(opts, "octaveFraction", 0);
+    db_ref = node_float_option(opts, "dbRef", 0.0f);
+    db_amin = node_float_option(opts, "dbAmin", 0.0f);
   }
   SonareSpectrumResult result{};
   SonareError err =

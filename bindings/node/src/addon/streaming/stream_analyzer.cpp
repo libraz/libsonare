@@ -13,30 +13,13 @@
 #include "mastering/eq/spectrum_engine.h"
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_streaming.h"
 #include "sonare_wrap_utils.h"
 
 namespace sonare_node {
 
 namespace {
-
-bool HasKey(const Napi::Object& object, const char* key) {
-  return object.Has(key) && !object.Get(key).IsUndefined() && !object.Get(key).IsNull();
-}
-
-double NumberKey(const Napi::Object& object, const char* key, double fallback) {
-  if (!HasKey(object, key)) return fallback;
-  Napi::Value value = object.Get(key);
-  if (!value.IsNumber()) return fallback;
-  return value.As<Napi::Number>().DoubleValue();
-}
-
-bool BoolKey(const Napi::Object& object, const char* key, bool fallback) {
-  if (!HasKey(object, key)) return fallback;
-  Napi::Value value = object.Get(key);
-  if (!value.IsBoolean()) return fallback;
-  return value.As<Napi::Boolean>().Value();
-}
 
 // Reads an optional quantization-range config from a JS value (null/undefined or
 // a non-object yields the library defaults). Each field defaults to the
@@ -46,11 +29,14 @@ sonare::QuantizeConfig QuantizeConfigFromValue(const Napi::Value& value) {
   sonare::QuantizeConfig qconfig;
   if (!value.IsObject()) return qconfig;
   Napi::Object object = value.As<Napi::Object>();
-  qconfig.mel_db_min = static_cast<float>(NumberKey(object, "melDbMin", qconfig.mel_db_min));
-  qconfig.mel_db_max = static_cast<float>(NumberKey(object, "melDbMax", qconfig.mel_db_max));
-  qconfig.onset_max = static_cast<float>(NumberKey(object, "onsetMax", qconfig.onset_max));
-  qconfig.rms_max = static_cast<float>(NumberKey(object, "rmsMax", qconfig.rms_max));
-  qconfig.centroid_max = static_cast<float>(NumberKey(object, "centroidMax", qconfig.centroid_max));
+  qconfig.mel_db_min =
+      static_cast<float>(node_double_option(object, "melDbMin", qconfig.mel_db_min));
+  qconfig.mel_db_max =
+      static_cast<float>(node_double_option(object, "melDbMax", qconfig.mel_db_max));
+  qconfig.onset_max = static_cast<float>(node_double_option(object, "onsetMax", qconfig.onset_max));
+  qconfig.rms_max = static_cast<float>(node_double_option(object, "rmsMax", qconfig.rms_max));
+  qconfig.centroid_max =
+      static_cast<float>(node_double_option(object, "centroidMax", qconfig.centroid_max));
   return qconfig;
 }
 
@@ -124,33 +110,36 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
   sonare::StreamConfig config;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object opts = info[0].As<Napi::Object>();
-    config.sample_rate = static_cast<int>(NumberKey(opts, "sampleRate", config.sample_rate));
-    config.n_fft = static_cast<int>(NumberKey(opts, "nFft", config.n_fft));
-    config.hop_length = static_cast<int>(NumberKey(opts, "hopLength", config.hop_length));
-    config.n_mels = static_cast<int>(NumberKey(opts, "nMels", config.n_mels));
-    config.fmin = static_cast<float>(NumberKey(opts, "fmin", config.fmin));
-    config.fmax = static_cast<float>(NumberKey(opts, "fmax", config.fmax));
-    config.tuning_ref_hz = static_cast<float>(NumberKey(opts, "tuningRefHz", config.tuning_ref_hz));
-    config.compute_magnitude = BoolKey(opts, "computeMagnitude", config.compute_magnitude);
-    config.compute_mel = BoolKey(opts, "computeMel", config.compute_mel);
-    config.compute_chroma = BoolKey(opts, "computeChroma", config.compute_chroma);
-    config.compute_onset = BoolKey(opts, "computeOnset", config.compute_onset);
-    config.compute_spectral = BoolKey(opts, "computeSpectral", config.compute_spectral);
+    config.sample_rate =
+        static_cast<int>(node_double_option(opts, "sampleRate", config.sample_rate));
+    config.n_fft = static_cast<int>(node_double_option(opts, "nFft", config.n_fft));
+    config.hop_length = static_cast<int>(node_double_option(opts, "hopLength", config.hop_length));
+    config.n_mels = static_cast<int>(node_double_option(opts, "nMels", config.n_mels));
+    config.fmin = static_cast<float>(node_double_option(opts, "fmin", config.fmin));
+    config.fmax = static_cast<float>(node_double_option(opts, "fmax", config.fmax));
+    config.tuning_ref_hz =
+        static_cast<float>(node_double_option(opts, "tuningRefHz", config.tuning_ref_hz));
+    config.compute_magnitude = node_bool_option(opts, "computeMagnitude", config.compute_magnitude);
+    config.compute_mel = node_bool_option(opts, "computeMel", config.compute_mel);
+    config.compute_chroma = node_bool_option(opts, "computeChroma", config.compute_chroma);
+    config.compute_onset = node_bool_option(opts, "computeOnset", config.compute_onset);
+    config.compute_spectral = node_bool_option(opts, "computeSpectral", config.compute_spectral);
     config.emit_every_n_frames =
-        static_cast<int>(NumberKey(opts, "emitEveryNFrames", config.emit_every_n_frames));
-    config.magnitude_downsample =
-        static_cast<int>(NumberKey(opts, "magnitudeDownsample", config.magnitude_downsample));
-    config.key_update_interval_sec =
-        static_cast<float>(NumberKey(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
-    config.bpm_update_interval_sec =
-        static_cast<float>(NumberKey(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
-    const int window = static_cast<int>(NumberKey(opts, "window", static_cast<int>(config.window)));
+        static_cast<int>(node_double_option(opts, "emitEveryNFrames", config.emit_every_n_frames));
+    config.magnitude_downsample = static_cast<int>(
+        node_double_option(opts, "magnitudeDownsample", config.magnitude_downsample));
+    config.key_update_interval_sec = static_cast<float>(
+        node_double_option(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
+    config.bpm_update_interval_sec = static_cast<float>(
+        node_double_option(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
+    const int window =
+        static_cast<int>(node_double_option(opts, "window", static_cast<int>(config.window)));
     config.window = window == 1   ? sonare::WindowType::Hamming
                     : window == 2 ? sonare::WindowType::Blackman
                     : window == 3 ? sonare::WindowType::Rectangular
                                   : sonare::WindowType::Hann;
-    const int output_format =
-        static_cast<int>(NumberKey(opts, "outputFormat", static_cast<int>(config.output_format)));
+    const int output_format = static_cast<int>(
+        node_double_option(opts, "outputFormat", static_cast<int>(config.output_format)));
     config.output_format = output_format == 1   ? sonare::OutputFormat::Int16
                            : output_format == 2 ? sonare::OutputFormat::Uint8
                                                 : sonare::OutputFormat::Float32;

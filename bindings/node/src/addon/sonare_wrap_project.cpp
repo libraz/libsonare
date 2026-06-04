@@ -5,9 +5,15 @@
 #include <string>
 #include <vector>
 
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 namespace {
+
+// Shared presence-checked property readers (see sonare_wrap_options.h).
+using sonare_node::FloatProperty;
+using sonare_node::Int64Property;
+using sonare_node::IntProperty;
 
 // Derived from the canonical C macro (via sonare_c.h) so this addon can never
 // drift from SONARE_PROJECT_ABI_VERSION. A runtime mismatch means the loaded
@@ -33,22 +39,6 @@ uint32_t Uint32Arg(const Napi::CallbackInfo& info, size_t index, uint32_t fallba
     return fallback;
   }
   return info[index].As<Napi::Number>().Uint32Value();
-}
-
-int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
-  Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback : value.As<Napi::Number>().Int32Value();
-}
-
-int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
-  Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback
-                             : static_cast<int64_t>(value.As<Napi::Number>().Int64Value());
-}
-
-float FloatProperty(const Napi::Object& obj, const char* key, float fallback) {
-  Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback : value.As<Napi::Number>().FloatValue();
 }
 
 // Fills `options` from a JS bounce-options object (zero-initialized on entry).

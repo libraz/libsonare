@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "sonare_wrap_engine.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 namespace sonare_node::engine {
@@ -181,25 +182,12 @@ inline Napi::Array ChannelsToJs(Napi::Env env, const ChannelBlock& block) {
   return out;
 }
 
-inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
-  Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback : value.As<Napi::Number>().Int32Value();
-}
-
-inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
-  Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback
-                             : static_cast<int64_t>(value.As<Napi::Number>().Int64Value());
-}
-
-inline float FloatProperty(const Napi::Object& obj, const char* key, float fallback) {
-  Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback : value.As<Napi::Number>().FloatValue();
-}
-
-inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback) {
-  Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback : value.As<Napi::Boolean>().Value();
-}
+// IntProperty / Int64Property / FloatProperty / BoolProperty come from
+// sonare_wrap_options.h (namespace sonare_node); re-exported here so the
+// engine TUs that `using namespace sonare_node::engine` keep finding them.
+using sonare_node::BoolProperty;
+using sonare_node::FloatProperty;
+using sonare_node::Int64Property;
+using sonare_node::IntProperty;
 
 }  // namespace sonare_node::engine
