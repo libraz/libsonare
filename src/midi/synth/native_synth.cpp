@@ -59,6 +59,11 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.vel_to_cutoff_cents = std::clamp(sanitize(p.vel_to_cutoff_cents, 0.0f), -9600.0f, 9600.0f);
   p.lfo_rate_hz = std::clamp(sanitize(p.lfo_rate_hz, 5.0f), 0.0f, 40.0f);
   p.lfo_to_pitch_cents = std::clamp(sanitize(p.lfo_to_pitch_cents, 0.0f), 0.0f, 1200.0f);
+  p.lfo2_rate_hz = std::clamp(sanitize(p.lfo2_rate_hz, 1.0f), 0.0f, 40.0f);
+  p.glide_ms = std::clamp(sanitize(p.glide_ms, 0.0f), 0.0f, 5000.0f);
+  for (ModRoute& route : p.mod_matrix.routes) {
+    route.depth = std::clamp(sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
+  }
   return p;
 }
 
@@ -67,7 +72,7 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
 // ---------------------------------------------------------------------------
 
 void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity,
-                             uint32_t voice_index) noexcept {
+                             uint32_t voice_index, float glide_from_hz) noexcept {
   patch = &p;
   key_down = true;
   releasing = false;
@@ -124,10 +129,27 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   filter.set_model(p.filter_model);
 
   vibrato_lfo.start(sample_rate, 0.0f, p.lfo_rate_hz);
+  lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz);
   // Per-voice drift: seeded depth (sign included) and a seeded rate offset so
   // stacked voices beat against each other instead of wobbling in unison.
   drift_depth_cents = p.drift_cents * seq.bipolar_at(101);
   drift_lfo.start(sample_rate, 0.0f, p.drift_rate_hz * (0.75f + 0.5f * seq.unipolar_at(102)));
+
+  // Mod-matrix source constants.
+  has_matrix = !p.mod_matrix.empty();
+  velocity01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  key_track_octaves = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
+  random_value = seq.bipolar_at(103);
+
+  // Glide: start offset in cents from the previous note, decaying through a
+  // one-pole sized so the pitch lands within ~5% in glide_ms.
+  glide_cents = 0.0f;
+  glide_coeff = 0.0f;
+  if (p.glide_ms > 0.0f && glide_from_hz > 0.0f && base_freq_hz > 0.0f) {
+    glide_cents = 1200.0f * std::log2(glide_from_hz / base_freq_hz);
+    const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+    glide_coeff = static_cast<float>(std::exp(-3.0 / (p.glide_ms * 0.001 * sr)));
+  }
 
   cached_pan_units = 1.0e9f;  // force pan recompute on first render
 }
@@ -135,18 +157,53 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
 float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
   if (!active || patch == nullptr) return 0.0f;
 
-  // Refresh the cached stereo pan gains when the channel pan changed.
-  if (mod.pan_units != cached_pan_units) {
-    cached_pan_units = mod.pan_units;
-    const float angle = pan_angle(mod.pan_units);
+  // --- modulation sources ---
+  const float level = amp_env.next();
+  if (!amp_env.active()) {
+    active = false;
+    return 0.0f;
+  }
+  const float fenv = filter_env.next();
+  const float lfo1_value = vibrato_lfo.next();
+  const float drift = drift_lfo.next() * drift_depth_cents;
+
+  // --- mod matrix ---
+  ModOffsets offsets;
+  if (has_matrix) {
+    ModSourceValues values;
+    values.amp_env = level;
+    values.filter_env = fenv;
+    values.lfo1 = lfo1_value;
+    values.lfo2 = lfo2.next();
+    values.velocity = velocity01;
+    values.key_track = key_track_octaves;
+    // Recover CC1 [0,1] from the shared channel snapshot's vibrato mapping.
+    values.mod_wheel = mod.extra_vibrato_cents * (1.0f / kModWheelVibratoCents);
+    values.random = random_value;
+    offsets = evaluate_mod_matrix(patch->mod_matrix, values);
+  }
+
+  // Refresh the cached stereo pan gains when the effective pan changed.
+  const float pan_units = mod.pan_units + offsets.pan_units;
+  if (pan_units != cached_pan_units) {
+    cached_pan_units = pan_units;
+    const float angle = pan_angle(pan_units);
     gain_left = std::cos(angle);
     gain_right = std::sin(angle);
   }
 
-  // --- pitch: bend + vibrato (patch LFO + mod wheel) + seeded drift ---
-  const float vib = vibrato_lfo.next() * (patch->lfo_to_pitch_cents + mod.extra_vibrato_cents);
-  const float drift = drift_lfo.next() * drift_depth_cents;
-  const float pitch_cents = mod.pitch_cents + vib + drift;
+  // --- glide: one-pole decay of the previous-note offset ---
+  if (glide_coeff > 0.0f) {
+    glide_cents *= glide_coeff;
+    if (std::fabs(glide_cents) < 0.5f) {
+      glide_cents = 0.0f;
+      glide_coeff = 0.0f;
+    }
+  }
+
+  // --- pitch: bend + vibrato (LFO1 + mod wheel) + drift + matrix + glide ---
+  const float vib = lfo1_value * (patch->lfo_to_pitch_cents + mod.extra_vibrato_cents);
+  const float pitch_cents = mod.pitch_cents + vib + drift + offsets.pitch_cents + glide_cents;
   const float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
 
   float sample = 0.0f;
@@ -161,21 +218,16 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
   if (drive_gain > 0.0f) sample = std::tanh(drive_gain * sample) * drive_makeup;
 
   // --- filter: cutoff = patch Fc * 2^((env + velocity + keytrack)/1200) ---
-  const float fenv = filter_env.next();
-  if (!filter_bypass) {
-    const float fc_cents = fenv * patch->env_to_cutoff_cents + static_cutoff_cents;
+  if (!filter_bypass || offsets.cutoff_cents != 0.0f) {
+    const float fc_cents =
+        fenv * patch->env_to_cutoff_cents + static_cutoff_cents + offsets.cutoff_cents;
     const float fc = patch->cutoff_hz * std::exp2(fc_cents * (1.0f / 1200.0f));
     filter.set(fc, patch->resonance_q);
     sample = filter.process(sample, patch->filter_output);
   }
 
   // --- amplitude ---
-  const float level = amp_env.next();
-  if (!amp_env.active()) {
-    active = false;
-    return 0.0f;
-  }
-  return sample * level * velocity_gain * patch->gain * mod.gain;
+  return sample * level * velocity_gain * patch->gain * mod.gain * offsets.amp_gain;
 }
 
 void NativeSynthVoice::release() noexcept {
@@ -234,10 +286,14 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
 
 void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
   if (!prepared_) return;
-  NativeSynthVoice* voice = pool_.allocate(channel & 0x0Fu, note);
+  const uint8_t ch = channel & 0x0Fu;
+  NativeSynthVoice* voice = pool_.allocate(ch, note);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
-  voice->start(config_.patch, sample_rate_, velocity, voice_index);
+  // Portamento: glide from the channel's previous note when enabled.
+  const float glide_from = config_.patch.glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;
+  voice->start(config_.patch, sample_rate_, velocity, voice_index, glide_from);
+  channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
 
 void NativeSynth::note_off(uint8_t channel, uint8_t note) noexcept {

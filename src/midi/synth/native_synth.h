@@ -29,6 +29,7 @@
 #include "midi/instrument.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
+#include "midi/synth/mod_matrix.h"
 #include "midi/synth/oscillator.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
@@ -98,9 +99,20 @@ struct NativeSynthPatch {
   /// cents (full velocity = no offset), like the SF2 default modulator.
   float vel_to_cutoff_cents = 0.0f;
 
-  // --- vibrato LFO ---
+  // --- LFOs ---
+  /// LFO1 with the hardwired vibrato routing (also ModSource::kLfo1).
   float lfo_rate_hz = 5.0f;
   float lfo_to_pitch_cents = 0.0f;
+  /// LFO2 is matrix-routed only (ModSource::kLfo2).
+  float lfo2_rate_hz = 1.0f;
+
+  // --- glide / portamento ---
+  /// One-pole pitch glide from the channel's previous note (ms to reach the
+  /// target within ~5%; 0 = off).
+  float glide_ms = 0.0f;
+
+  /// Free-form modulation routings on top of the hardwired patch modulations.
+  ModMatrix mod_matrix;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -124,8 +136,17 @@ struct NativeSynthVoice : VoiceState {
   DahdsrEnvelope filter_env;
   SynthFilter filter;
   Sf2Lfo vibrato_lfo;
+  Sf2Lfo lfo2;
   Sf2Lfo drift_lfo;
   float drift_depth_cents = 0.0f;
+  // Mod-matrix source constants (precomputed at start).
+  bool has_matrix = false;
+  float velocity01 = 0.0f;
+  float key_track_octaves = 0.0f;
+  float random_value = 0.0f;
+  // Glide: pitch offset in cents decaying to zero through a one-pole.
+  float glide_cents = 0.0f;
+  float glide_coeff = 0.0f;
   bool key_down = false;
   // Cached stereo gains for the channel pan; recomputed on change.
   float cached_pan_units = 1.0e9f;
@@ -134,9 +155,10 @@ struct NativeSynthVoice : VoiceState {
 
   /// Starts the voice for @p p. note/channel/age must already be set (the
   /// pool fills them in allocate()); @p voice_index seeds the deterministic
-  /// per-voice variation. @p p must outlive the voice.
-  void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity,
-             uint32_t voice_index) noexcept;
+  /// per-voice variation. @p p must outlive the voice. @p glide_from_hz != 0
+  /// glides the pitch from that frequency (portamento; needs p.glide_ms > 0).
+  void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
+             float glide_from_hz = 0.0f) noexcept;
   /// Renders one mono sample. Deactivates when the amp envelope ends.
   float render(const Sf2ChannelMod& mod) noexcept;
   /// Note-off: enter release (ignored by one-shot patches).
@@ -180,6 +202,8 @@ class NativeSynth final : public MidiInstrument {
     uint8_t pan = 64;          // CC10
     uint8_t mod_wheel = 0;     // CC1
     uint16_t pitch_bend = 8192;
+    /// Previous note's frequency (glide source; 0 = none yet).
+    float last_freq_hz = 0.0f;
   };
 
   void note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;

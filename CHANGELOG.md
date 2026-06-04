@@ -4,6 +4,13 @@
 
 ### New features
 
+- Added a modulation matrix, a second LFO and glide/portamento to the
+  NativeSynth voice: up to 8 free-form routings from envelopes / LFOs /
+  velocity / key tracking / mod wheel / seeded per-voice random to pitch,
+  filter cutoff, amplitude and stereo pan, on top of the hardwired patch
+  modulations; portamento glides each new note from the channel's previous
+  note through a one-pole pitch ramp. All modulation stays deterministic.
+
 - Added selectable virtual-analog filter models to the NativeSynth voice — the
   core of each classic synth "character": TPT state-variable (SEM family),
   4-pole transistor ladder (ZDF, saturating loop, self-oscillates), diode
