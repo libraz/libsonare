@@ -244,6 +244,7 @@ def synthesize_rir(
     listener: tuple[float, float, float] = ...,
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
+    scattering_bands: Sequence[float] | None = None,
     material_preset: int = 0,
     sample_rate: int = 48000,
     ism_order: int = 3,
@@ -274,6 +275,7 @@ def room_morph(
     listener: tuple[float, float, float] = ...,
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
+    scattering_bands: Sequence[float] | None = None,
     material_preset: int = 0,
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
@@ -695,13 +697,20 @@ def master_audio_stereo(
 ) -> MasteringChainStereoResult: ...
 
 class StreamingMasteringChain:
-    def __init__(self, config: dict[str, Any] | None = None) -> None: ...
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        *,
+        loudness_static_gain_db: float | None = None,
+        loudness_static_gain_peak_db: float | None = None,
+    ) -> None: ...
     def prepare(self, sample_rate: int, max_block_size: int, num_channels: int) -> None: ...
     def process_mono(self, samples: FloatSamples) -> list[float]: ...
     def process_stereo(
         self, left: FloatSamples, right: FloatSamples
     ) -> tuple[list[float], list[float]]: ...
     def reset(self) -> None: ...
+    @property
     def latency_samples(self) -> int: ...
     def close(self) -> None: ...
     def __enter__(self) -> StreamingMasteringChain: ...

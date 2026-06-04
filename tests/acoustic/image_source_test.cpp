@@ -156,6 +156,27 @@ TEST_CASE("empty image set yields a safe single-sample IR", "[acoustic][image_so
   REQUIRE(ir.data()[0] == 0.0f);
 }
 
+TEST_CASE("broadband fallback collapses per-band reflection by RMS, not arithmetic mean",
+          "[acoustic][image_source]") {
+  // Strongly frequency-dependent wall: amplitude reflection 1.0 in one band,
+  // 0.0 in the other. Energy-correct broadband gain is sqrt((1 + 0) / 2);
+  // the old arithmetic mean would render 0.5 (~1 dB low... high for absorbing
+  // rooms in general; for this wall the mean underestimates by ~3 dB).
+  ImageSource im;
+  im.distance = 2.0f;
+  im.reflection = {1.0f, 0.0f};
+
+  EarlyIrConfig cfg;  // band = -1 -> broadband fallback
+  const int sr = 48000;
+  const Audio ir = synthesize_early_ir({im}, sr, cfg);
+  float sum = 0.0f;
+  for (size_t i = 0; i < ir.size(); ++i) sum += ir.data()[i];
+
+  const float base = 1.0f / (4.0f * sonare::constants::kPi * im.distance);
+  const float expected = base * std::sqrt(0.5f);
+  REQUIRE_THAT(sum, WithinRel(expected, 0.02f));
+}
+
 // ---- Borish polyhedral ----
 
 namespace {

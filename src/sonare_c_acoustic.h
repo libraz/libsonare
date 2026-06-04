@@ -15,7 +15,7 @@
 #include "sonare_c_types.h"
 
 /// ABI version of the flat acoustic POD structs below. Bump on any layout change.
-#define SONARE_ACOUSTIC_ABI_VERSION 2u
+#define SONARE_ACOUSTIC_ABI_VERSION 3u
 
 /// Statistical late-reverberation RT60 model for RIR synthesis / room morph
 /// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model).
@@ -80,11 +80,15 @@ typedef struct {
   int ism_order;        /* image-source reflection order (>= 0) */
   int late_model;       /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
   unsigned int seed;    /* deterministic late-tail seed */
-  /* Optional per-octave-band wall absorption (125/250/500/1k/2k/4k.. Hz). When
-   * absorption_bands != NULL and absorption_band_count > 0 it overrides the
-   * scalar `absorption` (unless material_preset selects a preset). */
+  /* Optional per-octave-band wall absorption/scattering (125/250/500/1k/2k/4k..
+   * Hz). When absorption_bands != NULL and absorption_band_count > 0 it
+   * overrides the scalar `absorption` (unless material_preset selects a preset).
+   * scattering_bands is optional and applied band-wise when present; missing
+   * scattering bands default to 0. */
   const float* absorption_bands;
   size_t absorption_band_count;
+  const float* scattering_bands;
+  size_t scattering_band_count;
   int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
 } SonareRirSynthConfig;
 
@@ -146,9 +150,12 @@ typedef struct {
   int ism_order;
   int late_model; /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
   unsigned int seed;
-  /* Optional per-octave-band target-wall absorption; see SonareRirSynthConfig. */
+  /* Optional per-octave-band target-wall absorption/scattering; see
+   * SonareRirSynthConfig. */
   const float* absorption_bands;
   size_t absorption_band_count;
+  const float* scattering_bands;
+  size_t scattering_band_count;
   int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
 } SonareRoomMorphConfig;
 
@@ -162,8 +169,11 @@ typedef struct {
 // SonareRirSynthConfig prefix: 13 floats + 3 ints/unsigned = 16 four-byte members.
 static_assert(offsetof(SonareRirSynthConfig, absorption_bands) == 16u * sizeof(float),
               "SonareRirSynthConfig scalar prefix layout changed");
-static_assert(offsetof(SonareRirSynthConfig, material_preset) ==
+static_assert(offsetof(SonareRirSynthConfig, scattering_bands) ==
                   offsetof(SonareRirSynthConfig, absorption_band_count) + sizeof(size_t),
+              "SonareRirSynthConfig scattering tail layout changed");
+static_assert(offsetof(SonareRirSynthConfig, material_preset) ==
+                  offsetof(SonareRirSynthConfig, scattering_band_count) + sizeof(size_t),
               "SonareRirSynthConfig optional tail layout changed");
 static_assert(sizeof(SonareRoomEstimateConfig) == 8u * sizeof(float),
               "SonareRoomEstimateConfig unexpected size");
@@ -171,8 +181,11 @@ static_assert(sizeof(SonareRoomEstimateConfig) == 8u * sizeof(float),
 // (gained late_model/mixing_time_ms/crossfade_ms over the v1 layout).
 static_assert(offsetof(SonareRoomMorphConfig, absorption_bands) == 18u * sizeof(float),
               "SonareRoomMorphConfig scalar prefix layout changed");
-static_assert(offsetof(SonareRoomMorphConfig, material_preset) ==
+static_assert(offsetof(SonareRoomMorphConfig, scattering_bands) ==
                   offsetof(SonareRoomMorphConfig, absorption_band_count) + sizeof(size_t),
+              "SonareRoomMorphConfig scattering tail layout changed");
+static_assert(offsetof(SonareRoomMorphConfig, material_preset) ==
+                  offsetof(SonareRoomMorphConfig, scattering_band_count) + sizeof(size_t),
               "SonareRoomMorphConfig optional tail layout changed");
 #endif
 

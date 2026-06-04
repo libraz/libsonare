@@ -43,6 +43,11 @@ Material uniform_material(float absorption, float scattering, int n_bands = kDef
 /// @p t. The shortest absorption/scattering vector across both inputs governs
 /// the result length, so the returned material always satisfies
 /// absorption.size() == scattering.size().
+///
+/// Host-facing convenience: nothing inside the library calls this (room
+/// morphing interpolates acoustic metrics, not materials). It exists so hosts
+/// can author in-between wall treatments from two presets; the MIN-truncation
+/// rule above is pinned by tests and is part of the public contract.
 Material mix_materials(const Material& a, const Material& b, float t);
 
 /// @brief Shared octave-band reconciliation rule for a set of wall/face materials.

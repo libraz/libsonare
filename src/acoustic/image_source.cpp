@@ -264,9 +264,12 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
     if (config.band >= 0 && config.band < static_cast<int>(im.reflection.size())) {
       return im.reflection[static_cast<size_t>(config.band)];
     }
-    float sum = 0.0f;
-    for (float v : im.reflection) sum += v;
-    return sum / static_cast<float>(im.reflection.size());
+    // Broadband fallback: RMS across bands, the energy-correct collapse of
+    // per-band amplitude reflection coefficients (an arithmetic mean would
+    // overestimate strongly absorbing rooms by up to ~1 dB).
+    float sum_sq = 0.0f;
+    for (float v : im.reflection) sum_sq += v * v;
+    return std::sqrt(sum_sq / static_cast<float>(im.reflection.size()));
   };
 
   for (const auto& im : images) {

@@ -39,19 +39,19 @@ def _late_model(prefer_eyring: bool) -> int:
     return _REVERB_MODEL_EYRING if prefer_eyring else _REVERB_MODEL_SABINE
 
 
-def _absorption_band_args(
-    absorption_bands: Sequence[float] | None,
+def _band_array_args(
+    bands: Sequence[float] | None,
 ) -> tuple[object, int, object]:
     """Build the (pointer, count, owner) tuple for an optional per-band array.
 
     The third element keeps the backing ctypes buffer alive for the duration of
     the FFI call (the config only stores a borrowed pointer).
     """
-    if not absorption_bands:
+    if not bands:
         return None, 0, None
-    bands = list(absorption_bands)
-    buf = (ctypes.c_float * len(bands))(*bands)
-    return ctypes.cast(buf, ctypes.POINTER(ctypes.c_float)), len(bands), buf
+    values = list(bands)
+    buf = (ctypes.c_float * len(values))(*values)
+    return ctypes.cast(buf, ctypes.POINTER(ctypes.c_float)), len(values), buf
 
 
 def synthesize_rir(
@@ -63,6 +63,7 @@ def synthesize_rir(
     listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
+    scattering_bands: Sequence[float] | None = None,
     material_preset: int = 0,
     sample_rate: int = 48000,
     ism_order: int = 3,
@@ -82,6 +83,8 @@ def synthesize_rir(
         absorption_bands: Optional per-octave-band wall absorption
             (125/250/500/1k/2k/4k.. Hz). When given it overrides ``absorption``
             (unless ``material_preset`` selects a named preset).
+        scattering_bands: Optional per-octave-band wall scattering. Applied only
+            with ``absorption_bands`` and ignored when ``material_preset`` wins.
         material_preset: Named wall-material preset (0 = none; 1 concrete,
             2 wood, 3 curtain, 4 carpet, 5 glass). A non-zero preset wins over
             ``absorption_bands`` and ``absorption``.
@@ -103,7 +106,8 @@ def synthesize_rir(
     lib = _get_lib()
     if not hasattr(lib, "sonare_synthesize_rir"):
         raise RuntimeError("libsonare was built without acoustic-simulation support")
-    bands_ptr, bands_count, _bands_owner = _absorption_band_args(absorption_bands)
+    bands_ptr, bands_count, _bands_owner = _band_array_args(absorption_bands)
+    scatter_ptr, scatter_count, _scatter_owner = _band_array_args(scattering_bands)
     config = SonareRirSynthConfig(
         length_m=length_m,
         width_m=width_m,
@@ -125,6 +129,8 @@ def synthesize_rir(
         seed=max(0, seed),
         absorption_bands=bands_ptr,
         absorption_band_count=bands_count,
+        scattering_bands=scatter_ptr,
+        scattering_band_count=scatter_count,
         material_preset=material_preset,
     )
     out = SonareRirSynthResult()
@@ -220,6 +226,7 @@ def room_morph(
     listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
+    scattering_bands: Sequence[float] | None = None,
     material_preset: int = 0,
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
@@ -239,6 +246,9 @@ def room_morph(
     Args:
         absorption_bands: Optional per-octave-band target-wall absorption; when
             given it overrides ``absorption`` unless ``material_preset`` is set.
+        scattering_bands: Optional per-octave-band target-wall scattering.
+            Applied only with ``absorption_bands`` and ignored when
+            ``material_preset`` wins.
         material_preset: Named target-wall material preset (0 = none; see
             :func:`synthesize_rir`). A non-zero preset wins over the bands/scalar.
         prefer_eyring: Use the Eyring statistical late-tail model for the target
@@ -251,7 +261,8 @@ def room_morph(
     if not hasattr(lib, "sonare_room_morph"):
         raise RuntimeError("libsonare was built without acoustic-simulation support")
     c_array, length = _to_c_float_array(samples)
-    bands_ptr, bands_count, _bands_owner = _absorption_band_args(absorption_bands)
+    bands_ptr, bands_count, _bands_owner = _band_array_args(absorption_bands)
+    scatter_ptr, scatter_count, _scatter_owner = _band_array_args(scattering_bands)
     config = SonareRoomMorphConfig(
         length_m=length_m,
         width_m=width_m,
@@ -275,6 +286,8 @@ def room_morph(
         seed=max(0, seed),
         absorption_bands=bands_ptr,
         absorption_band_count=bands_count,
+        scattering_bands=scatter_ptr,
+        scattering_band_count=scatter_count,
         material_preset=material_preset,
     )
     out = ctypes.POINTER(ctypes.c_float)()

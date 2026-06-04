@@ -374,6 +374,43 @@ TEST_CASE("sonare acoustic C API uses per-band wall absorption", "[c_api][acoust
   sonare_free_rir_synth_result(&scalar_rir);
 }
 
+TEST_CASE("sonare acoustic C API uses per-band wall scattering", "[c_api][acoustic]") {
+  const float absorption[6] = {0.12f, 0.12f, 0.12f, 0.12f, 0.12f, 0.12f};
+  const float smooth_scattering[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  const float rough_scattering[6] = {0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f};
+
+  SonareRirSynthConfig smooth = valid_rir_config();
+  smooth.absorption_bands = absorption;
+  smooth.absorption_band_count = 6;
+  smooth.scattering_bands = smooth_scattering;
+  smooth.scattering_band_count = 6;
+  smooth.material_preset = SONARE_MATERIAL_PRESET_NONE;
+  smooth.max_seconds = 0.3f;
+  smooth.mixing_time_ms = 0.0f;
+
+  SonareRirSynthConfig rough = smooth;
+  rough.scattering_bands = rough_scattering;
+
+  SonareRirSynthResult smooth_rir{};
+  SonareRirSynthResult rough_rir{};
+  REQUIRE(sonare_synthesize_rir(&smooth, 48000, &smooth_rir) == SONARE_OK);
+  REQUIRE(sonare_synthesize_rir(&rough, 48000, &rough_rir) == SONARE_OK);
+  REQUIRE(smooth_rir.has_error == 0);
+  REQUIRE(rough_rir.has_error == 0);
+  REQUIRE(smooth_rir.length > 0);
+  REQUIRE(rough_rir.length > 0);
+
+  bool differs = smooth_rir.length != rough_rir.length;
+  const size_t common = smooth_rir.length < rough_rir.length ? smooth_rir.length : rough_rir.length;
+  for (size_t i = 0; i < common && !differs; ++i) {
+    differs = std::abs(smooth_rir.rir[i] - rough_rir.rir[i]) > 1e-6f;
+  }
+  REQUIRE(differs);
+
+  sonare_free_rir_synth_result(&smooth_rir);
+  sonare_free_rir_synth_result(&rough_rir);
+}
+
 TEST_CASE("sonare acoustic C API selects a material preset", "[c_api][acoustic]") {
   // A preset (non-zero) wins over both the per-band array and the scalar, so two
   // distinct presets must yield distinct RIRs from the same geometry.

@@ -64,6 +64,7 @@ sonare::acoustic::ReverbModel reverb_model_from_int(int selector) {
 // rooms; per-wall mesh materials are not reachable here yet).
 sonare::acoustic::ShoeboxRoom make_room(float length, float width, float height, float absorption,
                                         const float* absorption_bands, size_t absorption_band_count,
+                                        const float* scattering_bands, size_t scattering_band_count,
                                         int material_preset) {
   using namespace sonare::acoustic;
   const sonare::RoomDimensions dims{length, width, height};
@@ -85,9 +86,12 @@ sonare::acoustic::ShoeboxRoom make_room(float length, float width, float height,
     for (size_t i = 0; i < absorption_band_count; ++i) {
       wall.absorption.push_back(std::clamp(absorption_bands[i], 0.0f, 0.999f));
     }
-    // Keep the Material invariant absorption.size() == scattering.size(); the
-    // synthesis paths read only absorption, scattering stays specular (0).
-    wall.scattering.assign(absorption_band_count, 0.0f);
+    wall.scattering.reserve(absorption_band_count);
+    for (size_t i = 0; i < absorption_band_count; ++i) {
+      const float scattering =
+          scattering_bands != nullptr && i < scattering_band_count ? scattering_bands[i] : 0.0f;
+      wall.scattering.push_back(std::clamp(scattering, 0.0f, 1.0f));
+    }
     for (Material& w : room.walls) w = wall;
     return room;
   }
@@ -125,7 +129,8 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   using namespace sonare::acoustic;
   const ShoeboxRoom room =
       make_room(config->length_m, config->width_m, config->height_m, config->absorption,
-                config->absorption_bands, config->absorption_band_count, config->material_preset);
+                config->absorption_bands, config->absorption_band_count, config->scattering_bands,
+                config->scattering_band_count, config->material_preset);
   const SourceListener placement{{config->source_x, config->source_y, config->source_z},
                                  {config->listener_x, config->listener_y, config->listener_z}};
   RirSynthConfig rc;
@@ -230,7 +235,8 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
         sonare::effects::acoustic::RoomMorphConfig cfg;
         cfg.target = make_room(config->length_m, config->width_m, config->height_m,
                                config->absorption, config->absorption_bands,
-                               config->absorption_band_count, config->material_preset);
+                               config->absorption_band_count, config->scattering_bands,
+                               config->scattering_band_count, config->material_preset);
         cfg.placement = {{config->source_x, config->source_y, config->source_z},
                          {config->listener_x, config->listener_y, config->listener_z}};
         cfg.source_tail_suppression = config->source_tail_suppression;

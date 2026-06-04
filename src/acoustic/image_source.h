@@ -55,9 +55,10 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
 struct EarlyIrConfig {
   float sound_speed = kSoundSpeed;
   int fdl = 21;         ///< fractional-delay windowed-sinc length (odd; 1 = nearest sample)
-  int band = -1;        ///< band to render; -1 = broadband = arithmetic mean of per-band β
-                        ///< (exact for single-band/uniform materials; an approximation for
-                        ///< frequency-dependent walls — use band>=0 for per-band fidelity)
+  int band = -1;        ///< band to render; -1 = broadband = RMS of per-band β (the
+                        ///< energy-correct collapse; exact for single-band/uniform materials,
+                        ///< an approximation for frequency-dependent walls — use band>=0 for
+                        ///< per-band fidelity)
   int max_samples = 0;  ///< 0 = size automatically from the farthest image
 };
 

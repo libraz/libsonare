@@ -9,21 +9,9 @@
 // Streaming - StreamAnalyzer
 // ============================================================================
 
-/// @brief Helper to convert uint8 vector to Uint8Array.
-///
-/// Uses the same single-bulk-memcpy path as vectorToFloat32Array/Int32Array: a
-/// non-owning typed_memory_view over the C++ buffer plus a JS-side
-/// TypedArray.prototype.set, avoiding one JS<->WASM boundary crossing per
-/// element (the per-element set() defeats the bandwidth-reduction purpose of the
-/// quantized readFramesU8/readFramesI16 fast paths).
-val vectorToUint8Array(const std::vector<uint8_t>& vec) {
-  const size_t n = vec.size();
-  val result = val::global("Uint8Array").new_(n);
-  if (n == 0) return result;
-  val view = val(typed_memory_view(n, vec.data()));
-  result.call<void>("set", view);
-  return result;
-}
+// vectorToUint8Array lives in common.cpp with the other vectorTo*Array
+// helpers (declared in common.h); the quantized readFramesU8 path below uses
+// the same single-bulk-memcpy idiom.
 
 /// @brief Helper to convert int16 vector to Int16Array.
 val vectorToInt16Array(const std::vector<int16_t>& vec) {

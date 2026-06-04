@@ -126,6 +126,8 @@ class SonareRirSynthConfig(ctypes.Structure):
         # Optional per-octave-band absorption tail (NULL/0 keeps the scalar path).
         ("absorption_bands", ctypes.POINTER(ctypes.c_float)),
         ("absorption_band_count", ctypes.c_size_t),
+        ("scattering_bands", ctypes.POINTER(ctypes.c_float)),
+        ("scattering_band_count", ctypes.c_size_t),
         ("material_preset", ctypes.c_int),
     ]
 
@@ -197,6 +199,8 @@ class SonareRoomMorphConfig(ctypes.Structure):
         # Optional per-octave-band absorption tail (NULL/0 keeps the scalar path).
         ("absorption_bands", ctypes.POINTER(ctypes.c_float)),
         ("absorption_band_count", ctypes.c_size_t),
+        ("scattering_bands", ctypes.POINTER(ctypes.c_float)),
+        ("scattering_band_count", ctypes.c_size_t),
         ("material_preset", ctypes.c_int),
     ]
 
