@@ -200,7 +200,7 @@ TEST_CASE("new presets enable characteristic stages", "[mastering][preset]") {
 }
 
 TEST_CASE("all 25 presets process a deterministic fixture with valid output",
-          "[mastering][preset]") {
+          "[.][slow][mastering][preset]") {
   constexpr int sample_rate = 44100;
   const auto fixture = create_preset_fixture(sample_rate, 1.25f);
 

@@ -30,7 +30,7 @@ Audio make_c_major_chord(int sr, float duration) {
 }  // namespace
 
 TEST_CASE("chroma_cqt produces 12-bin output", "[chroma_cqt][unit][smoke]") {
-  Audio audio = make_c_major_chord(22050, 1.0f);
+  Audio audio = make_c_major_chord(22050, 0.5f);
   ChromaCqtConfig cfg;
   Chroma c = chroma_cqt(audio, cfg);
   REQUIRE(c.n_chroma() == 12);
@@ -38,7 +38,7 @@ TEST_CASE("chroma_cqt produces 12-bin output", "[chroma_cqt][unit][smoke]") {
 }
 
 TEST_CASE("chroma_cqt normalized values are in [0, 1]", "[chroma_cqt][unit][smoke]") {
-  Audio audio = make_c_major_chord(22050, 1.0f);
+  Audio audio = make_c_major_chord(22050, 0.5f);
   ChromaCqtConfig cfg;
   cfg.normalize_frames = true;
   Chroma c = chroma_cqt(audio, cfg);
@@ -51,7 +51,7 @@ TEST_CASE("chroma_cqt normalized values are in [0, 1]", "[chroma_cqt][unit][smok
 }
 
 TEST_CASE("chroma_cens produces 12-bin output", "[chroma_cqt][unit][smoke]") {
-  Audio audio = make_c_major_chord(22050, 1.0f);
+  Audio audio = make_c_major_chord(22050, 0.5f);
   ChromaCensConfig cfg;
   Chroma c = chroma_cens(audio, cfg);
   REQUIRE(c.n_chroma() == 12);
@@ -63,7 +63,7 @@ TEST_CASE("chroma_cqt frames are L-inf-normalized by default",
   // librosa.feature.chroma_cqt defaults to norm=np.inf — each frame's
   // max magnitude must be 1 (or the frame is all-zero). Cf. CLAUDE.md
   // librosa-parity rule for defaults.
-  Audio audio = make_c_major_chord(22050, 1.0f);
+  Audio audio = make_c_major_chord(22050, 0.5f);
   ChromaCqtConfig cfg;
   cfg.normalize_frames = true;
   Chroma c = chroma_cqt(audio, cfg);

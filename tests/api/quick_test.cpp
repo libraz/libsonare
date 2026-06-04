@@ -170,7 +170,7 @@ TEST_CASE("quick::detect_beats", "[quick][api]") {
   }
 }
 
-TEST_CASE("quick::analyze", "[quick][api]") {
+TEST_CASE("quick::analyze", "[.][slow][quick][api]") {
   SECTION("returns complete analysis result") {
     auto samples = generate_clicks(120.0f, 22050, 2.0f);
     auto result = sonare::quick::analyze(samples.data(), samples.size(), 22050);

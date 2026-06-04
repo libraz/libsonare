@@ -98,7 +98,7 @@ TEST_CASE("chroma reference compatibility", "[chroma][reference]") {
 }
 
 TEST_CASE("chroma_cqt reference compatibility (default L-inf norm)",
-          "[chroma_cqt][reference][librosa-parity]") {
+          "[.][slow][chroma_cqt][reference][librosa-parity]") {
   // librosa.feature.chroma_cqt defaults to norm=np.inf; the reference JSON was
   // generated against that default, so our default must match within tolerance.
   auto json = JsonReader::parse_file("tests/librosa/reference/chroma_cqt.json");

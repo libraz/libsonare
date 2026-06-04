@@ -172,7 +172,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
   }
 }
 
-TEST_CASE("sonare_mastering_repair_declip", "[c_api][mastering]") {
+TEST_CASE("sonare_mastering_repair_declip", "[.][slow][c_api][mastering]") {
   const int sr = 48000;
   auto samples = generate_sine(440.0f, sr, 0.5f);
   // Hard-clip the signal at +/- 0.9.

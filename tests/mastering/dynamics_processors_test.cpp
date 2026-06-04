@@ -189,6 +189,19 @@ TEST_CASE("ParallelComp links stereo detection and limits wet output", "[masteri
   REQUIRE(peak_abs(left, 4096) <= 0.708f);
 }
 
+TEST_CASE("ParallelComp output limiter releases gain instead of hard clipping",
+          "[mastering][dynamics]") {
+  ParallelComp compressor({100.0f, 1.0f, 0.0f, 100.0f, 0.0f, 0.0f, true, true, 0.0f});
+  compressor.prepare(1000.0, 2);
+
+  std::vector<float> samples = {2.0f, 0.5f};
+  process(compressor, samples);
+
+  REQUIRE_THAT(samples[0], WithinAbs(1.0f, 1e-6f));
+  REQUIRE(samples[1] > 0.0f);
+  REQUIRE(samples[1] < 0.5f);
+}
+
 TEST_CASE("ParallelComp validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(ParallelComp({-18.0f, 0.5f, 10.0f, 100.0f, 0.0f, 0.5f}));
   REQUIRE_THROWS(ParallelComp({-18.0f, 2.0f, -1.0f, 100.0f, 0.0f, 0.5f}));

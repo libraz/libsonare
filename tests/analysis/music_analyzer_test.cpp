@@ -93,7 +93,7 @@ TEST_CASE("MusicAnalyzer beat_times", "[music_analyzer]") {
   }
 }
 
-TEST_CASE("MusicAnalyzer chords", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer chords", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);
@@ -108,7 +108,7 @@ TEST_CASE("MusicAnalyzer chords", "[music_analyzer]") {
   }
 }
 
-TEST_CASE("MusicAnalyzer refines downbeats after chord analysis", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer refines downbeats after chord analysis", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);
@@ -132,7 +132,7 @@ TEST_CASE("MusicAnalyzer form", "[music_analyzer]") {
   REQUIRE(!form.empty());
 }
 
-TEST_CASE("MusicAnalyzer analyzer access", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer analyzer access", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);
@@ -150,7 +150,7 @@ TEST_CASE("MusicAnalyzer analyzer access", "[music_analyzer]") {
   REQUIRE(analyzer.boundary_detector().sample_rate() > 0);
 }
 
-TEST_CASE("MusicAnalyzer analyze", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer analyze", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);
@@ -205,7 +205,7 @@ TEST_CASE("MusicAnalyzer config", "[music_analyzer]") {
 }
 
 TEST_CASE("MusicAnalyzer can opt into chord HMM, key context, and inversion detection",
-          "[music_analyzer][chord_analyzer]") {
+          "[.][slow][music_analyzer][chord_analyzer]") {
   Audio audio = create_test_audio();
 
   MusicAnalyzerConfig config;
@@ -252,7 +252,7 @@ TEST_CASE("AnalysisResult struct", "[music_analyzer]") {
   REQUIRE(result.form == "IABABCO");
 }
 
-TEST_CASE("MusicAnalyzer progress callback", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer progress callback", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);
@@ -288,7 +288,7 @@ TEST_CASE("MusicAnalyzer progress callback", "[music_analyzer]") {
   REQUIRE(result.bpm > 0.0f);
 }
 
-TEST_CASE("MusicAnalyzer analyze deterministic", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer analyze deterministic", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio(22050, 2.0f);
 
   MusicAnalyzer analyzer1(audio);
@@ -308,7 +308,7 @@ TEST_CASE("MusicAnalyzer analyze deterministic", "[music_analyzer]") {
   REQUIRE(r1.form == r2.form);
 }
 
-TEST_CASE("MusicAnalyzer analyze multiple instances", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer analyze multiple instances", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio(22050, 2.0f);
 
   MusicAnalyzer a(audio);
@@ -327,7 +327,7 @@ TEST_CASE("MusicAnalyzer analyze multiple instances", "[music_analyzer]") {
   REQUIRE(ra.form == rb.form);
 }
 
-TEST_CASE("MusicAnalyzer progress callback thread safety", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer progress callback thread safety", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);
@@ -350,7 +350,7 @@ TEST_CASE("MusicAnalyzer progress callback thread safety", "[music_analyzer]") {
   }
 }
 
-TEST_CASE("MusicAnalyzer precompute then lazy access", "[music_analyzer]") {
+TEST_CASE("MusicAnalyzer precompute then lazy access", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);

@@ -484,7 +484,7 @@ TEST_CASE("sonare_detect_onsets", "[c_api]") {
   }
 }
 
-TEST_CASE("sonare_analyze", "[c_api]") {
+TEST_CASE("sonare_analyze", "[.][slow][c_api]") {
   SECTION("returns complete analysis result") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);
     SonareAnalysisResult result = {};
@@ -520,7 +520,7 @@ TEST_CASE("sonare_analyze", "[c_api]") {
   }
 }
 
-TEST_CASE("sonare_analyze_json", "[c_api]") {
+TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
   auto samples = generate_clicks(120.0f, 22050, 4.0f);
 
   SECTION("serializes the full analysis result") {

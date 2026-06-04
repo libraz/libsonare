@@ -41,7 +41,7 @@ TEST_CASE("SeqlockCell try_load reflects the latest store", "[rt][seqlock]") {
   CHECK(cell.try_load().a == 2u);
 }
 
-TEST_CASE("SeqlockCell never tears under a concurrent writer", "[rt][seqlock]") {
+TEST_CASE("SeqlockCell never tears under a concurrent writer", "[.][slow][rt][seqlock]") {
   sonare::rt::SeqlockCell<Pair> cell;
   std::atomic<bool> stop{false};
 

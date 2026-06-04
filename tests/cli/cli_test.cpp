@@ -181,7 +181,7 @@ TEST_CASE("CLI bpm command", "[cli]") {
   }
 }
 
-TEST_CASE("CLI key command", "[cli]") {
+TEST_CASE("CLI key command", "[.][slow][cli]") {
   create_test_wav(TEST_WAV);
 
   SECTION("text output") {
@@ -278,7 +278,7 @@ TEST_CASE("CLI onsets command", "[cli]") {
   }
 }
 
-TEST_CASE("CLI chords command", "[cli]") {
+TEST_CASE("CLI chords command", "[.][slow][cli]") {
   create_test_wav(TEST_WAV, 0.5f);
 
   SECTION("text output") {
@@ -509,7 +509,7 @@ TEST_CASE("CLI onset-env command", "[cli]") {
   }
 }
 
-TEST_CASE("CLI cqt command", "[cli]") {
+TEST_CASE("CLI cqt command", "[.][slow][cli]") {
   create_test_wav(TEST_WAV, 0.5f);
 
   SECTION("text output") {
@@ -526,7 +526,7 @@ TEST_CASE("CLI cqt command", "[cli]") {
   }
 }
 
-TEST_CASE("CLI analyze command", "[cli]") {
+TEST_CASE("CLI analyze command", "[.][slow][cli]") {
   create_test_wav(TEST_WAV);
 
   SECTION("text output") {
@@ -814,6 +814,17 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
 
     auto [analysis_code, analysis_output] =
         exec_command(CLI + " mastering-pair-analyze " + TEST_WAV + " --reference " + ref +
+                     " --analysis match.referenceLoudness -q");
+    REQUIRE(analysis_code == 0);
+    REQUIRE_THAT(analysis_output, ContainsSubstring("\"sourceLufs\""));
+    REQUIRE_THAT(analysis_output, ContainsSubstring("\"referenceLufs\""));
+  }
+
+  SECTION("pair analysis accepts independent source and reference lengths") {
+    const std::string short_ref = unique_temp_path("_short_reference.wav");
+    create_test_wav(short_ref, 1.0f, 660.0f);
+    auto [analysis_code, analysis_output] =
+        exec_command(CLI + " mastering-pair-analyze " + TEST_WAV + " --reference " + short_ref +
                      " --analysis match.referenceLoudness -q");
     REQUIRE(analysis_code == 0);
     REQUIRE_THAT(analysis_output, ContainsSubstring("\"sourceLufs\""));

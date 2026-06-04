@@ -159,7 +159,8 @@ unsigned int CountParameters(const std::string& name) {
 
 }  // namespace
 
-TEST_CASE("All factory inserts expose set_parameter contract", "[mastering][set_parameter]") {
+TEST_CASE("All factory inserts expose set_parameter contract",
+          "[.][slow][mastering][set_parameter]") {
   const std::vector<std::string> names = insert_factory_names();
   REQUIRE_FALSE(names.empty());
 

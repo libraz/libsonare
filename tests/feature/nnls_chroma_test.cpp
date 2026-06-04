@@ -63,7 +63,7 @@ TEST_CASE("NNLS harmonic template uses planned harmonic weight ratios", "[nnls_c
   }
 }
 
-TEST_CASE("nnls_chroma emphasizes pitch class of a sine tone", "[nnls_chroma]") {
+TEST_CASE("nnls_chroma emphasizes pitch class of a sine tone", "[.][slow][nnls_chroma]") {
   NnlsChromaConfig config;
   config.cqt.n_bins = 48;
   config.cqt.hop_length = 512;

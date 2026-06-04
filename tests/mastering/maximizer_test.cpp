@@ -92,6 +92,41 @@ TEST_CASE("TruePeakLimiter reports effective polyphase latency", "[mastering][ma
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 3}));
 }
 
+TEST_CASE("TruePeakLimiter set_config applies scalar changes without wiping running state",
+          "[mastering][maximizer]") {
+  TruePeakLimiter limiter({-6.0f, 1.0f, 25.0f, 4});
+  limiter.prepare(48000.0, 256);
+
+  auto hot = generate_sine_samples(1000.0f, 48000, 256, 0.95f);
+  float* channel[] = {hot.data()};
+  limiter.process(channel, 1, 256);
+  const float reduction_db = limiter.last_gain_reduction_db();
+  REQUIRE(reduction_db < -1.0f);
+
+  // Scalar change (ceiling / release only): applied in place, the running
+  // state — including the gain-reduction telemetry — must survive.
+  limiter.set_config({-3.0f, 1.0f, 50.0f, 4});
+  REQUIRE(limiter.last_gain_reduction_db() == reduction_db);
+
+  // Structural change (lookahead) re-prepares and resets, and the new
+  // lookahead is reflected in the reported latency.
+  limiter.set_config({-3.0f, 2.0f, 50.0f, 4});
+  REQUIRE(limiter.last_gain_reduction_db() == 0.0f);
+  REQUIRE(limiter.latency_samples() == 96);
+
+  // The updated -3 dB ceiling (0.708) is in effect on subsequent processing:
+  // the 0.95 sine is limited near the NEW ceiling — clearly above the stale
+  // -6 dB ceiling (0.5) and clearly below the unlimited input peak.
+  auto follow_up = generate_sine_samples(1000.0f, 48000, 4800, 0.95f);
+  for (size_t offset = 0; offset < follow_up.size(); offset += 256) {
+    float* follow_channel[] = {follow_up.data() + offset};
+    limiter.process(follow_channel, 1, 256);
+  }
+  REQUIRE(peak_abs(follow_up) > 0.52f);
+  REQUIRE(peak_abs(follow_up) <= 0.75f);
+  REQUIRE(limiter.last_gain_reduction_db() < 0.0f);
+}
+
 TEST_CASE("TruePeakLimiter keeps polyphase detector state across blocks",
           "[mastering][maximizer]") {
   TruePeakLimiter full({-6.0f, 1.0f, 25.0f, 4});

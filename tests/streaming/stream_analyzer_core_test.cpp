@@ -296,8 +296,10 @@ TEST_CASE("StreamAnalyzer clamps degenerate sizing params", "[streaming][edge]")
   REQUIRE(analyzer.config().magnitude_downsample >= 1);
 
   // Processing must not crash and the magnitude vector must be fully populated
-  // (full n_bins, since downsample clamped to 1).
-  std::vector<float> audio = generate_sine(22050, 440.0f, 22050);
+  // (full n_bins, since downsample clamped to 1). Keep the buffer just past
+  // n_fft: hop_length is clamped to 1 here, so every extra sample is one more
+  // full FFT frame and a 1 s buffer would mean ~20k frames.
+  std::vector<float> audio = generate_sine(2560, 440.0f, 22050);
   analyzer.process(audio.data(), audio.size());
   auto frames = analyzer.read_frames(4);
   REQUIRE_FALSE(frames.empty());

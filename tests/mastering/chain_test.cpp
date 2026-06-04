@@ -6,8 +6,10 @@
 #include <cmath>
 #include <vector>
 
+#include "mastering/api/audio_utils.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/common/loudness_measure.h"
 #include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
@@ -104,6 +106,34 @@ TEST_CASE("MasteringChain processes stereo audio with stereo stage", "[mastering
   REQUIRE(result.right.size() == right.size());
 }
 
+TEST_CASE("Stereo chain LUFS uses BS1770 channel summing", "[mastering][chain][loudness]") {
+  constexpr int sample_rate = 48000;
+  std::vector<float> left(static_cast<size_t>(sample_rate));
+  std::vector<float> right(left.size());
+  std::vector<float> interleaved(left.size() * 2);
+  for (size_t i = 0; i < left.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    left[i] = 0.1f * std::sin(2.0f * 3.14159265358979323846f * 440.0f * t);
+    right[i] = -left[i];
+    interleaved[2 * i] = left[i];
+    interleaved[2 * i + 1] = right[i];
+  }
+
+  const float expected_lufs =
+      common::measure_lufs_interleaved(interleaved.data(), left.size(), 2, sample_rate);
+  REQUIRE(std::isfinite(expected_lufs));
+
+  MasteringChain chain(MasteringChainConfig{});
+  const auto chain_result =
+      chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
+  REQUIRE_THAT(chain_result.input_lufs, WithinAbs(expected_lufs, 1.0e-5f));
+  REQUIRE_THAT(chain_result.output_lufs, WithinAbs(expected_lufs, 1.0e-5f));
+
+  const auto named_result = apply_named_processor_stereo(
+      "stereo.stereoBalance", left.data(), right.data(), left.size(), sample_rate, {});
+  REQUIRE_THAT(named_result.input_lufs, WithinAbs(expected_lufs, 1.0e-5f));
+}
+
 TEST_CASE("Named stereo fallback processes mono processors per channel", "[mastering][chain]") {
   std::vector<float> left = {0.1f, 0.2f, 0.3f, 0.4f};
   std::vector<float> right = {0.9f, 0.8f, 0.7f, 0.6f};
@@ -148,6 +178,25 @@ TEST_CASE("Named stereo classical repair applies a shared stereo transfer",
     }
   }
   REQUIRE(attenuated);
+}
+
+TEST_CASE("Shared stereo repair transfer preserves signed gain changes",
+          "[mastering][chain][repair]") {
+  std::vector<float> left = {0.25f, -0.5f};
+  std::vector<float> right = {0.125f, -0.25f};
+
+  detail::apply_shared_mono_transfer_repair(left, right, 48000, [](const Audio& mono) {
+    std::vector<float> repaired(mono.size());
+    for (size_t i = 0; i < repaired.size(); ++i) {
+      repaired[i] = -2.0f * mono.data()[i];
+    }
+    return Audio::from_buffer(repaired.data(), repaired.size(), mono.sample_rate());
+  });
+
+  REQUIRE_THAT(left[0], WithinAbs(-0.5f, 1.0e-6f));
+  REQUIRE_THAT(right[0], WithinAbs(-0.25f, 1.0e-6f));
+  REQUIRE_THAT(left[1], WithinAbs(1.0f, 1.0e-6f));
+  REQUIRE_THAT(right[1], WithinAbs(0.5f, 1.0e-6f));
 }
 
 TEST_CASE("MasteringChain stereo denoise applies a shared stereo transfer",

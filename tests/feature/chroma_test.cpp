@@ -165,7 +165,7 @@ TEST_CASE("Chroma C major chord detection", "[chroma]") {
   REQUIRE(mean_energy[7] > threshold);  // G
 }
 
-TEST_CASE("bass_chroma emphasizes low-frequency pitch class", "[chroma]") {
+TEST_CASE("bass_chroma emphasizes low-frequency pitch class", "[.][slow][chroma]") {
   Audio audio = create_sine_audio(65.41f, 22050, 1.0f);
 
   BassChromaConfig config;

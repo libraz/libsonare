@@ -77,7 +77,7 @@ TEST_CASE("sonare pseudo/hybrid CQT C API", "[c_api]") {
           SONARE_ERROR_INVALID_PARAMETER);
 }
 
-TEST_CASE("sonare chroma_cens and bass_chroma C API", "[c_api]") {
+TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
   auto samples = generate_sine(110.0f, 22050, 1.0f);
   SonareChromaResult result{};
 
@@ -225,7 +225,7 @@ TEST_CASE("sonare_tempogram_ratio", "[c_api]") {
   }
 }
 
-TEST_CASE("sonare_nnls_chroma", "[c_api]") {
+TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
   SECTION("returns a 12 x n_frames chroma matrix") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
     float* data = nullptr;

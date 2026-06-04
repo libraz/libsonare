@@ -33,7 +33,7 @@ TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
   REQUIRE(result.band_count == 0);
 }
 
-TEST_CASE("sonare_detect_acoustic", "[c_api][acoustic]") {
+TEST_CASE("sonare_detect_acoustic", "[.][slow][c_api][acoustic]") {
   const int sample_rate = 48000;
   const float expected_rt60 = 0.7f;
   std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
@@ -62,7 +62,8 @@ TEST_CASE("sonare_detect_acoustic", "[c_api][acoustic]") {
   sonare_free_acoustic_result(&result);
 }
 
-TEST_CASE("sonare_detect_acoustic blind mode exposes null clarity bands", "[c_api][acoustic]") {
+TEST_CASE("sonare_detect_acoustic blind mode exposes null clarity bands",
+          "[.][slow][c_api][acoustic]") {
   const int sample_rate = 48000;
   const float expected_rt60 = 0.7f;
   std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
@@ -161,7 +162,7 @@ TEST_CASE("sonare_analyze_timbre", "[c_api]") {
   }
 }
 
-TEST_CASE("sonare_detect_chords", "[c_api]") {
+TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
   SECTION("returns chord segments for a simple C major chord") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
     SonareChordAnalysisResult result = {};

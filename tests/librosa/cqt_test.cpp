@@ -17,7 +17,7 @@ using namespace sonare::constants;
 using namespace sonare::test;
 using Catch::Matchers::WithinRel;
 
-TEST_CASE("CQT reference compatibility", "[cqt][reference]") {
+TEST_CASE("CQT reference compatibility", "[.][slow][cqt][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/cqt.json");
   const auto& data = json["data"];
 

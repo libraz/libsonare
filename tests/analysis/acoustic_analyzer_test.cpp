@@ -170,7 +170,7 @@ TEST_CASE("AcousticAnalyzer returns octave-band vectors for IR mode", "[acoustic
 }
 
 TEST_CASE("AcousticAnalyzer estimates blind RT60 from synthetic free decay",
-          "[acoustic_analyzer]") {
+          "[.][slow][acoustic_analyzer]") {
   const float expected_rt60 = 0.7f;
   const Audio audio = create_exponential_ir(expected_rt60);
 
@@ -221,7 +221,7 @@ TEST_CASE("AcousticAnalyzer extrapolates blind low-frequency bands from high ban
 }
 
 TEST_CASE("AcousticAnalyzer models blind low bands from upper-band RT estimates",
-          "[acoustic_analyzer]") {
+          "[.][slow][acoustic_analyzer]") {
   const float expected_rt60 = 0.7f;
   const Audio audio = create_upper_band_free_decay(expected_rt60);
 
@@ -277,7 +277,7 @@ TEST_CASE("AcousticAnalyzer fits blind decay above elevated noise floor", "[acou
 }
 
 TEST_CASE("AcousticAnalyzer suppresses stationary noise before blind decay fitting",
-          "[acoustic_analyzer]") {
+          "[.][slow][acoustic_analyzer]") {
   const float expected_rt60 = 0.75f;
   const Audio audio = create_decay_with_stationary_noise(expected_rt60);
 
@@ -293,7 +293,8 @@ TEST_CASE("AcousticAnalyzer suppresses stationary noise before blind decay fitti
   REQUIRE(params.confidence >= 0.5f);
 }
 
-TEST_CASE("AcousticAnalyzer aggregates repeated blind free-decay regions", "[acoustic_analyzer]") {
+TEST_CASE("AcousticAnalyzer aggregates repeated blind free-decay regions",
+          "[.][slow][acoustic_analyzer]") {
   const float expected_rt60 = 0.8f;
   const Audio audio = create_repeated_free_decays(expected_rt60);
 
@@ -331,7 +332,7 @@ TEST_CASE("AcousticAnalyzer reports low-confidence blind RT60 as unavailable",
 // must still yield a finite RT60 estimate of the underlying free-decay
 // envelope after spectral subtraction (the noise should not dominate).
 TEST_CASE("AcousticAnalyzer preserves tone energy through spectral noise suppression",
-          "[acoustic_analyzer]") {
+          "[.][slow][acoustic_analyzer]") {
   const int sample_rate = 48000;
   const float duration_sec = 4.0f;
   const float expected_rt60 = 0.8f;
@@ -369,7 +370,7 @@ TEST_CASE("AcousticAnalyzer preserves tone energy through spectral noise suppres
 // a DC-offset signal must produce identical third-octave-band downstream
 // estimates to its zero-mean counterpart (within tight tolerance).
 TEST_CASE("AcousticAnalyzer is invariant to DC offset in blind third-octave fitting",
-          "[acoustic_analyzer]") {
+          "[.][slow][acoustic_analyzer]") {
   const float expected_rt60 = 0.7f;
   const Audio zero_mean = create_upper_band_free_decay(expected_rt60);
 

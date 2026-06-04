@@ -311,6 +311,34 @@ TEST_CASE("Tape hysteresis loop depends on prior signal direction", "[mastering]
   REQUIRE(at_top > at_bottom);
 }
 
+TEST_CASE("Tape keeps channel state when switching from mono to stereo",
+          "[mastering][saturation]") {
+  Tape mono_reference({6.0f, 0.5f, 0.9f, 0.0f});
+  Tape switched({6.0f, 0.5f, 0.9f, 0.0f});
+  mono_reference.prepare(48000.0, 1024);
+  switched.prepare(48000.0, 1024);
+
+  std::vector<float> ramp_up(1024, 0.0f);
+  for (size_t i = 0; i < ramp_up.size(); ++i) {
+    ramp_up[i] = static_cast<float>(i) / static_cast<float>(ramp_up.size() - 1);
+  }
+  auto warm_a = ramp_up;
+  auto warm_b = ramp_up;
+  process(mono_reference, warm_a);
+  process(switched, warm_b);
+
+  std::vector<float> mono_probe = {0.0f};
+  process(mono_reference, mono_probe);
+
+  std::vector<float> left_probe = {0.0f};
+  std::vector<float> right_probe = {0.0f};
+  float* stereo_channels[] = {left_probe.data(), right_probe.data()};
+  switched.process(stereo_channels, 2, 1);
+
+  REQUIRE_THAT(left_probe[0], WithinAbs(mono_probe[0], 1e-7f));
+  REQUIRE(std::abs(left_probe[0]) > 0.01f);
+}
+
 TEST_CASE("Shared Jiles-Atherton engine matches DAFx-19 reference equation",
           "[mastering][saturation]") {
   namespace common = sonare::mastering::common;

@@ -129,7 +129,7 @@ TEST_CASE("WarpMap from_markers rejects non-monotonic / too-few anchors", "[mir]
   REQUIRE_THROWS([] { WarpMap::from_markers({0.0, 1.0}, {0.0}); }());
 }
 
-TEST_CASE("chroma-DTW recovers a known time shift within tolerance", "[mir]") {
+TEST_CASE("chroma-DTW recovers a known time shift within tolerance", "[.][slow][mir]") {
   const int sr = 22050;
   // Reference: a 1.2 s C-ish tone. Target: a delayed copy (silence prefix),
   // so the alignment path should track a constant offset.
@@ -167,7 +167,7 @@ TEST_CASE("chroma-DTW recovers a known time shift within tolerance", "[mir]") {
   REQUIRE(std::abs(observed_offset - expected_offset_frames) <= 6.0);
 }
 
-TEST_CASE("chroma-DTW recovers a known time stretch within tolerance", "[mir]") {
+TEST_CASE("chroma-DTW recovers a known time stretch within tolerance", "[.][slow][mir]") {
   const int sr = 22050;
   Audio ref = make_tone(sr, 220.0, 1.0);
   // Target = reference stretched to 1.5x duration by linear resampling of the

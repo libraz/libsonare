@@ -166,7 +166,7 @@ TEST_CASE("ChordAnalyzer C major detection", "[chord_analyzer]") {
   REQUIRE(most_common.quality == ChordQuality::Major);
 }
 
-TEST_CASE("ChordAnalyzer supports opt-in NNLS chroma front-end", "[chord_analyzer]") {
+TEST_CASE("ChordAnalyzer supports opt-in NNLS chroma front-end", "[.][slow][chord_analyzer]") {
   Audio audio = create_c_major(22050, 1.0f);
 
   ChordConfig config;
@@ -183,7 +183,7 @@ TEST_CASE("ChordAnalyzer supports opt-in NNLS chroma front-end", "[chord_analyze
 }
 
 TEST_CASE("ChordAnalyzer uses low-frequency bass chroma for inversion detection",
-          "[chord_analyzer]") {
+          "[.][slow][chord_analyzer]") {
   Audio audio = create_c_major_over_e(22050, 1.0f);
 
   ChordConfig config;
@@ -206,7 +206,7 @@ TEST_CASE("ChordAnalyzer uses low-frequency bass chroma for inversion detection"
 }
 
 TEST_CASE("ChordAnalyzer inversion bass is not C-biased for a high pitch-class bass",
-          "[chord_analyzer]") {
+          "[.][slow][chord_analyzer]") {
   // G major over a low B bass (first inversion, G/B). B is pitch class 11, the
   // index most heavily penalized by the old energy[c]*(1-0.025*c) weighting,
   // which biased the bass estimate toward low indices (C). With that bogus

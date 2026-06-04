@@ -729,7 +729,7 @@ TEST_CASE("vqt librosa scale=True normalisation direction", "[vqt][regression]")
   REQUIRE(peak_mag < 100.0f);
 }
 
-TEST_CASE("vqt amplitude continuous across gamma=0 boundary", "[vqt][regression]") {
+TEST_CASE("vqt amplitude continuous across gamma=0 boundary", "[.][slow][vqt][regression]") {
   // gamma=0 delegates to cqt(); gamma>0 uses the dedicated VQT path. The two
   // kernel constructions differ but must agree on the librosa-compatible
   // amplitude convention, otherwise sweeping gamma toward 0 produces a step

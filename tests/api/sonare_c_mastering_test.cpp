@@ -119,6 +119,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(std::isfinite(result.input_lufs));
     REQUIRE(std::isfinite(result.output_lufs));
     REQUIRE(std::isfinite(result.applied_gain_db));
+    REQUIRE(result.latency_samples > 0);
     REQUIRE(result.output_lufs > -18.2f);
     REQUIRE(result.output_lufs < -17.8f);
 
@@ -252,6 +253,22 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(std::string(msg).find("stereo.imager.width must be in [0, 2], got 3.5") !=
             std::string::npos);
     sonare_free_mastering_stereo_result(&stereo);
+  }
+
+  SECTION("audio validation failures clear stale detailed error messages") {
+    auto samples = generate_sine(440.0f, 22050, 0.5f);
+    SonareMasteringParam params[] = {{"width", 3.5}};
+    SonareMasteringStereoResult stereo{};
+
+    REQUIRE(sonare_mastering_apply_processor_stereo("stereo.imager", samples.data(), samples.data(),
+                                                    samples.size(), 22050, params, 1,
+                                                    &stereo) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::strlen(sonare_last_error_message()) > 0);
+
+    SonareMasteringResult mono{};
+    REQUIRE(sonare_mastering_apply_processor("dynamics.compressor", nullptr, samples.size(), 22050,
+                                             nullptr, 0, &mono) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
   }
 
   SECTION("applies pair processors and analyses") {

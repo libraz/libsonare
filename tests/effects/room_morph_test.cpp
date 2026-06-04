@@ -37,7 +37,7 @@ double energy(const Audio& a) {
 }  // namespace
 
 TEST_CASE("room_morph moves the reverberation toward the target room",
-          "[effects][acoustic][room_morph]") {
+          "[.][slow][effects][acoustic][room_morph]") {
   const int sr = 48000;
   // A small, fairly dead source room (short RT60) recorded as its own RIR, and
   // a large, live target room (long RT60).

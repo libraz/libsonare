@@ -230,6 +230,30 @@ TEST_CASE("Imager decorrelates widened side signal", "[mastering][stereo]") {
   REQUIRE(std::abs(left[4096] - dry_left[4096]) > 0.001f);
 }
 
+TEST_CASE("Imager decorrelator stays stable across sample rates", "[mastering][stereo]") {
+  // The allpass break frequencies are anchored at the historical 48 kHz tuning
+  // and re-derived per rate (clamped below Nyquist), so the decorrelation path
+  // must stay finite and energy-sane even at extreme sample rates where the
+  // upper anchors exceed Nyquist.
+  for (double sr : {8000.0, 44100.0, 96000.0, 192000.0}) {
+    const int n = static_cast<int>(sr);
+    auto left = generate_sine_samples(440.0f, static_cast<int>(sr), n, 0.25f);
+    auto right = generate_sine_samples(440.0f, static_cast<int>(sr), n, -0.25f);
+
+    Imager imager({1.5f, 0.0f, 1.0f, false});
+    imager.prepare(sr, 1024);
+    process_stereo(imager, left, right);
+
+    bool all_finite = true;
+    for (int i = 0; i < n; ++i) {
+      all_finite = all_finite && std::isfinite(left[static_cast<size_t>(i)]) &&
+                   std::isfinite(right[static_cast<size_t>(i)]);
+    }
+    REQUIRE(all_finite);
+    REQUIRE(stereo_rms_tail(left, right, 4096) > 0.0f);
+  }
+}
+
 TEST_CASE("Imager validates width", "[mastering][stereo]") {
   REQUIRE_THROWS(Imager({-1.0f, 0.0f}));
   REQUIRE_THROWS(Imager({1.0f, 0.0f, 1.1f}));

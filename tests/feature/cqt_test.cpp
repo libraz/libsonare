@@ -290,7 +290,8 @@ TEST_CASE("cqt_to_chroma honours a non-C-aligned fmin", "[cqt]") {
 }
 
 TEST_CASE("cqt with progress callback", "[cqt]") {
-  Audio audio = generate_sine(440.0f, 1.0f, 22050);
+  // 0.5 s is plenty to exercise the callback path; keep this smoke test fast.
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
 
   std::vector<float> progress_values;
   CqtResult result = cqt(audio, CqtConfig(), [&](float p) { progress_values.push_back(p); });
