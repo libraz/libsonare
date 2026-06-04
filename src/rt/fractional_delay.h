@@ -24,14 +24,14 @@ namespace sonare::rt {
 /// no future/clamped tap and stays well-formed across the whole sub-sample
 /// range. Both branches interpolate at the same physical delay (base + mu).
 ///
-/// @param buffer          Circular delay buffer (must be non-empty).
+/// @param buffer          Circular delay buffer (must be non-null).
+/// @param size            Buffer length in samples (must be > 0).
 /// @param write_index     Current write position; advanced by one on return.
 /// @param delay_samples_q8 Requested delay in Q8.8 samples (negatives clamp to 0).
 /// @param input           New input sample to push into the buffer.
 /// @return The fractionally delayed output sample.
-inline float lagrange3_fractional_delay(std::vector<float>& buffer, size_t& write_index,
+inline float lagrange3_fractional_delay(float* buffer, size_t size, size_t& write_index,
                                         int delay_samples_q8, float input) noexcept {
-  const size_t size = buffer.size();
   auto sample_at_delay = [&](int delay) {
     delay = std::max(0, delay);
     const size_t index = (write_index + size - (static_cast<size_t>(delay) % size)) % size;
@@ -71,6 +71,13 @@ inline float lagrange3_fractional_delay(std::vector<float>& buffer, size_t& writ
 
   write_index = (write_index + 1) % size;
   return c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
+}
+
+/// @brief Vector convenience overload (the long-standing call form).
+inline float lagrange3_fractional_delay(std::vector<float>& buffer, size_t& write_index,
+                                        int delay_samples_q8, float input) noexcept {
+  return lagrange3_fractional_delay(buffer.data(), buffer.size(), write_index, delay_samples_q8,
+                                    input);
 }
 
 }  // namespace sonare::rt

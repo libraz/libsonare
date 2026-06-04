@@ -339,6 +339,7 @@ if(BUILD_MASTERING)
     mastering/repair/denoise_classical.cpp
     mastering/repair/dereverb_classical.cpp
     mastering/repair/trim_silence.cpp
+    mastering/saturation/amp_sim.cpp
     mastering/saturation/bitcrusher.cpp
     mastering/saturation/exciter.cpp
     mastering/saturation/hard_clipper.cpp
@@ -647,6 +648,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/filter_models.cpp
     midi/synth/mod_matrix.cpp
     midi/synth/fm_voice.cpp
+    midi/synth/ks_voice.cpp
     midi/synth/native_synth.cpp
     midi/synth/gm_fallback_map.cpp
     midi/synth/sf2_file.cpp

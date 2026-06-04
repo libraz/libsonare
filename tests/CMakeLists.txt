@@ -188,6 +188,7 @@ if(BUILD_MASTERING)
     mastering/eq_dynamic_detail_test.cpp
     mastering/final_test.cpp
     mastering/golden_hash_test.cpp
+    mastering/amp_sim_test.cpp
     mastering/insert_factory_extra_test.cpp
     mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp
@@ -332,6 +333,7 @@ if(BUILD_ARRANGEMENT)
     midi/filter_models_test.cpp
     midi/mod_matrix_test.cpp
     midi/fm_voice_test.cpp
+    midi/ks_voice_test.cpp
     midi/synth_toolkit_test.cpp
     midi/sf2_file_test.cpp
     midi/sf2_player_test.cpp

@@ -60,14 +60,20 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[2].cutoff_hz = 5000.0f;
   t[2].key_track = 0.3f;
 
-  // 24-31 guitar: plucked saw, decaying brightness.
-  t[3].waveform = VaWaveform::kSaw;
-  t[3].amp_env = env(2.0f, 600.0f, 0.0f, 200.0f);
-  t[3].cutoff_hz = 1800.0f;
-  t[3].filter_env = env(1.0f, 450.0f, 0.15f, 200.0f);
-  t[3].env_to_cutoff_cents = 2000.0f;
-  t[3].key_track = 0.5f;
-  t[3].vel_to_cutoff_cents = 1500.0f;
+  // 24-31 guitar: Karplus-Strong steel-string pluck (method (3)); the string
+  // itself decays, so the amp envelope just gates note-off. Program-level
+  // overrides voice the nylon/electric/muted/driven variants.
+  t[3].mode = SynthEngineMode::kKarplusStrong;
+  t[3].amp_env = env(1.0f, 0.0f, 1.0f, 250.0f);
+  t[3].cutoff_hz = 20000.0f;
+  t[3].ks.brightness = 0.62f;
+  t[3].ks.decay_s = 3.5f;
+  t[3].ks.decay_stretch = 0.6f;
+  t[3].ks.pick_position = 0.18f;
+  t[3].ks.exc_brightness = 0.85f;
+  t[3].ks.vel_to_brightness = 0.6f;
+  t[3].ks.release_damp_s = 0.08f;
+  t[3].gain = 0.8f;
 
   // 32-39 bass: single dark saw through the transistor ladder, punchy
   // filter envelope and a touch of drive.
@@ -159,13 +165,19 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[12].cutoff_hz = 3000.0f;
   t[12].lfo_to_pitch_cents = 10.0f;
 
-  // 104-111 ethnic (plucked): triangle pluck.
-  t[13].waveform = VaWaveform::kTriangle;
-  t[13].amp_env = env(2.0f, 450.0f, 0.0f, 250.0f);
-  t[13].cutoff_hz = 3000.0f;
-  t[13].filter_env = env(1.0f, 300.0f, 0.2f, 250.0f);
-  t[13].env_to_cutoff_cents = 1500.0f;
-  t[13].key_track = 0.5f;
+  // 104-111 ethnic (plucked): bright short KS pluck (banjo/sitar/koto
+  // sketch — near-bridge pick, fast decay).
+  t[13].mode = SynthEngineMode::kKarplusStrong;
+  t[13].amp_env = env(1.0f, 0.0f, 1.0f, 200.0f);
+  t[13].cutoff_hz = 20000.0f;
+  t[13].ks.brightness = 0.75f;
+  t[13].ks.decay_s = 1.6f;
+  t[13].ks.decay_stretch = 0.4f;
+  t[13].ks.pick_position = 0.09f;
+  t[13].ks.exc_brightness = 0.95f;
+  t[13].ks.vel_to_brightness = 0.6f;
+  t[13].ks.release_damp_s = 0.05f;
+  t[13].gain = 0.8f;
 
   // 112-119 percussive: short bright strike.
   t[14].waveform = VaWaveform::kTriangle;
@@ -188,11 +200,17 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
 }
 
 /// Program-level overrides inside a family: the electric pianos and
-/// clavi/harpsichord are FM instruments (method (2)) while the rest of the
-/// piano family stays subtractive.
+/// clavi/harpsichord are FM instruments (method (2)), and the guitar family
+/// + orchestral harp voice their Karplus-Strong variants (method (3)).
 struct ProgramOverrides {
-  NativeSynthPatch e_piano;  // programs 4-5 (Electric Piano 1/2)
-  NativeSynthPatch clav;     // programs 6-7 (Harpsichord / Clavi)
+  NativeSynthPatch e_piano;          // programs 4-5 (Electric Piano 1/2)
+  NativeSynthPatch clav;             // programs 6-7 (Harpsichord / Clavi)
+  NativeSynthPatch nylon_guitar;     // program 24
+  NativeSynthPatch electric_guitar;  // programs 26-27 (jazz / clean)
+  NativeSynthPatch muted_guitar;     // program 28 (palm mute)
+  NativeSynthPatch overdriven;       // program 29
+  NativeSynthPatch distortion;       // program 30
+  NativeSynthPatch harp;             // program 46 (Orchestral Harp)
 };
 
 ProgramOverrides build_program_overrides() noexcept {
@@ -241,8 +259,74 @@ ProgramOverrides build_program_overrides() noexcept {
   cl.fm.ops[1].key_rate_scale = 0.5f;
   cl.gain = 0.6f;
 
+  // KS guitar variants: all share the family-3 steel string and differ in
+  // pick position / loop brightness / decay (the Jaffe-Smith knobs).
+  NativeSynthPatch steel{};
+  steel.mode = SynthEngineMode::kKarplusStrong;
+  steel.amp_env = env(1.0f, 0.0f, 1.0f, 250.0f);
+  steel.cutoff_hz = 20000.0f;
+  steel.ks.brightness = 0.62f;
+  steel.ks.decay_s = 3.5f;
+  steel.ks.decay_stretch = 0.6f;
+  steel.ks.pick_position = 0.18f;
+  steel.ks.exc_brightness = 0.85f;
+  steel.ks.vel_to_brightness = 0.6f;
+  steel.ks.release_damp_s = 0.08f;
+  steel.gain = 0.8f;
+
+  // Nylon: soft finger pluck near the middle of the string, dull loop.
+  o.nylon_guitar = steel;
+  o.nylon_guitar.ks.brightness = 0.42f;
+  o.nylon_guitar.ks.exc_brightness = 0.55f;
+  o.nylon_guitar.ks.pick_position = 0.27f;
+  o.nylon_guitar.ks.decay_s = 2.2f;
+
+  // Electric (jazz/clean) — the `electric-guitar` preset: bright sustaining
+  // loop, near-bridge pick, a pickup-ish lowpass instead of the open string.
+  o.electric_guitar = steel;
+  o.electric_guitar.ks.brightness = 0.8f;
+  o.electric_guitar.ks.decay_s = 4.5f;
+  o.electric_guitar.ks.pick_position = 0.12f;
+  o.electric_guitar.ks.exc_brightness = 0.9f;
+  o.electric_guitar.cutoff_hz = 5500.0f;
+  o.electric_guitar.gain = 0.7f;
+
+  // Palm mute: same electric string, choked decay.
+  o.muted_guitar = o.electric_guitar;
+  o.muted_guitar.ks.decay_s = 0.35f;
+  o.muted_guitar.ks.brightness = 0.55f;
+  o.muted_guitar.ks.release_damp_s = 0.04f;
+
+  // Overdriven / distortion: electric string into the gain-compensated tanh
+  // drive (the voice-level stage; the track-level `saturation.ampSim` insert
+  // supplies the full amp/cab character).
+  o.overdriven = o.electric_guitar;
+  o.overdriven.drive = 0.45f;
+  o.overdriven.cutoff_hz = 4000.0f;
+  o.distortion = o.electric_guitar;
+  o.distortion.drive = 0.8f;
+  o.distortion.cutoff_hz = 3500.0f;
+  o.distortion.gain = 0.6f;
+
+  // Orchestral harp: long stretched decay, strings keep ringing after
+  // note-off (no damper grip), mid-string pluck.
+  o.harp = steel;
+  o.harp.amp_env = env(1.0f, 0.0f, 1.0f, 1200.0f);
+  o.harp.ks.brightness = 0.5f;
+  o.harp.ks.decay_s = 5.0f;
+  o.harp.ks.decay_stretch = 0.8f;
+  o.harp.ks.pick_position = 0.3f;
+  o.harp.ks.vel_to_brightness = 0.5f;
+  o.harp.ks.release_damp_s = 1.0f;
+
   o.e_piano = clamp_synth_patch(o.e_piano);
   o.clav = clamp_synth_patch(o.clav);
+  o.nylon_guitar = clamp_synth_patch(o.nylon_guitar);
+  o.electric_guitar = clamp_synth_patch(o.electric_guitar);
+  o.muted_guitar = clamp_synth_patch(o.muted_guitar);
+  o.overdriven = clamp_synth_patch(o.overdriven);
+  o.distortion = clamp_synth_patch(o.distortion);
+  o.harp = clamp_synth_patch(o.harp);
   return o;
 }
 
@@ -349,6 +433,19 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
     case 6:  // Harpsichord
     case 7:  // Clavi
       return program_overrides().clav;
+    case 24:  // Acoustic Guitar (nylon)
+      return program_overrides().nylon_guitar;
+    case 26:  // Electric Guitar (jazz)
+    case 27:  // Electric Guitar (clean)
+      return program_overrides().electric_guitar;
+    case 28:  // Electric Guitar (muted)
+      return program_overrides().muted_guitar;
+    case 29:  // Overdriven Guitar
+      return program_overrides().overdriven;
+    case 30:  // Distortion Guitar
+      return program_overrides().distortion;
+    case 46:  // Orchestral Harp
+      return program_overrides().harp;
     default:
       break;
   }
@@ -399,8 +496,10 @@ float gm_fallback_max_release_ms() noexcept {
     }
     const DrumPatches& d = drum_patches();
     const ProgramOverrides& o = program_overrides();
-    for (const NativeSynthPatch* p : {&d.kick, &d.snare, &d.closed_hat, &d.open_hat, &d.tom,
-                                      &d.cymbal, &d.percussion, &o.e_piano, &o.clav}) {
+    for (const NativeSynthPatch* p :
+         {&d.kick, &d.snare, &d.closed_hat, &d.open_hat, &d.tom, &d.cymbal, &d.percussion,
+          &o.e_piano, &o.clav, &o.nylon_guitar, &o.electric_guitar, &o.muted_guitar, &o.overdriven,
+          &o.distortion, &o.harp}) {
       max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
     }
     return max_ms;

@@ -25,11 +25,13 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 #include "midi/instrument.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
 #include "midi/synth/fm_voice.h"
+#include "midi/synth/ks_voice.h"
 #include "midi/synth/mod_matrix.h"
 #include "midi/synth/oscillator.h"
 #include "midi/synth/sf2_voice.h"
@@ -37,13 +39,14 @@
 
 namespace sonare::midi::synth {
 
-/// Synthesis method tag. kSubtractive and kFm are implemented; the remaining
-/// values reserve their slots so voice dispatch (and later the versioned ABI
-/// struct) never needs a layout change when they land.
+/// Synthesis method tag. kSubtractive, kFm and kKarplusStrong are
+/// implemented; the remaining values reserve their slots so voice dispatch
+/// (and later the versioned ABI struct) never needs a layout change when
+/// they land.
 enum class SynthEngineMode : int {
   kSubtractive = 0,
   kFm = 1,             // operator-stack FM (fm_voice.h)
-  kKarplusStrong = 2,  // reserved (plucked-string waveguide)
+  kKarplusStrong = 2,  // plucked-string waveguide (ks_voice.h)
   kModal = 3,          // reserved (resonator-bank mallets/bells)
   kAdditive = 4,       // reserved (drawbar organ)
   kPercussion = 5,     // reserved (membrane modal + filtered noise)
@@ -119,6 +122,10 @@ struct NativeSynthPatch {
   /// section is ignored in that mode, while amp envelope / filter / matrix /
   /// glide still apply around the FM core).
   FmPatchParams fm;
+
+  /// Karplus-Strong string (used when mode == kKarplusStrong; like FM, the
+  /// oscillator section is ignored while the wrapper sections still apply).
+  KsPatchParams ks;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -142,6 +149,9 @@ struct NativeSynthVoice : VoiceState {
   DahdsrEnvelope filter_env;
   SynthFilter filter;
   FmVoiceCore fm;
+  /// KS string core; the host attach()es its delay span before start() (the
+  /// slab is owned by the instrument and allocated in prepare()).
+  KsVoiceCore ks;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
   Sf2Lfo drift_lfo;
@@ -229,6 +239,10 @@ class NativeSynth final : public MidiInstrument {
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
   VoicePool<NativeSynthVoice> pool_;
+  /// KS delay slab: one ks_buffer_capacity() span per voice slot, allocated
+  /// in prepare() only when the patch is a Karplus-Strong instrument.
+  std::vector<float> ks_buffers_;
+  int ks_capacity_ = 0;
 };
 
 /// Returns a copy of @p patch with every field clamped to a safe range.

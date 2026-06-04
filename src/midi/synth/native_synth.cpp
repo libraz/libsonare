@@ -73,6 +73,13 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
     op.key_rate_scale = std::clamp(sanitize(op.key_rate_scale, 0.0f), 0.0f, 1.0f);
     op.feedback = std::clamp(sanitize(op.feedback, 0.0f), 0.0f, 4.0f);
   }
+  p.ks.brightness = std::clamp(sanitize(p.ks.brightness, 0.6f), 0.0f, 1.0f);
+  p.ks.decay_s = std::clamp(sanitize(p.ks.decay_s, 3.0f), 0.05f, 60.0f);
+  p.ks.decay_stretch = std::clamp(sanitize(p.ks.decay_stretch, 0.5f), 0.0f, 1.0f);
+  p.ks.pick_position = std::clamp(sanitize(p.ks.pick_position, 0.18f), 0.0f, 0.5f);
+  p.ks.exc_brightness = std::clamp(sanitize(p.ks.exc_brightness, 0.85f), 0.0f, 1.0f);
+  p.ks.vel_to_brightness = std::clamp(sanitize(p.ks.vel_to_brightness, 0.6f), 0.0f, 1.0f);
+  p.ks.release_damp_s = std::clamp(sanitize(p.ks.release_damp_s, 0.08f), 0.01f, 10.0f);
   return p;
 }
 
@@ -91,9 +98,13 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
 
   base_freq_hz = synth_note_to_hz(static_cast<float>(note & 0x7Fu) + p.pitch_offset_cents / 100.0f);
 
-  unison = p.mode == SynthEngineMode::kFm ? 0 : std::clamp(p.unison, 1, kMaxUnisonOscs);
+  const bool osc_less = p.mode == SynthEngineMode::kFm || p.mode == SynthEngineMode::kKarplusStrong;
+  unison = osc_less ? 0 : std::clamp(p.unison, 1, kMaxUnisonOscs);
   osc_norm = unison > 0 ? 1.0f / std::sqrt(static_cast<float>(unison)) : 1.0f;
   if (p.mode == SynthEngineMode::kFm) fm.start(p.fm, sample_rate, note, velocity);
+  if (p.mode == SynthEngineMode::kKarplusStrong) {
+    ks.start(p.ks, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
     // the stack never phase-locks; oscillator 0 of a single-osc patch stays
@@ -219,6 +230,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
   float sample = 0.0f;
   if (patch->mode == SynthEngineMode::kFm) {
     sample = fm.render(common);
+  } else if (patch->mode == SynthEngineMode::kKarplusStrong) {
+    sample = ks.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -253,12 +266,14 @@ void NativeSynthVoice::release() noexcept {
   amp_env.note_off();
   filter_env.note_off();
   if (patch != nullptr && patch->mode == SynthEngineMode::kFm) fm.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kKarplusStrong) ks.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
   amp_env.kill();
   filter_env.kill();
   fm.kill();
+  ks.kill();
   active = false;
   releasing = false;
 }
@@ -277,6 +292,14 @@ NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
 void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   pool_.prepare(config_.polyphony);
+  // KS strings need a per-voice delay slab (the only allocation site; voices
+  // attach their span at note-on).
+  ks_capacity_ = ks_buffer_capacity(sample_rate_);
+  if (config_.patch.mode == SynthEngineMode::kKarplusStrong) {
+    ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_capacity_), 0.0f);
+  } else {
+    ks_buffers_.clear();
+  }
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
   tail_samples_ =
@@ -306,6 +329,11 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   NativeSynthVoice* voice = pool_.allocate(ch, note);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
+  // KS patches get their delay span before start() (pointer wiring only).
+  if (!ks_buffers_.empty()) {
+    voice->ks.attach(ks_buffers_.data() + static_cast<size_t>(voice_index) * ks_capacity_,
+                     ks_capacity_);
+  }
   // Portamento: glide from the channel's previous note when enabled.
   const float glide_from = config_.patch.glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;
   voice->start(config_.patch, sample_rate_, velocity, voice_index, glide_from);

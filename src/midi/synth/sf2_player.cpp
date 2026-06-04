@@ -81,6 +81,14 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   pool_.prepare(config_.polyphony);
   fallback_pool_.prepare(config_.synth_fallback ? config_.polyphony : 1);
+  // Plucked GM fallback programs are Karplus-Strong voices: give every
+  // fallback slot its delay span here (the only allocation site; voices
+  // attach their span at note-on).
+  fallback_ks_capacity_ = ks_buffer_capacity(sample_rate_);
+  fallback_ks_buffers_.assign(
+      config_.synth_fallback ? fallback_pool_.size() * static_cast<size_t>(fallback_ks_capacity_)
+                             : 0,
+      0.0f);
   reset_all_state(/*reverb_send_default=*/0);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
@@ -255,6 +263,12 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   NativeSynthVoice* voice = fallback_pool_.allocate(channel & 0x0Fu, note);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - fallback_pool_.data());
+  // KS patches get their delay span before start() (pointer wiring only).
+  if (!fallback_ks_buffers_.empty()) {
+    voice->ks.attach(
+        fallback_ks_buffers_.data() + static_cast<size_t>(voice_index) * fallback_ks_capacity_,
+        fallback_ks_capacity_);
+  }
   voice->start(patch, sample_rate_, velocity, voice_index);
 }
 

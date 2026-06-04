@@ -195,6 +195,11 @@ class Sf2Player final : public MidiInstrument {
   VoicePool<Sf2Voice> pool_;
   /// Synth-fallback voices (programs no SoundFont preset covers).
   VoicePool<NativeSynthVoice> fallback_pool_;
+  /// KS delay slab for the fallback voices (plucked GM programs), one
+  /// ks_buffer_capacity() span per slot; allocated in prepare() when the
+  /// synth fallback is enabled.
+  std::vector<float> fallback_ks_buffers_;
+  int fallback_ks_capacity_ = 0;
 
   // Chunk scratch (prepared on the control thread).
   std::vector<float> mix_l_;

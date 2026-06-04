@@ -43,6 +43,7 @@
 #include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/amp_sim.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
@@ -351,6 +352,19 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
   }
   if (name == "saturation.multibandExciter") {
     return make<saturation::MultibandExciter>(detail::multiband_exciter_config(params));
+  }
+  if (name == "saturation.ampSim") {
+    // Guitar amp-sim: drive -> tone stack -> cab-EQ (the track-insert layer of
+    // the electric-guitar sound; the string itself is the KS synth voice).
+    saturation::AmpSimConfig config;
+    config.drive = f(params, "drive", config.drive);
+    config.bass_db = f(params, "bassDb", config.bass_db);
+    config.mid_db = f(params, "midDb", config.mid_db);
+    config.treble_db = f(params, "trebleDb", config.treble_db);
+    config.presence_db = f(params, "presenceDb", config.presence_db);
+    config.cab = b(params, "cab", config.cab);
+    config.level_db = f(params, "levelDb", config.level_db);
+    return make<saturation::AmpSim>(config);
   }
   return nullptr;
 }
@@ -728,6 +742,7 @@ std::vector<std::string> insert_factory_names() {
       "saturation.tube",
       "saturation.transformer",
       "saturation.multibandExciter",
+      "saturation.ampSim",
       "spectral.airBand",
       "spectral.lowEndFocus",
       "spectral.presenceEnhancer",

@@ -4,6 +4,25 @@
 
 ### New features
 
+- Added a Karplus-Strong plucked-string mode to the NativeSynth voice (the
+  guitar / harp / banjo family): a fractional-delay waveguide loop with
+  phase-exact tuning compensation, plus the Jaffe-Smith realism extensions —
+  decay stretching (low strings ring longer), a pick-position comb on the
+  excitation, a velocity-driven dynamic-level lowpass (hard pluck = bright)
+  and note-off loop damping (finger/palm mute). The GM fallback bank now
+  plays the guitar family (nylon / steel / jazz / clean / muted / overdriven
+  / distortion), the orchestral harp and the plucked ethnic family through
+  KS patches.
+
+- Added a `saturation.ampSim` guitar amp insert to the mastering insert
+  factory (drive -> tone stack -> cab-EQ): an oversampled 12AX7 triode drive
+  stage behind one [0,1] drive knob with a drive-scaled pre-emphasis shelf,
+  bass/mid/treble tone controls, and a fixed data-free cab voicing (low cut,
+  body bump, presence peak, steep 4.8 kHz roll-off) that can be bypassed for
+  a DI tone. Reachable from every binding through the existing
+  mastering-insert names surface, with drive/tone/presence/level automatable
+  via `set_parameter`.
+
 - Added an FM synthesis mode to the NativeSynth voice (the e-piano / bell /
   brass / clav family): a 2-4 operator phase-modulation stack with a small
   algorithm table, exponential operator envelopes, a feedback operator,
