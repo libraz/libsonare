@@ -18,7 +18,7 @@ using namespace sonare_c_mastering_detail;
 // ============================================================================
 
 const char* sonare_mastering_preset_names(void) {
-  static std::string names;
+  static thread_local std::string names;
   if (names.empty()) {
     std::ostringstream stream;
     auto presets = sonare::mastering::api::preset_names();

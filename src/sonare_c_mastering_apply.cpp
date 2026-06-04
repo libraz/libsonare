@@ -37,6 +37,7 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
     out->input_lufs = result.input_lufs;
     out->output_lufs = result.output_lufs;
     out->applied_gain_db = result.applied_gain_db;
+    out->latency_samples = result.latency_samples;
 
     std::unique_ptr<float[]> processed(new float[out->length]);
     std::memcpy(processed.get(), result.audio.data(), out->length * sizeof(float));
@@ -116,7 +117,7 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
 }
 
 const char* sonare_mastering_processor_names(void) {
-  static std::string names;
+  static thread_local std::string names;
   if (names.empty()) {
     std::ostringstream stream;
     auto processors = sonare::mastering::api::processor_names();
@@ -130,22 +131,22 @@ const char* sonare_mastering_processor_names(void) {
 }
 
 const char* sonare_mastering_pair_processor_names(void) {
-  static std::string names;
+  static thread_local std::string names;
   return join_names(sonare::mastering::api::pair_processor_names(), names);
 }
 
 const char* sonare_mastering_pair_analysis_names(void) {
-  static std::string names;
+  static thread_local std::string names;
   return join_names(sonare::mastering::api::pair_analysis_names(), names);
 }
 
 const char* sonare_mastering_stereo_analysis_names(void) {
-  static std::string names;
+  static thread_local std::string names;
   return join_names(sonare::mastering::api::stereo_analysis_names(), names);
 }
 
 const char* sonare_mastering_insert_names(void) {
-  static std::string names;
+  static thread_local std::string names;
   return join_names(sonare::mastering::api::insert_factory_names(), names);
 }
 

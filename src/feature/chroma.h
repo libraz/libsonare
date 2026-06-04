@@ -133,12 +133,17 @@ class Chroma {
   const float* data() const { return features_.data(); }
 
   /// @brief Computes mean energy for each pitch class.
-  /// @return Array of 12 mean energy values (C, C#, D, ..., B)
+  /// @return Array of 12 mean energy values (C, C#, D, ..., B). Defined only
+  ///         for the standard 12-bin chromagram: when n_chroma() != 12 (or
+  ///         there are no frames) the result is all zeros rather than a
+  ///         resampled approximation — callers with a non-12 bin count must
+  ///         aggregate via features() instead.
   std::array<float, 12> mean_energy() const;
 
   /// @brief Computes frame-weighted mean energy for each pitch class.
   /// @param frame_weights Non-negative weights indexed by chroma frame
-  /// @return Array of 12 weighted mean energy values
+  /// @return Array of 12 weighted mean energy values (same n_chroma() == 12
+  ///         contract as mean_energy())
   std::array<float, 12> weighted_mean_energy(const std::vector<float>& frame_weights) const;
 
   /// @brief Computes normalized chromagram per frame.

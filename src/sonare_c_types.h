@@ -752,6 +752,47 @@ static_assert(offsetof(SonareAnalysisResult, beat_times) ==
 static_assert(offsetof(SonareAnalysisResult, beat_count) ==
                   offsetof(SonareAnalysisResult, beat_times) + sizeof(float*),
               "SonareAnalysisResult tail layout changed");
+
+// Engine POD layout guards. These structs are mirrored by ctypes and are used
+// across the C ABI boundary, so layout drift must be caught at compile time.
+static_assert(sizeof(SonareMeterTelemetryRecord) == 80u,
+              "SonareMeterTelemetryRecord layout changed");
+static_assert(offsetof(SonareMeterTelemetryRecord, render_frame) == 8u,
+              "SonareMeterTelemetryRecord render_frame offset changed");
+static_assert(offsetof(SonareMeterTelemetryRecord, peak_db_l) == 24u,
+              "SonareMeterTelemetryRecord meter prefix offset changed");
+static_assert(offsetof(SonareMeterTelemetryRecord, dropped_records) == 76u,
+              "SonareMeterTelemetryRecord dropped_records offset changed");
+
+static_assert(sizeof(SonareTransportState) == 96u, "SonareTransportState layout changed");
+static_assert(offsetof(SonareTransportState, render_frame) == 8u,
+              "SonareTransportState render_frame offset changed");
+static_assert(offsetof(SonareTransportState, ppq_position) == 24u,
+              "SonareTransportState ppq_position offset changed");
+static_assert(offsetof(SonareTransportState, bar_start_ppq) == 64u,
+              "SonareTransportState bar_start_ppq offset changed");
+static_assert(offsetof(SonareTransportState, time_signature) == 80u,
+              "SonareTransportState time_signature offset changed");
+
+static_assert(sizeof(SonareEngineBounceResult) ==
+                  ((offsetof(SonareEngineBounceResult, integrated_lufs) + sizeof(float) +
+                    alignof(SonareEngineBounceResult) - 1u) /
+                   alignof(SonareEngineBounceResult)) *
+                      alignof(SonareEngineBounceResult),
+              "SonareEngineBounceResult layout changed");
+static_assert(offsetof(SonareEngineBounceResult, sample_count) == sizeof(float*),
+              "SonareEngineBounceResult sample_count offset changed");
+static_assert(offsetof(SonareEngineBounceResult, frames) == sizeof(float*) + sizeof(size_t),
+              "SonareEngineBounceResult frames offset changed");
+static_assert(offsetof(SonareEngineBounceResult, integrated_lufs) ==
+                  offsetof(SonareEngineBounceResult, sample_rate) + sizeof(int),
+              "SonareEngineBounceResult integrated_lufs offset changed");
+
+static_assert(sizeof(SonareEngineFreezeResult) == 24u, "SonareEngineFreezeResult layout changed");
+static_assert(offsetof(SonareEngineFreezeResult, frames) == 8u,
+              "SonareEngineFreezeResult frames offset changed");
+static_assert(offsetof(SonareEngineFreezeResult, num_channels) == 16u,
+              "SonareEngineFreezeResult num_channels offset changed");
 #endif
 
 #ifdef __cplusplus

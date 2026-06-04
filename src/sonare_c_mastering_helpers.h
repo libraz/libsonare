@@ -71,8 +71,17 @@ inline char** copy_stage_array(const std::vector<std::string>& stages) {
   for (size_t i = 0; i < stages.size(); ++i) {
     out[i] = nullptr;
   }
-  for (size_t i = 0; i < stages.size(); ++i) {
-    out[i] = sonare_c_detail::copy_string(stages[i]);
+  // Free the partially-copied strings if a copy_string throws (bad_alloc):
+  // the unique_ptr above only releases the pointer array, not its elements.
+  try {
+    for (size_t i = 0; i < stages.size(); ++i) {
+      out[i] = sonare_c_detail::copy_string(stages[i]);
+    }
+  } catch (...) {
+    for (size_t i = 0; i < stages.size(); ++i) {
+      delete[] out[i];
+    }
+    throw;
   }
   return out.release();
 }
