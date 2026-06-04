@@ -4,30 +4,54 @@
 /// @brief Multitimbral (16-part) SoundFont 2 player implementing
 ///        MidiInstrument: (bank, program) -> preset resolution, layered
 ///        preset/instrument zone matching, the shared voice pool with
-///        deterministic stealing, and BuiltinSynth-compatible channel-mode CC
-///        semantics (CC64 sustain, CC120/121/123).
+///        deterministic stealing, BuiltinSynth-compatible channel-mode CC
+///        semantics (CC64 sustain, CC120/121/123), and the GS effect bus
+///        (reverb / chorus / delay send-returns + per-part insert slot).
 ///
 /// One Sf2Player instance receives all 16 MIDI channels (GS multitimbral
 /// convention); channel 10 (index 9) resolves percussion via bank 128.
+/// Internally process() runs a 16-part bus graph in fixed-size chunks:
+/// voices accumulate into their part bus (insert processing) and into the
+/// system effect send buses (CC91/93/94 + zone send generators); the wet
+/// returns are summed with the dry mix. The effect bodies reuse the existing
+/// effects/ suite and only exist when the FX library is built
+/// (SONARE_MIDI_WITH_FX); otherwise the player renders dry.
 ///
 /// RT contract (MidiInstrument): set_soundfont() and prepare() run on the
 /// CONTROL thread and are the only allocating calls; on_event()/process()
 /// are allocation-free, lock-free and IO-free. The Sf2File is shared
 /// read-only with the audio thread.
 ///
-/// Determinism: no RNG, no wall clock; voice stealing and rendering are
-/// bit-identical for identical event streams within one build.
+/// Determinism: no RNG, no wall clock; voice stealing, effects and rendering
+/// are bit-identical for identical event streams within one build.
 
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "midi/instrument.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
+#if defined(SONARE_MIDI_WITH_FX)
+#include "midi/synth/gs_effects.h"
+#endif
 
 namespace sonare::midi::synth {
+
+/// Per-part insert slot (GS insertion-effect stand-in): a single
+/// gain-compensated drive stage on the part's dry bus.
+enum class Sf2InsertType : int {
+  kNone = 0,
+  kDrive = 1,
+};
+
+struct Sf2PartInsert {
+  Sf2InsertType type = Sf2InsertType::kNone;
+  /// Drive amount in [0, 1] (0 = clean, 1 = heavy saturation).
+  float amount = 0.0f;
+};
 
 struct Sf2PlayerConfig {
   /// Master output gain applied to the summed voices (linear).
@@ -35,11 +59,20 @@ struct Sf2PlayerConfig {
   /// Voice pool size. GS playback layers zones across 16 parts + drums, so the
   /// default is far above BuiltinSynth's 16 (clamped to [1, kMaxSynthVoices]).
   int polyphony = 48;
+  /// Per-part (MIDI channel) insert slot.
+  std::array<Sf2PartInsert, 16> part_inserts{};
+#if defined(SONARE_MIDI_WITH_FX)
+  /// System effect units (reverb / chorus / delay send-returns).
+  GsEffectsConfig effects;
+#endif
 };
 
 class Sf2Player final : public MidiInstrument {
  public:
-  explicit Sf2Player(const Sf2PlayerConfig& config = {}) noexcept;
+  explicit Sf2Player(const Sf2PlayerConfig& config = {});
+  ~Sf2Player() override;
+  Sf2Player(Sf2Player&&) = default;
+  Sf2Player& operator=(Sf2Player&&) = default;
 
   /// CONTROL thread: attach a parsed SoundFont. May be called before or after
   /// prepare(), but never concurrently with the audio thread.
@@ -67,8 +100,9 @@ class Sf2Player final : public MidiInstrument {
     uint8_t expression = 127;  // CC11
     uint8_t pan = 64;          // CC10
     uint8_t mod_wheel = 0;     // CC1
-    uint8_t reverb_send = 40;  // CC91 (GS power-on default)
+    uint8_t reverb_send = 0;   // CC91 (the GS layer's GS reset sets the GS power-on 40)
     uint8_t chorus_send = 0;   // CC93
+    uint8_t delay_send = 0;    // CC94 (GS delay send; no SF2 generator)
     uint16_t pitch_bend = 8192;
     // RPN state (bend range via RPN 0; default 2 semitones).
     uint8_t rpn_msb = 127;
@@ -98,9 +132,27 @@ class Sf2Player final : public MidiInstrument {
   /// Longest release timecents found in the soundfont (set_soundfont scan).
   int32_t max_release_timecents_ = -12000;
 
+  /// Renders one chunk (n <= kChunkFrames) of the 16-part bus graph into the
+  /// internal mix scratch.
+  void render_chunk(int n) noexcept;
+
+  /// Internal bus-graph chunk size (matches the effect bus block).
+  static constexpr int kChunkFrames = 256;
+
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
   VoicePool<Sf2Voice> pool_;
+
+  // Chunk scratch (prepared on the control thread).
+  std::vector<float> mix_l_;
+  std::vector<float> mix_r_;
+  /// 16 parts x stereo x kChunkFrames; only used when a part insert is set.
+  std::vector<float> part_bus_;
+  bool any_insert_ = false;
+
+#if defined(SONARE_MIDI_WITH_FX)
+  std::unique_ptr<GsEffectBus> effects_;
+#endif
 };
 
 }  // namespace sonare::midi::synth

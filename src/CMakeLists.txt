@@ -648,6 +648,13 @@ if(BUILD_ARRANGEMENT)
   )
   target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)
+  if(BUILD_FX)
+    # GS system effects (reverb/chorus/delay send-returns) reuse the FX suite;
+    # without BUILD_FX the SF2 player renders dry (sends become no-ops).
+    target_sources(sonare_midi PRIVATE midi/synth/gs_effects.cpp)
+    target_link_libraries(sonare_midi PUBLIC sonare_fx)
+    target_compile_definitions(sonare_midi PUBLIC SONARE_MIDI_WITH_FX=1)
+  endif()
   target_compile_options(sonare_midi PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_midi PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_compile_definitions(sonare_midi PUBLIC SONARE_WITH_ARRANGEMENT=1)

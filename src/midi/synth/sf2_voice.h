@@ -76,6 +76,8 @@ struct Sf2ChannelMod {
   /// at full controller). Added to the zone's send generators.
   float reverb_send = 0.0f;
   float chorus_send = 0.0f;
+  /// CC94 -> GS delay send (channel-level only; SF2 has no delay generator).
+  float delay_send = 0.0f;
 };
 
 /// SF2 triangle LFO: starts at zero after its delay, rises positive first.

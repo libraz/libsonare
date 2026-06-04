@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "midi/builtin_synth.h"
 #include "midi/ump.h"
@@ -20,11 +21,20 @@ constexpr float kCcSendDepth = 0.2f;
 
 }  // namespace
 
-Sf2Player::Sf2Player(const Sf2PlayerConfig& config) noexcept : config_(config) {
+Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
   if (!(config_.gain > 0.0f) || !std::isfinite(config_.gain)) config_.gain = 0.5f;
   config_.gain = std::min(config_.gain, 4.0f);
   config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices) : 48;
+  for (Sf2PartInsert& insert : config_.part_inserts) {
+    insert.amount = std::clamp(insert.amount, 0.0f, 1.0f);
+    any_insert_ = any_insert_ || insert.type != Sf2InsertType::kNone;
+  }
+#if defined(SONARE_MIDI_WITH_FX)
+  effects_ = std::make_unique<GsEffectBus>(config_.effects);
+#endif
 }
+
+Sf2Player::~Sf2Player() = default;
 
 void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
   soundfont_ = std::move(soundfont);
@@ -61,8 +71,18 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   pool_.prepare(config_.polyphony);
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
+  mix_l_.assign(kChunkFrames, 0.0f);
+  mix_r_.assign(kChunkFrames, 0.0f);
+  part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
   const float release_ms = std::max(5.0f, 1000.0f * timecents_to_seconds(max_release_timecents_));
   tail_samples_ = DahdsrEnvelope::release_tail_samples(sample_rate_, release_ms);
+#if defined(SONARE_MIDI_WITH_FX)
+  if (effects_ != nullptr) {
+    effects_->prepare(sample_rate_);
+    // The note tail rings first, the effect tail decays after it.
+    tail_samples_ += effects_->tail_samples(sample_rate_);
+  }
+#endif
   prepared_ = true;
 }
 
@@ -70,6 +90,9 @@ void Sf2Player::reset() {
   pool_.reset();
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
+#if defined(SONARE_MIDI_WITH_FX)
+  if (effects_ != nullptr) effects_->reset();
+#endif
 }
 
 void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
@@ -82,6 +105,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
   mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
   mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;
+  mod.delay_send = kCcSendDepth * static_cast<float>(st.delay_send) / 127.0f;
 }
 
 uint16_t Sf2Player::effective_bank(uint8_t channel) const noexcept {
@@ -271,6 +295,10 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       st.chorus_send = value;
       refresh_channel_mod(ch);
       break;
+    case 94:  // GS delay send (no SF2 generator; channel-level only)
+      st.delay_send = value;
+      refresh_channel_mod(ch);
+      break;
     case 100:  // RPN LSB
       st.rpn_lsb = value;
       break;
@@ -338,32 +366,121 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
   }
 }
 
+void Sf2Player::render_chunk(int n) noexcept {
+  std::memset(mix_l_.data(), 0, sizeof(float) * static_cast<size_t>(n));
+  std::memset(mix_r_.data(), 0, sizeof(float) * static_cast<size_t>(n));
+  if (any_insert_ && !part_bus_.empty()) {
+    std::memset(part_bus_.data(), 0, sizeof(float) * part_bus_.size());
+  }
+
+#if defined(SONARE_MIDI_WITH_FX)
+  float* rev_l = nullptr;
+  float* rev_r = nullptr;
+  float* cho_l = nullptr;
+  float* cho_r = nullptr;
+  float* dly_l = nullptr;
+  float* dly_r = nullptr;
+  if (effects_ != nullptr) {
+    effects_->begin_chunk();
+    rev_l = effects_->reverb_in(0);
+    rev_r = effects_->reverb_in(1);
+    cho_l = effects_->chorus_in(0);
+    cho_r = effects_->chorus_in(1);
+    dly_l = effects_->delay_in(0);
+    dly_r = effects_->delay_in(1);
+  }
+#endif
+
+  for (int i = 0; i < n; ++i) {
+    for (Sf2Voice& v : pool_) {
+      if (!v.active) continue;
+      const uint8_t part = v.channel & 0x0Fu;
+      const Sf2ChannelMod& mod = channel_mods_[part];
+      const float s = v.render(mod);
+      const float l = s * v.gain_left;
+      const float r = s * v.gain_right;
+      if (any_insert_) {
+        float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
+        bus[i] += l;
+        bus[kChunkFrames + i] += r;
+      } else {
+        mix_l_[static_cast<size_t>(i)] += l;
+        mix_r_[static_cast<size_t>(i)] += r;
+      }
+#if defined(SONARE_MIDI_WITH_FX)
+      if (rev_l != nullptr) {
+        const float rs = std::min(1.0f, v.params.reverb_send + mod.reverb_send);
+        if (rs > 0.0f) {
+          rev_l[i] += l * rs;
+          rev_r[i] += r * rs;
+        }
+        const float cs = std::min(1.0f, v.params.chorus_send + mod.chorus_send);
+        if (cs > 0.0f) {
+          cho_l[i] += l * cs;
+          cho_r[i] += r * cs;
+        }
+        if (mod.delay_send > 0.0f) {
+          dly_l[i] += l * mod.delay_send;
+          dly_r[i] += r * mod.delay_send;
+        }
+      }
+#endif
+    }
+  }
+
+  // Per-part insert processing, then sum the parts into the dry mix.
+  if (any_insert_) {
+    for (int part = 0; part < 16; ++part) {
+      float* bus_l = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
+      float* bus_r = bus_l + kChunkFrames;
+      const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
+      if (insert.type == Sf2InsertType::kDrive && insert.amount > 0.0f) {
+        // Gain-compensated tanh drive: normalise so a full-scale input keeps
+        // roughly unit level regardless of the drive amount.
+        const float drive = 1.0f + 9.0f * insert.amount;
+        const float makeup = 1.0f / std::tanh(drive);
+        for (int i = 0; i < n; ++i) {
+          bus_l[i] = std::tanh(drive * bus_l[i]) * makeup;
+          bus_r[i] = std::tanh(drive * bus_r[i]) * makeup;
+        }
+      }
+      for (int i = 0; i < n; ++i) {
+        mix_l_[static_cast<size_t>(i)] += bus_l[i];
+        mix_r_[static_cast<size_t>(i)] += bus_r[i];
+      }
+    }
+  }
+
+#if defined(SONARE_MIDI_WITH_FX)
+  if (effects_ != nullptr) effects_->render_returns(mix_l_.data(), mix_r_.data(), n);
+#endif
+}
+
 void Sf2Player::process(float* const* channels, int num_channels, int num_samples) {
   if (!prepared_ || channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
+  if (mix_l_.size() < static_cast<size_t>(kChunkFrames)) return;
   float* left = channels[0];
   float* right = num_channels > 1 ? channels[1] : nullptr;
   const bool mono = right == nullptr;
 
-  for (int i = 0; i < num_samples; ++i) {
-    float mix_l = 0.0f;
-    float mix_r = 0.0f;
-    for (Sf2Voice& v : pool_) {
-      if (!v.active) continue;
-      const float s = v.render(channel_mods_[v.channel & 0x0Fu]);
-      mix_l += s * v.gain_left;
-      mix_r += s * v.gain_right;
+  int offset = 0;
+  while (offset < num_samples) {
+    const int n = std::min(kChunkFrames, num_samples - offset);
+    render_chunk(n);
+    for (int i = 0; i < n; ++i) {
+      const float mix_l = mix_l_[static_cast<size_t>(i)] * config_.gain;
+      const float mix_r = mix_r_[static_cast<size_t>(i)] * config_.gain;
+      if (left != nullptr) {
+        // Mono host: fold both pan legs so centre-panned voices keep level.
+        left[offset + i] += mono ? 0.70710678f * (mix_l + mix_r) : mix_l;
+      }
+      if (right != nullptr) right[offset + i] += mix_r;
+      // Fan a mono fold-down to any additional channels.
+      for (int ch = 2; ch < num_channels; ++ch) {
+        if (channels[ch] != nullptr) channels[ch][offset + i] += 0.70710678f * (mix_l + mix_r);
+      }
     }
-    mix_l *= config_.gain;
-    mix_r *= config_.gain;
-    if (left != nullptr) {
-      // Mono host: fold both pan legs so centre-panned voices keep full level.
-      left[i] += mono ? 0.70710678f * (mix_l + mix_r) : mix_l;
-    }
-    if (right != nullptr) right[i] += mix_r;
-    // Fan a mono fold-down to any additional channels.
-    for (int ch = 2; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) channels[ch][i] += 0.70710678f * (mix_l + mix_r);
-    }
+    offset += n;
   }
 }
 
