@@ -26,7 +26,8 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   tempo_map_.prepare(sample_rate);
   publish_tempo_map_snapshot();
-  active_tempo_map_ = tempo_map_snapshot_.load();
+  tempo_map_snapshot_.acquire();
+  active_tempo_map_ = tempo_map_snapshot_.current();
   if (active_tempo_map_ == nullptr) active_tempo_map_ = &tempo_map_;
   transport_.prepare(sample_rate, active_tempo_map_);
   clip_player_.prepare(sample_rate, max_block_size_);
@@ -124,7 +125,8 @@ void RealtimeEngine::publish_tempo_map_snapshot() {
 }
 
 void RealtimeEngine::adopt_tempo_map_snapshot() noexcept {
-  const transport::TempoMap* map = tempo_map_snapshot_.load();
+  tempo_map_snapshot_.acquire();
+  const transport::TempoMap* map = tempo_map_snapshot_.current();
   if (map == nullptr || map == active_tempo_map_) return;
   active_tempo_map_ = map;
   transport_.set_tempo_map(active_tempo_map_);
@@ -494,7 +496,7 @@ bool RealtimeEngine::pop_telemetry(Telemetry& out) noexcept {
 
 transport::TransportState RealtimeEngine::transport_state_control() const noexcept {
   transport::TransportState state = transport_.snapshot_control();
-  const transport::TempoMap* snapshot = tempo_map_snapshot_.load();
+  const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
   const transport::TempoMap& map = *(snapshot ? snapshot : &tempo_map_);
   state.ppq_position = map.sample_to_ppq(state.sample_position);
   state.bpm = map.bpm_at_sample(state.sample_position);
@@ -564,7 +566,7 @@ void RealtimeEngine::set_metronome_config(MetronomeConfig config) noexcept {
 
 int64_t RealtimeEngine::count_in_end_sample(int64_t start_sample, int bars) const noexcept {
   if (bars <= 0) return start_sample;
-  const transport::TempoMap* snapshot = tempo_map_snapshot_.load();
+  const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
   const transport::TempoMap& map = *(snapshot ? snapshot : &tempo_map_);
   const double start_ppq = map.sample_to_ppq(start_sample);
   const double bar_start = map.bar_start_ppq(start_ppq);
@@ -575,7 +577,7 @@ int64_t RealtimeEngine::count_in_end_sample(int64_t start_sample, int bars) cons
 }
 
 void RealtimeEngine::set_clips(std::vector<ClipSchedule> clips) {
-  const transport::TempoMap* map = tempo_map_snapshot_.load();
+  const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
   clip_player_.set_clips(std::move(clips), map ? map : &tempo_map_);
 }
 

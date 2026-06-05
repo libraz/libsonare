@@ -360,9 +360,9 @@ void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
   const int8_t offset = static_cast<int8_t>(static_cast<int>(value & 0x7Fu) - 64);
-  if (st.nrpn_msb == 0x01) {
+  if (st.params.nrpn_msb == 0x01) {
     // GS part parameters (relative offsets onto the SoundFont generators).
-    switch (st.nrpn_lsb) {
+    switch (st.params.nrpn_lsb) {
       case 0x08:
         st.gs.vibrato_rate = offset;
         break;
@@ -394,8 +394,8 @@ void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {
   }
   if (!st.drums) return;
   // GS drum-kit NRPNs: msb selects the parameter, lsb is the drum note.
-  GsDrumNoteParams& d = drum_params_[ch][st.nrpn_lsb & 0x7Fu];
-  switch (st.nrpn_msb) {
+  GsDrumNoteParams& d = drum_params_[ch][st.params.nrpn_lsb & 0x7Fu];
+  switch (st.params.nrpn_msb) {
     case 0x18:
       d.pitch_coarse = offset;
       d.flags |= GsDrumNoteParams::kPitch;
@@ -428,11 +428,7 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   st.mod_wheel = 0;
   st.expression = 127;
   st.pitch_bend = 8192;
-  st.param_mode = ChannelState::ParamMode::kNone;
-  st.rpn_msb = 127;
-  st.rpn_lsb = 127;
-  st.nrpn_msb = 127;
-  st.nrpn_lsb = 127;
+  st.params.reset();
   sustain_pedal(ch, false);
   refresh_channel_mod(ch);
 }
@@ -452,15 +448,15 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       refresh_channel_mod(ch);
       break;
     case 6:  // Data entry MSB -> active RPN (bend range) or GS NRPN
-      if (st.param_mode == ChannelState::ParamMode::kRpn && st.rpn_msb == 0 && st.rpn_lsb == 0) {
+      if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents = 100.0f * static_cast<float>(value);
         refresh_channel_mod(ch);
-      } else if (st.param_mode == ChannelState::ParamMode::kNrpn) {
+      } else if (st.params.selected_nrpn()) {
         apply_nrpn(ch, value);
       }
       break;
     case 38:  // Data entry LSB -> bend range cents
-      if (st.param_mode == ChannelState::ParamMode::kRpn && st.rpn_msb == 0 && st.rpn_lsb == 0) {
+      if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents =
             100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
         refresh_channel_mod(ch);
@@ -491,20 +487,16 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       refresh_channel_mod(ch);
       break;
     case 98:  // NRPN LSB
-      st.nrpn_lsb = value;
-      st.param_mode = ChannelState::ParamMode::kNrpn;
+      st.params.select_nrpn_lsb(value);
       break;
     case 99:  // NRPN MSB
-      st.nrpn_msb = value;
-      st.param_mode = ChannelState::ParamMode::kNrpn;
+      st.params.select_nrpn_msb(value);
       break;
     case 100:  // RPN LSB
-      st.rpn_lsb = value;
-      st.param_mode = ChannelState::ParamMode::kRpn;
+      st.params.select_rpn_lsb(value);
       break;
     case 101:  // RPN MSB
-      st.rpn_msb = value;
-      st.param_mode = ChannelState::ParamMode::kRpn;
+      st.params.select_rpn_msb(value);
       break;
     case 64:
       sustain_pedal(ch, value >= 64);

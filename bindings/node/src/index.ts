@@ -1773,7 +1773,7 @@ function projectFadeCurveValue(curve: ProjectFadeCurve | undefined | null): numb
   if (curve === 'linear') {
     return 0;
   }
-  if (curve === 'equalPower') {
+  if (curve === 'equalPower' || curve === 'equal-power' || curve === 'equal_power') {
     return 1;
   }
   if (curve === 'exponential') {

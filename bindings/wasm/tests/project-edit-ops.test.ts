@@ -54,8 +54,8 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() =>
         project.setClipFade(
           clipId,
-          { lengthPpq: 0.5, curve: 'equalPower' },
-          { lengthPpq: 0.5, curve: 'logarithmic' },
+          { lengthPpq: 0.5, curve: 'equal-power' },
+          { lengthPpq: 0.5, curve: 'equal_power' },
         ),
       ).not.toThrow();
       expect(() => project.setClipLoop(clipId, 'loop', 2)).not.toThrow();

@@ -346,15 +346,18 @@ void build_and_compile(SonareMixer* mixer) {
   // sonare_mixer_from_scene_json); they persist across graph rebuilds, so no
   // node or edge is needed here.
 
-  if (!graph.compile()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mixer routing graph failed to compile (cycle or invalid topology)");
-  }
   graph.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+
+  const sonare::graph::Node* master_node = graph.node(master_id);
+  if (master_node == nullptr) {
+    throw SonareException(ErrorCode::InvalidState, "mixer master node missing after compile");
+  }
+  const int master_latency_q8 =
+      graph.node_latency_samples_q8(master_id) + master_node->processor().latency_samples_q8();
 
   mixer->graph = std::move(graph);
   mixer->master_id = std::move(master_id);
-  mixer->latency_samples = mixer->graph.node_latency_samples(mixer->master_id);
+  mixer->latency_samples = std::max(0, master_latency_q8 >> 8);
   mixer->tail_samples = tail_samples;
   mixer->compiled_dirty = false;
 }

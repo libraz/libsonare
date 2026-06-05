@@ -721,6 +721,29 @@ TEST_CASE("MIDI content command round-trips", "[arrangement]") {
     patch.remove = {{0.0, 0x90, 60}};
     check_round_trip(f.project, store, std::make_unique<PatchMidiClip>(patch));
   }
+  SECTION("PatchMidiClip undo restores referenced SysEx payloads") {
+    constexpr uint32_t kHandle = 7;
+    const MidiClipEvent sysex{120.0, 0x30000000u, 0u, kHandle};
+    store.events[f.midi_clip].push_back(sysex);
+    store.sysex_payloads[kHandle] = {0xF0, 0x7D, 0x01, 0xF7};
+    const MidiContentStore store_before = store;
+
+    MidiClipPatch patch;
+    patch.clip_id = f.midi_clip;
+    patch.remove = {sysex};
+    auto command = std::make_unique<PatchMidiClip>(patch);
+
+    const Project before = f.project;
+    REQUIRE(command->apply(f.project, store));
+    CHECK(store.sysex_payloads.find(kHandle) == store.sysex_payloads.end());
+
+    EditCommandPtr inverse = command->invert(before, store_before);
+    REQUIRE(inverse != nullptr);
+    REQUIRE(inverse->apply(f.project, store));
+
+    CHECK(project_equal(f.project, before));
+    CHECK(store == store_before);
+  }
 }
 
 TEST_CASE("Assist sidecar command round-trips", "[arrangement]") {

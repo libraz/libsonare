@@ -114,6 +114,23 @@ bool fail(std::string* error, const char* message) {
   return false;
 }
 
+Sf2Gen normalize_generator(Sf2Gen gen) noexcept {
+  switch (gen.oper) {
+    case kGenCoarseTune:
+      gen.amount = static_cast<int16_t>(std::clamp<int>(gen.amount, -120, 120));
+      break;
+    case kGenFineTune:
+      gen.amount = static_cast<int16_t>(std::clamp<int>(gen.amount, -99, 99));
+      break;
+    case kGenScaleTuning:
+      gen.amount = static_cast<int16_t>(std::clamp<int>(gen.amount, 0, 1200));
+      break;
+    default:
+      break;
+  }
+  return gen;
+}
+
 // Raw pdta record arrays prior to zone resolution.
 struct PresetHeader {
   std::string name;
@@ -310,7 +327,7 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
           Sf2Gen g;
           g.oper = sub.u16();
           g.amount = sub.s16();
-          gens.push_back(g);
+          gens.push_back(normalize_generator(g));
         }
       } else if (id_is(sub_id, "inst")) {
         if (sub_size % 22 != 0) return fail(error, "sf2: inst record size mismatch");

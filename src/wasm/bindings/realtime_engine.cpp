@@ -298,7 +298,7 @@ class RealtimeEngineWasm {
       val point = points[i];
       breakpoints.push_back({objectProperty(point, "ppq").as<double>(),
                              floatProperty(point, "value", 0.0f),
-                             automationCurveFromInt(intProperty(point, "curveToNext", 1))});
+                             automationCurveFromInt(intProperty(point, "curveToNext", 0))});
     }
     lane.set_points(std::move(breakpoints));
     bool replaced = false;

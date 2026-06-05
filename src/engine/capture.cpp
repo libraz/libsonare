@@ -32,7 +32,7 @@ void CaptureSink::process(const float* const* input, int num_channels, int num_f
   // Read a single consistent snapshot of the published control state. The
   // seqlock returns either the old or new whole snapshot, never a torn mix, when
   // racing a control-thread store().
-  const Control control = snapshot();
+  const Control control = snapshot_rt();
   if (!control.armed || !input || !control.segment.channels || num_channels <= 0 ||
       num_frames <= 0 || control.segment.num_channels <= 0 ||
       control.segment.capacity_frames <= 0) {

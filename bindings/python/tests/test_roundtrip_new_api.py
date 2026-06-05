@@ -151,6 +151,32 @@ def test_inverse_transforms_reject_dim_length_mismatch():
         ls.nn_filter(short_spec, n_features, n_frames)
 
 
+def test_inverse_transforms_reject_non_finite_cells():
+    n_mels, n_frames = 8, 4
+    mel = [0.1] * (n_mels * n_frames)
+    mel[3] = math.nan
+    with pytest.raises(ls.SonareError):
+        ls.mel_to_stft(mel, n_mels, n_frames)
+    with pytest.raises(ls.SonareError):
+        ls.mel_to_audio(mel, n_mels, n_frames, n_fft=256, hop_length=64, n_iter=2)
+
+    n_mfcc = 5
+    mfcc = [0.1] * (n_mfcc * n_frames)
+    mfcc[7] = math.inf
+    with pytest.raises(ls.SonareError):
+        ls.mfcc_to_mel(mfcc, n_mfcc, n_frames, n_mels=n_mels)
+    with pytest.raises(ls.SonareError):
+        ls.mfcc_to_audio(
+            mfcc,
+            n_mfcc,
+            n_frames,
+            n_mels=n_mels,
+            n_fft=256,
+            hop_length=64,
+            n_iter=2,
+        )
+
+
 def test_stream_analyzer_abi_and_stats():
     sr = 22050
     n_samples = sr * 4  # 4 seconds

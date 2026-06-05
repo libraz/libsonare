@@ -14,7 +14,10 @@ constexpr float kMinDelayBufferMs = 100.0f;  // 100 ms
 
 }  // namespace
 
-Flanger::Flanger(FlangerConfig config) : config_(config) {}
+Flanger::Flanger(FlangerConfig config) : config_(config) {
+  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxFlangerDelayMs);
+  config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxFlangerDelayMs);
+}
 
 void Flanger::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;

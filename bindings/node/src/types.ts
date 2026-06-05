@@ -1875,6 +1875,8 @@ export type ProjectFadeCurve =
   | 2
   | 3
   | 'linear'
+  | 'equal-power'
+  | 'equal_power'
   | 'equalPower'
   | 'exponential'
   | 'logarithmic';

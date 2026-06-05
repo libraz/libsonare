@@ -425,9 +425,11 @@ Value midi_content_to_json(const arrangement::MidiContentStore& midi) {
 Value insert_to_json(const mixing::api::Insert& ins) {
   Object o;
   o["slot"] = ins.slot == mixing::api::InsertSlot::PreFader ? "pre" : "post";
-  o["processor_name"] = ins.processor_name;
-  o["params_json"] = ins.params_json;
-  o["sidechain_key"] = ins.sidechain_key;
+  o["processor"] = ins.processor_name;
+  o["params"] = ins.params_json;
+  if (!ins.sidechain_key.empty()) {
+    o["sidechainKey"] = ins.sidechain_key;
+  }
   return o;
 }
 
@@ -692,13 +694,17 @@ bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out) {
   return base64_decode(b64, &out->payload);
 }
 
+double num_or_any(const Value& obj, const char* primary, const char* legacy, double fallback);
+std::string str_or_any(const Value& obj, const char* primary, const char* legacy,
+                       const std::string& fallback);
+
 mixing::api::Insert insert_from_json(const Value& v) {
   mixing::api::Insert ins;
   ins.slot = str_or(v, "slot", "pre") == "post" ? mixing::api::InsertSlot::PostFader
                                                 : mixing::api::InsertSlot::PreFader;
-  ins.processor_name = str_or(v, "processor_name", "");
-  ins.params_json = str_or(v, "params_json", "");
-  ins.sidechain_key = str_or(v, "sidechain_key", "");
+  ins.processor_name = str_or_any(v, "processor", "processor_name", "");
+  ins.params_json = str_or_any(v, "params", "params_json", "");
+  ins.sidechain_key = str_or_any(v, "sidechainKey", "sidechain_key", "");
   return ins;
 }
 

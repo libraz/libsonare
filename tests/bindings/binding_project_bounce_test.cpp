@@ -488,7 +488,73 @@ TEST_CASE("channel-strip bounce auto-renders mixer insert tails", "[project]") {
   sonare_project_destroy(project);
 }
 
-TEST_CASE("channel-strip bounce delays unbound tracks by mixer latency", "[project]") {
+TEST_CASE("channel-strip bounce preserves tail impulse through master latency insert",
+          "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  const char* scene_json =
+      "{\"version\":1,\"strips\":[{\"id\":\"track\"}],"
+      "\"buses\":[{\"id\":\"master\",\"role\":\"master\",\"inserts\":["
+      "{\"slot\":\"post\",\"processor\":\"dynamics.brickwallLimiter\","
+      "\"params\":\"{\\\"lookaheadMs\\\":1.0,\\\"ceilingDb\\\":0.0}\"}]}],"
+      "\"connections\":[{\"source\":\"track\",\"destination\":\"master\"}]}";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "tail-impulse";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track, "track", nullptr) == SONARE_OK);
+
+  constexpr int kClipFrames = 240;
+  constexpr int kImpulseFrame = kClipFrames - 32;
+  std::vector<float> impulse(static_cast<size_t>(kClipFrames) * 2, 0.0f);
+  impulse[static_cast<size_t>(kImpulseFrame) * 2u] = 0.25f;
+  impulse[static_cast<size_t>(kImpulseFrame) * 2u + 1u] = 0.25f;
+
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track;
+  clip_desc.is_midi = 0;
+  clip_desc.start_ppq = 0.0;
+  clip_desc.length_ppq = 0.01;  // 240 frames at 120 BPM / 48 kHz.
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = impulse.data();
+  clip_desc.audio_frames = kClipFrames;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == static_cast<size_t>(kClipFrames) * 2u);
+  size_t peak_index = 0;
+  float peak = 0.0f;
+  for (size_t i = 0; i < out_len; ++i) {
+    if (std::abs(out[i]) > peak) {
+      peak = std::abs(out[i]);
+      peak_index = i;
+    }
+  }
+  INFO("peak=" << peak << " index=" << peak_index);
+  REQUIRE(peak > 0.1f);
+  REQUIRE(peak_index >= static_cast<size_t>(kImpulseFrame) * 2u);
+
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("channel-strip bounce compensates mixer latency for unbound tracks", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
@@ -543,10 +609,10 @@ TEST_CASE("channel-strip bounce delays unbound tracks by mixer latency", "[proje
   REQUIRE(out != nullptr);
   REQUIRE(out_len == static_cast<size_t>(options.total_frames) * 2u);
 
-  REQUIRE(out[0] == Catch::Approx(0.0f).margin(1e-6f));
-  REQUIRE(out[1] == Catch::Approx(0.0f).margin(1e-6f));
-  REQUIRE(out[static_cast<size_t>(kLatency) * 2u] == Catch::Approx(2.0f).margin(1e-5f));
-  REQUIRE(out[static_cast<size_t>(kLatency) * 2u + 1u] == Catch::Approx(2.0f).margin(1e-5f));
+  REQUIRE(out[0] == Catch::Approx(2.0f).margin(1e-5f));
+  REQUIRE(out[1] == Catch::Approx(2.0f).margin(1e-5f));
+  REQUIRE(out[static_cast<size_t>(kLatency) * 2u] == Catch::Approx(0.0f).margin(1e-6f));
+  REQUIRE(out[static_cast<size_t>(kLatency) * 2u + 1u] == Catch::Approx(0.0f).margin(1e-6f));
 
   sonare_free_floats(out);
   sonare_project_destroy(project);
@@ -607,6 +673,65 @@ TEST_CASE("channel-strip bounce routes unbound tracks through master bus effects
   const size_t arrangement_samples = static_cast<size_t>(kClipFrames) * 2u;
   REQUIRE(out_len > arrangement_samples);
   REQUIRE(buffer_peak(out, out_len, arrangement_samples) > 0.0f);
+
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("channel-strip bounce solo mutes unbound direct tracks", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  const char* scene_json =
+      "{\"version\":1,\"strips\":[{\"id\":\"solo\",\"soloed\":true}],"
+      "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],"
+      "\"connections\":[{\"source\":\"solo\",\"destination\":\"master\"}]}";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+
+  SonareProjectTrackDesc solo_desc{};
+  solo_desc.kind = SONARE_TRACK_AUDIO;
+  solo_desc.name = "solo";
+  uint32_t solo_track = 0;
+  REQUIRE(sonare_project_add_track(project, &solo_desc, &solo_track) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, solo_track, "solo", nullptr) == SONARE_OK);
+
+  SonareProjectTrackDesc direct_desc{};
+  direct_desc.kind = SONARE_TRACK_AUDIO;
+  direct_desc.name = "direct";
+  uint32_t direct_track = 0;
+  REQUIRE(sonare_project_add_track(project, &direct_desc, &direct_track) == SONARE_OK);
+
+  constexpr int kClipFrames = 128;
+  std::vector<float> impulse(static_cast<size_t>(kClipFrames) * 2, 0.0f);
+  impulse[0] = 1.0f;
+  impulse[1] = 1.0f;
+
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = direct_track;
+  clip_desc.is_midi = 0;
+  clip_desc.start_ppq = 0.0;
+  clip_desc.length_ppq = 1.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = impulse.data();
+  clip_desc.audio_frames = kClipFrames;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = kClipFrames;
+  options.block_size = 64;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == static_cast<size_t>(kClipFrames) * 2u);
+  REQUIRE(buffer_peak(out, out_len) == Catch::Approx(0.0f).margin(1e-6f));
 
   sonare_free_floats(out);
   sonare_project_destroy(project);

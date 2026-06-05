@@ -56,21 +56,22 @@ node = [
   "assert_u32",
   "assert_project_midi_events",
   "midi1_event",
+  "synth_enum_tables",      # facade-visible snapshot built from C enum names
 ]
 
 wasm = [
   "require_module",         # WASM module-handle accessor
   "is_initialized",         # WASM init-state probe
   "engine_capabilities",    # WASM build capability descriptor
-  "assert_interleaved_samples",
-  "assert_non_negative_integer",
-  "assert_positive_integer",
-  "assert_sample_rate",
-  "stream_analyzer_config_defaults",
+  "assert_interleaved_samples",  # WASM test helper: validates interleaved buffers before embind calls
+  "assert_non_negative_integer", # WASM test helper: mirrors TS facade argument validation
+  "assert_positive_integer",     # WASM test helper: mirrors TS facade argument validation
+  "assert_sample_rate",          # WASM test helper: centralizes sample-rate validation
+  "stream_analyzer_config_defaults", # WASM facade default snapshot, not a C API symbol
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
-  "synth_patch_round_trip_for_test",
-  "*with_progress",
-  "analyze_with_progress",
+  "synth_patch_round_trip_for_test", # WASM-only regression hook for embind patch shape
+  "*with_progress",                  # WASM progress callbacks are facade-only async ergonomics
+  "analyze_with_progress",           # WASM progress callback wrapper, no C ABI equivalent
 ]
 
 python = [
@@ -374,9 +375,9 @@ node = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
-  "mel_to_stft",
-  "mel_to_audio",
-  "mfcc_to_audio",
+  "mel_to_stft",  # Node facade derives matrix extents from typed arrays; C requires explicit dims
+  "mel_to_audio", # Node facade derives matrix extents from typed arrays; C requires explicit dims
+  "mfcc_to_audio", # Node facade derives matrix extents from typed arrays; C requires explicit dims
 ]
 wasm = [
   "scale_quantize_midi",
@@ -390,9 +391,9 @@ wasm = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
-  "mel_to_stft",
-  "mel_to_audio",
-  "mfcc_to_audio",
+  "mel_to_stft",  # WASM facade derives matrix extents from typed arrays; C requires explicit dims
+  "mel_to_audio", # WASM facade derives matrix extents from typed arrays; C requires explicit dims
+  "mfcc_to_audio", # WASM facade derives matrix extents from typed arrays; C requires explicit dims
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -414,9 +415,9 @@ python = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
-  "mel_to_stft",
-  "mel_to_audio",
-  "mfcc_to_audio",
+  "mel_to_stft",  # Python facade derives matrix extents from sequences; C requires explicit dims
+  "mel_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
+  "mfcc_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
 ]
 
 # ---------------------------------------------------------------------------

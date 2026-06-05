@@ -16,6 +16,7 @@
 
 #include "midi/midi_event.h"
 #include "midi/synth/sf2_file.h"
+#include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/sf2_builder.h"
@@ -27,6 +28,8 @@ using sonare::midi::MidiEvent;
 using sonare::midi::synth::Sf2File;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
+using sonare::midi::synth::Sf2Voice;
+using sonare::midi::synth::Sf2VoiceParams;
 using sonare::test::AllocationGuard;
 using sonare::test::Sf2Builder;
 
@@ -376,4 +379,25 @@ TEST_CASE("Sf2Player audio path performs no heap allocation after prepare", "[mi
   player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 123, 0)));
   player.process(chans, 2, 512);
   REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("Sf2Voice wraps sustained loops in constant time", "[midi][sf2]") {
+  const float pool[] = {0.0f, 1.0f, -1.0f, 0.5f};
+  Sf2VoiceParams params;
+  params.start = 0;
+  params.end = 4;
+  params.loop_start = 1;
+  params.loop_end = 2;
+  params.loop_mode = 1;
+  params.pitch_increment = 1.0;
+
+  Sf2Voice voice;
+  voice.start(pool, params, kOutRate, 1.0f);
+  voice.active = true;
+  voice.pos = 1.0e12;
+
+  const float sample = voice.render({});
+
+  REQUIRE(std::isfinite(sample));
+  REQUIRE(voice.pos < 3.0);
 }

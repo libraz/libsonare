@@ -129,6 +129,8 @@ describe('NativeSynth preset catalog', () => {
   });
 
   it('rejects non-string preset properties consistently', () => {
+    expect(synthPatchRoundTripForTest({ preset: undefined }).preset).toBe('');
+    expect(synthPatchRoundTripForTest({ preset: null } as unknown as SynthPatch).preset).toBe('');
     expect(() => synthPatchRoundTripForTest({ preset: 123 } as unknown as SynthPatch)).toThrow(
       /synth patch preset must be a string/,
     );

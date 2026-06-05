@@ -1321,11 +1321,41 @@ def cmd_mastering(args: argparse.Namespace) -> int:
 
 
 def cmd_mastering_processor(args: argparse.Namespace) -> int:
-    from . import mastering_process
+    from . import mastering_process, mastering_process_stereo
 
     samples, sr = _load_audio(args.file)
     params = _parse_kv_params(args.params) if args.params else {}
-    result = mastering_process(args.processor, samples, sample_rate=sr, params=params)
+    stereo_only = {
+        "eq.midSide",
+        "multiband.compressor",
+        "multiband.dynamicEq",
+        "multiband.expander",
+        "multiband.imager",
+        "multiband.limiter",
+        "multiband.saturation",
+        "stereo.autoPan",
+        "stereo.haasEnhancer",
+        "stereo.imager",
+        "stereo.monoMaker",
+        "stereo.phaseAlign",
+        "stereo.stereoBalance",
+    }
+    if args.processor in stereo_only:
+        stereo = mastering_process_stereo(
+            args.processor, samples, samples, sample_rate=sr, params=params
+        )
+        result = argparse.Namespace(
+            samples=[
+                0.5 * (left + right) for left, right in zip(stereo.left, stereo.right, strict=True)
+            ],
+            sample_rate=stereo.sample_rate,
+            input_lufs=stereo.input_lufs,
+            output_lufs=stereo.output_lufs,
+            applied_gain_db=stereo.applied_gain_db,
+            latency_samples=stereo.latency_samples,
+        )
+    else:
+        result = mastering_process(args.processor, samples, sample_rate=sr, params=params)
 
     if args.output:
         _write_wav(args.output, result.samples, result.sample_rate)
@@ -1803,6 +1833,21 @@ def cmd_mastering_profile(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mixing_presets(args: argparse.Namespace) -> int:
+    from . import mixing_scene_preset_names
+
+    names = mixing_scene_preset_names()
+    print(json.dumps({"presets": names}) if args.json else "\n".join(names))
+    return 0
+
+
+def cmd_mixing_preset(args: argparse.Namespace) -> int:
+    from . import mixing_scene_preset_json
+
+    print(mixing_scene_preset_json(args.preset))
+    return 0
+
+
 def cmd_mix(args: argparse.Namespace) -> int:
     from . import Mixer, mixing_scene_preset_json
 
@@ -2241,6 +2286,12 @@ def main() -> None:
     midi_render_p.add_argument("--synth", default="", help="NativeSynth preset")
 
     # Mixing commands
+    sub.add_parser("mixing-presets", parents=[common], help="List built-in mixer scene presets")
+    mixing_preset_p = sub.add_parser(
+        "mixing-preset", parents=[common], help="Print a built-in mixer scene preset"
+    )
+    mixing_preset_p.add_argument("--preset", default="basic", help="Built-in scene preset name")
+
     mix_p = sub.add_parser(
         "mix",
         parents=[common],
@@ -2361,6 +2412,8 @@ def main() -> None:
         "mastering-profile": cmd_mastering_profile,
         "project": cmd_project,
         "midi-render": cmd_midi_render,
+        "mixing-presets": cmd_mixing_presets,
+        "mixing-preset": cmd_mixing_preset,
         "mix": cmd_mix,
     }
 

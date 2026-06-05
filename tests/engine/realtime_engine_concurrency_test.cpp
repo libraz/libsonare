@@ -122,6 +122,46 @@ TEST_CASE("RealtimeEngine survives concurrent control mutation while processing"
   run_concurrent_mutation(256);
 }
 
+TEST_CASE("RealtimeEngine tempo publishing cannot lap an audio-held snapshot",
+          "[engine][realtime][concurrency]") {
+  constexpr int kFrames = 128;
+  constexpr int kIterations = 4096;
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+
+  std::atomic<bool> done{false};
+  std::atomic<bool> bad_output{false};
+
+  std::thread control([&] {
+    for (int i = 0; i < kIterations; ++i) {
+      engine.set_tempo(60.0 + static_cast<double>(i % 180));
+    }
+    done.store(true, std::memory_order_release);
+  });
+
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  float* io[] = {left.data(), right.data()};
+  int blocks_processed = 0;
+  while (!done.load(std::memory_order_acquire)) {
+    engine.process(io, 2, kFrames);
+    ++blocks_processed;
+    if (!all_finite(left.data(), kFrames) || !all_finite(right.data(), kFrames)) {
+      bad_output.store(true, std::memory_order_relaxed);
+      break;
+    }
+  }
+  engine.process(io, 2, kFrames);
+
+  control.join();
+
+  REQUIRE_FALSE(bad_output.load(std::memory_order_relaxed));
+  REQUIRE(blocks_processed > 0);
+  REQUIRE(all_finite(left.data(), kFrames));
+  REQUIRE(all_finite(right.data(), kFrames));
+}
+
 #if defined(SONARE_WITH_MIXING)
 #include "engine/monitor_runtime.h"
 #include "mixing/channel_strip.h"

@@ -291,7 +291,7 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
     point.value = obj.Get("value").As<Napi::Number>().FloatValue();
     point.curve_to_next = obj.Has("curveToNext") && !obj.Get("curveToNext").IsUndefined()
                               ? obj.Get("curveToNext").As<Napi::Number>().Int32Value()
-                              : 1;
+                              : 0;
     points.push_back(point);
   }
   ThrowIfError(env,

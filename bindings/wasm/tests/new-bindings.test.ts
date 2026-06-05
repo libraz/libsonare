@@ -119,6 +119,7 @@ describe('newly exposed WASM functions', () => {
 
   it('decompose and nnFilter reject invalid dimensions', () => {
     const small = new Float32Array([1, 2, 3, 4]);
+    expect(() => decompose(small, 2, 2, 0, 20, 2.0)).toThrow();
     expect(() => decompose(small, 2, 2, 2, 0, 2.0)).toThrow();
     expect(() => decompose(small, 1000, 1000, 2, 20, 2.0)).toThrow();
     expect(() => nnFilter(small, 1000, 1000)).toThrow();

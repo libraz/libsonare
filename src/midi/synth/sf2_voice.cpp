@@ -260,7 +260,15 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   if (looping) {
     const double loop_len =
         static_cast<double>(params.loop_end) - static_cast<double>(params.loop_start);
-    while (pos >= static_cast<double>(params.loop_end) && loop_len > 0.0) pos -= loop_len;
+    if (!std::isfinite(pos)) {
+      active = false;
+      env.kill();
+      return 0.0f;
+    }
+    if (pos >= static_cast<double>(params.loop_end) && loop_len > 0.0) {
+      pos = static_cast<double>(params.loop_start) +
+            std::fmod(pos - static_cast<double>(params.loop_start), loop_len);
+    }
   } else if (pos >= static_cast<double>(params.end)) {
     active = false;
     env.kill();

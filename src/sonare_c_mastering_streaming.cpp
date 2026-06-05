@@ -85,6 +85,18 @@ struct SonareStreamingMasteringChain {
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
 };
 
+namespace {
+
+bool all_finite(const float* samples, size_t num_samples) noexcept {
+  if (!samples) return num_samples == 0;
+  for (size_t i = 0; i < num_samples; ++i) {
+    if (!std::isfinite(samples[i])) return false;
+  }
+  return true;
+}
+
+}  // namespace
+
 SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     const SonareMasteringParam* params, size_t param_count, float loudness_static_gain_db,
     float loudness_static_gain_peak_db) {
@@ -140,6 +152,7 @@ SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteri
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (num_samples == 0) return SONARE_OK;
+  if (!all_finite(samples, num_samples)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   float* channels[] = {samples};
   handle->chain->process_block(channels, 1, static_cast<int>(num_samples));
@@ -154,6 +167,9 @@ SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMaste
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (num_samples == 0) return SONARE_OK;
+  if (!all_finite(left, num_samples) || !all_finite(right, num_samples)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   float* channels[] = {left, right};
   handle->chain->process_block(channels, 2, static_cast<int>(num_samples));

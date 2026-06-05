@@ -255,7 +255,6 @@ export {
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
   synthEnumTables,
-  synthPatchRoundTripForTest,
   synthPresetNames,
   synthPresetPatch,
 } from './project';

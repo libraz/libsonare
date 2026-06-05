@@ -46,7 +46,7 @@ def test_set_clip_gain_accepts_zero_mute_and_undoes() -> None:
 def test_set_clip_fade_and_loop_round_trip() -> None:
     p, _track, clip = _audio_project()
     before = p.to_json()
-    p.set_clip_fade(clip, 24.0, 48.0, fade_in_curve="equal-power")
+    p.set_clip_fade(clip, 24.0, 48.0, fade_in_curve="equalPower", fade_out_curve="equal_power")
     assert p.to_json() != before
     p.undo()
     assert p.to_json() == before

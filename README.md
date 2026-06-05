@@ -500,9 +500,8 @@ sonare mastering-pair-analyze source.wav --reference reference.wav \
 sonare mastering-processors                 # list available processors
 
 # Mixing
-sonare mixing-presets
-sonare mixing-preset --preset vocalReverbSend
-sonare mix input.wav -o mix.wav --fader-db -3 --pan 0.1 --pan-mode stereo-pan --width 1.1
+sonare mix --preset vocalReverbSend
+sonare mix --scene scene.json --input vocal.wav --input drums.wav -o mix.wav
 
 # DAW editing DSP
 sonare pitch-correct vocal.wav --current-midi 69 --target-midi 70 -o corrected.wav

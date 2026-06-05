@@ -77,6 +77,9 @@ def test_named_mastering_processors() -> None:
     assert len(stereo.left) == len(samples)
     assert len(stereo.right) == len(samples)
 
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering_process("stereo.imager", samples, sample_rate=sr, params={"width": 1.1})
+
 
 def test_mastering_pair_accepts_differing_reference_length() -> None:
     """Pair process/analyze accept a reference that differs in length from source."""

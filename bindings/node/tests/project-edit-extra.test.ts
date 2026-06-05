@@ -63,10 +63,10 @@ describe('Project edit ops (new bindings)', () => {
     const project = Project.create();
     const track = project.addTrack({ kind: 'audio' });
     const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
-    project.setClipFade(clip, { lengthPpq: 0.5, curve: 'equalPower' }, { curve: 'logarithmic' });
+    project.setClipFade(clip, { lengthPpq: 0.5, curve: 'equal-power' }, { curve: 'equal_power' });
     const json = project.toJson();
     expect(json).toContain('"fade_in":{"curve":1,"length_ppq":0.5}');
-    expect(json).toContain('"fade_out":{"curve":3,"length_ppq":0}');
+    expect(json).toContain('"fade_out":{"curve":1,"length_ppq":0}');
     project.destroy();
   });
 

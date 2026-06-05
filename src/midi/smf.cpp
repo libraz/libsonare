@@ -236,6 +236,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
             seg.start_ppq = ppq;
             seg.time_sig.numerator = static_cast<int>(payload[0]);
             // SMF stores the denominator as a power of two (2 => 2^2 = 4).
+            if (payload[1] >= 31) {
+              ++(*skipped);
+              break;
+            }
             seg.time_sig.denominator = 1 << payload[1];
             if (meta_len >= 4) {
               seg.clocks_per_metronome_click = payload[2];
@@ -539,8 +543,13 @@ void put_meta(std::vector<uint8_t>* body, uint32_t delta, uint8_t type, const ui
 void put_sysex(std::vector<uint8_t>* body, uint32_t delta, const std::vector<uint8_t>& payload) {
   put_vlq(body, delta);
   put_u8(body, kSysExStart);
-  put_vlq(body, static_cast<uint32_t>(payload.size()));
+  const bool has_terminal_f7 = !payload.empty() && payload.back() == 0xF7u;
+  const size_t encoded_size = payload.size() + (has_terminal_f7 ? 0u : 1u);
+  put_vlq(body, static_cast<uint32_t>(encoded_size));
   body->insert(body->end(), payload.begin(), payload.end());
+  if (!has_terminal_f7) {
+    put_u8(body, 0xF7u);
+  }
 }
 
 }  // namespace

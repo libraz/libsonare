@@ -33,14 +33,9 @@ struct CaptureSegment {
 ///    is mid-update: a setter republishes the whole snapshot guarded by an
 ///    even/odd counter, and a reader that observes an in-progress write retries.
 ///    The setter is the single seqlock writer (control thread).
-///  - @ref process and the accessor getters (@ref armed, @ref punch_enabled,
-///    @ref punch_start_sample, @ref punch_end_sample) read through the seqlock's
-///    @c load(). load() never mutates any shared reader state (it only reads the
-///    value and the guard), so it is safe to call from any number of reader
-///    threads concurrently — both the audio thread (engine render callback) and
-///    a control thread polling @ref capture_status. The reader's critical
-///    section is a single trivially-copyable POD copy, so the bounded retry on a
-///    concurrent write is negligible on the audio thread.
+///  - @ref process uses the seqlock's non-spinning @c try_load() path so the
+///    audio callback never waits for a preempted control-thread store. Accessor
+///    getters use the spinning @c load() path and are control-thread helpers.
 ///
 /// Note: @ref reset zeroes @c captured_frames_, which is otherwise owned by the
 /// audio thread. @ref reset is therefore expected to be issued while the audio
@@ -76,9 +71,8 @@ class CaptureSink {
     int64_t punch_end_sample = 0;
   };
 
-  // Reads the currently published snapshot through the seqlock. load() does not
-  // mutate any shared reader state, so it is safe from any reader thread.
   Control snapshot() const noexcept { return control_.load(); }
+  Control snapshot_rt() const noexcept { return control_.try_load(); }
 
   // Control-thread shadow of the published state. The setters mutate this then
   // republish the whole snapshot so partial updates are never visible.

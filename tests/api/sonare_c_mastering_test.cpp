@@ -240,6 +240,43 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_free_mastering_chain_stereo_result(&ok);
   }
 
+  SECTION("streaming mastering chain rejects non-finite blocks") {
+    constexpr int kSampleRate = 48000;
+    constexpr int kBlockSize = 128;
+
+    SonareStreamingMasteringChain* mono_chain =
+        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    REQUIRE(mono_chain != nullptr);
+    REQUIRE(sonare_streaming_mastering_chain_prepare(mono_chain, kSampleRate, kBlockSize, 1) ==
+            SONARE_OK);
+
+    std::vector<float> mono(kBlockSize, 0.0f);
+    mono[7] = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(mono_chain, mono.data(), mono.size()) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    std::fill(mono.begin(), mono.end(), 0.0f);
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(mono_chain, mono.data(), mono.size()) ==
+            SONARE_OK);
+    sonare_streaming_mastering_chain_destroy(mono_chain);
+
+    SonareStreamingMasteringChain* stereo_chain =
+        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    REQUIRE(stereo_chain != nullptr);
+    REQUIRE(sonare_streaming_mastering_chain_prepare(stereo_chain, kSampleRate, kBlockSize, 2) ==
+            SONARE_OK);
+
+    std::vector<float> left(kBlockSize, 0.0f);
+    std::vector<float> right(kBlockSize, 0.0f);
+    right[11] = std::numeric_limits<float>::infinity();
+    REQUIRE(sonare_streaming_mastering_chain_process_stereo(stereo_chain, left.data(), right.data(),
+                                                            left.size()) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    std::fill(right.begin(), right.end(), 0.0f);
+    REQUIRE(sonare_streaming_mastering_chain_process_stereo(stereo_chain, left.data(), right.data(),
+                                                            left.size()) == SONARE_OK);
+    sonare_streaming_mastering_chain_destroy(stereo_chain);
+  }
+
   SECTION("named processor validation includes processor and parameter name") {
     auto samples = generate_sine(440.0f, 22050, 0.5f);
     SonareMasteringParam params[] = {{"width", 3.5}};

@@ -33,6 +33,43 @@ TEST_CASE("length-checked inverse transforms reject a short input buffer", "[c_a
                                      &bad) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
+TEST_CASE("inverse transforms reject non-finite input uniformly", "[c_api][abi]") {
+  const int n_frames = 4;
+  const int n_mels = 8;
+  const int n_mfcc = 5;
+  const int sample_rate = 22050;
+  const int n_fft = 256;
+  const int hop_length = 64;
+
+  std::vector<float> mel(static_cast<size_t>(n_mels) * n_frames, 0.1f);
+  mel[3] = std::nanf("");
+  SonareInverseResult stft{};
+  REQUIRE(sonare_mel_to_stft_checked(mel.data(), mel.size(), n_mels, n_frames, sample_rate, n_fft,
+                                     0.0f, 0.0f, &stft) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(stft.data == nullptr);
+
+  float* audio = nullptr;
+  size_t audio_len = 0;
+  REQUIRE(sonare_mel_to_audio_checked(mel.data(), mel.size(), n_mels, n_frames, sample_rate, n_fft,
+                                      hop_length, 0.0f, 0.0f, 2, &audio,
+                                      &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(audio == nullptr);
+  REQUIRE(audio_len == 0);
+
+  std::vector<float> mfcc(static_cast<size_t>(n_mfcc) * n_frames, 0.1f);
+  mfcc[7] = INFINITY;
+  SonareInverseResult out_mel{};
+  REQUIRE(sonare_mfcc_to_mel_checked(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels,
+                                     &out_mel) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out_mel.data == nullptr);
+
+  REQUIRE(sonare_mfcc_to_audio_checked(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels,
+                                       sample_rate, n_fft, hop_length, 0.0f, 0.0f, 2, &audio,
+                                       &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(audio == nullptr);
+  REQUIRE(audio_len == 0);
+}
+
 TEST_CASE("compat transforms reject non-finite input uniformly", "[c_api][abi]") {
   std::vector<float> values = {0.5f, 0.25f, std::nanf(""), 0.1f};
   float* out = nullptr;

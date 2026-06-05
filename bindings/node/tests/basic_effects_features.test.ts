@@ -15,9 +15,12 @@ import {
   masteringProcessorNames,
   masteringProcessStereo,
   melSpectrogram,
+  melToAudio,
   melToHz,
   melToStft,
   mfcc,
+  mfccToAudio,
+  mfccToMel,
   midiToHz,
   normalize,
   noteToHz,
@@ -276,6 +279,18 @@ describe('features', () => {
       diff += (slaney.power[i] - htk.power[i]) ** 2;
     }
     expect(diff).toBeGreaterThan(1e-6);
+  });
+
+  it('inverse feature wrappers reject non-finite matrices', () => {
+    const mel = new Float32Array(8 * 4).fill(0.1);
+    mel[3] = Number.NaN;
+    expect(() => melToStft(mel, 8, 4, SR, 256)).toThrow(/NaN|Inf/);
+    expect(() => melToAudio(mel, 8, 4, SR, 256, 64, 0, 0, 2)).toThrow(/NaN|Inf/);
+
+    const mfccCoeffs = new Float32Array(5 * 4).fill(0.1);
+    mfccCoeffs[7] = Number.POSITIVE_INFINITY;
+    expect(() => mfccToMel(mfccCoeffs, 5, 4, 8)).toThrow(/NaN|Inf/);
+    expect(() => mfccToAudio(mfccCoeffs, 5, 4, 8, SR, 256, 64, 0, 0, 2)).toThrow(/NaN|Inf/);
   });
 
   it('mfcc returns coefficients', () => {

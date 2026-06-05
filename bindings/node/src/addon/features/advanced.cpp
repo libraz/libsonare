@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -20,6 +21,19 @@ using namespace sonare_node;
 using namespace sonare_node::features;
 
 namespace {
+
+bool ValidateFiniteMatrix(Napi::Env env, const char* fn_name, const Napi::Float32Array& matrix) {
+  const float* data = matrix.Data();
+  const size_t length = matrix.ElementLength();
+  for (size_t index = 0; index < length; ++index) {
+    if (!std::isfinite(data[index])) {
+      Napi::RangeError::New(env, std::string(fn_name) + ": matrix contains NaN or Inf")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+  }
+  return true;
+}
 
 Napi::Value CqtResultToObject(Napi::Env env, const SonareCqtResult& result) {
   Napi::Object out = Napi::Object::New(env);
@@ -161,6 +175,7 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   if (!ValidateMatrixDims(env, "melToStft", n_mels, n_frames, typed.ElementLength())) {
     return env.Undefined();
   }
+  if (!ValidateFiniteMatrix(env, "melToStft", typed)) return env.Undefined();
   const int sr =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
   const int n_fft =
@@ -209,6 +224,7 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   if (!ValidateMatrixDims(env, "melToAudio", n_mels, n_frames, typed.ElementLength())) {
     return env.Undefined();
   }
+  if (!ValidateFiniteMatrix(env, "melToAudio", typed)) return env.Undefined();
   const int sr =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
   const int n_fft =
@@ -256,6 +272,7 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
   if (!ValidateMatrixDims(env, "mfccToMel", n_mfcc, n_frames, typed.ElementLength())) {
     return env.Undefined();
   }
+  if (!ValidateFiniteMatrix(env, "mfccToMel", typed)) return env.Undefined();
   const int n_mels =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 128;
 
@@ -290,6 +307,7 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   if (!ValidateMatrixDims(env, "mfccToAudio", n_mfcc, n_frames, typed.ElementLength())) {
     return env.Undefined();
   }
+  if (!ValidateFiniteMatrix(env, "mfccToAudio", typed)) return env.Undefined();
   const int n_mels =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 128;
   const int sr =

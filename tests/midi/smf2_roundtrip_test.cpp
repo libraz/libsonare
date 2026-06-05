@@ -40,6 +40,20 @@ void push_word(std::vector<uint8_t>* bytes, uint32_t w) {
   bytes->push_back(static_cast<uint8_t>(w & 0xFFu));
 }
 
+uint32_t read_word(const std::vector<uint8_t>& bytes, size_t offset) {
+  REQUIRE(offset + 4 <= bytes.size());
+  return (static_cast<uint32_t>(bytes[offset]) << 24) |
+         (static_cast<uint32_t>(bytes[offset + 1]) << 16) |
+         (static_cast<uint32_t>(bytes[offset + 2]) << 8) | static_cast<uint32_t>(bytes[offset + 3]);
+}
+
+bool contains_message_type(const std::vector<uint8_t>& bytes, uint32_t message_type) {
+  for (size_t offset = 8; offset + 4 <= bytes.size(); offset += 4) {
+    if (((read_word(bytes, offset) >> 28) & 0x0Fu) == message_type) return true;
+  }
+  return false;
+}
+
 std::vector<uint8_t> smf2_header_with_dctpq() {
   std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
   push_word(&bytes, (0x0u << 28) | (0x3u << 20) | 480u);
@@ -194,7 +208,6 @@ TEST_CASE("SMF2 chains Delta Clockstamps for events beyond the 20-bit tick span"
 
 TEST_CASE("SMF2 imports a SysEx8 data message payload", "[midi][smf2]") {
   // Hand-built SMF2CLIP: header + DCTPQ + a complete SysEx8 packet (MT=0x5).
-  // The exporter only writes SysEx7, so SysEx8 import is exercised directly.
   std::vector<uint8_t> bytes = smf2_header_with_dctpq();
   // SysEx8 complete (status 0x0), numBytes=4 (streamID + 3 data), streamID=0x00,
   // payload bytes {0x11, 0x22, 0x33}. word0 byte3 = data[0]=0x11.
@@ -212,6 +225,32 @@ TEST_CASE("SMF2 imports a SysEx8 data message payload", "[midi][smf2]") {
   const std::vector<uint8_t>* recovered = imported.sysex_store.lookup(events[0].ump.sysex_handle);
   REQUIRE(recovered != nullptr);
   REQUIRE(*recovered == std::vector<uint8_t>{0x11, 0x22, 0x33});
+}
+
+TEST_CASE("SMF2 exports high-bit SysEx payloads as SysEx8", "[midi][smf2]") {
+  SysExStore store;
+  const std::vector<uint8_t> payload = {0x11, 0x80, 0x22, 0xFF, 0x33};
+  const auto handle = store.add(payload);
+  REQUIRE(handle != 0);
+
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_sysex_handle(3, handle)));
+
+  Smf2ExportOptions options;
+  options.sysex_store = &store;
+  const auto exported = export_clip_file(clip, {}, {}, options);
+  REQUIRE(exported.skipped_events == 0);
+  REQUIRE(contains_message_type(exported.bytes, 0x5u));
+
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  const auto& events = imported.clips[0].events();
+  REQUIRE(events.size() == 1);
+  REQUIRE(events[0].ump.group == 3);
+  const std::vector<uint8_t>* recovered = imported.sysex_store.lookup(events[0].ump.sysex_handle);
+  REQUIRE(recovered != nullptr);
+  REQUIRE(*recovered == payload);
 }
 
 TEST_CASE("SMF2 import validates SysEx packet ordering", "[midi][smf2]") {

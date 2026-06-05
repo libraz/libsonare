@@ -14,6 +14,60 @@
 
 namespace sonare_c_detail {
 
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kSubtractive) + 1 ==
+              SONARE_SYNTH_ENGINE_SUBTRACTIVE);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kFm) + 1 ==
+              SONARE_SYNTH_ENGINE_FM);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kKarplusStrong) + 1 ==
+              SONARE_SYNTH_ENGINE_KARPLUS_STRONG);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kModal) + 1 ==
+              SONARE_SYNTH_ENGINE_MODAL);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kAdditive) + 1 ==
+              SONARE_SYNTH_ENGINE_ADDITIVE);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kPercussion) + 1 ==
+              SONARE_SYNTH_ENGINE_PERCUSSION);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kPiano) + 1 ==
+              SONARE_SYNTH_ENGINE_PIANO);
+
+static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSine) + 1 ==
+              SONARE_SYNTH_OSC_SINE);
+static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSaw) + 1 == SONARE_SYNTH_OSC_SAW);
+static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSquare) + 1 ==
+              SONARE_SYNTH_OSC_SQUARE);
+static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kTriangle) + 1 ==
+              SONARE_SYNTH_OSC_TRIANGLE);
+static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kNoise) + 1 ==
+              SONARE_SYNTH_OSC_NOISE);
+
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kSvf) + 1 ==
+              SONARE_SYNTH_FILTER_SVF);
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kMoogLadder) + 1 ==
+              SONARE_SYNTH_FILTER_MOOG_LADDER);
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kDiodeLadder) + 1 ==
+              SONARE_SYNTH_FILTER_DIODE_LADDER);
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kSallenKey) + 1 ==
+              SONARE_SYNTH_FILTER_SALLEN_KEY);
+
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterOutput::kLowpass) + 1 ==
+              SONARE_SYNTH_FILTER_OUT_LOWPASS);
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterOutput::kBandpass) + 1 ==
+              SONARE_SYNTH_FILTER_OUT_BANDPASS);
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterOutput::kHighpass) + 1 ==
+              SONARE_SYNTH_FILTER_OUT_HIGHPASS);
+
+static_assert(static_cast<int>(sonare::midi::synth::BodyType::kNone) + 1 == SONARE_SYNTH_BODY_NONE);
+static_assert(static_cast<int>(sonare::midi::synth::BodyType::kGuitar) + 1 ==
+              SONARE_SYNTH_BODY_GUITAR);
+static_assert(static_cast<int>(sonare::midi::synth::BodyType::kViolin) + 1 ==
+              SONARE_SYNTH_BODY_VIOLIN);
+static_assert(static_cast<int>(sonare::midi::synth::BodyType::kWoodTube) + 1 ==
+              SONARE_SYNTH_BODY_WOOD_TUBE);
+
+static_assert(static_cast<int>(sonare::midi::synth::ModSource::kRandom) + 1 ==
+              SONARE_SYNTH_MOD_SOURCE_COUNT);
+static_assert(static_cast<int>(sonare::midi::synth::ModDestination::kPanUnits) + 1 ==
+              SONARE_SYNTH_MOD_DESTINATION_COUNT);
+
 inline sonare::midi::synth::ModSource mod_source_from_c(int value) noexcept {
   using sonare::midi::synth::ModSource;
   if (value < static_cast<int>(ModSource::kNone) || value > static_cast<int>(ModSource::kRandom)) {

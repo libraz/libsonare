@@ -924,7 +924,9 @@ EditCommandPtr PatchMidiClip::invert(const Project& /*before*/,
   if (it != store_before.events.end()) {
     prior = it->second;
   }
-  return std::make_unique<ReplaceMidiClipEvents>(patch_.clip_id, std::move(prior));
+  auto payloads = payloads_for_events(store_before, prior);
+  return std::make_unique<ReplaceMidiClipEvents>(patch_.clip_id, std::move(prior),
+                                                 std::move(payloads));
 }
 
 // ===========================================================================

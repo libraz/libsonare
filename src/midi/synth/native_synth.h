@@ -30,6 +30,7 @@
 #include "midi/instrument.h"
 #include "midi/synth/additive_voice.h"
 #include "midi/synth/body_resonator.h"
+#include "midi/synth/channel_param_state.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
 #include "midi/synth/fm_voice.h"
@@ -257,10 +258,7 @@ class NativeSynth final : public MidiInstrument {
     uint8_t pan = 64;          // CC10
     uint8_t mod_wheel = 0;     // CC1
     uint16_t pitch_bend = 8192;
-    enum class ParamMode : uint8_t { kNone = 0, kRpn, kNrpn };
-    ParamMode param_mode = ParamMode::kNone;
-    uint8_t rpn_msb = 127;
-    uint8_t rpn_lsb = 127;
+    ChannelParamState params;
     float bend_range_cents = 200.0f;
     /// Previous note's frequency (glide source; 0 = none yet).
     float last_freq_hz = 0.0f;

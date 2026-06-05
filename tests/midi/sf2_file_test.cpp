@@ -187,6 +187,41 @@ TEST_CASE("Sf2File velocity/key zone matching helper", "[midi][sf2]") {
   REQUIRE(melodic.zones[1].matches(60, 100));
 }
 
+TEST_CASE("Sf2File clamps extreme tuning generators while parsing", "[midi][sf2]") {
+  Sf2Builder b;
+  std::vector<float> sample(64, 0.0f);
+  sample[0] = 1.0f;
+  const int sample_id = b.add_sample("impulse", sample, 44100, 60, 0, 64);
+
+  Sf2Builder::ZoneSpec zone;
+  zone.target = sample_id;
+  zone.gens.push_back({sonare::midi::synth::kGenCoarseTune, 300});
+  zone.gens.push_back({sonare::midi::synth::kGenFineTune, -300});
+  zone.gens.push_back({sonare::midi::synth::kGenScaleTuning, 3000});
+  const int inst = b.add_instrument("extreme", {zone});
+
+  Sf2Builder::ZoneSpec preset_zone;
+  preset_zone.target = inst;
+  b.add_preset("Extreme", 0, 0, {preset_zone});
+
+  const std::vector<uint8_t> bytes = b.build();
+  Sf2File sf2;
+  std::string error;
+  REQUIRE(sf2.parse(bytes.data(), bytes.size(), &error));
+  INFO(error);
+
+  const auto& gens = sf2.instruments()[0].zones[0];
+  const auto* coarse = gens.find_gen(sonare::midi::synth::kGenCoarseTune);
+  const auto* fine = gens.find_gen(sonare::midi::synth::kGenFineTune);
+  const auto* scale = gens.find_gen(sonare::midi::synth::kGenScaleTuning);
+  REQUIRE(coarse != nullptr);
+  REQUIRE(fine != nullptr);
+  REQUIRE(scale != nullptr);
+  REQUIRE(coarse->amount == 120);
+  REQUIRE(fine->amount == -99);
+  REQUIRE(scale->amount == 1200);
+}
+
 TEST_CASE("Sf2File rejects malformed input without crashing", "[midi][sf2]") {
   const std::vector<uint8_t> bytes = build_fixture();
   Sf2File sf2;

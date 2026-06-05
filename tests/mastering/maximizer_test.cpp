@@ -314,6 +314,14 @@ TEST_CASE("LoudnessOptimize accepts meter-supported true-peak oversample factors
   }
 }
 
+TEST_CASE("LoudnessOptimize rejects unsupported true-peak oversample factors",
+          "[mastering][maximizer]") {
+  const Audio input = sine_audio(0.05f, 48000, 0.1f);
+  for (int factor : {0, 3, 5, 6, 7, 32}) {
+    REQUIRE_THROWS(loudness_optimize(input, {-20.0f, -1.0f, factor}));
+  }
+}
+
 TEST_CASE("StreamingPreview reports platform normalization and ceiling risk",
           "[mastering][maximizer]") {
   const Audio input = sine_audio(0.2f);

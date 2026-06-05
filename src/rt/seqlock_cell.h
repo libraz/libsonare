@@ -48,6 +48,7 @@ class SeqlockCell {
   ///        the duration of the store so a concurrent reader detects the write.
   void store(const T& value) noexcept {
     guard_.fetch_add(1, std::memory_order_release);  // now odd: write in progress
+    std::atomic_thread_fence(std::memory_order_release);
     value_ = value;
     guard_.fetch_add(1, std::memory_order_release);  // now even: write complete
   }

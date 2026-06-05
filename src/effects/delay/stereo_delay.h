@@ -41,6 +41,7 @@ class StereoDelay : public rt::ProcessorBase {
   StereoDelayConfig config_{};
   double sample_rate_ = 48000.0;
   std::array<modulation::ModDelayLine, 2> delays_;
+  std::array<float, 2> delay_samples_{{0.0f, 0.0f}};
   std::array<float, 2> feedback_state_{{0.0f, 0.0f}};
 };
 

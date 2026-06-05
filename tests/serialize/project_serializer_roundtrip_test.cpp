@@ -165,6 +165,11 @@ Fixture make_fixture() {
   s.fader_db = -3.5f;
   s.pan = 0.25f;
   s.muted = false;
+  mixing::api::Insert strip_insert;
+  strip_insert.slot = mixing::api::InsertSlot::PreFader;
+  strip_insert.processor_name = "sonare.eq";
+  strip_insert.params_json = "{\"gainDb\":-1.5}";
+  s.inserts.push_back(strip_insert);
   mixing::api::Send send;
   send.id = "send.reverb";
   send.destination_bus_id = "bus.fx";
@@ -173,6 +178,12 @@ Fixture make_fixture() {
   s.sends.push_back(send);
   scene.strips.push_back(s);
   mixing::api::Bus master("bus.main", "master");
+  mixing::api::Insert master_insert;
+  master_insert.slot = mixing::api::InsertSlot::PostFader;
+  master_insert.processor_name = "sonare.compressor";
+  master_insert.params_json = "{\"thresholdDb\":-12}";
+  master_insert.sidechain_key = "strip.audio";
+  master.inserts.push_back(master_insert);
   scene.buses.push_back(master);
   mixing::api::Bus fx("bus.fx", "aux");
   scene.buses.push_back(fx);
@@ -439,6 +450,17 @@ TEST_CASE("project scene JSON uses stable camelCase keys", "[serialize]") {
   CHECK_FALSE(strip.contains("fader_db"));
   CHECK_FALSE(strip.contains("solo_safe"));
 
+  REQUIRE(strip["inserts"].is_array());
+  REQUIRE_FALSE(strip["inserts"].as_array().empty());
+  const auto& insert = strip["inserts"].as_array()[0];
+  REQUIRE(insert.is_object());
+  CHECK(insert.contains("processor"));
+  CHECK(insert.contains("params"));
+  CHECK_FALSE(insert.contains("sidechainKey"));
+  CHECK_FALSE(insert.contains("processor_name"));
+  CHECK_FALSE(insert.contains("params_json"));
+  CHECK_FALSE(insert.contains("sidechain_key"));
+
   REQUIRE(strip["sends"].is_array());
   REQUIRE_FALSE(strip["sends"].as_array().empty());
   const auto& send = strip["sends"].as_array()[0];
@@ -446,6 +468,17 @@ TEST_CASE("project scene JSON uses stable camelCase keys", "[serialize]") {
   CHECK(send.contains("sendDb"));
   CHECK_FALSE(send.contains("destination_bus_id"));
   CHECK_FALSE(send.contains("send_db"));
+
+  REQUIRE(scene["buses"].is_array());
+  REQUIRE_FALSE(scene["buses"].as_array().empty());
+  const auto& bus = scene["buses"].as_array()[0];
+  REQUIRE(bus.is_object());
+  REQUIRE(bus["inserts"].is_array());
+  REQUIRE_FALSE(bus["inserts"].as_array().empty());
+  const auto& bus_insert = bus["inserts"].as_array()[0];
+  REQUIRE(bus_insert.is_object());
+  CHECK(bus_insert.contains("sidechainKey"));
+  CHECK_FALSE(bus_insert.contains("sidechain_key"));
 }
 
 TEST_CASE("project scene deserializer accepts legacy snake_case scene keys", "[serialize]") {
@@ -458,7 +491,9 @@ TEST_CASE("project scene deserializer accepts legacy snake_case scene keys", "[s
       "\"solo_safe\":true,\"pan_mode\":2,\"dual_pan_left\":-0.4,"
       "\"dual_pan_right\":0.6,\"polarity_invert_left\":true,"
       "\"polarity_invert_right\":false,\"pan_law\":3,\"channel_delay_samples\":21,"
-      "\"inserts\":[],\"sends\":[{\"id\":\"send\",\"destination_bus_id\":\"bus\","
+      "\"inserts\":[{\"slot\":\"post\",\"processor_name\":\"legacy.eq\","
+      "\"params_json\":\"{\\\"q\\\":1.25}\",\"sidechain_key\":\"legacy.sc\"}],"
+      "\"sends\":[{\"id\":\"send\",\"destination_bus_id\":\"bus\","
       "\"send_db\":-8,\"timing\":\"pre\"}]}],\"buses\":[],"
       "\"vca_groups\":[{\"id\":\"vca\",\"gain_db\":-2,\"members\":[\"legacy\"]}],"
       "\"connections\":[{\"source\":\"legacy\",\"destination\":\"bus\"}]}");
@@ -477,6 +512,11 @@ TEST_CASE("project scene deserializer accepts legacy snake_case scene keys", "[s
   CHECK(scene.strips[0].polarity_invert_left);
   CHECK(scene.strips[0].pan_law == 3);
   CHECK(scene.strips[0].channel_delay_samples == 21);
+  REQUIRE(scene.strips[0].inserts.size() == 1);
+  CHECK(scene.strips[0].inserts[0].slot == mixing::api::InsertSlot::PostFader);
+  CHECK(scene.strips[0].inserts[0].processor_name == "legacy.eq");
+  CHECK(scene.strips[0].inserts[0].params_json == "{\"q\":1.25}");
+  CHECK(scene.strips[0].inserts[0].sidechain_key == "legacy.sc");
   REQUIRE(scene.strips[0].sends.size() == 1);
   CHECK(scene.strips[0].sends[0].destination_bus_id == "bus");
   CHECK(scene.strips[0].sends[0].send_db == -8.0f);
@@ -491,6 +531,14 @@ TEST_CASE("project scene deserializer accepts legacy snake_case scene keys", "[s
   const auto normalized = util::json::parse(project_to_json(*decoded.project, decoded.midi));
   CHECK(normalized["scene"].contains("vcaGroups"));
   CHECK_FALSE(normalized["scene"].contains("vca_groups"));
+  const auto& normalized_strip = normalized["scene"]["strips"].as_array()[0];
+  const auto& normalized_insert = normalized_strip["inserts"].as_array()[0];
+  CHECK(normalized_insert.contains("processor"));
+  CHECK(normalized_insert.contains("params"));
+  CHECK(normalized_insert.contains("sidechainKey"));
+  CHECK_FALSE(normalized_insert.contains("processor_name"));
+  CHECK_FALSE(normalized_insert.contains("params_json"));
+  CHECK_FALSE(normalized_insert.contains("sidechain_key"));
 }
 
 TEST_CASE("project deserialize preserves next id counters without gaps", "[serialize]") {

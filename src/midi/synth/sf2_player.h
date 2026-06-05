@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "midi/instrument.h"
+#include "midi/synth/channel_param_state.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/sf2_file.h"
@@ -138,12 +139,7 @@ class Sf2Player final : public MidiInstrument {
     uint16_t pitch_bend = 8192;
     // RPN/NRPN state: CC101/100 select an RPN, CC99/98 select a GS NRPN; the
     // data entry CCs (6/38) route to whichever was selected last.
-    enum class ParamMode : uint8_t { kNone = 0, kRpn, kNrpn };
-    ParamMode param_mode = ParamMode::kNone;
-    uint8_t rpn_msb = 127;
-    uint8_t rpn_lsb = 127;
-    uint8_t nrpn_msb = 127;
-    uint8_t nrpn_lsb = 127;
+    ChannelParamState params;
     float bend_range_cents = 200.0f;
     /// GS layer: rhythm-part flag (drums resolve bank 128) and NRPN edits.
     bool drums = false;

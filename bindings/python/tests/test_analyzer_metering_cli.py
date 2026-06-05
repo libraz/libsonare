@@ -508,6 +508,18 @@ def test_mastering_cli_help_lists_preset_streaming_and_declip_commands() -> None
     assert "declip" in result.stdout
 
 
+def test_mixing_preset_cli_commands_smoke() -> None:
+    presets = _run_cli(["mixing-presets", "--json"])
+    assert presets.returncode == 0, presets.stderr
+    names = json.loads(presets.stdout)["presets"]
+    assert names
+
+    preset = _run_cli(["mixing-preset", "--preset", names[0]])
+    assert preset.returncode == 0, preset.stderr
+    scene = json.loads(preset.stdout)
+    assert "strips" in scene
+
+
 def test_analyze_sections_returns_section_result() -> None:
     from libsonare import Section, SectionResult, SectionType, analyze_sections
 

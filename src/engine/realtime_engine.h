@@ -117,11 +117,11 @@ class RealtimeEngine {
   void set_time_signature(int numerator, int denominator);
   void set_time_signature_segments(std::vector<transport::TimeSignatureSegment> segments);
   double bpm_at_sample(int64_t sample) const noexcept {
-    const transport::TempoMap* map = tempo_map_snapshot_.load();
+    const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
     return (map ? map : &tempo_map_)->bpm_at_sample(sample);
   }
   transport::TimeSignature time_signature_at_ppq(double ppq) const noexcept {
-    const transport::TempoMap* map = tempo_map_snapshot_.load();
+    const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
     return (map ? map : &tempo_map_)->time_signature_at_ppq(ppq);
   }
   void set_loop(double start_ppq, double end_ppq, bool enabled) noexcept;
@@ -299,7 +299,7 @@ class RealtimeEngine {
   void adopt_tempo_map_snapshot() noexcept;
 
   transport::TempoMap tempo_map_{};
-  rt::RtSnapshot<transport::TempoMap> tempo_map_snapshot_{};
+  rt::RtPublisher<transport::TempoMap> tempo_map_snapshot_{};
   const transport::TempoMap* active_tempo_map_ = &tempo_map_;
   std::vector<transport::TempoSegment> control_tempo_segments_{};
   std::vector<transport::TimeSignatureSegment> control_time_signatures_{};

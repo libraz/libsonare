@@ -259,7 +259,6 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
   if (!direct_strip_id.empty()) {
     sonare::mixing::api::Strip direct_strip;
     direct_strip.id = direct_strip_id;
-    direct_strip.solo_safe = true;
     scene.strips.push_back(std::move(direct_strip));
   }
   const std::string scene_json = sonare::mixing::api::scene_to_json(scene);
@@ -271,17 +270,27 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
   return mixer;
 }
 
-int mixer_tail_samples_for_timeline(const arr::CompiledTimeline& timeline,
-                                    const MixerRouting& routing, double sample_rate, int block_size,
-                                    MixerPtr* out_mixer = nullptr) {
+struct MixerLatencyTail {
+  int latency_samples = 0;
+  int tail_samples = 0;
+};
+
+MixerLatencyTail mixer_latency_tail_for_timeline(const arr::CompiledTimeline& timeline,
+                                                 const MixerRouting& routing, double sample_rate,
+                                                 int block_size, MixerPtr* out_mixer = nullptr) {
   MixerPtr mixer(create_timeline_mixer(timeline, routing, sample_rate, block_size));
-  if (!mixer) return 0;
+  if (!mixer) return {};
+  MixerLatencyTail result;
+  int latency = 0;
   int tail = 0;
+  (void)sonare_mixer_latency_samples(mixer.get(), &latency);
   (void)sonare_mixer_tail_samples(mixer.get(), &tail);
+  result.latency_samples = std::max(latency, 0);
+  result.tail_samples = std::max(tail, 0);
   if (out_mixer != nullptr) {
     *out_mixer = std::move(mixer);
   }
-  return std::max(tail, 0);
+  return result;
 }
 
 // Channel-strip bounce: renders each bound track as an isolated dry
@@ -306,19 +315,31 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
     effective_routing.strip_tracks.emplace_back();
   }
 
+  // Build the mixer before rendering stems so we know how many extra internal
+  // frames are needed to compensate master-output latency.
+  if (!mixer_owner) {
+    mixer_owner.reset(
+        create_timeline_mixer(timeline, routing, sample_rate, block_size, direct_strip_id));
+  }
+  if (!mixer_owner) return SONARE_ERROR_INVALID_STATE;
+  int mixer_latency = 0;
+  (void)sonare_mixer_latency_samples(mixer_owner.get(), &mixer_latency);
+  mixer_latency = std::max(mixer_latency, 0);
+  const int64_t mixer_render_frames = frames + static_cast<int64_t>(mixer_latency);
+
   const size_t strip_count = effective_routing.strip_ids.size();
   // Stems are stereo (the mixer is stereo): one per strip plus one direct stem.
-  const uint64_t stem_floats = static_cast<uint64_t>(frames) * 2u * strip_count;
+  const uint64_t stem_floats = static_cast<uint64_t>(mixer_render_frames) * 2u * strip_count;
   if (stem_floats > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
 
-  const int64_t render_frames = frames + pdc;
+  const int64_t render_frames = mixer_render_frames + pdc;
   auto stem_aligned = [&](const std::function<bool(uint32_t)>& keep) {
     std::vector<std::vector<float>> ch;
     render_timeline(timeline, keep, instruments, sample_rate, block_size, /*num_channels=*/2,
                     render_frames, &ch);
     for (auto& c : ch) {
       if (pdc > 0) c.erase(c.begin(), c.begin() + pdc);
-      c.resize(static_cast<size_t>(frames));
+      c.resize(static_cast<size_t>(mixer_render_frames));
     }
     return ch;
   };
@@ -329,7 +350,7 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   for (size_t i = 0; i < effective_routing.strip_tracks.size(); ++i) {
     const std::set<uint32_t>& tracks = effective_routing.strip_tracks[i];
     if (tracks.empty()) {
-      stems.emplace_back(2, std::vector<float>(static_cast<size_t>(frames), 0.0f));
+      stems.emplace_back(2, std::vector<float>(static_cast<size_t>(mixer_render_frames), 0.0f));
       continue;
     }
     stems.push_back(stem_aligned([&tracks](uint32_t t) { return tracks.count(t) != 0; }));
@@ -343,19 +364,13 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
     stems.back() = std::move(direct);
   }
 
-  // Build the mixer from the scene and sum the strip stems block by block.
-  if (!mixer_owner) {
-    mixer_owner.reset(
-        create_timeline_mixer(timeline, routing, sample_rate, block_size, direct_strip_id));
-  }
-  if (!mixer_owner) return SONARE_ERROR_INVALID_STATE;
-
-  std::vector<float> master_l(static_cast<size_t>(frames), 0.0f);
-  std::vector<float> master_r(static_cast<size_t>(frames), 0.0f);
+  // Sum the strip stems through the mixer block by block.
+  std::vector<float> master_l(static_cast<size_t>(mixer_render_frames), 0.0f);
+  std::vector<float> master_r(static_cast<size_t>(mixer_render_frames), 0.0f);
   std::vector<const float*> in_l(strip_count, nullptr);
   std::vector<const float*> in_r(strip_count, nullptr);
   SonareError err = SONARE_OK;
-  const int64_t input_frames = std::clamp<int64_t>(mixer_input_frames, 0, frames);
+  const int64_t input_frames = std::clamp<int64_t>(mixer_input_frames, 0, mixer_render_frames);
   for (int64_t off = 0; off < input_frames; off += block_size) {
     const size_t n = static_cast<size_t>(std::min<int64_t>(block_size, input_frames - off));
     for (size_t i = 0; i < strip_count; ++i) {
@@ -366,8 +381,9 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
                                       master_l.data() + off, master_r.data() + off, n);
     if (err != SONARE_OK) break;
   }
-  for (int64_t off = input_frames; err == SONARE_OK && off < frames; off += block_size) {
-    const size_t n = static_cast<size_t>(std::min<int64_t>(block_size, frames - off));
+  for (int64_t off = input_frames; err == SONARE_OK && off < mixer_render_frames;
+       off += block_size) {
+    const size_t n = static_cast<size_t>(std::min<int64_t>(block_size, mixer_render_frames - off));
     err = sonare_mixer_drain_tail_stereo(mixer_owner.get(), master_l.data() + off,
                                          master_r.data() + off, n);
   }
@@ -378,8 +394,9 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   const size_t total = static_cast<size_t>(frames) * static_cast<size_t>(num_channels);
   std::unique_ptr<float[]> interleaved(new float[total]);
   for (int64_t f = 0; f < frames; ++f) {
-    const float l = master_l[static_cast<size_t>(f)];
-    const float r = master_r[static_cast<size_t>(f)];
+    const size_t source = static_cast<size_t>(f + mixer_latency);
+    const float l = master_l[source];
+    const float r = master_r[source];
     for (int ch = 0; ch < num_channels; ++ch) {
       float v = 0.0f;
       if (num_channels == 1) {
@@ -481,8 +498,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 #if defined(SONARE_WITH_MIXING)
     if (frames > 0 && !routing.bound_tracks.empty()) {
       MixerPtr* reusable = mixer_route_direct ? nullptr : &reusable_mixer;
-      frames += mixer_tail_samples_for_timeline(*compiled.timeline, routing, sample_rate,
-                                                block_size, reusable);
+      const MixerLatencyTail mixer_delay = mixer_latency_tail_for_timeline(
+          *compiled.timeline, routing, sample_rate, block_size, reusable);
+      frames += mixer_delay.tail_samples;
     }
 #endif
   }

@@ -552,6 +552,68 @@ bool emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<u
   return true;
 }
 
+bool needs_sysex8(const std::vector<uint8_t>& payload) {
+  size_t begin = 0;
+  size_t end = payload.size();
+  if (begin < end && payload[begin] == 0xF0u) ++begin;
+  if (end > begin && payload[end - 1] == 0xF7u) --end;
+  for (size_t i = begin; i < end; ++i) {
+    if (payload[i] > 0x7Fu) return true;
+  }
+  return false;
+}
+
+bool emit_sysex8(std::vector<SeqItem>* items, uint64_t tick, const std::vector<uint8_t>& payload,
+                 uint8_t group) {
+  // Match the SysEx7 exporter: tolerate MIDI 1.0 framing in the side store, but
+  // UMP SysEx8 packets carry only the payload bytes after the Stream ID.
+  size_t begin = 0;
+  size_t end = payload.size();
+  if (begin < end && payload[begin] == 0xF0u) ++begin;
+  if (end > begin && payload[end - 1] == 0xF7u) --end;
+  const size_t total = end - begin;
+  if (total == 0) return false;
+  size_t offset = 0;
+  bool first = true;
+  do {
+    const size_t chunk = std::min<size_t>(13u, total - offset);
+    uint8_t status;
+    if (total <= 13u) {
+      status = kSysex7Complete;
+    } else if (first) {
+      status = kSysex7Start;
+    } else if (offset + chunk >= total) {
+      status = kSysex7End;
+    } else {
+      status = kSysex7Continue;
+    }
+    std::array<uint8_t, 13> bytes{};
+    for (size_t i = 0; i < chunk; ++i) bytes[i] = payload[begin + offset + i];
+    SeqItem item;
+    item.tick = tick;
+    item.order = 2;
+    const uint8_t num_bytes = static_cast<uint8_t>(chunk + 1u);  // Stream ID + payload.
+    item.words[0] = (kMtData128 << 28) | (static_cast<uint32_t>(group & 0x0Fu) << 24) |
+                    (static_cast<uint32_t>(status) << 20) |
+                    (static_cast<uint32_t>(num_bytes) << 16) | (0u << 8) |
+                    static_cast<uint32_t>(bytes[0]);
+    item.words[1] = (static_cast<uint32_t>(bytes[1]) << 24) |
+                    (static_cast<uint32_t>(bytes[2]) << 16) |
+                    (static_cast<uint32_t>(bytes[3]) << 8) | static_cast<uint32_t>(bytes[4]);
+    item.words[2] = (static_cast<uint32_t>(bytes[5]) << 24) |
+                    (static_cast<uint32_t>(bytes[6]) << 16) |
+                    (static_cast<uint32_t>(bytes[7]) << 8) | static_cast<uint32_t>(bytes[8]);
+    item.words[3] = (static_cast<uint32_t>(bytes[9]) << 24) |
+                    (static_cast<uint32_t>(bytes[10]) << 16) |
+                    (static_cast<uint32_t>(bytes[11]) << 8) | static_cast<uint32_t>(bytes[12]);
+    item.word_count = 4;
+    items->push_back(item);
+    offset += chunk;
+    first = false;
+  } while (offset < total);
+  return true;
+}
+
 }  // namespace
 
 Smf2ExportResult export_clip_file(
@@ -649,7 +711,10 @@ Smf2ExportResult export_clip_file(
         ++result.skipped_events;
         continue;
       }
-      if (!emit_sysex7(&items, tick, *payload, ev.ump.group)) {
+      const bool emitted = needs_sysex8(*payload)
+                               ? emit_sysex8(&items, tick, *payload, ev.ump.group)
+                               : emit_sysex7(&items, tick, *payload, ev.ump.group);
+      if (!emitted) {
         ++result.skipped_events;
       }
       continue;

@@ -508,9 +508,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.mod_wheel = 0;
   st.expression = 127;
   st.pitch_bend = 8192;
-  st.param_mode = ChannelState::ParamMode::kNone;
-  st.rpn_msb = 127;
-  st.rpn_lsb = 127;
+  st.params.reset();
   st.bend_range_cents = kDefaultBendRangeCents;
   sustain_pedal(ch, false);
   refresh_channel_mod(ch);
@@ -537,13 +535,13 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       refresh_channel_mod(ch);
       break;
     case 6:
-      if (st.param_mode == ChannelState::ParamMode::kRpn && st.rpn_msb == 0 && st.rpn_lsb == 0) {
+      if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents = 100.0f * static_cast<float>(value);
         refresh_channel_mod(ch);
       }
       break;
     case 38:
-      if (st.param_mode == ChannelState::ParamMode::kRpn && st.rpn_msb == 0 && st.rpn_lsb == 0) {
+      if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents =
             100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
         refresh_channel_mod(ch);
@@ -553,18 +551,16 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       sustain_pedal(ch, value >= 64);
       break;
     case 98:
-      st.param_mode = ChannelState::ParamMode::kNrpn;
+      st.params.select_nrpn_lsb(value);
       break;
     case 99:
-      st.param_mode = ChannelState::ParamMode::kNrpn;
+      st.params.select_nrpn_msb(value);
       break;
     case 100:
-      st.rpn_lsb = value;
-      st.param_mode = ChannelState::ParamMode::kRpn;
+      st.params.select_rpn_lsb(value);
       break;
     case 101:
-      st.rpn_msb = value;
-      st.param_mode = ChannelState::ParamMode::kRpn;
+      st.params.select_rpn_msb(value);
       break;
     case 120:
       all_sound_off(ch);

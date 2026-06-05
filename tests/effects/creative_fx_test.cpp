@@ -96,6 +96,35 @@ TEST_CASE("StereoDelay emits a delayed wet impulse", "[fx]") {
   REQUIRE_THAT(right[2], WithinAbs(1.0f, 0.0001f));
 }
 
+TEST_CASE("StereoDelay smooths delay-time automation", "[fx]") {
+  constexpr int kSamples = 32;
+  std::array<float, kSamples> left{};
+  std::array<float, kSamples> right{};
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::effects::delay::StereoDelay delay({2.0f, 2.0f, 0.0f, 0.0f, 1.0f});
+  delay.prepare(1000.0, kSamples);
+
+  for (int i = 0; i < kSamples; ++i) {
+    left[static_cast<size_t>(i)] = static_cast<float>(i + 1);
+    right[static_cast<size_t>(i)] = static_cast<float>(i + 1);
+  }
+  delay.process(channels, 2, kSamples);
+
+  REQUIRE(delay.set_parameter(0, 20.0f));
+  REQUIRE(delay.set_parameter(1, 20.0f));
+  for (int i = 0; i < kSamples; ++i) {
+    left[static_cast<size_t>(i)] = static_cast<float>(kSamples + i + 1);
+    right[static_cast<size_t>(i)] = static_cast<float>(kSamples + i + 1);
+  }
+  delay.process(channels, 2, kSamples);
+
+  // An unsmoothed jump to 20 ms would read from roughly sample 13 here. The
+  // smoothed tap is still near the old 2 ms delay on the first sample.
+  REQUIRE(left[0] > 24.0f);
+  REQUIRE(right[0] > 24.0f);
+}
+
 TEST_CASE("Modulation processors keep output finite", "[fx]") {
   std::vector<float> left(256, 0.1f);
   std::vector<float> right(256, -0.1f);
@@ -569,6 +598,37 @@ TEST_CASE("Flanger mono output folds both voices instead of clobbering", "[fx]")
   REQUIRE(channel_diff > 1e-2);
   REQUIRE(fold_err < 1e-3);
   REQUIRE(right_only_diff > 1e-2);
+}
+
+TEST_CASE("Flanger constructor clamps delay like set_parameter", "[fx]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 4096;
+  const sonare::effects::modulation::FlangerConfig oob_config{0.8f, 200.0f, 200.0f, 0.0f, 1.0f};
+
+  std::vector<float> ctor_l = sine_input(kSamples, kSampleRate);
+  std::vector<float> ctor_r = ctor_l;
+  float* ctor_ch[] = {ctor_l.data(), ctor_r.data()};
+  sonare::effects::modulation::Flanger ctor_fx(oob_config);
+  ctor_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  ctor_fx.process(ctor_ch, 2, kSamples);
+
+  sonare::effects::modulation::FlangerConfig base_config{0.8f, 2.0f, 3.0f, 0.0f, 1.0f};
+  std::vector<float> auto_l = sine_input(kSamples, kSampleRate);
+  std::vector<float> auto_r = auto_l;
+  float* auto_ch[] = {auto_l.data(), auto_r.data()};
+  sonare::effects::modulation::Flanger auto_fx(base_config);
+  auto_fx.prepare(static_cast<double>(kSampleRate), kSamples);
+  REQUIRE(auto_fx.set_parameter(1, 200.0f));
+  REQUIRE(auto_fx.set_parameter(2, 200.0f));
+  auto_fx.process(auto_ch, 2, kSamples);
+
+  double diff = 0.0;
+  for (int i = 0; i < kSamples; ++i) {
+    diff += std::abs(static_cast<double>(ctor_l[static_cast<size_t>(i)]) -
+                     static_cast<double>(auto_l[static_cast<size_t>(i)]));
+  }
+  REQUIRE(all_finite(ctor_l));
+  REQUIRE(diff < 1e-3);
 }
 
 TEST_CASE("VelvetReverb mono output folds both tap tables instead of clobbering", "[fx]") {

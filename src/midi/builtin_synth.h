@@ -6,6 +6,10 @@
 ///        silence. A richer literature-backed instrument bank (FM, Karplus-Strong,
 ///        modal) is planned separately.
 ///
+/// This fallback intentionally implements only note on/off, sustain, channel
+/// mode, volume, expression and pan. Pitch bend, RPN and NRPN are supported by
+/// NativeSynth/Sf2Player, not by this minimal oscillator fallback.
+///
 /// RT contract (inherited from MidiInstrument):
 ///   - prepare() runs on the control thread and is the ONLY place that allocates
 ///     (it sizes the fixed voice pool).

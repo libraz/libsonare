@@ -256,9 +256,8 @@ SonareError sonare_mfcc_to_audio_ex(const float* mfcc, int n_mfcc, int n_frames,
    forms). On a valid length they behave identically to the unchecked forms (and
    delegate to them). This turns a wrong-dimension call from a heap over-read
    into a clean error. The size product is also bounded so a 32-bit (WASM)
-   size_t cannot overflow before the comparison. NaN/Inf in the matrix is NOT
-   inspected (inverse transforms are tolerant of non-finite cells); only the
-   buffer length is validated.
+   size_t cannot overflow before the comparison. NaN/Inf cells are rejected
+   uniformly before reconstruction so they cannot poison the inverse pipeline.
    ---------------------------------------------------------------------------- */
 
 /// @brief Length-checked sonare_mel_to_stft. @p input_length must equal

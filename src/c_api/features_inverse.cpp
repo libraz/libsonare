@@ -15,6 +15,14 @@ SonareError check_inverse_input_length(size_t input_length, int rows, int n_fram
   return SONARE_OK;
 }
 
+bool all_finite(const float* input, int rows, int n_frames) noexcept {
+  const auto total = static_cast<size_t>(rows) * static_cast<size_t>(n_frames);
+  for (size_t index = 0; index < total; ++index) {
+    if (!std::isfinite(input[index])) return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, int sample_rate,
@@ -26,6 +34,7 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
   }
 
   *out = {};
+  if (!all_finite(mel, n_mels, n_frames)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   MelConfig config;
@@ -55,6 +64,7 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
 
   *out = nullptr;
   *out_length = 0;
+  if (!all_finite(mel, n_mels, n_frames)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   MelConfig config;
@@ -82,6 +92,7 @@ SonareError sonare_mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
   if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
+  if (!all_finite(mfcc, n_mfcc, n_frames)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   std::vector<float> mel = mfcc_to_mel(mfcc, n_mfcc, n_frames, n_mels);
@@ -101,6 +112,7 @@ SonareError sonare_mfcc_to_audio_ex(const float* mfcc, int n_mfcc, int n_frames,
 
   *out = nullptr;
   *out_length = 0;
+  if (!all_finite(mfcc, n_mfcc, n_frames)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   MelConfig config;

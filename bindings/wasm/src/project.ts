@@ -265,6 +265,8 @@ export interface SynthPatch {
 /** Clip fade-curve for {@link Project.setClipFade}. */
 export type ProjectFadeCurve =
   | 'linear'
+  | 'equal-power'
+  | 'equal_power'
   | 'equalPower'
   | 'exponential'
   | 'logarithmic'

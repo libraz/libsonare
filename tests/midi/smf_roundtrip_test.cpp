@@ -447,6 +447,54 @@ TEST_CASE("SMF import and export preserve SysEx payloads via handles", "[midi]")
   REQUIRE(*round_payload == payload);
 }
 
+TEST_CASE("SMF import skips invalid time signature denominator exponents", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x58);
+  body.push_back(0x04);
+  body.push_back(0x04);
+  body.push_back(0x1F);
+  body.push_back(0x18);
+  body.push_back(0x08);
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 1);
+  REQUIRE(imported.time_signatures.size() == 1);
+  REQUIRE(imported.time_signatures[0].time_sig.denominator == 4);
+}
+
+TEST_CASE("SMF export terminates SysEx payloads with F7", "[midi]") {
+  sonare::midi::SysExStore store;
+  const sonare::midi::SysExHandle handle = store.add(std::vector<uint8_t>{0xF0, 0x7D, 0x01});
+  REQUIRE(handle != 0);
+
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{0.0, sonare::midi::make_sysex_handle(0, handle)});
+
+  SmfExportOptions opts;
+  opts.sysex_store = &store;
+  const auto exported = export_smf({clip}, {}, {}, {}, opts);
+  REQUIRE(exported.ok());
+
+  const SmfImportResult imported = import_smf(exported.bytes);
+
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 0);
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 1);
+  const std::vector<uint8_t>* payload =
+      imported.sysex_store.lookup(imported.clips[0].events()[0].ump.sysex_handle);
+  REQUIRE(payload != nullptr);
+  REQUIRE(*payload == std::vector<uint8_t>{0xF0, 0x7D, 0x01, 0xF7});
+}
+
 TEST_CASE("SMF import joins multi-packet SysEx continuations", "[midi]") {
   std::vector<uint8_t> body;
   body.push_back(0x00);

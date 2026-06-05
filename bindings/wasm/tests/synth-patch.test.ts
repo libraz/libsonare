@@ -5,6 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { SynthPatch } from '../dist/index.js';
 import {
   init,
   Project,
@@ -17,10 +18,11 @@ import {
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
   synthEnumTables,
-  synthPatchRoundTripForTest,
   synthPresetNames,
   synthPresetPatch,
 } from '../dist/index.js';
+import { setSonareModule } from '../src/module_state.js';
+import { synthPatchRoundTripForTest } from '../src/project.js';
 
 function peak(audio: Float32Array): number {
   let p = 0;
@@ -36,6 +38,8 @@ function peak(audio: Float32Array): number {
 describe('Sonare WASM NativeSynth', () => {
   beforeAll(async () => {
     await init();
+    const createModule = (await import('../dist/sonare.js')).default;
+    setSonareModule(await createModule());
   });
 
   function buildMidiOnlyProject(note = 60): Project {
@@ -127,6 +131,11 @@ describe('Sonare WASM NativeSynth', () => {
       expect(byName.modRoutings?.[0]?.destination).toBe(name);
       expect(byOrdinal.modRoutings?.[0]?.destination).toBe(name);
     }
+  });
+
+  it('treats explicit empty preset values as absent', () => {
+    expect(synthPatchRoundTripForTest({ preset: undefined }).preset).toBe('');
+    expect(synthPatchRoundTripForTest({ preset: null } as unknown as SynthPatch).preset).toBe('');
   });
 
   it('bounces preset patches deterministically', () => {

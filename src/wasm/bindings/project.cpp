@@ -791,7 +791,7 @@ struct ProjectWasm {
   }
 
   // Reads a { lengthPpq?, curve? } fade descriptor; curve accepts the ordinal or
-  // a string ("linear"/"equalPower"/"exponential"/"logarithmic").
+  // a string ("linear"/"equal-power"/"equalPower"/"equal_power"/...).
   static SonareProjectClipFade clipFadeFromVal(val desc) {
     SonareProjectClipFade fade{};
     if (desc.isUndefined() || desc.isNull()) {
@@ -804,7 +804,8 @@ struct ProjectWasm {
       val curve = desc["curve"];
       if (curve.typeOf().as<std::string>() == "string") {
         const std::string s = curve.as<std::string>();
-        fade.curve = s == "equalPower"    ? SONARE_FADE_CURVE_EQUAL_POWER
+        fade.curve = (s == "equalPower" || s == "equal-power" || s == "equal_power")
+                         ? SONARE_FADE_CURVE_EQUAL_POWER
                      : s == "exponential" ? SONARE_FADE_CURVE_EXPONENTIAL
                      : s == "logarithmic" ? SONARE_FADE_CURVE_LOGARITHMIC
                                           : SONARE_FADE_CURVE_LINEAR;

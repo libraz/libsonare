@@ -155,6 +155,9 @@ val js_voice_change(val samples, int sample_rate, float pitch_semitones, float f
 // [n_components x n_frames] row-major (both flat Float32Array buffers).
 val js_decompose(val s, int n_features, int n_frames, int n_components, int n_iter, float beta) {
   std::vector<float> data = float32ArrayToVector(s);
+  if (n_components <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "n_components must be positive");
+  }
   if (n_iter <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "n_iter must be positive");
   }
@@ -180,6 +183,9 @@ val js_decompose(val s, int n_features, int n_frames, int n_components, int n_it
 val js_decompose_with_init(val s, int n_features, int n_frames, int n_components, int n_iter,
                            float beta, std::string init) {
   std::vector<float> data = float32ArrayToVector(s);
+  if (n_components <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "n_components must be positive");
+  }
   if (n_iter <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "n_iter must be positive");
   }

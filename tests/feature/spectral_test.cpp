@@ -284,6 +284,13 @@ TEST_CASE("zero_crossing_rate handles empty input", "[spectral][zcr][edge]") {
   REQUIRE(zcr_audio[0] == 0.0f);
 }
 
+TEST_CASE("rms_energy handles empty input", "[spectral][rms][edge]") {
+  std::vector<float> empty;
+  std::vector<float> rms = rms_energy(empty.data(), empty.size(), 2049, 512);
+  REQUIRE(rms.size() == 1);
+  REQUIRE(rms[0] == 0.0f);
+}
+
 TEST_CASE("spectral_contrast basic", "[spectral]") {
   Audio audio = generate_sine_audio(1000.0f);
   int sr = audio.sample_rate();

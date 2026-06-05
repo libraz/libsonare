@@ -416,9 +416,9 @@ sonare chroma song.mp3           # Chromagram with visualization
 
 sonare mastering song.wav -o mastered.wav --target-lufs -14
 sonare mastering-processor song.wav --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5
-sonare mastering-pair-processor source.wav --reference reference.wav --processor match.abCrossfade
+sonare mastering-pair-processors
 sonare mastering-pair-analyze source.wav --reference reference.wav --analysis match.referenceLoudness
-sonare mastering-stereo-analyze left.wav --reference right.wav --analysis stereo.monoCompatCheck
+sonare mix --preset vocalReverbSend
 ```
 
 ## Features

@@ -2,7 +2,18 @@
 
 #include <algorithm>
 
+#include "rt/scoped_no_denormals.h"
+
 namespace sonare::effects::delay {
+namespace {
+
+constexpr float kDelaySmoothingTimeSeconds = 0.010f;
+
+float config_delay_samples(float delay_ms, double sample_rate) noexcept {
+  return std::max(0.0f, delay_ms) * 0.001f * static_cast<float>(sample_rate);
+}
+
+}  // namespace
 
 StereoDelay::StereoDelay(StereoDelayConfig config) : config_(config) {}
 
@@ -19,25 +30,32 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0 || channels[0] == nullptr) {
     return;
   }
+  rt::ScopedNoDenormals no_denormals;
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   const float feedback = std::clamp(config_.feedback, 0.0f, 0.95f);
   const float ping_pong = std::clamp(config_.ping_pong, 0.0f, 1.0f);
-  const float delay_l = config_.delay_time_l_ms * 0.001f * static_cast<float>(sample_rate_);
-  const float delay_r = config_.delay_time_r_ms * 0.001f * static_cast<float>(sample_rate_);
+  const std::array<float, 2> target_delay_samples{
+      config_delay_samples(config_.delay_time_l_ms, sample_rate_),
+      config_delay_samples(config_.delay_time_r_ms, sample_rate_)};
+  const float smoothing_coeff = std::clamp(
+      1.0f / std::max(1.0f, static_cast<float>(sample_rate_) * kDelaySmoothingTimeSeconds), 0.0f,
+      1.0f);
 
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
   const bool stereo = right != left;
   for (int i = 0; i < num_samples; ++i) {
+    delay_samples_[0] += (target_delay_samples[0] - delay_samples_[0]) * smoothing_coeff;
+    delay_samples_[1] += (target_delay_samples[1] - delay_samples_[1]) * smoothing_coeff;
     const float in_l = left[i];
     const float in_r = right[i];
     const float feed_l = in_l + feedback * ((1.0f - ping_pong) * feedback_state_[0] +
                                             ping_pong * feedback_state_[1]);
     const float feed_r = in_r + feedback * ((1.0f - ping_pong) * feedback_state_[1] +
                                             ping_pong * feedback_state_[0]);
-    const float delayed_l = delays_[0].process(feed_l, delay_l);
-    const float delayed_r = delays_[1].process(feed_r, delay_r);
+    const float delayed_l = delays_[0].process(feed_l, delay_samples_[0]);
+    const float delayed_r = delays_[1].process(feed_r, delay_samples_[1]);
     feedback_state_ = {delayed_l, delayed_r};
     if (stereo) {
       left[i] = dry * in_l + wet * delayed_l;
@@ -54,6 +72,8 @@ void StereoDelay::reset() {
   for (auto& delay : delays_) {
     delay.reset();
   }
+  delay_samples_ = {config_delay_samples(config_.delay_time_l_ms, sample_rate_),
+                    config_delay_samples(config_.delay_time_r_ms, sample_rate_)};
   feedback_state_ = {0.0f, 0.0f};
 }
 
@@ -62,8 +82,8 @@ void StereoDelay::set_config(const StereoDelayConfig& config) noexcept { config_
 bool StereoDelay::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      // Delay times feed the fractional read taps directly in process(); the
-      // delay lines are sized for up to 4 s so no reallocation is needed.
+      // process() smooths delay-time automation before it reaches the
+      // fractional read taps; the lines are sized for up to 4 s.
       config_.delay_time_l_ms = std::max(0.0f, value);
       return true;
     case 1:

@@ -415,15 +415,22 @@ std::vector<float> rms_energy(const Audio& audio, int frame_length, int hop_leng
 
 std::vector<float> rms_energy(const float* samples, size_t n_samples, int frame_length,
                               int hop_length) {
-  SONARE_CHECK(samples != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_samples == 0 || samples != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(frame_length > 0 && hop_length > 0, ErrorCode::InvalidParameter);
+
+  if (n_samples == 0) {
+    return std::vector<float>(1, 0.0f);
+  }
 
   std::vector<float> padded = pad_for_centered_frames(samples, n_samples, frame_length);
   const float* padded_samples = padded.data();
   size_t padded_length = padded.size();
 
-  int n_frames =
-      1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) / hop_length);
+  int n_frames = 1;
+  if (padded_length >= static_cast<size_t>(frame_length)) {
+    n_frames = 1 + static_cast<int>((padded_length - static_cast<size_t>(frame_length)) /
+                                    static_cast<size_t>(hop_length));
+  }
   if (n_frames <= 0) {
     n_frames = 1;
   }
