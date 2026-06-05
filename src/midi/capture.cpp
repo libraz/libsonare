@@ -63,6 +63,13 @@ double clamp01(double v) noexcept {
   return v;
 }
 
+double clamp_groove_offset(double v) noexcept {
+  if (!std::isfinite(v)) return 0.0;
+  if (v < -1.0) return -1.0;
+  if (v > 1.0) return 1.0;
+  return v;
+}
+
 size_t bounded_groove_steps(const CaptureQuantize& quantize) noexcept {
   return quantize.groove_steps > CaptureQuantize::kMaxGrooveSteps ? CaptureQuantize::kMaxGrooveSteps
                                                                   : quantize.groove_steps;
@@ -85,7 +92,7 @@ double swung_grid_ppq(double line, double grid_ppq, const CaptureQuantize& quant
   const size_t steps = bounded_groove_steps(quantize);
   if (steps > 0) {
     const int64_t line_i = static_cast<int64_t>(line);
-    ppq += grid_ppq * quantize.groove_offsets[groove_index(line_i, steps)];
+    ppq += grid_ppq * clamp_groove_offset(quantize.groove_offsets[groove_index(line_i, steps)]);
   }
   return ppq;
 }

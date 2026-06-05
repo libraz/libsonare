@@ -102,8 +102,13 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
     return false;
   }
   Napi::Object obj = desc.As<Napi::Object>();
-  if (obj.Has("preset") && obj.Get("preset").IsString()) {
-    set_preset(obj.Get("preset").As<Napi::String>().Utf8Value());
+  if (obj.Has("preset")) {
+    Napi::Value preset = obj.Get("preset");
+    if (!preset.IsString()) {
+      Napi::TypeError::New(env, "synth patch preset must be a string").ThrowAsJavaScriptException();
+      return false;
+    }
+    set_preset(preset.As<Napi::String>().Utf8Value());
   }
   if (!SynthEnumProperty(env, obj, "engineMode", kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,
                          "synth engine mode", &patch->engine_mode) ||

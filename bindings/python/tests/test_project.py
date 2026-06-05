@@ -299,6 +299,28 @@ def test_bounce_with_instruments_render_only_instrument() -> None:
         project.close()
 
 
+def test_bounce_with_instruments_auto_length_includes_tail_samples() -> None:
+    """External instruments can report release/effect tail for auto-length bounce."""
+    if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):
+        pytest.skip("libsonare built without the external-instrument bounce ABI")
+
+    project = _build_midi_only_project()
+    try:
+        dry = _ConstantInstrument(level=0.0)
+        no_tail = project.bounce_with_instruments(
+            dry, total_frames=0, block_size=128, num_channels=2, sample_rate=48000
+        )
+
+        wet = _ConstantInstrument(level=0.0)
+        wet.tail_samples = 4096
+        with_tail = project.bounce_with_instruments(
+            wet, total_frames=0, block_size=128, num_channels=2, sample_rate=48000
+        )
+        assert with_tail.shape[0] == no_tail.shape[0] + wet.tail_samples
+    finally:
+        project.close()
+
+
 def test_bounce_with_instruments_propagates_callback_error() -> None:
     """An exception raised inside a callback surfaces to the caller, not silenced."""
     if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):

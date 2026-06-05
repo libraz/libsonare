@@ -577,6 +577,8 @@ class SynthPatch:
     bus_drive: float = 0.0
 
     def _to_c(self) -> SonareSynthPatch:
+        if not isinstance(self.preset, str):
+            raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
         c.struct_version = 1
         c.preset = _strip_va_prefix(self.preset).encode("utf-8")[: SONARE_SYNTH_PRESET_NAME_MAX - 1]
@@ -722,9 +724,10 @@ class ExternalInstrument(Protocol):
     Optional members::
 
         def prepare(self, sample_rate: float, max_block_size: int) -> None: ...
-        def on_event(self, destination_id: int,
-                     ump_words: tuple[int, ...], render_frame: int) -> None: ...
-        latency_samples: int  # reported plugin-delay (PDC); defaults to 0
+                def on_event(self, destination_id: int,
+                             ump_words: tuple[int, ...], render_frame: int) -> None: ...
+                latency_samples: int  # reported plugin-delay (PDC); defaults to 0
+                tail_samples: int  # release/effect tail for auto-length bounce; defaults to 0
     """
 
     def render(self, channels: np.ndarray, num_frames: int) -> None:
@@ -752,6 +755,8 @@ def _make_instrument_callbacks(
     cbs.user_data = None
     latency = getattr(instrument, "latency_samples", 0)
     cbs.latency_samples = int(latency) if latency else 0
+    tail = getattr(instrument, "tail_samples", 0)
+    cbs.tail_samples = int(tail) if tail else 0
 
     prepare = getattr(instrument, "prepare", None)
     if callable(prepare):
@@ -2653,10 +2658,11 @@ class Project:
                 :meth:`set_track_midi_destination`; default 0).
             instruments: Optional explicit list of ``(destination_id, instrument)``
                 bindings, overriding ``instrument`` / ``destination_id``.
-            total_frames / block_size / num_channels / sample_rate /
-                instrument_latency_samples: As :meth:`bounce` (0 takes native
-                defaults; an instrument's own ``latency_samples`` attribute adds
-                per-instrument PDC).
+                    total_frames / block_size / num_channels / sample_rate /
+                        instrument_latency_samples: As :meth:`bounce` (0 takes native
+                        defaults; an instrument's own ``latency_samples`` attribute adds
+                        per-instrument PDC; ``tail_samples`` extends auto-length
+                        bounces).
 
         Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
         fixed project + options + instrument behaviour. Raises the first

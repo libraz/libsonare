@@ -30,6 +30,9 @@
 ///
 /// The importer never reads out of bounds on malformed / truncated input: it
 /// returns a diagnostic status instead (same robustness contract as import_smf).
+/// Fatal structural errors such as missing DCTPQ or truncated UMP words are
+/// transactional: partially parsed sequence data is discarded and callers must
+/// check status before consuming clips.
 
 #include <cstdint>
 #include <string>

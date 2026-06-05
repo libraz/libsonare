@@ -63,6 +63,13 @@ float clamp01(float v) noexcept {
   return v;
 }
 
+float clamp_groove_offset(float v) noexcept {
+  if (!std::isfinite(v)) return 0.0f;
+  if (v < -1.0f) return -1.0f;
+  if (v > 1.0f) return 1.0f;
+  return v;
+}
+
 size_t bounded_groove_steps(const QuantizeConfig& config) noexcept {
   return config.groove_steps > QuantizeConfig::kMaxGrooveSteps ? QuantizeConfig::kMaxGrooveSteps
                                                                : config.groove_steps;
@@ -85,7 +92,7 @@ int64_t swung_grid_frame(int64_t line, int64_t grid, const QuantizeConfig& confi
   }
   const size_t steps = bounded_groove_steps(config);
   if (steps > 0) {
-    const float offset = config.groove_offsets[groove_index(line, steps)];
+    const float offset = clamp_groove_offset(config.groove_offsets[groove_index(line, steps)]);
     frame +=
         static_cast<int64_t>(std::llround(static_cast<double>(grid) * static_cast<double>(offset)));
   }

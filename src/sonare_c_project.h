@@ -703,7 +703,22 @@ typedef struct {
   void (*render)(void* user_data, float* const* channels, int num_channels, int num_frames);
   /// Reported instrument latency in samples (PDC). 0 = no latency.
   int latency_samples;
+  /// Reported release / effect tail in samples for auto-length bounces. 0 = no tail.
+  int tail_samples;
 } SonareInstrumentCallbacks;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareInstrumentCallbacks, user_data) == 0,
+              "InstrumentCallbacks.user_data offset");
+static_assert(offsetof(SonareInstrumentCallbacks, prepare) == sizeof(void*),
+              "InstrumentCallbacks.prepare offset");
+static_assert(offsetof(SonareInstrumentCallbacks, latency_samples) == 4u * sizeof(void*),
+              "InstrumentCallbacks.latency_samples offset");
+static_assert(offsetof(SonareInstrumentCallbacks, tail_samples) == 4u * sizeof(void*) + sizeof(int),
+              "InstrumentCallbacks.tail_samples offset");
+static_assert(sizeof(SonareInstrumentCallbacks) == 4u * sizeof(void*) + 2u * sizeof(int),
+              "SonareInstrumentCallbacks layout drift");
+#endif
 
 /// @brief Binds a callback instrument to a MIDI destination id (the value set by
 ///        @ref sonare_project_set_track_midi_destination and stamped onto the
@@ -712,6 +727,15 @@ typedef struct {
   uint32_t destination_id;
   SonareInstrumentCallbacks callbacks;
 } SonareInstrumentBinding;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareInstrumentBinding, destination_id) == 0,
+              "InstrumentBinding.destination_id offset");
+static_assert(offsetof(SonareInstrumentBinding, callbacks) ==
+                  ((sizeof(uint32_t) + alignof(SonareInstrumentCallbacks) - 1u) &
+                   ~(alignof(SonareInstrumentCallbacks) - 1u)),
+              "InstrumentBinding.callbacks offset");
+#endif
 
 /// @brief Like @ref sonare_project_bounce, but registers each callback
 ///        instrument on the engine before rendering, so MIDI tracks routed to

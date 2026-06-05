@@ -479,6 +479,31 @@ TEST_CASE("SMF import joins multi-packet SysEx continuations", "[midi]") {
   REQUIRE(*payload == std::vector<uint8_t>{0x7E, 0x7F, 0x09, 0x01, 0xF7});
 }
 
+TEST_CASE("SMF import preserves independent F7 escape SysEx payloads", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0xF7);
+  body.push_back(0x03);
+  body.push_back(0x43);
+  body.push_back(0x12);
+  body.push_back(0x00);
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 0);
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 1);
+
+  const Ump& ump = imported.clips[0].events()[0].ump;
+  const std::vector<uint8_t>* payload = imported.sysex_store.lookup(ump.sysex_handle);
+  REQUIRE(payload != nullptr);
+  REQUIRE(*payload == std::vector<uint8_t>{0x43, 0x12, 0x00});
+}
+
 TEST_CASE("SMF import skips system real-time bytes without clearing running status", "[midi]") {
   std::vector<uint8_t> body;
   body.push_back(0x00);

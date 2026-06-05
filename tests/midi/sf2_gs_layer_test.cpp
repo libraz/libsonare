@@ -250,6 +250,8 @@ TEST_CASE("GS drum NRPNs override pitch, level and pan per note", "[midi][sf2][g
 TEST_CASE("parse_gs_sysex recognises the GS/GM messages", "[midi][sf2][gslayer]") {
   const uint8_t gm_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
   REQUIRE(parse_gs_sysex(gm_on, sizeof(gm_on)).kind == GsSysExKind::kGmReset);
+  const uint8_t gm2_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x03, 0xF7};
+  REQUIRE(parse_gs_sysex(gm2_on, sizeof(gm2_on)).kind == GsSysExKind::kGmReset);
 
   const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
   REQUIRE(parse_gs_sysex(gs_reset, sizeof(gs_reset)).kind == GsSysExKind::kGsReset);
@@ -266,6 +268,12 @@ TEST_CASE("parse_gs_sysex recognises the GS/GM messages", "[midi][sf2][gslayer]"
   // Block 0 addresses part 10 (the default drum channel).
   const uint8_t rhythm10[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x10, 0x15, 0x01, 0x1A, 0xF7};
   REQUIRE(parse_gs_sysex(rhythm10, sizeof(rhythm10)).channel == 9);
+
+  const uint8_t bad_sum[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x12, 0x15, 0x01, 0x19, 0xF7};
+  REQUIRE(parse_gs_sysex(bad_sum, sizeof(bad_sum)).kind == GsSysExKind::kNone);
+
+  const uint8_t missing_sum[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x12, 0x15, 0x01, 0xF7};
+  REQUIRE(parse_gs_sysex(missing_sum, sizeof(missing_sum)).kind == GsSysExKind::kNone);
 
   const uint8_t junk[] = {0xF0, 0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7};  // XG reset
   REQUIRE(parse_gs_sysex(junk, sizeof(junk)).kind == GsSysExKind::kNone);

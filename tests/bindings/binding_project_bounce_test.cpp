@@ -68,6 +68,54 @@ TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI"
   sonare_project_destroy(project);
 }
 
+TEST_CASE("bounce_with_instruments auto length includes callback instrument tail", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+  SonareMidiEventPod events[2];
+  events[0].ppq = 0.0;
+  events[0].data0 = 0x20903C40u;
+  events[0].data1 = 0u;
+  events[1].ppq = 0.5;
+  events[1].data0 = 0x20803C00u;
+  events[1].data1 = 0u;
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 0;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  CallbackInstrumentState state;
+  SonareInstrumentBinding binding{};
+  binding.destination_id = 5;
+  binding.callbacks.user_data = &state;
+  binding.callbacks.render = &cb_render;
+
+  float* no_tail = nullptr;
+  size_t no_tail_len = 0;
+  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &no_tail,
+                                                 &no_tail_len) == SONARE_OK);
+  sonare_free_floats(no_tail);
+
+  constexpr int kTailSamples = 4096;
+  binding.callbacks.tail_samples = kTailSamples;
+  float* with_tail = nullptr;
+  size_t with_tail_len = 0;
+  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &with_tail,
+                                                 &with_tail_len) == SONARE_OK);
+  sonare_free_floats(with_tail);
+
+  REQUIRE(with_tail_len == no_tail_len + static_cast<size_t>(kTailSamples * options.num_channels));
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("bounce_with_builtin_instruments renders the built-in synth for routed MIDI",
           "[project]") {
   SonareProject* project = nullptr;

@@ -156,10 +156,10 @@ Sf2Zone make_zone(const std::vector<Sf2Gen>& gens, const std::vector<Sf2Mod>& mo
         zone.vel_hi = g.range_hi();
         break;
       case kGenInstrument:
-        if (preset_level) zone.instrument = static_cast<uint16_t>(g.amount);
+        if (preset_level && g.amount >= 0) zone.instrument = static_cast<uint16_t>(g.amount);
         break;
       case kGenSampleId:
-        if (!preset_level) zone.sample = static_cast<uint16_t>(g.amount);
+        if (!preset_level && g.amount >= 0) zone.sample = static_cast<uint16_t>(g.amount);
         break;
       default:
         break;
@@ -380,6 +380,10 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
   }
 
   // --- resolve instrument zones ---
+  if (ibag.empty()) {
+    clear();
+    return fail(error, "sf2: missing ibag");
+  }
   for (size_t i = 0; i < inst.size(); ++i) {
     Sf2Instrument out;
     out.name = inst[i].name;
@@ -402,6 +406,10 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
   }
 
   // --- resolve preset zones ---
+  if (pbag.empty()) {
+    clear();
+    return fail(error, "sf2: missing pbag");
+  }
   for (size_t i = 0; i < phdr.size(); ++i) {
     Sf2Preset out;
     out.name = phdr[i].name;

@@ -14,6 +14,8 @@ namespace {
 
 constexpr uint8_t kDrumChannel = 9;  // MIDI channel 10
 constexpr uint16_t kDrumBank = 128;
+constexpr uint8_t kGm2MelodicBankMsb = 0x79;
+constexpr uint8_t kGm2PercussionBankMsb = 0x78;
 
 /// Default modulator: full CC1 adds 50 cents of vibrato LFO pitch depth.
 constexpr float kModWheelVibratoCents = 50.0f;
@@ -169,8 +171,10 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
 }
 
 uint16_t Sf2Player::effective_bank(uint8_t channel) const noexcept {
-  if (channels_[channel & 0x0Fu].drums) return kDrumBank;
-  return channels_[channel & 0x0Fu].bank_msb;
+  const ChannelState& st = channels_[channel & 0x0Fu];
+  if (st.drums || st.bank_msb == kGm2PercussionBankMsb) return kDrumBank;
+  if (st.bank_msb == kGm2MelodicBankMsb) return st.bank_lsb;
+  return st.bank_msb;
 }
 
 int resolve_gs_preset(const Sf2File& soundfont, uint16_t bank, uint8_t program) noexcept {
@@ -213,6 +217,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
   const Sf2Zone* preset_global =
       !preset.zones.empty() && preset.zones[0].is_global() ? &preset.zones[0] : nullptr;
 
+  bool has_renderable_zone = false;
   for (const Sf2Zone& pzone : preset.zones) {
     if (pzone.is_global() || !pzone.matches(note, velocity)) continue;
     if (pzone.instrument < 0 || static_cast<size_t>(pzone.instrument) >= instruments.size()) {
@@ -228,6 +233,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
       }
       const Sf2Sample& sample = soundfont_->samples()[static_cast<size_t>(izone.sample)];
       if (sample.is_rom() || sample.end <= sample.start) continue;
+      has_renderable_zone = true;
 
       // Stack generators: defaults -> instrument global -> instrument zone
       // (absolute), then + preset global + preset zone (relative).
@@ -260,6 +266,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
       voice->start(pool_data, params, sample_rate_, vel_gain);
     }
   }
+  if (!has_renderable_zone && config_.synth_fallback) fallback_note_on(channel, note, velocity);
 }
 
 void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
@@ -545,7 +552,16 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
   } else if (u.is_note_off()) {
     note_off(u.channel(), u.note_number());
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
-    channels_[u.channel() & 0x0Fu].program = u.note_number();  // data1 slot
+    const uint8_t ch = u.channel() & 0x0Fu;
+    if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+      channels_[ch].program = static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu);
+      if ((u.words[0] & 0x01u) != 0) {
+        channels_[ch].bank_msb = static_cast<uint8_t>((u.words[1] >> 8) & 0x7Fu);
+        channels_[ch].bank_lsb = static_cast<uint8_t>(u.words[1] & 0x7Fu);
+      }
+    } else {
+      channels_[ch].program = u.note_number();
+    }
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
     const uint8_t ch = u.channel() & 0x0Fu;
     if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {

@@ -15,8 +15,7 @@ namespace {
 /// Default modulator: full CC1 adds 50 cents of vibrato depth (matches
 /// Sf2Player so the fallback and SF2 voices respond alike).
 constexpr float kModWheelVibratoCents = 50.0f;
-/// Fixed pitch-bend range (cents); the patch surface has no RPN handling.
-constexpr float kBendRangeCents = 200.0f;
+constexpr float kDefaultBendRangeCents = 200.0f;
 
 float pan_angle(float pan_units) noexcept {
   const float pan = std::clamp(pan_units, -500.0f, 500.0f);
@@ -286,7 +285,10 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
 
   // --- pitch: bend + vibrato (LFO1 + mod wheel) + drift + matrix + glide ---
   const float vib = lfo1_value * (patch->lfo_to_pitch_cents + mod.extra_vibrato_cents);
-  const float pitch_cents = mod.pitch_cents + vib + drift + offsets.pitch_cents + glide_cents;
+  const float mode_pitch_offset =
+      patch->mode == SynthEngineMode::kSubtractive ? 0.0f : patch->pitch_offset_cents;
+  const float pitch_cents =
+      mode_pitch_offset + mod.pitch_cents + vib + drift + offsets.pitch_cents + glide_cents;
   const float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
 
   float sample = 0.0f;
@@ -414,7 +416,7 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   const uint8_t ch = channel & 0x0Fu;
   const ChannelState& st = channels_[ch];
   Sf2ChannelMod& mod = channel_mods_[ch];
-  mod.pitch_cents = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * kBendRangeCents;
+  mod.pitch_cents = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
   mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression);
   mod.extra_vibrato_cents = kModWheelVibratoCents * static_cast<float>(st.mod_wheel) / 127.0f;
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
@@ -506,6 +508,10 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.mod_wheel = 0;
   st.expression = 127;
   st.pitch_bend = 8192;
+  st.param_mode = ChannelState::ParamMode::kNone;
+  st.rpn_msb = 127;
+  st.rpn_lsb = 127;
+  st.bend_range_cents = kDefaultBendRangeCents;
   sustain_pedal(ch, false);
   refresh_channel_mod(ch);
 }
@@ -530,8 +536,35 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       st.expression = value;
       refresh_channel_mod(ch);
       break;
+    case 6:
+      if (st.param_mode == ChannelState::ParamMode::kRpn && st.rpn_msb == 0 && st.rpn_lsb == 0) {
+        st.bend_range_cents = 100.0f * static_cast<float>(value);
+        refresh_channel_mod(ch);
+      }
+      break;
+    case 38:
+      if (st.param_mode == ChannelState::ParamMode::kRpn && st.rpn_msb == 0 && st.rpn_lsb == 0) {
+        st.bend_range_cents =
+            100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
+        refresh_channel_mod(ch);
+      }
+      break;
     case 64:
       sustain_pedal(ch, value >= 64);
+      break;
+    case 98:
+      st.param_mode = ChannelState::ParamMode::kNrpn;
+      break;
+    case 99:
+      st.param_mode = ChannelState::ParamMode::kNrpn;
+      break;
+    case 100:
+      st.rpn_lsb = value;
+      st.param_mode = ChannelState::ParamMode::kRpn;
+      break;
+    case 101:
+      st.rpn_msb = value;
+      st.param_mode = ChannelState::ParamMode::kRpn;
       break;
     case 120:
       all_sound_off(ch);

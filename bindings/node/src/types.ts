@@ -1158,7 +1158,9 @@ export interface EngineMeterTelemetry {
 /** Read-only engine transport snapshot from {@link RealtimeEngine.getTransportState}. */
 export interface EngineTransportState {
   /** Whether the transport is currently playing. */
-  isPlaying: boolean;
+  playing: boolean;
+  /** @deprecated Use `playing`; kept for one release for compatibility. */
+  isPlaying?: boolean;
   /** Whether looping is enabled. */
   looping: boolean;
   /** Current render-frame counter. */

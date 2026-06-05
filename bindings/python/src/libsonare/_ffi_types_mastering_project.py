@@ -480,6 +480,7 @@ class SonareInstrumentCallbacks(ctypes.Structure):
         ("on_event", SonareInstrumentOnEventCallback),
         ("render", SonareInstrumentRenderCallback),
         ("latency_samples", ctypes.c_int),
+        ("tail_samples", ctypes.c_int),
     ]
 
 

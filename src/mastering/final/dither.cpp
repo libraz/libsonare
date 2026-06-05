@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <random>
 #include <utility>
 #include <vector>
@@ -20,6 +21,13 @@ namespace {
 constexpr std::array<float, 9> kLvNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f,  -4.174f, 3.353f,
                                                         -2.205f, 1.281f,  -0.569f, 0.0847f};
 
+float sanitize_sample(float sample) noexcept {
+  if (std::isnan(sample)) return 0.0f;
+  if (sample == std::numeric_limits<float>::infinity()) return 1.0f;
+  if (sample == -std::numeric_limits<float>::infinity()) return -1.0f;
+  return sample;
+}
+
 }  // namespace
 
 Audio dither(const Audio& audio, const DitherConfig& config) {
@@ -29,6 +37,7 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
   }
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   if (config.type == DitherType::None) {
+    for (auto& sample : samples) sample = sanitize_sample(sample);
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
 
@@ -41,6 +50,7 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
 
   if (config.type == DitherType::Rpdf) {
     for (auto& sample : samples) {
+      sample = sanitize_sample(sample);
       sample += dist(rng) * lsb;
     }
     return Audio::from_vector(std::move(samples), audio.sample_rate());
@@ -48,6 +58,7 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
 
   if (config.type == DitherType::Tpdf) {
     for (auto& sample : samples) {
+      sample = sanitize_sample(sample);
       sample += (dist(rng) + dist(rng)) * lsb;
     }
     return Audio::from_vector(std::move(samples), audio.sample_rate());
@@ -61,6 +72,7 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
       feedback += kLvNoiseShapingCoeffs[k] * error_history[k];
     }
 
+    sample = sanitize_sample(sample);
     const float dithered = sample + (dist(rng) + dist(rng)) * lsb + feedback * lsb;
     // Noise-shaping feedback can push the dithered value beyond full scale;
     // clamp before quantizing so the output never leaves [-1, 1] regardless of

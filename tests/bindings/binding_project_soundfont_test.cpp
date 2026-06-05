@@ -35,6 +35,10 @@ std::vector<uint8_t> make_sf2_bytes() {
   pz1.target = melodic;
   b.add_preset("Piano 2", 0, 1, {pz1});
 
+  sonare::test::Sf2Builder::ZoneSpec gm2_lsb;
+  gm2_lsb.target = melodic;
+  b.add_preset("Piano GM2 LSB", 5, 0, {gm2_lsb});
+
   sonare::test::Sf2Builder::ZoneSpec dz;
   dz.target = melodic;
   b.add_preset("Standard Kit", 128, 0, {dz});
@@ -47,6 +51,17 @@ constexpr uint32_t midi1_word(uint8_t status, uint8_t channel, uint8_t data1, ui
   return (0x2u << 28) | (static_cast<uint32_t>(status & 0x0Fu) << 20) |
          (static_cast<uint32_t>(channel & 0x0Fu) << 16) |
          (static_cast<uint32_t>(data1 & 0x7Fu) << 8) | static_cast<uint32_t>(data2 & 0x7Fu);
+}
+
+SonareMidiEventPod midi2_program_change_pod(double ppq, uint8_t channel, uint8_t program,
+                                            uint8_t bank_msb, uint8_t bank_lsb) {
+  SonareMidiEventPod e{};
+  e.ppq = ppq;
+  e.data0 = (0x4u << 28) | (0xCu << 20) | (static_cast<uint32_t>(channel & 0x0Fu) << 16) | 0x01u;
+  e.data1 = (static_cast<uint32_t>(program & 0x7Fu) << 24) |
+            (static_cast<uint32_t>(bank_msb & 0x7Fu) << 8) |
+            static_cast<uint32_t>(bank_lsb & 0x7Fu);
+  return e;
 }
 
 SonareMidiEventPod pod(double ppq, uint32_t word) {
@@ -84,13 +99,13 @@ TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project
 
   REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
-  REQUIRE(count == 3);
+  REQUIRE(count == 4);
 
   // A malformed re-load keeps the loaded soundfont.
   REQUIRE(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
-  REQUIRE(count == 3);
+  REQUIRE(count == 4);
 
   REQUIRE(sonare_project_clear_soundfont(project) == SONARE_OK);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
@@ -172,6 +187,68 @@ TEST_CASE("sonare_project_soundfont_manifest reports per-program backends", "[pr
   REQUIRE(total == 4);
   REQUIRE(first.bank == 0);
   REQUIRE(first.backend == SONARE_SOURCE_BACKEND_SF2);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("sonare_project_soundfont_manifest decodes MIDI 2.0 program change", "[project][sf2]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+  const std::vector<SonareMidiEventPod> events = {
+      midi2_program_change_pod(0.0, 0, 1, 0, 0),
+      pod(0.25, midi1_word(0x9, 0, 60, 100)),
+      pod(1.0, midi1_word(0x8, 0, 60, 0)),
+  };
+  REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
+
+  const std::vector<uint8_t> sf2 = make_sf2_bytes();
+  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+
+  size_t total = 0;
+  SonareSf2ProgramStatus manifest{};
+  REQUIRE(sonare_project_soundfont_manifest(project, &manifest, 1, &total) == SONARE_OK);
+  REQUIRE(total == 1);
+  REQUIRE(manifest.channel == 0);
+  REQUIRE(manifest.bank == 0);
+  REQUIRE(manifest.program == 1);
+  REQUIRE(manifest.backend == SONARE_SOURCE_BACKEND_SF2);
+  REQUIRE(std::string(manifest.preset_name) == "Piano 2");
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("sonare_project_soundfont_manifest resolves GM2 Bank Select LSB", "[project][sf2]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+  const std::vector<SonareMidiEventPod> events = {
+      pod(0.0, midi1_word(0xB, 0, 0, 0x79)), pod(0.1, midi1_word(0xB, 0, 32, 5)),
+      pod(0.2, midi1_word(0xC, 0, 0, 0)),    pod(0.25, midi1_word(0x9, 0, 60, 100)),
+      pod(1.0, midi1_word(0x8, 0, 60, 0)),
+  };
+  REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
+
+  const std::vector<uint8_t> sf2 = make_sf2_bytes();
+  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+
+  size_t total = 0;
+  SonareSf2ProgramStatus manifest{};
+  REQUIRE(sonare_project_soundfont_manifest(project, &manifest, 1, &total) == SONARE_OK);
+  REQUIRE(total == 1);
+  REQUIRE(manifest.channel == 0);
+  REQUIRE(manifest.bank == 5);
+  REQUIRE(manifest.program == 0);
+  REQUIRE(manifest.backend == SONARE_SOURCE_BACKEND_SF2);
+  REQUIRE(std::string(manifest.preset_name) == "Piano GM2 LSB");
 
   sonare_project_destroy(project);
 }

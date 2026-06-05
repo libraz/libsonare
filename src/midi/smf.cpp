@@ -277,17 +277,22 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       const uint8_t* payload = reader->take(sysex_len);
       if (payload == nullptr) return false;
 
+      bool complete = false;
       if (status == kSysExStart) {
         pending_sysex.assign(payload, payload + sysex_len);
         pending_sysex_ppq = ppq;
+        complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
       } else if (!pending_sysex.empty()) {
         pending_sysex.insert(pending_sysex.end(), payload, payload + sysex_len);
+        complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
       } else {
+        // Independent F7 escape event: its payload bytes are the complete byte
+        // sequence to send. It need not be terminated by an F7 data byte.
         pending_sysex.assign(payload, payload + sysex_len);
         pending_sysex_ppq = ppq;
+        complete = !pending_sysex.empty();
       }
 
-      const bool complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
       if (!complete) {
         continue;
       }

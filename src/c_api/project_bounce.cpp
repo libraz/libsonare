@@ -34,6 +34,7 @@ class CallbackInstrument final : public sonare::midi::MidiInstrument {
   }
   void reset() override {}
   int latency_samples() const noexcept override { return cb_.latency_samples; }
+  int tail_samples() const noexcept override { return cb_.tail_samples; }
   void on_event(uint32_t destination_id, const sonare::midi::MidiEvent& event) noexcept override {
     if (cb_.on_event) {
       cb_.on_event(cb_.user_data, destination_id, event.ump.words, event.ump.word_count,
@@ -429,6 +430,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (opts.instrument_latency_samples < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  for (const HostedInstrument& hosted : instruments) {
+    if (hosted.instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   arr::CompileConfig config;
   config.instrument_latency_samples = opts.instrument_latency_samples;
@@ -454,7 +458,6 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     sonare::engine::RealtimeEngine probe;
     probe.prepare(sample_rate, block_size);
     for (const HostedInstrument& hosted : instruments) {
-      if (hosted.instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
       if (!probe.set_midi_instrument(hosted.destination_id, hosted.instrument)) {
         return SONARE_ERROR_INVALID_PARAMETER;  // more instruments than the rack holds
       }

@@ -356,6 +356,9 @@ bool CcMap::param_to_cc(uint32_t param_id, float unit_value, uint8_t group,
           make_midi2_control_change(group, channel, b.cc_number, scale_bend_14_to_32(value14));
       return true;
     }
+    if (b.kind == CcBindingKind::kRpn || b.kind == CcBindingKind::kNrpn) {
+      return false;
+    }
     const uint8_t value7 = static_cast<uint8_t>(norm * kCc7BitMax + 0.5f);
     *out_ump = make_midi1_control_change(group, channel, b.cc_number, value7);
     return true;

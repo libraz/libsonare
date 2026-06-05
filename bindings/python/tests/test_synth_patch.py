@@ -143,6 +143,11 @@ def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
         assert by_ordinal.mod_routings[0].destination == name
 
 
+def test_synth_patch_rejects_non_string_preset() -> None:
+    with pytest.raises(TypeError, match="synth patch preset must be a string"):
+        SynthPatch(preset=123)._to_c()  # type: ignore[arg-type]
+
+
 def test_bounce_with_synth_instrument_renders_presets() -> None:
     project = _build_midi_only_project()
     try:

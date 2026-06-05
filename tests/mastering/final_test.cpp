@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
+#include <limits>
 #include <vector>
 
 #include "mastering/final/bit_depth.h"
@@ -44,6 +46,21 @@ TEST_CASE("OutputChain applies dither then quantization", "[mastering][final]") 
   REQUIRE(result.size() == 2);
   REQUIRE_THAT(result[0] * 2048.0f, WithinAbs(205.0f, 0.001f));
   REQUIRE_THAT(result[1] * 2048.0f, WithinAbs(-205.0f, 0.001f));
+}
+
+TEST_CASE("Final dither and bit depth sanitize non-finite samples", "[mastering][final]") {
+  const auto input =
+      make_audio({std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+                  -std::numeric_limits<float>::infinity(), 0.25f});
+
+  const auto quantized = bit_depth(input, {16, true});
+  for (size_t i = 0; i < quantized.size(); ++i) REQUIRE(std::isfinite(quantized[i]));
+
+  for (const DitherType type :
+       {DitherType::None, DitherType::Rpdf, DitherType::Tpdf, DitherType::NoiseShaped}) {
+    const auto dithered = dither(input, {type, 16, 1234});
+    for (size_t i = 0; i < dithered.size(); ++i) REQUIRE(std::isfinite(dithered[i]));
+  }
 }
 
 TEST_CASE("Final helpers validate inputs", "[mastering][final]") {

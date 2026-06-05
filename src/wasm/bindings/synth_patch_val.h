@@ -118,7 +118,12 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
     return patch;
   }
   if (hasProperty(desc, "preset")) {
-    setPresetName(&patch, desc["preset"].as<std::string>());
+    emscripten::val preset = desc["preset"];
+    if (preset.typeOf().as<std::string>() != "string") {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "synth patch preset must be a string");
+    }
+    setPresetName(&patch, preset.as<std::string>());
   }
   enumProperty(desc, "engineMode", kEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,
                "synth engine mode", &patch.engine_mode);

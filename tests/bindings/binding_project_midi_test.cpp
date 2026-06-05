@@ -227,6 +227,18 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(back_ump.note_number() == 74);
   REQUIRE((back_ump.words[0] & 0x7Fu) == 0u);
 
+  SonareMidiCcBinding rpn_binding{};
+  rpn_binding.cc_number = 6;
+  rpn_binding.channel = 3;
+  rpn_binding.kind = SONARE_MIDI_CC_RPN;
+  rpn_binding.selector_msb = 0;
+  rpn_binding.selector_lsb = 1;
+  rpn_binding.param_id = 78;
+  rpn_binding.min_value = 0.0f;
+  rpn_binding.max_value = 1.0f;
+  REQUIRE(sonare_midi_param_to_cc(&rpn_binding, 1, 78, 0.5f, 0, 4.0, &back_cc) ==
+          SONARE_ERROR_INVALID_STATE);
+
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
   uint32_t track = 0;

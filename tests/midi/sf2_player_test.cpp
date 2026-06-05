@@ -76,9 +76,21 @@ std::shared_ptr<Sf2File> make_fixture() {
   pz1.target = left_inst;
   b.add_preset("SineLeft", 0, 1, {pz1});
 
+  Sf2Builder::ZoneSpec gm2_lsb;
+  gm2_lsb.target = left_inst;
+  b.add_preset("Gm2Lsb", 5, 0, {gm2_lsb});
+
   Sf2Builder::ZoneSpec pz2;
   pz2.target = perc;
   b.add_preset("Burst", 0, 2, {pz2});
+
+  Sf2Builder::ZoneSpec low_only_inst_zone = looped;
+  low_only_inst_zone.key_lo = 0;
+  low_only_inst_zone.key_hi = 48;
+  const int low_only_inst = b.add_instrument("low-only", {low_only_inst_zone});
+  Sf2Builder::ZoneSpec low_only_preset_zone;
+  low_only_preset_zone.target = low_only_inst;
+  b.add_preset("LowOnly", 0, 3, {low_only_preset_zone});
 
   Sf2Builder::ZoneSpec dz;
   dz.target = perc;
@@ -175,6 +187,16 @@ TEST_CASE("Sf2Player plays a looped sample at the root-key frequency", "[midi][s
   REQUIRE(rms(out.left, 36000) > 0.1f);
 }
 
+TEST_CASE("Sf2Player falls back when a covered preset has no matching zone", "[midi][sf2]") {
+  Sf2Player player = make_player(make_fixture());
+  player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 3)));
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 84, 127)));
+
+  REQUIRE(player.active_voice_count() == 1);
+  const StereoRender out = render(player, 4096);
+  REQUIRE(peak(out.left) > 0.001f);
+}
+
 TEST_CASE("Sf2Player one-shot samples end and release tail is bounded", "[midi][sf2]") {
   Sf2Player player = make_player(make_fixture());
   // Program 2 = unlooped burst (~64 samples at 44.1k -> ~70 output samples).
@@ -224,6 +246,15 @@ TEST_CASE("Sf2Player pan generator routes to the stereo legs", "[midi][sf2]") {
   REQUIRE(peak(out.right) < peak(out.left) * 1e-3f);
 }
 
+TEST_CASE("Sf2Player decodes MIDI 2.0 banked program changes", "[midi][sf2]") {
+  Sf2Player player = make_player(make_fixture());
+  player.on_event(0, event(sonare::midi::make_midi2_program_change(0, 0, 1, 0, 0, true)));
+  player.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, 0xFFFFu)));
+  const StereoRender out = render(player, 4800);
+  REQUIRE(peak(out.left) > 0.1f);
+  REQUIRE(peak(out.right) < peak(out.left) * 1e-3f);
+}
+
 TEST_CASE("Sf2Player drum channel resolves bank 128", "[midi][sf2]") {
   Sf2Player player = make_player(make_fixture());
   // Channel 9 ignores the melodic banks and plays the kit (one-shot burst).
@@ -241,6 +272,17 @@ TEST_CASE("Sf2Player unknown variation bank falls back to the capital tone", "[m
   player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
   player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   REQUIRE(peak(render(player, 4800).left) > 0.1f);
+}
+
+TEST_CASE("Sf2Player resolves GM2 Bank Select LSB variations", "[midi][sf2]") {
+  Sf2Player player = make_player(make_fixture());
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 0, 0x79)));
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 32, 5)));
+  player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender out = render(player, 4800);
+  REQUIRE(peak(out.left) > 0.1f);
+  REQUIRE(peak(out.right) < peak(out.left) * 1e-3f);
 }
 
 TEST_CASE("Sf2Player channel-mode CCs match BuiltinSynth semantics", "[midi][sf2]") {

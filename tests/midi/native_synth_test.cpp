@@ -32,6 +32,7 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::Sf2File;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
+using sonare::midi::synth::SynthEngineMode;
 using sonare::midi::synth::VaOscillator;
 using sonare::midi::synth::VaWaveform;
 using sonare::test::AllocationGuard;
@@ -64,6 +65,48 @@ float peak(const std::vector<float>& buf, size_t from = 0) {
   float p = 0.0f;
   for (size_t i = from; i < buf.size(); ++i) p = std::max(p, std::fabs(buf[i]));
   return p;
+}
+
+double estimate_frequency(const std::vector<float>& buf, double sample_rate, size_t from = 0) {
+  std::vector<double> crossings;
+  for (size_t i = std::max<size_t>(from, 1); i < buf.size(); ++i) {
+    const float prev = buf[i - 1];
+    const float cur = buf[i];
+    if (prev < 0.0f && cur >= 0.0f) {
+      const double denom = static_cast<double>(cur) - static_cast<double>(prev);
+      const double frac = denom != 0.0 ? -static_cast<double>(prev) / denom : 0.0;
+      crossings.push_back(static_cast<double>(i - 1) + frac);
+    }
+  }
+  if (crossings.size() < 2) return 0.0;
+  return sample_rate * static_cast<double>(crossings.size() - 1) /
+         (crossings.back() - crossings.front());
+}
+
+double dominant_frequency(const std::vector<float>& signal, double sample_rate, size_t from = 0) {
+  const size_t n = signal.size() - std::min(from, signal.size());
+  if (n < 2) return 0.0;
+  std::vector<float> windowed(n);
+  for (size_t i = 0; i < n; ++i) {
+    const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * static_cast<double>(i) /
+                                          static_cast<double>(n - 1));
+    windowed[i] = signal[from + i] * static_cast<float>(w);
+  }
+  sonare::FFT fft(static_cast<int>(n));
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
+  fft.forward(windowed.data(), spectrum.data());
+  int best_bin = 1;
+  double best_power = 0.0;
+  for (int b = 1; b < fft.n_bins(); ++b) {
+    const double hz = static_cast<double>(b) * sample_rate / static_cast<double>(n);
+    if (hz < 20.0) continue;
+    const double power = static_cast<double>(std::norm(spectrum[static_cast<size_t>(b)]));
+    if (power > best_power) {
+      best_power = power;
+      best_bin = b;
+    }
+  }
+  return static_cast<double>(best_bin) * sample_rate / static_cast<double>(n);
 }
 
 /// Ratio of non-harmonic ("alias") spectral power to harmonic power for a
@@ -232,6 +275,53 @@ TEST_CASE("NativeSynth channel semantics: sustain, volume, all sound off", "[mid
   REQUIRE(synth.active_voice_count() == 0);
   StereoRender silent = render(synth, 512);
   REQUIRE(peak(silent.left) == 0.0f);
+}
+
+TEST_CASE("NativeSynth pitch bend follows RPN0 bend range", "[midi][synth]") {
+  NativeSynthConfig cfg;
+  cfg.patch.waveform = VaWaveform::kSine;
+  cfg.patch.cutoff_hz = 20000.0f;
+  cfg.patch.gain = 0.8f;
+
+  auto bent_frequency = [&](bool wide) {
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    if (wide) {
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 101, 0)));
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 100, 0)));
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 6, 12)));
+    }
+    synth.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, 0, 12288)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 127)));
+    const StereoRender out = render(synth, 8192);
+    return estimate_frequency(out.left, kOutRate, 1024);
+  };
+
+  const double normal = bent_frequency(false);
+  const double wide = bent_frequency(true);
+  REQUIRE(normal > 460.0);
+  REQUIRE(normal < 470.0);
+  REQUIRE(wide > 610.0);
+  REQUIRE(wide < 630.0);
+}
+
+TEST_CASE("NativeSynth applies pitch offset outside the subtractive engine", "[midi][synth]") {
+  auto peak_hz = [](float offset_cents) {
+    NativeSynthConfig cfg;
+    cfg.patch.mode = SynthEngineMode::kAdditive;
+    cfg.patch.pitch_offset_cents = offset_cents;
+    cfg.patch.gain = 0.8f;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 127)));
+    const StereoRender out = render(synth, 8192);
+    return dominant_frequency(out.left, kOutRate, 1024);
+  };
+
+  const double base = peak_hz(0.0f);
+  const double shifted = peak_hz(1200.0f);
+  REQUIRE(base > 0.0);
+  REQUIRE(shifted > base * 1.5);
 }
 
 TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback",

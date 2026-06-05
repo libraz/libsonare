@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdint>
 
+#include "rt/seqlock_cell.h"
 #include "transport/marker.h"
 #include "transport/tempo_map.h"
 #include "transport/transport_state.h"
@@ -91,59 +92,12 @@ class Transport {
     bool enabled = false;
   };
 
-  class AtomicLoopState {
-   public:
-    void store(const LoopState& loop) noexcept {
-      guard_.fetch_add(1, std::memory_order_release);
-      start_ppq_.store(loop.start_ppq, std::memory_order_relaxed);
-      end_ppq_.store(loop.end_ppq, std::memory_order_relaxed);
-      enabled_.store(loop.enabled, std::memory_order_relaxed);
-      guard_.fetch_add(1, std::memory_order_release);
-    }
-
-    LoopState load() const noexcept {
-      for (;;) {
-        const uint32_t g1 = guard_.load(std::memory_order_acquire);
-        if (g1 & 1u) continue;
-        LoopState copy{start_ppq_.load(std::memory_order_relaxed),
-                       end_ppq_.load(std::memory_order_relaxed),
-                       enabled_.load(std::memory_order_relaxed)};
-        std::atomic_thread_fence(std::memory_order_acquire);
-        const uint32_t g2 = guard_.load(std::memory_order_acquire);
-        if (g1 == g2) return copy;
-      }
-    }
-
-    LoopState try_load() const noexcept {
-      const uint32_t g1 = guard_.load(std::memory_order_acquire);
-      if ((g1 & 1u) == 0u) {
-        LoopState copy{start_ppq_.load(std::memory_order_relaxed),
-                       end_ppq_.load(std::memory_order_relaxed),
-                       enabled_.load(std::memory_order_relaxed)};
-        std::atomic_thread_fence(std::memory_order_acquire);
-        const uint32_t g2 = guard_.load(std::memory_order_acquire);
-        if (g1 == g2) {
-          cached_ = copy;
-          return copy;
-        }
-      }
-      return cached_;
-    }
-
-   private:
-    mutable std::atomic<uint32_t> guard_{0};
-    std::atomic<double> start_ppq_{0.0};
-    std::atomic<double> end_ppq_{0.0};
-    std::atomic<bool> enabled_{false};
-    mutable LoopState cached_{};
-  };
-
   std::atomic<const TempoMap*> tempo_map_{nullptr};
   std::atomic<double> sample_rate_{constants::kDefaultDawSampleRate};
   std::atomic<bool> playing_{false};
   std::atomic<int64_t> render_frame_{0};
   std::atomic<int64_t> sample_position_{0};
-  AtomicLoopState loop_state_{};
+  rt::SeqlockCell<LoopState> loop_state_{};
   // Diagnostic overflow counter (see loop_overflow_count()). Incremented on the
   // audio thread from the const collect_loop_boundaries(), hence mutable atomic.
   mutable std::atomic<uint32_t> loop_overflow_count_{0};

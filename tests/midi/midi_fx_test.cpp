@@ -151,6 +151,25 @@ TEST_CASE("MidiFx quantize applies repeating groove template offsets", "[midi]")
   REQUIRE(out.events[3].render_frame == 400);
 }
 
+TEST_CASE("MidiFx quantize clamps excessive groove template offsets", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  QuantizeConfig q;
+  q.enabled = true;
+  q.grid_frames = 100;
+  q.strength = 1.0f;
+  q.groove_steps = 1;
+  q.groove_offsets = {10.0f};
+  fx.set_quantize(q);
+
+  std::vector<MidiEvent> in = {note_on(190, 60, 100)};
+  MidiFxBuffer out;
+  fx.process(in.data(), in.size(), &out);
+
+  REQUIRE(out.size == 1);
+  REQUIRE(out.events[0].render_frame == 200);
+}
+
 TEST_CASE("MidiFx velocity curve maps velocity", "[midi]") {
   MidiFxChain fx;
   fx.prepare();

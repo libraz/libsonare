@@ -9,15 +9,12 @@ import {
   SYNTH_MOD_DESTINATIONS,
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
+  synthEnumTables,
   synthPresetNames,
   synthPresetPatch,
 } from '../src/index.js';
 import { addon } from '../src/native.js';
-import type { SynthEnumTables, SynthPatch } from '../src/types.js';
-
-function synthEnumTables(): SynthEnumTables {
-  return addon._synthEnumTables();
-}
+import type { SynthPatch } from '../src/types.js';
 
 function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
   return addon._synthPatchRoundTrip(patch);
@@ -129,6 +126,12 @@ describe('NativeSynth preset catalog', () => {
       expect(byName.modRoutings?.[0]?.destination).toBe(name);
       expect(byOrdinal.modRoutings?.[0]?.destination).toBe(name);
     }
+  });
+
+  it('rejects non-string preset properties consistently', () => {
+    expect(() => synthPatchRoundTripForTest({ preset: 123 } as unknown as SynthPatch)).toThrow(
+      /synth patch preset must be a string/,
+    );
   });
 });
 

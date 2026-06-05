@@ -33,6 +33,19 @@ MidiClipEvent ev(double ppq, const Ump& ump) {
   return e;
 }
 
+void push_word(std::vector<uint8_t>* bytes, uint32_t w) {
+  bytes->push_back(static_cast<uint8_t>((w >> 24) & 0xFFu));
+  bytes->push_back(static_cast<uint8_t>((w >> 16) & 0xFFu));
+  bytes->push_back(static_cast<uint8_t>((w >> 8) & 0xFFu));
+  bytes->push_back(static_cast<uint8_t>(w & 0xFFu));
+}
+
+std::vector<uint8_t> smf2_header_with_dctpq() {
+  std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
+  push_word(&bytes, (0x0u << 28) | (0x3u << 20) | 480u);
+  return bytes;
+}
+
 }  // namespace
 
 TEST_CASE("SMF2 export writes the SMF2CLIP file header", "[midi][smf2]") {
@@ -182,21 +195,13 @@ TEST_CASE("SMF2 chains Delta Clockstamps for events beyond the 20-bit tick span"
 TEST_CASE("SMF2 imports a SysEx8 data message payload", "[midi][smf2]") {
   // Hand-built SMF2CLIP: header + DCTPQ + a complete SysEx8 packet (MT=0x5).
   // The exporter only writes SysEx7, so SysEx8 import is exercised directly.
-  std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
-  auto push_word = [&bytes](uint32_t w) {
-    bytes.push_back(static_cast<uint8_t>((w >> 24) & 0xFFu));
-    bytes.push_back(static_cast<uint8_t>((w >> 16) & 0xFFu));
-    bytes.push_back(static_cast<uint8_t>((w >> 8) & 0xFFu));
-    bytes.push_back(static_cast<uint8_t>(w & 0xFFu));
-  };
-  // DCTPQ = 480 (MT=0x0 utility, status 0x3).
-  push_word((0x0u << 28) | (0x3u << 20) | 480u);
+  std::vector<uint8_t> bytes = smf2_header_with_dctpq();
   // SysEx8 complete (status 0x0), numBytes=4 (streamID + 3 data), streamID=0x00,
   // payload bytes {0x11, 0x22, 0x33}. word0 byte3 = data[0]=0x11.
-  push_word((0x5u << 28) | (0x4u << 16) | (0x00u << 8) | 0x11u);
-  push_word((0x22u << 24) | (0x33u << 16));
-  push_word(0);
-  push_word(0);
+  push_word(&bytes, (0x5u << 28) | (0x4u << 16) | (0x00u << 8) | 0x11u);
+  push_word(&bytes, (0x22u << 24) | (0x33u << 16));
+  push_word(&bytes, 0);
+  push_word(&bytes, 0);
 
   const Smf2ImportResult imported = import_clip_file(bytes);
   REQUIRE(imported.ok());
@@ -207,6 +212,77 @@ TEST_CASE("SMF2 imports a SysEx8 data message payload", "[midi][smf2]") {
   const std::vector<uint8_t>* recovered = imported.sysex_store.lookup(events[0].ump.sysex_handle);
   REQUIRE(recovered != nullptr);
   REQUIRE(*recovered == std::vector<uint8_t>{0x11, 0x22, 0x33});
+}
+
+TEST_CASE("SMF2 import validates SysEx packet ordering", "[midi][smf2]") {
+  SECTION("orphan continue is skipped") {
+    std::vector<uint8_t> bytes = smf2_header_with_dctpq();
+    push_word(&bytes, (0x3u << 28) | (0x2u << 20) | (0x2u << 16) | (0x11u << 8) | 0x22u);
+    push_word(&bytes, 0);
+    const Smf2ImportResult imported = import_clip_file(bytes);
+    REQUIRE(imported.ok());
+    REQUIRE(imported.skipped_events == 1);
+    REQUIRE(imported.clips.empty());
+  }
+
+  SECTION("orphan end is skipped") {
+    std::vector<uint8_t> bytes = smf2_header_with_dctpq();
+    push_word(&bytes, (0x3u << 28) | (0x3u << 20) | (0x2u << 16) | (0x11u << 8) | 0x22u);
+    push_word(&bytes, 0);
+    const Smf2ImportResult imported = import_clip_file(bytes);
+    REQUIRE(imported.ok());
+    REQUIRE(imported.skipped_events == 1);
+    REQUIRE(imported.clips.empty());
+  }
+
+  SECTION("unterminated start is skipped") {
+    std::vector<uint8_t> bytes = smf2_header_with_dctpq();
+    push_word(&bytes, (0x3u << 28) | (0x1u << 20) | (0x2u << 16) | (0x11u << 8) | 0x22u);
+    push_word(&bytes, 0);
+    const Smf2ImportResult imported = import_clip_file(bytes);
+    REQUIRE(imported.ok());
+    REQUIRE(imported.skipped_events == 1);
+    REQUIRE(imported.clips.empty());
+  }
+}
+
+TEST_CASE("SMF2 SysEx import and export preserve group", "[midi][smf2]") {
+  SysExStore store;
+  const auto handle = store.add(std::vector<uint8_t>{0x7E, 0x7F, 0x09, 0x01});
+  REQUIRE(handle != 0);
+
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_sysex_handle(5, handle)));
+  Smf2ExportOptions options;
+  options.sysex_store = &store;
+  const auto exported = export_clip_file(clip, {}, {}, options);
+  REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 0);
+
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 1);
+  REQUIRE(imported.clips[0].events()[0].ump.group == 5);
+}
+
+TEST_CASE("SMF2 export skips empty SysEx payloads instead of writing a dropped packet",
+          "[midi][smf2]") {
+  SysExStore store;
+  const auto handle = store.add(std::vector<uint8_t>{0xF0, 0xF7});
+  REQUIRE(handle != 0);
+
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_sysex_handle(0, handle)));
+  Smf2ExportOptions options;
+  options.sysex_store = &store;
+  const auto exported = export_clip_file(clip, {}, {}, options);
+  REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 1);
+
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.empty());
 }
 
 TEST_CASE("SMF2 import rejects malformed input without reading out of bounds", "[midi][smf2]") {
@@ -235,5 +311,12 @@ TEST_CASE("SMF2 import rejects malformed input without reading out of bounds", "
     std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P', 0xD0, 0x10, 0x00, 0x00};
     const Smf2ImportResult r = import_clip_file(bytes);
     REQUIRE(r.status == Smf2Status::kTruncated);
+  }
+  SECTION("channel voice before DCTPQ is rejected transactionally") {
+    std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
+    push_word(&bytes, sonare::midi::make_midi1_note_on(0, 0, 60, 100).words[0]);
+    const Smf2ImportResult r = import_clip_file(bytes);
+    REQUIRE(r.status == Smf2Status::kMissingDctpq);
+    REQUIRE(r.clips.empty());
   }
 }

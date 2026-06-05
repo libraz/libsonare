@@ -231,6 +231,7 @@ describe('RealtimeEngine native binding', () => {
     engine.process([new Float32Array(128), new Float32Array(128)]);
 
     const transport = engine.getTransportState();
+    expect(transport.playing).toBe(true);
     expect(transport.isPlaying).toBe(true);
     expect(transport.bpm).toBeCloseTo(90, 3);
     expect(transport.sampleRate).toBeCloseTo(48000, 1);

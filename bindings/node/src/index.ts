@@ -99,6 +99,7 @@ import type {
   StftDbResult,
   StftResult,
   StripRef,
+  SynthEnumTables,
   SynthPatch,
   SynthWaveform,
   TimbreResult,
@@ -946,6 +947,11 @@ export function synthPresetNames(): string[] {
  */
 export function synthPresetPatch(name: string): SynthPatch {
   return addon.synthPresetPatch(name);
+}
+
+/** Return the canonical NativeSynth enum tables from the native C oracle. */
+export function synthEnumTables(): SynthEnumTables {
+  return addon._synthEnumTables();
 }
 
 /**

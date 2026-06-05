@@ -261,6 +261,24 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
 
   std::vector<uint8_t> pending_sysex;
   double pending_sysex_ppq = 0.0;
+  uint8_t pending_sysex_group = 0;
+  bool pending_sysex_active = false;
+
+  auto store_pending_sysex = [&](uint8_t group) {
+    const SysExHandle handle = result.sysex_store.add(pending_sysex);
+    pending_sysex.clear();
+    pending_sysex_active = false;
+    if (handle == 0) {
+      ++result.skipped_events;
+      return;
+    }
+    MidiClipEvent ev;
+    ev.ppq = pending_sysex_ppq;
+    ev.ump = make_sysex_handle(group, handle);
+    clip.add_event(ev);
+    has_events = true;
+    last_event_ppq = std::max(last_event_ppq, pending_sysex_ppq);
+  };
 
   while (reader.remaining_words() > 0 && !saw_end_of_clip) {
     const size_t word0_pos = reader.pos();
@@ -366,25 +384,41 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
 
     if (mt == kMtData64) {
       const uint8_t packet_status = static_cast<uint8_t>((word0 >> 20) & 0x0Fu);
-      if (packet_status == kSysex7Complete || packet_status == kSysex7Start) {
+      const uint8_t group = static_cast<uint8_t>((word0 >> 24) & 0x0Fu);
+      if (packet_status == kSysex7Complete) {
         pending_sysex.clear();
         pending_sysex_ppq = ppq;
-      }
-      append_sysex7_bytes(words[0], words[1], &pending_sysex);
-      const bool complete = packet_status == kSysex7Complete || packet_status == kSysex7End;
-      if (!complete) continue;
-      const SysExHandle handle = result.sysex_store.add(pending_sysex);
-      pending_sysex.clear();
-      if (handle == 0) {
-        ++result.skipped_events;
+        append_sysex7_bytes(words[0], words[1], &pending_sysex);
+        store_pending_sysex(group);
         continue;
       }
-      MidiClipEvent ev;
-      ev.ppq = pending_sysex_ppq;
-      ev.ump = make_sysex_handle(/*group=*/0, handle);
-      clip.add_event(ev);
-      has_events = true;
-      last_event_ppq = std::max(last_event_ppq, pending_sysex_ppq);
+      if (packet_status == kSysex7Start) {
+        if (pending_sysex_active) ++result.skipped_events;
+        pending_sysex.clear();
+        pending_sysex_ppq = ppq;
+        pending_sysex_group = group;
+        pending_sysex_active = true;
+        append_sysex7_bytes(words[0], words[1], &pending_sysex);
+        continue;
+      }
+      if (packet_status == kSysex7Continue) {
+        if (!pending_sysex_active) {
+          ++result.skipped_events;
+          continue;
+        }
+        append_sysex7_bytes(words[0], words[1], &pending_sysex);
+        continue;
+      }
+      if (packet_status == kSysex7End) {
+        if (!pending_sysex_active) {
+          ++result.skipped_events;
+          continue;
+        }
+        append_sysex7_bytes(words[0], words[1], &pending_sysex);
+        store_pending_sysex(pending_sysex_group);
+        continue;
+      }
+      ++result.skipped_events;
       continue;
     }
 
@@ -392,29 +426,49 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
       // SysEx8 shares the SysEx7 status-nibble convention (complete/start/
       // continue/end) in word0 bits 20..23.
       const uint8_t packet_status = static_cast<uint8_t>((word0 >> 20) & 0x0Fu);
-      if (packet_status == kSysex7Complete || packet_status == kSysex7Start) {
+      const uint8_t group = static_cast<uint8_t>((word0 >> 24) & 0x0Fu);
+      if (packet_status == kSysex7Complete) {
         pending_sysex.clear();
         pending_sysex_ppq = ppq;
-      }
-      append_sysex8_bytes(words, &pending_sysex);
-      const bool complete = packet_status == kSysex7Complete || packet_status == kSysex7End;
-      if (!complete) continue;
-      const SysExHandle handle = result.sysex_store.add(pending_sysex);
-      pending_sysex.clear();
-      if (handle == 0) {
-        ++result.skipped_events;
+        append_sysex8_bytes(words, &pending_sysex);
+        store_pending_sysex(group);
         continue;
       }
-      MidiClipEvent ev;
-      ev.ppq = pending_sysex_ppq;
-      ev.ump = make_sysex_handle(/*group=*/0, handle);
-      clip.add_event(ev);
-      has_events = true;
-      last_event_ppq = std::max(last_event_ppq, pending_sysex_ppq);
+      if (packet_status == kSysex7Start) {
+        if (pending_sysex_active) ++result.skipped_events;
+        pending_sysex.clear();
+        pending_sysex_ppq = ppq;
+        pending_sysex_group = group;
+        pending_sysex_active = true;
+        append_sysex8_bytes(words, &pending_sysex);
+        continue;
+      }
+      if (packet_status == kSysex7Continue) {
+        if (!pending_sysex_active) {
+          ++result.skipped_events;
+          continue;
+        }
+        append_sysex8_bytes(words, &pending_sysex);
+        continue;
+      }
+      if (packet_status == kSysex7End) {
+        if (!pending_sysex_active) {
+          ++result.skipped_events;
+          continue;
+        }
+        append_sysex8_bytes(words, &pending_sysex);
+        store_pending_sysex(pending_sysex_group);
+        continue;
+      }
+      ++result.skipped_events;
       continue;
     }
 
     // System and reserved message types are not represented.
+    ++result.skipped_events;
+  }
+
+  if (pending_sysex_active) {
     ++result.skipped_events;
   }
 
@@ -455,7 +509,8 @@ struct SeqItem {
   int word_count = 0;
 };
 
-void emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<uint8_t>& payload) {
+bool emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<uint8_t>& payload,
+                 uint8_t group) {
   // Strip a leading 0xF0 / trailing 0xF7 if present; UMP SysEx7 carries the
   // payload without the MIDI 1.0 framing bytes.
   size_t begin = 0;
@@ -463,6 +518,7 @@ void emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<u
   if (begin < end && payload[begin] == 0xF0u) ++begin;
   if (end > begin && payload[end - 1] == 0xF7u) --end;
   const size_t total = end - begin;
+  if (total == 0) return false;
   size_t offset = 0;
   bool first = true;
   do {
@@ -482,9 +538,9 @@ void emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<u
     SeqItem item;
     item.tick = tick;
     item.order = 2;
-    item.words[0] = (kMtData64 << 28) | (static_cast<uint32_t>(status) << 20) |
-                    (static_cast<uint32_t>(chunk) << 16) | (static_cast<uint32_t>(bytes[0]) << 8) |
-                    static_cast<uint32_t>(bytes[1]);
+    item.words[0] = (kMtData64 << 28) | (static_cast<uint32_t>(group & 0x0Fu) << 24) |
+                    (static_cast<uint32_t>(status) << 20) | (static_cast<uint32_t>(chunk) << 16) |
+                    (static_cast<uint32_t>(bytes[0]) << 8) | static_cast<uint32_t>(bytes[1]);
     item.words[1] = (static_cast<uint32_t>(bytes[2]) << 24) |
                     (static_cast<uint32_t>(bytes[3]) << 16) |
                     (static_cast<uint32_t>(bytes[4]) << 8) | static_cast<uint32_t>(bytes[5]);
@@ -493,6 +549,7 @@ void emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const std::vector<u
     offset += chunk;
     first = false;
   } while (offset < total);
+  return true;
 }
 
 }  // namespace
@@ -592,7 +649,9 @@ Smf2ExportResult export_clip_file(
         ++result.skipped_events;
         continue;
       }
-      emit_sysex7(&items, tick, *payload);
+      if (!emit_sysex7(&items, tick, *payload, ev.ump.group)) {
+        ++result.skipped_events;
+      }
       continue;
     }
     SeqItem item;

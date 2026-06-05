@@ -3,12 +3,23 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <utility>
 #include <vector>
 
 #include "util/exception.h"
 
 namespace sonare::mastering::final {
+namespace {
+
+float sanitize_sample(float sample) noexcept {
+  if (std::isnan(sample)) return 0.0f;
+  if (sample == std::numeric_limits<float>::infinity()) return 1.0f;
+  if (sample == -std::numeric_limits<float>::infinity()) return -1.0f;
+  return sample;
+}
+
+}  // namespace
 
 Audio bit_depth(const Audio& audio, const BitDepthConfig& config) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
@@ -20,6 +31,7 @@ Audio bit_depth(const Audio& audio, const BitDepthConfig& config) {
   const float max_code = scale - 1.0f;
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   for (auto& sample : samples) {
+    sample = sanitize_sample(sample);
     if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);
     sample = std::clamp(std::round(sample * scale), min_code, max_code) / scale;
     if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);

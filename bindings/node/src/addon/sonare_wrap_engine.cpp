@@ -690,7 +690,9 @@ Napi::Value RealtimeEngineWrap::GetTransportState(const Napi::CallbackInfo& info
   ThrowIfError(env, sonare_engine_get_transport_state(engine_, &state));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("isPlaying", Napi::Boolean::New(env, state.playing != 0));
+  const Napi::Boolean playing = Napi::Boolean::New(env, state.playing != 0);
+  out.Set("playing", playing);
+  out.Set("isPlaying", playing);
   out.Set("looping", Napi::Boolean::New(env, state.looping != 0));
   out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(state.render_frame)));
   out.Set("samplePosition", Napi::Number::New(env, static_cast<double>(state.sample_position)));

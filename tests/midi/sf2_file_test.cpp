@@ -9,7 +9,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -66,6 +68,50 @@ std::vector<uint8_t> build_fixture() {
   b.add_preset("Drums", 128, 0, {drum_preset_zone});
 
   return b.build();
+}
+
+uint32_t read_u32(const std::vector<uint8_t>& bytes, size_t offset) {
+  return static_cast<uint32_t>(bytes[offset]) | (static_cast<uint32_t>(bytes[offset + 1]) << 8) |
+         (static_cast<uint32_t>(bytes[offset + 2]) << 16) |
+         (static_cast<uint32_t>(bytes[offset + 3]) << 24);
+}
+
+void write_u32(std::vector<uint8_t>& bytes, size_t offset, uint32_t value) {
+  bytes[offset] = static_cast<uint8_t>(value & 0xFF);
+  bytes[offset + 1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+  bytes[offset + 2] = static_cast<uint8_t>((value >> 16) & 0xFF);
+  bytes[offset + 3] = static_cast<uint8_t>((value >> 24) & 0xFF);
+}
+
+bool fourcc_at(const std::vector<uint8_t>& bytes, size_t offset, const char* id) {
+  return offset + 4 <= bytes.size() && std::memcmp(bytes.data() + offset, id, 4) == 0;
+}
+
+std::vector<uint8_t> build_fixture_with_empty_pdta_chunk(const char* target_id) {
+  std::vector<uint8_t> bytes = build_fixture();
+  for (size_t chunk = 12; chunk + 12 <= bytes.size();) {
+    const uint32_t chunk_size = read_u32(bytes, chunk + 4);
+    const size_t next = chunk + 8 + chunk_size + (chunk_size & 1u);
+    if (fourcc_at(bytes, chunk, "LIST") && fourcc_at(bytes, chunk + 8, "pdta")) {
+      for (size_t sub = chunk + 12; sub + 8 <= chunk + 8 + chunk_size;) {
+        const uint32_t sub_size = read_u32(bytes, sub + 4);
+        const size_t sub_body = sub + 8;
+        const size_t sub_next = sub_body + sub_size + (sub_size & 1u);
+        if (fourcc_at(bytes, sub, target_id)) {
+          const size_t erase_count = sub_next - sub_body;
+          write_u32(bytes, sub + 4, 0);
+          bytes.erase(bytes.begin() + static_cast<ptrdiff_t>(sub_body),
+                      bytes.begin() + static_cast<ptrdiff_t>(sub_next));
+          write_u32(bytes, chunk + 4, chunk_size - static_cast<uint32_t>(erase_count));
+          write_u32(bytes, 4, read_u32(bytes, 4) - static_cast<uint32_t>(erase_count));
+          return bytes;
+        }
+        sub = sub_next;
+      }
+    }
+    chunk = next;
+  }
+  return bytes;
 }
 
 }  // namespace
@@ -184,6 +230,27 @@ TEST_CASE("Sf2File rejects malformed input without crashing", "[midi][sf2]") {
       if (!f.parse(bad.data(), bad.size(), &err)) {
         REQUIRE(f.presets().empty());
       }
+    }
+  }
+
+  SECTION("empty bag tables fail cleanly") {
+    {
+      std::vector<uint8_t> bad = build_fixture_with_empty_pdta_chunk("ibag");
+      Sf2File f;
+      std::string err;
+      REQUIRE_FALSE(f.parse(bad.data(), bad.size(), &err));
+      REQUIRE(err == "sf2: missing ibag");
+      REQUIRE(f.presets().empty());
+      REQUIRE(f.instruments().empty());
+    }
+    {
+      std::vector<uint8_t> bad = build_fixture_with_empty_pdta_chunk("pbag");
+      Sf2File f;
+      std::string err;
+      REQUIRE_FALSE(f.parse(bad.data(), bad.size(), &err));
+      REQUIRE(err == "sf2: missing pbag");
+      REQUIRE(f.presets().empty());
+      REQUIRE(f.instruments().empty());
     }
   }
 }

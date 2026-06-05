@@ -12,6 +12,18 @@ constexpr float kSendDepth = 0.2f;
 
 int8_t clamp_offset(int8_t v) noexcept { return static_cast<int8_t>(std::clamp<int>(v, -64, 63)); }
 
+bool valid_roland_dt1_checksum(const uint8_t* data, size_t size) noexcept {
+  // Framing has already been stripped. Roland DT1 payload:
+  // 41 dd 42 12 aa bb cc <data...> sum
+  if (data == nullptr || size < 9) return false;
+  uint32_t sum = 0;
+  for (size_t i = 4; i + 1 < size; ++i) {
+    sum += data[i];
+  }
+  const uint8_t expected = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
+  return data[size - 1] == expected;
+}
+
 }  // namespace
 
 float gs_cutoff_offset_cents(int8_t offset) noexcept {
@@ -97,14 +109,15 @@ GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
   if (size > 0 && data[size - 1] == 0xF7) --size;
   if (size < 3) return out;
 
-  // GM System On: 7E 7F 09 01.
-  if (size >= 4 && data[0] == 0x7E && data[2] == 0x09 && data[3] == 0x01) {
+  // GM System On / GM2 System On: 7E 7F 09 01 / 03.
+  if (size >= 4 && data[0] == 0x7E && data[2] == 0x09 && (data[3] == 0x01 || data[3] == 0x03)) {
     out.kind = GsSysExKind::kGmReset;
     return out;
   }
 
   // Roland GS DT1: 41 dd 42 12 aa bb cc <data...> sum.
-  if (size >= 8 && data[0] == 0x41 && data[2] == 0x42 && data[3] == 0x12) {
+  if (size >= 9 && data[0] == 0x41 && data[2] == 0x42 && data[3] == 0x12) {
+    if (!valid_roland_dt1_checksum(data, size)) return out;
     const uint8_t addr_hi = data[4];
     const uint8_t addr_mid = data[5];
     const uint8_t addr_lo = data[6];

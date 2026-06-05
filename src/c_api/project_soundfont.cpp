@@ -14,12 +14,15 @@ namespace synth = sonare::midi::synth;
 
 /// SF2 drum bank (channel 10 percussion per the GS convention).
 constexpr uint16_t kManifestDrumBank = 128;
+constexpr uint8_t kGm2MelodicBankMsb = 0x79;
+constexpr uint8_t kGm2PercussionBankMsb = 0x78;
 
 /// Per-(destination, channel) program/bank state while scanning the compiled
 /// event streams in time order. Mirrors Sf2Player's channel state subset that
 /// affects preset resolution.
 struct ScanChannelState {
   uint8_t bank_msb = 0;
+  uint8_t bank_lsb = 0;
   uint8_t program = 0;
   bool drums = false;
 };
@@ -29,6 +32,12 @@ struct ScanChannelState {
 void copy_preset_name(char (&dest)[64], const std::string& name) {
   std::strncpy(dest, name.c_str(), sizeof(dest) - 1);
   dest[sizeof(dest) - 1] = '\0';
+}
+
+uint16_t effective_scan_bank(const ScanChannelState& state) noexcept {
+  if (state.drums || state.bank_msb == kGm2PercussionBankMsb) return kManifestDrumBank;
+  if (state.bank_msb == kGm2MelodicBankMsb) return state.bank_lsb;
+  return state.bank_msb;
 }
 
 /// Builds the bounce manifest from the compiled timeline: every
@@ -97,15 +106,27 @@ std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& 
     const uint8_t channel = u.channel() & 0x0Fu;
     ScanChannelState& state = state_for(scan.destination_id, channel);
     if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
-      state.program = u.note_number();  // data1 slot, both protocols
+      if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+        state.program = static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu);
+        if ((u.words[0] & 0x01u) != 0) {
+          state.bank_msb = static_cast<uint8_t>((u.words[1] >> 8) & 0x7Fu);
+          state.bank_lsb = static_cast<uint8_t>(u.words[1] & 0x7Fu);
+        }
+      } else {
+        state.program = u.note_number();
+      }
     } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
       if (u.note_number() == 0) {  // CC0 bank select MSB (GS variation bank)
         state.bank_msb = u.message_type() == UmpMessageType::kMidi1ChannelVoice
                              ? u.data2_7bit()
                              : sonare::midi::scale_cc_32_to_7(u.words[1]);
+      } else if (u.note_number() == 32) {
+        state.bank_lsb = u.message_type() == UmpMessageType::kMidi1ChannelVoice
+                             ? u.data2_7bit()
+                             : sonare::midi::scale_cc_32_to_7(u.words[1]);
       }
     } else if (u.is_note_on()) {
-      const uint16_t bank = state.drums ? kManifestDrumBank : state.bank_msb;
+      const uint16_t bank = effective_scan_bank(state);
       if (!seen.insert({channel, bank, state.program}).second) continue;
       SonareSf2ProgramStatus entry{};
       entry.channel = channel;

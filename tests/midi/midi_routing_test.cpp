@@ -280,6 +280,30 @@ TEST_CASE("CcMap param_to_cc round-trips value", "[midi]") {
   REQUIRE(norm == 1.0f);  // 127/127
 }
 
+TEST_CASE("CcMap param_to_cc rejects RPN and NRPN single-UMP emission", "[midi]") {
+  CcMap map;
+  CcBinding rpn;
+  rpn.kind = sonare::midi::CcBindingKind::kRpn;
+  rpn.cc_number = 6;
+  rpn.channel = 0;
+  rpn.param_id = 90;
+  rpn.selector_msb = 0;
+  rpn.selector_lsb = 1;
+  REQUIRE(map.bind(rpn));
+
+  CcBinding nrpn = rpn;
+  nrpn.kind = sonare::midi::CcBindingKind::kNrpn;
+  nrpn.channel = 1;
+  nrpn.param_id = 91;
+  nrpn.selector_msb = 12;
+  nrpn.selector_lsb = 34;
+  REQUIRE(map.bind(nrpn));
+
+  sonare::midi::Ump out;
+  REQUIRE_FALSE(map.param_to_cc(90, 0.5f, 0, &out));
+  REQUIRE_FALSE(map.param_to_cc(91, 0.5f, 0, &out));
+}
+
 TEST_CASE("CcMap lookup_param performs no allocation", "[midi][rt]") {
   CcMap map;
   for (uint8_t i = 0; i < 32; ++i) {
