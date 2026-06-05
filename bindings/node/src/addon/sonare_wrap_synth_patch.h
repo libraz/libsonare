@@ -69,6 +69,11 @@ inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char
     *out = mapped;
     return true;
   }
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(env, std::string("Expected ") + what + " to be a number or string")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
   *out = value.As<Napi::Number>().Int32Value();
   return true;
 }

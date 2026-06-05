@@ -92,6 +92,30 @@ TEST_CASE("TruePeakLimiter reports effective polyphase latency", "[mastering][ma
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 3}));
 }
 
+TEST_CASE("TruePeakLimiter accepts meter-supported oversample factors", "[mastering][maximizer]") {
+  for (int factor : {1, 2, 4, 8, 16}) {
+    TruePeakLimiter limiter({-1.0f, 0.0f, 10.0f, factor});
+    limiter.prepare(48000.0, 64);
+    auto signal = generate_sine_samples(1000.0f, 48000, 64, 0.25f);
+    float* channels[] = {signal.data()};
+    REQUIRE_NOTHROW(limiter.process(channels, 1, static_cast<int>(signal.size())));
+    REQUIRE(std::all_of(signal.begin(), signal.end(),
+                        [](float sample) { return std::isfinite(sample); }));
+  }
+}
+
+TEST_CASE("TruePeakLimiter rejects blocks larger than prepared capacity",
+          "[mastering][maximizer]") {
+  for (bool detect_only : {false, true}) {
+    TruePeakLimiter limiter({-1.0f, 0.0f, 10.0f, 4, detect_only});
+    limiter.prepare(48000.0, 64);
+    std::vector<float> signal(65, 0.0f);
+    float* channels[] = {signal.data()};
+    REQUIRE_THROWS_AS(limiter.process(channels, 1, static_cast<int>(signal.size())),
+                      SonareException);
+  }
+}
+
 TEST_CASE("TruePeakLimiter set_config applies scalar changes without wiping running state",
           "[mastering][maximizer]") {
   TruePeakLimiter limiter({-6.0f, 1.0f, 25.0f, 4});
@@ -278,6 +302,16 @@ TEST_CASE("LoudnessOptimize caps gain when target would exceed ceiling", "[maste
 
   REQUIRE(result.applied_gain_db < 0.0f);
   REQUIRE(metering::true_peak_db(result.audio, 4) <= -5.99f);
+}
+
+TEST_CASE("LoudnessOptimize accepts meter-supported true-peak oversample factors",
+          "[mastering][maximizer]") {
+  const Audio input = sine_audio(0.05f, 48000, 0.1f);
+  for (int factor : {1, 2, 4, 8, 16}) {
+    const auto result = loudness_optimize(input, {-20.0f, -1.0f, factor});
+    REQUIRE(result.audio.size() == input.size());
+    REQUIRE(std::isfinite(result.output_lufs));
+  }
 }
 
 TEST_CASE("StreamingPreview reports platform normalization and ceiling risk",

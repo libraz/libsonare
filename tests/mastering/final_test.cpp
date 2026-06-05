@@ -19,11 +19,12 @@ Audio make_audio(const std::vector<float>& samples) {
 }  // namespace
 
 TEST_CASE("BitDepth quantizes samples to target grid", "[mastering][final]") {
-  const auto result = bit_depth(make_audio({0.3f, -1.2f}), {8, true});
+  const auto result = bit_depth(make_audio({0.3f, -1.2f, 1.0f}), {8, true});
 
-  REQUIRE(result.size() == 2);
+  REQUIRE(result.size() == 3);
   REQUIRE_THAT(result[0], WithinAbs(38.0f / 128.0f, 0.0001f));
   REQUIRE_THAT(result[1], WithinAbs(-1.0f, 0.0001f));
+  REQUIRE_THAT(result[2], WithinAbs(127.0f / 128.0f, 0.0001f));
 }
 
 TEST_CASE("Dither adds deterministic low-level noise", "[mastering][final]") {

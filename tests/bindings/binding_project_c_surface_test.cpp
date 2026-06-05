@@ -45,6 +45,7 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   tempos[0].bpm = 120.0;
   tempos[1].start_ppq = 960.0;
   tempos[1].bpm = 132.0;
+  tempos[1].start_sample = -123.0;  // input is ignored; start samples are derived.
   tempos[1].end_bpm = 144.0;
   REQUIRE(sonare_project_set_tempo_segments(project, tempos, 2) == SONARE_OK);
   REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
@@ -106,6 +107,43 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(json.find("\"id\":\"lead\"") != std::string::npos);
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project][synth]") {
+  const auto split = [](const char* joined) {
+    std::vector<std::string> out;
+    REQUIRE(joined != nullptr);
+    std::string names(joined);
+    size_t start = 0;
+    while (start <= names.size()) {
+      const size_t end = names.find('\n', start);
+      if (end == std::string::npos) {
+        if (start < names.size()) out.push_back(names.substr(start));
+        break;
+      }
+      out.push_back(names.substr(start, end - start));
+      start = end + 1;
+    }
+    return out;
+  };
+
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)) ==
+        std::vector<std::string>{"default", "subtractive", "fm", "karplus-strong", "modal",
+                                 "additive", "percussion", "piano"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)) ==
+        std::vector<std::string>{"default", "sine", "saw", "square", "triangle", "noise"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)) ==
+        std::vector<std::string>{"default", "svf", "moog-ladder", "diode-ladder", "sallen-key"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT)) ==
+        std::vector<std::string>{"default", "lowpass", "bandpass", "highpass"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BODY_TYPE)) ==
+        std::vector<std::string>{"default", "none", "guitar", "violin", "wood-tube"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE)) ==
+        std::vector<std::string>{"none", "amp-env", "filter-env", "lfo1", "lfo2", "velocity",
+                                 "key-track", "mod-wheel", "random"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)) ==
+        std::vector<std::string>{"none", "pitch-cents", "cutoff-cents", "amp-gain", "pan-units"});
+  CHECK(std::string(sonare_synth_enum_names(999)) == "");
 }
 
 TEST_CASE("project C surface stores and retrieves AssistSidecar", "[project]") {

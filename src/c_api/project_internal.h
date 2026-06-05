@@ -153,7 +153,10 @@ void fill_compile_result_from_diagnostics(const std::vector<arr::Diagnostic>& di
     out->diagnostics[i].severity = static_cast<uint32_t>(d.severity);
     out->diagnostics[i].target_id = d.target_id;
     if (i > 0) stream << '\n';
-    stream << d.message;
+    std::string message = d.message;
+    std::replace(message.begin(), message.end(), '\n', ' ');
+    std::replace(message.begin(), message.end(), '\r', ' ');
+    stream << message;
   }
   out->messages = copy_string(stream.str());
 }

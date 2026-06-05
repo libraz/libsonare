@@ -240,6 +240,8 @@ export interface WasmRoomGeometryOptions {
   widthM?: number;
   heightM?: number;
   absorption?: number;
+  bandAbsorption?: Float32Array | number[];
+  bandScattering?: Float32Array | number[];
   sourceX?: number;
   sourceY?: number;
   sourceZ?: number;

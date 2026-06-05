@@ -138,6 +138,21 @@ def test_synthesize_rir_late_model_is_honored() -> None:
 
 
 @acoustic
+def test_synthesize_rir_honors_per_band_scattering() -> None:
+    base = dict(
+        length_m=7.0,
+        width_m=5.0,
+        height_m=3.0,
+        absorption_bands=[0.2, 0.22, 0.24, 0.26],
+        max_seconds=0.3,
+        seed=123,
+    )
+    mirror = libsonare.synthesize_rir(**base, scattering_bands=[0.0, 0.0, 0.0, 0.0])
+    diffuse = libsonare.synthesize_rir(**base, scattering_bands=[0.8, 0.8, 0.8, 0.8])
+    assert diffuse.rir != mirror.rir
+
+
+@acoustic
 def test_estimate_room_band_arrays_share_length() -> None:
     rir = libsonare.synthesize_rir(7.0, 5.0, 3.0, absorption=0.15)
     est = libsonare.estimate_room(rir.rir, sample_rate=48000, mode=2, min_decay_db=25.0)

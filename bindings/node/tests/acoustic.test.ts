@@ -64,6 +64,20 @@ describe('geometric room acoustics', () => {
     expect(Array.from(sabine.rir)).not.toEqual(Array.from(eyring.rir));
   });
 
+  it('honors per-band wall scattering', () => {
+    const base = {
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      bandAbsorption: [0.2, 0.22, 0.24, 0.26],
+      maxSeconds: 0.3,
+      seed: 123,
+    };
+    const mirror = synthesizeRir({ ...base, bandScattering: [0, 0, 0, 0] });
+    const diffuse = synthesizeRir({ ...base, bandScattering: [0.8, 0.8, 0.8, 0.8] });
+    expect(Array.from(diffuse.rir)).not.toEqual(Array.from(mirror.rir));
+  });
+
   it('emits absorption and rt60 bands at the same length', () => {
     const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
     const est = estimateRoom(rir.rir, 48000);

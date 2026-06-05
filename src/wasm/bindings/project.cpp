@@ -1169,8 +1169,8 @@ struct ProjectWasm {
   }
 
   // Replaces the project's tempo map from an array of { startPpq, bpm,
-  // startSample?, endBpm? } segments. Missing numeric fields default to 0.0
-  // (endBpm 0 = constant tempo), matching the C ABI.
+  // startSample?, endBpm? } segments. startSample is accepted for ABI/source
+  // compatibility but ignored; sample positions are derived during normalization.
   void setTempoSegments(val segments) {
     std::vector<SonareProjectTempoSegment> segs;
     if (!segments.isUndefined() && !segments.isNull()) {
@@ -1181,8 +1181,6 @@ struct ProjectWasm {
         SonareProjectTempoSegment seg{};
         seg.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
         seg.bpm = hasProperty(entry, "bpm") ? entry["bpm"].as<double>() : 0.0;
-        seg.start_sample =
-            hasProperty(entry, "startSample") ? entry["startSample"].as<double>() : 0.0;
         seg.end_bpm = hasProperty(entry, "endBpm") ? entry["endBpm"].as<double>() : 0.0;
         segs.push_back(seg);
       }

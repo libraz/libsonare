@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+
 #include "common.h"
 
 // ---------------------------------------------------------------------------
@@ -113,6 +115,7 @@ class EqualizerWrapper {
     const double sample_rate = floatProperty(config, "sampleRate", 48000.0f);
     const int max_block_size = intProperty(config, "maxBlockSize", 512);
     processor_.prepare(sample_rate, max_block_size);
+    sample_rate_ = sample_rate;
   }
 
   void setBand(int index, val band) {
@@ -230,7 +233,8 @@ class EqualizerWrapper {
   void match(val source, val reference, val options) {
     std::vector<float> src = float32ArrayToVector(source);
     std::vector<float> ref = float32ArrayToVector(reference);
-    const int sample_rate = intProperty(options, "sampleRate", 48000);
+    const int sample_rate =
+        intProperty(options, "sampleRate", static_cast<int>(std::lround(sample_rate_)));
     const int max_bands = intProperty(options, "maxBands", 8);
     Audio src_audio = Audio::from_buffer(src.data(), src.size(), sample_rate);
     Audio ref_audio = Audio::from_buffer(ref.data(), ref.size(), sample_rate);
@@ -249,6 +253,7 @@ class EqualizerWrapper {
   }
 
   mastering::eq::EqualizerProcessor processor_;
+  double sample_rate_ = 48000.0;
   std::vector<float> sidechain_left_;
   std::vector<float> sidechain_right_;
 };

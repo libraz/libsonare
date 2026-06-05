@@ -115,13 +115,17 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
 
   const std::vector<float> bands = NodeFloatArrayOption(opts, "bandAbsorption");
   if (!bands.empty()) {
+    const std::vector<float> scattering_bands = NodeFloatArrayOption(opts, "bandScattering");
     ShoeboxRoom room;
     room.dims = dims;
     Material wall;
     wall.absorption.reserve(bands.size());
     for (float a : bands) wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
-    // Keep the Material invariant absorption.size() == scattering.size().
-    wall.scattering.assign(bands.size(), 0.0f);
+    wall.scattering.reserve(bands.size());
+    for (size_t i = 0; i < bands.size(); ++i) {
+      const float scattering = i < scattering_bands.size() ? scattering_bands[i] : 0.0f;
+      wall.scattering.push_back(std::clamp(scattering, 0.0f, 1.0f));
+    }
     for (Material& w : room.walls) w = wall;
     return room;
   }

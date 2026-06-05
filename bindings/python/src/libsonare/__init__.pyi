@@ -12,6 +12,7 @@ from ._project import Sf2ProgramStatus as Sf2ProgramStatus
 from ._project import SynthModRouting as SynthModRouting
 from ._project import SynthPatch as SynthPatch
 from ._project import project_abi_version as project_abi_version
+from ._project import synth_enum_tables as synth_enum_tables
 from ._project import synth_preset_names as synth_preset_names
 from ._project import synth_preset_patch as synth_preset_patch
 from ._runtime import SonareError as SonareError

@@ -16,10 +16,12 @@ Audio bit_depth(const Audio& audio, const BitDepthConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter, "target_bits must be in [2, 32]");
   }
   const float scale = static_cast<float>(int64_t{1} << (config.target_bits - 1));
+  const float min_code = -scale;
+  const float max_code = scale - 1.0f;
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   for (auto& sample : samples) {
     if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);
-    sample = std::round(sample * scale) / scale;
+    sample = std::clamp(std::round(sample * scale), min_code, max_code) / scale;
     if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);
   }
   return Audio::from_vector(std::move(samples), audio.sample_rate());

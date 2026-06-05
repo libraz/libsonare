@@ -551,6 +551,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     }
     config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.seed = static_cast<uint32_t>(std::max(0, detail::i(params, "seed", config.seed)));
     auto reverb = std::make_unique<ConvolutionReverb>(config);
     std::vector<float> ir =
         json_params ? parse_ir_f32_base64_json(*json_params) : std::vector<float>{};

@@ -17,6 +17,7 @@ from ._project import (
     SynthModRouting,
     SynthPatch,
     project_abi_version,
+    synth_enum_tables,
     synth_preset_names,
     synth_preset_patch,
 )
@@ -435,6 +436,7 @@ __all__ = [
     "ebur128_loudness_range",
     "engine_abi_version",
     "project_abi_version",
+    "synth_enum_tables",
     "synth_preset_names",
     "synth_preset_patch",
     "estimate_tuning",

@@ -557,6 +557,8 @@ export interface RoomGeometryOptions {
    * provided it overrides `absorption` unless `materialPreset` is set.
    */
   bandAbsorption?: Float32Array | number[];
+  /** Optional per-band wall scattering; missing bands default to 0. */
+  bandScattering?: Float32Array | number[];
   /**
    * Named wall-material preset (0 none; 1 concrete, 2 wood, 3 curtain,
    * 4 carpet, 5 glass). A non-zero preset wins over `bandAbsorption`/`absorption`.

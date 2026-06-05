@@ -73,6 +73,10 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             lib.sonare_synth_preset_names.restype = ctypes.c_char_p
             lib.sonare_synth_preset_names.argtypes = []
 
+            if hasattr(lib, "sonare_synth_enum_names"):
+                lib.sonare_synth_enum_names.restype = ctypes.c_char_p
+                lib.sonare_synth_enum_names.argtypes = [ctypes.c_int]
+
             lib.sonare_synth_preset_patch.restype = ctypes.c_int32
             lib.sonare_synth_preset_patch.argtypes = [
                 ctypes.c_char_p,

@@ -89,6 +89,7 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   Napi::Value Match(const Napi::CallbackInfo& info);
 
   std::unique_ptr<sonare::mastering::eq::EqualizerProcessor> eq_;
+  double sample_rate_ = 48000.0;
   Napi::Reference<Napi::Float32Array> sidechain_left_;
   Napi::Reference<Napi::Float32Array> sidechain_right_;
   std::array<const float*, 2> sidechain_channels_{};

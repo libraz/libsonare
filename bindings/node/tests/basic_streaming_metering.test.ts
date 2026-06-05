@@ -170,6 +170,24 @@ describe('StreamingEqualizer', () => {
     expect(Number.isFinite(out[0])).toBe(true);
     eq.clearSidechain();
   });
+
+  it('uses the prepared sample rate for match when options omit sampleRate', () => {
+    const sampleRate = 44100;
+    const source = generateSine(1000, sampleRate, 0.25);
+    const reference = generateSine(2000, sampleRate, 0.25);
+    const omitted = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+    const explicit = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+
+    omitted.match(source, reference, { maxBands: 6 });
+    explicit.match(source, reference, { sampleRate, maxBands: 6 });
+
+    const omittedGain = Array.from(omitted.spectrum().bandGainDb);
+    const explicitGain = Array.from(explicit.spectrum().bandGainDb);
+    expect(omittedGain.length).toBe(explicitGain.length);
+    for (let i = 0; i < omittedGain.length; i += 1) {
+      expect(omittedGain[i]).toBeCloseTo(explicitGain[i], 6);
+    }
+  });
 });
 
 describe('onset, tempogram, NNLS chroma, and LUFS', () => {

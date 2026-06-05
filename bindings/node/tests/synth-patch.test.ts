@@ -9,11 +9,19 @@ import {
   SYNTH_MOD_DESTINATIONS,
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
-  synthEnumTables,
-  synthPatchRoundTripForTest,
   synthPresetNames,
   synthPresetPatch,
 } from '../src/index.js';
+import { addon } from '../src/native.js';
+import type { SynthEnumTables, SynthPatch } from '../src/types.js';
+
+function synthEnumTables(): SynthEnumTables {
+  return addon._synthEnumTables();
+}
+
+function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
+  return addon._synthPatchRoundTrip(patch);
+}
 
 function buildMidiOnlyProject(note = 60): Project {
   const project = Project.create();

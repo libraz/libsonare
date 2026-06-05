@@ -311,7 +311,7 @@ export interface ProjectTempoSegment {
   startPpq: number;
   /** Tempo in beats per minute at the segment start. */
   bpm: number;
-  /** Optional segment start in samples (default 0). */
+  /** Derived segment start in samples. Accepted for compatibility, ignored on input. */
   startSample?: number;
   /** Optional ramp end tempo in BPM (0 = constant tempo over the segment). */
   endBpm?: number;

@@ -12,6 +12,7 @@ from libsonare import (
     SonareError,
     SynthModRouting,
     SynthPatch,
+    synth_enum_tables,
     synth_preset_names,
     synth_preset_patch,
 )
@@ -95,6 +96,7 @@ def test_synth_preset_patch_round_trips() -> None:
 
 def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
     assert SYNTH_ENUM_TABLES == EXPECTED_SYNTH_ENUM_TABLES
+    assert synth_enum_tables() == EXPECTED_SYNTH_ENUM_TABLES
 
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["engine_modes"]):
         by_name = SynthPatch._from_c(SynthPatch(engine_mode=name)._to_c())

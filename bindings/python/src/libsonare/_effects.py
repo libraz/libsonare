@@ -58,6 +58,11 @@ from ._runtime import (
 from .types import HpssResult
 
 
+def _require_pow2_nfft(n_fft: int) -> None:
+    if n_fft <= 0 or (n_fft & (n_fft - 1)) != 0:
+        raise ValueError("n_fft must be a positive power of two")
+
+
 def hpss(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -1353,8 +1358,7 @@ def mastering_repair_denoise_classical(
         RuntimeError: If the C call rejects the request (e.g. non-power-of-two
         ``n_fft`` or non-positive ``hop_length``).
     """
-    if n_fft <= 0 or (n_fft & (n_fft - 1)) != 0:
-        raise ValueError("n_fft must be a positive power of two")
+    _require_pow2_nfft(n_fft)
     if hop_length <= 0:
         raise ValueError("hop_length must be positive")
 

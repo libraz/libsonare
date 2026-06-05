@@ -59,6 +59,17 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
+  it('setClipFade accepts named fade curves', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    project.setClipFade(clip, { lengthPpq: 0.5, curve: 'equalPower' }, { curve: 'logarithmic' });
+    const json = project.toJson();
+    expect(json).toContain('"fade_in":{"curve":1,"length_ppq":0.5}');
+    expect(json).toContain('"fade_out":{"curve":3,"length_ppq":0}');
+    project.destroy();
+  });
+
   it('setClipFade accepts omitted sides and partial fade objects', () => {
     const project = Project.create();
     const track = project.addTrack({ kind: 'audio' });
@@ -95,6 +106,17 @@ describe('Project edit ops (new bindings)', () => {
     expect(project.toJson()).not.toBe(before);
     project.undo();
     expect(project.toJson()).toBe(before);
+    project.destroy();
+  });
+
+  it('setClipLoop accepts named loop modes', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    project.setClipLoop(clip, 'loop', 2);
+    expect(project.toJson()).toContain('"loop_mode":1');
+    project.setClipLoop(clip, 'off');
+    expect(project.toJson()).toContain('"loop_mode":0');
     project.destroy();
   });
 
@@ -152,7 +174,7 @@ describe('Project edit ops (new bindings)', () => {
       targetParamId: 1,
       points: [
         { ppq: 0, value: 0, curve: 0 },
-        { ppq: 4, value: 1, curveToNext: 1 },
+        { ppq: 4, value: 1, curveToNext: 'exponential' },
       ],
     });
     expect(index).toBe(0);

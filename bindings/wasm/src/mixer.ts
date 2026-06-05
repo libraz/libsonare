@@ -351,7 +351,7 @@ export class Mixer {
     stripIndex: number,
     id: string,
     destinationBusId: string,
-    sendDb: number,
+    sendDb = 0.0,
     timing: SendTiming | number = 'postFader',
   ): number {
     return this.mixer.addSend(stripIndex, id, destinationBusId, sendDb, sendTimingCode(timing));

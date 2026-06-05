@@ -33,6 +33,7 @@ import type {
   ChromaResult,
   DynamicsResult,
   EngineAutomationPoint,
+  EngineAutomationPointCurve,
   EngineBounceOptions,
   EngineBounceResult,
   EngineCaptureStatus,
@@ -79,6 +80,7 @@ import type {
   ProjectClipDesc,
   ProjectClipFade,
   ProjectCompileResult,
+  ProjectFadeCurve,
   ProjectKeySegment,
   ProjectLoopMode,
   ProjectMidiCcBinding,
@@ -97,7 +99,6 @@ import type {
   StftDbResult,
   StftResult,
   StripRef,
-  SynthEnumTables,
   SynthPatch,
   SynthWaveform,
   TimbreResult,
@@ -553,7 +554,7 @@ export class RealtimeEngine {
   }
 
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
-    this.native.setAutomationLane(paramId, points);
+    this.native.setAutomationLane(paramId, points.map(engineAutomationPointValue));
   }
 
   automationLaneCount(): number {
@@ -947,14 +948,6 @@ export function synthPresetPatch(name: string): SynthPatch {
   return addon.synthPresetPatch(name);
 }
 
-export function synthEnumTables(): SynthEnumTables {
-  return addon._synthEnumTables();
-}
-
-export function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
-  return addon._synthPatchRoundTrip(patch);
-}
-
 /**
  * Headless arrangement / DAW project (the curated `sonare_project_*` C ABI).
  *
@@ -1339,16 +1332,16 @@ export class Project {
    * fields and omitted sides become a zero-length linear fade.
    */
   setClipFade(clipId: number, fadeIn?: ProjectClipFade, fadeOut?: ProjectClipFade): void {
-    this.native.setClipFade(clipId, fadeIn, fadeOut);
+    this.native.setClipFade(clipId, projectClipFadeValue(fadeIn), projectClipFadeValue(fadeOut));
   }
 
   /**
    * Set a clip's loop mode + loop length (PPQ) via an undoable edit.
-   * `loopMode` is a {@link ProjectLoopMode} ordinal (0 = off, 1 = loop). When
+   * `loopMode` is a {@link ProjectLoopMode} ordinal/name (0/off, 1/loop). When
    * looping, `loopLengthPpq` must be finite and > 0.
    */
   setClipLoop(clipId: number, loopMode: ProjectLoopMode, loopLengthPpq = 0): void {
-    this.native.setClipLoop(clipId, loopMode, loopLengthPpq);
+    this.native.setClipLoop(clipId, projectLoopModeValue(loopMode), loopLengthPpq);
   }
 
   /** Rebind a clip to a different already-registered source via an undoable edit. */
@@ -1387,12 +1380,12 @@ export class Project {
    * appended lane's index within the track.
    */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
-    return this.native.addAutomationLane(trackId, desc);
+    return this.native.addAutomationLane(trackId, projectAutomationLaneValue(desc));
   }
 
   /** Replace an existing automation lane in place via an undoable edit. */
   editAutomationLane(trackId: number, laneIndex: number, desc: ProjectAutomationLaneDesc): void {
-    this.native.editAutomationLane(trackId, laneIndex, desc);
+    this.native.editAutomationLane(trackId, laneIndex, projectAutomationLaneValue(desc));
   }
 
   /** Remove an automation lane from a track via an undoable edit. */
@@ -1745,6 +1738,79 @@ function trackKindValue(kind: ProjectTrackDesc['kind']): number {
     return kind;
   }
   throw new Error(`Invalid track kind: ${kind}`);
+}
+
+function engineAutomationCurveValue(curve: EngineAutomationPointCurve | undefined): number {
+  if (curve === undefined) {
+    return 0;
+  }
+  if (typeof curve === 'number') {
+    return curve;
+  }
+  return automationCurveValue(curve);
+}
+
+function engineAutomationPointValue(point: EngineAutomationPoint): EngineAutomationPoint {
+  return {
+    ...point,
+    curveToNext: engineAutomationCurveValue(point.curveToNext) as EngineAutomationPointCurve,
+  };
+}
+
+function projectFadeCurveValue(curve: ProjectFadeCurve | undefined | null): number | undefined {
+  if (curve === undefined || curve === null) {
+    return undefined;
+  }
+  if (typeof curve === 'number') {
+    return curve;
+  }
+  if (curve === 'linear') {
+    return 0;
+  }
+  if (curve === 'equalPower') {
+    return 1;
+  }
+  if (curve === 'exponential') {
+    return 2;
+  }
+  if (curve === 'logarithmic') {
+    return 3;
+  }
+  throw new Error(`Invalid project fade curve: ${curve}`);
+}
+
+function projectClipFadeValue(fade: ProjectClipFade | undefined): ProjectClipFade | undefined {
+  if (fade === undefined) {
+    return undefined;
+  }
+  const curve = projectFadeCurveValue(fade.curve);
+  return curve === undefined ? { ...fade } : { ...fade, curve: curve as ProjectFadeCurve };
+}
+
+function projectLoopModeValue(mode: ProjectLoopMode): number {
+  if (typeof mode === 'number') {
+    return mode;
+  }
+  if (mode === 'off') {
+    return 0;
+  }
+  if (mode === 'loop') {
+    return 1;
+  }
+  throw new Error(`Invalid project loop mode: ${mode}`);
+}
+
+function projectAutomationPointValue(point: ProjectAutomationPoint): ProjectAutomationPoint {
+  const curve = engineAutomationCurveValue(point.curve ?? point.curveToNext);
+  return {
+    ...point,
+    curve: curve as EngineAutomationPointCurve,
+    curveToNext: curve as EngineAutomationPointCurve,
+  };
+}
+
+function projectAutomationLaneValue(desc: ProjectAutomationLaneDesc): ProjectAutomationLaneDesc {
+  return { ...desc, points: desc.points.map(projectAutomationPointValue) };
 }
 
 // ============================================================================

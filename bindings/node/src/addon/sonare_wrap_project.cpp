@@ -1134,9 +1134,6 @@ Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
       SonareProjectTempoSegment seg{};
       seg.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
       seg.bpm = obj.Get("bpm").As<Napi::Number>().DoubleValue();
-      Napi::Value start_sample = obj.Get("startSample");
-      seg.start_sample =
-          start_sample.IsUndefined() ? 0.0 : start_sample.As<Napi::Number>().DoubleValue();
       Napi::Value end_bpm = obj.Get("endBpm");
       seg.end_bpm = end_bpm.IsUndefined() ? 0.0 : end_bpm.As<Napi::Number>().DoubleValue();
       segments.push_back(seg);

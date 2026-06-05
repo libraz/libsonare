@@ -1082,6 +1082,32 @@ describe('Sonare WASM Module', () => {
       }
     });
 
+    it('should use the prepared sample rate for StreamingEqualizer.match defaults', () => {
+      const sampleRate = 44100;
+      const length = Math.floor(sampleRate * 0.25);
+      const source = new Float32Array(length);
+      const reference = new Float32Array(length);
+      for (let i = 0; i < length; i += 1) {
+        source[i] = Math.sin((2 * Math.PI * 1000 * i) / sampleRate);
+        reference[i] = Math.sin((2 * Math.PI * 2000 * i) / sampleRate);
+      }
+      const omitted = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+      const explicit = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+      try {
+        omitted.match(source, reference, { maxBands: 6 });
+        explicit.match(source, reference, { sampleRate, maxBands: 6 });
+        const omittedGain = Array.from(omitted.spectrum().bandGainDb);
+        const explicitGain = Array.from(explicit.spectrum().bandGainDb);
+        expect(omittedGain.length).toBe(explicitGain.length);
+        for (let i = 0; i < omittedGain.length; i += 1) {
+          expect(omittedGain[i]).toBeCloseTo(explicitGain[i], 6);
+        }
+      } finally {
+        omitted.delete();
+        explicit.delete();
+      }
+    });
+
     it('should stream mono blocks through StreamingRetune', () => {
       const retune = new StreamingRetune({ semitones: 12, mix: 1, grainSize: 512 });
       try {

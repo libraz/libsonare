@@ -29,6 +29,7 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   // Establish partition size and per-channel buffers, then load the synthesized
   // IR (rebuilds the convolvers). An invalid geometry yields an empty IR, which
   // ConvolutionReverb::process() treats as a dry passthrough.
+  suppress_default_ir_synthesis();
   ConvolutionReverb::prepare(sample_rate, max_block_size);
   load_ir(res.rir.data(), static_cast<int>(res.rir.size()));
 }

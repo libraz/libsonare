@@ -182,6 +182,11 @@ static_assert(sizeof(SonareProjectWarpMapDesc) == 3u * sizeof(void*) + sizeof(si
 #endif
 
 /// @brief Project tempo segment descriptor for @ref sonare_project_set_tempo_segments.
+///
+/// @p start_sample is an output/derived timeline value kept in this POD for ABI
+/// compatibility with compile/import surfaces. The setter ignores it and
+/// derives sample positions from @p start_ppq / @p bpm during tempo-map
+/// normalization.
 typedef struct {
   double start_ppq;
   double bpm;
@@ -221,8 +226,9 @@ static_assert(sizeof(SonareProjectTimeSignatureSegment) == 2u * sizeof(double),
 /// @brief One compile diagnostic surfaced by @ref sonare_project_compile.
 ///        Mirrors sonare::arrangement::Diagnostic (code / severity / target_id).
 ///        Human-readable messages are stored in the same order in
-///        SonareProjectCompileResult::messages, one line per diagnostic, to
-///        preserve this frozen POD layout across the C ABI boundary.
+///        SonareProjectCompileResult::messages, one line per diagnostic, with
+///        embedded CR/LF normalized to spaces to preserve this frozen POD layout
+///        across the C ABI boundary.
 typedef struct {
   uint32_t code;      /* sonare::arrangement::Diagnostic::Code ordinal */
   uint32_t severity;  /* 0 = error, 1 = warning */
@@ -661,7 +667,9 @@ void sonare_project_free_compile_result(SonareProjectCompileResult* result);
 ///        @ref sonare_free_floats) of length @p out_len = total_frames * channels.
 /// @param out_len Receives the interleaved sample count.
 /// @details Deterministic: the same project + options yields bit-identical
-///          output within one build.
+///          output within one build. When options->total_frames is positive,
+///          that explicit length is used as-is; mixer FX / instrument tails are
+///          auto-extended only when total_frames <= 0.
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
                                   float** out_interleaved, size_t* out_len);
 
@@ -763,6 +771,8 @@ typedef struct {
 ///        @p instrument_count bindings (may be NULL / 0 for a silent bounce).
 ///        When @p options->total_frames <= 0 the render length is auto-derived
 ///        from the arrangement (musical end + the synth's release tail).
+///        A positive total_frames is used as-is and does not auto-extend for
+///        mixer FX / instrument tails.
 ///        Deterministic for a fixed project + options + patch.
 SonareError sonare_project_bounce_with_builtin_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
@@ -781,6 +791,22 @@ SonareError sonare_project_bounce_with_builtin_instruments(
 ///          lifetime; the caller must NOT free it (mirrors
 ///          @ref sonare_mastering_insert_names).
 const char* sonare_synth_preset_names(void);
+
+typedef enum {
+  SONARE_SYNTH_ENUM_ENGINE_MODE = 0,
+  SONARE_SYNTH_ENUM_OSC_WAVEFORM = 1,
+  SONARE_SYNTH_ENUM_FILTER_MODEL = 2,
+  SONARE_SYNTH_ENUM_FILTER_OUTPUT = 3,
+  SONARE_SYNTH_ENUM_BODY_TYPE = 4,
+  SONARE_SYNTH_ENUM_MOD_SOURCE = 5,
+  SONARE_SYNTH_ENUM_MOD_DESTINATION = 6
+} SonareSynthEnumKind;
+
+/// @brief Returns the canonical names for a @ref SonareSynthPatch enum
+///        separated by '\n'. Unknown @p kind returns an empty string.
+/// @details Pointer is owned by libsonare and remains valid for the program
+///          lifetime; the caller must NOT free it.
+const char* sonare_synth_enum_names(int kind);
 
 /// @brief Fills @p out with the named catalog preset: the preset name plus the
 ///        wrapper-section values (oscillator / filter / envelopes / LFO /
@@ -805,6 +831,8 @@ typedef struct {
 ///        unknown preset name fails with SONARE_ERROR_INVALID_PARAMETER.
 ///        When @p options->total_frames <= 0 the render length is auto-derived
 ///        from the arrangement (musical end + the patch's release tail).
+///        A positive total_frames is used as-is and does not auto-extend for
+///        mixer FX / instrument tails.
 ///        Deterministic for a fixed project + options + patch.
 SonareError sonare_project_bounce_with_synth_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,

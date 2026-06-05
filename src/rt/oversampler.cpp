@@ -1,11 +1,15 @@
 #include "rt/oversampler.h"
 
+#include <algorithm>
+
 #include "util/exception.h"
 
 namespace sonare::rt {
 namespace {
 
-bool is_supported_factor(int factor) { return factor == 2 || factor == 4 || factor == 8; }
+bool is_supported_factor(int factor) {
+  return factor == 1 || factor == 2 || factor == 4 || factor == 8 || factor == 16;
+}
 
 }  // namespace
 
@@ -14,6 +18,11 @@ Oversampler::Oversampler(int factor) { set_factor(factor); }
 void Oversampler::set_factor(int factor) {
   SONARE_CHECK(is_supported_factor(factor), ErrorCode::InvalidParameter);
   factor_ = factor;
+  if (factor_ == 1) {
+    decimation_taps_ = {1.0f};
+    fir_ = {};
+    return;
+  }
   decimation_taps_ = design_windowed_sinc_lowpass(12 * factor_, factor_, 7.85726, true);
   fir_ = build_polyphase(decimation_taps_, factor_);
 }
@@ -65,6 +74,10 @@ void Oversampler::downsample_to(const float* input, size_t size, float* output,
   SONARE_CHECK(size % static_cast<size_t>(factor_) == 0, ErrorCode::InvalidParameter);
   const size_t out_size = size / static_cast<size_t>(factor_);
   SONARE_CHECK(output_size >= out_size, ErrorCode::InvalidParameter);
+  if (factor_ == 1) {
+    std::copy_n(input, out_size, output);
+    return;
+  }
   const int half = static_cast<int>(decimation_taps_.size() / 2);
   for (size_t i = 0; i < out_size; ++i) {
     const long center = static_cast<long>(i * static_cast<size_t>(factor_));

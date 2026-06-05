@@ -423,7 +423,7 @@ export interface CqtResult {
   frequencies: Float32Array;
 }
 
-/** Reconstructed linear-magnitude STFT from a mel spectrogram (`melToStft`). */
+/** Reconstructed STFT power from a mel spectrogram (`melToStft`). */
 export interface InverseStftResult {
   /** Number of STFT frequency bins (`nFft / 2 + 1`). */
   nBins: number;
@@ -626,6 +626,8 @@ export interface RoomGeometryOptions {
    * provided it overrides `absorption` unless `materialPreset` is set.
    */
   bandAbsorption?: Float32Array | number[];
+  /** Optional per-band wall scattering; missing bands default to 0. */
+  bandScattering?: Float32Array | number[];
   /**
    * Named wall-material preset (0 none; 1 concrete, 2 wood, 3 curtain,
    * 4 carpet, 5 glass). A non-zero preset wins over `bandAbsorption`/`absorption`.
@@ -1186,7 +1188,15 @@ export interface EngineTransportState {
  * Canonical ordinals (matches mixer `AutomationCurve`):
  *   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve.
  */
-export type EngineAutomationPointCurve = 0 | 1 | 2 | 3;
+export type EngineAutomationPointCurve =
+  | 0
+  | 1
+  | 2
+  | 3
+  | 'linear'
+  | 'exponential'
+  | 'hold'
+  | 's-curve';
 
 export interface EngineParameterInfo {
   id: number;
@@ -1580,7 +1590,7 @@ export interface ProjectTempoSegment {
   startPpq: number;
   /** Tempo in BPM at the segment start. */
   bpm: number;
-  /** Segment start in absolute samples. Default `0`. */
+  /** Derived segment start in samples. Accepted for compatibility, ignored on input. */
   startSample?: number;
   /** Tempo in BPM at the segment end for a ramp; `0` / omitted = constant tempo. */
   endBpm?: number;
@@ -1856,15 +1866,23 @@ export interface Sf2ProgramStatus {
   presetName: string;
 }
 
-/** Clip fade-curve ordinals (mirror SonareProjectFadeCurve). */
-export type ProjectFadeCurve = 0 | 1 | 2 | 3;
+/** Clip fade-curve ordinals/names (mirror SonareProjectFadeCurve). */
+export type ProjectFadeCurve =
+  | 0
+  | 1
+  | 2
+  | 3
+  | 'linear'
+  | 'equalPower'
+  | 'exponential'
+  | 'logarithmic';
 export const PROJECT_FADE_CURVE_LINEAR = 0;
 export const PROJECT_FADE_CURVE_EQUAL_POWER = 1;
 export const PROJECT_FADE_CURVE_EXPONENTIAL = 2;
 export const PROJECT_FADE_CURVE_LOGARITHMIC = 3;
 
-/** Clip loop-mode ordinals (mirror SonareProjectLoopMode). */
-export type ProjectLoopMode = 0 | 1;
+/** Clip loop-mode ordinals/names (mirror SonareProjectLoopMode). */
+export type ProjectLoopMode = 0 | 1 | 'off' | 'loop';
 export const PROJECT_LOOP_MODE_OFF = 0;
 export const PROJECT_LOOP_MODE_LOOP = 1;
 

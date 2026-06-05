@@ -13,6 +13,7 @@
 #include <iterator>
 #include <string>
 
+#include "sonare_c_project.h"
 #include "sonare_c_types.h"
 #include "wasm/bindings/common.h"
 
@@ -49,19 +50,32 @@ static_assert(std::size(kModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
 
 inline emscripten::val synthEnumTablesToVal() {
   using emscripten::val;
-  auto array_from = [](const char* const* names, size_t count) {
+  auto array_from = [](const char* joined) {
     val out = val::array();
-    for (size_t i = 0; i < count; ++i) out.set(static_cast<unsigned>(i), std::string(names[i]));
+    if (joined == nullptr || joined[0] == '\0') return out;
+    std::string names(joined);
+    unsigned index = 0;
+    size_t start = 0;
+    while (start <= names.size()) {
+      const size_t end = names.find('\n', start);
+      if (end == std::string::npos) {
+        out.set(index++, names.substr(start));
+        break;
+      }
+      out.set(index++, names.substr(start, end - start));
+      start = end + 1;
+    }
     return out;
   };
   val out = val::object();
-  out.set("engineModes", array_from(kEngineModes, std::size(kEngineModes)));
-  out.set("waveforms", array_from(kWaveforms, std::size(kWaveforms)));
-  out.set("filterModels", array_from(kFilterModels, std::size(kFilterModels)));
-  out.set("filterOutputs", array_from(kFilterOutputs, std::size(kFilterOutputs)));
-  out.set("bodyTypes", array_from(kBodyTypes, std::size(kBodyTypes)));
-  out.set("modSources", array_from(kModSources, std::size(kModSources)));
-  out.set("modDestinations", array_from(kModDestinations, std::size(kModDestinations)));
+  out.set("engineModes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)));
+  out.set("waveforms", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)));
+  out.set("filterModels", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)));
+  out.set("filterOutputs", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT)));
+  out.set("bodyTypes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BODY_TYPE)));
+  out.set("modSources", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE)));
+  out.set("modDestinations",
+          array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)));
   return out;
 }
 

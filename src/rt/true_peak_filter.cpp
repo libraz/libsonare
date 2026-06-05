@@ -20,13 +20,17 @@ namespace {
 // the reconstructed inter-sample peaks at 4x/8x.
 PolyphaseFir make_true_peak_fir(int factor) {
   constexpr double kKaiserBeta = 9.5;
+  // factor=1 is the input-rate path used for API parity with the meter.
+  if (factor == 1) return {};
   // factor=2 is below ITU-R BS.1770's 4x minimum, so its result is a
   // non-compliant approximation of the true-peak level; use 4x or 8x for
   // standards-compliant measurement.
   if (factor == 2) return design_polyphase_lowpass(2, 24, 7.85726, true);
   if (factor == 4) return design_polyphase_lowpass(4, 48, kKaiserBeta, true);
   if (factor == 8) return design_polyphase_lowpass(8, 96, kKaiserBeta, true);
-  throw SonareException(ErrorCode::InvalidParameter, "TruePeakFilter factor must be 2, 4, or 8");
+  if (factor == 16) return design_polyphase_lowpass(16, 192, kKaiserBeta, true);
+  throw SonareException(ErrorCode::InvalidParameter,
+                        "TruePeakFilter factor must be 1, 2, 4, 8, or 16");
 }
 
 void validate_buffers(const float* const* input, int num_channels, int num_samples) {

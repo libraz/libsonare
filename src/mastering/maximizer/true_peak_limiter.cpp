@@ -85,6 +85,9 @@ void TruePeakLimiter::process(float* const* channels, int num_channels, int num_
   ensure_prepared(prepared_, "TruePeakLimiter");
   if (num_channels < 0 || num_samples < 0)
     throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
+  if (num_samples > max_block_size_)
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_samples exceeds prepared max_block_size");
   if (num_channels == 0 || num_samples == 0) return;
   if (channels == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
@@ -93,8 +96,8 @@ void TruePeakLimiter::process(float* const* channels, int num_channels, int num_
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
 
-  // All supported oversampling factors (2, 4, 8) use the sample-accurate
-  // polyphase brickwall path; validate_config rejects any other value.
+  // All supported oversampling factors use the sample-accurate polyphase
+  // brickwall path; validate_config rejects any other value.
   sonare::rt::ScopedNoDenormals no_denormals;
   process_polyphase(channels, num_channels, num_samples);
 }
@@ -333,8 +336,9 @@ bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const no
 
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f ||
-      (config.oversample_factor != 2 && config.oversample_factor != 4 &&
-       config.oversample_factor != 8)) {
+      (config.oversample_factor != 1 && config.oversample_factor != 2 &&
+       config.oversample_factor != 4 && config.oversample_factor != 8 &&
+       config.oversample_factor != 16)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid true peak limiter configuration");
   }
 }

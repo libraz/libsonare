@@ -62,6 +62,13 @@ wasm = [
   "require_module",         # WASM module-handle accessor
   "is_initialized",         # WASM init-state probe
   "engine_capabilities",    # WASM build capability descriptor
+  "assert_interleaved_samples",
+  "assert_non_negative_integer",
+  "assert_positive_integer",
+  "assert_sample_rate",
+  "stream_analyzer_config_defaults",
+  "synth_enum_tables",      # facade-visible snapshot built from C enum names
+  "synth_patch_round_trip_for_test",
   "*with_progress",
   "analyze_with_progress",
 ]
@@ -76,6 +83,7 @@ python = [
   # (it wraps C sonare_analyze_json_with_progress). Node/WASM expose the same
   # ergonomic name (see their surface_only blocks above).
   "analyze_with_progress",
+  "synth_enum_tables",      # facade-visible snapshot built from C enum names
 ]
 
 # ---------------------------------------------------------------------------
@@ -165,6 +173,17 @@ node = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  # HTK-aware inverse variants are folded into the base facades through the
+  # `htk` option and route to the _ex C entry points internally.
+  "mel_to_stft_ex",
+  "mel_to_audio_ex",
+  "mfcc_to_audio_ex",
+  "mel_to_stft_checked_ex",
+  "mel_to_audio_checked_ex",
+  "mfcc_to_audio_checked_ex",
+  # C-side canonical enum-name supplier consumed internally by the facade
+  # snapshot/test helpers; not exposed as a same-named public function.
+  "synth_enum_names",
   # --- Internal default-struct seeders (no public facade member) ---
   # *_default fns fill a C options/config POD with the documented defaults. The
   # facades apply the identical defaults inline (or via a typed config object /
@@ -205,6 +224,13 @@ wasm = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  "mel_to_stft_ex",
+  "mel_to_audio_ex",
+  "mfcc_to_audio_ex",
+  "mel_to_stft_checked_ex",
+  "mel_to_audio_checked_ex",
+  "mfcc_to_audio_checked_ex",
+  "synth_enum_names",
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
   "analyze_json",
@@ -264,6 +290,13 @@ python = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  "mel_to_stft_ex",
+  "mel_to_audio_ex",
+  "mfcc_to_audio_ex",
+  "mel_to_stft_checked_ex",
+  "mel_to_audio_checked_ex",
+  "mfcc_to_audio_checked_ex",
+  "synth_enum_names",
   # Unified-analysis variants folded into the base facade `analyze` /
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).
   "analyze_json",
@@ -341,6 +374,9 @@ node = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
+  "mel_to_stft",
+  "mel_to_audio",
+  "mfcc_to_audio",
 ]
 wasm = [
   "scale_quantize_midi",
@@ -354,6 +390,9 @@ wasm = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
+  "mel_to_stft",
+  "mel_to_audio",
+  "mfcc_to_audio",
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -375,6 +414,9 @@ python = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
+  "mel_to_stft",
+  "mel_to_audio",
+  "mfcc_to_audio",
 ]
 
 # ---------------------------------------------------------------------------

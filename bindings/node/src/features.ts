@@ -143,7 +143,7 @@ export function vqt(
   return addon.vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
 }
 
-/** Reconstruct a linear STFT magnitude from a mel spectrogram. */
+/** Reconstruct STFT power from a mel spectrogram. */
 export function melToStft(
   mel: Float32Array,
   nMels: number,
@@ -173,7 +173,7 @@ export function melToAudio(
   return addon.melToAudio(mel, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk);
 }
 
-/** Reconstruct a mel spectrogram from MFCCs (`nMels` mel bands, dB scale). */
+/** Reconstruct a mel power spectrogram from MFCCs (`nMels` mel bands). */
 export function mfccToMel(
   mfcc: Float32Array,
   nMfcc: number,

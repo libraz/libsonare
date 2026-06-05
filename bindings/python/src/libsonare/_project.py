@@ -26,6 +26,10 @@ from typing import Any, Protocol, SupportsFloat, cast
 
 import numpy as np
 
+from ._ffi_types_mastering_project import (
+    SONARE_SYNTH_PATCH_MOD_ROUTINGS,
+    SONARE_SYNTH_PRESET_NAME_MAX,
+)
 from ._runtime import (
     SonareAutomationLaneDesc,
     SonareAutomationPoint,
@@ -455,6 +459,30 @@ SYNTH_ENUM_TABLES = {
     "mod_sources": tuple(_SYNTH_MOD_SOURCES),
     "mod_destinations": tuple(_SYNTH_MOD_DESTINATIONS),
 }
+_SYNTH_ENUM_KINDS = {
+    "engine_modes": 0,
+    "waveforms": 1,
+    "filter_models": 2,
+    "filter_outputs": 3,
+    "body_types": 4,
+    "mod_sources": 5,
+    "mod_destinations": 6,
+}
+
+
+def synth_enum_tables() -> dict[str, tuple[str, ...]]:
+    """Canonical NativeSynth enum-name tables supplied by the C ABI."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_synth_enum_names"):
+        raise RuntimeError("libsonare was built without the NativeSynth enum ABI")
+    out: dict[str, tuple[str, ...]] = {}
+    for key, kind in _SYNTH_ENUM_KINDS.items():
+        raw = lib.sonare_synth_enum_names(kind)
+        if not raw:
+            out[key] = ()
+            continue
+        out[key] = tuple(name for name in raw.decode("utf-8").split("\n") if name)
+    return out
 
 
 def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
@@ -551,7 +579,7 @@ class SynthPatch:
     def _to_c(self) -> SonareSynthPatch:
         c = SonareSynthPatch()
         c.struct_version = 1
-        c.preset = _strip_va_prefix(self.preset).encode("utf-8")[:31]
+        c.preset = _strip_va_prefix(self.preset).encode("utf-8")[: SONARE_SYNTH_PRESET_NAME_MAX - 1]
         c.engine_mode = _synth_enum_value(self.engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
         c.waveform = _synth_enum_value(self.waveform, _SYNTH_OSC_WAVEFORMS, "oscillator waveform")
         c.unison = int(self.unison)
@@ -583,8 +611,10 @@ class SynthPatch:
         c.body_mix = float(self.body_mix)
         c.stereo_spread = float(self.stereo_spread)
         routings = list(self.mod_routings)
-        if len(routings) > 8:
-            raise ValueError("a synth patch supports at most 8 mod routings")
+        if len(routings) > SONARE_SYNTH_PATCH_MOD_ROUTINGS:
+            raise ValueError(
+                f"a synth patch supports at most {SONARE_SYNTH_PATCH_MOD_ROUTINGS} mod routings"
+            )
         c.num_mod_routings = len(routings)
         for i, routing in enumerate(routings):
             c.mod_routings[i] = SonareSynthModRouting(
@@ -2080,8 +2110,10 @@ class Project:
 
         Each segment is a mapping (``start_ppq`` / ``bpm`` / optional
         ``start_sample`` / ``end_bpm``) or a tuple
-        ``(start_ppq, bpm, start_sample=0.0, end_bpm=0.0)``. ``end_bpm`` 0 means
-        a constant-tempo segment. Pass an empty sequence to clear.
+        ``(start_ppq, bpm, start_sample=ignored, end_bpm=0.0)``. ``start_sample``
+        is accepted for ABI/source compatibility but ignored; sample positions
+        are derived during normalization. ``end_bpm`` 0 means a constant-tempo
+        segment. Pass an empty sequence to clear.
         """
         rows = list(segments)
         count = len(rows)
@@ -2090,7 +2122,6 @@ class Project:
             if isinstance(seg, Mapping):
                 start_ppq = float(seg["start_ppq"])
                 bpm = float(seg["bpm"])
-                start_sample = float(seg.get("start_sample", 0.0))
                 end_bpm = float(seg.get("end_bpm", 0.0))
             else:
                 tup = tuple(seg)
@@ -2098,11 +2129,9 @@ class Project:
                     raise ValueError(f"segments[{i}] must contain (start_ppq, bpm)")
                 start_ppq = float(tup[0])
                 bpm = float(tup[1])
-                start_sample = float(tup[2]) if len(tup) >= 3 else 0.0
                 end_bpm = float(tup[3]) if len(tup) >= 4 else 0.0
             c_segments[i].start_ppq = start_ppq
             c_segments[i].bpm = bpm
-            c_segments[i].start_sample = start_sample
             c_segments[i].end_bpm = end_bpm
         _check(
             _get_lib().sonare_project_set_tempo_segments(

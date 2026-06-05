@@ -33,6 +33,9 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
   }
 
   const float lsb = 1.0f / static_cast<float>(int64_t{1} << (config.target_bits - 1));
+  const float scale = 1.0f / lsb;
+  const float min_code = -scale;
+  const float max_code = scale - 1.0f;
   std::mt19937 rng(config.seed);
   std::uniform_real_distribution<float> dist(-0.5f, 0.5f);
 
@@ -65,7 +68,7 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
     // so the shaper accounts for the clamping as part of the quantization step.
     const float clamped = std::clamp(dithered, -1.0f, 1.0f);
     // Quantize the dithered signal to the target LSB resolution.
-    const float quantized = std::round(clamped / lsb) * lsb;
+    const float quantized = std::clamp(std::round(clamped / lsb), min_code, max_code) * lsb;
     const float quant_error = (dithered - quantized) / lsb;
 
     // Shift the error history (newest at index 0).

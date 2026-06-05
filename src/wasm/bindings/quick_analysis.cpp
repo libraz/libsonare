@@ -519,13 +519,19 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   if (hasProperty(opts, "bandAbsorption")) {
     const std::vector<float> bands = float32ArrayToVector(opts["bandAbsorption"]);
     if (!bands.empty()) {
+      const std::vector<float> scattering_bands = hasProperty(opts, "bandScattering")
+                                                      ? float32ArrayToVector(opts["bandScattering"])
+                                                      : std::vector<float>{};
       ShoeboxRoom room;
       room.dims = dims;
       Material wall;
       wall.absorption.reserve(bands.size());
       for (float a : bands) wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
-      // Keep the Material invariant absorption.size() == scattering.size().
-      wall.scattering.assign(bands.size(), 0.0f);
+      wall.scattering.reserve(bands.size());
+      for (size_t i = 0; i < bands.size(); ++i) {
+        const float scattering = i < scattering_bands.size() ? scattering_bands[i] : 0.0f;
+        wall.scattering.push_back(std::clamp(scattering, 0.0f, 1.0f));
+      }
       for (Material& w : room.walls) w = wall;
       return room;
     }

@@ -117,6 +117,13 @@ describe('newly exposed WASM functions', () => {
     expect(allFinite(r.data)).toBe(true);
   });
 
+  it('decompose and nnFilter reject invalid dimensions', () => {
+    const small = new Float32Array([1, 2, 3, 4]);
+    expect(() => decompose(small, 2, 2, 2, 0, 2.0)).toThrow();
+    expect(() => decompose(small, 1000, 1000, 2, 20, 2.0)).toThrow();
+    expect(() => nnFilter(small, 1000, 1000)).toThrow();
+  });
+
   it('remix concatenates interval slices', () => {
     const x = makeSine(0.5, 440);
     const half = Math.floor(x.length / 2);

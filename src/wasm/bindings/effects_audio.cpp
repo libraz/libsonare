@@ -3,6 +3,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+#include <limits>
+
 #include "common.h"
 
 // ============================================================================
@@ -152,6 +155,15 @@ val js_voice_change(val samples, int sample_rate, float pitch_semitones, float f
 // [n_components x n_frames] row-major (both flat Float32Array buffers).
 val js_decompose(val s, int n_features, int n_frames, int n_components, int n_iter, float beta) {
   std::vector<float> data = float32ArrayToVector(s);
+  if (n_iter <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "n_iter must be positive");
+  }
+  if (n_features <= 0 || n_frames <= 0 ||
+      static_cast<size_t>(n_features) >
+          std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
+      static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
+    throw SonareException(ErrorCode::InvalidParameter, "spectrogram dimensions exceed input");
+  }
   DecomposeResult result =
       decompose(data.data(), n_features, n_frames, n_components, n_iter, "mu", beta);
 
@@ -168,6 +180,15 @@ val js_decompose(val s, int n_features, int n_frames, int n_components, int n_it
 val js_decompose_with_init(val s, int n_features, int n_frames, int n_components, int n_iter,
                            float beta, std::string init) {
   std::vector<float> data = float32ArrayToVector(s);
+  if (n_iter <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "n_iter must be positive");
+  }
+  if (n_features <= 0 || n_frames <= 0 ||
+      static_cast<size_t>(n_features) >
+          std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
+      static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
+    throw SonareException(ErrorCode::InvalidParameter, "spectrogram dimensions exceed input");
+  }
   if (init.empty()) init = "random";
   DecomposeResult result =
       decompose(data.data(), n_features, n_frames, n_components, n_iter, "mu", beta, init);
@@ -183,6 +204,12 @@ val js_decompose_with_init(val s, int n_features, int n_frames, int n_components
 // [n_features x n_frames] as { data, rows, cols }.
 val js_nn_filter(val s, int n_features, int n_frames, std::string aggregate, int k, int width) {
   std::vector<float> data = float32ArrayToVector(s);
+  if (n_features <= 0 || n_frames <= 0 ||
+      static_cast<size_t>(n_features) >
+          std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
+      static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
+    throw SonareException(ErrorCode::InvalidParameter, "spectrogram dimensions exceed input");
+  }
   if (aggregate.empty()) aggregate = "mean";
   std::vector<float> filtered = nn_filter(data.data(), n_features, n_frames, aggregate, k, width);
 

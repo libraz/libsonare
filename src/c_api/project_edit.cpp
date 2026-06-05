@@ -251,14 +251,14 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
   out.reserve(segment_count);
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTempoSegment& in = segments[i];
-    if (!finite_non_negative(in.start_ppq) || !finite_non_negative(in.start_sample) ||
-        !finite_positive(in.bpm) || !std::isfinite(in.end_bpm) || in.end_bpm < 0.0) {
+    if (!finite_non_negative(in.start_ppq) || !finite_positive(in.bpm) ||
+        !std::isfinite(in.end_bpm) || in.end_bpm < 0.0) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     sonare::transport::TempoSegment seg;
     seg.start_ppq = in.start_ppq;
     seg.bpm = in.bpm;
-    seg.start_sample = in.start_sample;
+    seg.start_sample = 0.0;
     seg.end_bpm = in.end_bpm;
     out.push_back(seg);
   }

@@ -94,21 +94,36 @@ def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_r
 
 
 def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
-    """Write a Project.bounce ndarray to a mono WAV and return (frames, channels)."""
+    """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
     rows = getattr(audio, "tolist", lambda: audio)()
     if not isinstance(rows, list):
         rows = list(rows)
     frames = len(rows)
     channels = 1
     mono: list[float] = []
+    left: list[float] = []
+    right: list[float] = []
     for row in rows:
         if isinstance(row, list):
             channels = max(channels, len(row))
+            if len(row) >= 2:
+                left.append(float(row[0]))
+                right.append(float(row[1]))
+            else:
+                sample = float(row[0]) if row else 0.0
+                left.append(sample)
+                right.append(sample)
             mono.append(sum(float(sample) for sample in row) / len(row) if row else 0.0)
         else:
-            mono.append(float(row))
+            sample = float(row)
+            mono.append(sample)
+            left.append(sample)
+            right.append(sample)
+    if channels >= 2:
+        _write_wav_stereo(path, left, right, sample_rate)
+        return frames, 2
     _write_wav(path, mono, sample_rate)
-    return frames, channels
+    return frames, 1
 
 
 def _array_stats(vals: list[float]) -> dict[str, float | int]:
@@ -611,7 +626,14 @@ def cmd_mel(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     result = mel_spectrogram(
-        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
+        samples,
+        sample_rate=sr,
+        n_fft=args.n_fft,
+        hop_length=args.hop_length,
+        n_mels=args.n_mels,
+        fmin=args.fmin,
+        fmax=args.fmax,
+        htk=args.htk,
     )
     if args.json:
         print(
@@ -1922,7 +1944,10 @@ def main() -> None:
     chords_p.add_argument("--key-mode", default="major")
     chords_p.add_argument("--detect-inversions", action="store_true")
     sub.add_parser("analyze", parents=[common], help="Full music analysis")
-    sub.add_parser("mel", parents=[common], help="Compute mel spectrogram")
+    mel_p = sub.add_parser("mel", parents=[common], help="Compute mel spectrogram")
+    mel_p.add_argument("--fmin", type=float, default=0.0)
+    mel_p.add_argument("--fmax", type=float, default=0.0)
+    mel_p.add_argument("--htk", action="store_true")
     sub.add_parser("chroma", parents=[common], help="Compute chromagram")
     sub.add_parser("spectral", parents=[common], help="Compute spectral features")
     pitch_p = sub.add_parser("pitch", parents=[common], help="Track pitch")

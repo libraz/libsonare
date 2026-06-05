@@ -386,6 +386,7 @@ StreamingEqualizerWrap::StreamingEqualizerWrap(const Napi::CallbackInfo& info)
     eq_config.max_channels = 2;
     eq_ = std::make_unique<sonare::mastering::eq::EqualizerProcessor>(eq_config);
     eq_->prepare(sample_rate, max_block_size);
+    sample_rate_ = sample_rate;
   } catch (const std::exception& e) {
     Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
     return;
@@ -693,7 +694,7 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  int sample_rate = 48000;
+  int sample_rate = static_cast<int>(std::lround(sample_rate_));
   size_t max_bands = 8;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();

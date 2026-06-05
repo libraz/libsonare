@@ -306,6 +306,24 @@ Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
   return out;
 }
 
+Napi::Array SplitJoinedNames(Napi::Env env, const char* joined) {
+  Napi::Array out = Napi::Array::New(env);
+  if (joined == nullptr || joined[0] == '\0') return out;
+  std::string names(joined);
+  uint32_t index = 0;
+  size_t start = 0;
+  while (start <= names.size()) {
+    const size_t end = names.find('\n', start);
+    if (end == std::string::npos) {
+      out.Set(index++, Napi::String::New(env, names.substr(start)));
+      break;
+    }
+    out.Set(index++, Napi::String::New(env, names.substr(start, end - start)));
+    start = end + 1;
+  }
+  return out;
+}
+
 // Fetches a named catalog preset as a SynthPatch object (the preset name plus
 // its wrapper-section values), so hosts can inspect and tweak before binding.
 // A "va:" routing prefix is accepted; unknown names throw.
@@ -329,25 +347,20 @@ Napi::Value SynthPresetPatch(const Napi::CallbackInfo& info) {
 
 Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  auto array_from = [&env](const char* const* names, size_t count) {
-    Napi::Array out = Napi::Array::New(env, count);
-    for (size_t i = 0; i < count; ++i) {
-      out.Set(static_cast<uint32_t>(i), Napi::String::New(env, names[i]));
-    }
-    return out;
-  };
   Napi::Object out = Napi::Object::New(env);
   out.Set("engineModes",
-          array_from(sonare_node::kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT));
-  out.Set("waveforms", array_from(sonare_node::kSynthWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT));
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)));
+  out.Set("waveforms",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)));
   out.Set("filterModels",
-          array_from(sonare_node::kSynthFilterModels, SONARE_SYNTH_FILTER_MODEL_COUNT));
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)));
   out.Set("filterOutputs",
-          array_from(sonare_node::kSynthFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT));
-  out.Set("bodyTypes", array_from(sonare_node::kSynthBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT));
-  out.Set("modSources", array_from(sonare_node::kSynthModSources, SONARE_SYNTH_MOD_SOURCE_COUNT));
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT)));
+  out.Set("bodyTypes", SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_BODY_TYPE)));
+  out.Set("modSources",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE)));
   out.Set("modDestinations",
-          array_from(sonare_node::kSynthModDestinations, SONARE_SYNTH_MOD_DESTINATION_COUNT));
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)));
   return out;
 }
 

@@ -54,6 +54,9 @@ class ConvolutionReverb : public rt::ProcessorBase {
   int latency_samples() const noexcept override { return partition_size_; }
   int ir_size() const noexcept { return static_cast<int>(ir_.size()); }
 
+ protected:
+  void suppress_default_ir_synthesis() noexcept { explicit_ir_ = true; }
+
  private:
   void rebuild_convolvers();
   // Synthesize a decaying-noise IR from config_ at the prepared sample rate.
