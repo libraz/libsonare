@@ -198,7 +198,10 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
   });
 }
 
-// Full analysis
+// Full quick analysis. Although SonareAnalysisResult is a flat C struct, it
+// still exposes meter/beat data, so this intentionally pays the full quick
+// analysis cost. Use sonare_detect_bpm/key/beats for cheaper single-purpose
+// queries.
 
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out) {

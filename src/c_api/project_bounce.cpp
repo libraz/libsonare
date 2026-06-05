@@ -131,6 +131,32 @@ struct MixerRouting {
   std::set<uint32_t> bound_tracks;
 };
 
+bool timeline_has_unbound_tracks(const arr::CompiledTimeline& timeline,
+                                 const MixerRouting& routing) {
+  const auto unbound = [&](uint32_t track_id) { return routing.bound_tracks.count(track_id) == 0; };
+  for (const auto& clip : timeline.audio_clips) {
+    if (unbound(clip.track_id)) return true;
+  }
+  for (const auto& clip : timeline.midi_clips) {
+    if (unbound(clip.track_id)) return true;
+  }
+  return false;
+}
+
+std::string unique_direct_strip_id(const sonare::mixing::api::Scene& scene) {
+  constexpr const char* kBase = "__sonare_direct_master__";
+  auto exists = [&](const std::string& candidate) {
+    return std::any_of(
+        scene.strips.begin(), scene.strips.end(),
+        [&](const sonare::mixing::api::Strip& strip) { return strip.id == candidate; });
+  };
+  if (!exists(kBase)) return kBase;
+  for (int suffix = 1;; ++suffix) {
+    std::string candidate = std::string(kBase) + "_" + std::to_string(suffix);
+    if (!exists(candidate)) return candidate;
+  }
+}
+
 // Resolves the compiled timeline's mixer bindings against its scene. Only
 // bindings whose strip actually exists in the scene are honored; a binding to a
 // missing strip leaves its track unbound (rendered dry into the master).
@@ -216,6 +242,36 @@ void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const Mixe
   }
 }
 
+SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
+                                   const MixerRouting& routing, double sample_rate, int block_size,
+                                   const std::string& direct_strip_id = {}) {
+  sonare::mixing::api::Scene scene = timeline.mixer.scene;
+  if (!direct_strip_id.empty()) {
+    sonare::mixing::api::Strip direct_strip;
+    direct_strip.id = direct_strip_id;
+    direct_strip.solo_safe = true;
+    scene.strips.push_back(std::move(direct_strip));
+  }
+  const std::string scene_json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer =
+      sonare_mixer_from_scene_json(scene_json.c_str(), static_cast<int>(sample_rate), block_size);
+  if (mixer == nullptr) return nullptr;
+  sonare_c_mixing_detail::build_and_compile(mixer);
+  schedule_mixer_automation(timeline, routing, sample_rate, mixer);
+  return mixer;
+}
+
+int mixer_tail_samples_for_timeline(const arr::CompiledTimeline& timeline,
+                                    const MixerRouting& routing, double sample_rate,
+                                    int block_size) {
+  SonareMixer* mixer = create_timeline_mixer(timeline, routing, sample_rate, block_size);
+  if (mixer == nullptr) return 0;
+  int tail = 0;
+  (void)sonare_mixer_tail_samples(mixer, &tail);
+  sonare_mixer_destroy(mixer);
+  return std::max(tail, 0);
+}
+
 // Channel-strip bounce: renders each bound track as an isolated dry
 // stereo stem and sums the stems through the scene's mixer so per-track EQ,
 // inserts, pan, fader, sends and buses are applied. Tracks bound to no scene
@@ -226,10 +282,20 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
                                  const std::vector<HostedInstrument>& instruments,
                                  const MixerRouting& routing, double sample_rate, int block_size,
                                  int num_channels, int64_t frames, int64_t pdc,
-                                 float** out_interleaved, size_t* out_len) {
-  const size_t strip_count = routing.strip_ids.size();
+                                 int64_t mixer_input_frames, float** out_interleaved,
+                                 size_t* out_len) {
+  MixerRouting effective_routing = routing;
+  const bool route_direct = timeline_has_unbound_tracks(timeline, routing);
+  const std::string direct_strip_id =
+      route_direct ? unique_direct_strip_id(timeline.mixer.scene) : std::string();
+  if (route_direct) {
+    effective_routing.strip_ids.push_back(direct_strip_id);
+    effective_routing.strip_tracks.emplace_back();
+  }
+
+  const size_t strip_count = effective_routing.strip_ids.size();
   // Stems are stereo (the mixer is stereo): one per strip plus one direct stem.
-  const uint64_t stem_floats = static_cast<uint64_t>(frames) * 2u * (strip_count + 1u);
+  const uint64_t stem_floats = static_cast<uint64_t>(frames) * 2u * strip_count;
   if (stem_floats > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
 
   const int64_t render_frames = frames + pdc;
@@ -247,8 +313,8 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   // One stereo stem per strip (silent if the strip has no source track).
   std::vector<std::vector<std::vector<float>>> stems;
   stems.reserve(strip_count);
-  for (size_t i = 0; i < strip_count; ++i) {
-    const std::set<uint32_t>& tracks = routing.strip_tracks[i];
+  for (size_t i = 0; i < effective_routing.strip_tracks.size(); ++i) {
+    const std::set<uint32_t>& tracks = effective_routing.strip_tracks[i];
     if (tracks.empty()) {
       stems.emplace_back(2, std::vector<float>(static_cast<size_t>(frames), 0.0f));
       continue;
@@ -260,22 +326,23 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   const std::set<uint32_t>& bound = routing.bound_tracks;
   std::vector<std::vector<float>> direct =
       stem_aligned([&bound](uint32_t t) { return bound.count(t) == 0; });
+  if (route_direct) {
+    stems.back() = std::move(direct);
+  }
 
   // Build the mixer from the scene and sum the strip stems block by block.
-  const std::string scene_json = sonare::mixing::api::scene_to_json(timeline.mixer.scene);
   SonareMixer* mixer =
-      sonare_mixer_from_scene_json(scene_json.c_str(), static_cast<int>(sample_rate), block_size);
+      create_timeline_mixer(timeline, routing, sample_rate, block_size, direct_strip_id);
   if (mixer == nullptr) return SONARE_ERROR_INVALID_STATE;
-  sonare_c_mixing_detail::build_and_compile(mixer);
-  schedule_mixer_automation(timeline, routing, sample_rate, mixer);
 
   std::vector<float> master_l(static_cast<size_t>(frames), 0.0f);
   std::vector<float> master_r(static_cast<size_t>(frames), 0.0f);
   std::vector<const float*> in_l(strip_count, nullptr);
   std::vector<const float*> in_r(strip_count, nullptr);
   SonareError err = SONARE_OK;
-  for (int64_t off = 0; off < frames; off += block_size) {
-    const size_t n = static_cast<size_t>(std::min<int64_t>(block_size, frames - off));
+  const int64_t input_frames = std::clamp<int64_t>(mixer_input_frames, 0, frames);
+  for (int64_t off = 0; off < input_frames; off += block_size) {
+    const size_t n = static_cast<size_t>(std::min<int64_t>(block_size, input_frames - off));
     for (size_t i = 0; i < strip_count; ++i) {
       in_l[i] = stems[i][0].data() + off;
       in_r[i] = stems[i][1].data() + off;
@@ -284,14 +351,12 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
                                       master_l.data() + off, master_r.data() + off, n);
     if (err != SONARE_OK) break;
   }
+  for (int64_t off = input_frames; err == SONARE_OK && off < frames; off += block_size) {
+    const size_t n = static_cast<size_t>(std::min<int64_t>(block_size, frames - off));
+    err = sonare_mixer_drain_tail_stereo(mixer, master_l.data() + off, master_r.data() + off, n);
+  }
   sonare_mixer_destroy(mixer);
   if (err != SONARE_OK) return err;
-
-  // Unbound tracks bypass the strips and sum straight into the master.
-  for (int64_t i = 0; i < frames; ++i) {
-    master_l[static_cast<size_t>(i)] += direct[0][static_cast<size_t>(i)];
-    master_r[static_cast<size_t>(i)] += direct[1][static_cast<size_t>(i)];
-  }
 
   // Interleave into the requested channel count: mono downmixes the stereo
   // master; channels beyond stereo are left silent.
@@ -335,6 +400,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   if (out_len) *out_len = 0;
   if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
   project->last_bounce_diagnostics.clear();
+  project->last_bounce_has_timeline = false;
 
   SonareProjectBounceOptions opts{};
   if (options) opts = *options;
@@ -355,7 +421,12 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   arr::CompileResult compiled = arr::compile(
       project->history.project(), project->history.midi_content(), project->audio, config);
   project->last_bounce_diagnostics = compiled.diagnostics;
+  project->last_bounce_has_timeline = compiled.timeline.has_value();
   if (!compiled.timeline.has_value()) return SONARE_ERROR_INVALID_STATE;
+
+#if defined(SONARE_WITH_MIXING)
+  const MixerRouting routing = resolve_mixer_routing(*compiled.timeline);
+#endif
 
   // Validate the hosted instruments and derive the project's PDC + longest tail
   // on a throwaway engine (latency depends only on the registered instruments,
@@ -381,10 +452,19 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 
   // Determine the render length: caller-supplied, or auto-derived from the
   // arrangement (musical end + the longest instrument release tail).
+  const int64_t arrangement_frames = arrangement_end_frames(*compiled.timeline);
+  int64_t mixer_input_frames = arrangement_frames;
+  if (mixer_input_frames > 0) mixer_input_frames += instrument_tail;
   int64_t frames = opts.total_frames;
   if (frames <= 0) {
-    frames = arrangement_end_frames(*compiled.timeline);
+    frames = arrangement_frames;
     if (frames > 0) frames += instrument_tail;
+#if defined(SONARE_WITH_MIXING)
+    if (frames > 0 && !routing.bound_tracks.empty()) {
+      frames +=
+          mixer_tail_samples_for_timeline(*compiled.timeline, routing, sample_rate, block_size);
+    }
+#endif
   }
   if (frames < 0 ||
       static_cast<uint64_t>(frames) >
@@ -403,10 +483,10 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 
 #if defined(SONARE_WITH_MIXING)
   // Per-track channel-strip bounce when the project binds tracks to scene strips.
-  const MixerRouting routing = resolve_mixer_routing(*compiled.timeline);
   if (!routing.bound_tracks.empty()) {
     return bounce_through_mixer(*compiled.timeline, instruments, routing, sample_rate, block_size,
-                                num_channels, frames, pdc, out_interleaved, out_len);
+                                num_channels, frames, pdc, mixer_input_frames, out_interleaved,
+                                out_len);
   }
 #endif
 
@@ -416,13 +496,22 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   const int64_t render_frames = frames + pdc;
   std::vector<std::vector<float>> channels;
   render_timeline(*compiled.timeline, /*keep=*/{}, instruments, sample_rate, block_size,
-                  num_channels, render_frames, &channels);
+                  /*num_channels=*/2, render_frames, &channels);
 
   std::unique_ptr<float[]> interleaved(new float[total]);
   for (int64_t frame = 0; frame < frames; ++frame) {
+    const float l = channels[0][static_cast<size_t>(frame + pdc)];
+    const float r = channels[1][static_cast<size_t>(frame + pdc)];
     for (int ch = 0; ch < num_channels; ++ch) {
-      interleaved[static_cast<size_t>(frame) * num_channels + ch] =
-          channels[static_cast<size_t>(ch)][static_cast<size_t>(frame + pdc)];
+      float v = 0.0f;
+      if (num_channels == 1) {
+        v = 0.5f * (l + r);
+      } else if (ch == 0) {
+        v = l;
+      } else if (ch == 1) {
+        v = r;
+      }
+      interleaved[static_cast<size_t>(frame) * num_channels + ch] = v;
     }
   }
   *out_interleaved = interleaved.release();
@@ -567,6 +656,7 @@ SonareError sonare_project_bounce_with_synth_instruments(
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
   if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
   std::vector<std::unique_ptr<sonare::midi::synth::NativeSynth>> owned;
   std::vector<HostedInstrument> hosted;
   owned.reserve(instrument_count);

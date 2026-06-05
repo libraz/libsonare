@@ -24,6 +24,14 @@ function generateSine(freq: number, sr: number, duration: number): Float32Array 
   return samples;
 }
 
+function peak(samples: Float32Array): number {
+  let out = 0;
+  for (const sample of samples) {
+    out = Math.max(out, Math.abs(sample));
+  }
+  return out;
+}
+
 describe('editing effects', () => {
   const tone = generateSine(440, SR, 0.5);
 
@@ -86,6 +94,19 @@ describe('editing effects', () => {
     expect(offline).toBeInstanceOf(Float32Array);
     expect(offline.length).toBe(512);
 
+    const uncompensated = new RealtimeVoiceChanger({
+      sampleRate: SR,
+      maxBlockSize: 512,
+      channels: 1,
+      preset: 'soft-whisper',
+    });
+    const latency = uncompensated.latencySamples();
+    expect(latency).toBeGreaterThan(0);
+    const raw = uncompensated.processMono(tone.subarray(0, 512));
+    uncompensated.destroy();
+    expect(peak(raw.subarray(0, latency))).toBeLessThan(1e-4);
+    expect(peak(offline.subarray(0, latency))).toBeGreaterThan(1e-3);
+
     // Interleaved stereo path (mirrors the WASM voiceChangeRealtime channels
     // option): a 512-frame stereo buffer is 1024 interleaved samples.
     const stereoIn = new Float32Array(1024);
@@ -95,6 +116,9 @@ describe('editing effects', () => {
     }
     const stereoOut = voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 2 });
     expect(stereoOut.length).toBe(1024);
+    expect(() =>
+      voiceChangeRealtime(new Float32Array(3), SR, 'soft-whisper', { channels: 2 }),
+    ).toThrow(/multiple of 2/);
     expect(() =>
       voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 3 as unknown as 2 }),
     ).toThrow(/channels must be 1 or 2/);

@@ -22,6 +22,7 @@
 
 #include "core/audio.h"
 #include "core/fft.h"
+#include "editing/voice_changer/formant_bounds.h"
 #include "editing/voice_changer/formant_warp.h"
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/streaming_reverb.h"

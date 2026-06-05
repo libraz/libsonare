@@ -120,7 +120,8 @@ TEST_CASE("TruePeakLimiter set_config applies scalar changes without wiping runn
   auto follow_up = generate_sine_samples(1000.0f, 48000, 4800, 0.95f);
   for (size_t offset = 0; offset < follow_up.size(); offset += 256) {
     float* follow_channel[] = {follow_up.data() + offset};
-    limiter.process(follow_channel, 1, 256);
+    const int block = static_cast<int>(std::min<size_t>(256, follow_up.size() - offset));
+    limiter.process(follow_channel, 1, block);
   }
   REQUIRE(peak_abs(follow_up) > 0.52f);
   REQUIRE(peak_abs(follow_up) <= 0.75f);

@@ -13,6 +13,29 @@ const TempoMap& fallback_tempo_map() noexcept {
   return map;
 }
 
+const TempoMap& map_or_fallback(const TempoMap* map) noexcept {
+  return map ? *map : fallback_tempo_map();
+}
+
+TransportState make_snapshot(const TempoMap& map, double sample_rate, bool playing, bool looping,
+                             int64_t render_frame, int64_t sample_position, double loop_start_ppq,
+                             double loop_end_ppq) noexcept {
+  const double ppq = map.sample_to_ppq(sample_position);
+  const TimeSignature sig = map.time_signature_at_ppq(ppq);
+  return {playing,
+          looping,
+          render_frame,
+          sample_position,
+          ppq,
+          map.bpm_at_sample(sample_position),
+          map.bar_start_ppq(ppq),
+          map.ppq_to_bar_beat(ppq).bar,
+          sig,
+          loop_start_ppq,
+          loop_end_ppq,
+          sample_rate};
+}
+
 }  // namespace
 
 bool BoundaryList::add(Boundary boundary) noexcept {
@@ -25,62 +48,65 @@ bool BoundaryList::add(Boundary boundary) noexcept {
 }
 
 void Transport::prepare(double sample_rate, const TempoMap* tempo_map) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
-  tempo_map_ = tempo_map ? tempo_map : &fallback_tempo_map();
-  render_frame_ = 0;
-  sample_position_ = 0;
-  playing_ = false;
+  sample_rate_.store(sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate,
+                     std::memory_order_release);
+  tempo_map_.store(tempo_map ? tempo_map : &fallback_tempo_map(), std::memory_order_release);
+  render_frame_.store(0, std::memory_order_release);
+  sample_position_.store(0, std::memory_order_release);
+  playing_.store(false, std::memory_order_release);
   loop_overflow_count_.store(0, std::memory_order_relaxed);
   loop_state_.store({});
 }
 
 TransportState Transport::snapshot() const noexcept {
-  const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
-  const double ppq = map.sample_to_ppq(sample_position_);
-  const TimeSignature sig = map.time_signature_at_ppq(ppq);
+  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
   const LoopState loop = loop_state_.try_load();
-  return {playing_,
-          loop.enabled,
-          render_frame_,
-          sample_position_,
-          ppq,
-          map.bpm_at_sample(sample_position_),
-          map.bar_start_ppq(ppq),
-          map.ppq_to_bar_beat(ppq).bar,
-          sig,
-          loop.start_ppq,
-          loop.end_ppq,
-          sample_rate_};
+  return make_snapshot(map, sample_rate_.load(std::memory_order_acquire), playing(), loop.enabled,
+                       render_frame(), sample_position(), loop.start_ppq, loop.end_ppq);
+}
+
+TransportState Transport::snapshot_control() const noexcept {
+  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
+  const LoopState loop = loop_state_.load();
+  return make_snapshot(map, sample_rate_.load(std::memory_order_acquire), playing(), loop.enabled,
+                       render_frame(), sample_position(), loop.start_ppq, loop.end_ppq);
 }
 
 void Transport::advance(int num_frames) noexcept {
   const int frames = std::max(num_frames, 0);
-  render_frame_ += frames;
-  if (!playing_ || frames == 0) return;
+  render_frame_.fetch_add(frames, std::memory_order_acq_rel);
+  if (!playing() || frames == 0) return;
 
-  sample_position_ += frames;
+  int64_t position = sample_position_.load(std::memory_order_acquire) + frames;
 
-  const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
+  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
   const LoopState loop = loop_state_.try_load();
-  if (!loop.enabled || loop.end_ppq <= loop.start_ppq) return;
+  if (!loop.enabled || loop.end_ppq <= loop.start_ppq) {
+    sample_position_.store(position, std::memory_order_release);
+    return;
+  }
 
   const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
   const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
   const int64_t loop_len = loop_end - loop_start;
-  if (loop_len <= 0) return;
-
-  while (sample_position_ >= loop_end) {
-    sample_position_ = loop_start + (sample_position_ - loop_end);
+  if (loop_len <= 0) {
+    sample_position_.store(position, std::memory_order_release);
+    return;
   }
+
+  while (position >= loop_end) {
+    position = loop_start + (position - loop_end);
+  }
+  sample_position_.store(position, std::memory_order_release);
 }
 
 void Transport::seek_sample(int64_t sample) noexcept {
-  sample_position_ = std::max<int64_t>(0, sample);
+  sample_position_.store(std::max<int64_t>(0, sample), std::memory_order_release);
 }
 
 void Transport::seek_ppq(double ppq) noexcept {
-  const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
-  sample_position_ = std::max<int64_t>(0, map.ppq_to_sample(ppq));
+  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
+  sample_position_.store(std::max<int64_t>(0, map.ppq_to_sample(ppq)), std::memory_order_release);
 }
 
 void Transport::set_loop(double start_ppq, double end_ppq, bool enabled) noexcept {
@@ -118,11 +144,14 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
   if (!out) return false;
   out->clear();
   const LoopState loop = loop_state_.try_load();
-  if (!playing_ || !loop.enabled || num_frames <= 0 || loop.end_ppq <= loop.start_ppq) {
+  const bool is_playing = playing();
+  const int64_t current_sample = sample_position();
+  const int64_t current_render = render_frame();
+  if (!is_playing || !loop.enabled || num_frames <= 0 || loop.end_ppq <= loop.start_ppq) {
     return false;
   }
 
-  const TempoMap& map = tempo_map_ ? *tempo_map_ : fallback_tempo_map();
+  const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
   const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
   const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
   const int64_t loop_len = loop_end - loop_start;
@@ -133,22 +162,29 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
   // and reporting only the first wrap would leave the over-wrapped tail of the
   // block rendering from the wrong position (or as silence). We walk the
   // wrap points by repeatedly subtracting loop_len from the running position.
-  const int64_t block_end = sample_position_ + num_frames;
-  int64_t position = sample_position_;
-  int64_t next_wrap = loop_end;
+  int64_t next_wrap_offset = loop_end - current_sample;
   bool added = false;
-  // Use >= (not >) so a playhead sitting exactly on loop_end at block start is
-  // reported as a wrap at offset 0, matching advance()'s `>= loop_end` wrap.
-  // Otherwise the sub-block splitter and the post-advance position snapshot
-  // disagree on the exact-boundary frame (e.g. after seeking onto loop_end).
-  while (next_wrap >= position && next_wrap <= block_end) {
-    const int offset = static_cast<int>(next_wrap - sample_position_);
-    if (!out->add({offset, render_frame_ + offset, loop_end})) break;
+  // Use offset 0 when the playhead is already at or beyond loop_end at block
+  // start, matching advance()'s `>= loop_end` wrap. If it starts beyond loop_end,
+  // carry the overshoot forward so the following wrap lands one loop length
+  // after the wrapped position rather than being skipped.
+  if (current_sample >= loop_end) {
+    const int64_t overshoot = (current_sample - loop_end) % loop_len;
+    if (!out->add({0, current_render, loop_end})) {
+      if (out->overflowed()) {
+        loop_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+      }
+      return false;
+    }
     added = true;
-    // After this wrap the playhead jumps back to loop_start; the following
-    // wrap occurs another loop_len of forward travel later.
-    position = next_wrap;
-    next_wrap += loop_len;
+    next_wrap_offset = loop_len - overshoot;
+    if (next_wrap_offset == 0) next_wrap_offset = loop_len;
+  }
+  while (next_wrap_offset <= num_frames) {
+    const int offset = static_cast<int>(next_wrap_offset);
+    if (!out->add({offset, current_render + offset, loop_end})) break;
+    added = true;
+    next_wrap_offset += loop_len;
   }
   // Surface a dropped-wrap as a diagnostic counter instead of silently
   // truncating. With a loop shorter than the block / kCapacity wraps the tail

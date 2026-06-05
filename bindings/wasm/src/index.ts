@@ -234,6 +234,7 @@ export type {
   SourceBackend,
   SynthBodyType,
   SynthEngineMode,
+  SynthEnumTables,
   SynthFilterModel,
   SynthFilterOutput,
   SynthModDestination,
@@ -246,6 +247,15 @@ export {
   EXPECTED_PROJECT_ABI_VERSION,
   Project,
   projectAbiVersion,
+  SYNTH_BODY_TYPES,
+  SYNTH_ENGINE_MODES,
+  SYNTH_FILTER_MODELS,
+  SYNTH_FILTER_OUTPUTS,
+  SYNTH_MOD_DESTINATIONS,
+  SYNTH_MOD_SOURCES,
+  SYNTH_OSC_WAVEFORMS,
+  synthEnumTables,
+  synthPatchRoundTripForTest,
   synthPresetNames,
   synthPresetPatch,
 } from './project';
@@ -386,7 +396,7 @@ export type {
 export { EXPECTED_ENGINE_ABI_VERSION, engineCapabilities, RealtimeEngine } from './realtime_engine';
 export { scaleCorrectionSemitones, scalePitchClassEnabled, scaleQuantizeMidi } from './scale';
 export type { ProgressCallback } from './sonare.js';
-export { StreamAnalyzer } from './stream_analyzer';
+export { StreamAnalyzer, streamAnalyzerConfigDefaults } from './stream_analyzer';
 export type {
   AnalyzerStats,
   BarChord,
@@ -395,6 +405,7 @@ export type {
   PatternScore,
   ProgressiveEstimate,
   StreamConfig,
+  StreamConfigDefaults,
   StreamFramesI16,
   StreamFramesU8,
   StreamQuantizeConfig,

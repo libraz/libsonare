@@ -21,6 +21,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   // -- serialization --
   Napi::Value ToJson(const Napi::CallbackInfo& info);
   static Napi::Value FromJson(const Napi::CallbackInfo& info);
+  static Napi::Value FromJsonWithDiagnostics(const Napi::CallbackInfo& info);
   Napi::Value SetSampleRate(const Napi::CallbackInfo& info);
   Napi::Value GetSampleRate(const Napi::CallbackInfo& info);
   Napi::Value SetOverlapPolicy(const Napi::CallbackInfo& info);

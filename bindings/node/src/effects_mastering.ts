@@ -217,6 +217,41 @@ export interface VoiceChangeRealtimeOptions extends ValidateOptions {
   channels?: 1 | 2;
 }
 
+function latencyCompensatedVoiceChange(
+  changer: RealtimeVoiceChanger,
+  samples: Float32Array,
+  channels: 1 | 2,
+  blockFrames: number,
+): Float32Array {
+  const latencyFrames = Math.max(0, changer.latencySamples());
+  if (channels === 1) {
+    const total = samples.length + latencyFrames;
+    const input = new Float32Array(total);
+    input.set(samples);
+    const processed = new Float32Array(total);
+    for (let pos = 0; pos < total; pos += blockFrames) {
+      const inputBlock = input.subarray(pos, Math.min(total, pos + blockFrames));
+      const outputBlock = processed.subarray(pos, pos + inputBlock.length);
+      changer.processMonoInto(inputBlock, outputBlock);
+    }
+    return processed.slice(latencyFrames, latencyFrames + samples.length);
+  }
+
+  const frames = samples.length / 2;
+  const totalFrames = frames + latencyFrames;
+  const input = new Float32Array(totalFrames * 2);
+  input.set(samples);
+  const processed = new Float32Array(totalFrames * 2);
+  const frameStride = blockFrames * 2;
+  for (let pos = 0; pos < input.length; pos += frameStride) {
+    const inputBlock = input.subarray(pos, Math.min(input.length, pos + frameStride));
+    const outputBlock = processed.subarray(pos, pos + inputBlock.length);
+    changer.processInterleavedInto(inputBlock, 2, outputBlock);
+  }
+  const offset = latencyFrames * 2;
+  return processed.slice(offset, offset + samples.length);
+}
+
 export function voiceChangeRealtime(
   samples: Float32Array,
   sampleRate = 48000,
@@ -229,6 +264,9 @@ export function voiceChangeRealtime(
   if (channels !== 1 && channels !== 2) {
     throw new Error('voiceChangeRealtime: channels must be 1 or 2.');
   }
+  if (channels === 2 && samples.length % 2 !== 0) {
+    throw new Error('voiceChangeRealtime: stereo input length must be a multiple of 2.');
+  }
   const block = 512;
   const changer = new RealtimeVoiceChanger({
     sampleRate,
@@ -236,28 +274,11 @@ export function voiceChangeRealtime(
     channels,
     preset,
   });
-  const output = new Float32Array(samples.length);
   try {
-    if (channels === 1) {
-      for (let pos = 0; pos < samples.length; pos += block) {
-        const inputBlock = samples.subarray(pos, Math.min(samples.length, pos + block));
-        const outputBlock = output.subarray(pos, pos + inputBlock.length);
-        changer.processMonoInto(inputBlock, outputBlock);
-      }
-    } else {
-      // Interleaved stereo: each block carries `block` frames = block*2 samples,
-      // mirroring the WASM voiceChangeRealtime stereo path.
-      const frameStride = block * 2;
-      for (let pos = 0; pos < samples.length; pos += frameStride) {
-        const inputBlock = samples.subarray(pos, Math.min(samples.length, pos + frameStride));
-        const outputBlock = output.subarray(pos, pos + inputBlock.length);
-        changer.processInterleavedInto(inputBlock, 2, outputBlock);
-      }
-    }
+    return latencyCompensatedVoiceChange(changer, samples, channels, block);
   } finally {
     changer.destroy();
   }
-  return output;
 }
 
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {

@@ -59,6 +59,7 @@ struct SonareProject {
   arr::EditHistory history;
   arr::AudioContentStore audio;
   std::vector<arr::Diagnostic> last_bounce_diagnostics;
+  bool last_bounce_has_timeline = false;
   /// Loaded SoundFont (sonare_project_load_soundfont); shared read-only with
   /// the SF2 players a bounce creates. Null until a load succeeds.
   std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont;

@@ -256,6 +256,7 @@ class RealtimeEngineWasm {
     if (!parameters_.add(parameter)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "duplicate parameter id");
     }
+    publishParameterMetadata();
   }
 
   int parameterCount() const { return static_cast<int>(parameters_.parameter_count()); }
@@ -365,6 +366,10 @@ class RealtimeEngineWasm {
   }
 
   void setParameter(int param_id, float value, int64_t render_frame) {
+    if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "parameter is not realtime safe");
+    }
     sonare::rt::Command command{};
     command.type = sonare::rt::CommandType::kSetParam;
     command.target_id = static_cast<uint32_t>(param_id);
@@ -377,6 +382,10 @@ class RealtimeEngineWasm {
   }
 
   void setParameterSmoothed(int param_id, float value, int64_t render_frame) {
+    if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "parameter is not realtime safe");
+    }
     sonare::rt::Command command{};
     command.type = sonare::rt::CommandType::kSetParamSmoothed;
     command.target_id = static_cast<uint32_t>(param_id);
@@ -728,11 +737,12 @@ class RealtimeEngineWasm {
     parameters_.clear();
     parameter_strings_.clear();
     automation_lanes_.clear();
+    publishParameterMetadata();
     engine_.automation().set_lanes(automation_lanes_);
   }
 
   val getTransportState() const {
-    const sonare::transport::TransportState state = engine_.transport().snapshot();
+    const sonare::transport::TransportState state = engine_.transport_state_control();
     val out = val::object();
     out.set("playing", state.playing);
     out.set("looping", state.looping);
@@ -839,7 +849,7 @@ class RealtimeEngineWasm {
     if (!graph->compile()) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to compile graph");
     }
-    const auto state = engine_.transport().snapshot();
+    const auto state = engine_.transport().snapshot_control();
     graph->prepare(state.sample_rate, engine_.max_block_size());
     const std::string input_node = stringProperty(spec, "inputNode", "");
     const std::string output_node = stringProperty(spec, "outputNode", "");
@@ -1181,7 +1191,6 @@ class RealtimeEngineWasm {
     schedule.length_samples = total_frames;
     schedule.loop = false;
     schedule.gain = floatProperty(options_val, "gain", 1.0f);
-    if (schedule.gain == 0.0f) schedule.gain = 1.0f;
     engine_.set_clips({schedule});
 
     val out = val::object();
@@ -1333,6 +1342,23 @@ class RealtimeEngineWasm {
     out.set("ppq", marker.ppq);
     out.set("name", std::string(marker.name ? marker.name : ""));
     return out;
+  }
+
+  void publishParameterMetadata() {
+    std::vector<sonare::automation::ParameterInfo> parameters;
+    parameters.reserve(parameters_.parameter_count());
+    for (size_t i = 0; i < parameters_.parameter_count(); ++i) {
+      sonare::automation::ParameterInfo info{};
+      if (parameters_.parameter_info_by_index(i, &info)) {
+        parameters.push_back(info);
+      }
+    }
+    engine_.automation().set_parameter_metadata(std::move(parameters));
+  }
+
+  bool registeredParameterRejectsRealtime(uint32_t param_id) const {
+    sonare::automation::ParameterInfo info{};
+    return parameters_.parameter_info(param_id, &info) && !info.rt_safe;
   }
 
   sonare::engine::RealtimeEngine engine_{};

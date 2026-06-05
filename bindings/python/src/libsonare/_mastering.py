@@ -769,7 +769,7 @@ class StreamingEqualizer:
         self._lib.sonare_eq_clear(self._handle)
 
     def set_phase_mode(self, mode: int | str) -> None:
-        """Set the global phase mode: zero/natural/linear or 0/1/2."""
+        """Set the global phase mode: zero/natural/linear or 1/2/3."""
         self._ensure_open()
         if isinstance(mode, str):
             key = mode.lower()

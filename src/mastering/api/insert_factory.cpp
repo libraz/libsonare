@@ -357,15 +357,7 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
   if (name == "saturation.ampSim") {
     // Guitar amp-sim: drive -> tone stack -> cab-EQ (the track-insert layer of
     // the electric-guitar sound; the string itself is the KS synth voice).
-    saturation::AmpSimConfig config;
-    config.drive = f(params, "drive", config.drive);
-    config.bass_db = f(params, "bassDb", config.bass_db);
-    config.mid_db = f(params, "midDb", config.mid_db);
-    config.treble_db = f(params, "trebleDb", config.treble_db);
-    config.presence_db = f(params, "presenceDb", config.presence_db);
-    config.cab = b(params, "cab", config.cab);
-    config.level_db = f(params, "levelDb", config.level_db);
-    return make<saturation::AmpSim>(config);
+    return make<saturation::AmpSim>(detail::amp_sim_config(params));
   }
   return nullptr;
 }

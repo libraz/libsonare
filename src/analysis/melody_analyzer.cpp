@@ -7,6 +7,13 @@
 #include "util/exception.h"
 
 namespace sonare {
+namespace {
+
+bool crosses_zero(float current, float previous) noexcept {
+  return (current >= 0.0f && previous < 0.0f) || (current < 0.0f && previous >= 0.0f);
+}
+
+}  // namespace
 
 MelodyAnalyzer::MelodyAnalyzer(const Audio& audio, const MelodyConfig& config)
     : config_(config), sr_(audio.sample_rate()) {
@@ -81,11 +88,9 @@ void MelodyAnalyzer::compute_contour_features() {
 
   // Filter out unvoiced frames
   std::vector<float> voiced_frequencies;
-  std::vector<float> voiced_times;
   for (const auto& p : contour_.pitches) {
     if (p.frequency > 0.0f) {
       voiced_frequencies.push_back(p.frequency);
-      voiced_times.push_back(p.time);
     }
   }
 
@@ -127,30 +132,58 @@ void MelodyAnalyzer::compute_contour_features() {
   // Typical variance range is 0 to 1 octave^2
   contour_.pitch_stability = std::max(0.0f, 1.0f - std::sqrt(var_log));
 
-  // Estimate vibrato rate (simplified)
-  // Look for periodic variations in pitch
+  // Estimate vibrato rate from pitch-difference zero crossings. Work on each
+  // continuous voiced run independently so unvoiced gaps neither create a
+  // spurious cross-gap pitch difference nor dilute the denominator.
   if (voiced_frequencies.size() >= 8) {
-    // Compute pitch differences
-    std::vector<float> pitch_diff;
-    for (size_t i = 1; i < voiced_frequencies.size(); ++i) {
-      pitch_diff.push_back(voiced_frequencies[i] - voiced_frequencies[i - 1]);
-    }
-
-    // Count zero crossings in pitch difference (rough vibrato estimate)
     int zero_crossings = 0;
-    for (size_t i = 1; i < pitch_diff.size(); ++i) {
-      if ((pitch_diff[i] >= 0.0f && pitch_diff[i - 1] < 0.0f) ||
-          (pitch_diff[i] < 0.0f && pitch_diff[i - 1] >= 0.0f)) {
-        zero_crossings++;
-      }
-    }
+    float voiced_run_duration = 0.0f;
+    bool in_run = false;
+    bool have_previous_diff = false;
+    float run_start_time = 0.0f;
+    float last_voiced_time = 0.0f;
+    float previous_frequency = 0.0f;
+    float previous_diff = 0.0f;
+    size_t run_frames = 0;
 
-    // Convert to vibrato rate (Hz). The numerator counts zero crossings over the
-    // voiced subset, so the denominator must span the same voiced frames (not the
-    // full timeline including unvoiced gaps) to keep the ratio consistent.
-    float duration = voiced_times.back() - voiced_times.front();
-    if (duration > 0.0f) {
-      contour_.vibrato_rate = static_cast<float>(zero_crossings) / (2.0f * duration);
+    const auto finish_run = [&]() {
+      if (in_run && run_frames >= 2) {
+        voiced_run_duration += std::max(0.0f, last_voiced_time - run_start_time);
+      }
+      in_run = false;
+      have_previous_diff = false;
+      run_frames = 0;
+    };
+
+    for (const auto& point : contour_.pitches) {
+      if (point.frequency <= 0.0f) {
+        finish_run();
+        continue;
+      }
+
+      if (!in_run) {
+        in_run = true;
+        run_start_time = point.time;
+        last_voiced_time = point.time;
+        previous_frequency = point.frequency;
+        run_frames = 1;
+        continue;
+      }
+
+      const float diff = point.frequency - previous_frequency;
+      if (have_previous_diff && crosses_zero(diff, previous_diff)) {
+        ++zero_crossings;
+      }
+      previous_diff = diff;
+      have_previous_diff = true;
+      previous_frequency = point.frequency;
+      last_voiced_time = point.time;
+      ++run_frames;
+    }
+    finish_run();
+
+    if (voiced_run_duration > 0.0f) {
+      contour_.vibrato_rate = static_cast<float>(zero_crossings) / (2.0f * voiced_run_duration);
     }
   }
 }

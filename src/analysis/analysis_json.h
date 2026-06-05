@@ -11,6 +11,7 @@
 /// The WASM native object (analysisResultToVal) mirrors the same field names.
 
 #include <string>
+#include <vector>
 
 #include "analysis/music_analyzer.h"
 
@@ -36,5 +37,11 @@ namespace sonare {
 ///   }
 /// Non-finite floats are emitted as null (handled by the JSON dumper).
 std::string analysis_result_to_json(const AnalysisResult& result);
+
+/// @brief Canonical field paths for the unified AnalysisResult schema.
+/// @details Array item fields use [] (for example beats[].time). Keep the JSON
+/// serializer and WASM native object in parity by testing both surfaces against
+/// this list.
+const std::vector<std::string>& analysis_result_schema_paths();
 
 }  // namespace sonare

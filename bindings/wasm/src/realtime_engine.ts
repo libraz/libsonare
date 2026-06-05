@@ -206,7 +206,8 @@ export class RealtimeEngine {
    * `'va:saw-lead'`; see {@link synthPresetNames}), resolving exactly like
    * {@link Project.bounceWithSynthInstrument}. Live note/CC commands and
    * scheduled MIDI clips routed to that destination render through the synth.
-   * Unknown preset names throw.
+   * Unknown preset names throw. An object patch's `destinationId` is a JS
+   * binding convenience, not part of the NativeSynth patch itself.
    */
   setSynthInstrument(
     patch: SynthPatch | string = {},

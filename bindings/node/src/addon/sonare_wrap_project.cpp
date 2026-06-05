@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,14 @@ uint32_t Uint32Arg(const Napi::CallbackInfo& info, size_t index, uint32_t fallba
     return fallback;
   }
   return info[index].As<Napi::Number>().Uint32Value();
+}
+
+SonareProjectClipFade ClipFadeFromObject(const Napi::Object& obj) {
+  SonareProjectClipFade fade{};
+  const Napi::Value length = obj.Get("lengthPpq");
+  fade.length_ppq = length.IsNumber() ? length.As<Napi::Number>().DoubleValue() : 0.0;
+  fade.curve = static_cast<uint32_t>(IntProperty(obj, "curve", SONARE_FADE_CURVE_LINEAR));
+  return fade;
 }
 
 // Fills `options` from a JS bounce-options object (zero-initialized on entry).
@@ -243,6 +252,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount"),
           InstanceMethod<&ProjectWrap::Destroy>("destroy"),
           StaticMethod<&ProjectWrap::FromJson>("fromJson"),
+          StaticMethod<&ProjectWrap::FromJsonWithDiagnostics>("fromJsonWithDiagnostics"),
       });
   constructor = Napi::Persistent(func);
   constructor.SuppressDestruct();
@@ -330,6 +340,41 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   }
   if (diag != nullptr) sonare_free_string(diag);
   return ProjectWrap::Wrap(env, handle);
+}
+
+Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "fromJsonWithDiagnostics expects a JSON string")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const uint32_t abi_version = sonare_project_abi_version();
+  if (abi_version != kExpectedProjectAbiVersion) {
+    Napi::Error::New(env, "libsonare project ABI mismatch: native binary reports version " +
+                              std::to_string(abi_version) + ", expected " +
+                              std::to_string(kExpectedProjectAbiVersion) +
+                              " (0 = arrangement support not compiled in).")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::string json = info[0].As<Napi::String>().Utf8Value();
+  SonareProject* handle = nullptr;
+  char* diag = nullptr;
+  const SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);
+  std::string diagnostics = diag != nullptr ? diag : "";
+  if (diag != nullptr) sonare_free_string(diag);
+  if (err != SONARE_OK) {
+    sonare_project_destroy(handle);
+    Napi::Error::New(env, diagnostics.empty() ? "failed to deserialize project JSON" : diagnostics)
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("project", ProjectWrap::Wrap(env, handle));
+  out.Set("diagnostics", diagnostics);
+  return out;
 }
 
 Napi::Value ProjectWrap::SetSampleRate(const Napi::CallbackInfo& info) {
@@ -507,24 +552,18 @@ Napi::Value ProjectWrap::SetClipGain(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SetClipFade(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t clip_id = Uint32Arg(info, 0, 0);
-  // fadeIn / fadeOut are optional {lengthPpq, curve} objects; NULL = unchanged.
+  // fadeIn / fadeOut are optional {lengthPpq, curve} objects. Missing sides
+  // map to a zero-length linear fade to match the WASM facade and the C API's
+  // "both descriptors required" contract.
   SonareProjectClipFade fade_in{};
   SonareProjectClipFade fade_out{};
-  const SonareProjectClipFade* fade_in_ptr = nullptr;
-  const SonareProjectClipFade* fade_out_ptr = nullptr;
   if (info.Length() > 1 && info[1].IsObject()) {
-    Napi::Object obj = info[1].As<Napi::Object>();
-    fade_in.length_ppq = obj.Get("lengthPpq").As<Napi::Number>().DoubleValue();
-    fade_in.curve = static_cast<uint32_t>(IntProperty(obj, "curve", SONARE_FADE_CURVE_LINEAR));
-    fade_in_ptr = &fade_in;
+    fade_in = ClipFadeFromObject(info[1].As<Napi::Object>());
   }
   if (info.Length() > 2 && info[2].IsObject()) {
-    Napi::Object obj = info[2].As<Napi::Object>();
-    fade_out.length_ppq = obj.Get("lengthPpq").As<Napi::Number>().DoubleValue();
-    fade_out.curve = static_cast<uint32_t>(IntProperty(obj, "curve", SONARE_FADE_CURVE_LINEAR));
-    fade_out_ptr = &fade_out;
+    fade_out = ClipFadeFromObject(info[2].As<Napi::Object>());
   }
-  ThrowIfError(env, sonare_project_set_clip_fade(project_, clip_id, fade_in_ptr, fade_out_ptr));
+  ThrowIfError(env, sonare_project_set_clip_fade(project_, clip_id, &fade_in, &fade_out));
   return env.Undefined();
 }
 
@@ -994,13 +1033,22 @@ namespace {
 Napi::Object CompileResultToObject(Napi::Env env, SonareProjectCompileResult* result) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("hasTimeline", Napi::Boolean::New(env, result->has_timeline != 0));
-  out.Set("messages", Napi::String::New(env, result->messages != nullptr ? result->messages : ""));
+  const std::string messages = result->messages != nullptr ? result->messages : "";
+  out.Set("messages", Napi::String::New(env, messages));
+  std::vector<std::string> diagnostic_messages;
+  std::stringstream message_stream(messages);
+  std::string line;
+  while (std::getline(message_stream, line)) {
+    diagnostic_messages.push_back(line);
+  }
   Napi::Array diagnostics = Napi::Array::New(env, result->diagnostic_count);
   for (size_t i = 0; i < result->diagnostic_count; ++i) {
     Napi::Object diag = Napi::Object::New(env);
     diag.Set("code", Napi::Number::New(env, result->diagnostics[i].code));
     diag.Set("severity", Napi::Number::New(env, result->diagnostics[i].severity));
     diag.Set("targetId", Napi::Number::New(env, result->diagnostics[i].target_id));
+    diag.Set("message",
+             Napi::String::New(env, i < diagnostic_messages.size() ? diagnostic_messages[i] : ""));
     diagnostics.Set(static_cast<uint32_t>(i), diag);
   }
   out.Set("diagnostics", diagnostics);

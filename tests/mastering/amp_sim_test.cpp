@@ -12,11 +12,14 @@
 
 #include "core/fft.h"
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/named_processor.h"
 
 namespace {
 
+using sonare::mastering::api::apply_named_processor;
 using sonare::mastering::api::insert_factory_names;
 using sonare::mastering::api::make_insert;
+using sonare::mastering::api::processor_names;
 using sonare::mastering::saturation::AmpSim;
 using sonare::mastering::saturation::AmpSimConfig;
 
@@ -164,4 +167,31 @@ TEST_CASE("saturation.ampSim builds through the insert factory",
   REQUIRE(amp->amp_config().presence_db == 3.0f);
   REQUIRE(amp->amp_config().cab);
   REQUIRE(amp->amp_config().level_db == -6.0f);
+}
+
+TEST_CASE("saturation.ampSim is reachable through offline named processing",
+          "[mastering][saturation][amp][named_processor]") {
+  const auto names = processor_names();
+  bool listed = false;
+  for (const auto& name : names) listed |= name == "saturation.ampSim";
+  REQUIRE(listed);
+
+  const std::vector<float> input = sine(220.0, 0.3f, kNumSamples);
+  const auto result = apply_named_processor("saturation.ampSim", input.data(), input.size(),
+                                            static_cast<int>(kRate),
+                                            {{"drive", 0.8},
+                                             {"bassDb", 2.0},
+                                             {"midDb", -3.0},
+                                             {"trebleDb", 1.5},
+                                             {"presenceDb", 3.0},
+                                             {"cab", 1.0},
+                                             {"levelDb", -6.0}});
+
+  REQUIRE(result.sample_rate == static_cast<int>(kRate));
+  REQUIRE(result.samples.size() == input.size());
+  REQUIRE(result.latency_samples == 0);
+  REQUIRE(result.samples != input);
+  for (const float sample : result.samples) {
+    REQUIRE(std::isfinite(sample));
+  }
 }

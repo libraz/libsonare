@@ -135,6 +135,11 @@ SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count);
 // NULL while member_count > 0, or a group with the same id already exists.
 SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float gain_db,
                                        const char* const* members, size_t member_count);
+// Sets an existing VCA group's gain in dB. The live member strips receive only
+// the delta from the previous group gain, preserving direct strip VCA trims and
+// other VCA-group contributions. The stored scene gain is updated so
+// sonare_mixer_to_scene_json round-trips the new value.
+SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* id, float gain_db);
 // Removes a VCA group by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer
 // or id is NULL or no group with that id exists.
 SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id);

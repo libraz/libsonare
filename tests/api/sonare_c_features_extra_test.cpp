@@ -180,6 +180,27 @@ TEST_CASE("sonare_zero_crossings", "[c_api][features]") {
   }
 }
 
+TEST_CASE("sonare_rms_energy follows empty-output C ABI contract", "[c_api][features]") {
+  SECTION("empty input clears stale outputs") {
+    float* out = non_null_floats();
+    size_t count = 7;
+    REQUIRE(sonare_rms_energy(nullptr, 0, kSampleRate, 2048, 512, &out, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(count == 0);
+  }
+
+  SECTION("invalid params clear outputs") {
+    auto samples = make_sine(440.0f, kSampleRate, 0.1f);
+    float* out = non_null_floats();
+    size_t count = 7;
+    REQUIRE(sonare_rms_energy(nullptr, samples.size(), kSampleRate, 2048, 512, &out, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(count == 0);
+  }
+}
+
 TEST_CASE("sonare_pitch_tuning", "[c_api][features]") {
   SECTION("returns a tuning offset in (-0.5, 0.5]") {
     // Frequencies exactly on equal-tempered pitches -> tuning near 0.

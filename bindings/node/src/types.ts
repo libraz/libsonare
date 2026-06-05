@@ -819,6 +819,7 @@ export type SoloProcessor =
   | 'saturation.exciter'
   | 'saturation.hardClipper'
   | 'saturation.multibandExciter'
+  | 'saturation.ampSim'
   | 'saturation.softClipper'
   | 'saturation.tape'
   | 'saturation.transformer'
@@ -1009,6 +1010,7 @@ export interface MasteringChainConfig {
 }
 
 export interface MasteringChainResult {
+  /** Latency-compensated offline output; no separate latency field is reported. */
   samples: Float32Array;
   sampleRate: number;
   inputLufs: number;
@@ -1559,6 +1561,8 @@ export interface ProjectDiagnostic {
   severity: number;
   /** Affected clip / track / source id (0 = n/a). */
   targetId: number;
+  /** Human-readable message for this diagnostic. */
+  message: string;
 }
 
 /** Result of {@link Project.compile}. */
@@ -1611,7 +1615,7 @@ export interface ProjectBounceOptions {
 }
 
 /** Oscillator waveform for the {@link BuiltinInstrumentConfig built-in synth}. */
-export type SynthWaveform = 'sine' | 'saw' | 'square' | 'triangle';
+export type SynthWaveform = 'sine' | 'saw' | 'sawtooth' | 'square' | 'triangle';
 
 /**
  * Patch for the built-in minimal polyphonic oscillator synth used by
@@ -1668,48 +1672,82 @@ export interface Sf2InstrumentConfig {
   polyphony?: number;
 }
 
+export const SYNTH_ENGINE_MODES = [
+  'default',
+  'subtractive',
+  'fm',
+  'karplus-strong',
+  'modal',
+  'additive',
+  'percussion',
+  'piano',
+] as const;
+export const SYNTH_OSC_WAVEFORMS = [
+  'default',
+  'sine',
+  'saw',
+  'square',
+  'triangle',
+  'noise',
+] as const;
+export const SYNTH_FILTER_MODELS = [
+  'default',
+  'svf',
+  'moog-ladder',
+  'diode-ladder',
+  'sallen-key',
+] as const;
+export const SYNTH_FILTER_OUTPUTS = ['default', 'lowpass', 'bandpass', 'highpass'] as const;
+export const SYNTH_BODY_TYPES = ['default', 'none', 'guitar', 'violin', 'wood-tube'] as const;
+export const SYNTH_MOD_SOURCES = [
+  'none',
+  'amp-env',
+  'filter-env',
+  'lfo1',
+  'lfo2',
+  'velocity',
+  'key-track',
+  'mod-wheel',
+  'random',
+] as const;
+export const SYNTH_MOD_DESTINATIONS = [
+  'none',
+  'pitch-cents',
+  'cutoff-cents',
+  'amp-gain',
+  'pan-units',
+] as const;
+
+export interface SynthEnumTables {
+  engineModes: string[];
+  waveforms: string[];
+  filterModels: string[];
+  filterOutputs: string[];
+  bodyTypes: string[];
+  modSources: string[];
+  modDestinations: string[];
+}
+
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
-export type SynthEngineMode =
-  | 'default'
-  | 'subtractive'
-  | 'fm'
-  | 'karplus-strong'
-  | 'modal'
-  | 'additive'
-  | 'percussion'
-  | 'piano';
+export type SynthEngineMode = (typeof SYNTH_ENGINE_MODES)[number];
 
 /** NativeSynth oscillator waveform (`'default'` keeps the base patch's). */
-export type SynthOscWaveform = 'default' | 'sine' | 'saw' | 'square' | 'triangle' | 'noise';
+export type SynthOscWaveform = (typeof SYNTH_OSC_WAVEFORMS)[number];
 
 /** NativeSynth filter model — the character core (`'default'` keeps the base patch's). */
-export type SynthFilterModel = 'default' | 'svf' | 'moog-ladder' | 'diode-ladder' | 'sallen-key';
+export type SynthFilterModel = (typeof SYNTH_FILTER_MODELS)[number];
 
 /** NativeSynth filter output (SVF only; `'default'` keeps the base patch's). */
-export type SynthFilterOutput = 'default' | 'lowpass' | 'bandpass' | 'highpass';
+export type SynthFilterOutput = (typeof SYNTH_FILTER_OUTPUTS)[number];
 
 /** NativeSynth body/formant resonance voicing (`'default'` keeps the base patch's). */
-export type SynthBodyType = 'default' | 'none' | 'guitar' | 'violin' | 'wood-tube';
+export type SynthBodyType = (typeof SYNTH_BODY_TYPES)[number];
 
 /** {@link SynthPatch} mod-matrix source. */
-export type SynthModSource =
-  | 'none'
-  | 'amp-env'
-  | 'filter-env'
-  | 'lfo1'
-  | 'lfo2'
-  | 'velocity'
-  | 'key-track'
-  | 'mod-wheel'
-  | 'random';
+export type SynthModSource = (typeof SYNTH_MOD_SOURCES)[number];
 
 /** {@link SynthPatch} mod-matrix destination. */
-export type SynthModDestination =
-  | 'none'
-  | 'pitch-cents'
-  | 'cutoff-cents'
-  | 'amp-gain'
-  | 'pan-units';
+export type SynthModDestination = (typeof SYNTH_MOD_DESTINATIONS)[number];
 
 /** One {@link SynthPatch} mod-matrix routing (name or C ordinal per field). */
 export interface SynthModRouting {
@@ -1728,8 +1766,10 @@ export interface SynthModRouting {
  * {@link synthPresetNames}; a `"va:"` routing prefix is accepted) or, when
  * `preset` is omitted, the default subtractive patch. Every numeric field then
  * uses "0 / omit => keep the base value" (non-zero values override, clamped to
- * their audible ranges) and the enum fields reserve `'default'` as keep. A
- * non-empty `modRoutings` REPLACES the base mod matrix.
+ * their audible ranges) and the enum fields reserve `'default'` as keep. The
+ * frozen C ABI has no per-field presence bits, so explicit zero numeric
+ * overrides (for example `ampSustain: 0`) cannot be represented; they keep the
+ * base value. A non-empty `modRoutings` REPLACES the base mod matrix.
  *
  * Mode-specific deep parameters (FM operator stacks, modal mode tables,
  * drawbar registrations, kit pieces, piano strings) travel inside the named
@@ -1737,8 +1777,9 @@ export interface SynthModRouting {
  */
 export interface SynthPatch {
   /**
-   * MIDI destination id this patch renders (the value set by
-   * {@link Project.setTrackMidiDestination}). Defaults to `0`.
+   * Optional binding convenience for JS realtime/offline helpers. It is not
+   * part of the NativeSynth patch itself; Python uses explicit
+   * `(destination_id, patch)` bindings instead. Defaults to `0`.
    */
   destinationId?: number;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
@@ -1765,10 +1806,12 @@ export interface SynthPatch {
   // --- envelopes (ms / sustain in [0, 1]) ---
   ampAttackMs?: number;
   ampDecayMs?: number;
+  /** 0 / omit keeps the base value; explicit zero sustain is not representable. */
   ampSustain?: number;
   ampReleaseMs?: number;
   filterAttackMs?: number;
   filterDecayMs?: number;
+  /** 0 / omit keeps the base value; explicit zero sustain is not representable. */
   filterSustain?: number;
   filterReleaseMs?: number;
   // --- LFOs / glide ---

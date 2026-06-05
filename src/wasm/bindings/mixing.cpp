@@ -383,6 +383,15 @@ class MixerWasm {
     }
   }
 
+  void setVcaGroupGainDb(std::string id, float gain_db) {
+    SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, id.c_str(), gain_db);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("failed to set VCA group gain: ") + sonare_error_message(err));
+    }
+  }
+
   size_t vcaGroupCount() const {
     size_t count = 0;
     SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
@@ -955,6 +964,7 @@ void registerMixingBindings() {
       .function("removeBus", &MixerWasm::removeBus)
       .function("busCount", &MixerWasm::busCount)
       .function("addVcaGroup", &MixerWasm::addVcaGroup)
+      .function("setVcaGroupGainDb", &MixerWasm::setVcaGroupGainDb)
       .function("removeVcaGroup", &MixerWasm::removeVcaGroup)
       .function("vcaGroupCount", &MixerWasm::vcaGroupCount)
       .function("toSceneJson", &MixerWasm::toSceneJson)

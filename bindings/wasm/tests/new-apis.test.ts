@@ -22,6 +22,7 @@ import {
   melToStft,
   mfcc,
   mfccToAudio,
+  mfccToMel,
   mixingScenePresetJson,
   momentaryLufs,
   nnlsChroma,
@@ -35,6 +36,7 @@ import {
   RealtimeEngine,
   StreamingEqualizer,
   shortTermLufs,
+  stft,
   tempogram,
   tempogramRatio,
   voiceChange,
@@ -609,6 +611,10 @@ describe('v1.2 feature additions (WASM)', () => {
         const vcasBefore = mixer.vcaGroupCount();
         mixer.addVcaGroup('all', -3, ['vocal']);
         expect(mixer.vcaGroupCount()).toBe(vcasBefore + 1);
+        mixer.setVcaGroupGainDb('all', -8);
+        const scene = JSON.parse(mixer.toSceneJson());
+        const group = scene.vcaGroups.find((entry: { id: string }) => entry.id === 'all');
+        expect(group.gainDb).toBe(-8);
         mixer.removeVcaGroup('all');
         expect(mixer.vcaGroupCount()).toBe(vcasBefore);
 
@@ -655,6 +661,30 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(allFinite(mfccAudio)).toBe(true);
     });
 
+    it('passes htk through inverse Mel paths', () => {
+      const tone = generateSine(440, SR, 0.25);
+      const nFft = 1024;
+      const hop = 256;
+      const nMels = 40;
+      const mel = melSpectrogram(tone, SR, nFft, hop, nMels, 0, 0, true);
+
+      const slaney = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, false);
+      const htk = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, true);
+      expect(htk.nBins).toBe(nFft / 2 + 1);
+      expect(htk.nFrames).toBe(mel.nFrames);
+      expect(allFinite(htk.power)).toBe(true);
+
+      let diff = 0;
+      for (let i = 0; i < htk.power.length; i++) {
+        diff += (slaney.power[i] - htk.power[i]) ** 2;
+      }
+      expect(diff).toBeGreaterThan(1e-6);
+
+      const audio = melToAudio(mel.power, nMels, mel.nFrames, SR, nFft, hop, 0, 0, 2, true);
+      expect(audio.length).toBeGreaterThan(0);
+      expect(allFinite(audio)).toBe(true);
+    });
+
     it('computes CQT and VQT magnitude grids', () => {
       const cqtResult = cqt(signal, SR, 512, 32.7, 24, 12);
       expect(cqtResult.nBins).toBe(24);
@@ -682,6 +712,33 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(hybrid.magnitude.length).toBe(hybrid.nBins * hybrid.nFrames);
       expect(hybrid.sampleRate).toBe(SR);
       expect(allFinite(hybrid.magnitude)).toBe(true);
+    });
+
+    it('guards music feature wrappers before native analysis', () => {
+      expect(() => nnlsChroma(new Float32Array([Number.NaN]), SR)).toThrow(/NaN|Inf/);
+      expect(() => cqt(signal, 7999)).toThrow(/sampleRate/);
+      expect(() => cqt(signal, SR, 0)).toThrow(/hopLength/);
+      expect(() => vqt(signal, SR, 512, 32.7, 24, 12, Number.NaN)).toThrow(/gamma/);
+      expect(() => analyzeSections(signal, SR, { minSectionSec: 0 })).toThrow(/minSectionSec/);
+      expect(() => analyzeMelody(signal, SR, { fmin: 400, fmax: 200 })).toThrow(/fmax/);
+      expect(() => onsetEnvelope(new Float32Array(), SR)).toThrow(/empty/);
+      expect(() => fourierTempogram(new Float32Array([1, Number.POSITIVE_INFINITY]), SR)).toThrow(
+        /NaN|Inf/,
+      );
+      expect(() => tempogramRatio(new Float32Array([1, 2]), 0, SR)).toThrow(/winLength/);
+    });
+
+    it('guards spectrogram and inverse wrapper shape inputs', () => {
+      expect(() => stft(new Float32Array([0, Number.NaN]), SR)).toThrow(/NaN|Inf/);
+      expect(() => melSpectrogram(signal, 0)).toThrow(/sampleRate/);
+      expect(() => melSpectrogram(signal, SR, 1024, 256, 40, 5000, 4000)).toThrow(/fmax/);
+
+      expect(() => melToStft(new Float32Array(5), 2, 3, SR, 1024)).toThrow(/length/);
+      expect(() => melToAudio(new Float32Array([1, Number.NaN, 2, 3]), 2, 2, SR, 1024)).toThrow(
+        /NaN|Inf/,
+      );
+      expect(() => mfccToMel(new Float32Array(6), 0, 3, 40)).toThrow(/nMfcc/);
+      expect(() => mfccToAudio(new Float32Array(6), 2, 3, 40, 7999)).toThrow(/sampleRate/);
     });
 
     it('analyzes melody contour with summary stats', () => {

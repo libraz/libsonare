@@ -150,6 +150,29 @@ TEST_CASE("FormantWarp raises the spectral envelope when factor > 1", "[voice_ch
   REQUIRE(centroid_out > centroid_in);
 }
 
+TEST_CASE("FormantWarp clamps finite formant factors to realtime bounds", "[voice_changer]") {
+  constexpr int sample_rate = 22050;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(220.0f, sample_rate, sample_rate / 3), sample_rate);
+
+  auto render = [&](float factor) {
+    const sonare::Audio out = FormantWarp({factor, 12, 1.0f}).process(audio);
+    return std::vector<float>(out.begin(), out.end());
+  };
+
+  const auto very_low = render(-2.0f);
+  const auto low_bound = render(kFormantFactorMin);
+  const auto very_high = render(9.0f);
+  const auto high_bound = render(kFormantFactorMax);
+
+  REQUIRE(very_low.size() == low_bound.size());
+  REQUIRE(very_high.size() == high_bound.size());
+  for (std::size_t i = 0; i < low_bound.size(); ++i) {
+    REQUIRE(very_low[i] == low_bound[i]);
+    REQUIRE(very_high[i] == high_bound[i]);
+  }
+}
+
 TEST_CASE("VoiceChanger combines pitch and formant controls", "[voice_changer]") {
   constexpr int sample_rate = 22050;
   auto samples = sine(220.0f, sample_rate, sample_rate / 2);

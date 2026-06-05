@@ -216,6 +216,29 @@ TEST_CASE("Transport playhead exactly on loop_end wraps consistently", "[transpo
   REQUIRE(state.sample_position == 48512);  // loop_start + 512
 }
 
+TEST_CASE("Transport loop boundaries wrap blocks that start beyond loop_end", "[transport]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+
+  sonare::transport::Transport transport;
+  transport.prepare(48000.0, &map);
+  transport.set_loop(2.0, 4.0, true);  // loop_start=48000, loop_end=96000, len=48000
+  transport.play();
+  transport.seek_sample(96100);
+
+  sonare::transport::BoundaryList boundaries;
+  REQUIRE(transport.collect_loop_boundaries(48000, &boundaries));
+  REQUIRE(boundaries.size() == 2);
+  REQUIRE(boundaries[0].offset == 0);
+  REQUIRE(boundaries[0].timeline_sample == 96000);
+  REQUIRE(boundaries[1].offset == 47900);
+  REQUIRE(boundaries[1].timeline_sample == 96000);
+
+  transport.advance(512);
+  const auto state = transport.snapshot();
+  REQUIRE(state.sample_position == 48612);
+}
+
 TEST_CASE("Transport surfaces a loop-boundary overflow counter", "[transport]") {
   // A loop far shorter than the block can wrap more than BoundaryList::kCapacity
   // times in a single block. Those extra wraps are dropped; the drop must be

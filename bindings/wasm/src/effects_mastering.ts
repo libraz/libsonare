@@ -247,6 +247,39 @@ export interface VoiceChangeRealtimeOptions extends ValidateOptions {
   blockSize?: number;
 }
 
+function latencyCompensatedVoiceChange(
+  changer: RealtimeVoiceChanger,
+  samples: Float32Array,
+  channels: 1 | 2,
+  blockFrames: number,
+): Float32Array {
+  const latencyFrames = Math.max(0, changer.latencySamples());
+  if (channels === 1) {
+    const total = samples.length + latencyFrames;
+    const input = new Float32Array(total);
+    input.set(samples);
+    const processed = new Float32Array(total);
+    for (let offset = 0; offset < total; offset += blockFrames) {
+      const block = input.subarray(offset, Math.min(offset + blockFrames, total));
+      processed.set(changer.processMono(block), offset);
+    }
+    return processed.slice(latencyFrames, latencyFrames + samples.length);
+  }
+
+  const frames = samples.length / 2;
+  const totalFrames = frames + latencyFrames;
+  const input = new Float32Array(totalFrames * 2);
+  input.set(samples);
+  const processed = new Float32Array(totalFrames * 2);
+  const frameStride = blockFrames * 2;
+  for (let offset = 0; offset < input.length; offset += frameStride) {
+    const block = input.subarray(offset, Math.min(offset + frameStride, input.length));
+    processed.set(changer.processInterleaved(block, 2), offset);
+  }
+  const start = latencyFrames * 2;
+  return processed.slice(start, start + samples.length);
+}
+
 /**
  * Applies the realtime voice-changer chain to a whole buffer in one call.
  *
@@ -266,6 +299,9 @@ export function voiceChangeRealtime(
   if (channels !== 1 && channels !== 2) {
     throw new Error('voiceChangeRealtime: channels must be 1 or 2.');
   }
+  if (channels === 2 && samples.length % 2 !== 0) {
+    throw new Error('voiceChangeRealtime: stereo input length must be a multiple of 2.');
+  }
   // 48000 matches the Python voice_change_realtime and Node voiceChangeRealtime
   // convenience wrappers (and the RealtimeVoiceChanger default).
   const sampleRate = options.sampleRate ?? 48000;
@@ -273,20 +309,7 @@ export function voiceChangeRealtime(
   const changer = new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
   try {
     changer.prepare(sampleRate, blockSize, channels);
-    const out = new Float32Array(samples.length);
-    if (channels === 1) {
-      for (let offset = 0; offset < samples.length; offset += blockSize) {
-        const block = samples.subarray(offset, Math.min(offset + blockSize, samples.length));
-        out.set(changer.processMono(block), offset);
-      }
-    } else {
-      const frameStride = blockSize * 2;
-      for (let offset = 0; offset < samples.length; offset += frameStride) {
-        const block = samples.subarray(offset, Math.min(offset + frameStride, samples.length));
-        out.set(changer.processInterleaved(block, 2), offset);
-      }
-    }
-    return out;
+    return latencyCompensatedVoiceChange(changer, samples, channels, blockSize);
   } finally {
     changer.delete();
   }

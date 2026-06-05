@@ -1,7 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  analyzeBpm,
+  detectBpm,
   init,
   lufs,
+  lufsInterleaved,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
@@ -10,6 +13,7 @@ import {
   meteringStereoCorrelation,
   meteringTruePeakDb,
   voiceChange,
+  voiceChangeRealtime,
 } from '../src/index';
 
 const SR = 22050;
@@ -88,6 +92,11 @@ describe('empty-sample guards (WASM)', () => {
       /voiceChange: samples must not be empty/,
     );
   });
+  it('voiceChangeRealtime rejects invalid stereo length', () => {
+    expect(() => voiceChangeRealtime(new Float32Array(3), { channels: 2 })).toThrow(
+      /multiple of 2/,
+    );
+  });
 });
 
 describe('NaN/Inf guards (WASM)', () => {
@@ -112,11 +121,31 @@ describe('NaN/Inf guards (WASM)', () => {
       /meteringPeakDb: samples contains NaN or Inf at index 100/,
     );
   });
+  it('detectBpm rejects NaN before native analysis', () => {
+    expect(() => detectBpm(withNaN(), SR)).toThrow(
+      /detectBpm: samples contains NaN or Inf at index 100/,
+    );
+  });
+  it('analyzeBpm rejects negative maxCandidates before native analysis', () => {
+    expect(() => analyzeBpm(sine(SR), SR, { maxCandidates: -1 })).toThrow(
+      /analyzeBpm: maxCandidates must be a non-negative integer/,
+    );
+  });
+  it('lufsInterleaved rejects buffers whose length is not a multiple of channels', () => {
+    expect(() => lufsInterleaved(new Float32Array([0.1, 0.2, 0.3]), 2, SR)).toThrow(
+      /lufsInterleaved: samples length must be a multiple of channels/,
+    );
+  });
 });
 
 describe('validate=false skips NaN check (WASM)', () => {
   it('lufs with validate=false does not throw on NaN', () => {
     expect(() => lufs(withNaN(), SR, { validate: false })).not.toThrow(
+      /samples contains NaN or Inf/,
+    );
+  });
+  it('detectBpm with validate=false does not throw on NaN', () => {
+    expect(() => detectBpm(withNaN(), SR, { validate: false })).not.toThrow(
       /samples contains NaN or Inf/,
     );
   });

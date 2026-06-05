@@ -44,6 +44,29 @@ Audio create_melody(const std::vector<float>& freqs, float note_duration, int sr
   return Audio::from_vector(std::move(samples), sr);
 }
 
+Audio create_gapped_vibrato(float carrier_hz, float vibrato_hz, float depth_cents,
+                            float voiced_duration, float gap_duration, int sr = 22050) {
+  const int voiced_samples = static_cast<int>(sr * voiced_duration);
+  const int gap_samples = static_cast<int>(sr * gap_duration);
+  std::vector<float> samples(static_cast<size_t>(2 * voiced_samples + gap_samples), 0.0f);
+  const float depth_octaves = depth_cents / 1200.0f;
+  double phase = 0.0;
+
+  auto render_run = [&](int start_sample) {
+    for (int i = 0; i < voiced_samples; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(sr);
+      const float vibrato = std::sin(2.0f * sonare::constants::kPiD * vibrato_hz * t);
+      const float freq = carrier_hz * std::pow(2.0f, depth_octaves * vibrato);
+      phase += 2.0 * sonare::constants::kPiD * static_cast<double>(freq) / static_cast<double>(sr);
+      samples[static_cast<size_t>(start_sample + i)] = 0.7f * static_cast<float>(std::sin(phase));
+    }
+  };
+
+  render_run(0);
+  render_run(voiced_samples + gap_samples);
+  return Audio::from_vector(std::move(samples), sr);
+}
+
 }  // namespace
 
 TEST_CASE("MelodyAnalyzer basic", "[melody_analyzer]") {
@@ -134,6 +157,20 @@ TEST_CASE("MelodyAnalyzer stability for pure tone", "[melody_analyzer]") {
   if (analyzer.has_melody()) {
     REQUIRE(analyzer.stability() >= 0.5f);
   }
+}
+
+TEST_CASE("MelodyAnalyzer vibrato rate ignores unvoiced gaps", "[melody_analyzer]") {
+  Audio audio = create_gapped_vibrato(440.0f, 5.0f, 35.0f, 1.0f, 2.0f);
+
+  MelodyConfig config;
+  config.frame_length = 1024;
+  config.hop_length = 128;
+  config.threshold = 0.2f;
+  MelodyAnalyzer analyzer(audio, config);
+
+  REQUIRE(analyzer.has_melody());
+  REQUIRE(analyzer.contour().vibrato_rate > 3.5f);
+  REQUIRE(analyzer.contour().vibrato_rate < 7.0f);
 }
 
 TEST_CASE("MelodyAnalyzer melody with multiple pitches", "[melody_analyzer]") {

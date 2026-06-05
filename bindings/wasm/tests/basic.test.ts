@@ -307,6 +307,26 @@ describe('Sonare WASM Module', () => {
       const frozenRendered = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
       expect(frozenRendered[0][0]).toBeCloseTo(0.125, 4);
       expect(frozenRendered[1][0]).toBeCloseTo(-0.25, 4);
+      engine.setClips([
+        {
+          id: 303,
+          channels: [new Float32Array(128).fill(0.5), new Float32Array(128).fill(-0.5)],
+          startPpq: 0,
+          lengthSamples: 128,
+        },
+      ]);
+      engine.seekSample(0);
+      engine.freezeOffline({
+        totalFrames: 128,
+        blockSize: 128,
+        numChannels: 2,
+        clipId: 78,
+        gain: 0,
+      });
+      engine.seekSample(0);
+      const zeroGainFrozen = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
+      expect(zeroGainFrozen[0][0]).toBeCloseTo(0, 4);
+      expect(zeroGainFrozen[1][0]).toBeCloseTo(0, 4);
       engine.destroy();
     });
 
@@ -712,6 +732,7 @@ describe('Sonare WASM Module', () => {
       const names = masteringProcessorNames();
       expect(names).toContain('dynamics.compressor');
       expect(names).toContain('eq.equalizer');
+      expect(names).toContain('saturation.ampSim');
       expect(names).toContain('saturation.tape');
       expect(names).toContain('stereo.imager');
 
@@ -733,6 +754,19 @@ describe('Sonare WASM Module', () => {
       expect(eq.samples).toBeInstanceOf(Float32Array);
       expect(eq.samples.length).toBe(samples.length);
       expect(Number.isFinite(eq.outputLufs)).toBe(true);
+
+      const amp = masteringProcess('saturation.ampSim', samples, sampleRate, {
+        drive: 0.8,
+        bassDb: 2,
+        midDb: -3,
+        trebleDb: 1.5,
+        presenceDb: 3,
+        cab: 1,
+        levelDb: -6,
+      });
+      expect(amp.samples).toBeInstanceOf(Float32Array);
+      expect(amp.samples.length).toBe(samples.length);
+      expect(Number.isFinite(amp.outputLufs)).toBe(true);
     });
 
     it('should expose named stereo mastering processors in WASM', () => {
@@ -1017,6 +1051,34 @@ describe('Sonare WASM Module', () => {
         expect(eq.latencySamples()).toBeGreaterThanOrEqual(0);
       } finally {
         eq.delete();
+      }
+    });
+
+    it('should accept string phase modes for StreamingEqualizer', () => {
+      const linearEq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      const aliasEq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+      try {
+        linearEq.setPhaseMode('linear');
+        linearEq.setBand(0, {
+          type: 'Peak',
+          frequencyHz: 1000,
+          gainDb: 3,
+          q: 1,
+          enabled: true,
+        });
+        expect(linearEq.latencySamples()).toBeGreaterThan(0);
+
+        expect(() => aliasEq.setPhaseMode('zero-latency')).not.toThrow();
+        aliasEq.setBand(0, {
+          type: 'HighShelf',
+          frequencyHz: 8000,
+          gainDb: 2,
+          enabled: true,
+        });
+        expect(aliasEq.latencySamples()).toBeGreaterThanOrEqual(0);
+      } finally {
+        linearEq.delete();
+        aliasEq.delete();
       }
     });
 

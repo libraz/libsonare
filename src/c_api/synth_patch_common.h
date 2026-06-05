@@ -14,9 +14,28 @@
 
 namespace sonare_c_detail {
 
+inline sonare::midi::synth::ModSource mod_source_from_c(int value) noexcept {
+  using sonare::midi::synth::ModSource;
+  if (value < static_cast<int>(ModSource::kNone) || value > static_cast<int>(ModSource::kRandom)) {
+    return ModSource::kNone;
+  }
+  return static_cast<ModSource>(value);
+}
+
+inline sonare::midi::synth::ModDestination mod_destination_from_c(int value) noexcept {
+  using sonare::midi::synth::ModDestination;
+  if (value < static_cast<int>(ModDestination::kNone) ||
+      value > static_cast<int>(ModDestination::kPanUnits)) {
+    return ModDestination::kNone;
+  }
+  return static_cast<ModDestination>(value);
+}
+
 /// Resolves a versioned C synth patch onto a NativeSynthConfig: the base is
 /// the named preset (or the default subtractive patch when @p c.preset is
 /// empty), then every non-zero struct field overrides the base ("0 => keep").
+/// Struct version 1 has no per-field presence bits, so explicit zero numeric
+/// overrides are intentionally indistinguishable from "keep".
 /// Returns false (and sets @p out_error) for an unsupported struct_version or
 /// an unknown preset name. The result still passes through NativeSynth's own
 /// constructor clamping.
@@ -93,7 +112,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     for (int i = 0; i < count; ++i) {
       const SonareSynthModRouting& r = c.mod_routings[i];
       p.mod_matrix.routes[static_cast<size_t>(i)] = {
-          static_cast<ModSource>(r.source), static_cast<ModDestination>(r.destination), r.depth};
+          mod_source_from_c(r.source), mod_destination_from_c(r.destination), r.depth};
     }
   }
   // Voice pool / bus.

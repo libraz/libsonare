@@ -39,7 +39,7 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
                    int n_iter = 32, int sr = constants::kDefaultSampleRate);
 
-/// @brief Inverts MFCC coefficients back to a Mel spectrogram (in dB scale).
+/// @brief Inverts MFCC coefficients back to a Mel power spectrogram.
 /// @param mfcc MFCC matrix [n_mfcc x n_frames] row-major.
 /// @param n_mfcc Number of MFCCs.
 /// @param n_frames Number of time frames.

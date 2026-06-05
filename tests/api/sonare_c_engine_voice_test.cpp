@@ -1,6 +1,10 @@
 /// @file sonare_c_engine_voice_test.cpp
 /// @brief Engine and voice C API tests.
 
+#include <array>
+#include <atomic>
+#include <thread>
+
 #include "sonare_c_test_helpers.h"
 
 namespace {
@@ -51,6 +55,42 @@ TEST_CASE("sonare_engine MIDI scalar commands respect arrangement feature flag",
 #endif
   REQUIRE(sonare_engine_push_midi_cc(engine, 0, 16, 0, 74, 100, -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareParameterInfo parameter{};
+  parameter.id = 77;
+  std::strncpy(parameter.name, "mode", sizeof(parameter.name) - 1);
+  parameter.min_value = 0.0f;
+  parameter.max_value = 3.0f;
+  parameter.default_value = 0.0f;
+  parameter.rt_safe = 0;
+  parameter.default_curve = 0;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+
+  const SonareAutomationPoint points[] = {{0.0, 1.0f, 0}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, 77, points, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  size_t lane_count = 999;
+  REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
+  REQUIRE(lane_count == 0);
+
+  REQUIRE(sonare_engine_set_parameter(engine, 77, 1.0f, -1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_parameter_smoothed(engine, 77, 1.0f, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_clear_parameters(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_set_automation_lane(engine, 77, points, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
+  REQUIRE(lane_count == 1);
 
   sonare_engine_destroy(engine);
 }
@@ -257,6 +297,17 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   REQUIRE(out_length == samples.size());
   sonare_free_floats(out);
 
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, 0.0f, 9.0f, &out,
+                              &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  for (size_t i = 0; i < out_length; ++i) {
+    REQUIRE(std::isfinite(out[i]));
+  }
+  sonare_free_floats(out);
+
   // Time-varying correction: a caller-supplied per-frame F0 contour (here a
   // constant 440 Hz track) corrected toward MIDI 70.
   const int hop = 512;
@@ -414,6 +465,41 @@ TEST_CASE("sonare_engine_get_transport_state surfaces bar position and time sign
   REQUIRE(state.bar_count >= 0);
   REQUIRE(std::isfinite(state.bar_start_ppq));
 
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_get_transport_state polls safely during processing", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_loop(engine, 0.0, 4.0, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::atomic<bool> done{false};
+  std::atomic<bool> invalid{false};
+  std::thread poller([&] {
+    while (!done.load(std::memory_order_acquire)) {
+      SonareTransportState state{};
+      if (sonare_engine_get_transport_state(engine, &state) != SONARE_OK ||
+          !std::isfinite(state.ppq_position) || !std::isfinite(state.bpm) ||
+          !std::isfinite(state.loop_start_ppq) || !std::isfinite(state.loop_end_ppq)) {
+        invalid.store(true, std::memory_order_release);
+        break;
+      }
+    }
+  });
+
+  std::array<float, 128> left{};
+  std::array<float, 128> right{};
+  float* channels[] = {left.data(), right.data()};
+  for (int i = 0; i < 1000; ++i) {
+    REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  }
+
+  done.store(true, std::memory_order_release);
+  poller.join();
+  REQUIRE_FALSE(invalid.load(std::memory_order_acquire));
   sonare_engine_destroy(engine);
 }
 
@@ -748,6 +834,50 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]"
   REQUIRE(right[0] == Catch::Approx(-0.25f).margin(0.0001f));
   REQUIRE(left[127] == Catch::Approx(0.125f).margin(0.0001f));
   REQUIRE(right[127] == Catch::Approx(-0.25f).margin(0.0001f));
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_realtime_engine_freeze_c_api_preserves_explicit_zero_gain", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 64, 64) == SONARE_OK);
+
+  std::array<float, 128> clip_left{};
+  std::array<float, 128> clip_right{};
+  clip_left.fill(0.5f);
+  clip_right.fill(-0.5f);
+  const float* clip_channels[] = {clip_left.data(), clip_right.data()};
+  SonareEngineClip clip{};
+  clip.id = 7;
+  clip.channels = clip_channels;
+  clip.num_channels = 2;
+  clip.num_samples = 128;
+  clip.start_ppq = 0.0;
+  clip.length_samples = 128;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  SonareEngineFreezeOptions freeze_options{};
+  freeze_options.total_frames = 128;
+  freeze_options.block_size = 128;
+  freeze_options.num_channels = 2;
+  freeze_options.clip_id = 77;
+  freeze_options.start_ppq = 0.0;
+  freeze_options.gain = 0.0f;
+  SonareEngineFreezeResult freeze{};
+  REQUIRE(sonare_engine_freeze_offline(engine, &freeze_options, &freeze) == SONARE_OK);
+
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  std::array<float, 128> left{};
+  std::array<float, 128> right{};
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, 128, 128) == SONARE_OK);
+  for (size_t i = 0; i < left.size(); ++i) {
+    REQUIRE(left[i] == Catch::Approx(0.0f).margin(0.0001f));
+    REQUIRE(right[i] == Catch::Approx(0.0f).margin(0.0001f));
+  }
 
   sonare_engine_destroy(engine);
 }

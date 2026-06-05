@@ -3,12 +3,15 @@
 #include <algorithm>
 #include <cmath>
 
+#include "editing/voice_changer/formant_bounds.h"
 #include "util/exception.h"
 
 namespace sonare::editing::voice_changer {
 namespace {
 
-float clamp_factor(float value) noexcept { return std::clamp(value, 0.55f, 1.65f); }
+float clamp_factor(float value) noexcept {
+  return std::clamp(value, kFormantFactorMin, kFormantFactorMax);
+}
 
 }  // namespace
 

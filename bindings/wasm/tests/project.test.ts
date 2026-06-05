@@ -66,6 +66,10 @@ describe('Sonare WASM Project', () => {
     return smf;
   }
 
+  function danglingSourceJson(): string {
+    return '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]}';
+  }
+
   it('reports the expected project ABI version', () => {
     expect(projectAbiVersion()).toBe(EXPECTED_PROJECT_ABI_VERSION);
     expect(projectAbiVersion()).toBeGreaterThan(0);
@@ -159,6 +163,20 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('surfaces compile diagnostic messages per diagnostic', () => {
+    const project = buildProject();
+    try {
+      const result = project.compile();
+      expect(result.hasTimeline).toBe(true);
+      expect(result.diagnostics.length).toBe(1);
+      expect(result.diagnostics[0].code).toBe(10);
+      expect(result.diagnostics[0].message).toContain('project contains MIDI clips');
+      expect(result.messages.split('\n')[0]).toBe(result.diagnostics[0].message);
+    } finally {
+      project.delete();
+    }
+  });
+
   it('bounces deterministically (same-build repeatability)', () => {
     const project = buildProject();
     try {
@@ -222,6 +240,24 @@ describe('Sonare WASM Project', () => {
       expect(audible).toBeInstanceOf(Float32Array);
       expect(audible.length).toBe(48000 * 2);
       expect(maxAbs(audible)).toBeGreaterThan(0.01);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('keeps the base preset when synth patch numeric fields are explicitly zero', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      const preset = project.bounceWithBuiltinInstrument('warm-pad', {
+        totalFrames: 4096,
+        numChannels: 2,
+        sampleRate: 48000,
+      });
+      const explicitZero = project.bounceWithBuiltinInstrument(
+        { preset: 'warm-pad', ampSustain: 0, filterSustain: 0, gain: 0 },
+        { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+      );
+      expect(explicitZero).toEqual(preset);
     } finally {
       project.delete();
     }
@@ -414,6 +450,16 @@ describe('Sonare WASM Project', () => {
 
   it('throws cleanly on malformed fromJson input', () => {
     expect(() => Project.fromJson('{ not valid project json')).toThrow();
+  });
+
+  it('fromJsonWithDiagnostics returns warnings from successful loads', () => {
+    const { project, diagnostics } = Project.fromJsonWithDiagnostics(danglingSourceJson());
+    try {
+      expect(diagnostics).toContain('dangling_clip_source');
+      expect(project.trackCount()).toBe(1);
+    } finally {
+      project.delete();
+    }
   });
 
   // Golden vectors for the hand-written UMP MIDI-1.0 channel-voice packing

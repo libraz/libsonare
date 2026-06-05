@@ -10,6 +10,7 @@
 #include <emscripten/val.h>
 
 #include <cstring>
+#include <iterator>
 #include <string>
 
 #include "sonare_c_types.h"
@@ -30,6 +31,39 @@ inline constexpr const char* kModSources[] = {"none",      "amp-env",   "filter-
                                               "key-track", "mod-wheel", "random"};
 inline constexpr const char* kModDestinations[] = {"none", "pitch-cents", "cutoff-cents",
                                                    "amp-gain", "pan-units"};
+
+static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
+              "WASM SynthEngineMode table drifted from C");
+static_assert(std::size(kWaveforms) == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
+              "WASM SynthOscWaveform table drifted from C");
+static_assert(std::size(kFilterModels) == SONARE_SYNTH_FILTER_MODEL_COUNT,
+              "WASM SynthFilterModel table drifted from C");
+static_assert(std::size(kFilterOutputs) == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
+              "WASM SynthFilterOutput table drifted from C");
+static_assert(std::size(kBodyTypes) == SONARE_SYNTH_BODY_TYPE_COUNT,
+              "WASM SynthBodyType table drifted from C");
+static_assert(std::size(kModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
+              "WASM SynthModSource table drifted from C");
+static_assert(std::size(kModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
+              "WASM SynthModDestination table drifted from C");
+
+inline emscripten::val synthEnumTablesToVal() {
+  using emscripten::val;
+  auto array_from = [](const char* const* names, size_t count) {
+    val out = val::array();
+    for (size_t i = 0; i < count; ++i) out.set(static_cast<unsigned>(i), std::string(names[i]));
+    return out;
+  };
+  val out = val::object();
+  out.set("engineModes", array_from(kEngineModes, std::size(kEngineModes)));
+  out.set("waveforms", array_from(kWaveforms, std::size(kWaveforms)));
+  out.set("filterModels", array_from(kFilterModels, std::size(kFilterModels)));
+  out.set("filterOutputs", array_from(kFilterOutputs, std::size(kFilterOutputs)));
+  out.set("bodyTypes", array_from(kBodyTypes, std::size(kBodyTypes)));
+  out.set("modSources", array_from(kModSources, std::size(kModSources)));
+  out.set("modDestinations", array_from(kModDestinations, std::size(kModDestinations)));
+  return out;
+}
 
 /// Reads an enum field accepting the C ordinal or a name; throws on an
 /// unknown name. Absent fields keep @p out unchanged (0 = "keep base").
@@ -58,8 +92,9 @@ inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {
 
 /// Parses a JS SynthPatch descriptor (a preset-name string — a "va:" routing
 /// prefix is accepted — or an object of wrapper-section overrides) into the
-/// versioned C struct. Throws on unknown enum names; unknown PRESET names are
-/// validated downstream.
+/// versioned C struct. Numeric zero values are the C ABI's "keep base" sentinel,
+/// not explicit zero overrides. Throws on unknown enum names; unknown PRESET
+/// names are validated downstream.
 inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   SonareSynthPatch patch{};
   patch.struct_version = 1;
@@ -71,11 +106,15 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   if (hasProperty(desc, "preset")) {
     setPresetName(&patch, desc["preset"].as<std::string>());
   }
-  enumProperty(desc, "engineMode", kEngineModes, 8, "synth engine mode", &patch.engine_mode);
-  enumProperty(desc, "waveform", kWaveforms, 6, "oscillator waveform", &patch.waveform);
-  enumProperty(desc, "filterModel", kFilterModels, 5, "filter model", &patch.filter_model);
-  enumProperty(desc, "filterOutput", kFilterOutputs, 4, "filter output", &patch.filter_output);
-  enumProperty(desc, "body", kBodyTypes, 5, "body type", &patch.body);
+  enumProperty(desc, "engineMode", kEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,
+               "synth engine mode", &patch.engine_mode);
+  enumProperty(desc, "waveform", kWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT, "oscillator waveform",
+               &patch.waveform);
+  enumProperty(desc, "filterModel", kFilterModels, SONARE_SYNTH_FILTER_MODEL_COUNT, "filter model",
+               &patch.filter_model);
+  enumProperty(desc, "filterOutput", kFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT,
+               "filter output", &patch.filter_output);
+  enumProperty(desc, "body", kBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT, "body type", &patch.body);
   patch.unison = intProperty(desc, "unison", 0);
   patch.detune_cents = floatProperty(desc, "detuneCents", 0.0f);
   patch.drift_cents = floatProperty(desc, "driftCents", 0.0f);
@@ -115,9 +154,10 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
       for (size_t i = 0; i < count; ++i) {
         emscripten::val routing = routings[i];
         SonareSynthModRouting& out = patch.mod_routings[i];
-        enumProperty(routing, "source", kModSources, 9, "mod source", &out.source);
-        enumProperty(routing, "destination", kModDestinations, 5, "mod destination",
-                     &out.destination);
+        enumProperty(routing, "source", kModSources, SONARE_SYNTH_MOD_SOURCE_COUNT, "mod source",
+                     &out.source);
+        enumProperty(routing, "destination", kModDestinations, SONARE_SYNTH_MOD_DESTINATION_COUNT,
+                     "mod destination", &out.destination);
         out.depth = floatProperty(routing, "depth", 0.0f);
       }
     }
@@ -136,14 +176,16 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   };
   val out = val::object();
   out.set("preset", std::string(patch.preset));
-  out.set("engineMode", enum_name(patch.engine_mode, kEngineModes, 8));
-  out.set("waveform", enum_name(patch.waveform, kWaveforms, 6));
+  out.set("engineMode", enum_name(patch.engine_mode, kEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT));
+  out.set("waveform", enum_name(patch.waveform, kWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT));
   out.set("unison", patch.unison);
   out.set("detuneCents", patch.detune_cents);
   out.set("driftCents", patch.drift_cents);
   out.set("drive", patch.drive);
-  out.set("filterModel", enum_name(patch.filter_model, kFilterModels, 5));
-  out.set("filterOutput", enum_name(patch.filter_output, kFilterOutputs, 4));
+  out.set("filterModel",
+          enum_name(patch.filter_model, kFilterModels, SONARE_SYNTH_FILTER_MODEL_COUNT));
+  out.set("filterOutput",
+          enum_name(patch.filter_output, kFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT));
   out.set("cutoffHz", patch.cutoff_hz);
   out.set("resonanceQ", patch.resonance_q);
   out.set("keyTrack", patch.key_track);
@@ -161,14 +203,16 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("lfoToPitchCents", patch.lfo_to_pitch_cents);
   out.set("lfo2RateHz", patch.lfo2_rate_hz);
   out.set("glideMs", patch.glide_ms);
-  out.set("body", enum_name(patch.body, kBodyTypes, 5));
+  out.set("body", enum_name(patch.body, kBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT));
   out.set("bodyMix", patch.body_mix);
   out.set("stereoSpread", patch.stereo_spread);
   val routings = val::array();
   for (int i = 0; i < patch.num_mod_routings && i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {
     val routing = val::object();
-    routing.set("source", enum_name(patch.mod_routings[i].source, kModSources, 9));
-    routing.set("destination", enum_name(patch.mod_routings[i].destination, kModDestinations, 5));
+    routing.set("source", enum_name(patch.mod_routings[i].source, kModSources,
+                                    SONARE_SYNTH_MOD_SOURCE_COUNT));
+    routing.set("destination", enum_name(patch.mod_routings[i].destination, kModDestinations,
+                                         SONARE_SYNTH_MOD_DESTINATION_COUNT));
     routing.set("depth", patch.mod_routings[i].depth);
     routings.call<void>("push", routing);
   }

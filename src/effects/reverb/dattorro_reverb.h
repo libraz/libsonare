@@ -32,6 +32,7 @@ class DattorroReverb : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
 
   // Automatable parameters:
   //   0 = decay (clamped to [0, 0.98] in process())

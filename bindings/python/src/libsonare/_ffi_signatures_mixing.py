@@ -125,6 +125,13 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(ctypes.c_char_p),
                 ctypes.c_size_t,
             ]
+            if hasattr(lib, "sonare_mixer_set_vca_group_gain_db"):
+                lib.sonare_mixer_set_vca_group_gain_db.restype = ctypes.c_int32
+                lib.sonare_mixer_set_vca_group_gain_db.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_char_p,
+                    ctypes.c_float,
+                ]
             lib.sonare_mixer_remove_vca_group.restype = ctypes.c_int32
             lib.sonare_mixer_remove_vca_group.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
             lib.sonare_mixer_vca_group_count.restype = ctypes.c_int32

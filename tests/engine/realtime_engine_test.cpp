@@ -310,6 +310,55 @@ TEST_CASE("TempoMap re-prepare adopts the new sample rate", "[engine][realtime][
   REQUIRE(map.ppq_to_sample(0.0) == 0);
 }
 
+TEST_CASE("RealtimeEngine schedules clips from the latest tempo snapshot", "[engine][realtime]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 16;
+  constexpr int kClipFrames = 4;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+
+  std::array<float, kClipFrames> clip_l{1.0f, 0.5f, 0.25f, 0.125f};
+  std::array<float, kClipFrames> clip_r{};
+  const float* clip_channels[] = {clip_l.data(), clip_r.data()};
+
+  engine.set_tempo(60.0);
+  std::vector<sonare::engine::ClipSchedule> clips;
+  clips.emplace_back(1u, sonare::engine::ClipAudioBuffer{clip_channels, 2, kClipFrames}, 1.0, 0, 0,
+                     kClipFrames, false, 1.0f, 0, 0);
+  engine.set_clips(std::move(clips));
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  sonare::rt::Command seek{};
+  seek.type = sonare::rt::CommandType::kTransportSeekSample;
+  seek.sample_time = -1;
+  seek.arg.i = 24000;
+  REQUIRE(engine.push_command(seek));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, kBlock);
+
+  for (float sample : left) {
+    REQUIRE(sample == 0.0f);
+  }
+
+  seek.arg.i = 48000;
+  REQUIRE(engine.push_command(seek));
+  left.fill(0.0f);
+  right.fill(0.0f);
+  engine.process(io, 2, kBlock);
+
+  REQUIRE(left[0] == 1.0f);
+  REQUIRE(left[1] == 0.5f);
+  REQUIRE(left[2] == 0.25f);
+  REQUIRE(left[3] == 0.125f);
+}
+
 TEST_CASE("RealtimeEngine offline render matches block process", "[engine][realtime][offline]") {
   constexpr int kFrames = 512;
   constexpr int kBlock = 128;

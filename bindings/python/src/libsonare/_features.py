@@ -1817,6 +1817,7 @@ def mel_to_stft(
     n_fft: int = 2048,
     fmin: float = 0.0,
     fmax: float = 0.0,
+    htk: bool = False,
 ) -> InverseResult:
     """Approximate inverse of a Mel filterbank (Mel power -> STFT power).
 
@@ -1829,6 +1830,7 @@ def mel_to_stft(
             (default 2048).
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
         fmax: Maximum Mel frequency in Hz (0.0 = sr/2).
+        htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
         An :class:`InverseResult` with the reconstructed STFT power matrix.
@@ -1840,16 +1842,31 @@ def mel_to_stft(
     if length != n_mels * n_frames:
         raise ValueError("mel length must equal n_mels * n_frames")
     out = SonareInverseResult()
-    rc = lib.sonare_mel_to_stft(
-        c_array,
-        ctypes.c_int(n_mels),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_float(fmin),
-        ctypes.c_float(fmax),
-        ctypes.byref(out),
-    )
+    if htk:
+        if not hasattr(lib, "sonare_mel_to_stft_ex"):
+            raise RuntimeError("libsonare was built without HTK inverse-reconstruction support")
+        rc = lib.sonare_mel_to_stft_ex(
+            c_array,
+            ctypes.c_int(n_mels),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_fft),
+            ctypes.c_float(fmin),
+            ctypes.c_float(fmax),
+            ctypes.c_int(1),
+            ctypes.byref(out),
+        )
+    else:
+        rc = lib.sonare_mel_to_stft(
+            c_array,
+            ctypes.c_int(n_mels),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_fft),
+            ctypes.c_float(fmin),
+            ctypes.c_float(fmax),
+            ctypes.byref(out),
+        )
     _check(rc)
     try:
         total = out.rows * out.n_frames
@@ -1872,6 +1889,7 @@ def mel_to_audio(
     fmin: float = 0.0,
     fmax: float = 0.0,
     n_iter: int = 32,
+    htk: bool = False,
 ) -> list[float]:
     """Reconstruct audio from a Mel spectrogram via Griffin-Lim.
 
@@ -1885,6 +1903,7 @@ def mel_to_audio(
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
         fmax: Maximum Mel frequency in Hz (0.0 = sr/2).
         n_iter: Griffin-Lim iterations (default 32).
+        htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
         The reconstructed audio samples.
@@ -1897,19 +1916,37 @@ def mel_to_audio(
         raise ValueError("mel length must equal n_mels * n_frames")
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_mel_to_audio(
-        c_array,
-        ctypes.c_int(n_mels),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_float(fmin),
-        ctypes.c_float(fmax),
-        ctypes.c_int(n_iter),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
+    if htk:
+        if not hasattr(lib, "sonare_mel_to_audio_ex"):
+            raise RuntimeError("libsonare was built without HTK inverse-reconstruction support")
+        rc = lib.sonare_mel_to_audio_ex(
+            c_array,
+            ctypes.c_int(n_mels),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_fft),
+            ctypes.c_int(hop_length),
+            ctypes.c_float(fmin),
+            ctypes.c_float(fmax),
+            ctypes.c_int(1),
+            ctypes.c_int(n_iter),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+    else:
+        rc = lib.sonare_mel_to_audio(
+            c_array,
+            ctypes.c_int(n_mels),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_fft),
+            ctypes.c_int(hop_length),
+            ctypes.c_float(fmin),
+            ctypes.c_float(fmax),
+            ctypes.c_int(n_iter),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
     _check(rc)
     try:
         return _float_array_result(out, out_length.value)
@@ -1924,7 +1961,7 @@ def mfcc_to_mel(
     n_frames: int,
     n_mels: int = 128,
 ) -> InverseResult:
-    """Invert MFCC coefficients back to a Mel spectrogram (dB scale).
+    """Invert MFCC coefficients back to a Mel power spectrogram.
 
     Args:
         mfcc_coeffs: MFCC matrix, flattened row-major ``[n_mfcc x n_frames]``.
@@ -1972,6 +2009,7 @@ def mfcc_to_audio(
     fmin: float = 0.0,
     fmax: float = 0.0,
     n_iter: int = 32,
+    htk: bool = False,
 ) -> list[float]:
     """Reconstruct audio directly from MFCC via Mel inversion + Griffin-Lim.
 
@@ -1986,6 +2024,7 @@ def mfcc_to_audio(
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
         fmax: Maximum Mel frequency in Hz (0.0 = sr/2).
         n_iter: Griffin-Lim iterations (default 32).
+        htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
         The reconstructed audio samples.
@@ -1998,20 +2037,39 @@ def mfcc_to_audio(
         raise ValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
-    rc = lib.sonare_mfcc_to_audio(
-        c_array,
-        ctypes.c_int(n_mfcc),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(n_mels),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_float(fmin),
-        ctypes.c_float(fmax),
-        ctypes.c_int(n_iter),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
+    if htk:
+        if not hasattr(lib, "sonare_mfcc_to_audio_ex"):
+            raise RuntimeError("libsonare was built without HTK inverse-reconstruction support")
+        rc = lib.sonare_mfcc_to_audio_ex(
+            c_array,
+            ctypes.c_int(n_mfcc),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(n_mels),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_fft),
+            ctypes.c_int(hop_length),
+            ctypes.c_float(fmin),
+            ctypes.c_float(fmax),
+            ctypes.c_int(1),
+            ctypes.c_int(n_iter),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+    else:
+        rc = lib.sonare_mfcc_to_audio(
+            c_array,
+            ctypes.c_int(n_mfcc),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(n_mels),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_fft),
+            ctypes.c_int(hop_length),
+            ctypes.c_float(fmin),
+            ctypes.c_float(fmax),
+            ctypes.c_int(n_iter),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
     _check(rc)
     try:
         return _float_array_result(out, out_length.value)

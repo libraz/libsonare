@@ -49,3 +49,34 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
     throw new RangeError(`${fnName}: ${argName} must be a finite number`);
   }
 }
+
+export function assertSampleRate(fnName: string, sampleRate: number): void {
+  if (!Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 384000) {
+    throw new RangeError(`${fnName}: sampleRate out of supported range [8000, 384000]`);
+  }
+}
+
+export function assertNonNegativeInteger(fnName: string, value: number, argName: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RangeError(`${fnName}: ${argName} must be a non-negative integer`);
+  }
+}
+
+export function assertPositiveInteger(fnName: string, value: number, argName: string): void {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+  }
+}
+
+export function assertInterleavedSamples(
+  fnName: string,
+  samples: ArrayLike<number>,
+  channels: number,
+  validate: boolean,
+): void {
+  assertSamples(fnName, samples, validate);
+  assertPositiveInteger(fnName, channels, 'channels');
+  if (samples.length % channels !== 0) {
+    throw new RangeError(`${fnName}: samples length must be a multiple of channels`);
+  }
+}

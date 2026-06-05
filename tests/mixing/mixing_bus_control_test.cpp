@@ -193,6 +193,62 @@ TEST_CASE("BusProcessor applies post-sum inserts", "[mixing]") {
   }
 }
 
+TEST_CASE("BusProcessor sidechain slots are sized only when inserts are added", "[mixing]") {
+  class RecordingSidechainProcessor final : public sonare::rt::ProcessorBase {
+   public:
+    void prepare(double, int) override {}
+    void process(float* const*, int, int) override {}
+    void reset() override {}
+    void set_sidechain(const float* const* channels, int num_channels, int num_samples) override {
+      sidechain_channels = num_channels;
+      sidechain_samples = num_samples;
+      first_sample = (channels != nullptr && num_channels > 0 && channels[0] != nullptr)
+                         ? channels[0][0]
+                         : 0.0f;
+    }
+    void clear_sidechain() override {
+      sidechain_channels = 0;
+      sidechain_samples = 0;
+      first_sample = 0.0f;
+    }
+
+    int sidechain_channels = 0;
+    int sidechain_samples = 0;
+    float first_sample = 0.0f;
+  };
+
+  constexpr int kBlock = 4;
+  auto recorder = std::make_unique<RecordingSidechainProcessor>();
+  RecordingSidechainProcessor* raw_recorder = recorder.get();
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  REQUIRE(bus.insert_sidechain_slot_count() == 0);
+  REQUIRE(bus.insert_sidechains_capacity() >= sonare::mixing::BusProcessor::kMaxInserts);
+
+  bus.add_insert(std::move(recorder));
+  REQUIRE(bus.insert_sidechain_slot_count() == 1);
+  const size_t capacity = bus.insert_sidechains_capacity();
+
+  std::array<float, kBlock> key{0.75f, 0.5f, 0.25f, 0.125f};
+  const float* key_channels[] = {key.data()};
+  bus.set_insert_sidechain(7, key_channels, 1, kBlock);
+  REQUIRE(bus.insert_sidechain_slot_count() == 1);
+  REQUIRE(bus.insert_sidechains_capacity() == capacity);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+  bus.process(channels, 2, kBlock);
+  REQUIRE(raw_recorder->sidechain_channels == 0);
+  REQUIRE(raw_recorder->sidechain_samples == 0);
+
+  bus.set_insert_sidechain(0, key_channels, 1, kBlock);
+  bus.process(channels, 2, kBlock);
+  REQUIRE(raw_recorder->sidechain_channels == 1);
+  REQUIRE(raw_recorder->sidechain_samples == kBlock);
+  REQUIRE_THAT(raw_recorder->first_sample, WithinAbs(0.75f, 0.0001f));
+}
+
 TEST_CASE("MeterProcessor publishes peak rms and correlation snapshot", "[mixing]") {
   std::array<float, 4> left{0.5f, -0.5f, 0.5f, -0.5f};
   std::array<float, 4> right{0.5f, -0.5f, 0.5f, -0.5f};

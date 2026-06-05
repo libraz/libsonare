@@ -242,6 +242,11 @@ export class Mixer {
     this.mixer.addVcaGroup(id, gainDb, members);
   }
 
+  /** Set an existing VCA group's gain in dB. */
+  setVcaGroupGainDb(id: string, gainDb: number): void {
+    this.mixer.setVcaGroupGainDb(id, gainDb);
+  }
+
   /** Remove a VCA group by id. */
   removeVcaGroup(id: string): void {
     this.mixer.removeVcaGroup(id);

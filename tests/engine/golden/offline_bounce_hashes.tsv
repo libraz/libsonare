@@ -1,7 +1,7 @@
 # scenario	signal	fnv1a_quantized_interleaved_hash	frames	channels	sample_rate
 src-only	tone	70518f1ea80c5c86	24000	2	24000
 src-only	transient	812f434ca3cb8923	24000	2	24000
-src-lufs-tpdf	tone	e864f4bb16acf954	24000	2	24000
-src-lufs-tpdf	transient	47f0d3bfaafd2e7c	24000	2	24000
-src-lufs-noiseshaped	tone	4d1e086c66cb1cb3	24000	2	24000
-src-lufs-noiseshaped	transient	9993156285e9680b	24000	2	24000
+src-lufs-tpdf	tone	ec7a3b3a2498114b	24000	2	24000
+src-lufs-tpdf	transient	bfa48f23cb5bb92d	24000	2	24000
+src-lufs-noiseshaped	tone	16b840dbe0179069	24000	2	24000
+src-lufs-noiseshaped	transient	639518ca00ed095a	24000	2	24000

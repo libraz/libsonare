@@ -130,11 +130,12 @@ void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor) {
 void BusProcessor::set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                                         int num_channels, int num_samples) {
   const size_t index = insert_index;
-  if (index >= inserts_.size()) {
+  // insert_sidechains_ is sized by add_insert (control thread). Never resize
+  // here: process() reads it on the audio thread, so a resize could grow or
+  // reallocate the vector under the reader. Out-of-range keys are no-ops,
+  // matching ChannelStrip::set_insert_sidechain().
+  if (index >= insert_sidechains_.size()) {
     return;
-  }
-  if (insert_sidechains_.size() < inserts_.size()) {
-    insert_sidechains_.resize(inserts_.size());
   }
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     insert_sidechains_[index] = {{}, 0, 0, true};

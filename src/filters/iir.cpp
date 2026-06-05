@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/preemphasis.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -200,19 +201,7 @@ std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
 }
 
 std::vector<float> preemphasis(const float* input, size_t size, float coeff) {
-  if (size == 0) {
-    return {};
-  }
-  SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
-
-  std::vector<float> output(size);
-  output[0] = input[0];
-
-  for (size_t i = 1; i < size; ++i) {
-    output[i] = input[i] - coeff * input[i - 1];
-  }
-
-  return output;
+  return sonare::preemphasis(input, size, coeff, 0.0f);
 }
 
 }  // namespace sonare

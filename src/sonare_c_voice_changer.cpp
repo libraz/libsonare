@@ -41,6 +41,51 @@ inline void setup_planar_scratch(SonareRealtimeVoiceChanger* handle, int num_cha
         static_cast<size_t>(ch) * static_cast<size_t>(max_block_size);
   }
 }
+
+SonareError process_realtime_voice_change_compensated(SonareRealtimeVoiceChanger* handle,
+                                                      const float* samples, size_t length,
+                                                      int channels, int block_size, float* output) {
+  if (!handle || !samples || !output || channels < 1 || channels > 2 || block_size <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  int latency = handle->changer.latency_samples();  // per-channel frame count
+  if (latency < 0) latency = 0;
+  const size_t latency_frames = static_cast<size_t>(latency);
+  const size_t block = static_cast<size_t>(block_size);
+
+  if (channels == 1) {
+    const size_t total = length + latency_frames;
+    std::vector<float> in(total, 0.0f);
+    std::copy(samples, samples + length, in.begin());
+    std::vector<float> proc(total, 0.0f);
+    for (size_t pos = 0; pos < total; pos += block) {
+      const size_t n = std::min(block, total - pos);
+      SonareError err =
+          sonare_realtime_voice_changer_process_mono(handle, in.data() + pos, proc.data() + pos, n);
+      if (err != SONARE_OK) return err;
+    }
+    std::copy(proc.begin() + static_cast<std::ptrdiff_t>(latency_frames),
+              proc.begin() + static_cast<std::ptrdiff_t>(latency_frames + length), output);
+    return SONARE_OK;
+  }
+
+  if (length % 2 != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  const size_t frames = length / 2;
+  const size_t total_frames = frames + latency_frames;
+  std::vector<float> in(total_frames * 2, 0.0f);
+  std::copy(samples, samples + length, in.begin());
+  std::vector<float> proc(total_frames * 2, 0.0f);
+  for (size_t frame = 0; frame < total_frames; frame += block) {
+    const size_t block_frames = std::min(block, total_frames - frame);
+    const size_t offset = frame * 2;
+    SonareError err = sonare_realtime_voice_changer_process_interleaved(
+        handle, in.data() + offset, proc.data() + offset, block_frames, channels);
+    if (err != SONARE_OK) return err;
+  }
+  std::copy(proc.begin() + static_cast<std::ptrdiff_t>(latency_frames * 2),
+            proc.begin() + static_cast<std::ptrdiff_t>(latency_frames * 2 + length), output);
+  return SONARE_OK;
+}
 #endif
 
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
@@ -86,49 +131,10 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
   std::unique_ptr<SonareRealtimeVoiceChanger, decltype(&sonare_realtime_voice_changer_destroy)>
       handle(raw_handle, sonare_realtime_voice_changer_destroy);
 
-  // The realtime chain has processing latency (overlap-add retune grain plus any
-  // ISP-limiter lookahead), so a naive `length`-in/`length`-out render would be
-  // shifted by that latency with a silent pre-roll at the head and the final
-  // `latency` samples of real signal truncated. Compensate so the offline result
-  // lines up with the source like the dedicated offline sonare_voice_change does:
-  // feed an extra `latency` frames of silence (tail flush) and drop the first
-  // `latency` frames of output (front pre-roll). For the latency-free default
-  // (neutral-monitor) this collapses to the original 1:1 render.
-  int latency = handle->changer.latency_samples();  // per-channel frame count
-  if (latency < 0) latency = 0;
-  const size_t latency_frames = static_cast<size_t>(latency);
-
   std::unique_ptr<float[]> output(new float[length]);
-  if (channels == 1) {
-    const size_t total = length + latency_frames;
-    std::vector<float> in(total, 0.0f);
-    std::copy(samples, samples + length, in.begin());
-    std::vector<float> proc(total, 0.0f);
-    for (size_t pos = 0; pos < total; pos += static_cast<size_t>(kBlockSize)) {
-      const size_t block = std::min(static_cast<size_t>(kBlockSize), total - pos);
-      err = sonare_realtime_voice_changer_process_mono(handle.get(), in.data() + pos,
-                                                       proc.data() + pos, block);
-      if (err != SONARE_OK) return err;
-    }
-    std::copy(proc.begin() + static_cast<std::ptrdiff_t>(latency_frames),
-              proc.begin() + static_cast<std::ptrdiff_t>(latency_frames + length), output.get());
-  } else {
-    const size_t frames = length / 2;
-    const size_t total_frames = frames + latency_frames;
-    std::vector<float> in(total_frames * 2, 0.0f);
-    std::copy(samples, samples + length, in.begin());
-    std::vector<float> proc(total_frames * 2, 0.0f);
-    for (size_t frame = 0; frame < total_frames; frame += static_cast<size_t>(kBlockSize)) {
-      const size_t block_frames = std::min(static_cast<size_t>(kBlockSize), total_frames - frame);
-      const size_t offset = frame * 2;
-      err = sonare_realtime_voice_changer_process_interleaved(
-          handle.get(), in.data() + offset, proc.data() + offset, block_frames, channels);
-      if (err != SONARE_OK) return err;
-    }
-    std::copy(proc.begin() + static_cast<std::ptrdiff_t>(latency_frames * 2),
-              proc.begin() + static_cast<std::ptrdiff_t>(latency_frames * 2 + length),
-              output.get());
-  }
+  err = process_realtime_voice_change_compensated(handle.get(), samples, length, channels,
+                                                  kBlockSize, output.get());
+  if (err != SONARE_OK) return err;
 
   *out_length = length;
   *out = release_array(output);

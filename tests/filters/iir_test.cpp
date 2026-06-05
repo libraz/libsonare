@@ -237,3 +237,14 @@ TEST_CASE("apply_biquad empty input", "[iir]") {
   auto result = apply_biquad(empty, coeffs);
   REQUIRE(result.empty());
 }
+
+TEST_CASE("IIR preemphasis keeps zero initial condition contract", "[iir]") {
+  const std::vector<float> input{0.5f, 1.0f, -0.25f};
+
+  auto result = preemphasis(input.data(), input.size(), 0.5f);
+
+  REQUIRE(result.size() == input.size());
+  REQUIRE_THAT(result[0], WithinAbs(0.5f, 1e-6f));
+  REQUIRE_THAT(result[1], WithinAbs(0.75f, 1e-6f));
+  REQUIRE_THAT(result[2], WithinAbs(-0.75f, 1e-6f));
+}

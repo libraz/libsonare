@@ -55,6 +55,19 @@ def _make_sysex_smf() -> bytes:
     return bytes(smf)
 
 
+def _dangling_source_json() -> str:
+    return (
+        '{"version":1,"sample_rate":48000,'
+        '"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"",'
+        '"output_target":"","midi_destination_id":0,"automation_lanes":[]}],'
+        '"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,'
+        '"length_ppq":1,"source_offset_ppq":0,"gain":1,'
+        '"fade_in":{"length_ppq":0,"curve":0},'
+        '"fade_out":{"length_ppq":0,"curve":0},'
+        '"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]}'
+    )
+
+
 def _build_project() -> tuple[Project, int, int, int]:
     """Build a small non-trivial project: audio track+clip and MIDI track+clip."""
     project = Project()
@@ -126,6 +139,15 @@ def test_malformed_deserialize_raises_without_crashing() -> None:
         Project.from_json("{ this is not valid project json ]]")
     with pytest.raises(ValueError):
         Project.from_json(b"")
+
+
+def test_from_json_with_diagnostics_returns_success_warnings() -> None:
+    result = Project.from_json_with_diagnostics(_dangling_source_json())
+    try:
+        assert "dangling_clip_source" in result.diagnostics
+        assert result.project.track_count() == 1
+    finally:
+        result.project.close()
 
 
 # --- bounce ----------------------------------------------------------------
@@ -339,6 +361,8 @@ def test_compile_surfaces_renderable_timeline() -> None:
         assert result.diagnostic_count == 1
         assert result.diagnostics[0].code == 10
         assert result.diagnostics[0].severity == 1  # warning
+        assert "project contains MIDI clips" in result.diagnostics[0].message
+        assert result.messages.splitlines()[0] == result.diagnostics[0].message
     finally:
         project.close()
 

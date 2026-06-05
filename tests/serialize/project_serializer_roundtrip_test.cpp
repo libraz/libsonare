@@ -721,6 +721,20 @@ TEST_CASE("out-of-range MIDI content keys are ignored instead of truncating to u
   CHECK(found_sysex_key);
 }
 
+TEST_CASE("out-of-range uint fields fall back instead of wrapping", "[serialize]") {
+  const std::string in =
+      "{\"version\": 1, "
+      "\"sources\": [{\"kind\": 0, \"id\": 5000000000.0}], "
+      "\"tracks\": [{\"id\": 5000000000.0, \"kind\": 0}], "
+      "\"clips\": [{\"id\": 5000000000.0, \"track_id\": 5000000000.0, "
+      "\"source_id\": 5000000000.0, \"length_ppq\": 1.0}]}";
+  auto result = project_from_json(in);
+  REQUIRE(result.ok());
+  CHECK(result.project->sources().empty());
+  CHECK(result.project->tracks().empty());
+  CHECK(result.project->clips().empty());
+}
+
 TEST_CASE("dangling clip references and source-kind mismatch emit diagnostics", "[serialize]") {
   // A clip referencing a non-existent source and track.
   const std::string dangling =

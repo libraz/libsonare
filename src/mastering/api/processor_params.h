@@ -54,6 +54,7 @@
 #include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/amp_sim.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
@@ -706,6 +707,18 @@ inline saturation::MultibandExciterConfig multiband_exciter_config(const ParamMa
     config.bands[index].even_odd_mix =
         f(params, (prefix + "evenOddMix").c_str(), config.bands[index].even_odd_mix);
   }
+  return config;
+}
+
+inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params) {
+  saturation::AmpSimConfig config;
+  config.drive = f(params, "drive", config.drive);
+  config.bass_db = f(params, "bassDb", config.bass_db);
+  config.mid_db = f(params, "midDb", config.mid_db);
+  config.treble_db = f(params, "trebleDb", config.treble_db);
+  config.presence_db = f(params, "presenceDb", config.presence_db);
+  config.cab = b(params, "cab", config.cab);
+  config.level_db = f(params, "levelDb", config.level_db);
   return config;
 }
 

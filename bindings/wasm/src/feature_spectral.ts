@@ -5,6 +5,8 @@ import type {
   WasmLufsResult,
   WasmMatrix2dResult,
 } from './sonare.js';
+import type { ValidateOptions } from './validation';
+import { assertInterleavedSamples, assertSampleRate } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -221,7 +223,10 @@ export function lufsInterleaved(
   samples: Float32Array,
   channels: number,
   sampleRate = 22050,
+  options: ValidateOptions = {},
 ): WasmLufsResult {
+  assertSampleRate('lufsInterleaved', sampleRate);
+  assertInterleavedSamples('lufsInterleaved', samples, channels, options.validate !== false);
   return requireModule().lufsInterleaved(samples, channels, sampleRate);
 }
 

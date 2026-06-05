@@ -25,12 +25,15 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   max_block_size_ = std::max(max_block_size, 1);
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   tempo_map_.prepare(sample_rate);
-  transport_.prepare(sample_rate, &tempo_map_);
+  publish_tempo_map_snapshot();
+  active_tempo_map_ = tempo_map_snapshot_.load();
+  if (active_tempo_map_ == nullptr) active_tempo_map_ = &tempo_map_;
+  transport_.prepare(sample_rate, active_tempo_map_);
   clip_player_.prepare(sample_rate, max_block_size_);
-  clip_player_.set_tempo_map(&tempo_map_);
+  clip_player_.set_tempo_map(active_tempo_map_);
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.prepare(sample_rate);
-  midi_clock_.prepare(&tempo_map_);
+  midi_clock_.prepare(active_tempo_map_);
   // Pre-size the host-instrument render scratch (channel-planar) so the audio
   // path never allocates when an instrument is registered. Re-prepare an
   // already-registered instrument so it matches the new block size.
@@ -61,14 +64,14 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   // latency is known now that they have been prepared).
   recompute_pdc();
 #endif
-  metronome_.prepare(sample_rate, &tempo_map_);
+  metronome_.prepare(sample_rate, active_tempo_map_);
 #if defined(SONARE_WITH_MIXING)
   // The engine exposes a single master metering tap; its telemetry always
   // reports target id 0. Multi-tap metering (per-bus/per-strip) is not wired
   // through this entry point — a configurable target id would be needed first.
   meter_tap_.prepare(sample_rate, max_block_size_, 0, telemetry_capacity);
 #endif
-  automation_.prepare(sample_rate, &tempo_map_);
+  automation_.prepare(sample_rate, active_tempo_map_);
 #if defined(SONARE_WITH_MIXING)
   mixing_runtime_.prepare(sample_rate_, max_block_size_);
   monitor_runtime_.prepare(sample_rate_, max_block_size_);
@@ -108,6 +111,31 @@ void RealtimeEngine::process_with_monitor(float* const* io, float* const* monito
   process_impl(io, monitor_out, num_channels, num_frames, false);
 }
 
+void RealtimeEngine::publish_tempo_map_snapshot() {
+  auto map = std::make_shared<transport::TempoMap>();
+  map->prepare(sample_rate_);
+  if (!control_tempo_segments_.empty()) {
+    map->set_segments(control_tempo_segments_);
+  }
+  if (!control_time_signatures_.empty()) {
+    map->set_time_signatures(control_time_signatures_);
+  }
+  tempo_map_snapshot_.publish(std::move(map));
+}
+
+void RealtimeEngine::adopt_tempo_map_snapshot() noexcept {
+  const transport::TempoMap* map = tempo_map_snapshot_.load();
+  if (map == nullptr || map == active_tempo_map_) return;
+  active_tempo_map_ = map;
+  transport_.set_tempo_map(active_tempo_map_);
+  clip_player_.set_tempo_map(active_tempo_map_);
+  automation_.set_tempo_map(active_tempo_map_);
+  metronome_.set_tempo_map(active_tempo_map_);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  midi_clock_.prepare(active_tempo_map_);
+#endif
+}
+
 void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, int num_channels,
                                   int num_frames, bool fold_monitor_to_main) noexcept {
   rt::ScopedNoDenormals no_denormals;
@@ -129,6 +157,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     return;
   }
 
+  adopt_tempo_map_snapshot();
+  const transport::TempoMap& tempo_map = *(active_tempo_map_ ? active_tempo_map_ : &tempo_map_);
   const auto state = transport_.snapshot();
   // Adopt the latest published clip / automation snapshots exactly once at
   // block start. Every per-sub-block read below then sees a stable set, so a
@@ -165,11 +195,11 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   if (transport_.collect_loop_boundaries(frames, &loop_boundaries) && loop_boundaries.size() > 0) {
     boundary_context.loop_wrap = true;
     boundary_context.loop_wrap_offset = loop_boundaries[0].offset;
-    boundary_context.loop_start_timeline_sample = tempo_map_.ppq_to_sample(state.loop_start_ppq);
+    boundary_context.loop_start_timeline_sample = tempo_map.ppq_to_sample(state.loop_start_ppq);
     // Carry the loop length so timeline_at_offset can fold offsets past the
     // first wrap; with a short loop and a large block the playhead can wrap
     // more than once within this block.
-    const int64_t loop_end_sample = tempo_map_.ppq_to_sample(state.loop_end_ppq);
+    const int64_t loop_end_sample = tempo_map.ppq_to_sample(state.loop_end_ppq);
     boundary_context.loop_len_samples =
         loop_end_sample - boundary_context.loop_start_timeline_sample;
   }
@@ -206,7 +236,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     // Pre-wrap region: timeline runs forward to loop_end.
     automation_.collect_boundaries(state.ppq_position, state.loop_end_ppq, &automation_boundaries);
     for (size_t i = 0; i < automation_boundaries.size; ++i) {
-      const int64_t timeline_sample = tempo_map_.ppq_to_sample(automation_boundaries.ppq[i]);
+      const int64_t timeline_sample = tempo_map.ppq_to_sample(automation_boundaries.ppq[i]);
       const int offset = static_cast<int>(timeline_sample - state.sample_position);
       if (offset >= 0 && offset < wrap_offset) {
         boundary_splitter_.add_automation(offset);
@@ -218,11 +248,11 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     const int64_t tail_frames = static_cast<int64_t>(frames) - wrap_offset;
     if (tail_frames > 0) {
       const double post_wrap_end_ppq =
-          tempo_map_.sample_to_ppq(boundary_context.loop_start_timeline_sample + tail_frames);
+          tempo_map.sample_to_ppq(boundary_context.loop_start_timeline_sample + tail_frames);
       automation_.collect_boundaries(state.loop_start_ppq, post_wrap_end_ppq,
                                      &automation_boundaries);
       for (size_t i = 0; i < automation_boundaries.size; ++i) {
-        const int64_t timeline_sample = tempo_map_.ppq_to_sample(automation_boundaries.ppq[i]);
+        const int64_t timeline_sample = tempo_map.ppq_to_sample(automation_boundaries.ppq[i]);
         const int offset =
             wrap_offset +
             static_cast<int>(timeline_sample - boundary_context.loop_start_timeline_sample);
@@ -232,10 +262,10 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
       }
     }
   } else {
-    const double block_end_ppq = tempo_map_.sample_to_ppq(state.sample_position + frames);
+    const double block_end_ppq = tempo_map.sample_to_ppq(state.sample_position + frames);
     automation_.collect_boundaries(state.ppq_position, block_end_ppq, &automation_boundaries);
     for (size_t i = 0; i < automation_boundaries.size; ++i) {
-      const int64_t timeline_sample = tempo_map_.ppq_to_sample(automation_boundaries.ppq[i]);
+      const int64_t timeline_sample = tempo_map.ppq_to_sample(automation_boundaries.ppq[i]);
       boundary_splitter_.add_automation(static_cast<int>(timeline_sample - state.sample_position));
     }
   }
@@ -462,19 +492,37 @@ bool RealtimeEngine::pop_telemetry(Telemetry& out) noexcept {
   return telemetry_.pop(out);
 }
 
-void RealtimeEngine::set_tempo(double bpm) { tempo_map_.set_segments({{0.0, bpm, 0.0}}); }
+transport::TransportState RealtimeEngine::transport_state_control() const noexcept {
+  transport::TransportState state = transport_.snapshot_control();
+  const transport::TempoMap* snapshot = tempo_map_snapshot_.load();
+  const transport::TempoMap& map = *(snapshot ? snapshot : &tempo_map_);
+  state.ppq_position = map.sample_to_ppq(state.sample_position);
+  state.bpm = map.bpm_at_sample(state.sample_position);
+  state.bar_start_ppq = map.bar_start_ppq(state.ppq_position);
+  state.bar_count = map.ppq_to_bar_beat(state.ppq_position).bar;
+  state.time_sig = map.time_signature_at_ppq(state.ppq_position);
+  return state;
+}
+
+void RealtimeEngine::set_tempo(double bpm) {
+  control_tempo_segments_ = {{0.0, bpm, 0.0}};
+  publish_tempo_map_snapshot();
+}
 
 void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> segments) {
-  tempo_map_.set_segments(std::move(segments));
+  control_tempo_segments_ = std::move(segments);
+  publish_tempo_map_snapshot();
 }
 
 void RealtimeEngine::set_time_signature(int numerator, int denominator) {
-  tempo_map_.set_time_signatures({{0.0, {numerator, denominator}}});
+  control_time_signatures_ = {{0.0, {numerator, denominator}}};
+  publish_tempo_map_snapshot();
 }
 
 void RealtimeEngine::set_time_signature_segments(
     std::vector<transport::TimeSignatureSegment> segments) {
-  tempo_map_.set_time_signatures(std::move(segments));
+  control_time_signatures_ = std::move(segments);
+  publish_tempo_map_snapshot();
 }
 
 void RealtimeEngine::set_loop(double start_ppq, double end_ppq, bool enabled) noexcept {
@@ -515,11 +563,20 @@ void RealtimeEngine::set_metronome_config(MetronomeConfig config) noexcept {
 }
 
 int64_t RealtimeEngine::count_in_end_sample(int64_t start_sample, int bars) const noexcept {
-  return metronome_.count_in_end_sample(start_sample, bars);
+  if (bars <= 0) return start_sample;
+  const transport::TempoMap* snapshot = tempo_map_snapshot_.load();
+  const transport::TempoMap& map = *(snapshot ? snapshot : &tempo_map_);
+  const double start_ppq = map.sample_to_ppq(start_sample);
+  const double bar_start = map.bar_start_ppq(start_ppq);
+  const transport::TimeSignature sig = map.time_signature_at_ppq(start_ppq);
+  const double bar_len = static_cast<double>(std::max(sig.numerator, 1)) * 4.0 /
+                         static_cast<double>(std::max(sig.denominator, 1));
+  return map.ppq_to_sample(bar_start + bar_len * static_cast<double>(bars));
 }
 
 void RealtimeEngine::set_clips(std::vector<ClipSchedule> clips) {
-  clip_player_.set_clips(std::move(clips));
+  const transport::TempoMap* map = tempo_map_snapshot_.load();
+  clip_player_.set_clips(std::move(clips), map ? map : &tempo_map_);
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)

@@ -105,48 +105,82 @@ export interface Sf2ProgramStatus {
   presetName: string;
 }
 
+export const SYNTH_ENGINE_MODES = [
+  'default',
+  'subtractive',
+  'fm',
+  'karplus-strong',
+  'modal',
+  'additive',
+  'percussion',
+  'piano',
+] as const;
+export const SYNTH_OSC_WAVEFORMS = [
+  'default',
+  'sine',
+  'saw',
+  'square',
+  'triangle',
+  'noise',
+] as const;
+export const SYNTH_FILTER_MODELS = [
+  'default',
+  'svf',
+  'moog-ladder',
+  'diode-ladder',
+  'sallen-key',
+] as const;
+export const SYNTH_FILTER_OUTPUTS = ['default', 'lowpass', 'bandpass', 'highpass'] as const;
+export const SYNTH_BODY_TYPES = ['default', 'none', 'guitar', 'violin', 'wood-tube'] as const;
+export const SYNTH_MOD_SOURCES = [
+  'none',
+  'amp-env',
+  'filter-env',
+  'lfo1',
+  'lfo2',
+  'velocity',
+  'key-track',
+  'mod-wheel',
+  'random',
+] as const;
+export const SYNTH_MOD_DESTINATIONS = [
+  'none',
+  'pitch-cents',
+  'cutoff-cents',
+  'amp-gain',
+  'pan-units',
+] as const;
+
+export interface SynthEnumTables {
+  engineModes: string[];
+  waveforms: string[];
+  filterModels: string[];
+  filterOutputs: string[];
+  bodyTypes: string[];
+  modSources: string[];
+  modDestinations: string[];
+}
+
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
-export type SynthEngineMode =
-  | 'default'
-  | 'subtractive'
-  | 'fm'
-  | 'karplus-strong'
-  | 'modal'
-  | 'additive'
-  | 'percussion'
-  | 'piano';
+export type SynthEngineMode = (typeof SYNTH_ENGINE_MODES)[number];
 
 /** NativeSynth oscillator waveform (`'default'` keeps the base patch's). */
-export type SynthOscWaveform = 'default' | 'sine' | 'saw' | 'square' | 'triangle' | 'noise';
+export type SynthOscWaveform = (typeof SYNTH_OSC_WAVEFORMS)[number];
 
 /** NativeSynth filter model — the character core (`'default'` keeps the base patch's). */
-export type SynthFilterModel = 'default' | 'svf' | 'moog-ladder' | 'diode-ladder' | 'sallen-key';
+export type SynthFilterModel = (typeof SYNTH_FILTER_MODELS)[number];
 
 /** NativeSynth filter output (SVF only; `'default'` keeps the base patch's). */
-export type SynthFilterOutput = 'default' | 'lowpass' | 'bandpass' | 'highpass';
+export type SynthFilterOutput = (typeof SYNTH_FILTER_OUTPUTS)[number];
 
 /** NativeSynth body/formant resonance voicing (`'default'` keeps the base patch's). */
-export type SynthBodyType = 'default' | 'none' | 'guitar' | 'violin' | 'wood-tube';
+export type SynthBodyType = (typeof SYNTH_BODY_TYPES)[number];
 
 /** {@link SynthPatch} mod-matrix source. */
-export type SynthModSource =
-  | 'none'
-  | 'amp-env'
-  | 'filter-env'
-  | 'lfo1'
-  | 'lfo2'
-  | 'velocity'
-  | 'key-track'
-  | 'mod-wheel'
-  | 'random';
+export type SynthModSource = (typeof SYNTH_MOD_SOURCES)[number];
 
 /** {@link SynthPatch} mod-matrix destination. */
-export type SynthModDestination =
-  | 'none'
-  | 'pitch-cents'
-  | 'cutoff-cents'
-  | 'amp-gain'
-  | 'pan-units';
+export type SynthModDestination = (typeof SYNTH_MOD_DESTINATIONS)[number];
 
 /** One {@link SynthPatch} mod-matrix routing (name or C ordinal per field). */
 export interface SynthModRouting {
@@ -164,15 +198,21 @@ export interface SynthModRouting {
  * {@link synthPresetNames}; a `"va:"` routing prefix is accepted) or, when
  * `preset` is omitted, the default subtractive patch. Every numeric field then
  * uses "0 / omit => keep the base value" (non-zero values override, clamped to
- * their audible ranges) and the enum fields reserve `'default'` as keep. A
- * non-empty `modRoutings` REPLACES the base mod matrix.
+ * their audible ranges) and the enum fields reserve `'default'` as keep. The
+ * frozen C ABI has no per-field presence bits, so explicit zero numeric
+ * overrides (for example `ampSustain: 0`) cannot be represented; they keep the
+ * base value. A non-empty `modRoutings` REPLACES the base mod matrix.
  *
  * Mode-specific deep parameters (FM operator stacks, modal mode tables,
  * drawbar registrations, kit pieces, piano strings) travel inside the named
  * presets; the patch exposes the wrapper sections every engine shares.
  */
 export interface SynthPatch {
-  /** MIDI destination id this patch renders (default 0; see {@link Project.setTrackMidiDestination}). */
+  /**
+   * Optional binding convenience for JS realtime/offline helpers. It is not
+   * part of the NativeSynth patch itself; Python uses explicit
+   * `(destination_id, patch)` bindings instead. Defaults to `0`.
+   */
   destinationId?: number;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
   preset?: string;
@@ -195,10 +235,12 @@ export interface SynthPatch {
   velToCutoffCents?: number;
   ampAttackMs?: number;
   ampDecayMs?: number;
+  /** 0 / omit keeps the base value; explicit zero sustain is not representable. */
   ampSustain?: number;
   ampReleaseMs?: number;
   filterAttackMs?: number;
   filterDecayMs?: number;
+  /** 0 / omit keeps the base value; explicit zero sustain is not representable. */
   filterSustain?: number;
   filterReleaseMs?: number;
   lfoRateHz?: number;
@@ -429,6 +471,8 @@ export interface ProjectDiagnostic {
   severity: number;
   /** Affected clip / track / source id (0 = n/a). */
   targetId: number;
+  /** Human-readable message for this diagnostic. */
+  message: string;
 }
 
 /** Diagnostics summary returned by {@link Project.compile}. */
@@ -440,6 +484,11 @@ export interface ProjectCompileResult {
   /** Newline-joined human-readable detail of every diagnostic. */
   messages: string;
   diagnostics: ProjectDiagnostic[];
+}
+
+export interface ProjectDeserializeResult {
+  project: Project;
+  diagnostics: string;
 }
 
 // Embind handle for the C++ `ProjectWasm` class. The generated `SonareModule`
@@ -550,10 +599,13 @@ interface ProjectModule {
   Project: {
     new (): WasmProject;
     fromJson: (json: string) => WasmProject;
+    fromJsonWithDiagnostics: (json: string) => { project: WasmProject; diagnostics: string };
   };
   projectAbiVersion: () => number;
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => SynthPatch;
+  _synthEnumTables: () => SynthEnumTables;
+  _synthPatchRoundTrip: (patch: SynthPatch) => SynthPatch;
   midiGmInstrumentName: (program: number) => string | null;
   midiGmProgramForName: (name: string) => number;
   midiGmFamilyName: (family: number) => string | null;
@@ -709,6 +761,14 @@ export function synthPresetNames(): string[] {
  */
 export function synthPresetPatch(name: string): SynthPatch {
   return projectModule().synthPresetPatch(name);
+}
+
+export function synthEnumTables(): SynthEnumTables {
+  return projectModule()._synthEnumTables();
+}
+
+export function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
+  return projectModule()._synthPatchRoundTrip(patch);
 }
 
 /**
@@ -965,6 +1025,25 @@ export class Project {
     return project;
   }
 
+  /**
+   * Deserialize project JSON and return native warning diagnostics emitted on
+   * successful loads, such as dangling source references preserved for repair.
+   */
+  static fromJsonWithDiagnostics(json: string): ProjectDeserializeResult {
+    const project = new Project();
+    const restored = (() => {
+      try {
+        return projectModule().Project.fromJsonWithDiagnostics(json);
+      } catch (error) {
+        project.native.delete();
+        throw error;
+      }
+    })();
+    project.native.delete();
+    project.native = restored.project;
+    return { project, diagnostics: restored.diagnostics };
+  }
+
   /** Serialize the project (+ MIDI content) to deterministic JSON. */
   toJson(): string {
     return this.native.toJson();
@@ -1189,10 +1268,11 @@ export class Project {
    * Karplus-Strong / modal / additive / percussion / extended-waveguide-piano
    * engines plus the realism layer). Pass a {@link SynthPatch}, a preset-name
    * string (`'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}), or
-   * an array of either; each entry may carry a `destinationId` (default 0).
-   * An explicitly empty array (or `undefined` / `null`) produces zero
-   * bindings. Unknown preset names throw. Deterministic for a fixed project +
-   * options + patch.
+   * an array of either; each object entry may carry a `destinationId` binding
+   * convenience (default 0), which is not part of the NativeSynth patch itself.
+   * An explicitly empty array (or `undefined` / `null`) produces zero bindings.
+   * Unknown preset names throw. Deterministic for a fixed project + options +
+   * patch.
    */
   bounceWithSynthInstrument(
     instrument: SynthPatch | string | ReadonlyArray<SynthPatch | string> = {},

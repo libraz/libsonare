@@ -137,7 +137,9 @@ typedef struct {
   float confidence;
 } SonareTimeSignature;
 
-// Analysis result structure
+// Flat analysis result structure. Producing this result runs the full quick
+// analysis pipeline because the flat result still includes meter/beat data;
+// use sonare_detect_bpm/key/beats for cheaper single-purpose queries.
 typedef struct {
   float bpm;
   float bpm_confidence;
@@ -397,6 +399,8 @@ SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_
                                           size_t* out_count);
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count);
+// Runs the full quick analysis pipeline and fills the flat C result. Use the
+// single-purpose sonare_audio_detect_* helpers for cheaper queries.
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out);
 
 // Quick detection functions
@@ -436,7 +440,8 @@ SonareError sonare_detect_downbeats(const float* samples, size_t length, int sam
 SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
                                  float** out_times, size_t* out_count);
 
-// Full analysis
+// Runs the full quick analysis pipeline and fills the flat C result. Use the
+// single-purpose sonare_detect_* helpers for cheaper queries.
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out);
 
@@ -753,6 +758,7 @@ typedef enum {
   SONARE_SYNTH_ENGINE_PERCUSSION = 6,
   SONARE_SYNTH_ENGINE_PIANO = 7
 } SonareSynthEngineMode;
+#define SONARE_SYNTH_ENGINE_MODE_COUNT 8
 
 /* Oscillator waveform (subtractive mode). 0 keeps the base patch's value. */
 typedef enum {
@@ -763,6 +769,7 @@ typedef enum {
   SONARE_SYNTH_OSC_TRIANGLE = 4,
   SONARE_SYNTH_OSC_NOISE = 5
 } SonareSynthOscWaveform;
+#define SONARE_SYNTH_OSC_WAVEFORM_COUNT 6
 
 /* Filter model (the character core). 0 keeps the base patch's value. */
 typedef enum {
@@ -772,6 +779,7 @@ typedef enum {
   SONARE_SYNTH_FILTER_DIODE_LADDER = 3,
   SONARE_SYNTH_FILTER_SALLEN_KEY = 4
 } SonareSynthFilterModel;
+#define SONARE_SYNTH_FILTER_MODEL_COUNT 5
 
 /* Which filter output the voice mixes (SVF only; the ladder and Sallen-Key
    models are lowpass-only). 0 keeps the base patch's value. */
@@ -781,6 +789,7 @@ typedef enum {
   SONARE_SYNTH_FILTER_OUT_BANDPASS = 2,
   SONARE_SYNTH_FILTER_OUT_HIGHPASS = 3
 } SonareSynthFilterOutput;
+#define SONARE_SYNTH_FILTER_OUTPUT_COUNT 4
 
 /* Body/formant resonance voicing. 0 keeps the base patch's value;
    SONARE_SYNTH_BODY_NONE explicitly disables a preset's body. */
@@ -791,6 +800,10 @@ typedef enum {
   SONARE_SYNTH_BODY_VIOLIN = 3,
   SONARE_SYNTH_BODY_WOOD_TUBE = 4
 } SonareSynthBodyType;
+#define SONARE_SYNTH_BODY_TYPE_COUNT 5
+
+#define SONARE_SYNTH_MOD_SOURCE_COUNT 9
+#define SONARE_SYNTH_MOD_DESTINATION_COUNT 5
 
 /* One mod-matrix routing. Source/destination mirror the core ordinals
    directly; a slot with source or destination 0 (none) is disabled. */
@@ -813,7 +826,11 @@ typedef struct {
    is empty, the default subtractive patch. Every numeric field then uses
    "0 => keep the base value"; non-zero values override (and are clamped to
    their audible ranges). Enum fields reserve 0 as "keep" (see the enums
-   above). A non-empty @c num_mod_routings REPLACES the base mod matrix.
+   above). Because struct_version 1 has no per-field presence bits, explicit
+   zero values for numeric fields (for example @c amp_sustain = 0) cannot be
+   represented through this C ABI; pass a non-zero value or choose a base preset
+   that already contains the desired zero. A non-empty @c num_mod_routings
+   REPLACES the base mod matrix.
 
    Mode-specific deep parameters (FM operator stacks, modal mode tables,
    drawbar registrations, kit pieces, piano strings) travel inside the named
@@ -844,11 +861,11 @@ typedef struct {
   /* --- envelopes (ms / sustain in [0,1]) --- */
   float amp_attack_ms;
   float amp_decay_ms;
-  float amp_sustain;
+  float amp_sustain; /* 0 => base; explicit zero sustain is not representable */
   float amp_release_ms;
   float filter_attack_ms;
   float filter_decay_ms;
-  float filter_sustain;
+  float filter_sustain; /* 0 => base; explicit zero sustain is not representable */
   float filter_release_ms;
 
   /* --- LFOs / glide --- */
@@ -889,6 +906,17 @@ static_assert(offsetof(SonareAnalysisResult, beat_times) ==
 static_assert(offsetof(SonareAnalysisResult, beat_count) ==
                   offsetof(SonareAnalysisResult, beat_times) + sizeof(float*),
               "SonareAnalysisResult tail layout changed");
+
+static_assert(SONARE_SYNTH_ENGINE_PIANO + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
+              "SonareSynthEngineMode count changed");
+static_assert(SONARE_SYNTH_OSC_NOISE + 1 == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
+              "SonareSynthOscWaveform count changed");
+static_assert(SONARE_SYNTH_FILTER_SALLEN_KEY + 1 == SONARE_SYNTH_FILTER_MODEL_COUNT,
+              "SonareSynthFilterModel count changed");
+static_assert(SONARE_SYNTH_FILTER_OUT_HIGHPASS + 1 == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
+              "SonareSynthFilterOutput count changed");
+static_assert(SONARE_SYNTH_BODY_WOOD_TUBE + 1 == SONARE_SYNTH_BODY_TYPE_COUNT,
+              "SonareSynthBodyType count changed");
 
 // Engine POD layout guards. These structs are mirrored by ctypes and are used
 // across the C ABI boundary, so layout drift must be caught at compile time.

@@ -97,6 +97,7 @@ import type {
   StftDbResult,
   StftResult,
   StripRef,
+  SynthEnumTables,
   SynthPatch,
   SynthWaveform,
   TimbreResult,
@@ -115,8 +116,17 @@ export * from './analysis.js';
 export * from './effects_mastering.js';
 export * from './features.js';
 export * from './metering.js';
+export {
+  EXPECTED_PROJECT_ABI_VERSION,
+  SYNTH_BODY_TYPES,
+  SYNTH_ENGINE_MODES,
+  SYNTH_FILTER_MODELS,
+  SYNTH_FILTER_OUTPUTS,
+  SYNTH_MOD_DESTINATIONS,
+  SYNTH_MOD_SOURCES,
+  SYNTH_OSC_WAVEFORMS,
+} from './types.js';
 export type { ValidateOptions } from './validation.js';
-export { EXPECTED_PROJECT_ABI_VERSION };
 
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
@@ -937,6 +947,14 @@ export function synthPresetPatch(name: string): SynthPatch {
   return addon.synthPresetPatch(name);
 }
 
+export function synthEnumTables(): SynthEnumTables {
+  return addon._synthEnumTables();
+}
+
+export function synthPatchRoundTripForTest(patch: SynthPatch): SynthPatch {
+  return addon._synthPatchRoundTrip(patch);
+}
+
 /**
  * Headless arrangement / DAW project (the curated `sonare_project_*` C ABI).
  *
@@ -1169,6 +1187,18 @@ export class Project {
     return new Project(addon.Project.fromJson(json));
   }
 
+  /**
+   * Deserialize project JSON and return native warning diagnostics emitted on
+   * successful loads, such as dangling source references preserved for repair.
+   */
+  static fromJsonWithDiagnostics(json: string): { project: Project; diagnostics: string } {
+    const result = addon.Project.fromJsonWithDiagnostics(json);
+    return {
+      project: new Project(result.project),
+      diagnostics: result.diagnostics,
+    };
+  }
+
   // -- serialization --
 
   /** Serialize the project to deterministic JSON. */
@@ -1305,8 +1335,8 @@ export class Project {
 
   /**
    * Set a clip's fade-in / fade-out regions via an undoable edit. Each fade is
-   * an optional `{ lengthPpq, curve? }` ({@link ProjectClipFade}); pass
-   * `undefined` to leave that side unchanged.
+   * an optional `{ lengthPpq, curve? }` ({@link ProjectClipFade}); omitted
+   * fields and omitted sides become a zero-length linear fade.
    */
   setClipFade(clipId: number, fadeIn?: ProjectClipFade, fadeOut?: ProjectClipFade): void {
     this.native.setClipFade(clipId, fadeIn, fadeOut);
@@ -1572,7 +1602,9 @@ export class Project {
    * Convenience wrapper over {@link bounceWithBuiltinInstruments} for the
    * common single-instrument case. Pass a {@link BuiltinInstrumentConfig}
    * (e.g. `{ waveform: 'saw', destinationId: 0 }`) or a bare
-   * {@link SynthWaveform} name to bind one built-in synth patch.
+   * {@link SynthWaveform} name to bind one built-in synth patch. The
+   * `destinationId` field is a JS binding convenience, not part of the
+   * oscillator patch itself.
    *
    * Argument order is instrument-first to match the WASM and Python bindings.
    */
@@ -1592,8 +1624,10 @@ export class Project {
    * extended-waveguide-piano engines plus the realism layer). Each entry of
    * `instruments` binds a {@link SynthPatch} (or a preset-name string such as
    * `'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}) to a
-   * `destinationId` (default `0`). An empty array renders silence. Unknown
-   * preset names throw. Deterministic for a fixed project + options + patch.
+   * `destinationId` (default `0`). `destinationId` is a JS binding convenience,
+   * not part of the NativeSynth patch itself. An empty array renders silence.
+   * Unknown preset names throw. Deterministic for a fixed project + options +
+   * patch.
    *
    * Argument order is instrument-first to match the WASM and Python bindings.
    */
@@ -1987,6 +2021,11 @@ export class Mixer {
     this.native.addVcaGroup(id, gainDb, members);
   }
 
+  /** Set an existing VCA group's gain in dB. */
+  setVcaGroupGainDb(id: string, gainDb: number): void {
+    this.native.setVcaGroupGainDb(id, gainDb);
+  }
+
   /** Remove a VCA group by id. */
   removeVcaGroup(id: string): void {
     this.native.removeVcaGroup(id);
@@ -2327,6 +2366,7 @@ export type {
   StripRef,
   SynthBodyType,
   SynthEngineMode,
+  SynthEnumTables,
   SynthFilterModel,
   SynthFilterOutput,
   SynthModDestination,

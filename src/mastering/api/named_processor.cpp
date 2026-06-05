@@ -62,6 +62,7 @@
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
+#include "mastering/saturation/amp_sim.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
@@ -280,6 +281,9 @@ void configure_processor(const std::string& name, const ParamMap& params,
     run_processor(p, samples, sample_rate, latency_samples);
   } else if (name == "saturation.multibandExciter") {
     saturation::MultibandExciter p(detail::multiband_exciter_config(params));
+    run_processor(p, samples, sample_rate, latency_samples);
+  } else if (name == "saturation.ampSim") {
+    saturation::AmpSim p(detail::amp_sim_config(params));
     run_processor(p, samples, sample_rate, latency_samples);
   } else if (name == "spectral.airBand") {
     spectral::AirBand p(detail::air_band_config(params));

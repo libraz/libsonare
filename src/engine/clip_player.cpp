@@ -49,10 +49,12 @@ void ClipPlayer::set_tempo_map(const transport::TempoMap* tempo_map) noexcept {
   tempo_map_ = tempo_map;
 }
 
-void ClipPlayer::set_clips(std::vector<ClipSchedule> clips) {
-  if (tempo_map_) {
+void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
+                           const transport::TempoMap* tempo_map_override) {
+  const transport::TempoMap* map = tempo_map_override ? tempo_map_override : tempo_map_;
+  if (map) {
     for (ClipSchedule& clip : clips) {
-      clip.start_sample = tempo_map_->ppq_to_sample(clip.start_ppq);
+      clip.start_sample = map->ppq_to_sample(clip.start_ppq);
     }
   }
   std::sort(clips.begin(), clips.end(), [](const ClipSchedule& a, const ClipSchedule& b) {
@@ -88,15 +90,30 @@ void ClipPlayer::process_at(float* const* channels, int num_channels, int num_sa
 
     const int start = static_cast<int>(std::max<int64_t>(0, clip.start_sample - timeline_sample));
     const int end = static_cast<int>(std::min<int64_t>(num_samples, clip_end - timeline_sample));
-    const int channels_to_copy = std::min(num_channels, clip.buffer.num_channels);
     for (int i = start; i < end; ++i) {
       const int64_t position = timeline_sample + i - clip.start_sample;
       int64_t local = local_position(clip, timeline_sample + i);
       if (local < 0 || local >= clip.buffer.num_samples) continue;
       const float gain = clip.gain * fade_gain(clip, position);
-      for (int ch = 0; ch < channels_to_copy; ++ch) {
-        if (!channels[ch] || !clip.buffer.channels[ch]) continue;
-        channels[ch][i] += clip.buffer.channels[ch][local] * gain;
+      if (num_channels == 1) {
+        if (!channels[0]) continue;
+        float mono = 0.0f;
+        int contributing = 0;
+        for (int src_ch = 0; src_ch < clip.buffer.num_channels; ++src_ch) {
+          if (!clip.buffer.channels[src_ch]) continue;
+          mono += clip.buffer.channels[src_ch][local];
+          ++contributing;
+        }
+        if (contributing > 0) {
+          channels[0][i] += (mono / static_cast<float>(contributing)) * gain;
+        }
+        continue;
+      }
+      for (int ch = 0; ch < num_channels; ++ch) {
+        if (!channels[ch]) continue;
+        const int src_ch = std::min(ch, clip.buffer.num_channels - 1);
+        if (!clip.buffer.channels[src_ch]) continue;
+        channels[ch][i] += clip.buffer.channels[src_ch][local] * gain;
       }
     }
   }

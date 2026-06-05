@@ -110,7 +110,8 @@ class ClipPlayer final : public rt::ProcessorBase {
 
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept;
   void set_timeline_sample(int64_t timeline_sample) noexcept { timeline_sample_ = timeline_sample; }
-  void set_clips(std::vector<ClipSchedule> clips);
+  void set_clips(std::vector<ClipSchedule> clips,
+                 const transport::TempoMap* tempo_map_override = nullptr);
 
   /// Adopt the latest published clip set on the audio thread. Call once at
   /// block start before process_at / collect_boundaries. RT-safe, no alloc.

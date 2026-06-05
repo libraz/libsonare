@@ -15,6 +15,36 @@ from libsonare import (
     synth_preset_names,
     synth_preset_patch,
 )
+from libsonare._project import SYNTH_ENUM_TABLES
+
+EXPECTED_SYNTH_ENUM_TABLES = {
+    "engine_modes": (
+        "default",
+        "subtractive",
+        "fm",
+        "karplus-strong",
+        "modal",
+        "additive",
+        "percussion",
+        "piano",
+    ),
+    "waveforms": ("default", "sine", "saw", "square", "triangle", "noise"),
+    "filter_models": ("default", "svf", "moog-ladder", "diode-ladder", "sallen-key"),
+    "filter_outputs": ("default", "lowpass", "bandpass", "highpass"),
+    "body_types": ("default", "none", "guitar", "violin", "wood-tube"),
+    "mod_sources": (
+        "none",
+        "amp-env",
+        "filter-env",
+        "lfo1",
+        "lfo2",
+        "velocity",
+        "key-track",
+        "mod-wheel",
+        "random",
+    ),
+    "mod_destinations": ("none", "pitch-cents", "cutoff-cents", "amp-gain", "pan-units"),
+}
 
 
 def _build_midi_only_project(note: int = 60) -> Project:
@@ -63,6 +93,54 @@ def test_synth_preset_patch_round_trips() -> None:
         synth_preset_patch("no-such-preset")
 
 
+def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
+    assert SYNTH_ENUM_TABLES == EXPECTED_SYNTH_ENUM_TABLES
+
+    for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["engine_modes"]):
+        by_name = SynthPatch._from_c(SynthPatch(engine_mode=name)._to_c())
+        by_ordinal = SynthPatch._from_c(SynthPatch(engine_mode=ordinal)._to_c())
+        assert by_name.engine_mode == name
+        assert by_ordinal.engine_mode == name
+    for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["waveforms"]):
+        by_name = SynthPatch._from_c(SynthPatch(waveform=name)._to_c())
+        by_ordinal = SynthPatch._from_c(SynthPatch(waveform=ordinal)._to_c())
+        assert by_name.waveform == name
+        assert by_ordinal.waveform == name
+    for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["filter_models"]):
+        by_name = SynthPatch._from_c(SynthPatch(filter_model=name)._to_c())
+        by_ordinal = SynthPatch._from_c(SynthPatch(filter_model=ordinal)._to_c())
+        assert by_name.filter_model == name
+        assert by_ordinal.filter_model == name
+    for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["filter_outputs"]):
+        by_name = SynthPatch._from_c(SynthPatch(filter_output=name)._to_c())
+        by_ordinal = SynthPatch._from_c(SynthPatch(filter_output=ordinal)._to_c())
+        assert by_name.filter_output == name
+        assert by_ordinal.filter_output == name
+    for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["body_types"]):
+        by_name = SynthPatch._from_c(SynthPatch(body=name)._to_c())
+        by_ordinal = SynthPatch._from_c(SynthPatch(body=ordinal)._to_c())
+        assert by_name.body == name
+        assert by_ordinal.body == name
+    for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["mod_sources"]):
+        by_name = SynthPatch._from_c(
+            SynthPatch(mod_routings=(SynthModRouting(name, "pitch-cents", 1.0),))._to_c()
+        )
+        by_ordinal = SynthPatch._from_c(
+            SynthPatch(mod_routings=(SynthModRouting(ordinal, "pitch-cents", 1.0),))._to_c()
+        )
+        assert by_name.mod_routings[0].source == name
+        assert by_ordinal.mod_routings[0].source == name
+    for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["mod_destinations"]):
+        by_name = SynthPatch._from_c(
+            SynthPatch(mod_routings=(SynthModRouting("lfo1", name, 1.0),))._to_c()
+        )
+        by_ordinal = SynthPatch._from_c(
+            SynthPatch(mod_routings=(SynthModRouting("lfo1", ordinal, 1.0),))._to_c()
+        )
+        assert by_name.mod_routings[0].destination == name
+        assert by_ordinal.mod_routings[0].destination == name
+
+
 def test_bounce_with_synth_instrument_renders_presets() -> None:
     project = _build_midi_only_project()
     try:
@@ -101,6 +179,19 @@ def test_synth_patch_overrides_and_mod_matrix() -> None:
             project.bounce_with_synth_instrument(
                 SynthPatch(waveform="sawtooth-ish"), total_frames=128
             )
+    finally:
+        project.close()
+
+
+def test_synth_patch_zero_numeric_fields_keep_the_base_preset() -> None:
+    project = _build_midi_only_project()
+    try:
+        preset = project.bounce_with_synth_instrument("warm-pad", total_frames=24000)
+        explicit_zero = project.bounce_with_synth_instrument(
+            SynthPatch(preset="warm-pad", amp_sustain=0.0, filter_sustain=0.0, gain=0.0),
+            total_frames=24000,
+        )
+        assert np.array_equal(explicit_zero, preset)
     finally:
         project.close()
 

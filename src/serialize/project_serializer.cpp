@@ -131,7 +131,8 @@ uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback) {
   const auto* v = obj.find(key);
   if (!v || !v->is_number()) return fallback;
   const double d = v->as_number();
-  return d < 0.0 ? fallback : static_cast<uint32_t>(d);
+  constexpr double kMaxUint32 = 4294967295.0;  // 2^32 - 1
+  return (!std::isfinite(d) || d < 0.0 || d > kMaxUint32) ? fallback : static_cast<uint32_t>(d);
 }
 
 bool parse_uint32_key(const std::string& key, uint32_t* out) {

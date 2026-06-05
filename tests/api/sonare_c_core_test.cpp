@@ -1,8 +1,58 @@
 /// @file sonare_c_core_test.cpp
 /// @brief Core C API tests.
 
+#include <set>
+
+#include "analysis/analysis_json.h"
 #include "sonare_c_test_helpers.h"
 #include "util/json.h"
+
+namespace {
+
+void collect_schema_paths(const sonare::util::json::Value& value, const std::string& prefix,
+                          std::set<std::string>& out) {
+  if (value.is_object()) {
+    for (const auto& [key, child] : value.as_object()) {
+      const std::string path = prefix.empty() ? key : prefix + "." + key;
+      out.insert(path);
+      collect_schema_paths(child, path, out);
+    }
+    return;
+  }
+  if (value.is_array() && value.size() > 0) {
+    collect_schema_paths(value[static_cast<std::size_t>(0)], prefix + "[]", out);
+  }
+}
+
+sonare::AnalysisResult make_analysis_schema_fixture() {
+  sonare::AnalysisResult result;
+  result.bpm = 120.0f;
+  result.bpm_confidence = 0.9f;
+  result.key.root = sonare::PitchClass::C;
+  result.key.mode = sonare::Mode::Major;
+  result.key.confidence = 0.8f;
+  result.time_signature = {4, 4, 0.7f};
+  result.beats.push_back({0.25f, 0, 0.6f});
+  result.chords.push_back({sonare::PitchClass::C, sonare::ChordQuality::Major, 0.0f, 1.0f, 0.8f,
+                           sonare::PitchClass::C});
+  result.sections.push_back({sonare::SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
+  result.timbre = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+  result.dynamics = {12.0f, -1.0f, -14.0f, 13.0f, 3.0f, false};
+  result.rhythm.time_signature = {4, 4, 0.75f};
+  result.rhythm.syncopation = 0.1f;
+  result.rhythm.groove_type = "straight";
+  result.rhythm.pattern_regularity = 0.8f;
+  result.rhythm.tempo_stability = 0.9f;
+  result.melody.pitch_range_octaves = 1.0f;
+  result.melody.pitch_stability = 0.7f;
+  result.melody.mean_frequency = 440.0f;
+  result.melody.vibrato_rate = 5.0f;
+  result.melody.pitches.push_back({0.0f, 440.0f, 0.95f});
+  result.form = "A";
+  return result;
+}
+
+}  // namespace
 
 TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
   SECTION("creates audio from valid buffer") {
@@ -555,6 +605,17 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     REQUIRE(root["melody"].contains("pitches"));
 
     sonare_free_string(json);
+  }
+
+  SECTION("matches the canonical unified-result schema snapshot") {
+    const auto fixture = make_analysis_schema_fixture();
+    const auto root = sonare::util::json::parse(sonare::analysis_result_to_json(fixture));
+    std::set<std::string> actual;
+    collect_schema_paths(root, "", actual);
+
+    const auto& expected_paths = sonare::analysis_result_schema_paths();
+    const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
+    REQUIRE(actual == expected);
   }
 
   SECTION("reports progress and matches the silent variant's schema") {

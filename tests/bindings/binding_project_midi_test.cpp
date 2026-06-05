@@ -615,6 +615,9 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
     }
   }
   REQUIRE(warned);
+  REQUIRE(result.messages != nullptr);
+  const std::string messages(result.messages);
+  REQUIRE(messages.find("project contains MIDI clips") != std::string::npos);
   sonare_project_free_compile_result(&result);
 
   SonareProjectBounceOptions options{};
@@ -639,6 +642,8 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   }
   REQUIRE(bounce_warned);
   REQUIRE(bounce_result.messages != nullptr);
+  const std::string bounce_messages(bounce_result.messages);
+  REQUIRE(bounce_messages.find("project contains MIDI clips") != std::string::npos);
   sonare_project_free_compile_result(&bounce_result);
 
   sonare_project_destroy(project);

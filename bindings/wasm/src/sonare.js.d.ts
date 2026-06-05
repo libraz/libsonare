@@ -176,6 +176,27 @@ export interface WasmDynamicsAnalysisResult {
   loudnessRmsDb: Float32Array;
 }
 
+export interface WasmStreamConfigDefaults {
+  sampleRate: number;
+  nFft: number;
+  hopLength: number;
+  nMels: number;
+  fmin: number;
+  fmax: number;
+  tuningRefHz: number;
+  computeMagnitude: boolean;
+  computeMel: boolean;
+  computeChroma: boolean;
+  computeOnset: boolean;
+  computeSpectral: boolean;
+  emitEveryNFrames: number;
+  magnitudeDownsample: number;
+  keyUpdateIntervalSec: number;
+  bpmUpdateIntervalSec: number;
+  window: number;
+  outputFormat: number;
+}
+
 export interface WasmTimbreFrameResult {
   brightness: number;
   warmth: number;
@@ -273,6 +294,11 @@ export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
 export interface WasmHpssResult {
   harmonic: Float32Array;
   percussive: Float32Array;
+  sampleRate: number;
+}
+
+export interface WasmAudioFromMemoryResult {
+  samples: Float32Array;
   sampleRate: number;
 }
 
@@ -776,7 +802,19 @@ export interface WasmRealtimeEngine {
 export type ProgressCallback = (progress: number, stage: string) => void;
 export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
+export interface WasmSynthEnumTables {
+  engineModes: string[];
+  waveforms: string[];
+  filterModels: string[];
+  filterOutputs: string[];
+  bodyTypes: string[];
+  modSources: string[];
+  modDestinations: string[];
+}
+
 export interface SonareModule {
+  audioFromMemory: (bytes: Uint8Array) => WasmAudioFromMemoryResult;
+
   // Quick API (high-level)
   detectBpm: (samples: Float32Array, sampleRate: number) => number;
   detectKey: (samples: Float32Array, sampleRate: number) => WasmKeyResult;
@@ -844,6 +882,10 @@ export interface SonareModule {
     chromaMethod: number,
   ) => string[];
   analyze: (samples: Float32Array, sampleRate: number) => WasmAnalysisResult;
+  _synthEnumTables: () => WasmSynthEnumTables;
+  _synthPatchRoundTrip: (patch: unknown) => unknown;
+  _analysisResultSchemaPaths: () => string[];
+  _analysisResultSchemaFixture: () => WasmAnalysisResult;
   analyzeImpulseResponse: (
     samples: Float32Array,
     sampleRate: number,
@@ -1351,6 +1393,7 @@ export interface SonareModule {
     nFft: number,
     fmin: number,
     fmax: number,
+    htk: boolean,
   ) => WasmStftPowerResult;
   melToAudio: (
     melPower: Float32Array,
@@ -1362,6 +1405,7 @@ export interface SonareModule {
     fmin: number,
     fmax: number,
     nIter: number,
+    htk: boolean,
   ) => Float32Array;
   mfccToMel: (
     mfcc: Float32Array,
@@ -1380,6 +1424,7 @@ export interface SonareModule {
     fmin: number,
     fmax: number,
     nIter: number,
+    htk: boolean,
   ) => Float32Array;
 
   // Features - Chroma
@@ -1706,6 +1751,7 @@ export interface SonareModule {
   };
 
   // Streaming - StreamAnalyzer
+  streamAnalyzerConfigDefault: () => WasmStreamConfigDefaults;
   StreamAnalyzer: new (
     sampleRate: number,
     nFft: number,
@@ -1919,6 +1965,7 @@ export interface WasmMixer {
   removeBus: (id: string) => void;
   busCount: () => number;
   addVcaGroup: (id: string, gainDb: number, members: string[]) => void;
+  setVcaGroupGainDb: (id: string, gainDb: number) => void;
   removeVcaGroup: (id: string) => void;
   vcaGroupCount: () => number;
   toSceneJson: () => string;

@@ -8,6 +8,30 @@ import type {
   StreamingRetuneConfig,
 } from './public_types';
 
+type EqPhaseMode =
+  | 'zero'
+  | 'zero-latency'
+  | 'zero_latency'
+  | 'natural'
+  | 'natural-phase'
+  | 'natural_phase'
+  | 'linear'
+  | 'linear-phase'
+  | 'linear_phase'
+  | number;
+
+const EQ_PHASE_MODES: Record<string, number> = {
+  zero: 1,
+  'zero-latency': 1,
+  zero_latency: 1,
+  natural: 2,
+  'natural-phase': 2,
+  natural_phase: 2,
+  linear: 3,
+  'linear-phase': 3,
+  linear_phase: 3,
+};
+
 // ============================================================================
 // StreamingMasteringChain Class
 // ============================================================================
@@ -141,10 +165,14 @@ export class StreamingEqualizer {
   }
 
   /**
-   * Set the global phase mode: 1=ZeroLatency, 2=NaturalPhase, 3=LinearPhase.
+   * Set the global phase mode: `'zero'` | `'natural'` | `'linear'` or 1/2/3.
    */
-  setPhaseMode(mode: number): void {
-    this.eq.setPhaseMode(mode);
+  setPhaseMode(mode: EqPhaseMode): void {
+    const value = typeof mode === 'number' ? mode : EQ_PHASE_MODES[mode.toLowerCase()];
+    if (value === undefined) {
+      throw new Error(`unknown EQ phase mode: ${mode}`);
+    }
+    this.eq.setPhaseMode(value);
   }
 
   /** Enable or disable output auto-gain compensation. */

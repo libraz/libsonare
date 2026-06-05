@@ -6,6 +6,7 @@ from ._project import MidiCcBinding as MidiCcBinding
 from ._project import MidiRouteResult as MidiRouteResult
 from ._project import NotePairValidation as NotePairValidation
 from ._project import Project as Project
+from ._project import ProjectDeserializeResult as ProjectDeserializeResult
 from ._project import Sf2InstrumentConfig as Sf2InstrumentConfig
 from ._project import Sf2ProgramStatus as Sf2ProgramStatus
 from ._project import SynthModRouting as SynthModRouting

@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { Project, RealtimeEngine, synthPresetNames, synthPresetPatch } from '../src/index.js';
+import {
+  Project,
+  RealtimeEngine,
+  SYNTH_BODY_TYPES,
+  SYNTH_ENGINE_MODES,
+  SYNTH_FILTER_MODELS,
+  SYNTH_FILTER_OUTPUTS,
+  SYNTH_MOD_DESTINATIONS,
+  SYNTH_MOD_SOURCES,
+  SYNTH_OSC_WAVEFORMS,
+  synthEnumTables,
+  synthPatchRoundTripForTest,
+  synthPresetNames,
+  synthPresetPatch,
+} from '../src/index.js';
 
 function buildMidiOnlyProject(note = 60): Project {
   const project = Project.create();
@@ -54,6 +68,59 @@ describe('NativeSynth preset catalog', () => {
     expect(synthPresetPatch('va:e-piano').engineMode).toBe('fm');
     expect(synthPresetPatch('acoustic-piano').engineMode).toBe('piano');
     expect(() => synthPresetPatch('no-such-preset')).toThrow();
+  });
+
+  it('keeps every NativeSynth enum table in parity with native round-trip ordinals', () => {
+    expect(synthEnumTables()).toEqual({
+      engineModes: [...SYNTH_ENGINE_MODES],
+      waveforms: [...SYNTH_OSC_WAVEFORMS],
+      filterModels: [...SYNTH_FILTER_MODELS],
+      filterOutputs: [...SYNTH_FILTER_OUTPUTS],
+      bodyTypes: [...SYNTH_BODY_TYPES],
+      modSources: [...SYNTH_MOD_SOURCES],
+      modDestinations: [...SYNTH_MOD_DESTINATIONS],
+    });
+
+    for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {
+      expect(synthPatchRoundTripForTest({ engineMode: name }).engineMode).toBe(name);
+      expect(synthPatchRoundTripForTest({ engineMode: ordinal }).engineMode).toBe(name);
+    }
+    for (const [ordinal, name] of SYNTH_OSC_WAVEFORMS.entries()) {
+      expect(synthPatchRoundTripForTest({ waveform: name }).waveform).toBe(name);
+      expect(synthPatchRoundTripForTest({ waveform: ordinal }).waveform).toBe(name);
+    }
+    for (const [ordinal, name] of SYNTH_FILTER_MODELS.entries()) {
+      expect(synthPatchRoundTripForTest({ filterModel: name }).filterModel).toBe(name);
+      expect(synthPatchRoundTripForTest({ filterModel: ordinal }).filterModel).toBe(name);
+    }
+    for (const [ordinal, name] of SYNTH_FILTER_OUTPUTS.entries()) {
+      expect(synthPatchRoundTripForTest({ filterOutput: name }).filterOutput).toBe(name);
+      expect(synthPatchRoundTripForTest({ filterOutput: ordinal }).filterOutput).toBe(name);
+    }
+    for (const [ordinal, name] of SYNTH_BODY_TYPES.entries()) {
+      expect(synthPatchRoundTripForTest({ body: name }).body).toBe(name);
+      expect(synthPatchRoundTripForTest({ body: ordinal }).body).toBe(name);
+    }
+    for (const [ordinal, name] of SYNTH_MOD_SOURCES.entries()) {
+      const byName = synthPatchRoundTripForTest({
+        modRoutings: [{ source: name, destination: 'pitch-cents', depth: 1 }],
+      });
+      const byOrdinal = synthPatchRoundTripForTest({
+        modRoutings: [{ source: ordinal, destination: 'pitch-cents', depth: 1 }],
+      });
+      expect(byName.modRoutings?.[0]?.source).toBe(name);
+      expect(byOrdinal.modRoutings?.[0]?.source).toBe(name);
+    }
+    for (const [ordinal, name] of SYNTH_MOD_DESTINATIONS.entries()) {
+      const byName = synthPatchRoundTripForTest({
+        modRoutings: [{ source: 'lfo1', destination: name, depth: 1 }],
+      });
+      const byOrdinal = synthPatchRoundTripForTest({
+        modRoutings: [{ source: 'lfo1', destination: ordinal, depth: 1 }],
+      });
+      expect(byName.modRoutings?.[0]?.destination).toBe(name);
+      expect(byOrdinal.modRoutings?.[0]?.destination).toBe(name);
+    }
   });
 });
 

@@ -7,6 +7,7 @@
 #include <locale>
 #include <sstream>
 
+#include "editing/voice_changer/formant_bounds.h"
 #include "editing/voice_changer/realtime.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -429,7 +430,7 @@ RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
   // path (which bypasses JSON validation) cannot allocate a runaway grain
   // buffer in StreamingRetune::prepare().
   c.retune.grain_size = std::clamp(c.retune.grain_size, 0, 8192);
-  c.formant.factor = std::clamp(c.formant.factor, 0.55f, 1.65f);
+  c.formant.factor = std::clamp(c.formant.factor, kFormantFactorMin, kFormantFactorMax);
   c.formant.amount = std::clamp(c.formant.amount, 0.0f, 1.0f);
   c.formant.body = std::clamp(c.formant.body, -1.0f, 1.0f);
   c.formant.brightness = std::clamp(c.formant.brightness, -1.0f, 1.0f);

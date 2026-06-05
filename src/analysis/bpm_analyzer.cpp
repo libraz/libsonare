@@ -548,7 +548,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
 }
 
 std::vector<BpmCandidate> BpmAnalyzer::candidates(int top_n) const {
-  int n = std::min(top_n, static_cast<int>(candidates_.size()));
+  int n = std::clamp(top_n, 0, static_cast<int>(candidates_.size()));
   return std::vector<BpmCandidate>(candidates_.begin(), candidates_.begin() + n);
 }
 

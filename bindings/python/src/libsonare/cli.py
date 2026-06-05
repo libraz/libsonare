@@ -12,10 +12,10 @@ from .types import KeyProfile, Mode, PitchClass
 PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]
 
-# NOTE: Some C++ CLI commands (sections, melody, boundaries, cqt, and the
-# low-level math/unit converters) are intentionally NOT exposed here because
-# they have no standalone Python library backing yet. They remain C++-CLI-only
-# pending Python lib support.
+# NOTE: Some C++ CLI commands (sections, melody, boundaries, cqt variants, and
+# low-level math/unit converters) are not mirrored here yet. Several already
+# have Python library backing; this note tracks CLI parity, not Python API
+# availability.
 
 
 def _load_audio(path: str) -> tuple[list[float], int]:
@@ -24,6 +24,33 @@ def _load_audio(path: str) -> tuple[list[float], int]:
 
     with Audio.from_file(path) as audio:
         return audio.data, audio.sample_rate
+
+
+def _resample_linear(samples: list[float], source_rate: int, target_rate: int) -> list[float]:
+    """Resample mono samples with linear interpolation."""
+    if source_rate <= 0 or target_rate <= 0:
+        raise ValueError("sample rates must be positive")
+    if source_rate == target_rate:
+        return samples
+    if not samples:
+        return []
+
+    output_count = max(1, int(round(len(samples) * target_rate / source_rate)))
+    if output_count == 1 or len(samples) == 1:
+        return [samples[0]] * output_count
+
+    ratio = source_rate / target_rate
+    last_index = len(samples) - 1
+    output: list[float] = []
+    for i in range(output_count):
+        position = min(i * ratio, float(last_index))
+        index = int(position)
+        fraction = position - index
+        if index >= last_index:
+            output.append(samples[last_index])
+        else:
+            output.append(samples[index] + (samples[index + 1] - samples[index]) * fraction)
+    return output
 
 
 def _write_wav(path: str, samples: list[float], sample_rate: int) -> None:
@@ -66,6 +93,24 @@ def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_r
         wav.writeframes(bytes(frames))
 
 
+def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
+    """Write a Project.bounce ndarray to a mono WAV and return (frames, channels)."""
+    rows = getattr(audio, "tolist", lambda: audio)()
+    if not isinstance(rows, list):
+        rows = list(rows)
+    frames = len(rows)
+    channels = 1
+    mono: list[float] = []
+    for row in rows:
+        if isinstance(row, list):
+            channels = max(channels, len(row))
+            mono.append(sum(float(sample) for sample in row) / len(row) if row else 0.0)
+        else:
+            mono.append(float(row))
+    _write_wav(path, mono, sample_rate)
+    return frames, channels
+
+
 def _array_stats(vals: list[float]) -> dict[str, float | int]:
     """Summary statistics for a numeric array (avoids dumping huge arrays)."""
     import statistics
@@ -93,6 +138,44 @@ def _parse_kv_params(value: str) -> dict[str, float]:
         key, raw = item.split("=", 1)
         params[key.strip()] = float(raw.strip())
     return params
+
+
+def _load_json_object(path: str) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as fh:
+        loaded = json.load(fh)
+    if not isinstance(loaded, dict):
+        raise ValueError("JSON config must be an object")
+    return loaded
+
+
+def _parse_json_config(raw: str, path: str) -> dict[str, Any]:
+    if path:
+        return _load_json_object(path)
+    if not raw:
+        return {}
+    loaded = json.loads(raw)
+    if not isinstance(loaded, dict):
+        raise ValueError("--config must be a JSON object")
+    return loaded
+
+
+def _parse_json_list(raw: str, path: str) -> list[dict[str, Any]]:
+    if path:
+        with open(path, encoding="utf-8") as fh:
+            loaded = json.load(fh)
+    elif raw:
+        loaded = json.loads(raw)
+    else:
+        return []
+    if not isinstance(loaded, list) or not all(isinstance(item, dict) for item in loaded):
+        raise ValueError("platforms must be a JSON array of objects")
+    return cast(list[dict[str, Any]], loaded)
+
+
+def _float_sequence(value: object) -> list[float]:
+    if hasattr(value, "tolist"):
+        value = cast(Any, value).tolist()
+    return [float(sample) for sample in cast(Any, value)]
 
 
 def _load_voice_preset_pack(path: str, preset_id: str) -> dict[str, Any]:
@@ -1352,10 +1435,349 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
 
     source, sr = _load_audio(args.file)
     reference, ref_sr = _load_audio(args.reference)
+    if ref_sr != sr:
+        reference = _resample_linear(reference, ref_sr, sr)
     result_json = mastering_pair_analyze(args.analysis, source, reference, sample_rate=sr)
     # The library returns a JSON string regardless of --json; print it as-is.
     print(result_json)
-    _ = ref_sr
+    return 0
+
+
+def _load_project(path: str) -> object:
+    from . import Project
+
+    with open(path, encoding="utf-8") as fh:
+        return Project.from_json(fh.read())
+
+
+def _write_project_json(project: object, path: str) -> int:
+    data = cast(Any, project).to_json_bytes()
+    with open(path, "wb") as fh:
+        fh.write(data)
+    return len(data)
+
+
+def _project_bounce(args: argparse.Namespace, *, force_synth: bool = False) -> int:
+    if not args.output:
+        raise ValueError("project bounce requires --output")
+    project = _load_project(args.input)
+    try:
+        kwargs = {
+            "total_frames": args.frames,
+            "block_size": args.block_size,
+            "num_channels": args.channels,
+            "sample_rate": args.sample_rate,
+            "instrument_latency_samples": args.instrument_latency,
+        }
+        use_synth = force_synth or args.synth is not None
+        if use_synth:
+            audio = cast(Any, project).bounce_with_synth_instrument(args.synth or None, **kwargs)
+        else:
+            audio = cast(Any, project).bounce(**kwargs)
+        frames, channels = _write_project_bounce_wav(args.output, audio, args.sample_rate)
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "output": args.output,
+                        "frames": frames,
+                        "channels": channels,
+                        "sample_rate": args.sample_rate,
+                        "synth": bool(use_synth),
+                    }
+                )
+            )
+        else:
+            print(f"  Bounced {frames} frames ({channels} ch @ {args.sample_rate} Hz)")
+        return 0
+    finally:
+        cast(Any, project).close()
+
+
+def cmd_project(args: argparse.Namespace) -> int:
+    from . import Project, project_abi_version, synth_preset_names
+
+    subcommand = args.project_command
+    if subcommand == "abi":
+        version = project_abi_version()
+        print(json.dumps({"abi_version": version}) if args.json else version)
+        return 0
+    if subcommand == "new":
+        if not args.output:
+            raise ValueError("project new requires --output")
+        project = Project()
+        try:
+            if args.sample_rate > 0:
+                project.set_sample_rate(args.sample_rate)
+            bytes_written = _write_project_json(project, args.output)
+        finally:
+            project.close()
+        if args.json:
+            print(json.dumps({"output": args.output, "bytes": bytes_written}))
+        else:
+            print(f"  Wrote empty project: {args.output}")
+        return 0
+    if subcommand == "validate":
+        project = _load_project(args.input)
+        try:
+            bytes_written = 0
+            if args.output:
+                bytes_written = _write_project_json(project, args.output)
+            else:
+                bytes_written = len(cast(Any, project).to_json_bytes())
+        finally:
+            cast(Any, project).close()
+        if args.json:
+            print(json.dumps({"valid": True, "bytes": bytes_written}))
+        else:
+            print(f"  Project JSON is valid ({bytes_written} bytes canonical)")
+        return 0
+    if subcommand == "compile":
+        project = _load_project(args.input)
+        try:
+            result = cast(Any, project).compile()
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "has_timeline": result.has_timeline,
+                            "diagnostic_count": result.diagnostic_count,
+                            "diagnostics": [
+                                {
+                                    "code": diagnostic.code,
+                                    "severity": diagnostic.severity,
+                                    "target_id": diagnostic.target_id,
+                                    "message": diagnostic.message,
+                                }
+                                for diagnostic in result.diagnostics
+                            ],
+                            "messages": result.messages,
+                        }
+                    )
+                )
+            else:
+                print(
+                    "  Compiled"
+                    if result.has_timeline
+                    else f"  Compiled with errors ({result.diagnostic_count} diagnostics)"
+                )
+            return 0 if result.has_timeline else 1
+        finally:
+            cast(Any, project).close()
+    if subcommand == "bounce":
+        return _project_bounce(args)
+    if subcommand == "export-smf":
+        if not args.output:
+            raise ValueError("project export-smf requires --output")
+        project = _load_project(args.input)
+        try:
+            data = cast(Any, project).export_smf()
+        finally:
+            cast(Any, project).close()
+        with open(args.output, "wb") as fh:
+            fh.write(data)
+        print(json.dumps({"output": args.output, "bytes": len(data)}) if args.json else args.output)
+        return 0
+    if subcommand == "import-smf":
+        if not args.output:
+            raise ValueError("project import-smf requires --output")
+        with open(args.smf, "rb") as fh:
+            data = fh.read()
+        project = Project()
+        try:
+            first_clip = project.import_smf(data)
+            bytes_written = _write_project_json(project, args.output)
+        finally:
+            project.close()
+        if args.json:
+            print(
+                json.dumps(
+                    {"output": args.output, "first_clip_id": first_clip, "bytes": bytes_written}
+                )
+            )
+        else:
+            print(f"  Imported SMF: {args.output}")
+        return 0
+    if subcommand == "export-midi2":
+        if not args.output:
+            raise ValueError("project export-midi2 requires --output")
+        project = _load_project(args.input)
+        try:
+            data = cast(Any, project).export_clip_file()
+        finally:
+            cast(Any, project).close()
+        with open(args.output, "wb") as fh:
+            fh.write(data)
+        print(json.dumps({"output": args.output, "bytes": len(data)}) if args.json else args.output)
+        return 0
+    if subcommand == "import-midi2":
+        if not args.output:
+            raise ValueError("project import-midi2 requires --output")
+        with open(args.midi2, "rb") as fh:
+            data = fh.read()
+        project = Project()
+        try:
+            first_clip = project.import_clip_file(data)
+            bytes_written = _write_project_json(project, args.output)
+        finally:
+            project.close()
+        if args.json:
+            print(
+                json.dumps(
+                    {"output": args.output, "first_clip_id": first_clip, "bytes": bytes_written}
+                )
+            )
+        else:
+            print(f"  Imported MIDI2 Clip File: {args.output}")
+        return 0
+    if subcommand == "synth-presets":
+        names = synth_preset_names()
+        print(json.dumps({"presets": names}) if args.json else "\n".join(names))
+        return 0
+    raise ValueError(f"unknown project subcommand: {subcommand}")
+
+
+def cmd_midi_render(args: argparse.Namespace) -> int:
+    return _project_bounce(args, force_synth=True)
+
+
+def cmd_mastering_chain(args: argparse.Namespace) -> int:
+    from . import mastering_chain
+
+    samples, sr = _load_audio(args.file)
+    config = _parse_json_config(args.config, args.config_file)
+    if args.params:
+        config.update(_parse_kv_params(args.params))
+    result = mastering_chain(samples, sample_rate=sr, config=config)
+
+    if args.output:
+        _write_wav(args.output, result.samples, result.sample_rate)
+
+    if args.json:
+        payload: dict[str, object] = {
+            "input_lufs": round(result.input_lufs, 4),
+            "output_lufs": round(result.output_lufs, 4),
+            "applied_gain_db": round(result.applied_gain_db, 4),
+            "sample_rate": result.sample_rate,
+            "stages": result.stages,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print("  Mastering chain:")
+        print(f"    Stages:      {', '.join(result.stages) if result.stages else '(none)'}")
+        print(f"    Input LUFS:  {result.input_lufs:.2f}")
+        print(f"    Output LUFS: {result.output_lufs:.2f}")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_master(args: argparse.Namespace) -> int:
+    from . import master_audio
+
+    samples, sr = _load_audio(args.file)
+    overrides = _parse_json_config(args.config, args.config_file)
+    if args.params:
+        overrides.update(_parse_kv_params(args.params))
+    result = master_audio(samples, sample_rate=sr, preset_name=args.preset, overrides=overrides)
+
+    if args.output:
+        _write_wav(args.output, result.samples, result.sample_rate)
+
+    if args.json:
+        payload: dict[str, object] = {
+            "preset": args.preset,
+            "input_lufs": round(result.input_lufs, 4),
+            "output_lufs": round(result.output_lufs, 4),
+            "applied_gain_db": round(result.applied_gain_db, 4),
+            "sample_rate": result.sample_rate,
+            "stages": result.stages,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Master preset: {args.preset}")
+        print(f"    Stages:      {', '.join(result.stages) if result.stages else '(none)'}")
+        print(f"    Input LUFS:  {result.input_lufs:.2f}")
+        print(f"    Output LUFS: {result.output_lufs:.2f}")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_mastering_streaming(args: argparse.Namespace) -> int:
+    from . import mastering_streaming_preview
+
+    samples, sr = _load_audio(args.file)
+    platforms = _parse_json_list(args.platforms, args.platforms_file) or None
+    print(mastering_streaming_preview(samples, sample_rate=sr, platforms=platforms))
+    return 0
+
+
+def cmd_declip(args: argparse.Namespace) -> int:
+    from . import mastering_repair_declip
+
+    samples, sr = _load_audio(args.file)
+    repaired = _float_sequence(
+        mastering_repair_declip(
+            samples,
+            sample_rate=sr,
+            clip_threshold=args.clip_threshold,
+            lpc_order=args.lpc_order,
+            iterations=args.iterations,
+            lpc_blend=args.lpc_blend,
+        )
+    )
+
+    if args.output:
+        _write_wav(args.output, repaired, sr)
+
+    if args.json:
+        payload: dict[str, object] = {
+            "sample_rate": sr,
+            "samples": len(repaired),
+            "clip_threshold": args.clip_threshold,
+            "lpc_order": args.lpc_order,
+            "iterations": args.iterations,
+            "lpc_blend": args.lpc_blend,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print("  Declip:")
+        print(f"    Samples: {len(repaired)}")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_mastering_presets(args: argparse.Namespace) -> int:
+    from . import mastering_preset_names
+
+    names = mastering_preset_names()
+    print(json.dumps({"presets": names}) if args.json else "\n".join(names))
+    return 0
+
+
+def cmd_mastering_suggest(args: argparse.Namespace) -> int:
+    from . import mastering_assistant_suggest
+
+    samples, sr = _load_audio(args.file)
+    params = _parse_kv_params(args.params) if args.params else {}
+    print(mastering_assistant_suggest(samples, sample_rate=sr, params=params))
+    return 0
+
+
+def cmd_mastering_profile(args: argparse.Namespace) -> int:
+    from . import mastering_audio_profile
+
+    samples, sr = _load_audio(args.file)
+    params = _parse_kv_params(args.params) if args.params else {}
+    print(mastering_audio_profile(samples, sample_rate=sr, params=params))
     return 0
 
 
@@ -1708,6 +2130,90 @@ def main() -> None:
     )
     mpa_p.add_argument("--reference", required=True, help="Reference audio file")
     mpa_p.add_argument("--analysis", required=True, help="Analysis name")
+    mchain_p = sub.add_parser(
+        "mastering-chain", parents=[common], help="Run a configurable mastering chain"
+    )
+    mchain_p.add_argument("--config", default="", help="Chain config as a JSON object")
+    mchain_p.add_argument("--config-file", default="", help="Chain config JSON file")
+    mchain_p.add_argument("--params", default="", help="Flat params as k=v,k=v (floats)")
+    master_p = sub.add_parser("master", parents=[common], help="Apply a named mastering preset")
+    master_p.add_argument("--preset", default="pop", help="Mastering preset name")
+    master_p.add_argument("--config", default="", help="Preset overrides as a JSON object")
+    master_p.add_argument("--config-file", default="", help="Preset override JSON file")
+    master_p.add_argument("--params", default="", help="Flat overrides as k=v,k=v (floats)")
+    mstream_p = sub.add_parser(
+        "mastering-streaming",
+        parents=[common],
+        help="Preview streaming-platform normalization as JSON",
+    )
+    mstream_p.add_argument(
+        "--platforms",
+        default="",
+        help="Platform targets as JSON array of {name,targetLufs,ceilingDb}",
+    )
+    mstream_p.add_argument("--platforms-file", default="", help="Platform targets JSON file")
+    declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
+    declip_p.add_argument("--clip-threshold", type=float, default=0.98)
+    declip_p.add_argument("--lpc-order", type=int, default=36)
+    declip_p.add_argument("--iterations", type=int, default=2)
+    declip_p.add_argument("--lpc-blend", type=float, default=0.65)
+    sub.add_parser("mastering-presets", parents=[common], help="List mastering preset names")
+    msuggest_p = sub.add_parser(
+        "mastering-suggest", parents=[common], help="Suggest a mastering chain as JSON"
+    )
+    msuggest_p.add_argument("--params", default="", help="Assistant params as k=v,k=v")
+    mprofile_p = sub.add_parser(
+        "mastering-profile", parents=[common], help="Analyze a mastering audio profile as JSON"
+    )
+    mprofile_p.add_argument("--params", default="", help="Profile params as k=v,k=v")
+
+    # Project / MIDI commands
+    project_p = sub.add_parser("project", parents=[common], help="Headless project / SMF commands")
+    project_sub = project_p.add_subparsers(dest="project_command", required=True)
+    project_sub.add_parser("abi", parents=[common], help="Print the project ABI version")
+    pnew = project_sub.add_parser("new", parents=[common], help="Create an empty project JSON")
+    pnew.add_argument("--sample-rate", type=int, default=0, help="Project sample rate")
+    for pname in ("validate", "compile"):
+        pp = project_sub.add_parser(pname, parents=[common], help=f"Project {pname}")
+        pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pbounce = project_sub.add_parser("bounce", parents=[common], help="Render project to WAV")
+    pbounce.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pbounce.add_argument("--sample-rate", type=int, default=48000, help="Render sample rate")
+    pbounce.add_argument("--frames", type=int, default=0, help="Render length in frames")
+    pbounce.add_argument("--block-size", type=int, default=0, help="Render block size")
+    pbounce.add_argument("--channels", type=int, default=2, help="Render channel count")
+    pbounce.add_argument("--instrument-latency", type=int, default=0)
+    pbounce.add_argument(
+        "--synth",
+        nargs="?",
+        const="",
+        default=None,
+        help="Render MIDI via NativeSynth preset (default patch when value is omitted)",
+    )
+    pexport_smf = project_sub.add_parser("export-smf", parents=[common], help="Export SMF")
+    pexport_smf.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pimport_smf = project_sub.add_parser("import-smf", parents=[common], help="Import SMF")
+    pimport_smf.add_argument("--smf", required=True, help="Input Standard MIDI File")
+    pexport_midi2 = project_sub.add_parser(
+        "export-midi2", parents=[common], help="Export MIDI 2.0 Clip File"
+    )
+    pexport_midi2.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pimport_midi2 = project_sub.add_parser(
+        "import-midi2", parents=[common], help="Import MIDI 2.0 Clip File"
+    )
+    pimport_midi2.add_argument("--midi2", required=True, help="Input MIDI 2.0 Clip File")
+    project_sub.add_parser("synth-presets", parents=[common], help="List NativeSynth presets")
+
+    midi_render_p = sub.add_parser(
+        "midi-render", parents=[common], help="Render a MIDI project through NativeSynth"
+    )
+    midi_render_p.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    midi_render_p.add_argument("--sample-rate", type=int, default=48000, help="Render sample rate")
+    midi_render_p.add_argument("--frames", type=int, default=0, help="Render length in frames")
+    midi_render_p.add_argument("--block-size", type=int, default=0, help="Render block size")
+    midi_render_p.add_argument("--channels", type=int, default=2, help="Render channel count")
+    midi_render_p.add_argument("--instrument-latency", type=int, default=0)
+    midi_render_p.add_argument("--synth", default="", help="NativeSynth preset")
 
     # Mixing commands
     mix_p = sub.add_parser(
@@ -1765,6 +2271,12 @@ def main() -> None:
         "eq",
         "mastering-processor",
         "mastering-pair-analyze",
+        "mastering-chain",
+        "master",
+        "mastering-streaming",
+        "declip",
+        "mastering-suggest",
+        "mastering-profile",
         "voice-preset-validate",
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
@@ -1815,6 +2327,15 @@ def main() -> None:
         "mastering-pair-processors": cmd_mastering_pair_processors,
         "mastering-pair-analyses": cmd_mastering_pair_analyses,
         "mastering-pair-analyze": cmd_mastering_pair_analyze,
+        "mastering-chain": cmd_mastering_chain,
+        "master": cmd_master,
+        "mastering-streaming": cmd_mastering_streaming,
+        "declip": cmd_declip,
+        "mastering-presets": cmd_mastering_presets,
+        "mastering-suggest": cmd_mastering_suggest,
+        "mastering-profile": cmd_mastering_profile,
+        "project": cmd_project,
+        "midi-render": cmd_midi_render,
         "mix": cmd_mix,
     }
 

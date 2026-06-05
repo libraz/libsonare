@@ -22,6 +22,46 @@ function generateSine(freq: number, sr: number, duration: number): Float32Array 
   return samples;
 }
 
+function pcm16Wav(samples: Int16Array, sampleRate: number): Uint8Array {
+  const bytesPerSample = 2;
+  const dataBytes = samples.length * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(buffer);
+  let offset = 0;
+  const text = (value: string) => {
+    for (let i = 0; i < value.length; i++) {
+      view.setUint8(offset++, value.charCodeAt(i));
+    }
+  };
+  text('RIFF');
+  view.setUint32(offset, 36 + dataBytes, true);
+  offset += 4;
+  text('WAVE');
+  text('fmt ');
+  view.setUint32(offset, 16, true);
+  offset += 4;
+  view.setUint16(offset, 1, true);
+  offset += 2;
+  view.setUint16(offset, 1, true);
+  offset += 2;
+  view.setUint32(offset, sampleRate, true);
+  offset += 4;
+  view.setUint32(offset, sampleRate * bytesPerSample, true);
+  offset += 4;
+  view.setUint16(offset, bytesPerSample, true);
+  offset += 2;
+  view.setUint16(offset, 16, true);
+  offset += 2;
+  text('data');
+  view.setUint32(offset, dataBytes, true);
+  offset += 4;
+  for (const sample of samples) {
+    view.setInt16(offset, sample, true);
+    offset += 2;
+  }
+  return new Uint8Array(buffer);
+}
+
 describe('Audio class', () => {
   beforeAll(async () => {
     await init();
@@ -37,6 +77,17 @@ describe('Audio class', () => {
       const samples = sine();
       const audio = Audio.fromBuffer(samples, SR);
       expect(audio).toBeInstanceOf(Audio);
+    });
+
+    it('should create an Audio instance by decoding bytes from memory', () => {
+      const bytes = pcm16Wav(new Int16Array([0, 8192, -8192, 16384]), 8000);
+      const audio = Audio.fromMemory(bytes);
+      expect(audio).toBeInstanceOf(Audio);
+      expect(audio.sampleRate).toBe(8000);
+      expect(audio.length).toBe(4);
+      expect(audio.data[0]).toBeCloseTo(0, 6);
+      expect(audio.data[1]).toBeCloseTo(8192 / 32768, 4);
+      expect(audio.data[2]).toBeCloseTo(-8192 / 32768, 4);
     });
 
     it('should return correct data', () => {

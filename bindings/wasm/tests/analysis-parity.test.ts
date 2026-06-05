@@ -34,12 +34,37 @@ function makeSine(durationSec: number, freqHz: number): Float32Array {
   return out;
 }
 
+function collectSchemaPaths(value: unknown, prefix = '', out = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    if (value.length > 0) {
+      collectSchemaPaths(value[0], `${prefix}[]`, out);
+    }
+    return out;
+  }
+  if (value !== null && typeof value === 'object') {
+    for (const key of Object.keys(value).sort()) {
+      const path = prefix ? `${prefix}.${key}` : key;
+      out.add(path);
+      collectSchemaPaths((value as Record<string, unknown>)[key], path, out);
+    }
+  }
+  return out;
+}
+
 describe('WASM wave3 analysis parity', () => {
   beforeAll(async () => {
     await init();
   });
 
   describe('unified analyze() sub-result fields', () => {
+    it('keeps the native object field set in parity with the JSON schema snapshot', () => {
+      const module = getSonareModule();
+      const expected = [...module._analysisResultSchemaPaths()].sort();
+      const actual = [...collectSchemaPaths(module._analysisResultSchemaFixture())].sort();
+
+      expect(actual).toEqual(expected);
+    });
+
     it('exposes peak/RMS dynamics, rhythm stability + time signature, and a melody contour', () => {
       const samples = makeSine(4, 261.63); // C4
       const result = analyze(samples, SR);

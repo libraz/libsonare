@@ -194,6 +194,10 @@ def test_vca_group_add_remove_and_count(mixer) -> None:
     assert isinstance(before, int)
     mixer.add_vca_group("py-vca", gain_db=-3.0, members=["vocal"])
     assert mixer.vca_group_count() == before + 1
+    mixer.set_vca_group_gain_db("py-vca", -7.0)
+    scene = json.loads(mixer.to_scene_json())
+    group = next(group for group in scene["vcaGroups"] if group["id"] == "py-vca")
+    assert group["gainDb"] == -7.0
     mixer.remove_vca_group("py-vca")
     assert mixer.vca_group_count() == before
 

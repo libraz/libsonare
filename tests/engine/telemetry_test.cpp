@@ -203,6 +203,38 @@ TEST_CASE("RealtimeEngine records non realtime-safe automation rejection", "[eng
   REQUIRE(found);
 }
 
+TEST_CASE("RealtimeEngine records registered non realtime-safe parameter rejection",
+          "[engine][telemetry]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128);
+  engine.automation().set_parameter_metadata(
+      {{44, "mode", "", 0.0f, 1.0f, 0.0f, false, sonare::automation::CurveType::Linear}});
+
+  TelemetryCaptureProcessor processor;
+  REQUIRE(engine.automation().bind_target(44, &processor));
+
+  sonare::rt::Command command{};
+  command.type = sonare::rt::CommandType::kSetParam;
+  command.target_id = 44;
+  command.sample_time = -1;
+  command.arg.f = 0.5f;
+  REQUIRE(engine.push_command(command));
+
+  std::array<float, 128> buffer{};
+  float* io[] = {buffer.data()};
+  engine.process(io, 1, 128);
+
+  bool found = false;
+  sonare::engine::Telemetry telemetry{};
+  while (engine.pop_telemetry(telemetry)) {
+    found =
+        found || (telemetry.type == sonare::engine::TelemetryType::kError &&
+                  telemetry.error == sonare::engine::TelemetryErrorCode::kNonRealtimeSafeParameter);
+  }
+  REQUIRE(found);
+  REQUIRE(processor.last_param == 0);
+}
+
 TEST_CASE("RealtimeEngine records automation target binding overflow", "[engine][telemetry]") {
   sonare::engine::RealtimeEngine engine;
   engine.prepare(48000.0, 128);

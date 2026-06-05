@@ -1111,7 +1111,7 @@ class StreamConfig:
         fmin: float = 0.0,
         fmax: float = 0.0,
         tuning_ref_hz: float = 440.0,
-        compute_magnitude: bool = True,
+        compute_magnitude: bool = False,
         compute_mel: bool = True,
         compute_chroma: bool = True,
         compute_onset: bool = True,

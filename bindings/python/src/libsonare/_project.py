@@ -205,6 +205,7 @@ class ProjectDiagnostic:
     code: int
     severity: int
     target_id: int
+    message: str = ""
 
 
 @dataclass(frozen=True)
@@ -445,6 +446,15 @@ _SYNTH_MOD_DESTINATIONS = {
     "amp-gain": 3,
     "pan-units": 4,
 }
+SYNTH_ENUM_TABLES = {
+    "engine_modes": tuple(_SYNTH_ENGINE_MODES),
+    "waveforms": tuple(_SYNTH_OSC_WAVEFORMS),
+    "filter_models": tuple(_SYNTH_FILTER_MODELS),
+    "filter_outputs": tuple(_SYNTH_FILTER_OUTPUTS),
+    "body_types": tuple(_SYNTH_BODY_TYPES),
+    "mod_sources": tuple(_SYNTH_MOD_SOURCES),
+    "mod_destinations": tuple(_SYNTH_MOD_DESTINATIONS),
+}
 
 
 def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
@@ -494,8 +504,10 @@ class SynthPatch:
     when ``preset`` is empty, the default subtractive patch. Every numeric
     field then uses "0 => keep the base value" and non-zero values override
     (clamped to their audible ranges); enum fields accept the C ordinal or a
-    name with ``"default"`` = keep. A non-empty ``mod_routings`` REPLACES the
-    base mod matrix.
+    name with ``"default"`` = keep. The frozen C ABI has no per-field presence
+    bits, so explicit zero numeric overrides such as ``amp_sustain=0`` cannot
+    be represented and keep the base value. A non-empty ``mod_routings``
+    REPLACES the base mod matrix.
 
     Mode-specific deep parameters (FM operator stacks, modal mode tables,
     drawbar registrations, kit pieces, piano strings) travel inside the named
@@ -518,11 +530,11 @@ class SynthPatch:
     vel_to_cutoff_cents: float = 0.0
     amp_attack_ms: float = 0.0
     amp_decay_ms: float = 0.0
-    amp_sustain: float = 0.0
+    amp_sustain: float = 0.0  # 0 keeps the base; explicit zero is not representable.
     amp_release_ms: float = 0.0
     filter_attack_ms: float = 0.0
     filter_decay_ms: float = 0.0
-    filter_sustain: float = 0.0
+    filter_sustain: float = 0.0  # 0 keeps the base; explicit zero is not representable.
     filter_release_ms: float = 0.0
     lfo_rate_hz: float = 0.0
     lfo_to_pitch_cents: float = 0.0
@@ -784,6 +796,14 @@ class ProjectCompileResult:
         yield self.messages
 
 
+@dataclass(frozen=True)
+class ProjectDeserializeResult:
+    """Project plus warning diagnostics emitted by a successful JSON load."""
+
+    project: Project
+    diagnostics: str
+
+
 def project_abi_version() -> int:
     """Return the runtime project ABI version of the loaded native library.
 
@@ -943,6 +963,28 @@ class Project:
         obj = cls.__new__(cls)
         obj._handle = handle
         return obj
+
+    @classmethod
+    def from_json_with_diagnostics(cls, json: str | bytes) -> ProjectDeserializeResult:
+        """Deserialize project JSON and return warnings from successful loads."""
+        lib = _get_lib()
+        _check_project_abi(lib)
+        data = json.encode("utf-8") if isinstance(json, str) else bytes(json)
+        handle = ctypes.c_void_p()
+        diag = ctypes.c_char_p()
+        rc = lib.sonare_project_deserialize(
+            data, ctypes.c_size_t(len(data)), ctypes.byref(handle), ctypes.byref(diag)
+        )
+        try:
+            diagnostics = diag.value.decode("utf-8") if diag.value else ""
+        finally:
+            if diag:
+                lib.sonare_free_string(diag)
+        if rc != 0:
+            raise ValueError(diagnostics or "failed to deserialize project JSON")
+        obj = cls.__new__(cls)
+        obj._handle = handle
+        return ProjectDeserializeResult(project=obj, diagnostics=diagnostics)
 
     def set_sample_rate(self, sample_rate: float) -> None:
         """Set the project sample rate in Hz (must be > 0)."""
@@ -2144,11 +2186,13 @@ class Project:
         try:
             has_timeline = bool(result.has_timeline)
             messages = result.messages.decode("utf-8") if result.messages else ""
+            message_lines = messages.splitlines()
             diagnostics = tuple(
                 ProjectDiagnostic(
                     code=int(result.diagnostics[i].code),
                     severity=int(result.diagnostics[i].severity),
                     target_id=int(result.diagnostics[i].target_id),
+                    message=message_lines[i] if i < len(message_lines) else "",
                 )
                 for i in range(int(result.diagnostic_count))
             )
@@ -2170,11 +2214,13 @@ class Project:
         try:
             has_timeline = bool(result.has_timeline)
             messages = result.messages.decode("utf-8") if result.messages else ""
+            message_lines = messages.splitlines()
             diagnostics = tuple(
                 ProjectDiagnostic(
                     code=int(result.diagnostics[i].code),
                     severity=int(result.diagnostics[i].severity),
                     target_id=int(result.diagnostics[i].target_id),
+                    message=message_lines[i] if i < len(message_lines) else "",
                 )
                 for i in range(int(result.diagnostic_count))
             )
@@ -2339,7 +2385,9 @@ class Project:
                 for the default subtractive patch. Ignored when ``instruments``
                 is given.
             destination_id: Destination id for ``instrument`` (matches
-                :meth:`set_track_midi_destination`; default 0).
+                :meth:`set_track_midi_destination`; default 0). Unlike the
+                JS helpers, Python keeps this as a binding argument instead of a
+                :class:`SynthPatch` field.
             instruments: Optional explicit list of ``(destination_id, patch)``
                 bindings, overriding ``instrument`` / ``destination_id``.
             total_frames: Render length in frames; <= 0 auto-derives the length

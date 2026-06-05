@@ -5,6 +5,7 @@
 ///        and the realtime engine entry (sonare_engine_set_synth_instrument).
 
 #include "binding_project_parity_test_helpers.h"
+#include "c_api/synth_patch_common.h"
 
 namespace {
 
@@ -97,6 +98,21 @@ TEST_CASE("synth preset patches round-trip through the versioned struct",
   REQUIRE(sonare_synth_preset_patch("sine", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
+TEST_CASE("synth patch enum counts match the public C ordinals", "[project][synth_patch]") {
+  REQUIRE(SONARE_SYNTH_ENGINE_DEFAULT == 0);
+  REQUIRE(SONARE_SYNTH_ENGINE_PIANO + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT);
+  REQUIRE(SONARE_SYNTH_OSC_DEFAULT == 0);
+  REQUIRE(SONARE_SYNTH_OSC_NOISE + 1 == SONARE_SYNTH_OSC_WAVEFORM_COUNT);
+  REQUIRE(SONARE_SYNTH_FILTER_DEFAULT == 0);
+  REQUIRE(SONARE_SYNTH_FILTER_SALLEN_KEY + 1 == SONARE_SYNTH_FILTER_MODEL_COUNT);
+  REQUIRE(SONARE_SYNTH_FILTER_OUT_DEFAULT == 0);
+  REQUIRE(SONARE_SYNTH_FILTER_OUT_HIGHPASS + 1 == SONARE_SYNTH_FILTER_OUTPUT_COUNT);
+  REQUIRE(SONARE_SYNTH_BODY_DEFAULT == 0);
+  REQUIRE(SONARE_SYNTH_BODY_WOOD_TUBE + 1 == SONARE_SYNTH_BODY_TYPE_COUNT);
+  REQUIRE(SONARE_SYNTH_MOD_SOURCE_COUNT == 9);
+  REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 5);
+}
+
 TEST_CASE("bounce_with_synth_instruments renders preset patches deterministically",
           "[project][synth_patch]") {
   SonareProject* project = make_synth_project(3);
@@ -165,6 +181,68 @@ TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch
                                                        &out_len) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("synth patch numeric zero fields keep the base preset", "[project][synth_patch]") {
+  SonareSynthPatch preset_only{};
+  std::strcpy(preset_only.preset, "warm-pad");
+
+  sonare::midi::synth::NativeSynthConfig base;
+  const char* error = nullptr;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(preset_only, &base, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(base.patch.amp_env.sustain > 0.0f);
+  REQUIRE(base.patch.filter_env.sustain > 0.0f);
+  REQUIRE(base.gain > 0.0f);
+
+  SonareSynthPatch explicit_zero = preset_only;
+  explicit_zero.amp_sustain = 0.0f;
+  explicit_zero.filter_sustain = 0.0f;
+  explicit_zero.gain = 0.0f;
+
+  sonare::midi::synth::NativeSynthConfig kept;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(explicit_zero, &kept, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(kept.patch.amp_env.sustain == base.patch.amp_env.sustain);
+  REQUIRE(kept.patch.filter_env.sustain == base.patch.filter_env.sustain);
+  REQUIRE(kept.gain == base.gain);
+
+  SonareSynthPatch non_zero = preset_only;
+  non_zero.amp_sustain = 0.25f;
+  non_zero.filter_sustain = 0.125f;
+  non_zero.gain = 0.5f;
+
+  sonare::midi::synth::NativeSynthConfig overridden;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(non_zero, &overridden, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(overridden.patch.amp_env.sustain == 0.25f);
+  REQUIRE(overridden.patch.filter_env.sustain == 0.125f);
+  REQUIRE(overridden.gain == 0.5f);
+}
+
+TEST_CASE("synth patch mod routing ordinals are clamped at the C ABI boundary",
+          "[project][synth_patch]") {
+  SonareSynthPatch patch{};
+  patch.num_mod_routings = 4;
+  patch.mod_routings[0] = {-1, 1 /*pitchCents*/, 100.0f};
+  patch.mod_routings[1] = {99, 2 /*cutoffCents*/, 100.0f};
+  patch.mod_routings[2] = {3 /*lfo1*/, -1, 100.0f};
+  patch.mod_routings[3] = {4 /*lfo2*/, 99, 100.0f};
+
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+  REQUIRE(error == nullptr);
+
+  const auto& routes = cfg.patch.mod_matrix.routes;
+  REQUIRE(routes[0].source == sonare::midi::synth::ModSource::kNone);
+  REQUIRE(routes[0].destination == sonare::midi::synth::ModDestination::kPitchCents);
+  REQUIRE(routes[1].source == sonare::midi::synth::ModSource::kNone);
+  REQUIRE(routes[1].destination == sonare::midi::synth::ModDestination::kCutoffCents);
+  REQUIRE(routes[2].source == sonare::midi::synth::ModSource::kLfo1);
+  REQUIRE(routes[2].destination == sonare::midi::synth::ModDestination::kNone);
+  REQUIRE(routes[3].source == sonare::midi::synth::ModSource::kLfo2);
+  REQUIRE(routes[3].destination == sonare::midi::synth::ModDestination::kNone);
 }
 
 TEST_CASE("the drum-kit preset plays the GM drum map on any key", "[project][synth_patch]") {

@@ -39,29 +39,30 @@ inline bool node_bool_option(const Napi::Object& object, const char* key, bool f
   return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
 }
 
-/// @brief Read an int property, coercing any defined value (see note above).
+/// @brief Read an int property, coercing any non-null defined value (see note above).
 inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback : value.As<Napi::Number>().Int32Value();
+  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().Int32Value();
 }
 
-/// @brief Read an int64 property, coercing any defined value.
+/// @brief Read an int64 property, coercing any non-null defined value.
 inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback
-                             : static_cast<int64_t>(value.As<Napi::Number>().Int64Value());
+  return value.IsUndefined() || value.IsNull()
+             ? fallback
+             : static_cast<int64_t>(value.As<Napi::Number>().Int64Value());
 }
 
-/// @brief Read a float property, coercing any defined value.
+/// @brief Read a float property, coercing any non-null defined value.
 inline float FloatProperty(const Napi::Object& obj, const char* key, float fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback : value.As<Napi::Number>().FloatValue();
+  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().FloatValue();
 }
 
-/// @brief Read a bool property, coercing any defined value.
+/// @brief Read a bool property, coercing any non-null defined value.
 inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback) {
   Napi::Value value = obj.Get(key);
-  return value.IsUndefined() ? fallback : value.As<Napi::Boolean>().Value();
+  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Boolean>().Value();
 }
 
 }  // namespace sonare_node

@@ -59,6 +59,33 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
+  it('setClipFade accepts omitted sides and partial fade objects', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+
+    expect(() => project.setClipFade(clip, { curve: 1 })).not.toThrow();
+    let json = project.toJson();
+    expect(json).toContain('"fade_in":{"curve":1,"length_ppq":0}');
+    expect(json).toContain('"fade_out":{"curve":0,"length_ppq":0}');
+
+    expect(() => project.setClipFade(clip, {}, { curve: 1 })).not.toThrow();
+    json = project.toJson();
+    expect(json).toContain('"fade_in":{"curve":0,"length_ppq":0}');
+    expect(json).toContain('"fade_out":{"curve":1,"length_ppq":0}');
+
+    expect(() =>
+      project.setClipFade(clip, {
+        lengthPpq: null as unknown as number,
+        curve: null as unknown as number,
+      }),
+    ).not.toThrow();
+    json = project.toJson();
+    expect(json).toContain('"fade_in":{"curve":0,"length_ppq":0}');
+    expect(json).toContain('"fade_out":{"curve":0,"length_ppq":0}');
+    project.destroy();
+  });
+
   it('setClipLoop enables looping and undoes', () => {
     const project = Project.create();
     const track = project.addTrack({ kind: 'audio' });

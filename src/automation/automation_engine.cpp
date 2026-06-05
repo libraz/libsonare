@@ -36,6 +36,17 @@ void AutomationEngine::prepare(double sample_rate, const transport::TempoMap* te
   tempo_map_ = tempo_map;
 }
 
+void AutomationEngine::set_parameter_metadata(std::vector<ParameterInfo> parameters) {
+  for (ParameterInfo& info : parameters) {
+    info.name = "";
+    info.unit = "";
+  }
+  std::sort(parameters.begin(), parameters.end(),
+            [](const ParameterInfo& a, const ParameterInfo& b) { return a.id < b.id; });
+  parameter_metadata_.publish(
+      std::make_shared<const std::vector<ParameterInfo>>(std::move(parameters)));
+}
+
 void AutomationEngine::set_lanes(std::vector<AutomationLane> lanes) {
   std::sort(lanes.begin(), lanes.end(), [](const AutomationLane& a, const AutomationLane& b) {
     return a.target_param_id() < b.target_param_id();
@@ -115,12 +126,17 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
     return;
   }
   for (const AutomationLane& lane : *lanes) {
-    rt::ProcessorBase* processor = target_for(lane.target_param_id());
+    const uint32_t param_id = lane.target_param_id();
+    if (registered_parameter_rejects_realtime(param_id)) {
+      non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
+      continue;
+    }
+    rt::ProcessorBase* processor = target_for(param_id);
     if (!processor) {
       unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
     }
-    if (!processor->parameter_is_realtime_safe(lane.target_param_id())) {
+    if (!processor->parameter_is_realtime_safe(param_id)) {
       non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
     }
@@ -130,12 +146,16 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
     if (!std::isfinite(value)) {
       continue;
     }
-    processor->set_parameter(lane.target_param_id(), value);
+    processor->set_parameter(param_id, value);
   }
 }
 
 bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
   if (!std::isfinite(value)) {
+    return false;
+  }
+  if (registered_parameter_rejects_realtime(param_id)) {
+    non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
   rt::ProcessorBase* processor = target_for(param_id);
@@ -202,6 +222,15 @@ rt::ProcessorBase* AutomationEngine::target_for(uint32_t param_id) const noexcep
     }
   }
   return nullptr;
+}
+
+bool AutomationEngine::registered_parameter_rejects_realtime(uint32_t param_id) const noexcept {
+  const std::vector<ParameterInfo>* metadata = parameter_metadata_.load();
+  if (metadata == nullptr) return false;
+  const auto found =
+      std::lower_bound(metadata->begin(), metadata->end(), param_id,
+                       [](const ParameterInfo& info, uint32_t id) { return info.id < id; });
+  return found != metadata->end() && found->id == param_id && !found->rt_safe;
 }
 
 }  // namespace sonare::automation

@@ -3,12 +3,16 @@
 /// @file param_smoother.h
 /// @brief One-pole parameter smoothing.
 
+#include <atomic>
+
 namespace sonare::rt {
 
 class ParamSmoother {
  public:
   ParamSmoother() = default;
   ParamSmoother(float initial_value, float time_ms, double sample_rate);
+  ParamSmoother(const ParamSmoother& other) noexcept;
+  ParamSmoother& operator=(const ParamSmoother& other) noexcept;
 
   void prepare(double sample_rate, float time_ms);
   void reset(float value);
@@ -20,7 +24,7 @@ class ParamSmoother {
   float advance(int n);
 
   float current() const { return current_; }
-  float target() const { return target_; }
+  float target() const { return target_.load(std::memory_order_acquire); }
 
  private:
   void update_coefficient();
@@ -29,7 +33,7 @@ class ParamSmoother {
   float time_ms_ = 20.0f;
   float coefficient_ = 0.0f;
   float current_ = 0.0f;
-  float target_ = 0.0f;
+  std::atomic<float> target_{0.0f};
 };
 
 }  // namespace sonare::rt

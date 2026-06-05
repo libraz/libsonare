@@ -220,6 +220,9 @@ static_assert(sizeof(SonareProjectTimeSignatureSegment) == 2u * sizeof(double),
 
 /// @brief One compile diagnostic surfaced by @ref sonare_project_compile.
 ///        Mirrors sonare::arrangement::Diagnostic (code / severity / target_id).
+///        Human-readable messages are stored in the same order in
+///        SonareProjectCompileResult::messages, one line per diagnostic, to
+///        preserve this frozen POD layout across the C ABI boundary.
 typedef struct {
   uint32_t code;      /* sonare::arrangement::Diagnostic::Code ordinal */
   uint32_t severity;  /* 0 = error, 1 = warning */
@@ -238,8 +241,9 @@ static_assert(offsetof(SonareProjectDiagnostic, target_id) == 8, "Diagnostic.tar
 ///        heap-allocated array of @p diagnostic_count entries (free with
 ///        @ref sonare_project_free_compile_result). @p messages is the
 ///        newline-joined human-readable detail of every diagnostic (heap C
-///        string, same free function). @p has_timeline is non-zero when
-///        compilation produced a renderable timeline (no error diagnostics).
+///        string, same free function), with line @c i corresponding to
+///        @c diagnostics[i]. @p has_timeline is non-zero when compilation
+///        produced a renderable timeline (no error diagnostics).
 typedef struct {
   SonareProjectDiagnostic* diagnostics;
   size_t diagnostic_count;

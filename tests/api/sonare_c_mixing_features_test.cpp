@@ -133,6 +133,32 @@ TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[
     sonare_free_mel_result(&ranged);
   }
 
+  SECTION("HTK forward transform can be inverted with an HTK-aware inverse API") {
+    SonareMelResult mel = {};
+    REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 0.0f,
+                                      0.0f, 1, &mel) == SONARE_OK);
+
+    SonareInverseResult slaney = {};
+    SonareInverseResult htk = {};
+    REQUIRE(sonare_mel_to_stft(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f, 0.0f,
+                               &slaney) == SONARE_OK);
+    REQUIRE(sonare_mel_to_stft_ex(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f, 0.0f, 1,
+                                  &htk) == SONARE_OK);
+    REQUIRE(slaney.rows == htk.rows);
+    REQUIRE(slaney.n_frames == htk.n_frames);
+
+    const size_t total = static_cast<size_t>(htk.rows) * htk.n_frames;
+    bool differs = false;
+    for (size_t i = 0; i < total && !differs; ++i) {
+      differs = std::abs(slaney.data[i] - htk.data[i]) > 1e-6f;
+    }
+    REQUIRE(differs);
+
+    sonare_free_inverse_result(&slaney);
+    sonare_free_inverse_result(&htk);
+    sonare_free_mel_result(&mel);
+  }
+
   SECTION("sonare_mfcc_ex accepts the range and a null out is rejected") {
     SonareMfccResult mfcc = {};
     REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 100.0f,

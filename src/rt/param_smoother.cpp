@@ -15,6 +15,23 @@ ParamSmoother::ParamSmoother(float initial_value, float time_ms, double sample_r
   update_coefficient();
 }
 
+ParamSmoother::ParamSmoother(const ParamSmoother& other) noexcept
+    : sample_rate_(other.sample_rate_),
+      time_ms_(other.time_ms_),
+      coefficient_(other.coefficient_),
+      current_(other.current_),
+      target_(other.target_.load(std::memory_order_relaxed)) {}
+
+ParamSmoother& ParamSmoother::operator=(const ParamSmoother& other) noexcept {
+  if (this == &other) return *this;
+  sample_rate_ = other.sample_rate_;
+  time_ms_ = other.time_ms_;
+  coefficient_ = other.coefficient_;
+  current_ = other.current_;
+  target_.store(other.target_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  return *this;
+}
+
 void ParamSmoother::prepare(double sample_rate, float time_ms) {
   sample_rate_ = sample_rate;
   time_ms_ = time_ms;
@@ -23,13 +40,14 @@ void ParamSmoother::prepare(double sample_rate, float time_ms) {
 
 void ParamSmoother::reset(float value) {
   current_ = value;
-  target_ = value;
+  target_.store(value, std::memory_order_release);
 }
 
-void ParamSmoother::set_target(float value) { target_ = value; }
+void ParamSmoother::set_target(float value) { target_.store(value, std::memory_order_release); }
 
 float ParamSmoother::process() {
-  current_ += coefficient_ * (target_ - current_);
+  const float target = target_.load(std::memory_order_acquire);
+  current_ += coefficient_ * (target - current_);
   return current_;
 }
 
@@ -37,8 +55,9 @@ float ParamSmoother::advance(int n) {
   if (n <= 0) return current_;
   // Closed form of n iterations of current += coeff * (target - current):
   //   current = target + (current - target) * (1 - coeff)^n.
+  const float target = target_.load(std::memory_order_acquire);
   const float decay = std::pow(1.0f - coefficient_, static_cast<float>(n));
-  current_ = target_ + (current_ - target_) * decay;
+  current_ = target + (current_ - target) * decay;
   return current_;
 }
 

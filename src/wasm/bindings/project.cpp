@@ -3,6 +3,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <sstream>
+#include <vector>
+
 #include "common.h"
 #include "synth_patch_val.h"
 
@@ -23,13 +26,21 @@ val projectCompileResultToVal(const SonareProjectCompileResult& result) {
   val out = val::object();
   out.set("diagnosticCount", static_cast<double>(result.diagnostic_count));
   out.set("hasTimeline", result.has_timeline != 0);
-  out.set("messages", std::string(result.messages != nullptr ? result.messages : ""));
+  const std::string messages(result.messages != nullptr ? result.messages : "");
+  out.set("messages", messages);
+  std::vector<std::string> diagnostic_messages;
+  std::stringstream message_stream(messages);
+  std::string line;
+  while (std::getline(message_stream, line)) {
+    diagnostic_messages.push_back(line);
+  }
   val diagnostics = val::array();
   for (size_t i = 0; i < result.diagnostic_count; ++i) {
     val diag = val::object();
     diag.set("code", static_cast<double>(result.diagnostics[i].code));
     diag.set("severity", static_cast<double>(result.diagnostics[i].severity));
     diag.set("targetId", static_cast<double>(result.diagnostics[i].target_id));
+    diag.set("message", i < diagnostic_messages.size() ? diagnostic_messages[i] : std::string());
     diagnostics.set(static_cast<unsigned>(i), diag);
   }
   out.set("diagnostics", diagnostics);
@@ -86,6 +97,24 @@ struct ProjectWasm {
     }
     sonare_free_string(diag);
     return ProjectWasm(handle);
+  }
+
+  static val fromJsonWithDiagnostics(const std::string& json) {
+    SonareProject* handle = nullptr;
+    char* diag = nullptr;
+    const SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);
+    std::string diagnostics = diag != nullptr ? std::string(diag) : std::string();
+    sonare_free_string(diag);
+    if (err != SONARE_OK || handle == nullptr) {
+      sonare_project_destroy(handle);
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidFormat,
+          diagnostics.empty() ? std::string("invalid project JSON") : diagnostics);
+    }
+    val out = val::object();
+    out.set("project", ProjectWasm(handle));
+    out.set("diagnostics", diagnostics);
+    return out;
   }
 
   // Sets the project sample rate (Hz). Must be > 0.
@@ -1476,6 +1505,12 @@ val js_synth_preset_patch(const std::string& name) {
   }
   return sonare_wasm_synth::synthPatchToVal(patch);
 }
+
+val js_synth_enum_tables() { return sonare_wasm_synth::synthEnumTablesToVal(); }
+
+val js_synth_patch_round_trip(val desc) {
+  return sonare_wasm_synth::synthPatchToVal(sonare_wasm_synth::synthPatchFromVal(desc));
+}
 #endif  // SONARE_WITH_ARRANGEMENT
 
 void registerProjectBindings() {
@@ -1485,6 +1520,7 @@ void registerProjectBindings() {
   class_<ProjectWasm>("Project")
       .constructor<>()
       .class_function("fromJson", &ProjectWasm::fromJson)
+      .class_function("fromJsonWithDiagnostics", &ProjectWasm::fromJsonWithDiagnostics)
       .function("toJson", &ProjectWasm::toJson)
       .function("setSampleRate", &ProjectWasm::setSampleRate)
       .function("addTrack", &ProjectWasm::addTrack)
@@ -1570,6 +1606,8 @@ void registerProjectBindings() {
   function("midiRouteEvents", &js_midi_route_events);
   function("synthPresetNames", &js_synth_preset_names);
   function("synthPresetPatch", &js_synth_preset_patch);
+  function("_synthEnumTables", &js_synth_enum_tables);
+  function("_synthPatchRoundTrip", &js_synth_patch_round_trip);
 #endif
 }
 

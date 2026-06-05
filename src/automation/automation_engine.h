@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "automation/automation_lane.h"
+#include "automation/parameter.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 #include "transport/tempo_map.h"
@@ -32,6 +33,11 @@ struct AutomationBoundaryList {
 class AutomationEngine {
  public:
   void prepare(double sample_rate, const transport::TempoMap* tempo_map);
+  void set_tempo_map(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
+  /// Publishes registered parameter metadata used to reject explicitly
+  /// non-realtime-safe targets before any RT automation path reaches a
+  /// processor. Unregistered ids keep the legacy unknown-target behavior.
+  void set_parameter_metadata(std::vector<ParameterInfo> parameters);
   void set_lanes(std::vector<AutomationLane> lanes);
   bool bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept;
   void clear_targets() noexcept;
@@ -104,9 +110,11 @@ class AutomationEngine {
   };
 
   rt::ProcessorBase* target_for(uint32_t param_id) const noexcept;
+  bool registered_parameter_rejects_realtime(uint32_t param_id) const noexcept;
 
   double sample_rate_ = 48000.0;
   const transport::TempoMap* tempo_map_ = nullptr;
+  rt::RtSnapshot<std::vector<ParameterInfo>> parameter_metadata_{};
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
   std::atomic<size_t> lane_count_{0};
   std::array<Target, 128> targets_{};

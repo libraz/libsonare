@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+from types import SimpleNamespace
+
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 
@@ -181,6 +185,327 @@ def test_cli_new_commands_smoke(command: str) -> None:
         result = _run_cli([command, wav_path, "--json"])
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip()
+
+
+def test_mastering_pair_analyze_cli_resamples_reference_rate(monkeypatch, capsys) -> None:
+    """The pair-analysis CLI resamples reference audio to the master sample rate."""
+    import argparse
+
+    import libsonare
+    from libsonare import cli
+
+    calls: dict[str, object] = {}
+
+    def fake_load_audio(path: str) -> tuple[list[float], int]:
+        if path == "master.wav":
+            return [0.0, 1.0, 0.0, -1.0], 4
+        if path == "reference.wav":
+            return [0.0, 1.0], 2
+        raise AssertionError(path)
+
+    def fake_mastering_pair_analyze(
+        analysis: str,
+        source: list[float],
+        reference: list[float],
+        *,
+        sample_rate: int,
+    ) -> str:
+        calls["analysis"] = analysis
+        calls["source"] = source
+        calls["reference"] = reference
+        calls["sample_rate"] = sample_rate
+        return '{"ok":true}'
+
+    monkeypatch.setattr(cli, "_load_audio", fake_load_audio)
+    monkeypatch.setattr(libsonare, "mastering_pair_analyze", fake_mastering_pair_analyze)
+
+    args = argparse.Namespace(
+        analysis="match.referenceLoudness",
+        file="master.wav",
+        reference="reference.wav",
+    )
+    assert cli.cmd_mastering_pair_analyze(args) == 0
+
+    assert calls["analysis"] == "match.referenceLoudness"
+    assert calls["source"] == [0.0, 1.0, 0.0, -1.0]
+    assert calls["reference"] == pytest.approx([0.0, 0.5, 1.0, 1.0])
+    assert calls["sample_rate"] == 4
+    assert capsys.readouterr().out.strip() == '{"ok":true}'
+
+
+def test_project_cli_exports_smf_and_midi_render_smoke() -> None:
+    """The Python CLI exposes project validation, SMF export/import, and MIDI render."""
+    from libsonare import Project, project_abi_version
+
+    if project_abi_version() == 0:
+        pytest.skip("arrangement/project ABI is not available")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        project_path = root / "song.json"
+        smf_path = root / "song.mid"
+        imported_path = root / "imported.json"
+        wav_path = root / "render.wav"
+
+        project = Project()
+        try:
+            project.set_sample_rate(22050)
+            track_id, clip_id = project.add_midi_clip(0.0, 1.0)
+            project.set_track_midi_destination(track_id, 0)
+            project.set_midi_events(
+                clip_id,
+                [
+                    Project.midi_note_on(0.0, 0, 0, 60, 100),
+                    Project.midi_note_off(0.5, 0, 0, 60, 0),
+                ],
+            )
+            project_path.write_text(project.to_json(), encoding="utf-8")
+        finally:
+            project.close()
+
+        validate = _run_cli(["project", "validate", "--in", str(project_path), "--json"])
+        assert validate.returncode == 0, validate.stderr
+        assert json.loads(validate.stdout)["valid"] is True
+
+        export = _run_cli(
+            ["project", "export-smf", "--in", str(project_path), "-o", str(smf_path), "--json"]
+        )
+        assert export.returncode == 0, export.stderr
+        assert smf_path.read_bytes().startswith(b"MThd")
+        assert json.loads(export.stdout)["bytes"] == smf_path.stat().st_size
+
+        imported = _run_cli(
+            ["project", "import-smf", "--smf", str(smf_path), "-o", str(imported_path), "--json"]
+        )
+        assert imported.returncode == 0, imported.stderr
+        assert imported_path.exists()
+        assert json.loads(imported.stdout)["first_clip_id"] > 0
+
+        rendered = _run_cli(
+            [
+                "midi-render",
+                "--in",
+                str(project_path),
+                "-o",
+                str(wav_path),
+                "--frames",
+                "2048",
+                "--sample-rate",
+                "22050",
+                "--json",
+            ]
+        )
+        assert rendered.returncode == 0, rendered.stderr
+        payload = json.loads(rendered.stdout)
+        assert payload["synth"] is True
+        assert payload["frames"] == 2048
+        with wave.open(str(wav_path), "rb") as wav:
+            assert wav.getframerate() == 22050
+            assert wav.getnframes() == 2048
+
+
+def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_path, capsys) -> None:
+    """mastering-chain is exposed as a CLI wrapper over the Python mastering API."""
+    import libsonare
+    from libsonare import cli
+
+    calls: dict[str, object] = {}
+
+    def fake_load_audio(path: str) -> tuple[list[float], int]:
+        assert path == "input.wav"
+        return [0.25, -0.25, 0.0], 22050
+
+    def fake_mastering_chain(
+        samples: list[float],
+        *,
+        sample_rate: int,
+        config: dict[str, object],
+    ) -> SimpleNamespace:
+        calls["samples"] = samples
+        calls["sample_rate"] = sample_rate
+        calls["config"] = config
+        return SimpleNamespace(
+            samples=[0.0, 0.1, -0.1],
+            sample_rate=sample_rate,
+            input_lufs=-20.0,
+            output_lufs=-14.0,
+            applied_gain_db=6.0,
+            stages=["eq.tilt", "loudness"],
+        )
+
+    monkeypatch.setattr(cli, "_load_audio", fake_load_audio)
+    monkeypatch.setattr(libsonare, "mastering_chain", fake_mastering_chain)
+
+    output = tmp_path / "chain.wav"
+    args = argparse.Namespace(
+        file="input.wav",
+        output=str(output),
+        json=True,
+        config='{"eq.tilt.tiltDb": 1.5}',
+        config_file="",
+        params="loudness.enabled=1",
+    )
+
+    assert cli.cmd_mastering_chain(args) == 0
+    assert calls["samples"] == [0.25, -0.25, 0.0]
+    assert calls["sample_rate"] == 22050
+    assert calls["config"] == {"eq.tilt.tiltDb": 1.5, "loudness.enabled": 1.0}
+    assert output.exists()
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["stages"] == ["eq.tilt", "loudness"]
+    assert payload["output"] == str(output)
+
+
+def test_master_cli_applies_preset_and_override_params(monkeypatch, tmp_path, capsys) -> None:
+    """master is a preset-oriented wrapper over master_audio."""
+    import libsonare
+    from libsonare import cli
+
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.1, -0.1], 44100))
+
+    def fake_master_audio(
+        samples: list[float],
+        *,
+        sample_rate: int,
+        preset_name: str,
+        overrides: dict[str, object],
+    ) -> SimpleNamespace:
+        calls["samples"] = samples
+        calls["sample_rate"] = sample_rate
+        calls["preset_name"] = preset_name
+        calls["overrides"] = overrides
+        return SimpleNamespace(
+            samples=[0.0, 0.2],
+            sample_rate=sample_rate,
+            input_lufs=-18.0,
+            output_lufs=-12.0,
+            applied_gain_db=6.0,
+            stages=["preset", "loudness"],
+        )
+
+    monkeypatch.setattr(libsonare, "master_audio", fake_master_audio)
+
+    output = tmp_path / "master.wav"
+    args = argparse.Namespace(
+        file="input.wav",
+        output=str(output),
+        json=True,
+        preset="streaming",
+        config='{"eq.tilt.tiltDb": -0.5}',
+        config_file="",
+        params="loudness.enabled=1",
+    )
+
+    assert cli.cmd_master(args) == 0
+    assert calls["samples"] == [0.1, -0.1]
+    assert calls["sample_rate"] == 44100
+    assert calls["preset_name"] == "streaming"
+    assert calls["overrides"] == {"eq.tilt.tiltDb": -0.5, "loudness.enabled": 1.0}
+    assert output.exists()
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["preset"] == "streaming"
+    assert payload["stages"] == ["preset", "loudness"]
+
+
+def test_mastering_streaming_cli_passes_platform_targets(monkeypatch, capsys) -> None:
+    """mastering-streaming exposes the streaming preview JSON API."""
+    import libsonare
+    from libsonare import cli
+
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.2, -0.2, 0.0], 48000))
+
+    def fake_streaming_preview(
+        samples: list[float],
+        *,
+        sample_rate: int,
+        platforms: list[dict[str, object]] | None,
+    ) -> str:
+        calls["samples"] = samples
+        calls["sample_rate"] = sample_rate
+        calls["platforms"] = platforms
+        return '{"platforms":[{"name":"Service","gainDb":-1.0}]}'
+
+    monkeypatch.setattr(libsonare, "mastering_streaming_preview", fake_streaming_preview)
+
+    args = argparse.Namespace(
+        file="input.wav",
+        platforms='[{"name":"Service","targetLufs":-14,"ceilingDb":-1}]',
+        platforms_file="",
+    )
+
+    assert cli.cmd_mastering_streaming(args) == 0
+    assert calls["samples"] == [0.2, -0.2, 0.0]
+    assert calls["sample_rate"] == 48000
+    assert calls["platforms"] == [{"name": "Service", "targetLufs": -14, "ceilingDb": -1}]
+    assert json.loads(capsys.readouterr().out)["platforms"][0]["name"] == "Service"
+
+
+def test_declip_cli_writes_repaired_audio(monkeypatch, tmp_path, capsys) -> None:
+    """declip exposes the offline mastering repair API."""
+    import libsonare
+    from libsonare import cli
+
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(cli, "_load_audio", lambda path: ([1.0, -1.0, 0.25], 22050))
+
+    def fake_declip(
+        samples: list[float],
+        sample_rate: int,
+        *,
+        clip_threshold: float,
+        lpc_order: int,
+        iterations: int,
+        lpc_blend: float,
+    ) -> list[float]:
+        calls["samples"] = samples
+        calls["sample_rate"] = sample_rate
+        calls["clip_threshold"] = clip_threshold
+        calls["lpc_order"] = lpc_order
+        calls["iterations"] = iterations
+        calls["lpc_blend"] = lpc_blend
+        return [0.8, -0.8, 0.25]
+
+    monkeypatch.setattr(libsonare, "mastering_repair_declip", fake_declip)
+
+    output = tmp_path / "declip.wav"
+    args = argparse.Namespace(
+        file="input.wav",
+        output=str(output),
+        json=True,
+        clip_threshold=0.9,
+        lpc_order=24,
+        iterations=3,
+        lpc_blend=0.5,
+    )
+
+    assert cli.cmd_declip(args) == 0
+    assert calls == {
+        "samples": [1.0, -1.0, 0.25],
+        "sample_rate": 22050,
+        "clip_threshold": 0.9,
+        "lpc_order": 24,
+        "iterations": 3,
+        "lpc_blend": 0.5,
+    }
+    assert output.exists()
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["samples"] == 3
+    assert payload["output"] == str(output)
+
+
+def test_mastering_cli_help_lists_preset_streaming_and_declip_commands() -> None:
+    """The practical mastering CLI surface is advertised in --help."""
+    result = _run_cli(["--help"])
+
+    assert result.returncode == 0
+    assert "master " in result.stdout
+    assert "mastering-streaming" in result.stdout
+    assert "declip" in result.stdout
 
 
 def test_analyze_sections_returns_section_result() -> None:

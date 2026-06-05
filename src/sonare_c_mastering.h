@@ -52,7 +52,9 @@ typedef struct {
 /// @param user_data Opaque pointer passed at registration.
 typedef void (*SonareMasteringProgressCallback)(float progress, const char* stage, void* user_data);
 
-// Result of running the MasteringChain on a mono buffer.
+// Result of running the MasteringChain on a mono buffer. Offline chain/master_audio
+// outputs are latency-compensated, so this frozen result layout intentionally
+// reports no separate latency_samples field.
 // Memory for @c samples and @c stages (and each char* entry inside it) is
 // allocated by libsonare with @c new[]; free with
 // @c sonare_free_mastering_chain_result.
@@ -67,8 +69,9 @@ typedef struct {
   size_t stages_count;
 } SonareMasteringChainResult;
 
-// Result of running the MasteringChain on stereo buffers. Same ownership
-// rules as @c SonareMasteringChainResult; free with
+// Result of running the MasteringChain on stereo buffers. Offline chain/master_audio
+// outputs are latency-compensated; same ownership rules as
+// @c SonareMasteringChainResult; free with
 // @c sonare_free_mastering_chain_stereo_result.
 typedef struct {
   float* left;

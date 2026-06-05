@@ -149,6 +149,7 @@ SoloProcessor: TypeAlias = Literal[
     "saturation.exciter",
     "saturation.hardClipper",
     "saturation.multibandExciter",
+    "saturation.ampSim",
     "saturation.softClipper",
     "saturation.tape",
     "saturation.transformer",
@@ -591,6 +592,7 @@ class Mixer:
     def add_vca_group(
         self, group_id: str, gain_db: float = 0.0, members: Sequence[str] | None = None
     ) -> None: ...
+    def set_vca_group_gain_db(self, group_id: str, gain_db: float) -> None: ...
     def remove_vca_group(self, group_id: str) -> None: ...
     def vca_group_count(self) -> int: ...
     def set_soloed(self, strip: StripRef, soloed: bool) -> None: ...
@@ -1250,6 +1252,7 @@ def mel_to_stft(
     n_fft: int = 2048,
     fmin: float = 0.0,
     fmax: float = 0.0,
+    htk: bool = False,
 ) -> InverseResult: ...
 def mel_to_audio(
     mel: FloatSamples,
@@ -1261,6 +1264,7 @@ def mel_to_audio(
     fmin: float = 0.0,
     fmax: float = 0.0,
     n_iter: int = 32,
+    htk: bool = False,
 ) -> list[float]: ...
 def mfcc_to_mel(
     mfcc_coeffs: FloatSamples,
@@ -1279,6 +1283,7 @@ def mfcc_to_audio(
     fmin: float = 0.0,
     fmax: float = 0.0,
     n_iter: int = 32,
+    htk: bool = False,
 ) -> list[float]: ...
 def mastering_dynamics_compressor(
     samples: FloatSamples,

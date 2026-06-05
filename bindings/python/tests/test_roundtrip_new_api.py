@@ -1,10 +1,12 @@
 """Round-trip / ABI validation for the newly wired inverse + StreamAnalyzer API."""
 
+import ctypes
 import math
 
 import pytest
 
 import libsonare as ls
+from libsonare._runtime import SonareStreamConfig, _get_lib
 
 
 def _is_finite_list(xs):
@@ -13,6 +15,32 @@ def _is_finite_list(xs):
 
 def _sine(n, freq, sr):
     return [0.5 * math.sin(2.0 * math.pi * freq * i / sr) for i in range(n)]
+
+
+def test_stream_config_defaults_match_native_config():
+    raw = SonareStreamConfig()
+    lib = _get_lib()
+    assert lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)) == 0
+
+    cfg = ls.StreamConfig()
+    assert cfg.sample_rate == raw.sample_rate
+    assert cfg.n_fft == raw.n_fft
+    assert cfg.hop_length == raw.hop_length
+    assert cfg.n_mels == raw.n_mels
+    assert cfg.fmin == raw.fmin
+    assert cfg.fmax == raw.fmax
+    assert cfg.tuning_ref_hz == raw.tuning_ref_hz
+    assert int(cfg.compute_magnitude) == raw.compute_magnitude
+    assert int(cfg.compute_mel) == raw.compute_mel
+    assert int(cfg.compute_chroma) == raw.compute_chroma
+    assert int(cfg.compute_onset) == raw.compute_onset
+    assert int(cfg.compute_spectral) == raw.compute_spectral
+    assert cfg.emit_every_n_frames == raw.emit_every_n_frames
+    assert cfg.magnitude_downsample == raw.magnitude_downsample
+    assert cfg.key_update_interval_sec == raw.key_update_interval_sec
+    assert cfg.bpm_update_interval_sec == raw.bpm_update_interval_sec
+    assert cfg.window == raw.window
+    assert cfg.output_format == raw.output_format
 
 
 def test_mel_inverse_roundtrip():
@@ -38,6 +66,38 @@ def test_mel_inverse_roundtrip():
     assert len(out) >= (n_frames - 1) * hop
     assert _is_finite_list(out)
     assert max(abs(x) for x in out) > 0.0
+
+
+def test_mel_inverse_honours_htk():
+    sr = 22050
+    n_fft = 1024
+    hop = 256
+    n_mels = 40
+    audio = _sine(sr // 4, 440.0, sr)
+
+    mel = ls.mel_spectrogram(
+        audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels, htk=True
+    )
+    slaney = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sample_rate=sr, n_fft=n_fft, htk=False)
+    htk = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sample_rate=sr, n_fft=n_fft, htk=True)
+
+    assert htk.rows == n_fft // 2 + 1
+    assert htk.n_frames == mel.n_frames
+    assert _is_finite_list(htk.data)
+    assert sum((a - b) ** 2 for a, b in zip(slaney.data, htk.data, strict=True)) > 1e-6
+
+    out = ls.mel_to_audio(
+        mel.power,
+        n_mels,
+        mel.n_frames,
+        sample_rate=sr,
+        n_fft=n_fft,
+        hop_length=hop,
+        n_iter=2,
+        htk=True,
+    )
+    assert len(out) >= (mel.n_frames - 1) * hop
+    assert _is_finite_list(out)
 
 
 def test_mfcc_inverse_roundtrip():

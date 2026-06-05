@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "editing/voice_changer/formant_bounds.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/lpc.h"
@@ -20,8 +21,6 @@ namespace {
 
 constexpr int kFrameSize = 1024;
 constexpr int kHopSize = 256;
-constexpr float kFactorMin = 0.25f;
-constexpr float kFactorMax = 4.0f;
 
 // Periodic Hann window (good COLA at 75% overlap).
 std::vector<float> make_hann(int size) {
@@ -39,7 +38,7 @@ FormantWarp::FormantWarp(FormantWarpConfig config) : config_(config) {}
 
 Audio FormantWarp::process(const Audio& audio) const {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config_.factor > 0.0f && std::isfinite(config_.factor), ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config_.factor), ErrorCode::InvalidParameter);
   SONARE_CHECK(config_.lpc_order >= 0, ErrorCode::InvalidParameter);
 
   const int sr = audio.sample_rate();
@@ -48,9 +47,9 @@ Audio FormantWarp::process(const Audio& audio) const {
 
   // Effective warp factor folds the dry/wet amount into the shift strength.
   const float amount = std::clamp(config_.amount, 0.0f, 1.0f);
-  const float factor = std::clamp(config_.factor, kFactorMin, kFactorMax);
+  const float factor = std::clamp(config_.factor, kFormantFactorMin, kFormantFactorMax);
   const float effective_factor =
-      std::clamp(1.0f + (factor - 1.0f) * amount, kFactorMin, kFactorMax);
+      std::clamp(1.0f + (factor - 1.0f) * amount, kFormantFactorMin, kFormantFactorMax);
 
   // Effective LPC order: explicit config, else sr-based heuristic.
   const int default_order = static_cast<int>(sr / 1000) + 2;

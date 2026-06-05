@@ -36,6 +36,7 @@ import {
   trim,
   zeroCrossingRate,
 } from './features';
+import { getSonareModule } from './module_state';
 import type {
   AnalysisResult,
   ChordAnalysisResult,
@@ -113,6 +114,16 @@ export class Audio {
    */
   static fromBuffer(samples: Float32Array, sampleRate = 48000): Audio {
     return new Audio(samples, sampleRate);
+  }
+
+  /**
+   * Create an Audio instance by decoding audio bytes in memory.
+   *
+   * @param bytes - Encoded audio bytes such as WAV or MP3.
+   */
+  static fromMemory(bytes: Uint8Array): Audio {
+    const decoded = getSonareModule().audioFromMemory(bytes);
+    return new Audio(decoded.samples, decoded.sampleRate);
   }
 
   /** The raw audio samples. */

@@ -2,6 +2,21 @@
 
 using namespace sonare_c_mixing_detail;
 
+namespace {
+
+std::vector<std::string> unique_vca_members(const std::vector<std::string>& members) {
+  std::vector<std::string> unique;
+  unique.reserve(members.size());
+  for (const auto& member : members) {
+    if (std::find(unique.begin(), unique.end(), member) == unique.end()) {
+      unique.push_back(member);
+    }
+  }
+  return unique;
+}
+
+}  // namespace
+
 size_t sonare_mixer_strip_count(const SonareMixer* mixer) {
   if (!mixer) {
     return 0;
@@ -104,7 +119,10 @@ SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float
     if (!members[i]) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    group.members.emplace_back(members[i]);
+    const std::string member = members[i];
+    if (std::find(group.members.begin(), group.members.end(), member) == group.members.end()) {
+      group.members.push_back(member);
+    }
   }
   // Apply the group's gain offset to the live ChannelStrip of each member, the
   // same control-only path scene load uses. A strip may belong to several VCA
@@ -120,6 +138,34 @@ SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float
     }
   }
   mixer->vca_groups.push_back(std::move(group));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* id, float gain_db) {
+  if (!mixer || !id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const std::string group_id = id;
+  const auto it =
+      std::find_if(mixer->vca_groups.begin(), mixer->vca_groups.end(),
+                   [&](const sonare::mixing::api::VcaGroup& g) { return g.id == group_id; });
+  if (it == mixer->vca_groups.end()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const float delta_db = gain_db - it->gain_db;
+  if (delta_db != 0.0f) {
+    for (const auto& member : it->members) {
+      for (const auto& strip : mixer->strips) {
+        if (strip->id == member) {
+          strip->strip.add_vca_group_offset_db(delta_db);
+          break;
+        }
+      }
+    }
+  }
+  it->gain_db = gain_db;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -234,6 +280,9 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     // so strips default-route to it.
     mixer->buses = scene.buses;
     mixer->vca_groups = scene.vca_groups;
+    for (auto& group : mixer->vca_groups) {
+      group.members = unique_vca_members(group.members);
+    }
     mixer->connections = scene.connections;
     bool has_master = false;
     for (const auto& bus : mixer->buses) {
@@ -251,7 +300,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     // VCA-group offset, matching the runtime VcaGroup delta semantics (summing
     // in the dB domain is equivalent to multiplying the linear VCA gains). The
     // group offset is independent of any manual trim a loaded strip carries.
-    for (const auto& group : scene.vca_groups) {
+    for (const auto& group : mixer->vca_groups) {
       for (const auto& member : group.members) {
         for (const auto& strip : mixer->strips) {
           if (strip->id == member) {

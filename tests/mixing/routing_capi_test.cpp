@@ -98,6 +98,109 @@ TEST_CASE("C-API mixer reports latency and drains delayed output", "[mixing][cap
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("C-API VCA groups deduplicate duplicate member ids", "[mixing][capi]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 4096;
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip strip;
+  strip.id = "lead";
+  strip.pan_law = 3;  // Linear0dB.
+  scene.strips.push_back(strip);
+  scene.buses.push_back({"master", "master"});
+  scene.connections.push_back({"lead", "master"});
+  scene.vca_groups.push_back({"lead-vca", -6.0f, {"lead", "lead"}});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+
+  std::vector<float> input(kBlock, 1.0f);
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+  std::vector<float> out_l(kBlock, 0.0f);
+  std::vector<float> out_r(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.501187f, 0.01f));
+
+  char* round_trip = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &round_trip) == SONARE_OK);
+  REQUIRE(round_trip != nullptr);
+  const std::string round_trip_json(round_trip);
+  sonare_free_string(round_trip);
+  const auto restored = sonare::mixing::api::scene_from_json(round_trip_json);
+  REQUIRE(restored.vca_groups.size() == 1);
+  REQUIRE(restored.vca_groups[0].members == std::vector<std::string>{"lead"});
+
+  sonare_mixer_destroy(mixer);
+
+  SonareMixer* live = sonare_mixer_create(kSr, kBlock);
+  REQUIRE(live != nullptr);
+  REQUIRE(sonare_mixer_add_strip(live, "lead") != nullptr);
+  const char* members[] = {"lead", "lead"};
+  REQUIRE(sonare_mixer_add_vca_group(live, "live-vca", -6.0f, members, 2) == SONARE_OK);
+  input.assign(kBlock, 1.0f);
+  out_l.assign(kBlock, 0.0f);
+  out_r.assign(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(live, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.501187f, 0.01f));
+  REQUIRE(sonare_mixer_remove_vca_group(live, "live-vca") == SONARE_OK);
+  out_l.assign(kBlock, 0.0f);
+  out_r.assign(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(live, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE(out_l[kBlock - 1] > 0.99f);
+  sonare_mixer_destroy(live);
+}
+
+TEST_CASE("C-API VCA group gain setter updates live gain and scene state", "[mixing][capi]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 4096;
+
+  SonareMixer* mixer = sonare_mixer_create(kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+  const char* members[] = {"lead"};
+  REQUIRE(sonare_mixer_add_vca_group(mixer, "lead-vca", -6.0f, members, 1) == SONARE_OK);
+
+  std::vector<float> input(kBlock, 1.0f);
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+  std::vector<float> out_l(kBlock, 0.0f);
+  std::vector<float> out_r(kBlock, 0.0f);
+
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.501187f, 0.01f));
+
+  REQUIRE(sonare_mixer_set_vca_group_gain_db(mixer, "lead-vca", -12.0f) == SONARE_OK);
+  out_l.assign(kBlock, 0.0f);
+  out_r.assign(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.251189f, 0.01f));
+
+  char* round_trip = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &round_trip) == SONARE_OK);
+  REQUIRE(round_trip != nullptr);
+  const std::string round_trip_json(round_trip);
+  sonare_free_string(round_trip);
+  const auto restored = sonare::mixing::api::scene_from_json(round_trip_json);
+  REQUIRE(restored.vca_groups.size() == 1);
+  REQUIRE_THAT(restored.vca_groups[0].gain_db, WithinAbs(-12.0f, 0.0001f));
+
+  REQUIRE(sonare_mixer_set_vca_group_gain_db(mixer, "missing-vca", -3.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_set_vca_group_gain_db(nullptr, "lead-vca", -3.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_set_vca_group_gain_db(mixer, nullptr, -3.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("C-API strip setters reflect into scene JSON for cached fields", "[mixing][capi]") {
   // Load a two-strip scene, mutate a strip through the runtime setters, then
   // serialize and re-parse. Fields that the C layer caches into scene_strip

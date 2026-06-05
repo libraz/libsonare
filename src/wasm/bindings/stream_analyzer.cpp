@@ -42,6 +42,56 @@ QuantizeConfig quantizeConfigFromVal(const val& config) {
   return qconfig;
 }
 
+int streamWindowToCValue(WindowType window) {
+  switch (window) {
+    case WindowType::Hamming:
+      return SONARE_WINDOW_HAMMING;
+    case WindowType::Blackman:
+      return SONARE_WINDOW_BLACKMAN;
+    case WindowType::Rectangular:
+      return SONARE_WINDOW_RECTANGULAR;
+    case WindowType::Hann:
+    default:
+      return SONARE_WINDOW_HANN;
+  }
+}
+
+int streamOutputFormatToCValue(OutputFormat format) {
+  switch (format) {
+    case OutputFormat::Int16:
+      return SONARE_STREAM_OUTPUT_INT16;
+    case OutputFormat::Uint8:
+      return SONARE_STREAM_OUTPUT_UINT8;
+    case OutputFormat::Float32:
+    default:
+      return SONARE_STREAM_OUTPUT_FLOAT32;
+  }
+}
+
+val js_stream_analyzer_config_default() {
+  StreamConfig defaults;
+  val out = val::object();
+  out.set("sampleRate", defaults.sample_rate);
+  out.set("nFft", defaults.n_fft);
+  out.set("hopLength", defaults.hop_length);
+  out.set("nMels", defaults.n_mels);
+  out.set("fmin", defaults.fmin);
+  out.set("fmax", defaults.fmax);
+  out.set("tuningRefHz", defaults.tuning_ref_hz);
+  out.set("computeMagnitude", false);
+  out.set("computeMel", defaults.compute_mel);
+  out.set("computeChroma", defaults.compute_chroma);
+  out.set("computeOnset", defaults.compute_onset);
+  out.set("computeSpectral", defaults.compute_spectral);
+  out.set("emitEveryNFrames", defaults.emit_every_n_frames);
+  out.set("magnitudeDownsample", defaults.magnitude_downsample);
+  out.set("keyUpdateIntervalSec", defaults.key_update_interval_sec);
+  out.set("bpmUpdateIntervalSec", defaults.bpm_update_interval_sec);
+  out.set("window", streamWindowToCValue(defaults.window));
+  out.set("outputFormat", streamOutputFormatToCValue(defaults.output_format));
+  return out;
+}
+
 /// @brief JavaScript wrapper for StreamAnalyzer.
 class StreamAnalyzerWrapper {
  public:
@@ -51,6 +101,11 @@ class StreamAnalyzerWrapper {
                         int emit_every_n_frames, int magnitude_downsample,
                         float key_update_interval_sec, float bpm_update_interval_sec, int window,
                         int output_format) {
+    if (compute_magnitude) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "computeMagnitude is not supported because magnitude frames are not "
+                            "exposed by the StreamAnalyzer read paths");
+    }
     StreamConfig config;
     config.sample_rate = sample_rate;
     config.n_fft = n_fft;
@@ -63,7 +118,7 @@ class StreamAnalyzerWrapper {
     config.fmin = fmin;
     config.fmax = fmax;
     config.tuning_ref_hz = tuning_ref_hz;
-    config.compute_magnitude = compute_magnitude;
+    config.compute_magnitude = false;
     config.compute_mel = compute_mel;
     config.compute_chroma = compute_chroma;
     config.compute_onset = compute_onset;
@@ -267,6 +322,7 @@ class StreamAnalyzerWrapper {
 
 void registerStreamAnalyzerBindings() {
   // Streaming - StreamAnalyzer
+  function("streamAnalyzerConfigDefault", &js_stream_analyzer_config_default);
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
       .constructor<int, int, int, int, float, float, float, bool, bool, bool, bool, bool, int, int,
                    float, float, int, int>()

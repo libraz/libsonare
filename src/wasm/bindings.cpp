@@ -94,6 +94,16 @@ val js_realtime_voice_changer_preset_config(int preset) {
 }
 #undef SONARE_WASM_VC_FIELDS
 
+val js_audio_from_memory(val bytes) {
+  std::vector<uint8_t> data = uint8ArrayToVector(bytes);
+  const Audio audio = Audio::from_memory(data.data(), data.size());
+  const std::vector<float> samples(audio.data(), audio.data() + audio.size());
+  val out = val::object();
+  out.set("samples", vectorToFloat32Array(samples));
+  out.set("sampleRate", audio.sample_rate());
+  return out;
+}
+
 // ============================================================================
 // Embind Registrations
 // ============================================================================
@@ -157,6 +167,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("voiceChangerAbiVersion", &js_voice_changer_abi_version);
   function("voiceCharacterPresetId", &js_voice_character_preset_id);
   function("realtimeVoiceChangerPresetConfig", &js_realtime_voice_changer_preset_config);
+  function("audioFromMemory", &js_audio_from_memory);
 
   registerQuickAnalysisBindings();
   registerEffectsAudioBindings();

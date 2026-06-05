@@ -153,6 +153,29 @@ void fill_c_parameter(const automation::ParameterInfo& info, SonareParameterInfo
   out->default_curve = curve_to_int(info.default_curve);
 }
 
+std::vector<automation::ParameterInfo> parameter_metadata_snapshot(
+    const automation::ParameterRegistry& registry) {
+  std::vector<automation::ParameterInfo> parameters;
+  parameters.reserve(registry.parameter_count());
+  for (size_t i = 0; i < registry.parameter_count(); ++i) {
+    automation::ParameterInfo info{};
+    if (registry.parameter_info_by_index(i, &info)) {
+      parameters.push_back(info);
+    }
+  }
+  return parameters;
+}
+
+void publish_parameter_metadata(SonareRealtimeEngine* engine) {
+  engine->engine.automation().set_parameter_metadata(
+      parameter_metadata_snapshot(engine->parameters));
+}
+
+bool registered_parameter_rejects_realtime(const SonareRealtimeEngine* engine, uint32_t param_id) {
+  automation::ParameterInfo info{};
+  return engine->parameters.parameter_info(param_id, &info) && !info.rt_safe;
+}
+
 void fill_c_marker(const transport::Marker& marker, SonareEngineMarker* out) {
   out->id = marker.id;
   out->ppq = marker.ppq;
@@ -338,6 +361,7 @@ SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
     engine->parameter_strings.pop_back();
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  publish_parameter_metadata(engine);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -348,6 +372,7 @@ SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine) {
   // then release the backing strings so no dangling pointer ever exists.
   engine->parameters.clear();
   engine->parameter_strings.clear();
+  publish_parameter_metadata(engine);
   return SONARE_OK;
 }
 
@@ -383,6 +408,9 @@ SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint
                                               const SonareAutomationPoint* points,
                                               size_t point_count) {
   if (!engine || (point_count > 0 && !points)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (registered_parameter_rejects_realtime(engine, param_id)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   std::vector<automation::Breakpoint> breakpoints;
   breakpoints.reserve(point_count);
@@ -650,7 +678,7 @@ SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
   if (!graph->compile()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const auto state = engine->engine.transport().snapshot();
+  const auto state = engine->engine.transport().snapshot_control();
   graph->prepare(state.sample_rate, engine->engine.max_block_size());
   const std::string input_node = fixed_text(spec->input_node, sizeof(spec->input_node));
   const std::string output_node = fixed_text(spec->output_node, sizeof(spec->output_node));
@@ -844,7 +872,7 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
   schedule.clip_offset_samples = 0;
   schedule.length_samples = options->total_frames;
   schedule.loop = false;
-  schedule.gain = options->gain == 0.0f ? 1.0f : options->gain;
+  schedule.gain = options->gain;
   schedule.fade_in_samples = 0;
   schedule.fade_out_samples = 0;
 
@@ -919,6 +947,9 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t param_id,
                                         float value, int64_t render_frame) {
   if (!engine || !std::isfinite(value)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (registered_parameter_rejects_realtime(engine, param_id)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kSetParam;
   command.target_id = param_id;
@@ -930,6 +961,9 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame) {
   if (!engine || !std::isfinite(value)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (registered_parameter_rejects_realtime(engine, param_id)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kSetParamSmoothed;
   command.target_id = param_id;
@@ -1297,7 +1331,7 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
 SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
                                               SonareTransportState* out) {
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
-  const transport::TransportState state = engine->engine.transport().snapshot();
+  const transport::TransportState state = engine->engine.transport_state_control();
   out->playing = state.playing ? 1 : 0;
   out->looping = state.looping ? 1 : 0;
   out->render_frame = state.render_frame;

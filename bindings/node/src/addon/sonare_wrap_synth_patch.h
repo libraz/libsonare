@@ -4,12 +4,43 @@
 #include <napi.h>
 
 #include <cstring>
+#include <iterator>
 #include <string>
 
 #include "sonare_c.h"
 #include "sonare_wrap_options.h"
 
 namespace sonare_node {
+
+inline constexpr const char* kSynthEngineModes[] = {
+    "default", "subtractive", "fm", "karplus-strong", "modal", "additive", "percussion", "piano"};
+inline constexpr const char* kSynthWaveforms[] = {"default", "sine",     "saw",
+                                                  "square",  "triangle", "noise"};
+inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "moog-ladder",
+                                                     "diode-ladder", "sallen-key"};
+inline constexpr const char* kSynthFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
+inline constexpr const char* kSynthBodyTypes[] = {"default", "none", "guitar", "violin",
+                                                  "wood-tube"};
+inline constexpr const char* kSynthModSources[] = {"none",      "amp-env",   "filter-env",
+                                                   "lfo1",      "lfo2",      "velocity",
+                                                   "key-track", "mod-wheel", "random"};
+inline constexpr const char* kSynthModDestinations[] = {"none", "pitch-cents", "cutoff-cents",
+                                                        "amp-gain", "pan-units"};
+
+static_assert(std::size(kSynthEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
+              "Node SynthEngineMode table drifted from C");
+static_assert(std::size(kSynthWaveforms) == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
+              "Node SynthOscWaveform table drifted from C");
+static_assert(std::size(kSynthFilterModels) == SONARE_SYNTH_FILTER_MODEL_COUNT,
+              "Node SynthFilterModel table drifted from C");
+static_assert(std::size(kSynthFilterOutputs) == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
+              "Node SynthFilterOutput table drifted from C");
+static_assert(std::size(kSynthBodyTypes) == SONARE_SYNTH_BODY_TYPE_COUNT,
+              "Node SynthBodyType table drifted from C");
+static_assert(std::size(kSynthModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
+              "Node SynthModSource table drifted from C");
+static_assert(std::size(kSynthModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
+              "Node SynthModDestination table drifted from C");
 
 // SonareSynthPatch enum-name maps (shared by the project bounce and realtime
 // engine TUs; the names agree with the Python / WASM facades). 0 / "default"
@@ -44,21 +75,10 @@ inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char
 
 // Parses a JS SynthPatch descriptor (a preset-name string — a "va:" routing
 // prefix is accepted — or an object of wrapper-section overrides) into the
-// versioned C struct. Returns false with a pending JS exception on an unknown
-// enum name; unknown PRESET names are validated downstream by the C ABI.
+// versioned C struct. Numeric zero values are the C ABI's "keep base" sentinel,
+// not explicit zero overrides. Returns false with a pending JS exception on an
+// unknown enum name; unknown PRESET names are validated downstream by the C ABI.
 inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
-  static const char* const kEngineModes[] = {
-      "default", "subtractive", "fm", "karplus-strong", "modal", "additive", "percussion", "piano"};
-  static const char* const kWaveforms[] = {"default", "sine", "saw", "square", "triangle", "noise"};
-  static const char* const kFilterModels[] = {"default", "svf", "moog-ladder", "diode-ladder",
-                                              "sallen-key"};
-  static const char* const kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
-  static const char* const kBodyTypes[] = {"default", "none", "guitar", "violin", "wood-tube"};
-  static const char* const kModSources[] = {"none",     "amp-env",   "filter-env", "lfo1",  "lfo2",
-                                            "velocity", "key-track", "mod-wheel",  "random"};
-  static const char* const kModDestinations[] = {"none", "pitch-cents", "cutoff-cents", "amp-gain",
-                                                 "pan-units"};
-
   *patch = SonareSynthPatch{};
   patch->struct_version = 1;
   if (desc.IsUndefined() || desc.IsNull()) return true;
@@ -80,15 +100,17 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
   if (obj.Has("preset") && obj.Get("preset").IsString()) {
     set_preset(obj.Get("preset").As<Napi::String>().Utf8Value());
   }
-  if (!SynthEnumProperty(env, obj, "engineMode", kEngineModes, 8, "synth engine mode",
-                         &patch->engine_mode) ||
-      !SynthEnumProperty(env, obj, "waveform", kWaveforms, 6, "oscillator waveform",
-                         &patch->waveform) ||
-      !SynthEnumProperty(env, obj, "filterModel", kFilterModels, 5, "filter model",
-                         &patch->filter_model) ||
-      !SynthEnumProperty(env, obj, "filterOutput", kFilterOutputs, 4, "filter output",
+  if (!SynthEnumProperty(env, obj, "engineMode", kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,
+                         "synth engine mode", &patch->engine_mode) ||
+      !SynthEnumProperty(env, obj, "waveform", kSynthWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT,
+                         "oscillator waveform", &patch->waveform) ||
+      !SynthEnumProperty(env, obj, "filterModel", kSynthFilterModels,
+                         SONARE_SYNTH_FILTER_MODEL_COUNT, "filter model", &patch->filter_model) ||
+      !SynthEnumProperty(env, obj, "filterOutput", kSynthFilterOutputs,
+                         SONARE_SYNTH_FILTER_OUTPUT_COUNT, "filter output",
                          &patch->filter_output) ||
-      !SynthEnumProperty(env, obj, "body", kBodyTypes, 5, "body type", &patch->body)) {
+      !SynthEnumProperty(env, obj, "body", kSynthBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT,
+                         "body type", &patch->body)) {
     return false;
   }
   patch->unison = IntProperty(obj, "unison", 0);
@@ -136,8 +158,10 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
       }
       Napi::Object routing = entry.As<Napi::Object>();
       SonareSynthModRouting& out = patch->mod_routings[i];
-      if (!SynthEnumProperty(env, routing, "source", kModSources, 9, "mod source", &out.source) ||
-          !SynthEnumProperty(env, routing, "destination", kModDestinations, 5, "mod destination",
+      if (!SynthEnumProperty(env, routing, "source", kSynthModSources,
+                             SONARE_SYNTH_MOD_SOURCE_COUNT, "mod source", &out.source) ||
+          !SynthEnumProperty(env, routing, "destination", kSynthModDestinations,
+                             SONARE_SYNTH_MOD_DESTINATION_COUNT, "mod destination",
                              &out.destination)) {
         return false;
       }
@@ -151,31 +175,23 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
 // (the read direction for synthPresetPatch): enum ordinals become their
 // canonical names so the object can be passed back verbatim.
 inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& patch) {
-  static const char* const kEngineModes[] = {
-      "default", "subtractive", "fm", "karplus-strong", "modal", "additive", "percussion", "piano"};
-  static const char* const kWaveforms[] = {"default", "sine", "saw", "square", "triangle", "noise"};
-  static const char* const kFilterModels[] = {"default", "svf", "moog-ladder", "diode-ladder",
-                                              "sallen-key"};
-  static const char* const kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
-  static const char* const kBodyTypes[] = {"default", "none", "guitar", "violin", "wood-tube"};
-  static const char* const kModSources[] = {"none",     "amp-env",   "filter-env", "lfo1",  "lfo2",
-                                            "velocity", "key-track", "mod-wheel",  "random"};
-  static const char* const kModDestinations[] = {"none", "pitch-cents", "cutoff-cents", "amp-gain",
-                                                 "pan-units"};
   auto enum_name = [&env](int value, const char* const* names, int count) -> Napi::Value {
     if (value >= 0 && value < count) return Napi::String::New(env, names[value]);
     return Napi::Number::New(env, value);
   };
   Napi::Object out = Napi::Object::New(env);
   out.Set("preset", Napi::String::New(env, patch.preset));
-  out.Set("engineMode", enum_name(patch.engine_mode, kEngineModes, 8));
-  out.Set("waveform", enum_name(patch.waveform, kWaveforms, 6));
+  out.Set("engineMode",
+          enum_name(patch.engine_mode, kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT));
+  out.Set("waveform", enum_name(patch.waveform, kSynthWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT));
   out.Set("unison", patch.unison);
   out.Set("detuneCents", patch.detune_cents);
   out.Set("driftCents", patch.drift_cents);
   out.Set("drive", patch.drive);
-  out.Set("filterModel", enum_name(patch.filter_model, kFilterModels, 5));
-  out.Set("filterOutput", enum_name(patch.filter_output, kFilterOutputs, 4));
+  out.Set("filterModel",
+          enum_name(patch.filter_model, kSynthFilterModels, SONARE_SYNTH_FILTER_MODEL_COUNT));
+  out.Set("filterOutput",
+          enum_name(patch.filter_output, kSynthFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT));
   out.Set("cutoffHz", patch.cutoff_hz);
   out.Set("resonanceQ", patch.resonance_q);
   out.Set("keyTrack", patch.key_track);
@@ -193,15 +209,17 @@ inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& pa
   out.Set("lfoToPitchCents", patch.lfo_to_pitch_cents);
   out.Set("lfo2RateHz", patch.lfo2_rate_hz);
   out.Set("glideMs", patch.glide_ms);
-  out.Set("body", enum_name(patch.body, kBodyTypes, 5));
+  out.Set("body", enum_name(patch.body, kSynthBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT));
   out.Set("bodyMix", patch.body_mix);
   out.Set("stereoSpread", patch.stereo_spread);
   Napi::Array routings = Napi::Array::New(
       env, static_cast<size_t>(patch.num_mod_routings > 0 ? patch.num_mod_routings : 0));
   for (int i = 0; i < patch.num_mod_routings && i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {
     Napi::Object routing = Napi::Object::New(env);
-    routing.Set("source", enum_name(patch.mod_routings[i].source, kModSources, 9));
-    routing.Set("destination", enum_name(patch.mod_routings[i].destination, kModDestinations, 5));
+    routing.Set("source", enum_name(patch.mod_routings[i].source, kSynthModSources,
+                                    SONARE_SYNTH_MOD_SOURCE_COUNT));
+    routing.Set("destination", enum_name(patch.mod_routings[i].destination, kSynthModDestinations,
+                                         SONARE_SYNTH_MOD_DESTINATION_COUNT));
     routing.Set("depth", patch.mod_routings[i].depth);
     routings.Set(static_cast<uint32_t>(i), routing);
   }

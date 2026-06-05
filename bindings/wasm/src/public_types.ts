@@ -1,3 +1,5 @@
+import type { ValidateOptions } from './validation';
+
 /**
  * Pitch class enum (C=0, C#=1, ..., B=11)
  */
@@ -172,6 +174,7 @@ export type SoloProcessor =
   | 'saturation.exciter'
   | 'saturation.hardClipper'
   | 'saturation.multibandExciter'
+  | 'saturation.ampSim'
   | 'saturation.softClipper'
   | 'saturation.tape'
   | 'saturation.transformer'
@@ -230,7 +233,7 @@ export interface Key {
   shortName: string;
 }
 
-export interface KeyDetectionOptions {
+export interface KeyDetectionOptions extends ValidateOptions {
   nFft?: number;
   hopLength?: number;
   useHpss?: boolean;
@@ -251,7 +254,7 @@ export interface KeyCandidate {
   correlation: number;
 }
 
-export interface ChordDetectionOptions {
+export interface ChordDetectionOptions extends ValidateOptions {
   minDuration?: number;
   smoothingWindow?: number;
   threshold?: number;
@@ -269,7 +272,7 @@ export interface ChordDetectionOptions {
 }
 
 /** Options for `detectAcoustic`. All fields are optional. */
-export interface AcousticOptions {
+export interface AcousticOptions extends ValidateOptions {
   /** Number of octave bands. Default 6. */
   nOctaveBands?: number;
   /** Number of 1/3-octave sub-bands. Default 24. */
@@ -281,7 +284,7 @@ export interface AcousticOptions {
 }
 
 /** Options for `analyzeBpm`. All fields are optional. */
-export interface AnalyzeBpmOptions {
+export interface AnalyzeBpmOptions extends ValidateOptions {
   /** Lowest BPM to consider. Default 30. */
   bpmMin?: number;
   /** Highest BPM to consider. Default 300. */
@@ -297,7 +300,7 @@ export interface AnalyzeBpmOptions {
 }
 
 /** Options for `analyzeRhythm`. All fields are optional. */
-export interface AnalyzeRhythmOptions {
+export interface AnalyzeRhythmOptions extends ValidateOptions {
   /** Lowest BPM to consider. Default 60. */
   bpmMin?: number;
   /** Highest BPM to consider. Default 200. */
@@ -311,7 +314,7 @@ export interface AnalyzeRhythmOptions {
 }
 
 /** Options for `analyzeDynamics`. All fields are optional. */
-export interface AnalyzeDynamicsOptions {
+export interface AnalyzeDynamicsOptions extends ValidateOptions {
   /** Loudness-curve window length in seconds. Default 0.4. */
   windowSec?: number;
   /** Hop length for the loudness curve. Default 512. */
@@ -321,7 +324,7 @@ export interface AnalyzeDynamicsOptions {
 }
 
 /** Options for `analyzeTimbre`. All fields are optional. */
-export interface AnalyzeTimbreOptions {
+export interface AnalyzeTimbreOptions extends ValidateOptions {
   /** FFT size. Default 2048. */
   nFft?: number;
   /** Hop length. Default 512. */

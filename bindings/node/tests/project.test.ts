@@ -64,6 +64,10 @@ function makeSysexSmf(): Buffer {
   return out;
 }
 
+function danglingSourceJson(): string {
+  return '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]}';
+}
+
 describe('Project native binding', () => {
   it('reports the expected project ABI version', () => {
     expect(projectAbiVersion()).toBe(EXPECTED_PROJECT_ABI_VERSION);
@@ -81,6 +85,19 @@ describe('Project native binding', () => {
 
     project.destroy();
     restored.destroy();
+  });
+
+  it('surfaces compile diagnostic messages per diagnostic', () => {
+    const project = buildProject();
+    const result = project.compile();
+
+    expect(result.hasTimeline).toBe(true);
+    expect(result.diagnostics.length).toBe(1);
+    expect(result.diagnostics[0].code).toBe(10);
+    expect(result.diagnostics[0].message).toContain('project contains MIDI clips');
+    expect(result.messages.split('\n')[0]).toBe(result.diagnostics[0].message);
+
+    project.destroy();
   });
 
   it('bounces deterministically (bit-exact across two calls)', () => {
@@ -235,6 +252,13 @@ describe('Project native binding', () => {
     expect(() => Project.fromJson('{ not valid project json')).toThrow();
   });
 
+  it('fromJsonWithDiagnostics returns warnings from successful loads', () => {
+    const { project, diagnostics } = Project.fromJsonWithDiagnostics(danglingSourceJson());
+    expect(diagnostics).toContain('dangling_clip_source');
+    expect(project.trackCount()).toBe(1);
+    project.destroy();
+  });
+
   /** A MIDI-only project: one MIDI clip holding a sustained note routed to dest 0. */
   function buildMidiOnlyProject(): Project {
     const project = Project.create();
@@ -278,6 +302,24 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('keeps the base preset when synth patch numeric fields are explicitly zero', () => {
+    const project = buildMidiOnlyProject();
+    const preset = project.bounceWithBuiltinInstrument(
+      { preset: 'warm-pad' },
+      {
+        totalFrames: 4096,
+        numChannels: 2,
+        sampleRate: 48000,
+      },
+    );
+    const explicitZero = project.bounceWithBuiltinInstrument(
+      { preset: 'warm-pad', ampSustain: 0, filterSustain: 0, gain: 0 },
+      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+    );
+    expect(explicitZero).toEqual(preset);
+    project.destroy();
+  });
+
   it('accepts a bare waveform name and an explicit bindings array (instrument-first)', () => {
     const project = buildMidiOnlyProject();
     const byName = project.bounceWithBuiltinInstrument('sine', {
@@ -286,6 +328,13 @@ describe('Project native binding', () => {
       sampleRate: 48000,
     });
     expect(peak(byName)).toBeGreaterThan(0);
+
+    const byAlias = project.bounceWithBuiltinInstrument('sawtooth', {
+      totalFrames: 2048,
+      numChannels: 1,
+      sampleRate: 48000,
+    });
+    expect(peak(byAlias)).toBeGreaterThan(0);
 
     const byArray = project.bounceWithBuiltinInstruments(
       [{ destinationId: 0, waveform: 'square' }],

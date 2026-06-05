@@ -7,9 +7,71 @@ import type {
   StftPowerResult,
   StftResult,
 } from './public_types';
+import type { ValidateOptions } from './validation';
+import {
+  assertFiniteScalar,
+  assertPositiveInteger,
+  assertSampleRate,
+  assertSamples,
+} from './validation';
 
 function requireModule() {
   return getSonareModule();
+}
+
+type GuardedOptions = ValidateOptions;
+
+function validateSpectrogramSamples(
+  fnName: string,
+  samples: Float32Array,
+  sampleRate: number,
+  options: GuardedOptions = {},
+): void {
+  assertSampleRate(fnName, sampleRate);
+  assertSamples(fnName, samples, options.validate !== false);
+}
+
+function validatePositiveIntegers(fnName: string, values: Record<string, number>): void {
+  for (const [name, value] of Object.entries(values)) {
+    assertPositiveInteger(fnName, value, name);
+  }
+}
+
+function validateMelFrequencyRange(
+  fnName: string,
+  fmin: number,
+  fmax: number,
+  sampleRate: number,
+): void {
+  assertFiniteScalar(fnName, fmin, 'fmin');
+  assertFiniteScalar(fnName, fmax, 'fmax');
+  if (fmin < 0) {
+    throw new RangeError(`${fnName}: fmin must be non-negative`);
+  }
+  if (fmax < 0) {
+    throw new RangeError(`${fnName}: fmax must be non-negative`);
+  }
+  const effectiveFmax = fmax === 0 ? sampleRate / 2 : fmax;
+  if (effectiveFmax <= fmin) {
+    throw new RangeError(`${fnName}: fmax must be greater than fmin`);
+  }
+}
+
+function validateMatrix(
+  fnName: string,
+  data: Float32Array,
+  rows: number,
+  frames: number,
+  dataName: string,
+  rowName: string,
+  options: GuardedOptions = {},
+): void {
+  validatePositiveIntegers(fnName, { [rowName]: rows, nFrames: frames });
+  assertSamples(fnName, data, options.validate !== false, dataName);
+  const expectedLength = rows * frames;
+  if (!Number.isSafeInteger(expectedLength) || data.length !== expectedLength) {
+    throw new RangeError(`${fnName}: ${dataName} length must equal ${rowName} * nFrames`);
+  }
 }
 
 /**
@@ -20,7 +82,14 @@ function requireModule() {
  * @param thresholdDb - Silence threshold in dB (default: -60 dB)
  * @returns Trimmed audio
  */
-export function trim(samples: Float32Array, sampleRate: number, thresholdDb = -60.0): Float32Array {
+export function trim(
+  samples: Float32Array,
+  sampleRate: number,
+  thresholdDb = -60.0,
+  options: GuardedOptions = {},
+): Float32Array {
+  validateSpectrogramSamples('trim', samples, sampleRate, options);
+  assertFiniteScalar('trim', thresholdDb, 'thresholdDb');
   return requireModule().trim(samples, sampleRate, thresholdDb);
 }
 
@@ -42,7 +111,10 @@ export function stft(
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
+  options: GuardedOptions = {},
 ): StftResult {
+  validateSpectrogramSamples('stft', samples, sampleRate, options);
+  validatePositiveIntegers('stft', { nFft, hopLength });
   return requireModule().stft(samples, sampleRate, nFft, hopLength);
 }
 
@@ -60,7 +132,10 @@ export function stftDb(
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
+  options: GuardedOptions = {},
 ): { nBins: number; nFrames: number; db: Float32Array } {
+  validateSpectrogramSamples('stftDb', samples, sampleRate, options);
+  validatePositiveIntegers('stftDb', { nFft, hopLength });
   return requireModule().stftDb(samples, sampleRate, nFft, hopLength);
 }
 
@@ -78,7 +153,10 @@ export function chromaCens(
   sampleRate = 22050,
   hopLength = 512,
   nChroma = 12,
+  options: GuardedOptions = {},
 ): ChromaResult {
+  validateSpectrogramSamples('chromaCens', samples, sampleRate, options);
+  validatePositiveIntegers('chromaCens', { hopLength, nChroma });
   return requireModule().chromaCens(samples, sampleRate, hopLength, nChroma);
 }
 
@@ -96,7 +174,10 @@ export function bassChroma(
   sampleRate = 22050,
   hopLength = 512,
   nChroma = 12,
+  options: GuardedOptions = {},
 ): ChromaResult {
+  validateSpectrogramSamples('bassChroma', samples, sampleRate, options);
+  validatePositiveIntegers('bassChroma', { hopLength, nChroma });
   return requireModule().bassChroma(samples, sampleRate, hopLength, nChroma);
 }
 
@@ -127,7 +208,11 @@ export function melSpectrogram(
   fmin = 0,
   fmax = 0,
   htk = false,
+  options: GuardedOptions = {},
 ): MelSpectrogramResult {
+  validateSpectrogramSamples('melSpectrogram', samples, sampleRate, options);
+  validatePositiveIntegers('melSpectrogram', { nFft, hopLength, nMels });
+  validateMelFrequencyRange('melSpectrogram', fmin, fmax, sampleRate);
   return requireModule().melSpectrogram(
     samples,
     sampleRate,
@@ -164,7 +249,11 @@ export function mfcc(
   fmin = 0,
   fmax = 0,
   htk = false,
+  options: GuardedOptions = {},
 ): MfccResult {
+  validateSpectrogramSamples('mfcc', samples, sampleRate, options);
+  validatePositiveIntegers('mfcc', { nFft, hopLength, nMels, nMfcc });
+  validateMelFrequencyRange('mfcc', fmin, fmax, sampleRate);
   return requireModule().mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
 }
 
@@ -183,6 +272,7 @@ export function mfcc(
  * @param nFft - FFT size (default: 2048)
  * @param fmin - Lower Mel band edge in Hz (default: 0)
  * @param fmax - Upper Mel band edge in Hz (default: sr/2 when 0)
+ * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
  * @returns STFT power spectrogram result
  */
 export function melToStft(
@@ -193,8 +283,14 @@ export function melToStft(
   nFft = 2048,
   fmin = 0,
   fmax = 0,
+  htk = false,
+  options: GuardedOptions = {},
 ): StftPowerResult {
-  return requireModule().melToStft(melPower, nMels, nFrames, sampleRate, nFft, fmin, fmax);
+  assertSampleRate('melToStft', sampleRate);
+  validateMatrix('melToStft', melPower, nMels, nFrames, 'melPower', 'nMels', options);
+  validatePositiveIntegers('melToStft', { nFft });
+  validateMelFrequencyRange('melToStft', fmin, fmax, sampleRate);
+  return requireModule().melToStft(melPower, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk);
 }
 
 /**
@@ -210,6 +306,7 @@ export function melToStft(
  * @param fmin - Minimum Mel frequency in Hz (default: 0)
  * @param fmax - Maximum Mel frequency in Hz (default: 0 = sr/2)
  * @param nIter - Griffin-Lim iterations (default: 32)
+ * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
  * @returns Reconstructed audio samples (mono, float32)
  */
 export function melToAudio(
@@ -222,7 +319,13 @@ export function melToAudio(
   fmin = 0,
   fmax = 0,
   nIter = 32,
+  htk = false,
+  options: GuardedOptions = {},
 ): Float32Array {
+  assertSampleRate('melToAudio', sampleRate);
+  validateMatrix('melToAudio', melPower, nMels, nFrames, 'melPower', 'nMels', options);
+  validatePositiveIntegers('melToAudio', { nFft, hopLength, nIter });
+  validateMelFrequencyRange('melToAudio', fmin, fmax, sampleRate);
   return requireModule().melToAudio(
     melPower,
     nMels,
@@ -233,6 +336,7 @@ export function melToAudio(
     fmin,
     fmax,
     nIter,
+    htk,
   );
 }
 
@@ -251,7 +355,18 @@ export function mfccToMel(
   nMfcc: number,
   nFrames: number,
   nMels = 128,
+  options: GuardedOptions = {},
 ): MelPowerResult {
+  validateMatrix(
+    'mfccToMel',
+    mfccCoefficients,
+    nMfcc,
+    nFrames,
+    'mfccCoefficients',
+    'nMfcc',
+    options,
+  );
+  validatePositiveIntegers('mfccToMel', { nMels });
   return requireModule().mfccToMel(mfccCoefficients, nMfcc, nFrames, nMels);
 }
 
@@ -269,6 +384,7 @@ export function mfccToMel(
  * @param fmin - Minimum Mel frequency in Hz (default: 0)
  * @param fmax - Maximum Mel frequency in Hz (default: 0 = sr/2)
  * @param nIter - Griffin-Lim iterations (default: 32)
+ * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
  * @returns Reconstructed audio samples (mono, float32)
  */
 export function mfccToAudio(
@@ -282,7 +398,21 @@ export function mfccToAudio(
   fmin = 0,
   fmax = 0,
   nIter = 32,
+  htk = false,
+  options: GuardedOptions = {},
 ): Float32Array {
+  assertSampleRate('mfccToAudio', sampleRate);
+  validateMatrix(
+    'mfccToAudio',
+    mfccCoefficients,
+    nMfcc,
+    nFrames,
+    'mfccCoefficients',
+    'nMfcc',
+    options,
+  );
+  validatePositiveIntegers('mfccToAudio', { nMels, nFft, hopLength, nIter });
+  validateMelFrequencyRange('mfccToAudio', fmin, fmax, sampleRate);
   return requireModule().mfccToAudio(
     mfccCoefficients,
     nMfcc,
@@ -294,6 +424,7 @@ export function mfccToAudio(
     fmin,
     fmax,
     nIter,
+    htk,
   );
 }
 
@@ -315,6 +446,9 @@ export function chroma(
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
+  options: GuardedOptions = {},
 ): ChromaResult {
+  validateSpectrogramSamples('chroma', samples, sampleRate, options);
+  validatePositiveIntegers('chroma', { nFft, hopLength });
   return requireModule().chroma(samples, sampleRate, nFft, hopLength);
 }

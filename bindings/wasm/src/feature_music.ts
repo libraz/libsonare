@@ -10,10 +10,48 @@ import type {
 } from './public_types';
 import type { WasmFourierTempogramResult, WasmNnlsChromaResult } from './sonare.js';
 import type { ValidateOptions } from './validation';
-import { assertSamples } from './validation';
+import {
+  assertFiniteScalar,
+  assertPositiveInteger,
+  assertSampleRate,
+  assertSamples,
+} from './validation';
 
 function requireModule() {
   return getSonareModule();
+}
+
+type GuardedOptions = ValidateOptions;
+type AnalyzeSectionsGuardedOptions = AnalyzeSectionsOptions & ValidateOptions;
+type MelodyGuardedOptions = MelodyOptions & ValidateOptions;
+
+function validateMusicSamples(
+  fnName: string,
+  samples: Float32Array,
+  sampleRate: number,
+  options: GuardedOptions = {},
+): void {
+  assertSampleRate(fnName, sampleRate);
+  assertSamples(fnName, samples, options.validate !== false);
+}
+
+function validatePositiveIntegers(fnName: string, values: Record<string, number>): void {
+  for (const [name, value] of Object.entries(values)) {
+    assertPositiveInteger(fnName, value, name);
+  }
+}
+
+function validateFrequencyBounds(fnName: string, fmin: number, fmax?: number): void {
+  assertFiniteScalar(fnName, fmin, 'fmin');
+  if (fmin < 0) {
+    throw new RangeError(`${fnName}: fmin must be non-negative`);
+  }
+  if (fmax !== undefined) {
+    assertFiniteScalar(fnName, fmax, 'fmax');
+    if (fmax <= fmin) {
+      throw new RangeError(`${fnName}: fmax must be greater than fmin`);
+    }
+  }
 }
 
 /**
@@ -23,7 +61,12 @@ function requireModule() {
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns NNLS chroma result
  */
-export function nnlsChroma(samples: Float32Array, sampleRate = 22050): WasmNnlsChromaResult {
+export function nnlsChroma(
+  samples: Float32Array,
+  sampleRate = 22050,
+  options: GuardedOptions = {},
+): WasmNnlsChromaResult {
+  validateMusicSamples('nnlsChroma', samples, sampleRate, options);
   return requireModule().nnlsChroma(samples, sampleRate);
 }
 
@@ -45,7 +88,11 @@ export function cqt(
   fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
+  options: GuardedOptions = {},
 ): CqtResult {
+  validateMusicSamples('cqt', samples, sampleRate, options);
+  validatePositiveIntegers('cqt', { hopLength, nBins, binsPerOctave });
+  validateFrequencyBounds('cqt', fmin);
   return requireModule().cqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
 }
 
@@ -67,7 +114,11 @@ export function pseudoCqt(
   fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
+  options: GuardedOptions = {},
 ): CqtResult {
+  validateMusicSamples('pseudoCqt', samples, sampleRate, options);
+  validatePositiveIntegers('pseudoCqt', { hopLength, nBins, binsPerOctave });
+  validateFrequencyBounds('pseudoCqt', fmin);
   return requireModule().pseudoCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
 }
 
@@ -89,7 +140,11 @@ export function hybridCqt(
   fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
+  options: GuardedOptions = {},
 ): CqtResult {
+  validateMusicSamples('hybridCqt', samples, sampleRate, options);
+  validatePositiveIntegers('hybridCqt', { hopLength, nBins, binsPerOctave });
+  validateFrequencyBounds('hybridCqt', fmin);
   return requireModule().hybridCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
 }
 
@@ -113,7 +168,15 @@ export function vqt(
   nBins = 84,
   binsPerOctave = 12,
   gamma = 0,
+  options: GuardedOptions = {},
 ): CqtResult {
+  validateMusicSamples('vqt', samples, sampleRate, options);
+  validatePositiveIntegers('vqt', { hopLength, nBins, binsPerOctave });
+  validateFrequencyBounds('vqt', fmin);
+  assertFiniteScalar('vqt', gamma, 'gamma');
+  if (gamma < 0) {
+    throw new RangeError('vqt: gamma must be non-negative');
+  }
   return requireModule().vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
 }
 
@@ -130,8 +193,17 @@ export function vqt(
 export function analyzeSections(
   samples: Float32Array,
   sampleRate = 22050,
-  options: AnalyzeSectionsOptions = {},
+  options: AnalyzeSectionsGuardedOptions = {},
 ): Section[] {
+  validateMusicSamples('analyzeSections', samples, sampleRate, options);
+  validatePositiveIntegers('analyzeSections', {
+    nFft: options.nFft ?? 2048,
+    hopLength: options.hopLength ?? 512,
+  });
+  assertFiniteScalar('analyzeSections', options.minSectionSec ?? 4.0, 'minSectionSec');
+  if ((options.minSectionSec ?? 4.0) <= 0) {
+    throw new RangeError('analyzeSections: minSectionSec must be positive');
+  }
   return requireModule()
     .analyzeSections(
       samples,
@@ -179,8 +251,17 @@ export interface MelodyOptions {
 export function analyzeMelody(
   samples: Float32Array,
   sampleRate = 22050,
-  options: MelodyOptions = {},
+  options: MelodyGuardedOptions = {},
 ): MelodyResult {
+  validateMusicSamples('analyzeMelody', samples, sampleRate, options);
+  const fmin = options.fmin ?? 65.0;
+  const fmax = options.fmax ?? 2093.0;
+  validateFrequencyBounds('analyzeMelody', fmin, fmax);
+  validatePositiveIntegers('analyzeMelody', {
+    frameLength: options.frameLength ?? 2048,
+    hopLength: options.hopLength ?? 256,
+  });
+  assertFiniteScalar('analyzeMelody', options.threshold ?? 0.1, 'threshold');
   return requireModule().analyzeMelody(
     samples,
     sampleRate,
@@ -210,7 +291,10 @@ export function onsetEnvelope(
   nFft = 2048,
   hopLength = 512,
   nMels = 128,
+  options: GuardedOptions = {},
 ): Float32Array {
+  validateMusicSamples('onsetEnvelope', samples, sampleRate, options);
+  validatePositiveIntegers('onsetEnvelope', { nFft, hopLength, nMels });
   return requireModule().onsetEnvelope(samples, sampleRate, nFft, hopLength, nMels);
 }
 
@@ -232,7 +316,10 @@ export function onsetStrengthMulti(
   hopLength = 512,
   nMels = 128,
   nBands = 3,
+  options: GuardedOptions = {},
 ): OnsetStrengthMultiResult {
+  validateMusicSamples('onsetStrengthMulti', samples, sampleRate, options);
+  validatePositiveIntegers('onsetStrengthMulti', { nFft, hopLength, nMels, nBands });
   return requireModule().onsetStrengthMulti(samples, sampleRate, nFft, hopLength, nMels, nBands);
 }
 
@@ -250,7 +337,11 @@ export function fourierTempogram(
   sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
+  options: GuardedOptions = {},
 ): WasmFourierTempogramResult {
+  assertSampleRate('fourierTempogram', sampleRate);
+  assertSamples('fourierTempogram', onsetEnvelope, options.validate !== false, 'onsetEnvelope');
+  validatePositiveIntegers('fourierTempogram', { hopLength, winLength });
   return requireModule().fourierTempogram(onsetEnvelope, sampleRate, hopLength, winLength);
 }
 
@@ -268,7 +359,11 @@ export function tempogramRatio(
   winLength = 384,
   sampleRate = 22050,
   hopLength = 512,
+  options: GuardedOptions = {},
 ): Float32Array {
+  assertSampleRate('tempogramRatio', sampleRate);
+  assertSamples('tempogramRatio', tempogramData, options.validate !== false, 'tempogramData');
+  validatePositiveIntegers('tempogramRatio', { winLength, hopLength });
   return requireModule().tempogramRatio(tempogramData, winLength, sampleRate, hopLength);
 }
 
@@ -284,6 +379,7 @@ export function lufs(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): LufsResult {
+  assertSampleRate('lufs', sampleRate);
   assertSamples('lufs', samples, options.validate !== false);
   return requireModule().lufs(samples, sampleRate);
 }
@@ -300,6 +396,7 @@ export function momentaryLufs(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): Float32Array {
+  assertSampleRate('momentaryLufs', sampleRate);
   assertSamples('momentaryLufs', samples, options.validate !== false);
   return requireModule().momentaryLufs(samples, sampleRate);
 }
@@ -316,6 +413,7 @@ export function shortTermLufs(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): Float32Array {
+  assertSampleRate('shortTermLufs', sampleRate);
   assertSamples('shortTermLufs', samples, options.validate !== false);
   return requireModule().shortTermLufs(samples, sampleRate);
 }

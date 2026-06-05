@@ -37,6 +37,8 @@ class BusProcessor : public rt::ProcessorBase {
                             int num_channels, int num_samples);
   void clear_insert_sidechains() noexcept;
   MeterSnapshot meter_snapshot() const noexcept { return meter_.snapshot(); }
+  size_t insert_sidechain_slot_count() const noexcept { return insert_sidechains_.size(); }
+  size_t insert_sidechains_capacity() const noexcept { return insert_sidechains_.capacity(); }
 
   BusRole role() const noexcept { return role_; }
   int max_inputs() const noexcept { return max_inputs_; }

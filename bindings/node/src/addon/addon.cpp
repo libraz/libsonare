@@ -327,6 +327,39 @@ Napi::Value SynthPresetPatch(const Napi::CallbackInfo& info) {
   return sonare_node::SynthPatchToObject(env, patch);
 }
 
+Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  auto array_from = [&env](const char* const* names, size_t count) {
+    Napi::Array out = Napi::Array::New(env, count);
+    for (size_t i = 0; i < count; ++i) {
+      out.Set(static_cast<uint32_t>(i), Napi::String::New(env, names[i]));
+    }
+    return out;
+  };
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("engineModes",
+          array_from(sonare_node::kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT));
+  out.Set("waveforms", array_from(sonare_node::kSynthWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT));
+  out.Set("filterModels",
+          array_from(sonare_node::kSynthFilterModels, SONARE_SYNTH_FILTER_MODEL_COUNT));
+  out.Set("filterOutputs",
+          array_from(sonare_node::kSynthFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT));
+  out.Set("bodyTypes", array_from(sonare_node::kSynthBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT));
+  out.Set("modSources", array_from(sonare_node::kSynthModSources, SONARE_SYNTH_MOD_SOURCE_COUNT));
+  out.Set("modDestinations",
+          array_from(sonare_node::kSynthModDestinations, SONARE_SYNTH_MOD_DESTINATION_COUNT));
+  return out;
+}
+
+Napi::Value SynthPatchRoundTrip(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareSynthPatch patch{};
+  if (!sonare_node::ReadSynthPatch(env, info.Length() > 0 ? info[0] : env.Undefined(), &patch)) {
+    return env.Undefined();
+  }
+  return sonare_node::SynthPatchToObject(env, patch);
+}
+
 }  // namespace
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -340,6 +373,9 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, ProjectAbiVersion, "projectAbiVersion"));
   exports.Set("synthPresetNames", Napi::Function::New(env, SynthPresetNames, "synthPresetNames"));
   exports.Set("synthPresetPatch", Napi::Function::New(env, SynthPresetPatch, "synthPresetPatch"));
+  exports.Set("_synthEnumTables", Napi::Function::New(env, SynthEnumTables, "_synthEnumTables"));
+  exports.Set("_synthPatchRoundTrip",
+              Napi::Function::New(env, SynthPatchRoundTrip, "_synthPatchRoundTrip"));
   exports.Set("midiGmInstrumentName",
               Napi::Function::New(env, MidiGmInstrumentName, "midiGmInstrumentName"));
   exports.Set("midiGmProgramForName",

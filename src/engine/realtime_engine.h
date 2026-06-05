@@ -18,6 +18,7 @@
 #include "engine/telemetry.h"
 #include "rt/command.h"
 #include "rt/param_smoother.h"
+#include "rt/rt_publisher.h"
 #include "rt/spsc_queue.h"
 #include "transport/marker.h"
 #include "transport/tempo_map.h"
@@ -110,13 +111,18 @@ class RealtimeEngine {
 #if defined(SONARE_WITH_MIXING)
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
 #endif
+  transport::TransportState transport_state_control() const noexcept;
   void set_tempo(double bpm);
   void set_tempo_segments(std::vector<transport::TempoSegment> segments);
   void set_time_signature(int numerator, int denominator);
   void set_time_signature_segments(std::vector<transport::TimeSignatureSegment> segments);
-  double bpm_at_sample(int64_t sample) const noexcept { return tempo_map_.bpm_at_sample(sample); }
+  double bpm_at_sample(int64_t sample) const noexcept {
+    const transport::TempoMap* map = tempo_map_snapshot_.load();
+    return (map ? map : &tempo_map_)->bpm_at_sample(sample);
+  }
   transport::TimeSignature time_signature_at_ppq(double ppq) const noexcept {
-    return tempo_map_.time_signature_at_ppq(ppq);
+    const transport::TempoMap* map = tempo_map_snapshot_.load();
+    return (map ? map : &tempo_map_)->time_signature_at_ppq(ppq);
   }
   void set_loop(double start_ppq, double end_ppq, bool enabled) noexcept;
   void set_markers(std::vector<transport::Marker> markers);
@@ -289,8 +295,14 @@ class RealtimeEngine {
                              int num_frames) noexcept;
   void dispatch_live_midi_input(int64_t render_start_frame, int num_frames) noexcept;
 #endif
+  void publish_tempo_map_snapshot();
+  void adopt_tempo_map_snapshot() noexcept;
 
   transport::TempoMap tempo_map_{};
+  rt::RtSnapshot<transport::TempoMap> tempo_map_snapshot_{};
+  const transport::TempoMap* active_tempo_map_ = &tempo_map_;
+  std::vector<transport::TempoSegment> control_tempo_segments_{};
+  std::vector<transport::TimeSignatureSegment> control_time_signatures_{};
   transport::Transport transport_{};
   transport::MarkerMap markers_{};
   ClipPlayer clip_player_{};

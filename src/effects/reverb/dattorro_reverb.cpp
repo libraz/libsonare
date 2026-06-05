@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -275,6 +276,22 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
       left[i] = dry * in_l + wet * 0.5f * (out_l + out_r);
     }
   }
+}
+
+int DattorroReverb::tail_samples() const noexcept {
+  const double decay = std::clamp(static_cast<double>(config_.decay), 0.0, 0.98);
+  if (decay <= 0.0) return 0;
+
+  constexpr double kTankLoopSeconds = 21589.0 / kRefRate;
+  const double t60_seconds = std::log(1000.0) * kTankLoopSeconds / (-4.0 * std::log(decay));
+  const double pre_delay_seconds =
+      std::max(0.0, static_cast<double>(config_.pre_delay_samples)) / kRefRate;
+  const double samples = (pre_delay_seconds + t60_seconds) * sample_rate_;
+  if (samples <= 0.0) return 0;
+  if (samples >= static_cast<double>(std::numeric_limits<int>::max())) {
+    return std::numeric_limits<int>::max();
+  }
+  return static_cast<int>(std::ceil(samples));
 }
 
 bool DattorroReverb::set_parameter(unsigned int param_id, float value) {

@@ -182,6 +182,12 @@ typedef struct {
 ///          sonare_mel_to_stft_checked to have the length validated.
 SonareError sonare_mel_to_stft(const float* mel, int n_mels, int n_frames, int sample_rate,
                                int n_fft, float fmin, float fmax, SonareInverseResult* out);
+/// @brief HTK-aware sonare_mel_to_stft variant.
+/// @param htk Non-zero to rebuild the inverse Mel filterbank with HTK Mel
+///        spacing. Zero preserves the Slaney-compatible legacy contract.
+SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, int sample_rate,
+                                  int n_fft, float fmin, float fmax, int htk,
+                                  SonareInverseResult* out);
 
 /// @brief Reconstructs audio from a Mel spectrogram via Griffin-Lim.
 /// @param mel Mel power spectrogram [n_mels x n_frames] row-major.
@@ -199,8 +205,14 @@ SonareError sonare_mel_to_stft(const float* mel, int n_mels, int n_frames, int s
 SonareError sonare_mel_to_audio(const float* mel, int n_mels, int n_frames, int sample_rate,
                                 int n_fft, int hop_length, float fmin, float fmax, int n_iter,
                                 float** out, size_t* out_length);
+/// @brief HTK-aware sonare_mel_to_audio variant.
+/// @param htk Non-zero to rebuild the inverse Mel filterbank with HTK Mel
+///        spacing. Zero preserves the Slaney-compatible legacy contract.
+SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, int sample_rate,
+                                   int n_fft, int hop_length, float fmin, float fmax, int htk,
+                                   int n_iter, float** out, size_t* out_length);
 
-/// @brief Inverts MFCC coefficients back to a Mel spectrogram (dB scale).
+/// @brief Inverts MFCC coefficients back to a Mel power spectrogram.
 /// @param mfcc MFCC matrix [n_mfcc x n_frames] row-major.
 /// @param n_mfcc Number of MFCCs.
 /// @param n_frames Number of time frames.
@@ -226,6 +238,13 @@ SonareError sonare_mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
 SonareError sonare_mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                  int sample_rate, int n_fft, int hop_length, float fmin, float fmax,
                                  int n_iter, float** out, size_t* out_length);
+/// @brief HTK-aware sonare_mfcc_to_audio variant.
+/// @param htk Non-zero to rebuild the intermediate inverse Mel filterbank with
+///        HTK Mel spacing. Zero preserves the Slaney-compatible legacy contract.
+SonareError sonare_mfcc_to_audio_ex(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
+                                    int sample_rate, int n_fft, int hop_length, float fmin,
+                                    float fmax, int htk, int n_iter, float** out,
+                                    size_t* out_length);
 
 /* ----------------------------------------------------------------------------
    Length-checked inverse variants (recommended)
@@ -247,6 +266,9 @@ SonareError sonare_mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, in
 SonareError sonare_mel_to_stft_checked(const float* mel, size_t input_length, int n_mels,
                                        int n_frames, int sample_rate, int n_fft, float fmin,
                                        float fmax, SonareInverseResult* out);
+SonareError sonare_mel_to_stft_checked_ex(const float* mel, size_t input_length, int n_mels,
+                                          int n_frames, int sample_rate, int n_fft, float fmin,
+                                          float fmax, int htk, SonareInverseResult* out);
 
 /// @brief Length-checked sonare_mel_to_audio. @p input_length must equal
 ///        n_mels * n_frames.
@@ -254,6 +276,10 @@ SonareError sonare_mel_to_audio_checked(const float* mel, size_t input_length, i
                                         int n_frames, int sample_rate, int n_fft, int hop_length,
                                         float fmin, float fmax, int n_iter, float** out,
                                         size_t* out_length);
+SonareError sonare_mel_to_audio_checked_ex(const float* mel, size_t input_length, int n_mels,
+                                           int n_frames, int sample_rate, int n_fft, int hop_length,
+                                           float fmin, float fmax, int htk, int n_iter, float** out,
+                                           size_t* out_length);
 
 /// @brief Length-checked sonare_mfcc_to_mel. @p input_length must equal
 ///        n_mfcc * n_frames.
@@ -266,6 +292,10 @@ SonareError sonare_mfcc_to_audio_checked(const float* mfcc, size_t input_length,
                                          int n_frames, int n_mels, int sample_rate, int n_fft,
                                          int hop_length, float fmin, float fmax, int n_iter,
                                          float** out, size_t* out_length);
+SonareError sonare_mfcc_to_audio_checked_ex(const float* mfcc, size_t input_length, int n_mfcc,
+                                            int n_frames, int n_mels, int sample_rate, int n_fft,
+                                            int hop_length, float fmin, float fmax, int htk,
+                                            int n_iter, float** out, size_t* out_length);
 
 /// @brief Frees the matrix held by a SonareInverseResult.
 void sonare_free_inverse_result(SonareInverseResult* result);

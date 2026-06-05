@@ -131,10 +131,12 @@ SonareError sonare_rms_energy(const float* samples, size_t length, int sample_ra
   if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = nullptr;
+  *out_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> result = rms_energy(audio, frame_length, hop_length);
     *out_count = result.size();
+    if (result.empty()) return SONARE_OK;
     std::unique_ptr<float[]> tmp(new float[result.size()]);
     std::memcpy(tmp.get(), result.data(), result.size() * sizeof(float));
     *out = release_array(tmp);

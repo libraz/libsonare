@@ -63,6 +63,22 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 #endif
 }
 
+namespace {
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+std::string serialize_deserialize_diagnostics(
+    const std::vector<sonare::serialize::Diagnostic>& diagnostics) {
+  std::ostringstream stream;
+  for (size_t i = 0; i < diagnostics.size(); ++i) {
+    if (i > 0) stream << '\n';
+    stream << diagnostics[i].code << ": " << diagnostics[i].message;
+  }
+  return stream.str();
+}
+#endif
+
+}  // namespace
+
 SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
                                        char** out_diag) {
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -74,18 +90,16 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
       sonare::serialize::project_from_json(std::string(json, len));
   if (!result.ok()) {
     if (out_diag) {
-      std::ostringstream stream;
-      for (size_t i = 0; i < result.diagnostics.size(); ++i) {
-        if (i > 0) stream << '\n';
-        stream << result.diagnostics[i].code << ": " << result.diagnostics[i].message;
-      }
-      *out_diag = copy_string(stream.str());
+      *out_diag = copy_string(serialize_deserialize_diagnostics(result.diagnostics));
     }
     return SONARE_ERROR_INVALID_FORMAT;
   }
   auto handle = std::make_unique<SonareProject>();
   handle->history = arr::EditHistory(std::move(*result.project));
   handle->history.midi_content() = std::move(result.midi);
+  if (out_diag && !result.diagnostics.empty()) {
+    *out_diag = copy_string(serialize_deserialize_diagnostics(result.diagnostics));
+  }
   *out = handle.release();
   return SONARE_OK;
   SONARE_C_CATCH
@@ -218,7 +232,8 @@ SonareError sonare_project_last_bounce_compile_result(const SonareProject* proje
   if (out) *out = {};
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  fill_compile_result_from_diagnostics(project->last_bounce_diagnostics, true, out);
+  fill_compile_result_from_diagnostics(project->last_bounce_diagnostics,
+                                       project->last_bounce_has_timeline, out);
   return SONARE_OK;
   SONARE_C_CATCH
 #else

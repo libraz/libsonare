@@ -131,9 +131,12 @@ export interface StreamFramesI16 {
 
 /**
  * Configuration for StreamAnalyzer
+ *
+ * Omitted values are read from the native StreamConfig defaults via
+ * streamAnalyzerConfigDefault(), keeping the WASM wrapper in sync with core.
  */
 export interface StreamConfig {
-  /** Sample rate in Hz. Optional for parity with the Node/Python bindings (default 44100). */
+  /** Sample rate in Hz. Optional for parity with the Node/Python bindings. */
   sampleRate?: number;
   nFft?: number;
   hopLength?: number;
@@ -141,8 +144,7 @@ export interface StreamConfig {
   fmin?: number;
   fmax?: number;
   tuningRefHz?: number;
-  /** Compute the per-frame magnitude spectrum. Defaults to false: no read path
-   *  surfaces it, so enabling it only burns realtime CPU with no readable result. */
+  /** Unsupported: no read path surfaces per-frame magnitude spectra. */
   computeMagnitude?: boolean;
   computeMel?: boolean;
   computeChroma?: boolean;
@@ -155,3 +157,5 @@ export interface StreamConfig {
   window?: number;
   outputFormat?: number;
 }
+
+export type StreamConfigDefaults = Required<StreamConfig>;

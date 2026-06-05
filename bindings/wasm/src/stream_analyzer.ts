@@ -5,6 +5,7 @@ import type {
   AnalyzerStats,
   FrameBuffer,
   StreamConfig,
+  StreamConfigDefaults,
   StreamFramesI16,
   StreamFramesU8,
   StreamQuantizeConfig,
@@ -13,6 +14,10 @@ import type {
 // ============================================================================
 // StreamAnalyzer Class
 // ============================================================================
+
+export function streamAnalyzerConfigDefaults(): StreamConfigDefaults {
+  return getSonareModule().streamAnalyzerConfigDefault();
+}
 
 /**
  * Real-time streaming audio analyzer.
@@ -43,27 +48,33 @@ export class StreamAnalyzer {
    *
    * @param config - Configuration options
    */
-  constructor(config: StreamConfig) {
+  constructor(config: StreamConfig = {}) {
+    if (config.computeMagnitude) {
+      throw new Error(
+        'computeMagnitude is not supported because magnitude frames are not exposed by StreamAnalyzer read paths.',
+      );
+    }
     const module = getSonareModule();
+    const defaults = streamAnalyzerConfigDefaults();
     this.analyzer = new module.StreamAnalyzer(
-      config.sampleRate ?? 44100,
-      config.nFft ?? 2048,
-      config.hopLength ?? 512,
-      config.nMels ?? 128,
-      config.fmin ?? 0,
-      config.fmax ?? 0,
-      config.tuningRefHz ?? 440,
-      config.computeMagnitude ?? false,
-      config.computeMel ?? true,
-      config.computeChroma ?? true,
-      config.computeOnset ?? true,
-      config.computeSpectral ?? true,
-      config.emitEveryNFrames ?? 1,
-      config.magnitudeDownsample ?? 1,
-      config.keyUpdateIntervalSec ?? 5,
-      config.bpmUpdateIntervalSec ?? 10,
-      config.window ?? 0,
-      config.outputFormat ?? 0,
+      config.sampleRate ?? defaults.sampleRate,
+      config.nFft ?? defaults.nFft,
+      config.hopLength ?? defaults.hopLength,
+      config.nMels ?? defaults.nMels,
+      config.fmin ?? defaults.fmin,
+      config.fmax ?? defaults.fmax,
+      config.tuningRefHz ?? defaults.tuningRefHz,
+      config.computeMagnitude ?? defaults.computeMagnitude,
+      config.computeMel ?? defaults.computeMel,
+      config.computeChroma ?? defaults.computeChroma,
+      config.computeOnset ?? defaults.computeOnset,
+      config.computeSpectral ?? defaults.computeSpectral,
+      config.emitEveryNFrames ?? defaults.emitEveryNFrames,
+      config.magnitudeDownsample ?? defaults.magnitudeDownsample,
+      config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,
+      config.bpmUpdateIntervalSec ?? defaults.bpmUpdateIntervalSec,
+      config.window ?? defaults.window,
+      config.outputFormat ?? defaults.outputFormat,
     );
   }
 

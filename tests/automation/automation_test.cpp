@@ -143,6 +143,36 @@ TEST_CASE("AutomationEngine skips non realtime-safe parameters", "[automation]")
   REQUIRE(processor.set_count == 0);
 }
 
+TEST_CASE("AutomationEngine rejects registered non realtime-safe parameters before processor",
+          "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::Linear}});
+
+  CaptureProcessor processor;
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_parameter_metadata(
+      {{7, "mode", "", 0.0f, 1.0f, 0.0f, false, sonare::automation::CurveType::Linear}});
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+  REQUIRE(engine.bind_target(7, &processor));
+
+  sonare::transport::TransportState state{};
+  engine.apply(state, 0, 64);
+
+  REQUIRE(processor.set_count == 0);
+  REQUIRE(engine.non_realtime_safe_rejection_count() == 1);
+  REQUIRE(engine.unknown_target_count() == 0);
+
+  REQUIRE_FALSE(engine.set_parameter(7, 0.75f));
+  REQUIRE(processor.set_count == 0);
+  REQUIRE(engine.non_realtime_safe_rejection_count() == 2);
+  REQUIRE(engine.unknown_target_count() == 0);
+}
+
 TEST_CASE("AutomationEngine reports target binding table overflow", "[automation]") {
   sonare::automation::AutomationEngine engine;
   std::vector<CaptureProcessor> processors(129);

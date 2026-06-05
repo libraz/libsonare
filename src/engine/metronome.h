@@ -43,6 +43,7 @@ struct MetronomeEventList {
 class Metronome {
  public:
   void prepare(double sample_rate, const transport::TempoMap* tempo_map) noexcept;
+  void set_tempo_map(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
   void set_config(MetronomeConfig config) noexcept { config_ = config; }
   const MetronomeConfig& config() const noexcept { return config_; }
 

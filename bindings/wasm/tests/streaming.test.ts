@@ -3,7 +3,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, StreamAnalyzer } from '../dist/index.js';
+import { init, StreamAnalyzer, streamAnalyzerConfigDefaults } from '../dist/index.js';
 
 describe('StreamAnalyzer', () => {
   beforeAll(async () => {
@@ -11,11 +11,45 @@ describe('StreamAnalyzer', () => {
   });
 
   describe('lifecycle', () => {
+    it('uses native StreamConfig defaults for omitted WASM options', () => {
+      const defaults = streamAnalyzerConfigDefaults();
+      expect(defaults).toEqual({
+        sampleRate: 44100,
+        nFft: 2048,
+        hopLength: 512,
+        nMels: 128,
+        fmin: 0,
+        fmax: 0,
+        tuningRefHz: 440,
+        computeMagnitude: false,
+        computeMel: true,
+        computeChroma: true,
+        computeOnset: true,
+        computeSpectral: true,
+        emitEveryNFrames: 1,
+        magnitudeDownsample: 1,
+        keyUpdateIntervalSec: 5,
+        bpmUpdateIntervalSec: 10,
+        window: 0,
+        outputFormat: 0,
+      });
+
+      const analyzer = new StreamAnalyzer();
+      expect(analyzer.sampleRate()).toBe(defaults.sampleRate);
+      analyzer.delete();
+    });
+
     it('exposes delete() like every other WASM wrapper, with dispose() as alias', () => {
       const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
       expect(typeof analyzer.delete).toBe('function');
       expect(typeof analyzer.dispose).toBe('function');
       analyzer.delete();
+    });
+
+    it('rejects computeMagnitude because there is no magnitude read path', () => {
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, computeMagnitude: true })).toThrow(
+        /computeMagnitude is not supported/,
+      );
     });
   });
 

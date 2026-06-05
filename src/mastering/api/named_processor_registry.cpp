@@ -58,6 +58,7 @@ std::vector<std::string> processor_names() {
       "saturation.exciter",
       "saturation.hardClipper",
       "saturation.multibandExciter",
+      "saturation.ampSim",
       "saturation.softClipper",
       "saturation.tape",
       "saturation.transformer",

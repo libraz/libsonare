@@ -387,7 +387,8 @@ class SonareSynthPatch(ctypes.Structure):
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
     default subtractive patch when empty) and every non-zero field overrides
-    the base ("0 => keep"). Enum fields reserve 0 as "keep".
+    the base ("0 => keep"). Explicit zero numeric overrides are not
+    representable in struct_version 1. Enum fields reserve 0 as "keep".
     """
 
     _fields_ = [

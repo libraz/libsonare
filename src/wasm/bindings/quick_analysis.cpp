@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "analysis/analysis_json.h"
 #include "common.h"
 
 std::vector<Mode> modesFromVal(val modes) {
@@ -396,6 +397,42 @@ val js_analyze(val samples, int sample_rate) {
   return analysisResultToVal(result);
 }
 
+val js_analysis_result_schema_paths() {
+  val out = val::array();
+  const auto& paths = sonare::analysis_result_schema_paths();
+  for (size_t i = 0; i < paths.size(); ++i) {
+    out.call<void>("push", paths[i]);
+  }
+  return out;
+}
+
+val js_analysis_result_schema_fixture() {
+  AnalysisResult result;
+  result.bpm = 120.0f;
+  result.bpm_confidence = 0.9f;
+  result.key.root = PitchClass::C;
+  result.key.mode = Mode::Major;
+  result.key.confidence = 0.8f;
+  result.time_signature = {4, 4, 0.7f};
+  result.beats.push_back({0.25f, 0, 0.6f});
+  result.chords.push_back({PitchClass::C, ChordQuality::Major, 0.0f, 1.0f, 0.8f, PitchClass::C});
+  result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
+  result.timbre = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+  result.dynamics = {12.0f, -1.0f, -14.0f, 13.0f, 3.0f, false};
+  result.rhythm.time_signature = {4, 4, 0.75f};
+  result.rhythm.syncopation = 0.1f;
+  result.rhythm.groove_type = "straight";
+  result.rhythm.pattern_regularity = 0.8f;
+  result.rhythm.tempo_stability = 0.9f;
+  result.melody.pitch_range_octaves = 1.0f;
+  result.melody.pitch_stability = 0.7f;
+  result.melody.mean_frequency = 440.0f;
+  result.melody.vibrato_rate = 5.0f;
+  result.melody.pitches.push_back({0.0f, 440.0f, 0.95f});
+  result.form = "A";
+  return analysisResultToVal(result);
+}
+
 val acousticParametersToVal(const AcousticParameters& params) {
   val out = val::object();
   out.set("rt60", params.rt60);
@@ -664,6 +701,8 @@ void registerQuickAnalysisBindings() {
   function("detectChords", &js_detect_chords);
   function("chordFunctionalAnalysis", &js_chord_functional_analysis);
   function("analyze", &js_analyze);
+  function("_analysisResultSchemaPaths", &js_analysis_result_schema_paths);
+  function("_analysisResultSchemaFixture", &js_analysis_result_schema_fixture);
   function("analyzeImpulseResponse", &js_analyze_impulse_response);
   function("detectAcoustic", &js_detect_acoustic);
 #ifdef SONARE_WITH_ACOUSTIC_SIM

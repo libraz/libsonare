@@ -269,6 +269,10 @@ describe('Mixer argument validation', () => {
     const before = mixer.vcaGroupCount();
     mixer.addVcaGroup('test-vca-group', -2, ['host', 'guest']);
     expect(mixer.vcaGroupCount()).toBe(before + 1);
+    mixer.setVcaGroupGainDb('test-vca-group', -7);
+    const scene = JSON.parse(mixer.toSceneJson());
+    const group = scene.vcaGroups.find((entry: { id: string }) => entry.id === 'test-vca-group');
+    expect(group.gainDb).toBe(-7);
     mixer.removeVcaGroup('test-vca-group');
     expect(mixer.vcaGroupCount()).toBe(before);
     // members default to an empty group.

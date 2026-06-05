@@ -189,6 +189,20 @@ class Mixer:
             raise RuntimeError("libsonare was built without mixer VCA support")
         _check(lib.sonare_mixer_remove_vca_group(self._handle, group_id.encode("utf-8")))
 
+    def set_vca_group_gain_db(self, group_id: str, gain_db: float) -> None:
+        """Set an existing VCA group's gain in dB."""
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_set_vca_group_gain_db"):
+            raise RuntimeError("libsonare was built without mixer VCA support")
+        _check(
+            lib.sonare_mixer_set_vca_group_gain_db(
+                self._handle,
+                group_id.encode("utf-8"),
+                ctypes.c_float(gain_db),
+            )
+        )
+
     def vca_group_count(self) -> int:
         """Return the number of VCA groups in the mixer topology."""
         self._require()

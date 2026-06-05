@@ -16,6 +16,7 @@ import {
   masteringProcessStereo,
   melSpectrogram,
   melToHz,
+  melToStft,
   mfcc,
   midiToHz,
   normalize,
@@ -143,6 +144,7 @@ describe('effects', () => {
     const names = masteringProcessorNames();
     expect(names).toContain('dynamics.compressor');
     expect(names).toContain('eq.equalizer');
+    expect(names).toContain('saturation.ampSim');
     expect(names).toContain('stereo.imager');
 
     const result = masteringProcess('dynamics.compressor', quiet, SR, {
@@ -166,6 +168,19 @@ describe('effects', () => {
     expect(eq.samples).toBeInstanceOf(Float32Array);
     expect(eq.samples.length).toBe(quiet.length);
     expect(Number.isFinite(eq.outputLufs)).toBe(true);
+
+    const amp = masteringProcess('saturation.ampSim', quiet, SR, {
+      drive: 0.8,
+      bassDb: 2,
+      midDb: -3,
+      trebleDb: 1.5,
+      presenceDb: 3,
+      cab: 1,
+      levelDb: -6,
+    });
+    expect(amp.samples).toBeInstanceOf(Float32Array);
+    expect(amp.samples.length).toBe(quiet.length);
+    expect(Number.isFinite(amp.outputLufs)).toBe(true);
 
     const leftEq = masteringProcessStereo('eq.equalizer', quiet, quiet, SR, {
       'band0.enabled': 1,
@@ -243,6 +258,24 @@ describe('features', () => {
     }
     expect(dRange).toBeGreaterThan(1e-6);
     expect(dHtk).toBeGreaterThan(1e-6);
+  });
+
+  it('melToStft honours HTK mel spacing', () => {
+    const nFft = 1024;
+    const hop = 256;
+    const nMels = 40;
+    const mel = melSpectrogram(tone, SR, nFft, hop, nMels, 0, 0, true);
+    const slaney = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, false);
+    const htk = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, true);
+
+    expect(htk.nBins).toBe(nFft / 2 + 1);
+    expect(htk.nFrames).toBe(mel.nFrames);
+    let diff = 0;
+    for (let i = 0; i < htk.power.length; i++) {
+      expect(Number.isFinite(htk.power[i])).toBe(true);
+      diff += (slaney.power[i] - htk.power[i]) ** 2;
+    }
+    expect(diff).toBeGreaterThan(1e-6);
   });
 
   it('mfcc returns coefficients', () => {
