@@ -104,6 +104,7 @@ Strip strip_from_value(const JsonValue& object) {
   strip.id = string_or(object, "id", strip.id);
   strip.input_trim_db = number_or(object, "inputTrimDb", strip.input_trim_db);
   strip.fader_db = number_or(object, "faderDb", strip.fader_db);
+  strip.vca_offset_db = number_or(object, "vcaOffsetDb", strip.vca_offset_db);
   strip.pan = number_or(object, "pan", strip.pan);
   strip.width = number_or(object, "width", strip.width);
   strip.muted = bool_or(object, "muted", strip.muted);
@@ -237,6 +238,7 @@ JsonValue strip_to_value(const Strip& strip) {
   object.emplace("id", JsonValue(strip.id));
   object.emplace("inputTrimDb", JsonValue(strip.input_trim_db));
   object.emplace("faderDb", JsonValue(strip.fader_db));
+  if (strip.vca_offset_db != 0.0f) object.emplace("vcaOffsetDb", JsonValue(strip.vca_offset_db));
   object.emplace("pan", JsonValue(strip.pan));
   object.emplace("width", JsonValue(strip.width));
   object.emplace("muted", JsonValue(strip.muted));

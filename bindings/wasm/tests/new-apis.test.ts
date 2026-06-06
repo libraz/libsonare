@@ -247,6 +247,20 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(out2.length).toBe(signal.length);
     });
 
+    it('pitchCorrectToMidiTimevarying rejects mismatched companion arrays', () => {
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+      const tooShortVoiced = new Int32Array(nFrames - 1).fill(1);
+      const tooShortProb = new Float32Array(nFrames - 1).fill(1);
+      expect(() =>
+        pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, tooShortVoiced),
+      ).toThrow();
+      expect(() =>
+        pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, undefined, tooShortProb),
+      ).toThrow();
+    });
+
     it('noteStretch lengthens the buffer by the stretch ratio', () => {
       const out = noteStretch(signal, SR, {
         onsetSample: 0,

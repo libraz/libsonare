@@ -243,6 +243,37 @@ TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") 
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project bounce rejects non-project output sample rates", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 0) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 128;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 44100;
+
+  float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
+  size_t out_len = 123;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_len == 0);
+
+  options.sample_rate = 48000;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == 256);
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("mono project bounce downmixes stereo audio clips instead of dropping right",
           "[project]") {
   SonareProject* project = nullptr;

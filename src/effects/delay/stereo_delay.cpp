@@ -8,14 +8,24 @@ namespace sonare::effects::delay {
 namespace {
 
 constexpr float kDelaySmoothingTimeSeconds = 0.010f;
+constexpr float kMaxDelayMs = 4000.0f;
 
 float config_delay_samples(float delay_ms, double sample_rate) noexcept {
-  return std::max(0.0f, delay_ms) * 0.001f * static_cast<float>(sample_rate);
+  return std::clamp(delay_ms, 0.0f, kMaxDelayMs) * 0.001f * static_cast<float>(sample_rate);
+}
+
+StereoDelayConfig sanitize_config(StereoDelayConfig config) noexcept {
+  config.delay_time_l_ms = std::clamp(config.delay_time_l_ms, 0.0f, kMaxDelayMs);
+  config.delay_time_r_ms = std::clamp(config.delay_time_r_ms, 0.0f, kMaxDelayMs);
+  config.feedback = std::clamp(config.feedback, 0.0f, 0.95f);
+  config.ping_pong = std::clamp(config.ping_pong, 0.0f, 1.0f);
+  config.dry_wet = std::clamp(config.dry_wet, 0.0f, 1.0f);
+  return config;
 }
 
 }  // namespace
 
-StereoDelay::StereoDelay(StereoDelayConfig config) : config_(config) {}
+StereoDelay::StereoDelay(StereoDelayConfig config) : config_(sanitize_config(config)) {}
 
 void StereoDelay::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -31,9 +41,8 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
     return;
   }
   rt::ScopedNoDenormals no_denormals;
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const float dry = 1.0f - wet;
-  const float feedback = std::clamp(config_.feedback, 0.0f, 0.95f);
+  const float target_wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  const float target_feedback = std::clamp(config_.feedback, 0.0f, 0.95f);
   const float ping_pong = std::clamp(config_.ping_pong, 0.0f, 1.0f);
   const std::array<float, 2> target_delay_samples{
       config_delay_samples(config_.delay_time_l_ms, sample_rate_),
@@ -48,12 +57,16 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   for (int i = 0; i < num_samples; ++i) {
     delay_samples_[0] += (target_delay_samples[0] - delay_samples_[0]) * smoothing_coeff;
     delay_samples_[1] += (target_delay_samples[1] - delay_samples_[1]) * smoothing_coeff;
+    smoothed_feedback_ += (target_feedback - smoothed_feedback_) * smoothing_coeff;
+    smoothed_dry_wet_ += (target_wet - smoothed_dry_wet_) * smoothing_coeff;
+    const float wet = smoothed_dry_wet_;
+    const float dry = 1.0f - wet;
     const float in_l = left[i];
     const float in_r = right[i];
-    const float feed_l = in_l + feedback * ((1.0f - ping_pong) * feedback_state_[0] +
-                                            ping_pong * feedback_state_[1]);
-    const float feed_r = in_r + feedback * ((1.0f - ping_pong) * feedback_state_[1] +
-                                            ping_pong * feedback_state_[0]);
+    const float feed_l = in_l + smoothed_feedback_ * ((1.0f - ping_pong) * feedback_state_[0] +
+                                                      ping_pong * feedback_state_[1]);
+    const float feed_r = in_r + smoothed_feedback_ * ((1.0f - ping_pong) * feedback_state_[1] +
+                                                      ping_pong * feedback_state_[0]);
     const float delayed_l = delays_[0].process(feed_l, delay_samples_[0]);
     const float delayed_r = delays_[1].process(feed_r, delay_samples_[1]);
     feedback_state_ = {delayed_l, delayed_r};
@@ -75,30 +88,33 @@ void StereoDelay::reset() {
   delay_samples_ = {config_delay_samples(config_.delay_time_l_ms, sample_rate_),
                     config_delay_samples(config_.delay_time_r_ms, sample_rate_)};
   feedback_state_ = {0.0f, 0.0f};
+  smoothed_feedback_ = std::clamp(config_.feedback, 0.0f, 0.95f);
+  smoothed_dry_wet_ = std::clamp(config_.dry_wet, 0.0f, 1.0f);
 }
 
-void StereoDelay::set_config(const StereoDelayConfig& config) noexcept { config_ = config; }
+void StereoDelay::set_config(const StereoDelayConfig& config) noexcept {
+  config_ = sanitize_config(config);
+}
 
 bool StereoDelay::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       // process() smooths delay-time automation before it reaches the
       // fractional read taps; the lines are sized for up to 4 s.
-      config_.delay_time_l_ms = std::max(0.0f, value);
+      config_.delay_time_l_ms = std::clamp(value, 0.0f, kMaxDelayMs);
       return true;
     case 1:
-      config_.delay_time_r_ms = std::max(0.0f, value);
+      config_.delay_time_r_ms = std::clamp(value, 0.0f, kMaxDelayMs);
       return true;
     case 2:
-      // process() clamps feedback to [0, 0.95]; store the raw target.
-      config_.feedback = value;
+      config_.feedback = std::clamp(value, 0.0f, 0.95f);
       return true;
     case 3:
       // process() clamps ping_pong to [0, 1]; store the raw target.
       config_.ping_pong = value;
       return true;
     case 4:
-      config_.dry_wet = value;
+      config_.dry_wet = std::clamp(value, 0.0f, 1.0f);
       return true;
     default:
       return false;

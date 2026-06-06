@@ -285,6 +285,18 @@ describe('Sonare WASM Module', () => {
       expect(Number.isFinite(bounced.integratedLufs) || !Number.isNaN(bounced.integratedLufs)).toBe(
         true,
       );
+      for (const targetLufs of [0, Number.NaN]) {
+        const normalized = engine.bounceOffline({
+          totalFrames: 256,
+          blockSize: 128,
+          numChannels: 2,
+          sourceSampleRate: 48000,
+          targetSampleRate: 48000,
+          normalizeLufs: true,
+          targetLufs,
+        });
+        expect(Array.from(normalized.interleaved).every(Number.isFinite)).toBe(true);
+      }
       engine.setClips([
         {
           id: 202,

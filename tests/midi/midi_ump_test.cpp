@@ -337,6 +337,17 @@ TEST_CASE("MIDI 2.0 -> 1.0 velocity/CC down-scale is the top-7-bit truncation", 
   REQUIRE(sonare::midi::scale_velocity_16_to_7(65535u) == 127u);
   REQUIRE(sonare::midi::scale_velocity_16_to_7(0x81FFu) == 64u);  // low 9 bits dropped.
 
+  const Ump quiet_on = sonare::midi::midi2_to_midi1(sonare::midi::make_midi2_note_on(0, 0, 60, 1));
+  REQUIRE(quiet_on.is_note_on());
+  REQUIRE((quiet_on.words[0] & 0x7Fu) == 1u);
+  const Ump silent_on = sonare::midi::midi2_to_midi1(sonare::midi::make_midi2_note_on(0, 0, 60, 0));
+  REQUIRE(status_of(silent_on) == static_cast<uint8_t>(UmpStatus::kNoteOn));
+  REQUIRE((silent_on.words[0] & 0x7Fu) == 0u);
+  const Ump quiet_off =
+      sonare::midi::midi2_to_midi1(sonare::midi::make_midi2_note_off(0, 0, 60, 1));
+  REQUIRE(quiet_off.is_note_off());
+  REQUIRE((quiet_off.words[0] & 0x7Fu) == 0u);
+
   REQUIRE(sonare::midi::scale_cc_32_to_7(0x80000000u) == 64u);
   REQUIRE(sonare::midi::scale_cc_32_to_7(0xFFFFFFFFu) == 127u);
   REQUIRE(sonare::midi::scale_cc_32_to_7(0x81FFFFFFu) == 64u);  // low 25 bits dropped.

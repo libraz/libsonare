@@ -7,6 +7,9 @@
 // buffer-based loaders there (see the load_buffer_* functions below).
 #ifndef __EMSCRIPTEN__
 #include <fstream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #endif
 
 #include "util/exception.h"
@@ -139,11 +142,30 @@ std::vector<float> int16_stereo_to_mono(const mp3d_sample_t* data, size_t total_
 }
 
 #ifndef __EMSCRIPTEN__
+#ifdef _WIN32
+std::wstring utf8_to_wide_path(const std::string& path) {
+  if (path.empty()) return {};
+  const int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.data(),
+                                        static_cast<int>(path.size()), nullptr, 0);
+  SONARE_CHECK_MSG(count > 0, ErrorCode::InvalidParameter, "Path is not valid UTF-8: " + path);
+  std::wstring wide(static_cast<size_t>(count), L'\0');
+  const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.data(),
+                                          static_cast<int>(path.size()), wide.data(), count);
+  SONARE_CHECK_MSG(written == count, ErrorCode::InvalidParameter,
+                   "Failed to decode UTF-8 path: " + path);
+  return wide;
+}
+#endif
+
 /// @brief Reads entire file into memory.
 /// @param path Path to the file
 /// @param max_size Maximum allowed file size in bytes (0 = no limit)
 std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
+#ifdef _WIN32
+  std::ifstream file(utf8_to_wide_path(path), std::ios::binary | std::ios::ate);
+#else
   std::ifstream file(path, std::ios::binary | std::ios::ate);
+#endif
   SONARE_CHECK_MSG(file.is_open(), ErrorCode::FileNotFound, "Cannot open file: " + path);
 
   auto size = file.tellg();

@@ -207,6 +207,12 @@ TEST_CASE("spectral_rolloff validates librosa-compatible inputs", "[spectral]") 
   REQUIRE_THAT(clamped[0], WithinAbs(100.0f, 1e-7f));
 }
 
+TEST_CASE("spectral_contrast rejects empty spectrograms like sibling features", "[spectral]") {
+  Spectrogram empty;
+
+  REQUIRE_THROWS_AS(spectral_contrast(empty, 22050), SonareException);
+}
+
 TEST_CASE("spectral_flatness sine vs noise", "[spectral]") {
   Audio sine_audio = generate_sine_audio(1000.0f);
   Audio noise_audio = create_noise_audio();

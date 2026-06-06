@@ -1,6 +1,7 @@
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <set>
@@ -444,6 +445,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       opts.sample_rate > 0 ? static_cast<double>(opts.sample_rate) : project_sr;
   if (!finite_positive(sample_rate) || sample_rate < kMinSampleRate ||
       sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (opts.sample_rate > 0 && std::abs(sample_rate - project_sr) > 1.0e-6) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (opts.instrument_latency_samples < 0) return SONARE_ERROR_INVALID_PARAMETER;

@@ -71,3 +71,26 @@ TEST_CASE("FdnReverb mono output folds down both taps", "[reverb][fdn]") {
   // confirming the first tap is not being clobbered.
   REQUIRE(diff_from_second_tap > 1e-3);
 }
+
+TEST_CASE("FdnReverb dry_wet=0 preserves dry signal without DC blocking", "[reverb][fdn]") {
+  constexpr int kN = 1024;
+  FdnReverbConfig config;
+  config.dry_wet = 0.0f;
+
+  std::vector<float> left(static_cast<size_t>(kN), 0.25f);
+  std::vector<float> right(static_cast<size_t>(kN), -0.125f);
+  const std::vector<float> expected_left = left;
+  const std::vector<float> expected_right = right;
+  float* channels[2] = {left.data(), right.data()};
+
+  FdnReverb reverb(config);
+  reverb.prepare(48000.0, kN);
+  reverb.process(channels, 2, kN);
+
+  for (int i = 0; i < kN; ++i) {
+    REQUIRE_THAT(left[static_cast<size_t>(i)],
+                 WithinAbs(expected_left[static_cast<size_t>(i)], 0.0f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)],
+                 WithinAbs(expected_right[static_cast<size_t>(i)], 0.0f));
+  }
+}

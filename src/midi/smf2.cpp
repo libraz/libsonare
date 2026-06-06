@@ -347,7 +347,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
           seg.start_ppq = ppq;
           seg.time_sig.numerator = static_cast<int>(numerator);
           seg.time_sig.denominator = static_cast<int>(denominator);
-          if (n32 > 0) seg.thirty_seconds_per_quarter = n32;
+          seg.thirty_seconds_per_quarter = n32;
           result.time_signatures.push_back(seg);
         } else {
           ++result.skipped_events;
@@ -645,8 +645,8 @@ Smf2ExportResult export_clip_file(
     const auto& seg = time_signatures.front();
     const uint8_t num = static_cast<uint8_t>(std::clamp(seg.time_sig.numerator, 1, 255));
     const uint8_t den = static_cast<uint8_t>(std::clamp(seg.time_sig.denominator, 1, 255));
-    const uint8_t n32 = static_cast<uint8_t>(std::clamp(
-        seg.thirty_seconds_per_quarter > 0 ? seg.thirty_seconds_per_quarter : 8, 1, 255));
+    const uint8_t n32 =
+        static_cast<uint8_t>(std::clamp(static_cast<int>(seg.thirty_seconds_per_quarter), 0, 255));
     put_word(&out, delta_clockstamp_word(0));
     put_word(&out, flex_word0(kFlexBankSetupPerformance, kFlexStatusSetTimeSignature));
     put_word(&out, (static_cast<uint32_t>(num) << 24) | (static_cast<uint32_t>(den) << 16) |
@@ -690,8 +690,8 @@ Smf2ExportResult export_clip_file(
     const auto& seg = time_signatures[i];
     const uint8_t num = static_cast<uint8_t>(std::clamp(seg.time_sig.numerator, 1, 255));
     const uint8_t den = static_cast<uint8_t>(std::clamp(seg.time_sig.denominator, 1, 255));
-    const uint8_t n32 = static_cast<uint8_t>(std::clamp(
-        seg.thirty_seconds_per_quarter > 0 ? seg.thirty_seconds_per_quarter : 8, 1, 255));
+    const uint8_t n32 =
+        static_cast<uint8_t>(std::clamp(static_cast<int>(seg.thirty_seconds_per_quarter), 0, 255));
     SeqItem item;
     item.tick = ppq_to_tick(seg.start_ppq, dctpq);
     item.order = 1;

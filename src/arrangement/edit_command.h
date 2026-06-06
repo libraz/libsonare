@@ -251,12 +251,16 @@ class AddClip final : public EditCommand {
     restore_events_ = std::move(events);
     has_restore_events_ = true;
   }
+  void set_restore_sysex_payloads(std::map<uint32_t, std::vector<uint8_t>> payloads) {
+    restore_sysex_payloads_ = std::move(payloads);
+  }
 
  private:
   EditClip clip_;
   ClipId allocated_id_ = 0;
   size_t restore_index_ = Project::kAppend;
   MidiClipEventList restore_events_;
+  std::map<uint32_t, std::vector<uint8_t>> restore_sysex_payloads_;
   bool has_restore_events_ = false;
 };
 

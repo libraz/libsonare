@@ -187,6 +187,21 @@ def test_cli_new_commands_smoke(command: str) -> None:
         assert result.stdout.strip()
 
 
+def test_project_cli_help_documents_sf2_limitations() -> None:
+    """Project MIDI rendering help states the current SF2/synth-json CLI boundary."""
+
+    project_help = _run_cli(["project", "bounce", "--help"])
+    assert project_help.returncode == 0
+    assert "--sf2" in project_help.stdout
+    assert "--synth-json" in project_help.stdout
+    assert "SoundFont-backed bounces" in project_help.stdout
+
+    midi_render_help = _run_cli(["midi-render", "--help"])
+    assert midi_render_help.returncode == 0
+    assert "--sf2" in midi_render_help.stdout
+    assert "--synth-json" in midi_render_help.stdout
+
+
 def test_mastering_pair_analyze_cli_resamples_reference_rate(monkeypatch, capsys) -> None:
     """The pair-analysis CLI resamples reference audio to the master sample rate."""
     import argparse
@@ -407,6 +422,54 @@ def test_master_cli_applies_preset_and_override_params(monkeypatch, tmp_path, ca
     payload = json.loads(capsys.readouterr().out)
     assert payload["preset"] == "streaming"
     assert payload["stages"] == ["preset", "loudness"]
+
+
+def test_mastering_processor_warns_for_mono_preview_of_stereo_processors(
+    monkeypatch, capsys
+) -> None:
+    """stereo-only processor previews duplicate mono input and warn on stderr."""
+    import libsonare
+    from libsonare import cli
+
+    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.1, -0.1], 44100))
+
+    def fake_mastering_process_stereo(
+        processor: str,
+        left: list[float],
+        right: list[float],
+        *,
+        sample_rate: int,
+        params: dict[str, object],
+    ) -> SimpleNamespace:
+        assert processor == "stereo.imager"
+        assert left == [0.1, -0.1]
+        assert right == [0.1, -0.1]
+        assert sample_rate == 44100
+        assert params == {}
+        return SimpleNamespace(
+            left=[0.2, -0.2],
+            right=[0.0, 0.0],
+            sample_rate=sample_rate,
+            input_lufs=-20.0,
+            output_lufs=-19.0,
+            applied_gain_db=0.0,
+            latency_samples=0,
+        )
+
+    monkeypatch.setattr(libsonare, "mastering_process_stereo", fake_mastering_process_stereo)
+
+    args = argparse.Namespace(
+        file="input.wav",
+        output="",
+        json=True,
+        processor="stereo.imager",
+        params="",
+    )
+
+    assert cli.cmd_mastering_processor(args) == 0
+    captured = capsys.readouterr()
+    assert "duplicates the mono input" in captured.err
+    assert json.loads(captured.out)["processor"] == "stereo.imager"
 
 
 def test_mastering_streaming_cli_passes_platform_targets(monkeypatch, capsys) -> None:

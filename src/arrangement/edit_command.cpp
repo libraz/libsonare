@@ -10,6 +10,10 @@
 namespace sonare::arrangement {
 namespace {
 
+void prune_unreferenced_sysex_payloads(MidiContentStore* store);
+std::map<uint32_t, std::vector<uint8_t>> payloads_for_events(const MidiContentStore& store,
+                                                             const MidiClipEventList& events);
+
 bool clip_can_be_inserted(const Project& project, const EditClip& clip, ClipId ignore_clip_id = 0) {
   if (clip.id == 0 || project.has_clip(clip.id)) return false;
   if (!project.has_track(clip.track_id) || !project.has_source(clip.source_id)) return false;
@@ -38,6 +42,7 @@ struct RemovedTrackClipSnapshot {
   EditClip clip;
   size_t index = Project::kAppend;
   MidiClipEventList events;
+  std::map<uint32_t, std::vector<uint8_t>> sysex_payloads;
   bool has_events = false;
 };
 
@@ -71,6 +76,9 @@ class RestoreTrackWithClips final : public EditCommand {
       project.ensure_next_clip_id(snapshot.clip.id);
       if (snapshot.has_events) {
         store.events[snapshot.clip.id] = snapshot.events;
+      }
+      for (const auto& [handle, payload] : snapshot.sysex_payloads) {
+        store.sysex_payloads[handle] = payload;
       }
     }
     return true;
@@ -131,6 +139,7 @@ bool RemoveTrack::apply(Project& project, MidiContentStore& store) {
     }
     store.events.erase(clip_id);
   }
+  prune_unreferenced_sysex_payloads(&store);
   return project.remove_track(id_).second;
 }
 
@@ -151,6 +160,7 @@ EditCommandPtr RemoveTrack::invert(const Project& before,
     const auto events = store_before.events.find(clip.id);
     if (events != store_before.events.end()) {
       snapshot.events = events->second;
+      snapshot.sysex_payloads = payloads_for_events(store_before, snapshot.events);
       snapshot.has_events = true;
     }
     clips.push_back(std::move(snapshot));
@@ -246,6 +256,9 @@ bool AddClip::apply(Project& project, MidiContentStore& store) {
     if (has_restore_events_) {
       store.events[allocated_id_] = restore_events_;
     }
+    for (const auto& [handle, payload] : restore_sysex_payloads_) {
+      store.sysex_payloads[handle] = payload;
+    }
     return true;
   }
   allocated_id_ = project.add_clip(clip_);
@@ -261,6 +274,7 @@ bool RemoveClip::apply(Project& project, MidiContentStore& store) {
   const bool ok = project.remove_clip(id_).second;
   if (ok) {
     store.events.erase(id_);
+    prune_unreferenced_sysex_payloads(&store);
   }
   return ok;
 }
@@ -278,6 +292,7 @@ EditCommandPtr RemoveClip::invert(const Project& before,
   const auto it = store_before.events.find(id_);
   if (it != store_before.events.end()) {
     add->set_restore_events(it->second);
+    add->set_restore_sysex_payloads(payloads_for_events(store_before, it->second));
   }
   return add;
 }
@@ -288,6 +303,9 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
     return false;
   }
   if (!(split_ppq_ > c->start_ppq) || !(split_ppq_ < c->end_ppq())) {
+    return false;
+  }
+  if (c->loop_mode == LoopMode::kLoop) {
     return false;
   }
   const double left_len = split_ppq_ - c->start_ppq;

@@ -12,8 +12,18 @@ namespace {
 // (no stuck note). Other messages fall in between by status nibble.
 int same_time_rank(const Ump& ump) noexcept {
   if (ump.is_note_off()) return 0;
-  if (ump.is_note_on()) return 2;
-  return 1;
+  if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice) {
+    const auto status = static_cast<UmpStatus>(ump.status_nibble());
+    if (status == UmpStatus::kControlChange) {
+      const uint8_t controller = ump.note_number();
+      if (controller == 0) return 1;
+      if (controller == 32) return 2;
+      return 4;
+    }
+    if (status == UmpStatus::kProgramChange) return 3;
+  }
+  if (ump.is_note_on()) return 5;
+  return 4;
 }
 
 }  // namespace

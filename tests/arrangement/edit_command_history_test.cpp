@@ -352,12 +352,14 @@ TEST_CASE("RemoveTrack removes owned clips and restores MIDI content on undo", "
   REQUIRE(second_midi_clip != 0);
 
   store.events[f.midi_clip] = {
-      {120.0, 0x20903C64u, 0u},
+      {120.0, 0x20903C64u, 0u, 11},
       {360.0, 0x20803C00u, 0u},
   };
+  store.sysex_payloads[11] = {0xF0, 0x7D, 0x11, 0xF7};
   store.events[second_midi_clip] = {
-      {48.0, 0x20904064u, 0u},
+      {48.0, 0x20904064u, 0u, 12},
   };
+  store.sysex_payloads[12] = {0xF0, 0x7D, 0x12, 0xF7};
 
   const Project before = f.project;
   const MidiContentStore store_before = store;
@@ -373,13 +375,40 @@ TEST_CASE("RemoveTrack removes owned clips and restores MIDI content on undo", "
   CHECK(f.project.has_clip(f.audio_clip));
   CHECK(store.events.find(f.midi_clip) == store.events.end());
   CHECK(store.events.find(second_midi_clip) == store.events.end());
+  CHECK(store.sysex_payloads.find(11) == store.sysex_payloads.end());
+  CHECK(store.sysex_payloads.find(12) == store.sysex_payloads.end());
 
   EditCommandPtr undo = raw->invert(before, store_before);
   REQUIRE(undo != nullptr);
   REQUIRE(undo->apply(f.project, store));
 
   CHECK(project_equal(f.project, before));
-  CHECK(store.events == store_before.events);
+  CHECK(store == store_before);
+}
+
+TEST_CASE("RemoveClip prunes orphaned SysEx payloads and undo restores them", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+  constexpr uint32_t kHandle = 21;
+  store.events[f.midi_clip] = {{120.0, 0x30000000u, 0u, kHandle}};
+  store.sysex_payloads[kHandle] = {0xF0, 0x7D, 0x21, 0xF7};
+
+  const Project before = f.project;
+  const MidiContentStore store_before = store;
+  auto remove = std::make_unique<RemoveClip>(f.midi_clip);
+  RemoveClip* raw = remove.get();
+
+  REQUIRE(remove->apply(f.project, store));
+  CHECK_FALSE(f.project.has_clip(f.midi_clip));
+  CHECK(store.events.find(f.midi_clip) == store.events.end());
+  CHECK(store.sysex_payloads.find(kHandle) == store.sysex_payloads.end());
+
+  EditCommandPtr undo = raw->invert(before, store_before);
+  REQUIRE(undo != nullptr);
+  REQUIRE(undo->apply(f.project, store));
+
+  CHECK(project_equal(f.project, before));
+  CHECK(store == store_before);
 }
 
 TEST_CASE("Clip command round-trips", "[arrangement]") {
@@ -515,6 +544,20 @@ TEST_CASE("SplitClip partitions MIDI content instead of duplicating it", "[arran
   REQUIRE(undo->apply(f.project, store));
   REQUIRE(project_equal(f.project, before));
   REQUIRE(store.events == store_before.events);
+}
+
+TEST_CASE("SplitClip rejects loop clips until loop phase splitting is supported", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+  EditClip* clip = f.project.find_clip_mutable(f.audio_clip);
+  REQUIRE(clip != nullptr);
+  clip->loop_mode = LoopMode::kLoop;
+  clip->loop_length_ppq = 480.0;
+  const Project before = f.project;
+
+  SplitClip split(f.audio_clip, 960.0);
+  REQUIRE_FALSE(split.apply(f.project, store));
+  REQUIRE(project_equal(f.project, before));
 }
 
 TEST_CASE("Clip placement commands preserve overlap invariants and fail atomically",

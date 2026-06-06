@@ -61,6 +61,24 @@ void DcBlocker::process(float* const* channels, int num_channels, int num_sample
   }
 }
 
+float DcBlocker::process_sample(int channel, float sample) {
+  if (channel < 0) {
+    return sample;
+  }
+  if (x1_.empty()) {
+    x1_.assign(kRealtimePreparedChannels, 0.0f);
+    y1_.assign(kRealtimePreparedChannels, 0.0f);
+  }
+  if (channel >= static_cast<int>(x1_.size())) {
+    return sample;
+  }
+  const size_t index = static_cast<size_t>(channel);
+  const float y = sample - x1_[index] + pole_ * y1_[index];
+  x1_[index] = sample;
+  y1_[index] = y;
+  return y;
+}
+
 void DcBlocker::reset() {
   std::fill(x1_.begin(), x1_.end(), 0.0f);
   std::fill(y1_.begin(), y1_.end(), 0.0f);

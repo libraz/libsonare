@@ -224,10 +224,8 @@ void Sf2Voice::start(const float* pool_data, const Sf2VoiceParams& p, double sam
   key_down = true;
   releasing = false;
   env.configure(sample_rate, p.volume_env);
-  env.kill();
   env.note_on();
   mod_env.configure(sample_rate, p.mod_env);
-  mod_env.kill();
   mod_env.note_on();
   mod_lfo.start(sample_rate, p.mod_lfo_delay_s, p.mod_lfo_freq_hz);
   vib_lfo.start(sample_rate, p.vib_lfo_delay_s, p.vib_lfo_freq_hz);

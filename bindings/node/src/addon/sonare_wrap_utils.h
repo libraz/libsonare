@@ -33,6 +33,7 @@ const char* ModeNameLocal(SonareMode mode);
 const char* ChordQualityName(SonareChordQuality quality);
 Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, float confidence);
 Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis);
+bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* error);
 
 /// @brief Run sonare_analyze_json, parse the result with JSON.parse, inject a
 /// legacy `beatTimes` Float32Array derived from `beats[].time`, and return the

@@ -4,6 +4,7 @@
 /// @brief Realtime-safe punch in/out capture sink.
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -51,7 +52,9 @@ class CaptureSink {
   void process(const float* const* input, int num_channels, int num_frames,
                int64_t timeline_sample) noexcept;
 
-  int64_t captured_frames() const noexcept { return captured_frames_; }
+  int64_t captured_frames() const noexcept {
+    return captured_frames_.load(std::memory_order_relaxed);
+  }
   uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
   bool armed() const noexcept { return snapshot().armed; }
   bool punch_enabled() const noexcept { return snapshot().punch_enabled; }
@@ -79,7 +82,7 @@ class CaptureSink {
   Control control_state_{};
   rt::SeqlockCell<Control> control_{};
 
-  int64_t captured_frames_ = 0;
+  std::atomic<int64_t> captured_frames_{0};
   // Atomic: process() (audio thread) bumps it while overflow_count() is polled
   // cross-thread (control thread, via RealtimeEngine::capture_overflow_count()).
   rt::OverflowCounter overflow_count_{};

@@ -15,12 +15,16 @@
 ///   default -> instrument global zone -> instrument zone (override)
 ///   + preset global zone + preset zone (add).
 ///
-/// Default modulators (SF2 2.04 §8.4) are implemented as fixed behaviour:
+/// Supported modulators: the SF2 2.04 default modulators are implemented as
+/// fixed behaviour:
 /// velocity -> attenuation is the spec concave 960 cB curve, which works out
 /// to exactly gain = (vel/127)^2; CC7/CC11 use the same law; velocity ->
 /// initialFilterFc darkens soft notes; CC1 adds vibrato depth; CC10 offsets
 /// pan; the pitch wheel applies the RPN0 bend range. CC91/93 resolve to
 /// per-voice reverb/chorus send levels (consumed by the GS effect units).
+/// Parsed custom preset/instrument modulator records are preserved on Sf2Zone
+/// for inspection, but the realtime voice layer does not yet evaluate the
+/// arbitrary SF2 modulator matrix.
 ///
 /// RT contract: resolve_voice_params() / Sf2Voice methods are allocation-free
 /// (audio thread); the referenced Sf2File data is read-only.

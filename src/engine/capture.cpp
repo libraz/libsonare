@@ -23,7 +23,7 @@ void CaptureSink::set_punch(int64_t start_sample, int64_t end_sample, bool enabl
 }
 
 void CaptureSink::reset() noexcept {
-  captured_frames_ = 0;
+  captured_frames_.store(0, std::memory_order_relaxed);
   overflow_count_.reset();
 }
 
@@ -46,15 +46,16 @@ void CaptureSink::process(const float* const* input, int num_channels, int num_f
         (sample < control.punch_start_sample || sample >= control.punch_end_sample)) {
       continue;
     }
-    if (captured_frames_ >= control.segment.capacity_frames) {
+    const int64_t captured = captured_frames_.load(std::memory_order_relaxed);
+    if (captured >= control.segment.capacity_frames) {
       overflow_count_.bump();
       continue;
     }
     for (int ch = 0; ch < channels; ++ch) {
       if (!input[ch] || !control.segment.channels[ch]) continue;
-      control.segment.channels[ch][captured_frames_] = input[ch][i];
+      control.segment.channels[ch][captured] = input[ch][i];
     }
-    ++captured_frames_;
+    captured_frames_.store(captured + 1, std::memory_order_relaxed);
   }
 }
 

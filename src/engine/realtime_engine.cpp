@@ -169,10 +169,11 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   automation_.acquire_lanes();
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.acquire_midi_clips();
-  live_midi_input_count_ = midi_input_source_ != nullptr
-                               ? midi_input_source_->drain_block(live_midi_input_events_.data(),
-                                                                 live_midi_input_events_.size(),
-                                                                 state.render_frame, frames)
+  host::MidiInputSource* midi_input_source = midi_input_source_.load(std::memory_order_acquire);
+  live_midi_input_count_ = midi_input_source != nullptr
+                               ? midi_input_source->drain_block(live_midi_input_events_.data(),
+                                                                live_midi_input_events_.size(),
+                                                                state.render_frame, frames)
                                : 0;
   for (size_t i = 1; i < live_midi_input_count_; ++i) {
     midi::MidiEvent value = live_midi_input_events_[i];
@@ -595,22 +596,24 @@ void RealtimeEngine::clear_midi_fx(uint32_t destination_id) noexcept {
 }
 
 void RealtimeEngine::emit_midi_transport_command(uint8_t status, int64_t render_frame) noexcept {
-  if (midi_sync_sink_ == nullptr) return;
+  MidiSyncSink* sync_sink = midi_sync_sink_.load(std::memory_order_acquire);
+  if (sync_sink == nullptr) return;
   uint8_t byte = 0;
   if (midi::encode_transport_command(status, &byte, 1) != 1) return;
-  midi_sync_sink_->on_midi_sync_byte(render_frame, byte);
+  sync_sink->on_midi_sync_byte(render_frame, byte);
 }
 
 void RealtimeEngine::emit_midi_clock_block(int64_t timeline_start_sample,
                                            int64_t render_start_frame, int num_frames) noexcept {
-  if (midi_sync_sink_ == nullptr || num_frames <= 0) return;
+  MidiSyncSink* sync_sink = midi_sync_sink_.load(std::memory_order_acquire);
+  if (sync_sink == nullptr || num_frames <= 0) return;
   const int64_t block_end_sample = timeline_start_sample + num_frames;
   for (int64_t tick = midi_clock_.first_tick_at_or_after(timeline_start_sample);
        midi_clock_.frame_of_tick(tick) < block_end_sample; ++tick) {
     const int64_t timeline_tick_frame = midi_clock_.frame_of_tick(tick);
     if (timeline_tick_frame < timeline_start_sample) continue;
     const int64_t render_frame = render_start_frame + (timeline_tick_frame - timeline_start_sample);
-    midi_sync_sink_->on_midi_sync_byte(render_frame, midi::kStatusClock);
+    sync_sink->on_midi_sync_byte(render_frame, midi::kStatusClock);
   }
 }
 

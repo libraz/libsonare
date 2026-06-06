@@ -132,6 +132,7 @@ TEST_CASE("SMF2 round-trips tempo and time signature via Flex Data", "[midi][smf
   seg.start_ppq = 0.0;
   seg.time_sig.numerator = 6;
   seg.time_sig.denominator = 8;
+  seg.thirty_seconds_per_quarter = 0;
   sigs.push_back(seg);
 
   const auto exported = export_clip_file(clip, tempos, sigs, Smf2ExportOptions{});
@@ -143,6 +144,7 @@ TEST_CASE("SMF2 round-trips tempo and time signature via Flex Data", "[midi][smf
   REQUIRE(imported.time_signatures.size() >= 1);
   REQUIRE(imported.time_signatures.front().time_sig.numerator == 6);
   REQUIRE(imported.time_signatures.front().time_sig.denominator == 8);
+  REQUIRE(imported.time_signatures.front().thirty_seconds_per_quarter == 0);
 }
 
 TEST_CASE("SMF2 round-trips the clip name via Flex Data metadata", "[midi][smf2]") {

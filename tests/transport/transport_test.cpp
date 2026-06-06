@@ -239,6 +239,22 @@ TEST_CASE("Transport loop boundaries wrap blocks that start beyond loop_end", "[
   REQUIRE(state.sample_position == 48612);
 }
 
+TEST_CASE("Transport advance folds distant positions into loop with modulo", "[transport]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  map.set_segments({{0.0, 120.0, 0.0}});  // 1 ppq == 24000 samples
+
+  sonare::transport::Transport transport;
+  transport.prepare(48000.0, &map);
+  transport.set_loop(0.0, 100.0 / 24000.0, true);  // 100-sample loop
+  transport.play();
+  transport.seek_sample(10'000'000);
+
+  transport.advance(128);
+  const auto state = transport.snapshot();
+  REQUIRE(state.sample_position == 28);
+}
+
 TEST_CASE("Transport surfaces a loop-boundary overflow counter", "[transport]") {
   // A loop far shorter than the block can wrap more than BoundaryList::kCapacity
   // times in a single block. Those extra wraps are dropped; the drop must be

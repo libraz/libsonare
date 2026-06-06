@@ -283,13 +283,16 @@ TEST_CASE("NativeSynth pitch bend follows RPN0 bend range", "[midi][synth]") {
   cfg.patch.cutoff_hz = 20000.0f;
   cfg.patch.gain = 0.8f;
 
-  auto bent_frequency = [&](bool wide) {
+  auto bent_frequency = [&](bool wide, bool reset_all_controllers = false) {
     NativeSynth synth(cfg);
     synth.prepare(kOutRate, 256);
     if (wide) {
       synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 101, 0)));
       synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 100, 0)));
       synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 6, 12)));
+    }
+    if (reset_all_controllers) {
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 121, 0)));
     }
     synth.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, 0, 12288)));
     synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 127)));
@@ -299,10 +302,13 @@ TEST_CASE("NativeSynth pitch bend follows RPN0 bend range", "[midi][synth]") {
 
   const double normal = bent_frequency(false);
   const double wide = bent_frequency(true);
+  const double wide_after_rac = bent_frequency(true, true);
   REQUIRE(normal > 460.0);
   REQUIRE(normal < 470.0);
   REQUIRE(wide > 610.0);
   REQUIRE(wide < 630.0);
+  REQUIRE(wide_after_rac > 610.0);
+  REQUIRE(wide_after_rac < 630.0);
 }
 
 TEST_CASE("NativeSynth applies pitch offset outside the subtractive engine", "[midi][synth]") {

@@ -222,6 +222,41 @@ TEST_CASE("Sf2File clamps extreme tuning generators while parsing", "[midi][sf2]
   REQUIRE(scale->amount == 1200);
 }
 
+TEST_CASE("Sf2File preserves preset and instrument modulator records", "[midi][sf2]") {
+  Sf2Builder b;
+  std::vector<float> sample(64, 0.0f);
+  sample[0] = 1.0f;
+  const int sample_id = b.add_sample("impulse", sample, 44100, 60, 0, 64);
+
+  Sf2Builder::ZoneSpec zone;
+  zone.target = sample_id;
+  zone.mods.push_back({0x0502, sonare::midi::synth::kGenInitialFilterFc, 1200, 0, 0});
+  const int inst = b.add_instrument("modded", {zone});
+
+  Sf2Builder::ZoneSpec preset_zone;
+  preset_zone.target = inst;
+  preset_zone.mods.push_back({0x0282, sonare::midi::synth::kGenInitialAttenuation, -240, 0, 0});
+  b.add_preset("Modded", 0, 0, {preset_zone});
+
+  const std::vector<uint8_t> bytes = b.build();
+  Sf2File sf2;
+  std::string error;
+  REQUIRE(sf2.parse(bytes.data(), bytes.size(), &error));
+  INFO(error);
+
+  REQUIRE(sf2.presets()[0].zones[0].mods.size() == 1);
+  const auto& preset_mod = sf2.presets()[0].zones[0].mods[0];
+  REQUIRE(preset_mod.src_oper == 0x0282);
+  REQUIRE(preset_mod.dest_oper == sonare::midi::synth::kGenInitialAttenuation);
+  REQUIRE(preset_mod.amount == -240);
+
+  REQUIRE(sf2.instruments()[0].zones[0].mods.size() == 1);
+  const auto& inst_mod = sf2.instruments()[0].zones[0].mods[0];
+  REQUIRE(inst_mod.src_oper == 0x0502);
+  REQUIRE(inst_mod.dest_oper == sonare::midi::synth::kGenInitialFilterFc);
+  REQUIRE(inst_mod.amount == 1200);
+}
+
 TEST_CASE("Sf2File rejects malformed input without crashing", "[midi][sf2]") {
   const std::vector<uint8_t> bytes = build_fixture();
   Sf2File sf2;

@@ -22,6 +22,24 @@ namespace {
 // Clamp to a large but finite sentinel that still unambiguously signals
 // "extreme width / mono incompatible".
 constexpr float kMaxMonoCompatWidth = 1.0e6f;
+constexpr double kBs1770SurroundWeight = 1.4125375446227544;
+
+double bs1770_channel_weight(int channel, int channels) noexcept {
+  switch (channels) {
+    case 4:
+      return (channel == 2 || channel == 3) ? kBs1770SurroundWeight : 1.0;
+    case 5:
+      return (channel == 3 || channel == 4) ? kBs1770SurroundWeight : 1.0;
+    case 6:
+      if (channel == 3) return 0.0;
+      return (channel == 4 || channel == 5) ? kBs1770SurroundWeight : 1.0;
+    case 8:
+      if (channel == 3) return 0.0;
+      return channel >= 4 ? kBs1770SurroundWeight : 1.0;
+    default:
+      return 1.0;
+  }
+}
 
 // Map a requested true-peak oversample factor to one the realtime polyphase
 // TruePeakFilter implements (2, 4, 8). The offline metering::true_peak path
@@ -231,7 +249,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   }
 
   if (config_.measure_lufs && !energy_ring_.empty()) {
-    const int lufs_channels = std::min(num_channels, 2);
+    const int lufs_channels = std::min(num_channels, kLufsChannels);
     // Count the channels actually carrying audio. A true-mono bus presents a
     // single non-null channel; BS.1770 then weights that one channel, but the
     // loudness is referenced to a dual-mono pair (a centered mono source must
@@ -241,14 +259,14 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     for (int ch = 0; ch < lufs_channels; ++ch) {
       if (channels[ch] != nullptr) ++active_channels;
     }
-    const double mono_energy_scale = (active_channels == 1) ? 2.0 : 1.0;
+    const double mono_energy_scale = (lufs_channels == 1 && active_channels == 1) ? 2.0 : 1.0;
     for (int i = 0; i < num_samples; ++i) {
       // Combined K-weighted squared energy summed across stereo channels (BS.1770 weight 1.0 each).
       double combined = 0.0;
       for (int ch = 0; ch < lufs_channels; ++ch) {
         if (channels[ch] == nullptr) continue;
         const double y = filter_sample(ch, static_cast<double>(channels[ch][i]));
-        combined += y * y;
+        combined += bs1770_channel_weight(ch, lufs_channels) * y * y;
       }
       combined *= mono_energy_scale;
 

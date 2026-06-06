@@ -16,6 +16,7 @@ class DcBlocker : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  float process_sample(int channel, float sample);
 
   void set_pole(float pole) noexcept;
   float pole() const noexcept { return pole_; }

@@ -75,6 +75,11 @@ uint8_t scale_velocity_16_to_7(uint16_t velocity16) noexcept {
   return static_cast<uint8_t>(velocity16 >> 9u);
 }
 
+uint8_t scale_note_on_velocity_16_to_7(uint16_t velocity16) noexcept {
+  const uint8_t velocity7 = scale_velocity_16_to_7(velocity16);
+  return velocity16 != 0 && velocity7 == 0 ? 1u : velocity7;
+}
+
 uint32_t scale_cc_7_to_32(uint8_t value7) noexcept { return scale_up(value7 & 0x7Fu, 7u, 32u); }
 
 uint8_t scale_cc_32_to_7(uint32_t value32) noexcept { return static_cast<uint8_t>(value32 >> 25u); }
@@ -415,7 +420,8 @@ Ump midi2_to_midi1(const Ump& ump) noexcept {
   switch (static_cast<UmpStatus>(status)) {
     case UmpStatus::kNoteOn: {
       const uint16_t velocity16 = static_cast<uint16_t>(ump.words[1] >> 16u);
-      return make_midi1_note_on(ump.group, channel, note, scale_velocity_16_to_7(velocity16));
+      return make_midi1_note_on(ump.group, channel, note,
+                                scale_note_on_velocity_16_to_7(velocity16));
     }
     case UmpStatus::kNoteOff: {
       const uint16_t velocity16 = static_cast<uint16_t>(ump.words[1] >> 16u);

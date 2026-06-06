@@ -94,8 +94,8 @@ void Transport::advance(int num_frames) noexcept {
     return;
   }
 
-  while (position >= loop_end) {
-    position = loop_start + (position - loop_end);
+  if (position >= loop_end) {
+    position = loop_start + ((position - loop_start) % loop_len);
   }
   sample_position_.store(position, std::memory_order_release);
 }

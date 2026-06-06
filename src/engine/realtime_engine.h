@@ -147,7 +147,7 @@ class RealtimeEngine {
   bool set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
   void set_midi_input_source(host::MidiInputSource* source, uint32_t destination_id = 0) noexcept {
-    midi_input_source_ = source;
+    midi_input_source_.store(source, std::memory_order_release);
     midi_input_destination_id_ = destination_id;
   }
   bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
@@ -163,9 +163,11 @@ class RealtimeEngine {
   void clear_midi_cc_bindings() noexcept { midi_cc_map_.clear(); }
   size_t midi_cc_binding_count() const noexcept { return midi_cc_map_.binding_count(); }
   void set_midi_output_sink(host::MidiOutputSink* sink) noexcept {
-    midi_dispatch_sink_.output = sink;
+    midi_dispatch_sink_.output.store(sink, std::memory_order_release);
   }
-  void set_midi_sync_sink(MidiSyncSink* sink) noexcept { midi_sync_sink_ = sink; }
+  void set_midi_sync_sink(MidiSyncSink* sink) noexcept {
+    midi_sync_sink_.store(sink, std::memory_order_release);
+  }
   midi::MidiSequencer& midi_sequencer() noexcept { return midi_sequencer_; }
   const midi::MidiSequencer& midi_sequencer() const noexcept { return midi_sequencer_; }
 
@@ -309,17 +311,18 @@ class RealtimeEngine {
 #if defined(SONARE_WITH_ARRANGEMENT)
   struct MidiDispatchSink final : midi::MidiEventSink {
     InstrumentRack* rack = nullptr;
-    host::MidiOutputSink* output = nullptr;
+    std::atomic<host::MidiOutputSink*> output{nullptr};
     void on_event(uint32_t destination_id, const midi::MidiEvent& event) noexcept override {
       if (rack != nullptr) rack->on_event(destination_id, event);
-      if (output != nullptr) output->send(event);
+      host::MidiOutputSink* sink = output.load(std::memory_order_acquire);
+      if (sink != nullptr) sink->send(event);
     }
   };
 
   midi::MidiSequencer midi_sequencer_{};
   midi::ClockGenerator midi_clock_{};
-  MidiSyncSink* midi_sync_sink_ = nullptr;
-  host::MidiInputSource* midi_input_source_ = nullptr;
+  std::atomic<MidiSyncSink*> midi_sync_sink_{nullptr};
+  std::atomic<host::MidiInputSource*> midi_input_source_{nullptr};
   uint32_t midi_input_destination_id_ = 0;
   midi::CcMap midi_cc_map_{};
   static constexpr size_t kMaxLiveMidiInputEvents = 256;

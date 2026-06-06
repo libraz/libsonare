@@ -15,7 +15,6 @@ namespace {
 /// Default modulator: full CC1 adds 50 cents of vibrato depth (matches
 /// Sf2Player so the fallback and SF2 voices respond alike).
 constexpr float kModWheelVibratoCents = 50.0f;
-constexpr float kDefaultBendRangeCents = 200.0f;
 
 float pan_angle(float pan_units) noexcept {
   const float pan = std::clamp(pan_units, -500.0f, 500.0f);
@@ -198,10 +197,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   }
 
   amp_env.configure(sample_rate, p.amp_env);
-  amp_env.kill();
   amp_env.note_on();
   filter_env.configure(sample_rate, p.filter_env);
-  filter_env.kill();
   filter_env.note_on();
   filter.prepare(sample_rate);
   filter.set_model(p.filter_model);
@@ -509,7 +506,6 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.expression = 127;
   st.pitch_bend = 8192;
   st.params.reset();
-  st.bend_range_cents = kDefaultBendRangeCents;
   sustain_pedal(ch, false);
   refresh_channel_mod(ch);
 }

@@ -13,6 +13,8 @@
 
 #include "midi/synth/envelope.h"
 #include "midi/synth/interpolation.h"
+#include "midi/synth/native_synth.h"
+#include "midi/synth/sf2_voice.h"
 #include "midi/synth/svf.h"
 #include "midi/synth/voice_pool.h"
 #include "midi/synth/voice_random.h"
@@ -24,6 +26,11 @@ using Catch::Approx;
 using sonare::midi::synth::AllpassInterpolator;
 using sonare::midi::synth::DahdsrConfig;
 using sonare::midi::synth::DahdsrEnvelope;
+using sonare::midi::synth::NativeSynthPatch;
+using sonare::midi::synth::NativeSynthVoice;
+using sonare::midi::synth::Sf2ChannelMod;
+using sonare::midi::synth::Sf2Voice;
+using sonare::midi::synth::Sf2VoiceParams;
 using sonare::midi::synth::TptSvf;
 using sonare::midi::synth::VoicePool;
 using sonare::midi::synth::VoiceRandomSequence;
@@ -177,6 +184,74 @@ TEST_CASE("DahdsrEnvelope honours delay and hold segments", "[midi][synth]") {
   REQUIRE(env.level() == Approx(1.0f).margin(1.0e-3));
   for (int i = 0; i < 300; ++i) env.next();
   REQUIRE(env.level() == Approx(1.0f).margin(1.0e-3));
+}
+
+TEST_CASE("NativeSynthVoice steal retriggers from residual envelope level", "[midi][synth]") {
+  NativeSynthPatch patch;
+  patch.amp_env.attack_ms = 20.0f;
+  patch.amp_env.decay_ms = 1.0f;
+  patch.amp_env.sustain = 1.0f;
+  patch.filter_env = patch.amp_env;
+
+  NativeSynthVoice voice;
+  voice.active = true;
+  voice.channel = 0;
+  voice.note = 60;
+  voice.age = 1;
+  voice.start(patch, kSampleRate, 127, 0);
+
+  Sf2ChannelMod mod;
+  for (int i = 0; i < 480; ++i) {
+    static_cast<void>(voice.render(mod));
+  }
+  const float amp_before = voice.amp_env.level();
+  const float filter_before = voice.filter_env.level();
+  REQUIRE(amp_before > 0.1f);
+  REQUIRE(filter_before > 0.1f);
+
+  voice.note = 67;
+  voice.age = 2;
+  voice.start(patch, kSampleRate, 127, 0);
+
+  REQUIRE(voice.amp_env.level() == Approx(amp_before).margin(1.0e-6f));
+  REQUIRE(voice.filter_env.level() == Approx(filter_before).margin(1.0e-6f));
+}
+
+TEST_CASE("Sf2Voice steal retriggers from residual envelope level", "[midi][sf2]") {
+  const float samples[] = {1.0f, 1.0f, 1.0f, 1.0f};
+  Sf2VoiceParams params;
+  params.start = 0;
+  params.end = 4;
+  params.loop_start = 0;
+  params.loop_end = 4;
+  params.loop_mode = 1;
+  params.volume_env.attack_ms = 20.0f;
+  params.volume_env.decay_ms = 1.0f;
+  params.volume_env.sustain = 1.0f;
+  params.mod_env = params.volume_env;
+
+  Sf2Voice voice;
+  voice.active = true;
+  voice.channel = 0;
+  voice.note = 60;
+  voice.age = 1;
+  voice.start(samples, params, kSampleRate, 1.0f);
+
+  Sf2ChannelMod mod;
+  for (int i = 0; i < 480; ++i) {
+    static_cast<void>(voice.render(mod));
+  }
+  const float amp_before = voice.env.level();
+  const float mod_before = voice.mod_env.level();
+  REQUIRE(amp_before > 0.1f);
+  REQUIRE(mod_before > 0.1f);
+
+  voice.note = 67;
+  voice.age = 2;
+  voice.start(samples, params, kSampleRate, 1.0f);
+
+  REQUIRE(voice.env.level() == Approx(amp_before).margin(1.0e-6f));
+  REQUIRE(voice.mod_env.level() == Approx(mod_before).margin(1.0e-6f));
 }
 
 TEST_CASE("TptSvf lowpass passes below cutoff and attenuates above", "[midi][synth]") {

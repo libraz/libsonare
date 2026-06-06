@@ -26,6 +26,14 @@ class Sf2Builder {
     int16_t amount = 0;
   };
 
+  struct ModValue {
+    uint16_t src_oper = 0;
+    uint16_t dest_oper = 0;
+    int16_t amount = 0;
+    uint16_t amount_src_oper = 0;
+    uint16_t transform_oper = 0;
+  };
+
   struct ZoneSpec {
     // key/vel ranges emit kGenKeyRange/kGenVelRange when not full-range.
     uint8_t key_lo = 0;
@@ -34,6 +42,8 @@ class Sf2Builder {
     uint8_t vel_hi = 127;
     /// Extra generators emitted between the ranges and the terminal gen.
     std::vector<GenValue> gens;
+    /// Raw SF2 modulator records emitted for this zone.
+    std::vector<ModValue> mods;
     /// Terminal target: sample index (instrument zones) or instrument index
     /// (preset zones); -1 emits a GLOBAL zone (no terminal generator).
     int32_t target = -1;
@@ -120,31 +130,34 @@ class Sf2Builder {
       // Zone tables are built first so headers know their bag indices.
       std::vector<uint8_t> pbag, pmod, pgen, ibag, imod, igen;
       std::vector<uint16_t> preset_bag_index, inst_bag_index;
-      uint16_t pgen_count = 0, ibag_count = 0, pbag_count = 0, igen_count = 0;
+      uint16_t pgen_count = 0, pmod_count = 0, ibag_count = 0, imod_count = 0, pbag_count = 0,
+               igen_count = 0;
 
       for (const PresetRec& p : presets_) {
         preset_bag_index.push_back(pbag_count);
         for (const ZoneSpec& z : p.zones) {
           u16(pbag, pgen_count);
-          u16(pbag, 0);  // no preset modulators in fixtures
+          u16(pbag, pmod_count);
           ++pbag_count;
           pgen_count += emit_zone_gens(pgen, z, /*terminal_oper=*/41);
+          pmod_count += emit_zone_mods(pmod, z);
         }
       }
       for (const InstrumentRec& ins : instruments_) {
         inst_bag_index.push_back(ibag_count);
         for (const ZoneSpec& z : ins.zones) {
           u16(ibag, igen_count);
-          u16(ibag, 0);
+          u16(ibag, imod_count);
           ++ibag_count;
           igen_count += emit_zone_gens(igen, z, /*terminal_oper=*/53);
+          imod_count += emit_zone_mods(imod, z);
         }
       }
       // Terminal bags close the last zone's generator range.
       u16(pbag, pgen_count);
-      u16(pbag, 0);
+      u16(pbag, pmod_count);
       u16(ibag, igen_count);
-      u16(ibag, 0);
+      u16(ibag, imod_count);
 
       chunk(pdta, "phdr", [&](std::vector<uint8_t>& b) {
         for (size_t i = 0; i < presets_.size(); ++i) {
@@ -291,6 +304,19 @@ class Sf2Builder {
     if (z.target >= 0) {
       u16(b, terminal_oper);
       u16(b, static_cast<uint16_t>(z.target));
+      ++count;
+    }
+    return count;
+  }
+
+  static uint16_t emit_zone_mods(std::vector<uint8_t>& b, const ZoneSpec& z) {
+    uint16_t count = 0;
+    for (const ModValue& m : z.mods) {
+      u16(b, m.src_oper);
+      u16(b, m.dest_oper);
+      u16(b, static_cast<uint16_t>(m.amount));
+      u16(b, m.amount_src_oper);
+      u16(b, m.transform_oper);
       ++count;
     }
     return count;

@@ -29,6 +29,8 @@ struct MonoAudioResult {
   int sample_rate = 0;
   float input_lufs = 0.0f;
   float output_lufs = 0.0f;
+  /// Static gain applied by loudness normalization before any limiter gain
+  /// reduction. Limiter GR is reported separately in stage_gain_reductions.
   float applied_gain_db = 0.0f;
   int latency_samples = 0;
 };
@@ -40,6 +42,8 @@ struct StereoAudioResult {
   int sample_rate = 0;
   float input_lufs = 0.0f;
   float output_lufs = 0.0f;
+  /// Static gain applied by loudness normalization before any limiter gain
+  /// reduction. Limiter GR is reported separately in stage_gain_reductions.
   float applied_gain_db = 0.0f;
   int latency_samples = 0;
 };
@@ -57,7 +61,8 @@ struct StageGainReduction {
 /// mastering chain on top of the common @ref MonoAudioResult /
 /// @ref StereoAudioResult fields.
 struct ChainMetrics {
-  /// ITU-R BS.1770-4 true peak (4x oversampled).
+  /// ITU-R BS.1770-4 true peak measured with the chain's configured loudness
+  /// true-peak oversample factor (default 4x).
   float output_true_peak_dbtp = 0.0f;
   /// EBU Tech 3342 Loudness Range (LU).
   float output_lra = 0.0f;

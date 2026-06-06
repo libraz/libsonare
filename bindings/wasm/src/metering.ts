@@ -101,6 +101,12 @@ export function meteringTruePeakDb(
   options: ValidateOptions = {},
 ): number {
   assertSamples('meteringTruePeakDb', samples, options.validate !== false);
+  const factor = oversampleFactor === 0 ? 4 : oversampleFactor;
+  if (factor < 1 || factor > 16 || (factor & (factor - 1)) !== 0) {
+    throw new RangeError(
+      'meteringTruePeakDb: oversampleFactor must be 0 or a power of two from 1 to 16',
+    );
+  }
   return requireModule().meteringTruePeakDb(samples, sampleRate, oversampleFactor);
 }
 

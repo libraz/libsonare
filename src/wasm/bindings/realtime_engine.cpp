@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+
 #include "c_api/synth_patch_common.h"
 #include "common.h"
 #include "midi/midi_fx.h"
@@ -1119,8 +1121,11 @@ class RealtimeEngineWasm {
       // never drifts away from the C/Node/Python bounce normalization target.
       // See SONARE_DEFAULT_BOUNCE_TARGET_LUFS in src/sonare_c_types.h and the
       // sentinel handling in sonare_engine_bounce_offline.
-      const float target_lufs =
+      float target_lufs =
           floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
+      if (target_lufs == 0.0f || !std::isfinite(target_lufs)) {
+        target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
+      }
       metering::normalize_interleaved_to_lufs(interleaved, frames, num_channels, target_sample_rate,
                                               target_lufs);
     }

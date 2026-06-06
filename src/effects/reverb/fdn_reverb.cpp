@@ -82,8 +82,8 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
     state_[2] = delays_[2].process(input + 0.5f * h2);
     state_[3] = delays_[3].process(input + 0.5f * h3);
 
-    const float out_l = state_[0] - state_[2];
-    const float out_r = state_[1] - state_[3];
+    const float out_l = dc_blocker_.process_sample(0, state_[0] - state_[2]);
+    const float out_r = dc_blocker_.process_sample(1, state_[1] - state_[3]);
     if (stereo) {
       left[i] = dry * in_l + wet * out_l;
       right[i] = dry * in_r + wet * out_r;
@@ -93,8 +93,6 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
       left[i] = dry * in_l + wet * 0.5f * (out_l + out_r);
     }
   }
-
-  dc_blocker_.process(channels, num_channels, num_samples);
 }
 
 bool FdnReverb::set_parameter(unsigned int param_id, float value) {

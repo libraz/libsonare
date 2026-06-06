@@ -9,23 +9,70 @@
 
 namespace sonare::acoustic_detail {
 
-std::vector<float> schroeder_edc_db(const std::vector<double>& energy) {
+namespace {
+
+size_t estimate_lundeby_truncation_index(const std::vector<double>& energy, int sample_rate) {
+  const size_t n = energy.size();
+  if (n < 64 || sample_rate <= 0) {
+    return n;
+  }
+
+  const size_t peak = direct_sound_index(energy);
+  const size_t tail_count = std::clamp(n / 10, static_cast<size_t>(16), n / 2);
+  const double tail_sum = sum_range(energy, n - tail_count, n);
+  const double noise_power = tail_sum / static_cast<double>(tail_count);
+  if (!(noise_power > static_cast<double>(kEnergyEpsilon))) {
+    return n;
+  }
+
+  const size_t max_window = std::max<size_t>(16, std::min<size_t>(2048, n / 4));
+  const size_t window =
+      std::clamp(static_cast<size_t>(std::lround(0.01 * static_cast<double>(sample_rate))),
+                 static_cast<size_t>(16), max_window);
+  if (window >= n) {
+    return n;
+  }
+
+  double moving = sum_range(energy, 0, window);
+  const double threshold = noise_power * 4.0;
+  const size_t first = std::min(n - window, peak + window);
+  const size_t last = n - window;
+  for (size_t i = 0; i <= last; ++i) {
+    if (i >= first && moving / static_cast<double>(window) <= threshold) {
+      return i;
+    }
+    if (i == last) {
+      break;
+    }
+    moving += energy[i + window] - energy[i];
+  }
+  return n;
+}
+
+std::vector<float> schroeder_edc_db_until(const std::vector<double>& energy, size_t end) {
   std::vector<float> edc(energy.size(), nan_value());
   if (energy.empty()) {
     return edc;
   }
 
+  end = std::clamp(end, static_cast<size_t>(1), energy.size());
   double cumulative = 0.0;
-  for (size_t i = energy.size(); i-- > 0;) {
+  for (size_t i = end; i-- > 0;) {
     cumulative += energy[i];
     edc[i] = static_cast<float>(cumulative);
   }
 
   const float reference = std::max(edc.front(), kEnergyEpsilon);
-  for (float& value : edc) {
-    value = power_to_db_scalar(std::max(value, kEnergyEpsilon) / reference);
+  for (size_t i = 0; i < end; ++i) {
+    edc[i] = power_to_db_scalar(std::max(edc[i], kEnergyEpsilon) / reference);
   }
   return edc;
+}
+
+}  // namespace
+
+std::vector<float> schroeder_edc_db(const std::vector<double>& energy) {
+  return schroeder_edc_db_until(energy, energy.size());
 }
 
 float decay_time_from_range(const std::vector<float>& edc_db, int sample_rate, float upper_db,
@@ -76,22 +123,39 @@ double sum_range(const std::vector<double>& energy, size_t first, size_t last) {
                          energy.begin() + static_cast<std::ptrdiff_t>(last), 0.0);
 }
 
-float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec) {
+size_t direct_sound_index(const std::vector<double>& energy) {
+  if (energy.empty()) {
+    return 0;
+  }
+  return static_cast<size_t>(
+      std::distance(energy.begin(), std::max_element(energy.begin(), energy.end())));
+}
+
+float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec,
+                 size_t origin) {
   const size_t boundary = static_cast<size_t>(std::round(boundary_sec * sample_rate));
-  const double early = sum_range(energy, 0, boundary);
-  const double late = sum_range(energy, boundary, energy.size());
+  const double early = sum_range(energy, origin, origin + boundary);
+  const double late = sum_range(energy, origin + boundary, energy.size());
   return power_to_db_scalar(std::max(early, static_cast<double>(kEnergyEpsilon)) /
                             std::max(late, static_cast<double>(kEnergyEpsilon)));
 }
 
-float definition_d50(const std::vector<double>& energy, int sample_rate) {
+float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec) {
+  return clarity_db(energy, sample_rate, boundary_sec, 0);
+}
+
+float definition_d50(const std::vector<double>& energy, int sample_rate, size_t origin) {
   const size_t boundary = static_cast<size_t>(std::round(0.05f * sample_rate));
-  const double early = sum_range(energy, 0, boundary);
-  const double total = sum_range(energy, 0, energy.size());
+  const double early = sum_range(energy, origin, origin + boundary);
+  const double total = sum_range(energy, origin, energy.size());
   if (total <= 0.0) {
     return nan_value();
   }
   return static_cast<float>(early / total);
+}
+
+float definition_d50(const std::vector<double>& energy, int sample_rate) {
+  return definition_d50(energy, sample_rate, 0);
 }
 
 float estimate_confidence(float rt60, float edt, float min_decay_db) {
@@ -106,14 +170,19 @@ float estimate_confidence(float rt60, float edt, float min_decay_db) {
 AcousticParameters analyze_band(const float* samples, size_t size, int sample_rate,
                                 float min_decay_db) {
   const auto energy = squared_energy(samples, size);
-  const auto edc_db = schroeder_edc_db(energy);
+  const auto edc_db =
+      schroeder_edc_db_until(energy, estimate_lundeby_truncation_index(energy, sample_rate));
+  const size_t origin = direct_sound_index(energy);
 
   AcousticParameters result;
   result.rt60 = decay_time_from_range(edc_db, sample_rate, -5.0f, -5.0f - min_decay_db);
+  if (!std::isfinite(result.rt60) && min_decay_db > 20.0f) {
+    result.rt60 = decay_time_from_range(edc_db, sample_rate, -5.0f, -25.0f);
+  }
   result.edt = decay_time_from_range(edc_db, sample_rate, 0.0f, -10.0f);
-  result.c50 = clarity_db(energy, sample_rate, 0.05f);
-  result.c80 = clarity_db(energy, sample_rate, 0.08f);
-  result.d50 = definition_d50(energy, sample_rate);
+  result.c50 = clarity_db(energy, sample_rate, 0.05f, origin);
+  result.c80 = clarity_db(energy, sample_rate, 0.08f, origin);
+  result.d50 = definition_d50(energy, sample_rate, origin);
   result.confidence = estimate_confidence(result.rt60, result.edt, min_decay_db);
   return result;
 }

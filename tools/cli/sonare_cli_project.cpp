@@ -499,6 +499,8 @@ void print_project_usage(std::ostream& out) {
       << "  compile              Compile a project + report diagnostics (--in in.json)\n"
       << "  bounce               Render a project offline to WAV (--in in.json -o out.wav)\n"
       << "                       Use --synth [saw|square|triangle|sine] to make MIDI audible\n"
+      << "                       SF2 and per-destination synth JSON are not exposed here; use the\n"
+      << "                       project C/Node/Python/WASM APIs for SoundFont-backed bounces\n"
       << "  export-smf           Export tempo map + MIDI clips to SMF (--in in.json -o out.mid)\n"
       << "  import-smf           Import an SMF into a new project (--smf in.mid -o out.json)\n"
       << "  export-midi2         Export tempo map + MIDI clips to MIDI2 Clip File (--in in.json -o "
@@ -515,6 +517,7 @@ void print_project_usage(std::ostream& out) {
       << "  --channels <n>       Bounce channel count (default 2)\n"
       << "  --synth [waveform]   Bounce MIDI through the built-in synth "
          "(sine|saw|square|triangle)\n"
+      << "                       No --sf2/--synth-json CLI wiring in this command\n"
       << "  --json               Emit JSON results\n";
 }
 

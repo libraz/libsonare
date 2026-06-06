@@ -97,6 +97,7 @@ class ChannelStrip : public rt::ProcessorBase {
     fader_.add_vca_group_offset_db(delta_db);
   }
   float vca_offset_db() const noexcept { return fader_.vca_offset_db(); }
+  float vca_trim_offset_db() const noexcept { return fader_.vca_trim_offset_db(); }
 
   void set_pan(float pan) noexcept { panner_.set_pan(pan); }
   float pan() const noexcept { return panner_.pan(); }

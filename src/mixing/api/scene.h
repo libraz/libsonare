@@ -45,6 +45,7 @@ struct Strip {
   std::string id;
   float input_trim_db = 0.0f;
   float fader_db = 0.0f;
+  float vca_offset_db = 0.0f;
   float pan = 0.0f;
   float width = 1.0f;
   bool muted = false;

@@ -394,7 +394,7 @@ typedef struct {
   int64_t total_frames;           /* render length in frames at @p sample_rate */
   int block_size;                 /* render block size; <= 0 => 128 */
   int num_channels;               /* output channel count; <= 0 => 2 */
-  int sample_rate;                /* output sample rate; <= 0 => the project's */
+  int sample_rate;                /* must match the project sample rate; <= 0 => the project's */
   int instrument_latency_samples; /* host-instrument PDC fed to the compiler */
 } SonareProjectBounceOptions;
 

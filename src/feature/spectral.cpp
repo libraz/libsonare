@@ -216,6 +216,10 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
   int n_fft = spec.n_fft();
+  SONARE_CHECK(n_bins > 0 && n_frames > 0 && n_fft > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(!magnitude.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(magnitude.size() >= static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames),
+               ErrorCode::InvalidParameter);
 
   float nyquist = 0.5f * static_cast<float>(sr);
   SONARE_CHECK(fmin * std::pow(2.0f, static_cast<float>(n_bands - 1)) < nyquist,

@@ -27,6 +27,19 @@ Audio create_exponential_ir(float rt60_sec, int sample_rate = 48000, float durat
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
+Audio create_delayed_exponential_ir(float rt60_sec, float delay_sec, int sample_rate = 48000,
+                                    float duration_sec = 4.0f) {
+  const int delay_samples = static_cast<int>(std::round(sample_rate * delay_sec));
+  const int decay_samples = static_cast<int>(sample_rate * duration_sec);
+  std::vector<float> samples(static_cast<size_t>(delay_samples + decay_samples), 0.0f);
+  const float decay = std::log(1000.0f) / rt60_sec;
+  for (int i = 0; i < decay_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[static_cast<size_t>(delay_samples + i)] = std::exp(-decay * t);
+  }
+  return Audio::from_vector(std::move(samples), sample_rate);
+}
+
 Audio create_noisy_exponential_decay(float rt60_sec, int sample_rate = 48000,
                                      float duration_sec = 4.0f, float noise_amplitude = 0.003f) {
   const int n_samples = static_cast<int>(sample_rate * duration_sec);
@@ -147,6 +160,34 @@ TEST_CASE("AcousticAnalyzer computes clarity metrics from impulse responses",
   REQUIRE_THAT(params.c50, WithinAbs(theoretical_clarity(expected_rt60, 0.05f), 0.2f));
   REQUIRE_THAT(params.c80, WithinAbs(theoretical_clarity(expected_rt60, 0.08f), 0.2f));
   REQUIRE_THAT(params.d50, WithinAbs(theoretical_d50(expected_rt60), 0.02f));
+}
+
+TEST_CASE("AcousticAnalyzer anchors IR clarity metrics at the direct sound",
+          "[acoustic_analyzer]") {
+  const float expected_rt60 = 1.0f;
+  const Audio ir = create_delayed_exponential_ir(expected_rt60, 0.08f);
+
+  const auto params = analyze_impulse_response(ir);
+
+  REQUIRE(std::isfinite(params.c50));
+  REQUIRE(std::isfinite(params.c80));
+  REQUIRE(std::isfinite(params.d50));
+  REQUIRE_THAT(params.c50, WithinAbs(theoretical_clarity(expected_rt60, 0.05f), 0.2f));
+  REQUIRE_THAT(params.c80, WithinAbs(theoretical_clarity(expected_rt60, 0.08f), 0.2f));
+  REQUIRE_THAT(params.d50, WithinAbs(theoretical_d50(expected_rt60), 0.02f));
+}
+
+TEST_CASE("AcousticAnalyzer truncates IR Schroeder decay above the noise floor",
+          "[acoustic_analyzer]") {
+  const float expected_rt60 = 0.8f;
+  const Audio ir = create_noisy_exponential_decay(expected_rt60, 48000, 4.0f, 0.012f);
+
+  const auto params = analyze_impulse_response(ir);
+
+  REQUIRE_FALSE(params.is_blind);
+  REQUIRE(std::isfinite(params.rt60));
+  REQUIRE_THAT(params.rt60, WithinRel(expected_rt60, 0.25f));
+  REQUIRE(params.confidence >= 0.5f);
 }
 
 TEST_CASE("AcousticAnalyzer returns octave-band vectors for IR mode", "[acoustic_analyzer]") {

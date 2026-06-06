@@ -85,6 +85,8 @@ inline sonare::midi::synth::ModDestination mod_destination_from_c(int value) noe
   return static_cast<ModDestination>(value);
 }
 
+inline bool valid_c_enum(int value, int count) noexcept { return value >= 0 && value < count; }
+
 /// Resolves a versioned C synth patch onto a NativeSynthConfig: the base is
 /// the named preset (or the default subtractive patch when @p c.preset is
 /// empty), then every non-zero struct field overrides the base ("0 => keep").
@@ -110,6 +112,26 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   if (out_error) *out_error = nullptr;
   if (c.struct_version > 1) {
     if (out_error) *out_error = "unsupported SonareSynthPatch struct_version";
+    return false;
+  }
+  if (!valid_c_enum(c.engine_mode, SONARE_SYNTH_ENGINE_MODE_COUNT)) {
+    if (out_error) *out_error = "invalid synth engine_mode";
+    return false;
+  }
+  if (!valid_c_enum(c.waveform, SONARE_SYNTH_OSC_WAVEFORM_COUNT)) {
+    if (out_error) *out_error = "invalid synth waveform";
+    return false;
+  }
+  if (!valid_c_enum(c.filter_model, SONARE_SYNTH_FILTER_MODEL_COUNT)) {
+    if (out_error) *out_error = "invalid synth filter_model";
+    return false;
+  }
+  if (!valid_c_enum(c.filter_output, SONARE_SYNTH_FILTER_OUTPUT_COUNT)) {
+    if (out_error) *out_error = "invalid synth filter_output";
+    return false;
+  }
+  if (!valid_c_enum(c.body, SONARE_SYNTH_BODY_TYPE_COUNT)) {
+    if (out_error) *out_error = "invalid synth body";
     return false;
   }
   NativeSynthConfig cfg;

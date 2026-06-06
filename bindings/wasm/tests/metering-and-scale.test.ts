@@ -58,6 +58,14 @@ describe('Offline metering wrappers (WASM)', () => {
     expect(tp).toBeGreaterThanOrEqual(meteringPeakDb(samples, SR) - 0.1);
   });
 
+  it('true peak validates oversampling factors like the C API', () => {
+    const samples = sine(440, 1);
+    expect(Number.isFinite(meteringTruePeakDb(samples, SR, 0))).toBe(true);
+    expect(() => meteringTruePeakDb(samples, SR, -1)).toThrow();
+    expect(() => meteringTruePeakDb(samples, SR, 3)).toThrow();
+    expect(() => meteringTruePeakDb(samples, SR, 32)).toThrow();
+  });
+
   it('detect clipping reports runs', () => {
     const samples = new Float32Array(8000).fill(0.1);
     for (let i = 1000; i < 1064; i++) {

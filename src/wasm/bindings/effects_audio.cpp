@@ -104,6 +104,10 @@ val js_pitch_correct_to_midi_timevarying(val samples, int sample_rate, val f0_hz
   const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
   std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
   std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
+  if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "voiced and voicedProb must match f0Hz length");
+  }
 
   editing::pitch_editor::F0Track track;
   track.sample_rate = sample_rate;

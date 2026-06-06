@@ -95,8 +95,9 @@ class MeterProcessor : public rt::ProcessorBase {
   // LUFS streaming state. The two ITU-R BS.1770 K-weighting sections are
   // evaluated in Direct Form II transposed (double precision) per channel.
   double sample_rate_ = 0.0;
-  std::array<rt::BiquadStateD, 2> k_state_pre_{};
-  std::array<rt::BiquadStateD, 2> k_state_rlb_{};
+  static constexpr int kLufsChannels = 8;
+  std::array<rt::BiquadStateD, kLufsChannels> k_state_pre_{};
+  std::array<rt::BiquadStateD, kLufsChannels> k_state_rlb_{};
 
   // Ring buffer of per-sample combined K-weighted squared energy (sized to the short-term window).
   std::vector<double> energy_ring_;

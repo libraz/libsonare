@@ -89,8 +89,12 @@ std::vector<float> schroeder_edc_db(const std::vector<double>& energy);
 float decay_time_from_range(const std::vector<float>& edc_db, int sample_rate, float upper_db,
                             float lower_db);
 double sum_range(const std::vector<double>& energy, size_t first, size_t last);
+size_t direct_sound_index(const std::vector<double>& energy);
 float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec);
+float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec,
+                 size_t origin);
 float definition_d50(const std::vector<double>& energy, int sample_rate);
+float definition_d50(const std::vector<double>& energy, int sample_rate, size_t origin);
 float estimate_confidence(float rt60, float edt, float min_decay_db);
 AcousticParameters analyze_band(const float* samples, size_t size, int sample_rate,
                                 float min_decay_db);

@@ -4,6 +4,8 @@
 ///        patch-driven bounce (sonare_project_bounce_with_synth_instruments)
 ///        and the realtime engine entry (sonare_engine_set_synth_instrument).
 
+#include <cstring>
+
 #include "binding_project_parity_test_helpers.h"
 #include "c_api/synth_patch_common.h"
 
@@ -113,6 +115,28 @@ TEST_CASE("synth patch enum counts match the public C ordinals", "[project][synt
   REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 5);
 }
 
+TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][synth_patch]") {
+  SonareSynthPatch patch{};
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+
+  auto rejected = [&](auto mutate) {
+    SonareSynthPatch invalid{};
+    mutate(invalid);
+    error = nullptr;
+    return !sonare_c_detail::synth_config_from_patch_c(invalid, &cfg, &error) && error != nullptr;
+  };
+
+  REQUIRE(rejected([](SonareSynthPatch& p) { p.engine_mode = SONARE_SYNTH_ENGINE_MODE_COUNT; }));
+  REQUIRE(rejected([](SonareSynthPatch& p) { p.waveform = SONARE_SYNTH_OSC_WAVEFORM_COUNT; }));
+  REQUIRE(rejected([](SonareSynthPatch& p) { p.filter_model = SONARE_SYNTH_FILTER_MODEL_COUNT; }));
+  REQUIRE(
+      rejected([](SonareSynthPatch& p) { p.filter_output = SONARE_SYNTH_FILTER_OUTPUT_COUNT; }));
+  REQUIRE(rejected([](SonareSynthPatch& p) { p.body = SONARE_SYNTH_BODY_TYPE_COUNT; }));
+
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+}
+
 TEST_CASE("bounce_with_synth_instruments renders preset patches deterministically",
           "[project][synth_patch]") {
   SonareProject* project = make_synth_project(3);
@@ -126,9 +150,11 @@ TEST_CASE("bounce_with_synth_instruments renders preset patches deterministicall
     if (next == std::string::npos) next = catalog.size();
     const std::string name = catalog.substr(pos, next - pos);
     pos = next + 1;
+    INFO(name);
+    REQUIRE(name.size() < SONARE_SYNTH_PRESET_NAME_MAX);
     SonareSynthPatch patch{};
     REQUIRE(sonare_synth_preset_patch(name.c_str(), &patch) == SONARE_OK);
-    INFO(name);
+    REQUIRE(std::strlen(patch.preset) < SONARE_SYNTH_PRESET_NAME_MAX);
     REQUIRE(peak_of(bounce_synth(project, patch)) > 0.0f);
   }
 

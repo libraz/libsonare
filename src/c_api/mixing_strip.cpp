@@ -32,6 +32,11 @@ SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id) {
     strip->scene_strip.id = strip->id;
     strip->owner = mixer;
     strip->strip.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+    for (const auto& group : mixer->vca_groups) {
+      if (std::find(group.members.begin(), group.members.end(), strip->id) != group.members.end()) {
+        strip->strip.add_vca_group_offset_db(group.gain_db);
+      }
+    }
     SonareStrip* raw = strip.get();
     mixer->strips.push_back(std::move(strip));
     mixer->compiled_dirty = true;
@@ -210,9 +215,8 @@ SonareError sonare_strip_set_vca_offset_db(SonareStrip* strip, float offset_db) 
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  // VCA offset is a group concept with no per-strip scene field; only the live
-  // value is updated (not cached to scene_strip).
   strip->strip.set_vca_offset_db(offset_db);
+  strip->scene_strip.vca_offset_db = offset_db;
   return SONARE_OK;
   SONARE_C_CATCH
 }

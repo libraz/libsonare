@@ -155,6 +155,27 @@ TEST_CASE("C-API VCA groups deduplicate duplicate member ids", "[mixing][capi]")
   sonare_mixer_destroy(live);
 }
 
+TEST_CASE("C-API VCA groups apply to strips added after group creation", "[mixing][capi]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 4096;
+
+  SonareMixer* mixer = sonare_mixer_create(kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  const char* members[] = {"lead"};
+  REQUIRE(sonare_mixer_add_vca_group(mixer, "live-vca", -6.0f, members, 1) == SONARE_OK);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+
+  std::vector<float> input(kBlock, 1.0f);
+  const float* in_l[] = {input.data()};
+  const float* in_r[] = {input.data()};
+  std::vector<float> out_l(kBlock, 0.0f);
+  std::vector<float> out_r(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.501187f, 0.01f));
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("C-API VCA group gain setter updates live gain and scene state", "[mixing][capi]") {
   constexpr int kSr = 48000;
   constexpr int kBlock = 4096;
@@ -227,6 +248,7 @@ TEST_CASE("C-API strip setters reflect into scene JSON for cached fields", "[mix
   REQUIRE(sonare_strip_set_polarity_invert(strip, 1, 1) == SONARE_OK);
   REQUIRE(sonare_strip_set_pan_law(strip, 2) == SONARE_OK);  // Const6dB
   REQUIRE(sonare_strip_set_channel_delay_samples(strip, 11) == SONARE_OK);
+  REQUIRE(sonare_strip_set_vca_offset_db(strip, -2.0f) == SONARE_OK);
 
   char* round_trip = nullptr;
   REQUIRE(sonare_mixer_to_scene_json(mixer, &round_trip) == SONARE_OK);
@@ -245,6 +267,7 @@ TEST_CASE("C-API strip setters reflect into scene JSON for cached fields", "[mix
   REQUIRE(out.polarity_invert_right);
   REQUIRE(out.pan_law == 2);
   REQUIRE(out.channel_delay_samples == 11);
+  REQUIRE_THAT(out.vca_offset_db, WithinAbs(-2.0f, 0.0001f));
 }
 
 TEST_CASE("C-API solo and solo-safe gate the audio output", "[mixing][capi]") {

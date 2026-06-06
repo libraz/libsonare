@@ -167,6 +167,12 @@ export function pitchCorrectToMidiTimevarying(
   options: ValidateOptions = {},
 ): Float32Array {
   assertSamples('pitchCorrectToMidiTimevarying', samples, options.validate !== false);
+  if (voiced && voiced.length !== f0Hz.length) {
+    throw new RangeError('pitchCorrectToMidiTimevarying: voiced length must match f0Hz length');
+  }
+  if (voicedProb && voicedProb.length !== f0Hz.length) {
+    throw new RangeError('pitchCorrectToMidiTimevarying: voicedProb length must match f0Hz length');
+  }
   // The embind layer reads the companion arrays as Float32Array (voiced uses
   // 0.0/1.0); convert here so a single native conversion path suffices.
   const voicedF32 = voiced ? Float32Array.from(voiced) : undefined;

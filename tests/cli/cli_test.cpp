@@ -993,7 +993,7 @@ TEST_CASE("CLI project command group", "[cli]") {
   SECTION("bounce honors an explicit --sample-rate in the WAV header") {
     const std::string proj = unique_temp_path("_proj.json");
     const std::string wav = unique_temp_path("_bounce.wav");
-    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj + " --sample-rate 44100");
     REQUIRE(nc == 0);
 
     auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
@@ -1020,6 +1020,15 @@ TEST_CASE("CLI project command group", "[cli]") {
 
     std::remove(proj.c_str());
     std::remove(wav.c_str());
+  }
+
+  SECTION("project help documents CLI SF2 and synth-json limitations") {
+    auto [code, output] = exec_command(CLI + " project help");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("--synth"));
+    REQUIRE_THAT(output, ContainsSubstring("--sf2"));
+    REQUIRE_THAT(output, ContainsSubstring("--synth-json"));
+    REQUIRE_THAT(output, ContainsSubstring("SoundFont-backed bounces"));
   }
 }
 #endif  // SONARE_WITH_ARRANGEMENT

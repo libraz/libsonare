@@ -1,10 +1,14 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
 #include <string>
 #include <vector>
 
+#include "core/audio.h"
+#include "mastering/api/chain.h"
 #include "mastering/api/presets.h"
+#include "mastering/common/loudness_measure.h"
 #include "util/constants.h"
 
 namespace api = sonare::mastering::api;
@@ -86,4 +90,20 @@ TEST_CASE("mono loudness gains up a quiet signal toward the target LUFS",
           result.output_true_peak_dbtp);
 
   CHECK(std::abs(result.output_lufs - kTargetLufs) <= kLoudnessTolerance);
+}
+
+TEST_CASE("chain output true peak follows the configured oversample factor",
+          "[mastering][loudness][ceiling]") {
+  const std::vector<float> samples = {0.0f, 0.99f, 0.99f, 0.0f, -0.99f, -0.99f, 0.0f};
+  const sonare::Audio audio = sonare::Audio::from_buffer(samples.data(), samples.size(), 48000);
+
+  api::MasteringChainConfig config;
+  config.loudness.true_peak_oversample = 1;
+  api::MasteringChain chain(config);
+  const auto result = chain.process_mono(samples.data(), samples.size(), 48000);
+
+  CHECK(result.output_true_peak_dbtp ==
+        Catch::Approx(sonare::mastering::common::measure_true_peak_dbtp(audio, 1)).margin(1e-5));
+  CHECK(result.output_true_peak_dbtp !=
+        Catch::Approx(sonare::mastering::common::measure_true_peak_dbtp(audio, 8)).margin(0.1));
 }

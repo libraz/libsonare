@@ -40,6 +40,16 @@ describe('Node async API', () => {
       const samples = generateSine(440, 1);
       const [syncResult, asyncResult] = [analyze(samples, SR), await analyzeAsync(samples, SR)];
       expect(Object.keys(asyncResult).sort()).toEqual(Object.keys(syncResult).sort());
+      expect(typeof asyncResult.key.root).toBe('string');
+      expect(typeof asyncResult.key.mode).toBe('string');
+      expect(typeof asyncResult.key.name).toBe('string');
+      expect(typeof asyncResult.key.shortName).toBe('string');
+      expect(Object.keys(asyncResult.key).sort()).toEqual(Object.keys(syncResult.key).sort());
+    });
+
+    it('rejects invalid arguments instead of throwing synchronously', async () => {
+      const promise = analyzeAsync(undefined as unknown as Float32Array, SR);
+      await expect(promise).rejects.toThrow(/Expected \(Float32Array, sampleRate\?\)/);
     });
 
     it('does not block the JS event loop while running', async () => {

@@ -58,6 +58,46 @@ TEST_CASE("MeterProcessor streaming LUFS obeys the energy doubling law", "[mixin
   REQUIRE_THAT(snap_a.momentary_lufs, WithinAbs(offline.momentary_lufs, 0.7f));
 }
 
+TEST_CASE("MeterProcessor streaming LUFS includes BS.1770 surround channels", "[mixing]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 512;
+  constexpr int kChannels = 6;
+  constexpr float kA = 0.12f;
+  constexpr int kFrames = static_cast<int>(3.5 * kSr);
+
+  std::array<std::vector<float>, kChannels> planar;
+  std::vector<float> interleaved(static_cast<size_t>(kFrames * kChannels), 0.0f);
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planar[static_cast<size_t>(ch)].resize(kFrames);
+  }
+  for (int i = 0; i < kFrames; ++i) {
+    for (int ch = 0; ch < kChannels; ++ch) {
+      const float s = ch == 3 ? 0.0f
+                              : kA * std::sin(sonare::constants::kTwoPi * 440.0f *
+                                              static_cast<float>(i) / static_cast<float>(kSr));
+      planar[static_cast<size_t>(ch)][static_cast<size_t>(i)] = s;
+      interleaved[static_cast<size_t>(i * kChannels + ch)] = s;
+    }
+  }
+
+  sonare::mixing::MeterProcessor live;
+  live.prepare(kSr, kBlock);
+  for (int offset = 0; offset < kFrames; offset += kBlock) {
+    const int n = std::min(kBlock, kFrames - offset);
+    std::array<float*, kChannels> channels{};
+    for (int ch = 0; ch < kChannels; ++ch) {
+      channels[static_cast<size_t>(ch)] = planar[static_cast<size_t>(ch)].data() + offset;
+    }
+    live.process(channels.data(), kChannels, n);
+  }
+
+  const auto snapshot = live.snapshot();
+  const auto offline = sonare::metering::lufs_interleaved(interleaved.data(), kFrames, kChannels,
+                                                          static_cast<int>(kSr));
+  REQUIRE_THAT(snapshot.momentary_lufs, WithinAbs(offline.momentary_lufs, 0.8f));
+  REQUIRE_THAT(snapshot.integrated_lufs, WithinAbs(offline.integrated_lufs, 0.8f));
+}
+
 TEST_CASE("ChannelStrip EQ alters signal and position matters", "[mixing]") {
   static constexpr int kN = 256;
   auto make_input = [](std::vector<float>& l, std::vector<float>& r) {

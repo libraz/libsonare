@@ -320,23 +320,10 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
 
     Napi::Object result = parsed.As<Napi::Object>();
 
-    // Inject legacy beatTimes Float32Array.
-    Napi::Value beats_val = result.Get("beats");
-    if (beats_val.IsArray()) {
-      Napi::Array beats_arr = beats_val.As<Napi::Array>();
-      uint32_t n = beats_arr.Length();
-      auto beat_times = Napi::Float32Array::New(env, n);
-      for (uint32_t i = 0; i < n; ++i) {
-        Napi::Value beat = beats_arr.Get(i);
-        if (beat.IsObject()) {
-          Napi::Value t = beat.As<Napi::Object>().Get("time");
-          beat_times[i] =
-              t.IsNumber() ? static_cast<float>(t.As<Napi::Number>().DoubleValue()) : 0.0f;
-        }
-      }
-      result.Set("beatTimes", beat_times);
-    } else {
-      result.Set("beatTimes", Napi::Float32Array::New(env, 0));
+    Napi::Error enrich_error;
+    if (!EnrichFullAnalysisObject(env, result, &enrich_error)) {
+      deferred_.Reject(enrich_error.Value());
+      return;
     }
 
     deferred_.Resolve(result);
@@ -361,8 +348,9 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
 Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate?)").ThrowAsJavaScriptException();
-    return env.Undefined();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(Napi::TypeError::New(env, "Expected (Float32Array, sampleRate?)").Value());
+    return deferred.Promise();
   }
   auto typed = info[0].As<Napi::Float32Array>();
   std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());

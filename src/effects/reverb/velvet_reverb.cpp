@@ -128,6 +128,9 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
       wet_r = shelf_state_r_ + kShelfHighGain * (wet_r - shelf_state_r_);
     }
 
+    wet_l = dc_blocker_.process_sample(0, wet_l);
+    wet_r = dc_blocker_.process_sample(1, wet_r);
+
     if (stereo) {
       left[i] = dry * in_l + wet * wet_l;
       right[i] = dry * in_r + wet * wet_r;
@@ -137,8 +140,6 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
       left[i] = dry * in_l + wet * 0.5f * (wet_l + wet_r);
     }
   }
-
-  dc_blocker_.process(channels, num_channels, num_samples);
 }
 
 bool VelvetReverb::set_parameter(unsigned int param_id, float value) {

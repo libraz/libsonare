@@ -126,6 +126,31 @@ TEST_CASE("MidiClip validate_note_pairs reports matched and unmatched notes", "[
   }
 }
 
+TEST_CASE("MidiClip sort_stable keeps bank select before program change at same ppq", "[midi]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_program_change(0, 0, 5)));
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_control_change(0, 0, 32, 7)));
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_control_change(0, 0, 0, 0x79)));
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_control_change(0, 0, 11, 64)));
+
+  clip.sort_stable();
+  const auto& e = clip.events();
+  REQUIRE(e.size() == 5);
+  REQUIRE(e[0].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange));
+  REQUIRE(e[0].ump.note_number() == 0);
+  REQUIRE(e[1].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange));
+  REQUIRE(e[1].ump.note_number() == 32);
+  REQUIRE(e[2].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kProgramChange));
+  REQUIRE(e[3].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange));
+  REQUIRE(e[3].ump.note_number() == 11);
+  REQUIRE(e[4].ump.is_note_on());
+}
+
 TEST_CASE("MidiClip to_render_events converts PPQ to render frames via the tempo map", "[midi]") {
   // 120 BPM, 48000 Hz: one quarter note = 0.5 s = 24000 samples.
   sonare::transport::TempoMap map;

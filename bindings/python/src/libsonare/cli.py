@@ -1341,6 +1341,11 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
         "stereo.stereoBalance",
     }
     if args.processor in stereo_only:
+        print(
+            "warning: stereo-only processor preview duplicates the mono input on left/right; "
+            "inspect stereo results through the Python API for production decisions",
+            file=sys.stderr,
+        )
         stereo = mastering_process_stereo(
             args.processor, samples, samples, sample_rate=sr, params=params
         )
@@ -2246,7 +2251,16 @@ def main() -> None:
     for pname in ("validate", "compile"):
         pp = project_sub.add_parser(pname, parents=[common], help=f"Project {pname}")
         pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
-    pbounce = project_sub.add_parser("bounce", parents=[common], help="Render project to WAV")
+    sf2_cli_note = (
+        "SF2 / SoundFont and per-destination synth JSON are not wired through this CLI command; "
+        "use the Project API for SoundFont-backed bounces."
+    )
+    pbounce = project_sub.add_parser(
+        "bounce",
+        parents=[common],
+        help="Render project to WAV",
+        description=sf2_cli_note,
+    )
     pbounce.add_argument("--in", dest="input", required=True, help="Input project JSON")
     pbounce.add_argument("--sample-rate", type=int, default=48000, help="Render sample rate")
     pbounce.add_argument("--frames", type=int, default=0, help="Render length in frames")
@@ -2258,7 +2272,10 @@ def main() -> None:
         nargs="?",
         const="",
         default=None,
-        help="Render MIDI via NativeSynth preset (default patch when value is omitted)",
+        help=(
+            "Render MIDI via NativeSynth preset (default patch when value is omitted); "
+            "no --sf2 or --synth-json CLI wiring"
+        ),
     )
     pexport_smf = project_sub.add_parser("export-smf", parents=[common], help="Export SMF")
     pexport_smf.add_argument("--in", dest="input", required=True, help="Input project JSON")
@@ -2275,7 +2292,10 @@ def main() -> None:
     project_sub.add_parser("synth-presets", parents=[common], help="List NativeSynth presets")
 
     midi_render_p = sub.add_parser(
-        "midi-render", parents=[common], help="Render a MIDI project through NativeSynth"
+        "midi-render",
+        parents=[common],
+        help="Render a MIDI project through NativeSynth",
+        description=sf2_cli_note,
     )
     midi_render_p.add_argument("--in", dest="input", required=True, help="Input project JSON")
     midi_render_p.add_argument("--sample-rate", type=int, default=48000, help="Render sample rate")
@@ -2283,7 +2303,9 @@ def main() -> None:
     midi_render_p.add_argument("--block-size", type=int, default=0, help="Render block size")
     midi_render_p.add_argument("--channels", type=int, default=2, help="Render channel count")
     midi_render_p.add_argument("--instrument-latency", type=int, default=0)
-    midi_render_p.add_argument("--synth", default="", help="NativeSynth preset")
+    midi_render_p.add_argument(
+        "--synth", default="", help="NativeSynth preset; no --sf2 or --synth-json CLI wiring"
+    )
 
     # Mixing commands
     sub.add_parser("mixing-presets", parents=[common], help="List built-in mixer scene presets")

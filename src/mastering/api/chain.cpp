@@ -265,7 +265,8 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   result.applied_gain_db = applied_gain_db;
   {
     Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    result.output_true_peak_dbtp = common::measure_true_peak_dbtp(audio);
+    result.output_true_peak_dbtp =
+        common::measure_true_peak_dbtp(audio, config_.loudness.true_peak_oversample);
     result.output_lra = common::measure_lra(audio);
   }
   result.samples = std::move(data);
@@ -469,8 +470,9 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
     Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    result.output_true_peak_dbtp = std::max(common::measure_true_peak_dbtp(left_audio),
-                                            common::measure_true_peak_dbtp(right_audio));
+    result.output_true_peak_dbtp = std::max(
+        common::measure_true_peak_dbtp(left_audio, config_.loudness.true_peak_oversample),
+        common::measure_true_peak_dbtp(right_audio, config_.loudness.true_peak_oversample));
     std::vector<float> mono = detail::mono_mix(left, right);
     Audio mono_audio = Audio::from_buffer(mono.data(), mono.size(), sample_rate);
     result.output_lra = common::measure_lra(mono_audio);

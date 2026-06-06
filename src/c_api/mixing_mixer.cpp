@@ -243,6 +243,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       strip->scene_strip = scene_strip;
       strip->strip.set_input_trim_db(scene_strip.input_trim_db);
       strip->strip.set_fader_db(scene_strip.fader_db);
+      strip->strip.set_vca_offset_db(scene_strip.vca_offset_db);
       strip->strip.set_pan(scene_strip.pan);
       strip->strip.set_width(scene_strip.width);
       strip->strip.set_muted(scene_strip.muted);
@@ -340,6 +341,7 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
     scene_strip.id = strip->id;
     scene_strip.input_trim_db = strip->strip.input_trim_db();
     scene_strip.fader_db = strip->strip.fader_db();
+    scene_strip.vca_offset_db = strip->strip.vca_trim_offset_db();
     scene_strip.pan_mode = from_pan_mode(strip->strip.pan_mode());
     // For a DualPan strip the live ChannelStrip pan_ is never updated by
     // set_dual_pan (it drives the L/R pair directly), so reading strip.pan()

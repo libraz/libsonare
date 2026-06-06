@@ -91,10 +91,11 @@ float js_metering_dc_offset(val samples, int sample_rate) {
 float js_metering_true_peak_db(val samples, int sample_rate, int oversample_factor) {
   std::vector<float> data = float32ArrayToVector(samples);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  if (oversample_factor < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "oversample must be non-negative");
-  }
   const int factor = oversample_factor == 0 ? 4 : oversample_factor;
+  if (factor < 1 || factor > 16 || (factor & (factor - 1)) != 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "oversample must be 0 or a power of two from 1 to 16");
+  }
   return metering::true_peak_db(audio, factor);
 }
 

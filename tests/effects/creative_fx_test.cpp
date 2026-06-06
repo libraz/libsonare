@@ -125,6 +125,40 @@ TEST_CASE("StereoDelay smooths delay-time automation", "[fx]") {
   REQUIRE(right[0] > 24.0f);
 }
 
+TEST_CASE("StereoDelay clamps delays to the supported 4 second range", "[fx]") {
+  constexpr int kSamples = 4004;
+  std::vector<float> left(kSamples, 0.0f);
+  std::vector<float> right(kSamples, 0.0f);
+  left[0] = 1.0f;
+  right[0] = 1.0f;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::effects::delay::StereoDelay delay({5000.0f, 5000.0f, 0.0f, 0.0f, 1.0f});
+  delay.prepare(1000.0, kSamples);
+  delay.process(channels, 2, kSamples);
+
+  REQUIRE_THAT(left[4000], WithinAbs(1.0f, 0.0001f));
+  REQUIRE_THAT(right[4000], WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("StereoDelay leaves channels beyond stereo unchanged", "[fx]") {
+  constexpr int kSamples = 16;
+  std::array<float, kSamples> left{};
+  std::array<float, kSamples> right{};
+  std::array<float, kSamples> surround{};
+  for (int i = 0; i < kSamples; ++i) {
+    surround[static_cast<size_t>(i)] = static_cast<float>(i + 1);
+  }
+  const auto before = surround;
+  float* channels[] = {left.data(), right.data(), surround.data()};
+
+  sonare::effects::delay::StereoDelay delay({2.0f, 2.0f, 0.0f, 0.0f, 1.0f});
+  delay.prepare(1000.0, kSamples);
+  delay.process(channels, 3, kSamples);
+
+  REQUIRE(surround == before);
+}
+
 TEST_CASE("Modulation processors keep output finite", "[fx]") {
   std::vector<float> left(256, 0.1f);
   std::vector<float> right(256, -0.1f);
@@ -308,6 +342,28 @@ TEST_CASE("VelvetReverb produces a sparse decaying tail", "[fx]") {
   const double late = window_energy(left, 6000, 8000);
   REQUIRE(early > 1e-6);
   REQUIRE(late < early);
+}
+
+TEST_CASE("VelvetReverb dry_wet=0 preserves dry signal without DC blocking", "[fx]") {
+  constexpr int kSamples = 1024;
+  std::vector<float> left(static_cast<size_t>(kSamples), 0.25f);
+  std::vector<float> right(static_cast<size_t>(kSamples), -0.125f);
+  const std::vector<float> expected_left = left;
+  const std::vector<float> expected_right = right;
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::effects::reverb::VelvetReverbConfig config;
+  config.dry_wet = 0.0f;
+  sonare::effects::reverb::VelvetReverb velvet(config);
+  velvet.prepare(48000.0, kSamples);
+  velvet.process(channels, 2, kSamples);
+
+  for (int i = 0; i < kSamples; ++i) {
+    REQUIRE_THAT(left[static_cast<size_t>(i)],
+                 WithinAbs(expected_left[static_cast<size_t>(i)], 0.0f));
+    REQUIRE_THAT(right[static_cast<size_t>(i)],
+                 WithinAbs(expected_right[static_cast<size_t>(i)], 0.0f));
+  }
 }
 
 TEST_CASE("VelvetReverb shelf damps highs without replacing the wet tail", "[fx]") {
