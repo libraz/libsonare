@@ -319,6 +319,24 @@ def test_project_cli_exports_smf_and_midi_render_smoke() -> None:
             assert wav.getnframes() == 2048
 
 
+def test_project_bounce_wav_writer_preserves_more_than_two_channels(tmp_path) -> None:
+    from libsonare import cli
+
+    output = tmp_path / "surround.wav"
+    frames, channels = cli._write_project_bounce_wav(
+        str(output),
+        [[0.1, 0.2, 0.3, 0.4], [0.0, -0.1, -0.2, -0.3]],
+        48000,
+    )
+
+    assert frames == 2
+    assert channels == 4
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 4
+        assert wav.getnframes() == 2
+        assert wav.getframerate() == 48000
+
+
 def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_path, capsys) -> None:
     """mastering-chain is exposed as a CLI wrapper over the Python mastering API."""
     import libsonare

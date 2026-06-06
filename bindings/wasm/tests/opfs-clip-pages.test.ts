@@ -5,6 +5,7 @@ class FakeClipPageWorker {
   listener: ((event: MessageEvent) => void) | null = null;
   terminated = false;
   messages: unknown[] = [];
+  framesOverride: number | null = null;
 
   addEventListener(type: string, listener: EventListener): void {
     if (type === 'message') {
@@ -28,7 +29,8 @@ class FakeClipPageWorker {
   }): void {
     this.messages.push(message);
     const startFrame = message.pageIndex * message.pageFrames;
-    const frames = Math.min(message.pageFrames, message.numSamples - startFrame);
+    const frames =
+      this.framesOverride ?? Math.min(message.pageFrames, message.numSamples - startFrame);
     const buffers = Array.from({ length: message.numChannels }, () =>
       typeof SharedArrayBuffer === 'function'
         ? new SharedArrayBuffer(frames * Float32Array.BYTES_PER_ELEMENT)
@@ -92,5 +94,23 @@ describe('createOpfsClipPageProvider', () => {
     engine.destroy();
     expect(worker.terminated).toBe(false);
     expect(worker.messages).toHaveLength(2);
+  });
+
+  it('rejects short non-final pages returned by the worker', async () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const worker = new FakeClipPageWorker();
+    worker.framesOverride = 2;
+    const binding = createOpfsClipPageProvider(engine, {
+      path: 'clips/clip.f32',
+      numChannels: 1,
+      numSamples: 8,
+      pageFrames: 4,
+      worker: worker as unknown as Worker,
+    });
+
+    expect(await binding.supplyPage(0)).toBe(false);
+
+    binding.close();
+    engine.destroy();
   });
 });

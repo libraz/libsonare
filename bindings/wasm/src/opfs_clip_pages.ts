@@ -55,12 +55,22 @@ self.onmessage = async (event) => {
       const frames = Math.min(pageFrames, numSamples - startFrame);
       const frameBytes = numChannels * 4;
       const bytes = new Uint8Array(frames * frameBytes);
-      const bytesRead = access.read(bytes, { at: dataOffsetBytes + startFrame * frameBytes });
-      const framesRead = Math.floor(bytesRead / frameBytes);
-      if (framesRead <= 0) {
+      let bytesReadTotal = 0;
+      const readOffset = dataOffsetBytes + startFrame * frameBytes;
+      while (bytesReadTotal < bytes.byteLength) {
+        const bytesRead = access.read(bytes.subarray(bytesReadTotal), {
+          at: readOffset + bytesReadTotal,
+        });
+        if (bytesRead <= 0) {
+          break;
+        }
+        bytesReadTotal += bytesRead;
+      }
+      if (bytesReadTotal !== bytes.byteLength || bytesReadTotal % frameBytes !== 0) {
         self.postMessage({ type: 'sonare:clip-page', requestId, pageIndex, ok: false });
         return;
       }
+      const framesRead = bytesReadTotal / frameBytes;
       const view = new DataView(bytes.buffer, 0, framesRead * frameBytes);
       const channelBuffers = Array.from({ length: numChannels }, () => new ArrayBuffer(framesRead * 4));
       for (let ch = 0; ch < numChannels; ++ch) {
@@ -137,7 +147,12 @@ export function createOpfsClipPageProvider(
       entry.resolve(false);
       return;
     }
-    provider.supply(response.pageIndex, channels);
+    try {
+      provider.supply(response.pageIndex, channels);
+    } catch {
+      entry.resolve(false);
+      return;
+    }
     entry.resolve(true);
   };
   worker.addEventListener('message', onMessage as EventListener);

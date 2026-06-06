@@ -73,6 +73,10 @@ Plane wall_plane(const ShoeboxRoom& room, ShoeboxWall wall) noexcept;
 
 /// @brief Triangle-mesh room with a material per face (Borish image-source target).
 ///
+/// This is currently a C++ core/internal modelling type. The stable public RIR
+/// surfaces expose shoebox rooms only; hosts that need mesh rooms should treat
+/// this as a roadmap hook until a versioned C ABI and binding mirror exist.
+///
 /// `face_materials` is parallel to `faces`; a single-element vector applies one
 /// material to every face. Faces should wind so normals point into the room.
 struct PolyhedralRoom {

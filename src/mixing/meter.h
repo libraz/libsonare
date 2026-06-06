@@ -70,13 +70,13 @@ class MeterProcessor : public rt::ProcessorBase {
 
   MeterConfig config_{};
   std::atomic<float> gain_reduction_db_{0.0f};
-  rt::TruePeakFilter true_peak_filter_{2, 4};
+  rt::TruePeakFilter true_peak_filter_{8, 4};
 
   // True-peak oversample scratch, preallocated in prepare() so the per-block
   // path never allocates. The filter keeps cross-block history internally
   // (set up via TruePeakFilter::prepare()), so inter-sample peaks straddling
   // block boundaries are measured consistently regardless of block size.
-  static constexpr int kTruePeakChannels = 2;
+  static constexpr int kTruePeakChannels = 8;
   std::array<std::vector<float>, kTruePeakChannels> true_peak_oversampled_{};
   std::array<float*, kTruePeakChannels> true_peak_in_ptrs_{};
   std::array<float*, kTruePeakChannels> true_peak_out_ptrs_{};

@@ -16,11 +16,13 @@ export async function bindMicrophoneInput(
   engine: SonareRealtimeEngineNode | AudioWorkletNode,
   options: BindMicrophoneInputOptions = {},
 ): Promise<MicrophoneInputBinding> {
+  const { stream: providedStream, stopTracksOnClose = true, ...constraints } = options;
   const stream =
-    options.stream ??
+    providedStream ??
     (await navigator.mediaDevices.getUserMedia({
-      audio: options.audio ?? true,
-      video: false,
+      ...constraints,
+      audio: constraints.audio ?? true,
+      video: constraints.video ?? false,
     }));
   const source = context.createMediaStreamSource(stream);
   const node = 'node' in engine ? engine.node : engine;
@@ -35,7 +37,7 @@ export async function bindMicrophoneInput(
       }
       closed = true;
       source.disconnect();
-      if (options.stopTracksOnClose !== false) {
+      if (stopTracksOnClose) {
         for (const track of stream.getAudioTracks()) {
           track.stop();
         }

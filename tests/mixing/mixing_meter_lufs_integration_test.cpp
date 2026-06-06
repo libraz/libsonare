@@ -98,6 +98,68 @@ TEST_CASE("MeterProcessor streaming LUFS includes BS.1770 surround channels", "[
   REQUIRE_THAT(snapshot.integrated_lufs, WithinAbs(offline.integrated_lufs, 0.8f));
 }
 
+TEST_CASE("MeterProcessor LUFS treats a null stereo partner as mono", "[mixing]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 512;
+  constexpr float kA = 0.2f;
+  const int total_frames = static_cast<int>(3.5 * kSr);
+  std::vector<float> mono_buffer(static_cast<size_t>(total_frames));
+  for (int i = 0; i < total_frames; ++i) {
+    mono_buffer[static_cast<size_t>(i)] =
+        kA * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) /
+                      static_cast<float>(kSr));
+  }
+
+  sonare::mixing::MeterProcessor mono;
+  mono.prepare(kSr, kBlock);
+  for (int offset = 0; offset < total_frames; offset += kBlock) {
+    const int n = std::min(kBlock, total_frames - offset);
+    float* channels[] = {mono_buffer.data() + offset};
+    mono.process(channels, 1, n);
+  }
+  const auto mono_snapshot = mono.snapshot();
+
+  sonare::mixing::MeterProcessor null_stereo;
+  null_stereo.prepare(kSr, kBlock);
+  for (int offset = 0; offset < total_frames; offset += kBlock) {
+    const int n = std::min(kBlock, total_frames - offset);
+    float* channels[] = {mono_buffer.data() + offset, nullptr};
+    null_stereo.process(channels, 2, n);
+  }
+  const auto null_stereo_snapshot = null_stereo.snapshot();
+  REQUIRE_THAT(null_stereo_snapshot.momentary_lufs, WithinAbs(mono_snapshot.momentary_lufs, 0.05f));
+  REQUIRE_THAT(null_stereo_snapshot.integrated_lufs,
+               WithinAbs(mono_snapshot.integrated_lufs, 0.05f));
+}
+
+TEST_CASE("MeterProcessor max true peak includes surround channels", "[mixing]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 256;
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  std::array<float, kBlock> rear{};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = 0.1f * std::sin(sonare::constants::kTwoPi * 1000.0f *
+                                                   static_cast<float>(i) / static_cast<float>(kSr));
+    right[static_cast<size_t>(i)] = left[static_cast<size_t>(i)];
+    rear[static_cast<size_t>(i)] = 1.2f * std::sin(sonare::constants::kTwoPi * 1000.0f *
+                                                   static_cast<float>(i) / static_cast<float>(kSr));
+  }
+  float* channels[] = {left.data(), right.data(), rear.data()};
+
+  sonare::mixing::MeterConfig config;
+  config.measure_lufs = false;
+  config.measure_true_peak = true;
+  sonare::mixing::MeterProcessor meter(config);
+  meter.prepare(kSr, kBlock);
+  meter.process(channels, 3, kBlock);
+
+  const auto snapshot = meter.snapshot();
+  REQUIRE(snapshot.max_true_peak_db > 1.0f);
+  REQUIRE(snapshot.max_true_peak_db > snapshot.true_peak_db[0] + 10.0f);
+  REQUIRE(snapshot.max_true_peak_db > snapshot.true_peak_db[1] + 10.0f);
+}
+
 TEST_CASE("ChannelStrip EQ alters signal and position matters", "[mixing]") {
   static constexpr int kN = 256;
   auto make_input = [](std::vector<float>& l, std::vector<float>& r) {

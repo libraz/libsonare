@@ -178,6 +178,10 @@ class ChannelStrip : public rt::ProcessorBase {
   /// @brief RT-safe: mixes the requested send's tap (post-gain) additively into @p dest.
   /// Must be called after process() and before the next process() of the same block, since
   /// it consumes the pre/post taps captured by the most recent process() call.
+  /// Core callers must pass `num_samples <= max_block_size()` from the preceding
+  /// prepare/process cycle. Public C ABI entry points enforce this before
+  /// reaching the strip; direct C++ calls outside that contract are clamped to
+  /// the prepared tap length.
   void mix_send(size_t index, float* const* dest, int num_channels, int num_samples);
   void mix_send_at(size_t index, float* const* dest, int num_channels, int num_samples,
                    int64_t block_start);

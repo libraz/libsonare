@@ -238,7 +238,7 @@ JsonValue strip_to_value(const Strip& strip) {
   object.emplace("id", JsonValue(strip.id));
   object.emplace("inputTrimDb", JsonValue(strip.input_trim_db));
   object.emplace("faderDb", JsonValue(strip.fader_db));
-  if (strip.vca_offset_db != 0.0f) object.emplace("vcaOffsetDb", JsonValue(strip.vca_offset_db));
+  object.emplace("vcaOffsetDb", JsonValue(strip.vca_offset_db));
   object.emplace("pan", JsonValue(strip.pan));
   object.emplace("width", JsonValue(strip.width));
   object.emplace("muted", JsonValue(strip.muted));

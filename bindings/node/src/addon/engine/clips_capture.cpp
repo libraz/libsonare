@@ -190,6 +190,12 @@ Napi::Value RealtimeEngineWrap::CreateClipPageProvider(const Napi::CallbackInfo&
   ThrowIfError(env,
                sonare_clip_page_provider_create(num_channels, num_samples, page_frames, &provider));
   if (env.IsExceptionPending()) return env.Undefined();
+  for (size_t index = 0; index < clip_page_providers_.size(); ++index) {
+    if (clip_page_providers_[index] == nullptr) {
+      clip_page_providers_[index] = provider;
+      return Napi::Number::New(env, static_cast<double>(index + 1));
+    }
+  }
   clip_page_providers_.push_back(provider);
   return Napi::Number::New(env, static_cast<double>(clip_page_providers_.size()));
 }

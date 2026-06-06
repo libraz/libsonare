@@ -486,7 +486,7 @@ target_include_directories(sonare_engine SYSTEM PUBLIC
   ${PROJECT_SOURCE_DIR}/third_party/minimp3
   ${PROJECT_SOURCE_DIR}/third_party/r8brain
 )
-target_link_libraries(sonare_engine PUBLIC sonare_rt sonare_automation)
+target_link_libraries(sonare_engine PUBLIC sonare_core sonare_rt sonare_automation)
 if(BUILD_GRAPH)
   target_link_libraries(sonare_engine PUBLIC sonare_graph)
   target_compile_definitions(sonare_engine PUBLIC SONARE_WITH_GRAPH=1)

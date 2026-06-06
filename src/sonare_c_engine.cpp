@@ -10,8 +10,8 @@
 #include "automation/parameter.h"
 #include "core/audio.h"
 #include "core/resample.h"
-#include "effects/phase_vocoder.h"
 #include "engine/realtime_engine.h"
+#include "engine/tempo_sync.h"
 #include "metering/lufs.h"
 #include "metering/normalize.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -55,7 +55,7 @@ class CClipPageProvider final : public engine::ClipPagedAudioProvider {
 
   int num_channels() const noexcept override { return channels_; }
   int64_t num_samples() const noexcept override { return samples_; }
-  int64_t page_frames() const noexcept { return page_frames_; }
+  int64_t page_frames() const noexcept override { return page_frames_; }
   int64_t page_count() const noexcept { return static_cast<int64_t>(pages_.size()); }
 
   bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
@@ -83,7 +83,7 @@ class CClipPageProvider final : public engine::ClipPagedAudioProvider {
     const int64_t page_start = page_index * page_frames_;
     if (page_start >= samples_) return false;
     const int64_t max_frames = std::min<int64_t>(page_frames_, samples_ - page_start);
-    if (frames > max_frames) return false;
+    if (frames != max_frames) return false;
     auto page = std::make_shared<Page>();
     page->frames = frames;
     page->channels.reserve(static_cast<size_t>(channels_));
@@ -125,19 +125,13 @@ struct SonareClipPageProvider {
 
 namespace {
 
-struct TempoSyncSegment {
-  size_t source_offset = 0;
-  size_t source_samples = 0;
-  size_t target_samples = 0;
-};
-
 size_t rounded_nonnegative_sample(double sample) noexcept {
   if (!std::isfinite(sample) || sample <= 0.0) return 0;
   return static_cast<size_t>(std::llround(sample));
 }
 
 bool tempo_sync_segments_for_clip(const SonareEngineClip& clip,
-                                  std::vector<TempoSyncSegment>* out) {
+                                  std::vector<engine::TempoSyncWarpSegment>* out) {
   if (!out || clip.length_samples <= 0 || clip.clip_offset_samples < 0 ||
       clip.clip_offset_samples >= clip.num_samples) {
     return false;
@@ -153,7 +147,7 @@ bool tempo_sync_segments_for_clip(const SonareEngineClip& clip,
       const size_t source_end = rounded_nonnegative_sample(next.source_sample);
       const size_t target_start = rounded_nonnegative_sample(prev.warp_sample);
       const size_t target_end = rounded_nonnegative_sample(next.warp_sample);
-      TempoSyncSegment segment;
+      engine::TempoSyncWarpSegment segment;
       segment.source_offset = base_offset + source_start;
       segment.source_samples = source_end > source_start ? source_end - source_start : 0;
       segment.target_samples = target_end > target_start ? target_end - target_start : 0;
@@ -166,34 +160,13 @@ bool tempo_sync_segments_for_clip(const SonareEngineClip& clip,
     }
     return !out->empty();
   }
-  TempoSyncSegment segment;
+  engine::TempoSyncWarpSegment segment;
   segment.source_offset = base_offset;
   segment.source_samples = static_cast<size_t>(clip.num_samples) - base_offset;
   segment.target_samples = static_cast<size_t>(clip.length_samples);
   if (segment.source_samples == 0 || segment.target_samples == 0) return false;
   out->push_back(segment);
   return true;
-}
-
-std::vector<float> tempo_sync_channel(const float* source, size_t source_samples,
-                                      size_t target_samples, int sample_rate) {
-  StreamingPhaseVocoderConfig config;
-  config.sample_rate = sample_rate;
-  config.n_fft = 2048;
-  config.hop_length = 512;
-  config.phase_lock = true;
-
-  const float rate =
-      static_cast<float>(source_samples) / static_cast<float>(std::max<size_t>(1, target_samples));
-  StreamingPhaseVocoder stretcher(config);
-  stretcher.reserve(source_samples, target_samples + static_cast<size_t>(config.n_fft));
-  std::vector<float> output(target_samples + static_cast<size_t>(config.n_fft), 0.0f);
-  size_t written =
-      stretcher.process_into(source, source_samples, rate, output.data(), output.size());
-  written += stretcher.finalize_into(rate, output.data() + written, output.size() - written);
-  output.resize(std::min(written, target_samples));
-  if (output.size() < target_samples) output.resize(target_samples, 0.0f);
-  return output;
 }
 
 }  // namespace
@@ -722,6 +695,8 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
          clip.warp_mode != SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) ||
         (paged && clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) ||
         (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC && clip.loop != 0) ||
+        (clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH && clip.loop != 0 &&
+         clip.warp_anchor_count >= 2) ||
         (clip.warp_anchor_count > 0 && !clip.warp_anchors)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -745,19 +720,16 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
       // Paged providers are retained by shared_ptr on the ClipSchedule; no audio
       // is copied into ClipAudioStorage.
     } else if (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
-      std::vector<TempoSyncSegment> segments;
+      std::vector<engine::TempoSyncWarpSegment> segments;
       if (!tempo_sync_segments_for_clip(clip, &segments)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
+      engine::TempoSyncWarpBakeConfig bake_config;
+      bake_config.sample_rate = static_cast<int>(std::lround(engine->engine.sample_rate()));
       for (int ch = 0; ch < clip.num_channels; ++ch) {
         if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
-        std::vector<float> channel;
-        for (const TempoSyncSegment& segment : segments) {
-          std::vector<float> segment_audio = tempo_sync_channel(
-              clip.channels[ch] + segment.source_offset, segment.source_samples,
-              segment.target_samples, static_cast<int>(std::lround(engine->engine.sample_rate())));
-          channel.insert(channel.end(), segment_audio.begin(), segment_audio.end());
-        }
+        std::vector<float> channel = engine::bake_tempo_sync_warp_channel(
+            clip.channels[ch], static_cast<size_t>(clip.num_samples), segments, bake_config);
         owned->channels.push_back(std::move(channel));
       }
     } else {

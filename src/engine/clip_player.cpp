@@ -68,6 +68,10 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
 void ClipPlayer::process_at(float* const* channels, int num_channels, int num_samples,
                             int64_t timeline_sample) noexcept {
   if (!channels || num_channels <= 0 || num_samples <= 0) return;
+  const bool scoped_page_miss_block = !external_page_miss_block_;
+  if (!external_page_miss_block_) {
+    begin_page_miss_block();
+  }
 
   // Adopt the latest published clip set. The engine drives a single block-start
   // acquire_clips() so a clip set is never swapped mid-block between sub-blocks;
@@ -75,7 +79,10 @@ void ClipPlayer::process_at(float* const* channels, int num_channels, int num_sa
   // standalone ClipPlayer contract working (set_clips then process_at directly).
   clips_.acquire();
   const std::vector<ClipSchedule>* clips = clips_.current();
-  if (!clips) return;
+  if (!clips) {
+    if (scoped_page_miss_block) end_page_miss_block();
+    return;
+  }
 
   for (const ClipSchedule& clip : *clips) {
     if (source_channel_count(clip) <= 0 || source_sample_count(clip) <= 0 ||
@@ -120,6 +127,7 @@ void ClipPlayer::process_at(float* const* channels, int num_channels, int num_sa
       }
     }
   }
+  if (scoped_page_miss_block) end_page_miss_block();
 }
 
 void ClipPlayer::collect_boundaries(int64_t block_start_sample, int num_frames,
@@ -210,13 +218,11 @@ double map_warp_to_source(const std::vector<WarpAnchor>& anchors, double warp_sa
     prev = &anchors[anchors.size() - 2];
     next = &anchors.back();
   } else {
-    for (size_t i = 1; i < anchors.size(); ++i) {
-      if (warp_sample <= anchors[i].warp_sample) {
-        prev = &anchors[i - 1];
-        next = &anchors[i];
-        break;
-      }
-    }
+    const auto it = std::upper_bound(
+        anchors.begin(), anchors.end(), warp_sample,
+        [](double sample, const WarpAnchor& anchor) { return sample < anchor.warp_sample; });
+    next = &*it;
+    prev = &*(it - 1);
   }
   const double warp_span = next->warp_sample - prev->warp_sample;
   const double source_span = next->source_sample - prev->source_sample;
@@ -225,6 +231,7 @@ double map_warp_to_source(const std::vector<WarpAnchor>& anchors, double warp_sa
 }
 
 double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept {
+  if (clip.warp_mode == WarpMode::kTempoSync) return -1;
   const int64_t position = timeline_sample - clip.start_sample;
   if (position < 0 || position >= clip.length_samples) return -1;
   const int64_t source_len =
@@ -260,6 +267,33 @@ int64_t ClipPlayer::source_sample_count(const ClipSchedule& clip) noexcept {
   return clip.buffer.num_samples;
 }
 
+void ClipPlayer::begin_page_miss_block() noexcept {
+  external_page_miss_block_ = true;
+  page_miss_cache_size_ = 0;
+  page_miss_cache_overflowed_ = false;
+}
+
+void ClipPlayer::notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample) noexcept {
+  if (!page_request_sink_ || !clip.page_provider) return;
+  const int64_t frames = std::max<int64_t>(clip.page_provider->page_frames(), 1);
+  const int64_t page_index = sample >= 0 ? sample / frames : sample;
+  const uint32_t channel = static_cast<uint32_t>(std::max(src_ch, 0));
+  for (size_t i = 0; i < page_miss_cache_size_; ++i) {
+    const PageMissCacheEntry& entry = page_miss_cache_[i];
+    if (entry.clip_id == clip.id && entry.channel == channel && entry.page_index == page_index) {
+      return;
+    }
+  }
+  if (!page_miss_cache_overflowed_) {
+    if (page_miss_cache_size_ < page_miss_cache_.size()) {
+      page_miss_cache_[page_miss_cache_size_++] = {clip.id, channel, page_index};
+    } else {
+      page_miss_cache_overflowed_ = true;
+    }
+  }
+  page_request_sink_->on_clip_page_miss({clip.id, channel, sample});
+}
+
 float ClipPlayer::sample_channel(const ClipSchedule& clip, int src_ch, double source_pos) noexcept {
   const int source_channels = source_channel_count(clip);
   if (src_ch < 0 || src_ch >= source_channels) {
@@ -267,26 +301,31 @@ float ClipPlayer::sample_channel(const ClipSchedule& clip, int src_ch, double so
   }
   const auto last = static_cast<int64_t>(source_sample_count(clip) - 1);
   if (last < 0) return 0.0f;
-  const auto read = [this, &clip, src_ch](int64_t sample) noexcept {
+  const auto read = [this, &clip, src_ch](int64_t sample, float* out) noexcept {
     if (clip.page_provider) {
-      float out = 0.0f;
-      if (clip.page_provider->sample_at(src_ch, sample, &out)) return out;
-      if (page_request_sink_) {
-        page_request_sink_->on_clip_page_miss(
-            {clip.id, static_cast<uint32_t>(std::max(src_ch, 0)), sample});
+      if (out && clip.page_provider->sample_at(src_ch, sample, out)) {
+        return true;
       }
-      return 0.0f;
+      notify_page_miss(clip, src_ch, sample);
+      return false;
     }
-    if (!clip.buffer.channels || !clip.buffer.channels[src_ch]) return 0.0f;
-    return clip.buffer.channels[src_ch][sample];
+    if (!out || !clip.buffer.channels || !clip.buffer.channels[src_ch]) return false;
+    *out = clip.buffer.channels[src_ch][sample];
+    return true;
   };
-  if (source_pos <= 0.0) return read(0);
-  if (source_pos >= static_cast<double>(last)) return read(last);
+  float a = 0.0f;
+  if (source_pos <= 0.0) return read(0, &a) ? a : 0.0f;
+  if (source_pos >= static_cast<double>(last)) return read(last, &a) ? a : 0.0f;
   const auto left = static_cast<int64_t>(std::floor(source_pos));
   const auto right = std::min<int64_t>(left + 1, last);
   const float frac = static_cast<float>(source_pos - static_cast<double>(left));
-  const float a = read(left);
-  const float b = read(right);
+  float b = 0.0f;
+  const bool has_a = read(left, &a);
+  if (frac <= 1.0e-7f) return has_a ? a : 0.0f;
+  const bool has_b = read(right, &b);
+  if (!has_a && !has_b) return 0.0f;
+  if (!has_a) return b;
+  if (!has_b) return a;
   return a + (b - a) * frac;
 }
 

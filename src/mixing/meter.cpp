@@ -181,8 +181,10 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     // measurement block-size- and phase-independent and catches inter-sample
     // peaks that straddle block boundaries (the stateless path zero-padded the
     // taps at every block edge and kept no history). Bounded to kTruePeak
-    // channels — exactly the channels whose true-peak is reported below.
-    const int tp_channels = std::min(meters, kTruePeakChannels);
+    // channels. The public snapshot keeps per-channel L/R compatibility, but
+    // max_true_peak_db must include surround channels so rear/LFE overs are not
+    // hidden on multichannel buses.
+    const int tp_channels = std::min(num_channels, kTruePeakChannels);
     // Guard against a block larger than the prepared capacity (would otherwise
     // grow the scratch and allocate on the audio thread); clamp instead.
     const int tp_samples = std::min(num_samples, max_block_size_);
@@ -206,11 +208,13 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
         continue;
       }
       const auto& os = true_peak_oversampled_[static_cast<size_t>(ch)];
-      float peak = sample_peaks[static_cast<size_t>(ch)];
+      float peak = ch < meters ? sample_peaks[static_cast<size_t>(ch)] : 0.0f;
       for (size_t i = 0; i < oversampled; ++i) {
         peak = std::max(peak, std::abs(os[i]));
       }
-      next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
+      if (ch < static_cast<int>(next.true_peak_db.size())) {
+        next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
+      }
       max_true_peak = std::max(max_true_peak, peak);
     }
     next.max_true_peak_db = linear_to_db(max_true_peak);
@@ -259,7 +263,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     for (int ch = 0; ch < lufs_channels; ++ch) {
       if (channels[ch] != nullptr) ++active_channels;
     }
-    const double mono_energy_scale = (lufs_channels == 1 && active_channels == 1) ? 2.0 : 1.0;
+    const double mono_energy_scale = active_channels == 1 ? 2.0 : 1.0;
     for (int i = 0; i < num_samples; ++i) {
       // Combined K-weighted squared energy summed across stereo channels (BS.1770 weight 1.0 each).
       double combined = 0.0;

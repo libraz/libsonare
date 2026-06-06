@@ -585,7 +585,8 @@ val js_synthesize_rir(val opts) {
   config.seed = static_cast<unsigned>(std::max(0, intProperty(opts, "seed", 1)));
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
-  config.crossfade_ms = floatProperty(opts, "crossfadeMs", config.crossfade_ms);
+  const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
+  if (crossfade_ms > 0.0f) config.crossfade_ms = crossfade_ms;
 
   const auto result = sonare::acoustic::synthesize_rir(roomFromVal(opts, 0.2f),
                                                        placementFromVal(opts), sample_rate, config);
@@ -666,7 +667,8 @@ val js_room_morph(val samples, int sample_rate, val opts) {
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
-  config.crossfade_ms = floatProperty(opts, "crossfadeMs", config.crossfade_ms);
+  const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
+  if (crossfade_ms > 0.0f) config.crossfade_ms = crossfade_ms;
 
   const Audio result = sonare::effects::acoustic::room_morph(audio, config);
   std::vector<float> out;

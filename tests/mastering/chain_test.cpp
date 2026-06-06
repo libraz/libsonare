@@ -199,6 +199,35 @@ TEST_CASE("Shared stereo repair transfer preserves signed gain changes",
   REQUIRE_THAT(right[1], WithinAbs(0.5f, 1.0e-6f));
 }
 
+TEST_CASE("Shared stereo repair transfer stays bounded at mono zero crossings",
+          "[mastering][chain][repair]") {
+  // Decorrelated stereo content makes the mono mix cross zero where the
+  // channels do not; the spectral repair output is not proportional to the
+  // mono mix there, so an unbounded out/in ratio would explode the channels.
+  constexpr int sample_rate = 22050;
+  std::vector<float> left(static_cast<size_t>(sample_rate / 2));
+  std::vector<float> right(left.size());
+  float input_peak = 0.0f;
+  for (size_t i = 0; i < left.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    left[i] = 0.3f * std::sin(2.0f * 3.14159265358979323846f * 220.0f * t);
+    right[i] = 0.3f * std::sin(2.0f * 3.14159265358979323846f * 277.0f * t);
+    input_peak = std::max({input_peak, std::abs(left[i]), std::abs(right[i])});
+  }
+
+  MasteringChainConfig config;
+  config.repair.denoise.enabled = true;
+  config.repair.denoise.config.gain_floor = 0.1f;
+  MasteringChain chain(config);
+  auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
+
+  float output_peak = 0.0f;
+  for (size_t i = 0; i < result.left.size(); ++i) {
+    output_peak = std::max({output_peak, std::abs(result.left[i]), std::abs(result.right[i])});
+  }
+  REQUIRE(output_peak <= 4.0f * input_peak);
+}
+
 TEST_CASE("MasteringChain stereo denoise applies a shared stereo transfer",
           "[mastering][chain][repair]") {
   constexpr int sample_rate = 22050;

@@ -38,6 +38,7 @@ import type {
   EngineAutomationPointCurve,
   EngineBounceOptions,
   EngineBounceResult,
+  EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
   EngineFreezeOptions,
@@ -671,7 +672,7 @@ export class RealtimeEngine {
     this.native.setCapturePunch(startSample, endSample, enabled);
   }
 
-  setCaptureSource(source: EngineCaptureStatus['source']): void {
+  setCaptureSource(source: EngineCaptureSource): void {
     this.native.setCaptureSource(source);
   }
 
@@ -2561,6 +2562,7 @@ export type {
   DynamicsResult,
   EngineAutomationPoint,
   EngineAutomationPointCurve,
+  EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
   EngineGraphConnection,

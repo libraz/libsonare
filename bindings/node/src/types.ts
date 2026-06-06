@@ -1285,6 +1285,8 @@ export interface EngineCaptureStatus {
   recordOffsetSamples: number;
 }
 
+export type EngineCaptureSource = EngineCaptureStatus['source'] | number;
+
 export interface EngineBounceOptions {
   totalFrames: number;
   blockSize?: number;

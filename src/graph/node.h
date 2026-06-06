@@ -3,7 +3,6 @@
 /// @file node.h
 /// @brief Processor node with preallocated port buffers.
 
-#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -60,7 +59,7 @@ class Node {
   std::vector<float> input_;
   std::vector<float> output_;
   std::vector<float*> process_channels_;
-  std::array<const float*, kMaxPorts> sidechain_channels_{};
+  std::vector<const float*> sidechain_channels_;
   int sidechain_first_port_ = 0;
   int sidechain_num_ports_ = 0;
 };

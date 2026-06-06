@@ -136,10 +136,18 @@ ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model) {
 
 Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReverbConfig& config) {
   const float sr = static_cast<float>(sample_rate);
+  if (sample_rate <= 0) {
+    return Audio::from_vector(std::vector<float>{}, sample_rate);
+  }
 
+  const float nyquist = sr * 0.5f;
   float longest = 0.0f;
-  for (float t : rt.rt60_bands) longest = std::max(longest, t);
-  if (longest <= 0.0f || sample_rate <= 0) {
+  for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
+    const float center = octave_center_hz(static_cast<int>(b));
+    if (center * kSqrt2 >= nyquist) continue;
+    longest = std::max(longest, rt.rt60_bands[b]);
+  }
+  if (longest <= 0.0f) {
     return Audio::from_vector(std::vector<float>{}, sample_rate);
   }
 
@@ -152,7 +160,6 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
   if (config.max_samples > 0) length = std::min(length, config.max_samples);
   if (length < 1) length = 1;
 
-  const float nyquist = sr * 0.5f;
   std::vector<float> out(static_cast<size_t>(length), 0.0f);
   std::vector<float> band(static_cast<size_t>(length));
 

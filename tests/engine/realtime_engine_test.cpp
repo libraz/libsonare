@@ -366,9 +366,10 @@ TEST_CASE("RealtimeEngine drains paged clip requests and underrun telemetry",
    public:
     int num_channels() const noexcept override { return 1; }
     int64_t num_samples() const noexcept override { return static_cast<int64_t>(samples.size()); }
+    int64_t page_frames() const noexcept override { return 4; }
 
     bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
-      if (channel != 0 || !out || sample < 0 || sample >= num_samples() || sample == 2) {
+      if (channel != 0 || !out || sample < 0 || sample >= num_samples() || sample >= 2) {
         return false;
       }
       *out = samples[static_cast<size_t>(sample)];
@@ -400,17 +401,23 @@ TEST_CASE("RealtimeEngine drains paged clip requests and underrun telemetry",
   REQUIRE(request.clip_id == 44);
   REQUIRE(request.channel == 0);
   REQUIRE(request.sample == 2);
+  REQUIRE_FALSE(engine.pop_clip_page_request(request));
 
+  int underrun_count = 0;
   bool found_underrun = false;
   sonare::engine::Telemetry telemetry{};
   while (engine.pop_telemetry(telemetry)) {
-    found_underrun = found_underrun ||
-                     (telemetry.type == sonare::engine::TelemetryType::kError &&
-                      telemetry.error == sonare::engine::TelemetryErrorCode::kClipPageUnderrun &&
-                      telemetry.value == 44);
+    if (telemetry.type == sonare::engine::TelemetryType::kError &&
+        telemetry.error == sonare::engine::TelemetryErrorCode::kClipPageUnderrun &&
+        telemetry.value == 44) {
+      found_underrun = true;
+      ++underrun_count;
+    }
   }
   REQUIRE(found_underrun);
+  REQUIRE(underrun_count == 1);
   REQUIRE(left[2] == 0.0f);
+  REQUIRE(left[3] == 0.0f);
 }
 
 TEST_CASE("RealtimeEngine offline render matches block process", "[engine][realtime][offline]") {

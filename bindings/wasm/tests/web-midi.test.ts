@@ -175,6 +175,8 @@ describe('Web MIDI helper', () => {
     inputB.emit([0x90, 60, 100], 1);
     inputA.emit([0x90, 60, 100], 1);
     inputA.emit([64, 90], 2);
+    inputA.emit([0xf1, 0x01], 2.5);
+    inputA.emit([66, 91], 2.75);
     inputA.emit([0x90, 60, 0], 3);
     inputA.emit([0xb0, 74, 127], 4);
     inputA.emit([0x80, 64, 20], 5);
@@ -192,6 +194,28 @@ describe('Web MIDI helper', () => {
     inputA.emit([0x90, 67, 100], 6);
     expect(engine.messages).toHaveLength(5);
     expect(engine.sourceDestination).toBeNull();
+  });
+
+  it('clears running status for system common messages and drops incomplete channel voice messages', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('keys');
+    access.inputs.set(input.id, input);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+
+    input.emit([0x90, 60, 100]);
+    input.emit([0xf1, 0x01]);
+    input.emit([64, 90]);
+    input.emit([0x90, 62]);
+    input.emit([0xb0, 74]);
+    input.emit([0x90, 65, 70]);
+
+    expect(engine.messages).toEqual([
+      { kind: 'on', group: 0, channel: 0, a: 60, b: 100, time: 0 },
+      { kind: 'on', group: 0, channel: 0, a: 65, b: 70, time: 0 },
+    ]);
+    binding.close();
   });
 
   it('binds hot-plugged matching inputs and unbinds disconnected ports', async () => {
@@ -230,6 +254,25 @@ describe('Web MIDI helper', () => {
       { kind: 'on', group: 3, channel: 2, a: 65, b: 100, time: 0 },
       { kind: 'cc', group: 3, channel: 2, a: 74, b: 127, time: 0 },
     ]);
+    binding.close();
+  });
+
+  it('invokes requestMIDIAccess with the navigator as `this` (native methods throw otherwise)', async () => {
+    const access = new FakeAccess();
+    const navigatorValue = {
+      async requestMIDIAccess(this: unknown) {
+        if (this !== navigatorValue) {
+          throw new TypeError(
+            "Failed to execute 'requestMIDIAccess' on 'Navigator': Illegal invocation",
+          );
+        }
+        return access;
+      },
+    };
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: navigatorValue });
+
+    const binding = await bindWebMidi(new FakeEngine() as never);
+    expect(binding.inputs()).toEqual([]);
     binding.close();
   });
 

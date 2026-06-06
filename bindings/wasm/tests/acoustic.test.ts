@@ -73,6 +73,20 @@ describe('geometric room acoustics', () => {
     expect(Array.from(sabine.rir)).not.toEqual(Array.from(eyring.rir));
   });
 
+  it('treats crossfadeMs 0 as the default acoustic crossfade', () => {
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, seed: 123, maxSeconds: 0.3 };
+    const defaultRir = synthesizeRir(base);
+    const zeroRir = synthesizeRir({ ...base, crossfadeMs: 0 });
+    expect(Array.from(zeroRir.rir)).toEqual(Array.from(defaultRir.rir));
+
+    const samples = new Float32Array(4000);
+    samples[0] = 1.0;
+    const morphBase = { ...base, wet: 0.7 };
+    const defaultMorph = roomMorph(samples, 48000, morphBase);
+    const zeroMorph = roomMorph(samples, 48000, { ...morphBase, crossfadeMs: 0 });
+    expect(Array.from(zeroMorph)).toEqual(Array.from(defaultMorph));
+  });
+
   it('honors per-band wall scattering', () => {
     const base = {
       lengthM: 7,

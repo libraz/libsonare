@@ -95,35 +95,35 @@ def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_r
 
 def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
     """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
+    import struct
+    import wave
+
     rows = getattr(audio, "tolist", lambda: audio)()
     if not isinstance(rows, list):
         rows = list(rows)
     frames = len(rows)
     channels = 1
-    mono: list[float] = []
-    left: list[float] = []
-    right: list[float] = []
+    normalized: list[list[float]] = []
     for row in rows:
         if isinstance(row, list):
             channels = max(channels, len(row))
-            if len(row) >= 2:
-                left.append(float(row[0]))
-                right.append(float(row[1]))
-            else:
-                sample = float(row[0]) if row else 0.0
-                left.append(sample)
-                right.append(sample)
-            mono.append(sum(float(sample) for sample in row) / len(row) if row else 0.0)
+            normalized.append([float(sample) for sample in row])
         else:
-            sample = float(row)
-            mono.append(sample)
-            left.append(sample)
-            right.append(sample)
-    if channels >= 2:
-        _write_wav_stereo(path, left, right, sample_rate)
-        return frames, 2
-    _write_wav(path, mono, sample_rate)
-    return frames, 1
+            normalized.append([float(row)])
+
+    pcm = bytearray()
+    for row in normalized:
+        for ch in range(channels):
+            sample = row[ch] if ch < len(row) else 0.0
+            clamped = -1.0 if sample < -1.0 else (1.0 if sample > 1.0 else sample)
+            pcm += struct.pack("<h", int(round(clamped * 32767.0)))
+
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(channels)
+        wav.setsampwidth(2)
+        wav.setframerate(int(sample_rate))
+        wav.writeframes(bytes(pcm))
+    return frames, channels
 
 
 def _array_stats(vals: list[float]) -> dict[str, float | int]:

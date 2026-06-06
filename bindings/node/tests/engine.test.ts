@@ -120,6 +120,9 @@ describe('RealtimeEngine native binding', () => {
     expect(inputCaptureStatus.source).toBe('input');
     expect(inputCaptureStatus.recordOffsetSamples).toBe(-37);
     expect(captureLeft[0]).toBeCloseTo(0.25, 4);
+
+    engine.setCaptureSource(0);
+    expect(engine.captureStatus().source).toBe('output');
     expect(captureRight[0]).toBeCloseTo(-0.25, 4);
 
     engine.setInputMonitor(false);
@@ -210,6 +213,20 @@ describe('RealtimeEngine native binding', () => {
     }
   });
 
+  it('reuses destroyed clip page provider slots', () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const first = engine.createClipPageProvider(1, 8, 4);
+    const second = engine.createClipPageProvider(1, 8, 4);
+    expect(first.id).toBe(1);
+    expect(second.id).toBe(2);
+    first.destroy();
+    const reused = engine.createClipPageProvider(1, 8, 4);
+    expect(reused.id).toBe(1);
+    second.destroy();
+    reused.destroy();
+    engine.destroy();
+  });
+
   it('renders repitch warped clips from anchors', () => {
     const engine = new RealtimeEngine(48000, 4);
     engine.setClips([
@@ -233,6 +250,25 @@ describe('RealtimeEngine native binding', () => {
     expect(processed[0][2]).toBeCloseTo(10, 4);
     expect(processed[0][3]).toBeCloseTo(15, 4);
     engine.destroy();
+
+    const badLoopWarpEngine = new RealtimeEngine(48000, 4);
+    expect(() =>
+      badLoopWarpEngine.setClips([
+        {
+          id: 3031,
+          channels: [new Float32Array([0, 10, 20, 30])],
+          startPpq: 0,
+          lengthSamples: 8,
+          loop: true,
+          warpMode: 'repitch',
+          warpAnchors: [
+            { warpSample: 0, sourceSample: 0 },
+            { warpSample: 3, sourceSample: 1.5 },
+          ],
+        },
+      ]),
+    ).toThrow();
+    badLoopWarpEngine.destroy();
 
     const tempoEngine = new RealtimeEngine(48000, 8192);
     const tempoSource = new Float32Array(4096);

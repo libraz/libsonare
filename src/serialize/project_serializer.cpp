@@ -27,6 +27,9 @@ using json::Array;
 using json::Object;
 using json::Value;
 
+constexpr double kMinProjectSampleRate = 8000.0;
+constexpr double kMaxProjectSampleRate = 384000.0;
+
 // ===========================================================================
 // Deterministic base64 (for opaque AssistSidecar binary payloads). The core
 // never interprets sidecar bytes; base64 keeps arbitrary bytes (including NUL /
@@ -997,7 +1000,14 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // Default matches arrangement::Project's constructor default (48 kHz, the
     // conventional DAW render rate) so a document that omits "sample_rate"
     // round-trips to the same rate an in-memory project would have.
-    project.set_sample_rate(num_or(root, "sample_rate", 48000.0));
+    const double sample_rate = num_or(root, "sample_rate", 48000.0);
+    if (!std::isfinite(sample_rate) || sample_rate < kMinProjectSampleRate ||
+        sample_rate > kMaxProjectSampleRate) {
+      result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sample_rate",
+                                    "sample_rate must be finite and within the supported range"});
+      return result;
+    }
+    project.set_sample_rate(sample_rate);
     project.set_overlap_policy(
         static_cast<arrangement::OverlapPolicy>(uint_or(root, "overlap_policy", 0)));
 

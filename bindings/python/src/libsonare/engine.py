@@ -233,6 +233,7 @@ class RealtimeEngine:
         self._handle: ctypes.c_void_p | None = handle
         self._capture_arrays: list[ctypes.Array[ctypes.c_float]] = []
         self._capture_ptrs: ctypes.Array | None = None
+        self._clip_page_providers: list[ClipPageProvider] = []
         self.prepare(sample_rate, max_block_size, command_capacity, telemetry_capacity)
 
     def close(self) -> None:
@@ -449,8 +450,14 @@ class RealtimeEngine:
         return int(out.value)
 
     def set_clips(self, clips: Sequence[EngineClip]) -> None:
+        page_providers = [
+            provider
+            for provider in (getattr(clip, "page_provider", None) for clip in clips)
+            if isinstance(provider, ClipPageProvider)
+        ]
         raw_clips, _channel_arrays, _channel_ptrs, _warp_arrays = _clips_to_c(clips)
         _check(_get_lib().sonare_engine_set_clips(self._require_handle(), raw_clips, len(clips)))
+        self._clip_page_providers = page_providers
 
     def clip_count(self) -> int:
         out = ctypes.c_size_t()

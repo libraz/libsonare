@@ -6,7 +6,7 @@
 #include <utility>
 
 #include "core/resample.h"
-#include "effects/phase_vocoder.h"
+#include "engine/tempo_sync.h"
 #include "midi/midi_clip.h"
 
 namespace sonare::arrangement {
@@ -87,41 +87,10 @@ size_t rounded_nonnegative_sample(double sample) noexcept {
   return static_cast<size_t>(std::llround(sample));
 }
 
-std::vector<float> tempo_sync_channel(const std::vector<float>& source, size_t source_offset,
-                                      size_t source_samples, size_t target_samples,
-                                      int sample_rate) {
-  StreamingPhaseVocoderConfig config;
-  config.sample_rate = sample_rate;
-  config.n_fft = 2048;
-  config.hop_length = 512;
-  config.phase_lock = true;
-
-  const float rate =
-      static_cast<float>(static_cast<double>(source_samples) / static_cast<double>(target_samples));
-  StreamingPhaseVocoder stretcher(config);
-  stretcher.reserve(source_samples, target_samples + static_cast<size_t>(config.n_fft));
-
-  std::vector<float> out(target_samples + static_cast<size_t>(config.n_fft), 0.0f);
-  size_t written = stretcher.process_into(source.data() + source_offset, source_samples, rate,
-                                          out.data(), out.size());
-  written += stretcher.finalize_into(rate, out.data() + written, out.size() - written);
-  out.resize(std::min(written, target_samples));
-  if (out.size() < target_samples) {
-    out.resize(target_samples, 0.0f);
-  }
-  return out;
-}
-
 int64_t tempo_sync_latency_samples() noexcept {
-  StreamingPhaseVocoderConfig config;
+  engine::TempoSyncWarpBakeConfig config;
   return config.n_fft / 2;
 }
-
-struct TempoSyncSegment {
-  size_t source_offset = 0;
-  size_t source_samples = 0;
-  size_t target_samples = 0;
-};
 
 struct AudioClipPart {
   double start_ppq = 0.0;
@@ -469,8 +438,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           built->channels.push_back(resample_channel(ch, samples->sample_rate, project_sr));
         }
         if (compile_baked_tempo_sync) {
-          StreamingPhaseVocoderConfig pv_config;
-          std::vector<TempoSyncSegment> segments;
+          engine::TempoSyncWarpBakeConfig bake_config;
+          std::vector<engine::TempoSyncWarpSegment> segments;
           segments.reserve(rt_warp_map->anchors.size() > 1 ? rt_warp_map->anchors.size() - 1 : 0);
           size_t total_target_samples = 0;
           bool invalid_segment = rt_warp_map->anchors.size() < 2;
@@ -482,12 +451,12 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
             const size_t source_end = rounded_nonnegative_sample(next.source_sample);
             const size_t target_start = rounded_nonnegative_sample(prev.warp_sample);
             const size_t target_end = rounded_nonnegative_sample(next.warp_sample);
-            TempoSyncSegment segment;
+            engine::TempoSyncWarpSegment segment;
             segment.source_offset = source_offset;
             segment.source_samples = source_end > source_offset ? source_end - source_offset : 0;
             segment.target_samples = target_end > target_start ? target_end - target_start : 0;
             invalid_segment = segment.target_samples == 0 ||
-                              segment.source_samples < static_cast<size_t>(pv_config.hop_length);
+                              segment.source_samples < static_cast<size_t>(bake_config.hop_length);
             if (!invalid_segment) {
               total_target_samples += segment.target_samples;
               segments.push_back(segment);
@@ -499,9 +468,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
             continue;
           }
           const int project_sample_rate = static_cast<int>(std::lround(project_sr));
+          bake_config.sample_rate = project_sample_rate;
           bool span_exceeds_source = false;
           for (const auto& ch : built->channels) {
-            for (const TempoSyncSegment& segment : segments) {
+            for (const engine::TempoSyncWarpSegment& segment : segments) {
               if (segment.source_offset > ch.size() ||
                   segment.source_samples > ch.size() - segment.source_offset) {
                 span_exceeds_source = true;
@@ -518,14 +488,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           std::vector<std::vector<float>> stretched;
           stretched.reserve(built->channels.size());
           for (const auto& ch : built->channels) {
-            std::vector<float> channel;
-            channel.reserve(total_target_samples);
-            for (const TempoSyncSegment& segment : segments) {
-              std::vector<float> segment_audio =
-                  tempo_sync_channel(ch, segment.source_offset, segment.source_samples,
-                                     segment.target_samples, project_sample_rate);
-              channel.insert(channel.end(), segment_audio.begin(), segment_audio.end());
-            }
+            std::vector<float> channel =
+                engine::bake_tempo_sync_warp_channel(ch.data(), ch.size(), segments, bake_config);
             stretched.push_back(std::move(channel));
           }
           built->channels = std::move(stretched);

@@ -720,6 +720,21 @@ TEST_CASE("non-positive tempo bpm is rejected with a diagnostic", "[serialize]")
   CHECK(found);
 }
 
+TEST_CASE("invalid project sample rate is rejected with a diagnostic", "[serialize]") {
+  for (const char* json :
+       {"{\"version\": 1, \"sample_rate\": 0}", "{\"version\": 1, \"sample_rate\": -48000}",
+        "{\"version\": 1, \"sample_rate\": 500000}"}) {
+    auto result = project_from_json(json);
+    CHECK_FALSE(result.ok());
+    REQUIRE(result.has_error());
+    bool found = false;
+    for (const auto& d : result.diagnostics) {
+      if (d.code == "invalid_sample_rate") found = true;
+    }
+    CHECK(found);
+  }
+}
+
 TEST_CASE("invalid time signature is rejected with a diagnostic", "[serialize]") {
   auto result = project_from_json(
       "{\"version\": 1, \"time_signatures\": [{\"start_ppq\": 0.0, \"numerator\": 4, "

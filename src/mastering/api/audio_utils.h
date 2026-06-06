@@ -125,7 +125,11 @@ inline void apply_shared_mono_transfer_repair(std::vector<float>& left, std::vec
                                   "shared stereo repair produced mismatched length");
   }
 
+  // Spectral repairs shift zero crossings, so the per-sample ratio is unbounded
+  // where the mono mix passes through zero while the repaired output does not.
+  // Bound the transfer magnitude; within the bound the signed ratio is exact.
   constexpr float kEpsilon = 1.0e-6f;
+  constexpr float kMaxTransferGain = 4.0f;
   for (std::size_t index = 0; index < mono.size(); ++index) {
     const float in = mono[index];
     const float out = repaired_audio[index];
@@ -136,6 +140,7 @@ inline void apply_shared_mono_transfer_repair(std::vector<float>& left, std::vec
     if (!std::isfinite(gain)) {
       gain = 1.0f;
     }
+    gain = std::clamp(gain, -kMaxTransferGain, kMaxTransferGain);
     left[index] *= gain;
     right[index] *= gain;
   }

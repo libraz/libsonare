@@ -170,6 +170,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   adopt_tempo_map_snapshot();
   const transport::TempoMap& tempo_map = *(active_tempo_map_ ? active_tempo_map_ : &tempo_map_);
   const auto state = transport_.snapshot();
+  clip_page_underrun_reported_this_block_ = false;
   // Adopt the latest published clip / automation snapshots exactly once at
   // block start. Every per-sub-block read below then sees a stable set, so a
   // control-thread publish can never swap data mid-block.
@@ -345,6 +346,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   const uint32_t capture_overflow_before = capture_sink_.overflow_count();
   const BoundaryList& boundaries = boundary_splitter_.finish();
   int previous_offset = 0;
+  clip_player_.begin_page_miss_block();
   for (size_t i = 0; i < boundaries.size(); ++i) {
     const int offset = boundaries[i].offset;
     if (offset > previous_offset) {
@@ -383,6 +385,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
                      fold_monitor_to_main);
     transport_.advance(frames - previous_offset);
   }
+  clip_player_.end_page_miss_block();
 
   const auto end_state = transport_.snapshot();
   const uint32_t unknown_target_delta =
@@ -1272,7 +1275,8 @@ void RealtimeEngine::silence(float* const* io, int num_channels, int num_frames)
 }
 
 void RealtimeEngine::enqueue_telemetry(Telemetry telemetry) noexcept {
-  if (telemetry_overflow_count_ > 0 && telemetry.type != TelemetryType::kError) {
+  if (telemetry_overflow_count_ > 0 && (telemetry.type != TelemetryType::kError ||
+                                        telemetry.error == TelemetryErrorCode::kClipPageUnderrun)) {
     Telemetry overflow{};
     overflow.type = TelemetryType::kError;
     overflow.error = TelemetryErrorCode::kTelemetryOverflow;
@@ -1298,8 +1302,11 @@ void RealtimeEngine::enqueue_error(TelemetryErrorCode code, int64_t render_frame
 
 void RealtimeEngine::on_clip_page_miss(const ClipPageRequest& request) noexcept {
   (void)clip_page_requests_.push(request);
-  enqueue_error(TelemetryErrorCode::kClipPageUnderrun, transport_.render_frame(),
-                transport_.sample_position(), request.clip_id);
+  if (!clip_page_underrun_reported_this_block_) {
+    clip_page_underrun_reported_this_block_ = true;
+    enqueue_error(TelemetryErrorCode::kClipPageUnderrun, transport_.render_frame(),
+                  transport_.sample_position(), request.clip_id);
+  }
 }
 
 void RealtimeEngine::compact_pending() noexcept {

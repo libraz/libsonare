@@ -1,7 +1,12 @@
 #pragma once
 
 /// @file goniometer_buffer.h
-/// @brief Small lock-free-style ring for decimated stereo scope points.
+/// @brief Small best-effort ring for decimated stereo scope points.
+///
+/// The writer publishes a monotonically increasing index, but individual point
+/// slots are not seqlock-protected. UI consumers may observe a torn point during
+/// wraparound; this buffer is intended only for visual metering, never audio or
+/// state decisions.
 
 #include <array>
 #include <atomic>

@@ -230,6 +230,7 @@ TEST_CASE("Mixing Scene JSON round-trips pure data without graph dependency", "[
   scene.connections.push_back({"vocal", "master"});
 
   const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("\"vcaOffsetDb\":0") != std::string::npos);
   const auto parsed = sonare::mixing::api::scene_from_json(json);
 
   REQUIRE(parsed.version == 1);

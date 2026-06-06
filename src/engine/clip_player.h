@@ -50,6 +50,7 @@ class ClipPagedAudioProvider {
   virtual ~ClipPagedAudioProvider() = default;
   virtual int num_channels() const noexcept = 0;
   virtual int64_t num_samples() const noexcept = 0;
+  virtual int64_t page_frames() const noexcept { return 1; }
   virtual bool sample_at(int channel, int64_t sample, float* out) const noexcept = 0;
 };
 
@@ -156,6 +157,8 @@ class ClipPlayer final : public rt::ProcessorBase {
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept;
   void set_timeline_sample(int64_t timeline_sample) noexcept { timeline_sample_ = timeline_sample; }
   void set_page_request_sink(ClipPageRequestSink* sink) noexcept { page_request_sink_ = sink; }
+  void begin_page_miss_block() noexcept;
+  void end_page_miss_block() noexcept { external_page_miss_block_ = false; }
   void set_clips(std::vector<ClipSchedule> clips,
                  const transport::TempoMap* tempo_map_override = nullptr);
 
@@ -182,12 +185,23 @@ class ClipPlayer final : public rt::ProcessorBase {
   static double source_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
   static int source_channel_count(const ClipSchedule& clip) noexcept;
   static int64_t source_sample_count(const ClipSchedule& clip) noexcept;
+  void notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample) noexcept;
   float sample_channel(const ClipSchedule& clip, int src_ch, double source_pos) noexcept;
+
+  struct PageMissCacheEntry {
+    uint32_t clip_id = 0;
+    uint32_t channel = 0;
+    int64_t page_index = -1;
+  };
 
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   int64_t timeline_sample_ = 0;
   ClipPageRequestSink* page_request_sink_ = nullptr;
+  std::array<PageMissCacheEntry, 64> page_miss_cache_{};
+  size_t page_miss_cache_size_ = 0;
+  bool page_miss_cache_overflowed_ = false;
+  bool external_page_miss_block_ = false;
   const transport::TempoMap* tempo_map_ = nullptr;
   mutable rt::RtPublisher<std::vector<ClipSchedule>> clips_;
   // Published by set_clips() on the control thread; read lock-free by

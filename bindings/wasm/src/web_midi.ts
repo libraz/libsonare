@@ -105,9 +105,8 @@ export async function bindWebMidi(
   engine: RealtimeEngine,
   options: BindWebMidiOptions = {},
 ): Promise<WebMidiBinding> {
-  const requestMIDIAccess = (globalThis.navigator as NavigatorWithMidi | undefined)
-    ?.requestMIDIAccess;
-  if (typeof requestMIDIAccess !== 'function') {
+  const navigatorWithMidi = globalThis.navigator as NavigatorWithMidi | undefined;
+  if (typeof navigatorWithMidi?.requestMIDIAccess !== 'function') {
     throw new Error('Web MIDI is not available in this environment');
   }
 
@@ -115,7 +114,9 @@ export async function bindWebMidi(
   assertNibble('bindWebMidi', group, 'group');
   const destinationId = options.destinationId ?? 0;
   const selectedIds = new Set(options.inputIds ?? []);
-  const access = await requestMIDIAccess({
+  // Invoke through the navigator so the browser's native method keeps its
+  // required `this` binding (detached calls throw "Illegal invocation").
+  const access = await navigatorWithMidi.requestMIDIAccess({
     sysex: options.sysex ?? false,
     software: options.software ?? true,
   });
@@ -154,9 +155,7 @@ export async function bindWebMidi(
         runningStatus,
         options.timestampToSamples,
       );
-      if (status !== 0) {
-        runningStatus = status;
-      }
+      runningStatus = status;
     };
     if (input.addEventListener) {
       input.addEventListener('midimessage', listener);
@@ -268,12 +267,12 @@ function dispatchMidiMessage(
   const message = status & 0xf0;
   const channel = status & 0x0f;
   if (message < 0x80 || message > 0xe0) {
-    return status;
+    return status >= 0xf8 ? runningStatus : 0;
   }
 
   const a = readU7(data, offset);
   const b = readU7(data, offset + 1);
-  if (a < 0) {
+  if (a < 0 || b < 0) {
     return status;
   }
 
@@ -282,9 +281,9 @@ function dispatchMidiMessage(
     : 0;
 
   if (message === 0x80) {
-    engine.pushMidiInputNoteOff(group, channel, a, b < 0 ? 0 : b, portTimeSamples);
+    engine.pushMidiInputNoteOff(group, channel, a, b, portTimeSamples);
   } else if (message === 0x90) {
-    if ((b < 0 ? 0 : b) === 0) {
+    if (b === 0) {
       engine.pushMidiInputNoteOff(group, channel, a, 0, portTimeSamples);
     } else {
       engine.pushMidiInputNoteOn(group, channel, a, b, portTimeSamples);

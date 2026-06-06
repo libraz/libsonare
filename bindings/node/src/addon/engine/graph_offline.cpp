@@ -203,7 +203,7 @@ Napi::Value RealtimeEngineWrap::FreezeOffline(const Napi::CallbackInfo& info) {
   options.block_size = IntProperty(obj, "blockSize", 128);
   options.num_channels = IntProperty(obj, "numChannels", 2);
   options.clip_id = static_cast<uint32_t>(Int64Property(obj, "clipId", 1));
-  options.start_ppq = FloatProperty(obj, "startPpq", 0.0f);
+  options.start_ppq = sonare_node::DoubleProperty(obj, "startPpq", 0.0);
   options.gain = FloatProperty(obj, "gain", 1.0f);
   SonareEngineFreezeResult result{};
   ThrowIfError(env, sonare_engine_freeze_offline(engine_, &options, &result));

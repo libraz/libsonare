@@ -19,6 +19,8 @@ from ._ffi_signatures_repair_dynamics import configure_repair_dynamics_signature
 from ._ffi_types import *  # noqa: F403
 from ._ffi_types import __all__ as _type_exports
 
+EXPECTED_ABI_VERSION = 0x03020101
+
 # --- Library discovery ---
 
 
@@ -84,7 +86,19 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     configure_extra_signatures(lib)
     configure_project_signatures(lib)
 
+    if not hasattr(lib, "sonare_abi_version"):
+        raise RuntimeError(
+            "libsonare ABI mismatch: native binary does not expose sonare_abi_version"
+        )
+    abi = int(lib.sonare_abi_version())
+    if abi != EXPECTED_ABI_VERSION:
+        raise RuntimeError(
+            f"libsonare ABI mismatch: native binary reports {abi}, "
+            f"expected {EXPECTED_ABI_VERSION}. The installed shared library is "
+            "incompatible with this Python binding."
+        )
+
     return lib
 
 
-__all__ = [*_type_exports, "load_library"]
+__all__ = [*_type_exports, "EXPECTED_ABI_VERSION", "load_library"]

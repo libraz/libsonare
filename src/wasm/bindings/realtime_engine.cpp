@@ -10,7 +10,7 @@
 
 #include "c_api/synth_patch_common.h"
 #include "common.h"
-#include "effects/phase_vocoder.h"
+#include "engine/tempo_sync.h"
 #include "midi/midi_fx.h"
 #include "synth_patch_val.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -52,6 +52,7 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
 
   int num_channels() const noexcept override { return channels_; }
   int64_t num_samples() const noexcept override { return samples_; }
+  int64_t page_frames() const noexcept override { return page_frames_; }
 
   bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
     if (!out || channel < 0 || channel >= channels_ || sample < 0 || sample >= samples_) {
@@ -84,7 +85,7 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
         page->frames = static_cast<int64_t>(channel.size());
         const int64_t page_start = page_index * page_frames_;
         const int64_t max_frames = std::min<int64_t>(page_frames_, samples_ - page_start);
-        if (page->frames <= 0 || page->frames > max_frames) {
+        if (page->frames != max_frames) {
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                         "invalid clip page frame count");
         }
@@ -1105,6 +1106,10 @@ class RealtimeEngineWasm {
         }
       }
       if (schedule.warp_mode == sonare::engine::WarpMode::kTempoSync) {
+        if (has_page_provider) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "tempo-sync paged clips are not supported");
+        }
         if (schedule.loop) {
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                         "tempo-sync direct clips do not support loop=true yet");
@@ -1113,16 +1118,11 @@ class RealtimeEngineWasm {
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                         "tempo-sync clip offset is outside the source");
         }
-        struct TempoSyncSegment {
-          size_t source_offset = 0;
-          size_t source_samples = 0;
-          size_t target_samples = 0;
-        };
         const auto rounded_nonnegative_sample = [](double sample) noexcept -> size_t {
           if (!std::isfinite(sample) || sample <= 0.0) return 0;
           return static_cast<size_t>(std::llround(sample));
         };
-        std::vector<TempoSyncSegment> segments;
+        std::vector<sonare::engine::TempoSyncWarpSegment> segments;
         const size_t base_offset =
             static_cast<size_t>(std::max<int64_t>(0, schedule.clip_offset_samples));
         size_t target_samples = 0;
@@ -1136,7 +1136,7 @@ class RealtimeEngineWasm {
             const size_t source_end = rounded_nonnegative_sample(next.source_sample);
             const size_t target_start = rounded_nonnegative_sample(prev.warp_sample);
             const size_t target_end = rounded_nonnegative_sample(next.warp_sample);
-            TempoSyncSegment segment;
+            sonare::engine::TempoSyncWarpSegment segment;
             segment.source_offset = base_offset + source_start;
             segment.source_samples = source_end > source_start ? source_end - source_start : 0;
             segment.target_samples = target_end > target_start ? target_end - target_start : 0;
@@ -1150,7 +1150,7 @@ class RealtimeEngineWasm {
             segments.push_back(segment);
           }
         } else {
-          TempoSyncSegment segment;
+          sonare::engine::TempoSyncWarpSegment segment;
           segment.source_offset = base_offset;
           segment.source_samples = static_cast<size_t>(num_samples) - base_offset;
           segment.target_samples =
@@ -1161,33 +1161,11 @@ class RealtimeEngineWasm {
         if (segments.empty() || target_samples == 0)
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                         "tempo-sync clip has an empty source or target span");
-        sonare::StreamingPhaseVocoderConfig pv_config;
-        pv_config.sample_rate = static_cast<int>(std::lround(engine_.sample_rate()));
-        pv_config.n_fft = 2048;
-        pv_config.hop_length = 512;
-        pv_config.phase_lock = true;
+        sonare::engine::TempoSyncWarpBakeConfig bake_config;
+        bake_config.sample_rate = static_cast<int>(std::lround(engine_.sample_rate()));
         for (auto& channel : storage) {
-          std::vector<float> output;
-          output.reserve(target_samples);
-          for (const TempoSyncSegment& segment : segments) {
-            const float rate = static_cast<float>(segment.source_samples) /
-                               static_cast<float>(segment.target_samples);
-            sonare::StreamingPhaseVocoder stretcher(pv_config);
-            stretcher.reserve(segment.source_samples,
-                              segment.target_samples + static_cast<size_t>(pv_config.n_fft));
-            std::vector<float> segment_output(
-                segment.target_samples + static_cast<size_t>(pv_config.n_fft), 0.0f);
-            size_t written = stretcher.process_into(channel.data() + segment.source_offset,
-                                                    segment.source_samples, rate,
-                                                    segment_output.data(), segment_output.size());
-            written += stretcher.finalize_into(rate, segment_output.data() + written,
-                                               segment_output.size() - written);
-            segment_output.resize(std::min(written, segment.target_samples));
-            if (segment_output.size() < segment.target_samples)
-              segment_output.resize(segment.target_samples, 0.0f);
-            output.insert(output.end(), segment_output.begin(), segment_output.end());
-          }
-          channel = std::move(output);
+          channel = sonare::engine::bake_tempo_sync_warp_channel(channel.data(), channel.size(),
+                                                                 segments, bake_config);
         }
         pointers.clear();
         for (const auto& channel : storage) {
@@ -1199,6 +1177,10 @@ class RealtimeEngineWasm {
         schedule.loop = false;
         schedule.warp_mode = sonare::engine::WarpMode::kOff;
         schedule.warp_anchors.reset();
+      } else if (schedule.warp_mode == sonare::engine::WarpMode::kRepitch && schedule.loop &&
+                 schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "repitch warped clips do not support loop=true yet");
       }
       schedules.push_back(schedule);
     }

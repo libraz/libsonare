@@ -967,6 +967,11 @@ TEST_CASE("sonare_engine_set_clips_accepts_repitch_warp_anchors", "[c_api]") {
 
   clip.warp_mode = 99;
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
+
+  clip.warp_mode = SONARE_ENGINE_WARP_MODE_REPITCH;
+  clip.loop = 1;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
+
   sonare_engine_destroy(engine);
 }
 
@@ -1058,6 +1063,11 @@ TEST_CASE("sonare_engine streams paged clip providers and reports page misses", 
   SonareClipPageProvider* provider = nullptr;
   REQUIRE(sonare_clip_page_provider_create(1, 8, 4, &provider) == SONARE_OK);
   REQUIRE(provider != nullptr);
+
+  std::array<float, 2> short_page0{1.0f, 2.0f};
+  const float* short_page0_channels[] = {short_page0.data()};
+  REQUIRE(sonare_clip_page_provider_supply(provider, 0, short_page0_channels, 1, 2) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 
   std::array<float, 4> page0{1.0f, 2.0f, 3.0f, 4.0f};
   const float* page0_channels[] = {page0.data()};

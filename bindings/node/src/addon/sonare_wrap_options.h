@@ -59,6 +59,12 @@ inline float FloatProperty(const Napi::Object& obj, const char* key, float fallb
   return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().FloatValue();
 }
 
+/// @brief Read a double property, coercing any non-null defined value.
+inline double DoubleProperty(const Napi::Object& obj, const char* key, double fallback) {
+  Napi::Value value = obj.Get(key);
+  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().DoubleValue();
+}
+
 /// @brief Read a bool property, coercing any non-null defined value.
 inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback) {
   Napi::Value value = obj.Get(key);

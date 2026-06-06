@@ -33,6 +33,7 @@ void Node::prepare(double sample_rate, int max_block_size) {
   input_.assign(buffer_size, 0.0f);
   output_.assign(buffer_size, 0.0f);
   process_channels_.assign(static_cast<size_t>(num_ports_), nullptr);
+  sidechain_channels_.assign(static_cast<size_t>(num_ports_), nullptr);
   // prepared_ flips true only after the processor's own prepare() has completed
   // without throwing, so process_block() (noexcept, audio thread) can rely on
   // it: a prepared Node always has a prepared processor, hence ensure_prepared()

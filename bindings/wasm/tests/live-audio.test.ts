@@ -57,9 +57,10 @@ describe('bindMicrophoneInput', () => {
     const node = { port: {} } as unknown as AudioWorkletNode;
     const binding = await bindMicrophoneInput(context, { node } as never, {
       audio: { echoCancellation: false },
+      video: { width: 640 },
     });
 
-    expect(requested).toEqual([{ audio: { echoCancellation: false }, video: false }]);
+    expect(requested).toEqual([{ audio: { echoCancellation: false }, video: { width: 640 } }]);
     expect(binding.stream).toBe(stream);
     expect(source.connected).toEqual([node]);
     binding.close();

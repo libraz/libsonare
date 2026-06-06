@@ -125,6 +125,17 @@ TEST_CASE("late tail length follows the longest RT60 and the cap", "[acoustic][l
   REQUIRE(static_cast<int>(clipped.size()) == 10000);
 }
 
+TEST_CASE("late tail length ignores bands above Nyquist", "[acoustic][late_reverb]") {
+  ReverbTime rt;
+  rt.rt60_bands = {0.25f, 0.25f, 0.25f, 0.25f, 0.25f, 5.0f};
+  const int sr = 8000;
+
+  const Audio tail = synthesize_late_tail(rt, sr);
+  const int expected =
+      static_cast<int>(std::ceil(static_cast<double>(0.25f) * 2.0 * static_cast<double>(sr)));
+  REQUIRE(static_cast<int>(tail.size()) == expected);
+}
+
 TEST_CASE("unbounded RT60 does not overflow the auto length", "[acoustic][late_reverb]") {
   // A near-rigid room gives an enormous RT60; the auto length must clamp in
   // double instead of overflowing int into a negative size. A small cap keeps

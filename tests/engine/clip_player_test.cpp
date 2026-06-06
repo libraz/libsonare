@@ -12,11 +12,13 @@ namespace {
 
 class TestPagedProvider final : public sonare::engine::ClipPagedAudioProvider {
  public:
-  explicit TestPagedProvider(std::vector<float> samples, int64_t missing_sample = -1)
-      : samples_(std::move(samples)), missing_sample_(missing_sample) {}
+  explicit TestPagedProvider(std::vector<float> samples, int64_t missing_sample = -1,
+                             int64_t page_frames = 1)
+      : samples_(std::move(samples)), missing_sample_(missing_sample), page_frames_(page_frames) {}
 
   int num_channels() const noexcept override { return 1; }
   int64_t num_samples() const noexcept override { return static_cast<int64_t>(samples_.size()); }
+  int64_t page_frames() const noexcept override { return page_frames_; }
 
   bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
     if (channel != 0 || !out || sample < 0 || sample >= num_samples() ||
@@ -30,6 +32,7 @@ class TestPagedProvider final : public sonare::engine::ClipPagedAudioProvider {
  private:
   std::vector<float> samples_;
   int64_t missing_sample_ = -1;
+  int64_t page_frames_ = 1;
 };
 
 class TestPageRequestSink final : public sonare::engine::ClipPageRequestSink {
@@ -114,7 +117,8 @@ TEST_CASE("ClipPlayer reports paged provider misses to a request sink", "[engine
   REQUIRE(sink.requests[0].sample == 2);
 }
 
-TEST_CASE("ClipPlayer reports paged provider misses across loop wraps", "[engine][clip_player]") {
+TEST_CASE("ClipPlayer deduplicates paged provider misses across loop wraps",
+          "[engine][clip_player]") {
   auto provider = std::make_shared<TestPagedProvider>(std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f},
                                                       /*missing_sample=*/1);
 
@@ -136,11 +140,37 @@ TEST_CASE("ClipPlayer reports paged provider misses across loop wraps", "[engine
   REQUIRE(out_l[1] == 0.0f);
   REQUIRE(out_l[4] == 1.0f);
   REQUIRE(out_l[5] == 0.0f);
-  REQUIRE(sink.count >= 2);
+  REQUIRE(sink.count == 1);
   REQUIRE(sink.requests[0].clip_id == 88);
   REQUIRE(sink.requests[0].sample == 1);
-  REQUIRE(sink.requests[1].clip_id == 88);
-  REQUIRE(sink.requests[1].sample == 1);
+}
+
+TEST_CASE("ClipPlayer holds available paged samples across interpolation misses",
+          "[engine][clip_player]") {
+  auto provider = std::make_shared<TestPagedProvider>(
+      std::vector<float>{10.0f, 20.0f, 30.0f, 40.0f}, /*missing_sample=*/2,
+      /*page_frames=*/2);
+
+  sonare::engine::ClipSchedule clip{89, {}, 0.0, 0, 0, 1, false, 1.0f, 0, 0};
+  clip.page_provider = provider;
+  clip.warp_mode = sonare::engine::WarpMode::kRepitch;
+  clip.warp_anchors = std::make_shared<const std::vector<sonare::engine::WarpAnchor>>(
+      std::vector<sonare::engine::WarpAnchor>{{0.0, 1.5}, {1.0, 2.5}});
+
+  TestPageRequestSink sink;
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 1);
+  player.set_page_request_sink(&sink);
+  player.set_clips({clip});
+
+  std::array<float, 1> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 1, 0);
+
+  REQUIRE(out_l[0] == 20.0f);
+  REQUIRE(sink.count == 1);
+  REQUIRE(sink.requests[0].clip_id == 89);
+  REQUIRE(sink.requests[0].sample == 2);
 }
 
 TEST_CASE("ClipPlayer reports paged provider misses after a timeline seek",
@@ -331,6 +361,28 @@ TEST_CASE("ClipPlayer repitch warp maps warped positions to source positions",
   REQUIRE_THAT(out_l[1], WithinAbs(5.0f, 1.0e-6f));
   REQUIRE_THAT(out_l[2], WithinAbs(10.0f, 1.0e-6f));
   REQUIRE_THAT(out_l[3], WithinAbs(15.0f, 1.0e-6f));
+}
+
+TEST_CASE("ClipPlayer does not silently identity-render unbaked tempo-sync clips",
+          "[engine][clip_player]") {
+  std::array<float, 4> source{1.0f, 2.0f, 3.0f, 4.0f};
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipSchedule clip{1, {channels, 1, 4}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+  clip.warp_mode = sonare::engine::WarpMode::kTempoSync;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip});
+
+  std::array<float, 4> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 4, 0);
+
+  REQUIRE(out_l[0] == 0.0f);
+  REQUIRE(out_l[1] == 0.0f);
+  REQUIRE(out_l[2] == 0.0f);
+  REQUIRE(out_l[3] == 0.0f);
 }
 
 TEST_CASE(

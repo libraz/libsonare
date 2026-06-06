@@ -446,6 +446,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   float applied_param_smoothing_ms_ = 20.0f;  // audio thread only
   double sample_rate_ = 48000.0;
   uint32_t telemetry_overflow_count_ = 0;
+  bool clip_page_underrun_reported_this_block_ = false;
   int graph_latency_samples_q8_ = 0;
   int max_block_size_ = 0;
 
