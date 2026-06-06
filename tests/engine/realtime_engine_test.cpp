@@ -4,6 +4,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <memory>
 #include <vector>
 
 #include "engine/clip_player.h"
@@ -357,6 +358,59 @@ TEST_CASE("RealtimeEngine schedules clips from the latest tempo snapshot", "[eng
   REQUIRE(left[1] == 0.5f);
   REQUIRE(left[2] == 0.25f);
   REQUIRE(left[3] == 0.125f);
+}
+
+TEST_CASE("RealtimeEngine drains paged clip requests and underrun telemetry",
+          "[engine][realtime][clip_pages]") {
+  class MissingPagedProvider final : public sonare::engine::ClipPagedAudioProvider {
+   public:
+    int num_channels() const noexcept override { return 1; }
+    int64_t num_samples() const noexcept override { return static_cast<int64_t>(samples.size()); }
+
+    bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
+      if (channel != 0 || !out || sample < 0 || sample >= num_samples() || sample == 2) {
+        return false;
+      }
+      *out = samples[static_cast<size_t>(sample)];
+      return true;
+    }
+
+    std::array<float, 4> samples{1.0f, 2.0f, 3.0f, 4.0f};
+  };
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 4, 16, 16);
+
+  auto provider = std::make_shared<MissingPagedProvider>();
+  sonare::engine::ClipSchedule clip{44, {}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+  clip.page_provider = provider;
+  engine.set_clips({clip});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, 4> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, 4);
+
+  sonare::engine::ClipPageRequest request{};
+  REQUIRE(engine.pop_clip_page_request(request));
+  REQUIRE(request.clip_id == 44);
+  REQUIRE(request.channel == 0);
+  REQUIRE(request.sample == 2);
+
+  bool found_underrun = false;
+  sonare::engine::Telemetry telemetry{};
+  while (engine.pop_telemetry(telemetry)) {
+    found_underrun = found_underrun ||
+                     (telemetry.type == sonare::engine::TelemetryType::kError &&
+                      telemetry.error == sonare::engine::TelemetryErrorCode::kClipPageUnderrun &&
+                      telemetry.value == 44);
+  }
+  REQUIRE(found_underrun);
+  REQUIRE(left[2] == 0.0f);
 }
 
 TEST_CASE("RealtimeEngine offline render matches block process", "[engine][realtime][offline]") {

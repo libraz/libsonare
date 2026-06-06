@@ -154,6 +154,14 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_uint32),
         ]
 
+        lib.sonare_project_add_loop_recording_takes.restype = ctypes.c_int32
+        lib.sonare_project_add_loop_recording_takes.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectLoopRecordingDesc),
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
         lib.sonare_project_add_midi_clip.restype = ctypes.c_int32
         lib.sonare_project_add_midi_clip.argtypes = [
             ctypes.c_void_p,
@@ -199,6 +207,30 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.c_uint32,
             ctypes.c_uint32,
+        ]
+
+        lib.sonare_project_set_clip_warp_mode.restype = ctypes.c_int32
+        lib.sonare_project_set_clip_warp_mode.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+        ]
+
+        lib.sonare_project_set_clip_takes.restype = ctypes.c_int32
+        lib.sonare_project_set_clip_takes.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareProjectClipTake),
+            ctypes.c_size_t,
+            ctypes.c_uint32,
+        ]
+
+        lib.sonare_project_set_clip_comp_segments.restype = ctypes.c_int32
+        lib.sonare_project_set_clip_comp_segments.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareProjectClipCompSegment),
+            ctypes.c_size_t,
         ]
 
         lib.sonare_project_set_warp_map.restype = ctypes.c_int32

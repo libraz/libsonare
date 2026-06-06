@@ -408,11 +408,27 @@ SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int6
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count);
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_samples,
+                                             int64_t page_frames,
+                                             SonareClipPageProvider** out_provider);
+void sonare_clip_page_provider_destroy(SonareClipPageProvider* provider);
+SonareError sonare_clip_page_provider_supply(SonareClipPageProvider* provider, int64_t page_index,
+                                             const float* const* channels, int num_channels,
+                                             int64_t frames);
+SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, int64_t page_index);
+SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
+                                                SonareClipPageRequest* out_request,
+                                                int* out_has_request);
 SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
                                              const SonareEngineCaptureBuffer* buffer);
 SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed);
 SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_t start_sample,
                                             int64_t end_sample, int enabled);
+SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
+                                             SonareEngineCaptureSource source);
+SonareError sonare_engine_set_record_offset_samples(SonareRealtimeEngine* engine,
+                                                    int64_t offset_samples);
+SonareError sonare_engine_set_input_monitor(SonareRealtimeEngine* engine, int enabled, float gain);
 SonareError sonare_engine_reset_capture(SonareRealtimeEngine* engine);
 SonareError sonare_engine_capture_status(SonareRealtimeEngine* engine,
                                          SonareEngineCaptureStatus* out);

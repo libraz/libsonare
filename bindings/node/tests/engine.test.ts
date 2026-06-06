@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { engineAbiVersion, RealtimeEngine, voiceChangerAbiVersion } from '../src/index.js';
 
@@ -94,6 +97,8 @@ describe('RealtimeEngine native binding', () => {
     expect(captureStatus.capturedFrames).toBe(128);
     expect(captureStatus.overflowCount).toBe(0);
     expect(captureStatus.armed).toBe(true);
+    expect(captureStatus.source).toBe('output');
+    expect(captureStatus.recordOffsetSamples).toBe(0);
     expect(captureLeft[0]).toBeCloseTo(0.75, 4);
     expect(captureRight[0]).toBeCloseTo(-0.75, 4);
     engine.resetCapture();
@@ -106,7 +111,152 @@ describe('RealtimeEngine native binding', () => {
     expect(telemetry.at(-1)?.renderFrame).toBe(0);
     expect(telemetry.at(-1)?.timelineSample).toBe(48000 + 128);
 
+    engine.setCaptureSource('input');
+    engine.setRecordOffsetSamples(-37);
+    engine.armCapture();
+    engine.seekMarker(11);
+    engine.process([left, right]);
+    const inputCaptureStatus = engine.captureStatus();
+    expect(inputCaptureStatus.source).toBe('input');
+    expect(inputCaptureStatus.recordOffsetSamples).toBe(-37);
+    expect(captureLeft[0]).toBeCloseTo(0.25, 4);
+    expect(captureRight[0]).toBeCloseTo(-0.25, 4);
+
+    engine.setInputMonitor(false);
+    engine.resetCapture();
+    engine.armCapture();
+    engine.seekMarker(11);
+    let monitored = engine.process([
+      new Float32Array(128).fill(0.25),
+      new Float32Array(128).fill(-0.25),
+    ]);
+    expect(monitored[0][0]).toBeCloseTo(0.25, 4);
+    expect(monitored[1][0]).toBeCloseTo(-0.25, 4);
+    expect(captureLeft[0]).toBeCloseTo(0.25, 4);
+
+    engine.setInputMonitor(true, 0.5);
+    engine.seekMarker(11);
+    monitored = engine.process([
+      new Float32Array(128).fill(0.25),
+      new Float32Array(128).fill(-0.25),
+    ]);
+    expect(monitored[0][0]).toBeCloseTo(0.5, 4);
+    expect(monitored[1][0]).toBeCloseTo(-0.5, 4);
+
     engine.destroy();
+  });
+
+  it('streams paged clip providers and drains page requests', () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const provider = engine.createClipPageProvider(1, 8, 4);
+    provider.supply(0, [new Float32Array([1, 2, 3, 4])]);
+
+    engine.setClips([
+      {
+        id: 123,
+        pageProvider: provider,
+        startPpq: 0,
+      },
+    ]);
+    engine.play();
+    const first = engine.process([new Float32Array(8)]);
+    expect(Array.from(first[0])).toEqual([1, 2, 3, 4, 0, 0, 0, 0]);
+
+    const request = engine.popClipPageRequest();
+    expect(request).toEqual({ clipId: 123, channel: 0, sample: 4 });
+    expect(
+      engine.drainTelemetry().some((record) => record.type === 1 && record.value === 123),
+    ).toBe(true);
+
+    provider.supply(1, [new Float32Array([5, 6, 7, 8])]);
+    engine.seekSample(0);
+    const second = engine.process([new Float32Array(8)]);
+    expect(Array.from(second[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+
+    provider.destroy();
+    engine.destroy();
+  });
+
+  it('feeds paged clips from raw float32 files', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'sonare-paged-'));
+    const rawPath = join(tmpDir, 'clip.f32');
+    try {
+      const interleaved = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
+      writeFileSync(rawPath, Buffer.from(interleaved.buffer));
+
+      const engine = new RealtimeEngine(48000, 8);
+      const provider = engine.createFileClipPageProvider(rawPath, {
+        numChannels: 1,
+        numSamples: 8,
+        pageFrames: 4,
+      });
+      provider.supplyPage(0);
+      engine.setClips([{ id: 124, pageProvider: provider, startPpq: 0 }]);
+      engine.play();
+      const first = engine.process([new Float32Array(8)]);
+      expect(Array.from(first[0])).toEqual([1, 2, 3, 4, 0, 0, 0, 0]);
+
+      const request = engine.popClipPageRequest();
+      expect(request).toEqual({ clipId: 124, channel: 0, sample: 4 });
+      expect(request && provider.supplyRequest(request)).toBe(true);
+      engine.seekSample(0);
+      const second = engine.process([new Float32Array(8)]);
+      expect(Array.from(second[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+
+      provider.destroy();
+      engine.destroy();
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('renders repitch warped clips from anchors', () => {
+    const engine = new RealtimeEngine(48000, 4);
+    engine.setClips([
+      {
+        id: 303,
+        channels: [new Float32Array([0, 10, 20, 30])],
+        startPpq: 0,
+        lengthSamples: 4,
+        warpMode: 'repitch',
+        warpAnchors: [
+          { warpSample: 0, sourceSample: 0 },
+          { warpSample: 3, sourceSample: 1.5 },
+        ],
+      },
+    ]);
+    engine.play();
+
+    const processed = engine.process([new Float32Array(4)]);
+    expect(processed[0][0]).toBeCloseTo(0, 4);
+    expect(processed[0][1]).toBeCloseTo(5, 4);
+    expect(processed[0][2]).toBeCloseTo(10, 4);
+    expect(processed[0][3]).toBeCloseTo(15, 4);
+    engine.destroy();
+
+    const tempoEngine = new RealtimeEngine(48000, 8192);
+    const tempoSource = new Float32Array(4096);
+    for (let i = 0; i < tempoSource.length; i++) {
+      tempoSource[i] = Math.sin(i * 0.02);
+    }
+    tempoEngine.setClips([
+      {
+        id: 304,
+        channels: [tempoSource],
+        startPpq: 0,
+        lengthSamples: 8192,
+        warpMode: 'tempo-sync',
+        warpAnchors: [
+          { warpSample: 0, sourceSample: 0 },
+          { warpSample: 2048, sourceSample: 1024 },
+          { warpSample: 8192, sourceSample: 4096 },
+        ],
+      },
+    ]);
+    tempoEngine.play();
+    const tempoSynced = tempoEngine.process([new Float32Array(8192)]);
+    expect(tempoSynced[0].some((v) => Math.abs(v) > 0.1)).toBe(true);
+    tempoEngine.destroy();
   });
 
   it('offline render matches repeated process output', () => {

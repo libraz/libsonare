@@ -27,6 +27,7 @@ import type {
   WasmMatrix2dResult,
 } from './sonare.js';
 
+export type { BrowserAudioDecodeOptions } from './audio';
 export { Audio } from './audio';
 export type {
   CompressorDetector,
@@ -177,6 +178,8 @@ export {
   zeroCrossingRate,
   zeroCrossings,
 } from './features';
+export type { BindMicrophoneInputOptions, MicrophoneInputBinding } from './live_audio';
+export { bindMicrophoneInput } from './live_audio';
 export type {
   ClippingRegion,
   ClippingReport,
@@ -187,6 +190,9 @@ export type {
   SpectrumOptions,
   SpectrumReport,
   VectorscopeReport,
+  WaveformPeakPyramidOptions,
+  WaveformPeaksOptions,
+  WaveformPeaksReport,
 } from './metering';
 export {
   meteringCrestFactorDb,
@@ -204,7 +210,18 @@ export {
   meteringTruePeakDb,
   meteringVectorscope,
   meteringVectorscopeDecimated,
+  waveformPeakPyramid,
+  waveformPeaks,
 } from './metering';
+export type {
+  OpfsClipPageProviderBinding,
+  OpfsClipPageProviderOptions,
+} from './opfs_clip_pages';
+export {
+  createOpfsClipPageProvider,
+  createOpfsClipPageWorker,
+  opfsClipPageWorkerSource,
+} from './opfs_clip_pages';
 export type {
   BuiltinSynthBinding,
   BuiltinSynthConfig,
@@ -216,12 +233,16 @@ export type {
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
+  ProjectClipCompSegment,
   ProjectClipDesc,
   ProjectClipFade,
+  ProjectClipTake,
   ProjectCompileResult,
   ProjectFadeCurve,
   ProjectKeySegment,
   ProjectLoopMode,
+  ProjectLoopRecordingDesc,
+  ProjectLoopRecordingResult,
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectNotePairValidation,
@@ -426,6 +447,13 @@ export {
   validateRealtimeVoiceChangerPresetJson,
 } from './streaming_mixing';
 export type { ValidateOptions } from './validation';
+export type {
+  BindWebMidiOptions,
+  WebMidiBinding,
+  WebMidiCcBinding,
+  WebMidiInputInfo,
+} from './web_midi';
+export { bindWebMidi, isWebMidiAvailable } from './web_midi';
 
 /** Row-major 2-D matrix as a flat buffer plus its dimensions. */
 export type Matrix2dResult = WasmMatrix2dResult;

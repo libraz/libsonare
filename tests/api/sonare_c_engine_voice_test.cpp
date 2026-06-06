@@ -3,6 +3,7 @@
 
 #include <array>
 #include <atomic>
+#include <limits>
 #include <thread>
 
 #include "sonare_c_test_helpers.h"
@@ -724,6 +725,8 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(capture_status.captured_frames == 128);
   REQUIRE(capture_status.overflow_count == 0);
   REQUIRE(capture_status.armed == 1);
+  REQUIRE(capture_status.source == SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT);
+  REQUIRE(capture_status.record_offset_samples == 0);
   REQUIRE(capture_left[0] == Catch::Approx(0.75f).margin(0.0001f));
   REQUIRE(capture_right[0] == Catch::Approx(-0.75f).margin(0.0001f));
   REQUIRE(sonare_engine_reset_capture(engine) == SONARE_OK);
@@ -756,6 +759,100 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(bounce.sample_count == 128);
   REQUIRE((std::isfinite(bounce.integrated_lufs) || std::isinf(bounce.integrated_lufs)));
   sonare_free_floats(bounce.interleaved);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare engine capture can record live input and record offset metadata", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  std::array<float, 128> clip_left{};
+  std::array<float, 128> clip_right{};
+  clip_left.fill(0.5f);
+  clip_right.fill(-0.5f);
+  const float* clip_channels[] = {clip_left.data(), clip_right.data()};
+  SonareEngineClip clip{};
+  clip.id = 202;
+  clip.channels = clip_channels;
+  clip.num_channels = 2;
+  clip.num_samples = 128;
+  clip.start_ppq = 0.0;
+  clip.length_samples = 128;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+  std::array<float, 128> capture_left{};
+  std::array<float, 128> capture_right{};
+  float* capture_channels[] = {capture_left.data(), capture_right.data()};
+  SonareEngineCaptureBuffer capture_buffer{};
+  capture_buffer.channels = capture_channels;
+  capture_buffer.num_channels = 2;
+  capture_buffer.capacity_frames = 128;
+  REQUIRE(sonare_engine_set_capture_buffer(engine, &capture_buffer) == SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_source(engine, SONARE_ENGINE_CAPTURE_SOURCE_INPUT) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_source(engine, static_cast<SonareEngineCaptureSource>(99)) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_record_offset_samples(engine, -37) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::array<float, 128> left{};
+  std::array<float, 128> right{};
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.75f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.75f).margin(0.0001f));
+
+  SonareEngineCaptureStatus status{};
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.captured_frames == 128);
+  REQUIRE(status.source == SONARE_ENGINE_CAPTURE_SOURCE_INPUT);
+  REQUIRE(status.record_offset_samples == -37);
+  REQUIRE(capture_left[0] == Catch::Approx(0.25f).margin(0.0001f));
+  REQUIRE(capture_right[0] == Catch::Approx(-0.25f).margin(0.0001f));
+
+  REQUIRE(sonare_engine_set_input_monitor(engine, 0, 1.0f) == SONARE_OK);
+  REQUIRE(sonare_engine_set_input_monitor(engine, 1, std::numeric_limits<float>::infinity()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_reset_capture(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.5f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.5f).margin(0.0001f));
+  REQUIRE(capture_left[0] == Catch::Approx(0.25f).margin(0.0001f));
+  REQUIRE(capture_right[0] == Catch::Approx(-0.25f).margin(0.0001f));
+
+  REQUIRE(sonare_engine_set_input_monitor(engine, 1, 0.5f) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.625f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.625f).margin(0.0001f));
+
+  capture_left.fill(0.0f);
+  capture_right.fill(0.0f);
+  REQUIRE(sonare_engine_set_input_monitor(engine, 1, 1.0f) == SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_punch(engine, 64, 128, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_reset_capture(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.captured_frames == 64);
+  REQUIRE(capture_left[0] == Catch::Approx(0.25f).margin(0.0001f));
+  REQUIRE(capture_right[0] == Catch::Approx(-0.25f).margin(0.0001f));
+
   sonare_engine_destroy(engine);
 }
 #endif
@@ -834,6 +931,256 @@ TEST_CASE("sonare_realtime_engine_freeze_c_api_matches_clip_playback", "[c_api]"
   REQUIRE(right[0] == Catch::Approx(-0.25f).margin(0.0001f));
   REQUIRE(left[127] == Catch::Approx(0.125f).margin(0.0001f));
   REQUIRE(right[127] == Catch::Approx(-0.25f).margin(0.0001f));
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_clips_accepts_repitch_warp_anchors", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 4, 64, 64) == SONARE_OK);
+
+  std::array<float, 4> source{0.0f, 10.0f, 20.0f, 30.0f};
+  const float* clip_channels[] = {source.data()};
+  SonareEngineWarpAnchor anchors[] = {{0.0, 0.0}, {3.0, 1.5}};
+  SonareEngineClip clip{};
+  clip.id = 303;
+  clip.channels = clip_channels;
+  clip.num_channels = 1;
+  clip.num_samples = 4;
+  clip.start_ppq = 0.0;
+  clip.length_samples = 4;
+  clip.gain = 1.0f;
+  clip.warp_mode = SONARE_ENGINE_WARP_MODE_REPITCH;
+  clip.warp_anchors = anchors;
+  clip.warp_anchor_count = 2;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::array<float, 4> out{};
+  float* channels[] = {out.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 1, 4) == SONARE_OK);
+  REQUIRE(out[0] == Catch::Approx(0.0f).margin(0.0001f));
+  REQUIRE(out[1] == Catch::Approx(5.0f).margin(0.0001f));
+  REQUIRE(out[2] == Catch::Approx(10.0f).margin(0.0001f));
+  REQUIRE(out[3] == Catch::Approx(15.0f).margin(0.0001f));
+
+  clip.warp_mode = 99;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_warp", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
+
+  std::vector<float> source(4096);
+  for (size_t i = 0; i < source.size(); ++i) {
+    source[i] = std::sin(static_cast<float>(i) * 0.02f);
+  }
+  const float* clip_channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 304;
+  clip.channels = clip_channels;
+  clip.num_channels = 1;
+  clip.num_samples = static_cast<int64_t>(source.size());
+  clip.start_ppq = 0.0;
+  clip.length_samples = 8192;
+  clip.gain = 1.0f;
+  clip.warp_mode = SONARE_ENGINE_WARP_MODE_TEMPO_SYNC;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::vector<float> out(8192, 0.0f);
+  float* channels[] = {out.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+
+  float peak = 0.0f;
+  for (float v : out) {
+    REQUIRE(std::isfinite(v));
+    peak = std::max(peak, std::abs(v));
+  }
+  REQUIRE(peak > 0.1f);
+  REQUIRE(std::abs(out.back()) > 0.0001f);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[c_api]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8192, 64, 64) == SONARE_OK);
+
+  std::vector<float> source(4096);
+  for (size_t i = 0; i < source.size(); ++i) {
+    source[i] = std::sin(static_cast<float>(i) * 0.02f);
+  }
+  const float* clip_channels[] = {source.data()};
+  const SonareEngineWarpAnchor anchors[] = {
+      {0.0, 0.0},
+      {2048.0, 1024.0},
+      {8192.0, 4096.0},
+  };
+  SonareEngineClip clip{};
+  clip.id = 305;
+  clip.channels = clip_channels;
+  clip.num_channels = 1;
+  clip.num_samples = static_cast<int64_t>(source.size());
+  clip.start_ppq = 0.0;
+  clip.length_samples = 8192;
+  clip.gain = 1.0f;
+  clip.warp_mode = SONARE_ENGINE_WARP_MODE_TEMPO_SYNC;
+  clip.warp_anchors = anchors;
+  clip.warp_anchor_count = 3;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::vector<float> out(8192, 0.0f);
+  float* channels[] = {out.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+
+  float peak = 0.0f;
+  for (float v : out) {
+    REQUIRE(std::isfinite(v));
+    peak = std::max(peak, std::abs(v));
+  }
+  REQUIRE(peak > 0.1f);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine streams paged clip providers and reports page misses", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8, 16, 16) == SONARE_OK);
+
+  SonareClipPageProvider* provider = nullptr;
+  REQUIRE(sonare_clip_page_provider_create(1, 8, 4, &provider) == SONARE_OK);
+  REQUIRE(provider != nullptr);
+
+  std::array<float, 4> page0{1.0f, 2.0f, 3.0f, 4.0f};
+  const float* page0_channels[] = {page0.data()};
+  REQUIRE(sonare_clip_page_provider_supply(provider, 0, page0_channels, 1, 4) == SONARE_OK);
+
+  SonareEngineClip clip{};
+  clip.id = 123;
+  clip.start_ppq = 0.0;
+  clip.clip_offset_samples = 0;
+  clip.length_samples = 8;
+  clip.gain = 1.0f;
+  clip.page_provider = provider;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::array<float, 8> out{};
+  float* channels[] = {out.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+  REQUIRE(out[0] == Catch::Approx(1.0f));
+  REQUIRE(out[3] == Catch::Approx(4.0f));
+  REQUIRE(out[4] == Catch::Approx(0.0f));
+  REQUIRE(out[7] == Catch::Approx(0.0f));
+
+  SonareClipPageRequest request{};
+  int has_request = 0;
+  REQUIRE(sonare_engine_pop_clip_page_request(engine, &request, &has_request) == SONARE_OK);
+  REQUIRE(has_request == 1);
+  REQUIRE(request.clip_id == 123);
+  REQUIRE(request.channel == 0);
+  REQUIRE(request.sample == 4);
+
+  std::array<SonareEngineTelemetry, 8> telemetry{};
+  size_t written = 0;
+  REQUIRE(sonare_engine_drain_telemetry(engine, telemetry.data(), telemetry.size(), &written) ==
+          SONARE_OK);
+  bool found_underrun = false;
+  for (size_t i = 0; i < written; ++i) {
+    found_underrun = found_underrun || (telemetry[i].type == 1 && telemetry[i].value == 123);
+  }
+  REQUIRE(found_underrun);
+
+  std::array<float, 4> page1{5.0f, 6.0f, 7.0f, 8.0f};
+  const float* page1_channels[] = {page1.data()};
+  REQUIRE(sonare_clip_page_provider_supply(provider, 1, page1_channels, 1, 4) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  out.fill(0.0f);
+  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+  REQUIRE(out[4] == Catch::Approx(5.0f));
+  REQUIRE(out[7] == Catch::Approx(8.0f));
+
+  sonare_clip_page_provider_destroy(provider);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 8, 16, 16) == SONARE_OK);
+
+  SonareClipPageProvider* provider = nullptr;
+  REQUIRE(sonare_clip_page_provider_create(1, 8, 4, &provider) == SONARE_OK);
+
+  std::array<float, 4> page0{1.0f, 2.0f, 3.0f, 4.0f};
+  std::array<float, 4> page1{5.0f, 6.0f, 7.0f, 8.0f};
+  const float* page0_channels[] = {page0.data()};
+  const float* page1_channels[] = {page1.data()};
+  REQUIRE(sonare_clip_page_provider_supply(provider, 0, page0_channels, 1, 4) == SONARE_OK);
+  REQUIRE(sonare_clip_page_provider_supply(provider, 1, page1_channels, 1, 4) == SONARE_OK);
+
+  SonareEngineClip clip{};
+  clip.id = 321;
+  clip.start_ppq = 0.0;
+  clip.clip_offset_samples = 0;
+  clip.length_samples = 0;
+  clip.gain = 1.0f;
+  clip.page_provider = provider;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  SonareEngineBounceOptions bounce_options{};
+  REQUIRE(sonare_engine_bounce_options_default(&bounce_options) == SONARE_OK);
+  bounce_options.total_frames = 8;
+  bounce_options.block_size = 4;
+  bounce_options.num_channels = 1;
+  SonareEngineBounceResult bounce{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &bounce_options, &bounce) == SONARE_OK);
+  REQUIRE(bounce.frames == 8);
+  REQUIRE(bounce.num_channels == 1);
+  REQUIRE(bounce.sample_count == 8);
+  REQUIRE(bounce.interleaved != nullptr);
+  for (size_t i = 0; i < bounce.sample_count; ++i) {
+    REQUIRE(bounce.interleaved[i] == Catch::Approx(static_cast<float>(i + 1)).margin(0.0001f));
+  }
+  sonare_free_bounce_result(&bounce);
+
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  SonareEngineFreezeOptions freeze_options{};
+  freeze_options.total_frames = 8;
+  freeze_options.block_size = 4;
+  freeze_options.num_channels = 1;
+  freeze_options.clip_id = 654;
+  freeze_options.start_ppq = 0.0;
+  freeze_options.gain = 1.0f;
+  SonareEngineFreezeResult freeze{};
+  REQUIRE(sonare_engine_freeze_offline(engine, &freeze_options, &freeze) == SONARE_OK);
+  REQUIRE(freeze.clip_id == 654);
+  REQUIRE(freeze.frames == 8);
+  REQUIRE(freeze.num_channels == 1);
+
+  REQUIRE(sonare_clip_page_provider_clear(provider, 0) == SONARE_OK);
+  REQUIRE(sonare_clip_page_provider_clear(provider, 1) == SONARE_OK);
+  sonare_clip_page_provider_destroy(provider);
+
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, 8> frozen_out{};
+  float* channels[] = {frozen_out.data()};
+  REQUIRE(sonare_engine_render_offline(engine, channels, 1, 8, 4) == SONARE_OK);
+  for (size_t i = 0; i < frozen_out.size(); ++i) {
+    REQUIRE(frozen_out[i] == Catch::Approx(static_cast<float>(i + 1)).margin(0.0001f));
+  }
 
   sonare_engine_destroy(engine);
 }

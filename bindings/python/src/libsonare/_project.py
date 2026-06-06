@@ -47,10 +47,13 @@ from ._runtime import (
     SonareProjectAssistSidecar,
     SonareProjectBounceOptions,
     SonareProjectChordSymbol,
+    SonareProjectClipCompSegment,
     SonareProjectClipDesc,
     SonareProjectClipFade,
+    SonareProjectClipTake,
     SonareProjectCompileResult,
     SonareProjectKeySegment,
+    SonareProjectLoopRecordingDesc,
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
     SonareProjectTrackDesc,
@@ -874,6 +877,19 @@ def _track_kind_value(kind: str | int) -> int:
     return _TRACK_KIND_NAMES[key]
 
 
+def _warp_mode_value(mode: str | int) -> int:
+    if isinstance(mode, int):
+        return mode
+    key = mode.lower()
+    if key == "off":
+        return 0
+    if key == "repitch":
+        return 1
+    if key == "tempo-sync":
+        return 2
+    raise ValueError(f"unknown warp mode: {mode}")
+
+
 def _midi_event_tuple(name: str, *args: float | int) -> tuple[float, int, int]:
     lib = _get_lib()
     event = SonareMidiEventPod()
@@ -1101,6 +1117,48 @@ class Project:
         del backing
         return int(out_id.value)
 
+    def add_loop_recording_takes(
+        self,
+        track_id: int,
+        start_ppq: float,
+        loop_length_ppq: float,
+        audio: Sequence[float] | np.ndarray,
+        *,
+        audio_channels: int = 1,
+        audio_sample_rate: int = 48000,
+    ) -> tuple[int, int]:
+        """Split a captured loop recording into takes and add one clip.
+
+        Returns ``(clip_id, take_count)``. ``audio`` is interleaved float32
+        capture data; each loop-length span becomes a separate take and the
+        newest take is made active.
+        """
+        channels = max(1, int(audio_channels))
+        backing, total = _to_c_float_array(audio)
+        frames = total // channels
+        desc = SonareProjectLoopRecordingDesc(
+            track_id=int(track_id),
+            reserved=0,
+            start_ppq=float(start_ppq),
+            loop_length_ppq=float(loop_length_ppq),
+            audio_interleaved=backing,
+            audio_frames=int(frames),
+            audio_channels=channels,
+            audio_sample_rate=int(audio_sample_rate),
+        )
+        out_clip = ctypes.c_uint32()
+        out_take_count = ctypes.c_size_t()
+        _check(
+            _get_lib().sonare_project_add_loop_recording_takes(
+                self._require_handle(),
+                ctypes.byref(desc),
+                ctypes.byref(out_clip),
+                ctypes.byref(out_take_count),
+            )
+        )
+        del backing
+        return int(out_clip.value), int(out_take_count.value)
+
     def add_midi_clip(self, start_ppq: float, length_ppq: float) -> tuple[int, int]:
         """Create a MIDI track + clip; return ``(track_id, clip_id)``."""
         out_track = ctypes.c_uint32()
@@ -1168,6 +1226,81 @@ class Project:
                 self._require_handle(),
                 int(clip_id),
                 int(warp_ref_id),
+            )
+        )
+
+    def set_clip_warp_mode(self, clip_id: int, mode: str | int) -> None:
+        """Set a clip's warp playback mode."""
+        _check(
+            _get_lib().sonare_project_set_clip_warp_mode(
+                self._require_handle(),
+                int(clip_id),
+                _warp_mode_value(mode),
+            )
+        )
+
+    def set_clip_takes(
+        self,
+        clip_id: int,
+        takes: Sequence[Mapping[str, object]] | Sequence[tuple[int, int, float, str]] | None,
+        active_take_id: int = 0,
+    ) -> None:
+        """Replace a clip's take list and active take via an undoable edit."""
+        take_items = list(takes or [])
+        c_takes = (SonareProjectClipTake * len(take_items))()
+        name_backing: list[bytes] = []
+        for i, item in enumerate(take_items):
+            if isinstance(item, Mapping):
+                take_id = int(item.get("id", 0))
+                source_id = int(item.get("source_id", item.get("sourceId", 0)))
+                source_offset = float(
+                    item.get("source_offset_ppq", item.get("sourceOffsetPpq", 0.0))
+                )
+                name = item.get("name", "")
+            else:
+                take_id, source_id, source_offset, name = item
+            c_takes[i].id = int(take_id)
+            c_takes[i].source_id = int(source_id)
+            c_takes[i].source_offset_ppq = float(source_offset)
+            if name:
+                encoded = str(name).encode("utf-8")
+                name_backing.append(encoded)
+                c_takes[i].name = encoded
+        _check(
+            _get_lib().sonare_project_set_clip_takes(
+                self._require_handle(),
+                int(clip_id),
+                c_takes if take_items else None,
+                len(take_items),
+                int(active_take_id),
+            )
+        )
+        del name_backing
+
+    def set_clip_comp_segments(
+        self,
+        clip_id: int,
+        segments: Sequence[Mapping[str, object]] | Sequence[tuple[float, float, int]] | None,
+    ) -> None:
+        """Replace a clip's comp lane via an undoable edit."""
+        segment_items = list(segments or [])
+        c_segments = (SonareProjectClipCompSegment * len(segment_items))()
+        for i, item in enumerate(segment_items):
+            if isinstance(item, Mapping):
+                start_ppq = float(item.get("start_ppq", item.get("startPpq", 0.0)))
+                end_ppq = float(item.get("end_ppq", item.get("endPpq", 0.0)))
+                take_id = int(item.get("take_id", item.get("takeId", 0)))
+            else:
+                start_ppq, end_ppq, take_id = item
+            c_segments[i].start_ppq = float(start_ppq)
+            c_segments[i].end_ppq = float(end_ppq)
+            c_segments[i].take_id = int(take_id)
+        _check(
+            _get_lib().sonare_project_set_clip_comp_segments(
+                self._require_handle(),
+                int(clip_id),
+                c_segments if segment_items else None,
+                len(segment_items),
             )
         )
 

@@ -148,6 +148,42 @@ static_assert(sizeof(SonareProjectClipDesc) ==
               "SonareProjectClipDesc layout drift");
 #endif
 
+/// @brief Description for @ref sonare_project_add_loop_recording_takes.
+///
+/// The input is a captured interleaved audio buffer. The project tempo map is
+/// used to convert @p loop_length_ppq at @p start_ppq into an audio-frame loop
+/// span; each loop span becomes a separate audio source/take, and one clip of
+/// length @p loop_length_ppq is added to @p track_id. The newest take is made
+/// active. A final partial loop is kept as the last take.
+typedef struct {
+  uint32_t track_id;
+  uint32_t reserved;
+  double start_ppq;
+  double loop_length_ppq;
+  const float* audio_interleaved;
+  int64_t audio_frames;
+  int audio_channels;
+  int audio_sample_rate;
+} SonareProjectLoopRecordingDesc;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectLoopRecordingDesc, track_id) == 0,
+              "LoopRecordingDesc.track_id offset");
+static_assert(offsetof(SonareProjectLoopRecordingDesc, reserved) == sizeof(uint32_t),
+              "LoopRecordingDesc.reserved offset");
+static_assert(offsetof(SonareProjectLoopRecordingDesc, start_ppq) == sizeof(double),
+              "LoopRecordingDesc.start_ppq offset");
+static_assert(offsetof(SonareProjectLoopRecordingDesc, loop_length_ppq) == 2u * sizeof(double),
+              "LoopRecordingDesc.loop_length_ppq offset");
+static_assert(offsetof(SonareProjectLoopRecordingDesc, audio_interleaved) == 3u * sizeof(double),
+              "LoopRecordingDesc.audio_interleaved offset");
+static_assert(offsetof(SonareProjectLoopRecordingDesc, audio_frames) ==
+                  ((3u * sizeof(double) + sizeof(void*) + 7u) & ~static_cast<size_t>(7u)),
+              "LoopRecordingDesc.audio_frames offset");
+static_assert(sizeof(SonareProjectLoopRecordingDesc) == 6u * sizeof(double),
+              "SonareProjectLoopRecordingDesc layout drift");
+#endif
+
 /// @brief One warp-map anchor for @ref sonare_project_set_warp_map.
 typedef struct {
   double warp_sample;
@@ -161,6 +197,12 @@ static_assert(offsetof(SonareProjectWarpAnchor, source_sample) == sizeof(double)
 static_assert(sizeof(SonareProjectWarpAnchor) == 2u * sizeof(double),
               "SonareProjectWarpAnchor layout drift");
 #endif
+
+typedef enum {
+  SONARE_PROJECT_WARP_MODE_OFF = 0,
+  SONARE_PROJECT_WARP_MODE_REPITCH = 1,
+  SONARE_PROJECT_WARP_MODE_TEMPO_SYNC = 2,
+} SonareProjectWarpMode;
 
 /// @brief First-class project warp-map descriptor.
 typedef struct {
@@ -540,6 +582,48 @@ static_assert(offsetof(SonareProjectClipFade, length_ppq) == 0, "ClipFade.length
 static_assert(offsetof(SonareProjectClipFade, curve) == sizeof(double), "ClipFade.curve offset");
 static_assert(sizeof(SonareProjectClipFade) == sizeof(double) + 2u * sizeof(uint32_t),
               "SonareProjectClipFade layout drift");
+#endif
+
+/// @brief One recorded take/generation attached to a clip.
+///
+/// @p id is clip-local and must be non-zero. @p source_id may be 0 to use the
+/// clip's current source, or an existing source id compatible with the clip's
+/// track kind. @p source_offset_ppq must be finite and >= 0. @p name is optional.
+typedef struct {
+  uint32_t id;
+  uint32_t source_id;
+  double source_offset_ppq;
+  const char* name;
+} SonareProjectClipTake;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectClipTake, id) == 0, "ClipTake.id offset");
+static_assert(offsetof(SonareProjectClipTake, source_id) == sizeof(uint32_t),
+              "ClipTake.source_id offset");
+static_assert(offsetof(SonareProjectClipTake, source_offset_ppq) == sizeof(double),
+              "ClipTake.source_offset_ppq offset");
+static_assert(offsetof(SonareProjectClipTake, name) == 2u * sizeof(double), "ClipTake.name offset");
+static_assert(sizeof(SonareProjectClipTake) ==
+                  ((2u * sizeof(double) + sizeof(void*) + 7u) & ~static_cast<size_t>(7u)),
+              "SonareProjectClipTake layout drift");
+#endif
+
+/// @brief One clip-local comp segment selecting a take over [start_ppq,end_ppq).
+typedef struct {
+  double start_ppq;
+  double end_ppq;
+  uint32_t take_id;
+} SonareProjectClipCompSegment;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectClipCompSegment, start_ppq) == 0,
+              "ClipCompSegment.start_ppq offset");
+static_assert(offsetof(SonareProjectClipCompSegment, end_ppq) == sizeof(double),
+              "ClipCompSegment.end_ppq offset");
+static_assert(offsetof(SonareProjectClipCompSegment, take_id) == 2u * sizeof(double),
+              "ClipCompSegment.take_id offset");
+static_assert(sizeof(SonareProjectClipCompSegment) == 3u * sizeof(double),
+              "SonareProjectClipCompSegment layout drift");
 #endif
 
 /// @brief Description for @ref sonare_project_add_automation_lane and
@@ -959,6 +1043,12 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
 SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectClipDesc* desc,
                                     uint32_t* out_clip_id);
 
+/// @brief Splits captured loop-recording audio into takes and adds one clip.
+///        Returns the allocated clip id and optional take count.
+SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
+                                                    const SonareProjectLoopRecordingDesc* desc,
+                                                    uint32_t* out_clip_id, size_t* out_take_count);
+
 /// @brief Convenience wrapper that creates a MIDI track + a MIDI clip on it.
 ///        Returns the allocated track and clip ids. @p length_ppq must be > 0.
 SonareError sonare_project_add_midi_clip(SonareProject* project, double start_ppq,
@@ -988,6 +1078,28 @@ SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track
 /// reference a map registered with @ref sonare_project_set_warp_map.
 SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t clip_id,
                                              uint32_t warp_ref_id);
+
+/// @brief Sets a clip's warp playback mode via an undoable edit command.
+SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t clip_id,
+                                              SonareProjectWarpMode mode);
+
+/// @brief Replaces a clip's take list and active take via an undoable edit.
+///
+/// @p takes may be NULL only when @p take_count is 0. @p active_take_id may be
+/// 0 to use the clip's base source, otherwise it must reference one of @p takes.
+/// Existing comp segments must still reference valid take ids after replacement.
+SonareError sonare_project_set_clip_takes(SonareProject* project, uint32_t clip_id,
+                                          const SonareProjectClipTake* takes, size_t take_count,
+                                          uint32_t active_take_id);
+
+/// @brief Replaces a clip's comp lane via an undoable edit.
+///
+/// Segments are clip-local PPQ ranges and must be finite, positive length,
+/// sorted, non-overlapping, inside the clip, and reference existing take ids
+/// (or 0 for the base/active fallback).
+SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32_t clip_id,
+                                                  const SonareProjectClipCompSegment* segments,
+                                                  size_t segment_count);
 
 /// @brief Adds or replaces a first-class project warp map via an undoable edit.
 ///        @p desc->id must be non-zero and @p anchors must contain at least two

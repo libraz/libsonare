@@ -124,6 +124,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::Ebur128LoudnessRange, "ebur128LoudnessRange"));
   exports.Set("meteringPeakDb",
               Napi::Function::New(env, &SonareWrap::MeteringPeakDb, "meteringPeakDb"));
+  exports.Set("waveformPeaks",
+              Napi::Function::New(env, &SonareWrap::WaveformPeaks, "waveformPeaks"));
+  exports.Set("waveformPeakPyramid",
+              Napi::Function::New(env, &SonareWrap::WaveformPeakPyramid, "waveformPeakPyramid"));
   exports.Set("meteringRmsDb",
               Napi::Function::New(env, &SonareWrap::MeteringRmsDb, "meteringRmsDb"));
   exports.Set("meteringCrestFactorDb", Napi::Function::New(env, &SonareWrap::MeteringCrestFactorDb,

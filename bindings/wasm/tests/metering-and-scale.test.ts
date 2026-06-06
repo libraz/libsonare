@@ -20,6 +20,8 @@ import {
   scaleCorrectionSemitones,
   scalePitchClassEnabled,
   scaleQuantizeMidi,
+  waveformPeakPyramid,
+  waveformPeaks,
 } from '../src/index';
 
 const SR = 22050;
@@ -113,6 +115,49 @@ describe('Offline metering wrappers (WASM)', () => {
     expect(() =>
       meteringDynamicRange(samples, SR, { lowPercentile: 0.9, highPercentile: 0.1 }),
     ).toThrow();
+  });
+
+  it('waveform peaks bucket interleaved stereo audio', () => {
+    const samples = new Float32Array([-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9]);
+    const report = waveformPeaks(samples, 2, { samplesPerBucket: 2 });
+    expect(report.channels).toBe(2);
+    expect(report.bucketCount).toBe(3);
+    expect(report.samplesPerBucket).toBe(2);
+    expect(Array.from(report.min)).toEqual([
+      expect.closeTo(-1.0, 6),
+      expect.closeTo(-0.5, 6),
+      expect.closeTo(0.0, 6),
+      expect.closeTo(-0.25, 6),
+      expect.closeTo(-0.75, 6),
+      expect.closeTo(0.9, 6),
+    ]);
+    expect(Array.from(report.max)).toEqual([
+      expect.closeTo(0.25, 6),
+      expect.closeTo(0.75, 6),
+      expect.closeTo(0.0, 6),
+      expect.closeTo(0.5, 6),
+      expect.closeTo(0.1, 6),
+      expect.closeTo(0.9, 6),
+    ]);
+  });
+
+  it('waveform peak pyramid returns each requested level', () => {
+    const samples = new Float32Array([-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9]);
+    const pyramid = waveformPeakPyramid(samples, 2, { samplesPerBucketLevels: [2, 4] });
+    expect(pyramid).toHaveLength(2);
+    expect(pyramid[0]?.bucketCount).toBe(3);
+    expect(pyramid[1]?.bucketCount).toBe(2);
+    expect(pyramid[1]?.min[0]).toBeCloseTo(-1.0, 6);
+    expect(pyramid[1]?.max[0]).toBeCloseTo(0.75, 6);
+  });
+
+  it('waveform peaks default to 512-frame buckets and the standard zoom pyramid', () => {
+    const samples = new Float32Array([-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9]);
+    const report = waveformPeaks(samples, 2);
+    expect(report.samplesPerBucket).toBe(512);
+    expect(report.bucketCount).toBe(1);
+    const pyramid = waveformPeakPyramid(samples, 2);
+    expect(pyramid.map((level) => level.samplesPerBucket)).toEqual([512, 1024, 2048, 4096]);
   });
 });
 

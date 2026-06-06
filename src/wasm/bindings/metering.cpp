@@ -369,6 +369,40 @@ val js_metering_spectrum_frame(val samples, int sample_rate, size_t frame_offset
   return out;
 }
 
+val emit_waveform_peaks_result(const metering::WaveformPeaksResult& result) {
+  val out = val::object();
+  out.set("min", vectorToFloat32Array(result.min));
+  out.set("max", vectorToFloat32Array(result.max));
+  out.set("channels", result.channels);
+  out.set("bucketCount", result.bucket_count);
+  out.set("samplesPerBucket", result.samples_per_bucket);
+  return out;
+}
+
+val js_waveform_peaks(val samples, int channels, size_t samples_per_bucket) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  const size_t frames = channels > 0 ? data.size() / static_cast<size_t>(channels) : 0;
+  return emit_waveform_peaks_result(
+      metering::waveform_peaks(data.data(), frames, channels, samples_per_bucket));
+}
+
+val js_waveform_peak_pyramid(val samples, int channels, val js_levels) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<size_t> levels;
+  const uint32_t n = js_levels["length"].as<uint32_t>();
+  levels.reserve(n);
+  for (uint32_t i = 0; i < n; ++i) {
+    levels.push_back(js_levels[i].as<size_t>());
+  }
+  const size_t frames = channels > 0 ? data.size() / static_cast<size_t>(channels) : 0;
+  const auto pyramid = metering::waveform_peak_pyramid(data.data(), frames, channels, levels);
+  val out = val::array();
+  for (size_t i = 0; i < pyramid.size(); ++i) {
+    out.set(i, emit_waveform_peaks_result(pyramid[i]));
+  }
+  return out;
+}
+
 void registerMeteringBindings() {
   // Analysis - LUFS metering
   function("lufs", &js_lufs);
@@ -395,6 +429,8 @@ void registerMeteringBindings() {
   function("meteringPhaseScopeDecimated", &js_metering_phase_scope_decimated);
   function("meteringSpectrum", &js_metering_spectrum);
   function("meteringSpectrumFrame", &js_metering_spectrum_frame);
+  function("waveformPeaks", &js_waveform_peaks);
+  function("waveformPeakPyramid", &js_waveform_peak_pyramid);
 }
 
 #endif  // __EMSCRIPTEN__

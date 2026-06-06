@@ -64,7 +64,7 @@ def _dangling_source_json() -> str:
         '"length_ppq":1,"source_offset_ppq":0,"gain":1,'
         '"fade_in":{"length_ppq":0,"curve":0},'
         '"fade_out":{"length_ppq":0,"curve":0},'
-        '"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]}'
+        '"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}'
     )
 
 
@@ -450,12 +450,102 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
         before = project.to_json_bytes()
 
         project.set_clip_warp_ref(clip_id, 123)
+        project.set_clip_warp_mode(clip_id, "repitch")
         after = project.to_json_bytes()
         assert after != before
         assert b'"warp_ref_id":123' in after
+        assert b'"warp_mode":1' in after
+        restored = Project.from_json(after)
+        try:
+            assert restored.to_json_bytes() == after
+        finally:
+            restored.close()
 
         project.undo()
+        assert b'"warp_mode":0' in project.to_json_bytes()
+        project.undo()
         assert project.to_json_bytes() == before
+
+        project.set_clip_warp_mode(clip_id, "tempo-sync")
+        assert b'"warp_mode":2' in project.to_json_bytes()
+    finally:
+        project.close()
+
+
+def test_set_clip_takes_and_comp_segments_round_trip_and_undo() -> None:
+    project, audio_clip, *_ = _build_project()
+    try:
+        before = project.to_json_bytes()
+
+        project.set_clip_takes(
+            audio_clip,
+            [
+                {"id": 1, "sourceOffsetPpq": 0.0, "name": "take A"},
+                {"id": 2, "source_offset_ppq": 0.5, "name": "take B"},
+            ],
+            active_take_id=1,
+        )
+        with_takes = project.to_json_bytes()
+        assert with_takes != before
+        assert b'"takes"' in with_takes
+        assert b'"active_take_id":1' in with_takes
+
+        project.set_clip_comp_segments(
+            audio_clip,
+            [
+                {"startPpq": 0.0, "endPpq": 1.0, "takeId": 1},
+                {"start_ppq": 1.0, "end_ppq": 2.0, "take_id": 2},
+            ],
+        )
+        with_comp = project.to_json_bytes()
+        assert b'"comp_segments"' in with_comp
+
+        project.undo()
+        assert project.to_json_bytes() == with_takes
+        project.undo()
+        assert project.to_json_bytes() == before
+        project.redo()
+        assert project.to_json_bytes() == with_takes
+
+        with pytest.raises(SonareError):
+            project.set_clip_takes(
+                audio_clip,
+                [(1, 0, 0.0, "duplicate A"), (1, 0, 0.0, "duplicate B")],
+                active_take_id=1,
+            )
+        with pytest.raises(SonareError):
+            project.set_clip_comp_segments(
+                audio_clip, [{"startPpq": 0.0, "endPpq": 1.0, "takeId": 99}]
+            )
+    finally:
+        project.close()
+
+
+def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
+    project = Project()
+    try:
+        project.set_sample_rate(48000.0)
+        track_id = project.add_track("audio", "record")
+        audio = np.empty(48000, dtype=np.float32)
+        audio[:24000] = 0.25
+        audio[24000:] = 0.75
+
+        clip_id, take_count = project.add_loop_recording_takes(
+            track_id,
+            start_ppq=0.0,
+            loop_length_ppq=1.0,
+            audio=audio,
+            audio_channels=1,
+            audio_sample_rate=48000,
+        )
+        assert clip_id != 0
+        assert take_count == 2
+        json = project.to_json_bytes()
+        assert b'"takes"' in json
+        assert b'"active_take_id":2' in json
+
+        project.undo()
+        assert b'"clips":[]' in project.to_json_bytes()
     finally:
         project.close()
 

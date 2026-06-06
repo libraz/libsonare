@@ -1,6 +1,7 @@
 import { getSonareModule } from './module_state';
 import type { SynthPatch } from './project';
 import type {
+  WasmClipPageRequest,
   WasmEngineAutomationPoint,
   WasmEngineBounceOptions,
   WasmEngineBounceResult,
@@ -20,6 +21,7 @@ import type {
 } from './sonare.js';
 
 export type EngineClip = WasmEngineClip;
+export type ClipPageRequest = WasmClipPageRequest;
 export type EngineParameterInfo = WasmEngineParameterInfo;
 export type EngineAutomationPoint = WasmEngineAutomationPoint;
 export type EngineMarker = WasmEngineMarker;
@@ -97,6 +99,11 @@ interface WasmRealtimeEngineExt {
   setMidiInputSource: (destinationId: number) => void;
   clearMidiInputSource: () => void;
   midiInputPendingCount: () => number;
+  createClipPageProvider: (numChannels: number, numSamples: number, pageFrames: number) => number;
+  supplyClipPage: (providerId: number, pageIndex: number, channels: Float32Array[]) => void;
+  clearClipPage: (providerId: number, pageIndex: number) => void;
+  destroyClipPageProvider: (providerId: number) => void;
+  popClipPageRequest: () => ClipPageRequest | null;
   pushMidiInputNoteOn: (
     group: number,
     channel: number,
@@ -491,11 +498,44 @@ export class RealtimeEngine {
   }
 
   setClips(clips: EngineClip[]): void {
-    this.native.setClips(clips);
+    this.native.setClips(
+      clips.map((clip) => ({
+        ...clip,
+        pageProvider:
+          typeof clip.pageProvider === 'object' && clip.pageProvider !== null
+            ? clip.pageProvider.id
+            : clip.pageProvider,
+      })),
+    );
   }
 
   clipCount(): number {
     return this.native.clipCount();
+  }
+
+  createClipPageProvider(
+    numChannels: number,
+    numSamples: number,
+    pageFrames: number,
+  ): ClipPageProvider {
+    const id = this.nativeExt().createClipPageProvider(numChannels, numSamples, pageFrames);
+    return new ClipPageProvider(this, id);
+  }
+
+  supplyClipPage(providerId: number, pageIndex: number, channels: Float32Array[]): void {
+    this.nativeExt().supplyClipPage(providerId, pageIndex, channels);
+  }
+
+  clearClipPage(providerId: number, pageIndex: number): void {
+    this.nativeExt().clearClipPage(providerId, pageIndex);
+  }
+
+  destroyClipPageProvider(providerId: number): void {
+    this.nativeExt().destroyClipPageProvider(providerId);
+  }
+
+  popClipPageRequest(): ClipPageRequest | null {
+    return this.nativeExt().popClipPageRequest();
   }
 
   setCaptureBuffer(numChannels: number, capacityFrames: number): void {
@@ -508,6 +548,18 @@ export class RealtimeEngine {
 
   setCapturePunch(startSample: number, endSample: number, enabled = true): void {
     this.native.setCapturePunch(startSample, endSample, enabled);
+  }
+
+  setCaptureSource(source: EngineCaptureStatus['source']): void {
+    this.native.setCaptureSource(source);
+  }
+
+  setRecordOffsetSamples(offsetSamples: number): void {
+    this.native.setRecordOffsetSamples(offsetSamples);
+  }
+
+  setInputMonitor(enabled: boolean, gain = 1): void {
+    this.native.setInputMonitor(enabled, gain);
   }
 
   resetCapture(): void {
@@ -580,5 +632,36 @@ export class RealtimeEngine {
 
   destroy(): void {
     this.native.delete();
+  }
+}
+
+export class ClipPageProvider {
+  private disposed = false;
+
+  constructor(
+    private readonly engine: RealtimeEngine,
+    readonly id: number,
+  ) {}
+
+  supply(pageIndex: number, channels: Float32Array[]): void {
+    if (this.disposed) {
+      throw new Error('ClipPageProvider is destroyed');
+    }
+    this.engine.supplyClipPage(this.id, pageIndex, channels);
+  }
+
+  clear(pageIndex: number): void {
+    if (this.disposed) {
+      return;
+    }
+    this.engine.clearClipPage(this.id, pageIndex);
+  }
+
+  destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.engine.destroyClipPageProvider(this.id);
   }
 }

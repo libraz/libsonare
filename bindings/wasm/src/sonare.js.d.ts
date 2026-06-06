@@ -518,7 +518,7 @@ export interface WasmMixResult {
 
 export interface WasmEngineClip {
   id?: number;
-  channels: Float32Array[];
+  channels?: Float32Array[];
   startPpq: number;
   lengthSamples?: number;
   clipOffsetSamples?: number;
@@ -526,6 +526,15 @@ export interface WasmEngineClip {
   gain?: number;
   fadeInSamples?: number;
   fadeOutSamples?: number;
+  warpMode?: 'off' | 'repitch' | 'tempo-sync' | 0 | 1 | 2;
+  warpAnchors?: Array<{ warpSample: number; sourceSample: number }>;
+  pageProvider?: number | { readonly id: number };
+}
+
+export interface WasmClipPageRequest {
+  clipId: number;
+  channel: number;
+  sample: number;
 }
 
 export interface WasmEngineParameterInfo {
@@ -624,6 +633,8 @@ export interface WasmEngineCaptureStatus {
   overflowCount: number;
   armed: boolean;
   punchEnabled: boolean;
+  source: 'output' | 'input';
+  recordOffsetSamples: number;
 }
 
 export interface WasmEngineTransportState {
@@ -722,9 +733,17 @@ export interface WasmRealtimeEngine {
   graphConnectionCount: () => number;
   setClips: (clips: WasmEngineClip[]) => void;
   clipCount: () => number;
+  createClipPageProvider: (numChannels: number, numSamples: number, pageFrames: number) => number;
+  supplyClipPage: (providerId: number, pageIndex: number, channels: Float32Array[]) => void;
+  clearClipPage: (providerId: number, pageIndex: number) => void;
+  destroyClipPageProvider: (providerId: number) => void;
+  popClipPageRequest: () => WasmClipPageRequest | null;
   setCaptureBuffer: (numChannels: number, capacityFrames: number) => void;
   armCapture: (armed: boolean) => void;
   setCapturePunch: (startSample: number, endSample: number, enabled: boolean) => void;
+  setCaptureSource: (source: WasmEngineCaptureStatus['source']) => void;
+  setRecordOffsetSamples: (offsetSamples: number) => void;
+  setInputMonitor: (enabled: boolean, gain: number) => void;
   resetCapture: () => void;
   captureStatus: () => WasmEngineCaptureStatus;
   capturedAudio: () => Float32Array[];
@@ -1078,6 +1097,28 @@ export interface SonareModule {
     nFft: number;
     sampleRate: number;
   };
+  waveformPeaks: (
+    samples: Float32Array,
+    channels: number,
+    samplesPerBucket: number,
+  ) => {
+    min: Float32Array;
+    max: Float32Array;
+    channels: number;
+    bucketCount: number;
+    samplesPerBucket: number;
+  };
+  waveformPeakPyramid: (
+    samples: Float32Array,
+    channels: number,
+    samplesPerBucketLevels: number[],
+  ) => Array<{
+    min: Float32Array;
+    max: Float32Array;
+    channels: number;
+    bucketCount: number;
+    samplesPerBucket: number;
+  }>;
 
   scaleQuantizeMidi: (
     root: number,

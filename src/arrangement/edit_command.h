@@ -406,6 +406,48 @@ class SetClipWarpRef final : public EditCommand {
   WarpRefId warp_ref_id_;
 };
 
+class SetClipWarpMode final : public EditCommand {
+ public:
+  SetClipWarpMode(ClipId id, WarpMode mode) : id_(id), mode_(mode) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetClipWarpMode"; }
+
+ private:
+  ClipId id_;
+  WarpMode mode_;
+};
+
+class SetClipTakes final : public EditCommand {
+ public:
+  SetClipTakes(ClipId id, std::vector<ClipTake> takes, TakeId active_take_id)
+      : id_(id), takes_(std::move(takes)), active_take_id_(active_take_id) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetClipTakes"; }
+
+ private:
+  ClipId id_;
+  std::vector<ClipTake> takes_;
+  TakeId active_take_id_;
+};
+
+class SetClipCompSegments final : public EditCommand {
+ public:
+  SetClipCompSegments(ClipId id, std::vector<ClipCompSegment> segments)
+      : id_(id), segments_(std::move(segments)) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetClipCompSegments"; }
+
+ private:
+  ClipId id_;
+  std::vector<ClipCompSegment> segments_;
+};
+
 class SetWarpMap final : public EditCommand {
  public:
   explicit SetWarpMap(WarpMapRef map) : map_(std::move(map)) {}

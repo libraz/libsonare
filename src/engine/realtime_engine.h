@@ -45,6 +45,11 @@
 
 namespace sonare::engine {
 
+enum class CaptureSource {
+  kOutput = 0,
+  kInput = 1,
+};
+
 /// @brief Realtime audio engine.
 ///
 /// @par Thread-safety contract
@@ -56,9 +61,10 @@ namespace sonare::engine {
 /// - **Audio-thread-safe (RT-safe, noexcept, allocation-free after prepare):**
 ///   @c process, @c process_with_monitor, @c push_command (lock-free SPSC
 ///   producer; control-thread is the sole writer in normal flow but the
-///   underlying queue is wait-free), @c pop_telemetry, @c pop_meter_telemetry,
-///   @c set_loop (publishes the loop region through a seqlock so the audio
-///   thread reads a torn-free {start, end, enabled} snapshot),
+///   underlying queue is wait-free), @c pop_telemetry,
+///   @c pop_clip_page_request, @c pop_meter_telemetry, @c set_loop (publishes
+///   the loop region through a seqlock so the audio thread reads a torn-free
+///   {start, end, enabled} snapshot),
 ///   @c set_capture_*, @c reset_capture,
 ///   @c marker_by_index/id, @c seek_marker, @c set_loop_from_markers,
 ///   @c set_mixing_enabled, @c set_monitoring_enabled,
@@ -80,7 +86,7 @@ namespace sonare::engine {
 /// Cross-thread state changes that must reach the audio thread (e.g. tempo,
 /// parameter automation) flow through @c push_command and the SPSC command
 /// queue, drained inside @c process at sub-block boundaries.
-class RealtimeEngine {
+class RealtimeEngine : private ClipPageRequestSink {
  public:
   static constexpr size_t kMaxCommandsPerBlock = 64;
   static constexpr size_t kMaxPendingCommands = 64;
@@ -95,6 +101,7 @@ class RealtimeEngine {
 
   void prepare(double sample_rate, int max_block_size, size_t command_capacity = 1024,
                size_t telemetry_capacity = 1024);
+  double sample_rate() const noexcept { return sample_rate_; }
 
   void process(float* const* io, int num_channels, int num_frames) noexcept;
   void process_with_monitor(float* const* io, float* const* monitor_out, int num_channels,
@@ -108,6 +115,7 @@ class RealtimeEngine {
 
   bool push_command(const rt::Command& command) noexcept;
   bool pop_telemetry(Telemetry& out) noexcept;
+  bool pop_clip_page_request(ClipPageRequest& out) noexcept { return clip_page_requests_.pop(out); }
 #if defined(SONARE_WITH_MIXING)
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
 #endif
@@ -212,6 +220,28 @@ class RealtimeEngine {
   void set_capture_segment(CaptureSegment segment) noexcept;
   void set_capture_armed(bool armed) noexcept;
   void set_capture_punch(int64_t start_sample, int64_t end_sample, bool enabled) noexcept;
+  void set_capture_source(CaptureSource source) noexcept {
+    capture_source_.store(source, std::memory_order_release);
+  }
+  CaptureSource capture_source() const noexcept {
+    return capture_source_.load(std::memory_order_acquire);
+  }
+  void set_record_offset_samples(int64_t offset_samples) noexcept {
+    record_offset_samples_.store(offset_samples, std::memory_order_release);
+  }
+  int64_t record_offset_samples() const noexcept {
+    return record_offset_samples_.load(std::memory_order_acquire);
+  }
+  void set_input_monitor(bool enabled, float gain) noexcept {
+    input_monitor_enabled_.store(enabled, std::memory_order_release);
+    input_monitor_gain_.store(gain, std::memory_order_release);
+  }
+  bool input_monitor_enabled() const noexcept {
+    return input_monitor_enabled_.load(std::memory_order_acquire);
+  }
+  float input_monitor_gain() const noexcept {
+    return input_monitor_gain_.load(std::memory_order_acquire);
+  }
   void reset_capture() noexcept;
   int64_t captured_frames() const noexcept { return capture_sink_.captured_frames(); }
   uint32_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
@@ -283,6 +313,7 @@ class RealtimeEngine {
   void enqueue_telemetry(Telemetry telemetry) noexcept;
   void enqueue_error(TelemetryErrorCode code, int64_t render_frame, int64_t timeline_sample,
                      uint32_t value) noexcept;
+  void on_clip_page_miss(const ClipPageRequest& request) noexcept override;
   void compact_pending() noexcept;
 #if defined(SONARE_WITH_ARRANGEMENT)
   // CONTROL thread: refresh the PDC delays from the current instrument rack and
@@ -342,6 +373,10 @@ class RealtimeEngine {
   std::array<float*, 64> midi_instrument_channels_{};
 #endif
   CaptureSink capture_sink_{};
+  std::atomic<CaptureSource> capture_source_{CaptureSource::kOutput};
+  std::atomic<int64_t> record_offset_samples_{0};
+  std::atomic<bool> input_monitor_enabled_{true};
+  std::atomic<float> input_monitor_gain_{1.0f};
   Metronome metronome_{};
 #if defined(SONARE_WITH_MIXING)
   MeterTelemetryTap meter_tap_{};
@@ -353,6 +388,7 @@ class RealtimeEngine {
 #endif
   rt::SpscQueue<rt::Command> commands_{};
   rt::SpscQueue<Telemetry> telemetry_{};
+  rt::SpscQueue<ClipPageRequest> clip_page_requests_{};
   BoundarySplitter boundary_splitter_{};
   std::array<rt::Command, kMaxPendingCommands> pending_{};
   std::array<bool, kMaxPendingCommands> pending_active_{};
@@ -376,6 +412,8 @@ class RealtimeEngine {
   // per-block loop performs no heap allocation.
   std::vector<float*> render_block_channels_{};
   static constexpr size_t kMaxAudioChannels = 64;
+  std::vector<float> input_capture_storage_{};
+  std::array<float*, kMaxAudioChannels> input_capture_channels_{};
 #if defined(SONARE_WITH_ARRANGEMENT)
   // Plugin-delay compensation (PDC). A hosted instrument reports an internal
   // latency: its audio for a note dispatched at frame F emerges latency_samples

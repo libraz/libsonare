@@ -40,18 +40,22 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   // -- edit --
   Napi::Value AddTrack(const Napi::CallbackInfo& info);
   Napi::Value AddClip(const Napi::CallbackInfo& info);
+  Napi::Value AddLoopRecordingTakes(const Napi::CallbackInfo& info);
   Napi::Value AddMidiClip(const Napi::CallbackInfo& info);
   Napi::Value SplitClip(const Napi::CallbackInfo& info);
   Napi::Value TrimClip(const Napi::CallbackInfo& info);
   Napi::Value MoveClip(const Napi::CallbackInfo& info);
   Napi::Value SetTrackKind(const Napi::CallbackInfo& info);
   Napi::Value SetClipWarpRef(const Napi::CallbackInfo& info);
+  Napi::Value SetClipWarpMode(const Napi::CallbackInfo& info);
   Napi::Value SetWarpMap(const Napi::CallbackInfo& info);
   Napi::Value RemoveWarpMap(const Napi::CallbackInfo& info);
   Napi::Value SetTrackMidiDestination(const Napi::CallbackInfo& info);
   Napi::Value RemoveClip(const Napi::CallbackInfo& info);
   Napi::Value SetClipGain(const Napi::CallbackInfo& info);
   Napi::Value SetClipFade(const Napi::CallbackInfo& info);
+  Napi::Value SetClipTakes(const Napi::CallbackInfo& info);
+  Napi::Value SetClipCompSegments(const Napi::CallbackInfo& info);
   Napi::Value SetClipLoop(const Napi::CallbackInfo& info);
   Napi::Value SetClipSource(const Napi::CallbackInfo& info);
   Napi::Value DuplicateClip(const Napi::CallbackInfo& info);

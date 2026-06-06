@@ -51,6 +51,64 @@ SonareProjectClipFade ClipFadeFromObject(const Napi::Object& obj) {
   return fade;
 }
 
+bool ParseClipTakes(Napi::Env env, const Napi::Value& value,
+                    std::vector<SonareProjectClipTake>* takes,
+                    std::vector<std::string>* name_storage) {
+  if (!value.IsArray()) {
+    Napi::TypeError::New(env, "clip takes must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  Napi::Array input = value.As<Napi::Array>();
+  takes->reserve(input.Length());
+  name_storage->reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value entry = input.Get(i);
+    if (!entry.IsObject()) {
+      Napi::TypeError::New(env, "clip take must be an object").ThrowAsJavaScriptException();
+      return false;
+    }
+    Napi::Object obj = entry.As<Napi::Object>();
+    SonareProjectClipTake take{};
+    take.id = obj.Get("id").As<Napi::Number>().Uint32Value();
+    take.source_id = static_cast<uint32_t>(IntProperty(obj, "sourceId", 0));
+    const Napi::Value source_offset = obj.Get("sourceOffsetPpq");
+    take.source_offset_ppq = source_offset.IsUndefined() || source_offset.IsNull()
+                                 ? 0.0
+                                 : source_offset.As<Napi::Number>().DoubleValue();
+    const Napi::Value name = obj.Get("name");
+    if (name.IsString()) {
+      name_storage->push_back(name.As<Napi::String>().Utf8Value());
+      take.name = name_storage->back().empty() ? nullptr : name_storage->back().c_str();
+    }
+    takes->push_back(take);
+  }
+  return true;
+}
+
+bool ParseClipCompSegments(Napi::Env env, const Napi::Value& value,
+                           std::vector<SonareProjectClipCompSegment>* segments) {
+  if (!value.IsArray()) {
+    Napi::TypeError::New(env, "clip comp segments must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  Napi::Array input = value.As<Napi::Array>();
+  segments->reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value entry = input.Get(i);
+    if (!entry.IsObject()) {
+      Napi::TypeError::New(env, "clip comp segment must be an object").ThrowAsJavaScriptException();
+      return false;
+    }
+    Napi::Object obj = entry.As<Napi::Object>();
+    SonareProjectClipCompSegment segment{};
+    segment.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
+    segment.end_ppq = obj.Get("endPpq").As<Napi::Number>().DoubleValue();
+    segment.take_id = static_cast<uint32_t>(IntProperty(obj, "takeId", 0));
+    segments->push_back(segment);
+  }
+  return true;
+}
+
 // Fills `options` from a JS bounce-options object (zero-initialized on entry).
 void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* options) {
   options->total_frames = Int64Property(obj, "totalFrames", 0);
@@ -187,18 +245,22 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetSampleRate>("setSampleRate"),
           InstanceMethod<&ProjectWrap::AddTrack>("addTrack"),
           InstanceMethod<&ProjectWrap::AddClip>("addClip"),
+          InstanceMethod<&ProjectWrap::AddLoopRecordingTakes>("addLoopRecordingTakes"),
           InstanceMethod<&ProjectWrap::AddMidiClip>("addMidiClip"),
           InstanceMethod<&ProjectWrap::SplitClip>("splitClip"),
           InstanceMethod<&ProjectWrap::TrimClip>("trimClip"),
           InstanceMethod<&ProjectWrap::MoveClip>("moveClip"),
           InstanceMethod<&ProjectWrap::SetTrackKind>("setTrackKind"),
           InstanceMethod<&ProjectWrap::SetClipWarpRef>("setClipWarpRef"),
+          InstanceMethod<&ProjectWrap::SetClipWarpMode>("setClipWarpMode"),
           InstanceMethod<&ProjectWrap::SetWarpMap>("setWarpMap"),
           InstanceMethod<&ProjectWrap::RemoveWarpMap>("removeWarpMap"),
           InstanceMethod<&ProjectWrap::SetTrackMidiDestination>("setTrackMidiDestination"),
           InstanceMethod<&ProjectWrap::RemoveClip>("removeClip"),
           InstanceMethod<&ProjectWrap::SetClipGain>("setClipGain"),
           InstanceMethod<&ProjectWrap::SetClipFade>("setClipFade"),
+          InstanceMethod<&ProjectWrap::SetClipTakes>("setClipTakes"),
+          InstanceMethod<&ProjectWrap::SetClipCompSegments>("setClipCompSegments"),
           InstanceMethod<&ProjectWrap::SetClipLoop>("setClipLoop"),
           InstanceMethod<&ProjectWrap::SetClipSource>("setClipSource"),
           InstanceMethod<&ProjectWrap::DuplicateClip>("duplicateClip"),
@@ -455,6 +517,46 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   return Napi::Number::New(env, out_id);
 }
 
+Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "addLoopRecordingTakes expects a descriptor object")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Object obj = info[0].As<Napi::Object>();
+  SonareProjectLoopRecordingDesc desc{};
+  desc.track_id = static_cast<uint32_t>(IntProperty(obj, "trackId", 0));
+  desc.start_ppq = obj.Get("startPpq").IsUndefined()
+                       ? 0.0
+                       : obj.Get("startPpq").As<Napi::Number>().DoubleValue();
+  desc.loop_length_ppq = obj.Get("loopLengthPpq").IsUndefined()
+                             ? 0.0
+                             : obj.Get("loopLengthPpq").As<Napi::Number>().DoubleValue();
+  desc.audio_channels = IntProperty(obj, "audioChannels", 1);
+  desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 48000);
+
+  std::vector<float> audio;
+  Napi::Value audio_value = obj.Get("audio");
+  if (sonare_node::IsFloat32Array(audio_value)) {
+    Napi::Float32Array array = audio_value.As<Napi::Float32Array>();
+    audio.assign(array.Data(), array.Data() + array.ElementLength());
+    desc.audio_interleaved = audio.data();
+    const int channels = desc.audio_channels > 0 ? desc.audio_channels : 1;
+    desc.audio_frames = static_cast<int64_t>(audio.size()) / channels;
+  }
+
+  uint32_t out_clip_id = 0;
+  size_t out_take_count = 0;
+  ThrowIfError(
+      env, sonare_project_add_loop_recording_takes(project_, &desc, &out_clip_id, &out_take_count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("clipId", Napi::Number::New(env, out_clip_id));
+  out.Set("takeCount", Napi::Number::New(env, static_cast<double>(out_take_count)));
+  return out;
+}
+
 Napi::Value ProjectWrap::AddMidiClip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   uint32_t out_track = 0;
@@ -502,6 +604,14 @@ Napi::Value ProjectWrap::SetClipWarpRef(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_project_set_clip_warp_ref(project_, Uint32Arg(info, 0, 0),
                                                      Uint32Arg(info, 1, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetClipWarpMode(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_clip_warp_mode(
+                        project_, Uint32Arg(info, 0, 0),
+                        static_cast<SonareProjectWarpMode>(Uint32Arg(info, 1, 0))));
   return env.Undefined();
 }
 
@@ -564,6 +674,33 @@ Napi::Value ProjectWrap::SetClipFade(const Napi::CallbackInfo& info) {
     fade_out = ClipFadeFromObject(info[2].As<Napi::Object>());
   }
   ThrowIfError(env, sonare_project_set_clip_fade(project_, clip_id, &fade_in, &fade_out));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetClipTakes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  std::vector<SonareProjectClipTake> takes;
+  std::vector<std::string> name_storage;
+  if (!ParseClipTakes(env, info.Length() > 1 ? info[1] : env.Undefined(), &takes, &name_storage)) {
+    return env.Undefined();
+  }
+  ThrowIfError(
+      env, sonare_project_set_clip_takes(project_, clip_id, takes.empty() ? nullptr : takes.data(),
+                                         takes.size(), Uint32Arg(info, 2, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetClipCompSegments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  std::vector<SonareProjectClipCompSegment> segments;
+  if (!ParseClipCompSegments(env, info.Length() > 1 ? info[1] : env.Undefined(), &segments)) {
+    return env.Undefined();
+  }
+  ThrowIfError(
+      env, sonare_project_set_clip_comp_segments(
+               project_, clip_id, segments.empty() ? nullptr : segments.data(), segments.size()));
   return env.Undefined();
 }
 

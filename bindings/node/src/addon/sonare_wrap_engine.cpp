@@ -79,9 +79,17 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::CountInEndSample>("countInEndSample"),
           InstanceMethod<&RealtimeEngineWrap::SetClips>("setClips"),
           InstanceMethod<&RealtimeEngineWrap::ClipCount>("clipCount"),
+          InstanceMethod<&RealtimeEngineWrap::CreateClipPageProvider>("createClipPageProvider"),
+          InstanceMethod<&RealtimeEngineWrap::SupplyClipPage>("supplyClipPage"),
+          InstanceMethod<&RealtimeEngineWrap::ClearClipPage>("clearClipPage"),
+          InstanceMethod<&RealtimeEngineWrap::DestroyClipPageProvider>("destroyClipPageProvider"),
+          InstanceMethod<&RealtimeEngineWrap::PopClipPageRequest>("popClipPageRequest"),
           InstanceMethod<&RealtimeEngineWrap::SetCaptureBuffer>("setCaptureBuffer"),
           InstanceMethod<&RealtimeEngineWrap::ArmCapture>("armCapture"),
           InstanceMethod<&RealtimeEngineWrap::SetCapturePunch>("setCapturePunch"),
+          InstanceMethod<&RealtimeEngineWrap::SetCaptureSource>("setCaptureSource"),
+          InstanceMethod<&RealtimeEngineWrap::SetRecordOffsetSamples>("setRecordOffsetSamples"),
+          InstanceMethod<&RealtimeEngineWrap::SetInputMonitor>("setInputMonitor"),
           InstanceMethod<&RealtimeEngineWrap::ResetCapture>("resetCapture"),
           InstanceMethod<&RealtimeEngineWrap::CaptureStatus>("captureStatus"),
           InstanceMethod<&RealtimeEngineWrap::CapturedAudio>("capturedAudio"),
@@ -160,6 +168,10 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
 }
 
 RealtimeEngineWrap::~RealtimeEngineWrap() {
+  for (SonareClipPageProvider* provider : clip_page_providers_) {
+    sonare_clip_page_provider_destroy(provider);
+  }
+  clip_page_providers_.clear();
   if (engine_ != nullptr) {
     sonare_engine_destroy(engine_);
     engine_ = nullptr;

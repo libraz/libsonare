@@ -75,6 +75,7 @@ set(SONARE_SOURCES
   metering/spectrogram.cpp
   metering/stereo.cpp
   metering/true_peak.cpp
+  metering/waveform.cpp
   analysis/key_profiles.cpp
   analysis/chord_templates.cpp
   analysis/progression_patterns.cpp

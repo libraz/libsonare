@@ -461,12 +461,20 @@ from .analyzer import (
     vqt as vqt,
 )
 from .analyzer import (
+    waveform_peak_pyramid as waveform_peak_pyramid,
+)
+from .analyzer import (
+    waveform_peaks as waveform_peaks,
+)
+from .analyzer import (
     zero_crossing_rate as zero_crossing_rate,
 )
 from .analyzer import (
     zero_crossings as zero_crossings,
 )
 from .audio import Audio as Audio
+from .engine import ClipPageProvider as ClipPageProvider
+from .engine import FileClipPageProvider as FileClipPageProvider
 from .engine import RealtimeEngine as RealtimeEngine
 from .streaming import StreamAnalyzer as StreamAnalyzer
 from .types import (
@@ -702,6 +710,9 @@ from .types import (
 )
 from .types import (
     VectorscopeReport as VectorscopeReport,
+)
+from .types import (
+    WaveformPeaksReport as WaveformPeaksReport,
 )
 
 __version__: str

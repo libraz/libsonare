@@ -283,8 +283,40 @@ export interface ProjectClipFade {
   curve?: ProjectFadeCurve;
 }
 
+/** One alternate take for {@link Project.setClipTakes}. */
+export interface ProjectClipTake {
+  id: number;
+  sourceId?: number;
+  sourceOffsetPpq?: number;
+  name?: string;
+}
+
+/** One comp segment for {@link Project.setClipCompSegments}. */
+export interface ProjectClipCompSegment {
+  startPpq: number;
+  endPpq: number;
+  takeId?: number;
+}
+
+/** Descriptor for {@link Project.addLoopRecordingTakes}. */
+export interface ProjectLoopRecordingDesc {
+  trackId: number;
+  startPpq?: number;
+  loopLengthPpq: number;
+  audio: Float32Array;
+  audioChannels?: number;
+  audioSampleRate?: number;
+}
+
+/** Result returned by {@link Project.addLoopRecordingTakes}. */
+export interface ProjectLoopRecordingResult {
+  clipId: number;
+  takeCount: number;
+}
+
 /** Clip loop mode for {@link Project.setClipLoop}. */
 export type ProjectLoopMode = 'off' | 'loop' | 0 | 1;
+export type ProjectWarpMode = 'off' | 'repitch' | 'tempo-sync' | 0 | 1 | 2;
 
 /** Automation breakpoint interpolation for {@link ProjectAutomationPoint}. */
 export type ProjectAutomationCurve = 'linear' | 'exponential' | 'hold' | 'scurve' | 0 | 1 | 2 | 3;
@@ -501,12 +533,14 @@ interface WasmProject {
   setSampleRate: (sampleRate: number) => void;
   addTrack: (desc: { kind?: number | string; name?: string }) => number;
   addClip: (desc: ProjectClipDesc) => number;
+  addLoopRecordingTakes: (desc: ProjectLoopRecordingDesc) => ProjectLoopRecordingResult;
   addMidiClip: (startPpq: number, lengthPpq: number) => ProjectMidiClipResult;
   splitClip: (clipId: number, splitPpq: number) => number;
   trimClip: (clipId: number, newStartPpq: number, newLengthPpq: number) => void;
   moveClip: (clipId: number, newStartPpq: number, newTrackId: number) => void;
   setTrackKind: (trackId: number, kind: number) => void;
   setClipWarpRef: (clipId: number, warpRefId: number) => void;
+  setClipWarpMode: (clipId: number, mode: number) => void;
   setWarpMap: (map: ProjectWarpMapDesc) => void;
   removeWarpMap: (warpRefId: number) => void;
   setTrackMidiDestination: (trackId: number, destinationId: number) => void;
@@ -554,6 +588,12 @@ interface WasmProject {
   removeClip: (clipId: number) => void;
   setClipGain: (clipId: number, gain: number) => void;
   setClipFade: (clipId: number, fadeIn: ProjectClipFade, fadeOut: ProjectClipFade) => void;
+  setClipTakes: (
+    clipId: number,
+    takes: ReadonlyArray<ProjectClipTake>,
+    activeTakeId: number,
+  ) => void;
+  setClipCompSegments: (clipId: number, segments: ReadonlyArray<ProjectClipCompSegment>) => void;
   setClipLoop: (clipId: number, loopMode: number, loopLengthPpq: number) => void;
   setClipSource: (clipId: number, sourceId: number) => void;
   duplicateClip: (clipId: number, newStartPpq: number) => number;
@@ -1066,6 +1106,11 @@ export class Project {
     return this.native.addClip(desc);
   }
 
+  /** Split captured loop-recording audio into takes and add one clip. */
+  addLoopRecordingTakes(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingResult {
+    return this.native.addLoopRecordingTakes(desc);
+  }
+
   /** Create a MIDI track + clip; returns `{ trackId, clipId }`. */
   addMidiClip(startPpq: number, lengthPpq: number): ProjectMidiClipResult {
     return this.native.addMidiClip(startPpq, lengthPpq);
@@ -1094,6 +1139,11 @@ export class Project {
   /** Set a clip's warp reference id (0 clears it). */
   setClipWarpRef(clipId: number, warpRefId: number): void {
     this.native.setClipWarpRef(clipId, warpRefId);
+  }
+
+  /** Set a clip's warp playback mode. */
+  setClipWarpMode(clipId: number, mode: ProjectWarpMode): void {
+    this.native.setClipWarpMode(clipId, projectWarpModeValue(mode));
   }
 
   /** Add or replace a first-class warp map referenced by clip warp ids. */
@@ -1349,6 +1399,16 @@ export class Project {
     this.native.setClipFade(clipId, fadeIn, fadeOut);
   }
 
+  /** Replace a clip's take list and active take id (undoable). */
+  setClipTakes(clipId: number, takes: ReadonlyArray<ProjectClipTake>, activeTakeId = 0): void {
+    this.native.setClipTakes(clipId, takes, activeTakeId);
+  }
+
+  /** Replace a clip's comp segments (undoable). */
+  setClipCompSegments(clipId: number, segments: ReadonlyArray<ProjectClipCompSegment>): void {
+    this.native.setClipCompSegments(clipId, segments);
+  }
+
   /** Set a clip's loop mode + loop length in PPQ (undoable). */
   setClipLoop(clipId: number, loopMode: ProjectLoopMode, loopLengthPpq = 0): void {
     this.native.setClipLoop(clipId, projectLoopModeValue(loopMode), loopLengthPpq);
@@ -1528,6 +1588,19 @@ function projectTrackKindValue(kind: ProjectTrackKind | undefined): number {
     return 2;
   }
   return kind;
+}
+
+function projectWarpModeValue(mode: ProjectWarpMode | undefined): number {
+  if (mode === undefined || mode === 'off') {
+    return 0;
+  }
+  if (mode === 'repitch') {
+    return 1;
+  }
+  if (mode === 'tempo-sync') {
+    return 2;
+  }
+  return mode;
 }
 
 function projectLoopModeValue(mode: ProjectLoopMode | undefined): number {

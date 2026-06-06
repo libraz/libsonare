@@ -285,17 +285,28 @@ TEST_CASE("project C surface sets a clip warp reference", "[project]") {
   REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip_id) == SONARE_OK);
 
   REQUIRE(sonare_project_set_clip_warp_ref(project, clip_id, 123) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_warp_mode(project, clip_id, SONARE_PROJECT_WARP_MODE_REPITCH) ==
+          SONARE_OK);
   const std::string warped = serialize(project);
   REQUIRE(warped.find("\"warp_ref_id\":123") != std::string::npos);
+  REQUIRE(warped.find("\"warp_mode\":1") != std::string::npos);
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project).find("\"warp_mode\":0") != std::string::npos);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project).find("\"warp_ref_id\":0") != std::string::npos);
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(serialize(project) == warped);
 
   REQUIRE(sonare_project_set_clip_warp_ref(project, clip_id, 0) == SONARE_OK);
   REQUIRE(serialize(project).find("\"warp_ref_id\":0") != std::string::npos);
+  REQUIRE(sonare_project_set_clip_warp_mode(project, clip_id,
+                                            SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) == SONARE_OK);
+  REQUIRE(serialize(project).find("\"warp_mode\":2") != std::string::npos);
   CHECK(sonare_project_set_clip_warp_ref(project, 999999u, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_clip_warp_mode(project, 999999u, SONARE_PROJECT_WARP_MODE_REPITCH) ==
+        SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
 }

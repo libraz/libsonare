@@ -197,6 +197,27 @@ export interface SpectrumReport {
   sampleRate: number;
 }
 
+/** Options for {@link waveformPeaks}. All fields are optional. */
+export interface WaveformPeaksOptions extends ValidateOptions {
+  /** Bucket width in frames. Default 512. */
+  samplesPerBucket?: number;
+}
+
+/** Options for {@link waveformPeakPyramid}. All fields are optional. */
+export interface WaveformPeakPyramidOptions extends ValidateOptions {
+  /** Bucket widths in frames, one per zoom level. Default [512, 1024, 2048, 4096]. */
+  samplesPerBucketLevels?: number[];
+}
+
+/** Per-channel min/max waveform buckets. Arrays are channel-major. */
+export interface WaveformPeaksReport {
+  min: Float32Array;
+  max: Float32Array;
+  channels: number;
+  bucketCount: number;
+  samplesPerBucket: number;
+}
+
 /** Pearson correlation in [-1, 1] between two equal-length channels. */
 export function meteringStereoCorrelation(
   left: Float32Array,
@@ -322,4 +343,38 @@ export function meteringSpectrumFrame(
   const validate = options?.validate !== false;
   assertSamples('meteringSpectrumFrame', samples, validate);
   return requireModule().meteringSpectrumFrame(samples, sampleRate, frameOffset, options ?? {});
+}
+
+/** Compute per-channel min/max waveform buckets from interleaved audio. */
+export function waveformPeaks(
+  samples: Float32Array,
+  channels: number,
+  options: WaveformPeaksOptions = {},
+): WaveformPeaksReport {
+  assertSamples('waveformPeaks', samples, options.validate !== false);
+  if (channels <= 0 || samples.length % channels !== 0) {
+    throw new RangeError('waveformPeaks: samples length must be a multiple of channels');
+  }
+  const samplesPerBucket = options.samplesPerBucket ?? 512;
+  if (samplesPerBucket <= 0) {
+    throw new RangeError('waveformPeaks: samplesPerBucket must be > 0');
+  }
+  return requireModule().waveformPeaks(samples, channels, samplesPerBucket);
+}
+
+/** Compute waveform peak buckets for several zoom levels. */
+export function waveformPeakPyramid(
+  samples: Float32Array,
+  channels: number,
+  options: WaveformPeakPyramidOptions = {},
+): WaveformPeaksReport[] {
+  assertSamples('waveformPeakPyramid', samples, options.validate !== false);
+  if (channels <= 0 || samples.length % channels !== 0) {
+    throw new RangeError('waveformPeakPyramid: samples length must be a multiple of channels');
+  }
+  const levels = options.samplesPerBucketLevels ?? [512, 1024, 2048, 4096];
+  if (levels.length === 0 || levels.some((level) => level <= 0)) {
+    throw new RangeError('waveformPeakPyramid: samplesPerBucketLevels must be non-empty and > 0');
+  }
+  return requireModule().waveformPeakPyramid(samples, channels, levels);
 }

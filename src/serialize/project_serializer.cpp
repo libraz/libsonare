@@ -249,6 +249,23 @@ Value fade_to_json(const arrangement::ClipFade& f) {
   return o;
 }
 
+Value take_to_json(const arrangement::ClipTake& take) {
+  Object o;
+  o["id"] = static_cast<double>(take.id);
+  o["source_id"] = static_cast<double>(take.source_id);
+  o["source_offset_ppq"] = take.source_offset_ppq;
+  o["name"] = take.name;
+  return o;
+}
+
+Value comp_segment_to_json(const arrangement::ClipCompSegment& segment) {
+  Object o;
+  o["start_ppq"] = segment.start_ppq;
+  o["end_ppq"] = segment.end_ppq;
+  o["take_id"] = static_cast<double>(segment.take_id);
+  return o;
+}
+
 Value clip_to_json(const arrangement::EditClip& c) {
   Object o;
   o["id"] = static_cast<double>(c.id);
@@ -263,6 +280,24 @@ Value clip_to_json(const arrangement::EditClip& c) {
   o["loop_mode"] = static_cast<int>(c.loop_mode);
   o["loop_length_ppq"] = c.loop_length_ppq;
   o["warp_ref_id"] = static_cast<double>(c.warp_ref_id);
+  o["warp_mode"] = static_cast<int>(c.warp_mode);
+  if (!c.takes.empty()) {
+    Array takes;
+    for (const auto& take : c.takes) {
+      takes.push_back(take_to_json(take));
+    }
+    o["takes"] = std::move(takes);
+  }
+  if (c.active_take_id != 0) {
+    o["active_take_id"] = static_cast<double>(c.active_take_id);
+  }
+  if (!c.comp_segments.empty()) {
+    Array segments;
+    for (const auto& segment : c.comp_segments) {
+      segments.push_back(comp_segment_to_json(segment));
+    }
+    o["comp_segments"] = std::move(segments);
+  }
   return o;
 }
 
@@ -568,6 +603,23 @@ arrangement::ClipFade fade_from_json(const Value& v) {
   return f;
 }
 
+arrangement::ClipTake take_from_json(const Value& v) {
+  arrangement::ClipTake take;
+  take.id = uint_or(v, "id", 0);
+  take.source_id = uint_or(v, "source_id", 0);
+  take.source_offset_ppq = num_or(v, "source_offset_ppq", 0.0);
+  take.name = str_or(v, "name", "");
+  return take;
+}
+
+arrangement::ClipCompSegment comp_segment_from_json(const Value& v) {
+  arrangement::ClipCompSegment segment;
+  segment.start_ppq = num_or(v, "start_ppq", 0.0);
+  segment.end_ppq = num_or(v, "end_ppq", 0.0);
+  segment.take_id = uint_or(v, "take_id", 0);
+  return segment;
+}
+
 arrangement::EditClip clip_from_json(const Value& v) {
   arrangement::EditClip c;
   c.id = uint_or(v, "id", 0);
@@ -582,6 +634,18 @@ arrangement::EditClip clip_from_json(const Value& v) {
   c.loop_mode = static_cast<arrangement::LoopMode>(uint_or(v, "loop_mode", 0));
   c.loop_length_ppq = num_or(v, "loop_length_ppq", 0.0);
   c.warp_ref_id = uint_or(v, "warp_ref_id", 0);
+  c.warp_mode = static_cast<arrangement::WarpMode>(uint_or(v, "warp_mode", 0));
+  if (const auto* arr = array_at(v, "takes")) {
+    for (const auto& tv : *arr) {
+      if (tv.is_object()) c.takes.push_back(take_from_json(tv));
+    }
+  }
+  c.active_take_id = uint_or(v, "active_take_id", 0);
+  if (const auto* arr = array_at(v, "comp_segments")) {
+    for (const auto& sv : *arr) {
+      if (sv.is_object()) c.comp_segments.push_back(comp_segment_from_json(sv));
+    }
+  }
   return c;
 }
 

@@ -48,6 +48,7 @@ from .types import (
     StftResult,
     TimbreResult,
     VectorscopeReport,
+    WaveformPeaksReport,
 )
 
 TempogramMode: TypeAlias = Literal["autocorrelation", "auto", "ac", "cosine"]
@@ -1203,6 +1204,20 @@ def metering_spectrum_frame(
     *,
     validate: bool = True,
 ) -> SpectrumReport: ...
+def waveform_peaks(
+    samples: FloatSamples,
+    channels: int,
+    *,
+    samples_per_bucket: int = 512,
+    validate: bool = True,
+) -> WaveformPeaksReport: ...
+def waveform_peak_pyramid(
+    samples: FloatSamples,
+    channels: int,
+    *,
+    samples_per_bucket_levels: Sequence[int] = (512, 1024, 2048, 4096),
+    validate: bool = True,
+) -> list[WaveformPeaksReport]: ...
 def metering_peak_db(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
 ) -> float: ...

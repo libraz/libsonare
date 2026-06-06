@@ -37,6 +37,9 @@ enum class TelemetryErrorCode : uint16_t {
   // full), nothing is lost here: the backlog is deferred to future blocks and
   // the value carries the remaining queued count, not a dropped count.
   kCommandBacklogDeferred,
+  // A paged clip source returned a page miss on the audio thread. The value
+  // carries the clip id; detailed page requests are drained separately.
+  kClipPageUnderrun,
 };
 
 struct Telemetry {

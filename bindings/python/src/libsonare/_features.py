@@ -23,6 +23,8 @@ from ._ffi import (
     SonareStftResult,
     SonareVectorscopePoint,
     SonareVectorscopeResult,
+    SonareWaveformPeakPyramidResult,
+    SonareWaveformPeaksResult,
 )
 from ._runtime import (
     _call_float_transform,
@@ -50,6 +52,7 @@ from .types import (
     SpectrumReport,
     StftResult,
     VectorscopeReport,
+    WaveformPeaksReport,
 )
 
 
@@ -1578,6 +1581,99 @@ def metering_spectrum_frame(
         )
     finally:
         lib.sonare_free_spectrum_result(ctypes.byref(out))
+
+
+def _waveform_peaks_from_c(out: SonareWaveformPeaksResult) -> WaveformPeaksReport:
+    count = int(out.channels) * int(out.bucket_count)
+    return WaveformPeaksReport(
+        min=_from_c_float_array(out.min, count),
+        max=_from_c_float_array(out.max, count),
+        channels=int(out.channels),
+        bucket_count=int(out.bucket_count),
+        samples_per_bucket=int(out.samples_per_bucket),
+    )
+
+
+def waveform_peaks(
+    samples: Sequence[float] | list[float],
+    channels: int,
+    *,
+    samples_per_bucket: int = 512,
+    validate: bool = True,
+) -> WaveformPeaksReport:
+    """Compute per-channel min/max waveform buckets from interleaved audio.
+
+    The returned ``min`` and ``max`` arrays are channel-major:
+    ``channel * bucket_count + bucket``.
+
+    Args:
+        samples: Interleaved input buffer of ``frames * channels`` values.
+        channels: Channel count (must be > 0).
+        samples_per_bucket: Bucket width in frames (default 512).
+    """
+    sample_buf = _validate_samples("waveform_peaks", samples, validate=validate)
+    if channels <= 0 or len(sample_buf) % channels != 0:
+        raise ValueError("waveform_peaks: samples length must be a multiple of channels")
+    if samples_per_bucket <= 0:
+        raise ValueError("waveform_peaks: samples_per_bucket must be > 0")
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(sample_buf)
+    out = SonareWaveformPeaksResult()
+    rc = lib.sonare_waveform_peaks(
+        c_array,
+        ctypes.c_size_t(length // channels),
+        ctypes.c_int(channels),
+        ctypes.c_size_t(samples_per_bucket),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return _waveform_peaks_from_c(out)
+    finally:
+        lib.sonare_free_waveform_peaks_result(ctypes.byref(out))
+
+
+def waveform_peak_pyramid(
+    samples: Sequence[float] | list[float],
+    channels: int,
+    *,
+    samples_per_bucket_levels: Sequence[int] = (512, 1024, 2048, 4096),
+    validate: bool = True,
+) -> list[WaveformPeaksReport]:
+    """Compute waveform peak buckets for several zoom levels.
+
+    Args:
+        samples: Interleaved input buffer of ``frames * channels`` values.
+        channels: Channel count (must be > 0).
+        samples_per_bucket_levels: Bucket widths in frames, one per zoom level
+            (default ``(512, 1024, 2048, 4096)``).
+    """
+    sample_buf = _validate_samples("waveform_peak_pyramid", samples, validate=validate)
+    levels = [int(level) for level in samples_per_bucket_levels]
+    if channels <= 0 or len(sample_buf) % channels != 0:
+        raise ValueError("waveform_peak_pyramid: samples length must be a multiple of channels")
+    if not levels or any(level <= 0 for level in levels):
+        raise ValueError(
+            "waveform_peak_pyramid: samples_per_bucket_levels must be non-empty and > 0"
+        )
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(sample_buf)
+    c_levels = (ctypes.c_size_t * len(levels))(*levels)
+    out = SonareWaveformPeakPyramidResult()
+    rc = lib.sonare_waveform_peak_pyramid(
+        c_array,
+        ctypes.c_size_t(length // channels),
+        ctypes.c_int(channels),
+        c_levels,
+        ctypes.c_size_t(len(levels)),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        view = out.levels
+        return [_waveform_peaks_from_c(view[i]) for i in range(int(out.level_count))]
+    finally:
+        lib.sonare_free_waveform_peak_pyramid_result(ctypes.byref(out))
 
 
 def metering_dynamic_range(

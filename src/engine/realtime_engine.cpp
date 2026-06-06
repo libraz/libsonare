@@ -32,6 +32,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   transport_.prepare(sample_rate, active_tempo_map_);
   clip_player_.prepare(sample_rate, max_block_size_);
   clip_player_.set_tempo_map(active_tempo_map_);
+  clip_player_.set_page_request_sink(this);
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.prepare(sample_rate);
   midi_clock_.prepare(active_tempo_map_);
@@ -73,6 +74,12 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   meter_tap_.prepare(sample_rate, max_block_size_, 0, telemetry_capacity);
 #endif
   automation_.prepare(sample_rate, active_tempo_map_);
+  input_capture_storage_.assign(
+      static_cast<size_t>(max_block_size_) * input_capture_channels_.size(), 0.0f);
+  for (size_t ch = 0; ch < input_capture_channels_.size(); ++ch) {
+    input_capture_channels_[ch] =
+        input_capture_storage_.data() + ch * static_cast<size_t>(max_block_size_);
+  }
 #if defined(SONARE_WITH_MIXING)
   mixing_runtime_.prepare(sample_rate_, max_block_size_);
   monitor_runtime_.prepare(sample_rate_, max_block_size_);
@@ -88,6 +95,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   // producer; reserve it here so process()/enqueue_telemetry never push to an
   // unreserved (capacity 0) queue and silently drop records.
   telemetry_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 2)));
+  clip_page_requests_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 2)));
   pending_active_.fill(false);
   // Pre-size the engine-level smoothers so kSetParamSmoothed never allocates on
   // the audio thread; mark all slots inactive.
@@ -1074,6 +1082,34 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     for (int ch = 0; ch < channels; ++ch) {
       sub_channels[static_cast<size_t>(ch)] = io[ch] ? io[ch] + offset : nullptr;
     }
+    const bool capture_input = capture_source() == CaptureSource::kInput;
+    if (capture_input) {
+      for (int ch = 0; ch < channels; ++ch) {
+        float* dst = input_capture_channels_[static_cast<size_t>(ch)];
+        const float* src = sub_channels[static_cast<size_t>(ch)];
+        if (!dst) continue;
+        if (src) {
+          std::copy(src, src + num_frames, dst);
+        } else {
+          std::fill(dst, dst + num_frames, 0.0f);
+        }
+      }
+    }
+    const bool monitor_input = input_monitor_enabled();
+    const float monitor_gain = input_monitor_gain();
+    if (!monitor_input || monitor_gain != 1.0f) {
+      for (int ch = 0; ch < channels; ++ch) {
+        float* channel = sub_channels[static_cast<size_t>(ch)];
+        if (!channel) continue;
+        if (!monitor_input) {
+          std::fill(channel, channel + num_frames, 0.0f);
+        } else {
+          for (int i = 0; i < num_frames; ++i) {
+            channel[i] *= monitor_gain;
+          }
+        }
+      }
+    }
 #if defined(SONARE_WITH_ARRANGEMENT)
     if (pdc_total_q8_ > 0) {
       // PDC active: render the clip bus into scratch, delay it by the project's
@@ -1220,7 +1256,9 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     meter_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame());
 #endif
     const float* const* capture_channels =
-        reinterpret_cast<const float* const*>(sub_channels.data());
+        capture_source() == CaptureSource::kInput
+            ? reinterpret_cast<const float* const*>(input_capture_channels_.data())
+            : reinterpret_cast<const float* const*>(sub_channels.data());
     capture_sink_.process(capture_channels, channels, num_frames, transport_.sample_position());
   }
 }
@@ -1256,6 +1294,12 @@ void RealtimeEngine::enqueue_error(TelemetryErrorCode code, int64_t render_frame
                                    int64_t timeline_sample, uint32_t value) noexcept {
   enqueue_telemetry({TelemetryType::kError, code, render_frame, timeline_sample,
                      audible_timeline_sample(timeline_sample), graph_latency_samples_q8_, value});
+}
+
+void RealtimeEngine::on_clip_page_miss(const ClipPageRequest& request) noexcept {
+  (void)clip_page_requests_.push(request);
+  enqueue_error(TelemetryErrorCode::kClipPageUnderrun, transport_.render_frame(),
+                transport_.sample_position(), request.clip_id);
 }
 
 void RealtimeEngine::compact_pending() noexcept {

@@ -250,6 +250,76 @@ describe('Sonare WASM Module', () => {
       expect(processed[0][0]).toBeCloseTo(0.75, 4);
       expect(processed[1][0]).toBeCloseTo(-0.75, 4);
 
+      const warpEngine = new RealtimeEngine(48000, 4);
+      warpEngine.setClips([
+        {
+          id: 303,
+          channels: [new Float32Array([0, 10, 20, 30])],
+          startPpq: 0,
+          lengthSamples: 4,
+          warpMode: 'repitch',
+          warpAnchors: [
+            { warpSample: 0, sourceSample: 0 },
+            { warpSample: 3, sourceSample: 1.5 },
+          ],
+        },
+      ]);
+      warpEngine.play();
+      const warped = warpEngine.process([new Float32Array(4)]);
+      expect(warped[0][0]).toBeCloseTo(0, 4);
+      expect(warped[0][1]).toBeCloseTo(5, 4);
+      expect(warped[0][2]).toBeCloseTo(10, 4);
+      expect(warped[0][3]).toBeCloseTo(15, 4);
+      warpEngine.destroy();
+
+      const tempoEngine = new RealtimeEngine(48000, 8192);
+      const tempoSource = new Float32Array(4096);
+      for (let i = 0; i < tempoSource.length; i++) {
+        tempoSource[i] = Math.sin(i * 0.02);
+      }
+      tempoEngine.setClips([
+        {
+          id: 304,
+          channels: [tempoSource],
+          startPpq: 0,
+          lengthSamples: 8192,
+          warpMode: 'tempo-sync',
+          warpAnchors: [
+            { warpSample: 0, sourceSample: 0 },
+            { warpSample: 2048, sourceSample: 1024 },
+            { warpSample: 8192, sourceSample: 4096 },
+          ],
+        },
+      ]);
+      tempoEngine.play();
+      const tempoSynced = tempoEngine.process([new Float32Array(8192)]);
+      expect(Array.from(tempoSynced[0]).some((v) => Math.abs(v) > 0.1)).toBe(true);
+      tempoEngine.destroy();
+
+      const pagedEngine = new RealtimeEngine(48000, 8);
+      const provider = pagedEngine.createClipPageProvider(1, 8, 4);
+      provider.supply(0, [new Float32Array([1, 2, 3, 4])]);
+      pagedEngine.setClips([
+        {
+          id: 305,
+          pageProvider: provider,
+          startPpq: 0,
+        },
+      ]);
+      pagedEngine.play();
+      const firstPaged = pagedEngine.process([new Float32Array(8)]);
+      expect(Array.from(firstPaged[0])).toEqual([1, 2, 3, 4, 0, 0, 0, 0]);
+      expect(pagedEngine.popClipPageRequest()).toEqual({ clipId: 305, channel: 0, sample: 4 });
+      expect(
+        pagedEngine.drainTelemetry().some((record) => record.type === 1 && record.value === 305),
+      ).toBe(true);
+      provider.supply(1, [new Float32Array([5, 6, 7, 8])]);
+      pagedEngine.seekSample(0);
+      const secondPaged = pagedEngine.process([new Float32Array(8)]);
+      expect(Array.from(secondPaged[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      provider.destroy();
+      pagedEngine.destroy();
+
       engine.armCapture();
       engine.seekMarker(11);
       const capturedBlock = engine.process([
@@ -260,6 +330,8 @@ describe('Sonare WASM Module', () => {
       const captureStatus = engine.captureStatus();
       expect(captureStatus.capturedFrames).toBe(128);
       expect(captureStatus.overflowCount).toBe(0);
+      expect(captureStatus.source).toBe('output');
+      expect(captureStatus.recordOffsetSamples).toBe(0);
       expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.75, 4);
       engine.resetCapture();
       expect(engine.captureStatus().capturedFrames).toBe(0);
@@ -267,6 +339,38 @@ describe('Sonare WASM Module', () => {
       const telemetry = engine.drainTelemetry();
       expect(telemetry.length).toBeGreaterThan(0);
       expect(telemetry.at(-1)?.timelineSample).toBe(48000 + 128);
+
+      engine.setCaptureSource('input');
+      engine.setRecordOffsetSamples(-37);
+      engine.armCapture();
+      engine.seekMarker(11);
+      engine.process([new Float32Array(128).fill(0.25), new Float32Array(128).fill(-0.25)]);
+      const inputCaptureStatus = engine.captureStatus();
+      expect(inputCaptureStatus.source).toBe('input');
+      expect(inputCaptureStatus.recordOffsetSamples).toBe(-37);
+      expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
+
+      engine.setInputMonitor(false);
+      engine.resetCapture();
+      engine.armCapture();
+      engine.seekMarker(11);
+      let monitored = engine.process([
+        new Float32Array(128).fill(0.25),
+        new Float32Array(128).fill(-0.25),
+      ]);
+      expect(monitored[0][0]).toBeCloseTo(0.25, 4);
+      expect(monitored[1][0]).toBeCloseTo(-0.25, 4);
+      expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
+
+      engine.setInputMonitor(true, 0.5);
+      engine.seekMarker(11);
+      monitored = engine.process([
+        new Float32Array(128).fill(0.25),
+        new Float32Array(128).fill(-0.25),
+      ]);
+      expect(monitored[0][0]).toBeCloseTo(0.5, 4);
+      expect(monitored[1][0]).toBeCloseTo(-0.5, 4);
+
       const meters = engine.drainMeterTelemetry();
       expect(meters.length).toBeGreaterThan(0);
       expect(meters.at(-1)).toMatchObject({ targetId: 0 });

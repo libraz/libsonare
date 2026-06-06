@@ -40,6 +40,23 @@ Napi::Value EmitSpectrumResult(Napi::Env env, const SonareSpectrumResult& result
   return out;
 }
 
+Napi::Value EmitWaveformPeaksResult(Napi::Env env, const SonareWaveformPeaksResult& result) {
+  const size_t total = static_cast<size_t>(result.channels) * result.bucket_count;
+  auto min_values = Napi::Float32Array::New(env, total);
+  auto max_values = Napi::Float32Array::New(env, total);
+  if (total > 0) {
+    std::memcpy(min_values.Data(), result.min, total * sizeof(float));
+    std::memcpy(max_values.Data(), result.max, total * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("min", min_values);
+  out.Set("max", max_values);
+  out.Set("channels", Napi::Number::New(env, result.channels));
+  out.Set("bucketCount", Napi::Number::New(env, result.bucket_count));
+  out.Set("samplesPerBucket", Napi::Number::New(env, result.samples_per_bucket));
+  return out;
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
@@ -624,4 +641,78 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   }
   CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
   return EmitSpectrumResult(env, result);
+}
+
+Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(
+        env, "waveformPeaks: expected (Float32Array samples, channels, samplesPerBucket)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  int channels = info[1].As<Napi::Number>().Int32Value();
+  size_t samples_per_bucket =
+      static_cast<size_t>(std::max<int64_t>(0, info[2].As<Napi::Number>().Int64Value()));
+  if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
+    Napi::TypeError::New(env, "waveformPeaks: samples length must be a multiple of channels")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareWaveformPeaksResult result{};
+  const size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
+  SonareError err =
+      sonare_waveform_peaks(typed.Data(), frames, channels, samples_per_bucket, &result);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  CResultGuard<SonareWaveformPeaksResult, sonare_free_waveform_peaks_result> guard(&result);
+  return EmitWaveformPeaksResult(env, result);
+}
+
+Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsArray()) {
+    Napi::TypeError::New(env,
+                         "waveformPeakPyramid: expected (Float32Array samples, channels, levels)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto typed = info[0].As<Napi::Float32Array>();
+  int channels = info[1].As<Napi::Number>().Int32Value();
+  if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
+    Napi::TypeError::New(env, "waveformPeakPyramid: samples length must be a multiple of channels")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Array js_levels = info[2].As<Napi::Array>();
+  std::vector<size_t> levels;
+  levels.reserve(js_levels.Length());
+  for (uint32_t i = 0; i < js_levels.Length(); ++i) {
+    Napi::Value item = js_levels.Get(i);
+    if (!item.IsNumber()) {
+      Napi::TypeError::New(env, "waveformPeakPyramid: levels must be numbers")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    levels.push_back(
+        static_cast<size_t>(std::max<int64_t>(0, item.As<Napi::Number>().Int64Value())));
+  }
+  SonareWaveformPeakPyramidResult result{};
+  const size_t frames = typed.ElementLength() / static_cast<size_t>(channels);
+  SonareError err = sonare_waveform_peak_pyramid(typed.Data(), frames, channels, levels.data(),
+                                                 levels.size(), &result);
+  if (err != SONARE_OK) {
+    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  CResultGuard<SonareWaveformPeakPyramidResult, sonare_free_waveform_peak_pyramid_result> guard(
+      &result);
+  Napi::Array out = Napi::Array::New(env, result.level_count);
+  for (size_t i = 0; i < result.level_count; ++i) {
+    out.Set(i, EmitWaveformPeaksResult(env, result.levels[i]));
+  }
+  return out;
 }

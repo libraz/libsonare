@@ -229,6 +229,41 @@ SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, 
 
 void sonare_free_spectrum_result(SonareSpectrumResult* result);
 
+/// @brief Per-channel min/max waveform buckets. @c min and @c max are
+///        channel-major arrays of length @c channels * @c bucket_count:
+///        index = channel * bucket_count + bucket. Free with
+///        @ref sonare_free_waveform_peaks_result.
+typedef struct {
+  float* min;
+  float* max;
+  int channels;
+  size_t bucket_count;
+  size_t samples_per_bucket;
+} SonareWaveformPeaksResult;
+
+/// @brief A set of waveform peak levels for multiple zoom resolutions.
+typedef struct {
+  SonareWaveformPeaksResult* levels;
+  size_t level_count;
+} SonareWaveformPeakPyramidResult;
+
+/// @brief Compute per-channel min/max buckets from interleaved audio.
+/// @param samples Interleaved input buffer (may be null only when @p frames is 0).
+/// @param length Number of sample frames.
+/// @param channels Channel count (must be > 0).
+/// @param samples_per_bucket Bucket width in frames (must be > 0).
+SonareError sonare_waveform_peaks(const float* samples, size_t length, int channels,
+                                  size_t samples_per_bucket, SonareWaveformPeaksResult* out);
+
+/// @brief Compute multiple waveform peak levels. @p samples_per_bucket_levels
+///        has @p level_count entries; each must be > 0.
+SonareError sonare_waveform_peak_pyramid(const float* samples, size_t length, int channels,
+                                         const size_t* samples_per_bucket_levels,
+                                         size_t level_count, SonareWaveformPeakPyramidResult* out);
+
+void sonare_free_waveform_peaks_result(SonareWaveformPeaksResult* result);
+void sonare_free_waveform_peak_pyramid_result(SonareWaveformPeakPyramidResult* result);
+
 // ============================================================================
 // Metering - multi-channel / standards-compliant LUFS (offline)
 // ============================================================================

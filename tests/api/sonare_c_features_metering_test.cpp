@@ -383,6 +383,53 @@ TEST_CASE("sonare_metering_true_peak_db", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare waveform peaks bucket interleaved audio", "[c_api][meter]") {
+  const std::vector<float> samples{
+      -1.0f, 0.5f, 0.25f, -0.25f, 0.75f, 0.1f, -0.5f, -0.75f, 0.0f, 0.9f,
+  };
+  SonareWaveformPeaksResult result{};
+
+  REQUIRE(sonare_waveform_peaks(samples.data(), 5, 2, 2, &result) == SONARE_OK);
+  REQUIRE(result.channels == 2);
+  REQUIRE(result.bucket_count == 3);
+  REQUIRE(result.samples_per_bucket == 2);
+  REQUIRE(result.min != nullptr);
+  REQUIRE(result.max != nullptr);
+
+  const std::vector<float> expected_min{-1.0f, -0.5f, 0.0f, -0.25f, -0.75f, 0.9f};
+  const std::vector<float> expected_max{0.25f, 0.75f, 0.0f, 0.5f, 0.1f, 0.9f};
+  for (size_t i = 0; i < expected_min.size(); ++i) {
+    REQUIRE(result.min[i] == Catch::Approx(expected_min[i]));
+    REQUIRE(result.max[i] == Catch::Approx(expected_max[i]));
+  }
+  sonare_free_waveform_peaks_result(&result);
+  REQUIRE(result.min == nullptr);
+
+  REQUIRE(sonare_waveform_peaks(samples.data(), 5, 2, 0, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_waveform_peaks(samples.data(), 5, 0, 2, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare waveform peak pyramid returns requested levels", "[c_api][meter]") {
+  const std::vector<float> samples{-1.0f, 0.5f,  0.25f,  -0.25f, 0.75f,
+                                   0.1f,  -0.5f, -0.75f, 0.0f,   0.9f};
+  const size_t levels[] = {2, 4};
+  SonareWaveformPeakPyramidResult result{};
+
+  REQUIRE(sonare_waveform_peak_pyramid(samples.data(), 5, 2, levels, 2, &result) == SONARE_OK);
+  REQUIRE(result.level_count == 2);
+  REQUIRE(result.levels != nullptr);
+  REQUIRE(result.levels[0].bucket_count == 3);
+  REQUIRE(result.levels[0].samples_per_bucket == 2);
+  REQUIRE(result.levels[1].bucket_count == 2);
+  REQUIRE(result.levels[1].samples_per_bucket == 4);
+  REQUIRE(result.levels[1].min[0] == Catch::Approx(-1.0f));
+  REQUIRE(result.levels[1].max[0] == Catch::Approx(0.75f));
+  sonare_free_waveform_peak_pyramid_result(&result);
+  REQUIRE(result.levels == nullptr);
+}
+
 TEST_CASE("sonare_metering_detect_clipping", "[c_api]") {
   SECTION("reports clipped regions and frees them") {
     // Hard-clipped signal: ones in a run.

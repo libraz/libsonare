@@ -9,6 +9,54 @@
 
 using namespace sonare_node::engine;
 
+namespace {
+
+SonareEngineCaptureSource ParseCaptureSource(Napi::Env env, const Napi::Value& value) {
+  if (value.IsString()) {
+    const std::string source = value.As<Napi::String>().Utf8Value();
+    if (source == "output") return SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT;
+    if (source == "input") return SONARE_ENGINE_CAPTURE_SOURCE_INPUT;
+  } else if (value.IsNumber()) {
+    const int source = value.As<Napi::Number>().Int32Value();
+    if (source == SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT) return SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT;
+    if (source == SONARE_ENGINE_CAPTURE_SOURCE_INPUT) return SONARE_ENGINE_CAPTURE_SOURCE_INPUT;
+  }
+  Napi::TypeError::New(env, "capture source must be 'output' or 'input'")
+      .ThrowAsJavaScriptException();
+  return SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT;
+}
+
+int ParseWarpMode(Napi::Env env, const Napi::Value& value) {
+  if (value.IsUndefined() || value.IsNull()) return SONARE_ENGINE_WARP_MODE_OFF;
+  if (value.IsString()) {
+    const std::string mode = value.As<Napi::String>().Utf8Value();
+    if (mode == "off") return SONARE_ENGINE_WARP_MODE_OFF;
+    if (mode == "repitch") return SONARE_ENGINE_WARP_MODE_REPITCH;
+    if (mode == "tempo-sync") return SONARE_ENGINE_WARP_MODE_TEMPO_SYNC;
+  } else if (value.IsNumber()) {
+    const int mode = value.As<Napi::Number>().Int32Value();
+    if (mode == SONARE_ENGINE_WARP_MODE_OFF || mode == SONARE_ENGINE_WARP_MODE_REPITCH ||
+        mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
+      return mode;
+    }
+  }
+  Napi::TypeError::New(env, "warpMode must be 'off', 'repitch', or 'tempo-sync'")
+      .ThrowAsJavaScriptException();
+  return SONARE_ENGINE_WARP_MODE_OFF;
+}
+
+const char* CaptureSourceName(int source) {
+  return source == SONARE_ENGINE_CAPTURE_SOURCE_INPUT ? "input" : "output";
+}
+
+SonareClipPageProvider* ProviderById(const std::vector<SonareClipPageProvider*>& providers,
+                                     int id) {
+  if (id <= 0 || static_cast<size_t>(id) > providers.size()) return nullptr;
+  return providers[static_cast<size_t>(id - 1)];
+}
+
+}  // namespace
+
 Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() <= 0 || !info[0].IsArray()) {
@@ -18,22 +66,30 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
   Napi::Array input = info[0].As<Napi::Array>();
   std::vector<std::vector<std::vector<float>>> storage;
   std::vector<std::vector<const float*>> ptr_storage;
+  std::vector<std::vector<SonareEngineWarpAnchor>> warp_storage;
   std::vector<SonareEngineClip> clips;
   storage.reserve(input.Length());
   ptr_storage.reserve(input.Length());
+  warp_storage.reserve(input.Length());
   clips.reserve(input.Length());
 
   for (uint32_t i = 0; i < input.Length(); ++i) {
     Napi::Object obj = input.Get(i).As<Napi::Object>();
-    Napi::Array channels = obj.Get("channels").As<Napi::Array>();
-    if (channels.Length() == 0) {
+    const bool has_page_provider = obj.Has("pageProvider") &&
+                                   !obj.Get("pageProvider").IsUndefined() &&
+                                   !obj.Get("pageProvider").IsNull();
+    Napi::Array channels =
+        has_page_provider ? Napi::Array::New(env) : obj.Get("channels").As<Napi::Array>();
+    if (!has_page_provider && channels.Length() == 0) {
       Napi::TypeError::New(env, "clip channels must not be empty").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     storage.emplace_back();
     ptr_storage.emplace_back();
+    warp_storage.emplace_back();
     auto& clip_storage = storage.back();
     auto& clip_ptrs = ptr_storage.back();
+    auto& clip_warp_anchors = warp_storage.back();
     clip_storage.reserve(channels.Length());
     clip_ptrs.reserve(channels.Length());
     size_t num_samples = 0;
@@ -58,9 +114,23 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
 
     SonareEngineClip clip{};
     clip.id = obj.Get("id").As<Napi::Number>().Uint32Value();
-    clip.channels = clip_ptrs.data();
-    clip.num_channels = static_cast<int>(clip_ptrs.size());
-    clip.num_samples = static_cast<int64_t>(num_samples);
+    if (has_page_provider) {
+      const int provider_id = obj.Get("pageProvider").As<Napi::Number>().Int32Value();
+      SonareClipPageProvider* provider = ProviderById(clip_page_providers_, provider_id);
+      if (!provider) {
+        Napi::TypeError::New(env, "pageProvider is not a live ClipPageProvider")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      clip.page_provider = provider;
+      clip.channels = nullptr;
+      clip.num_channels = 0;
+      clip.num_samples = 0;
+    } else {
+      clip.channels = clip_ptrs.data();
+      clip.num_channels = static_cast<int>(clip_ptrs.size());
+      clip.num_samples = static_cast<int64_t>(num_samples);
+    }
     clip.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
     clip.clip_offset_samples =
         obj.Has("clipOffsetSamples") && !obj.Get("clipOffsetSamples").IsUndefined()
@@ -81,6 +151,21 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
     clip.fade_out_samples = obj.Has("fadeOutSamples") && !obj.Get("fadeOutSamples").IsUndefined()
                                 ? obj.Get("fadeOutSamples").As<Napi::Number>().Int64Value()
                                 : 0;
+    clip.warp_mode =
+        obj.Has("warpMode") ? ParseWarpMode(env, obj.Get("warpMode")) : SONARE_ENGINE_WARP_MODE_OFF;
+    if (obj.Has("warpAnchors") && !obj.Get("warpAnchors").IsUndefined()) {
+      Napi::Array anchors = obj.Get("warpAnchors").As<Napi::Array>();
+      clip_warp_anchors.reserve(anchors.Length());
+      for (uint32_t anchor_index = 0; anchor_index < anchors.Length(); ++anchor_index) {
+        Napi::Object anchor = anchors.Get(anchor_index).As<Napi::Object>();
+        SonareEngineWarpAnchor out{};
+        out.warp_sample = anchor.Get("warpSample").As<Napi::Number>().DoubleValue();
+        out.source_sample = anchor.Get("sourceSample").As<Napi::Number>().DoubleValue();
+        clip_warp_anchors.push_back(out);
+      }
+      clip.warp_anchors = clip_warp_anchors.data();
+      clip.warp_anchor_count = clip_warp_anchors.size();
+    }
     clips.push_back(clip);
   }
 
@@ -94,6 +179,94 @@ Napi::Value RealtimeEngineWrap::ClipCount(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_engine_clip_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value RealtimeEngineWrap::CreateClipPageProvider(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const int num_channels = info[0].As<Napi::Number>().Int32Value();
+  const int64_t num_samples = info[1].As<Napi::Number>().Int64Value();
+  const int64_t page_frames = info[2].As<Napi::Number>().Int64Value();
+  SonareClipPageProvider* provider = nullptr;
+  ThrowIfError(env,
+               sonare_clip_page_provider_create(num_channels, num_samples, page_frames, &provider));
+  if (env.IsExceptionPending()) return env.Undefined();
+  clip_page_providers_.push_back(provider);
+  return Napi::Number::New(env, static_cast<double>(clip_page_providers_.size()));
+}
+
+Napi::Value RealtimeEngineWrap::SupplyClipPage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareClipPageProvider* provider =
+      ProviderById(clip_page_providers_, info[0].As<Napi::Number>().Int32Value());
+  if (!provider) {
+    Napi::TypeError::New(env, "pageProvider is not live").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int64_t page_index = info[1].As<Napi::Number>().Int64Value();
+  Napi::Array channels = info[2].As<Napi::Array>();
+  std::vector<std::vector<float>> storage;
+  std::vector<const float*> ptrs;
+  storage.reserve(channels.Length());
+  ptrs.reserve(channels.Length());
+  size_t frames = 0;
+  for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
+    Napi::Value value = channels.Get(ch);
+    if (!sonare_node::IsFloat32Array(value)) {
+      Napi::TypeError::New(env, "clip page channel must be a Float32Array")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    Napi::Float32Array channel = value.As<Napi::Float32Array>();
+    if (ch == 0) {
+      frames = channel.ElementLength();
+    } else if (channel.ElementLength() != frames) {
+      Napi::TypeError::New(env, "all clip page channels must have the same length")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    storage.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
+    ptrs.push_back(storage.back().data());
+  }
+  ThrowIfError(env, sonare_clip_page_provider_supply(provider, page_index, ptrs.data(),
+                                                     static_cast<int>(ptrs.size()),
+                                                     static_cast<int64_t>(frames)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::ClearClipPage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareClipPageProvider* provider =
+      ProviderById(clip_page_providers_, info[0].As<Napi::Number>().Int32Value());
+  if (!provider) {
+    Napi::TypeError::New(env, "pageProvider is not live").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env,
+               sonare_clip_page_provider_clear(provider, info[1].As<Napi::Number>().Int64Value()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::DestroyClipPageProvider(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const int id = info[0].As<Napi::Number>().Int32Value();
+  SonareClipPageProvider* provider = ProviderById(clip_page_providers_, id);
+  if (!provider) return env.Undefined();
+  sonare_clip_page_provider_destroy(provider);
+  clip_page_providers_[static_cast<size_t>(id - 1)] = nullptr;
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::PopClipPageRequest(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareClipPageRequest request{};
+  int has_request = 0;
+  ThrowIfError(env, sonare_engine_pop_clip_page_request(engine_, &request, &has_request));
+  if (!has_request) return env.Null();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("clipId", Napi::Number::New(env, request.clip_id));
+  out.Set("channel", Napi::Number::New(env, request.channel));
+  out.Set("sample", Napi::Number::New(env, static_cast<double>(request.sample)));
+  return out;
 }
 
 Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info) {
@@ -170,6 +343,36 @@ Napi::Value RealtimeEngineWrap::SetCapturePunch(const Napi::CallbackInfo& info) 
   return env.Undefined();
 }
 
+Napi::Value RealtimeEngineWrap::SetCaptureSource(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() <= 0 || info[0].IsUndefined()) {
+    Napi::TypeError::New(env, "capture source must be 'output' or 'input'")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const SonareEngineCaptureSource source = ParseCaptureSource(env, info[0]);
+  if (env.IsExceptionPending()) return env.Undefined();
+  ThrowIfError(env, sonare_engine_set_capture_source(engine_, source));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetRecordOffsetSamples(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const int64_t offset_samples = OptionalInt64(info, 0, 0);
+  ThrowIfError(env, sonare_engine_set_record_offset_samples(engine_, offset_samples));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetInputMonitor(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const bool enabled =
+      info.Length() <= 0 || info[0].IsUndefined() ? true : info[0].As<Napi::Boolean>().Value();
+  const float gain =
+      info.Length() <= 1 || info[1].IsUndefined() ? 1.0f : info[1].As<Napi::Number>().FloatValue();
+  ThrowIfError(env, sonare_engine_set_input_monitor(engine_, enabled ? 1 : 0, gain));
+  return env.Undefined();
+}
+
 Napi::Value RealtimeEngineWrap::ResetCapture(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_engine_reset_capture(engine_));
@@ -186,6 +389,9 @@ Napi::Value RealtimeEngineWrap::CaptureStatus(const Napi::CallbackInfo& info) {
   out.Set("overflowCount", Napi::Number::New(env, status.overflow_count));
   out.Set("armed", Napi::Boolean::New(env, status.armed != 0));
   out.Set("punchEnabled", Napi::Boolean::New(env, status.punch_enabled != 0));
+  out.Set("source", Napi::String::New(env, CaptureSourceName(status.source)));
+  out.Set("recordOffsetSamples",
+          Napi::Number::New(env, static_cast<double>(status.record_offset_samples)));
   return out;
 }
 

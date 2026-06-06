@@ -65,7 +65,7 @@ function makeSysexSmf(): Buffer {
 }
 
 function danglingSourceJson(): string {
-  return '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]}';
+  return '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}';
 }
 
 describe('Project native binding', () => {
@@ -151,12 +151,22 @@ describe('Project native binding', () => {
     const before = project.toJson();
 
     project.setClipWarpRef(clipId, 123);
+    project.setClipWarpMode(clipId, 'repitch');
     const after = project.toJson();
     expect(after).not.toBe(before);
     expect(after).toContain('"warp_ref_id":123');
+    expect(after).toContain('"warp_mode":1');
+    const restored = Project.fromJson(after);
+    expect(restored.toJson()).toBe(after);
+    restored.destroy();
 
     project.undo();
+    expect(project.toJson()).toContain('"warp_mode":0');
+    project.undo();
     expect(project.toJson()).toBe(before);
+
+    project.setClipWarpMode(clipId, 'tempo-sync');
+    expect(project.toJson()).toContain('"warp_mode":2');
 
     project.destroy();
   });

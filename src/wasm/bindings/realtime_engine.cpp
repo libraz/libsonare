@@ -3,10 +3,14 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <memory>
 
 #include "c_api/synth_patch_common.h"
 #include "common.h"
+#include "effects/phase_vocoder.h"
 #include "midi/midi_fx.h"
 #include "synth_patch_val.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -26,6 +30,101 @@ sonare::automation::CurveType automationCurveFromInt(int curve) {
 }
 
 int automationCurveToInt(sonare::automation::CurveType curve) { return static_cast<int>(curve); }
+
+sonare::engine::CaptureSource captureSourceFromName(const std::string& source) {
+  if (source == "output") return sonare::engine::CaptureSource::kOutput;
+  if (source == "input") return sonare::engine::CaptureSource::kInput;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "capture source must be 'output' or 'input'");
+}
+
+const char* captureSourceName(sonare::engine::CaptureSource source) {
+  return source == sonare::engine::CaptureSource::kInput ? "input" : "output";
+}
+
+class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
+ public:
+  WasmClipPageProvider(int channels, int64_t samples, int64_t page_frames)
+      : channels_(channels),
+        samples_(samples),
+        page_frames_(page_frames),
+        pages_(static_cast<size_t>((samples + page_frames - 1) / page_frames)) {}
+
+  int num_channels() const noexcept override { return channels_; }
+  int64_t num_samples() const noexcept override { return samples_; }
+
+  bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
+    if (!out || channel < 0 || channel >= channels_ || sample < 0 || sample >= samples_) {
+      return false;
+    }
+    const int64_t page_index = sample / page_frames_;
+    const int64_t offset = sample % page_frames_;
+    if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) return false;
+    auto page = std::atomic_load_explicit(&pages_[static_cast<size_t>(page_index)],
+                                          std::memory_order_acquire);
+    if (!page || offset >= page->frames) return false;
+    *out = page->channels[static_cast<size_t>(channel)][static_cast<size_t>(offset)];
+    return true;
+  }
+
+  void supply(int64_t page_index, val channels_val) {
+    if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid page index");
+    }
+    const int channel_count = channels_val["length"].as<int>();
+    if (channel_count != channels_) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "clip page channel count mismatch");
+    }
+    auto page = std::make_shared<Page>();
+    page->channels.reserve(static_cast<size_t>(channels_));
+    for (int ch = 0; ch < channel_count; ++ch) {
+      std::vector<float> channel = float32ArrayToVector(channels_val[ch]);
+      if (ch == 0) {
+        page->frames = static_cast<int64_t>(channel.size());
+        const int64_t page_start = page_index * page_frames_;
+        const int64_t max_frames = std::min<int64_t>(page_frames_, samples_ - page_start);
+        if (page->frames <= 0 || page->frames > max_frames) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "invalid clip page frame count");
+        }
+      } else if (static_cast<int64_t>(channel.size()) != page->frames) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "all clip page channels must have the same length");
+      }
+      page->channels.push_back(std::move(channel));
+    }
+    std::atomic_store_explicit(&pages_[static_cast<size_t>(page_index)],
+                               std::shared_ptr<const Page>(std::move(page)),
+                               std::memory_order_release);
+  }
+
+  void clear(int64_t page_index) {
+    if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid page index");
+    }
+    std::shared_ptr<const Page> empty;
+    std::atomic_store_explicit(&pages_[static_cast<size_t>(page_index)], empty,
+                               std::memory_order_release);
+  }
+
+ private:
+  struct Page {
+    int64_t frames = 0;
+    std::vector<std::vector<float>> channels;
+  };
+
+  int channels_ = 0;
+  int64_t samples_ = 0;
+  int64_t page_frames_ = 0;
+  mutable std::vector<std::shared_ptr<const Page>> pages_;
+};
+
+std::shared_ptr<WasmClipPageProvider> liveProviderById(
+    const std::vector<std::shared_ptr<WasmClipPageProvider>>& providers, int id) {
+  if (id <= 0 || static_cast<size_t>(id) > providers.size()) return nullptr;
+  return providers[static_cast<size_t>(id - 1)];
+}
 
 int waveformFromName(const std::string& name) {
   if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
@@ -904,9 +1003,12 @@ class RealtimeEngineWasm {
 
     for (int i = 0; i < count; ++i) {
       val clip_val = clips[i];
-      val channels_val = clip_val["channels"];
-      const int channel_count = channels_val["length"].as<int>();
-      if (channel_count <= 0) {
+      const bool has_page_provider = hasProperty(clip_val, "pageProvider") &&
+                                     !objectProperty(clip_val, "pageProvider").isNull() &&
+                                     !objectProperty(clip_val, "pageProvider").isUndefined();
+      val channels_val = has_page_provider ? val::array() : clip_val["channels"];
+      const int channel_count = has_page_provider ? 0 : channels_val["length"].as<int>();
+      if (!has_page_provider && channel_count <= 0) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "clip channels must not be empty");
       }
@@ -935,7 +1037,18 @@ class RealtimeEngineWasm {
 
       sonare::engine::ClipSchedule schedule{};
       schedule.id = static_cast<uint32_t>(intProperty(clip_val, "id", i + 1));
-      schedule.buffer = {pointers.data(), channel_count, num_samples};
+      if (has_page_provider) {
+        const int provider_id = objectProperty(clip_val, "pageProvider").as<int>();
+        auto provider = liveProviderById(clip_page_providers_, provider_id);
+        if (!provider) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "pageProvider is not live");
+        }
+        schedule.page_provider = provider;
+        schedule.buffer = {};
+      } else {
+        schedule.buffer = {pointers.data(), channel_count, num_samples};
+      }
       schedule.start_ppq = objectProperty(clip_val, "startPpq").as<double>();
       // clip_offset_samples / fade_*_samples are int64_t in ClipSchedule; read
       // them at full 64-bit precision (like length_samples below) so large
@@ -944,9 +1057,13 @@ class RealtimeEngineWasm {
           hasProperty(clip_val, "clipOffsetSamples")
               ? objectProperty(clip_val, "clipOffsetSamples").as<int64_t>()
               : 0;
+      const int64_t default_length =
+          has_page_provider && schedule.page_provider
+              ? schedule.page_provider->num_samples() - schedule.clip_offset_samples
+              : num_samples;
       schedule.length_samples = hasProperty(clip_val, "lengthSamples")
                                     ? objectProperty(clip_val, "lengthSamples").as<int64_t>()
-                                    : num_samples;
+                                    : default_length;
       schedule.loop = boolProperty(clip_val, "loop", false);
       schedule.gain = floatProperty(clip_val, "gain", 1.0f);
       schedule.fade_in_samples = hasProperty(clip_val, "fadeInSamples")
@@ -955,12 +1072,180 @@ class RealtimeEngineWasm {
       schedule.fade_out_samples = hasProperty(clip_val, "fadeOutSamples")
                                       ? objectProperty(clip_val, "fadeOutSamples").as<int64_t>()
                                       : 0;
+      if (hasProperty(clip_val, "warpMode")) {
+        val mode_val = objectProperty(clip_val, "warpMode");
+        if (mode_val.typeOf().as<std::string>() == "string") {
+          const std::string mode = mode_val.as<std::string>();
+          if (mode == "repitch") {
+            schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
+          } else if (mode == "tempo-sync") {
+            schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
+          } else {
+            schedule.warp_mode = sonare::engine::WarpMode::kOff;
+          }
+        } else {
+          const int mode = mode_val.as<int>();
+          schedule.warp_mode = mode == 1   ? sonare::engine::WarpMode::kRepitch
+                               : mode == 2 ? sonare::engine::WarpMode::kTempoSync
+                                           : sonare::engine::WarpMode::kOff;
+        }
+      }
+      if (hasProperty(clip_val, "warpAnchors")) {
+        val anchors_val = objectProperty(clip_val, "warpAnchors");
+        const int anchor_count = anchors_val["length"].as<int>();
+        if (anchor_count > 0) {
+          auto anchors = std::make_shared<std::vector<sonare::engine::WarpAnchor>>();
+          anchors->reserve(static_cast<size_t>(anchor_count));
+          for (int anchor_index = 0; anchor_index < anchor_count; ++anchor_index) {
+            val anchor_val = anchors_val[anchor_index];
+            anchors->push_back({objectProperty(anchor_val, "warpSample").as<double>(),
+                                objectProperty(anchor_val, "sourceSample").as<double>()});
+          }
+          schedule.warp_anchors = std::move(anchors);
+        }
+      }
+      if (schedule.warp_mode == sonare::engine::WarpMode::kTempoSync) {
+        if (schedule.loop) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "tempo-sync direct clips do not support loop=true yet");
+        }
+        if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= num_samples) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "tempo-sync clip offset is outside the source");
+        }
+        struct TempoSyncSegment {
+          size_t source_offset = 0;
+          size_t source_samples = 0;
+          size_t target_samples = 0;
+        };
+        const auto rounded_nonnegative_sample = [](double sample) noexcept -> size_t {
+          if (!std::isfinite(sample) || sample <= 0.0) return 0;
+          return static_cast<size_t>(std::llround(sample));
+        };
+        std::vector<TempoSyncSegment> segments;
+        const size_t base_offset =
+            static_cast<size_t>(std::max<int64_t>(0, schedule.clip_offset_samples));
+        size_t target_samples = 0;
+        if (schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
+          segments.reserve(schedule.warp_anchors->size() - 1);
+          for (size_t anchor_index = 1; anchor_index < schedule.warp_anchors->size();
+               ++anchor_index) {
+            const auto& prev = (*schedule.warp_anchors)[anchor_index - 1];
+            const auto& next = (*schedule.warp_anchors)[anchor_index];
+            const size_t source_start = rounded_nonnegative_sample(prev.source_sample);
+            const size_t source_end = rounded_nonnegative_sample(next.source_sample);
+            const size_t target_start = rounded_nonnegative_sample(prev.warp_sample);
+            const size_t target_end = rounded_nonnegative_sample(next.warp_sample);
+            TempoSyncSegment segment;
+            segment.source_offset = base_offset + source_start;
+            segment.source_samples = source_end > source_start ? source_end - source_start : 0;
+            segment.target_samples = target_end > target_start ? target_end - target_start : 0;
+            if (segment.source_offset > static_cast<size_t>(num_samples) ||
+                segment.source_samples > static_cast<size_t>(num_samples) - segment.source_offset ||
+                segment.source_samples == 0 || segment.target_samples == 0) {
+              throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                            "tempo-sync warp anchors must span positive samples");
+            }
+            target_samples += segment.target_samples;
+            segments.push_back(segment);
+          }
+        } else {
+          TempoSyncSegment segment;
+          segment.source_offset = base_offset;
+          segment.source_samples = static_cast<size_t>(num_samples) - base_offset;
+          segment.target_samples =
+              static_cast<size_t>(std::max<int64_t>(1, schedule.length_samples));
+          target_samples = segment.target_samples;
+          segments.push_back(segment);
+        }
+        if (segments.empty() || target_samples == 0)
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "tempo-sync clip has an empty source or target span");
+        sonare::StreamingPhaseVocoderConfig pv_config;
+        pv_config.sample_rate = static_cast<int>(std::lround(engine_.sample_rate()));
+        pv_config.n_fft = 2048;
+        pv_config.hop_length = 512;
+        pv_config.phase_lock = true;
+        for (auto& channel : storage) {
+          std::vector<float> output;
+          output.reserve(target_samples);
+          for (const TempoSyncSegment& segment : segments) {
+            const float rate = static_cast<float>(segment.source_samples) /
+                               static_cast<float>(segment.target_samples);
+            sonare::StreamingPhaseVocoder stretcher(pv_config);
+            stretcher.reserve(segment.source_samples,
+                              segment.target_samples + static_cast<size_t>(pv_config.n_fft));
+            std::vector<float> segment_output(
+                segment.target_samples + static_cast<size_t>(pv_config.n_fft), 0.0f);
+            size_t written = stretcher.process_into(channel.data() + segment.source_offset,
+                                                    segment.source_samples, rate,
+                                                    segment_output.data(), segment_output.size());
+            written += stretcher.finalize_into(rate, segment_output.data() + written,
+                                               segment_output.size() - written);
+            segment_output.resize(std::min(written, segment.target_samples));
+            if (segment_output.size() < segment.target_samples)
+              segment_output.resize(segment.target_samples, 0.0f);
+            output.insert(output.end(), segment_output.begin(), segment_output.end());
+          }
+          channel = std::move(output);
+        }
+        pointers.clear();
+        for (const auto& channel : storage) {
+          pointers.push_back(channel.data());
+        }
+        schedule.buffer = {pointers.data(), channel_count, static_cast<int64_t>(target_samples)};
+        schedule.clip_offset_samples = 0;
+        schedule.length_samples = static_cast<int64_t>(target_samples);
+        schedule.loop = false;
+        schedule.warp_mode = sonare::engine::WarpMode::kOff;
+        schedule.warp_anchors.reset();
+      }
       schedules.push_back(schedule);
     }
     engine_.set_clips(std::move(schedules));
   }
 
   int clipCount() const { return static_cast<int>(engine_.clip_count()); }
+
+  int createClipPageProvider(int num_channels, int64_t num_samples, int64_t page_frames) {
+    if (num_channels <= 0 || num_samples <= 0 || page_frames <= 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "clip page provider dimensions must be positive");
+    }
+    clip_page_providers_.push_back(
+        std::make_shared<WasmClipPageProvider>(num_channels, num_samples, page_frames));
+    return static_cast<int>(clip_page_providers_.size());
+  }
+
+  void supplyClipPage(int provider_id, int64_t page_index, val channels) {
+    auto provider = liveProviderById(clip_page_providers_, provider_id);
+    if (!provider) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "pageProvider is not live");
+    }
+    provider->supply(page_index, channels);
+  }
+
+  void clearClipPage(int provider_id, int64_t page_index) {
+    auto provider = liveProviderById(clip_page_providers_, provider_id);
+    if (!provider) return;
+    provider->clear(page_index);
+  }
+
+  void destroyClipPageProvider(int provider_id) {
+    if (provider_id <= 0 || static_cast<size_t>(provider_id) > clip_page_providers_.size()) return;
+    clip_page_providers_[static_cast<size_t>(provider_id - 1)].reset();
+  }
+
+  val popClipPageRequest() {
+    sonare::engine::ClipPageRequest request{};
+    if (!engine_.pop_clip_page_request(request)) return val::null();
+    val out = val::object();
+    out.set("clipId", request.clip_id);
+    out.set("channel", request.channel);
+    out.set("sample", static_cast<double>(request.sample));
+    return out;
+  }
 
   void setCaptureBuffer(int num_channels, int capacity_frames) {
     if (num_channels <= 0 || capacity_frames <= 0) {
@@ -982,6 +1267,13 @@ class RealtimeEngineWasm {
   void setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled) {
     engine_.set_capture_punch(start_sample, end_sample, enabled);
   }
+  void setCaptureSource(std::string source) {
+    engine_.set_capture_source(captureSourceFromName(source));
+  }
+  void setRecordOffsetSamples(int64_t offset_samples) {
+    engine_.set_record_offset_samples(offset_samples);
+  }
+  void setInputMonitor(bool enabled, float gain) { engine_.set_input_monitor(enabled, gain); }
   void resetCapture() { engine_.reset_capture(); }
 
   val captureStatus() const {
@@ -990,6 +1282,8 @@ class RealtimeEngineWasm {
     out.set("overflowCount", engine_.capture_overflow_count());
     out.set("armed", engine_.capture_armed());
     out.set("punchEnabled", engine_.capture_punch_enabled());
+    out.set("source", captureSourceName(engine_.capture_source()));
+    out.set("recordOffsetSamples", static_cast<double>(engine_.record_offset_samples()));
     return out;
   }
 
@@ -1381,6 +1675,7 @@ class RealtimeEngineWasm {
   std::vector<sonare::automation::AutomationLane> automation_lanes_;
   std::deque<std::string> parameter_strings_;
   std::deque<std::string> marker_strings_;
+  std::vector<std::shared_ptr<WasmClipPageProvider>> clip_page_providers_;
   std::vector<std::vector<std::vector<float>>> clip_storage_;
   std::vector<std::vector<const float*>> clip_ptrs_;
   std::vector<std::vector<float>> capture_storage_;
@@ -1502,9 +1797,17 @@ void registerRealtimeEngineBindings() {
       .function("graphConnectionCount", &RealtimeEngineWasm::graphConnectionCount)
       .function("setClips", &RealtimeEngineWasm::setClips)
       .function("clipCount", &RealtimeEngineWasm::clipCount)
+      .function("createClipPageProvider", &RealtimeEngineWasm::createClipPageProvider)
+      .function("supplyClipPage", &RealtimeEngineWasm::supplyClipPage)
+      .function("clearClipPage", &RealtimeEngineWasm::clearClipPage)
+      .function("destroyClipPageProvider", &RealtimeEngineWasm::destroyClipPageProvider)
+      .function("popClipPageRequest", &RealtimeEngineWasm::popClipPageRequest)
       .function("setCaptureBuffer", &RealtimeEngineWasm::setCaptureBuffer)
       .function("armCapture", &RealtimeEngineWasm::armCapture)
       .function("setCapturePunch", &RealtimeEngineWasm::setCapturePunch)
+      .function("setCaptureSource", &RealtimeEngineWasm::setCaptureSource)
+      .function("setRecordOffsetSamples", &RealtimeEngineWasm::setRecordOffsetSamples)
+      .function("setInputMonitor", &RealtimeEngineWasm::setInputMonitor)
       .function("resetCapture", &RealtimeEngineWasm::resetCapture)
       .function("captureStatus", &RealtimeEngineWasm::captureStatus)
       .function("capturedAudio", &RealtimeEngineWasm::capturedAudio)

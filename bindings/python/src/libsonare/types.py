@@ -152,6 +152,8 @@ class EngineTelemetryError(IntEnum):
     AUTOMATION_BIND_TARGET_OVERFLOW = 11
     STALE_AUTOMATION_LANES = 12
     SMOOTHED_PARAMETER_CAPACITY = 13
+    COMMAND_BACKLOG_DEFERRED = 14
+    CLIP_PAGE_UNDERRUN = 15
 
 
 class KeyProfile(IntEnum):
@@ -554,6 +556,17 @@ class SpectrumReport:
     db: NDArray[np.float32]
     n_fft: int
     sample_rate: int
+
+
+@dataclass(frozen=True, slots=True)
+class WaveformPeaksReport:
+    """Per-channel min/max waveform buckets. Arrays are channel-major."""
+
+    min: NDArray[np.float32]
+    max: NDArray[np.float32]
+    channels: int
+    bucket_count: int
+    samples_per_bucket: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -1005,7 +1018,7 @@ class EngineClip:
     """Owned audio clip schedule for realtime engine playback."""
 
     id: int
-    channels: list[list[float]]
+    channels: list[list[float]] | None
     start_ppq: float
     length_samples: int | None = None
     clip_offset_samples: int = 0
@@ -1013,6 +1026,18 @@ class EngineClip:
     gain: float = 1.0
     fade_in_samples: int = 0
     fade_out_samples: int = 0
+    warp_mode: str | int = "off"
+    warp_anchors: list[tuple[float, float]] | None = None
+    page_provider: object | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ClipPageRequest:
+    """Paged clip sample request drained from the realtime engine."""
+
+    clip_id: int
+    channel: int
+    sample: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -1023,6 +1048,8 @@ class EngineCaptureStatus:
     overflow_count: int
     armed: bool
     punch_enabled: bool
+    source: str
+    record_offset_samples: int
 
 
 @dataclass(frozen=True, slots=True)

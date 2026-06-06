@@ -1,6 +1,7 @@
 /// @file edit_compiler_golden_test.cpp
 /// @brief compiler / RT snapshot golden + determinism tests.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -524,6 +525,56 @@ TEST_CASE("compiler passes audio loop length to ClipSchedule", "[arrangement]") 
   REQUIRE(r.timeline->audio_clips.front().loop_length_samples == 12000);
 }
 
+TEST_CASE("compiler expands audio comp segments into take-specific schedules", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+
+  for (auto& channel : f.audio.sources.at(f.source_id).channels) {
+    std::fill(channel.begin(), channel.end(), 0.1f);
+  }
+
+  sonare::arrangement::AudioSourceRef take_ref;
+  take_ref.sample_rate_hint = kProjectSr;
+  take_ref.channel_count = 2;
+  const arr::SourceId take_source = f.project.add_audio_source(take_ref);
+  arr::AudioSourceSamples take_samples;
+  take_samples.sample_rate = kProjectSr;
+  take_samples.channels.push_back(std::vector<float>(48000, 0.7f));
+  take_samples.channels.push_back(std::vector<float>(48000, 0.7f));
+  f.audio.sources.emplace(take_source, std::move(take_samples));
+
+  clip->takes = {{1, 0, 0.0, "base"}, {2, take_source, 0.0, "alternate"}};
+  clip->active_take_id = 1;
+  clip->comp_segments = {{1.0, 2.0, 2}};
+  clip->fade_in = arr::ClipFade{0.25, arr::FadeCurve::kLinear};
+  clip->fade_out = arr::ClipFade{0.25, arr::FadeCurve::kLinear};
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 2);
+
+  const auto& first = r.timeline->audio_clips[0];
+  const auto& second = r.timeline->audio_clips[1];
+  REQUIRE(first.start_sample == 0);
+  REQUIRE(first.length_samples == 24000);
+  REQUIRE(first.clip_offset_samples == 0);
+  REQUIRE(first.fade_reference_offset_samples == 0);
+  REQUIRE(first.fade_reference_length_samples == 48000);
+  REQUIRE(second.start_sample == 24000);
+  REQUIRE(second.length_samples == 24000);
+  REQUIRE(second.clip_offset_samples == 24000);
+  REQUIRE(second.fade_reference_offset_samples == 24000);
+  REQUIRE(second.fade_reference_length_samples == 48000);
+
+  const std::vector<float> rendered = render(*r.timeline, 48000);
+  REQUIRE(rendered[10000 * 2] > 0.09f);
+  REQUIRE(rendered[10000 * 2] < 0.11f);
+  REQUIRE(rendered[25000 * 2] > 0.69f);
+  REQUIRE(rendered[25000 * 2] < 0.71f);
+}
+
 TEST_CASE("compiler carries audio clip warp reference into the RT schedule", "[arrangement]") {
   Fixture f = make_fixture();
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
@@ -535,6 +586,28 @@ TEST_CASE("compiler carries audio clip warp reference into the RT schedule", "[a
   REQUIRE(r.timeline.has_value());
   REQUIRE(r.timeline->audio_clips.size() == 1);
   REQUIRE(r.timeline->audio_clips.front().warp_ref_id == 77);
+  REQUIRE(r.timeline->audio_clips.front().warp_mode == sonare::engine::WarpMode::kOff);
+  REQUIRE(r.timeline->audio_clips.front().warp_anchors == nullptr);
+}
+
+TEST_CASE("compiler attaches repitch warp anchors to the RT schedule", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kRepitch;
+  REQUIRE(f.project.set_warp_map({77, "repitch", {{0.0, 0.0}, {48000.0, 24000.0}}}));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  const auto& sched = r.timeline->audio_clips.front();
+  REQUIRE(sched.warp_ref_id == 77);
+  REQUIRE(sched.warp_mode == sonare::engine::WarpMode::kRepitch);
+  REQUIRE(sched.warp_anchors != nullptr);
+  REQUIRE(sched.warp_anchors->size() == 2);
+  REQUIRE((*sched.warp_anchors)[1].source_sample == 24000.0);
 }
 
 TEST_CASE("compiler uses pre-baked warped audio when a warp reference is registered",
@@ -543,6 +616,8 @@ TEST_CASE("compiler uses pre-baked warped audio when a warp reference is registe
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
   REQUIRE(clip != nullptr);
   clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kRepitch;
+  REQUIRE(f.project.set_warp_map({77, "repitch", {{0.0, 0.0}, {48000.0, 24000.0}}}));
 
   arr::AudioSourceSamples warped;
   warped.sample_rate = kProjectSr;
@@ -556,11 +631,125 @@ TEST_CASE("compiler uses pre-baked warped audio when a warp reference is registe
   REQUIRE(r.timeline->audio_clips.size() == 1);
   const auto& sched = r.timeline->audio_clips.front();
   REQUIRE(sched.warp_ref_id == 77);
+  REQUIRE(sched.warp_mode == sonare::engine::WarpMode::kOff);
+  REQUIRE(sched.warp_anchors == nullptr);
   REQUIRE(sched.buffer.num_channels == 2);
   REQUIRE(sched.buffer.num_samples == 3);
   REQUIRE(sched.storage != nullptr);
   REQUIRE(sched.storage->channels[0][0] == 0.75f);
   REQUIRE(sched.storage->channels[1][2] == -0.75f);
+}
+
+TEST_CASE("compiler bakes tempo-sync warp clips when warped audio is absent", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kTempoSync;
+  REQUIRE(f.project.set_warp_map({77, "tempo sync", {{0.0, 0.0}, {48000.0, 24000.0}}}));
+
+  arr::CompileResult compiled = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(compiled.has_errors());
+  REQUIRE(compiled.timeline.has_value());
+  REQUIRE(compiled.timeline->audio_clips.size() == 1);
+  const auto& generated = compiled.timeline->audio_clips.front();
+  REQUIRE(generated.warp_ref_id == 77);
+  REQUIRE(generated.warp_mode == sonare::engine::WarpMode::kOff);
+  REQUIRE(generated.warp_anchors == nullptr);
+  REQUIRE(generated.buffer.num_channels == 2);
+  REQUIRE(generated.buffer.num_samples == 48000);
+  REQUIRE(generated.storage != nullptr);
+  REQUIRE(generated.storage->channels.size() == 2);
+  REQUIRE(generated.storage->channels[0].size() == 48000);
+  REQUIRE(compiled.timeline->latency.total_latency_samples == 1024);
+  REQUIRE(compiled.timeline->latency.per_source_samples.at(f.source_id) == 1024);
+  double energy = 0.0;
+  for (const float sample : generated.storage->channels[0]) {
+    REQUIRE(std::isfinite(sample));
+    energy += static_cast<double>(sample) * static_cast<double>(sample);
+  }
+  REQUIRE(energy > 0.0);
+
+  arr::AudioSourceSamples warped;
+  warped.sample_rate = kProjectSr;
+  warped.channels.push_back({0.25f, 0.5f, 0.75f});
+  f.audio.warped_sources.emplace(77, std::move(warped));
+
+  arr::CompileResult baked = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(baked.has_errors());
+  REQUIRE(baked.timeline.has_value());
+  REQUIRE(baked.timeline->audio_clips.size() == 1);
+  const auto& sched = baked.timeline->audio_clips.front();
+  REQUIRE(sched.warp_ref_id == 77);
+  REQUIRE(sched.warp_mode == sonare::engine::WarpMode::kOff);
+  REQUIRE(sched.buffer.num_samples == 3);
+  REQUIRE(sched.storage != nullptr);
+  REQUIRE(sched.storage->channels[0][2] == 0.75f);
+  REQUIRE(baked.timeline->latency.total_latency_samples == 0);
+}
+
+TEST_CASE("compiler rejects tempo-sync clips without a warp reference", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_mode = arr::WarpMode::kTempoSync;
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE(r.has_errors());
+  REQUIRE_FALSE(r.timeline.has_value());
+}
+
+TEST_CASE("compiler bakes looped tempo-sync warp maps as loop bodies", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kTempoSync;
+  clip->loop_mode = arr::LoopMode::kLoop;
+  clip->length_ppq = 4.0;
+  clip->loop_length_ppq = 2.0;
+  REQUIRE(f.project.set_warp_map({77, "tempo sync", {{0.0, 0.0}, {48000.0, 24000.0}}}));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  const auto& sched = r.timeline->audio_clips.front();
+  REQUIRE(sched.warp_mode == sonare::engine::WarpMode::kOff);
+  REQUIRE(sched.loop);
+  REQUIRE(sched.loop_length_samples == 48000);
+  REQUIRE(sched.length_samples == 96000);
+  REQUIRE(sched.buffer.num_samples == 48000);
+  REQUIRE(sched.storage != nullptr);
+  REQUIRE(sched.storage->channels[0].size() == 48000);
+}
+
+TEST_CASE("compiler bakes tempo-sync warp maps with segment rates", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kTempoSync;
+  REQUIRE(f.project.set_warp_map(
+      {77, "tempo sync", {{0.0, 0.0}, {12000.0, 12000.0}, {48000.0, 24000.0}}}));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  const auto& sched = r.timeline->audio_clips.front();
+  REQUIRE(sched.warp_mode == sonare::engine::WarpMode::kOff);
+  REQUIRE(sched.buffer.num_samples == 48000);
+  REQUIRE(sched.storage != nullptr);
+  REQUIRE(sched.storage->channels.size() == 2);
+  REQUIRE(sched.storage->channels[0].size() == 48000);
+  REQUIRE(r.timeline->latency.total_latency_samples == 1024);
+  double energy = 0.0;
+  for (const float sample : sched.storage->channels[0]) {
+    REQUIRE(std::isfinite(sample));
+    energy += static_cast<double>(sample) * static_cast<double>(sample);
+  }
+  REQUIRE(energy > 0.0);
 }
 
 TEST_CASE("apply_to_engine installs full tempo and time-signature maps", "[arrangement]") {

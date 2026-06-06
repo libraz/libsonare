@@ -82,6 +82,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MeteringPhaseScope(const Napi::CallbackInfo& info);
   static Napi::Value MeteringSpectrum(const Napi::CallbackInfo& info);
   static Napi::Value MeteringSpectrumFrame(const Napi::CallbackInfo& info);
+  static Napi::Value WaveformPeaks(const Napi::CallbackInfo& info);
+  static Napi::Value WaveformPeakPyramid(const Napi::CallbackInfo& info);
 
   // Editing - scale quantizer
   static Napi::Value ScaleQuantizeMidi(const Napi::CallbackInfo& info);

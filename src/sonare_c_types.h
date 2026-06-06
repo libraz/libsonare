@@ -105,6 +105,7 @@ typedef struct SonareEq SonareEq;
 typedef struct SonareRealtimeEngine SonareRealtimeEngine;
 typedef struct SonareRealtimeVoiceChanger SonareRealtimeVoiceChanger;
 typedef struct SonareStreamAnalyzer SonareStreamAnalyzer;
+typedef struct SonareClipPageProvider SonareClipPageProvider;
 
 #define SONARE_EQ_MAX_BANDS 24
 #define SONARE_EQ_SPECTRUM_STREAM_CAPACITY 256
@@ -243,6 +244,23 @@ typedef struct {
   double click_seconds;
 } SonareEngineMetronomeConfig;
 
+typedef enum {
+  SONARE_ENGINE_WARP_MODE_OFF = 0,
+  SONARE_ENGINE_WARP_MODE_REPITCH = 1,
+  SONARE_ENGINE_WARP_MODE_TEMPO_SYNC = 2,
+} SonareEngineWarpMode;
+
+typedef struct {
+  double warp_sample;
+  double source_sample;
+} SonareEngineWarpAnchor;
+
+typedef struct {
+  uint32_t clip_id;
+  uint32_t channel;
+  int64_t sample;
+} SonareClipPageRequest;
+
 typedef struct {
   uint32_t id;
   const float* const* channels;
@@ -255,6 +273,10 @@ typedef struct {
   float gain;
   int64_t fade_in_samples;
   int64_t fade_out_samples;
+  int warp_mode;
+  const SonareEngineWarpAnchor* warp_anchors;
+  size_t warp_anchor_count;
+  SonareClipPageProvider* page_provider;
 } SonareEngineClip;
 
 typedef struct {
@@ -263,11 +285,18 @@ typedef struct {
   int64_t capacity_frames;
 } SonareEngineCaptureBuffer;
 
+typedef enum {
+  SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT = 0,
+  SONARE_ENGINE_CAPTURE_SOURCE_INPUT = 1,
+} SonareEngineCaptureSource;
+
 typedef struct {
   int64_t captured_frames;
   uint32_t overflow_count;
   int armed;
   int punch_enabled;
+  int source;
+  int64_t record_offset_samples;
 } SonareEngineCaptureStatus;
 
 /* Canonical fallback target loudness used by sonare_engine_bounce_offline when

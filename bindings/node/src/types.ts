@@ -1111,7 +1111,23 @@ export interface GoniometerPoint {
 
 export type EngineTelemetryType = 0 | 1;
 
-export type EngineTelemetryError = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+export type EngineTelemetryError =
+  | 0
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15;
 
 export interface EngineTelemetry {
   type: EngineTelemetryType;
@@ -1234,7 +1250,7 @@ export interface EngineMetronomeConfig {
 
 export interface EngineClip {
   id: number;
-  channels: Float32Array[];
+  channels?: Float32Array[];
   startPpq: number;
   lengthSamples?: number;
   clipOffsetSamples?: number;
@@ -1242,6 +1258,22 @@ export interface EngineClip {
   gain?: number;
   fadeInSamples?: number;
   fadeOutSamples?: number;
+  warpMode?: WarpMode;
+  warpAnchors?: ProjectWarpAnchor[];
+  pageProvider?: number | { readonly id: number };
+}
+
+export interface ClipPageRequest {
+  clipId: number;
+  channel: number;
+  sample: number;
+}
+
+export interface FileClipPageProviderOptions {
+  numChannels: number;
+  numSamples: number;
+  pageFrames: number;
+  dataOffsetBytes?: number;
 }
 
 export interface EngineCaptureStatus {
@@ -1249,6 +1281,8 @@ export interface EngineCaptureStatus {
   overflowCount: number;
   armed: boolean;
   punchEnabled: boolean;
+  source: 'output' | 'input';
+  recordOffsetSamples: number;
 }
 
 export interface EngineBounceOptions {
@@ -1467,6 +1501,8 @@ export interface ProjectWarpMapDesc {
   anchors: ProjectWarpAnchor[];
 }
 
+export type WarpMode = 'off' | 'repitch' | 'tempo-sync';
+
 /**
  * Descriptor for {@link Project.addClip}. All musical positions are PPQ
  * (quarter notes); `lengthPpq` must be > 0.
@@ -1495,6 +1531,22 @@ export interface ProjectClipDesc {
   audioSampleRate?: number;
   /** Optional host-local source reference for a metadata-only audio source. */
   sourceUri?: string;
+}
+
+/** Descriptor for {@link Project.addLoopRecordingTakes}. */
+export interface ProjectLoopRecordingDesc {
+  trackId: number;
+  startPpq?: number;
+  loopLengthPpq: number;
+  audio: Float32Array;
+  audioChannels?: number;
+  audioSampleRate?: number;
+}
+
+/** Result returned by {@link Project.addLoopRecordingTakes}. */
+export interface ProjectLoopRecordingResult {
+  clipId: number;
+  takeCount: number;
 }
 
 /** `(trackId, clipId)` returned by {@link Project.addMidiClip}. */
@@ -1896,6 +1948,26 @@ export interface ProjectClipFade {
   lengthPpq: number;
   /** Interpolation curve ({@link ProjectFadeCurve}); default linear (0). */
   curve?: ProjectFadeCurve;
+}
+
+/** One alternate take for {@link Project.setClipTakes}. */
+export interface ProjectClipTake {
+  /** Non-zero take id unique within the clip. */
+  id: number;
+  /** Source id for this take; 0 reuses the clip's current source. */
+  sourceId?: number;
+  /** Offset into the take source in PPQ. */
+  sourceOffsetPpq?: number;
+  /** Optional UI/display name. */
+  name?: string;
+}
+
+/** One comp segment for {@link Project.setClipCompSegments}. */
+export interface ProjectClipCompSegment {
+  startPpq: number;
+  endPpq: number;
+  /** Take id to play in this range; 0 falls back to the active/default take. */
+  takeId?: number;
 }
 
 /**

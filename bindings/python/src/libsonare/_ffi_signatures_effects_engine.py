@@ -345,6 +345,31 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    lib.sonare_clip_page_provider_create.restype = ctypes.c_int32
+    lib.sonare_clip_page_provider_create.argtypes = [
+        ctypes.c_int,
+        ctypes.c_int64,
+        ctypes.c_int64,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    lib.sonare_clip_page_provider_destroy.restype = None
+    lib.sonare_clip_page_provider_destroy.argtypes = [ctypes.c_void_p]
+    lib.sonare_clip_page_provider_supply.restype = ctypes.c_int32
+    lib.sonare_clip_page_provider_supply.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int64,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_int,
+        ctypes.c_int64,
+    ]
+    lib.sonare_clip_page_provider_clear.restype = ctypes.c_int32
+    lib.sonare_clip_page_provider_clear.argtypes = [ctypes.c_void_p, ctypes.c_int64]
+    lib.sonare_engine_pop_clip_page_request.restype = ctypes.c_int32
+    lib.sonare_engine_pop_clip_page_request.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareClipPageRequest),
+        ctypes.POINTER(ctypes.c_int),
+    ]
     lib.sonare_engine_set_capture_buffer.restype = ctypes.c_int32
     lib.sonare_engine_set_capture_buffer.argtypes = [
         ctypes.c_void_p,
@@ -361,6 +386,22 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int64,
         ctypes.c_int64,
         ctypes.c_int,
+    ]
+    lib.sonare_engine_set_capture_source.restype = ctypes.c_int32
+    lib.sonare_engine_set_capture_source.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_set_record_offset_samples.restype = ctypes.c_int32
+    lib.sonare_engine_set_record_offset_samples.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int64,
+    ]
+    lib.sonare_engine_set_input_monitor.restype = ctypes.c_int32
+    lib.sonare_engine_set_input_monitor.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_float,
     ]
     lib.sonare_engine_reset_capture.restype = ctypes.c_int32
     lib.sonare_engine_reset_capture.argtypes = [ctypes.c_void_p]

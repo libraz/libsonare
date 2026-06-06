@@ -157,6 +157,8 @@ from ._features import (
     stft,
     stft_db,
     vqt,
+    waveform_peak_pyramid,
+    waveform_peaks,
     zero_crossing_rate,
     zero_crossings,
 )
@@ -303,6 +305,8 @@ __all__ = [
     "metering_true_peak_db",
     "metering_vectorscope",
     "metering_vectorscope_decimated",
+    "waveform_peak_pyramid",
+    "waveform_peaks",
     "mfcc",
     "mfcc_to_audio",
     "mfcc_to_mel",

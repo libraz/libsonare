@@ -189,6 +189,40 @@ struct ProjectWasm {
     return out;
   }
 
+  val addLoopRecordingTakes(val desc) {
+    if (desc.isUndefined() || desc.isNull()) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "addLoopRecordingTakes expects a descriptor object");
+    }
+    SonareProjectLoopRecordingDesc d{};
+    std::vector<float> audio;
+    d.track_id = hasProperty(desc, "trackId") ? desc["trackId"].as<uint32_t>() : 0;
+    d.start_ppq = hasProperty(desc, "startPpq") ? desc["startPpq"].as<double>() : 0.0;
+    d.loop_length_ppq =
+        hasProperty(desc, "loopLengthPpq") ? desc["loopLengthPpq"].as<double>() : 0.0;
+    d.audio_channels = hasProperty(desc, "audioChannels") ? desc["audioChannels"].as<int>() : 1;
+    d.audio_sample_rate =
+        hasProperty(desc, "audioSampleRate") ? desc["audioSampleRate"].as<int>() : 48000;
+    if (hasProperty(desc, "audio")) {
+      audio = float32ArrayToVector(desc["audio"]);
+      d.audio_interleaved = audio.data();
+      const int channels = d.audio_channels > 0 ? d.audio_channels : 1;
+      d.audio_frames = static_cast<int64_t>(audio.size()) / channels;
+    }
+    uint32_t clip_id = 0;
+    size_t take_count = 0;
+    const SonareError err =
+        sonare_project_add_loop_recording_takes(project_.get(), &d, &clip_id, &take_count);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to add loop recording takes");
+    }
+    val out = val::object();
+    out.set("clipId", clip_id);
+    out.set("takeCount", static_cast<double>(take_count));
+    return out;
+  }
+
   val addMidiClip(double start_ppq, double length_ppq) {
     uint32_t track = 0;
     uint32_t clip = 0;
@@ -240,6 +274,25 @@ struct ProjectWasm {
     if (err != SONARE_OK) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "failed to set clip warp reference");
+    }
+  }
+
+  void setClipWarpMode(uint32_t clip_id, val mode_val) {
+    SonareProjectWarpMode mode = SONARE_PROJECT_WARP_MODE_OFF;
+    if (mode_val.typeOf().as<std::string>() == "string") {
+      const std::string mode_string = mode_val.as<std::string>();
+      if (mode_string == "repitch") {
+        mode = SONARE_PROJECT_WARP_MODE_REPITCH;
+      } else if (mode_string == "tempo-sync") {
+        mode = SONARE_PROJECT_WARP_MODE_TEMPO_SYNC;
+      }
+    } else {
+      mode = static_cast<SonareProjectWarpMode>(mode_val.as<int>());
+    }
+    const SonareError err = sonare_project_set_clip_warp_mode(project_.get(), clip_id, mode);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set clip warp mode");
     }
   }
 
@@ -822,6 +875,67 @@ struct ProjectWasm {
     const SonareError err = sonare_project_set_clip_fade(project_.get(), clip_id, &in, &out);
     if (err != SONARE_OK) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set clip fade");
+    }
+  }
+
+  void setClipTakes(uint32_t clip_id, val takes_val, uint32_t active_take_id) {
+    if (!val::global("Array").call<bool>("isArray", takes_val)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "clip takes must be an array");
+    }
+    const size_t count = takes_val["length"].as<size_t>();
+    std::vector<SonareProjectClipTake> takes;
+    std::vector<std::string> name_storage;
+    takes.reserve(count);
+    name_storage.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      val entry = takes_val[static_cast<unsigned>(i)];
+      SonareProjectClipTake take{};
+      take.id = entry["id"].as<uint32_t>();
+      if (hasProperty(entry, "sourceId")) {
+        take.source_id = entry["sourceId"].as<uint32_t>();
+      }
+      if (hasProperty(entry, "sourceOffsetPpq")) {
+        take.source_offset_ppq = entry["sourceOffsetPpq"].as<double>();
+      }
+      if (hasProperty(entry, "name")) {
+        name_storage.push_back(entry["name"].as<std::string>());
+        take.name = name_storage.back().empty() ? nullptr : name_storage.back().c_str();
+      }
+      takes.push_back(take);
+    }
+    const SonareError err = sonare_project_set_clip_takes(project_.get(), clip_id,
+                                                          takes.empty() ? nullptr : takes.data(),
+                                                          takes.size(), active_take_id);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set clip takes");
+    }
+  }
+
+  void setClipCompSegments(uint32_t clip_id, val segments_val) {
+    if (!val::global("Array").call<bool>("isArray", segments_val)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "clip comp segments must be an array");
+    }
+    const size_t count = segments_val["length"].as<size_t>();
+    std::vector<SonareProjectClipCompSegment> segments;
+    segments.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      val entry = segments_val[static_cast<unsigned>(i)];
+      SonareProjectClipCompSegment segment{};
+      segment.start_ppq = entry["startPpq"].as<double>();
+      segment.end_ppq = entry["endPpq"].as<double>();
+      if (hasProperty(entry, "takeId")) {
+        segment.take_id = entry["takeId"].as<uint32_t>();
+      }
+      segments.push_back(segment);
+    }
+    const SonareError err = sonare_project_set_clip_comp_segments(
+        project_.get(), clip_id, segments.empty() ? nullptr : segments.data(), segments.size());
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set clip comp segments");
     }
   }
 
@@ -1524,12 +1638,14 @@ void registerProjectBindings() {
       .function("setSampleRate", &ProjectWasm::setSampleRate)
       .function("addTrack", &ProjectWasm::addTrack)
       .function("addClip", &ProjectWasm::addClip)
+      .function("addLoopRecordingTakes", &ProjectWasm::addLoopRecordingTakes)
       .function("addMidiClip", &ProjectWasm::addMidiClip)
       .function("splitClip", &ProjectWasm::splitClip)
       .function("trimClip", &ProjectWasm::trimClip)
       .function("moveClip", &ProjectWasm::moveClip)
       .function("setTrackKind", &ProjectWasm::setTrackKind)
       .function("setClipWarpRef", &ProjectWasm::setClipWarpRef)
+      .function("setClipWarpMode", &ProjectWasm::setClipWarpMode)
       .function("setWarpMap", &ProjectWasm::setWarpMap)
       .function("removeWarpMap", &ProjectWasm::removeWarpMap)
       .function("setTrackMidiDestination", &ProjectWasm::setTrackMidiDestination)
@@ -1559,6 +1675,8 @@ void registerProjectBindings() {
       .function("removeClip", &ProjectWasm::removeClip)
       .function("setClipGain", &ProjectWasm::setClipGain)
       .function("setClipFade", &ProjectWasm::setClipFade)
+      .function("setClipTakes", &ProjectWasm::setClipTakes)
+      .function("setClipCompSegments", &ProjectWasm::setClipCompSegments)
       .function("setClipLoop", &ProjectWasm::setClipLoop)
       .function("setClipSource", &ProjectWasm::setClipSource)
       .function("duplicateClip", &ProjectWasm::duplicateClip)

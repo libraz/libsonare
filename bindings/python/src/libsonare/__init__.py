@@ -195,11 +195,13 @@ from .analyzer import (
     voice_changer_abi_version,
     voice_character_preset_id,
     vqt,
+    waveform_peak_pyramid,
+    waveform_peaks,
     zero_crossing_rate,
     zero_crossings,
 )
 from .audio import Audio
-from .engine import RealtimeEngine
+from .engine import ClipPageProvider, FileClipPageProvider, RealtimeEngine
 from .streaming import StreamAnalyzer
 from .types import (
     AcousticResult,
@@ -215,6 +217,7 @@ from .types import (
     Chord,
     ChordAnalysisResult,
     ChromaResult,
+    ClipPageRequest,
     ClippingRegion,
     ClippingReport,
     CqtResult,
@@ -286,6 +289,7 @@ from .types import (
     TimeSignature,
     TransportState,
     VectorscopeReport,
+    WaveformPeaksReport,
 )
 
 try:
@@ -305,6 +309,8 @@ __all__ = [
     "AnalysisTimbre",
     "AssistSidecar",
     "Audio",
+    "ClipPageProvider",
+    "FileClipPageProvider",
     "RirResult",
     "RoomEstimate",
     "estimate_room",
@@ -317,6 +323,7 @@ __all__ = [
     "BuiltinSynthConfig",
     "Chord",
     "ChordAnalysisResult",
+    "ClipPageRequest",
     "__version__",
     "ChromaResult",
     "ClippingRegion",
@@ -403,6 +410,7 @@ __all__ = [
     "TimeSignature",
     "TransportState",
     "VectorscopeReport",
+    "WaveformPeaksReport",
     "abi_version",
     "analyze",
     "analyze_bpm",
@@ -505,6 +513,8 @@ __all__ = [
     "metering_true_peak_db",
     "metering_vectorscope",
     "metering_vectorscope_decimated",
+    "waveform_peak_pyramid",
+    "waveform_peaks",
     "mfcc",
     "mfcc_to_audio",
     "mfcc_to_mel",

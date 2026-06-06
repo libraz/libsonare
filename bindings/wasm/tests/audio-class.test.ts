@@ -6,7 +6,7 @@
  * property getters, and that each method returns the expected type/shape.
  */
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Audio, detectBpm, init, melSpectrogram, stft } from '../dist/index.js';
 
 const SR = 22050;
@@ -62,6 +62,15 @@ function pcm16Wav(samples: Int16Array, sampleRate: number): Uint8Array {
   return new Uint8Array(buffer);
 }
 
+function fakeAudioBuffer(channels: Float32Array[], sampleRate: number): AudioBuffer {
+  return {
+    length: channels[0]?.length ?? 0,
+    numberOfChannels: channels.length,
+    sampleRate,
+    getChannelData: (channel: number) => channels[channel],
+  } as AudioBuffer;
+}
+
 describe('Audio class', () => {
   beforeAll(async () => {
     await init();
@@ -88,6 +97,78 @@ describe('Audio class', () => {
       expect(audio.data[0]).toBeCloseTo(0, 6);
       expect(audio.data[1]).toBeCloseTo(8192 / 32768, 4);
       expect(audio.data[2]).toBeCloseTo(-8192 / 32768, 4);
+    });
+
+    it('should keep the native decoder path for supported memory formats', async () => {
+      const bytes = pcm16Wav(new Int16Array([0, 8192]), 8000);
+      const decodeAudioData = vi.fn(async () => {
+        throw new Error('fallback should not run');
+      });
+
+      const audio = await Audio.fromMemoryWithBrowserFallback(bytes, {
+        audioContext: {
+          decodeAudioData,
+          sampleRate: 44100,
+        },
+      });
+
+      expect(audio.sampleRate).toBe(8000);
+      expect(audio.length).toBe(2);
+      expect(decodeAudioData).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to browser decodeAudioData and mix down channels', async () => {
+      const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+      const decodeAudioData = vi.fn(async (data: ArrayBuffer) => {
+        expect(data.byteLength).toBe(bytes.byteLength);
+        return fakeAudioBuffer(
+          [new Float32Array([1, 0, -1]), new Float32Array([0, 0.5, 1])],
+          44100,
+        );
+      });
+
+      const audio = await Audio.fromMemoryWithBrowserFallback(bytes, {
+        audioContext: {
+          decodeAudioData,
+          sampleRate: 44100,
+        },
+      });
+
+      expect(decodeAudioData).toHaveBeenCalledTimes(1);
+      expect(audio.sampleRate).toBe(44100);
+      expect(Array.from(audio.data)).toEqual([0.5, 0.25, 0]);
+    });
+
+    it('should pass targetSampleRate to created browser fallback contexts', async () => {
+      const close = vi.fn(async () => undefined);
+      const createAudioContext = vi.fn(() => ({
+        decodeAudioData: async () => fakeAudioBuffer([new Float32Array([0.25, -0.25])], 32000),
+        sampleRate: 32000,
+        close,
+      }));
+
+      const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array([9, 8, 7]), {
+        createAudioContext,
+        targetSampleRate: 32000,
+      });
+
+      expect(createAudioContext).toHaveBeenCalledWith({ sampleRate: 32000 });
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(audio.sampleRate).toBe(32000);
+      expect(Array.from(audio.data)).toEqual([0.25, -0.25]);
+    });
+
+    it('should report both decoder failures when browser fallback also fails', async () => {
+      await expect(
+        Audio.fromMemoryWithBrowserFallback(new Uint8Array([1]), {
+          audioContext: {
+            decodeAudioData: async () => {
+              throw new Error('browser decode failed');
+            },
+            sampleRate: 48000,
+          },
+        }),
+      ).rejects.toThrow(/browser decodeAudioData fallback failed: browser decode failed/);
     });
 
     it('should return correct data', () => {

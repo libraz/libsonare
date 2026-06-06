@@ -35,6 +35,13 @@ target_include_directories(sonare_streaming_mel_chroma_bench PRIVATE
   ${PROJECT_SOURCE_DIR}/src
 )
 
+add_executable(sonare_phase_vocoder_streaming_bench phase_vocoder_streaming_bench.cpp)
+target_link_libraries(sonare_phase_vocoder_streaming_bench PRIVATE sonare_core)
+target_compile_options(sonare_phase_vocoder_streaming_bench PRIVATE ${SONARE_WARNING_FLAGS})
+target_include_directories(sonare_phase_vocoder_streaming_bench PRIVATE
+  ${PROJECT_SOURCE_DIR}/src
+)
+
 add_executable(sonare_log10_bench log10_bench.cpp)
 target_link_libraries(sonare_log10_bench PRIVATE sonare_core)
 target_compile_options(sonare_log10_bench PRIVATE ${SONARE_WARNING_FLAGS})

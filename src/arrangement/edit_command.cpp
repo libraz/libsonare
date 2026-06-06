@@ -38,6 +38,47 @@ bool source_matches_track_kind(const Project& project, TrackId track_id, SourceI
   return false;
 }
 
+bool take_id_exists(const std::vector<ClipTake>& takes, TakeId id) {
+  if (id == 0) return true;
+  return std::any_of(takes.begin(), takes.end(),
+                     [id](const ClipTake& take) { return take.id == id; });
+}
+
+bool valid_clip_takes(const Project& project, const EditClip& clip,
+                      const std::vector<ClipTake>& takes, TakeId active_take_id) {
+  std::vector<TakeId> ids;
+  ids.reserve(takes.size());
+  for (const ClipTake& take : takes) {
+    if (take.id == 0 || take.source_offset_ppq < 0.0 || !std::isfinite(take.source_offset_ppq)) {
+      return false;
+    }
+    if (std::find(ids.begin(), ids.end(), take.id) != ids.end()) {
+      return false;
+    }
+    ids.push_back(take.id);
+    const SourceId source_id = take.source_id == 0 ? clip.source_id : take.source_id;
+    if (!source_matches_track_kind(project, clip.track_id, source_id)) {
+      return false;
+    }
+  }
+  return take_id_exists(takes, active_take_id);
+}
+
+bool valid_comp_segments(const std::vector<ClipTake>& takes,
+                         const std::vector<ClipCompSegment>& segments, double clip_length_ppq) {
+  double previous_end = 0.0;
+  for (const ClipCompSegment& segment : segments) {
+    if (!std::isfinite(segment.start_ppq) || !std::isfinite(segment.end_ppq) ||
+        segment.start_ppq < 0.0 || !(segment.end_ppq > segment.start_ppq) ||
+        segment.end_ppq > clip_length_ppq || segment.start_ppq < previous_end ||
+        !take_id_exists(takes, segment.take_id)) {
+      return false;
+    }
+    previous_end = segment.end_ppq;
+  }
+  return true;
+}
+
 struct RemovedTrackClipSnapshot {
   EditClip clip;
   size_t index = Project::kAppend;
@@ -563,6 +604,62 @@ EditCommandPtr SetClipWarpRef::invert(const Project& before,
     return nullptr;
   }
   return std::make_unique<SetClipWarpRef>(id_, c->warp_ref_id);
+}
+
+bool SetClipWarpMode::apply(Project& project, MidiContentStore& /*store*/) {
+  EditClip* c = project.find_clip_mutable(id_);
+  if (c == nullptr) {
+    return false;
+  }
+  c->warp_mode = mode_;
+  return true;
+}
+
+EditCommandPtr SetClipWarpMode::invert(const Project& before,
+                                       const MidiContentStore& /*store_before*/) const {
+  const EditClip* c = before.find_clip(id_);
+  if (c == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetClipWarpMode>(id_, c->warp_mode);
+}
+
+bool SetClipTakes::apply(Project& project, MidiContentStore& /*store*/) {
+  EditClip* c = project.find_clip_mutable(id_);
+  if (c == nullptr || !valid_clip_takes(project, *c, takes_, active_take_id_) ||
+      !valid_comp_segments(takes_, c->comp_segments, c->length_ppq)) {
+    return false;
+  }
+  c->takes = takes_;
+  c->active_take_id = active_take_id_;
+  return true;
+}
+
+EditCommandPtr SetClipTakes::invert(const Project& before,
+                                    const MidiContentStore& /*store_before*/) const {
+  const EditClip* c = before.find_clip(id_);
+  if (c == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetClipTakes>(id_, c->takes, c->active_take_id);
+}
+
+bool SetClipCompSegments::apply(Project& project, MidiContentStore& /*store*/) {
+  EditClip* c = project.find_clip_mutable(id_);
+  if (c == nullptr || !valid_comp_segments(c->takes, segments_, c->length_ppq)) {
+    return false;
+  }
+  c->comp_segments = segments_;
+  return true;
+}
+
+EditCommandPtr SetClipCompSegments::invert(const Project& before,
+                                           const MidiContentStore& /*store_before*/) const {
+  const EditClip* c = before.find_clip(id_);
+  if (c == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetClipCompSegments>(id_, c->comp_segments);
 }
 
 bool SetWarpMap::apply(Project& project, MidiContentStore& /*store*/) {

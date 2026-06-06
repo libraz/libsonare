@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import ctypes
+import os
 from collections.abc import Sequence
+from pathlib import Path
+from typing import BinaryIO
 
 import numpy as np
 
@@ -16,6 +19,7 @@ from ._project import (
 from ._runtime import (
     AutomationCurve,
     AutomationPoint,
+    ClipPageRequest,
     EngineBounceOptions,
     EngineBounceResult,
     EngineCaptureStatus,
@@ -36,6 +40,7 @@ from ._runtime import (
     MeterTelemetryRecord,
     ParameterInfo,
     SonareAutomationPoint,
+    SonareClipPageRequest,
     SonareEngineBounceOptions,
     SonareEngineBounceResult,
     SonareEngineCaptureBuffer,
@@ -50,6 +55,7 @@ from ._runtime import (
     SonareEngineMarker,
     SonareEngineMetronomeConfig,
     SonareEngineTelemetry,
+    SonareEngineWarpAnchor,
     SonareMeterTelemetryRecord,
     SonareParameterInfo,
     SonareTransportState,
@@ -65,6 +71,142 @@ from ._runtime import (
 # binding's EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
 # binary lays out engine structs differently than this wrapper expects.
 EXPECTED_ENGINE_ABI_VERSION = 3
+_CAPTURE_SOURCE_VALUES = {"output": 0, "input": 1}
+
+
+def _capture_source_value(source: str | int) -> int:
+    if isinstance(source, str):
+        try:
+            return _CAPTURE_SOURCE_VALUES[source]
+        except KeyError as exc:
+            raise ValueError("capture source must be 'output' or 'input'") from exc
+    value = int(source)
+    if value in _CAPTURE_SOURCE_VALUES.values():
+        return value
+    raise ValueError("capture source must be 'output' or 'input'")
+
+
+def _capture_source_name(source: int) -> str:
+    return "input" if int(source) == _CAPTURE_SOURCE_VALUES["input"] else "output"
+
+
+class ClipPageProvider:
+    """Host-supplied paged audio source for realtime clip streaming."""
+
+    def __init__(self, num_channels: int, num_samples: int, page_frames: int) -> None:
+        handle = ctypes.c_void_p()
+        _check(
+            _get_lib().sonare_clip_page_provider_create(
+                int(num_channels), int(num_samples), int(page_frames), ctypes.byref(handle)
+            )
+        )
+        self._handle: ctypes.c_void_p | None = handle
+
+    def close(self) -> None:
+        if self._handle is not None:
+            _get_lib().sonare_clip_page_provider_destroy(self._handle)
+            self._handle = None
+
+    def destroy(self) -> None:
+        self.close()
+
+    def __enter__(self) -> ClipPageProvider:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        self.close()
+
+    def _require_handle(self) -> ctypes.c_void_p:
+        if self._handle is None:
+            raise RuntimeError("ClipPageProvider is closed")
+        return self._handle
+
+    def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None:
+        if not channels:
+            raise ValueError("channels must not be empty")
+        frames = len(channels[0])
+        if frames <= 0:
+            raise ValueError("channels must not be empty")
+        arrays: list[ctypes.Array[ctypes.c_float]] = []
+        ptr_values: list[ctypes.POINTER(ctypes.c_float)] = []
+        for channel in channels:
+            if len(channel) != frames:
+                raise ValueError("all channels must have the same length")
+            array = (ctypes.c_float * frames)(*channel)
+            arrays.append(array)
+            ptr_values.append(ctypes.cast(array, ctypes.POINTER(ctypes.c_float)))
+        ptr_type = ctypes.POINTER(ctypes.c_float) * len(ptr_values)
+        ptrs = ptr_type(*ptr_values)
+        _check(
+            _get_lib().sonare_clip_page_provider_supply(
+                self._require_handle(),
+                int(page_index),
+                ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+                len(ptr_values),
+                frames,
+            )
+        )
+
+    def clear(self, page_index: int) -> None:
+        _check(_get_lib().sonare_clip_page_provider_clear(self._require_handle(), int(page_index)))
+
+
+class FileClipPageProvider(ClipPageProvider):
+    """File-backed float32 PCM page supplier for realtime clip streaming.
+
+    The file format is raw little-endian interleaved float32 PCM.
+    """
+
+    def __init__(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        num_channels: int,
+        num_samples: int,
+        page_frames: int,
+        data_offset_bytes: int = 0,
+    ) -> None:
+        if num_channels <= 0 or num_samples <= 0 or page_frames <= 0:
+            raise ValueError("num_channels, num_samples, and page_frames must be positive")
+        super().__init__(num_channels, num_samples, page_frames)
+        self.num_channels = int(num_channels)
+        self.num_samples = int(num_samples)
+        self.page_frames = int(page_frames)
+        self.data_offset_bytes = int(data_offset_bytes)
+        self._file: BinaryIO | None = Path(path).open("rb")  # noqa: SIM115
+
+    def close(self) -> None:
+        if self._file is not None:
+            self._file.close()
+            self._file = None
+        super().close()
+
+    def supply_page(self, page_index: int) -> bool:
+        if self._file is None:
+            raise RuntimeError("FileClipPageProvider is closed")
+        page = int(page_index)
+        if page < 0:
+            return False
+        start_frame = page * self.page_frames
+        if start_frame >= self.num_samples:
+            return False
+        frames = min(self.page_frames, self.num_samples - start_frame)
+        frame_bytes = self.num_channels * np.dtype("<f4").itemsize
+        self._file.seek(self.data_offset_bytes + start_frame * frame_bytes)
+        raw = self._file.read(frames * frame_bytes)
+        frames_read = len(raw) // frame_bytes
+        if frames_read <= 0:
+            return False
+        interleaved = np.frombuffer(raw[: frames_read * frame_bytes], dtype="<f4")
+        channels = [interleaved[ch :: self.num_channels] for ch in range(self.num_channels)]
+        self.supply(page, channels)
+        return True
+
+    def supply_request(self, request: ClipPageRequest) -> bool:
+        return self.supply_page(int(request.sample) // self.page_frames)
 
 
 class RealtimeEngine:
@@ -307,7 +449,7 @@ class RealtimeEngine:
         return int(out.value)
 
     def set_clips(self, clips: Sequence[EngineClip]) -> None:
-        raw_clips, _channel_arrays, _channel_ptrs = _clips_to_c(clips)
+        raw_clips, _channel_arrays, _channel_ptrs, _warp_arrays = _clips_to_c(clips)
         _check(_get_lib().sonare_engine_set_clips(self._require_handle(), raw_clips, len(clips)))
 
     def clip_count(self) -> int:
@@ -347,6 +489,27 @@ class RealtimeEngine:
             )
         )
 
+    def set_capture_source(self, source: str | int) -> None:
+        _check(
+            _get_lib().sonare_engine_set_capture_source(
+                self._require_handle(), _capture_source_value(source)
+            )
+        )
+
+    def set_record_offset_samples(self, offset_samples: int) -> None:
+        _check(
+            _get_lib().sonare_engine_set_record_offset_samples(
+                self._require_handle(), int(offset_samples)
+            )
+        )
+
+    def set_input_monitor(self, enabled: bool, gain: float = 1.0) -> None:
+        _check(
+            _get_lib().sonare_engine_set_input_monitor(
+                self._require_handle(), int(enabled), ctypes.c_float(float(gain))
+            )
+        )
+
     def reset_capture(self) -> None:
         _check(_get_lib().sonare_engine_reset_capture(self._require_handle()))
 
@@ -358,6 +521,8 @@ class RealtimeEngine:
             overflow_count=int(raw.overflow_count),
             armed=bool(raw.armed),
             punch_enabled=bool(raw.punch_enabled),
+            source=_capture_source_name(raw.source),
+            record_offset_samples=int(raw.record_offset_samples),
         )
 
     def captured_audio(self) -> list[list[float]]:
@@ -520,6 +685,20 @@ class RealtimeEngine:
             )
         )
         return [_telemetry_from_c(raw[i]) for i in range(written.value)]
+
+    def pop_clip_page_request(self) -> ClipPageRequest | None:
+        raw = SonareClipPageRequest()
+        has_request = ctypes.c_int()
+        _check(
+            _get_lib().sonare_engine_pop_clip_page_request(
+                self._require_handle(), ctypes.byref(raw), ctypes.byref(has_request)
+            )
+        )
+        if not has_request.value:
+            return None
+        return ClipPageRequest(
+            clip_id=int(raw.clip_id), channel=int(raw.channel), sample=int(raw.sample)
+        )
 
     def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
         """Drain pending meter telemetry records published by the engine."""
@@ -1037,11 +1216,42 @@ def _clips_to_c(
     ctypes.Array[SonareEngineClip],
     list[list[ctypes.Array[ctypes.c_float]]],
     list[ctypes.Array],
+    list[ctypes.Array],
 ]:
     channel_arrays: list[list[ctypes.Array[ctypes.c_float]]] = []
     channel_ptrs: list[ctypes.Array] = []
+    warp_arrays: list[ctypes.Array] = []
     raw_items: list[SonareEngineClip] = []
     for clip in clips:
+        page_provider = getattr(clip, "page_provider", None)
+        if page_provider is not None and not isinstance(page_provider, ClipPageProvider):
+            raise TypeError("clip page_provider must be a ClipPageProvider")
+        if page_provider is not None:
+            raw = SonareEngineClip()
+            raw.id = int(clip.id)
+            raw.channels = None
+            raw.num_channels = 0
+            raw.num_samples = 0
+            raw.start_ppq = float(clip.start_ppq)
+            raw.clip_offset_samples = int(clip.clip_offset_samples)
+            raw.length_samples = int(clip.length_samples) if clip.length_samples is not None else 0
+            raw.loop = int(clip.loop)
+            raw.gain = float(clip.gain)
+            raw.fade_in_samples = int(clip.fade_in_samples)
+            raw.fade_out_samples = int(clip.fade_out_samples)
+            raw.warp_mode = _warp_mode_value(clip.warp_mode)
+            raw.page_provider = page_provider._require_handle()
+            if clip.warp_anchors:
+                anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
+                for i, (warp_sample, source_sample) in enumerate(clip.warp_anchors):
+                    anchor_array[i].warp_sample = float(warp_sample)
+                    anchor_array[i].source_sample = float(source_sample)
+                raw.warp_anchors = ctypes.cast(anchor_array, ctypes.c_void_p)
+                raw.warp_anchor_count = len(clip.warp_anchors)
+                warp_arrays.append(anchor_array)
+            raw_items.append(raw)
+            channel_arrays.append([])
+            continue
         if not clip.channels:
             raise ValueError("clip channels must not be empty")
         num_samples = len(clip.channels[0])
@@ -1071,10 +1281,35 @@ def _clips_to_c(
         raw.gain = float(clip.gain)
         raw.fade_in_samples = int(clip.fade_in_samples)
         raw.fade_out_samples = int(clip.fade_out_samples)
+        raw.warp_mode = _warp_mode_value(clip.warp_mode)
+        if clip.warp_anchors:
+            anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
+            for i, (warp_sample, source_sample) in enumerate(clip.warp_anchors):
+                anchor_array[i].warp_sample = float(warp_sample)
+                anchor_array[i].source_sample = float(source_sample)
+            raw.warp_anchors = ctypes.cast(anchor_array, ctypes.c_void_p)
+            raw.warp_anchor_count = len(clip.warp_anchors)
+            warp_arrays.append(anchor_array)
+        raw.page_provider = None
         raw_items.append(raw)
         channel_arrays.append(arrays)
         channel_ptrs.append(ptrs)
-    return (SonareEngineClip * len(raw_items))(*raw_items), channel_arrays, channel_ptrs
+    return (
+        (SonareEngineClip * len(raw_items))(*raw_items),
+        channel_arrays,
+        channel_ptrs,
+        warp_arrays,
+    )
+
+
+def _warp_mode_value(mode: str | int) -> int:
+    if mode == "off":
+        return 0
+    if mode == "repitch":
+        return 1
+    if mode == "tempo-sync":
+        return 2
+    return int(mode)
 
 
 def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:

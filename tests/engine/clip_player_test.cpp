@@ -3,8 +3,49 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <memory>
+#include <vector>
 
 using Catch::Matchers::WithinAbs;
+
+namespace {
+
+class TestPagedProvider final : public sonare::engine::ClipPagedAudioProvider {
+ public:
+  explicit TestPagedProvider(std::vector<float> samples, int64_t missing_sample = -1)
+      : samples_(std::move(samples)), missing_sample_(missing_sample) {}
+
+  int num_channels() const noexcept override { return 1; }
+  int64_t num_samples() const noexcept override { return static_cast<int64_t>(samples_.size()); }
+
+  bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
+    if (channel != 0 || !out || sample < 0 || sample >= num_samples() ||
+        sample == missing_sample_) {
+      return false;
+    }
+    *out = samples_[static_cast<size_t>(sample)];
+    return true;
+  }
+
+ private:
+  std::vector<float> samples_;
+  int64_t missing_sample_ = -1;
+};
+
+class TestPageRequestSink final : public sonare::engine::ClipPageRequestSink {
+ public:
+  void on_clip_page_miss(const sonare::engine::ClipPageRequest& request) noexcept override {
+    if (count < requests.size()) {
+      requests[count] = request;
+    }
+    ++count;
+  }
+
+  std::array<sonare::engine::ClipPageRequest, 8> requests{};
+  size_t count = 0;
+};
+
+}  // namespace
 
 TEST_CASE("ClipPlayer starts and stops on sample boundaries", "[engine][clip_player]") {
   std::array<float, 4> source_l{1.0f, 2.0f, 3.0f, 4.0f};
@@ -26,6 +67,105 @@ TEST_CASE("ClipPlayer starts and stops on sample boundaries", "[engine][clip_pla
   REQUIRE(out_l[5] == 4.0f);
   REQUIRE(out_l[6] == 0.0f);
   REQUIRE(out_r[2] == -1.0f);
+}
+
+TEST_CASE("ClipPlayer reads paged provider samples and silences page misses",
+          "[engine][clip_player]") {
+  auto provider = std::make_shared<TestPagedProvider>(std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f},
+                                                      /*missing_sample=*/2);
+
+  sonare::engine::ClipSchedule clip{1, {}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+  clip.page_provider = provider;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip});
+
+  std::array<float, 4> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 4, 0);
+
+  REQUIRE(out_l[0] == 1.0f);
+  REQUIRE(out_l[1] == 2.0f);
+  REQUIRE(out_l[2] == 0.0f);
+  REQUIRE(out_l[3] == 4.0f);
+}
+
+TEST_CASE("ClipPlayer reports paged provider misses to a request sink", "[engine][clip_player]") {
+  auto provider = std::make_shared<TestPagedProvider>(std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f},
+                                                      /*missing_sample=*/2);
+
+  sonare::engine::ClipSchedule clip{77, {}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+  clip.page_provider = provider;
+
+  TestPageRequestSink sink;
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_page_request_sink(&sink);
+  player.set_clips({clip});
+
+  std::array<float, 4> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 4, 0);
+
+  REQUIRE(sink.count >= 1);
+  REQUIRE(sink.requests[0].clip_id == 77);
+  REQUIRE(sink.requests[0].channel == 0);
+  REQUIRE(sink.requests[0].sample == 2);
+}
+
+TEST_CASE("ClipPlayer reports paged provider misses across loop wraps", "[engine][clip_player]") {
+  auto provider = std::make_shared<TestPagedProvider>(std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f},
+                                                      /*missing_sample=*/1);
+
+  sonare::engine::ClipSchedule clip{88, {}, 0.0, 0, 0, 6, true, 1.0f, 0, 0};
+  clip.loop_length_samples = 4;
+  clip.page_provider = provider;
+
+  TestPageRequestSink sink;
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 6);
+  player.set_page_request_sink(&sink);
+  player.set_clips({clip});
+
+  std::array<float, 6> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 6, 0);
+
+  REQUIRE(out_l[0] == 1.0f);
+  REQUIRE(out_l[1] == 0.0f);
+  REQUIRE(out_l[4] == 1.0f);
+  REQUIRE(out_l[5] == 0.0f);
+  REQUIRE(sink.count >= 2);
+  REQUIRE(sink.requests[0].clip_id == 88);
+  REQUIRE(sink.requests[0].sample == 1);
+  REQUIRE(sink.requests[1].clip_id == 88);
+  REQUIRE(sink.requests[1].sample == 1);
+}
+
+TEST_CASE("ClipPlayer reports paged provider misses after a timeline seek",
+          "[engine][clip_player]") {
+  auto provider = std::make_shared<TestPagedProvider>(std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f},
+                                                      /*missing_sample=*/2);
+
+  sonare::engine::ClipSchedule clip{99, {}, 0.0, 10, 0, 4, false, 1.0f, 0, 0};
+  clip.page_provider = provider;
+
+  TestPageRequestSink sink;
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 2);
+  player.set_page_request_sink(&sink);
+  player.set_clips({clip});
+
+  std::array<float, 2> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 2, 12);
+
+  REQUIRE(out_l[0] == 0.0f);
+  REQUIRE(out_l[1] == 4.0f);
+  REQUIRE(sink.count >= 1);
+  REQUIRE(sink.requests[0].clip_id == 99);
+  REQUIRE(sink.requests[0].sample == 2);
 }
 
 TEST_CASE("ClipPlayer loops source material and mixes overlapping clips", "[engine][clip_player]") {
@@ -166,6 +306,31 @@ TEST_CASE("ClipPlayer honors explicit audio loop length", "[engine][clip_player]
   REQUIRE(out_l[3] == 20.0f);
   REQUIRE(out_l[4] == 10.0f);
   REQUIRE(out_l[5] == 20.0f);
+}
+
+TEST_CASE("ClipPlayer repitch warp maps warped positions to source positions",
+          "[engine][clip_player]") {
+  std::array<float, 4> source{0.0f, 10.0f, 20.0f, 30.0f};
+  const float* channels[] = {source.data()};
+  auto anchors = std::make_shared<std::vector<sonare::engine::WarpAnchor>>(
+      std::vector<sonare::engine::WarpAnchor>{{0.0, 0.0}, {3.0, 1.5}});
+
+  sonare::engine::ClipSchedule clip{1, {channels, 1, 4}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+  clip.warp_mode = sonare::engine::WarpMode::kRepitch;
+  clip.warp_anchors = anchors;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip});
+
+  std::array<float, 4> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 4, 0);
+
+  REQUIRE_THAT(out_l[0], WithinAbs(0.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[1], WithinAbs(5.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[2], WithinAbs(10.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[3], WithinAbs(15.0f, 1.0e-6f));
 }
 
 TEST_CASE(

@@ -65,6 +65,84 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('setClipTakes and setClipCompSegments serialize and undo', () => {
+    const { project, clipId } = buildAudioProject();
+    try {
+      const before = project.toJson();
+      expect(() =>
+        project.setClipTakes(
+          clipId,
+          [
+            { id: 1, sourceOffsetPpq: 0, name: 'take A' },
+            { id: 2, sourceOffsetPpq: 0.5, name: 'take B' },
+          ],
+          1,
+        ),
+      ).not.toThrow();
+      const withTakes = project.toJson();
+      expect(withTakes).not.toBe(before);
+      expect(withTakes).toContain('"takes"');
+      expect(withTakes).toContain('"active_take_id":1');
+
+      expect(() =>
+        project.setClipCompSegments(clipId, [
+          { startPpq: 0, endPpq: 2, takeId: 1 },
+          { startPpq: 2, endPpq: 4, takeId: 2 },
+        ]),
+      ).not.toThrow();
+      expect(project.toJson()).toContain('"comp_segments"');
+
+      project.undo();
+      expect(project.toJson()).toBe(withTakes);
+      project.undo();
+      expect(project.toJson()).toBe(before);
+      project.redo();
+      expect(project.toJson()).toBe(withTakes);
+
+      expect(() =>
+        project.setClipTakes(
+          clipId,
+          [
+            { id: 1, name: 'duplicate A' },
+            { id: 1, name: 'duplicate B' },
+          ],
+          1,
+        ),
+      ).toThrow();
+      expect(() =>
+        project.setClipCompSegments(clipId, [{ startPpq: 0, endPpq: 1, takeId: 99 }]),
+      ).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('addLoopRecordingTakes splits captured loops into takes', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio', name: 'record' });
+      const audio = new Float32Array(48000);
+      audio.fill(0.25, 0, 24000);
+      audio.fill(0.75, 24000);
+      const result = project.addLoopRecordingTakes({
+        trackId,
+        startPpq: 0,
+        loopLengthPpq: 1,
+        audio,
+        audioChannels: 1,
+        audioSampleRate: 48000,
+      });
+      expect(result.clipId).toBeGreaterThan(0);
+      expect(result.takeCount).toBe(2);
+      expect(project.toJson()).toContain('"active_take_id":2');
+      project.undo();
+      expect(project.toJson()).toContain('"clips":[]');
+    } finally {
+      project.delete();
+    }
+  });
+
   it('duplicateClip returns a fresh id distinct from the source', () => {
     const { project, clipId } = buildAudioProject();
     try {

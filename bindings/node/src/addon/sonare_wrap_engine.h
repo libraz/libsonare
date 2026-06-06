@@ -39,9 +39,17 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value CountInEndSample(const Napi::CallbackInfo& info);
   Napi::Value SetClips(const Napi::CallbackInfo& info);
   Napi::Value ClipCount(const Napi::CallbackInfo& info);
+  Napi::Value CreateClipPageProvider(const Napi::CallbackInfo& info);
+  Napi::Value SupplyClipPage(const Napi::CallbackInfo& info);
+  Napi::Value ClearClipPage(const Napi::CallbackInfo& info);
+  Napi::Value DestroyClipPageProvider(const Napi::CallbackInfo& info);
+  Napi::Value PopClipPageRequest(const Napi::CallbackInfo& info);
   Napi::Value SetCaptureBuffer(const Napi::CallbackInfo& info);
   Napi::Value ArmCapture(const Napi::CallbackInfo& info);
   Napi::Value SetCapturePunch(const Napi::CallbackInfo& info);
+  Napi::Value SetCaptureSource(const Napi::CallbackInfo& info);
+  Napi::Value SetRecordOffsetSamples(const Napi::CallbackInfo& info);
+  Napi::Value SetInputMonitor(const Napi::CallbackInfo& info);
   Napi::Value ResetCapture(const Napi::CallbackInfo& info);
   Napi::Value CaptureStatus(const Napi::CallbackInfo& info);
   Napi::Value CapturedAudio(const Napi::CallbackInfo& info);
@@ -83,6 +91,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   void Destroy(const Napi::CallbackInfo& info);
 
   SonareRealtimeEngine* engine_ = nullptr;
+  std::vector<SonareClipPageProvider*> clip_page_providers_;
   std::vector<Napi::Reference<Napi::Float32Array>> capture_refs_;
   std::vector<float*> capture_ptrs_;
   int64_t capture_capacity_frames_ = 0;

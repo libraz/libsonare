@@ -326,4 +326,25 @@ class SonareSpectrumResult(ctypes.Structure):
     ]
 
 
+class SonareWaveformPeaksResult(ctypes.Structure):
+    """Maps to SonareWaveformPeaksResult in sonare_c.h."""
+
+    _fields_ = [
+        ("min", ctypes.POINTER(ctypes.c_float)),
+        ("max", ctypes.POINTER(ctypes.c_float)),
+        ("channels", ctypes.c_int),
+        ("bucket_count", ctypes.c_size_t),
+        ("samples_per_bucket", ctypes.c_size_t),
+    ]
+
+
+class SonareWaveformPeakPyramidResult(ctypes.Structure):
+    """Maps to SonareWaveformPeakPyramidResult in sonare_c.h."""
+
+    _fields_ = [
+        ("levels", ctypes.POINTER(SonareWaveformPeaksResult)),
+        ("level_count", ctypes.c_size_t),
+    ]
+
+
 __all__ = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]

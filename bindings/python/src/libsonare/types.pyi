@@ -86,6 +86,8 @@ class EngineTelemetryError(IntEnum):
     AUTOMATION_BIND_TARGET_OVERFLOW = 11
     STALE_AUTOMATION_LANES = 12
     SMOOTHED_PARAMETER_CAPACITY = 13
+    COMMAND_BACKLOG_DEFERRED = 14
+    CLIP_PAGE_UNDERRUN = 15
 
 class Key:
     root: PitchClass
@@ -432,6 +434,21 @@ class SpectrumReport:
         db: NDArray[np.float32],
         n_fft: int,
         sample_rate: int,
+    ) -> None: ...
+
+class WaveformPeaksReport:
+    min: NDArray[np.float32]
+    max: NDArray[np.float32]
+    channels: int
+    bucket_count: int
+    samples_per_bucket: int
+    def __init__(
+        self,
+        min: NDArray[np.float32],
+        max: NDArray[np.float32],
+        channels: int,
+        bucket_count: int,
+        samples_per_bucket: int,
     ) -> None: ...
 
 class TimbreFrame:
@@ -801,7 +818,7 @@ class EngineMetronomeConfig:
 
 class EngineClip:
     id: int
-    channels: list[list[float]]
+    channels: list[list[float]] | None
     start_ppq: float
     length_samples: int | None
     clip_offset_samples: int
@@ -809,10 +826,13 @@ class EngineClip:
     gain: float
     fade_in_samples: int
     fade_out_samples: int
+    warp_mode: str | int
+    warp_anchors: list[tuple[float, float]] | None
+    page_provider: object | None
     def __init__(
         self,
         id: int,
-        channels: list[list[float]],
+        channels: list[list[float]] | None,
         start_ppq: float,
         length_samples: int | None = None,
         clip_offset_samples: int = 0,
@@ -820,19 +840,32 @@ class EngineClip:
         gain: float = 1.0,
         fade_in_samples: int = 0,
         fade_out_samples: int = 0,
+        warp_mode: str | int = "off",
+        warp_anchors: list[tuple[float, float]] | None = None,
+        page_provider: object | None = None,
     ) -> None: ...
+
+class ClipPageRequest:
+    clip_id: int
+    channel: int
+    sample: int
+    def __init__(self, clip_id: int, channel: int, sample: int) -> None: ...
 
 class EngineCaptureStatus:
     captured_frames: int
     overflow_count: int
     armed: bool
     punch_enabled: bool
+    source: str
+    record_offset_samples: int
     def __init__(
         self,
         captured_frames: int,
         overflow_count: int,
         armed: bool,
         punch_enabled: bool,
+        source: str,
+        record_offset_samples: int,
     ) -> None: ...
 
 class EngineBounceOptions:

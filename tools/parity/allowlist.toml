@@ -72,6 +72,11 @@ wasm = [
   "synth_patch_round_trip_for_test", # WASM-only regression hook for embind patch shape
   "*with_progress",                  # WASM progress callbacks are facade-only async ergonomics
   "analyze_with_progress",           # WASM progress callback wrapper, no C ABI equivalent
+  "bind_web_midi",                   # Browser Web MIDI listener glue; routes to existing realtime-engine MIDI input APIs
+  "is_web_midi_available",           # Browser capability probe for Web MIDI; platform-only facade helper
+  "bind_microphone_input",           # Browser getUserMedia -> AudioWorkletNode glue; platform-only realtime input helper
+  "create_opfs_clip_page_provider",  # Browser OPFS Worker -> paged clip provider glue; platform-only long-clip helper
+  "create_opfs_clip_page_worker",    # Browser OPFS Worker constructor for paged clip supply; platform-only helper
 ]
 
 python = [

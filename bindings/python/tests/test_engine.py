@@ -11,6 +11,7 @@ from libsonare import (
     AutomationCurve,
     AutomationPoint,
     BuiltinSynthConfig,
+    ClipPageProvider,
     EngineBounceOptions,
     EngineClip,
     EngineFreezeOptions,
@@ -23,6 +24,7 @@ from libsonare import (
     EngineMetronomeConfig,
     EngineTelemetryError,
     EngineTelemetryType,
+    FileClipPageProvider,
     ParameterInfo,
     RealtimeEngine,
     engine_abi_version,
@@ -183,6 +185,8 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert capture_status.captured_frames == 128
         assert capture_status.overflow_count == 0
         assert capture_status.armed
+        assert capture_status.source == "output"
+        assert capture_status.record_offset_samples == 0
         captured = engine.captured_audio()
         assert all(math.isclose(sample, 0.75, abs_tol=0.0001) for sample in captured[0])
         assert all(math.isclose(sample, -0.75, abs_tol=0.0001) for sample in captured[1])
@@ -197,6 +201,148 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert last.render_frame == 0
         assert last.timeline_sample == 48000 + 128
         assert last.audible_timeline_sample == 48000 + 128
+
+        engine.set_capture_source("input")
+        engine.set_record_offset_samples(-37)
+        engine.arm_capture()
+        engine.seek_marker(11)
+        engine.process([left, right])
+        input_capture_status = engine.capture_status()
+        assert input_capture_status.source == "input"
+        assert input_capture_status.record_offset_samples == -37
+        captured = engine.captured_audio()
+        assert all(math.isclose(sample, 0.25, abs_tol=0.0001) for sample in captured[0])
+        assert all(math.isclose(sample, -0.25, abs_tol=0.0001) for sample in captured[1])
+
+        engine.set_input_monitor(False)
+        engine.reset_capture()
+        engine.arm_capture()
+        engine.seek_marker(11)
+        monitored = engine.process([[0.25] * 128, [-0.25] * 128])
+        assert all(math.isclose(sample, 0.25, abs_tol=0.0001) for sample in monitored[0])
+        assert all(math.isclose(sample, -0.25, abs_tol=0.0001) for sample in monitored[1])
+        captured = engine.captured_audio()
+        assert all(math.isclose(sample, 0.25, abs_tol=0.0001) for sample in captured[0])
+
+        engine.set_input_monitor(True, 0.5)
+        engine.seek_marker(11)
+        monitored = engine.process([[0.25] * 128, [-0.25] * 128])
+        assert all(math.isclose(sample, 0.5, abs_tol=0.0001) for sample in monitored[0])
+        assert all(math.isclose(sample, -0.5, abs_tol=0.0001) for sample in monitored[1])
+
+
+def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:
+    with (
+        RealtimeEngine(sample_rate=48000.0, max_block_size=8) as engine,
+        ClipPageProvider(1, 8, 4) as provider,
+    ):
+        provider.supply(0, [[1.0, 2.0, 3.0, 4.0]])
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=123,
+                    channels=None,
+                    start_ppq=0.0,
+                    page_provider=provider,
+                )
+            ]
+        )
+        engine.play()
+        first = engine.process([[0.0] * 8])
+        assert first[0] == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]
+
+        request = engine.pop_clip_page_request()
+        assert request is not None
+        assert request.clip_id == 123
+        assert request.channel == 0
+        assert request.sample == 4
+        assert any(
+            record.type == EngineTelemetryType.ERROR
+            and record.error == EngineTelemetryError.CLIP_PAGE_UNDERRUN
+            and record.value == 123
+            for record in engine.drain_telemetry()
+        )
+
+        provider.supply(1, [[5.0, 6.0, 7.0, 8.0]])
+        engine.seek_sample(0)
+        second = engine.process([[0.0] * 8])
+        assert second[0] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+
+
+def test_engine_feeds_paged_clips_from_raw_float32_files(tmp_path) -> None:
+    raw_path = tmp_path / "clip.f32"
+    np.asarray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], dtype="<f4").tofile(raw_path)
+
+    with (
+        RealtimeEngine(sample_rate=48000.0, max_block_size=8) as engine,
+        FileClipPageProvider(raw_path, num_channels=1, num_samples=8, page_frames=4) as provider,
+    ):
+        assert provider.supply_page(0) is True
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=124,
+                    channels=None,
+                    start_ppq=0.0,
+                    page_provider=provider,
+                )
+            ]
+        )
+        engine.play()
+        first = engine.process([[0.0] * 8])
+        assert first[0] == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]
+
+        request = engine.pop_clip_page_request()
+        assert request is not None
+        assert request.clip_id == 124
+        assert request.sample == 4
+        assert provider.supply_request(request) is True
+        engine.seek_sample(0)
+        second = engine.process([[0.0] * 8])
+        assert second[0] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+
+
+def test_realtime_engine_renders_repitch_warped_clip() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=303,
+                    channels=[[0.0, 10.0, 20.0, 30.0]],
+                    start_ppq=0.0,
+                    length_samples=4,
+                    warp_mode="repitch",
+                    warp_anchors=[(0.0, 0.0), (3.0, 1.5)],
+                )
+            ]
+        )
+        engine.play()
+        processed = engine.process([[0.0] * 4])
+        assert math.isclose(processed[0][0], 0.0, abs_tol=0.0001)
+        assert math.isclose(processed[0][1], 5.0, abs_tol=0.0001)
+        assert math.isclose(processed[0][2], 10.0, abs_tol=0.0001)
+        assert math.isclose(processed[0][3], 15.0, abs_tol=0.0001)
+    tempo_source = [math.sin(i * 0.02) for i in range(4096)]
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=8192) as tempo_engine:
+        tempo_engine.set_clips(
+            [
+                EngineClip(
+                    id=304,
+                    channels=[tempo_source],
+                    start_ppq=0.0,
+                    length_samples=8192,
+                    warp_mode="tempo-sync",
+                    warp_anchors=[
+                        (0.0, 0.0),
+                        (2048.0, 1024.0),
+                        (8192.0, 4096.0),
+                    ],
+                )
+            ]
+        )
+        tempo_engine.play()
+        tempo_synced = tempo_engine.process([[0.0] * 8192])
+        assert max(abs(sample) for sample in tempo_synced[0]) > 0.1
 
 
 def test_realtime_engine_process_zero_copy_matches_list_input() -> None:

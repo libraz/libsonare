@@ -93,6 +93,44 @@ def test_metering_dynamic_range_rejects_inverted_percentiles() -> None:
         libsonare.metering_dynamic_range(samples, SR, low_percentile=0.9, high_percentile=0.1)
 
 
+def test_waveform_peaks_bucket_interleaved_stereo_audio() -> None:
+    samples = np.array(
+        [-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9],
+        dtype=np.float32,
+    )
+    report = libsonare.waveform_peaks(samples, 2, samples_per_bucket=2)
+    assert report.channels == 2
+    assert report.bucket_count == 3
+    assert report.samples_per_bucket == 2
+    np.testing.assert_allclose(report.min, [-1.0, -0.5, 0.0, -0.25, -0.75, 0.9])
+    np.testing.assert_allclose(report.max, [0.25, 0.75, 0.0, 0.5, 0.1, 0.9])
+
+
+def test_waveform_peak_pyramid_returns_requested_levels() -> None:
+    samples = np.array(
+        [-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9],
+        dtype=np.float32,
+    )
+    pyramid = libsonare.waveform_peak_pyramid(samples, 2, samples_per_bucket_levels=[2, 4])
+    assert len(pyramid) == 2
+    assert pyramid[0].bucket_count == 3
+    assert pyramid[1].bucket_count == 2
+    assert pyramid[1].min[0] == pytest.approx(-1.0)
+    assert pyramid[1].max[0] == pytest.approx(0.75)
+
+
+def test_waveform_peaks_default_bucket_width_and_pyramid_levels() -> None:
+    samples = np.array(
+        [-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9],
+        dtype=np.float32,
+    )
+    report = libsonare.waveform_peaks(samples, 2)
+    assert report.samples_per_bucket == 512
+    assert report.bucket_count == 1
+    pyramid = libsonare.waveform_peak_pyramid(samples, 2)
+    assert [level.samples_per_bucket for level in pyramid] == [512, 1024, 2048, 4096]
+
+
 C_MAJOR_MASK = 0b101010110101
 
 

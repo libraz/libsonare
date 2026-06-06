@@ -710,6 +710,33 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_free_spectrum_result.restype = None
     lib.sonare_free_spectrum_result.argtypes = [ctypes.POINTER(SonareSpectrumResult)]
 
+    lib.sonare_waveform_peaks.restype = ctypes.c_int32
+    lib.sonare_waveform_peaks.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareWaveformPeaksResult),
+    ]
+
+    lib.sonare_waveform_peak_pyramid.restype = ctypes.c_int32
+    lib.sonare_waveform_peak_pyramid.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.c_size_t,
+        ctypes.POINTER(SonareWaveformPeakPyramidResult),
+    ]
+
+    lib.sonare_free_waveform_peaks_result.restype = None
+    lib.sonare_free_waveform_peaks_result.argtypes = [ctypes.POINTER(SonareWaveformPeaksResult)]
+
+    lib.sonare_free_waveform_peak_pyramid_result.restype = None
+    lib.sonare_free_waveform_peak_pyramid_result.argtypes = [
+        ctypes.POINTER(SonareWaveformPeakPyramidResult)
+    ]
+
     # --- Editing - Scale quantizer ---
 
     for _name in ("sonare_scale_quantize_midi", "sonare_scale_correction_semitones"):

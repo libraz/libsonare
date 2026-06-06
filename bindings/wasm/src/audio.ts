@@ -80,6 +80,69 @@ import type { ProgressCallback, WasmNnlsChromaResult } from './sonare.js';
 // Audio Class
 // ============================================================================
 
+type BrowserDecodeContext = Pick<BaseAudioContext, 'decodeAudioData' | 'sampleRate'>;
+
+export interface BrowserAudioDecodeOptions {
+  /**
+   * AudioContext/OfflineAudioContext used for browser codec fallback. Its
+   * `sampleRate` becomes the returned Audio sample rate.
+   */
+  audioContext?: BrowserDecodeContext;
+  /**
+   * Factory used when `audioContext` is omitted. `targetSampleRate` is passed
+   * through so browsers that honor AudioContextOptions decode directly at that
+   * rate.
+   */
+  createAudioContext?: (options?: AudioContextOptions) => BrowserDecodeContext;
+  /**
+   * Requested fallback decode rate when this helper creates the context. If the
+   * browser ignores it or a context is supplied, no extra resampling is applied.
+   */
+  targetSampleRate?: number;
+}
+
+function encodedBytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+function getBrowserAudioContextFactory():
+  | ((options?: AudioContextOptions) => BrowserDecodeContext)
+  | undefined {
+  const root = globalThis as typeof globalThis & {
+    AudioContext?: new (options?: AudioContextOptions) => BaseAudioContext;
+    webkitAudioContext?: new (options?: AudioContextOptions) => BaseAudioContext;
+  };
+  const Ctor = root.AudioContext ?? root.webkitAudioContext;
+  return Ctor ? (options?: AudioContextOptions) => new Ctor(options) : undefined;
+}
+
+function audioBufferToMono(buffer: AudioBuffer): Float32Array {
+  const samples = new Float32Array(buffer.length);
+  if (buffer.numberOfChannels <= 0) {
+    return samples;
+  }
+  if (buffer.numberOfChannels === 1) {
+    samples.set(buffer.getChannelData(0));
+    return samples;
+  }
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let i = 0; i < buffer.length; i++) {
+      samples[i] += data[i] / buffer.numberOfChannels;
+    }
+  }
+  return samples;
+}
+
+async function closeCreatedContext(context: BrowserDecodeContext): Promise<void> {
+  const maybeClosable = context as BrowserDecodeContext & { close?: () => Promise<void> };
+  if (maybeClosable.close) {
+    await maybeClosable.close();
+  }
+}
+
 /**
  * Wrapper around audio data that exposes all analysis and feature functions as instance methods.
  *
@@ -124,6 +187,53 @@ export class Audio {
   static fromMemory(bytes: Uint8Array): Audio {
     const decoded = getSonareModule().audioFromMemory(bytes);
     return new Audio(decoded.samples, decoded.sampleRate);
+  }
+
+  /**
+   * Decode audio bytes with the native WASM decoder first, then fall back to the
+   * browser codec stack (`AudioContext.decodeAudioData`) for formats such as
+   * AAC, OGG, and FLAC when available. Browser-decoded multi-channel audio is
+   * mixed down to mono to match the `Audio` wrapper contract.
+   */
+  static async fromMemoryWithBrowserFallback(
+    bytes: Uint8Array,
+    options: BrowserAudioDecodeOptions = {},
+  ): Promise<Audio> {
+    try {
+      return Audio.fromMemory(bytes);
+    } catch (nativeError) {
+      let createdContext = false;
+      const contextFactory = options.createAudioContext ?? getBrowserAudioContextFactory();
+      const context =
+        options.audioContext ??
+        contextFactory?.(
+          options.targetSampleRate ? { sampleRate: options.targetSampleRate } : undefined,
+        );
+
+      if (!context) {
+        throw new Error(
+          `Audio.fromMemory failed and browser decodeAudioData is unavailable: ${
+            nativeError instanceof Error ? nativeError.message : String(nativeError)
+          }`,
+        );
+      }
+
+      createdContext = !options.audioContext;
+      try {
+        const decoded = await context.decodeAudioData(encodedBytesToArrayBuffer(bytes));
+        return new Audio(audioBufferToMono(decoded), decoded.sampleRate || context.sampleRate);
+      } catch (fallbackError) {
+        throw new Error(
+          `Audio.fromMemory failed and browser decodeAudioData fallback failed: ${
+            fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+          }`,
+        );
+      } finally {
+        if (createdContext) {
+          await closeCreatedContext(context);
+        }
+      }
+    }
   }
 
   /** The raw audio samples. */

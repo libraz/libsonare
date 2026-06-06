@@ -1,3 +1,4 @@
+import { closeSync, openSync, readSync } from 'node:fs';
 import {
   analyzeBpm as analyzeBpmFn,
   analyzeDynamics as analyzeDynamicsFn,
@@ -31,6 +32,7 @@ import type {
   ChordAnalysisResult,
   ChordDetectionOptions,
   ChromaResult,
+  ClipPageRequest,
   DynamicsResult,
   EngineAutomationPoint,
   EngineAutomationPointCurve,
@@ -47,6 +49,7 @@ import type {
   EngineParameterInfo,
   EngineTelemetry,
   EngineTransportState,
+  FileClipPageProviderOptions,
   GoniometerPoint,
   HpssResult,
   Key,
@@ -77,12 +80,16 @@ import type {
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
+  ProjectClipCompSegment,
   ProjectClipDesc,
   ProjectClipFade,
+  ProjectClipTake,
   ProjectCompileResult,
   ProjectFadeCurve,
   ProjectKeySegment,
   ProjectLoopMode,
+  ProjectLoopRecordingDesc,
+  ProjectLoopRecordingResult,
   ProjectMidiCcBinding,
   ProjectMidiClipResult,
   ProjectMidiEvent,
@@ -103,6 +110,7 @@ import type {
   SynthPatch,
   SynthWaveform,
   TimbreResult,
+  WarpMode,
 } from './types.js';
 // Runtime value re-exported from types (the rest of `./types.js` is type-only).
 import { EXPECTED_PROJECT_ABI_VERSION } from './types.js';
@@ -598,12 +606,57 @@ export class RealtimeEngine {
     return this.native.countInEndSample(startSample, bars);
   }
 
+  createClipPageProvider(
+    numChannels: number,
+    numSamples: number,
+    pageFrames: number,
+  ): ClipPageProvider {
+    const id = this.native.createClipPageProvider(numChannels, numSamples, pageFrames);
+    return new ClipPageProvider(this, id);
+  }
+
+  createFileClipPageProvider(
+    path: string,
+    options: FileClipPageProviderOptions,
+  ): FileClipPageProvider {
+    const id = this.native.createClipPageProvider(
+      options.numChannels,
+      options.numSamples,
+      options.pageFrames,
+    );
+    return new FileClipPageProvider(this, id, path, options);
+  }
+
   setClips(clips: EngineClip[]): void {
-    this.native.setClips(clips);
+    this.native.setClips(
+      clips.map((clip) => ({
+        ...clip,
+        pageProvider:
+          typeof clip.pageProvider === 'object' && clip.pageProvider !== null
+            ? clip.pageProvider.id
+            : clip.pageProvider,
+      })),
+    );
   }
 
   clipCount(): number {
     return this.native.clipCount();
+  }
+
+  supplyClipPage(providerId: number, pageIndex: number, channels: Float32Array[]): void {
+    this.native.supplyClipPage(providerId, pageIndex, channels);
+  }
+
+  clearClipPage(providerId: number, pageIndex: number): void {
+    this.native.clearClipPage(providerId, pageIndex);
+  }
+
+  destroyClipPageProvider(providerId: number): void {
+    this.native.destroyClipPageProvider(providerId);
+  }
+
+  popClipPageRequest(): ClipPageRequest | null {
+    return this.native.popClipPageRequest();
   }
 
   setCaptureBuffer(channels: Float32Array[]): void {
@@ -616,6 +669,18 @@ export class RealtimeEngine {
 
   setCapturePunch(startSample: number, endSample: number, enabled = true): void {
     this.native.setCapturePunch(startSample, endSample, enabled);
+  }
+
+  setCaptureSource(source: EngineCaptureStatus['source']): void {
+    this.native.setCaptureSource(source);
+  }
+
+  setRecordOffsetSamples(offsetSamples: number): void {
+    this.native.setRecordOffsetSamples(offsetSamples);
+  }
+
+  setInputMonitor(enabled: boolean, gain = 1): void {
+    this.native.setInputMonitor(enabled, gain);
   }
 
   resetCapture(): void {
@@ -909,6 +974,113 @@ export class RealtimeEngine {
   /** Releases the native handle; lets `using` (Node 22+) free it automatically. */
   [Symbol.dispose](): void {
     this.destroy();
+  }
+}
+
+export class ClipPageProvider {
+  private disposed = false;
+
+  constructor(
+    private readonly engine: RealtimeEngine,
+    readonly id: number,
+  ) {}
+
+  supply(pageIndex: number, channels: Float32Array[]): void {
+    if (this.disposed) {
+      throw new Error('ClipPageProvider is destroyed');
+    }
+    this.engine.supplyClipPage(this.id, pageIndex, channels);
+  }
+
+  clear(pageIndex: number): void {
+    if (this.disposed) {
+      return;
+    }
+    this.engine.clearClipPage(this.id, pageIndex);
+  }
+
+  destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.engine.destroyClipPageProvider(this.id);
+  }
+
+  [Symbol.dispose](): void {
+    this.destroy();
+  }
+}
+
+export class FileClipPageProvider extends ClipPageProvider {
+  private fd: number | null;
+  private readonly numChannels: number;
+  private readonly numSamples: number;
+  private readonly pageFrames: number;
+  private readonly dataOffsetBytes: number;
+
+  constructor(
+    engine: RealtimeEngine,
+    id: number,
+    path: string,
+    options: FileClipPageProviderOptions,
+  ) {
+    super(engine, id);
+    if (options.numChannels <= 0 || options.numSamples <= 0 || options.pageFrames <= 0) {
+      throw new Error('numChannels, numSamples, and pageFrames must be positive');
+    }
+    this.fd = openSync(path, 'r');
+    this.numChannels = options.numChannels;
+    this.numSamples = options.numSamples;
+    this.pageFrames = options.pageFrames;
+    this.dataOffsetBytes = options.dataOffsetBytes ?? 0;
+  }
+
+  supplyPage(pageIndex: number): boolean {
+    if (this.fd === null) {
+      throw new Error('FileClipPageProvider is destroyed');
+    }
+    if (pageIndex < 0) {
+      return false;
+    }
+    const startFrame = pageIndex * this.pageFrames;
+    if (startFrame >= this.numSamples) {
+      return false;
+    }
+    const frames = Math.min(this.pageFrames, this.numSamples - startFrame);
+    const frameBytes = this.numChannels * Float32Array.BYTES_PER_ELEMENT;
+    const buffer = Buffer.allocUnsafe(frames * frameBytes);
+    const bytesRead = readSync(
+      this.fd,
+      buffer,
+      0,
+      buffer.byteLength,
+      this.dataOffsetBytes + startFrame * frameBytes,
+    );
+    const framesRead = Math.floor(bytesRead / frameBytes);
+    if (framesRead <= 0) {
+      return false;
+    }
+    const channels = Array.from({ length: this.numChannels }, () => new Float32Array(framesRead));
+    for (let frame = 0; frame < framesRead; ++frame) {
+      for (let ch = 0; ch < this.numChannels; ++ch) {
+        channels[ch][frame] = buffer.readFloatLE((frame * this.numChannels + ch) * 4);
+      }
+    }
+    this.supply(pageIndex, channels);
+    return true;
+  }
+
+  supplyRequest(request: ClipPageRequest): boolean {
+    return this.supplyPage(Math.floor(request.sample / this.pageFrames));
+  }
+
+  destroy(): void {
+    if (this.fd !== null) {
+      closeSync(this.fd);
+      this.fd = null;
+    }
+    super.destroy();
   }
 }
 
@@ -1277,6 +1449,11 @@ export class Project {
     return this.native.addClip(desc);
   }
 
+  /** Split captured loop-recording audio into takes and add one clip. */
+  addLoopRecordingTakes(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingResult {
+    return this.native.addLoopRecordingTakes(desc);
+  }
+
   /** Create a MIDI track + clip; returns `{ trackId, clipId }`. */
   addMidiClip(startPpq: number, lengthPpq: number): ProjectMidiClipResult {
     return this.native.addMidiClip(startPpq, lengthPpq);
@@ -1305,6 +1482,11 @@ export class Project {
   /** Set a clip's warp reference id (0 clears it). */
   setClipWarpRef(clipId: number, warpRefId: number): void {
     this.native.setClipWarpRef(clipId, warpRefId);
+  }
+
+  /** Set a clip's warp playback mode. */
+  setClipWarpMode(clipId: number, mode: WarpMode | number): void {
+    this.native.setClipWarpMode(clipId, warpModeValue(mode));
   }
 
   /** Add or replace a first-class warp map referenced by clip warp ids. */
@@ -1339,6 +1521,16 @@ export class Project {
    */
   setClipFade(clipId: number, fadeIn?: ProjectClipFade, fadeOut?: ProjectClipFade): void {
     this.native.setClipFade(clipId, projectClipFadeValue(fadeIn), projectClipFadeValue(fadeOut));
+  }
+
+  /** Replace a clip's take list and active take id via an undoable edit. */
+  setClipTakes(clipId: number, takes: ReadonlyArray<ProjectClipTake>, activeTakeId = 0): void {
+    this.native.setClipTakes(clipId, takes, activeTakeId);
+  }
+
+  /** Replace a clip's comp segments via an undoable edit. */
+  setClipCompSegments(clipId: number, segments: ReadonlyArray<ProjectClipCompSegment>): void {
+    this.native.setClipCompSegments(clipId, segments);
   }
 
   /**
@@ -1744,6 +1936,22 @@ function trackKindValue(kind: ProjectTrackDesc['kind']): number {
     return kind;
   }
   throw new Error(`Invalid track kind: ${kind}`);
+}
+
+function warpModeValue(mode: WarpMode | number | undefined): number {
+  if (mode === undefined || mode === 'off') {
+    return 0;
+  }
+  if (mode === 'repitch') {
+    return 1;
+  }
+  if (mode === 'tempo-sync') {
+    return 2;
+  }
+  if (typeof mode === 'number') {
+    return mode;
+  }
+  throw new Error(`Invalid warp mode: ${mode}`);
 }
 
 function engineAutomationCurveValue(curve: EngineAutomationPointCurve | undefined): number {
@@ -2348,6 +2556,7 @@ export type {
   ChordChromaMethod,
   ChordDetectionOptions,
   ChromaResult,
+  ClipPageRequest,
   CqtResult,
   DynamicsResult,
   EngineAutomationPoint,
@@ -2407,6 +2616,8 @@ export type {
   ProjectClipDesc,
   ProjectCompileResult,
   ProjectDiagnostic,
+  ProjectLoopRecordingDesc,
+  ProjectLoopRecordingResult,
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectTrackDesc,

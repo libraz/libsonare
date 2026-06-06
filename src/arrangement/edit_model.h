@@ -37,7 +37,14 @@ inline constexpr uint32_t kProjectVersion = 1;
 /// Stable identifiers. 0 means "unset/invalid".
 using TrackId = uint32_t;
 using ClipId = uint32_t;
+using TakeId = uint32_t;
 using WarpRefId = uint32_t;
+
+enum class WarpMode : uint32_t {
+  kOff = 0,
+  kRepitch = 1,
+  kTempoSync = 2,
+};
 
 // ===========================================================================
 // Warp maps
@@ -92,6 +99,34 @@ struct ClipFade {
   FadeCurve curve = FadeCurve::kLinear;
 };
 
+/// One recorded take/generation attached to a clip. A take may point at a
+/// different source id than the clip's base source; 0 means "use clip source".
+struct ClipTake {
+  TakeId id = 0;
+  SourceId source_id = 0;
+  double source_offset_ppq = 0.0;
+  std::string name;
+
+  bool operator==(const ClipTake& o) const noexcept {
+    return id == o.id && source_id == o.source_id && source_offset_ppq == o.source_offset_ppq &&
+           name == o.name;
+  }
+  bool operator!=(const ClipTake& o) const noexcept { return !(*this == o); }
+};
+
+/// A comp region selects a take over a clip-local PPQ span
+/// [start_ppq, end_ppq). Empty comp lanes mean the active take/base clip plays.
+struct ClipCompSegment {
+  double start_ppq = 0.0;
+  double end_ppq = 0.0;
+  TakeId take_id = 0;
+
+  bool operator==(const ClipCompSegment& o) const noexcept {
+    return start_ppq == o.start_ppq && end_ppq == o.end_ppq && take_id == o.take_id;
+  }
+  bool operator!=(const ClipCompSegment& o) const noexcept { return !(*this == o); }
+};
+
 /// A placed clip on the timeline. The SAME struct/API is used for audio and
 /// MIDI clips: the referenced ClipSource's kind decides interpretation. All
 /// musical positions are PPQ.
@@ -121,6 +156,16 @@ struct EditClip {
   /// Optional warp reference id (0 = none). Reserved for warp markers; stored
   /// here so warp data can be attached without changing the project model.
   WarpRefId warp_ref_id = 0;
+  WarpMode warp_mode = WarpMode::kOff;
+
+  /// Recorded takes/generations attached to this clip. ids are clip-local,
+  /// deterministic, and host supplied via edit commands.
+  std::vector<ClipTake> takes;
+  /// Active fallback take when no comp segment covers a region. 0 means the
+  /// clip's base source/source_offset pair is active.
+  TakeId active_take_id = 0;
+  /// Clip-local comp lane. Regions are non-overlapping and sorted by callers.
+  std::vector<ClipCompSegment> comp_segments;
 
   /// End position on the timeline (PPQ).
   double end_ppq() const noexcept { return start_ppq + length_ppq; }

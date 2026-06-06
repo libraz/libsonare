@@ -6,7 +6,9 @@
 ///        Heap-allocated result fields are released through dedicated
 ///        `sonare_free_*_result` entry points to mirror the rest of the C API.
 
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <memory>
 
 #include "core/audio.h"
@@ -18,6 +20,7 @@
 #include "metering/spectrum.h"
 #include "metering/stereo.h"
 #include "metering/true_peak.h"
+#include "metering/waveform.h"
 #include "sonare_c.h"
 #include "sonare_c_internal.h"
 
@@ -399,6 +402,102 @@ void sonare_free_spectrum_result(SonareSpectrumResult* result) {
   result->power = nullptr;
   result->db = nullptr;
   result->bin_count = 0;
+}
+
+namespace {
+
+SonareError validate_interleaved_audio(const float* samples, size_t frames, int channels) {
+  if (channels <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!samples && frames > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  if (frames > std::numeric_limits<size_t>::max() / static_cast<size_t>(channels)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const size_t total = frames * static_cast<size_t>(channels);
+  for (size_t i = 0; i < total; ++i) {
+    if (!std::isfinite(samples[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError fill_waveform_peaks_result(const metering::WaveformPeaksResult& result,
+                                       SonareWaveformPeaksResult* out) {
+  out->channels = result.channels;
+  out->bucket_count = result.bucket_count;
+  out->samples_per_bucket = result.samples_per_bucket;
+  const size_t total = static_cast<size_t>(result.channels) * result.bucket_count;
+  if (total == 0) return SONARE_OK;
+  std::unique_ptr<float[]> min_values(new float[total]);
+  std::unique_ptr<float[]> max_values(new float[total]);
+  std::memcpy(min_values.get(), result.min.data(), total * sizeof(float));
+  std::memcpy(max_values.get(), result.max.data(), total * sizeof(float));
+  out->min = release_array(min_values);
+  out->max = release_array(max_values);
+  return SONARE_OK;
+}
+
+}  // namespace
+
+SonareError sonare_waveform_peaks(const float* samples, size_t frames, int channels,
+                                  size_t samples_per_bucket, SonareWaveformPeaksResult* out) {
+  if (!out || samples_per_bucket == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
+  SonareError err = validate_interleaved_audio(samples, frames, channels);
+  if (err != SONARE_OK) return err;
+  SONARE_C_TRY
+  return fill_waveform_peaks_result(
+      metering::waveform_peaks(samples, frames, channels, samples_per_bucket), out);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, int channels,
+                                         const size_t* samples_per_bucket_levels,
+                                         size_t level_count, SonareWaveformPeakPyramidResult* out) {
+  if (!out || !samples_per_bucket_levels || level_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  std::memset(out, 0, sizeof(*out));
+  SonareError err = validate_interleaved_audio(samples, frames, channels);
+  if (err != SONARE_OK) return err;
+  std::vector<size_t> levels(samples_per_bucket_levels, samples_per_bucket_levels + level_count);
+  for (size_t level : levels) {
+    if (level == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const auto pyramid = metering::waveform_peak_pyramid(samples, frames, channels, levels);
+  std::unique_ptr<SonareWaveformPeaksResult[]> c_levels(
+      new SonareWaveformPeaksResult[pyramid.size()]());
+  for (size_t i = 0; i < pyramid.size(); ++i) {
+    err = fill_waveform_peaks_result(pyramid[i], &c_levels[i]);
+    if (err != SONARE_OK) {
+      for (size_t j = 0; j <= i; ++j) sonare_free_waveform_peaks_result(&c_levels[j]);
+      return err;
+    }
+  }
+  out->level_count = pyramid.size();
+  out->levels = release_array(c_levels);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_free_waveform_peaks_result(SonareWaveformPeaksResult* result) {
+  if (!result) return;
+  delete[] result->min;
+  delete[] result->max;
+  result->min = nullptr;
+  result->max = nullptr;
+  result->channels = 0;
+  result->bucket_count = 0;
+  result->samples_per_bucket = 0;
+}
+
+void sonare_free_waveform_peak_pyramid_result(SonareWaveformPeakPyramidResult* result) {
+  if (!result) return;
+  for (size_t i = 0; i < result->level_count; ++i) {
+    sonare_free_waveform_peaks_result(&result->levels[i]);
+  }
+  delete[] result->levels;
+  result->levels = nullptr;
+  result->level_count = 0;
 }
 
 namespace {

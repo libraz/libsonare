@@ -63,6 +63,16 @@ class SonareEngineTelemetry(ctypes.Structure):
     ]
 
 
+class SonareClipPageRequest(ctypes.Structure):
+    """Maps to SonareClipPageRequest in sonare_c.h."""
+
+    _fields_ = [
+        ("clip_id", ctypes.c_uint32),
+        ("channel", ctypes.c_uint32),
+        ("sample", ctypes.c_int64),
+    ]
+
+
 class SonareMeterTelemetryRecord(ctypes.Structure):
     """Maps to SonareMeterTelemetryRecord in sonare_c.h."""
 
@@ -170,6 +180,19 @@ class SonareEngineClip(ctypes.Structure):
         ("gain", ctypes.c_float),
         ("fade_in_samples", ctypes.c_int64),
         ("fade_out_samples", ctypes.c_int64),
+        ("warp_mode", ctypes.c_int),
+        ("warp_anchors", ctypes.c_void_p),
+        ("warp_anchor_count", ctypes.c_size_t),
+        ("page_provider", ctypes.c_void_p),
+    ]
+
+
+class SonareEngineWarpAnchor(ctypes.Structure):
+    """Maps to SonareEngineWarpAnchor in sonare_c.h."""
+
+    _fields_ = [
+        ("warp_sample", ctypes.c_double),
+        ("source_sample", ctypes.c_double),
     ]
 
 
@@ -191,6 +214,8 @@ class SonareEngineCaptureStatus(ctypes.Structure):
         ("overflow_count", ctypes.c_uint32),
         ("armed", ctypes.c_int),
         ("punch_enabled", ctypes.c_int),
+        ("source", ctypes.c_int),
+        ("record_offset_samples", ctypes.c_int64),
     ]
 
 

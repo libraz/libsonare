@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -9,6 +10,7 @@
 #include "automation/parameter.h"
 #include "core/audio.h"
 #include "core/resample.h"
+#include "effects/phase_vocoder.h"
 #include "engine/realtime_engine.h"
 #include "metering/lufs.h"
 #include "metering/normalize.h"
@@ -40,6 +42,161 @@ using namespace sonare_c_detail;
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace json = sonare::util::json;
 #endif
+
+namespace {
+
+class CClipPageProvider final : public engine::ClipPagedAudioProvider {
+ public:
+  CClipPageProvider(int channels, int64_t samples, int64_t page_frames)
+      : channels_(channels),
+        samples_(samples),
+        page_frames_(page_frames),
+        pages_(static_cast<size_t>((samples + page_frames - 1) / page_frames)) {}
+
+  int num_channels() const noexcept override { return channels_; }
+  int64_t num_samples() const noexcept override { return samples_; }
+  int64_t page_frames() const noexcept { return page_frames_; }
+  int64_t page_count() const noexcept { return static_cast<int64_t>(pages_.size()); }
+
+  bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
+    if (!out || channel < 0 || channel >= channels_ || sample < 0 || sample >= samples_) {
+      return false;
+    }
+    const int64_t page_index = sample / page_frames_;
+    const int64_t offset = sample % page_frames_;
+    if (page_index < 0 || page_index >= page_count()) return false;
+    auto page = std::atomic_load_explicit(&pages_[static_cast<size_t>(page_index)],
+                                          std::memory_order_acquire);
+    if (!page || channel >= static_cast<int>(page->channels.size()) || offset < 0 ||
+        offset >= page->frames) {
+      return false;
+    }
+    *out = page->channels[static_cast<size_t>(channel)][static_cast<size_t>(offset)];
+    return true;
+  }
+
+  bool supply(int64_t page_index, const float* const* channels, int channel_count, int64_t frames) {
+    if (page_index < 0 || page_index >= page_count() || !channels || channel_count != channels_ ||
+        frames <= 0 || frames > page_frames_) {
+      return false;
+    }
+    const int64_t page_start = page_index * page_frames_;
+    if (page_start >= samples_) return false;
+    const int64_t max_frames = std::min<int64_t>(page_frames_, samples_ - page_start);
+    if (frames > max_frames) return false;
+    auto page = std::make_shared<Page>();
+    page->frames = frames;
+    page->channels.reserve(static_cast<size_t>(channels_));
+    for (int ch = 0; ch < channels_; ++ch) {
+      if (!channels[ch]) return false;
+      page->channels.emplace_back(channels[ch], channels[ch] + frames);
+    }
+    std::atomic_store_explicit(&pages_[static_cast<size_t>(page_index)],
+                               std::shared_ptr<const Page>(std::move(page)),
+                               std::memory_order_release);
+    return true;
+  }
+
+  bool clear(int64_t page_index) noexcept {
+    if (page_index < 0 || page_index >= page_count()) return false;
+    std::shared_ptr<const Page> empty;
+    std::atomic_store_explicit(&pages_[static_cast<size_t>(page_index)], empty,
+                               std::memory_order_release);
+    return true;
+  }
+
+ private:
+  struct Page {
+    int64_t frames = 0;
+    std::vector<std::vector<float>> channels;
+  };
+
+  int channels_ = 0;
+  int64_t samples_ = 0;
+  int64_t page_frames_ = 0;
+  mutable std::vector<std::shared_ptr<const Page>> pages_;
+};
+
+}  // namespace
+
+struct SonareClipPageProvider {
+  std::shared_ptr<CClipPageProvider> provider;
+};
+
+namespace {
+
+struct TempoSyncSegment {
+  size_t source_offset = 0;
+  size_t source_samples = 0;
+  size_t target_samples = 0;
+};
+
+size_t rounded_nonnegative_sample(double sample) noexcept {
+  if (!std::isfinite(sample) || sample <= 0.0) return 0;
+  return static_cast<size_t>(std::llround(sample));
+}
+
+bool tempo_sync_segments_for_clip(const SonareEngineClip& clip,
+                                  std::vector<TempoSyncSegment>* out) {
+  if (!out || clip.length_samples <= 0 || clip.clip_offset_samples < 0 ||
+      clip.clip_offset_samples >= clip.num_samples) {
+    return false;
+  }
+  out->clear();
+  const size_t base_offset = static_cast<size_t>(clip.clip_offset_samples);
+  if (clip.warp_anchor_count >= 2 && clip.warp_anchors) {
+    out->reserve(clip.warp_anchor_count - 1);
+    for (size_t anchor_index = 1; anchor_index < clip.warp_anchor_count; ++anchor_index) {
+      const auto& prev = clip.warp_anchors[anchor_index - 1];
+      const auto& next = clip.warp_anchors[anchor_index];
+      const size_t source_start = rounded_nonnegative_sample(prev.source_sample);
+      const size_t source_end = rounded_nonnegative_sample(next.source_sample);
+      const size_t target_start = rounded_nonnegative_sample(prev.warp_sample);
+      const size_t target_end = rounded_nonnegative_sample(next.warp_sample);
+      TempoSyncSegment segment;
+      segment.source_offset = base_offset + source_start;
+      segment.source_samples = source_end > source_start ? source_end - source_start : 0;
+      segment.target_samples = target_end > target_start ? target_end - target_start : 0;
+      if (segment.source_offset > static_cast<size_t>(clip.num_samples) ||
+          segment.source_samples > static_cast<size_t>(clip.num_samples) - segment.source_offset ||
+          segment.source_samples == 0 || segment.target_samples == 0) {
+        return false;
+      }
+      out->push_back(segment);
+    }
+    return !out->empty();
+  }
+  TempoSyncSegment segment;
+  segment.source_offset = base_offset;
+  segment.source_samples = static_cast<size_t>(clip.num_samples) - base_offset;
+  segment.target_samples = static_cast<size_t>(clip.length_samples);
+  if (segment.source_samples == 0 || segment.target_samples == 0) return false;
+  out->push_back(segment);
+  return true;
+}
+
+std::vector<float> tempo_sync_channel(const float* source, size_t source_samples,
+                                      size_t target_samples, int sample_rate) {
+  StreamingPhaseVocoderConfig config;
+  config.sample_rate = sample_rate;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.phase_lock = true;
+
+  const float rate =
+      static_cast<float>(source_samples) / static_cast<float>(std::max<size_t>(1, target_samples));
+  StreamingPhaseVocoder stretcher(config);
+  stretcher.reserve(source_samples, target_samples + static_cast<size_t>(config.n_fft));
+  std::vector<float> output(target_samples + static_cast<size_t>(config.n_fft), 0.0f);
+  size_t written =
+      stretcher.process_into(source, source_samples, rate, output.data(), output.size());
+  written += stretcher.finalize_into(rate, output.data() + written, output.size() - written);
+  output.resize(std::min(written, target_samples));
+  if (output.size() < target_samples) output.resize(target_samples, 0.0f);
+  return output;
+}
+
+}  // namespace
 
 #if defined(SONARE_WITH_GRAPH)
 namespace {
@@ -547,19 +704,67 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
   clip_storage.reserve(clip_count);
   for (size_t i = 0; i < clip_count; ++i) {
     const SonareEngineClip& clip = clips[i];
-    if (!clip.channels || clip.num_channels <= 0 || clip.num_samples <= 0 ||
-        !std::isfinite(clip.start_ppq) || clip.start_ppq < 0.0 || clip.clip_offset_samples < 0 ||
-        clip.clip_offset_samples >= clip.num_samples || clip.length_samples <= 0 ||
+    const bool paged = clip.page_provider != nullptr;
+    const int source_channels =
+        paged ? clip.page_provider->provider->num_channels() : clip.num_channels;
+    const int64_t source_samples =
+        paged ? clip.page_provider->provider->num_samples() : clip.num_samples;
+    const int64_t effective_length =
+        clip.length_samples > 0 ? clip.length_samples : source_samples - clip.clip_offset_samples;
+    if ((!paged && !clip.channels) || (paged && !clip.page_provider->provider) ||
+        source_channels <= 0 || source_samples <= 0 || !std::isfinite(clip.start_ppq) ||
+        clip.start_ppq < 0.0 || clip.clip_offset_samples < 0 ||
+        clip.clip_offset_samples >= source_samples || effective_length <= 0 ||
         !(std::isfinite(clip.gain) && clip.gain >= 0.0f) || clip.fade_in_samples < 0 ||
-        clip.fade_out_samples < 0) {
+        clip.fade_out_samples < 0 ||
+        (clip.warp_mode != SONARE_ENGINE_WARP_MODE_OFF &&
+         clip.warp_mode != SONARE_ENGINE_WARP_MODE_REPITCH &&
+         clip.warp_mode != SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) ||
+        (paged && clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) ||
+        (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC && clip.loop != 0) ||
+        (clip.warp_anchor_count > 0 && !clip.warp_anchors)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
+    for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
+      const SonareEngineWarpAnchor& anchor = clip.warp_anchors[anchor_index];
+      if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample) ||
+          anchor.warp_sample < 0.0 || anchor.source_sample < 0.0) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      if (anchor_index > 0) {
+        const SonareEngineWarpAnchor& prev = clip.warp_anchors[anchor_index - 1];
+        if (!(anchor.warp_sample > prev.warp_sample && anchor.source_sample > prev.source_sample)) {
+          return SONARE_ERROR_INVALID_PARAMETER;
+        }
+      }
+    }
     auto owned = std::make_shared<engine::ClipAudioStorage>();
-    owned->channels.reserve(static_cast<size_t>(clip.num_channels));
-    owned->channel_ptrs.reserve(static_cast<size_t>(clip.num_channels));
-    for (int ch = 0; ch < clip.num_channels; ++ch) {
-      if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
-      owned->channels.emplace_back(clip.channels[ch], clip.channels[ch] + clip.num_samples);
+    owned->channels.reserve(static_cast<size_t>(source_channels));
+    owned->channel_ptrs.reserve(static_cast<size_t>(source_channels));
+    if (paged) {
+      // Paged providers are retained by shared_ptr on the ClipSchedule; no audio
+      // is copied into ClipAudioStorage.
+    } else if (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
+      std::vector<TempoSyncSegment> segments;
+      if (!tempo_sync_segments_for_clip(clip, &segments)) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      for (int ch = 0; ch < clip.num_channels; ++ch) {
+        if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
+        std::vector<float> channel;
+        for (const TempoSyncSegment& segment : segments) {
+          std::vector<float> segment_audio = tempo_sync_channel(
+              clip.channels[ch] + segment.source_offset, segment.source_samples,
+              segment.target_samples, static_cast<int>(std::lround(engine->engine.sample_rate())));
+          channel.insert(channel.end(), segment_audio.begin(), segment_audio.end());
+        }
+        owned->channels.push_back(std::move(channel));
+      }
+    } else {
+      for (int ch = 0; ch < clip.num_channels; ++ch) {
+        if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
+        owned->channels.emplace_back(clip.channels[ch], clip.channels[ch] + clip.num_samples);
+      }
     }
     clip_storage.push_back(std::move(owned));
   }
@@ -568,6 +773,13 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
   schedules.reserve(clip_count);
   for (size_t i = 0; i < clip_count; ++i) {
     const SonareEngineClip& clip = clips[i];
+    const bool paged = clip.page_provider != nullptr;
+    const int source_channels =
+        paged ? clip.page_provider->provider->num_channels() : clip.num_channels;
+    const int64_t source_samples =
+        paged ? clip.page_provider->provider->num_samples() : clip.num_samples;
+    const int64_t effective_length =
+        clip.length_samples > 0 ? clip.length_samples : source_samples - clip.clip_offset_samples;
     auto& owned = clip_storage[i];
     owned->channel_ptrs.clear();
     for (const auto& channel : owned->channels) {
@@ -575,15 +787,36 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
     }
     engine::ClipSchedule schedule{};
     schedule.id = clip.id;
-    schedule.buffer = {owned->channel_ptrs.data(), clip.num_channels, clip.num_samples};
+    schedule.buffer =
+        paged ? engine::ClipAudioBuffer{}
+              : engine::ClipAudioBuffer{
+                    owned->channel_ptrs.data(), source_channels,
+                    static_cast<int64_t>(owned->channels.empty() ? 0 : owned->channels[0].size())};
     schedule.storage = owned;
+    if (paged) schedule.page_provider = clip.page_provider->provider;
     schedule.start_ppq = clip.start_ppq;
-    schedule.clip_offset_samples = clip.clip_offset_samples;
-    schedule.length_samples = clip.length_samples;
-    schedule.loop = clip.loop != 0;
+    schedule.clip_offset_samples =
+        clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ? 0 : clip.clip_offset_samples;
+    schedule.length_samples =
+        clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC
+            ? static_cast<int64_t>(owned->channels.empty() ? 0 : owned->channels[0].size())
+            : effective_length;
+    schedule.loop = clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ? false : clip.loop != 0;
     schedule.gain = clip.gain;
     schedule.fade_in_samples = clip.fade_in_samples;
     schedule.fade_out_samples = clip.fade_out_samples;
+    schedule.warp_mode = clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH
+                             ? engine::WarpMode::kRepitch
+                             : engine::WarpMode::kOff;
+    if (schedule.warp_mode == engine::WarpMode::kRepitch && clip.warp_anchor_count >= 2) {
+      auto anchors = std::make_shared<std::vector<engine::WarpAnchor>>();
+      anchors->reserve(clip.warp_anchor_count);
+      for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
+        anchors->push_back({clip.warp_anchors[anchor_index].warp_sample,
+                            clip.warp_anchors[anchor_index].source_sample});
+      }
+      schedule.warp_anchors = std::move(anchors);
+    }
     schedules.push_back(schedule);
   }
   engine->engine.set_clips(std::move(schedules));
@@ -594,6 +827,56 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count) {
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = engine->engine.clip_count();
+  return SONARE_OK;
+}
+
+SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_samples,
+                                             int64_t page_frames,
+                                             SonareClipPageProvider** out_provider) {
+  if (!out_provider || num_channels <= 0 || num_samples <= 0 || page_frames <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  auto handle = std::make_unique<SonareClipPageProvider>();
+  handle->provider = std::make_shared<CClipPageProvider>(num_channels, num_samples, page_frames);
+  *out_provider = handle.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_clip_page_provider_destroy(SonareClipPageProvider* provider) { delete provider; }
+
+SonareError sonare_clip_page_provider_supply(SonareClipPageProvider* provider, int64_t page_index,
+                                             const float* const* channels, int num_channels,
+                                             int64_t frames) {
+  if (!provider || !provider->provider ||
+      !provider->provider->supply(page_index, channels, num_channels, frames)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
+
+SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, int64_t page_index) {
+  if (!provider || !provider->provider || !provider->provider->clear(page_index)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
+                                                SonareClipPageRequest* out_request,
+                                                int* out_has_request) {
+  if (!engine || !out_request || !out_has_request) return SONARE_ERROR_INVALID_PARAMETER;
+  engine::ClipPageRequest request{};
+  if (engine->engine.pop_clip_page_request(request)) {
+    out_request->clip_id = request.clip_id;
+    out_request->channel = request.channel;
+    out_request->sample = request.sample;
+    *out_has_request = 1;
+  } else {
+    *out_request = {};
+    *out_has_request = 0;
+  }
   return SONARE_OK;
 }
 
@@ -626,6 +909,34 @@ SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_
   return SONARE_OK;
 }
 
+SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
+                                             SonareEngineCaptureSource source) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  switch (source) {
+    case SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT:
+      engine->engine.set_capture_source(engine::CaptureSource::kOutput);
+      return SONARE_OK;
+    case SONARE_ENGINE_CAPTURE_SOURCE_INPUT:
+      engine->engine.set_capture_source(engine::CaptureSource::kInput);
+      return SONARE_OK;
+    default:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
+}
+
+SonareError sonare_engine_set_record_offset_samples(SonareRealtimeEngine* engine,
+                                                    int64_t offset_samples) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  engine->engine.set_record_offset_samples(offset_samples);
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_set_input_monitor(SonareRealtimeEngine* engine, int enabled, float gain) {
+  if (!engine || !std::isfinite(gain)) return SONARE_ERROR_INVALID_PARAMETER;
+  engine->engine.set_input_monitor(enabled != 0, gain);
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_reset_capture(SonareRealtimeEngine* engine) {
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.reset_capture();
@@ -639,6 +950,10 @@ SonareError sonare_engine_capture_status(SonareRealtimeEngine* engine,
   out->overflow_count = engine->engine.capture_overflow_count();
   out->armed = engine->engine.capture_armed() ? 1 : 0;
   out->punch_enabled = engine->engine.capture_punch_enabled() ? 1 : 0;
+  out->source = engine->engine.capture_source() == engine::CaptureSource::kInput
+                    ? SONARE_ENGINE_CAPTURE_SOURCE_INPUT
+                    : SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT;
+  out->record_offset_samples = engine->engine.record_offset_samples();
   return SONARE_OK;
 }
 

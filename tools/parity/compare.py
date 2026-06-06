@@ -83,6 +83,7 @@ DEFAULT_INPUT_ROLES = (
 # allowlist [handle_prefixes].
 DEFAULT_HANDLE_PREFIXES = (
     "audio",
+    "clip_page_provider",
     "eq",
     "mixer",
     "engine",
@@ -114,6 +115,7 @@ _HANDLE_FULL_PREFIXES = (
     "streaming_mastering_chain_",
     "stream_analyzer_",
     "realtime_voice_changer_",
+    "clip_page_provider_",
     "engine_",
     "mixer_",
     "strip_",

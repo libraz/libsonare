@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "core/resample.h"
+#include "effects/phase_vocoder.h"
 #include "midi/midi_clip.h"
 
 namespace sonare::arrangement {
@@ -23,6 +24,18 @@ engine::FadeCurve to_engine_fade_curve(FadeCurve curve) noexcept {
     case FadeCurve::kLinear:
     default:
       return engine::FadeCurve::Linear;
+  }
+}
+
+engine::WarpMode to_engine_warp_mode(WarpMode mode) noexcept {
+  switch (mode) {
+    case WarpMode::kTempoSync:
+      return engine::WarpMode::kTempoSync;
+    case WarpMode::kRepitch:
+      return engine::WarpMode::kRepitch;
+    case WarpMode::kOff:
+    default:
+      return engine::WarpMode::kOff;
   }
 }
 
@@ -67,6 +80,111 @@ std::vector<float> resample_channel(const std::vector<float>& in, double src_sr,
     return in;
   }
   return sonare::resample(in.data(), in.size(), s, d);
+}
+
+size_t rounded_nonnegative_sample(double sample) noexcept {
+  if (!std::isfinite(sample) || sample <= 0.0) return 0;
+  return static_cast<size_t>(std::llround(sample));
+}
+
+std::vector<float> tempo_sync_channel(const std::vector<float>& source, size_t source_offset,
+                                      size_t source_samples, size_t target_samples,
+                                      int sample_rate) {
+  StreamingPhaseVocoderConfig config;
+  config.sample_rate = sample_rate;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.phase_lock = true;
+
+  const float rate =
+      static_cast<float>(static_cast<double>(source_samples) / static_cast<double>(target_samples));
+  StreamingPhaseVocoder stretcher(config);
+  stretcher.reserve(source_samples, target_samples + static_cast<size_t>(config.n_fft));
+
+  std::vector<float> out(target_samples + static_cast<size_t>(config.n_fft), 0.0f);
+  size_t written = stretcher.process_into(source.data() + source_offset, source_samples, rate,
+                                          out.data(), out.size());
+  written += stretcher.finalize_into(rate, out.data() + written, out.size() - written);
+  out.resize(std::min(written, target_samples));
+  if (out.size() < target_samples) {
+    out.resize(target_samples, 0.0f);
+  }
+  return out;
+}
+
+int64_t tempo_sync_latency_samples() noexcept {
+  StreamingPhaseVocoderConfig config;
+  return config.n_fft / 2;
+}
+
+struct TempoSyncSegment {
+  size_t source_offset = 0;
+  size_t source_samples = 0;
+  size_t target_samples = 0;
+};
+
+struct AudioClipPart {
+  double start_ppq = 0.0;
+  double end_ppq = 0.0;
+  SourceId source_id = 0;
+  double source_offset_ppq = 0.0;
+};
+
+const ClipTake* find_take(const EditClip& clip, TakeId id) noexcept {
+  if (id == 0) return nullptr;
+  const auto it = std::find_if(clip.takes.begin(), clip.takes.end(),
+                               [id](const ClipTake& take) { return take.id == id; });
+  return it == clip.takes.end() ? nullptr : &*it;
+}
+
+bool resolve_take_part(const EditClip& clip, TakeId take_id, double start_ppq, double end_ppq,
+                       AudioClipPart* out) noexcept {
+  if (out == nullptr) return false;
+  const ClipTake* take = find_take(clip, take_id);
+  if (take_id != 0 && take == nullptr) return false;
+  const SourceId source_id =
+      take != nullptr && take->source_id != 0 ? take->source_id : clip.source_id;
+  const double source_offset_ppq =
+      take != nullptr ? take->source_offset_ppq : clip.source_offset_ppq;
+  out->start_ppq = start_ppq;
+  out->end_ppq = end_ppq;
+  out->source_id = source_id;
+  out->source_offset_ppq = source_offset_ppq + start_ppq;
+  return true;
+}
+
+std::vector<AudioClipPart> build_audio_clip_parts(const EditClip& clip, bool* ok) {
+  if (ok != nullptr) *ok = true;
+  std::vector<AudioClipPart> parts;
+  const auto push_part = [&](TakeId take_id, double start_ppq, double end_ppq) {
+    if (!(end_ppq > start_ppq)) return;
+    AudioClipPart part;
+    if (!resolve_take_part(clip, take_id, start_ppq, end_ppq, &part)) {
+      if (ok != nullptr) *ok = false;
+      return;
+    }
+    parts.push_back(part);
+  };
+
+  const TakeId fallback_take_id = clip.active_take_id;
+  if (clip.comp_segments.empty()) {
+    push_part(fallback_take_id, 0.0, clip.length_ppq);
+    return parts;
+  }
+
+  double cursor = 0.0;
+  for (const ClipCompSegment& segment : clip.comp_segments) {
+    if (segment.start_ppq > cursor) {
+      push_part(fallback_take_id, cursor, segment.start_ppq);
+    }
+    push_part(segment.take_id == 0 ? fallback_take_id : segment.take_id, segment.start_ppq,
+              segment.end_ppq);
+    cursor = segment.end_ppq;
+  }
+  if (cursor < clip.length_ppq) {
+    push_part(fallback_take_id, cursor, clip.length_ppq);
+  }
+  return parts;
 }
 
 void add_diag(CompileResult* result, Diagnostic::Code code, Diagnostic::Severity sev,
@@ -251,91 +369,231 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       continue;
     }
 
-    const AudioSourceSamples* samples =
-        clip.warp_ref_id != 0 ? audio.find_warped(clip.warp_ref_id) : nullptr;
-    const WarpRefId baked_warp_ref = samples != nullptr ? clip.warp_ref_id : 0;
-    if (samples == nullptr) {
-      samples = audio.find(clip.source_id);
-    }
-    if (samples == nullptr) {
+    bool parts_ok = true;
+    const std::vector<AudioClipPart> parts = build_audio_clip_parts(clip, &parts_ok);
+    if (!parts_ok || parts.empty()) {
       add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError, clip.id,
-               "audio source has no decoded samples registered in the AudioContentStore");
-      continue;
-    }
-    if (samples->channels.empty() || samples->channels[0].empty()) {
-      add_diag(&result, Diagnostic::Code::kEmptyAudioSource, Diagnostic::Severity::kError, clip.id,
-               "audio source is registered but contains no samples");
-      continue;
-    }
-    if (!(samples->sample_rate > 0.0)) {
-      add_diag(&result, Diagnostic::Code::kInvalidSampleRate, Diagnostic::Severity::kError, clip.id,
-               "audio source has an invalid native sample rate");
+               "clip comp lane references a take that is not registered");
       continue;
     }
 
-    // Bake (resample to project SR) once per source; share across clips.
-    std::shared_ptr<const engine::ClipAudioStorage> storage;
-    const auto cache_key = std::make_pair(clip.source_id, baked_warp_ref);
-    const auto cached = baked.find(cache_key);
-    if (cached != baked.end()) {
-      storage = cached->second;
-    } else {
-      auto built = std::make_shared<engine::ClipAudioStorage>();
-      built->channels.reserve(samples->channels.size());
-      for (const auto& ch : samples->channels) {
-        built->channels.push_back(resample_channel(ch, samples->sample_rate, project_sr));
+    const int64_t clip_start_sample = tempo_map.ppq_to_sample(clip.start_ppq);
+    const int64_t clip_end_sample = tempo_map.ppq_to_sample(clip.end_ppq());
+    const int64_t clip_length_samples = std::max<int64_t>(0, clip_end_sample - clip_start_sample);
+
+    for (const AudioClipPart& part : parts) {
+      const ClipSource* part_src = project.find_source(part.source_id);
+      if (part_src == nullptr) {
+        add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+                 clip.id, "clip take references a source id that is not registered");
+        continue;
       }
-      built->channel_ptrs.reserve(built->channels.size());
-      for (const auto& ch : built->channels) {
-        built->channel_ptrs.push_back(ch.data());
+      if (!clip_matches_track_kind(project, clip, *part_src) ||
+          source_kind(*part_src) != SourceKind::kAudio) {
+        add_diag(&result, Diagnostic::Code::kSourceKindMismatch, Diagnostic::Severity::kError,
+                 clip.id, "clip take source kind does not match its track kind");
+        continue;
       }
-      storage = std::move(built);
-      baked.emplace(cache_key, storage);
+
+      const AudioSourceSamples* samples =
+          clip.warp_ref_id != 0 ? audio.find_warped(clip.warp_ref_id) : nullptr;
+      const WarpRefId baked_warp_ref = samples != nullptr ? clip.warp_ref_id : 0;
+      const WarpMapRef* rt_warp_map =
+          (baked_warp_ref == 0 &&
+           (clip.warp_mode == WarpMode::kRepitch || clip.warp_mode == WarpMode::kTempoSync) &&
+           clip.warp_ref_id != 0)
+              ? project.find_warp_map(clip.warp_ref_id)
+              : nullptr;
+      if (clip.warp_mode == WarpMode::kTempoSync && baked_warp_ref == 0 && clip.warp_ref_id == 0) {
+        add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+                 clip.id, "tempo-sync clip requires a warp map or pre-baked warped audio");
+        continue;
+      }
+      if (clip.warp_mode == WarpMode::kTempoSync && clip.warp_ref_id != 0 && baked_warp_ref == 0 &&
+          rt_warp_map == nullptr) {
+        add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+                 clip.id, "clip references a tempo-sync warp map that is not registered");
+        continue;
+      }
+      if (clip.warp_mode == WarpMode::kRepitch && clip.warp_ref_id != 0 && baked_warp_ref == 0 &&
+          rt_warp_map == nullptr) {
+        add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+                 clip.id, "clip references a repitch warp map that is not registered");
+        continue;
+      }
+      if (samples == nullptr) {
+        samples = audio.find(part.source_id);
+      }
+      if (samples == nullptr) {
+        add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+                 clip.id,
+                 "audio source has no decoded samples registered in the AudioContentStore");
+        continue;
+      }
+      if (samples->channels.empty() || samples->channels[0].empty()) {
+        add_diag(&result, Diagnostic::Code::kEmptyAudioSource, Diagnostic::Severity::kError,
+                 clip.id, "audio source is registered but contains no samples");
+        continue;
+      }
+      if (!(samples->sample_rate > 0.0)) {
+        add_diag(&result, Diagnostic::Code::kInvalidSampleRate, Diagnostic::Severity::kError,
+                 clip.id, "audio source has an invalid native sample rate");
+        continue;
+      }
+
+      // PPQ -> sample conversions through the deterministic TempoMap.
+      const int64_t start_sample = tempo_map.ppq_to_sample(clip.start_ppq + part.start_ppq);
+      const int64_t end_sample = tempo_map.ppq_to_sample(clip.start_ppq + part.end_ppq);
+      const int64_t length_samples = std::max<int64_t>(0, end_sample - start_sample);
+      // Source offset measured as a sample count in the (resampled) source domain:
+      // the musical distance clip-start..clip-start+offset, in samples. Comp
+      // fragments add their clip-local start to the selected take offset.
+      const int64_t offset_end_sample =
+          tempo_map.ppq_to_sample(clip.start_ppq + part.source_offset_ppq);
+      const int64_t clip_offset_samples =
+          std::max<int64_t>(0, offset_end_sample - clip_start_sample);
+
+      // Bake (resample to project SR) once per source; share across clips.
+      std::shared_ptr<const engine::ClipAudioStorage> storage;
+      const bool compile_baked_tempo_sync =
+          clip.warp_mode == WarpMode::kTempoSync && baked_warp_ref == 0 && rt_warp_map != nullptr;
+      const auto cache_key = std::make_pair(
+          part.source_id, compile_baked_tempo_sync ? clip.warp_ref_id : baked_warp_ref);
+      const auto cached = baked.find(cache_key);
+      if (cached != baked.end()) {
+        storage = cached->second;
+      } else {
+        auto built = std::make_shared<engine::ClipAudioStorage>();
+        built->channels.reserve(samples->channels.size());
+        for (const auto& ch : samples->channels) {
+          built->channels.push_back(resample_channel(ch, samples->sample_rate, project_sr));
+        }
+        if (compile_baked_tempo_sync) {
+          StreamingPhaseVocoderConfig pv_config;
+          std::vector<TempoSyncSegment> segments;
+          segments.reserve(rt_warp_map->anchors.size() > 1 ? rt_warp_map->anchors.size() - 1 : 0);
+          size_t total_target_samples = 0;
+          bool invalid_segment = rt_warp_map->anchors.size() < 2;
+          for (size_t anchor_index = 1;
+               !invalid_segment && anchor_index < rt_warp_map->anchors.size(); ++anchor_index) {
+            const WarpAnchorRef& prev = rt_warp_map->anchors[anchor_index - 1];
+            const WarpAnchorRef& next = rt_warp_map->anchors[anchor_index];
+            const size_t source_offset = rounded_nonnegative_sample(prev.source_sample);
+            const size_t source_end = rounded_nonnegative_sample(next.source_sample);
+            const size_t target_start = rounded_nonnegative_sample(prev.warp_sample);
+            const size_t target_end = rounded_nonnegative_sample(next.warp_sample);
+            TempoSyncSegment segment;
+            segment.source_offset = source_offset;
+            segment.source_samples = source_end > source_offset ? source_end - source_offset : 0;
+            segment.target_samples = target_end > target_start ? target_end - target_start : 0;
+            invalid_segment = segment.target_samples == 0 ||
+                              segment.source_samples < static_cast<size_t>(pv_config.hop_length);
+            if (!invalid_segment) {
+              total_target_samples += segment.target_samples;
+              segments.push_back(segment);
+            }
+          }
+          if (invalid_segment || total_target_samples == 0) {
+            add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+                     clip.id, "tempo-sync warp map has an unsupported source/target span");
+            continue;
+          }
+          const int project_sample_rate = static_cast<int>(std::lround(project_sr));
+          bool span_exceeds_source = false;
+          for (const auto& ch : built->channels) {
+            for (const TempoSyncSegment& segment : segments) {
+              if (segment.source_offset > ch.size() ||
+                  segment.source_samples > ch.size() - segment.source_offset) {
+                span_exceeds_source = true;
+                break;
+              }
+            }
+            if (span_exceeds_source) break;
+          }
+          if (span_exceeds_source) {
+            add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
+                     clip.id, "tempo-sync warp map source span exceeds decoded audio length");
+            continue;
+          }
+          std::vector<std::vector<float>> stretched;
+          stretched.reserve(built->channels.size());
+          for (const auto& ch : built->channels) {
+            std::vector<float> channel;
+            channel.reserve(total_target_samples);
+            for (const TempoSyncSegment& segment : segments) {
+              std::vector<float> segment_audio =
+                  tempo_sync_channel(ch, segment.source_offset, segment.source_samples,
+                                     segment.target_samples, project_sample_rate);
+              channel.insert(channel.end(), segment_audio.begin(), segment_audio.end());
+            }
+            stretched.push_back(std::move(channel));
+          }
+          built->channels = std::move(stretched);
+        }
+        built->channel_ptrs.reserve(built->channels.size());
+        for (const auto& ch : built->channels) {
+          built->channel_ptrs.push_back(ch.data());
+        }
+        storage = std::move(built);
+        baked.emplace(cache_key, storage);
+      }
+
+      const int num_channels = static_cast<int>(storage->channels.size());
+      const int64_t source_samples =
+          num_channels > 0 ? static_cast<int64_t>(storage->channels[0].size()) : 0;
+
+      const int64_t fade_in_samples = std::max<int64_t>(
+          0, tempo_map.ppq_to_sample(clip.start_ppq + clip.fade_in.length_ppq) - clip_start_sample);
+      const int64_t fade_out_samples = std::max<int64_t>(
+          0, tempo_map.ppq_to_sample(clip.end_ppq()) -
+                 tempo_map.ppq_to_sample(clip.end_ppq() - clip.fade_out.length_ppq));
+
+      engine::ClipAudioBuffer buffer;
+      buffer.channels = storage->channel_ptrs.data();
+      buffer.num_channels = num_channels;
+      buffer.num_samples = source_samples;
+
+      const bool is_whole_clip = part.start_ppq == 0.0 && part.end_ppq == clip.length_ppq;
+      const bool loop = is_whole_clip && clip.loop_mode == LoopMode::kLoop;
+      const int64_t loop_length_samples =
+          loop && clip.loop_length_ppq > 0.0
+              ? std::max<int64_t>(
+                    0,
+                    tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_length_ppq) - start_sample)
+              : 0;
+      const engine::FadeCurve fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
+      const engine::FadeCurve fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);
+
+      engine::ClipSchedule sched(clip.id, buffer, clip.start_ppq + part.start_ppq, start_sample,
+                                 clip_offset_samples, length_samples, loop, clip.gain,
+                                 fade_in_samples, fade_out_samples, fade_in_curve, fade_out_curve,
+                                 /*clip_has_separate_fade_out_curve=*/true);
+      sched.loop_length_samples = loop_length_samples;
+      sched.fade_reference_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
+      sched.fade_reference_length_samples = clip_length_samples;
+      sched.warp_ref_id = clip.warp_ref_id;
+      sched.warp_mode = baked_warp_ref == 0 && !compile_baked_tempo_sync
+                            ? to_engine_warp_mode(clip.warp_mode)
+                            : engine::WarpMode::kOff;
+      sched.warp_reference_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
+      if (sched.warp_mode != engine::WarpMode::kOff && rt_warp_map != nullptr &&
+          rt_warp_map->anchors.size() >= 2) {
+        auto anchors = std::make_shared<std::vector<engine::WarpAnchor>>();
+        anchors->reserve(rt_warp_map->anchors.size());
+        for (const WarpAnchorRef& anchor : rt_warp_map->anchors) {
+          anchors->push_back({anchor.warp_sample, anchor.source_sample});
+        }
+        sched.warp_anchors = std::move(anchors);
+      }
+      sched.track_id = clip.track_id;
+      sched.storage = std::move(storage);
+      timeline.audio_clips.push_back(std::move(sched));
+
+      if (compile_baked_tempo_sync) {
+        int64_t& source_latency = timeline.latency.per_source_samples[part.source_id];
+        source_latency = std::max(source_latency, tempo_sync_latency_samples());
+      }
     }
-
-    const int num_channels = static_cast<int>(storage->channels.size());
-    const int64_t source_samples =
-        num_channels > 0 ? static_cast<int64_t>(storage->channels[0].size()) : 0;
-
-    // PPQ -> sample conversions through the deterministic TempoMap.
-    const int64_t start_sample = tempo_map.ppq_to_sample(clip.start_ppq);
-    const int64_t end_sample = tempo_map.ppq_to_sample(clip.end_ppq());
-    const int64_t length_samples = std::max<int64_t>(0, end_sample - start_sample);
-    // Source offset measured as a sample count in the (resampled) source domain:
-    // the musical distance start..start+offset, in samples.
-    const int64_t offset_end_sample =
-        tempo_map.ppq_to_sample(clip.start_ppq + clip.source_offset_ppq);
-    const int64_t clip_offset_samples = std::max<int64_t>(0, offset_end_sample - start_sample);
-
-    const int64_t fade_in_samples = std::max<int64_t>(
-        0, tempo_map.ppq_to_sample(clip.start_ppq + clip.fade_in.length_ppq) - start_sample);
-    const int64_t fade_out_samples = std::max<int64_t>(
-        0, tempo_map.ppq_to_sample(clip.end_ppq()) -
-               tempo_map.ppq_to_sample(clip.end_ppq() - clip.fade_out.length_ppq));
-
-    engine::ClipAudioBuffer buffer;
-    buffer.channels = storage->channel_ptrs.data();
-    buffer.num_channels = num_channels;
-    buffer.num_samples = source_samples;
-
-    const bool loop = clip.loop_mode == LoopMode::kLoop;
-    const int64_t loop_length_samples =
-        loop && clip.loop_length_ppq > 0.0
-            ? std::max<int64_t>(
-                  0, tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_length_ppq) - start_sample)
-            : 0;
-    const engine::FadeCurve fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
-    const engine::FadeCurve fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);
-
-    engine::ClipSchedule sched(clip.id, buffer, clip.start_ppq, start_sample, clip_offset_samples,
-                               length_samples, loop, clip.gain, fade_in_samples, fade_out_samples,
-                               fade_in_curve, fade_out_curve,
-                               /*clip_has_separate_fade_out_curve=*/true);
-    sched.loop_length_samples = loop_length_samples;
-    sched.warp_ref_id = clip.warp_ref_id;
-    sched.track_id = clip.track_id;
-    sched.storage = std::move(storage);
-    timeline.audio_clips.push_back(std::move(sched));
   }
 
   // ---- MIDI clips ----------------------------------------------------------

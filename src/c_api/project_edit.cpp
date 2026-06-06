@@ -83,6 +83,47 @@ SonareError automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
   return SONARE_OK;
 }
 
+SonareError clip_takes_from_desc(const SonareProjectClipTake* takes, size_t take_count,
+                                 std::vector<arr::ClipTake>* out) {
+  if (!out || (take_count > 0 && takes == nullptr) || take_count > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  out->clear();
+  out->reserve(take_count);
+  for (size_t i = 0; i < take_count; ++i) {
+    const SonareProjectClipTake& take = takes[i];
+    if (take.id == 0 || !finite_non_negative(take.source_offset_ppq)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    arr::ClipTake next;
+    next.id = take.id;
+    next.source_id = take.source_id;
+    next.source_offset_ppq = take.source_offset_ppq;
+    if (take.name) next.name = take.name;
+    out->push_back(std::move(next));
+  }
+  return SONARE_OK;
+}
+
+SonareError clip_comp_segments_from_desc(const SonareProjectClipCompSegment* segments,
+                                         size_t segment_count,
+                                         std::vector<arr::ClipCompSegment>* out) {
+  if (!out || (segment_count > 0 && segments == nullptr) || segment_count > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  out->clear();
+  out->reserve(segment_count);
+  for (size_t i = 0; i < segment_count; ++i) {
+    const SonareProjectClipCompSegment& segment = segments[i];
+    if (!finite_non_negative(segment.start_ppq) || !finite_positive(segment.end_ppq) ||
+        !(segment.end_ppq > segment.start_ppq)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    out->push_back({segment.start_ppq, segment.end_ppq, segment.take_id});
+  }
+  return SONARE_OK;
+}
+
 }  // namespace
 
 #endif  // SONARE_WITH_ARRANGEMENT
@@ -185,6 +226,135 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id);
+#endif
+}
+
+SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
+                                                    const SonareProjectLoopRecordingDesc* desc,
+                                                    uint32_t* out_clip_id, size_t* out_take_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_clip_id) *out_clip_id = 0;
+  if (out_take_count) *out_take_count = 0;
+  if (!project || !desc || !out_clip_id || desc->track_id == 0 ||
+      !finite_non_negative(desc->start_ppq) || !finite_positive(desc->loop_length_ppq) ||
+      !desc->audio_interleaved || desc->audio_frames <= 0 || desc->audio_channels <= 0 ||
+      desc->audio_sample_rate < kMinSampleRate || desc->audio_sample_rate > kMaxSampleRate) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const auto total_frames = static_cast<uint64_t>(desc->audio_frames);
+  const auto channels = static_cast<uint64_t>(desc->audio_channels);
+  if (channels == 0 || total_frames > std::numeric_limits<size_t>::max() / channels) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const size_t total_samples = static_cast<size_t>(total_frames * channels);
+  if (total_samples == 0 || total_samples > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  for (size_t i = 0; i < total_samples; ++i) {
+    if (!std::isfinite(desc->audio_interleaved[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const arr::Track* track = project->history.project().find_track(desc->track_id);
+  if (track == nullptr || track->kind != arr::Track::Kind::kAudio) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  sonare::transport::TempoMap tempo_map;
+  tempo_map.prepare(project->history.project().sample_rate());
+  std::vector<sonare::transport::TempoSegment> tempo_segments =
+      project->history.project().tempo_segments();
+  if (tempo_segments.empty()) {
+    tempo_segments.push_back({0.0, 120.0, 0.0});
+  }
+  tempo_map.set_segments(std::move(tempo_segments));
+  std::vector<sonare::transport::TimeSignatureSegment> time_signatures =
+      project->history.project().time_signatures();
+  if (time_signatures.empty()) {
+    time_signatures.push_back({0.0, {4, 4}});
+  }
+  tempo_map.set_time_signatures(std::move(time_signatures));
+
+  const int64_t loop_start_project_sample = tempo_map.ppq_to_sample(desc->start_ppq);
+  const int64_t loop_end_project_sample =
+      tempo_map.ppq_to_sample(desc->start_ppq + desc->loop_length_ppq);
+  const int64_t loop_project_samples = loop_end_project_sample - loop_start_project_sample;
+  if (loop_project_samples <= 0 || !(project->history.project().sample_rate() > 0.0)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const double loop_audio_frames_f =
+      static_cast<double>(loop_project_samples) *
+      (static_cast<double>(desc->audio_sample_rate) / project->history.project().sample_rate());
+  if (!(loop_audio_frames_f > 0.0) || !std::isfinite(loop_audio_frames_f)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const int64_t loop_audio_frames = std::max<int64_t>(1, std::llround(loop_audio_frames_f));
+  const size_t take_count =
+      static_cast<size_t>((desc->audio_frames + loop_audio_frames - 1) / loop_audio_frames);
+  if (take_count == 0 || take_count > kMaxBufferSize ||
+      take_count > static_cast<size_t>(std::numeric_limits<uint32_t>::max())) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  const size_t rollback_depth = project->history.undo_depth();
+  std::vector<arr::SourceId> source_ids;
+  source_ids.reserve(take_count);
+  for (size_t take_index = 0; take_index < take_count; ++take_index) {
+    const int64_t frame_start = static_cast<int64_t>(take_index) * loop_audio_frames;
+    const int64_t frame_count =
+        std::min<int64_t>(loop_audio_frames, desc->audio_frames - frame_start);
+    if (frame_count <= 0) break;
+
+    arr::AudioSourceRef ref;
+    ref.channel_count = static_cast<uint32_t>(desc->audio_channels);
+    ref.sample_rate_hint = static_cast<double>(desc->audio_sample_rate);
+    auto attach = std::make_unique<arr::AttachAudioSource>(ref);
+    arr::AttachAudioSource* raw = attach.get();
+    if (!project->history.apply(std::move(attach))) {
+      rollback_to_depth(project, rollback_depth);
+      return SONARE_ERROR_INVALID_STATE;
+    }
+    const arr::SourceId source_id = raw->allocated_id();
+    source_ids.push_back(source_id);
+
+    arr::AudioSourceSamples samples;
+    samples.sample_rate = static_cast<double>(desc->audio_sample_rate);
+    samples.channels = deinterleave(desc->audio_interleaved + frame_start * desc->audio_channels,
+                                    frame_count, desc->audio_channels);
+    project->audio.sources[source_id] = std::move(samples);
+  }
+  if (source_ids.empty()) {
+    rollback_to_depth(project, rollback_depth);
+    return SONARE_ERROR_INVALID_STATE;
+  }
+
+  arr::EditClip clip;
+  clip.track_id = desc->track_id;
+  clip.source_id = source_ids.front();
+  clip.start_ppq = desc->start_ppq;
+  clip.length_ppq = desc->loop_length_ppq;
+  clip.gain = 1.0f;
+  clip.takes.reserve(source_ids.size());
+  for (size_t i = 0; i < source_ids.size(); ++i) {
+    const auto take_id = static_cast<arr::TakeId>(i + 1);
+    clip.takes.push_back({take_id, source_ids[i], 0.0, "take " + std::to_string(i + 1)});
+    clip.active_take_id = take_id;
+  }
+
+  auto command = std::make_unique<arr::AddClip>(clip);
+  arr::AddClip* raw = command.get();
+  if (!project->history.apply(std::move(command)) || raw->allocated_id() == 0) {
+    for (arr::SourceId id : source_ids) {
+      project->audio.sources.erase(id);
+    }
+    rollback_to_depth(project, rollback_depth);
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  *out_clip_id = raw->allocated_id();
+  if (out_take_count) *out_take_count = source_ids.size();
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id, out_take_count);
 #endif
 }
 
@@ -416,6 +586,75 @@ SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t cl
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, warp_ref_id);
+#endif
+}
+
+SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t clip_id,
+                                              SonareProjectWarpMode mode) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (mode != SONARE_PROJECT_WARP_MODE_OFF && mode != SONARE_PROJECT_WARP_MODE_REPITCH &&
+      mode != SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (project->history.project().find_clip(clip_id) == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  arr::WarpMode arr_mode = arr::WarpMode::kOff;
+  if (mode == SONARE_PROJECT_WARP_MODE_REPITCH) {
+    arr_mode = arr::WarpMode::kRepitch;
+  } else if (mode == SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) {
+    arr_mode = arr::WarpMode::kTempoSync;
+  }
+  auto command = std::make_unique<arr::SetClipWarpMode>(clip_id, arr_mode);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, mode);
+#endif
+}
+
+SonareError sonare_project_set_clip_takes(SonareProject* project, uint32_t clip_id,
+                                          const SonareProjectClipTake* takes, size_t take_count,
+                                          uint32_t active_take_id) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (project->history.project().find_clip(clip_id) == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  std::vector<arr::ClipTake> arr_takes;
+  const SonareError err = clip_takes_from_desc(takes, take_count, &arr_takes);
+  if (err != SONARE_OK) return err;
+  auto command = std::make_unique<arr::SetClipTakes>(clip_id, std::move(arr_takes), active_take_id);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, takes, take_count, active_take_id);
+#endif
+}
+
+SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32_t clip_id,
+                                                  const SonareProjectClipCompSegment* segments,
+                                                  size_t segment_count) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (project->history.project().find_clip(clip_id) == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  std::vector<arr::ClipCompSegment> arr_segments;
+  const SonareError err = clip_comp_segments_from_desc(segments, segment_count, &arr_segments);
+  if (err != SONARE_OK) return err;
+  auto command = std::make_unique<arr::SetClipCompSegments>(clip_id, std::move(arr_segments));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, segments, segment_count);
 #endif
 }
 

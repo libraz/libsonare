@@ -97,6 +97,76 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
+  it('setClipTakes and setClipCompSegments serialize and undo', () => {
+    const { project, clip } = buildProject();
+    const before = project.toJson();
+    project.setClipTakes(
+      clip,
+      [
+        { id: 1, sourceOffsetPpq: 0, name: 'take A' },
+        { id: 2, sourceOffsetPpq: 0.5, name: 'take B' },
+      ],
+      1,
+    );
+    const withTakes = project.toJson();
+    expect(withTakes).not.toBe(before);
+    expect(withTakes).toContain('"takes"');
+    expect(withTakes).toContain('"active_take_id":1');
+
+    project.setClipCompSegments(clip, [
+      { startPpq: 0, endPpq: 2, takeId: 1 },
+      { startPpq: 2, endPpq: 4, takeId: 2 },
+    ]);
+    const withComp = project.toJson();
+    expect(withComp).toContain('"comp_segments"');
+
+    project.undo();
+    expect(project.toJson()).toBe(withTakes);
+    project.undo();
+    expect(project.toJson()).toBe(before);
+    project.redo();
+    expect(project.toJson()).toBe(withTakes);
+
+    expect(() =>
+      project.setClipTakes(
+        clip,
+        [
+          { id: 1, name: 'duplicate A' },
+          { id: 1, name: 'duplicate B' },
+        ],
+        1,
+      ),
+    ).toThrow();
+    expect(() =>
+      project.setClipCompSegments(clip, [{ startPpq: 0, endPpq: 1, takeId: 99 }]),
+    ).toThrow();
+    project.destroy();
+  });
+
+  it('addLoopRecordingTakes splits captured loops into takes', () => {
+    const project = Project.create();
+    project.setSampleRate(48000);
+    const track = project.addTrack({ kind: 'audio', name: 'record' });
+    const audio = new Float32Array(48000);
+    audio.fill(0.25, 0, 24000);
+    audio.fill(0.75, 24000);
+
+    const result = project.addLoopRecordingTakes({
+      trackId: track,
+      startPpq: 0,
+      loopLengthPpq: 1,
+      audio,
+      audioChannels: 1,
+      audioSampleRate: 48000,
+    });
+    expect(result.clipId).toBeGreaterThan(0);
+    expect(result.takeCount).toBe(2);
+    expect(project.toJson()).toContain('"active_take_id":2');
+    project.undo();
+    expect(project.toJson()).toContain('"clips":[]');
+    project.destroy();
+  });
+
   it('setClipLoop enables looping and undoes', () => {
     const project = Project.create();
     const track = project.addTrack({ kind: 'audio' });

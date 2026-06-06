@@ -513,6 +513,42 @@ class SonareProjectClipFade(ctypes.Structure):
     ]
 
 
+class SonareProjectClipTake(ctypes.Structure):
+    """Maps to SonareProjectClipTake in sonare_c_project.h."""
+
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("source_id", ctypes.c_uint32),
+        ("source_offset_ppq", ctypes.c_double),
+        ("name", ctypes.c_char_p),
+    ]
+
+
+class SonareProjectClipCompSegment(ctypes.Structure):
+    """Maps to SonareProjectClipCompSegment in sonare_c_project.h."""
+
+    _fields_ = [
+        ("start_ppq", ctypes.c_double),
+        ("end_ppq", ctypes.c_double),
+        ("take_id", ctypes.c_uint32),
+    ]
+
+
+class SonareProjectLoopRecordingDesc(ctypes.Structure):
+    """Maps to SonareProjectLoopRecordingDesc in sonare_c_project.h."""
+
+    _fields_ = [
+        ("track_id", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
+        ("start_ppq", ctypes.c_double),
+        ("loop_length_ppq", ctypes.c_double),
+        ("audio_interleaved", ctypes.POINTER(ctypes.c_float)),
+        ("audio_frames", ctypes.c_int64),
+        ("audio_channels", ctypes.c_int),
+        ("audio_sample_rate", ctypes.c_int),
+    ]
+
+
 class SonareAutomationLaneDesc(ctypes.Structure):
     """Maps to SonareAutomationLaneDesc in sonare_c_project.h."""
 
