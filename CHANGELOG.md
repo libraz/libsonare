@@ -1,5 +1,46 @@
 # Changelog
 
+## v1.3.1 (2026-06-07)
+
+### Engine & clip streaming
+
+- Tempo-sync warp baking now goes through a single shared implementation (`engine::bake_tempo_sync_warp_channel`) with segment-join crossfade smoothing, so realtime bake (C ABI / WASM) and the offline edit compiler produce identical stretched audio instead of three diverging copies.
+- Clip page misses are deduplicated per block: a missing page now raises one `kClipPageUnderrun` telemetry event per audio block instead of one per sample.
+- Page providers (C ABI, WASM, Node) reject supplied pages whose frame count does not exactly match the configured page size; the OPFS provider retries partial reads until a full page is available and reports supply failures instead of leaving the request hanging.
+- The Node binding reuses destroyed clip-page-provider slots instead of growing the handle table.
+- The invalid `repitch` + loop + warp-anchors clip combination is rejected at `set_clips` time on every surface.
+
+### Metering & mastering
+
+- True-peak metering covers up to 8 channels (previously 2), and the max true-peak is computed over all channels, so rear/LFE channels on surround buses are no longer silently excluded.
+- LUFS mono-energy scaling now triggers whenever exactly one channel is active, fixing mono-gated buses.
+- Spectral-repair transfer gain is clamped to ±4× to avoid unbounded output where the mono mix crosses zero.
+- Waveform peak buckets filter out non-finite samples; the platform SIMD paths were replaced with a single portable implementation.
+
+### Acoustics
+
+- Late-tail synthesis skips octave bands whose centre frequency exceeds Nyquist when computing the longest RT60, preventing above-Nyquist bands from inflating tail length at low sample rates.
+- WASM `synthesizeRir` / `roomMorph` with `crossfadeMs: 0` now keeps the default acoustic crossfade instead of disabling it.
+
+### Serialization & validation
+
+- `project_from_json` validates that the sample rate is finite and within 8 kHz–384 kHz, returning a diagnostic error instead of silently accepting invalid values.
+- Mixer scene JSON always serialises `vcaOffsetDb` (previously omitted when zero).
+- The Python binding verifies `sonare_abi_version()` at load time and raises `RuntimeError` on mismatch.
+
+### Bug fixes
+
+- Graph nodes size their sidechain channel storage in `prepare()`, removing a potential out-of-bounds access at high port counts.
+- The Python CLI bounce WAV writer supports arbitrary channel counts, fixing surround (>2 ch) bounce output.
+- The Python engine retains references to active `ClipPageProvider` objects so they are not garbage-collected while clips still use them.
+- WASM Web MIDI: `requestMIDIAccess` is invoked with the correct `this` binding, running status is cleared on system-common messages, and incomplete channel-voice messages are dropped.
+- WASM live audio: extra `getUserMedia` constraints from the options object are forwarded to the native call, and `stopTracksOnClose` reliably defaults to true.
+- The Node binding reads `startPpq` for offline track freeze as a double, preserving sub-millisecond precision, and exports the `EngineCaptureSource` type alias.
+
+### CI
+
+- The publish workflow caps C++ build parallelism and tolerates PyPI re-uploads of already-published artifacts.
+
 ## v1.3.0 (2026-06-06)
 
 ### New features
