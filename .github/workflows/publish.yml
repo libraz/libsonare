@@ -38,9 +38,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libeigen3-dev
 
       - name: Build and test C++
+        # Capped at 2 jobs: unbounded parallelism OOM-kills cc1plus on the
+        # hosted runners when compiling the large Debug test TUs.
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
-          cmake --build build --parallel
+          cmake --build build --parallel 2
           python3 tools/scripts/k_weighting_reference.py
           ctest --test-dir build --output-on-failure --parallel
 
@@ -159,3 +161,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          # Tolerate re-runs of the tag workflow after a partial failure:
+          # wheels already on PyPI are skipped instead of failing the job.
+          skip-existing: true
