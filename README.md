@@ -9,28 +9,32 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
 
-**A dependency-free audio DSP toolkit for C++, Python, and the browser —
-librosa-compatible analysis plus broadcast-grade mastering, mixing, and editing.**
+**From analysis to arrangement: a dependency-free audio engine for C++,
+Python, Node.js, and the browser — librosa-compatible analysis,
+broadcast-grade mastering and mixing, built-in instruments, and a realtime
+headless-DAW runtime, all under one Apache-2.0 license.**
 
-Apache-2.0, zero runtime dependencies, one codebase for native and WebAssembly.
-The same processors that run in C++ run in the browser via WASM — no Python,
-no GPL/AGPL, no model weights.
+Zero runtime dependencies, one C++ codebase for native and WebAssembly. The
+same DSP that analyzes a song, masters it, plays it back, and renders its
+MIDI through built-in instruments runs identically in C++ and in the browser
+(WASM + AudioWorklet) — no Python at runtime, no GPL/AGPL, no model weights.
 
 📖 **[Documentation](https://libsonare.libraz.net)** &nbsp;·&nbsp; 🎧 **[Browser-local Demos](https://libsonare.libraz.net/demos)** &nbsp;·&nbsp; [Getting Started](https://libsonare.libraz.net/docs/getting-started)
 
 - **Analysis (librosa-compatible)** — BPM, key, chord (Viterbi/HMM smoothing,
   inversions, key-context), beat, downbeat, time signature, section, timbre,
   dynamics, pitch (YIN / pYIN), tempogram / PLP, NNLS chroma, EBU R128 loudness
-  (LUFS), and room acoustics (blind RT60/EDT, or ISO-style RT60/EDT/C50/C80/D50
-  from a measured IR). Defaults match librosa and are validated against
-  generated librosa reference values in CI.
-- **Mastering (66 named DSP processors, 18 in the default chain)** — EQ,
-  dynamics, multiband, stereo, saturation, repair, maximizer, and reference
-  matching, implemented against published references: ITU-R BS.1770-4 loudness
-  and inter-sample true-peak limiting, Linkwitz-Riley crossovers with all-pass
-  phase compensation, Vicanek matched-Z biquads, ADAA-antialiased clippers, a
-  Dempwolf 12AX7 triode model for tube saturation, Lemire sliding max, and
-  polyphase FIR oversampling. Repair is classical DSP by design (spectral
+  (LUFS, with BS.1770-4 surround channel weighting for multichannel input), and
+  room acoustics (blind RT60/EDT, or ISO-style RT60/EDT/C50/C80/D50 from a
+  measured IR with Lundeby truncation). Defaults match librosa and are
+  validated against generated librosa reference values in CI.
+- **Mastering (76 named DSP processors)** — EQ, dynamics, multiband, stereo,
+  saturation, repair, maximizer, and reference matching, implemented against
+  published references: ITU-R BS.1770-4 loudness and inter-sample true-peak
+  limiting, Linkwitz-Riley crossovers with all-pass phase compensation,
+  Vicanek matched-Z biquads, ADAA-antialiased clippers, a Dempwolf 12AX7
+  triode model for tube saturation and the guitar amp sim, Lemire sliding max,
+  and polyphase FIR oversampling. Repair is classical DSP by design (spectral
   subtraction / MMSE-STSA / LogMMSE), not DNN source separation or spectral
   repair.
 - **Mixing & routing** — a real-time-safe channel-strip / bus model
@@ -40,21 +44,37 @@ no GPL/AGPL, no model weights.
 - **Editing & creative FX** — time stretch / pitch shift, pitch correction,
   note-region stretch, voice-change pitch + formant controls, five reverb
   engines (convolution, Dattorro plate, FDN, velvet-noise, and a geometric
-  room engine), chorus / flanger / phaser, stereo delay, and ducking.
+  room engine), chorus / flanger / phaser / BBD string-machine ensemble,
+  stereo delay, guitar amp sim, and ducking.
 - **Geometric room acoustics** — synthesize a room impulse response from
   shoebox geometry (`synthesizeRir`), blindly estimate an equivalent room from
   a recording (`estimateRoom` → volume / dimensions / per-band absorption /
   DRR + honest confidence), and morph a recording's reverberation toward a
-  target room (`roomMorph`). Apache-2.0, dependency-free, deterministic.
+  target room (`roomMorph`). Dependency-free and deterministic.
+- **Built-in instruments (MIDI never renders silent)** — a patch-driven
+  NativeSynth with seven synthesis engines (virtual-analog subtractive with
+  four classic filter models, FM, Karplus-Strong plucked string, modal
+  percussion, additive drawbar organ, membrane percussion, and a waveguide
+  acoustic piano), a modulation matrix, named presets, and a data-free GM
+  fallback bank covering all 128 programs plus the drum map. Add a
+  host-supplied SoundFont and the GS-compatible SF2 player takes over —
+  16-part multitimbral with GS NRPN/SysEx and reverb/chorus/delay sends —
+  falling back per program to the synth, with an honest per-program manifest.
 - **Headless DAW / arrangement runtime** — author projects with audio & MIDI
-  tracks and clips (split / trim / move with full undo/redo), sequence MIDI,
-  import/export Standard MIDI Files and MIDI 2.0 Clip Files (`SMF2CLIP`),
-  auto-tempo and snap-to-grid, deterministic byte-stable JSON save/load, compile
-  to a renderable timeline with structured diagnostics, and bounce offline to
-  interleaved audio. No UI, device setup, or plugin-host implementation — just
-  the headless core, exposed across the C ABI, Python, Node, WASM, and CLI.
-- **Everywhere, one license** — Apache-2.0 across the entire stack
-  (C++, C, Python, Node, WASM, and CLI).
+  tracks and clips (split / trim / move with full undo/redo), takes and comp
+  lanes for loop-recorded comping, per-clip warp modes (repitch / tempo-sync),
+  MIDI 1.0/2.0 sequencing, import/export of Standard MIDI Files and MIDI 2.0
+  Clip Files (`SMF2CLIP`), auto-tempo and snap-to-grid, deterministic
+  byte-stable JSON save/load, compile to a renderable timeline with structured
+  diagnostics, and offline bounce — directly or through the built-in
+  instruments. Exposed across the C ABI, Python, Node, WASM, and CLI.
+- **Realtime engine** — a sample-accurate, allocation-free playback engine:
+  transport with loop/markers/metronome, clip playback with warp, paged audio
+  streaming for clips larger than memory (lock-free page-request queue), live
+  MIDI input through any built-in instrument, parameter automation with
+  lock-free command/telemetry queues, and capture/recording (input or output
+  source, punch in/out, loop-recording takes, input monitoring). The same
+  engine runs in the browser through an AudioWorklet glue layer.
 
 ## Installation
 
@@ -213,7 +233,7 @@ const remixed = remix(samples, Int32Array.from([0, 22050, 44100, 66150]));
 const faster = phaseVocoder(samples, 1.5, sampleRate);  // rate > 1 → faster
 const { harmonic, percussive, residual } = hpssWithResidual(samples, sampleRate);
 
-// Multichannel / standards-compliant loudness
+// Multichannel / standards-compliant loudness (BS.1770-4 surround weighting)
 const multi = lufsInterleaved(interleaved, 2, sampleRate); // channel-weighted LUFS + LRA
 const lra = ebur128LoudnessRange(samples, sampleRate);     // EBU R128 loudness range (LU)
 ```
@@ -337,6 +357,44 @@ const midiMix = project.bounceWithBuiltinInstrument({ waveform: 'saw' });
 
 project.delete();                                      // Node native: project.destroy()
 ```
+
+**Built-in instruments**
+
+```typescript
+import { Project, synthPresetNames } from '@libraz/libsonare';
+
+// Full NativeSynth via a named preset (subtractive / FM / Karplus-Strong /
+// modal / additive / percussion / waveguide piano) or a custom patch object:
+synthPresetNames(); // ['sine', 'saw-lead', ..., 'drum-kit', 'acoustic-piano']
+const synthMix = project.bounceWithSynthInstrument('va:saw-lead');
+
+// Or sampled sounds from a host-supplied SoundFont — the GS-compatible SF2
+// player covers loaded programs, the GM synth fallback covers the rest:
+project.loadSoundFont(sf2Bytes);                       // Uint8Array
+project.soundFontManifest();                           // per-program backend: 'sf2' | 'synth'
+const sf2Mix = project.bounceWithSf2Instrument();
+```
+
+**Realtime engine**
+
+```typescript
+import { RealtimeEngine } from '@libraz/libsonare';
+
+const engine = new RealtimeEngine(48000, 128);
+engine.setTempo(120);
+engine.setClips(clips);                    // scheduled audio clips (warp optional)
+engine.setSynthInstrument('va:saw-lead');  // live MIDI plays the NativeSynth
+engine.setMidiInputSource();
+engine.pushMidiInputNoteOn(0, 0, 60, 100); // group, channel, note, velocity
+engine.play();
+const out = engine.process([new Float32Array(128), new Float32Array(128)]);
+```
+
+In the browser, `SonareRealtimeEngineNode` (from the worklet entry point) runs
+the same engine inside an AudioWorklet with lock-free command / telemetry /
+meter rings, and paged clip streaming keeps arbitrarily long clips out of
+memory (`popClipPageRequest` + a page provider; an OPFS-backed provider is
+included for the browser).
 
 ### Python
 
@@ -465,6 +523,21 @@ with libsonare.Project() as project:
     # Karplus-Strong / modal / additive / percussion / waveguide piano —
     # see libsonare.synth_preset_names()):
     synth_mix = project.bounce_with_synth_instrument("va:saw-lead")
+    # ...or sampled sounds from a host-supplied SoundFont (GS-compatible SF2
+    # player; programs the SoundFont doesn't cover fall back to the synth):
+    project.load_soundfont(sf2_bytes)
+    project.soundfont_manifest()       # per-program backend: 'sf2' | 'synth'
+    sf2_mix = project.bounce_with_sf2_instrument()
+
+# Realtime engine: sample-accurate transport, clip playback with warp,
+# live MIDI through any built-in instrument, capture/recording
+engine = libsonare.RealtimeEngine(48000, 128)
+engine.set_tempo(120.0)
+engine.set_synth_instrument("va:saw-lead")
+engine.set_midi_input_source()
+engine.push_midi_input_note_on(0, 0, 60, 100)
+engine.play()
+block = engine.process([[0.0] * 128, [0.0] * 128])
 ```
 
 ### Python CLI
@@ -513,10 +586,13 @@ sonare project new -o song.json                          # create an empty proje
 sonare project validate --in song.json                   # round-trip / validate project JSON
 sonare project compile --in song.json                    # compile + report diagnostics
 sonare project bounce --in song.json -o mix.wav          # render offline to WAV
+sonare project bounce --in song.json -o mix.wav --synth va:saw-lead  # MIDI via NativeSynth
+sonare project synth-presets                             # list NativeSynth presets
 sonare project export-smf --in song.json -o song.mid     # tempo map + MIDI clips → SMF
 sonare project import-smf --smf song.mid -o song.json     # SMF → new project JSON
 sonare project export-midi2 --in song.json -o song.midi2 # → MIDI 2.0 Clip File (lossless)
 sonare project import-midi2 --midi2 song.midi2 -o song.json
+sonare midi-render --in song.json -o synth.wav --synth e-piano  # MIDI project → NativeSynth render
 ```
 
 ### C++
@@ -548,7 +624,7 @@ std::cout << "BPM: " << result.bpm
 | RT60 / EDT / C50          | Room acoustics       |                     |
 | Loudness (EBU R128 LUFS)  | Onset envelope       |                     |
 
-### Mastering (66 DSP processors)
+### Mastering (76 DSP processors)
 
 | Dynamics                  | EQ                        | Multiband / Stereo                  |
 |---------------------------|---------------------------|-------------------------------------|
@@ -562,8 +638,9 @@ std::cout << "BPM: " << result.bpm
 |------------------------------------|-----------------------------------------|----------------------------|
 | Tube (Dempwolf 12AX7) / Tape       | True-peak limiter (ITU-R BS.1770-4)     | Polyphase FIR oversampler  |
 | Transformer / Exciter / Bitcrusher | Loudness optimizer (LUFS target)        | ADAA-antialiased shaping   |
-| Declick / Declip / Decrackle       | Adaptive release                        | Vicanek matched-Z biquads  |
-| Denoise / Dereverb / Dehum         | Reference EQ / loudness / spectrum      | Partitioned convolver      |
+| Guitar amp sim (drive / tone / cab)| Adaptive release                        | Vicanek matched-Z biquads  |
+| Declick / Declip / Decrackle       | Reference EQ / loudness / spectrum      | Partitioned convolver      |
+| Denoise / Dereverb / Dehum         |                                         |                            |
 
 Repair is classical DSP by design. `denoise_classical` covers spectral
 subtraction, MMSE-STSA, and LogMMSE with explicit noise estimation; DNN
@@ -596,13 +673,30 @@ for analysis/mastering-only builds.
 |----------------------------------|----------------------------------|--------------------------------|
 | Audio / MIDI / aux tracks & clips| MIDI 1.0 + MIDI 2.0 sequencing   | Compile to renderable timeline |
 | Split / trim / move, undo / redo | SMF import / export              | Structured compile diagnostics |
-| Auto-tempo, snap-to-grid, warp   | MIDI 2.0 Clip File (lossless)    | Deterministic offline bounce   |
-| Program / bank, per-clip MIDI-FX | Per-track MIDI destination route | C / Node / Python / WASM / CLI |
+| Takes, comp lanes, loop comping  | MIDI 2.0 Clip File (lossless)    | Deterministic offline bounce   |
+| Warp modes (repitch / tempo-sync)| Program / bank, per-clip MIDI-FX | Bounce through built-in synths |
+| Auto-tempo, snap-to-grid         | Per-track MIDI destination route | C / Node / Python / WASM / CLI |
 
 The arrangement runtime is the headless core only: there is no UI, device
 setup, or plugin-host implementation (see [Non-goals](#non-goals)). Project state
 serializes to deterministic, byte-stable JSON, and `bounce` is bit-identical for
 the same project and options within one build.
+
+### Instruments & realtime engine
+
+| Built-in instruments              | Realtime playback                  | Capture / live input          |
+|-----------------------------------|------------------------------------|-------------------------------|
+| NativeSynth: 7 synthesis engines  | Sample-accurate transport & loop   | Input / output capture source |
+| 4 virtual-analog filter models    | Markers, metronome, count-in       | Punch in/out, record offset   |
+| Mod matrix, 2 LFOs, glide         | Clip playback with warp            | Loop-recording takes          |
+| GM fallback bank (128 + drums)    | Paged clip streaming (lock-free)   | Input monitoring              |
+| SF2/GS SoundFont player (16-part) | Automation, telemetry, meters      | Live MIDI in (note / CC / PB) |
+| Named presets + custom patches    | Browser AudioWorklet glue          | MIDI-FX, CC-to-param bindings |
+
+Instruments are deterministic (seeded per-voice variation, no RNG) and need no
+bundled data: the NativeSynth GM bank renders all 128 programs and the drum map
+from pure DSP, and a host-supplied `.sf2` upgrades programs to sampled sound
+with per-program fallback reported honestly in the SoundFont manifest.
 
 ## Performance
 
@@ -683,16 +777,20 @@ Full docs and browser-local demos: **[libsonare.libraz.net](https://libsonare.li
 
 libsonare intentionally does **not** include:
 
-- **Plugin-grade creative instruments/effects** — use Tone.js, a plugin host, or your DAW
-- **Built-in audio synthesis** (oscillators, samplers, instrument DSP) — out of scope
-- **Real-time I/O abstraction** (PortAudio/JACK wrappers) — callers handle I/O
-- **Full DAW application workflow** (UI, device setup, plugin hosting implementation) —
-  callers provide those layers; libsonare focuses on the headless arrangement/runtime core
-- **Deep-learning models** (no bundled weights, no inference runtime) — keeps the
-  library dependency-free and Apache-2.0 pure
+- **A UI or DAW application workflow** — no editor, no device setup; libsonare
+  is the headless arrangement/runtime core and callers provide those layers
+- **Plugin hosting** (VST/AU/CLAP loading) — the engine hosts its own inserts
+  and instruments; third-party plugin formats are out of scope
+- **Real-time I/O abstraction** (PortAudio/JACK/CoreAudio wrappers) — the
+  engine processes blocks; the host owns the audio callback and devices
+- **Bundled sample data** — the SF2 player plays host-supplied SoundFonts;
+  no sample content ships in the binaries (the GM synth fallback is pure DSP)
+- **Deep-learning models** (no bundled weights, no inference runtime) — keeps
+  the library dependency-free and Apache-2.0 pure
 
-These boundaries keep the library focused on **analysis + mastering + mixer DSP +
-headless arrangement runtime** and allow us to maintain the dependency-free property.
+These boundaries keep the library focused on **analysis + mastering + mixing +
+instruments + the headless arrangement/realtime runtime** while preserving the
+dependency-free property.
 
 ## License
 
