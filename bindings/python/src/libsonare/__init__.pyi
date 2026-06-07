@@ -203,6 +203,9 @@ from .analyzer import (
     mastering_insert_names as mastering_insert_names,
 )
 from .analyzer import (
+    mastering_insert_param_names as mastering_insert_param_names,
+)
+from .analyzer import (
     mastering_pair_analysis_names as mastering_pair_analysis_names,
 )
 from .analyzer import (

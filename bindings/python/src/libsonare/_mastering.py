@@ -133,6 +133,26 @@ def mastering_insert_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+def mastering_insert_param_names(name: str) -> list[str]:
+    """Return the camelCase parameter names a given insert/FX processor reads.
+
+    For tools/UIs that want to validate a scene insert's params before loading
+    it: any supplied key NOT in this list is silently ignored by the processor
+    (and would be reported via :meth:`Mixer.scene_warnings` on a scene load).
+    Band/sub-band processors enumerate their indexed ``band{i}.<field>`` keys.
+    Returns an empty list for an unknown ``name`` (or one whose insert needs an
+    unavailable build feature, e.g. FX).
+
+    The native layer returns a thread-local, newline-joined string the caller
+    must NOT free (same convention as the other ``*_names`` getters).
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_insert_param_names"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_insert_param_names(name.encode("utf-8"))
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
 def mastering_process(
     processor_name: str,
     samples: Sequence[float] | list[float],

@@ -72,7 +72,7 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   SonareLufsResult lufs{};
   SonareError err = sonare_lufs(typed.Data(), typed.ElementLength(), sr, &lufs);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -98,7 +98,7 @@ Napi::Value SonareWrap::MomentaryLufs(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_momentary_lufs(typed.Data(), typed.ElementLength(), sr, &out, &count);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   auto result = Napi::Float32Array::New(env, count);
@@ -123,7 +123,7 @@ Napi::Value SonareWrap::ShortTermLufs(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err = sonare_short_term_lufs(typed.Data(), typed.ElementLength(), sr, &out, &count);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   auto result = Napi::Float32Array::New(env, count);
@@ -159,7 +159,7 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   SonareLufsResult lufs{};
   SonareError err = sonare_lufs_interleaved(typed.Data(), frames, channels, sr, &lufs);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -185,7 +185,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRange(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_ebur128_loudness_range(typed.Data(), typed.ElementLength(), sr, &out_lra);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, out_lra);
@@ -210,7 +210,7 @@ Napi::Value MeteringScalar(const Napi::CallbackInfo& info, MeteringScalarFn fn,
   float out_value = 0.0f;
   SonareError err = fn(typed.Data(), typed.ElementLength(), sr, &out_value);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, out_value);
@@ -250,7 +250,7 @@ Napi::Value SonareWrap::MeteringTruePeakDb(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_metering_true_peak_db(typed.Data(), typed.ElementLength(), sr, oversample, &out_value);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, out_value);
@@ -275,7 +275,7 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
   SonareError err = sonare_metering_detect_clipping(typed.Data(), typed.ElementLength(), sr,
                                                     threshold, min_region, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   Napi::Array regions = Napi::Array::New(env, result.region_count);
@@ -322,7 +322,7 @@ Napi::Value SonareWrap::MeteringDynamicRange(const Napi::CallbackInfo& info) {
   SonareError err = sonare_metering_dynamic_range(typed.Data(), typed.ElementLength(), sr,
                                                   window_sec, hop_sec, low_p, high_p, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   auto windows = Napi::Float32Array::New(env, result.window_count);
@@ -378,7 +378,7 @@ Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
   float out_value = 0.0f;
   SonareError err = sonare_scale_quantize_midi(root, mask, ref, midi, &out_value);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, out_value);
@@ -400,7 +400,7 @@ Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info)
   float out_value = 0.0f;
   SonareError err = sonare_scale_correction_semitones(root, mask, ref, midi, &out_value);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, out_value);
@@ -419,7 +419,7 @@ Napi::Value SonareWrap::ScalePitchClassEnabled(const Napi::CallbackInfo& info) {
   int out_enabled = 0;
   SonareError err = sonare_scale_pitch_class_enabled(root, mask, pitch_class, &out_enabled);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Boolean::New(env, out_enabled != 0);
@@ -463,7 +463,7 @@ Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn, cons
   float out_value = 0.0f;
   SonareError err = fn(left.Data(), right.Data(), left.ElementLength(), sr, &out_value);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return Napi::Number::New(env, out_value);
@@ -504,7 +504,7 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   SonareError err = sonare_metering_vectorscope_decimated(
       left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   CResultGuard<SonareVectorscopeResult, sonare_free_vectorscope_result> guard(&result);
@@ -545,7 +545,7 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   SonareError err = sonare_metering_phase_scope_decimated(
       left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   CResultGuard<SonarePhaseScopeResult, sonare_free_phase_scope_result> guard(&result);
@@ -597,7 +597,7 @@ Napi::Value SonareWrap::MeteringSpectrum(const Napi::CallbackInfo& info) {
   SonareError err = sonare_metering_spectrum(typed.Data(), typed.ElementLength(), sr, n_fft, smooth,
                                              octave, db_ref, db_amin, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
@@ -636,7 +636,7 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
       sonare_metering_spectrum_frame(typed.Data(), typed.ElementLength(), sr, frame_offset, n_fft,
                                      smooth, octave, db_ref, db_amin, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   CResultGuard<SonareSpectrumResult, sonare_free_spectrum_result> guard(&result);
@@ -665,7 +665,7 @@ Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_waveform_peaks(typed.Data(), frames, channels, samples_per_bucket, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   CResultGuard<SonareWaveformPeaksResult, sonare_free_waveform_peaks_result> guard(&result);
@@ -705,7 +705,7 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   SonareError err = sonare_waveform_peak_pyramid(typed.Data(), frames, channels, levels.data(),
                                                  levels.size(), &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   CResultGuard<SonareWaveformPeakPyramidResult, sonare_free_waveform_peak_pyramid_result> guard(

@@ -475,4 +475,62 @@ TEST_CASE("Scene JSON rejects non-string insert slot and send timing", "[mixing]
   REQUIRE(scene.strips[0].inserts[0].slot == sonare::mixing::api::InsertSlot::PostFader);
 }
 
+TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
+          "[mixing][routing][warning]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+
+  // eq.parametric reads only band{i}.* fields, so flat highPassHz/presenceDb keys
+  // take no effect. The scene still loads, but the ignored keys are reported on
+  // the dedicated warning channel (NOT last_error, which stays empty on success).
+  const std::string with_unknown = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "vocal", "inserts": [
+      {"slot": "post", "processor": "eq.parametric",
+       "params": "{\"highPassHz\":80,\"presenceDb\":4}"}
+    ]}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  SonareMixer* mixer = sonare_mixer_from_scene_json(with_unknown.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  const std::string warning = sonare_last_warning_message();
+  REQUIRE(warning.find("eq.parametric") != std::string::npos);
+  REQUIRE(warning.find("vocal") != std::string::npos);
+  REQUIRE(warning.find("highPassHz") != std::string::npos);
+  REQUIRE(warning.find("presenceDb") != std::string::npos);
+  REQUIRE(std::string(sonare_last_error_message()).empty());
+  sonare_mixer_destroy(mixer);
+
+  // A scene whose insert params are all consumed leaves the warning channel clear
+  // (and clears any stale warning from the previous load on this thread).
+  const std::string all_known = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "vocal", "inserts": [
+      {"slot": "post", "processor": "eq.parametric",
+       "params": "{\"band0.frequencyHz\":1000,\"band0.gainDb\":3}"}
+    ]}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  SonareMixer* clean = sonare_mixer_from_scene_json(all_known.c_str(), kSr, kBlock);
+  REQUIRE(clean != nullptr);
+  REQUIRE(std::string(sonare_last_warning_message()).empty());
+  sonare_mixer_destroy(clean);
+}
+
+TEST_CASE("sonare_mastering_insert_param_names enumerates an insert's keys",
+          "[mixing][routing][mastering]") {
+  const std::string comp = sonare_mastering_insert_param_names("dynamics.compressor");
+  REQUIRE(comp.find("thresholdDb") != std::string::npos);
+  REQUIRE(comp.find("ratio") != std::string::npos);
+
+  // Band-indexed processors enumerate their band{i}.<field> keys.
+  const std::string parametric = sonare_mastering_insert_param_names("eq.parametric");
+  REQUIRE(parametric.find("band0.frequencyHz") != std::string::npos);
+
+  // Unknown name -> empty string (no params, no crash).
+  REQUIRE(std::string(sonare_mastering_insert_param_names("not.a.real.processor")).empty());
+}
+
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

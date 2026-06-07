@@ -529,6 +529,23 @@ const char* sonare_error_message(SonareError error);
 /// @return Pointer to a NUL-terminated thread-local message string.
 const char* sonare_last_error_message(void);
 
+/// @brief Returns the most recent non-fatal warning recorded on the calling
+///        thread, or "" when none.
+/// @details A SEPARATE channel from sonare_last_error_message so a warning on a
+///   SUCCESS return never has to share storage with (or be mistaken for) an
+///   error. Currently recorded by sonare_mixer_from_scene_json: when a scene
+///   loads successfully but a channel-strip insert was handed param keys it does
+///   not read (a likely typo or a key meant for a different processor), those
+///   ignored keys are reported here as a human-readable message and the load
+///   still succeeds. Use sonare_mastering_insert_param_names() to discover the
+///   keys a given insert accepts.
+///   - The pointer is owned by libsonare, never NULL, and valid until the next
+///     API call that records or clears a warning on the same thread.
+///   - Cleared at the entry of sonare_mixer_from_scene_json, so a stale warning
+///     from an earlier load never leaks into a later, clean one.
+/// @return Pointer to a NUL-terminated thread-local message string.
+const char* sonare_last_warning_message(void);
+
 // Version
 const char* sonare_version(void);
 uint32_t sonare_engine_abi_version(void);

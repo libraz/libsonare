@@ -13,6 +13,95 @@ const char* ErrorMessageForCode(SonareError err) {
   return sonare_error_message(err);
 }
 
+const char* ErrorCodeName(SonareError err) {
+  switch (err) {
+    case SONARE_OK:
+      return "Ok";
+    case SONARE_ERROR_FILE_NOT_FOUND:
+      return "FileNotFound";
+    case SONARE_ERROR_INVALID_FORMAT:
+      return "InvalidFormat";
+    case SONARE_ERROR_DECODE_FAILED:
+      return "DecodeFailed";
+    case SONARE_ERROR_INVALID_PARAMETER:
+      return "InvalidParameter";
+    case SONARE_ERROR_OUT_OF_MEMORY:
+      return "OutOfMemory";
+    case SONARE_ERROR_NOT_SUPPORTED:
+      return "NotSupported";
+    case SONARE_ERROR_INVALID_STATE:
+      return "InvalidState";
+    case SONARE_ERROR_UNKNOWN:
+    default:
+      return "Unknown";
+  }
+}
+
+SonareError CErrorFromException(const sonare::SonareException& e) {
+  switch (e.code()) {
+    case sonare::ErrorCode::FileNotFound:
+      return SONARE_ERROR_FILE_NOT_FOUND;
+    case sonare::ErrorCode::InvalidFormat:
+      return SONARE_ERROR_INVALID_FORMAT;
+    case sonare::ErrorCode::DecodeFailed:
+      return SONARE_ERROR_DECODE_FAILED;
+    case sonare::ErrorCode::InvalidParameter:
+      return SONARE_ERROR_INVALID_PARAMETER;
+    case sonare::ErrorCode::OutOfMemory:
+      return SONARE_ERROR_OUT_OF_MEMORY;
+    case sonare::ErrorCode::NotImplemented:
+      return SONARE_ERROR_NOT_SUPPORTED;
+    case sonare::ErrorCode::InvalidState:
+      return SONARE_ERROR_INVALID_STATE;
+    case sonare::ErrorCode::Ok:
+    default:
+      return SONARE_ERROR_UNKNOWN;
+  }
+}
+
+sonare::ErrorCode CodeFromCError(SonareError err) {
+  switch (err) {
+    case SONARE_ERROR_FILE_NOT_FOUND:
+      return sonare::ErrorCode::FileNotFound;
+    case SONARE_ERROR_INVALID_FORMAT:
+      return sonare::ErrorCode::InvalidFormat;
+    case SONARE_ERROR_DECODE_FAILED:
+      return sonare::ErrorCode::DecodeFailed;
+    case SONARE_ERROR_INVALID_PARAMETER:
+      return sonare::ErrorCode::InvalidParameter;
+    case SONARE_ERROR_OUT_OF_MEMORY:
+      return sonare::ErrorCode::OutOfMemory;
+    case SONARE_ERROR_NOT_SUPPORTED:
+      return sonare::ErrorCode::NotImplemented;
+    case SONARE_ERROR_INVALID_STATE:
+      return sonare::ErrorCode::InvalidState;
+    case SONARE_OK:
+    case SONARE_ERROR_UNKNOWN:
+    default:
+      return sonare::ErrorCode::InvalidState;
+  }
+}
+
+namespace {
+
+void ThrowWithCode(Napi::Env env, SonareError err, const std::string& message) {
+  Napi::Error error = Napi::Error::New(env, message);
+  error.Set("name", Napi::String::New(env, "SonareError"));
+  error.Set("code", Napi::Number::New(env, static_cast<double>(static_cast<int>(err))));
+  error.Set("codeName", Napi::String::New(env, ErrorCodeName(err)));
+  error.ThrowAsJavaScriptException();
+}
+
+}  // namespace
+
+void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix) {
+  ThrowWithCode(env, err, prefix + ErrorMessageForCode(err));
+}
+
+void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message) {
+  ThrowWithCode(env, err, message);
+}
+
 bool IsFloat32Array(const Napi::Value& value) {
   return value.IsTypedArray() &&
          value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array;

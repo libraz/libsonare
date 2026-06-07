@@ -13,6 +13,15 @@ void set_last_error(const char* msg) { last_error_storage().assign(msg != nullpt
 
 void clear_last_error() { last_error_storage().clear(); }
 
+std::string& last_warning_storage() {
+  static thread_local std::string storage;
+  return storage;
+}
+
+void set_last_warning(const char* msg) { last_warning_storage().assign(msg != nullptr ? msg : ""); }
+
+void clear_last_warning() { last_warning_storage().clear(); }
+
 SonareError map_sonare_exception(const SonareException& e) {
   switch (e.code()) {
     case sonare::ErrorCode::FileNotFound:

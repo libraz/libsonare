@@ -229,6 +229,11 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   if (!json) {
     return nullptr;
   }
+  // A non-fatal channel, separate from last_error: a scene can load fine while
+  // still carrying insert params no processor reads. Cleared on entry so a stale
+  // warning from an earlier load never leaks into a later, clean one.
+  sonare_c_detail::clear_last_warning();
+  std::vector<std::string> ignored_param_notes;
   try {
     const auto scene = sonare::mixing::api::scene_from_json(json);
     std::unique_ptr<SonareMixer> mixer(sonare_mixer_create(sample_rate, max_block_size));
@@ -256,12 +261,23 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
                                        scene_strip.polarity_invert_right);
       strip->strip.set_channel_delay_samples(scene_strip.channel_delay_samples);
       for (const auto& insert : scene_strip.inserts) {
-        auto processor =
-            sonare::mastering::api::make_insert(insert.processor_name, insert.params_json);
+        std::vector<std::string> unknown_keys;
+        auto processor = sonare::mastering::api::make_insert(insert.processor_name,
+                                                             insert.params_json, &unknown_keys);
         if (!processor) {
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                         "unknown insert processor: " + insert.processor_name +
                                             " (strip " + scene_strip.id + ")");
+        }
+        if (!unknown_keys.empty()) {
+          std::string note = "insert '" + insert.processor_name + "' on strip '" + scene_strip.id +
+                             "' ignored unknown param" + (unknown_keys.size() > 1 ? "s" : "") +
+                             ": ";
+          for (size_t k = 0; k < unknown_keys.size(); ++k) {
+            if (k > 0) note += ", ";
+            note += unknown_keys[k];
+          }
+          ignored_param_notes.push_back(std::move(note));
         }
         if (insert.slot == sonare::mixing::api::InsertSlot::PreFader) {
           strip->strip.add_pre_insert(std::move(processor));
@@ -314,6 +330,16 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
     apply_solo_mutes(mixer.get());
     build_and_compile(mixer.get());
+    // Scene loaded successfully; surface any silently-ignored insert params as a
+    // non-fatal warning (one note per affected insert, '\n'-joined).
+    if (!ignored_param_notes.empty()) {
+      std::string warning;
+      for (size_t n = 0; n < ignored_param_notes.size(); ++n) {
+        if (n > 0) warning += '\n';
+        warning += ignored_param_notes[n];
+      }
+      sonare_c_detail::set_last_warning(warning.c_str());
+    }
     return mixer.release();
   } catch (const std::exception& e) {
     sonare_c_detail::set_last_error(e.what());

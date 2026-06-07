@@ -202,6 +202,63 @@ def test_project_cli_help_documents_sf2_limitations() -> None:
     assert "--synth-json" in midi_render_help.stdout
 
 
+def _run_cli_env(args: list[str], extra_env: dict[str, str]) -> subprocess.CompletedProcess:
+    src_dir = str(Path(__file__).parent.parent / "src")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
+    env.update(extra_env)
+    return subprocess.run(
+        [sys.executable, "-m", "libsonare.cli", *args],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_cli_exit_codes_distinguish_error_classes() -> None:
+    """Failures map to distinct, C-ABI-aligned exit codes (not a blanket 1)."""
+    from libsonare.cli import (
+        EXIT_DECODE_FAILED,
+        EXIT_FILE_NOT_FOUND,
+        EXIT_INVALID_FORMAT,
+        EXIT_USAGE,
+    )
+
+    # Usage errors keep argparse's native exit 2.
+    assert _run_cli(["definitely-not-a-command"]).returncode == EXIT_USAGE
+    assert _run_cli(["bpm"]).returncode == EXIT_USAGE  # missing required file arg.
+
+    # A missing input file surfaces SONARE_ERROR_FILE_NOT_FOUND -> exit 4.
+    missing = _run_cli(["bpm", "/no/such/sonare-test-file.wav"])
+    assert missing.returncode == EXIT_FILE_NOT_FOUND
+    assert "Error:" in missing.stderr
+
+    # Undecodable bytes surface as a non-file, non-usage error class distinct
+    # from the codes above. The exact class depends on the decode backend the
+    # library was built with: an FFmpeg-enabled build routes the bytes through
+    # avformat_open_input, which rejects them as DECODE_FAILED (exit 6); a build
+    # without FFmpeg falls back to the native loader, which reports the unknown
+    # container as INVALID_FORMAT (exit 5). Accept either so the test is
+    # independent of SONARE_WITH_FFMPEG.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        garbage = os.path.join(tmpdir, "garbage.wav")
+        with open(garbage, "wb") as handle:
+            handle.write(b"not a wav at all")
+        assert _run_cli(["bpm", garbage]).returncode in (
+            EXIT_INVALID_FORMAT,
+            EXIT_DECODE_FAILED,
+        )
+
+
+def test_cli_legacy_exit_code_folds_failures_to_one() -> None:
+    """SONARE_LEGACY_EXIT=1 restores the old all-failures-are-1 contract."""
+    result = _run_cli_env(
+        ["bpm", "/no/such/sonare-test-file.wav"],
+        {"SONARE_LEGACY_EXIT": "1"},
+    )
+    assert result.returncode == 1
+
+
 def test_mastering_pair_analyze_cli_resamples_reference_rate(monkeypatch, capsys) -> None:
     """The pair-analysis CLI resamples reference audio to the master sample rate."""
     import argparse

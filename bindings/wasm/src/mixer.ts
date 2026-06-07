@@ -77,6 +77,17 @@ export class Mixer {
   }
 
   /**
+   * Non-fatal warnings captured when this mixer was built from scene JSON: one
+   * entry per channel-strip insert that was handed param keys it does not read
+   * (a likely typo, or a key meant for a different processor). The scene still
+   * loaded; these keys simply took no effect. Empty when every key was consumed.
+   * Use {@link masteringInsertParamNames} to discover the keys an insert accepts.
+   */
+  sceneWarnings(): string[] {
+    return this.mixer.sceneWarnings();
+  }
+
+  /**
    * Mix one block of per-strip stereo audio into the stereo master.
    *
    * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`

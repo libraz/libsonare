@@ -274,7 +274,7 @@ Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn) {
   const SonareError err =
       fn(typed.Data(), typed.ElementLength(), sr, hop_length, n_chroma, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 

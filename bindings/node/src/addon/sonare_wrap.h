@@ -133,6 +133,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringPairAnalysisNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStereoAnalysisNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringInsertNames(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringInsertParamNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPairProcess(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPairAnalyze(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStereoAnalyze(const Napi::CallbackInfo& info);

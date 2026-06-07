@@ -28,6 +28,18 @@ val js_mastering_insert_names() {
   return out;
 }
 
+// Parameter names a given insert processor reads (mastering::api::insert_param_names).
+// Any key not in this list is silently ignored; for scene loads those ignored
+// keys are reported via Mixer.sceneWarnings(). Empty array for an unknown name.
+val js_mastering_insert_param_names(std::string name) {
+  val out = val::array();
+  auto names = mastering::api::insert_param_names(name);
+  for (size_t index = 0; index < names.size(); ++index) {
+    out.call<void>("push", names[index]);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Mastering presets (high-level master_audio API).
 // Overrides accept a flat object whose keys match `parse_chain_config_params`
@@ -314,6 +326,7 @@ std::string js_mastering_streaming_preview(val samples, int sample_rate, val pla
 void registerMasteringApiBindings() {
   function("masteringProcessorNames", &js_mastering_processor_names);
   function("masteringInsertNames", &js_mastering_insert_names);
+  function("masteringInsertParamNames", &js_mastering_insert_param_names);
   function("masteringPairProcessorNames", &js_mastering_pair_processor_names);
   function("masteringPairAnalysisNames", &js_mastering_pair_analysis_names);
   function("masteringStereoAnalysisNames", &js_mastering_stereo_analysis_names);

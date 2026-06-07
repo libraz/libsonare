@@ -25,7 +25,7 @@ constexpr uint32_t kExpectedProjectAbiVersion = SONARE_PROJECT_ABI_VERSION;
 
 void ThrowIfError(Napi::Env env, SonareError err) {
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_node::ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
   }
 }
 

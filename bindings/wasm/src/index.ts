@@ -67,6 +67,7 @@ export {
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
   masteringInsertNames,
+  masteringInsertParamNames,
   masteringPairAnalysisNames,
   masteringPairAnalyze,
   masteringPairProcess,
@@ -98,6 +99,7 @@ export {
   voiceChange,
   voiceChangeRealtime,
 } from './effects_mastering';
+export { ErrorCode, isSonareError, SonareError } from './errors';
 export type { MelodyOptions } from './feature_music';
 export {
   amplitudeToDb,

@@ -178,6 +178,20 @@ const char* sonare_mastering_stereo_analysis_names(void);
 ///          lifetime; the caller must NOT free it (mirrors
 ///          @ref sonare_mastering_processor_names).
 const char* sonare_mastering_insert_names(void);
+
+/// @brief Returns the camelCase parameter names a given insert / FX processor
+///        reads, separated by '\n' (empty string when @p name is unknown or its
+///        insert needs an unavailable build feature).
+/// @details For tools/UIs that want to validate a scene insert's params before
+///   loading it: any supplied key NOT in this list is silently ignored by the
+///   processor (and would be reported via @ref sonare_last_warning_message on a
+///   scene load). Band/sub-band processors enumerate their indexed
+///   `band{i}.<field>` keys. Unlike the program-lifetime @ref
+///   sonare_mastering_insert_names, the returned pointer is a thread-local valid
+///   only until the next API call on the same thread; the caller must NOT free it.
+/// @param name Insert processor name (see @ref sonare_mastering_insert_names).
+const char* sonare_mastering_insert_param_names(const char* name);
+
 SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
                                                   const float* reference, size_t length,
                                                   int sample_rate,

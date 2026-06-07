@@ -8,10 +8,12 @@
 /// surface. It centralizes the param-name -> config-field mapping so the
 /// offline (named_processor) and streaming (insert_factory) paths stay in sync.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
@@ -79,7 +81,58 @@
 
 namespace sonare::mastering::api::detail {
 
-using ParamMap = std::unordered_map<std::string, double>;
+/// @brief Flat (key -> value) param store that records which keys a config
+/// builder probes.
+///
+/// Every config builder reads a param through `find()` (directly, or via the
+/// `f` / `i` / `b` / `read_field` helpers below), and it probes a key even when
+/// that key is absent (it then falls back to the field's default). Recording
+/// each probed key therefore yields, for free and with no hand-maintained list:
+///   - the set of keys a processor *consumes* (probe an empty map -> the names
+///     it reads for a default configuration; see insert_param_names), and
+///   - the keys a caller supplied that *no* builder read (build the real map ->
+///     `unprobed_keys()`; these took no effect and are surfaced as warnings).
+/// The wrapper is a drop-in for the previous `std::unordered_map` alias: only
+/// `find` / `end` / `operator[]` are used across the param surface.
+class ParamMap {
+ public:
+  using Map = std::unordered_map<std::string, double>;
+  using const_iterator = Map::const_iterator;
+
+  /// @brief Inserts/overwrites a value (used only when building the map).
+  double& operator[](const std::string& key) { return map_[key]; }
+
+  /// @brief Looks up @p key, recording it as probed (whether present or not).
+  const_iterator find(const std::string& key) const {
+    probed_.insert(key);
+    return map_.find(key);
+  }
+  const_iterator find(const char* key) const {
+    probed_.insert(key);
+    return map_.find(key);
+  }
+  const_iterator end() const { return map_.end(); }
+
+  /// @brief Keys this processor read (probed) when built; reflects an empty map
+  /// as the names consumed for a default configuration.
+  const std::unordered_set<std::string>& probed_keys() const { return probed_; }
+
+  /// @brief Supplied keys that no builder probed, sorted for determinism. These
+  /// were silently ignored by the processor and are reported as warnings.
+  std::vector<std::string> unprobed_keys() const {
+    std::vector<std::string> out;
+    for (const auto& [key, value] : map_) {
+      (void)value;
+      if (probed_.find(key) == probed_.end()) out.push_back(key);
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+  }
+
+ private:
+  Map map_;
+  mutable std::unordered_set<std::string> probed_;
+};
 
 inline ParamMap make_map(const std::vector<Param>& params) {
   ParamMap map;

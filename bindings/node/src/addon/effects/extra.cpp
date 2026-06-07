@@ -54,7 +54,7 @@ Napi::Float32Array EffectsFloatResult(Napi::Env env, float* data, size_t count) 
 }
 
 Napi::Value EffectsCheckCResult(Napi::Env env, SonareError err) {
-  Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+  sonare_node::ThrowSonareError(env, err);
   return env.Undefined();
 }
 

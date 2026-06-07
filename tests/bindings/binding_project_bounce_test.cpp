@@ -918,3 +918,100 @@ TEST_CASE("bounce dispatches every note of a sequential melody, not just the fir
 
   sonare_project_destroy(project);
 }
+
+namespace {
+
+// Median f0 (Hz) of a mono window via the C-ABI YIN tracker, over voiced frames
+// only (fill_na = 0). Returns 0 when no frame is voiced.
+float window_median_hz(const float* samples, size_t length, float fmin, float fmax) {
+  SonarePitchResult pitch{};
+  REQUIRE(sonare_pitch_yin(samples, length, 48000, 2048, 512, fmin, fmax, 0.1f,
+                           /*fill_na=*/0, &pitch) == SONARE_OK);
+  const float median = pitch.median_f0;
+  sonare_free_pitch_result(&pitch);
+  return median;
+}
+
+}  // namespace
+
+TEST_CASE("bounce retunes sequential synth notes to each note's pitch, not the first",
+          "[project][synth_patch]") {
+  // Regression for the audio-domain side of the sequential-melody defect: even
+  // when every note-on is dispatched (see the dispatch test above), the synth
+  // must RETUNE for each note. A clip holding C5 then G5 (non-overlapping) must
+  // bounce audio whose pitch tracks C5 early and G5 late -- the reported bug
+  // left the second note sounding at the first note's pitch while the amplitude
+  // envelope still retriggered. This asserts on the rendered f0, which the
+  // dispatch-count test cannot catch.
+  constexpr uint8_t kC5 = 72;  // 523.25 Hz
+  constexpr uint8_t kG5 = 79;  // 783.99 Hz
+  // 120 BPM default, 48 kHz -> one quarter note = 24000 frames.
+  constexpr int kQuarter = 24000;
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  // C5 sounds over [0, 1) quarters (frames 0..24000); after a quarter of
+  // silence, G5 sounds over [2, 3) quarters (frames 48000..72000).
+  SonareMidiEventPod events[4];
+  events[0].ppq = 0.0;
+  events[0].data0 = 0x20900040u | (static_cast<uint32_t>(kC5) << 8);  // C5 on, vel 64
+  events[0].data1 = 0u;
+  events[1].ppq = 1.0;
+  events[1].data0 = 0x20800000u | (static_cast<uint32_t>(kC5) << 8);  // C5 off
+  events[1].data1 = 0u;
+  events[2].ppq = 2.0;
+  events[2].data0 = 0x20900040u | (static_cast<uint32_t>(kG5) << 8);  // G5 on, vel 64
+  events[2].data1 = 0u;
+  events[3].ppq = 3.0;
+  events[3].data0 = 0x20800000u | (static_cast<uint32_t>(kG5) << 8);  // G5 off
+  events[3].data1 = 0u;
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 4) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
+
+  SonareSynthPatch patch{};
+  REQUIRE(sonare_synth_preset_patch("saw-lead", &patch) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 4 * kQuarter;  // 2.0 s: through the end of G5.
+  options.block_size = 128;
+  options.num_channels = 1;  // mono -> sample index == frame index for YIN.
+  options.sample_rate = 48000;
+
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = 5;
+  binding.patch = patch;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == static_cast<size_t>(options.total_frames));
+
+  // Sanity: both notes produced audio.
+  float peak = 0.0f;
+  for (size_t i = 0; i < out_len; ++i) peak = std::max(peak, std::abs(out[i]));
+  REQUIRE(peak > 0.0f);
+
+  // Window into the sustain of each note (skip the attack transient, stay before
+  // note-off). fmin/fmax bracket C5..G5 with margin so YIN cannot alias one to
+  // the other.
+  const float c5_median = window_median_hz(out + 4000, 16000, 300.0f, 1100.0f);
+  const float g5_median = window_median_hz(out + 52000, 16000, 300.0f, 1100.0f);
+  sonare_free_floats(out);
+
+  // The first note tracks C5 (~523 Hz).
+  REQUIRE(c5_median == Catch::Approx(523.25f).epsilon(0.06));
+  // The decisive assertion: the second note must be RETUNED to G5 (~784 Hz),
+  // not frozen at C5. A regression leaves g5_median near 523 Hz.
+  REQUIRE(g5_median == Catch::Approx(783.99f).epsilon(0.06));
+  REQUIRE(g5_median > 640.0f);  // unambiguously above C5.
+
+  sonare_project_destroy(project);
+}

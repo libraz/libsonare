@@ -27,6 +27,7 @@ using Catch::Matchers::WithinAbs;
 using sonare::mastering::api::chain_config_from_json;
 using sonare::mastering::api::chain_config_to_json;
 using sonare::mastering::api::insert_factory_names;
+using sonare::mastering::api::insert_param_names;
 using sonare::mastering::api::make_insert;
 using sonare::mastering::api::make_insert_with_ir;
 using sonare::mastering::api::MasteringChainConfig;
@@ -399,6 +400,63 @@ TEST_CASE("chain JSON round-trips the full repair.denoise field set",
   REQUIRE(d.noise_estimation_quantile == 0.2f);
   REQUIRE_FALSE(d.speech_presence_gain);
   REQUIRE_FALSE(d.gain_smoothing);
+}
+
+TEST_CASE("insert_param_names enumerates the keys a processor reads",
+          "[mastering][insert_factory][param_names]") {
+  // Table-driven processor: every SONARE_FIELDS_* key shows up.
+  const auto comp = insert_param_names("dynamics.compressor");
+  REQUIRE(ListContains(comp, "thresholdDb"));
+  REQUIRE(ListContains(comp, "ratio"));
+  REQUIRE(ListContains(comp, "attackMs"));
+  REQUIRE(ListContains(comp, "makeupGainDb"));
+  REQUIRE_FALSE(ListContains(comp, "highPassHz"));
+
+  // Setter-based EQ with fixed keys.
+  const auto tilt = insert_param_names("eq.tilt");
+  REQUIRE(ListContains(tilt, "tiltDb"));
+  REQUIRE(ListContains(tilt, "pivotHz"));
+
+  // Band-indexed EQ: the per-band field names are enumerated under band{i}.
+  const auto parametric = insert_param_names("eq.parametric");
+  REQUIRE(ListContains(parametric, "band0.frequencyHz"));
+  REQUIRE(ListContains(parametric, "band0.gainDb"));
+  REQUIRE(ListContains(parametric, "band0.q"));
+
+  // An unknown name yields no parameter names (rather than throwing).
+  REQUIRE(insert_param_names("not.a.real.processor").empty());
+}
+
+TEST_CASE("make_insert reports supplied keys the processor ignored",
+          "[mastering][insert_factory][param_names]") {
+  std::vector<std::string> unknown;
+
+  // All keys consumed => no warnings.
+  REQUIRE(make_insert("eq.tilt", R"({"tiltDb":3,"pivotHz":800})", &unknown) != nullptr);
+  REQUIRE(unknown.empty());
+
+  // Valid band keys are consumed even though they are indexed.
+  REQUIRE(make_insert("eq.parametric", R"({"band0.frequencyHz":1000,"band0.gainDb":3})",
+                      &unknown) != nullptr);
+  REQUIRE(unknown.empty());
+
+  // The historically silently-ignored keys are now surfaced. eq.parametric reads
+  // only band{i}.* fields, so a flat highPassHz/presenceDb takes no effect.
+  REQUIRE(make_insert("eq.parametric", R"({"highPassHz":80,"presenceDb":4})", &unknown) != nullptr);
+  REQUIRE(unknown.size() == 2);
+  REQUIRE(ListContains(unknown, "highPassHz"));
+  REQUIRE(ListContains(unknown, "presenceDb"));
+
+  // A mix of known and unknown keys reports only the unknown ones, sorted.
+  REQUIRE(make_insert("dynamics.compressor", R"({"thresholdDb":-12,"bogusKey":1,"ratio":4})",
+                      &unknown) != nullptr);
+  REQUIRE(unknown == std::vector<std::string>{"bogusKey"});
+
+  // An unknown processor name leaves the out-parameter untouched (it is a hard
+  // error surfaced elsewhere, not an ignored-keys warning).
+  std::vector<std::string> sentinel{"sentinel"};
+  REQUIRE(make_insert("not.a.real.processor", R"({"x":1})", &sentinel) == nullptr);
+  REQUIRE(sentinel == std::vector<std::string>{"sentinel"});
 }
 
 TEST_CASE("streaming preset equals pop preset", "[mastering][presets]") {

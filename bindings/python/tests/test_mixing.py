@@ -244,3 +244,65 @@ def test_tail_samples_and_drain_tail_stereo(mixer) -> None:
     assert len(result.left) == 128
     assert len(result.right) == 128
     assert result.sample_rate == 48000
+
+
+def _scene_with_insert_params(processor: str, params: dict[str, float]) -> str:
+    """Build a one-strip scene whose post-fader insert carries `params`."""
+    return json.dumps(
+        {
+            "version": 1,
+            "buses": [{"id": "master", "role": "master"}],
+            "strips": [
+                {
+                    "id": "vocal",
+                    "inserts": [
+                        {
+                            "slot": "post",
+                            "processor": processor,
+                            "params": json.dumps(params),
+                        }
+                    ],
+                }
+            ],
+            "connections": [{"source": "vocal", "destination": "master"}],
+        }
+    )
+
+
+def test_mastering_insert_param_names_enumerates_keys() -> None:
+    """insert_param_names lists the keys a processor reads (empty for unknown)."""
+    from libsonare import mastering_insert_param_names
+
+    comp = mastering_insert_param_names("dynamics.compressor")
+    assert "thresholdDb" in comp
+    assert "ratio" in comp
+    # Band-indexed processors expose their band{i}.<field> keys.
+    assert "band0.frequencyHz" in mastering_insert_param_names("eq.parametric")
+    assert mastering_insert_param_names("not.a.real.processor") == []
+
+
+def test_scene_warnings_surface_ignored_insert_params() -> None:
+    """A scene insert with unread params loads but reports the ignored keys."""
+    from libsonare import Mixer
+
+    # eq.parametric reads only band{i}.* fields, so flat keys take no effect.
+    scene = _scene_with_insert_params("eq.parametric", {"highPassHz": 80, "presenceDb": 4})
+    mixer = Mixer.from_scene_json(scene, sample_rate=48000, block_size=256)
+    try:
+        warnings = mixer.scene_warnings()
+        assert len(warnings) == 1
+        assert "eq.parametric" in warnings[0]
+        assert "highPassHz" in warnings[0]
+        assert "presenceDb" in warnings[0]
+    finally:
+        mixer.close()
+
+    # A scene whose params are all consumed reports no warnings.
+    clean = _scene_with_insert_params(
+        "eq.parametric", {"band0.frequencyHz": 1000, "band0.gainDb": 3}
+    )
+    mixer = Mixer.from_scene_json(clean, sample_rate=48000, block_size=256)
+    try:
+        assert mixer.scene_warnings() == []
+    finally:
+        mixer.close()

@@ -65,7 +65,7 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_analyze_json_with_progress(data, length, sample_rate, c_progress, &ctx, &json_str);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -128,7 +128,7 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   SonareError err = sonare_analyze_sections(typed.Data(), typed.ElementLength(), sample_rate, n_fft,
                                             hop_length, min_section_sec, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
@@ -181,7 +181,7 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
       sonare_analyze_melody_ex(typed.Data(), typed.ElementLength(), sample_rate, fmin, fmax,
                                frame_length, hop_length, threshold, use_pyin, center, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 

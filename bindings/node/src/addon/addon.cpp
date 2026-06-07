@@ -339,7 +339,7 @@ Napi::Value SynthPresetPatch(const Napi::CallbackInfo& info) {
   SonareSynthPatch patch{};
   const SonareError err = sonare_synth_preset_patch(name.c_str(), &patch);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_node::ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   return sonare_node::SynthPatchToObject(env, patch);

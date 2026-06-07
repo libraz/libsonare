@@ -125,6 +125,7 @@ import {
 
 export * from './analysis.js';
 export * from './effects_mastering.js';
+export * from './errors.js';
 export * from './features.js';
 export * from './metering.js';
 export {
@@ -2207,6 +2208,17 @@ export class Mixer {
   /** Number of strips in the mixer. */
   stripCount(): number {
     return this.native.stripCount();
+  }
+
+  /**
+   * Non-fatal warnings captured when this mixer was built from scene JSON: one
+   * entry per channel-strip insert that was handed param keys it does not read
+   * (a likely typo, or a key meant for a different processor). The scene still
+   * loaded; these keys simply took no effect. Empty when every key was consumed.
+   * Use {@link masteringInsertParamNames} to discover the keys an insert accepts.
+   */
+  sceneWarnings(): string[] {
+    return this.native.sceneWarnings();
   }
 
   /** Maximum processor tail length (samples) currently in the compiled graph. */

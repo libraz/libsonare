@@ -57,10 +57,12 @@ node = [
   "assert_project_midi_events",
   "midi1_event",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
+  "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
 ]
 
 wasm = [
   "require_module",         # WASM module-handle accessor
+  "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
   "is_initialized",         # WASM init-state probe
   "engine_capabilities",    # WASM build capability descriptor
   "assert_interleaved_samples",  # WASM test helper: validates interleaved buffers before embind calls
@@ -119,9 +121,10 @@ python = [
 #    not allowlisted here.)
 #   onset_strength: exposed by the facades under the ergonomic name
 #     `onset_envelope`.
-#   error_message / last_error_message: C-ABI error-string helpers consumed
-#     internally by each facade's error layer (mapped to native exceptions),
-#     not part of the public facade surface.
+#   error_message / last_error_message / last_warning_message: C-ABI
+#     error/warning-string helpers consumed internally by each facade (errors map
+#     to native exceptions; the scene-load warning surfaces as Mixer.sceneWarnings
+#     / scene_warnings), not standalone public facade functions.
 #
 # --- mastering ops exposed under ERGONOMIC facade names (see [surface_only]) ---
 #   mastering_analyze_pair / mastering_analyze_stereo / mastering_apply_processor
@@ -141,6 +144,7 @@ node = [
   "onset_strength",
   "error_message",
   "last_error_message",
+  "last_warning_message",
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
   "mastering_analyze_pair",
@@ -214,6 +218,7 @@ wasm = [
   "onset_strength",
   "error_message",
   "last_error_message",
+  "last_warning_message",
   "mastering_analyze_pair",
   "mastering_analyze_stereo",
   "mastering_apply_processor",
@@ -280,6 +285,7 @@ python = [
   "onset_strength",
   "error_message",
   "last_error_message",
+  "last_warning_message",
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
   "mastering_analyze_pair",

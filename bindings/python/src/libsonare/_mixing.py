@@ -82,10 +82,17 @@ class Mixer:
     every strip). Do not retain results across a :meth:`close` call.
     """
 
-    def __init__(self, handle: int, sample_rate: int, block_size: int) -> None:
+    def __init__(
+        self,
+        handle: int,
+        sample_rate: int,
+        block_size: int,
+        scene_warnings: list[str] | None = None,
+    ) -> None:
         self._handle: int | None = handle
         self._sample_rate = sample_rate
         self._block_size = block_size
+        self._scene_warnings: list[str] = scene_warnings or []
 
     @classmethod
     def from_scene_json(cls, json: str, sample_rate: int = 48000, block_size: int = 512) -> Mixer:
@@ -98,7 +105,25 @@ class Mixer:
         )
         if not handle:
             raise RuntimeError("failed to build mixer from scene JSON")
-        return cls(int(handle), sample_rate, block_size)
+        # Capture any non-fatal load warning (e.g. insert params no processor
+        # read) immediately, before any later C-ABI call overwrites it.
+        warnings: list[str] = []
+        if hasattr(lib, "sonare_last_warning_message"):
+            raw = lib.sonare_last_warning_message()
+            if raw:
+                warnings = raw.decode("utf-8").splitlines()
+        return cls(int(handle), sample_rate, block_size, warnings)
+
+    def scene_warnings(self) -> list[str]:
+        """Non-fatal warnings captured when this mixer was built from scene JSON.
+
+        One entry per channel-strip insert that was handed param keys it does not
+        read (a likely typo, or a key meant for a different processor). The scene
+        still loaded; those keys simply took no effect. Empty when every key was
+        consumed. Use :func:`mastering_insert_param_names` to discover the keys an
+        insert accepts.
+        """
+        return list(self._scene_warnings)
 
     def compile(self) -> None:
         """Rebuild and compile the routing graph from the current scene."""

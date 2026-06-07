@@ -24,12 +24,17 @@ namespace sonare::mastering::api {
 /// @param json_params A JSON object string ("{...}"). Empty or "{}" means the
 ///             processor's defaults. Keys mirror the camelCase param names that
 ///             named_processor.cpp accepts (e.g. "thresholdDb", "ratio").
+/// @param out_unknown_keys When non-null and @p name is a known insert, receives
+///             the supplied param keys that the processor did not read (silently
+///             ignored). Sorted; empty when every key took effect. Left
+///             untouched for an unknown @p name (which returns nullptr).
 /// @return A heap-allocated processor, or nullptr if @p name is not a known
 ///         block-processor insert.
 /// @throws sonare::SonareException (InvalidParameter) only when @p json_params
 ///         is malformed. Unknown names return nullptr rather than throwing.
-std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
-                                                       const std::string& json_params);
+std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
+    const std::string& name, const std::string& json_params,
+    std::vector<std::string>* out_unknown_keys = nullptr);
 
 /// @brief Same as make_insert() but takes an already-parsed Param list instead
 ///        of a JSON string. Used by the offline named-processor path so it can
@@ -60,5 +65,14 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string
 
 /// @brief Names that make_insert() can build (a stable, sorted list).
 std::vector<std::string> insert_factory_names();
+
+/// @brief Parameter names a given insert processor reads, for tooling/validation.
+/// @param name Processor name (see make_insert()).
+/// @return The camelCase param keys the processor consumes for a default
+///         configuration, sorted. Band/sub-band processors additionally enumerate
+///         their indexed `band{i}.<field>` keys. Returns an empty list for an
+///         unknown @p name (or a name whose insert needs an unavailable build
+///         feature, e.g. FX).
+std::vector<std::string> insert_param_names(const std::string& name);
 
 }  // namespace sonare::mastering::api

@@ -3,6 +3,8 @@
 
 #include <napi.h>
 
+#include <string>
+
 #include "sonare_c.h"
 
 namespace sonare_node {
@@ -41,6 +43,9 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value DrainTailStereo(const Napi::CallbackInfo& info);
   Napi::Value TailSamples(const Napi::CallbackInfo& info);
   Napi::Value StripCount(const Napi::CallbackInfo& info);
+  /// @brief Non-fatal warnings captured when this mixer was built from scene
+  /// JSON (e.g. insert params no processor read); a JS string[], empty when none.
+  Napi::Value SceneWarnings(const Napi::CallbackInfo& info);
   Napi::Value ScheduleInsertAutomation(const Napi::CallbackInfo& info);
   Napi::Value ToSceneJson(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
@@ -94,6 +99,8 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   SonareMixer* mixer_ = nullptr;
   int sample_rate_ = 48000;
   int block_size_ = 0;
+  /// Warning message captured at construction (newline-joined; empty if none).
+  std::string scene_warning_;
 
   static Napi::FunctionReference constructor_;
 };

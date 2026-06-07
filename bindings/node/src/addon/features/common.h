@@ -29,7 +29,7 @@ inline Napi::Int32Array IntResult(Napi::Env env, int* data, size_t count) {
 
 inline Napi::Value CheckCResult(Napi::Env env, SonareError err) {
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
   }
   return env.Undefined();
 }

@@ -1,5 +1,6 @@
 #include "mastering/api/insert_factory.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -673,10 +674,19 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
 }  // namespace
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
-                                                       const std::string& json_params) {
+                                                       const std::string& json_params,
+                                                       std::vector<std::string>* out_unknown_keys) {
   const std::vector<Param> param_list = parse_insert_params_json(json_params);
   const ParamMap params = detail::make_map(param_list);
-  return build_insert(name, params, &json_params);
+  auto processor = build_insert(name, params, &json_params);
+  // Only report ignored keys for a recognized processor: build_insert() probes
+  // every key the processor reads (even absent ones), so any supplied key it
+  // never touched took no effect. An unknown name is surfaced as a hard error by
+  // the caller, not as an ignored-keys warning.
+  if (out_unknown_keys != nullptr && processor != nullptr) {
+    *out_unknown_keys = params.unprobed_keys();
+  }
+  return processor;
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
@@ -787,6 +797,22 @@ std::vector<std::string> insert_factory_names() {
       "effects.delay.stereo",
 #endif
   };
+}
+
+std::vector<std::string> insert_param_names(const std::string& name) {
+  // Build the processor against an empty param map: every config builder probes
+  // the keys it reads (falling back to defaults when absent), so the probed set
+  // is exactly the parameter names this processor consumes. The throwaway
+  // processor is discarded immediately.
+  ParamMap params;
+  auto processor = build_insert(name, params);
+  if (processor == nullptr) {
+    return {};
+  }
+  const auto& probed = params.probed_keys();
+  std::vector<std::string> names(probed.begin(), probed.end());
+  std::sort(names.begin(), names.end());
+  return names;
 }
 
 }  // namespace sonare::mastering::api

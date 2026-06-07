@@ -1,35 +1,20 @@
-import { describe, expect, it } from 'vitest';
-import {
-  Mixer,
-  masteringInsertParamNames,
-  mixingScenePresetJson,
-  mixingScenePresetNames,
-  mixStereo,
-} from '../src/index.js';
+/**
+ * WASM coverage for insert param validation: masteringInsertParamNames enumerates
+ * the keys a processor reads, and Mixer.sceneWarnings surfaces scene-insert params
+ * that were silently ignored (matching the C ABI and the other surfaces).
+ */
 
-describe('mixing native binding', () => {
-  it('exposes scene presets and renders a stereo mix with input trim', () => {
-    expect(mixingScenePresetNames()).toContain('vocalReverbSend');
-    expect(mixingScenePresetJson('vocalReverbSend')).toContain('"vocal"');
+import { beforeAll, describe, expect, it } from 'vitest';
+import { init, Mixer, masteringInsertParamNames } from '../dist/index.js';
 
-    const left = new Float32Array([1, 1]);
-    const right = new Float32Array([0, 0]);
-    const result = mixStereo([left], [right], 48000, { inputTrimDb: 6.0206, faderDb: -6.0206 });
-    expect(result.left).toBeInstanceOf(Float32Array);
-    expect(result.right).toBeInstanceOf(Float32Array);
-    // +6.02 dB trim and -6.02 dB fader cancel to unity. With the Balance pan law
-    // no longer attenuating a centered signal by 3 dB, the output passes through
-    // at unity instead of sqrt(0.5).
-    expect(result.left[0]).toBeCloseTo(1.0, 2);
-    expect(result.left[1]).toBeCloseTo(1.0, 2);
-    expect(Array.from(result.right)).toEqual([0, 0]);
-    expect(result.meters).toHaveLength(1);
-    expect(Number.isFinite(result.meters[0].peakDbL)).toBe(true);
-    expect(typeof result.meters[0].likelyMonoCompatible).toBe('boolean');
+const SR = 48000;
+const BLOCK = 512;
+
+describe('insert param validation (WASM)', () => {
+  beforeAll(async () => {
+    await init();
   });
-});
 
-describe('insert param validation', () => {
   it('enumerates the keys an insert processor reads', () => {
     const comp = masteringInsertParamNames('dynamics.compressor');
     expect(comp).toContain('thresholdDb');
@@ -59,7 +44,7 @@ describe('insert param validation', () => {
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    const mixer = Mixer.fromSceneJson(ignored, 48000, 512);
+    const mixer = Mixer.fromSceneJson(ignored, SR, BLOCK);
     const warnings = mixer.sceneWarnings();
     expect(warnings.length).toBe(1);
     expect(warnings[0]).toContain('eq.parametric');
@@ -84,6 +69,6 @@ describe('insert param validation', () => {
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    expect(Mixer.fromSceneJson(clean, 48000, 512).sceneWarnings()).toEqual([]);
+    expect(Mixer.fromSceneJson(clean, SR, BLOCK).sceneWarnings()).toEqual([]);
   });
 });

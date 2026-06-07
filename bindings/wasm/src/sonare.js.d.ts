@@ -1845,6 +1845,11 @@ export interface SonareModule {
 
   // Mixing - scene-based Mixer
   createMixerFromSceneJson: (json: string, sampleRate: number, blockSize: number) => WasmMixer;
+
+  // Decodes a thrown native exception-object pointer (emscripten classic EH
+  // surfaces a C++ throw as the raw pointer number) into a structured error.
+  // Consumed by the module-error wrapper in module_state.ts.
+  sonareExceptionInfo: (ptr: number) => { code: number; codeName: string; message: string };
 }
 
 export interface WasmStreamingMasteringChain {
@@ -1947,6 +1952,7 @@ export interface WasmMixer {
   outputRightView: () => Float32Array;
   processPreparedStereo: (numSamples: number) => void;
   stripCount: () => number;
+  sceneWarnings: () => string[];
   scheduleInsertAutomation: (
     stripIndex: number,
     insertIndex: number,

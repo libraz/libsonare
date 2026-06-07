@@ -728,6 +728,13 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_last_error_message.restype = ctypes.c_char_p
     lib.sonare_last_error_message.argtypes = []
 
+    # sonare_last_warning_message: thread-local non-fatal diagnostic, separate from
+    # the error channel. Recorded on a SUCCESS return (e.g. a scene loaded fine but
+    # an insert was handed param keys no processor reads). Empty (non-NULL) when none.
+    if hasattr(lib, "sonare_last_warning_message"):
+        lib.sonare_last_warning_message.restype = ctypes.c_char_p
+        lib.sonare_last_warning_message.argtypes = []
+
     # --- Version ---
 
     # sonare_version

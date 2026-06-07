@@ -15,7 +15,7 @@ constexpr uint32_t kExpectedEngineAbiVersion = 3;
 
 inline void ThrowIfError(Napi::Env env, SonareError err) {
   if (err != SONARE_OK) {
-    Napi::Error::New(env, sonare_node::ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
   }
 }
 

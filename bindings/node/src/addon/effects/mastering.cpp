@@ -710,6 +710,36 @@ Napi::Value SonareWrap::MasteringInsertNames(const Napi::CallbackInfo& info) {
   return out;
 }
 
+Napi::Value SonareWrap::MasteringInsertParamNames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (name: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  // sonare_mastering_insert_param_names(name) returns a thread-local '\n'-joined
+  // const char* (NOT to be freed); split it into a JS string[] like the *_names
+  // getters. An unknown name yields an empty string -> empty array.
+  const std::string name = info[0].As<Napi::String>().Utf8Value();
+  const char* joined = sonare_mastering_insert_param_names(name.c_str());
+  Napi::Array out = Napi::Array::New(env);
+  if (joined == nullptr || joined[0] == '\0') {
+    return out;
+  }
+  std::string names(joined);
+  uint32_t index = 0;
+  size_t start = 0;
+  while (start <= names.size()) {
+    size_t end = names.find('\n', start);
+    if (end == std::string::npos) {
+      out.Set(index++, Napi::String::New(env, names.substr(start)));
+      break;
+    }
+    out.Set(index++, Napi::String::New(env, names.substr(start, end - start)));
+    start = end + 1;
+  }
+  return out;
+}
+
 Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||

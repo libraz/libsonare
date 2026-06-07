@@ -86,7 +86,7 @@ Napi::Value CqtLike(const Napi::CallbackInfo& info, CqtFn fn) {
   SonareError err = fn(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
                        bins_per_octave, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   Napi::Value out = CqtResultToObject(env, result);
@@ -133,7 +133,7 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   SonareError err = sonare_vqt(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
                                bins_per_octave, gamma, &result);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   Napi::Value out = CqtResultToObject(env, result);

@@ -70,7 +70,32 @@ class MixerWasm {
           sonare::ErrorCode::InvalidState,
           std::string("failed to build mixer from scene JSON: ") + sonare_last_error_message());
     }
-    return new MixerWasm(mixer, sample_rate, block_size);
+    // Capture any non-fatal load warning (e.g. insert params no processor read)
+    // before any later C-ABI call can overwrite the thread-local message.
+    std::string warning = sonare_last_warning_message();
+    auto* wrapped = new MixerWasm(mixer, sample_rate, block_size);
+    wrapped->scene_warning_ = std::move(warning);
+    return wrapped;
+  }
+
+  // Non-fatal warnings captured when this mixer was built from scene JSON, one
+  // entry per insert handed param keys it does not read; empty when all consumed.
+  val sceneWarnings() const {
+    val out = val::array();
+    if (scene_warning_.empty()) {
+      return out;
+    }
+    size_t start = 0;
+    while (start <= scene_warning_.size()) {
+      size_t end = scene_warning_.find('\n', start);
+      if (end == std::string::npos) {
+        out.call<void>("push", scene_warning_.substr(start));
+        break;
+      }
+      out.call<void>("push", scene_warning_.substr(start, end - start));
+      start = end + 1;
+    }
+    return out;
   }
 
   static std::string presetJson(std::string name) {
@@ -633,6 +658,8 @@ class MixerWasm {
   SonareMixer* mixer_ = nullptr;
   int sample_rate_ = 48000;
   int block_size_ = 0;
+  // Non-fatal warning captured at scene load (newline-joined; empty if none).
+  std::string scene_warning_;
   std::vector<std::vector<float>> left_scratch_;
   std::vector<std::vector<float>> right_scratch_;
   std::vector<const float*> left_ptrs_;
@@ -936,6 +963,7 @@ void registerMixingBindings() {
       .function("outputRightView", &MixerWasm::outputRightView)
       .function("processPreparedStereo", &MixerWasm::processPreparedStereo)
       .function("stripCount", &MixerWasm::stripCount)
+      .function("sceneWarnings", &MixerWasm::sceneWarnings)
       .function("scheduleInsertAutomation", &MixerWasm::scheduleInsertAutomation)
       .function("stripById", &MixerWasm::stripById)
       .function("setInputTrimDb", &MixerWasm::setInputTrimDb)

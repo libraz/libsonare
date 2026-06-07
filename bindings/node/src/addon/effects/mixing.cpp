@@ -124,7 +124,7 @@ Napi::Value SonareWrap::MixingScenePresetJson(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_mixing_scene_preset_json(info[0].As<Napi::String>().Utf8Value().c_str(), &json);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   std::string result = json != nullptr ? json : "";
@@ -209,35 +209,41 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
       if (inputTrim.IsNumber()) {
         SonareError err =
             sonare_strip_set_input_trim_db(strip, inputTrim.As<Napi::Number>().FloatValue());
-        if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
+        if (err != SONARE_OK)
+          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
       }
       Napi::Value fader = OptionAt(env, options, "faderDb", index);
       if (fader.IsNumber()) {
         SonareError err = sonare_strip_set_fader_db(strip, fader.As<Napi::Number>().FloatValue());
-        if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
+        if (err != SONARE_OK)
+          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
       }
       Napi::Value pan = OptionAt(env, options, "pan", index);
       if (pan.IsNumber()) {
         Napi::Value mode = OptionAt(env, options, "panMode", index);
         SonareError err =
             sonare_strip_set_pan(strip, pan.As<Napi::Number>().FloatValue(), PanModeValue(mode));
-        if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
+        if (err != SONARE_OK)
+          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
       }
       Napi::Value width = OptionAt(env, options, "width", index);
       if (width.IsNumber()) {
         SonareError err = sonare_strip_set_width(strip, width.As<Napi::Number>().FloatValue());
-        if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
+        if (err != SONARE_OK)
+          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
       }
       Napi::Value muted = OptionAt(env, options, "muted", index);
       if (muted.IsBoolean()) {
         SonareError err = sonare_strip_set_muted(strip, muted.As<Napi::Boolean>().Value() ? 1 : 0);
-        if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
+        if (err != SONARE_OK)
+          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
       }
     }
 
     SonareError err = sonare_mixer_process_stereo(mixer, left_ptrs.data(), right_ptrs.data(), count,
                                                   out_left.data(), out_right.data(), length);
-    if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
+    if (err != SONARE_OK)
+      throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
 
     // Per-strip meter snapshots. NOTE: the integrating fields
     // (momentaryLufs / shortTermLufs / integratedLufs / truePeakDb*) require
@@ -248,7 +254,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     for (size_t index = 0; index < strips.size(); ++index) {
       SonareMixMeterSnapshot snapshot{};
       err = sonare_strip_meter(strips[index], &snapshot);
-      if (err != SONARE_OK) throw std::runtime_error(ErrorMessageForCode(err));
+      if (err != SONARE_OK)
+        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
       meters.Set(index, MixMeterToObject(env, snapshot));
     }
 

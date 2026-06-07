@@ -14,6 +14,66 @@ using namespace sonare;
 
 std::string js_version() { return SONARE_VERSION_STRING; }
 
+// ----------------------------------------------------------------------------
+// Error introspection
+// ----------------------------------------------------------------------------
+// With emscripten's classic exception handling a C++ throw reaches JS as the
+// raw exception-object pointer (a number). Given that pointer, surface a
+// structured { code, codeName, message } so the JS glue can rebuild a
+// SonareError whose numeric code matches the C ABI / Node / Python surfaces.
+// The integer codes mirror the C ABI SonareError enum (the C-ABI TU is not
+// linked into WASM, so the values are written out here rather than referenced).
+val js_sonare_exception_info(std::uintptr_t exception_ptr) {
+  val info = val::object();
+  int code = 99;  // SONARE_ERROR_UNKNOWN
+  const char* code_name = "Unknown";
+  std::string message;
+  auto* base = reinterpret_cast<std::exception*>(exception_ptr);
+  if (base != nullptr) {
+    message = base->what();
+    if (const auto* se = dynamic_cast<const sonare::SonareException*>(base)) {
+      switch (se->code()) {
+        case sonare::ErrorCode::Ok:
+          code = 0;
+          code_name = "Ok";
+          break;
+        case sonare::ErrorCode::FileNotFound:
+          code = 1;
+          code_name = "FileNotFound";
+          break;
+        case sonare::ErrorCode::InvalidFormat:
+          code = 2;
+          code_name = "InvalidFormat";
+          break;
+        case sonare::ErrorCode::DecodeFailed:
+          code = 3;
+          code_name = "DecodeFailed";
+          break;
+        case sonare::ErrorCode::InvalidParameter:
+          code = 4;
+          code_name = "InvalidParameter";
+          break;
+        case sonare::ErrorCode::OutOfMemory:
+          code = 5;
+          code_name = "OutOfMemory";
+          break;
+        case sonare::ErrorCode::NotImplemented:
+          code = 6;
+          code_name = "NotSupported";
+          break;
+        case sonare::ErrorCode::InvalidState:
+          code = 7;
+          code_name = "InvalidState";
+          break;
+      }
+    }
+  }
+  info.set("code", code);
+  info.set("codeName", std::string(code_name));
+  info.set("message", message);
+  return info;
+}
+
 uint32_t js_engine_abi_version() { return sonare::rt::kEngineAbiVersion; }
 
 uint32_t js_voice_changer_abi_version() { return editing::voice_changer::kVoiceChangerAbiVersion; }
@@ -163,6 +223,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .value("Unknown", SectionType::Unknown);
 
   function("version", &js_version);
+  function("sonareExceptionInfo", &js_sonare_exception_info);
   function("engineAbiVersion", &js_engine_abi_version);
   function("voiceChangerAbiVersion", &js_voice_changer_abi_version);
   function("voiceCharacterPresetId", &js_voice_character_preset_id);

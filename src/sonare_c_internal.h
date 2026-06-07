@@ -65,6 +65,14 @@ void set_last_error(const char* msg);
 ///          an earlier call can never leak into an unrelated later call. See the
 ///          @ref sonare_last_error_message contract in sonare_c.h.
 void clear_last_error();
+/// @brief Thread-local non-fatal diagnostic channel, separate from the error
+/// message. Surfaced by @ref sonare_last_warning_message on a SUCCESS return
+/// (e.g. a scene loaded fine but some insert params were silently ignored).
+std::string& last_warning_storage();
+void set_last_warning(const char* msg);
+/// @brief Clears the thread-local warning message. Called at the entry of the
+/// C-ABI calls that may record one, so a stale warning never leaks forward.
+void clear_last_warning();
 SonareError map_sonare_exception(const SonareException& e);
 /// @brief Validates an offline audio buffer shared by every run_*_offline entry.
 /// @details EMPTY-AUDIO POLICY: a NULL @p samples or @c length == 0 is rejected

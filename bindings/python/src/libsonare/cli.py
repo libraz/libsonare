@@ -4,13 +4,66 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from typing import Any, cast
 
+from ._ffi import (
+    SONARE_ERROR_DECODE_FAILED,
+    SONARE_ERROR_FILE_NOT_FOUND,
+    SONARE_ERROR_INVALID_FORMAT,
+    SONARE_ERROR_INVALID_PARAMETER,
+    SONARE_ERROR_INVALID_STATE,
+    SONARE_ERROR_NOT_SUPPORTED,
+    SONARE_ERROR_OUT_OF_MEMORY,
+)
+from ._runtime import SonareError
 from .types import KeyProfile, Mode, PitchClass
 
 PITCH_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"]
+
+# CLI exit codes. Failures map to codes aligned with the C-ABI SonareError so
+# scripts can distinguish usage / missing-file / decode / processing errors.
+# argparse keeps its native exit 2 for usage errors. Set SONARE_LEGACY_EXIT=1 to
+# fold every failure back to 1 for scripts that hardcode the old contract.
+EXIT_SUCCESS = 0
+EXIT_USAGE = 2
+EXIT_INVALID_PARAMETER = 3
+EXIT_FILE_NOT_FOUND = 4
+EXIT_INVALID_FORMAT = 5
+EXIT_DECODE_FAILED = 6
+EXIT_OUT_OF_MEMORY = 7
+EXIT_NOT_SUPPORTED = 8
+EXIT_INVALID_STATE = 9
+EXIT_ERROR = 10
+
+_SONARE_CODE_TO_EXIT = {
+    SONARE_ERROR_INVALID_PARAMETER: EXIT_INVALID_PARAMETER,
+    SONARE_ERROR_FILE_NOT_FOUND: EXIT_FILE_NOT_FOUND,
+    SONARE_ERROR_INVALID_FORMAT: EXIT_INVALID_FORMAT,
+    SONARE_ERROR_DECODE_FAILED: EXIT_DECODE_FAILED,
+    SONARE_ERROR_OUT_OF_MEMORY: EXIT_OUT_OF_MEMORY,
+    SONARE_ERROR_NOT_SUPPORTED: EXIT_NOT_SUPPORTED,
+    SONARE_ERROR_INVALID_STATE: EXIT_INVALID_STATE,
+}
+
+
+def _legacy_exit_codes() -> bool:
+    """Whether SONARE_LEGACY_EXIT requests the old all-failures-are-1 behaviour."""
+    return os.environ.get("SONARE_LEGACY_EXIT") == "1"
+
+
+def _exit_code_for(exc: BaseException) -> int:
+    """Map an exception to a CLI exit code aligned with the C-ABI error codes."""
+    if _legacy_exit_codes():
+        return 1
+    if isinstance(exc, SonareError):
+        return _SONARE_CODE_TO_EXIT.get(exc.code, EXIT_ERROR)
+    if isinstance(exc, FileNotFoundError):
+        return EXIT_FILE_NOT_FOUND
+    return EXIT_ERROR
+
 
 # NOTE: Some C++ CLI commands (sections, melody, boundaries, cqt variants, and
 # low-level math/unit converters) are not mirrored here yet. Several already
@@ -2385,7 +2438,7 @@ def main() -> None:
 
     if not args.command:
         parser.print_help()
-        sys.exit(1)
+        sys.exit(1 if _legacy_exit_codes() else EXIT_USAGE)
 
     commands = {
         "version": cmd_version,
@@ -2444,13 +2497,13 @@ def main() -> None:
     handler = commands.get(args.command)
     if not handler:
         print(f"Unknown command: {args.command}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(1 if _legacy_exit_codes() else EXIT_USAGE)
 
     try:
         sys.exit(handler(args))
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(_exit_code_for(e))
 
 
 if __name__ == "__main__":
