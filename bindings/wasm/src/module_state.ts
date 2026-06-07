@@ -13,10 +13,32 @@ interface NativeExceptionInfo {
 }
 
 /**
- * Turn a thrown native exception pointer into a {@link SonareError}. With
- * emscripten's classic exception handling a C++ throw reaches JS as the raw
- * exception-object pointer (a number); the bound `sonareExceptionInfo` decodes
- * it back into { code, codeName, message }.
+ * Recover the native exception-object pointer from a value thrown across the
+ * WASM boundary. emscripten surfaces a C++ throw in two shapes depending on the
+ * toolchain/exception mode:
+ *   - a raw pointer number (older / classic surfacing), or
+ *   - a `CppException` object exposing the pointer as `excPtr` (emscripten with
+ *     `-fexceptions`).
+ * Returns null when the thrown value is neither (a genuine JS error), so the
+ * caller rethrows it unchanged.
+ */
+function nativeExceptionPtr(error: unknown): number | null {
+  if (typeof error === 'number') {
+    return error;
+  }
+  if (error !== null && typeof error === 'object') {
+    const ptr = (error as { excPtr?: unknown }).excPtr;
+    if (typeof ptr === 'number') {
+      return ptr;
+    }
+  }
+  return null;
+}
+
+/**
+ * Turn a thrown native exception pointer into a {@link SonareError}. The bound
+ * `sonareExceptionInfo` decodes the pointer back into { code, codeName,
+ * message }.
  */
 function makeSonareError(raw: SonareModule, thrown: number): SonareError {
   let code: number = ErrorCode.Unknown;
@@ -39,7 +61,8 @@ function makeSonareError(raw: SonareModule, thrown: number): SonareError {
 
 /**
  * Wrap the embind module so a native C++ exception (which surfaces as a raw
- * pointer number) is rethrown as a {@link SonareError}. Only function-valued
+ * pointer number or a `CppException` carrying one) is rethrown as a
+ * {@link SonareError}. Only function-valued
  * members are wrapped, and the wrapper is cached per member so repeated access
  * stays cheap; non-function members (typed-array heap views, etc.) pass through
  * unchanged. The dedicated realtime `sonare-rt` module is separate and is not
@@ -48,8 +71,9 @@ function makeSonareError(raw: SonareModule, thrown: number): SonareError {
 function wrapModuleErrors(raw: SonareModule): SonareModule {
   const cache = new Map<PropertyKey, unknown>();
   const convert = (error: unknown): never => {
-    if (typeof error === 'number') {
-      throw makeSonareError(raw, error);
+    const ptr = nativeExceptionPtr(error);
+    if (ptr !== null) {
+      throw makeSonareError(raw, ptr);
     }
     throw error;
   };

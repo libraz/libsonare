@@ -995,6 +995,14 @@ if(BUILD_WASM)
   target_compile_options(sonare PRIVATE -msimd128)
   target_link_options(sonare PRIVATE
     -msimd128
+    # Enable classic (JS-based) C++ exception support so a native throw
+    # propagates to JS as a catchable CppException carrying the exception
+    # pointer, instead of aborting. emscripten disables exception catching by
+    # default (DISABLE_EXCEPTION_CATCHING=1); without this, embind functions
+    # that throw abort the module on platforms where the throw is not silently
+    # turned into a pointer (e.g. Linux), which is how SonareError surfacing
+    # breaks. The JS module wrapper decodes the pointer via sonareExceptionInfo.
+    -fexceptions
     -sEXPORT_NAME='Sonare'
     -sEXPORTED_RUNTIME_METHODS=['UTF8ToString']
     -sMODULARIZE=1
