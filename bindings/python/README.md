@@ -4,11 +4,11 @@
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 
-A dependency-free audio DSP toolkit for Python — librosa-compatible analysis
-plus broadcast-grade mastering, mixing, and editing.
+A C++-core audio DSP toolkit for Python — librosa-compatible analysis plus
+broadcast-grade mastering, mixing, editing, synthesis, and a real-time engine.
 
-Built on a C++ core with zero Python dependencies. Analysis defaults match
-librosa (validated against generated librosa reference values in CI), and
+Built on a C++ core with NumPy as the only Python dependency. Analysis defaults
+match librosa (validated against generated librosa reference values in CI), and
 mastering ships 66 named DSP processors implemented against published
 references (ITU-R BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers,
 Vicanek matched-Z biquads, ADAA-antialiased saturation) — Apache-2.0, no model
@@ -70,6 +70,29 @@ print(blind.rt60, blind.edt, blind.is_blind)
 ir = libsonare.Audio.from_file("room_ir.wav")
 params = ir.analyze_impulse_response()
 print(params.rt60, params.c50, params.c80, params.d50)
+```
+
+`estimate_room` infers room geometry (`volume`, `length`/`width`/`height`,
+`drr_db`, per-band `absorption_bands` / `rt60_bands`) from a recording.
+`synthesize_rir` renders an image-source-model RIR for a shoebox room, and
+`room_morph` convolves audio with such an RIR to relocate it into that room.
+
+```python
+import numpy as np
+import libsonare
+
+room = libsonare.estimate_room(samples, sample_rate=48000)
+print(room.volume, room.length, room.width, room.height, room.rt60_bands)
+
+rir = libsonare.synthesize_rir(
+    length_m=6.0, width_m=4.0, height_m=2.8,
+    absorption=0.2, sample_rate=48000, ism_order=3,
+)
+print(len(rir.rir), rir.sample_rate)
+
+wet = libsonare.room_morph(
+    samples, 48000, length_m=6.0, width_m=4.0, height_m=2.8, wet=0.5,
+)
 ```
 
 ### Load from a numpy array / in-memory samples
@@ -169,6 +192,39 @@ mono_compat_json = libsonare.mastering_stereo_analyze(
 )
 ```
 
+### Mastering specialist processors
+
+For direct access to individual dynamics and restoration processors (each
+returns `(processed_ndarray, latency_samples)` for the dynamics family, and a
+processed `ndarray` for the repair family):
+
+```python
+import libsonare
+
+comp, latency = libsonare.mastering_dynamics_compressor(
+    samples, sample_rate=sr, threshold_db=-18.0, ratio=2.0, attack_ms=10.0,
+)
+gated, _ = libsonare.mastering_dynamics_gate(samples, sample_rate=sr, threshold_db=-50.0)
+shaped, _ = libsonare.mastering_dynamics_transient_shaper(
+    samples, sample_rate=sr, attack_gain_db=3.0,
+)
+
+declicked = libsonare.mastering_repair_declick(samples, sample_rate=sr)
+declipped = libsonare.mastering_repair_declip(samples, sample_rate=sr)
+decrackled = libsonare.mastering_repair_decrackle(samples, sample_rate=sr)
+dehummed = libsonare.mastering_repair_dehum(samples, sample_rate=sr, fundamental_hz=50.0)
+denoised = libsonare.mastering_repair_denoise_classical(samples, sample_rate=sr)
+dereverbed = libsonare.mastering_repair_dereverb_classical(samples, sample_rate=sr)
+trimmed = libsonare.mastering_repair_trim_silence(samples, sample_rate=sr)
+```
+
+Insert (FX) introspection for scene/UI builders:
+
+```python
+inserts = libsonare.mastering_insert_names()              # e.g. "dynamics.compressor"
+params = libsonare.mastering_insert_param_names("dynamics.compressor")  # camelCase keys
+```
+
 ### Mastering chain
 
 `mastering_chain` runs the full configurable mastering pipeline (EQ, dynamics,
@@ -219,7 +275,7 @@ libsonare.mastering_preset_names()
 result = libsonare.master_audio(
     samples,
     sample_rate=sr,
-    preset="aiMusic",
+    preset_name="aiMusic",
     overrides={
         "loudness.targetLufs": -13.0,
         "dynamics.multibandComp.enabled": True,
@@ -285,6 +341,165 @@ with libsonare.Project() as project:
     audio = project.bounce(num_channels=2)  # (frames, channels) float32 ndarray
 ```
 
+### Instruments and synthesis
+
+A plain `Project.bounce()` renders MIDI tracks to silence (no instrument is
+bound). The `bounce_with_*_instrument` methods route bound MIDI destinations
+through a sound source: the simple built-in oscillator (`BuiltinSynthConfig`),
+the full patch-driven NativeSynth (`SynthPatch` / preset name), a SoundFont
+player (`Sf2InstrumentConfig`, after `load_soundfont`), or your own host
+instrument (`bounce_with_instruments`). `synth_preset_names()` lists the
+NativeSynth catalog, and `synth_preset_patch(name)` returns a tweakable
+`SynthPatch`.
+
+```python
+import libsonare
+
+print(libsonare.synth_preset_names())   # ['sine', 'saw-lead', 'e-piano', ...]
+
+with libsonare.Project() as project:
+    project.set_sample_rate(48000)
+    _, clip_id = project.add_midi_clip(0.0, 4.0)
+    project.set_midi_events(clip_id, [
+        libsonare.Project.midi_note_on(0.0, 0, 0, 60, 100),
+        libsonare.Project.midi_note_off(2.0, 0, 0, 60),
+    ])
+
+    # NativeSynth preset (or a SynthPatch, or None for the default patch).
+    audio = project.bounce_with_synth_instrument("saw-lead", num_channels=2)
+
+    # Build a patch from a preset base, overriding only what you need.
+    patch = libsonare.SynthPatch(preset="e-piano", cutoff_hz=4000.0, gain=0.8)
+    audio2 = project.bounce_with_synth_instrument(patch, num_channels=2)
+
+    # Simple built-in oscillator.
+    audio3 = project.bounce_with_builtin_instrument(
+        libsonare.BuiltinSynthConfig(waveform="saw", gain=0.5),
+    )
+```
+
+### Real-time engine
+
+`RealtimeEngine` is a block-based transport + clip/MIDI playback engine with
+instrument binding, MIDI input/output, parameter automation, capture, an
+offline bounce, and a telemetry ring. It is a context manager.
+
+```python
+import libsonare
+from libsonare import EngineBounceOptions
+
+with libsonare.RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+    engine.set_tempo(120.0)
+    engine.set_synth_instrument("saw-lead", destination_id=0)
+    engine.push_midi_note_on(0, 0, 0, 60, 100)   # destination, group, channel, note, velocity
+    engine.play()
+
+    out = engine.process([[0.0] * 128, [0.0] * 128])  # -> planar [[...left], [...right]]
+    telemetry = engine.drain_telemetry()
+
+    bounced = engine.bounce_offline(EngineBounceOptions(total_frames=48000, num_channels=2))
+    print(bounced.frames, bounced.num_channels, bounced.integrated_lufs)
+```
+
+Capabilities:
+
+- Transport: `play` / `stop` / `seek_sample` / `seek_ppq` / `set_tempo` / `set_time_signature` / `set_loop`.
+- Clips: `set_clips([EngineClip(...)])`, paged streaming via `ClipPageProvider` / `FileClipPageProvider`.
+- Instruments: `set_synth_instrument` / `set_builtin_instrument` / `set_sf2_instrument` (after `load_soundfont`).
+- MIDI: `push_midi_note_on` / `push_midi_note_off` / `push_midi_cc` / `push_midi_panic`, live input via `push_midi_input_*`, and `bind_midi_cc` to parameters.
+- Rendering: `process` / `process_with_monitor` / `render_offline` / `bounce_offline` / `freeze_offline`.
+- Automation, markers, metronome, capture (`arm_capture` / `captured_audio`), and `drain_telemetry` / `drain_meter_telemetry`.
+
+### Real-time voice changer
+
+`RealtimeVoiceChanger` runs a block-based vocal chain (retune, formant shift,
+EQ, gate, compressor, de-esser, reverb, limiter) configured from a named preset
+or a config mapping. `voice_change_realtime` is a one-shot convenience for an
+entire buffer. Preset helpers list, fetch, and validate configs.
+
+```python
+import libsonare
+
+print(libsonare.realtime_voice_changer_preset_names())  # ['neutral-monitor', 'bright-idol', ...]
+
+with libsonare.RealtimeVoiceChanger(48000, "bright-idol", max_block_size=128) as vc:
+    out_block = vc.process_mono([0.0] * 128)      # -> np.ndarray
+    vc.set_config("deep-narrator")                # swap preset mid-stream
+    cfg = vc.config_pod()                         # RealtimeVoiceChangerConfig (POD)
+
+# One-shot over a whole buffer.
+processed = libsonare.voice_change_realtime(samples, sample_rate=48000, preset="bright-idol")
+
+cfg = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+check = libsonare.validate_realtime_voice_changer_preset_json(
+    libsonare.realtime_voice_changer_preset_json("bright-idol")
+)
+print(check["ok"])  # True
+```
+
+### Streaming frame analyzer
+
+`StreamAnalyzer` analyzes audio incrementally: feed chunks with `process`, then
+drain analyzed frames (mel / chroma / onset / RMS / spectral / chord) with
+`read_frames` (or the quantized `read_frames_u8` / `read_frames_i16`). Query the
+running BPM/key/chord estimate via `stats`. It is a context manager.
+
+```python
+import libsonare
+
+with libsonare.StreamAnalyzer(libsonare.StreamConfig(sample_rate=22050)) as sa:
+    for chunk in audio_chunks:
+        sa.process(chunk)
+    sa.finalize()
+
+    frames = sa.read_frames(sa.available_frames())
+    print(frames.n_frames, frames.n_mels)
+
+    stats = sa.stats()
+    print(stats.bpm, stats.key, stats.chord_root)
+```
+
+### Metering
+
+A compact metering family operates on plain sample buffers. Names (all
+`libsonare.<name>`):
+
+| Function | Returns |
+|----------|---------|
+| `metering_peak_db` / `metering_rms_db` / `metering_true_peak_db` | `float` |
+| `metering_crest_factor_db` / `metering_dc_offset` | `float` |
+| `metering_stereo_correlation` / `metering_stereo_width` | `float` (L/R) |
+| `metering_detect_clipping` | `ClippingReport` |
+| `metering_dynamic_range` | `DynamicRangeReport` |
+| `metering_spectrum` / `metering_spectrum_frame` | `SpectrumReport` |
+| `metering_vectorscope` / `metering_vectorscope_decimated` | `VectorscopeReport` |
+| `metering_phase_scope` / `metering_phase_scope_decimated` | `PhaseScopeReport` |
+| `waveform_peaks` / `waveform_peak_pyramid` | `WaveformPeaksReport` (min/max buckets) |
+
+```python
+import libsonare
+
+print(libsonare.metering_true_peak_db(samples, sample_rate=sr))
+report = libsonare.metering_detect_clipping(samples, sample_rate=sr)
+peaks = libsonare.waveform_peaks(samples, channels=1, samples_per_bucket=512)
+```
+
+### Error handling
+
+Native return-code failures raise `libsonare.SonareError`, a subclass of
+`RuntimeError` carrying a numeric `.code`. Input-validation failures (empty /
+NaN / Inf buffers, bad shapes) raise `ValueError`, and missing-feature builds
+raise `RuntimeError`.
+
+```python
+import libsonare
+
+try:
+    libsonare.synth_preset_patch("does-not-exist")
+except libsonare.SonareError as exc:
+    print(exc.code, str(exc))
+```
+
 ### Streaming mastering chain
 
 `StreamingMasteringChain` runs the same pipeline block-by-block for real-time
@@ -316,7 +531,7 @@ with libsonare.StreamingMasteringChain({
 
 ```python
 import libsonare
-libsonare.__version__   # e.g. "1.0.4"  (preferred — matches importlib.metadata)
+libsonare.__version__   # e.g. "1.3.2"  (preferred — matches importlib.metadata)
 libsonare.version()     # native library version string
 ```
 
@@ -414,20 +629,65 @@ sonare pitch song.mp3            # Pitch tracking (pYIN)
 sonare mel song.mp3              # Mel spectrogram shape
 sonare chroma song.mp3           # Chromagram with visualization
 
+sonare rhythm song.mp3           # Rhythm primitives
+sonare timbre song.mp3           # Timbre / spectral shape
+sonare dynamics song.mp3         # Dynamics / loudness analysis
+sonare lufs song.mp3 --series    # Integrated LUFS (+ momentary/short-term)
+sonare tempogram song.mp3        # Autocorrelation tempogram
+sonare plp song.mp3              # Predominant local pulse
+sonare nnls-chroma song.mp3      # NNLS chroma
+sonare onset-envelope song.mp3   # Onset strength envelope
+
+sonare acoustic recording.wav                 # Blind RT60 / EDT estimation
+sonare estimate-room recording.wav            # Inferred room geometry
+sonare synthesize-rir -o rir.wav              # Render a shoebox-room RIR
+sonare room-morph song.wav -o wet.wav         # Convolve into a synthesized room
+
+sonare master song.wav -o mastered.wav --preset pop
 sonare mastering song.wav -o mastered.wav --target-lufs -14
 sonare mastering-processor song.wav --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5
-sonare mastering-pair-processors
+sonare mastering-chain song.wav -o out.wav --params loudness.targetLufs=-14
+sonare mastering-processors           # List solo processors
+sonare mastering-pair-processors      # List two-input processors
 sonare mastering-pair-analyze source.wav --reference reference.wav --analysis match.referenceLoudness
+sonare mastering-presets              # List mastering preset names
+sonare mastering-suggest song.wav     # Suggested chain as JSON
+sonare eq song.wav -o eq.wav --frequency-hz 1000 --gain-db 3 --q 1.0
+sonare declip song.wav -o fixed.wav   # Repair clipped audio
+
+sonare pitch-correct vocal.wav -o tuned.wav   # Snap pitch to a scale/MIDI
+sonare note-stretch song.wav -o out.wav       # Per-note time stretch
+sonare voice-change vocal.wav -o out.wav --preset bright-idol
+sonare voice-presets                  # List realtime voice-changer presets
+sonare voice-preset --preset bright-idol --json   # Print a voice-changer preset
+
+sonare mixing-presets                 # List mixer scene presets
+sonare mixing-preset --preset vocalReverbSend
 sonare mix --preset vocalReverbSend
+sonare mix --scene scene.json --input a.wav --input b.wav -o mix.wav
+
+sonare synth-presets                  # List NativeSynth presets
+
+# Headless project / MIDI
+sonare project new --sample-rate 48000 -o project.json
+sonare project bounce --in project.json -o out.wav --synth saw-lead
+sonare project export-smf --in project.json -o out.mid
+sonare project import-smf --smf in.mid -o project.json
+sonare midi-render --in project.json -o out.wav --synth saw-lead
 ```
 
 ## Features
 
-- **Detection**: BPM (`float`), key (`Key(root, mode, confidence)`), beats (`list[float]` seconds), onsets (`list[float]` seconds)
-- **Analysis**: Full music analysis (`AnalysisResult` with BPM, key, time signature, beat times)
+- **Detection**: BPM (`float`), key (`detect_key` / `detect_key_candidates`), beats, downbeats (`detect_downbeats`), onsets, chords (`detect_chords` / `chord_functional_analysis`)
+- **Analysis**: Full music analysis (`analyze`), plus `analyze_melody`, `analyze_sections`, `analyze_rhythm`, `analyze_dynamics`, `analyze_timbre`
 - **Effects**: HPSS, HPSS with residual, pitch shift, time stretch, phase vocoder, normalize, trim, remix
 - **Features**: STFT, mel spectrogram, MFCC, chroma, CQT/VQT, spectral contrast, poly features, zero crossings, pitch tracking (YIN / pYIN with optional `fill_na`)
 - **Decomposition & loudness**: NMF decomposition, nearest-neighbour filtering, multichannel LUFS, EBU R128 LRA
+- **Mastering & metering**: 66 named processors, preset chains (`master_audio`), dynamics / repair specialist functions, and a `metering_*` / `waveform_peaks` family
+- **Mixing**: scene-driven `Mixer`, `mix_stereo`, built-in scene presets
+- **Instruments & synthesis**: NativeSynth (`SynthPatch` / presets), built-in oscillator, SoundFont (SF2) playback, host-instrument bounce
+- **Real-time**: `RealtimeEngine` (transport / clips / MIDI / capture), `RealtimeVoiceChanger`, `StreamAnalyzer`
+- **Room acoustics**: blind RT60 / EDT, `estimate_room`, `synthesize_rir`, `room_morph`
 - **Conversions**: Hz / mel / MIDI / note, frames / time
 - **Headless DAW**: `Project` arrangement model — audio/MIDI tracks & clips, undo/redo, MIDI sequencing, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`
 - **I/O**: Load WAV / MP3 (and M4A/AAC/FLAC/OGG when built with FFmpeg), resample

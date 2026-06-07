@@ -19,7 +19,11 @@ Unlike the WebAssembly package (`@libraz/libsonare`), this binding can decode
 audio files directly from disk or memory (WAV / MP3 out of the box, plus
 M4A / AAC / FLAC / OGG / Opus when built with FFmpeg). The analysis, mastering,
 mixing, and editing APIs are exposed, matching the C, Python, CLI, and WASM
-surfaces.
+surfaces. Beyond core BPM/key detection, the analysis surface includes chord
+(`detectChords`), downbeat (`detectDownbeats`), section (`analyzeSections`), and
+melody (`analyzeMelody`) extraction, plus a metering suite
+(`meteringTruePeakDb`, `meteringStereoCorrelation`, `meteringVectorscope`,
+`waveformPeaks`, ...).
 
 ## Installation
 
@@ -143,12 +147,44 @@ metrics because they are not reliable without an impulse response.
 import { Audio, analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare-native';
 
 const audio = Audio.fromFile('recording.wav');
-const blind = audio.detectAcoustic(6, 24, 30.0, 10.0);
+const blind = audio.detectAcoustic({
+  nOctaveBands: 6,
+  nThirdOctaveSubbands: 24,
+  minDecayDb: 30.0,
+  noiseFloorMarginDb: 10.0,
+});
 console.log(blind.rt60, blind.edt, blind.isBlind);
 
 const ir = Audio.fromFile('room_ir.wav');
 const params = analyzeImpulseResponse(ir.getData(), ir.getSampleRate());
 console.log(params.rt60, params.c50, params.c80, params.d50);
+```
+
+`synthesizeRir` renders a room impulse response from shoebox geometry,
+`estimateRoom` infers an equivalent room (volume / dimensions / absorption / DRR)
+from a recording or IR, and `roomMorph` re-reverberates a signal toward a target
+room as a creative effect (not dereverberation).
+
+```typescript
+import { estimateRoom, roomMorph, synthesizeRir } from '@libraz/libsonare-native';
+
+const { rir, sampleRate, hasError } = synthesizeRir({
+  lengthM: 8,
+  widthM: 5,
+  heightM: 3,
+  absorption: 0.2,
+  sampleRate: 48000,
+});
+
+const room = estimateRoom(samples, 48000, { referenceAbsorption: 0.2 });
+console.log(room.volume, room.drrDb, room.confidence);
+
+const morphed = roomMorph(samples, 48000, {
+  lengthM: 20,
+  widthM: 15,
+  heightM: 8,
+  wet: 0.5,
+});
 ```
 
 ### Mastering
@@ -173,14 +209,18 @@ const samples = audio.getData();
 // Full mastering chain (loudness optimizer toward a target LUFS / true-peak ceiling).
 // Returns MasteringResult(samples, sampleRate, inputLufs, outputLufs,
 // appliedGainDb, latencySamples).
-const mastered = mastering(samples, sampleRate, -14.0, -1.0, 4);
+const mastered = mastering(samples, sampleRate, {
+  targetLufs: -14.0,
+  ceilingDb: -1.0,
+  truePeakOversample: 4,
+});
 console.log(
   `${mastered.inputLufs.toFixed(1)} LUFS -> ${mastered.outputLufs.toFixed(1)} LUFS ` +
     `(gain ${mastered.appliedGainDb.toFixed(2)} dB)`,
 );
 
 // Audio class shortcut
-const masteredViaAudio = audio.mastering(-14.0, -1.0, 4);
+const masteredViaAudio = audio.mastering({ targetLufs: -14.0, ceilingDb: -1.0 });
 
 // Apply a single named processor
 const compressed = masteringProcess('dynamics.compressor', samples, sampleRate, {
@@ -338,6 +378,32 @@ const { left: outL, right: outR } = chain.processStereo(left, right);
 chain.reset();
 ```
 
+### Real-time voice changer
+
+`RealtimeVoiceChanger` applies a low-latency pitch / formant / character
+transform block-by-block, driven by a named voice-character preset.
+`realtimeVoiceChangerPresetNames()` lists the presets. For a one-shot offline
+transform, `voiceChange` (constant pitch/formant) and `voiceChangeRealtime`
+(latency-compensated preset pass) operate on a whole buffer.
+
+```typescript
+import {
+  RealtimeVoiceChanger,
+  realtimeVoiceChangerPresetNames,
+} from '@libraz/libsonare-native';
+
+realtimeVoiceChangerPresetNames();   // ['neutral-monitor', 'bright-idol', 'soft-whisper', ...]
+
+const changer = new RealtimeVoiceChanger({
+  sampleRate: 48000,
+  maxBlockSize: 128,
+  channels: 1,
+  preset: 'bright-idol',
+});
+const out = changer.processMono(new Float32Array(128));
+changer.destroy();
+```
+
 ### Headless DAW project
 
 `Project` is a headless arrangement model: audio & MIDI tracks and clips, MIDI
@@ -358,13 +424,102 @@ project.setMidiEvents(clipId, [
 ]);
 
 const json = project.toJson();                         // deterministic, byte-stable within a build
-const smf = project.exportSmf();                       // Uint8Array — Standard MIDI File
-const midi2 = project.exportClipFile();                // Uint8Array — MIDI 2.0 Clip File (lossless)
+const smf = project.exportSmf();                       // Buffer — Standard MIDI File
+const midi2 = project.exportClipFile();                // Buffer — MIDI 2.0 Clip File (lossless)
 
 const { hasTimeline, diagnostics } = project.compile();
 const audio = project.bounce({ numChannels: 2 });      // interleaved Float32Array
 
 project.destroy();
+```
+
+### Instruments and synthesis
+
+A plain `bounce` renders MIDI tracks as silence (no instrument is bound). To
+audition a MIDI arrangement, bounce it through an instrument: the built-in
+oscillator synth (`bounceWithBuiltinInstrument(s)`), the patch-driven
+NativeSynth (`bounceWithSynthInstrument(s)`), or a loaded SoundFont 2 player
+(`bounceWithSf2Instrument(s)`). `synthPresetNames()` lists NativeSynth presets
+and `synthPresetPatch(name)` returns one as a tweakable `SynthPatch`.
+
+```typescript
+import { Project, synthPresetNames, synthPresetPatch } from '@libraz/libsonare-native';
+
+const project = Project.create();
+project.setSampleRate(48000);
+const { clipId } = project.addMidiClip(0, 4);
+project.setMidiEvents(clipId, [
+  Project.midiNoteOn(0, 0, 0, 60, 100),
+  Project.midiNoteOff(1, 0, 0, 60),
+]);
+project.compile();
+
+synthPresetNames();                       // ['sine', 'saw-lead', 'e-piano', 'drum-kit', ...]
+const patch = synthPresetPatch('saw-lead');
+
+// Render the MIDI through the NativeSynth (preset name or a SynthPatch object)
+const audio = project.bounceWithSynthInstrument('saw-lead', { numChannels: 2 });
+
+// Built-in oscillator synth (waveform name or BuiltinInstrumentConfig)
+const simple = project.bounceWithBuiltinInstrument({ waveform: 'saw', gain: 0.2 });
+
+// SoundFont 2 player (load the SF2 first; uncovered programs fall back to the synth)
+project.loadSoundFont(sf2Bytes);
+const sf2Audio = project.bounceWithSf2Instrument({ gain: 0.5 });
+
+project.destroy();
+```
+
+### RealtimeEngine
+
+`RealtimeEngine` is the lock-free real-time host: a transport + timeline,
+clip/page streaming, MIDI-driven instruments, an audio graph, capture, and a
+telemetry ring buffer. Audio is processed block-by-block via `process` (or
+rendered in one shot offline with `renderOffline` / `bounceOffline`). MIDI can
+be scheduled or pushed live, and bound instruments are the same synth / SF2
+backends used by `Project`. Call `destroy()` to release the native handle.
+
+```typescript
+import { RealtimeEngine } from '@libraz/libsonare-native';
+
+const engine = new RealtimeEngine(48000, 128);          // sampleRate, maxBlockSize
+engine.setTempo(120);
+engine.setSynthInstrument('saw-lead', 0);               // bind NativeSynth to destination 0
+engine.setMidiInputSource(0);                           // route live MIDI input to it
+
+engine.play();
+engine.pushMidiInputNoteOn(0, 0, 60, 100);              // group, channel, note, velocity
+const output = engine.process([new Float32Array(128)]); // one block per channel
+
+const telemetry = engine.drainTelemetry();
+engine.destroy();
+```
+
+Capability areas (see the type definitions for the full method list):
+
+- Transport: `play` / `stop` / `seekSample` / `seekPpq` / `setTempo` / `setLoop`
+- Instrument binding: `setBuiltinInstrument` / `setSynthInstrument` / `setSf2Instrument` / `loadSoundFont`
+- Live MIDI: `pushMidiInputNoteOn` / `pushMidiInputNoteOff` / `pushMidiInputCc` (and scheduled `pushMidi*`)
+- Rendering: `process` / `processWithMonitor` / `renderOffline` / `bounceOffline` / `freezeOffline`
+- Telemetry: `drainTelemetry` / `drainMeterTelemetry` / `getTransportState`
+- Clips / capture: clip-page providers, `setClips`, `armCapture`, `capturedAudio`
+
+### Error handling
+
+C-ABI failures throw a standard `Error` whose `name` is `'SonareError'`,
+augmented with a numeric `code` (an `ErrorCode` value) and its canonical
+`codeName`. Narrow a caught value with the `isSonareError` type guard.
+
+```typescript
+import { Audio, ErrorCode, isSonareError } from '@libraz/libsonare-native';
+
+try {
+  Audio.fromFile('missing.wav');
+} catch (err) {
+  if (isSonareError(err) && err.code === ErrorCode.FileNotFound) {
+    console.error(`${err.codeName}: ${err.message}`);
+  }
+}
 ```
 
 ### Audio class

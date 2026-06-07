@@ -21,6 +21,11 @@ no model weights.
 > If you need to read WAV/MP3/M4A files directly in Node, use the native
 > N-API package [`@libraz/libsonare-native`](https://github.com/libraz/libsonare/tree/main/bindings/node) instead.
 
+> **Platform constraints:** the WebAssembly build is single-threaded (analysis
+> runs to completion on the calling thread — there is no non-blocking variant),
+> has no host filesystem access, and expects pre-decoded `Float32Array` sample
+> buffers. Drive long-running calls from a Web Worker to keep the UI responsive.
+
 ## Installation
 
 ```bash
@@ -122,6 +127,54 @@ await init();
 const blind = detectAcoustic(samples, sampleRate, 6, 24, 30.0, 10.0);
 const room = analyzeImpulseResponse(irSamples, sampleRate);
 console.log(blind.rt60, room.c50);
+```
+
+Acoustic simulation adds `synthesizeRir` (synthesize a shoebox-room impulse
+response from geometry), `estimateRoom` (recover an equivalent room from a
+recording or IR), and `roomMorph` (creatively re-reverberate audio toward a
+target room — not dereverberation).
+
+```typescript
+import { init, synthesizeRir, estimateRoom, roomMorph } from '@libraz/libsonare';
+
+await init();
+
+const { rir, hasError } = synthesizeRir({
+  lengthM: 6,
+  widthM: 4,
+  heightM: 3,
+  absorption: 0.2,
+  sampleRate: 48000,
+});
+
+const room = estimateRoom(samples, 48000); // { volume, length, width, height, ... }
+const morphed = roomMorph(samples, sampleRate, { lengthM: 12, widthM: 9, wet: 0.5 });
+```
+
+### Error handling
+
+Native (C++) failures are thrown as a `SonareError` carrying a numeric `code`
+(an `ErrorCode` value) and its canonical `codeName`, so you can branch on the
+cause instead of matching message text. Use the `isSonareError` type guard in a
+`catch`:
+
+```typescript
+import { init, analyze, ErrorCode, isSonareError } from '@libraz/libsonare';
+
+await init();
+
+try {
+  const result = analyze(samples, sampleRate);
+} catch (error) {
+  if (isSonareError(error)) {
+    console.error(`${error.codeName} (${error.code}): ${error.message}`);
+    if (error.code === ErrorCode.InvalidParameter) {
+      // recover...
+    }
+  } else {
+    throw error;
+  }
+}
 ```
 
 ### Decoding files in the browser
@@ -331,6 +384,149 @@ try {
 }
 ```
 
+#### Clip warp
+
+A clip can be time-warped during an offline `bounce`. `setClipWarpMode` selects
+the playback mode (`ProjectWarpMode`: `'off'` | `'repitch'` | `'tempo-sync'`),
+`setClipWarpRef` binds it to a warp map, and `setWarpMap` registers a first-class
+warp map (anchors mapping warp-timeline samples to source samples).
+
+```typescript
+project.setWarpMap({
+  id: 1,
+  name: 'main',
+  anchors: [
+    { warpSample: 0, sourceSample: 0 },
+    { warpSample: 48000, sourceSample: 24000 },
+  ],
+});
+project.setClipWarpRef(clipId, 1);
+project.setClipWarpMode(clipId, 'tempo-sync');
+```
+
+> Warp is an offline `Project.bounce` feature only. Realtime warp playback is
+> **not** available in `RealtimeEngine`.
+
+### Instruments and synthesis
+
+MIDI tracks bounce silently unless an instrument is bound. `Project` offers
+three instrument backends, each as a `bounceWith…` variant that takes a binding
+(or array of bindings) plus the usual `ProjectBounceOptions`:
+
+- `bounceWithBuiltinInstrument(binding?, options?)` — simple built-in oscillator
+  synth (`BuiltinSynthConfig` / `BuiltinSynthBinding`: waveform + ADSR + gain).
+- `bounceWithSynthInstrument(patchOrName?, options?)` — patch-driven NativeSynth
+  (`SynthPatch`, or a preset-name string like `'saw-lead'`).
+- `bounceWithSf2Instrument(config?, options?)` — GS-compatible SoundFont player
+  (`Sf2InstrumentConfig`), fed by `loadSoundFont()`.
+
+Discover NativeSynth presets with `synthPresetNames()` and fetch one as an
+editable patch with `synthPresetPatch(name)`.
+
+```typescript
+import { init, Project, synthPresetNames, synthPresetPatch } from '@libraz/libsonare';
+
+await init();
+
+const project = new Project();
+try {
+  const { clipId } = project.addMidiClip(0, 4);
+  project.setMidiEvents(clipId, [
+    Project.midiNoteOn(0, 0, 0, 60, 100),
+    Project.midiNoteOff(1, 0, 0, 60),
+  ]);
+
+  // Built-in oscillator synth.
+  const a = project.bounceWithBuiltinInstrument({ waveform: 'saw' }, { numChannels: 2 });
+
+  // NativeSynth from a named preset, tweaked.
+  const patch = synthPresetPatch(synthPresetNames()[0]);
+  patch.cutoffHz = 4000;
+  const b = project.bounceWithSynthInstrument(patch, { numChannels: 2 });
+
+  // SoundFont player (requires loadSoundFont first).
+  project.loadSoundFont(sf2Bytes);
+  const c = project.bounceWithSf2Instrument({ gain: 0.6 }, { numChannels: 2 });
+} finally {
+  project.delete();
+}
+```
+
+### Real-time engine
+
+`RealtimeEngine` is a control-thread-driven transport + render engine: it plays
+a clip/automation timeline, hosts MIDI instruments, accepts live MIDI, and
+renders blocks (or bounces offline). Bind it to an AudioWorklet for browser
+playback — see the [AudioWorklet bridge](#audioworklet-bridge) below; the engine
+is the offline/headless half, the worklet is the audio-thread half.
+
+```typescript
+import { init, RealtimeEngine } from '@libraz/libsonare';
+
+await init();
+
+const engine = new RealtimeEngine(48000, 128); // sampleRate, maxBlockSize
+try {
+  engine.setSynthInstrument('saw-lead', 0);     // patch (or name), destinationId
+  engine.play();
+  engine.pushMidiNoteOn(0, 0, 0, 60, 100);      // destination, group, channel, note, velocity
+  engine.pushMidiNoteOff(0, 0, 0, 60);
+
+  const blockL = new Float32Array(128);
+  const blockR = new Float32Array(128);
+  const out = engine.process([blockL, blockR]); // Float32Array[] per channel
+  const telemetry = engine.drainTelemetry();
+} finally {
+  engine.destroy();
+}
+```
+
+Capabilities:
+
+- **Transport**: `play` / `stop` / `seekSample` / `seekPpq` / `setTempo` /
+  `setTimeSignature` / `setLoop`, plus `getTransportState`.
+- **Instruments**: `setBuiltinInstrument` / `setSynthInstrument` /
+  `setSf2Instrument` (+ `loadSoundFont`) per MIDI destination id.
+- **Live MIDI**: `pushMidiNoteOn` / `pushMidiNoteOff` / `pushMidiCc` /
+  `pushMidiPanic`, and `bindMidiCc(channel, controller, paramId, options?)` to
+  map a CC to an automation parameter.
+- **Process / bounce**: `process` (real-time blocks), the allocation-free
+  `prepareChannels` + `getChannelBuffer` + `processPrepared` worklet path,
+  `renderOffline`, `bounceOffline`, `freezeOffline`.
+- **Clip page providers**: `createClipPageProvider` + `supplyClipPage` for
+  streaming large clip audio in pages; pair with the OPFS helpers
+  (`createOpfsClipPageProvider`).
+- **Telemetry**: `drainTelemetry` / `drainMeterTelemetry`. Inspect runtime
+  capabilities (ABI compatibility, SharedArrayBuffer/Atomics) via
+  `engineCapabilities()`.
+
+### Real-time voice changer
+
+`RealtimeVoiceChanger` runs a block-by-block voice transformation chain (retune,
+formant shaping, EQ, gate, compressor). Construct it from a preset id (see
+`realtimeVoiceChangerPresetNames()`) or a full config object, then process blocks.
+
+```typescript
+import { init, RealtimeVoiceChanger, voiceChangeRealtime } from '@libraz/libsonare';
+
+await init();
+
+const changer = new RealtimeVoiceChanger('bright-idol');
+try {
+  changer.prepare(48000, 128, 1); // sampleRate, maxBlockSize, channels
+  const out = changer.processMono(block);
+} finally {
+  changer.delete();
+}
+
+// Whole-buffer convenience wrapper (constructs/prepares/disposes internally).
+const processed = voiceChangeRealtime(samples, { preset: 'deep-narrator', sampleRate: 48000 });
+```
+
+For a simple offline pitch + formant shift without the full chain, use
+`voiceChange(samples, sampleRate, { pitchSemitones: -2, formantFactor: 1.1 })`.
+Inspect a preset with `realtimeVoiceChangerPresetJson(name)`.
+
 ### AudioWorklet bridge
 
 The package exposes an optional worklet entry that uses the same `sonare.wasm`
@@ -476,17 +672,50 @@ chain.reset();
 chain.delete(); // release WASM memory
 ```
 
+### Streaming equalizer and retune
+
+`StreamingEqualizer` wraps the unified `EqualizerProcessor` (up to 24 bands,
+RBJ/Vicanek biquads, dynamic EQ, linear-phase FIR, mid/side, auto-gain) with
+state maintained across calls. `StreamingRetune` is a block-by-block mono voice
+retune / pitch shifter.
+
+```typescript
+import { init, StreamingEqualizer, StreamingRetune } from '@libraz/libsonare';
+
+await init();
+
+const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+try {
+  eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+  const { left: eqL, right: eqR } = eq.processStereo(left, right);
+} finally {
+  eq.delete();
+}
+
+const retune = new StreamingRetune({ semitones: 2, mix: 1.0 });
+try {
+  retune.prepare(48000, 512); // sampleRate, maxBlockSize
+  const shifted = retune.processMono(monoBlock);
+} finally {
+  retune.delete();
+}
+```
+
 ## Features
 
-- **Detection**: BPM, key, beats, onsets, chords, sections
+- **Detection**: `detectBeats`, `detectOnsets`, `detectDownbeats`, `detectChords`, `detectKey`, `detectKeyCandidates`, `chordFunctionalAnalysis`, sections
+- **Analysis**: `analyze`, `analyzeWithProgress`, `analyzeBpm`, `analyzeRhythm`, `analyzeDynamics`, `analyzeTimbre`; `hasFfmpegSupport` capability check
 - **Effects**: HPSS, HPSS with residual, time stretch, phase vocoder, pitch shift, normalize, trim, remix
 - **Mastering**: EQ, compressor, tape/exciter, air band, stereo imaging,
   true-peak limiting, loudness optimization
 - **Features**: STFT, mel spectrogram, MFCC, chroma, CQT/VQT, spectral contrast, poly features, zero crossings
 - **Pitch**: YIN, pYIN algorithms with optional `fillNa`
 - **Decomposition & loudness**: NMF decomposition, nearest-neighbour filtering, multichannel LUFS, EBU R128 LRA
-- **Streaming**: Real-time analysis with progressive estimates
-- **Headless DAW**: `Project` arrangement model — audio/MIDI tracks & clips, undo/redo, MIDI sequencing, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`
+- **Streaming**: Real-time analysis with progressive estimates; streaming mastering chain, equalizer, and retune
+- **Instruments**: built-in synth, patch-driven NativeSynth, SoundFont (SF2) player — bound to `Project` bounces or the `RealtimeEngine`
+- **Real-time**: `RealtimeEngine` transport/MIDI/render, `RealtimeVoiceChanger`, AudioWorklet bridge
+- **Room acoustics**: blind RT60/EDT, impulse-response clarity metrics, RIR synthesis, room estimation, room morphing
+- **Headless DAW**: `Project` arrangement model — audio/MIDI tracks & clips, undo/redo, MIDI sequencing, clip warp, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`
 - **Conversions**: Hz/mel/MIDI/note, frames/time, resample
 
 ## Also available
