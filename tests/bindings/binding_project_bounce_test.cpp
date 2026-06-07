@@ -822,3 +822,99 @@ TEST_CASE("bounce_with_instruments PDC-compensates a latency-bearing instrument"
 
   sonare_project_destroy(project);
 }
+
+namespace {
+
+// Records every note-on the sequencer dispatches (note number + render frame),
+// so a bounce can assert that sequential clip notes ALL reach the instrument,
+// not just the first. render() is a required no-op (callback instruments must
+// supply a render function).
+struct SequenceRecorderState {
+  std::vector<uint8_t> note_on_notes;
+  std::vector<int64_t> note_on_frames;
+  int note_off = 0;
+};
+
+void seq_on_event(void* user, uint32_t /*destination_id*/, const uint32_t* words, int word_count,
+                  int64_t render_frame) {
+  if (word_count < 1) return;
+  auto* state = static_cast<SequenceRecorderState*>(user);
+  const uint8_t status = static_cast<uint8_t>((words[0] >> 16) & 0xF0u);
+  const uint8_t note = static_cast<uint8_t>((words[0] >> 8) & 0x7Fu);
+  if (status == 0x90u) {
+    state->note_on_notes.push_back(note);
+    state->note_on_frames.push_back(render_frame);
+  } else if (status == 0x80u) {
+    state->note_off += 1;
+  }
+}
+
+void seq_render(void* /*user*/, float* const* /*channels*/, int /*num_channels*/,
+                int /*num_frames*/) {}
+
+}  // namespace
+
+TEST_CASE("bounce dispatches every note of a sequential melody, not just the first", "[project]") {
+  // Regression: a clip holding a sequential (non-overlapping) melody must
+  // dispatch ALL its note events through the offline bounce. A prior defect
+  // stopped MIDI dispatch after the first block, so only the note sounding at
+  // render frame 0 ever reached the instrument (it then sustained forever
+  // because its note-off was dropped too) -- a melody bounced as one frozen
+  // note. The recorder asserts each note-on arrives, in order, at a distinct
+  // and increasing render frame.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  // Three separated notes: C4 (60), E4 (64), G4 (67), each a quarter long with a
+  // quarter of silence after, so no two notes overlap.
+  SonareMidiEventPod events[6];
+  const uint8_t notes[3] = {60, 64, 67};
+  for (int i = 0; i < 3; ++i) {
+    const double on_ppq = static_cast<double>(i);  // 0, 1, 2 quarters
+    events[i * 2].ppq = on_ppq;
+    events[i * 2].data0 = 0x20900040u | (static_cast<uint32_t>(notes[i]) << 8) | 0x40u;
+    events[i * 2].data1 = 0u;
+    events[i * 2 + 1].ppq = on_ppq + 0.5;  // note-off half a beat later
+    events[i * 2 + 1].data0 = 0x20800000u | (static_cast<uint32_t>(notes[i]) << 8);
+    events[i * 2 + 1].data1 = 0u;
+  }
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 6) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 120000;  // 2.5 s at 48 kHz, past the last note-off.
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  SequenceRecorderState state;
+  SonareInstrumentBinding binding{};
+  binding.destination_id = 5;
+  binding.callbacks.user_data = &state;
+  binding.callbacks.on_event = &seq_on_event;
+  binding.callbacks.render = &seq_render;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len) ==
+          SONARE_OK);
+  sonare_free_floats(out);
+
+  // All three note-ons must have been dispatched, in pitch order, each at a
+  // strictly increasing render frame (the bug delivered only the first).
+  REQUIRE(state.note_on_notes.size() == 3);
+  REQUIRE(state.note_on_notes[0] == 60);
+  REQUIRE(state.note_on_notes[1] == 64);
+  REQUIRE(state.note_on_notes[2] == 67);
+  REQUIRE(state.note_on_frames[0] < state.note_on_frames[1]);
+  REQUIRE(state.note_on_frames[1] < state.note_on_frames[2]);
+  // And every note-off too (3) -- otherwise the first note would hang.
+  REQUIRE(state.note_off == 3);
+
+  sonare_project_destroy(project);
+}

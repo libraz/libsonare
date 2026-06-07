@@ -5,6 +5,8 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+#include "util/exception.h"
+
 TEST_CASE("Routed mixer scene round-trip preserves topology", "[mixing][routing]") {
   // from_scene_json(vocalReverbSend) -> to_scene_json must preserve buses,
   // strips, sends (with destination_bus_id), and connections, including the
@@ -437,6 +439,40 @@ TEST_CASE("Routed mixer does not auto-route explicit unpatched aux buses", "[mix
 
   REQUIRE(block_energy({out_l.begin(), out_l.end()}, {out_r.begin(), out_r.end()}) < 1.0e-8);
   sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Scene JSON rejects non-string insert slot and send timing", "[mixing][routing]") {
+  // `slot` and `timing` are string enums ("pre"/"post"). A wrong-typed value
+  // must fail the parse instead of silently falling back to the default.
+  const std::string bad_slot = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "vocal", "inserts": [{"slot": 1, "processor": "eq.tilt"}]}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(bad_slot), sonare::SonareException);
+
+  const std::string bad_timing = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master"}, {"id": "verb", "role": "aux"}],
+    "strips": [{"id": "vocal", "sends": [
+      {"id": "to-verb", "destinationBusId": "verb", "sendDb": -12, "timing": 1}
+    ]}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(bad_timing), sonare::SonareException);
+
+  // The string forms still parse.
+  const std::string good = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "vocal", "inserts": [{"slot": "post", "processor": "eq.tilt"}]}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  const auto scene = sonare::mixing::api::scene_from_json(good);
+  REQUIRE(scene.strips.size() == 1);
+  REQUIRE(scene.strips[0].inserts.size() == 1);
+  REQUIRE(scene.strips[0].inserts[0].slot == sonare::mixing::api::InsertSlot::PostFader);
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

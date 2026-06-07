@@ -600,6 +600,11 @@ def test_mixing_preset_cli_commands_smoke() -> None:
     scene = json.loads(preset.stdout)
     assert "strips" in scene
 
+    # Bare invocation must resolve to a valid default preset.
+    default_preset = _run_cli(["mixing-preset"])
+    assert default_preset.returncode == 0, default_preset.stderr
+    assert "strips" in json.loads(default_preset.stdout)
+
 
 def test_analyze_sections_returns_section_result() -> None:
     from libsonare import Section, SectionResult, SectionType, analyze_sections

@@ -13,8 +13,11 @@ Scene make_vocal_reverb_send() {
   Strip vocal;
   vocal.id = "vocal";
   vocal.fader_db = -3.0f;
-  vocal.inserts.push_back(
-      {InsertSlot::PreFader, "eq.parametric", "{\"highPassHz\":80,\"presenceDb\":2}"});
+  // 80 Hz high-pass (band0, type 4 = HighPass) + 2 dB presence peak at 4 kHz
+  // (band1, default Peak type). eq.parametric only reads `band{N}.*` keys.
+  vocal.inserts.push_back({InsertSlot::PreFader, "eq.parametric",
+                           "{\"band0.type\":4,\"band0.frequencyHz\":80,"
+                           "\"band1.frequencyHz\":4000,\"band1.gainDb\":2}"});
   vocal.inserts.push_back(
       {InsertSlot::PreFader, "dynamics.compressor", "{\"thresholdDb\":-18,\"ratio\":2.5}"});
   vocal.sends.push_back({"vocal-to-verb", "vocal-verb", -14.0f, SendTiming::PostFader});

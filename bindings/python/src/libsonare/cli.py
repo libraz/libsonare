@@ -2312,7 +2312,9 @@ def main() -> None:
     mixing_preset_p = sub.add_parser(
         "mixing-preset", parents=[common], help="Print a built-in mixer scene preset"
     )
-    mixing_preset_p.add_argument("--preset", default="basic", help="Built-in scene preset name")
+    mixing_preset_p.add_argument(
+        "--preset", default="vocalReverbSend", help="Built-in scene preset name"
+    )
 
     mix_p = sub.add_parser(
         "mix",

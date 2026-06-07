@@ -2,7 +2,7 @@
 
 /// @file silence.h
 /// @brief librosa.effects.trim / split — silence boundary detection.
-/// @details Distinct from sonare::trim(const Audio&, ...) in
+/// @details Distinct from sonare::trim_absolute(const Audio&, ...) in
 ///          src/effects/normalize.h, which operates on Audio. These functions
 ///          take raw float buffers and return sample-index ranges.
 

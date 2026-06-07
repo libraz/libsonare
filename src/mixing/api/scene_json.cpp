@@ -59,7 +59,11 @@ std::string string_or(const JsonValue& object, const char* key, const std::strin
 
 Insert insert_from_value(const JsonValue& object) {
   Insert insert;
-  if (const auto* slot = object.find("slot"); slot && slot->is_string()) {
+  if (const auto* slot = object.find("slot")) {
+    if (!slot->is_string()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "insert slot must be a string (\"pre\" or \"post\")");
+    }
     insert.slot = insert_slot_from_string(slot->as_string());
   }
   insert.processor_name = string_or(object, "processor", insert.processor_name);
@@ -83,7 +87,11 @@ Send send_from_value(const JsonValue& object) {
   send.id = string_or(object, "id", send.id);
   send.destination_bus_id = string_or(object, "destinationBusId", send.destination_bus_id);
   send.send_db = number_or(object, "sendDb", send.send_db);
-  if (const auto* timing = object.find("timing"); timing && timing->is_string()) {
+  if (const auto* timing = object.find("timing")) {
+    if (!timing->is_string()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "send timing must be a string (\"pre\" or \"post\")");
+    }
     send.timing = send_timing_from_string(timing->as_string());
   }
   return send;
