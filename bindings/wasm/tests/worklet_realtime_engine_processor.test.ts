@@ -91,6 +91,35 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('keeps the clip bus silent while the transport is stopped', () => {
+      const blockSize = 128;
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { postMessage: () => undefined },
+      );
+      try {
+        const left = new Float32Array(blockSize).fill(0.5);
+        const right = new Float32Array(blockSize).fill(-0.5);
+        processor.receiveSync({
+          type: 'syncClips',
+          clips: [{ id: 1, channels: [left, right], startPpq: 0 }],
+        });
+
+        const outL = new Float32Array(blockSize);
+        const outR = new Float32Array(blockSize);
+        // Stopped: the playhead is frozen, so the clip must not be rendered —
+        // replaying the frozen window every block would emit a sustained buzz.
+        expect(processor.process([[]], [[outL, outR]])).toBe(true);
+        expect(Math.max(...outL.map(Math.abs), ...outR.map(Math.abs))).toBe(0);
+
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        expect(processor.process([[]], [[outL, outR]])).toBe(true);
+        expect(Math.max(...outL.map(Math.abs))).toBeCloseTo(0.5, 5);
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('publishes real output meters from the realtime engine', () => {
       const meters: unknown[] = [];
       const posted: unknown[] = [];

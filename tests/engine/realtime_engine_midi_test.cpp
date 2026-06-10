@@ -590,3 +590,43 @@ TEST_CASE("PDC aligns instrument audio with clip audio", "[engine][midi]") {
 
   engine.set_midi_instrument(nullptr);
 }
+
+TEST_CASE("stopped transport renders no clip audio", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  engine.set_clips({impulse_clip(kBlock)});
+
+  // While stopped the playhead is frozen, so the clip bus must stay silent —
+  // rendering the frozen window every block would emit a sustained buzz.
+  std::vector<float> out_l(static_cast<size_t>(kBlock), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kBlock), 0.0f);
+  float* io[] = {out_l.data(), out_r.data()};
+  engine.process(io, 2, kBlock);
+  REQUIRE(block_peak(out_l) == Catch::Approx(0.0f));
+  REQUIRE(block_peak(out_r) == Catch::Approx(0.0f));
+
+  // Rolling the transport renders the clip impulse at frame 0.
+  push_play(engine);
+  engine.process(io, 2, kBlock);
+  REQUIRE(out_l[0] == Catch::Approx(1.0f));
+}
+
+TEST_CASE("render_offline rolls a stopped transport and restores it", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int64_t kFrames = 256;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  engine.set_clips({impulse_clip(kFrames)});
+
+  std::vector<float> out_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kFrames), 0.0f);
+  float* io[] = {out_l.data(), out_r.data()};
+  engine.render_offline(io, 2, kFrames, kBlock);
+
+  REQUIRE(out_l[0] == Catch::Approx(1.0f));
+  REQUIRE(engine.transport().sample_position() == kFrames);
+  REQUIRE_FALSE(engine.transport().playing());
+}

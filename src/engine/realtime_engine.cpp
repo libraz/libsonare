@@ -446,6 +446,13 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   }
 
   const int frames_per_block = std::max(1, std::min(block_size, max_block_size_));
+  // Clips and sequenced MIDI only render (and the playhead only advances)
+  // while the transport is rolling, so roll it for the duration of the render
+  // and restore the prior state afterwards.
+  const bool was_playing = transport_.playing();
+  if (!was_playing) {
+    transport_.play();
+  }
   // Reuse the member scratch: size it once here (offline path), then the
   // per-block loop only rewrites pointers and never reallocates.
   render_block_channels_.assign(static_cast<size_t>(num_channels), nullptr);
@@ -455,6 +462,9 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
       render_block_channels_[static_cast<size_t>(ch)] = out[ch] ? out[ch] + frame : nullptr;
     }
     process(render_block_channels_.data(), num_channels, frames);
+  }
+  if (!was_playing) {
+    transport_.stop();
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.all_notes_off(transport_.render_frame());
@@ -1113,20 +1123,28 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
       }
     }
+    // Clip audio and sequenced MIDI are both gated on the transport rolling.
+    // While stopped, advance() freezes sample_position, so rendering clips
+    // would replay the same clip window every block as a sustained buzz.
+    const bool transport_rolling = transport_.playing();
 #if defined(SONARE_WITH_ARRANGEMENT)
     if (pdc_total_q8_ > 0) {
       // PDC active: render the clip bus into scratch, delay it by the project's
       // total instrument latency so it lands phase-aligned with the
       // (internally-delayed) instruments, then sum it into the source layer.
-      // Mirrors the additive-into-io contract of the direct path below.
+      // Mirrors the additive-into-io contract of the direct path below. While
+      // stopped, the delay keeps running on silence so its tail drains instead
+      // of re-emerging stale on the next play.
       for (int ch = 0; ch < channels; ++ch) {
         if (clip_scratch_channels_[static_cast<size_t>(ch)]) {
           std::fill(clip_scratch_channels_[static_cast<size_t>(ch)],
                     clip_scratch_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
         }
       }
-      clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
-                              transport_.sample_position());
+      if (transport_rolling) {
+        clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
+                                transport_.sample_position());
+      }
       clip_pdc_delay_.process(clip_scratch_channels_.data(), channels, num_frames);
       for (int ch = 0; ch < channels; ++ch) {
         float* out = sub_channels[static_cast<size_t>(ch)];
@@ -1134,22 +1152,22 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         if (!out) continue;
         for (int i = 0; i < num_frames; ++i) out[i] += clip[i];
       }
-    } else {
+    } else if (transport_rolling) {
       clip_player_.process_at(sub_channels.data(), channels, num_frames,
                               transport_.sample_position());
     }
 #else
-    clip_player_.process_at(sub_channels.data(), channels, num_frames,
-                            transport_.sample_position());
+    if (transport_rolling) {
+      clip_player_.process_at(sub_channels.data(), channels, num_frames,
+                              transport_.sample_position());
+    }
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
-    // Sequenced MIDI playback is gated on the transport rolling. While stopped,
-    // advance() freezes sample_position, so scanning the same window every block
-    // would re-dispatch the same note-ons (saturating the active-note table and
+    // While stopped, scanning the same window every block would also
+    // re-dispatch the same note-ons (saturating the active-note table and
     // re-triggering the instrument) and capture a sustained note with no choke.
     // A stopped transport therefore dispatches nothing and renders no instrument
     // audio; kTransportStop already released sounding notes via all_notes_off.
-    const bool transport_rolling = transport_.playing();
     // Dispatch the MIDI events whose render frame falls in this sub-block. The
     // sequencer scans [block_start, block_start + num_frames); using the
     // sub-block's timeline sample position keeps dispatch sample-accurate and
