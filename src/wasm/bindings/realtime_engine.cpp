@@ -995,10 +995,10 @@ class RealtimeEngineWasm {
 
   void setClips(val clips) {
     const int count = clips["length"].as<int>();
-    clip_storage_.clear();
-    clip_ptrs_.clear();
-    clip_storage_.reserve(static_cast<size_t>(count));
-    clip_ptrs_.reserve(static_cast<size_t>(count));
+    std::vector<std::vector<std::vector<float>>> new_storage;
+    std::vector<std::vector<const float*>> new_ptrs;
+    new_storage.reserve(static_cast<size_t>(count));
+    new_ptrs.reserve(static_cast<size_t>(count));
     std::vector<sonare::engine::ClipSchedule> schedules;
     schedules.reserve(static_cast<size_t>(count));
 
@@ -1013,10 +1013,10 @@ class RealtimeEngineWasm {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "clip channels must not be empty");
       }
-      clip_storage_.emplace_back();
-      clip_ptrs_.emplace_back();
-      auto& storage = clip_storage_.back();
-      auto& pointers = clip_ptrs_.back();
+      new_storage.emplace_back();
+      new_ptrs.emplace_back();
+      auto& storage = new_storage.back();
+      auto& pointers = new_ptrs.back();
       storage.reserve(static_cast<size_t>(channel_count));
       pointers.reserve(static_cast<size_t>(channel_count));
       int64_t num_samples = 0;
@@ -1058,13 +1058,18 @@ class RealtimeEngineWasm {
           hasProperty(clip_val, "clipOffsetSamples")
               ? objectProperty(clip_val, "clipOffsetSamples").as<int64_t>()
               : 0;
-      const int64_t default_length =
-          has_page_provider && schedule.page_provider
-              ? schedule.page_provider->num_samples() - schedule.clip_offset_samples
-              : num_samples;
+      const int64_t source_samples = has_page_provider && schedule.page_provider
+                                         ? schedule.page_provider->num_samples()
+                                         : num_samples;
+      const int64_t default_length = source_samples - schedule.clip_offset_samples;
       schedule.length_samples = hasProperty(clip_val, "lengthSamples")
                                     ? objectProperty(clip_val, "lengthSamples").as<int64_t>()
                                     : default_length;
+      if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= source_samples ||
+          schedule.length_samples <= 0) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "clip offset or length is outside the source");
+      }
       schedule.loop = boolProperty(clip_val, "loop", false);
       schedule.gain = floatProperty(clip_val, "gain", 1.0f);
       schedule.fade_in_samples = hasProperty(clip_val, "fadeInSamples")
@@ -1077,18 +1082,26 @@ class RealtimeEngineWasm {
         val mode_val = objectProperty(clip_val, "warpMode");
         if (mode_val.typeOf().as<std::string>() == "string") {
           const std::string mode = mode_val.as<std::string>();
-          if (mode == "repitch") {
+          if (mode == "off") {
+            schedule.warp_mode = sonare::engine::WarpMode::kOff;
+          } else if (mode == "repitch") {
             schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
           } else if (mode == "tempo-sync") {
             schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
           } else {
-            schedule.warp_mode = sonare::engine::WarpMode::kOff;
+            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
           }
         } else {
           const int mode = mode_val.as<int>();
-          schedule.warp_mode = mode == 1   ? sonare::engine::WarpMode::kRepitch
-                               : mode == 2 ? sonare::engine::WarpMode::kTempoSync
-                                           : sonare::engine::WarpMode::kOff;
+          if (mode == 0) {
+            schedule.warp_mode = sonare::engine::WarpMode::kOff;
+          } else if (mode == 1) {
+            schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
+          } else if (mode == 2) {
+            schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
+          } else {
+            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
+          }
         }
       }
       if (hasProperty(clip_val, "warpAnchors")) {
@@ -1163,17 +1176,19 @@ class RealtimeEngineWasm {
                                         "tempo-sync clip has an empty source or target span");
         sonare::engine::TempoSyncWarpBakeConfig bake_config;
         bake_config.sample_rate = static_cast<int>(std::lround(engine_.sample_rate()));
-        for (auto& channel : storage) {
-          channel = sonare::engine::bake_tempo_sync_warp_channel(channel.data(), channel.size(),
-                                                                 segments, bake_config);
+        std::vector<const float*> source_channel_ptrs;
+        source_channel_ptrs.reserve(storage.size());
+        for (const auto& channel : storage) {
+          source_channel_ptrs.push_back(channel.data());
         }
+        storage = sonare::engine::bake_tempo_sync_warp_channels(
+            source_channel_ptrs, storage[0].size(), segments, bake_config);
         pointers.clear();
         for (const auto& channel : storage) {
           pointers.push_back(channel.data());
         }
         schedule.buffer = {pointers.data(), channel_count, static_cast<int64_t>(target_samples)};
         schedule.clip_offset_samples = 0;
-        schedule.length_samples = static_cast<int64_t>(target_samples);
         schedule.loop = false;
         schedule.warp_mode = sonare::engine::WarpMode::kOff;
         schedule.warp_anchors.reset();
@@ -1184,6 +1199,8 @@ class RealtimeEngineWasm {
       }
       schedules.push_back(schedule);
     }
+    clip_storage_ = std::move(new_storage);
+    clip_ptrs_ = std::move(new_ptrs);
     engine_.set_clips(std::move(schedules));
   }
 
@@ -1210,7 +1227,10 @@ class RealtimeEngineWasm {
 
   void clearClipPage(int provider_id, int64_t page_index) {
     auto provider = liveProviderById(clip_page_providers_, provider_id);
-    if (!provider) return;
+    if (!provider) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "pageProvider is not live");
+    }
     provider->clear(page_index);
   }
 
@@ -1255,7 +1275,13 @@ class RealtimeEngineWasm {
   void setRecordOffsetSamples(int64_t offset_samples) {
     engine_.set_record_offset_samples(offset_samples);
   }
-  void setInputMonitor(bool enabled, float gain) { engine_.set_input_monitor(enabled, gain); }
+  void setInputMonitor(bool enabled, float gain) {
+    if (!std::isfinite(gain)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "input monitor gain must be finite");
+    }
+    engine_.set_input_monitor(enabled, gain);
+  }
   void resetCapture() { engine_.reset_capture(); }
 
   val captureStatus() const {
@@ -1448,19 +1474,19 @@ class RealtimeEngineWasm {
     }
     engine_.render_offline(render_pointers.data(), num_channels, total_frames, block_size);
 
-    clip_storage_.clear();
-    clip_ptrs_.clear();
-    clip_storage_.push_back(std::move(frozen));
-    clip_ptrs_.emplace_back();
-    clip_ptrs_.back().reserve(clip_storage_.back().size());
-    for (const auto& channel : clip_storage_.back()) {
-      clip_ptrs_.back().push_back(channel.data());
+    std::vector<std::vector<std::vector<float>>> new_storage;
+    std::vector<std::vector<const float*>> new_ptrs;
+    new_storage.push_back(std::move(frozen));
+    new_ptrs.emplace_back();
+    new_ptrs.back().reserve(new_storage.back().size());
+    for (const auto& channel : new_storage.back()) {
+      new_ptrs.back().push_back(channel.data());
     }
 
     sonare::engine::ClipSchedule schedule{};
     schedule.id = static_cast<uint32_t>(intProperty(options_val, "clipId", 1));
     if (schedule.id == 0) schedule.id = 1;
-    schedule.buffer = {clip_ptrs_.back().data(), num_channels, total_frames};
+    schedule.buffer = {new_ptrs.back().data(), num_channels, total_frames};
     // Read startPpq at full double precision to match setClips() and the
     // double-typed ClipSchedule.start_ppq field; a Float32 read would quantize a
     // frozen clip at a large PPQ position to a different sample than the same
@@ -1472,6 +1498,8 @@ class RealtimeEngineWasm {
     schedule.length_samples = total_frames;
     schedule.loop = false;
     schedule.gain = floatProperty(options_val, "gain", 1.0f);
+    clip_storage_ = std::move(new_storage);
+    clip_ptrs_ = std::move(new_ptrs);
     engine_.set_clips({schedule});
 
     val out = val::object();

@@ -166,6 +166,52 @@ TEST_CASE("CaptureSink hands a coherent snapshot across control/audio threads",
   REQUIRE_FALSE(torn.load());
 }
 
+TEST_CASE("CaptureSink publishes captured samples before captured_frames", "[engine][capture]") {
+  constexpr size_t kFrames = 1024;
+  std::array<float, kFrames> input_data{};
+  std::array<float, kFrames> capture_data{};
+  for (size_t i = 0; i < kFrames; ++i) {
+    input_data[i] = static_cast<float>(i + 1);
+  }
+  float* capture[] = {capture_data.data()};
+
+  sonare::engine::CaptureSink sink;
+  sink.prepare({capture, 1, static_cast<int64_t>(capture_data.size())});
+  sink.arm(true);
+
+  std::atomic<bool> done{false};
+  std::atomic<bool> stale_prefix{false};
+
+  std::thread audio([&] {
+    for (size_t i = 0; i < kFrames; ++i) {
+      const float* input[] = {&input_data[i]};
+      sink.process(input, 1, 1, static_cast<int64_t>(i));
+    }
+    done.store(true, std::memory_order_release);
+  });
+
+  std::thread control([&] {
+    int64_t checked = 0;
+    while (!done.load(std::memory_order_acquire) || checked < sink.captured_frames()) {
+      const int64_t published = sink.captured_frames();
+      while (checked < published) {
+        const float expected = static_cast<float>(checked + 1);
+        if (capture_data[static_cast<size_t>(checked)] != expected) {
+          stale_prefix.store(true, std::memory_order_relaxed);
+          return;
+        }
+        ++checked;
+      }
+    }
+  });
+
+  audio.join();
+  control.join();
+
+  REQUIRE(sink.captured_frames() == static_cast<int64_t>(kFrames));
+  REQUIRE_FALSE(stale_prefix.load(std::memory_order_relaxed));
+}
+
 TEST_CASE("Capture boundaries include punch in and out offsets", "[engine][capture]") {
   sonare::engine::CaptureBoundaryList boundaries;
   sonare::engine::collect_capture_boundaries(1000, 256, 1050, 1200, &boundaries);

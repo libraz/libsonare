@@ -132,26 +132,36 @@ size_t direct_sound_index(const std::vector<double>& energy) {
 }
 
 float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec,
-                 size_t origin) {
+                 size_t origin, size_t end) {
   const size_t boundary = static_cast<size_t>(std::round(boundary_sec * sample_rate));
   const double early = sum_range(energy, origin, origin + boundary);
-  const double late = sum_range(energy, origin + boundary, energy.size());
+  const double late = sum_range(energy, origin + boundary, end);
   return power_to_db_scalar(std::max(early, static_cast<double>(kEnergyEpsilon)) /
                             std::max(late, static_cast<double>(kEnergyEpsilon)));
+}
+
+float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec,
+                 size_t origin) {
+  return clarity_db(energy, sample_rate, boundary_sec, origin, energy.size());
 }
 
 float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec) {
   return clarity_db(energy, sample_rate, boundary_sec, 0);
 }
 
-float definition_d50(const std::vector<double>& energy, int sample_rate, size_t origin) {
+float definition_d50(const std::vector<double>& energy, int sample_rate, size_t origin,
+                     size_t end) {
   const size_t boundary = static_cast<size_t>(std::round(0.05f * sample_rate));
   const double early = sum_range(energy, origin, origin + boundary);
-  const double total = sum_range(energy, origin, energy.size());
+  const double total = sum_range(energy, origin, end);
   if (total <= 0.0) {
     return nan_value();
   }
   return static_cast<float>(early / total);
+}
+
+float definition_d50(const std::vector<double>& energy, int sample_rate, size_t origin) {
+  return definition_d50(energy, sample_rate, origin, energy.size());
 }
 
 float definition_d50(const std::vector<double>& energy, int sample_rate) {
@@ -170,8 +180,8 @@ float estimate_confidence(float rt60, float edt, float min_decay_db) {
 AcousticParameters analyze_band(const float* samples, size_t size, int sample_rate,
                                 float min_decay_db) {
   const auto energy = squared_energy(samples, size);
-  const auto edc_db =
-      schroeder_edc_db_until(energy, estimate_lundeby_truncation_index(energy, sample_rate));
+  const size_t truncation = estimate_lundeby_truncation_index(energy, sample_rate);
+  const auto edc_db = schroeder_edc_db_until(energy, truncation);
   const size_t origin = direct_sound_index(energy);
 
   AcousticParameters result;
@@ -180,9 +190,9 @@ AcousticParameters analyze_band(const float* samples, size_t size, int sample_ra
     result.rt60 = decay_time_from_range(edc_db, sample_rate, -5.0f, -25.0f);
   }
   result.edt = decay_time_from_range(edc_db, sample_rate, 0.0f, -10.0f);
-  result.c50 = clarity_db(energy, sample_rate, 0.05f, origin);
-  result.c80 = clarity_db(energy, sample_rate, 0.08f, origin);
-  result.d50 = definition_d50(energy, sample_rate, origin);
+  result.c50 = clarity_db(energy, sample_rate, 0.05f, origin, truncation);
+  result.c80 = clarity_db(energy, sample_rate, 0.08f, origin, truncation);
+  result.d50 = definition_d50(energy, sample_rate, origin, truncation);
   result.confidence = estimate_confidence(result.rt60, result.edt, min_decay_db);
   return result;
 }

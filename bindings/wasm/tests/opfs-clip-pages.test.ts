@@ -113,4 +113,29 @@ describe('createOpfsClipPageProvider', () => {
     binding.close();
     engine.destroy();
   });
+
+  it('serializes concurrent page reads sent to the worker', async () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const worker = new FakeClipPageWorker();
+    const binding = createOpfsClipPageProvider(engine, {
+      path: 'clips/clip.f32',
+      numChannels: 1,
+      numSamples: 8,
+      pageFrames: 4,
+      worker: worker as unknown as Worker,
+    });
+
+    const first = binding.supplyPage(0);
+    const second = binding.supplyPage(1);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(worker.messages).toHaveLength(1);
+    expect(await first).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worker.messages).toHaveLength(2);
+    expect(await second).toBe(true);
+
+    binding.close();
+    engine.destroy();
+  });
 });

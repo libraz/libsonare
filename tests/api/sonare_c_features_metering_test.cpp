@@ -1,6 +1,8 @@
 /// @file sonare_c_features_metering_test.cpp
 /// @brief Feature and metering C API tests.
 
+#include <limits>
+
 #include "sonare_c_test_helpers.h"
 
 TEST_CASE("sonare_onset_strength", "[c_api]") {
@@ -409,6 +411,19 @@ TEST_CASE("sonare waveform peaks bucket interleaved audio", "[c_api][meter]") {
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_waveform_peaks(samples.data(), 5, 0, 2, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
+
+  const std::vector<float> non_finite_samples{
+      -1.0f,  std::numeric_limits<float>::quiet_NaN(),
+      0.5f,   std::numeric_limits<float>::infinity(),
+      -0.25f, 0.75f,
+  };
+  REQUIRE(sonare_waveform_peaks(non_finite_samples.data(), 3, 2, 2, &result) == SONARE_OK);
+  REQUIRE(result.bucket_count == 2);
+  REQUIRE(result.min[0] == Catch::Approx(-1.0f));
+  REQUIRE(result.max[0] == Catch::Approx(0.5f));
+  REQUIRE(result.min[2] == Catch::Approx(0.0f));
+  REQUIRE(result.max[2] == Catch::Approx(0.0f));
+  sonare_free_waveform_peaks_result(&result);
 }
 
 TEST_CASE("sonare waveform peak pyramid returns requested levels", "[c_api][meter]") {

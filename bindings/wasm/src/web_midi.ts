@@ -93,6 +93,7 @@ export interface WebMidiBinding {
 type BoundInput = {
   input: MidiInputLike;
   listener: (event: MidiMessageEventLike) => void;
+  runningStatus: number;
 };
 
 export function isWebMidiAvailable(): boolean {
@@ -128,7 +129,6 @@ export async function bindWebMidi(
 
   const bound = new Map<string, BoundInput>();
   let closed = false;
-  let runningStatus = 0;
 
   const shouldBind = (input: MidiInputLike) =>
     input.state !== 'disconnected' && (selectedIds.size === 0 || selectedIds.has(input.id));
@@ -147,22 +147,26 @@ export async function bindWebMidi(
     if (bound.has(input.id) || !shouldBind(input)) {
       return;
     }
-    const listener = (event: MidiMessageEventLike) => {
-      const status = dispatchMidiMessage(
-        engine,
-        event,
-        group,
-        runningStatus,
-        options.timestampToSamples,
-      );
-      runningStatus = status;
+    const entry: BoundInput = {
+      input,
+      listener: (event: MidiMessageEventLike) => {
+        entry.runningStatus = dispatchMidiMessage(
+          engine,
+          event,
+          group,
+          entry.runningStatus,
+          options.timestampToSamples,
+        );
+      },
+      runningStatus: 0,
     };
+    const listener = entry.listener;
     if (input.addEventListener) {
       input.addEventListener('midimessage', listener);
     } else {
       input.onmidimessage = listener;
     }
-    bound.set(input.id, { input, listener });
+    bound.set(input.id, entry);
   };
 
   const unbindInput = (input: MidiInputLike) => {

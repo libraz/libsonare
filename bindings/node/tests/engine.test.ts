@@ -149,6 +149,17 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('rejects clips without channels or a page provider without aborting', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setClips([{ id: 1, startPpq: 0 }])).toThrow(
+      /clip requires non-empty channels or a pageProvider/,
+    );
+    expect(() => engine.setClips([{ id: 2, startPpq: 0, channels: [] }])).toThrow(
+      /clip requires non-empty channels or a pageProvider/,
+    );
+    engine.destroy();
+  });
+
   it('streams paged clip providers and drains page requests', () => {
     const engine = new RealtimeEngine(48000, 8);
     const provider = engine.createClipPageProvider(1, 8, 4);
@@ -215,6 +226,17 @@ describe('RealtimeEngine native binding', () => {
 
   it('reuses destroyed clip page provider slots', () => {
     const engine = new RealtimeEngine(48000, 8);
+    expect(() =>
+      engine.createFileClipPageProvider('/definitely/missing/sonare-clip.f32', {
+        numChannels: 1,
+        numSamples: 8,
+        pageFrames: 4,
+      }),
+    ).toThrow();
+    const afterFailedOpen = engine.createClipPageProvider(1, 8, 4);
+    expect(afterFailedOpen.id).toBe(1);
+    afterFailedOpen.destroy();
+
     const first = engine.createClipPageProvider(1, 8, 4);
     const second = engine.createClipPageProvider(1, 8, 4);
     expect(first.id).toBe(1);
@@ -269,6 +291,39 @@ describe('RealtimeEngine native binding', () => {
       ]),
     ).toThrow();
     badLoopWarpEngine.destroy();
+
+    const badWarpModeEngine = new RealtimeEngine(48000, 4);
+    badWarpModeEngine.setClips([
+      {
+        id: 3032,
+        channels: [new Float32Array([0.25, 0.5, 0.75, 1.0])],
+        startPpq: 0,
+        lengthSamples: 4,
+      },
+    ]);
+    badWarpModeEngine.play();
+    expect(() =>
+      badWarpModeEngine.setClips([
+        {
+          id: 3033,
+          channels: [new Float32Array([0, 10, 20, 30])],
+          startPpq: 0,
+          lengthSamples: 4,
+        },
+        {
+          id: 3034,
+          channels: [new Float32Array([0, 10, 20, 30])],
+          startPpq: 0,
+          lengthSamples: 4,
+          warpMode: 'typo' as 'repitch',
+        },
+      ]),
+    ).toThrow(/warpMode must be/);
+    expect(badWarpModeEngine.clipCount()).toBe(1);
+    badWarpModeEngine.seekSample(0);
+    const afterBadWarpMode = badWarpModeEngine.process([new Float32Array(4)]);
+    expect(Array.from(afterBadWarpMode[0])).toEqual([0.25, 0.5, 0.75, 1.0]);
+    badWarpModeEngine.destroy();
 
     const tempoEngine = new RealtimeEngine(48000, 8192);
     const tempoSource = new Float32Array(4096);

@@ -626,7 +626,12 @@ export class RealtimeEngine {
       options.numSamples,
       options.pageFrames,
     );
-    return new FileClipPageProvider(this, id, path, options);
+    try {
+      return new FileClipPageProvider(this, id, path, options);
+    } catch (err) {
+      this.native.destroyClipPageProvider(id);
+      throw err;
+    }
   }
 
   setClips(clips: EngineClip[]): void {

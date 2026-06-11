@@ -550,6 +550,33 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
         project.close()
 
 
+def test_project_rejects_audio_length_not_matching_channels() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "record")
+        audio = np.zeros(5, dtype=np.float32)
+        with pytest.raises(ValueError, match="audio length must be a multiple of audio_channels"):
+            project.add_clip(
+                track_id,
+                start_ppq=0.0,
+                length_ppq=1.0,
+                audio=audio,
+                audio_channels=2,
+                audio_sample_rate=48000,
+            )
+        with pytest.raises(ValueError, match="audio length must be a multiple of audio_channels"):
+            project.add_loop_recording_takes(
+                track_id,
+                start_ppq=0.0,
+                loop_length_ppq=1.0,
+                audio=audio,
+                audio_channels=2,
+                audio_sample_rate=48000,
+            )
+    finally:
+        project.close()
+
+
 def test_set_track_midi_destination_rejects_unknown_track() -> None:
     project = Project()
     try:

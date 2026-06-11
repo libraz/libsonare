@@ -853,6 +853,40 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(capture_left[0] == Catch::Approx(0.25f).margin(0.0001f));
   REQUIRE(capture_right[0] == Catch::Approx(-0.25f).margin(0.0001f));
 
+  capture_left.fill(0.0f);
+  capture_right.fill(0.0f);
+  REQUIRE(sonare_engine_set_capture_punch(engine, 0, 128, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_reset_capture(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  REQUIRE(sonare_engine_process(engine, channels, 2, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.captured_frames == 64);
+
+  REQUIRE(sonare_engine_stop(engine, -1) == SONARE_OK);
+  for (int i = 0; i < 3; ++i) {
+    left.fill(0.5f);
+    right.fill(-0.5f);
+    REQUIRE(sonare_engine_process(engine, channels, 2, 64) == SONARE_OK);
+  }
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.captured_frames == 64);
+  REQUIRE(status.overflow_count == 0);
+  REQUIRE(capture_left[63] == Catch::Approx(0.25f).margin(0.0001f));
+  REQUIRE(capture_left[64] == Catch::Approx(0.0f).margin(0.0001f));
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  left.fill(0.75f);
+  right.fill(-0.75f);
+  REQUIRE(sonare_engine_process(engine, channels, 2, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.captured_frames == 128);
+  REQUIRE(capture_left[64] == Catch::Approx(0.75f).margin(0.0001f));
+  REQUIRE(capture_right[64] == Catch::Approx(-0.75f).margin(0.0001f));
+
   sonare_engine_destroy(engine);
 }
 #endif
@@ -1051,6 +1085,24 @@ TEST_CASE("sonare_engine_set_clips_prebakes_direct_tempo_sync_segment_rates", "[
     peak = std::max(peak, std::abs(v));
   }
   REQUIRE(peak > 0.1f);
+
+  clip.length_samples = 4096;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  std::fill(out.begin(), out.end(), 0.0f);
+  REQUIRE(sonare_engine_process(engine, channels, 1, static_cast<int>(out.size())) == SONARE_OK);
+  float head_peak = 0.0f;
+  float tail_peak = 0.0f;
+  for (size_t i = 0; i < out.size(); ++i) {
+    REQUIRE(std::isfinite(out[i]));
+    if (i < 4096) {
+      head_peak = std::max(head_peak, std::abs(out[i]));
+    } else {
+      tail_peak = std::max(tail_peak, std::abs(out[i]));
+    }
+  }
+  REQUIRE(head_peak > 0.1f);
+  REQUIRE(tail_peak == Catch::Approx(0.0f).margin(0.0001f));
 
   sonare_engine_destroy(engine);
 }

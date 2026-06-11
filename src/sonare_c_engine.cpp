@@ -51,7 +51,12 @@ class CClipPageProvider final : public engine::ClipPagedAudioProvider {
       : channels_(channels),
         samples_(samples),
         page_frames_(page_frames),
-        pages_(static_cast<size_t>((samples + page_frames - 1) / page_frames)) {}
+        pages_(static_cast<size_t>((samples + page_frames - 1) / page_frames)),
+        page_ptrs_(pages_.size()) {
+    for (auto& page_ptr : page_ptrs_) {
+      page_ptr.store(nullptr, std::memory_order_relaxed);
+    }
+  }
 
   int num_channels() const noexcept override { return channels_; }
   int64_t num_samples() const noexcept override { return samples_; }
@@ -65,8 +70,7 @@ class CClipPageProvider final : public engine::ClipPagedAudioProvider {
     const int64_t page_index = sample / page_frames_;
     const int64_t offset = sample % page_frames_;
     if (page_index < 0 || page_index >= page_count()) return false;
-    auto page = std::atomic_load_explicit(&pages_[static_cast<size_t>(page_index)],
-                                          std::memory_order_acquire);
+    const Page* page = page_ptrs_[static_cast<size_t>(page_index)].load(std::memory_order_acquire);
     if (!page || channel >= static_cast<int>(page->channels.size()) || offset < 0 ||
         offset >= page->frames) {
       return false;
@@ -91,17 +95,18 @@ class CClipPageProvider final : public engine::ClipPagedAudioProvider {
       if (!channels[ch]) return false;
       page->channels.emplace_back(channels[ch], channels[ch] + frames);
     }
-    std::atomic_store_explicit(&pages_[static_cast<size_t>(page_index)],
-                               std::shared_ptr<const Page>(std::move(page)),
-                               std::memory_order_release);
+    const size_t index = static_cast<size_t>(page_index);
+    retire_page(std::move(pages_[index]));
+    pages_[index] = std::move(page);
+    page_ptrs_[index].store(pages_[index].get(), std::memory_order_release);
     return true;
   }
 
-  bool clear(int64_t page_index) noexcept {
+  bool clear(int64_t page_index) {
     if (page_index < 0 || page_index >= page_count()) return false;
-    std::shared_ptr<const Page> empty;
-    std::atomic_store_explicit(&pages_[static_cast<size_t>(page_index)], empty,
-                               std::memory_order_release);
+    const size_t index = static_cast<size_t>(page_index);
+    page_ptrs_[index].store(nullptr, std::memory_order_release);
+    retire_page(std::move(pages_[index]));
     return true;
   }
 
@@ -111,10 +116,18 @@ class CClipPageProvider final : public engine::ClipPagedAudioProvider {
     std::vector<std::vector<float>> channels;
   };
 
+  void retire_page(std::shared_ptr<const Page> page) {
+    if (page) {
+      retired_pages_.push_back(std::move(page));
+    }
+  }
+
   int channels_ = 0;
   int64_t samples_ = 0;
   int64_t page_frames_ = 0;
-  mutable std::vector<std::shared_ptr<const Page>> pages_;
+  std::vector<std::shared_ptr<const Page>> pages_;
+  mutable std::vector<std::atomic<const Page*>> page_ptrs_;
+  std::vector<std::shared_ptr<const Page>> retired_pages_;
 };
 
 }  // namespace
@@ -726,12 +739,14 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
       }
       engine::TempoSyncWarpBakeConfig bake_config;
       bake_config.sample_rate = static_cast<int>(std::lround(engine->engine.sample_rate()));
+      std::vector<const float*> source_channel_ptrs;
+      source_channel_ptrs.reserve(static_cast<size_t>(clip.num_channels));
       for (int ch = 0; ch < clip.num_channels; ++ch) {
         if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
-        std::vector<float> channel = engine::bake_tempo_sync_warp_channel(
-            clip.channels[ch], static_cast<size_t>(clip.num_samples), segments, bake_config);
-        owned->channels.push_back(std::move(channel));
+        source_channel_ptrs.push_back(clip.channels[ch]);
       }
+      owned->channels = engine::bake_tempo_sync_warp_channels(
+          source_channel_ptrs, static_cast<size_t>(clip.num_samples), segments, bake_config);
     } else {
       for (int ch = 0; ch < clip.num_channels; ++ch) {
         if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
@@ -769,10 +784,7 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
     schedule.start_ppq = clip.start_ppq;
     schedule.clip_offset_samples =
         clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ? 0 : clip.clip_offset_samples;
-    schedule.length_samples =
-        clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC
-            ? static_cast<int64_t>(owned->channels.empty() ? 0 : owned->channels[0].size())
-            : effective_length;
+    schedule.length_samples = effective_length;
     schedule.loop = clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ? false : clip.loop != 0;
     schedule.gain = clip.gain;
     schedule.fade_in_samples = clip.fade_in_samples;
@@ -821,18 +833,22 @@ void sonare_clip_page_provider_destroy(SonareClipPageProvider* provider) { delet
 SonareError sonare_clip_page_provider_supply(SonareClipPageProvider* provider, int64_t page_index,
                                              const float* const* channels, int num_channels,
                                              int64_t frames) {
+  SONARE_C_TRY
   if (!provider || !provider->provider ||
       !provider->provider->supply(page_index, channels, num_channels, frames)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, int64_t page_index) {
+  SONARE_C_TRY
   if (!provider || !provider->provider || !provider->provider->clear(page_index)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,

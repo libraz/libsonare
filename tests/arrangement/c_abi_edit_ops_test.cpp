@@ -251,6 +251,52 @@ TEST_CASE("C-ABI set_clip_takes and comp segments apply and undo", "[project][c-
   REQUIRE(sonare_project_set_clip_comp_segments(project, fx.clip, segments, 2) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
+  segments[1].take_id = 2;
+  REQUIRE(sonare_project_set_clip_comp_segments(project, fx.clip, segments, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0) ==
+          SONARE_ERROR_INVALID_STATE);
+
+  SonareProjectClipCompSegment whole_segment{};
+  whole_segment.start_ppq = 0.0;
+  whole_segment.end_ppq = 8.0;
+  whole_segment.take_id = 1;
+  REQUIRE(sonare_project_set_clip_comp_segments(project, fx.clip, &whole_segment, 1) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_comp_segments(project, fx.clip, segments, 2) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("C-ABI rejects takes and comp segments on MIDI clips", "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t midi_track = 0;
+  uint32_t midi_clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &midi_track, &midi_clip) == SONARE_OK);
+  const std::string before = serialize(project);
+
+  SonareProjectClipTake take{};
+  take.id = 1;
+  take.source_id = 0;
+  take.source_offset_ppq = 0.0;
+  take.name = "midi take";
+  REQUIRE(sonare_project_set_clip_takes(project, midi_clip, &take, 1, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(serialize(project) == before);
+
+  SonareProjectClipCompSegment segment{};
+  segment.start_ppq = 0.0;
+  segment.end_ppq = 1.0;
+  segment.take_id = 0;
+  REQUIRE(sonare_project_set_clip_comp_segments(project, midi_clip, &segment, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(serialize(project) == before);
+
+  REQUIRE(sonare_project_set_clip_takes(project, midi_clip, nullptr, 0, 0) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_comp_segments(project, midi_clip, nullptr, 0) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+
   sonare_project_destroy(project);
 }
 
@@ -299,6 +345,23 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   desc.track_id = 9999;
   REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  sonare_project_destroy(project);
+
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  AudioFixture existing = add_audio_track_clip(project, 0.0, 1.0);
+  const std::string before_failed_add = serialize(project);
+  desc.track_id = existing.track;
+  desc.start_ppq = 0.0;
+  desc.loop_length_ppq = 1.0;
+  clip_id = 0;
+  take_count = 0;
+  REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count) ==
+          SONARE_ERROR_INVALID_STATE);
+  REQUIRE(clip_id == 0);
+  REQUIRE(take_count == 0);
+  REQUIRE(serialize(project) == before_failed_add);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project).find("\"clips\":[]") != std::string::npos);
   sonare_project_destroy(project);
 }
 

@@ -152,6 +152,8 @@ describe('Sonare WASM Project', () => {
       expect(project.toJson()).toBe(before);
       project.setClipWarpMode(clipId, 'tempo-sync');
       expect(project.toJson()).toContain('"warp_mode":2');
+      expect(() => project.setClipWarpMode(clipId, 'typo' as 'repitch')).toThrow();
+      expect(() => project.setClipWarpMode(clipId, 99 as 1)).toThrow();
     } finally {
       project.delete();
     }

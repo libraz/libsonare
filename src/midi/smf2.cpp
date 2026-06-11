@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 #include "util/constants.h"
 
@@ -48,6 +49,16 @@ constexpr uint8_t kSysex7End = 0x3u;
 // Data domain constant, not a universal numeric constant.
 constexpr double kTenNanosPerQuarterToBpm = 6.0e9;
 constexpr double kDefaultBpm = sonare::constants::kDefaultBpm;
+
+uint32_t tempo_10ns_from_bpm(double bpm) noexcept {
+  const double safe_bpm = bpm > 0.0 ? bpm : kDefaultBpm;
+  const double tempo = std::llround(kTenNanosPerQuarterToBpm / safe_bpm);
+  if (!(tempo > 0.0)) return 1u;
+  if (tempo > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+    return std::numeric_limits<uint32_t>::max();
+  }
+  return static_cast<uint32_t>(tempo);
+}
 
 // Number of 32-bit words a UMP message occupies, keyed by message type nibble.
 int words_for_message_type(uint32_t mt) noexcept {
@@ -328,6 +339,12 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
       continue;
     }
 
+    if (!saw_dctpq) {
+      result.status = Smf2Status::kMissingDctpq;
+      result.diagnostic = "timed event before DCTPQ";
+      break;
+    }
+
     if (mt == kMtFlexData) {
       const uint8_t bank = static_cast<uint8_t>((word0 >> 8) & 0xFFu);
       const uint8_t status = static_cast<uint8_t>(word0 & 0xFFu);
@@ -363,11 +380,6 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
     }
 
     if (mt == kMtMidi1 || mt == kMtMidi2) {
-      if (!saw_dctpq) {
-        result.status = Smf2Status::kMissingDctpq;
-        result.diagnostic = "channel-voice event before DCTPQ";
-        break;
-      }
       Ump ump;
       ump.words[0] = words[0];
       ump.words[1] = words[1];
@@ -633,8 +645,7 @@ Smf2ExportResult export_clip_file(
   // First tempo / time-signature + optional name live in the config header,
   // each with a prepended DCS(0).
   if (!tempo_segments.empty()) {
-    const double bpm = tempo_segments.front().bpm > 0.0 ? tempo_segments.front().bpm : kDefaultBpm;
-    const uint32_t tempo10ns = static_cast<uint32_t>(std::llround(kTenNanosPerQuarterToBpm / bpm));
+    const uint32_t tempo10ns = tempo_10ns_from_bpm(tempo_segments.front().bpm);
     put_word(&out, delta_clockstamp_word(0));
     put_word(&out, flex_word0(kFlexBankSetupPerformance, kFlexStatusSetTempo));
     put_word(&out, tempo10ns);
@@ -677,12 +688,11 @@ Smf2ExportResult export_clip_file(
   // first, plus all clip events.
   std::vector<SeqItem> items;
   for (size_t i = 1; i < tempo_segments.size(); ++i) {
-    const double bpm = tempo_segments[i].bpm > 0.0 ? tempo_segments[i].bpm : kDefaultBpm;
     SeqItem item;
     item.tick = ppq_to_tick(tempo_segments[i].start_ppq, dctpq);
     item.order = 0;
     item.words[0] = flex_word0(kFlexBankSetupPerformance, kFlexStatusSetTempo);
-    item.words[1] = static_cast<uint32_t>(std::llround(kTenNanosPerQuarterToBpm / bpm));
+    item.words[1] = tempo_10ns_from_bpm(tempo_segments[i].bpm);
     item.word_count = 4;
     items.push_back(item);
   }

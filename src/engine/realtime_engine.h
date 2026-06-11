@@ -19,6 +19,7 @@
 #include "rt/command.h"
 #include "rt/param_smoother.h"
 #include "rt/rt_publisher.h"
+#include "rt/seqlock_cell.h"
 #include "rt/spsc_queue.h"
 #include "transport/marker.h"
 #include "transport/tempo_map.h"
@@ -157,8 +158,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
   void set_midi_input_source(host::MidiInputSource* source, uint32_t destination_id = 0) noexcept {
+    midi_input_destination_id_.store(destination_id, std::memory_order_relaxed);
     midi_input_source_.store(source, std::memory_order_release);
-    midi_input_destination_id_ = destination_id;
   }
   bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
                     float max_value) noexcept {
@@ -235,15 +236,10 @@ class RealtimeEngine : private ClipPageRequestSink {
     return record_offset_samples_.load(std::memory_order_acquire);
   }
   void set_input_monitor(bool enabled, float gain) noexcept {
-    input_monitor_enabled_.store(enabled, std::memory_order_release);
-    input_monitor_gain_.store(gain, std::memory_order_release);
+    input_monitor_.store(InputMonitorState{enabled, gain});
   }
-  bool input_monitor_enabled() const noexcept {
-    return input_monitor_enabled_.load(std::memory_order_acquire);
-  }
-  float input_monitor_gain() const noexcept {
-    return input_monitor_gain_.load(std::memory_order_acquire);
-  }
+  bool input_monitor_enabled() const noexcept { return input_monitor_.load().enabled; }
+  float input_monitor_gain() const noexcept { return input_monitor_.load().gain; }
   void reset_capture() noexcept;
   int64_t captured_frames() const noexcept { return capture_sink_.captured_frames(); }
   uint32_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
@@ -333,6 +329,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   void publish_tempo_map_snapshot();
   void adopt_tempo_map_snapshot() noexcept;
 
+  struct InputMonitorState {
+    bool enabled = true;
+    float gain = 1.0f;
+  };
+
   transport::TempoMap tempo_map_{};
   rt::RtPublisher<transport::TempoMap> tempo_map_snapshot_{};
   const transport::TempoMap* active_tempo_map_ = &tempo_map_;
@@ -356,7 +357,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   midi::ClockGenerator midi_clock_{};
   std::atomic<MidiSyncSink*> midi_sync_sink_{nullptr};
   std::atomic<host::MidiInputSource*> midi_input_source_{nullptr};
-  uint32_t midi_input_destination_id_ = 0;
+  std::atomic<uint32_t> midi_input_destination_id_{0};
+  uint32_t live_midi_input_destination_id_ = 0;
   midi::CcMap midi_cc_map_{};
   static constexpr size_t kMaxLiveMidiInputEvents = 256;
   std::array<midi::MidiEvent, kMaxLiveMidiInputEvents> live_midi_input_events_{};
@@ -377,8 +379,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   CaptureSink capture_sink_{};
   std::atomic<CaptureSource> capture_source_{CaptureSource::kOutput};
   std::atomic<int64_t> record_offset_samples_{0};
-  std::atomic<bool> input_monitor_enabled_{true};
-  std::atomic<float> input_monitor_gain_{1.0f};
+  rt::SeqlockCell<InputMonitorState> input_monitor_{InputMonitorState{}};
   Metronome metronome_{};
 #if defined(SONARE_WITH_MIXING)
   MeterTelemetryTap meter_tap_{};

@@ -51,6 +51,29 @@ SonareProjectClipFade ClipFadeFromObject(const Napi::Object& obj) {
   return fade;
 }
 
+bool RequiredUint32Property(Napi::Env env, const Napi::Object& obj, const char* name,
+                            uint32_t* out) {
+  Napi::Value value = obj.Get(name);
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Number>().Uint32Value();
+  return !env.IsExceptionPending();
+}
+
+bool RequiredDoubleProperty(Napi::Env env, const Napi::Object& obj, const char* name, double* out) {
+  Napi::Value value = obj.Get(name);
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Number>().DoubleValue();
+  return !env.IsExceptionPending();
+}
+
 bool ParseClipTakes(Napi::Env env, const Napi::Value& value,
                     std::vector<SonareProjectClipTake>* takes,
                     std::vector<std::string>* name_storage) {
@@ -63,21 +86,27 @@ bool ParseClipTakes(Napi::Env env, const Napi::Value& value,
   name_storage->reserve(input.Length());
   for (uint32_t i = 0; i < input.Length(); ++i) {
     Napi::Value entry = input.Get(i);
+    if (env.IsExceptionPending()) return false;
     if (!entry.IsObject()) {
       Napi::TypeError::New(env, "clip take must be an object").ThrowAsJavaScriptException();
       return false;
     }
     Napi::Object obj = entry.As<Napi::Object>();
     SonareProjectClipTake take{};
-    take.id = obj.Get("id").As<Napi::Number>().Uint32Value();
+    if (!RequiredUint32Property(env, obj, "id", &take.id)) return false;
     take.source_id = static_cast<uint32_t>(IntProperty(obj, "sourceId", 0));
+    if (env.IsExceptionPending()) return false;
     const Napi::Value source_offset = obj.Get("sourceOffsetPpq");
+    if (env.IsExceptionPending()) return false;
     take.source_offset_ppq = source_offset.IsUndefined() || source_offset.IsNull()
                                  ? 0.0
                                  : source_offset.As<Napi::Number>().DoubleValue();
+    if (env.IsExceptionPending()) return false;
     const Napi::Value name = obj.Get("name");
+    if (env.IsExceptionPending()) return false;
     if (name.IsString()) {
       name_storage->push_back(name.As<Napi::String>().Utf8Value());
+      if (env.IsExceptionPending()) return false;
       take.name = name_storage->back().empty() ? nullptr : name_storage->back().c_str();
     }
     takes->push_back(take);
@@ -95,15 +124,17 @@ bool ParseClipCompSegments(Napi::Env env, const Napi::Value& value,
   segments->reserve(input.Length());
   for (uint32_t i = 0; i < input.Length(); ++i) {
     Napi::Value entry = input.Get(i);
+    if (env.IsExceptionPending()) return false;
     if (!entry.IsObject()) {
       Napi::TypeError::New(env, "clip comp segment must be an object").ThrowAsJavaScriptException();
       return false;
     }
     Napi::Object obj = entry.As<Napi::Object>();
     SonareProjectClipCompSegment segment{};
-    segment.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
-    segment.end_ppq = obj.Get("endPpq").As<Napi::Number>().DoubleValue();
+    if (!RequiredDoubleProperty(env, obj, "startPpq", &segment.start_ppq)) return false;
+    if (!RequiredDoubleProperty(env, obj, "endPpq", &segment.end_ppq)) return false;
     segment.take_id = static_cast<uint32_t>(IntProperty(obj, "takeId", 0));
+    if (env.IsExceptionPending()) return false;
     segments->push_back(segment);
   }
   return true;
@@ -498,10 +529,15 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   Napi::Value audio_value = obj.Get("audio");
   if (sonare_node::IsFloat32Array(audio_value)) {
     Napi::Float32Array array = audio_value.As<Napi::Float32Array>();
+    if (desc.audio_channels <= 0 ||
+        array.ElementLength() % static_cast<size_t>(desc.audio_channels) != 0) {
+      Napi::TypeError::New(env, "audio length must be a multiple of audioChannels")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
     audio.assign(array.Data(), array.Data() + array.ElementLength());
     desc.audio_interleaved = audio.data();
-    const int channels = desc.audio_channels > 0 ? desc.audio_channels : 1;
-    desc.audio_frames = static_cast<int64_t>(audio.size()) / channels;
+    desc.audio_frames = static_cast<int64_t>(audio.size()) / desc.audio_channels;
   }
 
   std::string source_uri;
@@ -540,10 +576,15 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
   Napi::Value audio_value = obj.Get("audio");
   if (sonare_node::IsFloat32Array(audio_value)) {
     Napi::Float32Array array = audio_value.As<Napi::Float32Array>();
+    if (desc.audio_channels <= 0 ||
+        array.ElementLength() % static_cast<size_t>(desc.audio_channels) != 0) {
+      Napi::TypeError::New(env, "audio length must be a multiple of audioChannels")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
     audio.assign(array.Data(), array.Data() + array.ElementLength());
     desc.audio_interleaved = audio.data();
-    const int channels = desc.audio_channels > 0 ? desc.audio_channels : 1;
-    desc.audio_frames = static_cast<int64_t>(audio.size()) / channels;
+    desc.audio_frames = static_cast<int64_t>(audio.size()) / desc.audio_channels;
   }
 
   uint32_t out_clip_id = 0;

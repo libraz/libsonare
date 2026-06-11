@@ -87,11 +87,6 @@ size_t rounded_nonnegative_sample(double sample) noexcept {
   return static_cast<size_t>(std::llround(sample));
 }
 
-int64_t tempo_sync_latency_samples() noexcept {
-  engine::TempoSyncWarpBakeConfig config;
-  return config.n_fft / 2;
-}
-
 struct AudioClipPart {
   double start_ppq = 0.0;
   double end_ppq = 0.0;
@@ -104,6 +99,26 @@ const ClipTake* find_take(const EditClip& clip, TakeId id) noexcept {
   const auto it = std::find_if(clip.takes.begin(), clip.takes.end(),
                                [id](const ClipTake& take) { return take.id == id; });
   return it == clip.takes.end() ? nullptr : &*it;
+}
+
+bool take_id_exists(const std::vector<ClipTake>& takes, TakeId id) noexcept {
+  if (id == 0) return true;
+  return std::any_of(takes.begin(), takes.end(),
+                     [id](const ClipTake& take) { return take.id == id; });
+}
+
+bool valid_comp_segments(const EditClip& clip) noexcept {
+  double previous_end = 0.0;
+  for (const ClipCompSegment& segment : clip.comp_segments) {
+    if (!std::isfinite(segment.start_ppq) || !std::isfinite(segment.end_ppq) ||
+        segment.start_ppq < 0.0 || !(segment.end_ppq > segment.start_ppq) ||
+        segment.end_ppq > clip.length_ppq || segment.start_ppq < previous_end ||
+        !take_id_exists(clip.takes, segment.take_id)) {
+      return false;
+    }
+    previous_end = segment.end_ppq;
+  }
+  return true;
 }
 
 bool resolve_take_part(const EditClip& clip, TakeId take_id, double start_ppq, double end_ppq,
@@ -337,6 +352,11 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                "clip has non-positive length or negative start/offset PPQ");
       continue;
     }
+    if (!valid_comp_segments(clip)) {
+      add_diag(&result, Diagnostic::Code::kInvalidPpq, Diagnostic::Severity::kError, clip.id,
+               "clip has invalid comp segments");
+      continue;
+    }
 
     bool parts_ok = true;
     const std::vector<AudioClipPart> parts = build_audio_clip_parts(clip, &parts_ok);
@@ -485,13 +505,13 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                      clip.id, "tempo-sync warp map source span exceeds decoded audio length");
             continue;
           }
-          std::vector<std::vector<float>> stretched;
-          stretched.reserve(built->channels.size());
+          std::vector<const float*> source_channels;
+          source_channels.reserve(built->channels.size());
           for (const auto& ch : built->channels) {
-            std::vector<float> channel =
-                engine::bake_tempo_sync_warp_channel(ch.data(), ch.size(), segments, bake_config);
-            stretched.push_back(std::move(channel));
+            source_channels.push_back(ch.data());
           }
+          std::vector<std::vector<float>> stretched = engine::bake_tempo_sync_warp_channels(
+              source_channels, built->channels[0].size(), segments, bake_config);
           built->channels = std::move(stretched);
         }
         built->channel_ptrs.reserve(built->channels.size());
@@ -552,11 +572,6 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       sched.track_id = clip.track_id;
       sched.storage = std::move(storage);
       timeline.audio_clips.push_back(std::move(sched));
-
-      if (compile_baked_tempo_sync) {
-        int64_t& source_latency = timeline.latency.per_source_samples[part.source_id];
-        source_latency = std::max(source_latency, tempo_sync_latency_samples());
-      }
     }
   }
 

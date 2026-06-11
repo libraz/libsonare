@@ -15,9 +15,11 @@
 ///      (a) drains the retire ring, freeing previously-retired shared_ptrs on
 ///          the control thread (never the audio thread);
 ///      (b) hands the new snapshot to the audio thread through an SPSC ring of
-///          `shared_ptr<const T>`. Ownership is partitioned strictly by the
-///          head (producer) and tail (consumer) indices, so the producer and
-///          consumer never touch the same ring element concurrently.
+///          `shared_ptr<const T>`. If the ring is full, the latest snapshot is
+///          coalesced into a single pending slot that the audio thread adopts
+///          after draining the ring. Ownership is partitioned by atomic slot
+///          state, so the producer and consumer never touch the same
+///          `shared_ptr` object concurrently.
 ///
 ///  - AUDIO thread calls `acquire()` at block start. It drains the publish ring
 ///      to the newest pending snapshot; the OLD owning snapshot and every
@@ -39,6 +41,7 @@
 #include <atomic>
 #include <cstddef>
 #include <memory>
+#include <thread>
 #include <utility>
 
 namespace sonare::rt {
@@ -64,9 +67,9 @@ class RtPublisher {
   RtPublisher& operator=(RtPublisher&&) = delete;
 
   /// Publish a new snapshot from the CONTROL thread. May allocate/free (it
-  /// drains and releases retired snapshots here). Returns false if the hand-off
-  /// ring is momentarily full (the snapshot is then dropped and the previously
-  /// published value remains current). Not real-time safe.
+  /// drains and releases retired snapshots here). When the hand-off ring is
+  /// full, the newest snapshot overwrites the coalesced pending slot instead
+  /// of being dropped. Not real-time safe.
   bool publish(std::shared_ptr<const T> snapshot) {
     reclaim_retired();
     if (!snapshot) return false;
@@ -76,7 +79,8 @@ class RtPublisher {
     // the audio thread.
     std::shared_ptr<const T> retained = snapshot;
     if (!publish_ring_.push(std::move(snapshot))) {
-      return false;
+      publish_pending(std::move(retained));
+      return true;
     }
     control_current_ = std::move(retained);
     return true;
@@ -97,6 +101,7 @@ class RtPublisher {
       }
       audio_current_ = std::move(popped);
     }
+    acquire_pending();
   }
 
   /// Raw pointer to the snapshot currently held by the audio thread, or nullptr
@@ -165,10 +170,52 @@ class RtPublisher {
     }
   }
 
+  void publish_pending(std::shared_ptr<const T> snapshot) {
+    for (;;) {
+      uint8_t state = pending_state_.load(std::memory_order_acquire);
+      if (state == kPendingReading) {
+        std::this_thread::yield();
+        continue;
+      }
+      if (pending_state_.compare_exchange_weak(state, kPendingWriting, std::memory_order_acq_rel,
+                                               std::memory_order_acquire)) {
+        pending_slot_ = snapshot;
+        control_current_ = std::move(snapshot);
+        pending_state_.store(kPendingReady, std::memory_order_release);
+        return;
+      }
+    }
+  }
+
+  void acquire_pending() noexcept {
+    if (audio_current_ && !retire_ring_.can_push()) {
+      return;
+    }
+    uint8_t expected = kPendingReady;
+    if (!pending_state_.compare_exchange_strong(
+            expected, kPendingReading, std::memory_order_acq_rel, std::memory_order_acquire)) {
+      return;
+    }
+    if (pending_slot_) {
+      if (audio_current_) {
+        retire_ring_.push(std::move(audio_current_));
+      }
+      audio_current_ = std::move(pending_slot_);
+    }
+    pending_state_.store(kPendingEmpty, std::memory_order_release);
+  }
+
   // Hand-off: control -> audio.
   SpscPtrRing publish_ring_;
   // Retirement: audio -> control.
   SpscPtrRing retire_ring_;
+
+  static constexpr uint8_t kPendingEmpty = 0;
+  static constexpr uint8_t kPendingWriting = 1;
+  static constexpr uint8_t kPendingReady = 2;
+  static constexpr uint8_t kPendingReading = 3;
+  alignas(64) std::atomic<uint8_t> pending_state_{kPendingEmpty};
+  std::shared_ptr<const T> pending_slot_;
 
   std::shared_ptr<const T> control_current_;  // control thread
   std::shared_ptr<const T> audio_current_;    // audio thread

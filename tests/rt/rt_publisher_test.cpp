@@ -72,6 +72,19 @@ TEST_CASE("RtPublisher acquire adopts the newest of several pending publishes", 
   REQUIRE(CountedSnapshot::destroyed.load() == 2);
 }
 
+TEST_CASE("RtPublisher coalesces a full publish ring to the newest snapshot", "[rt][publisher]") {
+  CountedSnapshot::destroyed.store(0);
+  sonare::rt::RtPublisher<CountedSnapshot> publisher;
+
+  for (size_t i = 1; i <= sonare::rt::RtPublisher<CountedSnapshot>::kCapacity + 10; ++i) {
+    REQUIRE(publisher.publish(make_snapshot(static_cast<uint64_t>(i))));
+  }
+
+  publisher.acquire();
+  REQUIRE(publisher.current() != nullptr);
+  REQUIRE(publisher.current()->value == sonare::rt::RtPublisher<CountedSnapshot>::kCapacity + 10);
+}
+
 TEST_CASE("RtPublisher concurrent publish/acquire is torn-read and leak free", "[rt][publisher]") {
   constexpr int kIterations = 100000;
   CountedSnapshot::live.store(0);

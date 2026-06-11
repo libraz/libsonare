@@ -181,12 +181,17 @@ TEST_CASE("AcousticAnalyzer truncates IR Schroeder decay above the noise floor",
           "[acoustic_analyzer]") {
   const float expected_rt60 = 0.8f;
   const Audio ir = create_noisy_exponential_decay(expected_rt60, 48000, 4.0f, 0.012f);
+  const Audio clean_ir = create_exponential_ir(expected_rt60, 48000, 4.0f);
 
   const auto params = analyze_impulse_response(ir);
+  const auto clean = analyze_impulse_response(clean_ir);
 
   REQUIRE_FALSE(params.is_blind);
   REQUIRE(std::isfinite(params.rt60));
   REQUIRE_THAT(params.rt60, WithinRel(expected_rt60, 0.25f));
+  REQUIRE_THAT(params.c50, WithinAbs(clean.c50, 1.0f));
+  REQUIRE_THAT(params.c80, WithinAbs(clean.c80, 1.0f));
+  REQUIRE_THAT(params.d50, WithinAbs(clean.d50, 0.05f));
   REQUIRE(params.confidence >= 0.5f);
 }
 

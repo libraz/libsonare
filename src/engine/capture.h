@@ -27,7 +27,9 @@ struct CaptureSegment {
 ///    setters. They mutate the published control state (capture segment, armed
 ///    flag, punch window) and are NOT real-time safe — call them from the
 ///    control thread only.
-///  - @ref process and @ref captured_frames run on the AUDIO thread.
+///  - @ref process runs on the AUDIO thread. @ref captured_frames may be
+///    polled by the control thread; observing N frames synchronizes with the
+///    audio-thread writes to the published prefix [0, N).
 ///  - The published control state is handed across the thread boundary through a
 ///    seqlock (@ref rt::SeqlockCell), so any reader observes a consistent
 ///    whole-snapshot (no torn reads, no data race) even while the control thread
@@ -53,7 +55,7 @@ class CaptureSink {
                int64_t timeline_sample) noexcept;
 
   int64_t captured_frames() const noexcept {
-    return captured_frames_.load(std::memory_order_relaxed);
+    return captured_frames_.load(std::memory_order_acquire);
   }
   uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
   bool armed() const noexcept { return snapshot().armed; }

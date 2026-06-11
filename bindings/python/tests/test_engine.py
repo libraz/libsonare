@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import math
 
 import numpy as np
@@ -27,6 +28,7 @@ from libsonare import (
     FileClipPageProvider,
     ParameterInfo,
     RealtimeEngine,
+    SonareError,
     engine_abi_version,
     voice_changer_abi_version,
 )
@@ -302,6 +304,30 @@ def test_engine_feeds_paged_clips_from_raw_float32_files(tmp_path) -> None:
         assert second[0] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
 
 
+def test_clip_page_provider_failed_construction_does_not_emit_del_noise(capsys) -> None:
+    with pytest.raises(SonareError):
+        ClipPageProvider(0, 0, 0)
+    gc.collect()
+    assert "Exception ignored in" not in capsys.readouterr().err
+
+
+def test_file_clip_page_provider_failed_open_cleans_up_without_del_noise(tmp_path, capsys) -> None:
+    missing = tmp_path / "missing.f32"
+    with pytest.raises(FileNotFoundError):
+        FileClipPageProvider(missing, num_channels=1, num_samples=8, page_frames=4)
+    gc.collect()
+    assert "Exception ignored in" not in capsys.readouterr().err
+
+
+def test_file_clip_page_provider_truncated_page_returns_false(tmp_path) -> None:
+    raw_path = tmp_path / "truncated.f32"
+    np.asarray([1.0, 2.0, 3.0, 4.0, 5.0], dtype="<f4").tofile(raw_path)
+
+    with FileClipPageProvider(raw_path, num_channels=1, num_samples=8, page_frames=4) as provider:
+        assert provider.supply_page(0) is True
+        assert provider.supply_page(1) is False
+
+
 def test_realtime_engine_renders_repitch_warped_clip() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
         engine.set_clips(
@@ -343,6 +369,40 @@ def test_realtime_engine_renders_repitch_warped_clip() -> None:
         tempo_engine.play()
         tempo_synced = tempo_engine.process([[0.0] * 8192])
         assert max(abs(sample) for sample in tempo_synced[0]) > 0.1
+
+
+def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=305,
+                    channels=[[0.0, 10.0, 20.0, 30.0]],
+                    start_ppq=0.0,
+                    length_samples=4,
+                    warp_mode="Repitch",
+                    warp_anchors=[(0.0, 0.0), (3.0, 1.5)],
+                )
+            ]
+        )
+        engine.play()
+        processed = engine.process([[0.0] * 4])
+        assert math.isclose(processed[0][1], 5.0, abs_tol=0.0001)
+
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+        for mode in ("typo", 1.9, True):
+            with pytest.raises(ValueError, match="unknown warp mode"):
+                engine.set_clips(
+                    [
+                        EngineClip(
+                            id=306,
+                            channels=[[0.0, 10.0, 20.0, 30.0]],
+                            start_ppq=0.0,
+                            length_samples=4,
+                            warp_mode=mode,  # type: ignore[arg-type]
+                        )
+                    ]
+                )
 
 
 def test_realtime_engine_process_zero_copy_matches_list_input() -> None:

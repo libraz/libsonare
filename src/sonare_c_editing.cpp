@@ -413,10 +413,6 @@ SonareError validate_interleaved_audio(const float* samples, size_t frames, int 
   if (frames > std::numeric_limits<size_t>::max() / static_cast<size_t>(channels)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const size_t total = frames * static_cast<size_t>(channels);
-  for (size_t i = 0; i < total; ++i) {
-    if (!std::isfinite(samples[i])) return SONARE_ERROR_INVALID_PARAMETER;
-  }
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -436,6 +432,27 @@ SonareError fill_waveform_peaks_result(const metering::WaveformPeaksResult& resu
   out->max = release_array(max_values);
   return SONARE_OK;
 }
+
+struct WaveformPyramidLevels {
+  std::unique_ptr<SonareWaveformPeaksResult[]> levels;
+  size_t initialized = 0;
+
+  explicit WaveformPyramidLevels(size_t count) : levels(new SonareWaveformPeaksResult[count]()) {}
+
+  ~WaveformPyramidLevels() {
+    if (!levels) return;
+    for (size_t i = 0; i < initialized; ++i) {
+      sonare_free_waveform_peaks_result(&levels[i]);
+    }
+  }
+
+  SonareWaveformPeaksResult* get() noexcept { return levels.get(); }
+
+  SonareWaveformPeaksResult* release() noexcept {
+    initialized = 0;
+    return release_array(levels);
+  }
+};
 
 }  // namespace
 
@@ -464,17 +481,16 @@ SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, in
   }
   SONARE_C_TRY
   const auto pyramid = metering::waveform_peak_pyramid(samples, frames, channels, levels);
-  std::unique_ptr<SonareWaveformPeaksResult[]> c_levels(
-      new SonareWaveformPeaksResult[pyramid.size()]());
+  WaveformPyramidLevels c_levels(pyramid.size());
   for (size_t i = 0; i < pyramid.size(); ++i) {
-    err = fill_waveform_peaks_result(pyramid[i], &c_levels[i]);
+    err = fill_waveform_peaks_result(pyramid[i], &c_levels.get()[i]);
     if (err != SONARE_OK) {
-      for (size_t j = 0; j <= i; ++j) sonare_free_waveform_peaks_result(&c_levels[j]);
       return err;
     }
+    ++c_levels.initialized;
   }
   out->level_count = pyramid.size();
-  out->levels = release_array(c_levels);
+  out->levels = c_levels.release();
   return SONARE_OK;
   SONARE_C_CATCH
 }

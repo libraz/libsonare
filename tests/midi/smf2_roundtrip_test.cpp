@@ -6,6 +6,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -145,6 +146,21 @@ TEST_CASE("SMF2 round-trips tempo and time signature via Flex Data", "[midi][smf
   REQUIRE(imported.time_signatures.front().time_sig.numerator == 6);
   REQUIRE(imported.time_signatures.front().time_sig.denominator == 8);
   REQUIRE(imported.time_signatures.front().thirty_seconds_per_quarter == 0);
+}
+
+TEST_CASE("SMF2 export clamps very low BPM tempo instead of wrapping", "[midi][smf2]") {
+  MidiClip clip;
+  std::vector<sonare::transport::TempoSegment> tempos = {{0.0, 1.0, 0.0}, {1.0, 0.5, 0.0}};
+
+  const auto exported = export_clip_file(clip, tempos, {}, Smf2ExportOptions{});
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.tempo_segments.size() >= 2);
+
+  const double min_representable_bpm =
+      6.0e9 / static_cast<double>(std::numeric_limits<uint32_t>::max());
+  REQUIRE(imported.tempo_segments[0].bpm == Catch::Approx(min_representable_bpm).epsilon(1e-9));
+  REQUIRE(imported.tempo_segments[1].bpm == Catch::Approx(min_representable_bpm).epsilon(1e-9));
 }
 
 TEST_CASE("SMF2 round-trips the clip name via Flex Data metadata", "[midi][smf2]") {
@@ -356,6 +372,24 @@ TEST_CASE("SMF2 import rejects malformed input without reading out of bounds", "
   SECTION("channel voice before DCTPQ is rejected transactionally") {
     std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
     push_word(&bytes, sonare::midi::make_midi1_note_on(0, 0, 60, 100).words[0]);
+    const Smf2ImportResult r = import_clip_file(bytes);
+    REQUIRE(r.status == Smf2Status::kMissingDctpq);
+    REQUIRE(r.clips.empty());
+  }
+  SECTION("Flex Data before DCTPQ is rejected instead of timestamped at zero") {
+    std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
+    push_word(&bytes, (0xDu << 28) | (0x1u << 16) | (0x01u << 8) | 0x00u);
+    push_word(&bytes, 50000000u);
+    push_word(&bytes, 0);
+    push_word(&bytes, 0);
+    const Smf2ImportResult r = import_clip_file(bytes);
+    REQUIRE(r.status == Smf2Status::kMissingDctpq);
+    REQUIRE(r.clips.empty());
+  }
+  SECTION("SysEx before DCTPQ is rejected instead of timestamped at zero") {
+    std::vector<uint8_t> bytes = {'S', 'M', 'F', '2', 'C', 'L', 'I', 'P'};
+    push_word(&bytes, (0x3u << 28) | (0x0u << 20) | (0x03u << 16) | 0xF0u);
+    push_word(&bytes, 0x0102F700u);
     const Smf2ImportResult r = import_clip_file(bytes);
     REQUIRE(r.status == Smf2Status::kMissingDctpq);
     REQUIRE(r.clips.empty());

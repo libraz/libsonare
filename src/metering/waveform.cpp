@@ -58,7 +58,7 @@ WaveformPeaksResult waveform_peaks(const float* samples, size_t frames, int chan
   WaveformPeaksResult result;
   result.channels = channels;
   result.samples_per_bucket = samples_per_bucket;
-  result.bucket_count = frames == 0 ? 0 : (frames + samples_per_bucket - 1) / samples_per_bucket;
+  result.bucket_count = frames == 0 ? 0 : (frames - 1) / samples_per_bucket + 1;
 
   const size_t total = static_cast<size_t>(channels) * result.bucket_count;
   result.min.assign(total, 0.0f);

@@ -233,6 +233,10 @@ TEST_CASE("StreamingPhaseVocoder prototype normalizes config and reports centere
   StreamingPhaseVocoder short_streamer(short_window);
   REQUIRE(short_streamer.config().win_length == 512);
   REQUIRE(short_streamer.latency_samples() == 512);
+
+  StreamingPhaseVocoderConfig sparse_hop = config;
+  sparse_hop.hop_length = 768;
+  REQUIRE_THROWS_AS(StreamingPhaseVocoder(sparse_hop), SonareException);
 }
 
 TEST_CASE("StreamingPhaseVocoder process facade buffers until finalize",

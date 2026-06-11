@@ -418,6 +418,37 @@ TEST_CASE(
   REQUIRE(player.clip_count() == 0);
 }
 
+TEST_CASE("ClipPlayer clip_count follows coalesced publishes when the publish ring is full",
+          "[engine][clip_player]") {
+  std::array<float, 1> source{1.0f};
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 8);
+
+  using ClipVector = std::vector<sonare::engine::ClipSchedule>;
+  constexpr size_t kCapacity = sonare::rt::RtPublisher<ClipVector>::kCapacity;
+  for (size_t i = 1; i <= kCapacity; ++i) {
+    ClipVector clips;
+    clips.reserve(i);
+    for (size_t id = 1; id <= i; ++id) {
+      clips.push_back(
+          {static_cast<uint32_t>(id), {channels, 1, 1}, 0.0, 0, 0, 1, false, 1.0f, 0, 0});
+    }
+    player.set_clips(std::move(clips));
+    REQUIRE(player.clip_count() == i);
+  }
+
+  player.set_clips({});
+  REQUIRE(player.clip_count() == 0);
+
+  player.acquire_clips();
+  std::array<float, 1> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 1, 0);
+  REQUIRE(out_l[0] == 0.0f);
+}
+
 TEST_CASE("ClipPlayer precomputes clip start from PPQ when tempo map is bound",
           "[engine][clip_player]") {
   sonare::transport::TempoMap tempo;

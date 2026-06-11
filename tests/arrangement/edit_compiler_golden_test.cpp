@@ -575,6 +575,40 @@ TEST_CASE("compiler expands audio comp segments into take-specific schedules", "
   REQUIRE(rendered[25000 * 2] < 0.71f);
 }
 
+TEST_CASE("compiler rejects invalid audio comp segments from loaded projects", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->takes = {{1, 0, 0.0, "base"}, {2, 0, 0.0, "alternate"}};
+
+  const auto compile_with_segments =
+      [&](std::vector<arr::ClipCompSegment> segments) -> arr::CompileResult {
+    clip->comp_segments = std::move(segments);
+    return arr::compile(f.project, f.midi, f.audio);
+  };
+  const auto has_invalid_ppq = [](const arr::CompileResult& result) {
+    return std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& diag) {
+      return diag.code == arr::Diagnostic::Code::kInvalidPpq &&
+             diag.severity == arr::Diagnostic::Severity::kError;
+    });
+  };
+
+  arr::CompileResult out_of_range = compile_with_segments({{1.0, 3.0, 1}});
+  REQUIRE(out_of_range.has_errors());
+  REQUIRE_FALSE(out_of_range.timeline.has_value());
+  REQUIRE(has_invalid_ppq(out_of_range));
+
+  arr::CompileResult overlapping = compile_with_segments({{0.25, 1.0, 1}, {0.75, 1.5, 2}});
+  REQUIRE(overlapping.has_errors());
+  REQUIRE_FALSE(overlapping.timeline.has_value());
+  REQUIRE(has_invalid_ppq(overlapping));
+
+  arr::CompileResult missing_take = compile_with_segments({{0.25, 1.0, 99}});
+  REQUIRE(missing_take.has_errors());
+  REQUIRE_FALSE(missing_take.timeline.has_value());
+  REQUIRE(has_invalid_ppq(missing_take));
+}
+
 TEST_CASE("compiler carries audio clip warp reference into the RT schedule", "[arrangement]") {
   Fixture f = make_fixture();
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
@@ -661,8 +695,8 @@ TEST_CASE("compiler bakes tempo-sync warp clips when warped audio is absent", "[
   REQUIRE(generated.storage != nullptr);
   REQUIRE(generated.storage->channels.size() == 2);
   REQUIRE(generated.storage->channels[0].size() == 48000);
-  REQUIRE(compiled.timeline->latency.total_latency_samples == 1024);
-  REQUIRE(compiled.timeline->latency.per_source_samples.at(f.source_id) == 1024);
+  REQUIRE(compiled.timeline->latency.total_latency_samples == 0);
+  REQUIRE(compiled.timeline->latency.per_source_samples.count(f.source_id) == 0);
   double energy = 0.0;
   for (const float sample : generated.storage->channels[0]) {
     REQUIRE(std::isfinite(sample));
@@ -743,7 +777,7 @@ TEST_CASE("compiler bakes tempo-sync warp maps with segment rates", "[arrangemen
   REQUIRE(sched.storage != nullptr);
   REQUIRE(sched.storage->channels.size() == 2);
   REQUIRE(sched.storage->channels[0].size() == 48000);
-  REQUIRE(r.timeline->latency.total_latency_samples == 1024);
+  REQUIRE(r.timeline->latency.total_latency_samples == 0);
   double energy = 0.0;
   for (const float sample : sched.storage->channels[0]) {
     REQUIRE(std::isfinite(sample));

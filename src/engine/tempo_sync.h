@@ -38,4 +38,8 @@ std::vector<float> bake_tempo_sync_warp_channel(const float* source, size_t sour
                                                 const std::vector<TempoSyncWarpSegment>& segments,
                                                 const TempoSyncWarpBakeConfig& config = {});
 
+std::vector<std::vector<float>> bake_tempo_sync_warp_channels(
+    const std::vector<const float*>& sources, size_t source_samples,
+    const std::vector<TempoSyncWarpSegment>& segments, const TempoSyncWarpBakeConfig& config = {});
+
 }  // namespace sonare::engine

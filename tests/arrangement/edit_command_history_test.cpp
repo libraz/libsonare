@@ -58,7 +58,8 @@ bool clip_equal(const EditClip& a, const EditClip& b) {
          a.source_offset_ppq == b.source_offset_ppq && a.gain == b.gain &&
          fade_equal(a.fade_in, b.fade_in) && fade_equal(a.fade_out, b.fade_out) &&
          a.loop_mode == b.loop_mode && a.loop_length_ppq == b.loop_length_ppq &&
-         a.warp_ref_id == b.warp_ref_id;
+         a.warp_ref_id == b.warp_ref_id && a.takes == b.takes &&
+         a.active_take_id == b.active_take_id && a.comp_segments == b.comp_segments;
 }
 
 bool source_equal(const ClipSource& a, const ClipSource& b) {
@@ -546,6 +547,76 @@ TEST_CASE("SplitClip partitions MIDI content instead of duplicating it", "[arran
   REQUIRE(store.events == store_before.events);
 }
 
+TEST_CASE("SplitClip rebases takes and comp segments for both halves", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+  EditClip* clip = f.project.find_clip_mutable(f.audio_clip);
+  REQUIRE(clip != nullptr);
+  clip->takes = {{1, 0, 10.0, "one"}, {2, 0, 100.0, "two"}};
+  clip->active_take_id = 2;
+  clip->comp_segments = {{240.0, 720.0, 1}, {720.0, 1440.0, 2}, {1500.0, 1800.0, 1}};
+  const Project before = f.project;
+
+  auto split = std::make_unique<SplitClip>(f.audio_clip, 960.0);
+  SplitClip* raw = split.get();
+  REQUIRE(split->apply(f.project, store));
+  const ClipId right_id = raw->new_clip_id();
+  REQUIRE(right_id != 0);
+
+  const EditClip* left = f.project.find_clip(f.audio_clip);
+  const EditClip* right = f.project.find_clip(right_id);
+  REQUIRE(left != nullptr);
+  REQUIRE(right != nullptr);
+  CHECK(left->length_ppq == 960.0);
+  CHECK(left->takes == std::vector<ClipTake>{{1, 0, 10.0, "one"}, {2, 0, 100.0, "two"}});
+  CHECK(left->active_take_id == 2);
+  CHECK(left->comp_segments == std::vector<ClipCompSegment>{{240.0, 720.0, 1}, {720.0, 960.0, 2}});
+  CHECK(right->start_ppq == 960.0);
+  CHECK(right->length_ppq == 960.0);
+  CHECK(right->source_offset_ppq == 960.0);
+  CHECK(right->takes == std::vector<ClipTake>{{1, 0, 970.0, "one"}, {2, 0, 1060.0, "two"}});
+  CHECK(right->active_take_id == 2);
+  CHECK(right->comp_segments == std::vector<ClipCompSegment>{{0.0, 480.0, 2}, {540.0, 840.0, 1}});
+
+  REQUIRE(SetClipTakes(f.audio_clip, left->takes, left->active_take_id).apply(f.project, store));
+  REQUIRE(SetClipTakes(right_id, right->takes, right->active_take_id).apply(f.project, store));
+
+  EditCommandPtr undo = raw->invert(before, store);
+  REQUIRE(undo != nullptr);
+  REQUIRE(undo->apply(f.project, store));
+  REQUIRE(project_equal(f.project, before));
+}
+
+TEST_CASE("TrimClip shifts takes and keeps comp segments timeline-aligned", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+  EditClip* clip = f.project.find_clip_mutable(f.audio_clip);
+  REQUIRE(clip != nullptr);
+  clip->takes = {{1, 0, 1000.0, "one"}, {2, 0, 1200.0, "two"}};
+  clip->active_take_id = 1;
+  clip->comp_segments = {{100.0, 300.0, 1}, {500.0, 1000.0, 2}, {1300.0, 1800.0, 1}};
+  const Project before = f.project;
+
+  TrimClip trim(f.audio_clip, 240.0, 960.0);
+  REQUIRE(trim.apply(f.project, store));
+
+  const EditClip* trimmed = f.project.find_clip(f.audio_clip);
+  REQUIRE(trimmed != nullptr);
+  CHECK(trimmed->start_ppq == 240.0);
+  CHECK(trimmed->source_offset_ppq == 240.0);
+  CHECK(trimmed->length_ppq == 960.0);
+  CHECK(trimmed->takes == std::vector<ClipTake>{{1, 0, 1240.0, "one"}, {2, 0, 1440.0, "two"}});
+  CHECK(trimmed->active_take_id == 1);
+  CHECK(trimmed->comp_segments == std::vector<ClipCompSegment>{{0.0, 60.0, 1}, {260.0, 760.0, 2}});
+  REQUIRE(
+      SetClipTakes(f.audio_clip, trimmed->takes, trimmed->active_take_id).apply(f.project, store));
+
+  EditCommandPtr undo = trim.invert(before, store);
+  REQUIRE(undo != nullptr);
+  REQUIRE(undo->apply(f.project, store));
+  REQUIRE(project_equal(f.project, before));
+}
+
 TEST_CASE("SplitClip rejects loop clips until loop phase splitting is supported", "[arrangement]") {
   Fixture f;
   MidiContentStore store;
@@ -558,6 +629,22 @@ TEST_CASE("SplitClip rejects loop clips until loop phase splitting is supported"
   SplitClip split(f.audio_clip, 960.0);
   REQUIRE_FALSE(split.apply(f.project, store));
   REQUIRE(project_equal(f.project, before));
+}
+
+TEST_CASE("Loop clips reject comp segments that split the clip", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+  EditClip* clip = f.project.find_clip_mutable(f.audio_clip);
+  REQUIRE(clip != nullptr);
+  clip->takes = {{1, 0, 0.0, "one"}, {2, 0, 0.0, "two"}};
+  const std::vector<ClipCompSegment> split_segments{{240.0, 720.0, 2}};
+  const std::vector<ClipCompSegment> whole_clip_segment{{0.0, clip->length_ppq, 2}};
+
+  REQUIRE(SetClipCompSegments(f.audio_clip, split_segments).apply(f.project, store));
+  CHECK_FALSE(SetClipLoop(f.audio_clip, LoopMode::kLoop, 480.0).apply(f.project, store));
+  REQUIRE(SetClipCompSegments(f.audio_clip, whole_clip_segment).apply(f.project, store));
+  REQUIRE(SetClipLoop(f.audio_clip, LoopMode::kLoop, 480.0).apply(f.project, store));
+  CHECK_FALSE(SetClipCompSegments(f.audio_clip, split_segments).apply(f.project, store));
 }
 
 TEST_CASE("Clip placement commands preserve overlap invariants and fail atomically",

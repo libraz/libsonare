@@ -29,10 +29,25 @@ interface PageResponse {
 }
 
 export const opfsClipPageWorkerSource = `
+const sonareClipPageReadQueues = new Map();
+
+function sonareEnqueueClipPageRead(key, task) {
+  const previous = sonareClipPageReadQueues.get(key) || Promise.resolve();
+  const next = previous.catch(() => undefined).then(task);
+  const queued = next.finally(() => {
+    if (sonareClipPageReadQueues.get(key) === queued) {
+      sonareClipPageReadQueues.delete(key);
+    }
+  });
+  sonareClipPageReadQueues.set(key, queued);
+  return next;
+}
+
 self.onmessage = async (event) => {
   const message = event.data;
   if (!message || message.type !== 'sonare:read-clip-page') return;
   const { requestId, path, pageIndex, numChannels, numSamples, pageFrames, dataOffsetBytes = 0 } = message;
+  await sonareEnqueueClipPageRead(String(path), async () => {
   try {
     if (pageIndex < 0) {
       self.postMessage({ type: 'sonare:clip-page', requestId, pageIndex, ok: false });
@@ -95,6 +110,7 @@ self.onmessage = async (event) => {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  });
 };
 `;
 
@@ -119,6 +135,7 @@ export function createOpfsClipPageProvider(
   const ownsWorker = options.worker === undefined || options.terminateWorkerOnClose === true;
   let nextRequestId = 1;
   let closed = false;
+  let readQueue: Promise<void> = Promise.resolve();
   const pending = new Map<
     number,
     { resolve: (value: boolean) => void; reject: (reason: unknown) => void }
@@ -165,15 +182,32 @@ export function createOpfsClipPageProvider(
     const promise = new Promise<boolean>((resolve, reject) => {
       pending.set(requestId, { resolve, reject });
     });
-    worker.postMessage({
-      type: 'sonare:read-clip-page',
-      requestId,
-      path: options.path,
-      pageIndex,
-      numChannels: options.numChannels,
-      numSamples: options.numSamples,
-      pageFrames: options.pageFrames,
-      dataOffsetBytes: options.dataOffsetBytes ?? 0,
+    readQueue = readQueue
+      .catch(() => undefined)
+      .then(() => {
+        if (closed) {
+          const entry = pending.get(requestId);
+          pending.delete(requestId);
+          entry?.reject(new Error('OpfsClipPageProvider is closed'));
+          return;
+        }
+        worker.postMessage({
+          type: 'sonare:read-clip-page',
+          requestId,
+          path: options.path,
+          pageIndex,
+          numChannels: options.numChannels,
+          numSamples: options.numSamples,
+          pageFrames: options.pageFrames,
+          dataOffsetBytes: options.dataOffsetBytes ?? 0,
+        });
+        return promise.then(
+          () => undefined,
+          () => undefined,
+        );
+      });
+    readQueue.catch(() => {
+      // The per-request promise carries the user-visible failure.
     });
     return promise;
   };

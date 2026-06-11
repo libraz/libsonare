@@ -6,7 +6,14 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, masteringInsertNames, Project, RealtimeEngine } from '../dist/index.js';
+import {
+  ErrorCode,
+  init,
+  isSonareError,
+  masteringInsertNames,
+  Project,
+  RealtimeEngine,
+} from '../dist/index.js';
 
 describe('Sonare WASM Project edit ops', () => {
   beforeAll(async () => {
@@ -138,6 +145,65 @@ describe('Sonare WASM Project edit ops', () => {
       expect(project.toJson()).toContain('"active_take_id":2');
       project.undo();
       expect(project.toJson()).toContain('"clips":[]');
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('rejects interleaved audio lengths that do not match audioChannels', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'record' });
+      expect(() =>
+        project.addClip({
+          trackId,
+          startPpq: 0,
+          lengthPpq: 1,
+          audio: new Float32Array(5),
+          audioChannels: 2,
+          audioSampleRate: 48000,
+        }),
+      ).toThrow();
+      expect(() =>
+        project.addLoopRecordingTakes({
+          trackId,
+          startPpq: 0,
+          loopLengthPpq: 1,
+          audio: new Float32Array(5),
+          audioChannels: 2,
+          audioSampleRate: 48000,
+        }),
+      ).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('addLoopRecordingTakes preserves native InvalidState error codes', () => {
+    const { project, trackId } = buildAudioProject();
+    try {
+      project.setOverlapPolicy(0);
+      const audio = new Float32Array(48000);
+      audio.fill(0.25);
+      let caught: unknown;
+      try {
+        project.addLoopRecordingTakes({
+          trackId,
+          startPpq: 0,
+          loopLengthPpq: 2,
+          audio,
+          audioChannels: 1,
+          audioSampleRate: 48000,
+        });
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      if (!isSonareError(caught)) {
+        throw new Error('expected SonareError');
+      }
+      expect(caught.code).toBe(ErrorCode.InvalidState);
+      expect(caught.codeName).toBe('InvalidState');
     } finally {
       project.delete();
     }

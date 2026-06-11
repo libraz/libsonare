@@ -47,6 +47,38 @@ val projectCompileResultToVal(const SonareProjectCompileResult& result) {
   return out;
 }
 
+sonare::ErrorCode codeFromCError(SonareError err) {
+  switch (err) {
+    case SONARE_ERROR_FILE_NOT_FOUND:
+      return sonare::ErrorCode::FileNotFound;
+    case SONARE_ERROR_INVALID_FORMAT:
+      return sonare::ErrorCode::InvalidFormat;
+    case SONARE_ERROR_DECODE_FAILED:
+      return sonare::ErrorCode::DecodeFailed;
+    case SONARE_ERROR_INVALID_PARAMETER:
+      return sonare::ErrorCode::InvalidParameter;
+    case SONARE_ERROR_OUT_OF_MEMORY:
+      return sonare::ErrorCode::OutOfMemory;
+    case SONARE_ERROR_NOT_SUPPORTED:
+      return sonare::ErrorCode::NotImplemented;
+    case SONARE_ERROR_INVALID_STATE:
+      return sonare::ErrorCode::InvalidState;
+    case SONARE_OK:
+    case SONARE_ERROR_UNKNOWN:
+    default:
+      return sonare::ErrorCode::InvalidState;
+  }
+}
+
+[[noreturn]] void throwCError(SonareError err, const char* context) {
+  const char* detail = sonare_last_error_message();
+  const char* fallback = sonare_error_message(err);
+  std::string message = context != nullptr ? context : "C API call failed";
+  message += ": ";
+  message += detail != nullptr && detail[0] != '\0' ? detail : fallback;
+  throw sonare::SonareException(codeFromCError(err), message);
+}
+
 struct ProjectWasm {
   ProjectWasm() {
     SonareProject* handle = nullptr;
@@ -173,9 +205,12 @@ struct ProjectWasm {
         hasProperty(desc, "audioSampleRate") ? desc["audioSampleRate"].as<int>() : 0;
     if (hasProperty(desc, "audio")) {
       audio = float32ArrayToVector(desc["audio"]);
+      if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "audio length must be a multiple of audioChannels");
+      }
       d.audio_interleaved = audio.data();
-      const int channels = d.audio_channels > 0 ? d.audio_channels : 1;
-      d.audio_frames = static_cast<int64_t>(audio.size()) / channels;
+      d.audio_frames = static_cast<int64_t>(audio.size()) / d.audio_channels;
     }
     if (hasProperty(desc, "sourceUri")) {
       source_uri = desc["sourceUri"].as<std::string>();
@@ -184,7 +219,7 @@ struct ProjectWasm {
     uint32_t out = 0;
     const SonareError err = sonare_project_add_clip(project_.get(), &d, &out);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to add clip");
+      throwCError(err, "failed to add clip");
     }
     return out;
   }
@@ -205,17 +240,19 @@ struct ProjectWasm {
         hasProperty(desc, "audioSampleRate") ? desc["audioSampleRate"].as<int>() : 48000;
     if (hasProperty(desc, "audio")) {
       audio = float32ArrayToVector(desc["audio"]);
+      if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "audio length must be a multiple of audioChannels");
+      }
       d.audio_interleaved = audio.data();
-      const int channels = d.audio_channels > 0 ? d.audio_channels : 1;
-      d.audio_frames = static_cast<int64_t>(audio.size()) / channels;
+      d.audio_frames = static_cast<int64_t>(audio.size()) / d.audio_channels;
     }
     uint32_t clip_id = 0;
     size_t take_count = 0;
     const SonareError err =
         sonare_project_add_loop_recording_takes(project_.get(), &d, &clip_id, &take_count);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to add loop recording takes");
+      throwCError(err, "failed to add loop recording takes");
     }
     val out = val::object();
     out.set("clipId", clip_id);
@@ -281,13 +318,22 @@ struct ProjectWasm {
     SonareProjectWarpMode mode = SONARE_PROJECT_WARP_MODE_OFF;
     if (mode_val.typeOf().as<std::string>() == "string") {
       const std::string mode_string = mode_val.as<std::string>();
-      if (mode_string == "repitch") {
+      if (mode_string == "off") {
+        mode = SONARE_PROJECT_WARP_MODE_OFF;
+      } else if (mode_string == "repitch") {
         mode = SONARE_PROJECT_WARP_MODE_REPITCH;
       } else if (mode_string == "tempo-sync") {
         mode = SONARE_PROJECT_WARP_MODE_TEMPO_SYNC;
+      } else {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
       }
     } else {
-      mode = static_cast<SonareProjectWarpMode>(mode_val.as<int>());
+      const int mode_int = mode_val.as<int>();
+      if (mode_int < SONARE_PROJECT_WARP_MODE_OFF ||
+          mode_int > SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
+      }
+      mode = static_cast<SonareProjectWarpMode>(mode_int);
     }
     const SonareError err = sonare_project_set_clip_warp_mode(project_.get(), clip_id, mode);
     if (err != SONARE_OK) {
@@ -832,14 +878,14 @@ struct ProjectWasm {
   void removeClip(uint32_t clip_id) {
     const SonareError err = sonare_project_remove_clip(project_.get(), clip_id);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to remove clip");
+      throwCError(err, "failed to remove clip");
     }
   }
 
   void setClipGain(uint32_t clip_id, float gain) {
     const SonareError err = sonare_project_set_clip_gain(project_.get(), clip_id, gain);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set clip gain");
+      throwCError(err, "failed to set clip gain");
     }
   }
 
@@ -874,7 +920,7 @@ struct ProjectWasm {
     SonareProjectClipFade out = clipFadeFromVal(fade_out);
     const SonareError err = sonare_project_set_clip_fade(project_.get(), clip_id, &in, &out);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set clip fade");
+      throwCError(err, "failed to set clip fade");
     }
   }
 
@@ -908,8 +954,7 @@ struct ProjectWasm {
                                                           takes.empty() ? nullptr : takes.data(),
                                                           takes.size(), active_take_id);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to set clip takes");
+      throwCError(err, "failed to set clip takes");
     }
   }
 
@@ -934,8 +979,7 @@ struct ProjectWasm {
     const SonareError err = sonare_project_set_clip_comp_segments(
         project_.get(), clip_id, segments.empty() ? nullptr : segments.data(), segments.size());
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to set clip comp segments");
+      throwCError(err, "failed to set clip comp segments");
     }
   }
 
@@ -943,15 +987,14 @@ struct ProjectWasm {
     const SonareError err =
         sonare_project_set_clip_loop(project_.get(), clip_id, loop_mode, loop_length_ppq);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set clip loop");
+      throwCError(err, "failed to set clip loop");
     }
   }
 
   void setClipSource(uint32_t clip_id, uint32_t source_id) {
     const SonareError err = sonare_project_set_clip_source(project_.get(), clip_id, source_id);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to set clip source");
+      throwCError(err, "failed to set clip source");
     }
   }
 
@@ -960,8 +1003,7 @@ struct ProjectWasm {
     const SonareError err =
         sonare_project_duplicate_clip(project_.get(), clip_id, new_start_ppq, &out);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to duplicate clip");
+      throwCError(err, "failed to duplicate clip");
     }
     return out;
   }
@@ -969,7 +1011,7 @@ struct ProjectWasm {
   void removeTrack(uint32_t track_id) {
     const SonareError err = sonare_project_remove_track(project_.get(), track_id);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to remove track");
+      throwCError(err, "failed to remove track");
     }
   }
 
@@ -977,7 +1019,7 @@ struct ProjectWasm {
     const SonareError err = sonare_project_rename_track(project_.get(), track_id,
                                                         name.empty() ? nullptr : name.c_str());
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to rename track");
+      throwCError(err, "failed to rename track");
     }
   }
 
@@ -987,8 +1029,7 @@ struct ProjectWasm {
         project_.get(), track_id, channel_strip_ref.empty() ? nullptr : channel_strip_ref.c_str(),
         output_target.empty() ? nullptr : output_target.c_str());
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to set track route");
+      throwCError(err, "failed to set track route");
     }
   }
 
@@ -1051,8 +1092,7 @@ struct ProjectWasm {
     size_t out = 0;
     const SonareError err = sonare_project_add_automation_lane(project_.get(), track_id, &d, &out);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to add automation lane");
+      throwCError(err, "failed to add automation lane");
     }
     return static_cast<double>(out);
   }
@@ -1063,8 +1103,7 @@ struct ProjectWasm {
     const SonareError err = sonare_project_edit_automation_lane(
         project_.get(), track_id, static_cast<size_t>(lane_index), &d);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to edit automation lane");
+      throwCError(err, "failed to edit automation lane");
     }
   }
 
@@ -1072,8 +1111,7 @@ struct ProjectWasm {
     const SonareError err = sonare_project_remove_automation_lane(project_.get(), track_id,
                                                                   static_cast<size_t>(lane_index));
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to remove automation lane");
+      throwCError(err, "failed to remove automation lane");
     }
   }
 
@@ -1099,7 +1137,7 @@ struct ProjectWasm {
     const SonareError err = sonare_project_annotate_keys(
         project_.get(), segments.empty() ? nullptr : segments.data(), segments.size());
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to annotate keys");
+      throwCError(err, "failed to annotate keys");
     }
   }
 
@@ -1150,8 +1188,7 @@ struct ProjectWasm {
     const SonareError err = sonare_project_annotate_chords(
         project_.get(), symbols.empty() ? nullptr : symbols.data(), symbols.size());
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to annotate chords");
+      throwCError(err, "failed to annotate chords");
     }
   }
 
@@ -1167,8 +1204,7 @@ struct ProjectWasm {
         project_.get(), module_id.c_str(), schema_version, target_track_id, region_start_ppq,
         region_end_ppq, bytes.empty() ? nullptr : bytes.data(), bytes.size());
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to set assist sidecar");
+      throwCError(err, "failed to set assist sidecar");
     }
   }
 

@@ -272,6 +272,29 @@ TEST_CASE("RealtimeEngine drains live MIDI input into instruments while stopped"
   REQUIRE(block_peak(left) == Catch::Approx(0.0f));
 }
 
+TEST_CASE("RealtimeEngine routes live MIDI input to the configured destination", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  CountingInstrument default_instrument;
+  CountingInstrument routed_instrument;
+  REQUIRE(engine.set_midi_instrument(0, &default_instrument));
+  REQUIRE(engine.set_midi_instrument(7, &routed_instrument));
+
+  sonare::host::FixedMidiInputSource<8> input;
+  engine.set_midi_input_source(&input, 7);
+
+  REQUIRE(input.push_event(sonare::midi::make_midi1_note_on(0, 0, 64, 100), 4));
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+
+  REQUIRE(default_instrument.note_on_count_ == 0);
+  REQUIRE(routed_instrument.note_on_count_ == 1);
+  REQUIRE(block_peak(left) == Catch::Approx(0.5f));
+}
+
 TEST_CASE("RealtimeEngine mirrors sequenced MIDI to live output sink", "[engine][midi]") {
   RealtimeEngine engine;
   engine.prepare(48000.0, 64);
@@ -611,6 +634,35 @@ TEST_CASE("stopped transport renders no clip audio", "[engine][midi]") {
   push_play(engine);
   engine.process(io, 2, kBlock);
   REQUIRE(out_l[0] == Catch::Approx(1.0f));
+}
+
+TEST_CASE("stopped transport renders no metronome click", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  engine.set_tempo(120.0);
+  engine.set_time_signature(4, 4);
+  engine.set_metronome_config(sonare::engine::MetronomeConfig{
+      true,
+      0.25f,
+      0.75f,
+      32,
+      0.0,
+  });
+
+  std::vector<float> out_l(static_cast<size_t>(kBlock), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kBlock), 0.0f);
+  float* io[] = {out_l.data(), out_r.data()};
+
+  engine.process(io, 2, kBlock);
+  REQUIRE(block_peak(out_l) == Catch::Approx(0.0f));
+  REQUIRE(block_peak(out_r) == Catch::Approx(0.0f));
+
+  push_play(engine);
+  engine.process(io, 2, kBlock);
+  REQUIRE(block_peak(out_l) > 0.7f);
+  REQUIRE(block_peak(out_r) > 0.7f);
 }
 
 TEST_CASE("render_offline rolls a stopped transport and restores it", "[engine][midi]") {

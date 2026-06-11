@@ -39,6 +39,10 @@ double wrap_phase(double phase) {
   return std::remainder(phase, kTwoPiD);
 }
 
+size_t ceil_divide_samples(size_t samples, float rate) noexcept {
+  return static_cast<size_t>(std::ceil(static_cast<double>(samples) / static_cast<double>(rate)));
+}
+
 }  // namespace
 
 std::vector<float> compute_instantaneous_frequency(const float* phase, const float* prev_phase,
@@ -74,7 +78,8 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
 }
 
 StreamingPhaseVocoder::StreamingPhaseVocoder(StreamingPhaseVocoderConfig config) : config_(config) {
-  SONARE_CHECK(config_.sample_rate > 0 && config_.n_fft >= 2 && config_.hop_length > 0,
+  SONARE_CHECK(config_.sample_rate > 0 && config_.n_fft >= 2 && config_.hop_length > 0 &&
+                   config_.hop_length <= config_.n_fft / 2,
                ErrorCode::InvalidParameter);
   if (config_.win_length <= 0) config_.win_length = config_.n_fft;
   SONARE_CHECK(config_.win_length <= config_.n_fft, ErrorCode::InvalidParameter);
@@ -199,10 +204,11 @@ void StreamingPhaseVocoder::synthesize_available_frames(bool final) {
   const int available_input_frames = next_analysis_frame_;
   if (available_input_frames - analysis_frame_base_ < 2) return;
   bind_rate(active_rate_);
-  int target_output_frames = 0;
+  int target_output_frames = final ? 0 : next_output_frame_;
   if (final) {
-    target_output_frames = std::max(
-        1, static_cast<int>(std::ceil(static_cast<float>(available_input_frames) / active_rate_)));
+    target_output_frames =
+        std::max(1, static_cast<int>(std::ceil(static_cast<double>(available_input_frames) /
+                                               static_cast<double>(active_rate_))));
   } else {
     while (true) {
       const int t_in = static_cast<int>(static_cast<float>(target_output_frames) * active_rate_);
@@ -403,9 +409,8 @@ void StreamingPhaseVocoder::compact_buffers() {
 Audio StreamingPhaseVocoder::drain_available(bool final) {
   size_t stable_user_samples = 0;
   if (final) {
-    stable_user_samples = std::max<size_t>(
-        1, static_cast<size_t>(
-               std::ceil(static_cast<float>(input_base_sample_ + input_.size()) / active_rate_)));
+    stable_user_samples =
+        std::max<size_t>(1, ceil_divide_samples(input_base_sample_ + input_.size(), active_rate_));
   } else {
     const size_t stable_full_samples =
         static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);
@@ -429,9 +434,8 @@ Audio StreamingPhaseVocoder::drain_available(bool final) {
 size_t StreamingPhaseVocoder::drain_into(bool final, float* out, size_t out_capacity) {
   size_t stable_user_samples = 0;
   if (final) {
-    stable_user_samples = std::max<size_t>(
-        1, static_cast<size_t>(
-               std::ceil(static_cast<float>(input_base_sample_ + input_.size()) / active_rate_)));
+    stable_user_samples =
+        std::max<size_t>(1, ceil_divide_samples(input_base_sample_ + input_.size(), active_rate_));
   } else {
     const size_t stable_full_samples =
         static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);

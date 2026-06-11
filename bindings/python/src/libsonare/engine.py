@@ -94,17 +94,19 @@ class ClipPageProvider:
     """Host-supplied paged audio source for realtime clip streaming."""
 
     def __init__(self, num_channels: int, num_samples: int, page_frames: int) -> None:
+        self._handle: ctypes.c_void_p | None = None
         handle = ctypes.c_void_p()
         _check(
             _get_lib().sonare_clip_page_provider_create(
                 int(num_channels), int(num_samples), int(page_frames), ctypes.byref(handle)
             )
         )
-        self._handle: ctypes.c_void_p | None = handle
+        self._handle = handle
 
     def close(self) -> None:
-        if self._handle is not None:
-            _get_lib().sonare_clip_page_provider_destroy(self._handle)
+        handle = getattr(self, "_handle", None)
+        if handle is not None:
+            _get_lib().sonare_clip_page_provider_destroy(handle)
             self._handle = None
 
     def destroy(self) -> None:
@@ -172,15 +174,21 @@ class FileClipPageProvider(ClipPageProvider):
         if num_channels <= 0 or num_samples <= 0 or page_frames <= 0:
             raise ValueError("num_channels, num_samples, and page_frames must be positive")
         super().__init__(num_channels, num_samples, page_frames)
+        self._file: BinaryIO | None = None
+        try:
+            self._file = Path(path).open("rb")  # noqa: SIM115
+        except BaseException:
+            super().close()
+            raise
         self.num_channels = int(num_channels)
         self.num_samples = int(num_samples)
         self.page_frames = int(page_frames)
         self.data_offset_bytes = int(data_offset_bytes)
-        self._file: BinaryIO | None = Path(path).open("rb")  # noqa: SIM115
 
     def close(self) -> None:
-        if self._file is not None:
-            self._file.close()
+        file = getattr(self, "_file", None)
+        if file is not None:
+            file.close()
             self._file = None
         super().close()
 
@@ -198,7 +206,7 @@ class FileClipPageProvider(ClipPageProvider):
         self._file.seek(self.data_offset_bytes + start_frame * frame_bytes)
         raw = self._file.read(frames * frame_bytes)
         frames_read = len(raw) // frame_bytes
-        if frames_read <= 0:
+        if frames_read < frames:
             return False
         interleaved = np.frombuffer(raw[: frames_read * frame_bytes], dtype="<f4")
         channels = [interleaved[ch :: self.num_channels] for ch in range(self.num_channels)]
@@ -1310,13 +1318,20 @@ def _clips_to_c(
 
 
 def _warp_mode_value(mode: str | int) -> int:
-    if mode == "off":
+    if isinstance(mode, bool):
+        raise ValueError(f"unknown warp mode: {mode}")
+    if isinstance(mode, int):
+        return mode
+    if not isinstance(mode, str):
+        raise ValueError(f"unknown warp mode: {mode}")
+    key = mode.lower()
+    if key == "off":
         return 0
-    if mode == "repitch":
+    if key == "repitch":
         return 1
-    if mode == "tempo-sync":
+    if key == "tempo-sync":
         return 2
-    return int(mode)
+    raise ValueError(f"unknown warp mode: {mode}")
 
 
 def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:

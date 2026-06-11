@@ -272,6 +272,31 @@ describe('Sonare WASM Module', () => {
       expect(warped[0][3]).toBeCloseTo(15, 4);
       warpEngine.destroy();
 
+      const badWarpModeEngine = new RealtimeEngine(48000, 4);
+      expect(() =>
+        badWarpModeEngine.setClips([
+          {
+            id: 3030,
+            channels: [new Float32Array([0, 10, 20, 30])],
+            startPpq: 0,
+            lengthSamples: 4,
+            warpMode: 'typo' as 'repitch',
+          },
+        ]),
+      ).toThrow();
+      expect(() =>
+        badWarpModeEngine.setClips([
+          {
+            id: 30301,
+            channels: [new Float32Array([0, 10, 20, 30])],
+            startPpq: 0,
+            lengthSamples: 4,
+            warpMode: 99 as 1,
+          },
+        ]),
+      ).toThrow();
+      badWarpModeEngine.destroy();
+
       const badLoopWarpEngine = new RealtimeEngine(48000, 4);
       expect(() =>
         badLoopWarpEngine.setClips([
@@ -290,6 +315,51 @@ describe('Sonare WASM Module', () => {
         ]),
       ).toThrow();
       badLoopWarpEngine.destroy();
+
+      const failedSetClipsEngine = new RealtimeEngine(48000, 4);
+      failedSetClipsEngine.setClips([
+        {
+          id: 3032,
+          channels: [new Float32Array([0.25, 0.5, 0.75, 1.0])],
+          startPpq: 0,
+          lengthSamples: 4,
+        },
+      ]);
+      failedSetClipsEngine.play();
+      expect(() =>
+        failedSetClipsEngine.setClips([
+          {
+            id: 3033,
+            channels: [new Float32Array([0, 10, 20, 30])],
+            startPpq: 0,
+            lengthSamples: 8,
+            loop: true,
+            warpMode: 'repitch',
+            warpAnchors: [
+              { warpSample: 0, sourceSample: 0 },
+              { warpSample: 3, sourceSample: 1.5 },
+            ],
+          },
+        ]),
+      ).toThrow();
+      expect(failedSetClipsEngine.clipCount()).toBe(1);
+      failedSetClipsEngine.seekSample(0);
+      const afterFailedSet = failedSetClipsEngine.process([new Float32Array(4)]);
+      expect(Array.from(afterFailedSet[0])).toEqual([0.25, 0.5, 0.75, 1.0]);
+      failedSetClipsEngine.destroy();
+
+      const badOffsetEngine = new RealtimeEngine(48000, 4);
+      expect(() =>
+        badOffsetEngine.setClips([
+          {
+            id: 3034,
+            channels: [new Float32Array([0, 10, 20, 30])],
+            startPpq: 0,
+            clipOffsetSamples: 4,
+          },
+        ]),
+      ).toThrow();
+      badOffsetEngine.destroy();
 
       const tempoEngine = new RealtimeEngine(48000, 8192);
       const tempoSource = new Float32Array(4096);
@@ -315,9 +385,42 @@ describe('Sonare WASM Module', () => {
       expect(Array.from(tempoSynced[0]).some((v) => Math.abs(v) > 0.1)).toBe(true);
       tempoEngine.destroy();
 
+      const shortTempoEngine = new RealtimeEngine(48000, 8192);
+      shortTempoEngine.setClips([
+        {
+          id: 3041,
+          channels: [tempoSource],
+          startPpq: 0,
+          lengthSamples: 4096,
+          warpMode: 'tempo-sync',
+          warpAnchors: [
+            { warpSample: 0, sourceSample: 0 },
+            { warpSample: 2048, sourceSample: 1024 },
+            { warpSample: 8192, sourceSample: 4096 },
+          ],
+        },
+      ]);
+      shortTempoEngine.play();
+      const shortTempoSynced = shortTempoEngine.process([new Float32Array(8192)])[0];
+      expect(Array.from(shortTempoSynced.slice(0, 4096)).some((v) => Math.abs(v) > 0.1)).toBe(true);
+      expect(Array.from(shortTempoSynced.slice(4096)).every((v) => Math.abs(v) < 0.0001)).toBe(
+        true,
+      );
+      shortTempoEngine.destroy();
+
       const pagedEngine = new RealtimeEngine(48000, 8);
       const provider = pagedEngine.createClipPageProvider(1, 8, 4);
       expect(() => provider.supply(0, [new Float32Array([1, 2])])).toThrow();
+      expect(() =>
+        pagedEngine.setClips([
+          {
+            id: 3050,
+            pageProvider: provider,
+            startPpq: 0,
+            clipOffsetSamples: 8,
+          },
+        ]),
+      ).toThrow();
       expect(() =>
         pagedEngine.setClips([
           {
@@ -347,7 +450,9 @@ describe('Sonare WASM Module', () => {
       pagedEngine.seekSample(0);
       const secondPaged = pagedEngine.process([new Float32Array(8)]);
       expect(Array.from(secondPaged[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(() => pagedEngine.clearClipPage(999, 0)).toThrow();
       provider.destroy();
+      expect(() => pagedEngine.clearClipPage(provider.id, 0)).toThrow();
       pagedEngine.destroy();
 
       engine.armCapture();
@@ -400,6 +505,8 @@ describe('Sonare WASM Module', () => {
       ]);
       expect(monitored[0][0]).toBeCloseTo(0.5, 4);
       expect(monitored[1][0]).toBeCloseTo(-0.5, 4);
+      expect(() => engine.setInputMonitor(true, Number.NaN)).toThrow();
+      expect(() => engine.setInputMonitor(true, Number.POSITIVE_INFINITY)).toThrow();
 
       const meters = engine.drainMeterTelemetry();
       expect(meters.length).toBeGreaterThan(0);

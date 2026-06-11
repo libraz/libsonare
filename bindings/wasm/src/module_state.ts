@@ -70,6 +70,7 @@ function makeSonareError(raw: SonareModule, thrown: number): SonareError {
  */
 function wrapModuleErrors(raw: SonareModule): SonareModule {
   const cache = new Map<PropertyKey, unknown>();
+  const objectCache = new WeakMap<object, unknown>();
   const convert = (error: unknown): never => {
     const ptr = nativeExceptionPtr(error);
     if (ptr !== null) {
@@ -77,6 +78,86 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
     }
     throw error;
   };
+
+  const wrapNativeObject = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') {
+      return value;
+    }
+    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer || value instanceof Promise) {
+      return value;
+    }
+    const objectValue = value as object;
+    const cached = objectCache.get(objectValue);
+    if (cached) {
+      return cached;
+    }
+    const methodCache = new Map<PropertyKey, unknown>();
+    const wrapped = new Proxy(objectValue, {
+      get(target, prop, receiver) {
+        const member = Reflect.get(target, prop, receiver);
+        if (typeof member !== 'function') {
+          return member;
+        }
+        const cachedMethod = methodCache.get(prop);
+        if (cachedMethod) {
+          return cachedMethod;
+        }
+        const method = member as (...a: unknown[]) => unknown;
+        const wrappedMethod = (...args: unknown[]) => {
+          try {
+            return wrapNativeObject(Reflect.apply(method, target, args));
+          } catch (error) {
+            return convert(error);
+          }
+        };
+        methodCache.set(prop, wrappedMethod);
+        return wrappedMethod;
+      },
+    });
+    objectCache.set(objectValue, wrapped);
+    return wrapped;
+  };
+
+  const wrapFunction = (value: (...a: unknown[]) => unknown): unknown => {
+    const fnCache = new Map<PropertyKey, unknown>();
+    return new Proxy(value, {
+      get(target, prop, receiver) {
+        const member = Reflect.get(target, prop, receiver);
+        if (typeof member !== 'function') {
+          return member;
+        }
+        const cachedMember = fnCache.get(prop);
+        if (cachedMember) {
+          return cachedMember;
+        }
+        const fn = member as (...a: unknown[]) => unknown;
+        const wrappedMember = (...args: unknown[]) => {
+          try {
+            return wrapNativeObject(Reflect.apply(fn, target, args));
+          } catch (error) {
+            return convert(error);
+          }
+        };
+        fnCache.set(prop, wrappedMember);
+        return wrappedMember;
+      },
+      apply(t, thisArg, args) {
+        try {
+          return wrapNativeObject(Reflect.apply(t, thisArg, args as unknown[]));
+        } catch (error) {
+          return convert(error);
+        }
+      },
+      construct(t, args, newTarget) {
+        try {
+          return wrapNativeObject(Reflect.construct(t, args as unknown[], newTarget));
+        } catch (error) {
+          return convert(error) as object;
+        }
+      },
+    });
+  };
+
   return new Proxy(raw, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
@@ -90,23 +171,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
       // Wrap as a Proxy (not a plain function) so embind class constructors
       // invoked via `new module.Foo(...)` keep their `[[Construct]]` behaviour
       // and prototype while still converting thrown native pointers.
-      const fn = value as (...a: unknown[]) => unknown;
-      const wrapped = new Proxy(fn, {
-        apply(t, thisArg, args) {
-          try {
-            return Reflect.apply(t, thisArg, args as unknown[]);
-          } catch (error) {
-            return convert(error);
-          }
-        },
-        construct(t, args, newTarget) {
-          try {
-            return Reflect.construct(t, args as unknown[], newTarget) as object;
-          } catch (error) {
-            return convert(error) as object;
-          }
-        },
-      });
+      const wrapped = wrapFunction(value as (...a: unknown[]) => unknown);
       cache.set(prop, wrapped);
       return wrapped;
     },

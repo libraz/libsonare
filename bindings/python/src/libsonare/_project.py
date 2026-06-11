@@ -1092,7 +1092,9 @@ class Project:
         if audio is not None:
             backing, total = _to_c_float_array(audio)
             c_audio = backing
-            channels = max(1, int(audio_channels))
+            channels = int(audio_channels)
+            if channels <= 0 or total % channels != 0:
+                raise ValueError("audio length must be a multiple of audio_channels")
             audio_frames = total // channels
         desc = SonareProjectClipDesc(
             track_id=int(track_id),
@@ -1133,8 +1135,10 @@ class Project:
         capture data; each loop-length span becomes a separate take and the
         newest take is made active.
         """
-        channels = max(1, int(audio_channels))
+        channels = int(audio_channels)
         backing, total = _to_c_float_array(audio)
+        if channels <= 0 or total % channels != 0:
+            raise ValueError("audio length must be a multiple of audio_channels")
         frames = total // channels
         desc = SonareProjectLoopRecordingDesc(
             track_id=int(track_id),

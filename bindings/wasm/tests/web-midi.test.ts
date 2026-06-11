@@ -218,6 +218,29 @@ describe('Web MIDI helper', () => {
     binding.close();
   });
 
+  it('keeps MIDI running status isolated per bound input', async () => {
+    const access = new FakeAccess();
+    const inputA = new FakeInput('a');
+    const inputB = new FakeInput('b');
+    access.inputs.set(inputA.id, inputA);
+    access.inputs.set(inputB.id, inputB);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+
+    inputA.emit([0x90, 60, 100]);
+    inputB.emit([64, 90]);
+    inputB.emit([0x80, 64, 20]);
+    inputB.emit([65, 30]);
+
+    expect(engine.messages).toEqual([
+      { kind: 'on', group: 0, channel: 0, a: 60, b: 100, time: 0 },
+      { kind: 'off', group: 0, channel: 0, a: 64, b: 20, time: 0 },
+      { kind: 'off', group: 0, channel: 0, a: 65, b: 30, time: 0 },
+    ]);
+    binding.close();
+  });
+
   it('binds hot-plugged matching inputs and unbinds disconnected ports', async () => {
     const access = new FakeAccess();
     const engine = new FakeEngine();

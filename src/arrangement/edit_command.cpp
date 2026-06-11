@@ -44,8 +44,16 @@ bool take_id_exists(const std::vector<ClipTake>& takes, TakeId id) {
                      [id](const ClipTake& take) { return take.id == id; });
 }
 
+bool clip_is_on_midi_track(const Project& project, const EditClip& clip) {
+  const Track* track = project.find_track(clip.track_id);
+  return track != nullptr && track->kind == Track::Kind::kMidi;
+}
+
 bool valid_clip_takes(const Project& project, const EditClip& clip,
                       const std::vector<ClipTake>& takes, TakeId active_take_id) {
+  if (clip_is_on_midi_track(project, clip) && (!takes.empty() || active_take_id != 0)) {
+    return false;
+  }
   std::vector<TakeId> ids;
   ids.reserve(takes.size());
   for (const ClipTake& take : takes) {
@@ -79,12 +87,73 @@ bool valid_comp_segments(const std::vector<ClipTake>& takes,
   return true;
 }
 
+bool comp_segments_split_clip(const std::vector<ClipCompSegment>& segments,
+                              double clip_length_ppq) {
+  if (segments.empty()) return false;
+  return segments.size() != 1 || segments.front().start_ppq != 0.0 ||
+         segments.front().end_ppq != clip_length_ppq;
+}
+
+std::vector<ClipCompSegment> shifted_clamped_comp_segments(
+    const std::vector<ClipCompSegment>& segments, double delta_ppq, double clip_length_ppq) {
+  std::vector<ClipCompSegment> out;
+  out.reserve(segments.size());
+  for (ClipCompSegment segment : segments) {
+    segment.start_ppq = std::max(0.0, segment.start_ppq + delta_ppq);
+    segment.end_ppq = std::min(clip_length_ppq, segment.end_ppq + delta_ppq);
+    if (segment.end_ppq > segment.start_ppq) {
+      out.push_back(segment);
+    }
+  }
+  return out;
+}
+
+bool shift_take_offsets(std::vector<ClipTake>* takes, double delta_ppq) {
+  if (takes == nullptr) return false;
+  for (ClipTake& take : *takes) {
+    const double shifted = take.source_offset_ppq + delta_ppq;
+    if (shifted < 0.0 || !std::isfinite(shifted)) {
+      return false;
+    }
+    take.source_offset_ppq = shifted;
+  }
+  return true;
+}
+
 struct RemovedTrackClipSnapshot {
   EditClip clip;
   size_t index = Project::kAppend;
   MidiClipEventList events;
   std::map<uint32_t, std::vector<uint8_t>> sysex_payloads;
   bool has_events = false;
+};
+
+class RestoreClip final : public EditCommand {
+ public:
+  explicit RestoreClip(EditClip clip) : clip_(std::move(clip)) {}
+
+  bool apply(Project& project, MidiContentStore& /*store*/) override {
+    EditClip* clip = project.find_clip_mutable(clip_.id);
+    if (clip == nullptr) {
+      return false;
+    }
+    *clip = clip_;
+    return true;
+  }
+
+  EditCommandPtr invert(const Project& before,
+                        const MidiContentStore& /*store_before*/) const override {
+    const EditClip* clip = before.find_clip(clip_.id);
+    if (clip == nullptr) {
+      return nullptr;
+    }
+    return std::make_unique<RestoreClip>(*clip);
+  }
+
+  const char* type_name() const noexcept override { return "RestoreClip"; }
+
+ private:
+  EditClip clip_;
 };
 
 class RestoreTrackWithClips final : public EditCommand {
@@ -358,6 +427,10 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   right.start_ppq = split_ppq_;
   right.length_ppq = right_len;
   right.source_offset_ppq = c->source_offset_ppq + left_len;
+  right.comp_segments = shifted_clamped_comp_segments(c->comp_segments, -left_len, right_len);
+  if (!shift_take_offsets(&right.takes, left_len)) {
+    return false;
+  }
   right.fade_in = ClipFade{};  // inner edge has no fade-in
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
       project.clip_overlaps(right.track_id, right.start_ppq, right.length_ppq, id_)) {
@@ -365,6 +438,7 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   }
   // Left keeps fade_in, drops fade_out at the cut.
   c->length_ppq = left_len;
+  c->comp_segments = shifted_clamped_comp_segments(c->comp_segments, 0.0, left_len);
   c->fade_out = ClipFade{};
 
   if (new_clip_id_ != 0) {
@@ -424,6 +498,12 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   if (new_offset < 0.0) {
     return false;
   }
+  std::vector<ClipTake> shifted_takes = c->takes;
+  if (!shift_take_offsets(&shifted_takes, delta)) {
+    return false;
+  }
+  std::vector<ClipCompSegment> shifted_segments =
+      shifted_clamped_comp_segments(c->comp_segments, -delta, new_length_ppq_);
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
       project.clip_overlaps(c->track_id, new_start_ppq_, new_length_ppq_, id_)) {
     return false;
@@ -431,6 +511,8 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   c->start_ppq = new_start_ppq_;
   c->source_offset_ppq = new_offset;
   c->length_ppq = new_length_ppq_;
+  c->takes = std::move(shifted_takes);
+  c->comp_segments = std::move(shifted_segments);
   return true;
 }
 
@@ -440,7 +522,7 @@ EditCommandPtr TrimClip::invert(const Project& before,
   if (c == nullptr) {
     return nullptr;
   }
-  return std::make_unique<TrimClip>(id_, c->start_ppq, c->length_ppq);
+  return std::make_unique<RestoreClip>(*c);
 }
 
 bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
@@ -571,7 +653,8 @@ bool SetClipLoop::apply(Project& project, MidiContentStore& /*store*/) {
   if (c == nullptr) {
     return false;
   }
-  if (mode_ == LoopMode::kLoop && !(loop_length_ppq_ > 0.0)) {
+  if (mode_ == LoopMode::kLoop &&
+      (!(loop_length_ppq_ > 0.0) || comp_segments_split_clip(c->comp_segments, c->length_ppq))) {
     return false;
   }
   c->loop_mode = mode_;
@@ -646,7 +729,9 @@ EditCommandPtr SetClipTakes::invert(const Project& before,
 
 bool SetClipCompSegments::apply(Project& project, MidiContentStore& /*store*/) {
   EditClip* c = project.find_clip_mutable(id_);
-  if (c == nullptr || !valid_comp_segments(c->takes, segments_, c->length_ppq)) {
+  if (c == nullptr || (clip_is_on_midi_track(project, *c) && !segments_.empty()) ||
+      !valid_comp_segments(c->takes, segments_, c->length_ppq) ||
+      (c->loop_mode == LoopMode::kLoop && comp_segments_split_clip(segments_, c->length_ppq))) {
     return false;
   }
   c->comp_segments = segments_;

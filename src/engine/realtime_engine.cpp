@@ -179,6 +179,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.acquire_midi_clips();
   host::MidiInputSource* midi_input_source = midi_input_source_.load(std::memory_order_acquire);
+  live_midi_input_destination_id_ = midi_input_destination_id_.load(std::memory_order_relaxed);
   live_midi_input_count_ = midi_input_source != nullptr
                                ? midi_input_source->drain_block(live_midi_input_events_.data(),
                                                                 live_midi_input_events_.size(),
@@ -654,7 +655,7 @@ void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int nu
         midi_cc_map_.value_to_unit(cc, event.ump.channel(), norm, &mapped_value)) {
       automation_.set_parameter(param_id, mapped_value);
     }
-    midi_sequencer_.inject_event(midi_input_destination_id_, event.render_frame, event.ump);
+    midi_sequencer_.inject_event(live_midi_input_destination_id_, event.render_frame, event.ump);
   }
 }
 
@@ -1081,6 +1082,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #endif
   std::array<float*, kMaxAudioChannels> sub_channels{};
   int channels = 0;
+  const bool capture_input = capture_source() == CaptureSource::kInput;
   const int scratch_channels =
       std::min<int>(std::max(num_channels, 0), static_cast<int>(sub_channels.size()));
   if (monitor_out && num_frames > 0 && offset >= 0) {
@@ -1095,7 +1097,6 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     for (int ch = 0; ch < channels; ++ch) {
       sub_channels[static_cast<size_t>(ch)] = io[ch] ? io[ch] + offset : nullptr;
     }
-    const bool capture_input = capture_source() == CaptureSource::kInput;
     if (capture_input) {
       for (int ch = 0; ch < channels; ++ch) {
         float* dst = input_capture_channels_[static_cast<size_t>(ch)];
@@ -1108,17 +1109,16 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
       }
     }
-    const bool monitor_input = input_monitor_enabled();
-    const float monitor_gain = input_monitor_gain();
-    if (!monitor_input || monitor_gain != 1.0f) {
+    const InputMonitorState monitor = input_monitor_.try_load();
+    if (!monitor.enabled || monitor.gain != 1.0f) {
       for (int ch = 0; ch < channels; ++ch) {
         float* channel = sub_channels[static_cast<size_t>(ch)];
         if (!channel) continue;
-        if (!monitor_input) {
+        if (!monitor.enabled) {
           std::fill(channel, channel + num_frames, 0.0f);
         } else {
           for (int i = 0; i < num_frames; ++i) {
-            channel[i] *= monitor_gain;
+            channel[i] *= monitor.gain;
           }
         }
       }
@@ -1230,7 +1230,9 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
           });
     }
 #endif
-    metronome_.process(sub_channels.data(), channels, num_frames, transport_.sample_position());
+    if (transport_rolling) {
+      metronome_.process(sub_channels.data(), channels, num_frames, transport_.sample_position());
+    }
 #if defined(SONARE_WITH_MIXING)
     // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs
     // sample-accurately at the sub-block's timeline position when enabled.
@@ -1277,10 +1279,11 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     meter_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame());
 #endif
     const float* const* capture_channels =
-        capture_source() == CaptureSource::kInput
-            ? reinterpret_cast<const float* const*>(input_capture_channels_.data())
-            : reinterpret_cast<const float* const*>(sub_channels.data());
-    capture_sink_.process(capture_channels, channels, num_frames, transport_.sample_position());
+        capture_input ? reinterpret_cast<const float* const*>(input_capture_channels_.data())
+                      : reinterpret_cast<const float* const*>(sub_channels.data());
+    if (!capture_sink_.punch_enabled() || transport_.playing()) {
+      capture_sink_.process(capture_channels, channels, num_frames, transport_.sample_position());
+    }
   }
 }
 

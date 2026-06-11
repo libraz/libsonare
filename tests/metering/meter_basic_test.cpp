@@ -37,6 +37,18 @@ TEST_CASE("waveform peaks ignore non-finite samples in trusted core input", "[me
   REQUIRE_THAT(result.min[3], WithinAbs(0.75f, 0.0f));
   REQUIRE_THAT(result.max[3], WithinAbs(0.75f, 0.0f));
 }
+
+TEST_CASE("waveform peaks bucket count does not overflow for huge bucket sizes", "[meter]") {
+  const std::vector<float> samples{-1.0f, 0.25f, 0.75f};
+  const auto result = sonare::metering::waveform_peaks(samples.data(), samples.size(), 1,
+                                                       std::numeric_limits<size_t>::max());
+
+  REQUIRE(result.bucket_count == 1);
+  REQUIRE(result.min.size() == 1);
+  REQUIRE(result.max.size() == 1);
+  REQUIRE_THAT(result.min[0], WithinAbs(-1.0f, 0.0f));
+  REQUIRE_THAT(result.max[0], WithinAbs(0.75f, 0.0f));
+}
 using Catch::Matchers::WithinRel;
 using namespace sonare;
 

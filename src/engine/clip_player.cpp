@@ -61,8 +61,10 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
     if (a.start_sample != b.start_sample) return a.start_sample < b.start_sample;
     return a.id < b.id;
   });
-  clip_count_.store(clips.size(), std::memory_order_relaxed);
-  clips_.publish(std::make_shared<const std::vector<ClipSchedule>>(std::move(clips)));
+  const size_t count = clips.size();
+  if (clips_.publish(std::make_shared<const std::vector<ClipSchedule>>(std::move(clips)))) {
+    clip_count_.store(count, std::memory_order_relaxed);
+  }
 }
 
 void ClipPlayer::process_at(float* const* channels, int num_channels, int num_samples,

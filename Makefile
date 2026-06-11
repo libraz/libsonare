@@ -76,8 +76,8 @@ format:
 lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
-	$(RYE) sync --pyproject bindings/python/pyproject.toml
-	$(RYE) run --pyproject bindings/python/pyproject.toml ruff check bindings/python/src bindings/python/tests
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
+	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check bindings/python/src bindings/python/tests
 
 # Binding targets
 build-shared:

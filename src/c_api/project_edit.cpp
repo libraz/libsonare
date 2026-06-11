@@ -298,6 +298,21 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
   const size_t rollback_depth = project->history.undo_depth();
   std::vector<arr::SourceId> source_ids;
   source_ids.reserve(take_count);
+  struct LoopRecordingRollback {
+    SonareProject* project = nullptr;
+    size_t rollback_depth = 0;
+    std::vector<arr::SourceId>* source_ids = nullptr;
+    bool committed = false;
+
+    ~LoopRecordingRollback() {
+      if (committed || project == nullptr || source_ids == nullptr) return;
+      for (arr::SourceId id : *source_ids) {
+        project->audio.sources.erase(id);
+      }
+      rollback_to_depth(project, rollback_depth);
+    }
+  } rollback{project, rollback_depth, &source_ids, false};
+
   for (size_t take_index = 0; take_index < take_count; ++take_index) {
     const int64_t frame_start = static_cast<int64_t>(take_index) * loop_audio_frames;
     const int64_t frame_count =
@@ -310,7 +325,6 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
     auto attach = std::make_unique<arr::AttachAudioSource>(ref);
     arr::AttachAudioSource* raw = attach.get();
     if (!project->history.apply(std::move(attach))) {
-      rollback_to_depth(project, rollback_depth);
       return SONARE_ERROR_INVALID_STATE;
     }
     const arr::SourceId source_id = raw->allocated_id();
@@ -323,7 +337,6 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
     project->audio.sources[source_id] = std::move(samples);
   }
   if (source_ids.empty()) {
-    rollback_to_depth(project, rollback_depth);
     return SONARE_ERROR_INVALID_STATE;
   }
 
@@ -343,14 +356,11 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
   auto command = std::make_unique<arr::AddClip>(clip);
   arr::AddClip* raw = command.get();
   if (!project->history.apply(std::move(command)) || raw->allocated_id() == 0) {
-    for (arr::SourceId id : source_ids) {
-      project->audio.sources.erase(id);
-    }
-    rollback_to_depth(project, rollback_depth);
     return SONARE_ERROR_INVALID_STATE;
   }
   *out_clip_id = raw->allocated_id();
   if (out_take_count) *out_take_count = source_ids.size();
+  rollback.committed = true;
   return SONARE_OK;
   SONARE_C_CATCH
 #else

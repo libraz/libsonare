@@ -143,6 +143,37 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
+  it('setClipTakes and setClipCompSegments reject missing required fields without mutating', () => {
+    const { project, clip } = buildProject();
+    const before = project.toJson();
+
+    expect(() =>
+      project.setClipTakes(
+        clip,
+        [{ sourceId: 5 }, { id: 2 }] as unknown as Parameters<typeof project.setClipTakes>[1],
+        1,
+      ),
+    ).toThrow(/id must be a number/);
+    expect(project.toJson()).toBe(before);
+
+    expect(() =>
+      project.setClipCompSegments(clip, [
+        { endPpq: 1, takeId: 1 },
+        { startPpq: 1, endPpq: 2, takeId: 2 },
+      ] as unknown as Parameters<typeof project.setClipCompSegments>[1]),
+    ).toThrow(/startPpq must be a number/);
+    expect(project.toJson()).toBe(before);
+
+    expect(() =>
+      project.setClipCompSegments(clip, [
+        { startPpq: 0, takeId: 1 },
+        { startPpq: 1, endPpq: 2, takeId: 2 },
+      ] as unknown as Parameters<typeof project.setClipCompSegments>[1]),
+    ).toThrow(/endPpq must be a number/);
+    expect(project.toJson()).toBe(before);
+    project.destroy();
+  });
+
   it('addLoopRecordingTakes splits captured loops into takes', () => {
     const project = Project.create();
     project.setSampleRate(48000);
@@ -164,6 +195,32 @@ describe('Project edit ops (new bindings)', () => {
     expect(project.toJson()).toContain('"active_take_id":2');
     project.undo();
     expect(project.toJson()).toContain('"clips":[]');
+    project.destroy();
+  });
+
+  it('rejects interleaved audio lengths that do not match audioChannels', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio', name: 'record' });
+    expect(() =>
+      project.addClip({
+        trackId: track,
+        startPpq: 0,
+        lengthPpq: 1,
+        audio: new Float32Array(5),
+        audioChannels: 2,
+        audioSampleRate: 48000,
+      }),
+    ).toThrow(/audio length must be a multiple of audioChannels/);
+    expect(() =>
+      project.addLoopRecordingTakes({
+        trackId: track,
+        startPpq: 0,
+        loopLengthPpq: 1,
+        audio: new Float32Array(5),
+        audioChannels: 2,
+        audioSampleRate: 48000,
+      }),
+    ).toThrow(/audio length must be a multiple of audioChannels/);
     project.destroy();
   });
 

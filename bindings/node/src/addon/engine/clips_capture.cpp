@@ -78,10 +78,19 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
     const bool has_page_provider = obj.Has("pageProvider") &&
                                    !obj.Get("pageProvider").IsUndefined() &&
                                    !obj.Get("pageProvider").IsNull();
-    Napi::Array channels =
-        has_page_provider ? Napi::Array::New(env) : obj.Get("channels").As<Napi::Array>();
+    Napi::Array channels = Napi::Array::New(env);
+    if (!has_page_provider) {
+      const Napi::Value channel_value = obj.Get("channels");
+      if (!channel_value.IsArray()) {
+        Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      channels = channel_value.As<Napi::Array>();
+    }
     if (!has_page_provider && channels.Length() == 0) {
-      Napi::TypeError::New(env, "clip channels must not be empty").ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
+          .ThrowAsJavaScriptException();
       return env.Undefined();
     }
     storage.emplace_back();
@@ -153,8 +162,14 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
                                 : 0;
     clip.warp_mode =
         obj.Has("warpMode") ? ParseWarpMode(env, obj.Get("warpMode")) : SONARE_ENGINE_WARP_MODE_OFF;
+    if (env.IsExceptionPending()) return env.Undefined();
     if (obj.Has("warpAnchors") && !obj.Get("warpAnchors").IsUndefined()) {
-      Napi::Array anchors = obj.Get("warpAnchors").As<Napi::Array>();
+      const Napi::Value anchors_value = obj.Get("warpAnchors");
+      if (!anchors_value.IsArray()) {
+        Napi::TypeError::New(env, "warpAnchors must be an array").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Array anchors = anchors_value.As<Napi::Array>();
       clip_warp_anchors.reserve(anchors.Length());
       for (uint32_t anchor_index = 0; anchor_index < anchors.Length(); ++anchor_index) {
         Napi::Object anchor = anchors.Get(anchor_index).As<Napi::Object>();
