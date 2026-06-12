@@ -72,6 +72,38 @@ TEST_CASE("ClipPlayer starts and stops on sample boundaries", "[engine][clip_pla
   REQUIRE(out_r[2] == -1.0f);
 }
 
+TEST_CASE("ClipPlayer can render tracks separately without changing summed output",
+          "[engine][clip_player]") {
+  std::array<float, 4> source_a{1.0f, 2.0f, 3.0f, 4.0f};
+  std::array<float, 4> source_b{0.25f, 0.5f, 0.75f, 1.0f};
+  const float* a[] = {source_a.data()};
+  const float* b[] = {source_b.data()};
+
+  sonare::engine::ClipSchedule clip_a{1, {a, 1, 4}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+  clip_a.track_id = 101;
+  sonare::engine::ClipSchedule clip_b{2, {b, 1, 4}, 0.0, 1, 0, 4, false, 0.5f, 0, 0};
+  clip_b.track_id = 202;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 8);
+  player.set_clips({clip_a, clip_b});
+
+  std::array<float, 8> full{};
+  float* full_channels[] = {full.data()};
+  player.process_at(full_channels, 1, 8, 0);
+
+  std::array<float, 8> lane_a{};
+  std::array<float, 8> lane_b{};
+  float* lane_a_channels[] = {lane_a.data()};
+  float* lane_b_channels[] = {lane_b.data()};
+  player.process_track_at(101, lane_a_channels, 1, 8, 0);
+  player.process_track_at(202, lane_b_channels, 1, 8, 0);
+
+  for (size_t i = 0; i < full.size(); ++i) {
+    REQUIRE(full[i] == lane_a[i] + lane_b[i]);
+  }
+}
+
 TEST_CASE("ClipPlayer reads paged provider samples and silences page misses",
           "[engine][clip_player]") {
   auto provider = std::make_shared<TestPagedProvider>(std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f},

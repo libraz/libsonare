@@ -153,6 +153,8 @@ class ChannelStrip : public rt::ProcessorBase {
 
   // Schedules a sample-accurate insert-parameter automation event. @p insert_index addresses
   // the combined insert sequence [pre_inserts_ ... then post_inserts_ ...]. Control-thread API.
+  bool set_insert_bypassed(unsigned int insert_index, bool bypassed,
+                           bool reset_on_bypass = false) noexcept;
   bool schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
                                   int64_t sample_pos, float value,
                                   AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
@@ -163,6 +165,7 @@ class ChannelStrip : public rt::ProcessorBase {
   // Aux sends. add_send is a control-thread mutator (may allocate); it must not run
   // concurrently with process()/mix_send(), matching FxBus::add_insert's contract.
   size_t add_send(const SendConfig& cfg);
+  void clear_sends();
   // Removes the send at @p index (and its paired automation lane), shifting the
   // indices of any higher sends down by one. Control-thread mutator; must not
   // run concurrently with process()/mix_send(), matching add_send's contract.
@@ -202,6 +205,7 @@ class ChannelStrip : public rt::ProcessorBase {
   // iterates them. Exceeding the cap throws std::length_error from
   // add_pre_insert / add_post_insert.
   static constexpr size_t kMaxInserts = 64;
+  static constexpr size_t kMaxSends = 8;
 
 #ifdef SONARE_TESTING
   // Test-only introspection used to assert that schedule_insert_automation

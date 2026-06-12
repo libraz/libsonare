@@ -4,6 +4,7 @@
 
 export interface SonareModuleOptions {
   locateFile?: (path: string, prefix: string) => string;
+  wasmBinary?: ArrayBuffer | Uint8Array;
   onRuntimeInitialized?: () => void;
   print?: (text: string) => void;
   printErr?: (text: string) => void;
@@ -518,6 +519,7 @@ export interface WasmMixResult {
 
 export interface WasmEngineClip {
   id?: number;
+  trackId?: number;
   channels?: Float32Array[];
   startPpq: number;
   lengthSamples?: number;
@@ -529,6 +531,22 @@ export interface WasmEngineClip {
   warpMode?: 'off' | 'repitch' | 'tempo-sync' | 0 | 1 | 2;
   warpAnchors?: Array<{ warpSample: number; sourceSample: number }>;
   pageProvider?: number | { readonly id: number };
+}
+
+export interface WasmEngineTrackSend {
+  busId: number;
+  levelDb?: number;
+  enabled?: boolean;
+}
+
+export interface WasmEngineTrackLane {
+  trackId: number;
+  sends?: WasmEngineTrackSend[];
+}
+
+export interface WasmEngineBus {
+  busId: number;
+  gainDb?: number;
 }
 
 export interface WasmClipPageRequest {
@@ -696,6 +714,18 @@ export interface WasmEngineProcessWithMonitorResult {
   monitor: Float32Array[];
 }
 
+export interface WasmEngineTempoSegment {
+  startPpq: number;
+  bpm: number;
+  endBpm?: number;
+}
+
+export interface WasmEngineTimeSignatureSegment {
+  startPpq: number;
+  numerator: number;
+  denominator: number;
+}
+
 export interface WasmRealtimeEngine {
   prepare: (
     sampleRate: number,
@@ -705,13 +735,17 @@ export interface WasmRealtimeEngine {
   ) => void;
   setParameter: (paramId: number, value: number, renderFrame: number) => void;
   setParameterSmoothed: (paramId: number, value: number, renderFrame: number) => void;
+  setSoloMute: (laneIndex: number, solo: boolean, mute: boolean, renderFrame: number) => void;
   getTransportState: () => WasmEngineTransportState;
   play: (renderFrame: number) => void;
   stop: (renderFrame: number) => void;
   seekSample: (timelineSample: number, renderFrame: number) => void;
   seekPpq: (ppq: number, renderFrame: number) => void;
   setTempo: (bpm: number) => void;
+  setTempoSegments: (segments: WasmEngineTempoSegment[]) => void;
   setTimeSignature: (numerator: number, denominator: number) => void;
+  setTimeSignatureSegments: (segments: WasmEngineTimeSignatureSegment[]) => void;
+  sampleAtPpq: (ppq: number) => number;
   setLoop: (startPpq: number, endPpq: number, enabled: boolean) => void;
   addParameter: (info: WasmEngineParameterInfo) => void;
   parameterCount: () => number;
@@ -733,6 +767,24 @@ export interface WasmRealtimeEngine {
   graphConnectionCount: () => number;
   setClips: (clips: WasmEngineClip[]) => void;
   clipCount: () => number;
+  setTrackLanes: (lanes: Array<number | WasmEngineTrackLane>) => void;
+  setTrackBuses: (buses: WasmEngineBus[]) => void;
+  setBusStripJson: (busId: number, sceneJson: string) => void;
+  setTrackStripJson: (trackId: number, sceneJson: string) => void;
+  setTrackStripEqBandJson: (trackId: number, bandIndex: number, bandJson: string) => void;
+  setTrackStripInsertBypassed: (
+    trackId: number,
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass: boolean,
+  ) => void;
+  setMasterStripJson: (sceneJson: string) => void;
+  setMasterStripEqBandJson: (bandIndex: number, bandJson: string) => void;
+  setMasterStripInsertBypassed: (
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass: boolean,
+  ) => void;
   createClipPageProvider: (numChannels: number, numSamples: number, pageFrames: number) => number;
   supplyClipPage: (providerId: number, pageIndex: number, channels: Float32Array[]) => void;
   clearClipPage: (providerId: number, pageIndex: number) => void;
@@ -747,7 +799,11 @@ export interface WasmRealtimeEngine {
   resetCapture: () => void;
   captureStatus: () => WasmEngineCaptureStatus;
   capturedAudio: () => Float32Array[];
+  setMidiClips: (clips: readonly object[]) => void;
   setBuiltinInstrument: (destinationId: number, config: object) => void;
+  setSynthInstrument: (destinationId: number, patch: object | string) => void;
+  loadSoundFont: (data: Uint8Array) => void;
+  setSf2Instrument: (destinationId: number, config: object) => void;
   clearMidiInstrument: (destinationId: number) => void;
   midiInstrumentCount: () => number;
   bindMidiCc: (
@@ -759,6 +815,8 @@ export interface WasmRealtimeEngine {
   ) => void;
   clearMidiCcBindings: () => void;
   midiCcBindingCount: () => number;
+  setMidiFx: (destinationId: number, configJson: string) => void;
+  clearMidiFx: (destinationId: number) => void;
   setMidiInputSource: (destinationId: number) => void;
   clearMidiInputSource: () => void;
   midiInputPendingCount: () => number;
@@ -808,6 +866,7 @@ export interface WasmRealtimeEngine {
     renderFrame: number,
   ) => void;
   pushMidiPanic: (renderFrame: number) => void;
+  clearParameters: () => void;
   process: (channels: Float32Array[]) => Float32Array[];
   prepareChannels: (numChannels: number, maxFrames: number) => void;
   getChannelBuffer: (channel: number, numFrames: number) => Float32Array;

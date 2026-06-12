@@ -339,7 +339,9 @@ uint32_t sonare_voice_changer_abi_version(void);
 /// - Topology / registration: `sonare_engine_set_graph`,
 ///   `sonare_engine_set_clips`, `sonare_engine_add_parameter`,
 ///   `sonare_engine_set_automation_lane`, `sonare_engine_set_markers`,
-///   `sonare_engine_set_metronome`.
+///   `sonare_engine_set_metronome`, `sonare_engine_set_track_lanes`,
+///   `sonare_engine_set_track_strip_json`,
+///   `sonare_engine_set_master_strip_json`.
 /// - Offline render: `sonare_engine_render_offline`,
 ///   `sonare_engine_bounce_offline`, `sonare_engine_freeze_offline` (these own
 ///   the audio role internally; do not also call them from a render callback).
@@ -364,6 +366,8 @@ SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm);
 SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int numerator,
                                              int denominator);
+SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq,
+                                        int64_t* out_sample);
 SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_ppq, double end_ppq,
                                    int enabled);
 /// @brief Registers a parameter's metadata for automation UIs.
@@ -408,6 +412,52 @@ SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int6
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count);
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
+SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
+                                          const SonareEngineTrackLane* lanes, size_t lane_count);
+
+/// @brief Configure realtime engine aux buses used by track sends.
+/// @details Control-thread only; must not run concurrently with process().
+SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
+                                          const SonareEngineBus* buses, size_t bus_count);
+
+/// @brief Configure a bus strip from the first bus in a mixer scene JSON.
+/// @details The bus must already exist via sonare_engine_set_track_buses.
+SonareError sonare_engine_set_bus_strip_json(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                             const char* scene_json);
+/// @brief Builds an engine-owned ChannelStrip for @p track_id from a mixer scene JSON.
+/// @details The first `strips[0]` entry in @p scene_json is used as the track strip spec.
+///          This is a control-thread structural mutation; do not call concurrently with
+///          @ref sonare_engine_process.
+SonareError sonare_engine_set_track_strip_json(SonareRealtimeEngine* engine, uint32_t track_id,
+                                               const char* scene_json);
+/// @brief Sets one embedded EQ band on an engine-owned track strip.
+/// @details @p band_json uses the same JSON schema as @ref sonare_eq_set_band.
+///          Control-thread mutation; do not call concurrently with @ref sonare_engine_process.
+SonareError sonare_engine_set_track_strip_eq_band_json(SonareRealtimeEngine* engine,
+                                                       uint32_t track_id, int band_index,
+                                                       const char* band_json);
+/// @brief Toggles bypass for a track strip insert by combined pre/post insert index.
+/// @details Control-thread mutation; do not call concurrently with @ref sonare_engine_process.
+SonareError sonare_engine_set_track_strip_insert_bypassed(SonareRealtimeEngine* engine,
+                                                          uint32_t track_id,
+                                                          unsigned int insert_index, int bypassed,
+                                                          int reset_on_bypass);
+/// @brief Builds an engine-owned master ChannelStrip from a mixer scene JSON.
+/// @details The first `strips[0]` entry in @p scene_json is used as the master strip spec.
+///          This is a control-thread structural mutation; do not call concurrently with
+///          @ref sonare_engine_process.
+SonareError sonare_engine_set_master_strip_json(SonareRealtimeEngine* engine,
+                                                const char* scene_json);
+/// @brief Sets one embedded EQ band on an engine-owned master strip.
+/// @details @p band_json uses the same JSON schema as @ref sonare_eq_set_band.
+///          Control-thread mutation; do not call concurrently with @ref sonare_engine_process.
+SonareError sonare_engine_set_master_strip_eq_band_json(SonareRealtimeEngine* engine,
+                                                        int band_index, const char* band_json);
+/// @brief Toggles bypass for a master strip insert by combined pre/post insert index.
+/// @details Control-thread mutation; do not call concurrently with @ref sonare_engine_process.
+SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine* engine,
+                                                           unsigned int insert_index, int bypassed,
+                                                           int reset_on_bypass);
 SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_samples,
                                              int64_t page_frames,
                                              SonareClipPageProvider** out_provider);
@@ -480,6 +530,48 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
 /// @brief Pushes a live parameter value to the engine using a smoothed ramp.
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame);
+SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t lane_index, int solo,
+                                        int mute, int64_t render_frame);
+
+/// @brief One render-frame MIDI event for @ref sonare_engine_set_midi_clips.
+/// @details Mirrors midi::MidiEvent with a fixed UMP payload. `render_frame` is
+///          an absolute sample position on the engine timeline. `word_count` is
+///          the number of active UMP words (1..4); 0 lets the C bridge infer a
+///          one-word MIDI 1.0 event when only `word0` is set.
+typedef struct {
+  int64_t render_frame;
+  uint32_t word0;
+  uint32_t word1;
+  uint32_t word2;
+  uint32_t word3;
+  uint8_t word_count;
+  uint8_t group;
+  uint16_t reserved;
+  uint32_t sysex_handle;
+} SonareEngineMidiEvent;
+
+/// @brief One compiled realtime MIDI clip schedule.
+/// @details Direct bindings expose the same RT-facing shape as
+///          midi::MidiClipSchedule: PPQ has already been compiled to absolute
+///          sample frames in @ref SonareEngineMidiEvent.render_frame.
+typedef struct {
+  uint32_t id;
+  uint32_t track_id;
+  int64_t start_sample;
+  double start_ppq;
+  int64_t length_samples;
+  int loop;
+  int64_t loop_length_samples;
+  uint32_t destination_id;
+  const SonareEngineMidiEvent* events;
+  size_t event_count;
+} SonareEngineMidiClipSchedule;
+
+/// @brief Replaces the engine's realtime MIDI clip schedule snapshot.
+SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
+                                         const SonareEngineMidiClipSchedule* clips,
+                                         size_t clip_count);
+
 /// @brief Built-in realtime synth patch for @ref sonare_engine_set_builtin_instrument.
 /// @details Same zero-init contract as project bounce built-in instruments:
 ///          non-positive fields use the default sine patch values.

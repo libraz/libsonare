@@ -358,7 +358,7 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
 
   const uint8_t garbage[4] = {'b', 'a', 'd', '!'};
   REQUIRE(sonare_engine_load_soundfont(engine, garbage, sizeof(garbage)) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
 
   config.struct_version = 99;

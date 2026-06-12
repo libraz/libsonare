@@ -12,6 +12,7 @@ import {
   detectBeats,
   detectBpm,
   detectKey,
+  ErrorCode,
   EXPECTED_ENGINE_ABI_VERSION,
   engineAbiVersion,
   engineCapabilities,
@@ -21,6 +22,7 @@ import {
   framesToSamples,
   init,
   isInitialized,
+  isSonareError,
   mastering,
   masteringAssistantSuggest,
   masteringAudioProfile,
@@ -60,6 +62,17 @@ import {
 } from '../dist/index.js';
 
 describe('Sonare WASM Module', () => {
+  const rms = (data: Float32Array): number => {
+    let sum = 0;
+    for (const value of data) {
+      sum += value * value;
+    }
+    return Math.sqrt(sum / data.length);
+  };
+
+  const midi1Word = (status: number, channel: number, data0: number, data1: number): number =>
+    (0x2 << 28) | ((status & 0xf) << 20) | ((channel & 0xf) << 16) | (data0 << 8) | data1;
+
   beforeAll(async () => {
     await init();
   });
@@ -191,6 +204,31 @@ describe('Sonare WASM Module', () => {
       engine.setMetronome({ enabled: true, beatGain: 0.25, accentGain: 0.75, clickSamples: 16 });
       expect(engine.metronome().enabled).toBe(true);
       expect(engine.countInEndSample(0, 2)).toBe(288000);
+      expect(engine.sampleAtPpq(1.5)).toBe(72000);
+      engine.setTempoSegments([
+        { startPpq: 0, bpm: 120 },
+        { startPpq: 4, bpm: 60 },
+      ]);
+      expect(engine.sampleAtPpq(4)).toBe(96000);
+      expect(engine.sampleAtPpq(5)).toBe(144000);
+      engine.setTimeSignatureSegments([
+        { startPpq: 0, numerator: 4, denominator: 4 },
+        { startPpq: 4, numerator: 3, denominator: 4 },
+      ]);
+      expect(engine.countInEndSample(engine.sampleAtPpq(4), 1)).toBe(engine.sampleAtPpq(7));
+      engine.setTempo(60);
+      engine.setTimeSignature(3, 4);
+      let badPpqError: unknown;
+      try {
+        engine.sampleAtPpq(Number.NaN);
+      } catch (error) {
+        badPpqError = error;
+      }
+      expect(isSonareError(badPpqError)).toBe(true);
+      if (!isSonareError(badPpqError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badPpqError.code).toBe(ErrorCode.InvalidParameter);
       engine.setMetronome({ enabled: false });
       engine.addParameter({
         id: 7,
@@ -271,6 +309,40 @@ describe('Sonare WASM Module', () => {
       expect(warped[0][2]).toBeCloseTo(10, 4);
       expect(warped[0][3]).toBeCloseTo(15, 4);
       warpEngine.destroy();
+
+      const fadeEngine = new RealtimeEngine(48000, 4);
+      fadeEngine.setClips([
+        {
+          id: 302,
+          channels: [new Float32Array([1, 1, 1, 1])],
+          startPpq: 0,
+          lengthSamples: 4,
+          fadeInSamples: 4,
+          fadeOutSamples: 2,
+        },
+      ]);
+      fadeEngine.play();
+      const faded = fadeEngine.process([new Float32Array(4)])[0];
+      expect(faded[0]).toBeCloseTo(0, 4);
+      expect(faded[1]).toBeGreaterThan(faded[0]);
+      expect(faded[2]).toBeGreaterThan(faded[3]);
+      fadeEngine.destroy();
+
+      const loopLengthEngine = new RealtimeEngine(48000, 6);
+      loopLengthEngine.setClips([
+        {
+          id: 3021,
+          channels: [new Float32Array([1, 2, 3, 4])],
+          startPpq: 0,
+          lengthSamples: 6,
+          loop: true,
+          loopLengthSamples: 2,
+        },
+      ]);
+      loopLengthEngine.play();
+      const looped = loopLengthEngine.process([new Float32Array(6)])[0];
+      expect(Array.from(looped)).toEqual([1, 2, 3, 4, 1, 2]);
+      loopLengthEngine.destroy();
 
       const badWarpModeEngine = new RealtimeEngine(48000, 4);
       expect(() =>
@@ -484,6 +556,7 @@ describe('Sonare WASM Module', () => {
       expect(inputCaptureStatus.source).toBe('input');
       expect(inputCaptureStatus.recordOffsetSamples).toBe(-37);
       expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
+      expect(engine.drainMeterTelemetry().some((record) => record.targetId === 0xffff)).toBe(true);
 
       engine.setInputMonitor(false);
       engine.resetCapture();
@@ -580,6 +653,505 @@ describe('Sonare WASM Module', () => {
       const zeroGainFrozen = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
       expect(zeroGainFrozen[0][0]).toBeCloseTo(0, 4);
       expect(zeroGainFrozen[1][0]).toBeCloseTo(0, 4);
+      engine.destroy();
+    });
+
+    it('routes track clips through lanes and lane commands', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 10;
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [new Float32Array(frames).fill(1), new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+        {
+          id: 2,
+          trackId: 20,
+          channels: [new Float32Array(frames).fill(1), new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setTrackLanes([10, { trackId: 20 }]);
+      let duplicateLaneError: unknown;
+      try {
+        engine.setTrackLanes([{ trackId: 10 }, { trackId: 10 }]);
+      } catch (error) {
+        duplicateLaneError = error;
+      }
+      expect(isSonareError(duplicateLaneError)).toBe(true);
+      if (!isSonareError(duplicateLaneError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(duplicateLaneError.code).toBe(ErrorCode.InvalidParameter);
+      engine.setTrackLanes([10, { trackId: 20 }]);
+
+      engine.play();
+      let processed = engine.process([new Float32Array(256), new Float32Array(256)]);
+      expect(processed[0].at(-1)).toBeCloseTo(2, 4);
+      expect(processed[1].at(-1)).toBeCloseTo(2, 4);
+
+      engine.setSoloMute(0, true, false);
+      for (let block = 0; block < 4; block += 1) {
+        processed = engine.process([new Float32Array(256), new Float32Array(256)]);
+      }
+      expect(processed[0].at(-1)).toBeGreaterThan(0.75);
+      expect(processed[0].at(-1)).toBeLessThan(1.25);
+
+      engine.setParameterSmoothed(0x4d580001, -12, -1);
+      for (let block = 0; block < 6; block += 1) {
+        processed = engine.process([new Float32Array(256), new Float32Array(256)]);
+      }
+      expect(processed[0].at(-1)).toBeLessThan(0.45);
+      expect(processed[1].at(-1)).toBeLessThan(0.45);
+      engine.destroy();
+    });
+
+    it('renders scheduled MIDI clips through built-in instruments', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+      engine.setMidiClips([
+        {
+          id: 1,
+          trackId: 5,
+          destinationId: 5,
+          lengthSamples: 8192,
+          events: [
+            { renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 },
+            { renderFrame: 4096, word0: midi1Word(0x8, 0, 60, 0), wordCount: 1 },
+          ],
+        },
+      ]);
+      engine.play();
+      const out = engine.process([new Float32Array(128), new Float32Array(128)]);
+      expect(Math.max(rms(out[0]), rms(out[1]))).toBeGreaterThan(0);
+
+      let badGroupError: unknown;
+      try {
+        engine.setMidiClips([
+          {
+            id: 2,
+            trackId: 5,
+            destinationId: 5,
+            events: [
+              { renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1, group: 16 },
+            ],
+          },
+        ]);
+      } catch (error) {
+        badGroupError = error;
+      }
+      expect(isSonareError(badGroupError)).toBe(true);
+      if (!isSonareError(badGroupError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badGroupError.code).toBe(ErrorCode.InvalidParameter);
+
+      let badChannelError: unknown;
+      try {
+        engine.pushMidiNoteOn(5, 0, 16, 60, 100);
+      } catch (error) {
+        badChannelError = error;
+      }
+      expect(isSonareError(badChannelError)).toBe(true);
+      if (!isSonareError(badChannelError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badChannelError.code).toBe(ErrorCode.InvalidParameter);
+
+      let badSoundFontError: unknown;
+      try {
+        engine.loadSoundFont(new Uint8Array([0x6e, 0x6f, 0x74, 0x20, 0x73, 0x66, 0x32]));
+      } catch (error) {
+        badSoundFontError = error;
+      }
+      expect(isSonareError(badSoundFontError)).toBe(true);
+      if (!isSonareError(badSoundFontError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badSoundFontError.code).toBe(ErrorCode.InvalidFormat);
+
+      engine.setMidiClips([]);
+      engine.destroy();
+    });
+
+    it('routes track sends through buses', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 40;
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
+      let duplicateBusError: unknown;
+      try {
+        engine.setTrackBuses([
+          { busId: 1, gainDb: 0 },
+          { busId: 1, gainDb: 0 },
+        ]);
+      } catch (error) {
+        duplicateBusError = error;
+      }
+      expect(isSonareError(duplicateBusError)).toBe(true);
+      if (!isSonareError(duplicateBusError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(duplicateBusError.code).toBe(ErrorCode.InvalidParameter);
+
+      engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: 0, enabled: true }] }]);
+      for (const lane of [
+        { trackId: 10, sends: [{ busId: 99, levelDb: 0, enabled: true }] },
+        {
+          trackId: 10,
+          sends: [
+            { busId: 1, levelDb: 0, enabled: true },
+            { busId: 1, levelDb: -6, enabled: true },
+          ],
+        },
+        { trackId: 10, sends: [{ busId: 1, levelDb: 99, enabled: true }] },
+      ]) {
+        let laneError: unknown;
+        try {
+          engine.setTrackLanes([lane]);
+        } catch (error) {
+          laneError = error;
+        }
+        expect(isSonareError(laneError)).toBe(true);
+        if (!isSonareError(laneError)) {
+          throw new Error('expected SonareError');
+        }
+        expect(laneError.code).toBe(ErrorCode.InvalidParameter);
+      }
+
+      engine.play();
+      let [out] = engine.process([new Float32Array(256)]);
+      expect(out.at(-1)).toBeGreaterThan(2.82);
+      expect(out.at(-1)).toBeLessThan(2.84);
+      const meterTargets = new Set(engine.drainMeterTelemetry().map((record) => record.targetId));
+      expect(meterTargets.has(1)).toBe(true);
+      expect(meterTargets.has(33)).toBe(true);
+      expect(meterTargets.has(0)).toBe(true);
+
+      engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: -6.0206 }] }]);
+      engine.seekSample(0);
+      [out] = engine.process([new Float32Array(256)]);
+      expect(out.at(-1)).toBeGreaterThan(2.11);
+      expect(out.at(-1)).toBeLessThan(2.13);
+
+      engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: 0, enabled: false }] }]);
+      engine.seekSample(0);
+      [out] = engine.process([new Float32Array(256)]);
+      expect(out.at(-1)).toBeGreaterThan(1.41);
+      expect(out.at(-1)).toBeLessThan(1.42);
+
+      let badJsonError: unknown;
+      try {
+        engine.setBusStripJson(1, '{bad json');
+      } catch (error) {
+        badJsonError = error;
+      }
+      expect(isSonareError(badJsonError)).toBe(true);
+      if (!isSonareError(badJsonError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
+      engine.setBusStripJson(
+        1,
+        '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+      );
+      engine.destroy();
+    });
+
+    it('applies track strip JSON to a lane', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 4;
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+        {
+          id: 2,
+          trackId: 20,
+          channels: [new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setTrackLanes([10, 20]);
+      const sceneJson =
+        '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
+      engine.setTrackStripJson(10, sceneJson);
+      let badJsonError: unknown;
+      try {
+        engine.setTrackStripJson(10, '{bad json');
+      } catch (error) {
+        badJsonError = error;
+      }
+      expect(isSonareError(badJsonError)).toBe(true);
+      if (!isSonareError(badJsonError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
+      let badProcessorError: unknown;
+      try {
+        engine.setTrackStripJson(
+          10,
+          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+        );
+      } catch (error) {
+        badProcessorError = error;
+      }
+      expect(isSonareError(badProcessorError)).toBe(true);
+      if (!isSonareError(badProcessorError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badProcessorError.code).toBe(ErrorCode.InvalidParameter);
+      let badParamError: unknown;
+      try {
+        engine.setTrackStripJson(
+          10,
+          '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+        );
+      } catch (error) {
+        badParamError = error;
+      }
+      expect(isSonareError(badParamError)).toBe(true);
+      if (!isSonareError(badParamError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badParamError.code).toBe(ErrorCode.InvalidParameter);
+      let badBypassError: unknown;
+      try {
+        engine.setMasterStripInsertBypassed(0, true);
+      } catch (error) {
+        badBypassError = error;
+      }
+      expect(isSonareError(badBypassError)).toBe(true);
+      if (!isSonareError(badBypassError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badBypassError.code).toBe(ErrorCode.InvalidParameter);
+
+      engine.play();
+      const processed = engine.process([new Float32Array(256)]);
+      expect(processed[0].at(-1)).toBeGreaterThan(1.2);
+      expect(processed[0].at(-1)).toBeLessThan(1.4);
+      engine.destroy();
+    });
+
+    it('toggles track strip insert bypass', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 16;
+      const source = new Float32Array(frames);
+      for (let i = 0; i < frames; i += 1) {
+        source[i] = Math.sin((2 * Math.PI * 1000 * i) / 48000);
+      }
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [source],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setTrackLanes([10]);
+      engine.setTrackStripJson(
+        10,
+        '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}',
+      );
+      let badIndexError: unknown;
+      try {
+        engine.setTrackStripInsertBypassed(10, 7, true);
+      } catch (error) {
+        badIndexError = error;
+      }
+      expect(isSonareError(badIndexError)).toBe(true);
+      if (!isSonareError(badIndexError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+
+      engine.play();
+      let eqOut = new Float32Array(256);
+      for (let block = 0; block < 6; block += 1) {
+        [eqOut] = engine.process([new Float32Array(256)]);
+      }
+      engine.setTrackStripInsertBypassed(10, 0, true, true);
+      engine.seekSample(0);
+      const [bypassedOut] = engine.process([new Float32Array(256)]);
+      expect(rms(eqOut)).toBeGreaterThan(rms(bypassedOut) * 1.5);
+      engine.destroy();
+    });
+
+    it('updates track strip EQ band', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 16;
+      const source = new Float32Array(frames);
+      for (let i = 0; i < frames; i += 1) {
+        source[i] = Math.sin((2 * Math.PI * 1000 * i) / 48000);
+      }
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [source],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setTrackLanes([10]);
+      engine.setTrackStripJson(
+        10,
+        '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+      );
+      let badIndexError: unknown;
+      try {
+        engine.setTrackStripEqBand(10, 99, { type: 'Peak', enabled: true });
+      } catch (error) {
+        badIndexError = error;
+      }
+      expect(isSonareError(badIndexError)).toBe(true);
+      if (!isSonareError(badIndexError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+
+      engine.play();
+      const [flatOut] = engine.process([new Float32Array(256)]);
+      engine.setTrackStripEqBand(10, 0, {
+        type: 'Peak',
+        frequencyHz: 1000,
+        gainDb: 12,
+        q: 1,
+        enabled: true,
+      });
+      engine.seekSample(0);
+      let eqOut = new Float32Array(256);
+      for (let block = 0; block < 6; block += 1) {
+        [eqOut] = engine.process([new Float32Array(256)]);
+      }
+      expect(rms(eqOut)).toBeGreaterThan(rms(flatOut) * 1.5);
+      engine.destroy();
+    });
+
+    it('applies master strip JSON after lane mix', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 16;
+      engine.setClips([
+        {
+          id: 1,
+          channels: [new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+        {
+          id: 2,
+          channels: [new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      const sceneJson =
+        '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]}';
+      engine.setMasterStripJson(sceneJson);
+      let badJsonError: unknown;
+      try {
+        engine.setMasterStripJson('{bad json');
+      } catch (error) {
+        badJsonError = error;
+      }
+      expect(isSonareError(badJsonError)).toBe(true);
+      if (!isSonareError(badJsonError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badJsonError.code).toBe(ErrorCode.InvalidFormat);
+      let badParamError: unknown;
+      try {
+        engine.setMasterStripJson(
+          '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],"buses":[],"connections":[]}',
+        );
+      } catch (error) {
+        badParamError = error;
+      }
+      expect(isSonareError(badParamError)).toBe(true);
+      if (!isSonareError(badParamError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badParamError.code).toBe(ErrorCode.InvalidParameter);
+
+      engine.play();
+      const processed = engine.process([new Float32Array(256)]);
+      expect(processed[0].at(-1)).toBeGreaterThan(0.65);
+      expect(processed[0].at(-1)).toBeLessThan(0.8);
+      engine.setParameterSmoothed(0x4d58ff01, -24);
+      engine.setParameter(0x4d58ff02, 0.25);
+      let attenuated = processed;
+      for (let block = 0; block < 8; block += 1) {
+        attenuated = engine.process([new Float32Array(256)]);
+      }
+      expect(attenuated[0].at(-1)).toBeGreaterThan(0.05);
+      expect(attenuated[0].at(-1)).toBeLessThan(0.25);
+      engine.destroy();
+    });
+
+    it('updates master strip EQ band', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 16;
+      const source = new Float32Array(frames);
+      for (let i = 0; i < frames; i += 1) {
+        source[i] = Math.sin((2 * Math.PI * 1000 * i) / 48000);
+      }
+      engine.setClips([
+        {
+          id: 1,
+          channels: [source],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setMasterStripJson(
+        '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}',
+      );
+      let badIndexError: unknown;
+      try {
+        engine.setMasterStripEqBand(99, { type: 'Peak', enabled: true });
+      } catch (error) {
+        badIndexError = error;
+      }
+      expect(isSonareError(badIndexError)).toBe(true);
+      if (!isSonareError(badIndexError)) {
+        throw new Error('expected SonareError');
+      }
+      expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+
+      engine.play();
+      const [flatOut] = engine.process([new Float32Array(256)]);
+      engine.setMasterStripEqBand(0, {
+        type: 'Peak',
+        frequencyHz: 1000,
+        gainDb: 12,
+        q: 1,
+        enabled: true,
+      });
+      engine.seekSample(0);
+      let eqOut = new Float32Array(256);
+      for (let block = 0; block < 6; block += 1) {
+        [eqOut] = engine.process([new Float32Array(256)]);
+      }
+      expect(rms(eqOut)).toBeGreaterThan(rms(flatOut) * 1.5);
       engine.destroy();
     });
 

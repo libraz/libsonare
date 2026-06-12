@@ -1250,6 +1250,7 @@ export interface EngineMetronomeConfig {
 
 export interface EngineClip {
   id: number;
+  trackId?: number;
   channels?: Float32Array[];
   startPpq: number;
   lengthSamples?: number;
@@ -1261,6 +1262,22 @@ export interface EngineClip {
   warpMode?: WarpMode;
   warpAnchors?: ProjectWarpAnchor[];
   pageProvider?: number | { readonly id: number };
+}
+
+export interface EngineTrackLane {
+  trackId: number;
+  sends?: EngineTrackSend[];
+}
+
+export interface EngineTrackSend {
+  busId: number;
+  levelDb?: number;
+  enabled?: boolean;
+}
+
+export interface EngineBus {
+  busId: number;
+  gainDb?: number;
 }
 
 export interface ClipPageRequest {
@@ -1603,6 +1620,39 @@ export interface MidiCcBindOptions {
   minValue?: number;
   /** Upper end of the mapped parameter range. Default `1`. */
   maxValue?: number;
+}
+
+/** One absolute render-frame MIDI event accepted by {@link RealtimeEngine.setMidiClips}. */
+export interface EngineMidiEvent {
+  renderFrame: number;
+  /** First UMP word. `data0` is accepted by native wrappers as an alias. */
+  word0?: number;
+  /** Second UMP word. `data1` is accepted by native wrappers as an alias. */
+  word1?: number;
+  word2?: number;
+  word3?: number;
+  wordCount?: number;
+  /** UMP group, 0..15. */
+  group?: number;
+  /** Optional SysEx side-store handle for native hosts. */
+  sysexHandle?: number;
+  /** Project-style alias for one-word MIDI 1.0 events. */
+  data0?: number;
+  /** Project-style alias for the second UMP word. */
+  data1?: number;
+}
+
+/** One compiled realtime MIDI clip schedule accepted by {@link RealtimeEngine.setMidiClips}. */
+export interface EngineMidiClipSchedule {
+  id?: number;
+  trackId?: number;
+  destinationId?: number;
+  startSample?: number;
+  startPpq?: number;
+  lengthSamples?: number;
+  loop?: boolean;
+  loopLengthSamples?: number;
+  events: EngineMidiEvent[];
 }
 
 /** MIDI CC <-> automation binding descriptor used by CC learn/conversion helpers. */

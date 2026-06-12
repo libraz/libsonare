@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import BinaryIO
 
@@ -34,6 +35,7 @@ from ._runtime import (
     EngineGraphSpec,
     EngineMarker,
     EngineMetronomeConfig,
+    EngineMidiClipSchedule,
     EngineTelemetry,
     EngineTelemetryError,
     EngineTelemetryType,
@@ -43,6 +45,7 @@ from ._runtime import (
     SonareClipPageRequest,
     SonareEngineBounceOptions,
     SonareEngineBounceResult,
+    SonareEngineBus,
     SonareEngineCaptureBuffer,
     SonareEngineCaptureStatus,
     SonareEngineClip,
@@ -54,7 +57,11 @@ from ._runtime import (
     SonareEngineGraphSpec,
     SonareEngineMarker,
     SonareEngineMetronomeConfig,
+    SonareEngineMidiClipSchedule,
+    SonareEngineMidiEvent,
     SonareEngineTelemetry,
+    SonareEngineTrackLane,
+    SonareEngineTrackSend,
     SonareEngineWarpAnchor,
     SonareMeterTelemetryRecord,
     SonareParameterInfo,
@@ -88,6 +95,10 @@ def _capture_source_value(source: str | int) -> int:
 
 def _capture_source_name(source: int) -> str:
     return "input" if int(source) == _CAPTURE_SOURCE_VALUES["input"] else "output"
+
+
+def _band_json_arg(band: Mapping[str, object] | str) -> bytes:
+    return (band if isinstance(band, str) else json.dumps(dict(band))).encode("utf-8")
 
 
 class ClipPageProvider:
@@ -318,6 +329,17 @@ class RealtimeEngine:
             )
         )
 
+    def sample_at_ppq(self, ppq: float) -> int:
+        """Convert PPQ to a timeline sample using the engine tempo-map snapshot."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_sample_at_ppq"):
+            raise RuntimeError("libsonare was built without sampleAtPpq support")
+        out = ctypes.c_int64()
+        _check(
+            lib.sonare_engine_sample_at_ppq(self._require_handle(), float(ppq), ctypes.byref(out))
+        )
+        return int(out.value)
+
     def set_loop(self, start_ppq: float, end_ppq: float, enabled: bool = True) -> None:
         _check(
             _get_lib().sonare_engine_set_loop(
@@ -471,6 +493,130 @@ class RealtimeEngine:
         out = ctypes.c_size_t()
         _check(_get_lib().sonare_engine_clip_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
+
+    def set_track_lanes(self, lanes: Sequence[int | Mapping[str, object]]) -> None:
+        raw = (SonareEngineTrackLane * len(lanes))()
+        send_arrays: list[object] = []
+        for i, lane in enumerate(lanes):
+            if isinstance(lane, Mapping):
+                raw[i].track_id = int(lane["track_id"] if "track_id" in lane else lane["trackId"])
+                sends = lane.get("sends", [])
+                if sends:
+                    send_array = (SonareEngineTrackSend * len(sends))()
+                    for send_index, send in enumerate(sends):
+                        if not isinstance(send, Mapping):
+                            raise TypeError("track lane send must be a mapping")
+                        send_array[send_index].bus_id = int(
+                            send["bus_id"] if "bus_id" in send else send["busId"]
+                        )
+                        send_array[send_index].level_db = float(
+                            send["level_db"] if "level_db" in send else send.get("levelDb", 0.0)
+                        )
+                        send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
+                    raw[i].sends = send_array
+                    raw[i].send_count = len(sends)
+                    send_arrays.append(send_array)
+            else:
+                raw[i].track_id = int(lane)
+        _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
+
+    def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
+        raw = (SonareEngineBus * len(buses))()
+        for i, bus in enumerate(buses):
+            raw[i].bus_id = int(bus["bus_id"] if "bus_id" in bus else bus["busId"])
+            raw[i].gain_db = float(bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0))
+        _check(_get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses)))
+
+    def set_bus_strip_json(self, bus_id: int, scene_json: str) -> None:
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_json(
+                self._require_handle(),
+                int(bus_id),
+                scene_json.encode("utf-8"),
+            )
+        )
+
+    def set_track_strip_json(self, track_id: int, scene_json: str) -> None:
+        _check(
+            _get_lib().sonare_engine_set_track_strip_json(
+                self._require_handle(),
+                int(track_id),
+                scene_json.encode("utf-8"),
+            )
+        )
+
+    def set_track_strip_eq_band(
+        self, track_id: int, band_index: int, band: Mapping[str, object] | str
+    ) -> None:
+        _check(
+            _get_lib().sonare_engine_set_track_strip_eq_band_json(
+                self._require_handle(),
+                int(track_id),
+                int(band_index),
+                _band_json_arg(band),
+            )
+        )
+
+    def set_track_strip_eq_band_json(self, track_id: int, band_index: int, band_json: str) -> None:
+        _check(
+            _get_lib().sonare_engine_set_track_strip_eq_band_json(
+                self._require_handle(),
+                int(track_id),
+                int(band_index),
+                band_json.encode("utf-8"),
+            )
+        )
+
+    def set_track_strip_insert_bypassed(
+        self, track_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
+    ) -> None:
+        _check(
+            _get_lib().sonare_engine_set_track_strip_insert_bypassed(
+                self._require_handle(),
+                int(track_id),
+                int(insert_index),
+                1 if bypassed else 0,
+                1 if reset_on_bypass else 0,
+            )
+        )
+
+    def set_master_strip_json(self, scene_json: str) -> None:
+        _check(
+            _get_lib().sonare_engine_set_master_strip_json(
+                self._require_handle(),
+                scene_json.encode("utf-8"),
+            )
+        )
+
+    def set_master_strip_eq_band(self, band_index: int, band: Mapping[str, object] | str) -> None:
+        _check(
+            _get_lib().sonare_engine_set_master_strip_eq_band_json(
+                self._require_handle(),
+                int(band_index),
+                _band_json_arg(band),
+            )
+        )
+
+    def set_master_strip_eq_band_json(self, band_index: int, band_json: str) -> None:
+        _check(
+            _get_lib().sonare_engine_set_master_strip_eq_band_json(
+                self._require_handle(),
+                int(band_index),
+                band_json.encode("utf-8"),
+            )
+        )
+
+    def set_master_strip_insert_bypassed(
+        self, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
+    ) -> None:
+        _check(
+            _get_lib().sonare_engine_set_master_strip_insert_bypassed(
+                self._require_handle(),
+                int(insert_index),
+                1 if bypassed else 0,
+                1 if reset_on_bypass else 0,
+            )
+        )
 
     def set_capture_buffer(self, num_channels: int, capacity_frames: int) -> None:
         if num_channels <= 0:
@@ -756,6 +902,63 @@ class RealtimeEngine:
                 self._require_handle(), int(param_id), float(value), int(render_frame)
             )
         )
+
+    def set_solo_mute(
+        self, lane_index: int, solo: bool, mute: bool, render_frame: int = -1
+    ) -> None:
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_solo_mute"):
+            raise RuntimeError("libsonare was built without realtime mixer support")
+        _check(
+            lib.sonare_engine_set_solo_mute(
+                self._require_handle(),
+                int(lane_index),
+                1 if solo else 0,
+                1 if mute else 0,
+                int(render_frame),
+            )
+        )
+
+    def set_midi_clips(self, clips: Sequence[EngineMidiClipSchedule]) -> None:
+        """Replace the realtime MIDI clip snapshot with compiled schedules."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_midi_clips"):
+            raise RuntimeError("libsonare was built without realtime MIDI clip support")
+        event_arrays: list[ctypes.Array[SonareEngineMidiEvent]] = []
+        raw_clips = (SonareEngineMidiClipSchedule * len(clips))()
+        for index, clip in enumerate(clips):
+            raw_events = (SonareEngineMidiEvent * len(clip.events))()
+            for event_index, event in enumerate(clip.events):
+                raw_events[event_index] = SonareEngineMidiEvent(
+                    int(event.render_frame),
+                    int(event.word0),
+                    int(event.word1),
+                    int(event.word2),
+                    int(event.word3),
+                    int(event.word_count),
+                    int(event.group),
+                    0,
+                    int(event.sysex_handle),
+                )
+            event_arrays.append(raw_events)
+            raw_clips[index] = SonareEngineMidiClipSchedule(
+                int(clip.id),
+                int(clip.track_id),
+                int(clip.start_sample),
+                float(clip.start_ppq),
+                int(clip.length_samples),
+                1 if clip.loop else 0,
+                int(clip.loop_length_samples),
+                int(clip.destination_id if clip.destination_id != 0 else clip.track_id),
+                raw_events,
+                len(clip.events),
+            )
+        _check(
+            lib.sonare_engine_set_midi_clips(
+                self._require_handle(), raw_clips, ctypes.c_size_t(len(clips))
+            )
+        )
+        _ = event_arrays
 
     def push_midi_cc(
         self,
@@ -1244,6 +1447,7 @@ def _clips_to_c(
         if page_provider is not None:
             raw = SonareEngineClip()
             raw.id = int(clip.id)
+            raw.track_id = int(clip.track_id)
             raw.channels = None
             raw.num_channels = 0
             raw.num_samples = 0
@@ -1284,6 +1488,7 @@ def _clips_to_c(
         ptrs = ptr_type(*ptr_values)
         raw = SonareEngineClip()
         raw.id = int(clip.id)
+        raw.track_id = int(clip.track_id)
         raw.channels = ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float)))
         raw.num_channels = len(arrays)
         raw.num_samples = num_samples

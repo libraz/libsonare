@@ -263,6 +263,7 @@ typedef struct {
 
 typedef struct {
   uint32_t id;
+  uint32_t track_id;
   const float* const* channels;
   int num_channels;
   int64_t num_samples;
@@ -278,6 +279,23 @@ typedef struct {
   size_t warp_anchor_count;
   SonareClipPageProvider* page_provider;
 } SonareEngineClip;
+
+typedef struct {
+  uint32_t bus_id;
+  float level_db;
+  int enabled;
+} SonareEngineTrackSend;
+
+typedef struct {
+  uint32_t track_id;
+  const SonareEngineTrackSend* sends;
+  size_t send_count;
+} SonareEngineTrackLane;
+
+typedef struct {
+  uint32_t bus_id;
+  float gain_db;
+} SonareEngineBus;
 
 typedef struct {
   float* const* channels;

@@ -820,6 +820,7 @@ class EngineClip:
     id: int
     channels: list[list[float]] | None
     start_ppq: float
+    track_id: int
     length_samples: int | None
     clip_offset_samples: int
     loop: bool
@@ -834,6 +835,7 @@ class EngineClip:
         id: int,
         channels: list[list[float]] | None,
         start_ppq: float,
+        track_id: int = 0,
         length_samples: int | None = None,
         clip_offset_samples: int = 0,
         loop: bool = False,

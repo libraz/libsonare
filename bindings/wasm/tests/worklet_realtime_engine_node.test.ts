@@ -16,6 +16,9 @@ describe('SonareRealtimeEngineNode', () => {
   setupWorklet();
 
   describe('SonareRealtimeEngineNode', () => {
+    const midi1Word = (status: number, channel: number, data0: number, data1: number): number =>
+      (0x2 << 28) | ((status & 0xf) << 20) | ((channel & 0xf) << 16) | (data0 << 8) | data1;
+
     function fakeContext(): BaseAudioContext {
       return {
         sampleRate: 48000,
@@ -227,22 +230,79 @@ describe('SonareRealtimeEngineNode', () => {
         expect(engine.transport.play()).toBe(true);
         expect(engine.transport.seekSeconds(1)).toBe(true);
         engine.transport.setTempo(90);
+        engine.transport.setTempoSegments([
+          { startPpq: 0, bpm: 90 },
+          { startPpq: 4, bpm: 60 },
+        ]);
         expect(engine.transport.setLoop(0, 1, true)).toBe(true);
         expect(engine.setParam('gain-node', 'gain', -6)).toBe(true);
         engine.scheduleParam('gain-node', 'gain', 0.5, -3);
         engine.addAutomationPoint(7, 1, 0);
-        // solo/mute is a Mixer feature; the engine facade now throws a clear
-        // error instead of silently returning false (no-op).
-        expect(() => engine.setSoloMute(3, true, false)).toThrow();
+        expect(engine.setSoloMute(3, true, false)).toBe(true);
+        expect(engine.setStripGain(3, -6)).toBe(true);
+        expect(engine.setStripPan(3, 0.25)).toBe(true);
+        const trackStripJson =
+          '{"version":1,"strips":[{"id":"track-3","faderDb":-6,"panLaw":3,"inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
+        const masterStripJson =
+          '{"version":1,"strips":[{"id":"master","faderDb":-3,"panLaw":3,"inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],"buses":[],"connections":[]}';
+        engine.setTrackStripJson(3, trackStripJson);
+        engine.setMasterStripJson(masterStripJson);
+        expect(engine.setStripGain('master', -3)).toBe(true);
+        expect(engine.setStripPan('master', -0.25)).toBe(true);
+        engine.setTrackStripEqBand(3, 0, { type: 'Peak', frequencyHz: 1000, gainDb: 6 });
+        engine.setMasterStripEqBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3 });
+        engine.setTrackStripInsertBypassed(3, 0, true, true);
+        engine.setMasterStripInsertBypassed(0, true, true);
+        engine.setStripEq(3, 0, { type: 'Peak', frequencyHz: 2000, gainDb: 2 });
+        engine.setStripEq('master', 0, { type: 'Peak', frequencyHz: 3000, gainDb: 1 });
+        engine.setStripInsertBypassed(3, 0, false);
+        engine.setStripInsertBypassed('master', 0, false);
+        engine.setStripInserts(3, trackStripJson);
+        engine.setMasterChain(masterStripJson);
+        engine.setTrackBuses([{ busId: 100, gainDb: -3 }]);
+        engine.setSends(3, [{ busId: 100, levelDb: -6, enabled: true }]);
+        expect(engine.setBusGain(100, -9)).toBe(true);
+        const busStripJson =
+          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[]}],"connections":[]}';
+        engine.setBusStripJson(100, busStripJson);
+        engine.setBuiltinInstrument(3, { gain: 0.5 });
+        engine.setSynthInstrument(3, 'saw-lead');
+        engine.setSf2Instrument(3, { gain: 0.5 });
+        engine.setMidiClips([
+          {
+            id: 501,
+            trackId: 3,
+            destinationId: 3,
+            lengthSamples: 8192,
+            events: [
+              { renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 },
+              { renderFrame: 4096, word0: midi1Word(0x8, 0, 60, 0), wordCount: 1 },
+            ],
+          },
+        ]);
+        engine.pushMidiNoteOn(3, 0, 0, 64, 100);
+        engine.pushMidiNoteOff(3, 0, 0, 64, 0);
+        engine.pushMidiCc(3, 0, 0, 74, 100);
+        engine.pushMidiPanic();
         const clipId = engine.addClip(
-          0,
+          3,
           [new Float32Array(128).fill(0.25), new Float32Array(128).fill(-0.25)],
           0,
         );
         expect(clipId).toBeGreaterThan(0);
         engine.removeClip(clipId);
+        expect(() => engine.armRecord(0, true)).toThrow(/Capture buffer is not configured/);
+        engine.configureCapture({
+          bufferFrames: 4096,
+          channels: 2,
+          source: 'input',
+          recordOffsetSamples: -32,
+          inputMonitor: { enabled: true, gain: 0.5 },
+        });
+        engine.setTempo(60);
+        expect(engine.countInEndSample(0, 2)).toBe(384000);
         expect(engine.armRecord(0, true)).toBe(true);
-        expect(engine.punch(0, 1)).toBe(true);
+        expect(engine.punch(1, 1.5)).toBe(true);
         engine.setMetronome({ enabled: true, clickSamples: 16 });
         const markerId = engine.addMarker(0, 'start');
         expect(markerId).toBeGreaterThan(0);
@@ -252,6 +312,15 @@ describe('SonareRealtimeEngineNode', () => {
         const rendered = await engine.renderOffline(128);
         expect(rendered).toHaveLength(2);
         expect(rendered[0]).toHaveLength(128);
+        expect(
+          posted.some(
+            (message) =>
+              typeof message === 'object' &&
+              message !== null &&
+              (message as { type?: unknown }).type === 'syncBuiltinInstrument',
+          ),
+        ).toBe(false);
+        expect(engine.transport.stop()).toBe(true);
 
         expect(posted).toEqual(
           expect.arrayContaining([
@@ -260,8 +329,124 @@ describe('SonareRealtimeEngineNode', () => {
             expect.objectContaining({ type: SonareEngineCommandType.SetTempoMap }),
             expect.objectContaining({ type: SonareEngineCommandType.SetLoop }),
             expect.objectContaining({ type: SonareEngineCommandType.ArmRecord }),
-            expect.objectContaining({ type: SonareEngineCommandType.Punch }),
+            expect.objectContaining({
+              type: SonareEngineCommandType.Punch,
+              argInt: 48000,
+              argFloat: 72000,
+            }),
             expect.objectContaining({ type: SonareEngineCommandType.SetMetronome }),
+            expect.objectContaining({ type: SonareEngineCommandType.TransportStop }),
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetSoloMute,
+              targetId: 0,
+              argInt: 0x2,
+            }),
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetParamSmoothed,
+              targetId: 0x4d580001,
+              argFloat: -6,
+            }),
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetParamSmoothed,
+              targetId: 0x4d580002,
+              argFloat: 0.25,
+            }),
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetParamSmoothed,
+              targetId: 0x4d58ff01,
+              argFloat: -3,
+            }),
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetParamSmoothed,
+              targetId: 0x4d58ff02,
+              argFloat: -0.25,
+            }),
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetParamSmoothed,
+              targetId: 0x4d58fe01,
+              argFloat: -9,
+            }),
+          ]),
+        );
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'syncMixer', lanes: [{ trackId: 3 }] }),
+            expect.objectContaining({
+              type: 'syncMixer',
+              buses: [{ busId: 100, gainDb: -3 }],
+            }),
+            expect.objectContaining({
+              type: 'syncMixer',
+              lanes: [{ trackId: 3, sends: [{ busId: 100, levelDb: -6, enabled: true }] }],
+            }),
+            expect.objectContaining({
+              type: 'syncMixer',
+              trackStrips: [{ trackId: 3, sceneJson: trackStripJson }],
+              masterStripJson,
+            }),
+            expect.objectContaining({
+              type: 'syncTrackStripEqBand',
+              trackId: 3,
+              bandIndex: 0,
+              bandJson: expect.stringContaining('"frequencyHz":1000'),
+            }),
+            expect.objectContaining({
+              type: 'syncMasterStripEqBand',
+              bandIndex: 0,
+              bandJson: expect.stringContaining('"frequencyHz":1000'),
+            }),
+            expect.objectContaining({
+              type: 'syncTrackStripInsertBypassed',
+              trackId: 3,
+              insertIndex: 0,
+              bypassed: true,
+              resetOnBypass: true,
+            }),
+            expect.objectContaining({
+              type: 'syncMasterStripInsertBypassed',
+              insertIndex: 0,
+              bypassed: true,
+              resetOnBypass: true,
+            }),
+            expect.objectContaining({
+              type: 'syncMixer',
+              busStrips: [{ busId: 100, sceneJson: busStripJson }],
+            }),
+            expect.objectContaining({
+              type: 'syncClipsDelta',
+              upserts: [expect.objectContaining({ id: clipId, trackId: 3 })],
+            }),
+            expect.objectContaining({
+              type: 'syncBuiltinInstrument',
+              destinationId: 3,
+              config: { gain: 0.5 },
+            }),
+            expect.objectContaining({
+              type: 'syncSynthInstrument',
+              destinationId: 3,
+              patch: 'saw-lead',
+            }),
+            expect.objectContaining({
+              type: 'syncSf2Instrument',
+              destinationId: 3,
+              config: { gain: 0.5 },
+            }),
+            expect.objectContaining({
+              type: 'syncMidiClips',
+              clips: [expect.objectContaining({ id: 501, destinationId: 3 })],
+            }),
+            expect.objectContaining({
+              type: 'syncCapture',
+              bufferFrames: 4096,
+              channels: 2,
+              source: 'input',
+              recordOffsetSamples: -32,
+              inputMonitor: { enabled: true, gain: 0.5 },
+            }),
+            expect.objectContaining({ type: 'syncMidiNoteOn', destinationId: 3, note: 64 }),
+            expect.objectContaining({ type: 'syncMidiNoteOff', destinationId: 3, note: 64 }),
+            expect.objectContaining({ type: 'syncMidiCc', destinationId: 3, controller: 74 }),
+            expect.objectContaining({ type: 'syncMidiPanic' }),
           ]),
         );
         // scheduleParam/addAutomationPoint mirror the lane to the live engine via
@@ -272,6 +457,165 @@ describe('SonareRealtimeEngineNode', () => {
       } finally {
         engine.destroy();
       }
+    });
+
+    it('requests capture status, audio, and reset over the worklet port', async () => {
+      const posted: unknown[] = [];
+      const port = {
+        onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+        postMessage(message: unknown) {
+          posted.push(message);
+          if (
+            typeof message === 'object' &&
+            message !== null &&
+            (message as { type?: unknown }).type === 'captureRequest'
+          ) {
+            const request = message as { requestId: number; op: string };
+            const response =
+              request.op === 'status'
+                ? {
+                    type: 'captureResponse',
+                    requestId: request.requestId,
+                    ok: true,
+                    status: {
+                      capturedFrames: 128,
+                      overflowCount: 0,
+                      armed: true,
+                      punchEnabled: false,
+                      source: 'input',
+                      recordOffsetSamples: -12,
+                    },
+                  }
+                : request.op === 'read'
+                  ? {
+                      type: 'captureResponse',
+                      requestId: request.requestId,
+                      ok: true,
+                      channels: [new Float32Array([0.5, 0.25])],
+                    }
+                  : { type: 'captureResponse', requestId: request.requestId, ok: true };
+            port.onmessage?.({ data: response } as MessageEvent<unknown>);
+          }
+        },
+      };
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          ({
+            port,
+            disconnect: () => undefined,
+          }) as unknown as AudioWorkletNode,
+      });
+
+      await expect(engine.captureStatus()).resolves.toMatchObject({
+        capturedFrames: 128,
+        source: 'input',
+        recordOffsetSamples: -12,
+      });
+      const audio = await engine.capturedAudio();
+      expect(audio[0][0]).toBeCloseTo(0.5, 4);
+      await expect(engine.resetCapture()).resolves.toBeUndefined();
+      expect(posted).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'captureRequest', op: 'status' }),
+          expect.objectContaining({ type: 'captureRequest', op: 'read' }),
+          expect.objectContaining({ type: 'captureRequest', op: 'reset' }),
+        ]),
+      );
+      engine.destroy();
+    });
+
+    it('syncs time signatures and requests transport state over the worklet port', async () => {
+      const posted: unknown[] = [];
+      const port = {
+        onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+        postMessage(message: unknown) {
+          posted.push(message);
+          if (
+            typeof message === 'object' &&
+            message !== null &&
+            (message as { type?: unknown }).type === 'transportRequest'
+          ) {
+            const request = message as { requestId: number };
+            port.onmessage?.({
+              data: {
+                type: 'transportResponse',
+                requestId: request.requestId,
+                ok: true,
+                state: {
+                  playing: true,
+                  looping: true,
+                  renderFrame: 128,
+                  samplePosition: 48000,
+                  ppq: 1,
+                  bpm: 90,
+                  barStartPpq: 0,
+                  barCount: 1,
+                  timeSignature: { numerator: 7, denominator: 8, confidence: 1 },
+                  loopStartPpq: 1,
+                  loopEndPpq: 3,
+                  sampleRate: 48000,
+                },
+              },
+            } as MessageEvent<unknown>);
+          }
+        },
+      };
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          ({
+            port,
+            disconnect: () => undefined,
+          }) as unknown as AudioWorkletNode,
+      });
+
+      engine.setTempo(90);
+      engine.setTimeSignature(7, 8);
+      engine.setTempoSegments([
+        { startPpq: 0, bpm: 90 },
+        { startPpq: 4, bpm: 60 },
+      ]);
+      engine.setTimeSignatureSegments([
+        { startPpq: 0, numerator: 7, denominator: 8 },
+        { startPpq: 8, numerator: 3, denominator: 4 },
+      ]);
+      const firstMarker = engine.addMarker(1, 'in');
+      const secondMarker = engine.addMarker(3, 'out');
+      expect(engine.markerCount()).toBe(2);
+      expect(engine.markerByIndex(0)).toMatchObject({ id: firstMarker, ppq: 1, name: 'in' });
+      expect(engine.marker(secondMarker)).toMatchObject({ id: secondMarker, ppq: 3 });
+      expect(engine.setLoopFromMarkers(firstMarker, secondMarker)).toBe(true);
+      await expect(engine.getTransportState()).resolves.toMatchObject({
+        playing: true,
+        bpm: 90,
+        timeSignature: { numerator: 7, denominator: 8 },
+      });
+      expect(engine.cachedTransportState()).toMatchObject({ samplePosition: 48000 });
+      expect(posted).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'syncTempo',
+            bpm: 90,
+            timeSignature: { numerator: 7, denominator: 8 },
+            tempoSegments: [
+              { startPpq: 0, bpm: 90 },
+              { startPpq: 4, bpm: 60 },
+            ],
+            timeSignatureSegments: [
+              { startPpq: 0, numerator: 7, denominator: 8 },
+              { startPpq: 8, numerator: 3, denominator: 4 },
+            ],
+          }),
+          expect.objectContaining({
+            type: SonareEngineCommandType.SetLoop,
+            argFloat: 1,
+            argInt: 3_000_000,
+          }),
+          expect.objectContaining({ type: 'transportRequest', op: 'state' }),
+        ]),
+      );
+      engine.destroy();
     });
 
     it('runs suspend/resume/destroy lifecycle without accepting stale transport commands', async () => {

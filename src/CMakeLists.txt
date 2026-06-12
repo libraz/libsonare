@@ -109,6 +109,7 @@ set(SONARE_SOURCES
   streaming/stream_resampler.cpp
   quick.cpp
   sonare_c.cpp
+  c_api/eq_band_json.cpp
   c_api/core_analysis.cpp
   c_api/core_audio.cpp
   c_api/core_common.cpp
@@ -474,6 +475,7 @@ if(BUILD_MIXING)
     engine/meter_telemetry.cpp
     engine/mixing_runtime.cpp
     engine/monitor_runtime.cpp
+    engine/track_mixer.cpp
   )
 endif()
 add_library(sonare_engine STATIC ${SONARE_ENGINE_SOURCES})
@@ -869,6 +871,7 @@ if(BUILD_WASM)
   # Enable WebAssembly SIMD128 across the whole WASM build (core, mastering,
   # binding shim). -msimd128 must be set both on compile and link for Eigen
   # vectorization to actually map onto v128 ops in the emitted .wasm.
+  target_compile_options(sonare_core_objects PUBLIC -msimd128)
   target_compile_options(sonare_core PUBLIC -msimd128)
   target_compile_options(sonare_rt PUBLIC -msimd128)
   target_compile_options(sonare_automation PUBLIC -msimd128)
@@ -895,6 +898,7 @@ if(BUILD_WASM)
     target_compile_options(sonare_voice_changer PUBLIC -msimd128)
   endif()
 
+  target_compile_options(sonare_core_objects PUBLIC -matomics -mbulk-memory)
   target_compile_options(sonare_core PUBLIC -matomics -mbulk-memory)
   target_compile_options(sonare_rt PUBLIC -matomics -mbulk-memory)
   target_compile_options(sonare_automation PUBLIC -matomics -mbulk-memory)

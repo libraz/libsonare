@@ -42,6 +42,7 @@
 #include "engine/meter_telemetry.h"
 #include "engine/mixing_runtime.h"
 #include "engine/monitor_runtime.h"
+#include "engine/track_mixer.h"
 #endif
 
 namespace sonare::engine {
@@ -127,6 +128,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   void set_tempo_segments(std::vector<transport::TempoSegment> segments);
   void set_time_signature(int numerator, int denominator);
   void set_time_signature_segments(std::vector<transport::TimeSignatureSegment> segments);
+  int64_t sample_at_ppq(double ppq) const noexcept;
   double bpm_at_sample(int64_t sample) const noexcept {
     const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
     return (map ? map : &tempo_map_)->bpm_at_sample(sample);
@@ -163,6 +165,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   }
   bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
                     float max_value) noexcept {
+    if (parameter_target_reserved(param_id)) return false;
     midi::CcBinding binding{};
     binding.cc_number = controller;
     binding.channel = channel;
@@ -245,6 +248,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   uint32_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
   bool capture_armed() const noexcept { return capture_sink_.armed(); }
   bool capture_punch_enabled() const noexcept { return capture_sink_.punch_enabled(); }
+  static bool parameter_target_reserved(uint32_t target_id) noexcept;
   automation::AutomationEngine& automation() noexcept { return automation_; }
   const automation::AutomationEngine& automation() const noexcept { return automation_; }
 
@@ -255,9 +259,23 @@ class RealtimeEngine : private ClipPageRequestSink {
   // propagates rather than terminating the process).
 #if defined(SONARE_WITH_MIXING)
   bool bind_mixing_strip(mixing::ChannelStrip* strip);
-  void set_mixing_enabled(bool enabled) noexcept { mixing_enabled_ = enabled; }
+  void set_mixing_enabled(bool enabled) noexcept;
   bool mixing_enabled() const noexcept { return mixing_enabled_; }
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }
+  bool set_master_strip(const mixing::api::Strip& strip);
+  bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
+  bool set_track_buses(std::vector<TrackBusConfig> buses);
+  bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
+  bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
+  bool set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus);
+  bool set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
+                                 bool reset_on_bypass = false) noexcept;
+  bool set_master_insert_bypassed(unsigned int insert_index, bool bypassed,
+                                  bool reset_on_bypass = false) noexcept;
+  bool set_track_eq_band(uint32_t track_id, size_t band_index,
+                         const mastering::eq::EqBand& band) noexcept;
+  bool set_master_eq_band(size_t band_index, const mastering::eq::EqBand& band) noexcept;
+  TrackMixerRuntime& track_mixer() noexcept { return track_mixer_runtime_; }
 
   // Solo/mute + PFL/AFL monitoring stage applied to a registered set of strips.
   bool add_monitor_strip(mixing::ChannelStrip* strip) noexcept;
@@ -308,6 +326,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   void start_smoothed_param(uint32_t target_id, float value) noexcept;
   void tick_smoothed_params(int num_steps) noexcept;
   bool any_smoothed_param_active() const noexcept;
+#if defined(SONARE_WITH_MIXING)
+  bool route_engine_parameter(uint32_t target_id, float value) noexcept;
+#endif
+  void update_reported_graph_latency() noexcept;
   void enqueue_telemetry(Telemetry telemetry) noexcept;
   void enqueue_error(TelemetryErrorCode code, int64_t render_frame, int64_t timeline_sample,
                      uint32_t value) noexcept;
@@ -387,7 +409,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   automation::AutomationEngine automation_{};
 #if defined(SONARE_WITH_MIXING)
   MixingRuntime mixing_runtime_{};
+  std::unique_ptr<mixing::ChannelStrip> owned_master_strip_{};
   MonitorRuntime monitor_runtime_{};
+  TrackMixerRuntime track_mixer_runtime_{};
 #endif
   rt::SpscQueue<rt::Command> commands_{};
   rt::SpscQueue<Telemetry> telemetry_{};

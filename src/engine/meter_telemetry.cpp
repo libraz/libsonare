@@ -1,6 +1,8 @@
 #include "engine/meter_telemetry.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 #include "util/math_utils.h"
 
@@ -34,6 +36,57 @@ void MeterTelemetryTap::process(float* const* channels, int num_channels, int nu
   publish(meter_->snapshot(), render_frame);
 }
 
+void MeterTelemetryTap::process_lightweight(float* const* channels, int num_channels,
+                                            int num_frames, int64_t render_frame,
+                                            uint32_t target_id) noexcept {
+  if (channels == nullptr || num_channels <= 0 || num_frames <= 0) return;
+
+  MeterTelemetryRecord record{};
+  record.target_id = target_id;
+  record.render_frame = render_frame;
+  record.seq = meter_.has_value() ? meter_->snapshot().seq : 0;
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  record.true_peak_db = {nan, nan};
+  record.max_true_peak_db = nan;
+  record.momentary_lufs = nan;
+  record.short_term_lufs = nan;
+  record.integrated_lufs = nan;
+  record.gain_reduction_db = nan;
+  record.correlation = nan;
+  record.mono_compat_width = nan;
+
+  std::array<double, 2> sum_sq{};
+  std::array<float, 2> peak{};
+  for (int ch = 0; ch < std::min(num_channels, 2); ++ch) {
+    const float* channel = channels[ch];
+    if (!channel) continue;
+    for (int i = 0; i < num_frames; ++i) {
+      const float value = channel[i];
+      peak[static_cast<size_t>(ch)] = std::max(peak[static_cast<size_t>(ch)], std::abs(value));
+      sum_sq[static_cast<size_t>(ch)] += static_cast<double>(value) * static_cast<double>(value);
+    }
+  }
+
+  for (size_t ch = 0; ch < 2; ++ch) {
+    const float rms = std::sqrt(sum_sq[ch] / static_cast<double>(num_frames));
+    record.peak_db[ch] = peak[ch] > 0.0f ? 20.0f * std::log10(peak[ch]) : -120.0f;
+    record.rms_db[ch] = rms > 0.0f ? 20.0f * std::log10(rms) : -120.0f;
+  }
+  if (num_channels >= 2 && channels[0] && channels[1]) {
+    double cross = 0.0;
+    for (int i = 0; i < num_frames; ++i) {
+      cross += static_cast<double>(channels[0][i]) * static_cast<double>(channels[1][i]);
+    }
+    const double denom = std::sqrt(sum_sq[0] * sum_sq[1]);
+    if (denom > 0.0) {
+      record.correlation = static_cast<float>(std::clamp(cross / denom, -1.0, 1.0));
+      record.mono_compat_width = 1.0f - std::abs(record.correlation);
+    }
+  }
+
+  publish(record);
+}
+
 size_t MeterTelemetryTap::read_goniometer(mixing::GoniometerPoint* out,
                                           size_t max_points) const noexcept {
   return goniometer_.read_latest(out, max_points);
@@ -57,6 +110,11 @@ void MeterTelemetryTap::publish(const mixing::MeterSnapshot& snapshot,
   record.gain_reduction_db = snapshot.gain_reduction_db;
   record.dropped_records = dropped_records_;
 
+  publish(record);
+}
+
+void MeterTelemetryTap::publish(MeterTelemetryRecord record) noexcept {
+  record.dropped_records = dropped_records_;
   if (telemetry_.push(record)) {
     return;
   }

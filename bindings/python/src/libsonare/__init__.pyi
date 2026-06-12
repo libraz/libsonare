@@ -568,6 +568,12 @@ from .types import (
     EngineMetronomeConfig as EngineMetronomeConfig,
 )
 from .types import (
+    EngineMidiClipSchedule as EngineMidiClipSchedule,
+)
+from .types import (
+    EngineMidiEvent as EngineMidiEvent,
+)
+from .types import (
     EngineTelemetry as EngineTelemetry,
 )
 from .types import (

@@ -45,6 +45,8 @@ class MeterTelemetryTap {
 
   void process(float* const* channels, int num_channels, int num_frames,
                int64_t render_frame) noexcept;
+  void process_lightweight(float* const* channels, int num_channels, int num_frames,
+                           int64_t render_frame, uint32_t target_id) noexcept;
 
   bool pop(MeterTelemetryRecord& out) noexcept { return telemetry_.pop(out); }
   mixing::MeterSnapshot snapshot() const noexcept {
@@ -55,6 +57,7 @@ class MeterTelemetryTap {
 
  private:
   void publish(const mixing::MeterSnapshot& snapshot, int64_t render_frame) noexcept;
+  void publish(MeterTelemetryRecord record) noexcept;
   void push_goniometer(float* const* channels, int num_channels, int num_frames) noexcept;
 
   std::optional<mixing::MeterProcessor> meter_{};

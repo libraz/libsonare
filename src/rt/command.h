@@ -21,7 +21,7 @@ inline constexpr uint32_t kEngineAbiVersion = 3;
 //        kSetParam, kSetParamSmoothed, kTransportPlay, kTransportStop,
 //        kTransportSeekSample, kTransportSeekPpq, kSeekMarker,
 //        kMidiNoteOnImmediate, kMidiNoteOffImmediate, kMidiCcImmediate,
-//        kMidiAllNotesOff (a.k.a. MIDI panic).
+//        kMidiAllNotesOff (a.k.a. MIDI panic), kSetSoloMute.
 //
 //      Live scalar MIDI commands stay strictly POD: they synthesize a UMP from
 //      packed scalar fields (no pointer, no variable-length payload) and route
@@ -35,8 +35,8 @@ inline constexpr uint32_t kEngineAbiVersion = 3;
 //      RtPublisher pattern on control-thread setters (set_tempo, set_loop,
 //      swap_graph, set_clips, set_capture_*, set_metronome_config,
 //      set_markers, ...):
-//        kSetTempoMap, kSetLoop, kSwapGraph, kSwapAutomation, kSetSoloMute,
-//        kAddClip, kRemoveClip, kArmRecord, kPunch, kSetMetronome, kSetMarker.
+//        kSetTempoMap, kSetLoop, kSwapGraph, kSwapAutomation, kAddClip,
+//        kRemoveClip, kArmRecord, kPunch, kSetMetronome, kSetMarker.
 //
 // If a group-(2) value is pushed through the queue, apply_command() rejects it
 // with TelemetryErrorCode::kNonQueueableCommand (NOT the misleading
@@ -56,6 +56,9 @@ enum class CommandType : uint16_t {
   kSetLoop,
   kSwapGraph,
   kSwapAutomation,
+  // -- Group (1) exception kept in its historical enum position: queueable
+  // lane solo/mute in the realtime mixer. The numeric value stays unchanged so
+  // the engine ABI version and SharedArrayBuffer command layout stay stable.
   kSetSoloMute,
   kAddClip,
   kRemoveClip,

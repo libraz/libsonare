@@ -623,6 +623,51 @@ function readMeters() {
 }
 ```
 
+#### RealtimeEngine AudioWorklet facade
+
+For browser DAW-style playback, `SonareEngine` keeps a main-thread
+`RealtimeEngine` mirror for offline renders and synchronizes the live worklet
+engine through control messages. The default runtime target is the embind engine;
+the `sonare-rt` runtime remains a transport-focused fallback.
+
+```typescript
+import { init } from '@libraz/libsonare';
+import { init as initWorklet, SonareEngine } from '@libraz/libsonare/worklet';
+
+await init();
+await audioContext.audioWorklet.addModule('/worklet.js');
+await initWorklet();
+
+const engine = await SonareEngine.create(audioContext, { mode: 'sab' });
+engine.setTrackLanes([{ trackId: 1 }]);
+engine.setTrackStripJson(1, trackSceneJson);
+engine.addClip({ trackId: 1, channels: [clipL, clipR], startPpq: 0 });
+engine.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
+engine.setTimeSignatureSegments([{ startPpq: 0, numerator: 4, denominator: 4 }]);
+engine.transport.play();
+```
+
+| Need | Facade/API |
+|---|---|
+| Track routing, fader, pan, solo/mute | `setTrackLanes`, `setStripGain`, `setStripPan`, `setSoloMute` |
+| Track/master inserts and EQ | `setTrackStripJson`, `setMasterStripJson`, `setTrackStripEqBand`, `setMasterStripEqBand`, insert bypass methods |
+| Sends and buses | `setSends`, `setBusGain`, `setBusStripJson` |
+| MIDI clips and live MIDI | `setMidiClips`, `pushMidiNoteOn`, `pushMidiNoteOff`, `pushMidiCc`, `pushMidiPanic` |
+| Instruments | `setBuiltinInstrument`, `setSynthInstrument`, `loadSoundFont`, `setSf2Instrument` |
+| Recording and monitoring | `configureCapture`, `armCapture`, `setCapturePunch`, `setInputMonitor`, `capturedAudio`, `captureStatus` |
+| Transport, tempo, markers | `getTransportState`, `cachedTransportState`, `setTempoSegments`, `setTimeSignatureSegments`, marker methods, `setLoopFromMarkers` |
+| Clip updates | `addClip`, `removeClip`; the facade sends clip deltas while the processor keeps full-sync compatibility |
+| Meters | `onMeter` messages or the meter SharedArrayBuffer ring; records include master, lane, bus, and input target ids |
+
+Studio integration notes:
+
+- If a host worklet entry filters message names before forwarding, add every
+  `sync*`, `captureRequest`, and `transportRequest` message used above to that
+  allowlist; otherwise the host may silently drop the new control messages.
+- If a host vendors built worklet bundles, regenerate and reimport
+  `worklet.js`, `worklet.d.ts`, `sonare.js`, `sonare.wasm`,
+  `sonare-rt.js`, `sonare-rt-module.js`, and `sonare-rt.wasm` together.
+
 ### Progress callback
 
 `masteringChainWithProgress` (and its stereo variant) is `masteringChain` with

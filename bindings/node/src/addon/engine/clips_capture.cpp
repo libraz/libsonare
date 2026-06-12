@@ -123,6 +123,9 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
 
     SonareEngineClip clip{};
     clip.id = obj.Get("id").As<Napi::Number>().Uint32Value();
+    clip.track_id = obj.Has("trackId") && !obj.Get("trackId").IsUndefined()
+                        ? obj.Get("trackId").As<Napi::Number>().Uint32Value()
+                        : 0;
     if (has_page_provider) {
       const int provider_id = obj.Get("pageProvider").As<Napi::Number>().Int32Value();
       SonareClipPageProvider* provider = ProviderById(clip_page_providers_, provider_id);
@@ -185,6 +188,159 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
   }
 
   ThrowIfError(env, sonare_engine_set_clips(engine_, clips.data(), clips.size()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() <= 0 || !info[0].IsArray()) {
+    Napi::TypeError::New(env, "expected an array of track lanes").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Array input = info[0].As<Napi::Array>();
+  std::vector<SonareEngineTrackLane> lanes;
+  std::vector<std::vector<SonareEngineTrackSend>> send_storage;
+  lanes.reserve(input.Length());
+  send_storage.reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value value = input.Get(i);
+    SonareEngineTrackLane lane{};
+    if (value.IsNumber()) {
+      lane.track_id = value.As<Napi::Number>().Uint32Value();
+    } else if (value.IsObject()) {
+      Napi::Object obj = value.As<Napi::Object>();
+      lane.track_id = obj.Get("trackId").As<Napi::Number>().Uint32Value();
+      if (obj.Has("sends") && !obj.Get("sends").IsUndefined() && !obj.Get("sends").IsNull()) {
+        if (!obj.Get("sends").IsArray()) {
+          Napi::TypeError::New(env, "track lane sends must be an array")
+              .ThrowAsJavaScriptException();
+          return env.Undefined();
+        }
+        Napi::Array sends = obj.Get("sends").As<Napi::Array>();
+        std::vector<SonareEngineTrackSend> lane_sends;
+        lane_sends.reserve(sends.Length());
+        for (uint32_t send_index = 0; send_index < sends.Length(); ++send_index) {
+          if (!sends.Get(send_index).IsObject()) {
+            Napi::TypeError::New(env, "track lane send must be an object")
+                .ThrowAsJavaScriptException();
+            return env.Undefined();
+          }
+          Napi::Object send_obj = sends.Get(send_index).As<Napi::Object>();
+          SonareEngineTrackSend send{};
+          send.bus_id = send_obj.Get("busId").As<Napi::Number>().Uint32Value();
+          send.level_db = send_obj.Has("levelDb") && !send_obj.Get("levelDb").IsUndefined()
+                              ? send_obj.Get("levelDb").As<Napi::Number>().FloatValue()
+                              : 0.0f;
+          send.enabled = !send_obj.Has("enabled") || send_obj.Get("enabled").IsUndefined() ||
+                                 send_obj.Get("enabled").As<Napi::Boolean>().Value()
+                             ? 1
+                             : 0;
+          lane_sends.push_back(send);
+        }
+        send_storage.push_back(std::move(lane_sends));
+        lane.sends = send_storage.back().data();
+        lane.send_count = send_storage.back().size();
+      }
+    } else {
+      Napi::TypeError::New(env, "track lane must be a number or object")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    lanes.push_back(lane);
+  }
+  ThrowIfError(env, sonare_engine_set_track_lanes(engine_, lanes.data(), lanes.size()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() <= 0 || !info[0].IsArray()) {
+    Napi::TypeError::New(env, "expected an array of track buses").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Array input = info[0].As<Napi::Array>();
+  std::vector<SonareEngineBus> buses;
+  buses.reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    if (!input.Get(i).IsObject()) {
+      Napi::TypeError::New(env, "track bus must be an object").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    Napi::Object obj = input.Get(i).As<Napi::Object>();
+    SonareEngineBus bus{};
+    bus.bus_id = obj.Get("busId").As<Napi::Number>().Uint32Value();
+    bus.gain_db = obj.Has("gainDb") && !obj.Get("gainDb").IsUndefined()
+                      ? obj.Get("gainDb").As<Napi::Number>().FloatValue()
+                      : 0.0f;
+    buses.push_back(bus);
+  }
+  ThrowIfError(env, sonare_engine_set_track_buses(engine_, buses.data(), buses.size()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetBusStripJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t bus_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  std::string scene_json = info.Length() > 1 ? info[1].As<Napi::String>().Utf8Value() : "";
+  ThrowIfError(env, sonare_engine_set_bus_strip_json(engine_, bus_id, scene_json.c_str()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetTrackStripJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t track_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  std::string scene_json = info.Length() > 1 ? info[1].As<Napi::String>().Utf8Value() : "";
+  ThrowIfError(env, sonare_engine_set_track_strip_json(engine_, track_id, scene_json.c_str()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetTrackStripEqBandJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t track_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const int band_index = info.Length() > 1 ? info[1].As<Napi::Number>().Int32Value() : -1;
+  std::string band_json = info.Length() > 2 ? info[2].As<Napi::String>().Utf8Value() : "";
+  ThrowIfError(env, sonare_engine_set_track_strip_eq_band_json(engine_, track_id, band_index,
+                                                               band_json.c_str()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetTrackStripInsertBypassed(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t track_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const unsigned int insert_index =
+      info.Length() > 1 ? info[1].As<Napi::Number>().Uint32Value() : 0;
+  const bool bypassed = info.Length() > 2 && info[2].As<Napi::Boolean>().Value();
+  const bool reset_on_bypass = info.Length() > 3 && info[3].As<Napi::Boolean>().Value();
+  ThrowIfError(env,
+               sonare_engine_set_track_strip_insert_bypassed(
+                   engine_, track_id, insert_index, bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetMasterStripJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  std::string scene_json = info.Length() > 0 ? info[0].As<Napi::String>().Utf8Value() : "";
+  ThrowIfError(env, sonare_engine_set_master_strip_json(engine_, scene_json.c_str()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetMasterStripEqBandJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const int band_index = info.Length() > 0 ? info[0].As<Napi::Number>().Int32Value() : -1;
+  std::string band_json = info.Length() > 1 ? info[1].As<Napi::String>().Utf8Value() : "";
+  ThrowIfError(env,
+               sonare_engine_set_master_strip_eq_band_json(engine_, band_index, band_json.c_str()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetMasterStripInsertBypassed(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const unsigned int insert_index =
+      info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const bool bypassed = info.Length() > 1 && info[1].As<Napi::Boolean>().Value();
+  const bool reset_on_bypass = info.Length() > 2 && info[2].As<Napi::Boolean>().Value();
+  ThrowIfError(env, sonare_engine_set_master_strip_insert_bypassed(
+                        engine_, insert_index, bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
   return env.Undefined();
 }
 

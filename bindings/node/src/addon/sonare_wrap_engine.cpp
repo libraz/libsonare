@@ -48,6 +48,50 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
   return true;
 }
 
+uint32_t OptionalUint32(const Napi::Object& obj, const char* key, uint32_t fallback) {
+  return obj.Has(key) ? obj.Get(key).As<Napi::Number>().Uint32Value() : fallback;
+}
+
+int64_t OptionalInt64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
+  return obj.Has(key) ? obj.Get(key).As<Napi::Number>().Int64Value() : fallback;
+}
+
+double OptionalDoubleProperty(const Napi::Object& obj, const char* key, double fallback) {
+  return obj.Has(key) ? obj.Get(key).As<Napi::Number>().DoubleValue() : fallback;
+}
+
+uint32_t MidiWordFromObject(const Napi::Object& obj, const char* key, uint32_t fallback) {
+  return obj.Has(key) ? obj.Get(key).As<Napi::Number>().Uint32Value() : fallback;
+}
+
+std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Value value) {
+  if (!value.IsArray()) {
+    Napi::TypeError::New(env, "MIDI clip events must be an array").ThrowAsJavaScriptException();
+    return {};
+  }
+  Napi::Array input = value.As<Napi::Array>();
+  std::vector<SonareEngineMidiEvent> events(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value item = input.Get(i);
+    if (!item.IsObject()) {
+      Napi::TypeError::New(env, "MIDI clip events must be objects").ThrowAsJavaScriptException();
+      return {};
+    }
+    Napi::Object obj = item.As<Napi::Object>();
+    SonareEngineMidiEvent event{};
+    event.render_frame = OptionalInt64Property(obj, "renderFrame", 0);
+    event.word0 = MidiWordFromObject(obj, "word0", MidiWordFromObject(obj, "data0", 0));
+    event.word1 = MidiWordFromObject(obj, "word1", MidiWordFromObject(obj, "data1", 0));
+    event.word2 = MidiWordFromObject(obj, "word2", 0);
+    event.word3 = MidiWordFromObject(obj, "word3", 0);
+    event.word_count = static_cast<uint8_t>(OptionalUint32(obj, "wordCount", 0));
+    event.group = static_cast<uint8_t>(OptionalUint32(obj, "group", 0));
+    event.sysex_handle = OptionalUint32(obj, "sysexHandle", 0);
+    events[i] = event;
+  }
+  return events;
+}
+
 }  // namespace
 
 Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
@@ -61,6 +105,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SeekPpq>("seekPpq"),
           InstanceMethod<&RealtimeEngineWrap::SetTempo>("setTempo"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignature>("setTimeSignature"),
+          InstanceMethod<&RealtimeEngineWrap::SampleAtPpq>("sampleAtPpq"),
           InstanceMethod<&RealtimeEngineWrap::SetLoop>("setLoop"),
           InstanceMethod<&RealtimeEngineWrap::AddParameter>("addParameter"),
           InstanceMethod<&RealtimeEngineWrap::ParameterCount>("parameterCount"),
@@ -79,6 +124,17 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::CountInEndSample>("countInEndSample"),
           InstanceMethod<&RealtimeEngineWrap::SetClips>("setClips"),
           InstanceMethod<&RealtimeEngineWrap::ClipCount>("clipCount"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackLanes>("setTrackLanes"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackBuses>("setTrackBuses"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusStripJson>("setBusStripJson"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripJson>("setTrackStripJson"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripEqBandJson>("setTrackStripEqBandJson"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripInsertBypassed>(
+              "setTrackStripInsertBypassed"),
+          InstanceMethod<&RealtimeEngineWrap::SetMasterStripJson>("setMasterStripJson"),
+          InstanceMethod<&RealtimeEngineWrap::SetMasterStripEqBandJson>("setMasterStripEqBandJson"),
+          InstanceMethod<&RealtimeEngineWrap::SetMasterStripInsertBypassed>(
+              "setMasterStripInsertBypassed"),
           InstanceMethod<&RealtimeEngineWrap::CreateClipPageProvider>("createClipPageProvider"),
           InstanceMethod<&RealtimeEngineWrap::SupplyClipPage>("supplyClipPage"),
           InstanceMethod<&RealtimeEngineWrap::ClearClipPage>("clearClipPage"),
@@ -105,7 +161,9 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::DrainMeterTelemetry>("drainMeterTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::SetParameter>("setParameter"),
           InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
+          InstanceMethod<&RealtimeEngineWrap::SetSoloMute>("setSoloMute"),
           InstanceMethod<&RealtimeEngineWrap::ClearParameters>("clearParameters"),
+          InstanceMethod<&RealtimeEngineWrap::SetMidiClips>("setMidiClips"),
           InstanceMethod<&RealtimeEngineWrap::SetBuiltinInstrument>("setBuiltinInstrument"),
           InstanceMethod<&RealtimeEngineWrap::SetSynthInstrument>("setSynthInstrument"),
           InstanceMethod<&RealtimeEngineWrap::LoadSoundFont>("loadSoundFont"),
@@ -234,6 +292,14 @@ Napi::Value RealtimeEngineWrap::SetTimeSignature(const Napi::CallbackInfo& info)
   const int denominator = info.Length() > 1 ? info[1].As<Napi::Number>().Int32Value() : 4;
   ThrowIfError(env, sonare_engine_set_time_signature(engine_, numerator, denominator));
   return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SampleAtPpq(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const double ppq = info.Length() > 0 ? info[0].As<Napi::Number>().DoubleValue() : 0.0;
+  int64_t sample = 0;
+  ThrowIfError(env, sonare_engine_sample_at_ppq(engine_, ppq, &sample));
+  return Napi::Number::New(env, static_cast<double>(sample));
 }
 
 Napi::Value RealtimeEngineWrap::SetLoop(const Napi::CallbackInfo& info) {
@@ -446,9 +512,56 @@ Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& i
   return env.Undefined();
 }
 
+Napi::Value RealtimeEngineWrap::SetSoloMute(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t lane_index = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const bool solo = info.Length() > 1 && info[1].As<Napi::Boolean>().Value();
+  const bool mute = info.Length() > 2 && info[2].As<Napi::Boolean>().Value();
+  ThrowIfError(env, sonare_engine_set_solo_mute(engine_, lane_index, solo ? 1 : 0, mute ? 1 : 0,
+                                                OptionalInt64(info, 3, -1)));
+  return env.Undefined();
+}
+
 Napi::Value RealtimeEngineWrap::ClearParameters(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_engine_clear_parameters(engine_));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() == 0 || !info[0].IsArray()) {
+    Napi::TypeError::New(env, "setMidiClips expects an array of clip schedules")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Array input = info[0].As<Napi::Array>();
+  std::vector<std::vector<SonareEngineMidiEvent>> event_storage(input.Length());
+  std::vector<SonareEngineMidiClipSchedule> clips(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value item = input.Get(i);
+    if (!item.IsObject()) {
+      Napi::TypeError::New(env, "MIDI clips must be objects").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    Napi::Object obj = item.As<Napi::Object>();
+    event_storage[i] =
+        ReadEngineMidiEvents(env, obj.Has("events") ? obj.Get("events") : env.Null());
+    if (env.IsExceptionPending()) return env.Undefined();
+    SonareEngineMidiClipSchedule clip{};
+    clip.id = OptionalUint32(obj, "id", 0);
+    clip.track_id = OptionalUint32(obj, "trackId", 0);
+    clip.start_sample = OptionalInt64Property(obj, "startSample", 0);
+    clip.start_ppq = OptionalDoubleProperty(obj, "startPpq", 0.0);
+    clip.length_samples = OptionalInt64Property(obj, "lengthSamples", 0);
+    clip.loop = obj.Has("loop") && obj.Get("loop").ToBoolean().Value() ? 1 : 0;
+    clip.loop_length_samples = OptionalInt64Property(obj, "loopLengthSamples", 0);
+    clip.destination_id = OptionalUint32(obj, "destinationId", OptionalUint32(obj, "trackId", 0));
+    clip.events = event_storage[i].data();
+    clip.event_count = event_storage[i].size();
+    clips[i] = clip;
+  }
+  ThrowIfError(env, sonare_engine_set_midi_clips(engine_, clips.data(), clips.size()));
   return env.Undefined();
 }
 

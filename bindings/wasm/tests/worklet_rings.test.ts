@@ -99,6 +99,7 @@ describe('Sonare worklet ring buffers', () => {
         let previousFrame = -1;
         for (const meter of read.meters) {
           expect(meter.type).toBe('meter');
+          expect(meter.targetId).toBe(0);
           expect(Number.isFinite(meter.frame)).toBe(true);
           // frame is the cumulative processed-frame count; strictly increasing.
           expect(meter.frame).toBeGreaterThan(previousFrame);
@@ -111,6 +112,7 @@ describe('Sonare worklet ring buffers', () => {
             );
           }
           expect(Number.isFinite(meter.correlation)).toBe(true);
+          expect(Number.isNaN(meter.momentaryLufs)).toBe(true);
         }
         // First record corresponds to the first published block of frames.
         expect(read.meters[0].frame).toBe(blockSize);
@@ -195,6 +197,7 @@ describe('Sonare worklet ring buffers', () => {
 
       const writeRecord = (
         frame: number,
+        targetId: number,
         peakDbL: number,
         peakDbR: number,
         rmsDbL: number,
@@ -204,43 +207,59 @@ describe('Sonare worklet ring buffers', () => {
         const writeIndex = header[0];
         const offset = (writeIndex % capacity) * SONARE_METER_RING_RECORD_FLOATS;
         records[offset] = frame;
-        records[offset + 1] = peakDbL;
-        records[offset + 2] = peakDbR;
-        records[offset + 3] = rmsDbL;
-        records[offset + 4] = rmsDbR;
-        records[offset + 5] = correlation;
+        records[offset + 1] = 0;
+        records[offset + 2] = targetId;
+        records[offset + 3] = peakDbL;
+        records[offset + 4] = peakDbR;
+        records[offset + 5] = rmsDbL;
+        records[offset + 6] = rmsDbR;
+        records[offset + 7] = correlation;
+        records[offset + 8] = peakDbL + 0.5;
+        records[offset + 9] = peakDbR + 0.5;
+        records[offset + 10] = -23;
+        records[offset + 11] = -24;
+        records[offset + 12] = -25;
+        records[offset + 13] = -2;
         header[0] = writeIndex + 1;
       };
 
       const ring = { sharedBuffer: sab, header, records, capacity };
 
-      writeRecord(128, -1, -2, -3, -4, 0.5);
-      writeRecord(256, -5, -6, -7, -8, 0.25);
+      writeRecord(128, 0, -1, -2, -3, -4, 0.5);
+      writeRecord(256, 1, -5, -6, -7, -8, 0.25);
 
       const first = readSonareMeterRingBuffer(ring, 0);
       expect(first.meters).toHaveLength(2);
       expect(first.nextReadIndex).toBe(2);
       expect(first.meters[0]).toMatchObject({
         type: 'meter',
+        targetId: 0,
         frame: 128,
         peakDbL: -1,
         peakDbR: -2,
         rmsDbL: -3,
         rmsDbR: -4,
         correlation: 0.5,
+        truePeakDbL: -0.5,
+        truePeakDbR: -1.5,
+        momentaryLufs: -23,
+        shortTermLufs: -24,
+        integratedLufs: -25,
+        gainReductionDb: -2,
       });
 
       // Overflow the ring; only the most-recent `capacity` survive.
-      writeRecord(384, -9, -10, -11, -12, 0);
-      writeRecord(512, -13, -14, -15, -16, 0);
-      writeRecord(640, -17, -18, -19, -20, 0);
-      writeRecord(768, -21, -22, -23, -24, 0);
+      writeRecord(384, 0, -9, -10, -11, -12, 0);
+      writeRecord(512, 1, -13, -14, -15, -16, 0);
+      writeRecord(640, 33, -17, -18, -19, -20, 0);
+      writeRecord(768, 0xffff, -21, -22, -23, -24, 0);
 
       const wrapped = readSonareMeterRingBuffer(ring, first.nextReadIndex);
       expect(wrapped.meters.length).toBeLessThanOrEqual(capacity);
       expect(wrapped.nextReadIndex).toBe(6);
       // Frames 128/256 were overwritten; 384..768 remain (most-recent capacity).
       expect(wrapped.meters.map((m) => m.frame)).toEqual([384, 512, 640, 768]);
+      expect(wrapped.meters.map((m) => m.targetId)).toEqual([0, 1, 33, 0xffff]);
       for (const meter of wrapped.meters) {
         expect(Number.isFinite(meter.peakDbL)).toBe(true);
         expect(Number.isFinite(meter.correlation)).toBe(true);

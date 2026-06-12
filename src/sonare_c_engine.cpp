@@ -14,10 +14,15 @@
 #include "engine/tempo_sync.h"
 #include "metering/lufs.h"
 #include "metering/normalize.h"
+#if defined(SONARE_WITH_MIXING)
+#include "c_api/eq_band_json.h"
+#include "mixing/api/scene.h"
+#endif
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
 #include "c_api/synth_patch_common.h"
 #include "midi/builtin_synth.h"
+#include "midi/midi_clip.h"
 #include "midi/midi_fx.h"
 #include "midi/synth/sf2_player.h"
 #include "util/json.h"
@@ -393,6 +398,31 @@ bool valid_midi_note_args(uint8_t group, uint8_t channel, uint8_t note, uint8_t 
   return group <= 15 && channel <= 15 && note <= 127 && velocity <= 127;
 }
 
+uint8_t infer_ump_word_count(const SonareEngineMidiEvent& event) noexcept {
+  if (event.word_count >= 1 && event.word_count <= 4) return event.word_count;
+  if (event.word3 != 0) return 4;
+  if (event.word2 != 0) return 3;
+  if (event.word1 != 0) return 2;
+  return 1;
+}
+
+bool midi_event_from_c(const SonareEngineMidiEvent& src, midi::MidiEvent* out) noexcept {
+  if (!out || src.group > 15 || src.reserved != 0) return false;
+  midi::Ump ump{};
+  ump.words[0] = src.word0;
+  ump.words[1] = src.word1;
+  ump.words[2] = src.word2;
+  ump.words[3] = src.word3;
+  ump.word_count = infer_ump_word_count(src);
+  ump.group = src.group;
+  ump.sysex_handle = src.sysex_handle;
+  out->render_frame = src.render_frame;
+  out->ump = ump;
+  out->sysex_payload = nullptr;
+  out->sysex_payload_size = 0;
+  return true;
+}
+
 #endif
 
 }  // namespace
@@ -471,6 +501,15 @@ SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int n
   SONARE_C_CATCH
 }
 
+SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq,
+                                        int64_t* out_sample) {
+  if (!engine || !out_sample || !std::isfinite(ppq) || ppq < 0.0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_sample = engine->engine.sample_at_ppq(ppq);
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_ppq, double end_ppq,
                                    int enabled) {
   if (!engine || !std::isfinite(start_ppq) || !std::isfinite(end_ppq) || start_ppq < 0.0 ||
@@ -484,6 +523,9 @@ SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_pp
 SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
                                         const SonareParameterInfo* info) {
   if (!engine || !info || info->max_value < info->min_value) return SONARE_ERROR_INVALID_PARAMETER;
+  if (sonare::engine::RealtimeEngine::parameter_target_reserved(info->id)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   // Stage the name/unit strings in the deque. std::deque keeps pointers to its
   // existing elements valid across push_back/pop_back at the ends, so the raw
@@ -774,6 +816,7 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
     }
     engine::ClipSchedule schedule{};
     schedule.id = clip.id;
+    schedule.track_id = clip.track_id;
     schedule.buffer =
         paged ? engine::ClipAudioBuffer{}
               : engine::ClipAudioBuffer{
@@ -812,6 +855,206 @@ SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_c
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = engine->engine.clip_count();
   return SONARE_OK;
+}
+
+SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
+                                          const SonareEngineTrackLane* lanes, size_t lane_count) {
+  if (!engine || (lane_count > 0 && !lanes)) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)lanes;
+  (void)lane_count;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  std::vector<engine::TrackLaneConfig> configs;
+  SONARE_C_TRY
+  configs.reserve(lane_count);
+  for (size_t i = 0; i < lane_count; ++i) {
+    if (lanes[i].send_count > 0 && lanes[i].sends == nullptr) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    engine::TrackLaneConfig lane{lanes[i].track_id};
+    lane.sends.reserve(lanes[i].send_count);
+    for (size_t send_index = 0; send_index < lanes[i].send_count; ++send_index) {
+      const SonareEngineTrackSend& send = lanes[i].sends[send_index];
+      lane.sends.push_back({send.bus_id, send.level_db, send.enabled != 0});
+    }
+    configs.push_back(std::move(lane));
+  }
+  return engine->engine.set_track_lanes(std::move(configs)) ? SONARE_OK
+                                                            : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
+                                          const SonareEngineBus* buses, size_t bus_count) {
+  if (!engine || (bus_count > 0 && !buses)) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)buses;
+  (void)bus_count;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  std::vector<engine::TrackBusConfig> configs;
+  SONARE_C_TRY
+  configs.reserve(bus_count);
+  for (size_t i = 0; i < bus_count; ++i) {
+    configs.push_back({buses[i].bus_id, buses[i].gain_db});
+  }
+  return engine->engine.set_track_buses(std::move(configs)) ? SONARE_OK
+                                                            : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_bus_strip_json(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                             const char* scene_json) {
+  if (!engine || bus_id == 0 || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)scene_json;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  mixing::api::Scene scene;
+  try {
+    scene = mixing::api::scene_from_json(scene_json);
+  } catch (const std::exception& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+  if (scene.buses.empty()) return SONARE_ERROR_INVALID_PARAMETER;
+  return engine->engine.set_bus_strip(bus_id, scene.buses.front()) ? SONARE_OK
+                                                                   : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_json(SonareRealtimeEngine* engine, uint32_t track_id,
+                                               const char* scene_json) {
+  if (!engine || track_id == 0 || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)scene_json;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  mixing::api::Scene scene;
+  try {
+    scene = mixing::api::scene_from_json(scene_json);
+  } catch (const std::exception& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+  if (scene.strips.empty()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return engine->engine.set_track_strip(track_id, scene.strips.front())
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_eq_band_json(SonareRealtimeEngine* engine,
+                                                       uint32_t track_id, int band_index,
+                                                       const char* band_json) {
+  if (!engine || track_id == 0 || band_index < 0 || !band_json) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)band_index;
+  (void)band_json;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_track_eq_band(track_id, static_cast<size_t>(band_index),
+                                          sonare::c_api::parse_eq_band_json(band_json))
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_insert_bypassed(SonareRealtimeEngine* engine,
+                                                          uint32_t track_id,
+                                                          unsigned int insert_index, int bypassed,
+                                                          int reset_on_bypass) {
+  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)insert_index;
+  (void)bypassed;
+  (void)reset_on_bypass;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_track_insert_bypassed(track_id, insert_index, bypassed != 0,
+                                                  reset_on_bypass != 0)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_master_strip_json(SonareRealtimeEngine* engine,
+                                                const char* scene_json) {
+  if (!engine || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)scene_json;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  mixing::api::Scene scene;
+  try {
+    scene = mixing::api::scene_from_json(scene_json);
+  } catch (const std::exception& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+  if (scene.strips.empty()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return engine->engine.set_master_strip(scene.strips.front()) ? SONARE_OK
+                                                               : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_master_strip_eq_band_json(SonareRealtimeEngine* engine,
+                                                        int band_index, const char* band_json) {
+  if (!engine || band_index < 0 || !band_json) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)band_index;
+  (void)band_json;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_master_eq_band(static_cast<size_t>(band_index),
+                                           sonare::c_api::parse_eq_band_json(band_json))
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine* engine,
+                                                           unsigned int insert_index, int bypassed,
+                                                           int reset_on_bypass) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  (void)bypassed;
+  (void)reset_on_bypass;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_master_insert_bypassed(insert_index, bypassed != 0,
+                                                   reset_on_bypass != 0)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
 }
 
 SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_samples,
@@ -1275,6 +1518,70 @@ SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, u
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
 }
 
+SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t lane_index, int solo,
+                                        int mute, int64_t render_frame) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)lane_index;
+  (void)solo;
+  (void)mute;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  rt::Command command{};
+  command.type = rt::CommandType::kSetSoloMute;
+  command.target_id = lane_index;
+  command.sample_time = render_frame;
+  command.arg.i = (mute ? 0x1 : 0x0) | (solo ? 0x2 : 0x0);
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
+                                         const SonareEngineMidiClipSchedule* clips,
+                                         size_t clip_count) {
+  if (!engine || (clip_count > 0 && clips == nullptr)) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)clips;
+  (void)clip_count;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  std::vector<midi::MidiClipSchedule> schedules;
+  schedules.reserve(clip_count);
+  for (size_t i = 0; i < clip_count; ++i) {
+    const SonareEngineMidiClipSchedule& src = clips[i];
+    if (!std::isfinite(src.start_ppq) || src.loop < 0 ||
+        (src.event_count > 0 && src.events == nullptr)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    midi::MidiClipSchedule dst;
+    dst.id = src.id;
+    dst.track_id = src.track_id;
+    dst.start_sample = src.start_sample;
+    dst.start_ppq = src.start_ppq;
+    dst.length_samples = src.length_samples;
+    dst.loop_mode = src.loop ? midi::MidiLoopMode::kLoop : midi::MidiLoopMode::kOneShot;
+    dst.loop_length_samples = src.loop_length_samples;
+    dst.destination_id = src.destination_id;
+    dst.events.reserve(src.event_count);
+    for (size_t j = 0; j < src.event_count; ++j) {
+      midi::MidiEvent event;
+      if (!midi_event_from_c(src.events[j], &event)) return SONARE_ERROR_INVALID_PARAMETER;
+      dst.events.push_back(event);
+    }
+    std::sort(dst.events.begin(), dst.events.end(),
+              [](const midi::MidiEvent& a, const midi::MidiEvent& b) {
+                return a.render_frame < b.render_frame;
+              });
+    schedules.push_back(std::move(dst));
+  }
+  engine->engine.set_midi_clips(std::move(schedules));
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
                                                  uint32_t destination_id,
                                                  const SonareEngineBuiltinSynthConfig* config) {
@@ -1322,7 +1629,7 @@ SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uin
   std::string error;
   if (!soundfont->parse(data, size, &error)) {
     set_last_error(error.c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_FORMAT;
   }
   engine->soundfont = std::move(soundfont);
   return SONARE_OK;
@@ -1383,6 +1690,9 @@ SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t cha
                                        float max_value) {
   if (!engine || channel > 15 || controller > 127 || param_id == 0 || !std::isfinite(min_value) ||
       !std::isfinite(max_value) || max_value < min_value) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (sonare::engine::RealtimeEngine::parameter_target_reserved(param_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)

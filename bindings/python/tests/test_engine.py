@@ -23,6 +23,8 @@ from libsonare import (
     EngineGraphSpec,
     EngineMarker,
     EngineMetronomeConfig,
+    EngineMidiClipSchedule,
+    EngineMidiEvent,
     EngineTelemetryError,
     EngineTelemetryType,
     FileClipPageProvider,
@@ -81,6 +83,340 @@ def test_engine_transport_state_and_live_parameters() -> None:
         assert isinstance(records, list)
 
 
+def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
+    frames = 256 * 10
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[1.0] * frames, [1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                ),
+                EngineClip(
+                    id=2,
+                    track_id=20,
+                    channels=[[1.0] * frames, [1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                ),
+            ]
+        )
+        engine.set_track_lanes([10, 20])
+        with pytest.raises(SonareError) as duplicate_lane_error:
+            engine.set_track_lanes([10, 10])
+        assert duplicate_lane_error.value.code == 4
+        engine.set_track_lanes([10, 20])
+
+        engine.play()
+        processed = engine.process([[0.0] * 256, [0.0] * 256])
+        assert processed[0][-1] == pytest.approx(2.0)
+        assert processed[1][-1] == pytest.approx(2.0)
+
+        engine.set_solo_mute(0, solo=True, mute=False)
+        for _ in range(4):
+            processed = engine.process([[0.0] * 256, [0.0] * 256])
+        assert 0.75 < processed[0][-1] < 1.25
+
+        engine.set_parameter_smoothed(0x4D580001, -12.0, render_frame=-1)
+        for _ in range(6):
+            processed = engine.process([[0.0] * 256, [0.0] * 256])
+        assert processed[0][-1] < 0.45
+        assert processed[1][-1] < 0.45
+
+
+def test_engine_track_buses_route_lane_sends() -> None:
+    frames = 256 * 40
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
+        with pytest.raises(SonareError) as duplicate_bus_error:
+            engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 1, "gain_db": 0.0}])
+        assert duplicate_bus_error.value.code == 4
+
+        engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0}]}])
+        bad_lanes = [
+            {"track_id": 10, "sends": [{"bus_id": 99, "level_db": 0.0}]},
+            {
+                "track_id": 10,
+                "sends": [
+                    {"bus_id": 1, "level_db": 0.0},
+                    {"bus_id": 1, "level_db": -6.0},
+                ],
+            },
+            {"track_id": 10, "sends": [{"bus_id": 1, "level_db": 99.0}]},
+        ]
+        for lane in bad_lanes:
+            with pytest.raises(SonareError) as lane_error:
+                engine.set_track_lanes([lane])
+            assert lane_error.value.code == 4
+
+        engine.play()
+        out = engine.process([[0.0] * 256])[0]
+        assert 2.82 < out[-1] < 2.84
+        meter_targets = {record.target_id for record in engine.drain_meter_telemetry()}
+        assert {0, 1, 33}.issubset(meter_targets)
+
+        engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": -6.0206}]}])
+        engine.seek_sample(0)
+        out = engine.process([[0.0] * 256])[0]
+        assert 2.11 < out[-1] < 2.13
+
+        engine.set_track_lanes(
+            [{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0, "enabled": False}]}]
+        )
+        engine.seek_sample(0)
+        out = engine.process([[0.0] * 256])[0]
+        assert 1.41 < out[-1] < 1.42
+
+        with pytest.raises(SonareError) as bad_json_error:
+            engine.set_bus_strip_json(1, "{bad json")
+        assert bad_json_error.value.code == 2
+        engine.set_bus_strip_json(
+            1,
+            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+        )
+
+
+def test_engine_track_strip_json_routes_lane_strip() -> None:
+    frames = 256 * 4
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                ),
+                EngineClip(
+                    id=2,
+                    track_id=20,
+                    channels=[[1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                ),
+            ]
+        )
+        engine.set_track_lanes([10, 20])
+        scene_json = (
+            '{"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],'
+            '"buses":[],"connections":[]}'
+        )
+        engine.set_track_strip_json(10, scene_json)
+        with pytest.raises(SonareError) as bad_json_error:
+            engine.set_track_strip_json(10, "{bad json")
+        assert bad_json_error.value.code == 2
+        with pytest.raises(SonareError) as bad_processor_error:
+            engine.set_track_strip_json(
+                10,
+                '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+                '"processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
+            )
+        assert bad_processor_error.value.code == 4
+        with pytest.raises(SonareError) as bad_param_error:
+            engine.set_track_strip_json(
+                10,
+                '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+                '"processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],'
+                '"buses":[],"connections":[]}',
+            )
+        assert bad_param_error.value.code == 4
+
+        engine.play()
+        processed = engine.process([[0.0] * 256])
+        assert 1.20 < processed[0][-1] < 1.40
+
+
+def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
+    frames = 256 * 16
+    source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[source],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_track_lanes([10])
+        engine.set_track_strip_json(
+            10,
+            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+            '"processor":"eq.parametric","params":"{\\"band0.type\\":1,'
+            '\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],'
+            '"buses":[],"connections":[]}',
+        )
+        with pytest.raises(SonareError) as bad_index_error:
+            engine.set_track_strip_insert_bypassed(10, 7, True)
+        assert bad_index_error.value.code == 4
+
+        engine.play()
+        eq_out = [0.0] * 256
+        for _ in range(6):
+            eq_out = engine.process([[0.0] * 256])[0]
+        engine.set_track_strip_insert_bypassed(10, 0, True, True)
+        engine.seek_sample(0)
+        bypassed_out = engine.process([[0.0] * 256])[0]
+        assert math.sqrt(sum(sample * sample for sample in eq_out) / len(eq_out)) > (
+            math.sqrt(sum(sample * sample for sample in bypassed_out) / len(bypassed_out)) * 1.5
+        )
+
+
+def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
+    frames = 256 * 16
+    source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[source],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_track_lanes([10])
+        engine.set_track_strip_json(
+            10,
+            '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+        )
+        with pytest.raises(SonareError) as bad_index_error:
+            engine.set_track_strip_eq_band(10, 99, {"type": "Peak", "enabled": True})
+        assert bad_index_error.value.code == 4
+
+        engine.play()
+        flat_out = engine.process([[0.0] * 256])[0]
+        engine.set_track_strip_eq_band(
+            10,
+            0,
+            {
+                "type": "Peak",
+                "frequencyHz": 1000,
+                "gainDb": 12,
+                "q": 1,
+                "enabled": True,
+            },
+        )
+        engine.seek_sample(0)
+        eq_out = [0.0] * 256
+        for _ in range(6):
+            eq_out = engine.process([[0.0] * 256])[0]
+        assert math.sqrt(sum(sample * sample for sample in eq_out) / len(eq_out)) > (
+            math.sqrt(sum(sample * sample for sample in flat_out) / len(flat_out)) * 1.5
+        )
+
+
+def test_engine_master_strip_json_routes_master_strip() -> None:
+    frames = 256 * 16
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    channels=[[1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                ),
+                EngineClip(
+                    id=2,
+                    channels=[[1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                ),
+            ]
+        )
+        scene_json = (
+            '{"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":3}],'
+            '"buses":[],"connections":[]}'
+        )
+        engine.set_master_strip_json(scene_json)
+        with pytest.raises(SonareError) as bad_json_error:
+            engine.set_master_strip_json("{bad json")
+        assert bad_json_error.value.code == 2
+        with pytest.raises(SonareError) as bad_param_error:
+            engine.set_master_strip_json(
+                '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre",'
+                '"processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],'
+                '"buses":[],"connections":[]}'
+            )
+        assert bad_param_error.value.code == 4
+        with pytest.raises(SonareError) as bad_bypass_error:
+            engine.set_master_strip_insert_bypassed(0, True)
+        assert bad_bypass_error.value.code == 4
+
+        engine.play()
+        processed = engine.process([[0.0] * 256])
+        assert 0.65 < processed[0][-1] < 0.80
+        engine.set_parameter_smoothed(0x4D58FF01, -24.0)
+        engine.set_parameter(0x4D58FF02, 0.25)
+        attenuated = processed
+        for _ in range(8):
+            attenuated = engine.process([[0.0] * 256])
+        assert 0.05 < attenuated[0][-1] < 0.25
+
+
+def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
+    frames = 256 * 16
+    source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    channels=[source],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_master_strip_json(
+            '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'
+        )
+        with pytest.raises(SonareError) as bad_index_error:
+            engine.set_master_strip_eq_band(99, {"type": "Peak", "enabled": True})
+        assert bad_index_error.value.code == 4
+
+        engine.play()
+        flat_out = engine.process([[0.0] * 256])[0]
+        engine.set_master_strip_eq_band(
+            0,
+            {
+                "type": "Peak",
+                "frequencyHz": 1000,
+                "gainDb": 12,
+                "q": 1,
+                "enabled": True,
+            },
+        )
+        engine.seek_sample(0)
+        eq_out = [0.0] * 256
+        for _ in range(6):
+            eq_out = engine.process([[0.0] * 256])[0]
+        assert math.sqrt(sum(sample * sample for sample in eq_out) / len(eq_out)) > (
+            math.sqrt(sum(sample * sample for sample in flat_out) / len(flat_out)) * 1.5
+        )
+
+
 def test_engine_destroy_and_delete_aliases() -> None:
     engine = RealtimeEngine(sample_rate=48000.0, max_block_size=128)
     engine.destroy()
@@ -114,6 +450,10 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert engine.metronome().enabled
         assert engine.metronome().click_samples == 16
         assert engine.count_in_end_sample(0, 2) == 288000
+        assert engine.sample_at_ppq(1.5) == 72000
+        with pytest.raises(SonareError) as bad_ppq_error:
+            engine.sample_at_ppq(math.nan)
+        assert bad_ppq_error.value.code == 4
         engine.set_metronome(EngineMetronomeConfig(enabled=False))
         engine.add_parameter(
             ParameterInfo(
@@ -215,6 +555,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
         captured = engine.captured_audio()
         assert all(math.isclose(sample, 0.25, abs_tol=0.0001) for sample in captured[0])
         assert all(math.isclose(sample, -0.25, abs_tol=0.0001) for sample in captured[1])
+        assert any(record.target_id == 0xFFFF for record in engine.drain_meter_telemetry())
 
         engine.set_input_monitor(False)
         engine.reset_capture()
@@ -231,6 +572,9 @@ def test_realtime_engine_process_and_telemetry() -> None:
         monitored = engine.process([[0.25] * 128, [-0.25] * 128])
         assert all(math.isclose(sample, 0.5, abs_tol=0.0001) for sample in monitored[0])
         assert all(math.isclose(sample, -0.5, abs_tol=0.0001) for sample in monitored[1])
+        with pytest.raises(SonareError) as bad_monitor_gain_error:
+            engine.set_input_monitor(True, math.nan)
+        assert bad_monitor_gain_error.value.code == 4
 
 
 def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:
@@ -563,3 +907,54 @@ def test_engine_push_immediate_notes_do_not_raise() -> None:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
         engine.push_midi_note_on(0, 0, 0, 60, 100)
         engine.push_midi_note_off(0, 0, 0, 60, 0)
+
+
+def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
+    def midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
+        return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1
+
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 6)
+        engine.set_midi_clips(
+            [
+                EngineMidiClipSchedule(
+                    id=1,
+                    track_id=6,
+                    destination_id=6,
+                    length_samples=8192,
+                    events=[
+                        EngineMidiEvent(0, word0=midi1_word(0x9, 0, 60, 100), word_count=1),
+                        EngineMidiEvent(4096, word0=midi1_word(0x8, 0, 60, 0), word_count=1),
+                    ],
+                )
+            ]
+        )
+        engine.play()
+        out = np.asarray(engine.process([[0.0] * 128, [0.0] * 128]))
+        assert float(np.max(np.abs(out))) > 0.0
+        with pytest.raises(SonareError) as bad_group_error:
+            engine.set_midi_clips(
+                [
+                    EngineMidiClipSchedule(
+                        id=2,
+                        track_id=6,
+                        destination_id=6,
+                        events=[
+                            EngineMidiEvent(
+                                0,
+                                word0=midi1_word(0x9, 0, 60, 100),
+                                word_count=1,
+                                group=16,
+                            )
+                        ],
+                    )
+                ]
+            )
+        assert bad_group_error.value.code == 4
+        with pytest.raises(SonareError) as bad_channel_error:
+            engine.push_midi_note_on(6, 0, 16, 60, 100)
+        assert bad_channel_error.value.code == 4
+        with pytest.raises(SonareError) as bad_soundfont_error:
+            engine.load_soundfont(b"not sf2")
+        assert bad_soundfont_error.value.code == 2
+        engine.set_midi_clips([])

@@ -3,6 +3,7 @@
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <vector>
 
 #include "metering/lufs.h"
@@ -89,5 +90,27 @@ TEST_CASE("MeterTelemetryTap drops newest record and counts drops when full",
   REQUIRE(tap.pop(record));
   REQUIRE(record.render_frame == kBlock * 3);
   REQUIRE(record.dropped_records == 2);
+  REQUIRE_FALSE(tap.pop(record));
+}
+
+TEST_CASE("MeterTelemetryTap publishes lightweight target records", "[engine][meter_telemetry]") {
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(48000.0, kBlock, 0, 8);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.5f);
+  right.fill(-0.25f);
+  float* channels[] = {left.data(), right.data()};
+  tap.process_lightweight(channels, 2, kBlock, 512, 0xFFFFu);
+
+  sonare::engine::MeterTelemetryRecord record{};
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.target_id == 0xFFFFu);
+  REQUIRE(record.render_frame == 512);
+  REQUIRE(record.peak_db[0] == Approx(-6.0206f).margin(0.01f));
+  REQUIRE(record.rms_db[1] == Approx(-12.0412f).margin(0.01f));
+  REQUIRE(record.correlation == Approx(-1.0f).margin(0.001f));
+  REQUIRE(std::isnan(record.integrated_lufs));
   REQUIRE_FALSE(tap.pop(record));
 }

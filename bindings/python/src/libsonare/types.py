@@ -1020,6 +1020,7 @@ class EngineClip:
     id: int
     channels: list[list[float]] | None
     start_ppq: float
+    track_id: int = 0
     length_samples: int | None = None
     clip_offset_samples: int = 0
     loop: bool = False
@@ -1029,6 +1030,35 @@ class EngineClip:
     warp_mode: str | int = "off"
     warp_anchors: list[tuple[float, float]] | None = None
     page_provider: object | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EngineMidiEvent:
+    """Absolute render-frame MIDI event for realtime engine MIDI clips."""
+
+    render_frame: int
+    word0: int = 0
+    word1: int = 0
+    word2: int = 0
+    word3: int = 0
+    word_count: int = 0
+    group: int = 0
+    sysex_handle: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EngineMidiClipSchedule:
+    """Compiled realtime MIDI clip schedule."""
+
+    events: list[EngineMidiEvent]
+    id: int = 0
+    track_id: int = 0
+    destination_id: int = 0
+    start_sample: int = 0
+    start_ppq: float = 0.0
+    length_samples: int = 0
+    loop: bool = False
+    loop_length_samples: int = 0
 
 
 @dataclass(frozen=True, slots=True)

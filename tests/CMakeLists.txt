@@ -225,6 +225,7 @@ if(BUILD_MIXING)
     engine/meter_telemetry_test.cpp
     engine/mixing_runtime_test.cpp
     engine/monitor_runtime_test.cpp
+    engine/track_mixer_test.cpp
     mixing/golden_hash_test.cpp
     mixing/insert_automation_c_api_test.cpp
     mixing/mixing_meter_panner_capi_test.cpp

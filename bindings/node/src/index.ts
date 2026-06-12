@@ -38,6 +38,7 @@ import type {
   EngineAutomationPointCurve,
   EngineBounceOptions,
   EngineBounceResult,
+  EngineBus,
   EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
@@ -47,9 +48,12 @@ import type {
   EngineMarker,
   EngineMeterTelemetry,
   EngineMetronomeConfig,
+  EngineMidiClipSchedule,
   EngineParameterInfo,
   EngineTelemetry,
+  EngineTrackLane,
   EngineTransportState,
+  EqBandInput,
   FileClipPageProviderOptions,
   GoniometerPoint,
   HpssResult,
@@ -544,6 +548,10 @@ export class RealtimeEngine {
     this.native.setTimeSignature(numerator, denominator);
   }
 
+  sampleAtPpq(ppq: number): number {
+    return this.native.sampleAtPpq(ppq);
+  }
+
   setLoop(startPpq: number, endPpq: number, enabled = true): void {
     this.native.setLoop(startPpq, endPpq, enabled);
   }
@@ -648,6 +656,68 @@ export class RealtimeEngine {
 
   clipCount(): number {
     return this.native.clipCount();
+  }
+
+  setTrackLanes(lanes: Array<number | EngineTrackLane>): void {
+    this.native.setTrackLanes(
+      lanes.map((lane) => (typeof lane === 'number' ? { trackId: lane } : lane)),
+    );
+  }
+
+  setTrackBuses(buses: EngineBus[]): void {
+    this.native.setTrackBuses(buses);
+  }
+
+  setBusStripJson(busId: number, sceneJson: string): void {
+    this.native.setBusStripJson(busId, sceneJson);
+  }
+
+  setTrackStripJson(trackId: number, sceneJson: string): void {
+    this.native.setTrackStripJson(trackId, sceneJson);
+  }
+
+  setTrackStripEqBand(trackId: number, bandIndex: number, band: EqBandInput | string): void {
+    this.native.setTrackStripEqBandJson(
+      trackId,
+      bandIndex,
+      typeof band === 'string' ? band : JSON.stringify(band),
+    );
+  }
+
+  setTrackStripEqBandJson(trackId: number, bandIndex: number, bandJson: string): void {
+    this.native.setTrackStripEqBandJson(trackId, bandIndex, bandJson);
+  }
+
+  setTrackStripInsertBypassed(
+    trackId: number,
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    this.native.setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass);
+  }
+
+  setMasterStripJson(sceneJson: string): void {
+    this.native.setMasterStripJson(sceneJson);
+  }
+
+  setMasterStripEqBand(bandIndex: number, band: EqBandInput | string): void {
+    this.native.setMasterStripEqBandJson(
+      bandIndex,
+      typeof band === 'string' ? band : JSON.stringify(band),
+    );
+  }
+
+  setMasterStripEqBandJson(bandIndex: number, bandJson: string): void {
+    this.native.setMasterStripEqBandJson(bandIndex, bandJson);
+  }
+
+  setMasterStripInsertBypassed(
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    this.native.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
   }
 
   supplyClipPage(providerId: number, pageIndex: number, channels: Float32Array[]): void {
@@ -770,6 +840,10 @@ export class RealtimeEngine {
     this.native.setParameterSmoothed(paramId, value, renderFrame);
   }
 
+  setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame = -1): void {
+    this.native.setSoloMute(laneIndex, solo, mute, renderFrame);
+  }
+
   /**
    * Remove all registered parameters and release their backing strings. Use
    * before re-registering a parameter id (add() rejects duplicate ids). Not
@@ -777,6 +851,14 @@ export class RealtimeEngine {
    */
   clearParameters(): void {
     this.native.clearParameters();
+  }
+
+  /**
+   * Replace the realtime MIDI clip snapshot. Events are absolute render-frame
+   * UMP events compiled for the engine timeline.
+   */
+  setMidiClips(clips: ReadonlyArray<EngineMidiClipSchedule>): void {
+    this.native.setMidiClips(clips);
   }
 
   /**
@@ -2579,6 +2661,7 @@ export type {
   DynamicsResult,
   EngineAutomationPoint,
   EngineAutomationPointCurve,
+  EngineBus,
   EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
@@ -2595,6 +2678,8 @@ export type {
   EngineTelemetry,
   EngineTelemetryError,
   EngineTelemetryType,
+  EngineTrackLane,
+  EngineTrackSend,
   EngineTransportState,
   EqBandInput,
   EqSpectrumSnapshot,

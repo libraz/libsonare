@@ -117,9 +117,7 @@ struct ClipSchedule {
   WarpMode warp_mode = WarpMode::kOff;
   int64_t warp_reference_offset_samples = 0;
   std::shared_ptr<const std::vector<WarpAnchor>> warp_anchors;
-  /// Control-plane source-track id carried from the arrangement clip. The clip
-  /// player never reads it on the audio thread; the offline bounce uses it to
-  /// group clips into per-track stems for channel-strip mixing. 0 = unset.
+  /// Source-track id carried from the arrangement clip. 0 = unset.
   uint32_t track_id = 0;
   float gain = 1.0f;
   int64_t fade_in_samples = 0;
@@ -172,6 +170,11 @@ class ClipPlayer final : public rt::ProcessorBase {
 
   void process_at(float* const* channels, int num_channels, int num_samples,
                   int64_t timeline_sample) noexcept;
+  void process_track_at(uint32_t track_id, float* const* channels, int num_channels,
+                        int num_samples, int64_t timeline_sample) noexcept;
+  void process_excluding_tracks_at(const uint32_t* track_ids, size_t track_count,
+                                   float* const* channels, int num_channels, int num_samples,
+                                   int64_t timeline_sample) noexcept;
   void collect_boundaries(int64_t block_start_sample, int num_frames,
                           ClipBoundaryList* out) const noexcept;
 
@@ -187,6 +190,14 @@ class ClipPlayer final : public rt::ProcessorBase {
   static int64_t source_sample_count(const ClipSchedule& clip) noexcept;
   void notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample) noexcept;
   float sample_channel(const ClipSchedule& clip, int src_ch, double source_pos) noexcept;
+  enum class TrackFilterMode {
+    kAll,
+    kOnlyTrack,
+    kExcludeTracks,
+  };
+  void process_filtered_at(uint32_t track_id, const uint32_t* track_ids, size_t track_count,
+                           TrackFilterMode filter_mode, float* const* channels, int num_channels,
+                           int num_samples, int64_t timeline_sample) noexcept;
 
   struct PageMissCacheEntry {
     uint32_t clip_id = 0;

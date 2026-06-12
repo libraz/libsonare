@@ -268,6 +268,39 @@ class SonareMidiCcBinding(ctypes.Structure):
     ]
 
 
+class SonareEngineMidiEvent(ctypes.Structure):
+    """Maps to SonareEngineMidiEvent in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("render_frame", ctypes.c_int64),
+        ("word0", ctypes.c_uint32),
+        ("word1", ctypes.c_uint32),
+        ("word2", ctypes.c_uint32),
+        ("word3", ctypes.c_uint32),
+        ("word_count", ctypes.c_uint8),
+        ("group", ctypes.c_uint8),
+        ("reserved", ctypes.c_uint16),
+        ("sysex_handle", ctypes.c_uint32),
+    ]
+
+
+class SonareEngineMidiClipSchedule(ctypes.Structure):
+    """Maps to SonareEngineMidiClipSchedule in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("track_id", ctypes.c_uint32),
+        ("start_sample", ctypes.c_int64),
+        ("start_ppq", ctypes.c_double),
+        ("length_samples", ctypes.c_int64),
+        ("loop", ctypes.c_int),
+        ("loop_length_samples", ctypes.c_int64),
+        ("destination_id", ctypes.c_uint32),
+        ("events", ctypes.POINTER(SonareEngineMidiEvent)),
+        ("event_count", ctypes.c_size_t),
+    ]
+
+
 class SonareProjectTempoSegment(ctypes.Structure):
     """Maps to SonareProjectTempoSegment in sonare_c_project.h (sizeof 32)."""
 

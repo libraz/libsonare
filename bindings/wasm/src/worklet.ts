@@ -1,16 +1,33 @@
 import type {
   EngineAutomationPoint,
+  EngineBus,
+  EngineCaptureStatus,
   EngineClip,
   EngineMarker,
   EngineMeterTelemetry,
   EngineMetronomeConfig,
+  EngineMidiClipSchedule,
   EngineParameterInfo,
   EngineTelemetry,
+  EngineTempoSegment,
+  EngineTimeSignatureSegment,
+  EngineTrackLane,
+  EngineTrackSend,
+  EngineTransportState,
+  EqBand,
   MixerRealtimeBuffer,
   RealtimeVoiceChangerConfigInput,
 } from './index';
-import { engineCapabilities, Mixer, RealtimeEngine, RealtimeVoiceChanger } from './index';
+import {
+  engineCapabilities,
+  init as initSonareModule,
+  isInitialized,
+  Mixer,
+  RealtimeEngine,
+  RealtimeVoiceChanger,
+} from './index';
 import type { AutomationCurve } from './public_types';
+import type { SonareModule } from './sonare.js';
 import type { SonareRtModule } from './sonare-rt';
 
 // With code-splitting disabled, the worklet bundle carries its own copy of the
@@ -38,6 +55,9 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   runtimeTarget?: 'embind' | 'sonare-rt';
   rtModuleUrl?: string;
   rtWasmBinary?: ArrayBuffer | Uint8Array;
+  wasmBinary?: ArrayBuffer | Uint8Array;
+  initialSyncMessages?: SonareEngineSyncMessage[];
+  initialCommands?: SonareEngineCommandRecord[];
   sampleRate?: number;
   blockSize?: number;
   channelCount?: number;
@@ -85,6 +105,7 @@ export interface SonareRealtimeEngineNodeCapabilities {
   expectedEngineAbiVersion?: number;
   abiCompatible?: boolean;
   degradedReason?: string;
+  readyMessage?: boolean;
 }
 
 export interface SonareRealtimeEngineNodeOptions
@@ -127,6 +148,7 @@ export interface SonareEngineTransportFacade {
   seekPpq(ppq: number, sampleTime?: number): boolean;
   seekSeconds(seconds: number, sampleTime?: number): boolean;
   setTempo(bpm: number): void;
+  setTempoSegments(segments: readonly EngineTempoSegment[]): void;
   setLoop(startPpq: number, endPpq: number, enabled?: boolean): boolean;
 }
 
@@ -134,6 +156,22 @@ type SuspendableAudioContext = BaseAudioContext & {
   suspend?: () => Promise<void>;
   resume?: () => Promise<void>;
 };
+
+const ENGINE_MIXER_TARGET_BASE = 0x4d580000;
+const ENGINE_MIXER_PARAM_FADER_DB = 1;
+const ENGINE_MIXER_PARAM_PAN = 2;
+
+function engineMixerLaneTarget(laneIndex: number, paramKind: number): number {
+  return ENGINE_MIXER_TARGET_BASE | ((laneIndex & 0xff) << 8) | (paramKind & 0xff);
+}
+
+function engineMixerBusTarget(busIndex: number, paramKind: number): number {
+  return ENGINE_MIXER_TARGET_BASE | (((0xfe - busIndex) & 0xff) << 8) | (paramKind & 0xff);
+}
+
+function engineMixerMasterTarget(paramKind: number): number {
+  return ENGINE_MIXER_TARGET_BASE | (0xff << 8) | (paramKind & 0xff);
+}
 
 type WorkletInput = readonly (readonly Float32Array[])[];
 type WorkletOutput = Float32Array[][];
@@ -164,12 +202,19 @@ export type SonareWorkletMessage =
 
 export interface SonareWorkletMeterSnapshot {
   type: 'meter';
+  targetId: number;
   frame: number;
   peakDbL: number;
   peakDbR: number;
   rmsDbL: number;
   rmsDbR: number;
   correlation: number;
+  truePeakDbL: number;
+  truePeakDbR: number;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  gainReductionDb: number;
 }
 
 export interface SonareWorkletSpectrumSnapshot {
@@ -184,12 +229,14 @@ export type SonareWorkletTransportMessage =
   | SonareEngineTelemetryRecord;
 
 export const SONARE_METER_RING_HEADER_INTS = 4;
-// Record layout: [frameLo, peakDbL, peakDbR, rmsDbL, rmsDbR, correlation, frameHi].
+// Record layout: [frameLo, frameHi, targetId, peakDbL, peakDbR, rmsDbL, rmsDbR,
+// correlation, truePeakDbL, truePeakDbR, momentaryLufs, shortTermLufs,
+// integratedLufs, gainReductionDb].
 // The sample-frame index is monotonically increasing and quickly exceeds the
 // 2^24 exact-integer range of a single Float32 slot (~349 s at 48 kHz), so it is
 // stored split across two Float32 lanes (low 24 bits + high bits) for exact
 // reconstruction. See encodeFrameLo/encodeFrameHi/decodeFrame.
-export const SONARE_METER_RING_RECORD_FLOATS = 7;
+export const SONARE_METER_RING_RECORD_FLOATS = 14;
 export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
 
 /** Base for splitting a frame index into two exactly-representable Float32 lanes. */
@@ -259,7 +306,13 @@ export enum SonareEngineTelemetryError {
 }
 
 interface WorkletTransport {
-  postMessage?: (message: SonareWorkletTransportMessage) => void;
+  postMessage?: (
+    message:
+      | SonareWorkletTransportMessage
+      | SonareEngineCaptureResponseMessage
+      | SonareEngineTransportResponseMessage,
+    transfer?: Transferable[],
+  ) => void;
   onMeter?: (meter: SonareWorkletMeterSnapshot) => void;
   onSpectrum?: (spectrum: SonareWorkletSpectrumSnapshot) => void;
 }
@@ -331,6 +384,17 @@ export interface SonareEngineSyncClipsMessage {
   clips: EngineClip[];
 }
 
+export interface SonareEngineSyncClipsDeltaMessage {
+  type: 'syncClipsDelta';
+  upserts: EngineClip[];
+  removeIds: number[];
+}
+
+export interface SonareEngineSyncMidiClipsMessage {
+  type: 'syncMidiClips';
+  clips: EngineMidiClipSchedule[];
+}
+
 export interface SonareEngineSyncMarkersMessage {
   type: 'syncMarkers';
   markers: EngineMarker[];
@@ -347,11 +411,135 @@ export interface SonareEngineSyncAutomationMessage {
   points: EngineAutomationPoint[];
 }
 
+export interface SonareEngineSyncTempoMessage {
+  type: 'syncTempo';
+  bpm: number;
+  timeSignature: { numerator: number; denominator: number };
+  tempoSegments?: EngineTempoSegment[];
+  timeSignatureSegments?: EngineTimeSignatureSegment[];
+}
+
+export interface SonareEngineSyncMixerMessage {
+  type: 'syncMixer';
+  lanes: EngineTrackLane[];
+  buses?: EngineBus[];
+  trackStrips?: Array<{ trackId: number; sceneJson: string }>;
+  busStrips?: Array<{ busId: number; sceneJson: string }>;
+  masterStripJson?: string;
+}
+
+export interface SonareEngineSyncCaptureMessage {
+  type: 'syncCapture';
+  bufferFrames: number;
+  channels: number;
+  source: EngineCaptureStatus['source'];
+  recordOffsetSamples: number;
+  inputMonitor: { enabled: boolean; gain: number };
+}
+
+export interface SonareEngineSyncTrackStripEqBandMessage {
+  type: 'syncTrackStripEqBand';
+  trackId: number;
+  bandIndex: number;
+  bandJson: string;
+}
+
+export interface SonareEngineSyncMasterStripEqBandMessage {
+  type: 'syncMasterStripEqBand';
+  bandIndex: number;
+  bandJson: string;
+}
+
+export interface SonareEngineSyncTrackStripInsertBypassedMessage {
+  type: 'syncTrackStripInsertBypassed';
+  trackId: number;
+  insertIndex: number;
+  bypassed: boolean;
+  resetOnBypass: boolean;
+}
+
+export interface SonareEngineSyncMasterStripInsertBypassedMessage {
+  type: 'syncMasterStripInsertBypassed';
+  insertIndex: number;
+  bypassed: boolean;
+  resetOnBypass: boolean;
+}
+
+export interface SonareEngineSyncBuiltinInstrumentMessage {
+  type: 'syncBuiltinInstrument';
+  destinationId: number;
+  config: { destinationId?: number } & Record<string, unknown>;
+}
+
+export interface SonareEngineSyncSynthInstrumentMessage {
+  type: 'syncSynthInstrument';
+  destinationId: number;
+  patch: Record<string, unknown> | string;
+}
+
+export interface SonareEngineSyncSf2InstrumentMessage {
+  type: 'syncSf2Instrument';
+  destinationId: number;
+  config: { destinationId?: number; gain?: number; polyphony?: number };
+}
+
+export interface SonareEngineSyncLoadSoundFontMessage {
+  type: 'syncLoadSoundFont';
+  data: Uint8Array;
+}
+
+export interface SonareEngineSyncMidiNoteMessage {
+  type: 'syncMidiNoteOn' | 'syncMidiNoteOff';
+  destinationId: number;
+  group: number;
+  channel: number;
+  note: number;
+  velocity: number;
+  renderFrame: number;
+}
+
+export interface SonareEngineSyncMidiCcMessage {
+  type: 'syncMidiCc';
+  destinationId: number;
+  group: number;
+  channel: number;
+  controller: number;
+  value: number;
+  renderFrame: number;
+}
+
+export interface SonareEngineSyncMidiPanicMessage {
+  type: 'syncMidiPanic';
+  renderFrame: number;
+}
+
+type SonareEngineInstrumentSyncMessage =
+  | SonareEngineSyncBuiltinInstrumentMessage
+  | SonareEngineSyncSynthInstrumentMessage
+  | SonareEngineSyncSf2InstrumentMessage
+  | SonareEngineSyncLoadSoundFontMessage;
+
 export type SonareEngineSyncMessage =
   | SonareEngineSyncClipsMessage
+  | SonareEngineSyncClipsDeltaMessage
+  | SonareEngineSyncMidiClipsMessage
   | SonareEngineSyncMarkersMessage
   | SonareEngineSyncMetronomeMessage
-  | SonareEngineSyncAutomationMessage;
+  | SonareEngineSyncAutomationMessage
+  | SonareEngineSyncTempoMessage
+  | SonareEngineSyncMixerMessage
+  | SonareEngineSyncCaptureMessage
+  | SonareEngineSyncTrackStripEqBandMessage
+  | SonareEngineSyncMasterStripEqBandMessage
+  | SonareEngineSyncTrackStripInsertBypassedMessage
+  | SonareEngineSyncMasterStripInsertBypassedMessage
+  | SonareEngineSyncBuiltinInstrumentMessage
+  | SonareEngineSyncSynthInstrumentMessage
+  | SonareEngineSyncSf2InstrumentMessage
+  | SonareEngineSyncLoadSoundFontMessage
+  | SonareEngineSyncMidiNoteMessage
+  | SonareEngineSyncMidiCcMessage
+  | SonareEngineSyncMidiPanicMessage;
 
 export interface SonareEngineTelemetryRecord {
   type: SonareEngineTelemetryType | number;
@@ -397,10 +585,39 @@ interface SharedSpectrumRingWriter {
 }
 
 interface WorkletPort {
-  postMessage?: (message: unknown) => void;
+  postMessage?: (message: unknown, transfer?: Transferable[]) => void;
   onmessage?: (event: { data: unknown }) => void;
   addEventListener?: (type: 'message', listener: (event: { data: unknown }) => void) => void;
   start?: () => void;
+}
+
+export interface SonareEngineCaptureRequestMessage {
+  type: 'captureRequest';
+  requestId: number;
+  op: 'status' | 'read' | 'reset';
+}
+
+export interface SonareEngineCaptureResponseMessage {
+  type: 'captureResponse';
+  requestId: number;
+  ok: boolean;
+  status?: EngineCaptureStatus;
+  channels?: Float32Array[] | number[][];
+  error?: string;
+}
+
+export interface SonareEngineTransportRequestMessage {
+  type: 'transportRequest';
+  requestId: number;
+  op: 'state';
+}
+
+export interface SonareEngineTransportResponseMessage {
+  type: 'transportResponse';
+  requestId: number;
+  ok: boolean;
+  state?: EngineTransportState;
+  error?: string;
 }
 
 function toDb(value: number): number {
@@ -432,9 +649,68 @@ function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMessage {
   }
   return (
     value.type === 'syncClips' ||
+    value.type === 'syncClipsDelta' ||
+    value.type === 'syncMidiClips' ||
     value.type === 'syncMarkers' ||
     value.type === 'syncMetronome' ||
-    value.type === 'syncAutomation'
+    value.type === 'syncAutomation' ||
+    value.type === 'syncTempo' ||
+    value.type === 'syncMixer' ||
+    value.type === 'syncCapture' ||
+    value.type === 'syncTrackStripEqBand' ||
+    value.type === 'syncMasterStripEqBand' ||
+    value.type === 'syncTrackStripInsertBypassed' ||
+    value.type === 'syncMasterStripInsertBypassed' ||
+    value.type === 'syncBuiltinInstrument' ||
+    value.type === 'syncSynthInstrument' ||
+    value.type === 'syncSf2Instrument' ||
+    value.type === 'syncLoadSoundFont' ||
+    value.type === 'syncMidiNoteOn' ||
+    value.type === 'syncMidiNoteOff' ||
+    value.type === 'syncMidiCc' ||
+    value.type === 'syncMidiPanic'
+  );
+}
+
+function isEngineCaptureRequestMessage(value: unknown): value is SonareEngineCaptureRequestMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'captureRequest' &&
+    typeof value.requestId === 'number' &&
+    (value.op === 'status' || value.op === 'read' || value.op === 'reset')
+  );
+}
+
+function isEngineCaptureResponseMessage(
+  value: unknown,
+): value is SonareEngineCaptureResponseMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'captureResponse' &&
+    typeof value.requestId === 'number' &&
+    typeof value.ok === 'boolean'
+  );
+}
+
+function isEngineTransportRequestMessage(
+  value: unknown,
+): value is SonareEngineTransportRequestMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'transportRequest' &&
+    typeof value.requestId === 'number' &&
+    value.op === 'state'
+  );
+}
+
+function isEngineTransportResponseMessage(
+  value: unknown,
+): value is SonareEngineTransportResponseMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'transportResponse' &&
+    typeof value.requestId === 'number' &&
+    typeof value.ok === 'boolean'
   );
 }
 
@@ -467,7 +743,8 @@ function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnapshot {
     typeof value.peakDbR === 'number' &&
     typeof value.rmsDbL === 'number' &&
     typeof value.rmsDbR === 'number' &&
-    typeof value.correlation === 'number'
+    typeof value.correlation === 'number' &&
+    (typeof value.targetId === 'number' || value.targetId === undefined)
   );
 }
 
@@ -495,19 +772,27 @@ export function readSonareMeterRingBuffer(
   readIndex = 0,
 ): SonareMeterRingReadResult {
   const writeIndex = Atomics.load(ring.header, 0);
+  const recordFloats = Atomics.load(ring.header, 2) || SONARE_METER_RING_RECORD_FLOATS;
   const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
   const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
   const meters: SonareWorkletMeterSnapshot[] = [];
   for (let index = firstReadable; index < writeIndex; index++) {
-    const offset = (index % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    const offset = (index % ring.capacity) * recordFloats;
     meters.push({
       type: 'meter',
-      frame: decodeFrame(ring.records[offset], ring.records[offset + 6]),
-      peakDbL: ring.records[offset + 1],
-      peakDbR: ring.records[offset + 2],
-      rmsDbL: ring.records[offset + 3],
-      rmsDbR: ring.records[offset + 4],
-      correlation: ring.records[offset + 5],
+      frame: decodeFrame(ring.records[offset], ring.records[offset + 1]),
+      targetId: ring.records[offset + 2],
+      peakDbL: ring.records[offset + 3],
+      peakDbR: ring.records[offset + 4],
+      rmsDbL: ring.records[offset + 5],
+      rmsDbR: ring.records[offset + 6],
+      correlation: ring.records[offset + 7],
+      truePeakDbL: ring.records[offset + 8],
+      truePeakDbR: ring.records[offset + 9],
+      momentaryLufs: ring.records[offset + 10],
+      shortTermLufs: ring.records[offset + 11],
+      integratedLufs: ring.records[offset + 12],
+      gainReductionDb: ring.records[offset + 13],
     });
   }
   return { nextReadIndex: writeIndex, meters };
@@ -841,12 +1126,19 @@ function telemetryFromEngine(telemetry: EngineTelemetry): SonareEngineTelemetryR
 function meterFromEngine(meter: EngineMeterTelemetry): SonareWorkletMeterSnapshot {
   return {
     type: 'meter',
+    targetId: meter.targetId,
     frame: meter.renderFrame,
     peakDbL: meter.peakDbL,
     peakDbR: meter.peakDbR,
     rmsDbL: meter.rmsDbL,
     rmsDbR: meter.rmsDbR,
     correlation: meter.correlation,
+    truePeakDbL: meter.truePeakDbL,
+    truePeakDbR: meter.truePeakDbR,
+    momentaryLufs: meter.momentaryLufs,
+    shortTermLufs: meter.shortTermLufs,
+    integratedLufs: meter.integratedLufs,
+    gainReductionDb: meter.gainReductionDb,
   };
 }
 
@@ -1041,12 +1333,19 @@ export class SonareWorkletProcessor {
     const denominator = Math.sqrt(sumL * sumR);
     const meter: SonareWorkletMeterSnapshot = {
       type: 'meter',
+      targetId: 0,
       frame: this.processedFrames,
       peakDbL: toDb(peakL),
       peakDbR: toDb(peakR),
       rmsDbL: toDb(rmsL),
       rmsDbR: toDb(rmsR),
       correlation: denominator > 0 ? sumLR / denominator : 0,
+      truePeakDbL: toDb(peakL),
+      truePeakDbR: toDb(peakR),
+      momentaryLufs: Number.NaN,
+      shortTermLufs: Number.NaN,
+      integratedLufs: Number.NaN,
+      gainReductionDb: Number.NaN,
     };
     this.transport.onMeter?.(meter);
     if (this.meterRing) {
@@ -1064,12 +1363,19 @@ export class SonareWorkletProcessor {
     const writeIndex = Atomics.load(ring.header, 0);
     const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
     ring.records[offset] = encodeFrameLo(meter.frame);
-    ring.records[offset + 1] = meter.peakDbL;
-    ring.records[offset + 2] = meter.peakDbR;
-    ring.records[offset + 3] = meter.rmsDbL;
-    ring.records[offset + 4] = meter.rmsDbR;
-    ring.records[offset + 5] = meter.correlation;
-    ring.records[offset + 6] = encodeFrameHi(meter.frame);
+    ring.records[offset + 1] = encodeFrameHi(meter.frame);
+    ring.records[offset + 2] = meter.targetId;
+    ring.records[offset + 3] = meter.peakDbL;
+    ring.records[offset + 4] = meter.peakDbR;
+    ring.records[offset + 5] = meter.rmsDbL;
+    ring.records[offset + 6] = meter.rmsDbR;
+    ring.records[offset + 7] = meter.correlation;
+    ring.records[offset + 8] = meter.truePeakDbL;
+    ring.records[offset + 9] = meter.truePeakDbR;
+    ring.records[offset + 10] = meter.momentaryLufs;
+    ring.records[offset + 11] = meter.shortTermLufs;
+    ring.records[offset + 12] = meter.integratedLufs;
+    ring.records[offset + 13] = meter.gainReductionDb;
     Atomics.store(ring.header, 0, writeIndex + 1);
     // writeIndex is a free-running monotonic counter, so an overflow guard here
     // would fire on essentially every write past the first `capacity` records
@@ -1179,6 +1485,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   // allocated per render quantum (the old engine.process() round-tripped fresh
   // arrays on both heaps every block, an RT-safety hazard).
   private channelBuffers: Float32Array[];
+  private readonly liveClips = new Map<number, EngineClip>();
 
   constructor(
     options: SonareRealtimeEngineWorkletProcessorOptions = {},
@@ -1318,7 +1625,27 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     switch (message.type) {
       case 'syncClips':
+        this.liveClips.clear();
+        for (const clip of message.clips) {
+          if (clip.id !== undefined) {
+            this.liveClips.set(clip.id, clip);
+          }
+        }
         this.engine.setClips(message.clips);
+        break;
+      case 'syncClipsDelta':
+        for (const clipId of message.removeIds) {
+          this.liveClips.delete(clipId);
+        }
+        for (const clip of message.upserts) {
+          if (clip.id !== undefined) {
+            this.liveClips.set(clip.id, clip);
+          }
+        }
+        this.engine.setClips(Array.from(this.liveClips.values()));
+        break;
+      case 'syncMidiClips':
+        this.engine.setMidiClips(message.clips);
         break;
       case 'syncMarkers':
         this.engine.setMarkers(message.markers);
@@ -1330,6 +1657,186 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncAutomation':
         this.engine.setAutomationLane(message.paramId, message.points);
         break;
+      case 'syncTempo':
+        if (message.tempoSegments) {
+          this.engine.setTempoSegments(message.tempoSegments);
+        } else {
+          this.engine.setTempo(message.bpm);
+        }
+        if (message.timeSignatureSegments) {
+          this.engine.setTimeSignatureSegments(message.timeSignatureSegments);
+        } else {
+          this.engine.setTimeSignature(
+            message.timeSignature.numerator,
+            message.timeSignature.denominator,
+          );
+        }
+        break;
+      case 'syncMixer':
+        if (message.buses) {
+          this.engine.setTrackBuses(message.buses);
+        }
+        this.engine.setTrackLanes(message.lanes);
+        for (const strip of message.trackStrips ?? []) {
+          this.engine.setTrackStripJson(strip.trackId, strip.sceneJson);
+        }
+        for (const strip of message.busStrips ?? []) {
+          this.engine.setBusStripJson(strip.busId, strip.sceneJson);
+        }
+        if (message.masterStripJson) {
+          this.engine.setMasterStripJson(message.masterStripJson);
+        }
+        break;
+      case 'syncCapture':
+        this.engine.setCaptureBuffer(message.channels, message.bufferFrames);
+        this.engine.setCaptureSource(message.source);
+        this.engine.setRecordOffsetSamples(message.recordOffsetSamples);
+        this.engine.setInputMonitor(message.inputMonitor.enabled, message.inputMonitor.gain);
+        break;
+      case 'syncTrackStripEqBand':
+        this.engine.setTrackStripEqBandJson(message.trackId, message.bandIndex, message.bandJson);
+        break;
+      case 'syncMasterStripEqBand':
+        this.engine.setMasterStripEqBandJson(message.bandIndex, message.bandJson);
+        break;
+      case 'syncTrackStripInsertBypassed':
+        this.engine.setTrackStripInsertBypassed(
+          message.trackId,
+          message.insertIndex,
+          message.bypassed,
+          message.resetOnBypass,
+        );
+        break;
+      case 'syncMasterStripInsertBypassed':
+        this.engine.setMasterStripInsertBypassed(
+          message.insertIndex,
+          message.bypassed,
+          message.resetOnBypass,
+        );
+        break;
+      case 'syncBuiltinInstrument':
+        this.engine.setBuiltinInstrument(message.config, message.destinationId);
+        break;
+      case 'syncSynthInstrument':
+        this.engine.setSynthInstrument(message.patch, message.destinationId);
+        break;
+      case 'syncLoadSoundFont':
+        this.engine.loadSoundFont(message.data);
+        break;
+      case 'syncSf2Instrument':
+        this.engine.setSf2Instrument(message.config, message.destinationId);
+        break;
+      case 'syncMidiNoteOn':
+        this.engine.pushMidiNoteOn(
+          message.destinationId,
+          message.group,
+          message.channel,
+          message.note,
+          message.velocity,
+          message.renderFrame,
+        );
+        break;
+      case 'syncMidiNoteOff':
+        this.engine.pushMidiNoteOff(
+          message.destinationId,
+          message.group,
+          message.channel,
+          message.note,
+          message.velocity,
+          message.renderFrame,
+        );
+        break;
+      case 'syncMidiCc':
+        this.engine.pushMidiCc(
+          message.destinationId,
+          message.group,
+          message.channel,
+          message.controller,
+          message.value,
+          message.renderFrame,
+        );
+        break;
+      case 'syncMidiPanic':
+        this.engine.pushMidiPanic(message.renderFrame);
+        break;
+    }
+  }
+
+  receiveCaptureRequest(message: SonareEngineCaptureRequestMessage): void {
+    if (this.closed) {
+      return;
+    }
+    try {
+      if (message.op === 'status') {
+        const status = this.engine.captureStatus();
+        this.transport?.postMessage?.({
+          type: 'captureResponse',
+          requestId: message.requestId,
+          ok: true,
+          status: {
+            capturedFrames: status.capturedFrames,
+            overflowCount: status.overflowCount,
+            armed: status.armed,
+            punchEnabled: status.punchEnabled,
+            source: status.source,
+            recordOffsetSamples: status.recordOffsetSamples,
+          },
+        } satisfies SonareEngineCaptureResponseMessage);
+        return;
+      }
+      if (message.op === 'read') {
+        const captured = this.engine.capturedAudio();
+        const channels: number[][] = [];
+        for (let ch = 0; ch < captured.length; ch++) {
+          const source = captured[ch];
+          const copy: number[] = [];
+          for (let i = 0; i < source.length; i++) {
+            copy.push(Number(source[i]));
+          }
+          channels.push(copy);
+        }
+        this.transport?.postMessage?.({
+          type: 'captureResponse',
+          requestId: message.requestId,
+          ok: true,
+          channels,
+        } satisfies SonareEngineCaptureResponseMessage);
+        return;
+      }
+      this.engine.resetCapture();
+      this.transport?.postMessage?.({
+        type: 'captureResponse',
+        requestId: message.requestId,
+        ok: true,
+      } satisfies SonareEngineCaptureResponseMessage);
+    } catch (error) {
+      this.transport?.postMessage?.({
+        type: 'captureResponse',
+        requestId: message.requestId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      } satisfies SonareEngineCaptureResponseMessage);
+    }
+  }
+
+  receiveTransportRequest(message: SonareEngineTransportRequestMessage): void {
+    if (this.closed) {
+      return;
+    }
+    try {
+      this.transport?.postMessage?.({
+        type: 'transportResponse',
+        requestId: message.requestId,
+        ok: true,
+        state: this.engine.getTransportState(),
+      } satisfies SonareEngineTransportResponseMessage);
+    } catch (error) {
+      this.transport?.postMessage?.({
+        type: 'transportResponse',
+        requestId: message.requestId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      } satisfies SonareEngineTransportResponseMessage);
     }
   }
 
@@ -1423,6 +1930,14 @@ export class SonareRealtimeEngineWorkletProcessor {
         // (RtPublisher-style swap), so a queued kSeekMarker resolves correctly.
         this.engine.seekMarker(Math.trunc(Number(command.targetId ?? 0)), sampleTime);
         break;
+      case SonareEngineCommandType.SetSoloMute:
+        this.engine.setSoloMute(
+          Math.trunc(Number(command.targetId ?? 0)),
+          Boolean((Number(command.argInt ?? 0) & 0x2) !== 0),
+          Boolean((Number(command.argInt ?? 0) & 0x1) !== 0),
+          sampleTime,
+        );
+        break;
       default:
         this.publishTelemetryRecord({
           type: SonareEngineTelemetryType.Error,
@@ -1457,10 +1972,15 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     for (const item of this.engine.drainMeterTelemetry(64)) {
       const meter = meterFromEngine(item);
-      if (meter.frame - this.lastMeterFrame < this.meterIntervalFrames) {
+      if (
+        meter.frame !== this.lastMeterFrame &&
+        meter.frame - this.lastMeterFrame < this.meterIntervalFrames
+      ) {
         continue;
       }
-      this.lastMeterFrame = meter.frame;
+      if (meter.frame !== this.lastMeterFrame) {
+        this.lastMeterFrame = meter.frame;
+      }
       // Prefer the lock-free SAB meter ring (matching the telemetry path and
       // SonareWorkletProcessor); only fall back to structured-clone postMessage
       // when no ring was provided, so we do not allocate/post from the audio
@@ -1482,12 +2002,19 @@ export class SonareRealtimeEngineWorkletProcessor {
     const writeIndex = Atomics.load(ring.header, 0);
     const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
     ring.records[offset] = encodeFrameLo(meter.frame);
-    ring.records[offset + 1] = meter.peakDbL;
-    ring.records[offset + 2] = meter.peakDbR;
-    ring.records[offset + 3] = meter.rmsDbL;
-    ring.records[offset + 4] = meter.rmsDbR;
-    ring.records[offset + 5] = meter.correlation;
-    ring.records[offset + 6] = encodeFrameHi(meter.frame);
+    ring.records[offset + 1] = encodeFrameHi(meter.frame);
+    ring.records[offset + 2] = meter.targetId;
+    ring.records[offset + 3] = meter.peakDbL;
+    ring.records[offset + 4] = meter.peakDbR;
+    ring.records[offset + 5] = meter.rmsDbL;
+    ring.records[offset + 6] = meter.rmsDbR;
+    ring.records[offset + 7] = meter.correlation;
+    ring.records[offset + 8] = meter.truePeakDbL;
+    ring.records[offset + 9] = meter.truePeakDbR;
+    ring.records[offset + 10] = meter.momentaryLufs;
+    ring.records[offset + 11] = meter.shortTermLufs;
+    ring.records[offset + 12] = meter.integratedLufs;
+    ring.records[offset + 13] = meter.gainReductionDb;
     Atomics.store(ring.header, 0, writeIndex + 1);
     // writeIndex is a free-running monotonic counter, so an overflow guard here
     // would fire on essentially every write past the first `capacity` records
@@ -1657,12 +2184,32 @@ export class SonareRtRealtimeEngineRuntime {
           this.metronomeConfig.clickSamples,
         );
         break;
+      case 'syncTempo':
+        this.module._sonare_rt_engine_set_tempo(this.engine, message.bpm);
+        break;
       case 'syncClips':
+      case 'syncClipsDelta':
+      case 'syncMidiClips':
       case 'syncMarkers':
       case 'syncAutomation':
+      case 'syncMixer':
+      case 'syncCapture':
+      case 'syncTrackStripEqBand':
+      case 'syncMasterStripEqBand':
+      case 'syncTrackStripInsertBypassed':
+      case 'syncMasterStripInsertBypassed':
+      case 'syncBuiltinInstrument':
+      case 'syncSynthInstrument':
+      case 'syncSf2Instrument':
+      case 'syncLoadSoundFont':
+      case 'syncMidiNoteOn':
+      case 'syncMidiNoteOff':
+      case 'syncMidiCc':
+      case 'syncMidiPanic':
         // The sonare-rt C ABI exposes no set_clips / set_markers /
-        // set_automation_lane, so these mutations cannot reach a live sonare-rt
-        // engine. Surface a clear telemetry error rather than silently dropping.
+        // set_automation_lane / set_track_lanes, so these mutations cannot
+        // reach a live sonare-rt engine. Surface a clear telemetry error rather
+        // than silently dropping.
         if (this.telemetryRing) {
           writeSonareEngineTelemetryRingBuffer(this.telemetryRing, {
             type: SonareEngineTelemetryType.Error,
@@ -1676,6 +2223,30 @@ export class SonareRtRealtimeEngineRuntime {
         }
         break;
     }
+  }
+
+  receiveCaptureRequest(message: SonareEngineCaptureRequestMessage, port?: WorkletPort): void {
+    if (this.closed) {
+      return;
+    }
+    port?.postMessage?.({
+      type: 'captureResponse',
+      requestId: message.requestId,
+      ok: false,
+      error: 'Capture read-back is not supported by the sonare-rt runtime.',
+    } satisfies SonareEngineCaptureResponseMessage);
+  }
+
+  receiveTransportRequest(message: SonareEngineTransportRequestMessage, port?: WorkletPort): void {
+    if (this.closed) {
+      return;
+    }
+    port?.postMessage?.({
+      type: 'transportResponse',
+      requestId: message.requestId,
+      ok: false,
+      error: 'Transport state read-back is not supported by the sonare-rt runtime.',
+    } satisfies SonareEngineTransportResponseMessage);
   }
 
   destroy(): void {
@@ -1880,6 +2451,22 @@ export class SonareRealtimeEngineNode {
   private meterReadIndex = 0;
   private telemetryListeners = new Set<(telemetry: SonareEngineTelemetryRecord) => void>();
   private meterListeners = new Set<(meter: SonareWorkletMeterSnapshot) => void>();
+  private captureRequestId = 1;
+  private readonly captureRequests = new Map<
+    number,
+    {
+      resolve: (response: SonareEngineCaptureResponseMessage) => void;
+      reject: (reason?: unknown) => void;
+    }
+  >();
+  private transportRequestId = 1;
+  private readonly transportRequests = new Map<
+    number,
+    {
+      resolve: (response: SonareEngineTransportResponseMessage) => void;
+      reject: (reason?: unknown) => void;
+    }
+  >();
   private resolveReady!: () => void;
   private rejectReady!: (reason?: unknown) => void;
   private destroyed = false;
@@ -1900,11 +2487,31 @@ export class SonareRealtimeEngineNode {
       this.resolveReady = resolve;
       this.rejectReady = reject;
     });
-    if (capabilities.runtimeTarget !== 'sonare-rt') {
+    if (!capabilities.readyMessage) {
       this.resolveReady();
     }
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
-      if (isEngineTelemetryRecord(event.data)) {
+      if (isEngineCaptureResponseMessage(event.data)) {
+        const pending = this.captureRequests.get(event.data.requestId);
+        if (pending) {
+          this.captureRequests.delete(event.data.requestId);
+          if (event.data.ok) {
+            pending.resolve(event.data);
+          } else {
+            pending.reject(new Error(event.data.error ?? 'Capture request failed'));
+          }
+        }
+      } else if (isEngineTransportResponseMessage(event.data)) {
+        const pending = this.transportRequests.get(event.data.requestId);
+        if (pending) {
+          this.transportRequests.delete(event.data.requestId);
+          if (event.data.ok) {
+            pending.resolve(event.data);
+          } else {
+            pending.reject(new Error(event.data.error ?? 'Transport request failed'));
+          }
+        }
+      } else if (isEngineTelemetryRecord(event.data)) {
         this.emitTelemetry(event.data);
       } else if (isMeterSnapshot(event.data)) {
         this.emitMeter(event.data);
@@ -1988,6 +2595,9 @@ export class SonareRealtimeEngineNode {
       telemetryRingCapacity: telemetryRing?.capacity,
       meterSharedBuffer: meterRing?.sharedBuffer,
       meterRingCapacity: meterRing?.capacity,
+      wasmBinary: options.wasmBinary,
+      initialSyncMessages: options.initialSyncMessages,
+      initialCommands: options.initialCommands,
     };
     const factory =
       options.nodeFactory ??
@@ -2011,6 +2621,9 @@ export class SonareRealtimeEngineNode {
         expectedEngineAbiVersion: detectedCapabilities?.expectedEngineAbiVersion,
         abiCompatible: detectedCapabilities?.abiCompatible,
         degradedReason,
+        readyMessage:
+          runtimeTarget === 'sonare-rt' ||
+          (runtimeTarget === 'embind' && moduleUrl !== undefined && !options.nodeFactory),
       },
       commandRing,
       telemetryRing,
@@ -2051,6 +2664,36 @@ export class SonareRealtimeEngineNode {
     }
     this.node.port.postMessage(command);
     return true;
+  }
+
+  requestCaptureStatus(): Promise<EngineCaptureStatus> {
+    return this.sendCaptureRequest('status').then((response) => {
+      if (!response.status) {
+        throw new Error('Capture status response is missing status.');
+      }
+      return response.status;
+    });
+  }
+
+  requestCapturedAudio(): Promise<Float32Array[]> {
+    return this.sendCaptureRequest('read').then((response) =>
+      (response.channels ?? []).map((channel) =>
+        channel instanceof Float32Array ? channel : new Float32Array(channel),
+      ),
+    );
+  }
+
+  requestCaptureReset(): Promise<void> {
+    return this.sendCaptureRequest('reset').then(() => undefined);
+  }
+
+  requestTransportState(): Promise<EngineTransportState> {
+    return this.sendTransportRequest().then((response) => {
+      if (!response.state) {
+        throw new Error('Transport state response is missing state.');
+      }
+      return response.state;
+    });
   }
 
   pollTelemetry(): SonareEngineTelemetryRecord[] {
@@ -2101,6 +2744,14 @@ export class SonareRealtimeEngineNode {
     this.destroyed = true;
     this.node.port.postMessage({ type: SonareEngineCommandType.TransportStop, sampleTime: -1 });
     this.node.disconnect();
+    for (const pending of this.captureRequests.values()) {
+      pending.reject(new Error('Realtime engine node is destroyed.'));
+    }
+    this.captureRequests.clear();
+    for (const pending of this.transportRequests.values()) {
+      pending.reject(new Error('Realtime engine node is destroyed.'));
+    }
+    this.transportRequests.clear();
     this.telemetryListeners.clear();
     this.meterListeners.clear();
   }
@@ -2116,6 +2767,32 @@ export class SonareRealtimeEngineNode {
       listener(meter);
     }
   }
+
+  private sendCaptureRequest(
+    op: SonareEngineCaptureRequestMessage['op'],
+  ): Promise<SonareEngineCaptureResponseMessage> {
+    if (this.destroyed) {
+      return Promise.reject(new Error('Realtime engine node is destroyed.'));
+    }
+    const requestId = this.captureRequestId++;
+    const promise = new Promise<SonareEngineCaptureResponseMessage>((resolve, reject) => {
+      this.captureRequests.set(requestId, { resolve, reject });
+    });
+    this.node.port.postMessage({ type: 'captureRequest', requestId, op });
+    return promise;
+  }
+
+  private sendTransportRequest(): Promise<SonareEngineTransportResponseMessage> {
+    if (this.destroyed) {
+      return Promise.reject(new Error('Realtime engine node is destroyed.'));
+    }
+    const requestId = this.transportRequestId++;
+    const promise = new Promise<SonareEngineTransportResponseMessage>((resolve, reject) => {
+      this.transportRequests.set(requestId, { resolve, reject });
+    });
+    this.node.port.postMessage({ type: 'transportRequest', requestId, op: 'state' });
+    return promise;
+  }
 }
 
 export class SonareEngine {
@@ -2130,9 +2807,26 @@ export class SonareEngine {
   private readonly offlineChannelCount: number;
   private readonly automationLanes = new Map<number, EngineAutomationPoint[]>();
   private readonly clips = new Map<number, EngineClip>();
+  private readonly midiClips = new Map<number, EngineMidiClipSchedule>();
   private readonly markers = new Map<number, EngineMarker>();
+  private readonly trackLaneIds: number[] = [];
+  private readonly trackSends = new Map<number, EngineTrackSend[]>();
+  private readonly buses: EngineBus[] = [];
+  private readonly trackStripJson = new Map<number, string>();
+  private readonly busStripJson = new Map<number, string>();
+  private masterStripJson: string | undefined;
+  private captureConfig: Omit<SonareEngineSyncCaptureMessage, 'type'> | undefined;
+  private tempoBpm = 120;
+  private timeSignature = { numerator: 4, denominator: 4 };
+  private tempoSegments: EngineTempoSegment[] = [{ startPpq: 0, bpm: 120 }];
+  private timeSignatureSegments: EngineTimeSignatureSegment[] = [
+    { startPpq: 0, numerator: 4, denominator: 4 },
+  ];
+  private latestTransportState: EngineTransportState | undefined;
   private nextClipId = 1;
   private nextMarkerId = 1;
+  private transportPlaying = false;
+  private readonly pendingInstrumentSync: SonareEngineInstrumentSyncMessage[] = [];
   private destroyed = false;
 
   private constructor(
@@ -2152,8 +2846,21 @@ export class SonareEngine {
     this.offlineBlockSize = offlineBlockSize;
     this.offlineChannelCount = offlineChannelCount;
     this.transport = {
-      play: (sampleTime = -1) => this.realtimeNode.play(sampleTime),
-      stop: (sampleTime = -1) => this.realtimeNode.stop(sampleTime),
+      play: (sampleTime = -1) => {
+        const ok = this.realtimeNode.play(sampleTime);
+        if (ok) {
+          this.transportPlaying = true;
+        }
+        return ok;
+      },
+      stop: (sampleTime = -1) => {
+        const ok = this.realtimeNode.stop(sampleTime);
+        if (ok) {
+          this.transportPlaying = false;
+          this.flushPendingInstrumentSync();
+        }
+        return ok;
+      },
       seekPpq: (ppq, sampleTime = -1) => {
         this.offlineEngine.seekPpq(ppq, sampleTime);
         return this.realtimeNode.seekPpq(ppq, sampleTime);
@@ -2164,6 +2871,7 @@ export class SonareEngine {
         return this.realtimeNode.seekSample(timelineSample, sampleTime);
       },
       setTempo: (bpm) => this.setTempo(bpm),
+      setTempoSegments: (segments) => this.setTempoSegments(segments),
       setLoop: (startPpq, endPpq, enabled = true) => this.setLoop(startPpq, endPpq, enabled),
     };
   }
@@ -2205,12 +2913,39 @@ export class SonareEngine {
   }
 
   setTempo(bpm: number): void {
+    this.tempoBpm = bpm;
+    this.tempoSegments = [{ startPpq: 0, bpm }];
     this.offlineEngine.setTempo(bpm);
+    this.postTempoSync();
     this.realtimeNode.sendCommand({
       type: SonareEngineCommandType.SetTempoMap,
       sampleTime: -1,
       argFloat: bpm,
     });
+  }
+
+  setTempoSegments(segments: readonly EngineTempoSegment[]): void {
+    this.tempoSegments = segments.map((segment) => ({ ...segment }));
+    this.tempoBpm = this.tempoSegments[0]?.bpm ?? this.tempoBpm;
+    this.offlineEngine.setTempoSegments(this.tempoSegments);
+    this.postTempoSync();
+  }
+
+  setTimeSignature(numerator: number, denominator: number): void {
+    this.timeSignature = { numerator, denominator };
+    this.timeSignatureSegments = [{ startPpq: 0, numerator, denominator }];
+    this.offlineEngine.setTimeSignature(numerator, denominator);
+    this.postTempoSync();
+  }
+
+  setTimeSignatureSegments(segments: readonly EngineTimeSignatureSegment[]): void {
+    this.timeSignatureSegments = segments.map((segment) => ({ ...segment }));
+    const first = this.timeSignatureSegments[0];
+    if (first) {
+      this.timeSignature = { numerator: first.numerator, denominator: first.denominator };
+    }
+    this.offlineEngine.setTimeSignatureSegments(this.timeSignatureSegments);
+    this.postTempoSync();
   }
 
   setLoop(startPpq: number, endPpq: number, enabled = true): boolean {
@@ -2231,6 +2966,20 @@ export class SonareEngine {
       argFloat: startPpq,
       argInt: Math.round(endPpq * 1_000_000),
     });
+  }
+
+  countInEndSample(startSample: number, bars: number): number {
+    return this.offlineEngine.countInEndSample(startSample, bars);
+  }
+
+  async getTransportState(): Promise<EngineTransportState> {
+    const state = await this.realtimeNode.requestTransportState();
+    this.latestTransportState = state;
+    return state;
+  }
+
+  cachedTransportState(): EngineTransportState | undefined {
+    return this.latestTransportState;
   }
 
   setParam(nodeId: string, param: string | number, value: number): boolean {
@@ -2285,19 +3034,187 @@ export class SonareEngine {
   }
 
   setSoloMute(target: string | number, solo: boolean, mute: boolean): boolean {
-    void target;
-    void solo;
-    void mute;
-    // Per-track solo/mute is a Mixer concept (strip-indexed setSoloed/setMuted),
-    // not an engine command: the WASM SonareEngine facade does not own a Mixer
-    // node, so there is no realtime transport for solo/mute on this surface.
-    // Throw a clear error instead of silently returning false (a silent no-op
-    // would leave callers believing the change took effect). Apply solo/mute
-    // directly on a Mixer instance (Mixer.setSoloed/Mixer.setMuted) instead.
-    throw new Error(
-      'SonareEngine.setSoloMute is not supported: solo/mute is a Mixer feature; ' +
-        'use Mixer.setSoloed(stripIndex, ...) / Mixer.setMuted(stripIndex, ...) instead.',
+    const laneIndex = this.ensureTrackLane(target);
+    this.offlineEngine.setSoloMute(laneIndex, solo, mute);
+    return this.realtimeNode.sendCommand({
+      type: SonareEngineCommandType.SetSoloMute,
+      targetId: laneIndex,
+      sampleTime: -1,
+      argInt: (mute ? 0x1 : 0) | (solo ? 0x2 : 0),
+    });
+  }
+
+  setStripGain(target: string | number, db: number): boolean {
+    if (target === 'master') {
+      const paramId = engineMixerMasterTarget(ENGINE_MIXER_PARAM_FADER_DB);
+      this.offlineEngine.setParameter(paramId, db);
+      return this.realtimeNode.sendCommand({
+        type: SonareEngineCommandType.SetParamSmoothed,
+        targetId: paramId,
+        sampleTime: -1,
+        argFloat: db,
+      });
+    }
+    const laneIndex = this.ensureTrackLane(target);
+    const paramId = engineMixerLaneTarget(laneIndex, ENGINE_MIXER_PARAM_FADER_DB);
+    this.offlineEngine.setParameter(paramId, db);
+    return this.realtimeNode.sendCommand({
+      type: SonareEngineCommandType.SetParamSmoothed,
+      targetId: paramId,
+      sampleTime: -1,
+      argFloat: db,
+    });
+  }
+
+  setStripPan(target: string | number, pan: number): boolean {
+    if (target === 'master') {
+      const paramId = engineMixerMasterTarget(ENGINE_MIXER_PARAM_PAN);
+      this.offlineEngine.setParameter(paramId, pan);
+      return this.realtimeNode.sendCommand({
+        type: SonareEngineCommandType.SetParamSmoothed,
+        targetId: paramId,
+        sampleTime: -1,
+        argFloat: pan,
+      });
+    }
+    const laneIndex = this.ensureTrackLane(target);
+    const paramId = engineMixerLaneTarget(laneIndex, ENGINE_MIXER_PARAM_PAN);
+    this.offlineEngine.setParameter(paramId, pan);
+    return this.realtimeNode.sendCommand({
+      type: SonareEngineCommandType.SetParamSmoothed,
+      targetId: paramId,
+      sampleTime: -1,
+      argFloat: pan,
+    });
+  }
+
+  setSends(target: string | number, sends: EngineTrackSend[]): void {
+    const laneIndex = this.ensureTrackLane(target);
+    const trackId = this.trackLaneIds[laneIndex];
+    this.trackSends.set(
+      trackId,
+      sends.map((send) => ({ ...send })),
     );
+    this.syncMixer();
+  }
+
+  setTrackBuses(buses: EngineBus[]): void {
+    this.buses.splice(0, this.buses.length, ...buses.map((bus) => ({ ...bus })));
+    this.syncMixer();
+  }
+
+  setBusGain(busId: number, db: number): boolean {
+    const busIndex = this.ensureBus(busId);
+    this.buses[busIndex] = { ...this.buses[busIndex], busId, gainDb: db };
+    this.offlineEngine.setTrackBuses(this.buses);
+    const paramId = engineMixerBusTarget(busIndex, ENGINE_MIXER_PARAM_FADER_DB);
+    this.offlineEngine.setParameter(paramId, db);
+    return this.realtimeNode.sendCommand({
+      type: SonareEngineCommandType.SetParamSmoothed,
+      targetId: paramId,
+      sampleTime: -1,
+      argFloat: db,
+    });
+  }
+
+  setTrackStripJson(target: string | number, sceneJson: string): void {
+    const laneIndex = this.ensureTrackLane(target);
+    const trackId = this.trackLaneIds[laneIndex];
+    this.offlineEngine.setTrackStripJson(trackId, sceneJson);
+    this.trackStripJson.set(trackId, sceneJson);
+    this.syncMixer();
+  }
+
+  setTrackStripEqBand(target: string | number, bandIndex: number, band: EqBand | string): void {
+    const laneIndex = this.ensureTrackLane(target);
+    const trackId = this.trackLaneIds[laneIndex];
+    const bandJson = typeof band === 'string' ? band : JSON.stringify(band);
+    this.offlineEngine.setTrackStripEqBandJson(trackId, bandIndex, bandJson);
+    this.postSync({ type: 'syncTrackStripEqBand', trackId, bandIndex, bandJson });
+  }
+
+  setTrackStripInsertBypassed(
+    target: string | number,
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    const laneIndex = this.ensureTrackLane(target);
+    const trackId = this.trackLaneIds[laneIndex];
+    this.offlineEngine.setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass);
+    this.postSync({
+      type: 'syncTrackStripInsertBypassed',
+      trackId,
+      insertIndex,
+      bypassed,
+      resetOnBypass,
+    });
+  }
+
+  setStripEq(target: string | number, bandIndex: number, band: EqBand | string): void {
+    if (target === 'master') {
+      this.setMasterStripEqBand(bandIndex, band);
+      return;
+    }
+    this.setTrackStripEqBand(target, bandIndex, band);
+  }
+
+  setStripInsertBypassed(
+    target: string | number,
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    if (target === 'master') {
+      this.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
+      return;
+    }
+    this.setTrackStripInsertBypassed(target, insertIndex, bypassed, resetOnBypass);
+  }
+
+  setStripInserts(target: string | number, sceneJson: string): void {
+    if (target === 'master') {
+      this.setMasterStripJson(sceneJson);
+      return;
+    }
+    this.setTrackStripJson(target, sceneJson);
+  }
+
+  setBusStripJson(busId: number, sceneJson: string): void {
+    this.ensureBus(busId);
+    this.offlineEngine.setBusStripJson(busId, sceneJson);
+    this.busStripJson.set(busId, sceneJson);
+    this.syncMixer();
+  }
+
+  setMasterStripJson(sceneJson: string): void {
+    this.offlineEngine.setMasterStripJson(sceneJson);
+    this.masterStripJson = sceneJson;
+    this.syncMixer();
+  }
+
+  setMasterStripEqBand(bandIndex: number, band: EqBand | string): void {
+    const bandJson = typeof band === 'string' ? band : JSON.stringify(band);
+    this.offlineEngine.setMasterStripEqBandJson(bandIndex, bandJson);
+    this.postSync({ type: 'syncMasterStripEqBand', bandIndex, bandJson });
+  }
+
+  setMasterStripInsertBypassed(
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    this.offlineEngine.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
+    this.postSync({
+      type: 'syncMasterStripInsertBypassed',
+      insertIndex,
+      bypassed,
+      resetOnBypass,
+    });
+  }
+
+  setMasterChain(sceneJson: string): void {
+    this.setMasterStripJson(sceneJson);
   }
 
   addClip(
@@ -2312,19 +3229,152 @@ export class SonareEngine {
       id,
       channels: buffer,
       startPpq,
+      trackId: this.resolveTargetId(trackId),
     };
+    this.ensureTrackLane(trackId);
     this.clips.set(id, clip);
-    this.syncClips();
-    void trackId;
+    this.syncClipsDelta([clip], []);
     return id;
   }
 
   removeClip(clipId: number): void {
     this.clips.delete(clipId);
-    this.syncClips();
+    this.syncClipsDelta([], [clipId]);
+  }
+
+  setMidiClips(clips: readonly EngineMidiClipSchedule[]): void {
+    this.midiClips.clear();
+    for (const clip of clips) {
+      const id = clip.id ?? this.nextClipId++;
+      this.midiClips.set(id, { ...clip, id, events: clip.events.map((event) => ({ ...event })) });
+    }
+    this.syncMidiClips();
+  }
+
+  setBuiltinInstrument(
+    trackId: string | number,
+    config: { destinationId?: number } & Record<string, unknown> = {},
+  ): void {
+    const destinationId = this.resolveTargetId(trackId);
+    this.offlineEngine.setBuiltinInstrument(config, destinationId);
+    this.postInstrumentSync({ type: 'syncBuiltinInstrument', destinationId, config });
+  }
+
+  setSynthInstrument(trackId: string | number, patch: Record<string, unknown> | string = {}): void {
+    const destinationId = this.resolveTargetId(trackId);
+    this.offlineEngine.setSynthInstrument(patch, destinationId);
+    this.postInstrumentSync({ type: 'syncSynthInstrument', destinationId, patch });
+  }
+
+  loadSoundFont(data: Uint8Array): void {
+    this.offlineEngine.loadSoundFont(data);
+    this.postInstrumentSync({ type: 'syncLoadSoundFont', data });
+  }
+
+  setSf2Instrument(
+    trackId: string | number,
+    config: { destinationId?: number; gain?: number; polyphony?: number } = {},
+  ): void {
+    const destinationId = this.resolveTargetId(trackId);
+    this.offlineEngine.setSf2Instrument(config, destinationId);
+    this.postInstrumentSync({ type: 'syncSf2Instrument', destinationId, config });
+  }
+
+  pushMidiNoteOn(
+    trackId: string | number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    renderFrame = -1,
+  ): void {
+    const destinationId = this.resolveTargetId(trackId);
+    this.offlineEngine.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
+    this.postSync({
+      type: 'syncMidiNoteOn',
+      destinationId,
+      group,
+      channel,
+      note,
+      velocity,
+      renderFrame,
+    });
+  }
+
+  pushMidiNoteOff(
+    trackId: string | number,
+    group: number,
+    channel: number,
+    note: number,
+    velocity = 0,
+    renderFrame = -1,
+  ): void {
+    const destinationId = this.resolveTargetId(trackId);
+    this.offlineEngine.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
+    this.postSync({
+      type: 'syncMidiNoteOff',
+      destinationId,
+      group,
+      channel,
+      note,
+      velocity,
+      renderFrame,
+    });
+  }
+
+  pushMidiCc(
+    trackId: string | number,
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    renderFrame = -1,
+  ): void {
+    const destinationId = this.resolveTargetId(trackId);
+    this.offlineEngine.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
+    this.postSync({
+      type: 'syncMidiCc',
+      destinationId,
+      group,
+      channel,
+      controller,
+      value,
+      renderFrame,
+    });
+  }
+
+  pushMidiPanic(renderFrame = -1): void {
+    this.offlineEngine.pushMidiPanic(renderFrame);
+    this.postSync({ type: 'syncMidiPanic', renderFrame });
+  }
+
+  configureCapture(options: {
+    bufferFrames: number;
+    channels?: number;
+    source?: EngineCaptureStatus['source'];
+    recordOffsetSamples?: number;
+    inputMonitor?: { enabled: boolean; gain?: number };
+  }): void {
+    const bufferFrames = Math.trunc(options.bufferFrames);
+    const channels = Math.trunc(options.channels ?? this.offlineChannelCount);
+    const source = options.source ?? 'output';
+    const recordOffsetSamples = Math.trunc(options.recordOffsetSamples ?? 0);
+    const inputMonitor = {
+      enabled: Boolean(options.inputMonitor?.enabled),
+      gain: options.inputMonitor?.gain ?? 1,
+    };
+    this.offlineEngine.setCaptureBuffer(channels, bufferFrames);
+    this.offlineEngine.setCaptureSource(source);
+    this.offlineEngine.setRecordOffsetSamples(recordOffsetSamples);
+    this.offlineEngine.setInputMonitor(inputMonitor.enabled, inputMonitor.gain);
+    this.captureConfig = { bufferFrames, channels, source, recordOffsetSamples, inputMonitor };
+    this.postSync({ type: 'syncCapture', ...this.captureConfig });
   }
 
   armRecord(trackId: string | number, enabled: boolean): boolean {
+    if (enabled && !this.captureConfig) {
+      throw new Error('Capture buffer is not configured');
+    }
     this.offlineEngine.armCapture(enabled);
     return this.realtimeNode.sendCommand({
       type: SonareEngineCommandType.ArmRecord,
@@ -2335,8 +3385,8 @@ export class SonareEngine {
   }
 
   punch(inPpq: number, outPpq: number): boolean {
-    const inSample = this.ppqToApproxSample(inPpq);
-    const outSample = this.ppqToApproxSample(outPpq);
+    const inSample = this.offlineEngine.sampleAtPpq(inPpq);
+    const outSample = this.offlineEngine.sampleAtPpq(outPpq);
     this.offlineEngine.setCapturePunch(inSample, outSample, true);
     // Carry BOTH endpoints as already-converted SAMPLES so the realtime engine
     // agrees with the offline engine. The previous code sent the raw PPQ out
@@ -2349,6 +3399,19 @@ export class SonareEngine {
       argInt: inSample,
       argFloat: outSample,
     });
+  }
+
+  captureStatus(): Promise<EngineCaptureStatus> {
+    return this.realtimeNode.requestCaptureStatus();
+  }
+
+  capturedAudio(): Promise<Float32Array[]> {
+    return this.realtimeNode.requestCapturedAudio();
+  }
+
+  async resetCapture(): Promise<void> {
+    this.offlineEngine.resetCapture();
+    await this.realtimeNode.requestCaptureReset();
   }
 
   setMetronome(opts: EngineMetronomeConfig): void {
@@ -2371,6 +3434,18 @@ export class SonareEngine {
     return id;
   }
 
+  markerCount(): number {
+    return this.offlineEngine.markerCount();
+  }
+
+  markerByIndex(index: number): EngineMarker {
+    return this.offlineEngine.markerByIndex(index);
+  }
+
+  marker(markerId: number): EngineMarker {
+    return this.offlineEngine.marker(markerId);
+  }
+
   seekMarker(markerId: number): boolean {
     this.offlineEngine.seekMarker(markerId);
     // Forward to the live worklet engine. Its marker set is kept in sync via the
@@ -2382,6 +3457,13 @@ export class SonareEngine {
       targetId: markerId,
       sampleTime: -1,
     });
+  }
+
+  setLoopFromMarkers(startMarkerId: number, endMarkerId: number): boolean {
+    this.offlineEngine.setLoopFromMarkers(startMarkerId, endMarkerId);
+    const start = this.offlineEngine.marker(startMarkerId);
+    const end = this.offlineEngine.marker(endMarkerId);
+    return this.setLoop(start.ppq, end.ppq, true);
   }
 
   async renderOffline(totalFrames: number): Promise<Float32Array[]> {
@@ -2420,20 +3502,87 @@ export class SonareEngine {
     this.offlineEngine.destroy();
   }
 
-  private syncClips(): void {
+  private syncClipsDelta(upserts: EngineClip[], removeIds: number[]): void {
     const clips = Array.from(this.clips.values());
     this.offlineEngine.setClips(clips);
-    // Push the full clip set to the live worklet engine over the message port.
-    // Clip audio buffers are too large for the fixed-size SAB command record, so
-    // they ride a structured-clone 'syncClips' message applied OUTSIDE the audio
-    // render callback (the audio-thread equivalent of an RtPublisher swap).
-    this.postSync({ type: 'syncClips', clips });
+    this.postSync({
+      type: 'syncClipsDelta',
+      upserts,
+      removeIds,
+    });
+  }
+
+  private syncMidiClips(): void {
+    const clips = Array.from(this.midiClips.values());
+    this.offlineEngine.setMidiClips(clips);
+    this.postSync({ type: 'syncMidiClips', clips });
+  }
+
+  private syncMixer(): void {
+    const lanes = this.trackLaneIds.map((trackId) => {
+      const sends = this.trackSends.get(trackId);
+      return sends && sends.length > 0
+        ? { trackId, sends: sends.map((send) => ({ ...send })) }
+        : { trackId };
+    });
+    const buses = this.buses.map((bus) => ({ ...bus }));
+    this.offlineEngine.setTrackBuses(buses);
+    if (lanes.length > 0) {
+      this.offlineEngine.setTrackLanes(lanes);
+    }
+    const trackStrips = Array.from(this.trackStripJson, ([trackId, sceneJson]) => ({
+      trackId,
+      sceneJson,
+    }));
+    const busStrips = Array.from(this.busStripJson, ([busId, sceneJson]) => ({
+      busId,
+      sceneJson,
+    }));
+    this.postSync({
+      type: 'syncMixer',
+      lanes,
+      buses,
+      trackStrips,
+      busStrips,
+      masterStripJson: this.masterStripJson,
+    });
   }
 
   private syncMarkers(): void {
     const markers = Array.from(this.markers.values()).sort((a, b) => a.ppq - b.ppq);
     this.offlineEngine.setMarkers(markers);
     this.postSync({ type: 'syncMarkers', markers });
+  }
+
+  private postInstrumentSync(message: SonareEngineInstrumentSyncMessage): void {
+    if (this.destroyed) {
+      return;
+    }
+    if (this.transportPlaying) {
+      this.pendingInstrumentSync.push(message);
+      return;
+    }
+    this.postSync(message);
+  }
+
+  private flushPendingInstrumentSync(): void {
+    if (this.destroyed || this.pendingInstrumentSync.length === 0) {
+      return;
+    }
+    const pending = this.pendingInstrumentSync.splice(0);
+    for (const message of pending) {
+      this.postSync(message);
+    }
+  }
+
+  private postTempoSync(): void {
+    this.postSync({
+      type: 'syncTempo',
+      bpm: this.tempoBpm,
+      timeSignature: { ...this.timeSignature },
+      tempoSegments: this.tempoSegments.map((segment) => ({ ...segment })),
+      timeSignatureSegments: this.timeSignatureSegments.map((segment) => ({ ...segment })),
+    });
   }
 
   // Posts an out-of-band control-sync message to the worklet engine processor.
@@ -2465,15 +3614,39 @@ export class SonareEngine {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  private ensureTrackLane(target: string | number): number {
+    const trackId = this.resolveTargetId(target);
+    if (!Number.isInteger(trackId) || trackId <= 0) {
+      throw new Error(`Invalid track id for mixer lane: ${String(target)}`);
+    }
+    const existing = this.trackLaneIds.indexOf(trackId);
+    if (existing >= 0) {
+      return existing;
+    }
+    this.trackLaneIds.push(trackId);
+    this.syncMixer();
+    return this.trackLaneIds.length - 1;
+  }
+
+  private ensureBus(busId: number): number {
+    const resolved = Math.trunc(busId);
+    if (!Number.isInteger(resolved) || resolved <= 0) {
+      throw new Error(`Invalid bus id for mixer bus: ${String(busId)}`);
+    }
+    const existing = this.buses.findIndex((bus) => bus.busId === resolved);
+    if (existing >= 0) {
+      return existing;
+    }
+    this.buses.push({ busId: resolved });
+    this.syncMixer();
+    return this.buses.length - 1;
+  }
+
   private curveCode(curve: number | 'linear' | 'exponential'): number {
     if (typeof curve === 'number') {
       return curve;
     }
     return curve === 'exponential' ? 1 : 0;
-  }
-
-  private ppqToApproxSample(ppq: number): number {
-    return Math.max(0, Math.round(((ppq * 60) / 120) * this.sampleRate));
   }
 }
 
@@ -2768,6 +3941,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
   class RegisteredSonareRealtimeEngineWorkletProcessor extends Base {
     private bridge?: SonareRealtimeEngineWorkletProcessor;
     private rtBridge?: SonareRtRealtimeEngineRuntime;
+    private readonly pendingMessages: unknown[] = [];
     readonly port?: WorkletPort;
 
     constructor(options?: { processorOptions?: SonareRealtimeEngineWorkletProcessorOptions }) {
@@ -2777,18 +3951,27 @@ export function registerSonareRealtimeEngineWorkletProcessor(
       if (processorOptions.runtimeTarget === 'sonare-rt') {
         void this.initializeSonareRt(processorOptions, port);
       } else {
-        this.bridge = new SonareRealtimeEngineWorkletProcessor(processorOptions, {
-          postMessage: (message) => port?.postMessage?.(message),
-          onMeter: (meter) => port?.postMessage?.(meter),
-        });
+        void this.initializeEmbind(processorOptions, port);
       }
       const onMessage = (event: { data: unknown }) => {
+        if (!this.bridge && !this.rtBridge) {
+          if (this.pendingMessages.length < 1024) {
+            this.pendingMessages.push(event.data);
+          }
+          return;
+        }
         if (isEngineCommandRecord(event.data)) {
           this.bridge?.receiveCommand(event.data);
           this.rtBridge?.receiveCommand(event.data);
         } else if (isEngineSyncMessage(event.data)) {
           this.bridge?.receiveSync(event.data);
           this.rtBridge?.receiveSync(event.data);
+        } else if (isEngineCaptureRequestMessage(event.data)) {
+          this.bridge?.receiveCaptureRequest(event.data);
+          this.rtBridge?.receiveCaptureRequest(event.data, port);
+        } else if (isEngineTransportRequestMessage(event.data)) {
+          this.bridge?.receiveTransportRequest(event.data);
+          this.rtBridge?.receiveTransportRequest(event.data, port);
         }
       };
       if (port?.addEventListener) {
@@ -2811,6 +3994,75 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         channel.fill(0);
       }
       return true;
+    }
+
+    private replayPendingMessages(port?: WorkletPort): void {
+      const messages = this.pendingMessages.splice(0);
+      for (const data of messages) {
+        if (isEngineCommandRecord(data)) {
+          this.bridge?.receiveCommand(data);
+          this.rtBridge?.receiveCommand(data);
+        } else if (isEngineSyncMessage(data)) {
+          this.bridge?.receiveSync(data);
+          this.rtBridge?.receiveSync(data);
+        } else if (isEngineCaptureRequestMessage(data)) {
+          this.bridge?.receiveCaptureRequest(data);
+          this.rtBridge?.receiveCaptureRequest(data, port);
+        } else if (isEngineTransportRequestMessage(data)) {
+          this.bridge?.receiveTransportRequest(data);
+          this.rtBridge?.receiveTransportRequest(data, port);
+        }
+      }
+    }
+
+    private async initializeEmbind(
+      options: SonareRealtimeEngineWorkletProcessorOptions,
+      port?: WorkletPort,
+    ): Promise<void> {
+      try {
+        const initPromise = (
+          globalThis as typeof globalThis & { SonareEmbindInitPromise?: Promise<void> }
+        ).SonareEmbindInitPromise;
+        if (initPromise) {
+          await initPromise;
+        }
+        if (!isInitialized()) {
+          type EmbindModuleFactory = (options?: {
+            locateFile?: (path: string, prefix: string) => string;
+            wasmBinary?: ArrayBuffer | Uint8Array;
+          }) => Promise<SonareModule>;
+          const moduleFactory = (
+            globalThis as typeof globalThis & {
+              SonareEmbindModuleFactory?: EmbindModuleFactory;
+            }
+          ).SonareEmbindModuleFactory;
+          if (!moduleFactory) {
+            throw new Error('embind realtime engine module is not initialized.');
+          }
+          await initSonareModule({
+            locateFile: (path) => path,
+            wasmBinary: options.wasmBinary,
+            moduleFactory,
+          });
+        }
+        this.bridge = new SonareRealtimeEngineWorkletProcessor(options, {
+          postMessage: (message) => port?.postMessage?.(message),
+          onMeter: (meter) => port?.postMessage?.(meter),
+        });
+        for (const message of options.initialSyncMessages ?? []) {
+          this.bridge.receiveSync(message);
+        }
+        for (const command of options.initialCommands ?? []) {
+          this.bridge.receiveCommand(command);
+        }
+        this.replayPendingMessages(port);
+        port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
+      } catch (error) {
+        port?.postMessage?.({
+          type: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     private async initializeSonareRt(
@@ -2857,6 +4109,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
           telemetrySharedBuffer: options.telemetrySharedBuffer,
           telemetryRingCapacity: options.telemetryRingCapacity,
         });
+        this.replayPendingMessages(port);
         port?.postMessage?.({ type: 'ready', runtimeTarget: 'sonare-rt' });
       } catch (error) {
         port?.postMessage?.({

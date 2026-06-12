@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### WASM realtime engine
+
+- Added realtime-engine AudioWorklet facade coverage for track lanes, strip and bus scene sync, MIDI clips and live MIDI, instruments, capture read-back, marker loops, transport state, clip delta sync, clip loop/fade/warp typing, and tempo/time-signature segment sync.
+- The WASM build now compiles core objects with the atomics and bulk-memory features required by the `sonare-rt` shared-memory target, so `bindings/wasm` can build both embind and realtime worklet artifacts together.
+
 ## v1.3.2 (2026-06-07)
 
 ### Error handling

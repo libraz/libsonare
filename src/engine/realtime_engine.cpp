@@ -18,6 +18,14 @@ bool command_belongs_to_block(int64_t sample_time, int64_t block_start, int num_
   return sample_time >= block_start && sample_time < block_end_frame(block_start, num_frames);
 }
 
+constexpr uint32_t kEngineParamNamespace = 0x4D580000u;
+constexpr uint32_t kEngineParamNamespaceMask = 0xFFFF0000u;
+constexpr uint32_t kEngineParamLaneMask = 0x0000FF00u;
+constexpr uint32_t kEngineParamKindMask = 0x000000FFu;
+constexpr uint32_t kEngineParamLaneShift = 8u;
+constexpr uint32_t kEngineParamLaneMaster = 0xFFu;
+constexpr uint32_t kEngineParamLaneBusBase = 0xFEu;
+
 }  // namespace
 
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
@@ -68,10 +76,9 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
 #endif
   metronome_.prepare(sample_rate, active_tempo_map_);
 #if defined(SONARE_WITH_MIXING)
-  // The engine exposes a single master metering tap; its telemetry always
-  // reports target id 0. Multi-tap metering (per-bus/per-strip) is not wired
-  // through this entry point — a configurable target id would be needed first.
-  meter_tap_.prepare(sample_rate, max_block_size_, 0, telemetry_capacity);
+  meter_tap_.prepare(sample_rate, max_block_size_, 0,
+                     telemetry_capacity *
+                         (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2));
 #endif
   automation_.prepare(sample_rate, active_tempo_map_);
   input_capture_storage_.assign(
@@ -83,6 +90,8 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
 #if defined(SONARE_WITH_MIXING)
   mixing_runtime_.prepare(sample_rate_, max_block_size_);
   monitor_runtime_.prepare(sample_rate_, max_block_size_);
+  track_mixer_runtime_.prepare(sample_rate_, max_block_size_);
+  update_reported_graph_latency();
   monitor_bus_storage_.assign(static_cast<size_t>(max_block_size_) * monitor_bus_channels_.size(),
                               0.0f);
   for (size_t ch = 0; ch < monitor_bus_channels_.size(); ++ch) {
@@ -471,6 +480,9 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   midi_sequencer_.all_notes_off(transport_.render_frame());
   flush_pdc_delays();
 #endif
+#if defined(SONARE_WITH_MIXING)
+  track_mixer_runtime_.flush_pdc_delays();
+#endif
 }
 
 bool RealtimeEngine::push_command(const rt::Command& command) noexcept {
@@ -550,6 +562,12 @@ void RealtimeEngine::set_time_signature_segments(
   publish_tempo_map_snapshot();
 }
 
+int64_t RealtimeEngine::sample_at_ppq(double ppq) const noexcept {
+  const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
+  const transport::TempoMap& map = *(snapshot ? snapshot : &tempo_map_);
+  return map.ppq_to_sample(ppq);
+}
+
 void RealtimeEngine::set_loop(double start_ppq, double end_ppq, bool enabled) noexcept {
   transport_.set_loop(start_ppq, end_ppq, enabled);
 }
@@ -568,6 +586,20 @@ bool RealtimeEngine::marker_by_id(uint32_t id, transport::Marker* out) const noe
 
 void RealtimeEngine::set_graph_latency_samples_q8(int latency_q8) noexcept {
   graph_latency_samples_q8_ = std::max(latency_q8, 0);
+}
+
+void RealtimeEngine::update_reported_graph_latency() noexcept {
+  int latency_q8 = 0;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  latency_q8 += pdc_total_q8_;
+#endif
+#if defined(SONARE_WITH_MIXING)
+  latency_q8 += track_mixer_runtime_.latency_samples_q8();
+  if (mixing_enabled_) {
+    latency_q8 += mixing_runtime_.latency_samples_q8();
+  }
+#endif
+  set_graph_latency_samples_q8(latency_q8);
 }
 
 int64_t RealtimeEngine::audible_timeline_sample(int64_t timeline_sample) const noexcept {
@@ -709,15 +741,19 @@ void RealtimeEngine::recompute_pdc() noexcept {
   });
   // Surface the applied compensation as the engine's graph latency so transport
   // telemetry (audible_timeline_sample) reflects the real output delay.
-  set_graph_latency_samples_q8(pdc_total_q8_);
+  update_reported_graph_latency();
 }
 
 void RealtimeEngine::flush_pdc_delays() noexcept {
-  if (pdc_total_q8_ == 0) return;
-  clip_pdc_delay_.reset();
-  for (size_t i = 0; i < pdc_instrument_count_; ++i) {
-    instrument_pdc_delays_[i].reset();
+  if (pdc_total_q8_ > 0) {
+    clip_pdc_delay_.reset();
+    for (size_t i = 0; i < pdc_instrument_count_; ++i) {
+      instrument_pdc_delays_[i].reset();
+    }
   }
+#if defined(SONARE_WITH_MIXING)
+  track_mixer_runtime_.flush_pdc_delays();
+#endif
 }
 #endif
 
@@ -733,6 +769,10 @@ void RealtimeEngine::set_capture_punch(int64_t start_sample, int64_t end_sample,
 }
 
 void RealtimeEngine::reset_capture() noexcept { capture_sink_.reset(); }
+
+bool RealtimeEngine::parameter_target_reserved(uint32_t target_id) noexcept {
+  return (target_id & kEngineParamNamespaceMask) == kEngineParamNamespace;
+}
 
 #if defined(SONARE_WITH_GRAPH)
 bool RealtimeEngine::swap_graph(std::unique_ptr<graph::Graph> graph, const char* input_node_id,
@@ -755,6 +795,9 @@ size_t RealtimeEngine::graph_connection_count() const noexcept {
 }
 
 bool RealtimeEngine::bind_graph_parameter(uint32_t param_id, const char* node_id) noexcept {
+  if (parameter_target_reserved(param_id)) {
+    return false;
+  }
   graph::Graph* graph = graph_runtime_.active_graph();
   if (!graph || !node_id) {
     return false;
@@ -847,12 +890,29 @@ void RealtimeEngine::apply_due_commands(int64_t boundary_render_frame) noexcept 
 void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
   switch (command.type) {
     case rt::CommandType::kSetParam:
+#if defined(SONARE_WITH_MIXING)
+      if (parameter_target_reserved(command.target_id)) {
+        if (!route_engine_parameter(command.target_id, command.arg.f)) {
+          enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                        transport_.sample_position(), command.target_id);
+        }
+        break;
+      }
+#endif
       // Failures (unknown target / non-RT-safe) bump automation_ counters,
       // which process() converts to telemetry after the sub-block loop. Do
       // not emit an error here or the rejection would be double-reported.
       automation_.set_parameter(command.target_id, command.arg.f);
       break;
     case rt::CommandType::kSetParamSmoothed:
+#if defined(SONARE_WITH_MIXING)
+      if (parameter_target_reserved(command.target_id) &&
+          !route_engine_parameter(command.target_id, command.arg.f)) {
+        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                      transport_.sample_position(), command.target_id);
+        break;
+      }
+#endif
       // Engine-level smoothing: start (or retarget) a one-pole ramp toward the
       // requested value. The ramp is ticked once per control period in
       // process() and pushed to the bound parameter, avoiding the zipper noise
@@ -880,6 +940,9 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // position and must not ring out across the discontinuity.
       flush_pdc_delays();
 #endif
+#if defined(SONARE_WITH_MIXING)
+      track_mixer_runtime_.flush_pdc_delays();
+#endif
       break;
     case rt::CommandType::kTransportSeekSample:
       transport_.seek_sample(command.arg.i);
@@ -890,12 +953,18 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       midi_sequencer_.all_notes_off(command.sample_time);
       flush_pdc_delays();
 #endif
+#if defined(SONARE_WITH_MIXING)
+      track_mixer_runtime_.flush_pdc_delays();
+#endif
       break;
     case rt::CommandType::kTransportSeekPpq:
       transport_.seek_ppq(command.arg.d);
 #if defined(SONARE_WITH_ARRANGEMENT)
       midi_sequencer_.all_notes_off(command.sample_time);
       flush_pdc_delays();
+#endif
+#if defined(SONARE_WITH_MIXING)
+      track_mixer_runtime_.flush_pdc_delays();
 #endif
       break;
     case rt::CommandType::kSeekMarker:
@@ -907,6 +976,9 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #if defined(SONARE_WITH_ARRANGEMENT)
         midi_sequencer_.all_notes_off(command.sample_time);
         flush_pdc_delays();
+#endif
+#if defined(SONARE_WITH_MIXING)
+        track_mixer_runtime_.flush_pdc_delays();
 #endif
       }
       break;
@@ -956,11 +1028,26 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       midi_sequencer_.all_notes_off(command.sample_time);
 #endif
       break;
+    case rt::CommandType::kSetSoloMute: {
+#if defined(SONARE_WITH_MIXING)
+      const uint64_t packed = static_cast<uint64_t>(command.arg.i);
+      const bool mute = (packed & 0x1u) != 0u;
+      const bool solo = (packed & 0x2u) != 0u;
+      if (!track_mixer_runtime_.set_lane_solo_mute(static_cast<size_t>(command.target_id), solo,
+                                                   mute)) {
+        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                      transport_.sample_position(), command.target_id);
+      }
+#else
+      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                    transport_.sample_position(), command.target_id);
+#endif
+      break;
+    }
     case rt::CommandType::kSetTempoMap:
     case rt::CommandType::kSetLoop:
     case rt::CommandType::kSwapGraph:
     case rt::CommandType::kSwapAutomation:
-    case rt::CommandType::kSetSoloMute:
     case rt::CommandType::kAddClip:
     case rt::CommandType::kRemoveClip:
     case rt::CommandType::kArmRecord:
@@ -981,6 +1068,11 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 }
 
 #if defined(SONARE_WITH_MIXING)
+void RealtimeEngine::set_mixing_enabled(bool enabled) noexcept {
+  mixing_enabled_ = enabled;
+  update_reported_graph_latency();
+}
+
 bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
   if (strip != nullptr && monitor_runtime_.contains(strip)) {
     return false;
@@ -991,7 +1083,115 @@ bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
     // block size. bind() runs on the control thread, so allocation is allowed.
     mixing_runtime_.prepare(sample_rate_, max_block_size_);
   }
+  if (bound) {
+    update_reported_graph_latency();
+  }
   return bound;
+}
+
+bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
+  std::unique_ptr<mixing::ChannelStrip> strip;
+  try {
+    strip = make_channel_strip_from_spec(strip_spec);
+  } catch (...) {
+    return false;
+  }
+  if (!strip) return false;
+  owned_master_strip_ = std::move(strip);
+  const bool bound = bind_mixing_strip(owned_master_strip_.get());
+  if (bound) {
+    set_mixing_enabled(true);
+  }
+  return bound;
+}
+
+bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
+  const bool ok = track_mixer_runtime_.set_track_lanes(std::move(lanes));
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::set_track_buses(std::vector<TrackBusConfig> buses) {
+  const bool ok = track_mixer_runtime_.set_buses(std::move(buses));
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip) {
+  const bool ok = track_mixer_runtime_.bind_track_strip(track_id, strip);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::set_track_strip(uint32_t track_id, const mixing::api::Strip& strip) {
+  const bool ok = track_mixer_runtime_.set_track_strip(track_id, strip);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus) {
+  const bool ok = track_mixer_runtime_.set_bus_strip(bus_id, bus);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index,
+                                               bool bypassed, bool reset_on_bypass) noexcept {
+  return track_mixer_runtime_.set_track_insert_bypassed(track_id, insert_index, bypassed,
+                                                        reset_on_bypass);
+}
+
+bool RealtimeEngine::set_master_insert_bypassed(unsigned int insert_index, bool bypassed,
+                                                bool reset_on_bypass) noexcept {
+  return owned_master_strip_ != nullptr &&
+         owned_master_strip_->set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
+}
+
+bool RealtimeEngine::set_track_eq_band(uint32_t track_id, size_t band_index,
+                                       const mastering::eq::EqBand& band) noexcept {
+  const bool ok = track_mixer_runtime_.set_track_eq_band(track_id, band_index, band);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::set_master_eq_band(size_t band_index,
+                                        const mastering::eq::EqBand& band) noexcept {
+  if (owned_master_strip_ == nullptr) return false;
+  try {
+    owned_master_strip_->set_eq_band(band_index, band);
+    update_reported_graph_latency();
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noexcept {
+  if (!parameter_target_reserved(target_id)) return false;
+  const uint32_t lane = (target_id & kEngineParamLaneMask) >> kEngineParamLaneShift;
+  const uint32_t kind = target_id & kEngineParamKindMask;
+  if (lane == kEngineParamLaneMaster) {
+    return mixing_runtime_.set_parameter(kind, value);
+  }
+  if (lane <= kEngineParamLaneBusBase &&
+      lane > kEngineParamLaneBusBase - TrackMixerRuntime::kMaxBusLanes) {
+    if (kind != TrackMixerRuntime::kFaderDb) return false;
+    const uint32_t bus_index = kEngineParamLaneBusBase - lane;
+    return track_mixer_runtime_.set_bus_gain_db_by_index(bus_index, value);
+  }
+  return track_mixer_runtime_.set_lane_parameter(static_cast<size_t>(lane), kind, value);
 }
 
 bool RealtimeEngine::add_monitor_strip(mixing::ChannelStrip* strip) noexcept {
@@ -1063,7 +1263,21 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
   for (SmoothedParam& slot : smoothed_params_) {
     if (!slot.active) continue;
     const float current = slot.smoother.advance(num_steps);
+#if defined(SONARE_WITH_MIXING)
+    if (parameter_target_reserved(slot.target_id)) {
+      if (!route_engine_parameter(slot.target_id, current)) {
+        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                      transport_.sample_position(), slot.target_id);
+        slot.active = false;
+        slot.target_id = 0;
+        continue;
+      }
+    } else {
+      automation_.set_parameter(slot.target_id, current);
+    }
+#else
     automation_.set_parameter(slot.target_id, current);
+#endif
     // Retire the slot once the ramp has effectively settled at its target so
     // the bank does not stay saturated with finished ramps.
     if (std::abs(slot.smoother.target() - current) <= kSettleEpsilon) {
@@ -1108,6 +1322,10 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
           std::fill(dst, dst + num_frames, 0.0f);
         }
       }
+#if defined(SONARE_WITH_MIXING)
+      meter_tap_.process_lightweight(input_capture_channels_.data(), channels, num_frames,
+                                     transport_.render_frame(), 0xFFFFu);
+#endif
     }
     const InputMonitorState monitor = input_monitor_.try_load();
     if (!monitor.enabled || monitor.gain != 1.0f) {
@@ -1142,8 +1360,17 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
       }
       if (transport_rolling) {
+#if defined(SONARE_WITH_MIXING)
+        if (!track_mixer_runtime_.render_clips(clip_player_, clip_scratch_channels_.data(),
+                                               channels, num_frames, transport_.sample_position(),
+                                               &meter_tap_, transport_.render_frame())) {
+          clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
+                                  transport_.sample_position());
+        }
+#else
         clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
                                 transport_.sample_position());
+#endif
       }
       clip_pdc_delay_.process(clip_scratch_channels_.data(), channels, num_frames);
       for (int ch = 0; ch < channels; ++ch) {
@@ -1153,13 +1380,31 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         for (int i = 0; i < num_frames; ++i) out[i] += clip[i];
       }
     } else if (transport_rolling) {
+#if defined(SONARE_WITH_MIXING)
+      if (!track_mixer_runtime_.render_clips(clip_player_, sub_channels.data(), channels,
+                                             num_frames, transport_.sample_position(), &meter_tap_,
+                                             transport_.render_frame())) {
+        clip_player_.process_at(sub_channels.data(), channels, num_frames,
+                                transport_.sample_position());
+      }
+#else
       clip_player_.process_at(sub_channels.data(), channels, num_frames,
                               transport_.sample_position());
+#endif
     }
 #else
     if (transport_rolling) {
+#if defined(SONARE_WITH_MIXING)
+      if (!track_mixer_runtime_.render_clips(clip_player_, sub_channels.data(), channels,
+                                             num_frames, transport_.sample_position(), &meter_tap_,
+                                             transport_.render_frame())) {
+        clip_player_.process_at(sub_channels.data(), channels, num_frames,
+                                transport_.sample_position());
+      }
+#else
       clip_player_.process_at(sub_channels.data(), channels, num_frames,
                               transport_.sample_position());
+#endif
     }
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -1219,6 +1464,13 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                 }
               }
             }
+#if defined(SONARE_WITH_MIXING)
+            if (track_mixer_runtime_.mix_source(destination_id, midi_instrument_channels_.data(),
+                                                sub_channels.data(), channels, num_frames,
+                                                &meter_tap_, transport_.render_frame())) {
+              return;
+            }
+#endif
             for (int ch = 0; ch < channels; ++ch) {
               float* out = sub_channels[static_cast<size_t>(ch)];
               const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];

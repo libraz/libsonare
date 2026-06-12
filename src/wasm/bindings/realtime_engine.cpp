@@ -8,10 +8,12 @@
 #include <cmath>
 #include <memory>
 
+#include "c_api/eq_band_json.h"
 #include "c_api/synth_patch_common.h"
 #include "common.h"
 #include "engine/tempo_sync.h"
 #include "midi/midi_fx.h"
+#include "mixing/api/scene.h"
 #include "synth_patch_val.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "midi/synth/sf2_player.h"
@@ -133,6 +135,21 @@ int waveformFromName(const std::string& name) {
   if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
   if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
   return -1;
+}
+
+uint32_t uintProperty(val object, const char* key, uint32_t default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : value.as<uint32_t>();
+}
+
+int64_t int64Property(val object, const char* key, int64_t default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : static_cast<int64_t>(value.as<double>());
+}
+
+double doubleProperty(val object, const char* key, double default_value) {
+  val value = objectProperty(object, key);
+  return value.isUndefined() ? default_value : value.as<double>();
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -331,8 +348,61 @@ class RealtimeEngineWasm {
   }
 
   void setTempo(double bpm) { engine_.set_tempo(bpm); }
+  void setTempoSegments(val segments) {
+    std::vector<sonare::transport::TempoSegment> parsed;
+    if (!segments.isUndefined() && !segments.isNull()) {
+      const unsigned count = segments["length"].as<unsigned>();
+      parsed.reserve(count);
+      for (unsigned i = 0; i < count; ++i) {
+        val entry = segments[i];
+        sonare::transport::TempoSegment segment{};
+        segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+        segment.bpm = doubleProperty(entry, "bpm", 0.0);
+        segment.end_bpm = doubleProperty(entry, "endBpm", 0.0);
+        if (!std::isfinite(segment.start_ppq) || segment.start_ppq < 0.0 ||
+            !std::isfinite(segment.bpm) || segment.bpm <= 0.0 ||
+            (segment.end_bpm != 0.0 &&
+             (!std::isfinite(segment.end_bpm) || segment.end_bpm <= 0.0))) {
+          throw sonare::SonareException(
+              sonare::ErrorCode::InvalidParameter,
+              "setTempoSegments: segments require finite startPpq and positive bpm/endBpm");
+        }
+        parsed.push_back(segment);
+      }
+    }
+    engine_.set_tempo_segments(std::move(parsed));
+  }
   void setTimeSignature(int numerator, int denominator) {
     engine_.set_time_signature(numerator, denominator);
+  }
+  void setTimeSignatureSegments(val segments) {
+    std::vector<sonare::transport::TimeSignatureSegment> parsed;
+    if (!segments.isUndefined() && !segments.isNull()) {
+      const unsigned count = segments["length"].as<unsigned>();
+      parsed.reserve(count);
+      for (unsigned i = 0; i < count; ++i) {
+        val entry = segments[i];
+        sonare::transport::TimeSignatureSegment segment{};
+        segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+        segment.time_sig.numerator = intProperty(entry, "numerator", 0);
+        segment.time_sig.denominator = intProperty(entry, "denominator", 0);
+        if (!std::isfinite(segment.start_ppq) || segment.start_ppq < 0.0 ||
+            segment.time_sig.numerator <= 0 || segment.time_sig.denominator <= 0) {
+          throw sonare::SonareException(
+              sonare::ErrorCode::InvalidParameter,
+              "setTimeSignatureSegments: segments require finite startPpq and positive signature");
+        }
+        parsed.push_back(segment);
+      }
+    }
+    engine_.set_time_signature_segments(std::move(parsed));
+  }
+  int64_t sampleAtPpq(double ppq) {
+    if (!std::isfinite(ppq) || ppq < 0.0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "sampleAtPpq: ppq must be finite and non-negative");
+    }
+    return engine_.sample_at_ppq(ppq);
   }
   void setLoop(double start_ppq, double end_ppq, bool enabled) {
     engine_.set_loop(start_ppq, end_ppq, enabled);
@@ -343,6 +413,10 @@ class RealtimeEngineWasm {
     if (id == 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "parameter id must be non-zero");
+    }
+    if (sonare::engine::RealtimeEngine::parameter_target_reserved(id)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "parameter id is reserved by the engine");
     }
     parameter_strings_.push_back(stringProperty(info, "name", ""));
     parameter_strings_.push_back(stringProperty(info, "unit", ""));
@@ -499,6 +573,18 @@ class RealtimeEngineWasm {
     }
   }
 
+  void setSoloMute(uint32_t lane_index, bool solo, bool mute, int64_t render_frame) {
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kSetSoloMute;
+    command.target_id = lane_index;
+    command.sample_time = render_frame;
+    command.arg.i = (mute ? 0x1 : 0x0) | (solo ? 0x2 : 0x0);
+    if (!engine_.push_command(command)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "failed to queue solo/mute command");
+    }
+  }
+
   void setBuiltinInstrument(uint32_t destination_id, val config) {
 #if defined(SONARE_WITH_ARRANGEMENT)
     sonare::midi::BuiltinSynthConfig cfg;
@@ -532,6 +618,71 @@ class RealtimeEngineWasm {
 #else
     (void)destination_id;
     (void)config;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  void setMidiClips(val clips_val) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    const uint32_t count = clips_val["length"].as<uint32_t>();
+    std::vector<sonare::midi::MidiClipSchedule> clips;
+    clips.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+      val clip_val = clips_val[i];
+      sonare::midi::MidiClipSchedule clip;
+      clip.id = uintProperty(clip_val, "id", 0);
+      clip.track_id = uintProperty(clip_val, "trackId", 0);
+      clip.start_sample = int64Property(clip_val, "startSample", 0);
+      clip.start_ppq = doubleProperty(clip_val, "startPpq", 0.0);
+      clip.length_samples = int64Property(clip_val, "lengthSamples", 0);
+      clip.loop_mode = boolProperty(clip_val, "loop", false) ? sonare::midi::MidiLoopMode::kLoop
+                                                             : sonare::midi::MidiLoopMode::kOneShot;
+      clip.loop_length_samples = int64Property(clip_val, "loopLengthSamples", 0);
+      clip.destination_id = uintProperty(clip_val, "destinationId", clip.track_id);
+      val events_val = clip_val["events"];
+      const uint32_t event_count = events_val["length"].as<uint32_t>();
+      clip.events.reserve(event_count);
+      for (uint32_t j = 0; j < event_count; ++j) {
+        val event_val = events_val[j];
+        sonare::midi::MidiEvent event;
+        event.render_frame = int64Property(event_val, "renderFrame", 0);
+        sonare::midi::Ump ump;
+        ump.words[0] = uintProperty(event_val, "word0", uintProperty(event_val, "data0", 0));
+        ump.words[1] = uintProperty(event_val, "word1", uintProperty(event_val, "data1", 0));
+        ump.words[2] = uintProperty(event_val, "word2", 0);
+        ump.words[3] = uintProperty(event_val, "word3", 0);
+        const uint32_t word_count = uintProperty(event_val, "wordCount", 0);
+        if (word_count >= 1 && word_count <= 4) {
+          ump.word_count = static_cast<uint8_t>(word_count);
+        } else if (ump.words[3] != 0) {
+          ump.word_count = 4;
+        } else if (ump.words[2] != 0) {
+          ump.word_count = 3;
+        } else if (ump.words[1] != 0) {
+          ump.word_count = 2;
+        } else {
+          ump.word_count = 1;
+        }
+        const uint32_t group = uintProperty(event_val, "group", 0);
+        if (group > 15) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "setMidiClips: event group must be in [0,15]");
+        }
+        ump.group = static_cast<uint8_t>(group);
+        ump.sysex_handle = uintProperty(event_val, "sysexHandle", 0);
+        event.ump = ump;
+        clip.events.push_back(event);
+      }
+      std::sort(clip.events.begin(), clip.events.end(),
+                [](const sonare::midi::MidiEvent& a, const sonare::midi::MidiEvent& b) {
+                  return a.render_frame < b.render_frame;
+                });
+      clips.push_back(std::move(clip));
+    }
+    engine_.set_midi_clips(std::move(clips));
+#else
+    (void)clips_val;
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1038,6 +1189,9 @@ class RealtimeEngineWasm {
 
       sonare::engine::ClipSchedule schedule{};
       schedule.id = static_cast<uint32_t>(intProperty(clip_val, "id", i + 1));
+      schedule.track_id = hasProperty(clip_val, "trackId")
+                              ? static_cast<uint32_t>(intProperty(clip_val, "trackId", 0))
+                              : 0;
       if (has_page_provider) {
         const int provider_id = objectProperty(clip_val, "pageProvider").as<int>();
         auto provider = liveProviderById(clip_page_providers_, provider_id);
@@ -1205,6 +1359,185 @@ class RealtimeEngineWasm {
   }
 
   int clipCount() const { return static_cast<int>(engine_.clip_count()); }
+
+  void setTrackLanes(val lanes) {
+#if defined(SONARE_WITH_MIXING)
+    const int count = lanes["length"].as<int>();
+    std::vector<sonare::engine::TrackLaneConfig> configs;
+    configs.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i) {
+      val lane_val = lanes[i];
+      uint32_t track_id = 0;
+      if (lane_val.typeOf().as<std::string>() == "number") {
+        track_id = lane_val.as<uint32_t>();
+      } else {
+        track_id = static_cast<uint32_t>(intProperty(lane_val, "trackId", 0));
+      }
+      sonare::engine::TrackLaneConfig config{track_id};
+      if (lane_val.typeOf().as<std::string>() == "object" && !lane_val["sends"].isUndefined() &&
+          !lane_val["sends"].isNull()) {
+        val sends = lane_val["sends"];
+        const int send_count = sends["length"].as<int>();
+        config.sends.reserve(static_cast<size_t>(send_count));
+        for (int send_index = 0; send_index < send_count; ++send_index) {
+          val send = sends[send_index];
+          config.sends.push_back({static_cast<uint32_t>(intProperty(send, "busId", 0)),
+                                  floatProperty(send, "levelDb", 0.0f),
+                                  boolProperty(send, "enabled", true)});
+        }
+      }
+      configs.push_back(std::move(config));
+    }
+    if (!engine_.set_track_lanes(std::move(configs))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track lane configuration");
+    }
+#else
+    (void)lanes;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackBuses(val buses) {
+#if defined(SONARE_WITH_MIXING)
+    const int count = buses["length"].as<int>();
+    std::vector<sonare::engine::TrackBusConfig> configs;
+    configs.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i) {
+      val bus = buses[i];
+      configs.push_back({static_cast<uint32_t>(intProperty(bus, "busId", 0)),
+                         floatProperty(bus, "gainDb", 0.0f)});
+    }
+    if (!engine_.set_track_buses(std::move(configs))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track bus configuration");
+    }
+#else
+    (void)buses;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setBusStripJson(uint32_t bus_id, const std::string& scene_json) {
+#if defined(SONARE_WITH_MIXING)
+    sonare::mixing::api::Scene scene;
+    try {
+      scene = sonare::mixing::api::scene_from_json(scene_json);
+    } catch (const std::exception& e) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
+    }
+    if (bus_id == 0 || scene.buses.empty() || !engine_.set_bus_strip(bus_id, scene.buses.front())) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bus strip spec");
+    }
+#else
+    (void)bus_id;
+    (void)scene_json;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripJson(uint32_t track_id, const std::string& scene_json) {
+#if defined(SONARE_WITH_MIXING)
+    if (track_id == 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "track id must be non-zero");
+    }
+    sonare::mixing::api::Scene scene;
+    try {
+      scene = sonare::mixing::api::scene_from_json(scene_json);
+    } catch (const std::exception& e) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
+    }
+    if (scene.strips.empty() || !engine_.set_track_strip(track_id, scene.strips.front())) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip spec");
+    }
+#else
+    (void)track_id;
+    (void)scene_json;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripEqBandJson(uint32_t track_id, int band_index, const std::string& band_json) {
+#if defined(SONARE_WITH_MIXING)
+    if (track_id == 0 || band_index < 0 ||
+        !engine_.set_track_eq_band(track_id, static_cast<size_t>(band_index),
+                                   sonare::c_api::parse_eq_band_json(band_json.c_str()))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip EQ band target");
+    }
+#else
+    (void)track_id;
+    (void)band_index;
+    (void)band_json;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripInsertBypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
+                                   bool reset_on_bypass) {
+#if defined(SONARE_WITH_MIXING)
+    if (!engine_.set_track_insert_bypassed(track_id, insert_index, bypassed, reset_on_bypass)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip insert bypass target");
+    }
+#else
+    (void)track_id;
+    (void)insert_index;
+    (void)bypassed;
+    (void)reset_on_bypass;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setMasterStripJson(const std::string& scene_json) {
+#if defined(SONARE_WITH_MIXING)
+    sonare::mixing::api::Scene scene;
+    try {
+      scene = sonare::mixing::api::scene_from_json(scene_json);
+    } catch (const std::exception& e) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
+    }
+    if (scene.strips.empty() || !engine_.set_master_strip(scene.strips.front())) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid master strip spec");
+    }
+#else
+    (void)scene_json;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setMasterStripEqBandJson(int band_index, const std::string& band_json) {
+#if defined(SONARE_WITH_MIXING)
+    if (band_index < 0 ||
+        !engine_.set_master_eq_band(static_cast<size_t>(band_index),
+                                    sonare::c_api::parse_eq_band_json(band_json.c_str()))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid master strip EQ band target");
+    }
+#else
+    (void)band_index;
+    (void)band_json;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setMasterStripInsertBypassed(unsigned int insert_index, bool bypassed,
+                                    bool reset_on_bypass) {
+#if defined(SONARE_WITH_MIXING)
+    if (!engine_.set_master_insert_bypassed(insert_index, bypassed, reset_on_bypass)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid master strip insert bypass target");
+    }
+#else
+    (void)insert_index;
+    (void)bypassed;
+    (void)reset_on_bypass;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
 
   int createClipPageProvider(int num_channels, int64_t num_samples, int64_t page_frames) {
     if (num_channels <= 0 || num_samples <= 0 || page_frames <= 0) {
@@ -1757,6 +2090,8 @@ void registerRealtimeEngineBindings() {
       .function("prepare", &RealtimeEngineWasm::prepare)
       .function("setParameter", &RealtimeEngineWasm::setParameter)
       .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
+      .function("setSoloMute", &RealtimeEngineWasm::setSoloMute)
+      .function("setMidiClips", &RealtimeEngineWasm::setMidiClips)
       .function("setBuiltinInstrument", &RealtimeEngineWasm::setBuiltinInstrument)
       .function("setSynthInstrument", &RealtimeEngineWasm::setSynthInstrument)
       .function("loadSoundFont", &RealtimeEngineWasm::loadSoundFont)
@@ -1785,7 +2120,10 @@ void registerRealtimeEngineBindings() {
       .function("seekSample", &RealtimeEngineWasm::seekSample)
       .function("seekPpq", &RealtimeEngineWasm::seekPpq)
       .function("setTempo", &RealtimeEngineWasm::setTempo)
+      .function("setTempoSegments", &RealtimeEngineWasm::setTempoSegments)
       .function("setTimeSignature", &RealtimeEngineWasm::setTimeSignature)
+      .function("setTimeSignatureSegments", &RealtimeEngineWasm::setTimeSignatureSegments)
+      .function("sampleAtPpq", &RealtimeEngineWasm::sampleAtPpq)
       .function("setLoop", &RealtimeEngineWasm::setLoop)
       .function("addParameter", &RealtimeEngineWasm::addParameter)
       .function("parameterCount", &RealtimeEngineWasm::parameterCount)
@@ -1807,6 +2145,15 @@ void registerRealtimeEngineBindings() {
       .function("graphConnectionCount", &RealtimeEngineWasm::graphConnectionCount)
       .function("setClips", &RealtimeEngineWasm::setClips)
       .function("clipCount", &RealtimeEngineWasm::clipCount)
+      .function("setTrackLanes", &RealtimeEngineWasm::setTrackLanes)
+      .function("setTrackBuses", &RealtimeEngineWasm::setTrackBuses)
+      .function("setBusStripJson", &RealtimeEngineWasm::setBusStripJson)
+      .function("setTrackStripJson", &RealtimeEngineWasm::setTrackStripJson)
+      .function("setTrackStripEqBandJson", &RealtimeEngineWasm::setTrackStripEqBandJson)
+      .function("setTrackStripInsertBypassed", &RealtimeEngineWasm::setTrackStripInsertBypassed)
+      .function("setMasterStripJson", &RealtimeEngineWasm::setMasterStripJson)
+      .function("setMasterStripEqBandJson", &RealtimeEngineWasm::setMasterStripEqBandJson)
+      .function("setMasterStripInsertBypassed", &RealtimeEngineWasm::setMasterStripInsertBypassed)
       .function("createClipPageProvider", &RealtimeEngineWasm::createClipPageProvider)
       .function("supplyClipPage", &RealtimeEngineWasm::supplyClipPage)
       .function("clearClipPage", &RealtimeEngineWasm::clearClipPage)

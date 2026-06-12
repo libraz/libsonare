@@ -1,0 +1,496 @@
+#include "engine/track_mixer.h"
+
+#include <array>
+#include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <memory>
+
+#include "rt/processor_base.h"
+
+namespace {
+
+class GainProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit GainProcessor(float gain) : gain_(gain) {}
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] *= gain_;
+      }
+    }
+  }
+  void reset() override {}
+
+ private:
+  float gain_ = 1.0f;
+};
+
+sonare::engine::ClipSchedule clip_for_track(uint32_t clip_id, uint32_t track_id,
+                                            const float* const* samples, int channels, int frames,
+                                            float gain = 1.0f) {
+  sonare::engine::ClipSchedule clip{
+      clip_id, {samples, channels, frames}, 0.0, 0, 0, frames, false, gain, 0, 0};
+  clip.track_id = track_id;
+  return clip;
+}
+
+}  // namespace
+
+TEST_CASE("TrackMixerRuntime routes clip tracks into independent lanes", "[engine][track_mixer]") {
+  std::array<float, 4> source_a_l{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> source_a_r{0.5f, 0.5f, 0.5f, 0.5f};
+  std::array<float, 4> source_b_l{0.25f, 0.25f, 0.25f, 0.25f};
+  std::array<float, 4> source_b_r{0.75f, 0.75f, 0.75f, 0.75f};
+  const float* a[] = {source_a_l.data(), source_a_r.data()};
+  const float* b[] = {source_b_l.data(), source_b_r.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip_for_track(1, 10, a, 2, 4), clip_for_track(2, 20, b, 2, 4)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 4);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  std::array<float, 4> out_l{};
+  std::array<float, 4> out_r{};
+  float* out[] = {out_l.data(), out_r.data()};
+  REQUIRE(mixer.render_clips(player, out, 2, 4, 0));
+
+  REQUIRE(out_l[0] == 1.25f);
+  REQUIRE(out_r[3] == 1.25f);
+}
+
+TEST_CASE("TrackMixerRuntime keeps unknown clip tracks on the main bus", "[engine][track_mixer]") {
+  std::array<float, 4> source_a{1.0f, 1.0f, 1.0f, 1.0f};
+  std::array<float, 4> source_unknown{0.5f, 0.5f, 0.5f, 0.5f};
+  const float* a[] = {source_a.data()};
+  const float* unknown[] = {source_unknown.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip_for_track(1, 10, a, 1, 4), clip_for_track(2, 99, unknown, 1, 4)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 4);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  std::array<float, 4> out_l{};
+  float* out[] = {out_l.data()};
+  REQUIRE(mixer.render_clips(player, out, 1, 4, 0));
+
+  REQUIRE(out_l[0] > 1.49f);
+  REQUIRE(out_l[0] < 1.51f);
+}
+
+TEST_CASE("TrackMixerRuntime validates lane snapshots", "[engine][track_mixer]") {
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 4);
+
+  REQUIRE_FALSE(mixer.set_track_lanes({{0}}));
+  REQUIRE_FALSE(mixer.set_track_lanes({{1}, {1}}));
+
+  std::vector<sonare::engine::TrackLaneConfig> too_many;
+  too_many.resize(sonare::engine::TrackMixerRuntime::kMaxTrackLanes + 1);
+  for (size_t i = 0; i < too_many.size(); ++i) {
+    too_many[i].track_id = static_cast<uint32_t>(i + 1);
+  }
+  REQUIRE_FALSE(mixer.set_track_lanes(std::move(too_many)));
+}
+
+TEST_CASE("TrackMixerRuntime aligns strip latency across active lanes", "[engine][track_mixer]") {
+  std::array<float, 16> latent_source{};
+  std::array<float, 16> dry_source{};
+  latent_source[0] = 1.0f;
+  dry_source[0] = 1.0f;
+  const float* latent[] = {latent_source.data()};
+  const float* dry[] = {dry_source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 16);
+  player.set_clips({clip_for_track(1, 10, latent, 1, 16), clip_for_track(2, 20, dry, 1, 16)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 16);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip latent_strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  latent_strip.set_channel_delay_samples(4);
+  REQUIRE(mixer.bind_track_strip(10, &latent_strip));
+  REQUIRE(mixer.latency_samples_q8() == (4 << 8));
+
+  std::array<float, 16> out_l{};
+  float* out[] = {out_l.data()};
+  REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
+
+  REQUIRE(out_l[0] == 0.0f);
+  REQUIRE(out_l[1] == 0.0f);
+  REQUIRE(out_l[2] == 0.0f);
+  REQUIRE(out_l[3] == 0.0f);
+  REQUIRE(out_l[4] > 2.3f);
+  REQUIRE(out_l[4] < 2.5f);
+}
+
+TEST_CASE("TrackMixerRuntime mixes post-fader sends into buses", "[engine][track_mixer]") {
+  std::array<float, 16> source{};
+  source.fill(1.0f);
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 16);
+  player.set_clips({clip_for_track(1, 10, channels, 1, 16)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 16);
+  REQUIRE(mixer.set_buses({{1, 0.0f}}));
+
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.sends.push_back({1, 0.0f, true});
+  REQUIRE(mixer.set_track_lanes({lane}));
+
+  std::array<float, 16> out_l{};
+  float* out[] = {out_l.data()};
+  REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
+  REQUIRE(out_l.back() > 2.82f);
+  REQUIRE(out_l.back() < 2.84f);
+
+  lane.sends[0].level_db = -6.0206f;
+  REQUIRE(mixer.set_track_lanes({lane}));
+  out_l.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
+  REQUIRE(out_l.back() > 2.11f);
+  REQUIRE(out_l.back() < 2.13f);
+
+  lane.sends[0].enabled = false;
+  REQUIRE(mixer.set_track_lanes({lane}));
+  out_l.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
+  REQUIRE(out_l.back() > 1.41f);
+  REQUIRE(out_l.back() < 1.42f);
+}
+
+TEST_CASE("TrackMixerRuntime validates buses and routes sends through bus strip",
+          "[engine][track_mixer]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 4;
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] = 0.25f * std::sin(2.0f * 3.14159265358979323846f * 1000.0f *
+                                                      static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime flat;
+  flat.prepare(48000.0, kBlock);
+  REQUIRE(flat.set_buses({{1, -120.0f}}));
+  sonare::engine::TrackLaneConfig flat_lane{10};
+  flat_lane.sends.push_back({1, 0.0f, true});
+  REQUIRE(flat.set_track_lanes({flat_lane}));
+  std::array<float, kBlock> flat_out{};
+  float* flat_io[] = {flat_out.data()};
+  REQUIRE(flat.render_clips(player, flat_io, 1, kBlock, 0));
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE_FALSE(mixer.set_buses({{1, 0.0f}, {1, 0.0f}}));
+  REQUIRE(mixer.set_buses({{1, -120.0f}, {2, 0.0f}}));
+  sonare::engine::TrackLaneConfig bad_lane{10};
+  bad_lane.sends.push_back({99, 0.0f, true});
+  REQUIRE_FALSE(mixer.set_track_lanes({bad_lane}));
+  sonare::engine::TrackLaneConfig dup_lane{10};
+  dup_lane.sends.push_back({1, 0.0f, true});
+  dup_lane.sends.push_back({1, -6.0f, true});
+  REQUIRE_FALSE(mixer.set_track_lanes({dup_lane}));
+
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.sends.push_back({2, 0.0f, true});
+  REQUIRE(mixer.set_track_lanes({lane}));
+  sonare::mixing::api::Bus bus;
+  bus.id = "2";
+  bus.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "eq.parametric",
+       R"({"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1})"});
+  REQUIRE(mixer.set_bus_strip(2, bus));
+
+  std::array<float, kBlock> eq_out{};
+  float* eq_io[] = {eq_out.data()};
+  for (int block = 0; block < 6; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, eq_io, 1, kBlock, 0));
+  }
+
+  auto rms = [](const std::array<float, kBlock>& samples) {
+    double sum = 0.0;
+    for (float sample : samples) {
+      sum += static_cast<double>(sample) * static_cast<double>(sample);
+    }
+    return std::sqrt(sum / static_cast<double>(samples.size()));
+  };
+  REQUIRE(rms(eq_out) > rms(flat_out) * 1.5);
+}
+
+TEST_CASE("TrackMixerRuntime applies lane fader pan and solo mute", "[engine][track_mixer]") {
+  std::array<float, 256> source_a_l{};
+  std::array<float, 256> source_a_r{};
+  std::array<float, 256> source_b_l{};
+  std::array<float, 256> source_b_r{};
+  source_a_l.fill(1.0f);
+  source_a_r.fill(1.0f);
+  source_b_l.fill(1.0f);
+  source_b_r.fill(1.0f);
+  const float* a[] = {source_a_l.data(), source_a_r.data()};
+  const float* b[] = {source_b_l.data(), source_b_r.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 256);
+  player.set_clips({clip_for_track(1, 10, a, 2, 256), clip_for_track(2, 20, b, 2, 256)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 256);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  std::array<float, 256> out_l{};
+  std::array<float, 256> out_r{};
+  float* out[] = {out_l.data(), out_r.data()};
+  REQUIRE(mixer.render_clips(player, out, 2, 256, 0));
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb, -12.0f));
+  REQUIRE(mixer.set_lane_parameter(1, sonare::engine::TrackMixerRuntime::kPan, 1.0f));
+  out_l.fill(0.0f);
+  out_r.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, out, 2, 256, 0));
+  REQUIRE(out_l.back() < out_r.back());
+  REQUIRE(out_l.back() > 0.2f);
+
+  REQUIRE(mixer.set_lane_solo_mute(0, true, false));
+  for (int block = 0; block < 4; ++block) {
+    out_l.fill(0.0f);
+    out_r.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out, 2, 256, 0));
+  }
+  REQUIRE(out_l.back() < 0.45f);
+  REQUIRE(out_r.back() < 0.45f);
+
+  REQUIRE(mixer.set_lane_solo_mute(0, true, true));
+  for (int block = 0; block < 4; ++block) {
+    out_l.fill(0.0f);
+    out_r.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out, 2, 256, 0));
+  }
+  REQUIRE(out_l.back() < 0.1f);
+  REQUIRE(out_r.back() < 0.1f);
+}
+
+TEST_CASE("TrackMixerRuntime carries lane smoother state by track id across reorders",
+          "[engine][track_mixer]") {
+  std::array<float, 256> source_a{};
+  std::array<float, 256> source_b{};
+  source_a.fill(1.0f);
+  source_b.fill(1.0f);
+  const float* a[] = {source_a.data()};
+  const float* b[] = {source_b.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 256);
+  player.set_clips({clip_for_track(1, 10, a, 1, 256), clip_for_track(2, 20, b, 1, 256)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 256);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  std::array<float, 256> out_l{};
+  float* out[] = {out_l.data()};
+  REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb, -12.0f));
+  for (int block = 0; block < 8; ++block) {
+    out_l.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  }
+  REQUIRE(out_l.back() > 1.20f);
+  REQUIRE(out_l.back() < 1.35f);
+
+  REQUIRE(mixer.set_track_lanes({{20}, {10}}));
+  out_l.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  REQUIRE(out_l.back() > 1.20f);
+  REQUIRE(out_l.back() < 1.35f);
+}
+
+TEST_CASE("TrackMixerRuntime carries solo mute state by track id across remove and re-add",
+          "[engine][track_mixer]") {
+  std::array<float, 256> source_a{};
+  std::array<float, 256> source_b{};
+  source_a.fill(1.0f);
+  source_b.fill(1.0f);
+  const float* a[] = {source_a.data()};
+  const float* b[] = {source_b.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 256);
+  player.set_clips({clip_for_track(1, 10, a, 1, 256), clip_for_track(2, 20, b, 1, 256)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 256);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+  REQUIRE(mixer.set_lane_solo_mute(0, true, false));
+
+  std::array<float, 256> out_l{};
+  float* out[] = {out_l.data()};
+  for (int block = 0; block < 8; ++block) {
+    out_l.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  }
+  REQUIRE(out_l.back() > 0.95f);
+  REQUIRE(out_l.back() < 1.05f);
+
+  REQUIRE(mixer.set_track_lanes({{20}}));
+  out_l.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  REQUIRE(out_l.back() > 1.3f);
+  REQUIRE(out_l.back() < 2.1f);
+
+  REQUIRE(mixer.set_track_lanes({{20}, {10}}));
+  for (int block = 0; block < 4; ++block) {
+    out_l.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  }
+  REQUIRE(out_l.back() > 0.95f);
+  REQUIRE(out_l.back() < 1.05f);
+}
+
+TEST_CASE("TrackMixerRuntime processes bound ChannelStrip for a track lane",
+          "[engine][track_mixer]") {
+  std::array<float, 256> source_a{};
+  std::array<float, 256> source_b{};
+  source_a.fill(1.0f);
+  source_b.fill(1.0f);
+  const float* a[] = {source_a.data()};
+  const float* b[] = {source_b.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 256);
+  player.set_clips({clip_for_track(1, 10, a, 1, 256), clip_for_track(2, 20, b, 1, 256)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 256);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<GainProcessor>(0.25f));
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+
+  std::array<float, 256> out_l{};
+  float* out[] = {out_l.data()};
+  REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  REQUIRE(out_l.back() > 1.20f);
+  REQUIRE(out_l.back() < 1.40f);
+
+  REQUIRE(mixer.set_track_lanes({{20}, {10}}));
+  out_l.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  REQUIRE(out_l.back() > 1.20f);
+  REQUIRE(out_l.back() < 1.40f);
+}
+
+TEST_CASE("TrackMixerRuntime applies scene EQ insert for a track lane", "[engine][track_mixer]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 4;
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] = 0.25f * std::sin(2.0f * 3.14159265358979323846f * 100.0f *
+                                                      static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime flat;
+  flat.prepare(48000.0, kBlock);
+  REQUIRE(flat.set_track_lanes({{10}}));
+  std::array<float, kBlock> flat_out{};
+  float* flat_io[] = {flat_out.data()};
+  REQUIRE(flat.render_clips(player, flat_io, 1, kBlock, 0));
+
+  sonare::engine::TrackMixerRuntime eq;
+  eq.prepare(48000.0, kBlock);
+  REQUIRE(eq.set_track_lanes({{10}}));
+  sonare::mixing::api::Strip strip_spec;
+  strip_spec.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "eq.parametric",
+       R"({"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":12,"band0.enabled":1})"});
+  REQUIRE(eq.set_track_strip(10, strip_spec));
+
+  std::array<float, kBlock> eq_out{};
+  float* eq_io[] = {eq_out.data()};
+  for (int block = 0; block < 6; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(eq.render_clips(player, eq_io, 1, kBlock, 0));
+  }
+
+  auto rms = [](const std::array<float, kBlock>& samples) {
+    double sum = 0.0;
+    for (float sample : samples) {
+      sum += static_cast<double>(sample) * static_cast<double>(sample);
+    }
+    return std::sqrt(sum / static_cast<double>(samples.size()));
+  };
+  REQUIRE(rms(eq_out) > rms(flat_out) * 1.5);
+
+  REQUIRE_FALSE(eq.set_track_insert_bypassed(10, 7, true));
+  REQUIRE(eq.set_track_insert_bypassed(10, 0, true, true));
+  std::array<float, kBlock> bypassed_out{};
+  float* bypassed_io[] = {bypassed_out.data()};
+  REQUIRE(eq.render_clips(player, bypassed_io, 1, kBlock, 0));
+  REQUIRE(std::abs(rms(bypassed_out) - rms(flat_out)) < 0.001);
+}
+
+TEST_CASE("TrackMixerRuntime applies embedded EQ band changes", "[engine][track_mixer]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 4;
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] =
+        std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  sonare::mixing::api::Strip strip_spec;
+  REQUIRE(mixer.set_track_strip(10, strip_spec));
+
+  std::array<float, kBlock> flat_out{};
+  float* flat_io[] = {flat_out.data()};
+  REQUIRE(mixer.render_clips(player, flat_io, 1, kBlock, 0));
+
+  sonare::mastering::eq::EqBand band{sonare::mastering::eq::EqBandType::Peak, 1000.0f, 12.0f, 1.0f,
+                                     true};
+  REQUIRE_FALSE(mixer.set_track_eq_band(99, 0, band));
+  REQUIRE(mixer.set_track_eq_band(10, 0, band));
+  std::array<float, kBlock> eq_out{};
+  float* eq_io[] = {eq_out.data()};
+  for (int block = 0; block < 4; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, eq_io, 1, kBlock, 0));
+  }
+
+  auto rms = [](const std::array<float, kBlock>& samples) {
+    double sum = 0.0;
+    for (float sample : samples) {
+      sum += static_cast<double>(sample) * static_cast<double>(sample);
+    }
+    return std::sqrt(sum / static_cast<double>(samples.size()));
+  };
+  REQUIRE(rms(eq_out) > rms(flat_out) * 1.5);
+}

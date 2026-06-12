@@ -172,6 +172,12 @@ std::vector<sonare::midi::MidiClipSchedule> note_on_at_zero() {
   return {clip};
 }
 
+std::vector<sonare::midi::MidiClipSchedule> note_on_at_zero(uint32_t destination_id) {
+  auto clips = note_on_at_zero();
+  clips[0].destination_id = destination_id;
+  return clips;
+}
+
 // A stereo clip carrying a unit impulse at frame 0.
 sonare::engine::ClipSchedule impulse_clip(int64_t length) {
   auto storage = std::make_shared<sonare::engine::ClipAudioStorage>();
@@ -191,6 +197,26 @@ sonare::engine::ClipSchedule impulse_clip(int64_t length) {
   clip.storage = std::move(storage);
   return clip;
 }
+
+#if defined(SONARE_WITH_MIXING)
+sonare::engine::ClipSchedule constant_track_clip(uint32_t track_id, int64_t length, float value) {
+  auto storage = std::make_shared<sonare::engine::ClipAudioStorage>();
+  storage->channels = {std::vector<float>(static_cast<size_t>(length), value),
+                       std::vector<float>(static_cast<size_t>(length), value)};
+  storage->channel_ptrs = {storage->channels[0].data(), storage->channels[1].data()};
+  sonare::engine::ClipSchedule clip;
+  clip.id = track_id;
+  clip.track_id = track_id;
+  clip.buffer.channels = storage->channel_ptrs.data();
+  clip.buffer.num_channels = 2;
+  clip.buffer.num_samples = length;
+  clip.start_sample = 0;
+  clip.length_samples = length;
+  clip.gain = 1.0f;
+  clip.storage = std::move(storage);
+  return clip;
+}
+#endif
 
 void push_play(RealtimeEngine& engine) {
   sonare::rt::Command c{};
@@ -294,6 +320,40 @@ TEST_CASE("RealtimeEngine routes live MIDI input to the configured destination",
   REQUIRE(routed_instrument.note_on_count_ == 1);
   REQUIRE(block_peak(left) == Catch::Approx(0.5f));
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("RealtimeEngine routes instrument destinations through track lanes", "[engine][midi]") {
+  constexpr int kBlock = 128;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  CountingInstrument lane_a;
+  CountingInstrument lane_b;
+  REQUIRE(engine.set_midi_instrument(10, &lane_a));
+  REQUIRE(engine.set_midi_instrument(20, &lane_b));
+  auto clips = note_on_at_zero(10);
+  auto second = note_on_at_zero(20);
+  second[0].id = 2;
+  clips.push_back(second[0]);
+  engine.set_midi_clips(clips);
+  REQUIRE(engine.set_track_lanes({{10}, {20}}));
+  push_play(engine);
+
+  std::vector<float> left(kBlock, 0.0f);
+  std::vector<float> right(kBlock, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, kBlock);
+  REQUIRE(block_peak(left) == Catch::Approx(1.0f));
+
+  REQUIRE(engine.track_mixer().set_lane_solo_mute(0, true, false));
+  for (int i = 0; i < 8; ++i) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    engine.process(channels, 2, kBlock);
+  }
+  REQUIRE(block_peak(left) > 0.45f);
+  REQUIRE(block_peak(left) < 0.55f);
+}
+#endif
 
 TEST_CASE("RealtimeEngine mirrors sequenced MIDI to live output sink", "[engine][midi]") {
   RealtimeEngine engine;
@@ -548,6 +608,39 @@ TEST_CASE("render_offline flushes PDC delay tails before returning", "[engine][m
   engine.set_midi_instrument(nullptr);
 }
 
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("render_offline flushes PDC delay tails from lane-routed clips", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 64;
+  constexpr int kLatency = 96;
+  constexpr int64_t kFrames = 32;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  FractionalLatencyInstrument inst(kLatency << 8);
+  engine.set_midi_instrument(&inst);
+  auto clip = impulse_clip(kFrames);
+  clip.track_id = 10;
+  engine.set_clips({clip});
+  REQUIRE(engine.set_track_lanes({{10}}));
+
+  push_play(engine);
+  std::vector<float> out_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kFrames), 0.0f);
+  float* out[] = {out_l.data(), out_r.data()};
+  engine.render_offline(out, 2, kFrames, kBlock);
+  REQUIRE(block_peak(out_l) == Catch::Approx(0.0f));
+
+  engine.set_clips({});
+  std::vector<float> next_l(static_cast<size_t>(kLatency + kBlock), 0.0f);
+  std::vector<float> next_r(static_cast<size_t>(kLatency + kBlock), 0.0f);
+  float* next[] = {next_l.data(), next_r.data()};
+  engine.render_offline(next, 2, static_cast<int64_t>(next_l.size()), kBlock);
+  REQUIRE(block_peak(next_l) == Catch::Approx(0.0f));
+
+  engine.set_midi_instrument(nullptr);
+}
+#endif
+
 TEST_CASE("PDC threads and applies fractional (Q8) instrument latency", "[engine][midi]") {
   constexpr double kSr = 48000.0;
   constexpr int kBlock = 256;
@@ -613,6 +706,37 @@ TEST_CASE("PDC aligns instrument audio with clip audio", "[engine][midi]") {
 
   engine.set_midi_instrument(nullptr);
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("PDC clip bus still routes through track lanes", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 256;
+  constexpr int kLatency = 96;
+  constexpr int64_t kFrames = kBlock * 10;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  FractionalLatencyInstrument inst(kLatency << 8);
+  engine.set_midi_instrument(99, &inst);
+  engine.set_clips({constant_track_clip(10, kFrames, 1.0f)});
+  REQUIRE(engine.set_track_lanes({{10}}));
+  REQUIRE(engine.track_mixer().set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb,
+                                                  -12.0f));
+  push_play(engine);
+
+  std::vector<float> out_l(static_cast<size_t>(kBlock), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kBlock), 0.0f);
+  float* io[] = {out_l.data(), out_r.data()};
+  for (int block = 0; block < 7; ++block) {
+    std::fill(out_l.begin(), out_l.end(), 0.0f);
+    std::fill(out_r.begin(), out_r.end(), 0.0f);
+    engine.process(io, 2, kBlock);
+  }
+
+  REQUIRE(block_peak(out_l) > 0.20f);
+  REQUIRE(block_peak(out_l) < 0.35f);
+  engine.set_midi_instrument(99, nullptr);
+}
+#endif
 
 TEST_CASE("stopped transport renders no clip audio", "[engine][midi]") {
   constexpr double kSr = 48000.0;

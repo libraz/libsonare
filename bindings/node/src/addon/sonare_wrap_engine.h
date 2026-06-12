@@ -21,6 +21,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SeekPpq(const Napi::CallbackInfo& info);
   Napi::Value SetTempo(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignature(const Napi::CallbackInfo& info);
+  Napi::Value SampleAtPpq(const Napi::CallbackInfo& info);
   Napi::Value SetLoop(const Napi::CallbackInfo& info);
   Napi::Value AddParameter(const Napi::CallbackInfo& info);
   Napi::Value ParameterCount(const Napi::CallbackInfo& info);
@@ -39,6 +40,15 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value CountInEndSample(const Napi::CallbackInfo& info);
   Napi::Value SetClips(const Napi::CallbackInfo& info);
   Napi::Value ClipCount(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackLanes(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackBuses(const Napi::CallbackInfo& info);
+  Napi::Value SetBusStripJson(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripJson(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripEqBandJson(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripInsertBypassed(const Napi::CallbackInfo& info);
+  Napi::Value SetMasterStripJson(const Napi::CallbackInfo& info);
+  Napi::Value SetMasterStripEqBandJson(const Napi::CallbackInfo& info);
+  Napi::Value SetMasterStripInsertBypassed(const Napi::CallbackInfo& info);
   Napi::Value CreateClipPageProvider(const Napi::CallbackInfo& info);
   Napi::Value SupplyClipPage(const Napi::CallbackInfo& info);
   Napi::Value ClearClipPage(const Napi::CallbackInfo& info);
@@ -65,7 +75,9 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value DrainMeterTelemetry(const Napi::CallbackInfo& info);
   Napi::Value SetParameter(const Napi::CallbackInfo& info);
   Napi::Value SetParameterSmoothed(const Napi::CallbackInfo& info);
+  Napi::Value SetSoloMute(const Napi::CallbackInfo& info);
   Napi::Value ClearParameters(const Napi::CallbackInfo& info);
+  Napi::Value SetMidiClips(const Napi::CallbackInfo& info);
   Napi::Value SetBuiltinInstrument(const Napi::CallbackInfo& info);
   Napi::Value SetSynthInstrument(const Napi::CallbackInfo& info);
   Napi::Value LoadSoundFont(const Napi::CallbackInfo& info);

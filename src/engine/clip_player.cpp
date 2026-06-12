@@ -69,6 +69,28 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
 
 void ClipPlayer::process_at(float* const* channels, int num_channels, int num_samples,
                             int64_t timeline_sample) noexcept {
+  process_filtered_at(0, nullptr, 0, TrackFilterMode::kAll, channels, num_channels, num_samples,
+                      timeline_sample);
+}
+
+void ClipPlayer::process_track_at(uint32_t track_id, float* const* channels, int num_channels,
+                                  int num_samples, int64_t timeline_sample) noexcept {
+  if (track_id == 0) return;
+  process_filtered_at(track_id, nullptr, 0, TrackFilterMode::kOnlyTrack, channels, num_channels,
+                      num_samples, timeline_sample);
+}
+
+void ClipPlayer::process_excluding_tracks_at(const uint32_t* track_ids, size_t track_count,
+                                             float* const* channels, int num_channels,
+                                             int num_samples, int64_t timeline_sample) noexcept {
+  process_filtered_at(0, track_ids, track_count, TrackFilterMode::kExcludeTracks, channels,
+                      num_channels, num_samples, timeline_sample);
+}
+
+void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_ids,
+                                     size_t track_count, TrackFilterMode filter_mode,
+                                     float* const* channels, int num_channels, int num_samples,
+                                     int64_t timeline_sample) noexcept {
   if (!channels || num_channels <= 0 || num_samples <= 0) return;
   const bool scoped_page_miss_block = !external_page_miss_block_;
   if (!external_page_miss_block_) {
@@ -87,6 +109,18 @@ void ClipPlayer::process_at(float* const* channels, int num_channels, int num_sa
   }
 
   for (const ClipSchedule& clip : *clips) {
+    if (filter_mode == TrackFilterMode::kOnlyTrack) {
+      if (clip.track_id != track_id) continue;
+    } else if (filter_mode == TrackFilterMode::kExcludeTracks) {
+      bool matched = false;
+      for (size_t i = 0; i < track_count; ++i) {
+        if (clip.track_id == track_ids[i]) {
+          matched = true;
+          break;
+        }
+      }
+      if (matched) continue;
+    }
     if (source_channel_count(clip) <= 0 || source_sample_count(clip) <= 0 ||
         clip.length_samples <= 0) {
       continue;

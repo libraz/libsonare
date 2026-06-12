@@ -116,6 +116,8 @@ ChannelStrip::ChannelStrip(ChannelStripConfig config)
   insert_sidechains_.reserve(kMaxInserts);
   pre_inserts_.reserve(kMaxInserts);
   post_inserts_.reserve(kMaxInserts);
+  sends_.reserve(kMaxSends);
+  send_automation_.reserve(kMaxSends);
 }
 
 void ChannelStrip::prepare(double sample_rate, int max_block_size) {
@@ -565,6 +567,19 @@ bool ChannelStrip::schedule_pan_automation(int64_t sample_pos, float pan,
   return pan_automation_.push(event);
 }
 
+bool ChannelStrip::set_insert_bypassed(unsigned int insert_index, bool bypassed,
+                                       bool reset_on_bypass) noexcept {
+  const size_t idx = insert_index;
+  const size_t pre_count = pre_inserts_.size();
+  rt::ProcessorBase* insert = nullptr;
+  if (idx < pre_count) {
+    insert = pre_inserts_[idx].get();
+  } else if (idx - pre_count < post_inserts_.size()) {
+    insert = post_inserts_[idx - pre_count].get();
+  }
+  return insert != nullptr && insert->set_bypassed(bypassed, reset_on_bypass);
+}
+
 bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
                                               int64_t sample_pos, float value,
                                               AutomationCurveType curve) noexcept {
@@ -720,12 +735,20 @@ void ChannelStrip::clear_insert_sidechains() noexcept {
 }
 
 size_t ChannelStrip::add_send(const SendConfig& cfg) {
+  if (sends_.size() >= kMaxSends) {
+    throw SonareException(ErrorCode::InvalidState, "ChannelStrip send cap exceeded");
+  }
   sends_.push_back(std::make_unique<SendProcessor>(cfg));
   send_automation_.push_back(std::make_unique<AutomationLane>());
   if (max_block_size_ > 0) {
     sends_.back()->prepare(sample_rate_, max_block_size_);
   }
   return sends_.size() - 1;
+}
+
+void ChannelStrip::clear_sends() {
+  sends_.clear();
+  send_automation_.clear();
 }
 
 void ChannelStrip::remove_send(size_t index) {

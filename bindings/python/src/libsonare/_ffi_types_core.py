@@ -170,6 +170,7 @@ class SonareEngineClip(ctypes.Structure):
 
     _fields_ = [
         ("id", ctypes.c_uint32),
+        ("track_id", ctypes.c_uint32),
         ("channels", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
         ("num_channels", ctypes.c_int),
         ("num_samples", ctypes.c_int64),
@@ -184,6 +185,35 @@ class SonareEngineClip(ctypes.Structure):
         ("warp_anchors", ctypes.c_void_p),
         ("warp_anchor_count", ctypes.c_size_t),
         ("page_provider", ctypes.c_void_p),
+    ]
+
+
+class SonareEngineTrackSend(ctypes.Structure):
+    """Maps to SonareEngineTrackSend in sonare_c.h."""
+
+    _fields_ = [
+        ("bus_id", ctypes.c_uint32),
+        ("level_db", ctypes.c_float),
+        ("enabled", ctypes.c_int),
+    ]
+
+
+class SonareEngineTrackLane(ctypes.Structure):
+    """Maps to SonareEngineTrackLane in sonare_c.h."""
+
+    _fields_ = [
+        ("track_id", ctypes.c_uint32),
+        ("sends", ctypes.POINTER(SonareEngineTrackSend)),
+        ("send_count", ctypes.c_size_t),
+    ]
+
+
+class SonareEngineBus(ctypes.Structure):
+    """Maps to SonareEngineBus in sonare_c.h."""
+
+    _fields_ = [
+        ("bus_id", ctypes.c_uint32),
+        ("gain_db", ctypes.c_float),
     ]
 
 

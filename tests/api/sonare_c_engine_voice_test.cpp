@@ -3,6 +3,7 @@
 
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <limits>
 #include <thread>
 
@@ -10,10 +11,38 @@
 
 namespace {
 
+#if defined(SONARE_WITH_MIXING)
+constexpr uint32_t engine_lane_param_target(uint32_t lane_index, uint32_t param_kind) {
+  return 0x4D580000u | (lane_index << 8u) | param_kind;
+}
+
+constexpr uint32_t engine_bus_param_target(uint32_t bus_index, uint32_t param_kind) {
+  return 0x4D580000u | ((0xFEu - bus_index) << 8u) | param_kind;
+}
+
+constexpr uint32_t engine_master_param_target(uint32_t param_kind) {
+  return 0x4D580000u | (0xFFu << 8u) | param_kind;
+}
+#endif
+
 float peak_abs(const std::vector<float>& data) {
   float peak = 0.0f;
   for (float value : data) peak = std::max(peak, std::abs(value));
   return peak;
+}
+
+double rms(const std::array<float, 256>& data) {
+  double sum = 0.0;
+  for (float value : data) {
+    sum += static_cast<double>(value) * static_cast<double>(value);
+  }
+  return std::sqrt(sum / static_cast<double>(data.size()));
+}
+
+uint32_t midi1_word(uint8_t status, uint8_t channel, uint8_t data0, uint8_t data1) {
+  return (0x2u << 28u) | (static_cast<uint32_t>(status & 0x0f) << 20u) |
+         (static_cast<uint32_t>(channel & 0x0f) << 16u) | (static_cast<uint32_t>(data0) << 8u) |
+         static_cast<uint32_t>(data1);
 }
 
 }  // namespace
@@ -92,6 +121,525 @@ TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets
   REQUIRE(sonare_engine_set_automation_lane(engine, 77, points, 1) == SONARE_OK);
   REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
   REQUIRE(lane_count == 1);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine rejects engine-reserved automation parameter ids", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareParameterInfo parameter{};
+  parameter.id = 0x4D580001u;
+  std::strncpy(parameter.name, "reserved", sizeof(parameter.name) - 1);
+  parameter.min_value = -60.0f;
+  parameter.max_value = 6.0f;
+  parameter.default_value = 0.0f;
+  parameter.rt_safe = 1;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, parameter.id, -60.0f, 6.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 10;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
+
+  std::array<float, kFrames> a_l{};
+  std::array<float, kFrames> a_r{};
+  std::array<float, kFrames> b_l{};
+  std::array<float, kFrames> b_r{};
+  a_l.fill(1.0f);
+  a_r.fill(1.0f);
+  b_l.fill(1.0f);
+  b_r.fill(1.0f);
+  const float* a_channels[] = {a_l.data(), a_r.data()};
+  const float* b_channels[] = {b_l.data(), b_r.data()};
+
+  SonareEngineClip clips[2]{};
+  clips[0].id = 1;
+  clips[0].track_id = 10;
+  clips[0].channels = a_channels;
+  clips[0].num_channels = 2;
+  clips[0].num_samples = kFrames;
+  clips[0].length_samples = kFrames;
+  clips[0].gain = 1.0f;
+  clips[1].id = 2;
+  clips[1].track_id = 20;
+  clips[1].channels = b_channels;
+  clips[1].num_channels = 2;
+  clips[1].num_samples = kFrames;
+  clips[1].length_samples = kFrames;
+  clips[1].gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, clips, 2) == SONARE_OK);
+
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0}, {20, nullptr, 0}};
+#if defined(SONARE_WITH_MIXING)
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_lanes(engine, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareEngineTrackLane duplicate_lanes[] = {{10, nullptr, 0}, {10, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, duplicate_lanes, 2) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+#else
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, io, 2, kBlock) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  REQUIRE(left.back() == 2.0f);
+  REQUIRE(sonare_engine_set_solo_mute(engine, 0, 1, 0, -1) == SONARE_OK);
+  for (int block = 0; block < 4; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 2, kBlock) == SONARE_OK);
+  }
+  REQUIRE(left.back() < 1.25f);
+  REQUIRE(left.back() > 0.75f);
+
+  REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_lane_param_target(0, 1), -12.0f,
+                                               -1) == SONARE_OK);
+  for (int block = 0; block < 30; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 2, kBlock) == SONARE_OK);
+  }
+  REQUIRE(left.back() < 0.45f);
+  REQUIRE(right.back() < 0.45f);
+#else
+  REQUIRE(sonare_engine_set_solo_mute(engine, 0, 1, 0, -1) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 40;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  source.fill(1.0f);
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  SonareEngineBus buses[] = {{1, 0.0f}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  SonareEngineBus duplicate_buses[] = {{1, 0.0f}, {1, 0.0f}};
+  REQUIRE(sonare_engine_set_track_buses(engine, duplicate_buses, 2) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareEngineTrackSend send[] = {{1, 0.0f, 1}};
+  SonareEngineTrackLane lane[] = {{10, send, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  SonareEngineTrackLane null_send_lane[] = {{10, nullptr, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, null_send_lane, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  SonareEngineTrackSend bad_bus_send[] = {{99, 0.0f, 1}};
+  SonareEngineTrackLane bad_bus_lane[] = {{10, bad_bus_send, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, bad_bus_lane, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareEngineTrackSend duplicate_send[] = {{1, 0.0f, 1}, {1, -6.0f, 1}};
+  SonareEngineTrackLane duplicate_send_lane[] = {{10, duplicate_send, 2}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, duplicate_send_lane, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  SonareEngineTrackSend bad_level_send[] = {{1, 99.0f, 1}};
+  SonareEngineTrackLane bad_level_lane[] = {{10, bad_level_send, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, bad_level_lane, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> out{};
+  float* io[] = {out.data()};
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(out.back() > 2.82f);
+  REQUIRE(out.back() < 2.84f);
+  std::array<SonareMeterTelemetryRecord, 8> meters{};
+  size_t meter_count = 0;
+  REQUIRE(sonare_engine_drain_meter_telemetry(engine, meters.data(), meters.size(), &meter_count) ==
+          SONARE_OK);
+  bool found_lane_meter = false;
+  bool found_bus_meter = false;
+  bool found_master_meter = false;
+  for (size_t i = 0; i < meter_count; ++i) {
+    found_lane_meter = found_lane_meter || meters[i].target_id == 1;
+    found_bus_meter = found_bus_meter || meters[i].target_id == 33;
+    found_master_meter = found_master_meter || meters[i].target_id == 0;
+  }
+  REQUIRE(found_lane_meter);
+  REQUIRE(found_bus_meter);
+  REQUIRE(found_master_meter);
+
+  send[0].level_db = -6.0206f;
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  out.fill(0.0f);
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(out.back() > 2.11f);
+  REQUIRE(out.back() < 2.13f);
+
+  send[0].enabled = 0;
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  out.fill(0.0f);
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(out.back() > 1.41f);
+  REQUIRE(out.back() < 1.42f);
+
+  send[0].enabled = 1;
+  send[0].level_db = 0.0f;
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_bus_param_target(0, 1), -6.0206f,
+                                               -1) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  for (int block = 0; block < 30; ++block) {
+    out.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(out.back() > 2.11f);
+  REQUIRE(out.back() < 2.13f);
+
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
+  const char* bus_strip_json =
+      R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":12,\"band0.enabled\":1}"}]}],"connections":[]})";
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_strip_json) == SONARE_OK);
+#else
+  SonareEngineBus buses[] = {{1, 0.0f}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, "{}") == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 4;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> a{};
+  std::array<float, kFrames> b{};
+  a.fill(1.0f);
+  b.fill(1.0f);
+  const float* a_channels[] = {a.data()};
+  const float* b_channels[] = {b.data()};
+
+  SonareEngineClip clips[2]{};
+  clips[0].id = 1;
+  clips[0].track_id = 10;
+  clips[0].channels = a_channels;
+  clips[0].num_channels = 1;
+  clips[0].num_samples = kFrames;
+  clips[0].length_samples = kFrames;
+  clips[0].gain = 1.0f;
+  clips[1].id = 2;
+  clips[1].track_id = 20;
+  clips[1].channels = b_channels;
+  clips[1].num_channels = 1;
+  clips[1].num_samples = kFrames;
+  clips[1].length_samples = kFrames;
+  clips[1].gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, clips, 2) == SONARE_OK);
+
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0}, {20, nullptr, 0}};
+#if defined(SONARE_WITH_MIXING)
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  const char* scene_json =
+      R"({"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 0, scene_json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, "{bad json") ==
+          SONARE_ERROR_INVALID_FORMAT);
+  const char* unknown_processor_json =
+      R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, unknown_processor_json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  const char* bad_param_json =
+      R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.gainDb\":\"loud\"}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, bad_param_json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> left{};
+  float* io[] = {left.data()};
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(left.back() > 1.20f);
+  REQUIRE(left.back() < 1.40f);
+#else
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, "{}") == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_track_strip_insert_bypassed toggles track insert", "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 16;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] =
+        std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
+  const char* scene_json =
+      R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":12,\"band0.enabled\":1}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_insert_bypassed(engine, 10, 7, 1, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> eq_out{};
+  float* io[] = {eq_out.data()};
+  for (int block = 0; block < 6; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+
+  REQUIRE(sonare_engine_set_track_strip_insert_bypassed(engine, 10, 0, 1, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  std::array<float, kBlock> bypassed_out{};
+  io[0] = bypassed_out.data();
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(rms(eq_out) > rms(bypassed_out) * 1.5);
+#else
+  REQUIRE(sonare_engine_set_track_strip_insert_bypassed(engine, 10, 0, 1, 0) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_track_strip_eq_band_json updates embedded lane EQ",
+          "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 16;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] =
+        std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 10,
+              R"({"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]})") ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_eq_band_json(engine, 99, 0,
+                                                     R"({"type":"Peak","enabled":true})") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_eq_band_json(engine, 10, 99,
+                                                     R"({"type":"Peak","enabled":true})") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> flat_out{};
+  float* io[] = {flat_out.data()};
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_eq_band_json(
+              engine, 10, 0,
+              R"({"type":"Peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true})") ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  std::array<float, kBlock> eq_out{};
+  io[0] = eq_out.data();
+  for (int block = 0; block < 6; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(rms(eq_out) > rms(flat_out) * 1.5);
+#else
+  REQUIRE(sonare_engine_set_track_strip_eq_band_json(engine, 10, 0, "{}") ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_master_strip_json processes master strip", "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 40;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> a{};
+  std::array<float, kFrames> b{};
+  a.fill(1.0f);
+  b.fill(1.0f);
+  const float* a_channels[] = {a.data()};
+  const float* b_channels[] = {b.data()};
+
+  SonareEngineClip clips[2]{};
+  clips[0].id = 1;
+  clips[0].channels = a_channels;
+  clips[0].num_channels = 1;
+  clips[0].num_samples = kFrames;
+  clips[0].length_samples = kFrames;
+  clips[0].gain = 1.0f;
+  clips[1].id = 2;
+  clips[1].channels = b_channels;
+  clips[1].num_channels = 1;
+  clips[1].num_samples = kFrames;
+  clips[1].length_samples = kFrames;
+  clips[1].gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, clips, 2) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  const char* scene_json =
+      R"({"version":1,"strips":[{"id":"master","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, scene_json) == SONARE_OK);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
+  const char* unknown_processor_json =
+      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, unknown_processor_json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  const char* bad_param_json =
+      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.gainDb\":\"loud\"}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, bad_param_json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_master_strip_insert_bypassed(engine, 0, 1, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> left{};
+  float* io[] = {left.data()};
+  for (int block = 0; block < 20; ++block) {
+    left.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(left.back() > 0.65f);
+  REQUIRE(left.back() < 0.80f);
+  REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_master_param_target(1), -24.0f, -1) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter(engine, engine_master_param_target(2), 0.25f, -1) ==
+          SONARE_OK);
+  for (int block = 0; block < 8; ++block) {
+    left.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(left.back() > 0.05f);
+  REQUIRE(left.back() < 0.25f);
+#else
+  REQUIRE(sonare_engine_set_master_strip_json(engine, "{}") == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_master_strip_eq_band_json updates embedded master EQ",
+          "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 16;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] =
+        std::sin(2.0f * 3.14159265358979323846f * 1000.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  REQUIRE(sonare_engine_set_master_strip_json(
+              engine, R"({"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]})") ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_master_strip_eq_band_json(
+              engine, 99, R"({"type":"Peak","enabled":true})") == SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> flat_out{};
+  float* io[] = {flat_out.data()};
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(
+      sonare_engine_set_master_strip_eq_band_json(
+          engine, 0, R"({"type":"Peak","frequencyHz":1000,"gainDb":12,"q":1,"enabled":true})") ==
+      SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  std::array<float, kBlock> eq_out{};
+  io[0] = eq_out.data();
+  for (int block = 0; block < 6; ++block) {
+    eq_out.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(rms(eq_out) > rms(flat_out) * 1.5);
+#else
+  REQUIRE(sonare_engine_set_master_strip_eq_band_json(engine, 0, "{}") ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
 
   sonare_engine_destroy(engine);
 }
@@ -198,6 +746,8 @@ TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[
   REQUIRE(std::max(peak_abs(left), peak_abs(right)) > 0.0f);
 
   REQUIRE(sonare_engine_push_midi_note_off(engine, 7, 0, 0, 60, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 16, 60, 100, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_clear_midi_instrument(engine, 7) == SONARE_OK);
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
   REQUIRE(count == 0);
@@ -207,6 +757,89 @@ TEST_CASE("sonare_engine live MIDI note renders through built-in instrument", "[
   REQUIRE(sonare_engine_push_midi_note_on(engine, 7, 0, 0, 60, 100, -1) ==
           SONARE_ERROR_NOT_SUPPORTED);
 #endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine malformed SoundFont bytes report invalid format", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+
+  const uint8_t bad_sf2[] = {'n', 'o', 't', ' ', 's', 'f', '2'};
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_load_soundfont(engine, bad_sf2, sizeof(bad_sf2)) ==
+          SONARE_ERROR_INVALID_FORMAT);
+#else
+  REQUIRE(sonare_engine_load_soundfont(engine, bad_sf2, sizeof(bad_sf2)) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+  REQUIRE(sonare_engine_load_soundfont(engine, nullptr, 0) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine scheduled MIDI clips render through built-in instrument",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SonareEngineBuiltinSynthConfig synth{};
+  synth.gain = 0.5f;
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 9, &synth) == SONARE_OK);
+
+  const SonareEngineMidiEvent events[] = {
+      {0, midi1_word(0x9, 0, 60, 100), 0, 0, 0, 1, 0, 0, 0},
+      {4096, midi1_word(0x8, 0, 60, 0), 0, 0, 0, 1, 0, 0, 0},
+  };
+  SonareEngineMidiClipSchedule clip{};
+  clip.id = 42;
+  clip.track_id = 9;
+  clip.length_samples = 8192;
+  clip.destination_id = 9;
+  clip.events = events;
+  clip.event_count = 2;
+  REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(std::max(peak_abs(left), peak_abs(right)) > 0.0f);
+
+  SonareEngineMidiEvent bad_group_event = events[0];
+  bad_group_event.group = 16;
+  SonareEngineMidiClipSchedule bad_clip = clip;
+  bad_clip.events = &bad_group_event;
+  bad_clip.event_count = 1;
+  REQUIRE(sonare_engine_set_midi_clips(engine, &bad_clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_set_midi_clips(engine, nullptr, 0) == SONARE_OK);
+#else
+  REQUIRE(sonare_engine_set_midi_clips(engine, nullptr, 0) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine converts PPQ to samples from the tempo map", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 60.0) == SONARE_OK);
+
+  int64_t sample = 0;
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 1.5, &sample) == SONARE_OK);
+  REQUIRE(sample == 72000);
+  REQUIRE(sonare_engine_sample_at_ppq(engine, -1.0, &sample) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_sample_at_ppq(engine, std::numeric_limits<double>::quiet_NaN(), &sample) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 1.0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
 }
@@ -807,6 +1440,18 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.75f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.75f).margin(0.0001f));
+  std::array<SonareMeterTelemetryRecord, 4> input_meters{};
+  size_t input_meter_count = 0;
+  REQUIRE(sonare_engine_drain_meter_telemetry(engine, input_meters.data(), input_meters.size(),
+                                              &input_meter_count) == SONARE_OK);
+  bool found_input_meter = false;
+  for (size_t i = 0; i < input_meter_count; ++i) {
+    if (input_meters[i].target_id == 0xFFFFu) {
+      found_input_meter = true;
+      REQUIRE(input_meters[i].peak_db_l == Catch::Approx(-12.0412f).margin(0.05f));
+    }
+  }
+  REQUIRE(found_input_meter);
 
   SonareEngineCaptureStatus status{};
   REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);

@@ -401,6 +401,7 @@ export type {
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
+  EngineBus,
   EngineCapabilities,
   EngineCaptureStatus,
   EngineClip,
@@ -410,8 +411,14 @@ export type {
   EngineMarker,
   EngineMeterTelemetry,
   EngineMetronomeConfig,
+  EngineMidiClipSchedule,
+  EngineMidiEvent,
   EngineParameterInfo,
   EngineTelemetry,
+  EngineTempoSegment,
+  EngineTimeSignatureSegment,
+  EngineTrackLane,
+  EngineTrackSend,
   EngineTransportState,
   MidiCcBindOptions,
 } from './realtime_engine';
@@ -484,6 +491,11 @@ let initPromise: Promise<void> | null = null;
  */
 export async function init(options?: {
   locateFile?: (path: string, prefix: string) => string;
+  wasmBinary?: ArrayBuffer | Uint8Array;
+  moduleFactory?: (options?: {
+    locateFile?: (path: string, prefix: string) => string;
+    wasmBinary?: ArrayBuffer | Uint8Array;
+  }) => Promise<SonareModule>;
 }): Promise<void> {
   if (module) {
     return;
@@ -495,7 +507,7 @@ export async function init(options?: {
 
   initPromise = (async () => {
     try {
-      const createModule = (await import('./sonare.js')).default;
+      const createModule = options?.moduleFactory ?? (await import('./sonare.js')).default;
       module = await createModule(options);
       setSonareModule(module);
     } catch (error) {

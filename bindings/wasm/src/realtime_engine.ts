@@ -1,5 +1,7 @@
+import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type { SynthPatch } from './project';
+import type { EqBand } from './public_types';
 import type {
   WasmClipPageRequest,
   WasmEngineAutomationPoint,
@@ -16,6 +18,8 @@ import type {
   WasmEngineParameterInfo,
   WasmEngineProcessWithMonitorResult,
   WasmEngineTelemetry,
+  WasmEngineTempoSegment,
+  WasmEngineTimeSignatureSegment,
   WasmEngineTransportState,
   WasmRealtimeEngine,
 } from './sonare.js';
@@ -35,6 +39,49 @@ export type EngineFreezeResult = WasmEngineFreezeResult;
 export type EngineTelemetry = WasmEngineTelemetry;
 export type EngineMeterTelemetry = WasmEngineMeterTelemetry;
 export type EngineTransportState = WasmEngineTransportState;
+export type EngineTempoSegment = WasmEngineTempoSegment;
+export type EngineTimeSignatureSegment = WasmEngineTimeSignatureSegment;
+
+export interface EngineTrackSend {
+  busId: number;
+  levelDb?: number;
+  enabled?: boolean;
+}
+
+export interface EngineTrackLane {
+  trackId: number;
+  sends?: EngineTrackSend[];
+}
+
+export interface EngineBus {
+  busId: number;
+  gainDb?: number;
+}
+
+export interface EngineMidiEvent {
+  renderFrame: number;
+  word0?: number;
+  word1?: number;
+  word2?: number;
+  word3?: number;
+  wordCount?: number;
+  group?: number;
+  sysexHandle?: number;
+  data0?: number;
+  data1?: number;
+}
+
+export interface EngineMidiClipSchedule {
+  id?: number;
+  trackId?: number;
+  destinationId?: number;
+  startSample?: number;
+  startPpq?: number;
+  lengthSamples?: number;
+  loop?: boolean;
+  loopLengthSamples?: number;
+  events: EngineMidiEvent[];
+}
 
 export const EXPECTED_ENGINE_ABI_VERSION = 3;
 
@@ -75,90 +122,8 @@ export function engineCapabilities(): EngineCapabilities {
   };
 }
 
-// Methods added to the embind RealtimeEngine that the generated `sonare.js`
-// declarations only gain after a WASM rebuild. The native handle is cast to this
-// shape so the wrapper can reach them without a stale type error.
-interface WasmRealtimeEngineExt {
-  setBuiltinInstrument: (destinationId: number, config: object) => void;
-  setSynthInstrument: (destinationId: number, patch: object | string) => void;
-  loadSoundFont: (data: Uint8Array) => void;
-  setSf2Instrument: (destinationId: number, config: object) => void;
-  clearMidiInstrument: (destinationId: number) => void;
-  midiInstrumentCount: () => number;
-  bindMidiCc: (
-    channel: number,
-    controller: number,
-    paramId: number,
-    minValue: number,
-    maxValue: number,
-  ) => void;
-  clearMidiCcBindings: () => void;
-  midiCcBindingCount: () => number;
-  setMidiFx: (destinationId: number, configJson: string) => void;
-  clearMidiFx: (destinationId: number) => void;
-  setMidiInputSource: (destinationId: number) => void;
-  clearMidiInputSource: () => void;
-  midiInputPendingCount: () => number;
-  createClipPageProvider: (numChannels: number, numSamples: number, pageFrames: number) => number;
-  supplyClipPage: (providerId: number, pageIndex: number, channels: Float32Array[]) => void;
-  clearClipPage: (providerId: number, pageIndex: number) => void;
-  destroyClipPageProvider: (providerId: number) => void;
-  popClipPageRequest: () => ClipPageRequest | null;
-  pushMidiInputNoteOn: (
-    group: number,
-    channel: number,
-    note: number,
-    velocity: number,
-    portTimeSamples: number,
-  ) => void;
-  pushMidiInputNoteOff: (
-    group: number,
-    channel: number,
-    note: number,
-    velocity: number,
-    portTimeSamples: number,
-  ) => void;
-  pushMidiInputCc: (
-    group: number,
-    channel: number,
-    controller: number,
-    value: number,
-    portTimeSamples: number,
-  ) => void;
-  pushMidiNoteOn: (
-    destinationId: number,
-    group: number,
-    channel: number,
-    note: number,
-    velocity: number,
-    renderFrame: number,
-  ) => void;
-  pushMidiNoteOff: (
-    destinationId: number,
-    group: number,
-    channel: number,
-    note: number,
-    velocity: number,
-    renderFrame: number,
-  ) => void;
-  pushMidiCc: (
-    destinationId: number,
-    group: number,
-    channel: number,
-    controller: number,
-    value: number,
-    renderFrame: number,
-  ) => void;
-  pushMidiPanic: (renderFrame: number) => void;
-  clearParameters: () => void;
-}
-
 export class RealtimeEngine {
   private native: WasmRealtimeEngine;
-
-  private nativeExt(): WasmRealtimeEngineExt {
-    return this.native as unknown as WasmRealtimeEngineExt;
-  }
 
   constructor(
     sampleRate = 48000,
@@ -200,11 +165,19 @@ export class RealtimeEngine {
     this.native.setParameterSmoothed(paramId, value, renderFrame);
   }
 
+  setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame = -1): void {
+    this.native.setSoloMute(laneIndex, solo, mute, renderFrame);
+  }
+
+  setMidiClips(clips: readonly EngineMidiClipSchedule[]): void {
+    this.native.setMidiClips(clips);
+  }
+
   setBuiltinInstrument(
     config: { destinationId?: number } & Record<string, unknown> = {},
     destinationId = config.destinationId ?? 0,
   ): void {
-    this.nativeExt().setBuiltinInstrument(destinationId, config);
+    this.native.setBuiltinInstrument(destinationId, config);
   }
 
   /**
@@ -220,7 +193,7 @@ export class RealtimeEngine {
     patch: SynthPatch | string = {},
     destinationId = (typeof patch === 'object' ? patch.destinationId : undefined) ?? 0,
   ): void {
-    this.nativeExt().setSynthInstrument(destinationId, patch);
+    this.native.setSynthInstrument(destinationId, patch);
   }
 
   /**
@@ -230,7 +203,7 @@ export class RealtimeEngine {
    * not referenced afterwards. Replaces any previously loaded SoundFont.
    */
   loadSoundFont(data: Uint8Array): void {
-    this.nativeExt().loadSoundFont(data);
+    this.native.loadSoundFont(data);
   }
 
   /**
@@ -246,15 +219,15 @@ export class RealtimeEngine {
     config: { destinationId?: number; gain?: number; polyphony?: number } = {},
     destinationId = config.destinationId ?? 0,
   ): void {
-    this.nativeExt().setSf2Instrument(destinationId, config);
+    this.native.setSf2Instrument(destinationId, config);
   }
 
   clearMidiInstrument(destinationId = 0): void {
-    this.nativeExt().clearMidiInstrument(destinationId);
+    this.native.clearMidiInstrument(destinationId);
   }
 
   midiInstrumentCount(): number {
-    return this.nativeExt().midiInstrumentCount();
+    return this.native.midiInstrumentCount();
   }
 
   /**
@@ -268,7 +241,7 @@ export class RealtimeEngine {
     paramId: number,
     options: MidiCcBindOptions = {},
   ): void {
-    this.nativeExt().bindMidiCc(
+    this.native.bindMidiCc(
       channel,
       controller,
       paramId,
@@ -278,33 +251,33 @@ export class RealtimeEngine {
   }
 
   clearMidiCcBindings(): void {
-    this.nativeExt().clearMidiCcBindings();
+    this.native.clearMidiCcBindings();
   }
 
   midiCcBindingCount(): number {
-    return this.nativeExt().midiCcBindingCount();
+    return this.native.midiCcBindingCount();
   }
 
   /** Install/replace a live non-destructive MIDI-FX insert for one destination. */
   setMidiFx(destinationId: number, configJson: string): void {
-    this.nativeExt().setMidiFx(destinationId, configJson);
+    this.native.setMidiFx(destinationId, configJson);
   }
 
   clearMidiFx(destinationId = 0): void {
-    this.nativeExt().clearMidiFx(destinationId);
+    this.native.clearMidiFx(destinationId);
   }
 
   /** Enable the engine-owned live MIDI input source for a destination. */
   setMidiInputSource(destinationId = 0): void {
-    this.nativeExt().setMidiInputSource(destinationId);
+    this.native.setMidiInputSource(destinationId);
   }
 
   clearMidiInputSource(): void {
-    this.nativeExt().clearMidiInputSource();
+    this.native.clearMidiInputSource();
   }
 
   midiInputPendingCount(): number {
-    return this.nativeExt().midiInputPendingCount();
+    return this.native.midiInputPendingCount();
   }
 
   pushMidiInputNoteOn(
@@ -314,7 +287,7 @@ export class RealtimeEngine {
     velocity: number,
     portTimeSamples = 0,
   ): void {
-    this.nativeExt().pushMidiInputNoteOn(group, channel, note, velocity, portTimeSamples);
+    this.native.pushMidiInputNoteOn(group, channel, note, velocity, portTimeSamples);
   }
 
   pushMidiInputNoteOff(
@@ -324,7 +297,7 @@ export class RealtimeEngine {
     velocity = 0,
     portTimeSamples = 0,
   ): void {
-    this.nativeExt().pushMidiInputNoteOff(group, channel, note, velocity, portTimeSamples);
+    this.native.pushMidiInputNoteOff(group, channel, note, velocity, portTimeSamples);
   }
 
   pushMidiInputCc(
@@ -334,7 +307,7 @@ export class RealtimeEngine {
     value: number,
     portTimeSamples = 0,
   ): void {
-    this.nativeExt().pushMidiInputCc(group, channel, controller, value, portTimeSamples);
+    this.native.pushMidiInputCc(group, channel, controller, value, portTimeSamples);
   }
 
   pushMidiNoteOn(
@@ -345,7 +318,7 @@ export class RealtimeEngine {
     velocity: number,
     renderFrame = -1,
   ): void {
-    this.nativeExt().pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
+    this.native.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
   }
 
   pushMidiNoteOff(
@@ -356,7 +329,7 @@ export class RealtimeEngine {
     velocity = 0,
     renderFrame = -1,
   ): void {
-    this.nativeExt().pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
+    this.native.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
   }
 
   /**
@@ -373,7 +346,7 @@ export class RealtimeEngine {
     value: number,
     renderFrame = -1,
   ): void {
-    this.nativeExt().pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
+    this.native.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
   }
 
   /**
@@ -381,7 +354,7 @@ export class RealtimeEngine {
    * `renderFrame` (-1 = immediate). Mirrors the C-ABI `pushMidiPanic`.
    */
   pushMidiPanic(renderFrame = -1): void {
-    this.nativeExt().pushMidiPanic(renderFrame);
+    this.native.pushMidiPanic(renderFrame);
   }
 
   /**
@@ -389,7 +362,7 @@ export class RealtimeEngine {
    * only; not realtime-safe. Mirrors the C-ABI `clearParameters`.
    */
   clearParameters(): void {
-    this.nativeExt().clearParameters();
+    this.native.clearParameters();
   }
 
   /** Read back the current transport state snapshot. */
@@ -417,8 +390,20 @@ export class RealtimeEngine {
     this.native.setTempo(bpm);
   }
 
+  setTempoSegments(segments: readonly EngineTempoSegment[]): void {
+    this.native.setTempoSegments([...segments]);
+  }
+
   setTimeSignature(numerator: number, denominator: number): void {
     this.native.setTimeSignature(numerator, denominator);
+  }
+
+  setTimeSignatureSegments(segments: readonly EngineTimeSignatureSegment[]): void {
+    this.native.setTimeSignatureSegments([...segments]);
+  }
+
+  sampleAtPpq(ppq: number): number {
+    return Number(this.native.sampleAtPpq(ppq));
   }
 
   setLoop(startPpq: number, endPpq: number, enabled = true): void {
@@ -513,29 +498,109 @@ export class RealtimeEngine {
     return this.native.clipCount();
   }
 
+  setTrackLanes(lanes: Array<number | EngineTrackLane>): void {
+    this.native.setTrackLanes(
+      lanes.map((lane) => (typeof lane === 'number' ? { trackId: lane } : lane)),
+    );
+  }
+
+  setTrackBuses(buses: EngineBus[]): void {
+    this.native.setTrackBuses(buses);
+  }
+
+  setBusStripJson(busId: number, sceneJson: string): void {
+    try {
+      JSON.parse(sceneJson);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'invalid bus strip JSON';
+      throw new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
+    }
+    this.native.setBusStripJson(busId, sceneJson);
+  }
+
+  setTrackStripJson(trackId: number, sceneJson: string): void {
+    try {
+      JSON.parse(sceneJson);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'invalid track strip JSON';
+      throw new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
+    }
+    this.native.setTrackStripJson(trackId, sceneJson);
+  }
+
+  setTrackStripEqBand(trackId: number, bandIndex: number, band: EqBand | string): void {
+    this.native.setTrackStripEqBandJson(
+      trackId,
+      bandIndex,
+      typeof band === 'string' ? band : JSON.stringify(band),
+    );
+  }
+
+  setTrackStripEqBandJson(trackId: number, bandIndex: number, bandJson: string): void {
+    this.native.setTrackStripEqBandJson(trackId, bandIndex, bandJson);
+  }
+
+  setTrackStripInsertBypassed(
+    trackId: number,
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    this.native.setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass);
+  }
+
+  setMasterStripJson(sceneJson: string): void {
+    try {
+      JSON.parse(sceneJson);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'invalid master strip JSON';
+      throw new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
+    }
+    this.native.setMasterStripJson(sceneJson);
+  }
+
+  setMasterStripEqBand(bandIndex: number, band: EqBand | string): void {
+    this.native.setMasterStripEqBandJson(
+      bandIndex,
+      typeof band === 'string' ? band : JSON.stringify(band),
+    );
+  }
+
+  setMasterStripEqBandJson(bandIndex: number, bandJson: string): void {
+    this.native.setMasterStripEqBandJson(bandIndex, bandJson);
+  }
+
+  setMasterStripInsertBypassed(
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    this.native.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
+  }
+
   createClipPageProvider(
     numChannels: number,
     numSamples: number,
     pageFrames: number,
   ): ClipPageProvider {
-    const id = this.nativeExt().createClipPageProvider(numChannels, numSamples, pageFrames);
+    const id = this.native.createClipPageProvider(numChannels, numSamples, pageFrames);
     return new ClipPageProvider(this, id);
   }
 
   supplyClipPage(providerId: number, pageIndex: number, channels: Float32Array[]): void {
-    this.nativeExt().supplyClipPage(providerId, pageIndex, channels);
+    this.native.supplyClipPage(providerId, pageIndex, channels);
   }
 
   clearClipPage(providerId: number, pageIndex: number): void {
-    this.nativeExt().clearClipPage(providerId, pageIndex);
+    this.native.clearClipPage(providerId, pageIndex);
   }
 
   destroyClipPageProvider(providerId: number): void {
-    this.nativeExt().destroyClipPageProvider(providerId);
+    this.native.destroyClipPageProvider(providerId);
   }
 
   popClipPageRequest(): ClipPageRequest | null {
-    return this.nativeExt().popClipPageRequest();
+    return this.native.popClipPageRequest();
   }
 
   setCaptureBuffer(numChannels: number, capacityFrames: number): void {
