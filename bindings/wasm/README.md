@@ -641,7 +641,7 @@ await initWorklet();
 const engine = await SonareEngine.create(audioContext, { mode: 'sab' });
 engine.setTrackLanes([{ trackId: 1 }]);
 engine.setTrackStripJson(1, trackSceneJson);
-engine.addClip({ trackId: 1, channels: [clipL, clipR], startPpq: 0 });
+engine.addClip(1, [clipL, clipR], 0);
 engine.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
 engine.setTimeSignatureSegments([{ startPpq: 0, numerator: 4, denominator: 4 }]);
 engine.transport.play();
@@ -654,7 +654,7 @@ engine.transport.play();
 | Sends and buses | `setSends`, `setBusGain`, `setBusStripJson` |
 | MIDI clips and live MIDI | `setMidiClips`, `pushMidiNoteOn`, `pushMidiNoteOff`, `pushMidiCc`, `pushMidiPanic` |
 | Instruments | `setBuiltinInstrument`, `setSynthInstrument`, `loadSoundFont`, `setSf2Instrument` |
-| Recording and monitoring | `configureCapture`, `armCapture`, `setCapturePunch`, `setInputMonitor`, `capturedAudio`, `captureStatus` |
+| Recording and monitoring | `configureCapture` (incl. the `inputMonitor` option), `armRecord`, `punch`, `capturedAudio`, `captureStatus` |
 | Transport, tempo, markers | `getTransportState`, `cachedTransportState`, `setTempoSegments`, `setTimeSignatureSegments`, marker methods, `setLoopFromMarkers` |
 | Clip updates | `addClip`, `removeClip`; the facade sends clip deltas while the processor keeps full-sync compatibility |
 | Meters | `onMeter` messages or the meter SharedArrayBuffer ring; records include master, lane, bus, and input target ids |

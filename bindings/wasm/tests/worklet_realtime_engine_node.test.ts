@@ -459,6 +459,70 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('declares mixer lanes in explicit order via setTrackLanes', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          ({
+            port: {
+              postMessage: (message: unknown) => posted.push(message),
+              onmessage: undefined,
+            },
+            disconnect: () => undefined,
+          }) as unknown as AudioWorkletNode,
+      });
+      try {
+        engine.setTrackBuses([{ busId: 7 }]);
+        engine.setTrackLanes([
+          2,
+          { trackId: 5, sends: [{ busId: 7, levelDb: -6, enabled: true }] },
+        ]);
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: 'syncMixer',
+              lanes: [
+                { trackId: 2 },
+                { trackId: 5, sends: [{ busId: 7, levelDb: -6, enabled: true }] },
+              ],
+            }),
+          ]),
+        );
+        // Lane indices follow the declared order: track 5 occupies lane 1.
+        expect(engine.setSoloMute(5, false, true)).toBe(true);
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetSoloMute,
+              targetId: 1,
+              argInt: 0x1,
+            }),
+          ]),
+        );
+        // Appending keeps existing lanes; entries without sends keep prior sends.
+        engine.setTrackLanes([2, 5, 9]);
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: 'syncMixer',
+              lanes: [
+                { trackId: 2 },
+                { trackId: 5, sends: [{ busId: 7, levelDb: -6, enabled: true }] },
+                { trackId: 9 },
+              ],
+            }),
+          ]),
+        );
+        expect(() => engine.setTrackLanes([5, 2, 9])).toThrow(/append-only/);
+        expect(() => engine.setTrackLanes([2, 5])).toThrow(/append-only/);
+        expect(() => engine.setTrackLanes([2, 5, 9, 9])).toThrow(/Duplicate track id/);
+        expect(() => engine.setTrackLanes([2, 5, 9, 0])).toThrow(/Invalid track id/);
+      } finally {
+        engine.destroy();
+      }
+    });
+
     it('requests capture status, audio, and reset over the worklet port', async () => {
       const posted: unknown[] = [];
       const port = {

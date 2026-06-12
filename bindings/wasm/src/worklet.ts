@@ -3088,6 +3088,48 @@ export class SonareEngine {
     });
   }
 
+  /**
+   * Declares the mixer track lanes in an explicit order.
+   *
+   * Lane indices are append-only: once a track id occupies a lane, its index
+   * stays fixed for the engine's lifetime. The given list must therefore start
+   * with the already-declared lane ids in their current order and may only
+   * append new track ids after them. Entries carrying `sends` replace that
+   * track's send list; entries without `sends` leave existing sends untouched.
+   *
+   * @param lanes Track ids or lane descriptors in the desired lane order.
+   */
+  setTrackLanes(lanes: ReadonlyArray<number | EngineTrackLane>): void {
+    const entries = lanes.map((lane) => (typeof lane === 'number' ? { trackId: lane } : lane));
+    const ids: number[] = [];
+    for (const entry of entries) {
+      if (!Number.isInteger(entry.trackId) || entry.trackId <= 0) {
+        throw new Error(`Invalid track id for mixer lane: ${String(entry.trackId)}`);
+      }
+      ids.push(entry.trackId);
+    }
+    if (new Set(ids).size !== ids.length) {
+      throw new Error('Duplicate track id in mixer lane list');
+    }
+    for (let index = 0; index < this.trackLaneIds.length; index++) {
+      if (ids[index] !== this.trackLaneIds[index]) {
+        throw new Error(
+          'Mixer lanes are append-only: keep existing lanes in order and only append new track ids',
+        );
+      }
+    }
+    for (const entry of entries) {
+      if (entry.sends) {
+        this.trackSends.set(
+          entry.trackId,
+          entry.sends.map((send) => ({ ...send })),
+        );
+      }
+    }
+    this.trackLaneIds.splice(0, this.trackLaneIds.length, ...ids);
+    this.syncMixer();
+  }
+
   setSends(target: string | number, sends: EngineTrackSend[]): void {
     const laneIndex = this.ensureTrackLane(target);
     const trackId = this.trackLaneIds[laneIndex];
