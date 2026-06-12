@@ -1,11 +1,32 @@
 # Changelog
 
-## Unreleased
+## v1.3.3 (2026-06-12)
+
+### Per-track lane mixer
+
+- Added a realtime-safe per-track lane mixer (`TrackMixerRuntime`) owned by the realtime engine: tracks route through configurable aux sends into numbered buses, and plugin delay compensation is recomputed whenever the lane snapshot is published. New C-ABI surface — `sonare_engine_set_track_lanes` / `set_track_buses`, per-track / master / bus channel-strip JSON (`set_track_strip_json`, `set_master_strip_json`, `set_bus_strip_json`), EQ-band updates (`set_track_strip_eq_band_json`, `set_master_strip_eq_band_json`), insert bypass (`set_track_strip_insert_bypassed`, `set_master_strip_insert_bypassed`), queueable lane solo/mute (`set_solo_mute`), and the `SonareEngineTrackLane` / `SonareEngineTrackSend` / `SonareEngineBus` structs — wired on Node, Python and WASM.
+- Added a realtime MIDI clip schedule API (`sonare_engine_set_midi_clips` with `SonareEngineMidiEvent` / `MidiClipSchedule`) and `sonare_engine_sample_at_ppq` for sample-accurate PPQ lookup, exposed on every binding.
+- The clip player renders individual lanes in isolation (`process_track_at` / `process_excluding_tracks_at`), and EQ-band JSON parsing is now shared between the mastering EQ and the new strip helpers.
+
+### Engine warp & realtime hardening
+
+- Tempo-sync warp baking is now phase-coherent across channels (`bake_tempo_sync_warp_channels`, peak-locked phase vocoder), used by both the edit compiler and the C engine instead of per-channel baking.
+- `RtPublisher` keeps a coalesced pending slot so `publish()` never drops a snapshot when the hand-off ring is full.
+- The metronome and punch-capture are gated on the transport actually rolling.
+- Realtime-thread hardening: the MIDI input destination id is atomic and snapshotted per block, input-monitor state is consolidated into a single seqlock cell, the C clip-page provider uses raw atomic pointers plus a retired-pages list to prevent use-after-free on supply/clear, and `captured_frames` uses release/acquire ordering.
+- Clip editing propagates comp segments and take offsets through split and trim, blocks loop mode when comp segments split a clip, adds a `RestoreClip` undo step, and validates comp segments before scheduling.
 
 ### WASM realtime engine
 
 - Added realtime-engine AudioWorklet facade coverage for track lanes, strip and bus scene sync, MIDI clips and live MIDI, instruments, capture read-back, marker loops, transport state, clip delta sync, clip loop/fade/warp typing, and tempo/time-signature segment sync.
 - The WASM build now compiles core objects with the atomics and bulk-memory features required by the `sonare-rt` shared-memory target, so `bindings/wasm` can build both embind and realtime worklet artifacts together.
+
+### Bug fixes
+
+- Clips scheduled on a stopped engine no longer emit a sustained buzz: the clip bus is gated on the transport rolling, matching the sequenced-MIDI gate, and `render_offline` now rolls the transport for the render duration and restores the prior state so offline clip / MIDI rendering works without a manual play command.
+- Acoustic IR clarity (`clarity_db`) and definition (`definition_d50`) are scoped to the Lundeby truncation index instead of the full energy vector.
+- SMF2 tempo conversion adds overflow guards and diagnoses timed events before the DCTPQ header; the phase vocoder guards `hop_length <= n_fft/2` and fixes its final-frame output count; and waveform peak bucket counts fix an off-by-one.
+- Binding hardening: the Node addon adds `RequiredUint32Property` / `RequiredDoubleProperty` helpers that throw `TypeError` on missing or wrong-typed fields and validates `audio_channels` before deriving frame counts; Python tightens `warp_mode` parsing (rejecting booleans / ints / unknown strings) and guards page-provider `close()`; WASM extends `wrapModuleErrors` to wrap native embind objects returned from top-level factory functions.
 
 ## v1.3.2 (2026-06-07)
 
