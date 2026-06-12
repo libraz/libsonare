@@ -81,6 +81,12 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
                          (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2));
 #endif
   automation_.prepare(sample_rate, active_tempo_map_);
+#if defined(SONARE_WITH_MIXING)
+  // Route reserved engine-namespace automation lanes (mixer fader/pan) straight
+  // to the mixer runtimes instead of the bound-processor table.
+  automation_.set_engine_param_router(&RealtimeEngine::route_engine_parameter_thunk, this,
+                                      kEngineParamNamespaceMask, kEngineParamNamespace);
+#endif
   input_capture_storage_.assign(
       static_cast<size_t>(max_block_size_) * input_capture_channels_.size(), 0.0f);
   for (size_t ch = 0; ch < input_capture_channels_.size(); ++ch) {
@@ -1192,6 +1198,11 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
     return track_mixer_runtime_.set_bus_gain_db_by_index(bus_index, value);
   }
   return track_mixer_runtime_.set_lane_parameter(static_cast<size_t>(lane), kind, value);
+}
+
+bool RealtimeEngine::route_engine_parameter_thunk(void* context, uint32_t param_id,
+                                                  float value) noexcept {
+  return static_cast<RealtimeEngine*>(context)->route_engine_parameter(param_id, value);
 }
 
 bool RealtimeEngine::add_monitor_strip(mixing::ChannelStrip* strip) noexcept {

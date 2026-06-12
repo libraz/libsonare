@@ -328,6 +328,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool any_smoothed_param_active() const noexcept;
 #if defined(SONARE_WITH_MIXING)
   bool route_engine_parameter(uint32_t target_id, float value) noexcept;
+  // AutomationEngine::EngineParamRouter trampoline: forwards reserved-namespace
+  // automation lane values to route_engine_parameter on @p context.
+  static bool route_engine_parameter_thunk(void* context, uint32_t param_id, float value) noexcept;
 #endif
   void update_reported_graph_latency() noexcept;
   void enqueue_telemetry(Telemetry telemetry) noexcept;

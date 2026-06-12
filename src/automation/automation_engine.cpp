@@ -127,6 +127,24 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
   }
   for (const AutomationLane& lane : *lanes) {
     const uint32_t param_id = lane.target_param_id();
+    // An empty lane has nothing to play back; value_at() on it reports a
+    // constant 0.0, so skip it instead of driving any target to zero.
+    if (lane.points().empty()) {
+      continue;
+    }
+    if (engine_param_router_ != nullptr &&
+        (param_id & engine_param_id_mask_) == engine_param_id_match_) {
+      // Engine-namespace lanes route directly to the engine runtime; they never
+      // fall through to the bound-processor resolution below.
+      const float value = lane.value_at(ppq);
+      if (!std::isfinite(value)) {
+        continue;
+      }
+      if (!engine_param_router_(engine_param_router_context_, param_id, value)) {
+        unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
+      }
+      continue;
+    }
     if (registered_parameter_rejects_realtime(param_id)) {
       non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
@@ -153,6 +171,16 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
 bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
   if (!std::isfinite(value)) {
     return false;
+  }
+  if (engine_param_router_ != nullptr &&
+      (param_id & engine_param_id_mask_) == engine_param_id_match_) {
+    // Mirror apply(): engine-namespace ids go through the router, never the
+    // bound-processor table. A rejected target surfaces like an unknown one.
+    const bool routed = engine_param_router_(engine_param_router_context_, param_id, value);
+    if (!routed) {
+      unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
+    }
+    return routed;
   }
   if (registered_parameter_rejects_realtime(param_id)) {
     non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);

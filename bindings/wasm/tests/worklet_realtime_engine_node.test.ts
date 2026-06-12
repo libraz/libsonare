@@ -733,6 +733,66 @@ describe('SonareRealtimeEngineNode', () => {
       engine.destroy();
     });
 
+    it('replaces and clears automation lanes via setAutomationLane', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          ({
+            port: {
+              postMessage: (message: unknown) => posted.push(message),
+              addEventListener: () => undefined,
+              removeEventListener: () => undefined,
+              start: () => undefined,
+            },
+            disconnect: () => undefined,
+          }) as unknown as AudioWorkletNode,
+      });
+
+      // Reserved mixer namespace encodings: master = lane 0xff, first track
+      // lane = index 0, first bus = index 0 (lane byte 0xfe); kind 1 = faderDb,
+      // kind 2 = pan.
+      const masterFader = engine.automationParamId('master', 'faderDb');
+      expect(masterFader).toBe(0x4d58ff01);
+      expect(engine.automationParamId('master', 'pan')).toBe(0x4d58ff02);
+      expect(engine.automationParamId(10, 'faderDb')).toBe(0x4d580001);
+      expect(engine.automationParamId(10, 'pan')).toBe(0x4d580002);
+      expect(engine.busAutomationParamId(1)).toBe(0x4d58fe01);
+
+      // Replace-all installs the sorted lane on the offline engine and mirrors
+      // it to the live worklet via syncAutomation.
+      engine.setAutomationLane(masterFader, [
+        { ppq: 4, value: -12 },
+        { ppq: 0, value: 0 },
+      ]);
+      expect(engine.automationLaneCount()).toBe(1);
+      expect(posted).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'syncAutomation',
+            paramId: masterFader,
+            points: [
+              { ppq: 0, value: 0 },
+              { ppq: 4, value: -12 },
+            ],
+          }),
+        ]),
+      );
+
+      // A second replace overwrites rather than appends.
+      engine.setAutomationLane(masterFader, [{ ppq: 1, value: -6 }]);
+      expect(engine.automationLaneCount()).toBe(1);
+
+      // Clearing posts an empty replace-all sync to the worklet.
+      engine.setAutomationLane(masterFader, []);
+      expect(posted).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'syncAutomation', paramId: masterFader, points: [] }),
+        ]),
+      );
+      engine.destroy();
+    });
+
     it('runs suspend/resume/destroy lifecycle without accepting stale transport commands', async () => {
       const posted: unknown[] = [];
       const disconnected: boolean[] = [];

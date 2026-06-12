@@ -455,14 +455,16 @@ class RealtimeEngineWasm {
   }
 
   void setAutomationLane(int param_id, val points) {
-    // NOTE: this surfaces a non-RT-safe parameter synchronously (a throw),
-    // whereas setParameter/setParameterSmoothed and the canonical C API
-    // (sonare_engine_set_automation_lane) report the same misuse asynchronously
-    // via kNonRealtimeSafeParameter telemetry. The synchronous throw is kept
-    // here intentionally because setAutomationLane is a control-thread (offline)
-    // setter, so an immediate, actionable error is preferable to a deferred
-    // telemetry record; the queued realtime writes keep the telemetry contract.
-    if (!parameters_.parameter_is_realtime_safe(static_cast<uint32_t>(param_id))) {
+    // NOTE: a registered, explicitly non-RT-safe parameter surfaces
+    // synchronously (a throw), whereas setParameter/setParameterSmoothed and
+    // the canonical C API (sonare_engine_set_automation_lane) report the same
+    // misuse asynchronously via kNonRealtimeSafeParameter telemetry. The
+    // synchronous throw is kept here intentionally because setAutomationLane
+    // is a control-thread (offline) setter, so an immediate, actionable error
+    // is preferable to a deferred telemetry record. Unregistered ids — notably
+    // the reserved engine namespace (0x4D58xxxx mixer fader/pan targets) — are
+    // accepted, matching the C oracle's gating.
+    if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "parameter is not realtime safe");
     }

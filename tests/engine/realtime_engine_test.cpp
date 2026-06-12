@@ -567,6 +567,66 @@ TEST_CASE("RealtimeEngine track lanes route clip audio through lane state", "[en
   REQUIRE(right.back() < 0.4f);
 }
 
+TEST_CASE("RealtimeEngine automation lanes drive reserved track mixer faders",
+          "[engine][realtime]") {
+  // An automation lane targeting the reserved engine namespace (lane 0 fader)
+  // must reach the track mixer runtime without any ProcessorBase binding: held
+  // at 0 dB before the breakpoint, dropping to -60 dB after it.
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 48;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  std::array<float, kFrames> clip_l{};
+  std::array<float, kFrames> clip_r{};
+  clip_l.fill(1.0f);
+  clip_r.fill(1.0f);
+  const float* clip_channels[] = {clip_l.data(), clip_r.data()};
+  sonare::engine::ClipSchedule clip{
+      1, {clip_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+  clip.track_id = 10;
+  engine.set_clips({clip});
+  REQUIRE(engine.set_track_lanes({{10}}));
+
+  // Breakpoint at sample 1024 (= 4 blocks). 1 ppq = 24000 samples at 120 bpm.
+  constexpr double kBreakpointPpq = 1024.0 / 24000.0;
+  const uint32_t fader_target =
+      engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+  sonare::automation::AutomationLane lane(fader_target);
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Hold},
+                   {kBreakpointPpq, -60.0f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+
+  // Before the breakpoint the lane holds 0 dB: unity clip level passes through.
+  for (int block = 0; block < 4; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    engine.process(io, 2, kBlock);
+  }
+  REQUIRE(left.back() > 0.9f);
+  REQUIRE(right.back() > 0.9f);
+  REQUIRE(engine.automation().unknown_target_count() == 0);
+
+  // After the breakpoint the routed -60 dB fader (smoothed) collapses the lane.
+  for (int block = 0; block < 40; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    engine.process(io, 2, kBlock);
+  }
+  REQUIRE(left.back() < 0.2f);
+  REQUIRE(right.back() < 0.2f);
+  REQUIRE(engine.automation().unknown_target_count() == 0);
+}
+
 TEST_CASE("RealtimeEngine commands drive track lane params and solo mute", "[engine][realtime]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;

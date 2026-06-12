@@ -32,8 +32,24 @@ struct AutomationBoundaryList {
 
 class AutomationEngine {
  public:
+  /// Router callback for engine-reserved parameter ids. Returns true when the
+  /// value was accepted by the engine-side target.
+  using EngineParamRouter = bool (*)(void* context, uint32_t param_id, float value);
+
   void prepare(double sample_rate, const transport::TempoMap* tempo_map);
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
+  /// Routes lane values whose target id matches `(id & id_mask) == id_match`
+  /// through @p router instead of the bound-processor table, so reserved
+  /// engine-namespace lanes (e.g. mixer fader/pan) reach their runtime without
+  /// a ProcessorBase binding. The members are plain (non-atomic): configure at
+  /// prepare time, before realtime processing starts, like prepare().
+  void set_engine_param_router(EngineParamRouter router, void* context, uint32_t id_mask,
+                               uint32_t id_match) noexcept {
+    engine_param_router_ = router;
+    engine_param_router_context_ = context;
+    engine_param_id_mask_ = id_mask;
+    engine_param_id_match_ = id_match;
+  }
   /// Publishes registered parameter metadata used to reject explicitly
   /// non-realtime-safe targets before any RT automation path reaches a
   /// processor. Unregistered ids keep the legacy unknown-target behavior.
@@ -114,6 +130,12 @@ class AutomationEngine {
 
   double sample_rate_ = 48000.0;
   const transport::TempoMap* tempo_map_ = nullptr;
+  // Engine-parameter router state. Plain members by design: written once at
+  // prepare time (see set_engine_param_router), read on the audio thread.
+  EngineParamRouter engine_param_router_ = nullptr;
+  void* engine_param_router_context_ = nullptr;
+  uint32_t engine_param_id_mask_ = 0;
+  uint32_t engine_param_id_match_ = 0;
   rt::RtSnapshot<std::vector<ParameterInfo>> parameter_metadata_{};
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
   std::atomic<size_t> lane_count_{0};

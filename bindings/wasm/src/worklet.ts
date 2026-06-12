@@ -3025,6 +3025,68 @@ export class SonareEngine {
     this.scheduleParam('', laneId, ppq, value, curve);
   }
 
+  /**
+   * Replaces the automation lane for `paramId` with the given breakpoints.
+   *
+   * Unlike scheduleParam (which appends a single point), this sets the whole
+   * lane at once; an empty array clears the lane. The points are defensively
+   * copied and sorted by ppq before being mirrored to the offline engine and
+   * the live worklet engine.
+   *
+   * @param paramId Automation target id (registered parameter or a reserved
+   *   engine mixer target from automationParamId/busAutomationParamId).
+   * @param points Lane breakpoints; order does not matter.
+   */
+  setAutomationLane(paramId: number, points: ReadonlyArray<EngineAutomationPoint>): void {
+    const sorted = points.map((point) => ({ ...point })).sort((a, b) => a.ppq - b.ppq);
+    if (sorted.length === 0) {
+      this.automationLanes.delete(paramId);
+    } else {
+      this.automationLanes.set(paramId, sorted);
+    }
+    this.offlineEngine.setAutomationLane(paramId, sorted);
+    this.postSync({ type: 'syncAutomation', paramId, points: sorted });
+  }
+
+  /**
+   * Returns the automation target id for a mixer strip parameter.
+   *
+   * The id addresses the engine's reserved mixer namespace, so it can be fed
+   * straight to setAutomationLane to automate a fader or pan without
+   * registering a parameter.
+   *
+   * @param target Track id (declares a mixer lane on first use) or 'master'.
+   * @param kind Strip parameter to address.
+   * @returns Reserved engine parameter id for the strip parameter.
+   */
+  automationParamId(target: string | number, kind: 'faderDb' | 'pan'): number {
+    const paramKind = kind === 'pan' ? ENGINE_MIXER_PARAM_PAN : ENGINE_MIXER_PARAM_FADER_DB;
+    if (target === 'master') {
+      return engineMixerMasterTarget(paramKind);
+    }
+    return engineMixerLaneTarget(this.ensureTrackLane(target), paramKind);
+  }
+
+  /**
+   * Returns the automation target id for a bus fader.
+   *
+   * @param busId Bus id (declares the mixer bus on first use).
+   * @returns Reserved engine parameter id for the bus fader gain (dB).
+   */
+  busAutomationParamId(busId: number): number {
+    return engineMixerBusTarget(this.ensureBus(busId), ENGINE_MIXER_PARAM_FADER_DB);
+  }
+
+  /**
+   * Returns the number of automation lanes installed on the engine, including
+   * lanes whose breakpoint list is currently empty.
+   *
+   * @returns Engine-side automation lane count.
+   */
+  automationLaneCount(): number {
+    return this.offlineEngine.automationLaneCount();
+  }
+
   listParameters(): EngineParameterInfo[] {
     const parameters: EngineParameterInfo[] = [];
     for (let index = 0; index < this.offlineEngine.parameterCount(); index++) {

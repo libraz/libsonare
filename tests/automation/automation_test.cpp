@@ -34,6 +34,26 @@ class CaptureProcessor final : public sonare::rt::ProcessorBase {
   int set_count = 0;
 };
 
+// Captures AutomationEngine::EngineParamRouter callbacks (engine-reserved
+// parameter namespace) and returns a configurable accept/reject result.
+struct RouterCapture {
+  uint32_t last_param = 0;
+  float last_value = 0.0f;
+  int call_count = 0;
+  bool accept = true;
+
+  static bool route(void* context, uint32_t param_id, float value) {
+    auto* self = static_cast<RouterCapture*>(context);
+    self->last_param = param_id;
+    self->last_value = value;
+    ++self->call_count;
+    return self->accept;
+  }
+};
+
+constexpr uint32_t kEngineNamespaceMask = 0xFFFF0000u;
+constexpr uint32_t kEngineNamespaceMatch = 0x4D580000u;
+
 }  // namespace
 
 TEST_CASE("AutomationLane evaluates hold linear exponential and s-curve breakpoints",
@@ -261,6 +281,132 @@ TEST_CASE("AutomationEngine resolves targets bound after an interior gap",
   REQUIRE_FALSE(engine.set_parameter(20, 0.5f));
   REQUIRE(p20.set_count == 0);
   REQUIRE(engine.unknown_target_count() == unknown_before + 1);
+}
+
+TEST_CASE("AutomationEngine routes engine-namespace lane values through the param router",
+          "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  const uint32_t engine_param = kEngineNamespaceMatch | 0x0001u;
+  sonare::automation::AutomationLane lane(engine_param);
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                   {1.0, 1.0f, sonare::automation::CurveType::Linear}});
+
+  RouterCapture router;
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_engine_param_router(&RouterCapture::route, &router, kEngineNamespaceMask,
+                                 kEngineNamespaceMatch);
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+
+  sonare::transport::TransportState state{};
+  engine.apply(state, 12000, 64);  // 12000 samples @120bpm = ppq 0.5
+
+  REQUIRE(router.call_count == 1);
+  REQUIRE(router.last_param == engine_param);
+  REQUIRE_THAT(router.last_value, WithinAbs(0.5f, 1.0e-6f));
+  REQUIRE(engine.unknown_target_count() == 0);
+}
+
+TEST_CASE("AutomationEngine router does not capture non-namespace lanes", "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::Linear}});
+
+  RouterCapture router;
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_engine_param_router(&RouterCapture::route, &router, kEngineNamespaceMask,
+                                 kEngineNamespaceMatch);
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+
+  sonare::transport::TransportState state{};
+  engine.apply(state, 0, 64);
+
+  // Outside the engine namespace the bound-processor path still applies: with
+  // no bound processor the lane counts as an unknown target, never a router hit.
+  REQUIRE(router.call_count == 0);
+  REQUIRE(engine.unknown_target_count() == 1);
+
+  CaptureProcessor processor;
+  REQUIRE(engine.bind_target(7, &processor));
+  engine.apply(state, 0, 64);
+  REQUIRE(router.call_count == 0);
+  REQUIRE(processor.set_count == 1);
+  REQUIRE(processor.last_param == 7);
+}
+
+TEST_CASE("AutomationEngine counts router-rejected targets as unknown", "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  const uint32_t engine_param = kEngineNamespaceMatch | 0x0002u;
+  sonare::automation::AutomationLane lane(engine_param);
+  lane.set_points({{0.0, 0.5f, sonare::automation::CurveType::Linear}});
+
+  RouterCapture router;
+  router.accept = false;
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_engine_param_router(&RouterCapture::route, &router, kEngineNamespaceMask,
+                                 kEngineNamespaceMatch);
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+
+  sonare::transport::TransportState state{};
+  engine.apply(state, 0, 64);
+
+  REQUIRE(router.call_count == 1);
+  REQUIRE(engine.unknown_target_count() == 1);
+}
+
+TEST_CASE("AutomationEngine skips empty lanes without touching the router", "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  sonare::automation::AutomationLane lane(kEngineNamespaceMatch | 0x0001u);  // no points
+
+  RouterCapture router;
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_engine_param_router(&RouterCapture::route, &router, kEngineNamespaceMask,
+                                 kEngineNamespaceMatch);
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+
+  sonare::transport::TransportState state{};
+  engine.apply(state, 0, 64);
+
+  REQUIRE(router.call_count == 0);
+  REQUIRE(engine.unknown_target_count() == 0);
+}
+
+TEST_CASE("AutomationEngine set_parameter routes engine-namespace ids", "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+
+  const uint32_t engine_param = kEngineNamespaceMatch | 0xFF01u;
+  RouterCapture router;
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_engine_param_router(&RouterCapture::route, &router, kEngineNamespaceMask,
+                                 kEngineNamespaceMatch);
+
+  REQUIRE(engine.set_parameter(engine_param, -6.0f));
+  REQUIRE(router.call_count == 1);
+  REQUIRE(router.last_param == engine_param);
+  REQUIRE_THAT(router.last_value, WithinAbs(-6.0f, 1.0e-6f));
+  REQUIRE(engine.unknown_target_count() == 0);
+
+  router.accept = false;
+  REQUIRE_FALSE(engine.set_parameter(engine_param, 0.0f));
+  REQUIRE(router.call_count == 2);
+  REQUIRE(engine.unknown_target_count() == 1);
 }
 
 TEST_CASE("ParameterRegistry enumerates stable metadata", "[automation]") {
