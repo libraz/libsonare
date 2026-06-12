@@ -19,6 +19,7 @@
 ### WASM realtime engine
 
 - Added realtime-engine AudioWorklet facade coverage for track lanes, strip and bus scene sync, MIDI clips and live MIDI, instruments, capture read-back, marker loops, transport state, clip delta sync, clip loop/fade/warp typing, and tempo/time-signature segment sync.
+- Added `SonareEngine.setMarkers`, a replace-all marker facade: where `addMarker` could only append, `setMarkers` replaces the whole marker set in one call — entries keep explicit positive unique ids or are assigned fresh ones (the id counter advances past explicit ids), the resolved list is returned for host-side id mapping, and the set is delivered to both the offline mirror and the realtime worklet through the existing `syncMarkers` path.
 - The WASM build now compiles core objects with the atomics and bulk-memory features required by the `sonare-rt` shared-memory target, so `bindings/wasm` can build both embind and realtime worklet artifacts together.
 
 ### Bug fixes
