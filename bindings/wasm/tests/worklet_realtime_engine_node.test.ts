@@ -682,6 +682,57 @@ describe('SonareRealtimeEngineNode', () => {
       engine.destroy();
     });
 
+    it('replaces the whole marker set via setMarkers', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          ({
+            port: {
+              postMessage: (message: unknown) => posted.push(message),
+              addEventListener: () => undefined,
+              removeEventListener: () => undefined,
+              start: () => undefined,
+            },
+            disconnect: () => undefined,
+          }) as unknown as AudioWorkletNode,
+      });
+
+      const stale = engine.addMarker(9, 'stale');
+      const resolved = engine.setMarkers([
+        { ppq: 1, name: 'verse' },
+        { ppq: 5, name: 'chorus' },
+      ]);
+      expect(resolved).toHaveLength(2);
+      expect(resolved[0].id).not.toBe(stale);
+      expect(engine.markerCount()).toBe(2);
+      expect(engine.markerByIndex(0)).toMatchObject({ ppq: 1, name: 'verse' });
+      expect(engine.marker(resolved[1].id)).toMatchObject({ ppq: 5, name: 'chorus' });
+      expect(() => engine.marker(stale)).toThrow();
+
+      // Explicit ids are kept; fresh ids never collide with them afterwards.
+      const explicit = engine.setMarkers([{ ppq: 2, name: 'mark', id: 41 }]);
+      expect(explicit[0].id).toBe(41);
+      expect(engine.addMarker(3, 'after')).toBeGreaterThan(41);
+
+      expect(() => engine.setMarkers([{ ppq: Number.NaN }])).toThrow(/Invalid marker ppq/);
+      expect(() => engine.setMarkers([{ ppq: 0, id: 0 }])).toThrow(/Invalid marker id/);
+      expect(() =>
+        engine.setMarkers([
+          { ppq: 0, id: 7 },
+          { ppq: 1, id: 7 },
+        ]),
+      ).toThrow(/Duplicate marker id/);
+
+      // Clearing posts an empty replace-all sync to the worklet.
+      engine.setMarkers([]);
+      expect(engine.markerCount()).toBe(0);
+      expect(posted).toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: 'syncMarkers', markers: [] })]),
+      );
+      engine.destroy();
+    });
+
     it('runs suspend/resume/destroy lifecycle without accepting stale transport commands', async () => {
       const posted: unknown[] = [];
       const disconnected: boolean[] = [];

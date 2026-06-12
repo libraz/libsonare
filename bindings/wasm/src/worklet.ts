@@ -3476,6 +3476,47 @@ export class SonareEngine {
     return id;
   }
 
+  /**
+   * Replaces the whole marker set in one call.
+   *
+   * Entries without an `id` are assigned fresh ids; entries carrying an `id`
+   * keep it (ids must be positive and unique within the list). Returns the
+   * resolved markers in the order given, so a caller can map its own marker
+   * identities to the engine ids used by `seekMarker`/`setLoopFromMarkers`.
+   *
+   * @param markers The full marker list (an empty list clears all markers).
+   * @returns The markers with their resolved engine ids.
+   */
+  setMarkers(markers: ReadonlyArray<{ ppq: number; name?: string; id?: number }>): EngineMarker[] {
+    const resolved: EngineMarker[] = [];
+    const seen = new Set<number>();
+    for (const marker of markers) {
+      if (!Number.isFinite(marker.ppq)) {
+        throw new Error(`Invalid marker ppq: ${String(marker.ppq)}`);
+      }
+      if (marker.id !== undefined) {
+        if (!Number.isInteger(marker.id) || marker.id <= 0) {
+          throw new Error(`Invalid marker id: ${String(marker.id)}`);
+        }
+        if (seen.has(marker.id)) {
+          throw new Error(`Duplicate marker id: ${marker.id}`);
+        }
+      }
+      const id = marker.id ?? this.nextMarkerId++;
+      seen.add(id);
+      if (id >= this.nextMarkerId) {
+        this.nextMarkerId = id + 1;
+      }
+      resolved.push({ id, ppq: marker.ppq, name: marker.name ?? '' });
+    }
+    this.markers.clear();
+    for (const marker of resolved) {
+      this.markers.set(marker.id, marker);
+    }
+    this.syncMarkers();
+    return resolved.map((marker) => ({ ...marker }));
+  }
+
   markerCount(): number {
     return this.offlineEngine.markerCount();
   }
