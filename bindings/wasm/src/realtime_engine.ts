@@ -382,6 +382,16 @@ export class RealtimeEngine {
     this.native.seekSample(timelineSample, renderFrame);
   }
 
+  /**
+   * Snaps every in-flight parameter ramp (engine-level smoothed params, mixer
+   * lane fader/pan/gate, bus gains) to its target value. Offline renders call
+   * this after a priming process() block so the first audible block renders at
+   * settled values instead of ramping in from defaults.
+   */
+  settleParameters(): void {
+    this.native.settleParameters();
+  }
+
   seekPpq(ppq: number, renderFrame = -1): void {
     this.native.seekPpq(ppq, renderFrame);
   }

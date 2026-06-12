@@ -484,6 +484,12 @@ SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
 }
 
+SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  engine->engine.settle_parameters();
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm) {
   if (!engine || !std::isfinite(bpm) || bpm <= 0.0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY

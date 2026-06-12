@@ -578,6 +578,30 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('settles smoothed lane faders before an offline render starts', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setTempo(120);
+      engine.setTrackLanes([10]);
+      const frames = 128 * 8;
+      const ones = new Float32Array(frames).fill(1);
+      engine.setClips([
+        { trackId: 10, channels: [ones, ones], startPpq: 0, lengthSamples: frames },
+      ]);
+      // Lane 0 fader (reserved mixer namespace) held at -60 dB from ppq 0.
+      engine.setAutomationLane(0x4d580001, [{ ppq: 0, value: -60, curveToNext: 2 }]);
+      engine.seekSample(0);
+      // Priming block with the transport stopped applies the automation target;
+      // settleParameters snaps the lane fader smoother to it so the first
+      // audible frame renders at -60 dB instead of ramping down from 0 dB.
+      engine.process([new Float32Array(128), new Float32Array(128)]);
+      engine.settleParameters();
+      engine.play();
+      const out = engine.process([new Float32Array(128), new Float32Array(128)]);
+      expect(Math.abs(out[0][0])).toBeLessThan(0.01);
+      expect(Math.abs(out[0][127])).toBeLessThan(0.01);
+      engine.destroy();
+    });
+
     it('seeks markers at a scheduled render frame', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setTempo(60);

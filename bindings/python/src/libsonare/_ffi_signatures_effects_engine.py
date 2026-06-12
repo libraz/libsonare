@@ -238,6 +238,8 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_seek_sample.argtypes = [ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64]
     lib.sonare_engine_seek_ppq.restype = ctypes.c_int32
     lib.sonare_engine_seek_ppq.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int64]
+    lib.sonare_engine_settle_parameters.restype = ctypes.c_int32
+    lib.sonare_engine_settle_parameters.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_set_tempo.restype = ctypes.c_int32
     lib.sonare_engine_set_tempo.argtypes = [ctypes.c_void_p, ctypes.c_double]
     lib.sonare_engine_set_time_signature.restype = ctypes.c_int32

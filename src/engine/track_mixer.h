@@ -81,6 +81,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool render_clips(ClipPlayer& player, float* const* channels, int num_channels, int num_samples,
                     int64_t timeline_sample, MeterTelemetryTap* meter_tap = nullptr,
                     int64_t render_frame = 0) noexcept;
+  /// Snaps every lane fader/pan/gate and bus gain smoother to its current
+  /// target. Lane smoothers only advance while lanes render, so a freshly
+  /// configured runtime would otherwise ramp from its reset values over the
+  /// first audible milliseconds. Intended for offline rendering between
+  /// process() calls; not safe concurrently with the audio thread.
+  void settle_smoothers() noexcept;
   bool mix_source(uint32_t track_id, float* const* source, float* const* channels, int num_channels,
                   int num_samples, MeterTelemetryTap* meter_tap = nullptr,
                   int64_t render_frame = 0) noexcept;

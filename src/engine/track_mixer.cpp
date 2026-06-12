@@ -365,6 +365,17 @@ void TrackMixerRuntime::reset() {
   flush_pdc_delays();
 }
 
+void TrackMixerRuntime::settle_smoothers() noexcept {
+  for (LaneState& lane : lane_states_) {
+    lane.fader_db.reset(lane.fader_db.target());
+    lane.pan.reset(lane.pan.target());
+    lane.gate.reset(lane.gate.target());
+  }
+  for (BusState& bus : bus_states_) {
+    bus.gain_db.reset(bus.gain_db.target());
+  }
+}
+
 void TrackMixerRuntime::flush_pdc_delays() noexcept {
   for (mixing::AlignmentDelay& delay : lane_pdc_delays_) {
     delay.reset();

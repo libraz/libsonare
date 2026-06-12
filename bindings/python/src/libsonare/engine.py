@@ -314,6 +314,16 @@ class RealtimeEngine:
             )
         )
 
+    def settle_parameters(self) -> None:
+        """Snap every in-flight parameter ramp to its target value.
+
+        Covers engine-level smoothed parameters and the mixer's lane
+        fader/pan/gate and bus gain smoothers. Offline renders call this after
+        a priming process() block so the first audible block renders at the
+        settled values instead of ramping in from defaults.
+        """
+        _check(_get_lib().sonare_engine_settle_parameters(self._require_handle()))
+
     def seek_ppq(self, ppq: float, render_frame: int = -1) -> None:
         _check(
             _get_lib().sonare_engine_seek_ppq(self._require_handle(), float(ppq), int(render_frame))

@@ -363,6 +363,13 @@ SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_fram
 SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t timeline_sample,
                                       int64_t render_frame);
 SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int64_t render_frame);
+/// @brief Snaps every in-flight parameter ramp (engine-level smoothed params,
+///   mixer lane fader/pan/gate, bus gains) to its target value.
+/// @details For offline rendering: call after a priming process() block (which
+///   drains queued commands and applies automation at the seek position) so
+///   the first audible block renders at settled values instead of ramping in
+///   from defaults. Not safe concurrently with a running audio thread.
+SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine);
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm);
 SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int numerator,
                                              int denominator);

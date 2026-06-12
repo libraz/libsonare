@@ -740,6 +740,7 @@ export interface WasmRealtimeEngine {
   play: (renderFrame: number) => void;
   stop: (renderFrame: number) => void;
   seekSample: (timelineSample: number, renderFrame: number) => void;
+  settleParameters: () => void;
   seekPpq: (ppq: number, renderFrame: number) => void;
   setTempo: (bpm: number) => void;
   setTempoSegments: (segments: WasmEngineTempoSegment[]) => void;

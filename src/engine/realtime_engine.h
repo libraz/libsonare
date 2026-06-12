@@ -289,6 +289,14 @@ class RealtimeEngine : private ClipPageRequestSink {
 
   // Default ramp time for engine-level kSetParamSmoothed commands, in ms.
   void set_param_smoothing_ms(float smoothing_ms) noexcept;
+  /// Snaps every in-flight parameter ramp to its target: engine-level smoothed
+  /// parameters are pushed at their final value and retired, and the track
+  /// mixer's lane fader/pan/gate and bus gain smoothers jump to their targets.
+  /// Offline renders call this after a priming process() block (which drains
+  /// queued commands and applies automation at the seek position) so the first
+  /// audible block renders at the settled values instead of ramping in from
+  /// defaults. Not safe concurrently with a running audio thread.
+  void settle_parameters() noexcept;
   float param_smoothing_ms() const noexcept {
     return param_smoothing_ms_.load(std::memory_order_relaxed);
   }

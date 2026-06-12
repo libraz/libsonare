@@ -1217,6 +1217,28 @@ void RealtimeEngine::set_param_smoothing_ms(float smoothing_ms) noexcept {
   param_smoothing_ms_.store(std::max(smoothing_ms, 0.0f), std::memory_order_relaxed);
 }
 
+void RealtimeEngine::settle_parameters() noexcept {
+  for (SmoothedParam& slot : smoothed_params_) {
+    if (!slot.active) continue;
+    const float target = slot.smoother.target();
+    slot.smoother.reset(target);
+#if defined(SONARE_WITH_MIXING)
+    if (parameter_target_reserved(slot.target_id)) {
+      route_engine_parameter(slot.target_id, target);
+    } else {
+      automation_.set_parameter(slot.target_id, target);
+    }
+#else
+    automation_.set_parameter(slot.target_id, target);
+#endif
+    slot.active = false;
+    slot.target_id = 0;
+  }
+#if defined(SONARE_WITH_MIXING)
+  track_mixer_runtime_.settle_smoothers();
+#endif
+}
+
 void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexcept {
   if (target_id == 0) {
     // 0 is the reserved invalid target id; treat as an unbound target so the

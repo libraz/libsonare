@@ -102,6 +102,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::Play>("play"),
           InstanceMethod<&RealtimeEngineWrap::Stop>("stop"),
           InstanceMethod<&RealtimeEngineWrap::SeekSample>("seekSample"),
+          InstanceMethod<&RealtimeEngineWrap::SettleParameters>("settleParameters"),
           InstanceMethod<&RealtimeEngineWrap::SeekPpq>("seekPpq"),
           InstanceMethod<&RealtimeEngineWrap::SetTempo>("setTempo"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignature>("setTimeSignature"),
@@ -269,6 +270,12 @@ Napi::Value RealtimeEngineWrap::SeekSample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_engine_seek_sample(engine_, OptionalInt64(info, 0, 0),
                                               OptionalInt64(info, 1, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SettleParameters(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_engine_settle_parameters(engine_));
   return env.Undefined();
 }
 

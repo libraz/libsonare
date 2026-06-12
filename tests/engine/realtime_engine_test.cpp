@@ -627,6 +627,62 @@ TEST_CASE("RealtimeEngine automation lanes drive reserved track mixer faders",
   REQUIRE(engine.automation().unknown_target_count() == 0);
 }
 
+TEST_CASE("RealtimeEngine settle_parameters snaps lane faders for offline rendering",
+          "[engine][realtime]") {
+  // Lane fader smoothers only advance while lanes render, so an offline render
+  // that seeks and plays a freshly configured engine would capture the first
+  // milliseconds with faders still ramping in from 0 dB. After one priming
+  // block (which applies automation at the stopped position and drains queued
+  // commands), settle_parameters must snap the smoothers so the very first
+  // audible frame renders at the automated value.
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 8;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  std::array<float, kFrames> clip_l{};
+  std::array<float, kFrames> clip_r{};
+  clip_l.fill(1.0f);
+  clip_r.fill(1.0f);
+  const float* clip_channels[] = {clip_l.data(), clip_r.data()};
+  sonare::engine::ClipSchedule clip{
+      1, {clip_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+  clip.track_id = 10;
+  engine.set_clips({clip});
+  REQUIRE(engine.set_track_lanes({{10}}));
+
+  const uint32_t fader_target =
+      engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+  sonare::automation::AutomationLane lane(fader_target);
+  lane.set_points({{0.0, -60.0f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+
+  // Priming block with the transport stopped: automation applies at the seek
+  // position and pushes -60 dB as the lane fader target, but the smoother's
+  // current value has not advanced (nothing rendered through the lane).
+  engine.process(io, 2, kBlock);
+  engine.settle_parameters();
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  left.fill(0.0f);
+  right.fill(0.0f);
+  engine.process(io, 2, kBlock);
+  // The first audible frame must already sit at -60 dB (1e-3 linear), not at
+  // the 0 dB reset value the smoother would otherwise ramp down from.
+  REQUIRE(left.front() < 0.01f);
+  REQUIRE(right.front() < 0.01f);
+  REQUIRE(left.back() < 0.01f);
+  REQUIRE(engine.automation().unknown_target_count() == 0);
+}
+
 TEST_CASE("RealtimeEngine commands drive track lane params and solo mute", "[engine][realtime]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;

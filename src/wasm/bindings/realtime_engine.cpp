@@ -322,6 +322,13 @@ class RealtimeEngineWasm {
     }
   }
 
+  /// Snaps every in-flight parameter ramp (engine-level smoothed params, mixer
+  /// lane fader/pan/gate, bus gains) to its target. For offline rendering:
+  /// call after a priming process() block so the first audible block renders
+  /// at settled values instead of ramping in from defaults. Matches
+  /// sonare_engine_settle_parameters.
+  void settleParameters() { engine_.settle_parameters(); }
+
   void seekSample(int64_t timeline_sample, int64_t render_frame) {
     sonare::rt::Command command{};
     command.type = sonare::rt::CommandType::kTransportSeekSample;
@@ -2120,6 +2127,7 @@ void registerRealtimeEngineBindings() {
       .function("play", &RealtimeEngineWasm::play)
       .function("stop", &RealtimeEngineWasm::stop)
       .function("seekSample", &RealtimeEngineWasm::seekSample)
+      .function("settleParameters", &RealtimeEngineWasm::settleParameters)
       .function("seekPpq", &RealtimeEngineWasm::seekPpq)
       .function("setTempo", &RealtimeEngineWasm::setTempo)
       .function("setTempoSegments", &RealtimeEngineWasm::setTempoSegments)
