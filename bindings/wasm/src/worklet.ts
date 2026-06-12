@@ -426,6 +426,8 @@ export interface SonareEngineSyncMixerMessage {
   trackStrips?: Array<{ trackId: number; sceneJson: string }>;
   busStrips?: Array<{ busId: number; sceneJson: string }>;
   masterStripJson?: string;
+  /** Lane insert sidechain bindings (replayed after lanes/strips). */
+  laneSidechains?: Array<{ trackId: number; insertIndex: number; sourceTrackId: number }>;
 }
 
 export interface SonareEngineSyncCaptureMessage {
@@ -1686,6 +1688,13 @@ export class SonareRealtimeEngineWorkletProcessor {
         if (message.masterStripJson) {
           this.engine.setMasterStripJson(message.masterStripJson);
         }
+        for (const binding of message.laneSidechains ?? []) {
+          this.engine.setLaneSidechain(
+            binding.trackId,
+            binding.insertIndex,
+            binding.sourceTrackId,
+          );
+        }
         break;
       case 'syncCapture':
         this.engine.setCaptureBuffer(message.channels, message.bufferFrames);
@@ -2811,6 +2820,8 @@ export class SonareEngine {
   private readonly markers = new Map<number, EngineMarker>();
   private readonly trackLaneIds: number[] = [];
   private readonly trackSends = new Map<number, EngineTrackSend[]>();
+  private readonly trackOutputBus = new Map<number, number>();
+  private readonly laneSidechains = new Map<string, { trackId: number; insertIndex: number; sourceTrackId: number }>();
   private readonly buses: EngineBus[] = [];
   private readonly trackStripJson = new Map<number, string>();
   private readonly busStripJson = new Map<number, string>();
@@ -3187,9 +3198,53 @@ export class SonareEngine {
           entry.sends.map((send) => ({ ...send })),
         );
       }
+      if (entry.outputBusId !== undefined) {
+        if (entry.outputBusId === 0) this.trackOutputBus.delete(entry.trackId);
+        else this.trackOutputBus.set(entry.trackId, entry.outputBusId);
+      }
     }
     this.trackLaneIds.splice(0, this.trackLaneIds.length, ...ids);
     this.syncMixer();
+  }
+
+  /**
+   * Routes a track lane's post-fader output into a declared bus instead of
+   * the master mix (group/folder routing); busId 0 restores the master mix.
+   */
+  setTrackOutputBus(target: string | number, busId: number): void {
+    const laneIndex = this.ensureTrackLane(target);
+    const trackId = this.trackLaneIds[laneIndex];
+    if (busId === 0) this.trackOutputBus.delete(trackId);
+    else this.trackOutputBus.set(trackId, busId);
+    this.syncMixer();
+  }
+
+  /**
+   * Keys one insert of a lane strip from another lane's post-strip pre-fader
+   * audio (ducking/sidechainRouter inserts). sourceTarget null removes the
+   * binding.
+   */
+  setLaneSidechain(
+    target: string | number,
+    insertIndex: number,
+    sourceTarget: string | number | null,
+  ): void {
+    const laneIndex = this.ensureTrackLane(target);
+    const trackId = this.trackLaneIds[laneIndex];
+    const key = `${trackId}:${insertIndex}`;
+    let sourceTrackId = 0;
+    if (sourceTarget !== null) {
+      const sourceIndex = this.ensureTrackLane(sourceTarget);
+      sourceTrackId = this.trackLaneIds[sourceIndex];
+    }
+    if (sourceTrackId === 0) this.laneSidechains.delete(key);
+    else this.laneSidechains.set(key, { trackId, insertIndex, sourceTrackId });
+    this.offlineEngine.setLaneSidechain(trackId, insertIndex, sourceTrackId);
+    this.postSync({
+      type: 'syncMixer',
+      lanes: this.mixerLanes(),
+      laneSidechains: [{ trackId, insertIndex, sourceTrackId }],
+    });
   }
 
   setSends(target: string | number, sends: EngineTrackSend[]): void {
@@ -3663,13 +3718,20 @@ export class SonareEngine {
     this.postSync({ type: 'syncMidiClips', clips });
   }
 
-  private syncMixer(): void {
-    const lanes = this.trackLaneIds.map((trackId) => {
+  private mixerLanes(): EngineTrackLane[] {
+    return this.trackLaneIds.map((trackId) => {
       const sends = this.trackSends.get(trackId);
-      return sends && sends.length > 0
-        ? { trackId, sends: sends.map((send) => ({ ...send })) }
-        : { trackId };
+      const outputBusId = this.trackOutputBus.get(trackId);
+      return {
+        trackId,
+        ...(sends && sends.length > 0 ? { sends: sends.map((send) => ({ ...send })) } : {}),
+        ...(outputBusId !== undefined ? { outputBusId } : {}),
+      };
     });
+  }
+
+  private syncMixer(): void {
+    const lanes = this.mixerLanes();
     const buses = this.buses.map((bus) => ({ ...bus }));
     this.offlineEngine.setTrackBuses(buses);
     if (lanes.length > 0) {
@@ -3688,6 +3750,7 @@ export class SonareEngine {
       lanes,
       buses,
       trackStrips,
+      laneSidechains: Array.from(this.laneSidechains.values()),
       busStrips,
       masterStripJson: this.masterStripJson,
     });
