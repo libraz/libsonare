@@ -315,6 +315,8 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = std::max(max_block_size, 1);
   scratch_.assign(kMaxTrackLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
   bus_scratch_.assign(kMaxBusLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
+  key_scratch_.assign(kMaxTrackLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_),
+                      0.0f);
   for (LaneState& lane : lane_states_) {
     lane.fader_db.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
@@ -467,6 +469,9 @@ bool TrackMixerRuntime::lane_config_valid(
   if (lanes.size() > kMaxTrackLanes) return false;
   for (size_t i = 0; i < lanes.size(); ++i) {
     if (lanes[i].track_id == 0) return false;
+    if (lanes[i].output_bus_id != 0 && bus_state_for(lanes[i].output_bus_id) == nullptr) {
+      return false;
+    }
     if (lanes[i].sends.size() > mixing::ChannelStrip::kMaxSends) return false;
     for (size_t send_index = 0; send_index < lanes[i].sends.size(); ++send_index) {
       const TrackLaneConfig::Send& send = lanes[i].sends[send_index];
@@ -544,6 +549,12 @@ float* TrackMixerRuntime::lane_channel(size_t lane_index, int channel) noexcept 
   const size_t lane_stride = static_cast<size_t>(kMaxLaneChannels) * max_block_size_;
   const size_t offset = lane_index * lane_stride + static_cast<size_t>(channel) * max_block_size_;
   return scratch_.data() + offset;
+}
+
+float* TrackMixerRuntime::key_channel(size_t lane_index, int channel) noexcept {
+  const size_t lane_stride = static_cast<size_t>(kMaxLaneChannels) * max_block_size_;
+  const size_t offset = lane_index * lane_stride + static_cast<size_t>(channel) * max_block_size_;
+  return key_scratch_.data() + offset;
 }
 
 float* TrackMixerRuntime::bus_channel(size_t bus_index, int channel) noexcept {
@@ -675,6 +686,63 @@ void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>&
   }
 }
 
+bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
+                                           uint32_t source_track_id) noexcept {
+  if (track_id == 0) return false;
+  for (size_t i = 0; i < sidechain_binding_count_; ++i) {
+    SidechainBinding& binding = sidechain_bindings_[i];
+    if (binding.track_id != track_id || binding.insert_index != insert_index) continue;
+    if (source_track_id == 0) {
+      // Drop the binding; the strip's key state clears so the insert falls
+      // back to its internal key until (and unless) another binding feeds it.
+      const int lane_index = lane_index_for_track(track_id);
+      if (lane_index >= 0 && lane_states_[static_cast<size_t>(lane_index)].strip) {
+        lane_states_[static_cast<size_t>(lane_index)].strip->clear_insert_sidechains();
+      }
+      sidechain_bindings_[i] = sidechain_bindings_[sidechain_binding_count_ - 1];
+      sidechain_bindings_[--sidechain_binding_count_] = SidechainBinding{};
+    } else {
+      binding.source_track_id = source_track_id;
+    }
+    return true;
+  }
+  if (source_track_id == 0) return true;
+  if (sidechain_binding_count_ >= kMaxSidechainBindings) return false;
+  sidechain_bindings_[sidechain_binding_count_++] =
+      SidechainBinding{track_id, insert_index, source_track_id};
+  return true;
+}
+
+int TrackMixerRuntime::lane_index_for_track(uint32_t track_id) const noexcept {
+  if (track_id == 0) return -1;
+  for (size_t i = 0; i < lane_states_.size(); ++i) {
+    if (lane_states_[i].track_id == track_id) return static_cast<int>(i);
+  }
+  return -1;
+}
+
+void TrackMixerRuntime::deliver_lane_sidechains(size_t lane_index, int num_channels,
+                                                int num_samples) noexcept {
+  if (sidechain_binding_count_ == 0) return;
+  LaneState& lane = lane_states_[lane_index];
+  if (!lane.strip || lane.track_id == 0) return;
+  std::array<const float*, kMaxLaneChannels> key{};
+  for (size_t i = 0; i < sidechain_binding_count_; ++i) {
+    const SidechainBinding& binding = sidechain_bindings_[i];
+    if (binding.track_id != lane.track_id) continue;
+    const int source_index = lane_index_for_track(binding.source_track_id);
+    if (source_index < 0) continue;
+    // The source lane's key snapshot holds its most recent post-strip,
+    // pre-fader audio: the current block when the source renders before this
+    // lane, the previous block otherwise (one block of key latency).
+    for (int ch = 0; ch < num_channels && ch < kMaxLaneChannels; ++ch) {
+      key[static_cast<size_t>(ch)] = key_channel(static_cast<size_t>(source_index), ch);
+    }
+    lane.strip->set_insert_sidechain(binding.insert_index, key.data(),
+                                     std::min(num_channels, kMaxLaneChannels), num_samples);
+  }
+}
+
 void TrackMixerRuntime::process_lane_strip(size_t lane_index, int num_channels, int num_samples,
                                            int64_t timeline_sample) noexcept {
   LaneState& lane = lane_states_[lane_index];
@@ -682,9 +750,32 @@ void TrackMixerRuntime::process_lane_strip(size_t lane_index, int num_channels, 
     lane_channel_ptrs_[static_cast<size_t>(ch)] = lane_channel(lane_index, ch);
   }
   if (lane.strip) {
+    deliver_lane_sidechains(lane_index, num_channels, num_samples);
     lane.strip->process_at(lane_channel_ptrs_.data(), num_channels, num_samples, timeline_sample);
   }
   lane_pdc_delays_[lane_index].process(lane_channel_ptrs_.data(), num_channels, num_samples);
+  snapshot_sidechain_key(lane_index, num_channels, num_samples);
+}
+
+void TrackMixerRuntime::snapshot_sidechain_key(size_t lane_index, int num_channels,
+                                               int num_samples) noexcept {
+  if (sidechain_binding_count_ == 0) return;
+  const uint32_t track_id = lane_states_[lane_index].track_id;
+  if (track_id == 0) return;
+  bool is_source = false;
+  for (size_t i = 0; i < sidechain_binding_count_; ++i) {
+    if (sidechain_bindings_[i].source_track_id == track_id) {
+      is_source = true;
+      break;
+    }
+  }
+  if (!is_source) return;
+  // Copy the post-strip output before the fader/gate/pan stage mutates the
+  // lane buffer in place, so keyed inserts see the source's pre-fader signal.
+  for (int ch = 0; ch < num_channels && ch < kMaxLaneChannels; ++ch) {
+    const float* src = lane_channel(lane_index, ch);
+    std::copy(src, src + num_samples, key_channel(lane_index, ch));
+  }
 }
 
 void TrackMixerRuntime::mix_lane_sends(size_t lane_index, int num_channels, int num_samples,
@@ -748,6 +839,22 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
   LaneState& lane = lane_states_[lane_index];
   const bool audible = !lane.mute && (!any_solo || lane.solo);
   lane.gate.set_target(audible ? 1.0f : 0.0f);
+  // Group/folder routing: a lane with an output bus sums its post-fader
+  // signal into that bus buffer instead of the master mix; process_buses
+  // (which runs after every lane was applied) then carries it to the master
+  // through the bus gain and inserts. Sends were already tapped pre-fader.
+  float* dest_left = channels[0];
+  float* dest_right = num_channels >= 2 ? channels[1] : nullptr;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (lanes && lane_index < lanes->size() && (*lanes)[lane_index].output_bus_id != 0) {
+    const uint32_t output_bus_id = (*lanes)[lane_index].output_bus_id;
+    for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
+      if (bus_configs_[bus_index].bus_id != output_bus_id) continue;
+      dest_left = bus_channel(bus_index, 0);
+      dest_right = num_channels >= 2 ? bus_channel(bus_index, 1) : nullptr;
+      break;
+    }
+  }
   for (int i = 0; i < num_samples; ++i) {
     const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
     const float gate = lane.gate.process();
@@ -759,10 +866,10 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
       right_gain *= pan >= 0.0f ? 1.0f : 1.0f + pan;
     }
     lane_channel(lane_index, 0)[i] *= left_gain;
-    if (channels[0]) channels[0][i] += lane_channel(lane_index, 0)[i];
-    if (num_channels >= 2 && channels[1]) {
+    if (dest_left) dest_left[i] += lane_channel(lane_index, 0)[i];
+    if (num_channels >= 2 && dest_right) {
       lane_channel(lane_index, 1)[i] *= right_gain;
-      channels[1][i] += lane_channel(lane_index, 1)[i];
+      dest_right[i] += lane_channel(lane_index, 1)[i];
     }
   }
   if (meter_tap) {

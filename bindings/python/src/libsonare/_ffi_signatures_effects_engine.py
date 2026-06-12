@@ -354,6 +354,14 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    if hasattr(lib, "sonare_engine_set_lane_sidechain"):
+        lib.sonare_engine_set_lane_sidechain.restype = ctypes.c_int32
+        lib.sonare_engine_set_lane_sidechain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_uint32,
+        ]
     if hasattr(lib, "sonare_engine_set_track_lanes"):
         lib.sonare_engine_set_track_lanes.restype = ctypes.c_int32
         lib.sonare_engine_set_track_lanes.argtypes = [

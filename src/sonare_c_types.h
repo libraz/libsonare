@@ -290,6 +290,9 @@ typedef struct {
   uint32_t track_id;
   const SonareEngineTrackSend* sends;
   size_t send_count;
+  /* Bus the lane's post-fader output sums into instead of the master mix
+     (group/folder routing); 0 keeps the lane on the master mix. */
+  uint32_t output_bus_id;
 } SonareEngineTrackLane;
 
 typedef struct {

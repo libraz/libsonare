@@ -542,6 +542,11 @@ export interface WasmEngineTrackSend {
 export interface WasmEngineTrackLane {
   trackId: number;
   sends?: WasmEngineTrackSend[];
+  /**
+   * Bus the lane's post-fader output sums into instead of the master mix
+   * (group/folder routing); 0 or absent keeps the lane on the master mix.
+   */
+  outputBusId?: number;
 }
 
 export interface WasmEngineBus {
@@ -769,6 +774,7 @@ export interface WasmRealtimeEngine {
   setClips: (clips: WasmEngineClip[]) => void;
   clipCount: () => number;
   setTrackLanes: (lanes: Array<number | WasmEngineTrackLane>) => void;
+  setLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => void;
   setTrackBuses: (buses: WasmEngineBus[]) => void;
   setBusStripJson: (busId: number, sceneJson: string) => void;
   setTrackStripJson: (trackId: number, sceneJson: string) => void;

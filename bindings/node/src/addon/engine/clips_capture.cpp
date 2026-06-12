@@ -210,6 +210,10 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
     } else if (value.IsObject()) {
       Napi::Object obj = value.As<Napi::Object>();
       lane.track_id = obj.Get("trackId").As<Napi::Number>().Uint32Value();
+      if (obj.Has("outputBusId") && !obj.Get("outputBusId").IsUndefined() &&
+          !obj.Get("outputBusId").IsNull()) {
+        lane.output_bus_id = obj.Get("outputBusId").As<Napi::Number>().Uint32Value();
+      }
       if (obj.Has("sends") && !obj.Get("sends").IsUndefined() && !obj.Get("sends").IsNull()) {
         if (!obj.Get("sends").IsArray()) {
           Napi::TypeError::New(env, "track lane sends must be an array")
@@ -249,6 +253,20 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
     lanes.push_back(lane);
   }
   ThrowIfError(env, sonare_engine_set_track_lanes(engine_, lanes.data(), lanes.size()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "expected (trackId, insertIndex, sourceTrackId)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env,
+               sonare_engine_set_lane_sidechain(engine_, info[0].As<Napi::Number>().Uint32Value(),
+                                                info[1].As<Napi::Number>().Uint32Value(),
+                                                info[2].As<Napi::Number>().Uint32Value()));
   return env.Undefined();
 }
 

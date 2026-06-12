@@ -265,6 +265,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool set_master_strip(const mixing::api::Strip& strip);
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
   bool set_track_buses(std::vector<TrackBusConfig> buses);
+  /// Keys one insert of a lane strip from another lane's post-strip audio
+  /// (see TrackMixerRuntime::set_lane_sidechain). source_track_id 0 clears.
+  bool set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
+                          uint32_t source_track_id) noexcept {
+    return track_mixer_runtime_.set_lane_sidechain(track_id, insert_index, source_track_id);
+  }
   bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
   bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
   bool set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus);

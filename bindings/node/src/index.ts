@@ -678,6 +678,14 @@ export class RealtimeEngine {
     this.native.setTrackBuses(buses);
   }
 
+  /**
+   * Keys one insert of a lane strip from another lane's post-strip audio
+   * (ducking/sidechainRouter inserts). sourceTrackId 0 removes the binding.
+   */
+  setLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): void {
+    this.native.setLaneSidechain(trackId, insertIndex, sourceTrackId);
+  }
+
   setBusStripJson(busId: number, sceneJson: string): void {
     this.native.setBusStripJson(busId, sceneJson);
   }

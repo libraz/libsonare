@@ -51,6 +51,11 @@ export interface EngineTrackSend {
 export interface EngineTrackLane {
   trackId: number;
   sends?: EngineTrackSend[];
+  /**
+   * Bus the lane's post-fader output sums into instead of the master mix
+   * (group/folder routing); 0 or absent keeps the lane on the master mix.
+   */
+  outputBusId?: number;
 }
 
 export interface EngineBus {
@@ -512,6 +517,14 @@ export class RealtimeEngine {
     this.native.setTrackLanes(
       lanes.map((lane) => (typeof lane === 'number' ? { trackId: lane } : lane)),
     );
+  }
+
+  /**
+   * Keys one insert of a lane strip from another lane's post-strip audio
+   * (ducking/sidechainRouter inserts). sourceTrackId 0 removes the binding.
+   */
+  setLaneSidechain(trackId: number, insertIndex: number, sourceTrackId: number): void {
+    this.native.setLaneSidechain(trackId, insertIndex, sourceTrackId);
   }
 
   setTrackBuses(buses: EngineBus[]): void {

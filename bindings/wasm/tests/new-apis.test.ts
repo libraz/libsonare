@@ -602,6 +602,59 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('routes a lane through its group bus and ducks a lane from a sidechain key', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setTempo(120);
+      const frames = 128 * 64;
+      const pad = new Float32Array(frames).fill(0.5);
+      const key = new Float32Array(frames).fill(1.0);
+      engine.setTrackBuses([{ busId: 5, gainDb: -6.0206 }]);
+      engine.setTrackLanes([{ trackId: 10, outputBusId: 5 }, { trackId: 20 }]);
+      engine.setClips([
+        { trackId: 10, channels: [pad, pad], startPpq: 0, lengthSamples: frames },
+        { trackId: 20, channels: [key, key], startPpq: 0, lengthSamples: frames },
+      ]);
+      // Ducking insert on the grouped lane keyed from the other lane.
+      engine.setTrackStripJson(
+        10,
+        JSON.stringify({
+          version: 1,
+          strips: [
+            {
+              id: 'track-10',
+              inserts: [
+                {
+                  slot: 'post',
+                  processor: 'dynamics.duckingProcessor',
+                  params: { thresholdDb: -30, ratio: 20, attackMs: 1, releaseMs: 50, rangeDb: 24 },
+                },
+              ],
+            },
+          ],
+          buses: [],
+          connections: [],
+        }),
+      );
+      engine.setLaneSidechain(10, 0, 20);
+      // Keep the key lane out of the measured mix; the key snapshot is
+      // pre-fader, so the binding still sees it at full level.
+      engine.setParameter(0x4d580101, -120, -1);
+      engine.seekSample(0);
+      engine.process([new Float32Array(128), new Float32Array(128)]);
+      engine.settleParameters();
+      engine.play();
+      let out: Float32Array[] = [];
+      for (let block = 0; block < 40; block++) {
+        out = engine.process([new Float32Array(128), new Float32Array(128)]);
+      }
+      const ducked = Math.abs(out[0][127]);
+      // Pad 0.5 through the -6 dB group bus would sit at ~0.25 unducked; the
+      // hot key must push it far below that.
+      expect(ducked).toBeLessThan(0.07);
+      engine.setLaneSidechain(10, 0, 0);
+      engine.destroy();
+    });
+
     it('seeks markers at a scheduled render frame', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setTempo(60);

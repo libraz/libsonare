@@ -205,6 +205,7 @@ class SonareEngineTrackLane(ctypes.Structure):
         ("track_id", ctypes.c_uint32),
         ("sends", ctypes.POINTER(SonareEngineTrackSend)),
         ("send_count", ctypes.c_size_t),
+        ("output_bus_id", ctypes.c_uint32),
     ]
 
 

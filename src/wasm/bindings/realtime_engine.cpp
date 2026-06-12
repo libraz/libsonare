@@ -1383,6 +1383,9 @@ class RealtimeEngineWasm {
         track_id = static_cast<uint32_t>(intProperty(lane_val, "trackId", 0));
       }
       sonare::engine::TrackLaneConfig config{track_id};
+      if (lane_val.typeOf().as<std::string>() == "object") {
+        config.output_bus_id = static_cast<uint32_t>(intProperty(lane_val, "outputBusId", 0));
+      }
       if (lane_val.typeOf().as<std::string>() == "object" && !lane_val["sends"].isUndefined() &&
           !lane_val["sends"].isNull()) {
         val sends = lane_val["sends"];
@@ -1404,6 +1407,24 @@ class RealtimeEngineWasm {
 #else
     (void)lanes;
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  /// Keys one insert of a lane strip from another lane's post-strip audio
+  /// (ducking/sidechainRouter inserts); sourceTrackId 0 removes the binding.
+  /// Matches sonare_engine_set_lane_sidechain.
+  void setLaneSidechain(uint32_t track_id, unsigned int insert_index, uint32_t source_track_id) {
+#if defined(SONARE_WITH_MIXING)
+    if (track_id == 0 || !engine_.set_lane_sidechain(track_id, insert_index, source_track_id)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid lane sidechain binding");
+    }
+#else
+    (void)track_id;
+    (void)insert_index;
+    (void)source_track_id;
+    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                  "mixing support is not compiled in");
 #endif
   }
 
@@ -2156,6 +2177,7 @@ void registerRealtimeEngineBindings() {
       .function("setClips", &RealtimeEngineWasm::setClips)
       .function("clipCount", &RealtimeEngineWasm::clipCount)
       .function("setTrackLanes", &RealtimeEngineWasm::setTrackLanes)
+      .function("setLaneSidechain", &RealtimeEngineWasm::setLaneSidechain)
       .function("setTrackBuses", &RealtimeEngineWasm::setTrackBuses)
       .function("setBusStripJson", &RealtimeEngineWasm::setBusStripJson)
       .function("setTrackStripJson", &RealtimeEngineWasm::setTrackStripJson)

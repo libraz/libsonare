@@ -421,6 +421,13 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
 SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
                                           const SonareEngineTrackLane* lanes, size_t lane_count);
+/// @brief Keys one insert of a lane strip from another lane's post-strip audio.
+/// @details Sidechain for ducking/sidechainRouter inserts: the source lane's
+///   most recent post-strip buffer feeds the insert's key input every block
+///   (same-block when the source renders earlier, previous block otherwise).
+///   @p source_track_id 0 removes the binding. Control-thread only.
+SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
+                                             unsigned int insert_index, uint32_t source_track_id);
 
 /// @brief Configure realtime engine aux buses used by track sends.
 /// @details Control-thread only; must not run concurrently with process().

@@ -879,6 +879,7 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     engine::TrackLaneConfig lane{lanes[i].track_id};
+    lane.output_bus_id = lanes[i].output_bus_id;
     lane.sends.reserve(lanes[i].send_count);
     for (size_t send_index = 0; send_index < lanes[i].send_count; ++send_index) {
       const SonareEngineTrackSend& send = lanes[i].sends[send_index];
@@ -889,6 +890,20 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
   return engine->engine.set_track_lanes(std::move(configs)) ? SONARE_OK
                                                             : SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
+                                             unsigned int insert_index, uint32_t source_track_id) {
+  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  (void)source_track_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return engine->engine.set_lane_sidechain(track_id, insert_index, source_track_id)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
 #endif
 }
 

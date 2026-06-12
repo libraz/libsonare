@@ -181,11 +181,11 @@ TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_
   clips[1].gain = 1.0f;
   REQUIRE(sonare_engine_set_clips(engine, clips, 2) == SONARE_OK);
 
-  SonareEngineTrackLane lanes[] = {{10, nullptr, 0}, {20, nullptr, 0}};
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0}, {20, nullptr, 0, 0}};
 #if defined(SONARE_WITH_MIXING)
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_lanes(engine, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
-  SonareEngineTrackLane duplicate_lanes[] = {{10, nullptr, 0}, {10, nullptr, 0}};
+  SonareEngineTrackLane duplicate_lanes[] = {{10, nullptr, 0, 0}, {10, nullptr, 0, 0}};
   REQUIRE(sonare_engine_set_track_lanes(engine, duplicate_lanes, 2) ==
           SONARE_ERROR_INVALID_PARAMETER);
 #else
@@ -254,20 +254,20 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
           SONARE_ERROR_INVALID_PARAMETER);
 
   SonareEngineTrackSend send[] = {{1, 0.0f, 1}};
-  SonareEngineTrackLane lane[] = {{10, send, 1}};
+  SonareEngineTrackLane lane[] = {{10, send, 1, 0}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-  SonareEngineTrackLane null_send_lane[] = {{10, nullptr, 1}};
+  SonareEngineTrackLane null_send_lane[] = {{10, nullptr, 1, 0}};
   REQUIRE(sonare_engine_set_track_lanes(engine, null_send_lane, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   SonareEngineTrackSend bad_bus_send[] = {{99, 0.0f, 1}};
-  SonareEngineTrackLane bad_bus_lane[] = {{10, bad_bus_send, 1}};
+  SonareEngineTrackLane bad_bus_lane[] = {{10, bad_bus_send, 1, 0}};
   REQUIRE(sonare_engine_set_track_lanes(engine, bad_bus_lane, 1) == SONARE_ERROR_INVALID_PARAMETER);
   SonareEngineTrackSend duplicate_send[] = {{1, 0.0f, 1}, {1, -6.0f, 1}};
-  SonareEngineTrackLane duplicate_send_lane[] = {{10, duplicate_send, 2}};
+  SonareEngineTrackLane duplicate_send_lane[] = {{10, duplicate_send, 2, 0}};
   REQUIRE(sonare_engine_set_track_lanes(engine, duplicate_send_lane, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   SonareEngineTrackSend bad_level_send[] = {{1, 99.0f, 1}};
-  SonareEngineTrackLane bad_level_lane[] = {{10, bad_level_send, 1}};
+  SonareEngineTrackLane bad_level_lane[] = {{10, bad_level_send, 1, 0}};
   REQUIRE(sonare_engine_set_track_lanes(engine, bad_level_lane, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
@@ -367,7 +367,7 @@ TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][en
   clips[1].gain = 1.0f;
   REQUIRE(sonare_engine_set_clips(engine, clips, 2) == SONARE_OK);
 
-  SonareEngineTrackLane lanes[] = {{10, nullptr, 0}, {20, nullptr, 0}};
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0}, {20, nullptr, 0, 0}};
 #if defined(SONARE_WITH_MIXING)
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
   const char* scene_json =
@@ -424,7 +424,7 @@ TEST_CASE("sonare_engine_set_track_strip_insert_bypassed toggles track insert", 
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  SonareEngineTrackLane lanes[] = {{10, nullptr, 0}};
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
   const char* scene_json =
       R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":12,\"band0.enabled\":1}"}]}],"buses":[],"connections":[]})";
@@ -480,7 +480,7 @@ TEST_CASE("sonare_engine_set_track_strip_eq_band_json updates embedded lane EQ",
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
 
 #if defined(SONARE_WITH_MIXING)
-  SonareEngineTrackLane lanes[] = {{10, nullptr, 0}};
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(
               engine, 10,

@@ -28,6 +28,13 @@ class DuckingProcessor : public rt::ProcessorBase {
   void set_key_input(const float* const* channels, int num_channels, int num_samples);
   void clear_key_input();
 
+  // Strip-managed sidechain delivery (ChannelStrip::set_insert_sidechain
+  // routes external keys through this ProcessorBase interface).
+  void set_sidechain(const float* const* channels, int num_channels, int num_samples) override {
+    set_key_input(channels, num_channels, num_samples);
+  }
+  void clear_sidechain() override { clear_key_input(); }
+
   void set_config(const DuckingConfig& config);
   const DuckingConfig& config() const noexcept { return config_; }
   float last_gain_reduction_db() const noexcept override {

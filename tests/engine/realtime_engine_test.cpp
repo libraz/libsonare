@@ -683,6 +683,130 @@ TEST_CASE("RealtimeEngine settle_parameters snaps lane faders for offline render
   REQUIRE(engine.automation().unknown_target_count() == 0);
 }
 
+TEST_CASE("RealtimeEngine routes a lane's output through its group bus", "[engine][realtime]") {
+  // A lane with output_bus_id sums into that bus (here at -6 dB) instead of
+  // the master mix, so the master receives the bus-attenuated signal only.
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 8;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  std::array<float, kFrames> clip_l{};
+  std::array<float, kFrames> clip_r{};
+  clip_l.fill(1.0f);
+  clip_r.fill(1.0f);
+  const float* clip_channels[] = {clip_l.data(), clip_r.data()};
+  sonare::engine::ClipSchedule clip{
+      1, {clip_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+  clip.track_id = 10;
+  engine.set_clips({clip});
+
+  // Routing to an undeclared bus is rejected; declare the bus first.
+  sonare::engine::TrackLaneConfig grouped{10};
+  grouped.output_bus_id = 5;
+  REQUIRE_FALSE(engine.set_track_lanes({grouped}));
+  REQUIRE(engine.set_track_buses({{5, -6.0206f}}));
+  REQUIRE(engine.set_track_lanes({grouped}));
+  engine.settle_parameters();
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  for (int block = 0; block < 4; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    engine.process(io, 2, kBlock);
+  }
+  // Unity clip through the -6 dB group bus: master sits at ~0.5, not 1.0.
+  REQUIRE(left.back() > 0.45f);
+  REQUIRE(left.back() < 0.55f);
+  REQUIRE(right.back() > 0.45f);
+  REQUIRE(right.back() < 0.55f);
+}
+
+TEST_CASE("RealtimeEngine lane sidechain ducks one lane from another's audio",
+          "[engine][realtime]") {
+  // A ducking insert on lane 10 keyed from lane 20 must attenuate lane 10
+  // while the key lane carries signal, and pass it (near) unity when the key
+  // lane is silent.
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 48;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  const auto run = [&](bool key_audible) {
+    std::array<float, kFrames> pad{};
+    std::array<float, kFrames> key{};
+    pad.fill(0.5f);
+    key.fill(key_audible ? 1.0f : 0.0f);
+    const float* pad_channels[] = {pad.data(), pad.data()};
+    const float* key_channels[] = {key.data(), key.data()};
+    sonare::engine::ClipSchedule pad_clip{
+        1, {pad_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+    pad_clip.track_id = 10;
+    sonare::engine::ClipSchedule key_clip{
+        2, {key_channels, 2, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0, 0};
+    key_clip.track_id = 20;
+    engine.set_clips({pad_clip, key_clip});
+    REQUIRE(engine.set_track_lanes({{10}, {20}}));
+
+    sonare::mixing::api::Strip strip_spec;
+    strip_spec.pan_law = 3;
+    strip_spec.inserts.push_back(sonare::mixing::api::Insert{
+        sonare::mixing::api::InsertSlot::PostFader, "dynamics.duckingProcessor",
+        R"({"thresholdDb":-30,"ratio":20,"attackMs":1,"releaseMs":50,"rangeDb":24})"});
+    REQUIRE(engine.set_track_strip(10, strip_spec));
+    REQUIRE(engine.set_lane_sidechain(10, 0, 20));
+
+    // Mute the key lane's own master contribution so the measurement sees the
+    // pad lane only (the sidechain taps the key pre-fader, post-strip).
+    REQUIRE(engine.track_mixer().set_lane_parameter(1, sonare::engine::TrackMixerRuntime::kFaderDb,
+                                                    -120.0f));
+    engine.settle_parameters();
+
+    sonare::rt::Command seek{};
+    seek.type = sonare::rt::CommandType::kTransportSeekSample;
+    seek.sample_time = -1;
+    seek.arg.i = 0;
+    REQUIRE(engine.push_command(seek));
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+
+    std::array<float, kBlock> left{};
+    std::array<float, kBlock> right{};
+    float* io[] = {left.data(), right.data()};
+    float level = 0.0f;
+    for (int block = 0; block < 40; ++block) {
+      left.fill(0.0f);
+      right.fill(0.0f);
+      engine.process(io, 2, kBlock);
+      level = std::abs(left.back());
+    }
+    sonare::rt::Command stop{};
+    stop.type = sonare::rt::CommandType::kTransportStop;
+    stop.sample_time = -1;
+    REQUIRE(engine.push_command(stop));
+    left.fill(0.0f);
+    right.fill(0.0f);
+    engine.process(io, 2, kBlock);
+    REQUIRE(engine.set_lane_sidechain(10, 0, 0));
+    return level;
+  };
+
+  const float ducked = run(true);
+  const float open = run(false);
+  REQUIRE(open > 0.4f);
+  // 24 dB of range at 20:1 on a key far over threshold: at least ~12 dB down.
+  REQUIRE(ducked < open * 0.25f);
+}
+
 TEST_CASE("RealtimeEngine commands drive track lane params and solo mute", "[engine][realtime]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;

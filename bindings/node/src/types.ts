@@ -1267,6 +1267,11 @@ export interface EngineClip {
 export interface EngineTrackLane {
   trackId: number;
   sends?: EngineTrackSend[];
+  /**
+   * Bus the lane's post-fader output sums into instead of the master mix
+   * (group/folder routing); 0 or absent keeps the lane on the master mix.
+   */
+  outputBusId?: number;
 }
 
 export interface EngineTrackSend {

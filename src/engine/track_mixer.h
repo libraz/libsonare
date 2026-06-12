@@ -34,6 +34,10 @@ struct TrackLaneConfig {
 
   uint32_t track_id = 0;
   std::vector<Send> sends;
+  /// Bus the lane's post-fader output sums into instead of the master mix
+  /// (group/folder routing); 0 keeps the lane on the master mix. Must
+  /// reference a declared bus. Sends are unaffected by the routing.
+  uint32_t output_bus_id = 0;
 };
 
 struct TrackBusConfig {
@@ -61,6 +65,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   bool set_lane_parameter(size_t lane_index, unsigned int param_id, float value) noexcept;
   bool set_lane_solo_mute(size_t lane_index, bool solo, bool mute) noexcept;
+  /// Routes another lane's most recent post-strip audio into one insert of a
+  /// lane strip as its sidechain key (ducking/sidechainRouter inserts).
+  /// Source lanes rendered earlier in the block deliver same-block audio;
+  /// later ones deliver the previous block (one block of key latency).
+  /// source_track_id 0 removes the binding. Control-thread only (not safe
+  /// concurrently with process()); bindings are keyed by track id and survive
+  /// lane republishes. Returns false when the binding table is full.
+  bool set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
+                          uint32_t source_track_id) noexcept;
   bool bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip);
   bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
   bool set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
@@ -113,6 +126,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     std::unique_ptr<mixing::FxBus> bus;
   };
 
+  struct SidechainBinding {
+    uint32_t track_id = 0;
+    unsigned int insert_index = 0;
+    uint32_t source_track_id = 0;
+  };
+  static constexpr size_t kMaxSidechainBindings = 16;
+
   bool lane_config_valid(const std::vector<TrackLaneConfig>& lanes) const noexcept;
   bool bus_config_valid(const std::vector<TrackBusConfig>& buses) const noexcept;
   mixing::ChannelStrip* owned_strip_for(uint32_t track_id) noexcept;
@@ -131,6 +151,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void configure_lane_sends(const std::vector<TrackLaneConfig>& lanes);
   void process_lane_strip(size_t lane_index, int num_channels, int num_samples,
                           int64_t timeline_sample) noexcept;
+  void deliver_lane_sidechains(size_t lane_index, int num_channels, int num_samples) noexcept;
+  void snapshot_sidechain_key(size_t lane_index, int num_channels, int num_samples) noexcept;
+  int lane_index_for_track(uint32_t track_id) const noexcept;
+  float* key_channel(size_t lane_index, int channel) noexcept;
   void mix_lane_sends(size_t lane_index, int num_channels, int num_samples,
                       int64_t timeline_sample) noexcept;
   void process_buses(float* const* channels, int num_channels, int num_samples,
@@ -143,12 +167,17 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   int max_block_size_ = 0;
   std::vector<float> scratch_;
   std::vector<float> bus_scratch_;
+  // Post-strip, pre-fader snapshots of sidechain SOURCE lanes (the lane
+  // buffers themselves are mutated in place by the fader/gate/pan stage).
+  std::vector<float> key_scratch_;
   std::array<float*, kMaxLaneChannels> lane_channel_ptrs_{};
   std::array<uint32_t, kMaxTrackLanes> active_track_ids_{};
   std::array<LaneState, kMaxTrackLanes> lane_states_{};
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pdc_delays_;
   std::array<BusState, kMaxBusLanes> bus_states_{};
   std::vector<TrackBusConfig> bus_configs_;
+  std::array<SidechainBinding, kMaxSidechainBindings> sidechain_bindings_{};
+  size_t sidechain_binding_count_ = 0;
   std::vector<OwnedStrip> owned_strips_;
   mutable rt::RtPublisher<std::vector<TrackLaneConfig>> lanes_;
   int latency_samples_q8_ = 0;

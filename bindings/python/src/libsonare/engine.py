@@ -526,9 +526,24 @@ class RealtimeEngine:
                     raw[i].sends = send_array
                     raw[i].send_count = len(sends)
                     send_arrays.append(send_array)
+                raw[i].output_bus_id = int(
+                    lane["output_bus_id"] if "output_bus_id" in lane else lane.get("outputBusId", 0)
+                )
             else:
                 raw[i].track_id = int(lane)
         _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
+
+    def set_lane_sidechain(self, track_id: int, insert_index: int, source_track_id: int) -> None:
+        """Key one insert of a lane strip from another lane's post-strip audio.
+
+        Sidechain for ducking/sidechainRouter inserts; ``source_track_id`` 0
+        removes the binding.
+        """
+        _check(
+            _get_lib().sonare_engine_set_lane_sidechain(
+                self._require_handle(), int(track_id), int(insert_index), int(source_track_id)
+            )
+        )
 
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         raw = (SonareEngineBus * len(buses))()
