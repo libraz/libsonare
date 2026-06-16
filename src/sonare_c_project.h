@@ -703,9 +703,44 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
                                                const SonareProjectTimeSignatureSegment* segments,
                                                size_t segment_count);
 
-/// @brief Adds or replaces a marker. @p marker_id 0 allocates a new id.
+/// @brief Project timeline marker with its kind and (for key signatures) the
+///        structured key. @c kind is a SonareMarkerKind ordinal; the key fields
+///        apply only to the key-signature kind. The layout mirrors
+///        SonareEngineMarker so one binding shape serves both.
+typedef struct {
+  uint32_t id;
+  uint8_t kind;      /* SonareMarkerKind */
+  int8_t key_fifths; /* key signature only: -7..7 (sharps positive) */
+  uint8_t key_minor; /* key signature only: 0 major / 1 minor */
+  double ppq;
+  char name[64];
+} SonareProjectMarker;
+
+#ifdef __cplusplus
+static_assert(sizeof(SonareProjectMarker) == 80u, "SonareProjectMarker layout drift");
+static_assert(offsetof(SonareProjectMarker, ppq) == 8u, "SonareProjectMarker ppq offset");
+static_assert(offsetof(SonareProjectMarker, name) == 16u, "SonareProjectMarker name offset");
+#endif
+
+/// @brief Adds or replaces a marker. @p marker_id 0 allocates a new id. The
+///        marker is created with the default (Marker) kind; use
+///        sonare_project_set_marker_ex to set a text / lyric / cue / key
+///        signature kind.
 SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id, double ppq,
                                       const char* name, uint32_t* out_marker_id);
+
+/// @brief Adds or replaces a marker from a full SonareProjectMarker, including
+///        its kind and key signature. @p marker->id 0 allocates a new id; the
+///        allocated / affected id is returned via @p out_marker_id. For the
+///        key-signature kind @p marker->key_fifths must be in -7..7 (the SMF
+///        `sf` range); an out-of-range value yields SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_project_set_marker_ex(SonareProject* project, const SonareProjectMarker* marker,
+                                         uint32_t* out_marker_id);
+
+/// @brief Reads a project marker by index (0-based, in stored order). An index
+///        out of range yields SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_project_marker_by_index(const SonareProject* project, size_t index,
+                                           SonareProjectMarker* out);
 
 /// @brief Replaces the project's mixer scene from scene JSON.
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);

@@ -363,6 +363,14 @@ Value marker_to_json(const arrangement::ProjectMarker& m) {
   o["id"] = static_cast<double>(m.id);
   o["ppq"] = m.ppq;
   o["name"] = m.name;
+  // `kind` mirrors SonareMarkerKind. Omitted for the default marker kind (0) to
+  // keep existing marker JSON unchanged; key fields are written only for the
+  // key-signature kind (4).
+  if (m.kind != 0) o["kind"] = static_cast<double>(m.kind);
+  if (m.kind == 4) {
+    o["key_fifths"] = static_cast<double>(m.key_fifths);
+    o["key_minor"] = m.key_minor;
+  }
   return o;
 }
 
@@ -1189,6 +1197,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
         m.id = uint_or(mv, "id", 0);
         m.ppq = num_or(mv, "ppq", 0.0);
         m.name = str_or(mv, "name", "");
+        m.kind = static_cast<uint8_t>(uint_or(mv, "kind", 0));
+        m.key_fifths = static_cast<int8_t>(num_or(mv, "key_fifths", 0.0));
+        m.key_minor = bool_or(mv, "key_minor", false);
         if (m.id > max_marker_id) max_marker_id = m.id;
         project.markers_mutable().push_back(std::move(m));
       }

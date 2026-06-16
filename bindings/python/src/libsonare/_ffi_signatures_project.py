@@ -679,6 +679,22 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_uint32),
         ]
 
+    if hasattr(lib, "sonare_project_set_marker_ex"):
+        lib.sonare_project_set_marker_ex.restype = ctypes.c_int32
+        lib.sonare_project_set_marker_ex.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectMarker),
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+
+    if hasattr(lib, "sonare_project_marker_by_index"):
+        lib.sonare_project_marker_by_index.restype = ctypes.c_int32
+        lib.sonare_project_marker_by_index.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareProjectMarker),
+        ]
+
     if hasattr(lib, "sonare_project_set_mixer_scene_json"):
         lib.sonare_project_set_mixer_scene_json.restype = ctypes.c_int32
         lib.sonare_project_set_mixer_scene_json.argtypes = [
@@ -703,6 +719,7 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         ]
 
     for _name in (
+        "sonare_project_marker_count",
         "sonare_project_source_count",
         "sonare_project_tempo_segment_count",
         "sonare_project_time_signature_count",

@@ -23,6 +23,24 @@ TEST_CASE("MarkerMap sorts markers and navigates by id and position", "[transpor
   REQUIRE(marker.id == 2);
 }
 
+TEST_CASE("MarkerMap preserves marker kind and key signature fields", "[transport][marker]") {
+  sonare::transport::MarkerMap markers;
+  sonare::transport::Marker key{};
+  key.ppq = 0.0;
+  key.id = 7;
+  key.name = "E minor";
+  key.kind = 4;  // Key signature.
+  key.key_fifths = 1;
+  key.key_minor = true;
+  markers.set_markers({key});
+
+  sonare::transport::Marker out{};
+  REQUIRE(markers.marker_by_id(7, &out));
+  REQUIRE(out.kind == 4);
+  REQUIRE(out.key_fifths == 1);
+  REQUIRE(out.key_minor == true);
+}
+
 TEST_CASE("Transport seeks to marker with sample accuracy", "[transport][marker]") {
   sonare::transport::TempoMap tempo;
   tempo.prepare(48000.0);

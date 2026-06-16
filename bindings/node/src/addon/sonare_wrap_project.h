@@ -28,6 +28,8 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value GetOverlapPolicy(const Napi::CallbackInfo& info);
   Napi::Value SetMixerSceneJson(const Napi::CallbackInfo& info);
   Napi::Value SetMarker(const Napi::CallbackInfo& info);
+  Napi::Value SetMarkerEx(const Napi::CallbackInfo& info);
+  Napi::Value MarkerByIndex(const Napi::CallbackInfo& info);
   Napi::Value SetTempoSegments(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignatures(const Napi::CallbackInfo& info);
 
@@ -36,6 +38,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SourceCount(const Napi::CallbackInfo& info);
   Napi::Value TempoSegmentCount(const Napi::CallbackInfo& info);
   Napi::Value TimeSignatureCount(const Napi::CallbackInfo& info);
+  Napi::Value MarkerCount(const Napi::CallbackInfo& info);
 
   // -- edit --
   Napi::Value AddTrack(const Napi::CallbackInfo& info);

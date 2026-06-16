@@ -501,6 +501,37 @@ SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id
 #endif
 }
 
+SonareError sonare_project_set_marker_ex(SonareProject* project, const SonareProjectMarker* marker,
+                                         uint32_t* out_marker_id) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_marker_id) *out_marker_id = 0;
+  if (!project || !out_marker_id || !marker || !finite_non_negative(marker->ppq) ||
+      marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Key signatures encode the SMF `sf` byte, which is constrained to -7..7
+  // (7 flats to 7 sharps). Reject out-of-range fifths so the marker cannot
+  // serialize to a non-conformant SMF key signature.
+  if (marker->kind == SONARE_MARKER_KIND_KEY_SIGNATURE &&
+      (marker->key_fifths < -7 || marker->key_fifths > 7)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const char* name_end = std::find(marker->name, marker->name + sizeof(marker->name), '\0');
+  std::string name(marker->name, name_end);
+  auto command =
+      std::make_unique<arr::SetMarker>(marker->id, marker->ppq, std::move(name), marker->kind,
+                                       marker->key_fifths, marker->key_minor != 0);
+  arr::SetMarker* raw = command.get();
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  *out_marker_id = raw->allocated_id() != 0 ? raw->allocated_id() : marker->id;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, marker, out_marker_id);
+#endif
+}
+
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json) {
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
   if (!project || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;

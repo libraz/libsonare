@@ -512,7 +512,10 @@ class RealtimeEngineWasm {
       marker_strings_.push_back(stringProperty(marker, "name", ""));
       prepared.push_back({objectProperty(marker, "ppq").as<double>(),
                           static_cast<uint32_t>(intProperty(marker, "id", i + 1)),
-                          marker_strings_.back().c_str()});
+                          marker_strings_.back().c_str(),
+                          static_cast<uint8_t>(intProperty(marker, "kind", 0)),
+                          static_cast<int8_t>(intProperty(marker, "keyFifths", 0)),
+                          boolProperty(marker, "keyMinor", false)});
     }
     engine_.set_markers(std::move(prepared));
   }
@@ -2013,6 +2016,9 @@ class RealtimeEngineWasm {
     out.set("id", marker.id);
     out.set("ppq", marker.ppq);
     out.set("name", std::string(marker.name ? marker.name : ""));
+    out.set("kind", static_cast<int>(marker.kind));
+    out.set("keyFifths", static_cast<int>(marker.key_fifths));
+    out.set("keyMinor", marker.key_minor);
     return out;
   }
 

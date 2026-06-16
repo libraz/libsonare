@@ -991,13 +991,48 @@ class AutomationPoint:
     curve_to_next: AutomationCurve = AutomationCurve.LINEAR
 
 
+class MarkerKind(IntEnum):
+    """Timeline marker kind. Mirrors SonareMarkerKind in the C ABI and the
+    other bindings' marker-kind enums; the values are part of the ABI."""
+
+    MARKER = 0
+    TEXT = 1
+    LYRIC = 2
+    CUE_POINT = 3
+    KEY_SIGNATURE = 4
+
+
 @dataclass(frozen=True, slots=True)
 class EngineMarker:
-    """Timeline marker used by the realtime engine transport."""
+    """Timeline marker used by the realtime engine transport.
+
+    ``kind`` is a :class:`MarkerKind` ordinal; ``key_fifths`` (-7..7, sharps
+    positive) and ``key_minor`` apply only to the key-signature kind.
+    """
 
     id: int
     ppq: float
     name: str = ""
+    kind: int = 0
+    key_fifths: int = 0
+    key_minor: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectMarker:
+    """Timeline marker stored on a headless :class:`~libsonare._project.Project`.
+
+    Same shape as :class:`EngineMarker`: ``kind`` is a :class:`MarkerKind`
+    ordinal and ``key_fifths`` / ``key_minor`` apply only to the key-signature
+    kind.
+    """
+
+    id: int
+    ppq: float
+    name: str = ""
+    kind: int = 0
+    key_fifths: int = 0
+    key_minor: bool = False
 
 
 @dataclass(frozen=True, slots=True)

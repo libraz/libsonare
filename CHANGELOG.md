@@ -2,6 +2,11 @@
 
 ## v1.3.3 (2026-06-12)
 
+### SMF meta events & structured markers
+
+- The SMF core now preserves the standard text-class meta events it previously dropped: text (0x01), lyric (0x05), cue point (0x07) and key signature (0x59) import and export round-trip alongside the existing marker (0x06). Each is tagged with a `SmfMarkerKind` (Marker / Text / Lyric / CuePoint / KeySignature); key signatures carry the structured fifths/minor pair plus a human-readable tonic name (e.g. "E minor"). Text and lyric events are collected into the flat, timeline-global marker list — their musical-time position is preserved, but per-track / per-note alignment is not.
+- Project markers gained `kind` + key-signature fields end-to-end: the document model, JSON serialization, the SMF import path and a new SMF export of project markers (previously project markers were never written back to SMF). New C ABI: the `SonareMarkerKind` enum, a `SonareProjectMarker` struct, `sonare_project_set_marker_ex` (set a marker with its kind / key signature) and `sonare_project_marker_by_index` (read markers structurally without JSON). `SonareEngineMarker` carries the same fields. Wired on Node, Python and WASM with a `MarkerKind` enum, `ProjectMarker` type, and `setMarkerEx` / `markerByIndex` facades.
+
 ### Per-track lane mixer
 
 - Added a realtime-safe per-track lane mixer (`TrackMixerRuntime`) owned by the realtime engine: tracks route through configurable aux sends into numbered buses, and plugin delay compensation is recomputed whenever the lane snapshot is published. New C-ABI surface — `sonare_engine_set_track_lanes` / `set_track_buses`, per-track / master / bus channel-strip JSON (`set_track_strip_json`, `set_master_strip_json`, `set_bus_strip_json`), EQ-band updates (`set_track_strip_eq_band_json`, `set_master_strip_eq_band_json`), insert bypass (`set_track_strip_insert_bypassed`, `set_master_strip_insert_bypassed`), queueable lane solo/mute (`set_solo_mute`), and the `SonareEngineTrackLane` / `SonareEngineTrackSend` / `SonareEngineBus` structs — wired on Node, Python and WASM.

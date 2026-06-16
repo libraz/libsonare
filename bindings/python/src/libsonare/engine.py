@@ -1424,13 +1424,23 @@ def _parameter_from_c(raw: SonareParameterInfo) -> ParameterInfo:
 def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     raw = SonareEngineMarker()
     raw.id = int(marker.id)
+    raw.kind = int(marker.kind) & 0xFF
+    raw.key_fifths = int(marker.key_fifths)
+    raw.key_minor = 1 if marker.key_minor else 0
     raw.ppq = float(marker.ppq)
     raw.name = _fixed_bytes(marker.name, 64)
     return raw
 
 
 def _marker_from_c(raw: SonareEngineMarker) -> EngineMarker:
-    return EngineMarker(id=int(raw.id), ppq=float(raw.ppq), name=_c_string(bytes(raw.name)))
+    return EngineMarker(
+        id=int(raw.id),
+        ppq=float(raw.ppq),
+        name=_c_string(bytes(raw.name)),
+        kind=int(raw.kind),
+        key_fifths=int(raw.key_fifths),
+        key_minor=bool(raw.key_minor),
+    )
 
 
 def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfig:

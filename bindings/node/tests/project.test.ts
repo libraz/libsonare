@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { BuiltinSynthConfig } from '../src/index.js';
-import { EXPECTED_PROJECT_ABI_VERSION, Project, projectAbiVersion } from '../src/index.js';
+import {
+  EXPECTED_PROJECT_ABI_VERSION,
+  MarkerKind,
+  Project,
+  projectAbiVersion,
+} from '../src/index.js';
 
 /** Build a small deterministic project: a track + an audio clip + a MIDI clip + tempo. */
 function buildProject(): Project {
@@ -446,6 +451,44 @@ describe('Project value-model accessors', () => {
     const id = project.setMarker(0, 1.5, 'verse');
     expect(typeof id).toBe('number');
     expect(id).toBeGreaterThan(0);
+    project.destroy();
+  });
+
+  it('round-trips a structured marker through setMarkerEx / markerByIndex', () => {
+    const project = Project.create();
+    const id = project.setMarkerEx({
+      ppq: 2,
+      name: 'E minor',
+      kind: MarkerKind.KeySignature,
+      keyFifths: 1,
+      keyMinor: true,
+    });
+    expect(id).toBeGreaterThan(0);
+    const marker = project.markerByIndex(0);
+    expect(marker.id).toBe(id);
+    expect(marker.ppq).toBe(2);
+    expect(marker.name).toBe('E minor');
+    expect(marker.kind).toBe(MarkerKind.KeySignature);
+    expect(marker.keyFifths).toBe(1);
+    expect(marker.keyMinor).toBe(true);
+
+    // A second structured marker; markerCount lets a host iterate by index.
+    project.setMarkerEx({ ppq: 5, name: 'chorus' });
+    expect(project.markerCount()).toBe(2);
+    const names: string[] = [];
+    for (let i = 0; i < project.markerCount(); i++) {
+      const m = project.markerByIndex(i);
+      expect(typeof m.id).toBe('number');
+      names.push(m.name);
+    }
+    expect(names).toContain('E minor');
+    expect(names).toContain('chorus');
+
+    // A plain setMarkerEx keeps the default Marker kind with neutral key fields.
+    const plain = project.markerByIndex(1);
+    expect(plain.kind).toBe(MarkerKind.Marker);
+    expect(plain.keyFifths).toBe(0);
+    expect(plain.keyMinor).toBe(false);
     project.destroy();
   });
 

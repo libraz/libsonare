@@ -795,11 +795,46 @@ class AutomationPoint:
         curve_to_next: AutomationCurve = AutomationCurve.LINEAR,
     ) -> None: ...
 
+class MarkerKind(IntEnum):
+    MARKER = 0
+    TEXT = 1
+    LYRIC = 2
+    CUE_POINT = 3
+    KEY_SIGNATURE = 4
+
 class EngineMarker:
     id: int
     ppq: float
     name: str
-    def __init__(self, id: int, ppq: float, name: str = "") -> None: ...
+    kind: int
+    key_fifths: int
+    key_minor: bool
+    def __init__(
+        self,
+        id: int,
+        ppq: float,
+        name: str = "",
+        kind: int = 0,
+        key_fifths: int = 0,
+        key_minor: bool = False,
+    ) -> None: ...
+
+class ProjectMarker:
+    id: int
+    ppq: float
+    name: str
+    kind: int
+    key_fifths: int
+    key_minor: bool
+    def __init__(
+        self,
+        id: int,
+        ppq: float,
+        name: str = "",
+        kind: int = 0,
+        key_fifths: int = 0,
+        key_minor: bool = False,
+    ) -> None: ...
 
 class EngineMetronomeConfig:
     enabled: bool

@@ -900,7 +900,7 @@ EditCommandPtr SetScene::invert(const Project& before,
 
 bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
   if (id_ == 0 && allocated_id_ == 0) {
-    allocated_id_ = project.add_marker(ppq_, name_);
+    allocated_id_ = project.add_marker(ppq_, name_, kind_, key_fifths_, key_minor_);
     return allocated_id_ != 0;
   }
   const uint32_t target = id_ != 0 ? id_ : allocated_id_;
@@ -908,6 +908,9 @@ bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
     if (m.id == target) {
       m.ppq = ppq_;
       m.name = name_;
+      m.kind = kind_;
+      m.key_fifths = key_fifths_;
+      m.key_minor = key_minor_;
       return true;
     }
   }
@@ -917,6 +920,9 @@ bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
   m.id = target;
   m.ppq = ppq_;
   m.name = name_;
+  m.kind = kind_;
+  m.key_fifths = key_fifths_;
+  m.key_minor = key_minor_;
   project.markers_mutable().push_back(std::move(m));
   project.ensure_next_marker_id(target);
   return true;
@@ -927,8 +933,8 @@ EditCommandPtr SetMarker::invert(const Project& before,
   const uint32_t target = id_ != 0 ? id_ : allocated_id_;
   for (const ProjectMarker& m : before.markers()) {
     if (m.id == target) {
-      // Marker existed before: restore prior ppq/name.
-      return std::make_unique<SetMarker>(target, m.ppq, m.name);
+      // Marker existed before: restore prior ppq/name/kind.
+      return std::make_unique<SetMarker>(target, m.ppq, m.name, m.kind, m.key_fifths, m.key_minor);
     }
   }
   // Marker was newly created: inverse removes it.

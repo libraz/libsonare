@@ -598,8 +598,14 @@ class SetScene final : public EditCommand {
 /// `id` references an existing marker its ppq/name are replaced.
 class SetMarker final : public EditCommand {
  public:
-  SetMarker(uint32_t id, double ppq, std::string name)
-      : id_(id), ppq_(ppq), name_(std::move(name)) {}
+  SetMarker(uint32_t id, double ppq, std::string name, uint8_t kind = 0, int8_t key_fifths = 0,
+            bool key_minor = false)
+      : id_(id),
+        ppq_(ppq),
+        name_(std::move(name)),
+        kind_(kind),
+        key_fifths_(key_fifths),
+        key_minor_(key_minor) {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
@@ -611,6 +617,9 @@ class SetMarker final : public EditCommand {
   uint32_t id_;
   double ppq_;
   std::string name_;
+  uint8_t kind_;
+  int8_t key_fifths_;
+  bool key_minor_;
   uint32_t allocated_id_ = 0;
 };
 

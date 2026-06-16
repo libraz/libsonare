@@ -6,7 +6,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePresetJson, Project } from '../dist/index.js';
+import { init, MarkerKind, Mixer, mixingScenePresetJson, Project } from '../dist/index.js';
 
 describe('Project counts and timeline metadata (WASM)', () => {
   beforeAll(async () => {
@@ -59,6 +59,49 @@ describe('Project counts and timeline metadata (WASM)', () => {
       const id = project.setMarker(0, 480, 'intro');
       expect(typeof id).toBe('number');
       expect(id).toBeGreaterThan(0);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('round-trips markers through setMarkerEx/markerByIndex and counts them', () => {
+    const project = new Project();
+    try {
+      expect(project.markerCount()).toBe(0);
+      const keyId = project.setMarkerEx({
+        id: 0,
+        ppq: 960,
+        name: 'chorus',
+        kind: MarkerKind.keySignature,
+        keyFifths: -3,
+        keyMinor: true,
+      });
+      const cueId = project.setMarkerEx({
+        id: 0,
+        ppq: 1920,
+        name: 'drop',
+        kind: MarkerKind.cuePoint,
+      });
+      expect(keyId).toBeGreaterThan(0);
+      expect(cueId).toBeGreaterThan(0);
+
+      const count = project.markerCount();
+      expect(count).toBe(2);
+      const markers = [];
+      for (let i = 0; i < count; i++) {
+        markers.push(project.markerByIndex(i));
+      }
+      const key = markers.find((m) => m.id === keyId);
+      expect(key?.ppq).toBe(960);
+      expect(key?.name).toBe('chorus');
+      expect(key?.kind).toBe(MarkerKind.keySignature);
+      expect(key?.keyFifths).toBe(-3);
+      expect(key?.keyMinor).toBe(true);
+      const cue = markers.find((m) => m.id === cueId);
+      expect(cue?.kind).toBe(MarkerKind.cuePoint);
+      expect(cue?.keyMinor).toBe(false);
+
+      expect(() => project.markerByIndex(count)).toThrow();
     } finally {
       project.delete();
     }

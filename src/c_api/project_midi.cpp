@@ -506,16 +506,14 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   sonare::midi::SmfImportResult result = sonare::midi::import_smf(bytes, len);
   if (!result.ok()) return SONARE_ERROR_INVALID_FORMAT;
 
-  std::vector<std::pair<double, std::string>> markers;
-  markers.reserve(result.markers.size());
-  for (const auto& marker : result.markers) markers.emplace_back(marker.ppq, marker.text);
-
   // The per-event PPQ already comes from the importer in quarter-note units, so
   // the shared installer derives each clip length from the largest event
-  // position (or the imported end-of-track length).
-  return install_imported_midi(project, result.tempo_segments, result.time_signatures, markers,
-                               result.clips, result.clip_names, result.clip_lengths_ppq,
-                               result.sysex_store, out_first_clip_id, result.sequence_name);
+  // position (or the imported end-of-track length). Marker kind / key-signature
+  // fields are carried through verbatim via SmfMarker.
+  return install_imported_midi(project, result.tempo_segments, result.time_signatures,
+                               result.markers, result.clips, result.clip_names,
+                               result.clip_lengths_ppq, result.sysex_store, out_first_clip_id,
+                               result.sequence_name);
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, bytes, len, out_first_clip_id);
@@ -532,7 +530,7 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
   if (!result.ok()) return SONARE_ERROR_INVALID_FORMAT;
 
   // MIDI Clip Files carry no SMF "Marker" equivalent.
-  const std::vector<std::pair<double, std::string>> markers;
+  const std::vector<sonare::midi::SmfMarker> markers;
   return install_imported_midi(project, result.tempo_segments, result.time_signatures, markers,
                                result.clips, result.clip_names, result.clip_lengths_ppq,
                                result.sysex_store, out_first_clip_id);
@@ -627,6 +625,18 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
 
   sonare::midi::SmfExportOptions options;
   options.sysex_store = &sysex_store;
+  // Carry project markers (with their kind / key-signature) onto SMF track 0 so
+  // marker / text / lyric / cue / key-signature meta round-trip through export.
+  options.markers.reserve(model.markers().size());
+  for (const arr::ProjectMarker& m : model.markers()) {
+    sonare::midi::SmfMarker out;
+    out.ppq = m.ppq;
+    out.text = m.name;
+    out.kind = static_cast<sonare::midi::SmfMarkerKind>(m.kind);
+    out.key_fifths = m.key_fifths;
+    out.key_minor = m.key_minor;
+    options.markers.push_back(std::move(out));
+  }
   sonare::midi::SmfExportResult result =
       sonare::midi::export_smf(clips, tempo, sigs, names, options);
   if (!result.ok()) return SONARE_ERROR_INVALID_STATE;

@@ -225,11 +225,33 @@ typedef struct {
   int curve_to_next;
 } SonareAutomationPoint;
 
+/* Marker kind ordinals. Mirrors sonare::midi::SmfMarkerKind and the binding
+   MarkerKind enums; values are part of the ABI and must not be renumbered. */
+typedef enum {
+  SONARE_MARKER_KIND_MARKER = 0,
+  SONARE_MARKER_KIND_TEXT = 1,
+  SONARE_MARKER_KIND_LYRIC = 2,
+  SONARE_MARKER_KIND_CUE_POINT = 3,
+  SONARE_MARKER_KIND_KEY_SIGNATURE = 4
+} SonareMarkerKind;
+
+/* The kind / key fields occupy the 4-byte padding hole after `id`, so the
+   layout (and ppq / name offsets) is unchanged from when this struct carried
+   only id / ppq / name. */
 typedef struct {
   uint32_t id;
+  uint8_t kind;      /* SonareMarkerKind */
+  int8_t key_fifths; /* key signature only: -7..7 (sharps positive) */
+  uint8_t key_minor; /* key signature only: 0 major / 1 minor */
   double ppq;
   char name[64];
 } SonareEngineMarker;
+
+#ifdef __cplusplus
+static_assert(sizeof(SonareEngineMarker) == 80u, "SonareEngineMarker layout drift");
+static_assert(offsetof(SonareEngineMarker, ppq) == 8u, "SonareEngineMarker ppq offset");
+static_assert(offsetof(SonareEngineMarker, name) == 16u, "SonareEngineMarker name offset");
+#endif
 
 typedef struct {
   int enabled;

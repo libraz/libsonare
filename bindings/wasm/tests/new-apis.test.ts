@@ -668,6 +668,25 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(state.samplePosition).toBe(192000 + 128);
       engine.destroy();
     });
+
+    it('round-trips marker kind and key signature through setMarkers/markerByIndex', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setMarkers([
+        { id: 1, ppq: 0, name: 'intro' },
+        { id: 2, ppq: 4, name: 'Bb minor', kind: 4, keyFifths: -2, keyMinor: true },
+      ]);
+      expect(engine.markerCount()).toBe(2);
+      const plain = engine.markerByIndex(0);
+      expect(plain.kind).toBe(0);
+      expect(plain.keyFifths).toBe(0);
+      expect(plain.keyMinor).toBe(false);
+      const key = engine.markerByIndex(1);
+      expect(key.name).toBe('Bb minor');
+      expect(key.kind).toBe(4);
+      expect(key.keyFifths).toBe(-2);
+      expect(key.keyMinor).toBe(true);
+      engine.destroy();
+    });
   });
 
   describe('StreamingEqualizer sidechain parity', () => {

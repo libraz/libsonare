@@ -1689,11 +1689,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           this.engine.setMasterStripJson(message.masterStripJson);
         }
         for (const binding of message.laneSidechains ?? []) {
-          this.engine.setLaneSidechain(
-            binding.trackId,
-            binding.insertIndex,
-            binding.sourceTrackId,
-          );
+          this.engine.setLaneSidechain(binding.trackId, binding.insertIndex, binding.sourceTrackId);
         }
         break;
       case 'syncCapture':
@@ -2821,7 +2817,10 @@ export class SonareEngine {
   private readonly trackLaneIds: number[] = [];
   private readonly trackSends = new Map<number, EngineTrackSend[]>();
   private readonly trackOutputBus = new Map<number, number>();
-  private readonly laneSidechains = new Map<string, { trackId: number; insertIndex: number; sourceTrackId: number }>();
+  private readonly laneSidechains = new Map<
+    string,
+    { trackId: number; insertIndex: number; sourceTrackId: number }
+  >();
   private readonly buses: EngineBus[] = [];
   private readonly trackStripJson = new Map<number, string>();
   private readonly busStripJson = new Map<number, string>();
@@ -3199,8 +3198,11 @@ export class SonareEngine {
         );
       }
       if (entry.outputBusId !== undefined) {
-        if (entry.outputBusId === 0) this.trackOutputBus.delete(entry.trackId);
-        else this.trackOutputBus.set(entry.trackId, entry.outputBusId);
+        if (entry.outputBusId === 0) {
+          this.trackOutputBus.delete(entry.trackId);
+        } else {
+          this.trackOutputBus.set(entry.trackId, entry.outputBusId);
+        }
       }
     }
     this.trackLaneIds.splice(0, this.trackLaneIds.length, ...ids);
@@ -3214,8 +3216,11 @@ export class SonareEngine {
   setTrackOutputBus(target: string | number, busId: number): void {
     const laneIndex = this.ensureTrackLane(target);
     const trackId = this.trackLaneIds[laneIndex];
-    if (busId === 0) this.trackOutputBus.delete(trackId);
-    else this.trackOutputBus.set(trackId, busId);
+    if (busId === 0) {
+      this.trackOutputBus.delete(trackId);
+    } else {
+      this.trackOutputBus.set(trackId, busId);
+    }
     this.syncMixer();
   }
 
@@ -3237,8 +3242,11 @@ export class SonareEngine {
       const sourceIndex = this.ensureTrackLane(sourceTarget);
       sourceTrackId = this.trackLaneIds[sourceIndex];
     }
-    if (sourceTrackId === 0) this.laneSidechains.delete(key);
-    else this.laneSidechains.set(key, { trackId, insertIndex, sourceTrackId });
+    if (sourceTrackId === 0) {
+      this.laneSidechains.delete(key);
+    } else {
+      this.laneSidechains.set(key, { trackId, insertIndex, sourceTrackId });
+    }
     this.offlineEngine.setLaneSidechain(trackId, insertIndex, sourceTrackId);
     this.postSync({
       type: 'syncMixer',

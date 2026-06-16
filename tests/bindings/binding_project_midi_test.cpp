@@ -295,6 +295,130 @@ TEST_CASE("project C surface imports SMF time signatures and markers", "[project
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface imports SMF text-class meta with structured kinds", "[project]") {
+  // Format 0, 480 PPQN: text / lyric / cue / marker / key signature + a note.
+  std::vector<uint8_t> body;
+  auto meta_text = [&](uint8_t type, const std::string& s) {
+    body.push_back(0x00);
+    body.push_back(0xFF);
+    body.push_back(type);
+    body.push_back(static_cast<uint8_t>(s.size()));
+    for (char c : s) body.push_back(static_cast<uint8_t>(c));
+  };
+  meta_text(0x01, "memo");   // Text.
+  meta_text(0x05, "la");     // Lyric.
+  meta_text(0x07, "cue1");   // Cue point.
+  meta_text(0x06, "verse");  // Marker.
+  // Key signature sf=1 mi=1 (E minor).
+  for (uint8_t b : {0x00u, 0xFFu, 0x59u, 0x02u, 0x01u, 0x01u}) body.push_back(b);
+  // Note-on / note-off so a clip exists.
+  for (uint8_t b : {0x00u, 0x90u, 0x3Cu, 0x64u, 0x83u, 0x60u, 0x80u, 0x3Cu, 0x00u})
+    body.push_back(b);
+  for (uint8_t b : {0x00u, 0xFFu, 0x2Fu, 0x00u}) body.push_back(b);
+
+  std::vector<uint8_t> smf = {'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xE0};
+  for (char c : std::string("MTrk")) smf.push_back(static_cast<uint8_t>(c));
+  const uint32_t len = static_cast<uint32_t>(body.size());
+  for (int shift = 24; shift >= 0; shift -= 8) smf.push_back((len >> shift) & 0xFFu);
+  smf.insert(smf.end(), body.begin(), body.end());
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &first_clip) == SONARE_OK);
+
+  size_t count = 0;
+  REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
+  REQUIRE(count == 5);
+
+  bool found_key = false, found_lyric = false, found_cue = false;
+  for (size_t i = 0; i < count; ++i) {
+    SonareProjectMarker m{};
+    REQUIRE(sonare_project_marker_by_index(project, i, &m) == SONARE_OK);
+    if (m.kind == SONARE_MARKER_KIND_KEY_SIGNATURE) {
+      found_key = true;
+      REQUIRE(m.key_fifths == 1);
+      REQUIRE(m.key_minor == 1);
+    } else if (m.kind == SONARE_MARKER_KIND_LYRIC) {
+      found_lyric = true;
+      REQUIRE(std::string(m.name) == "la");
+    } else if (m.kind == SONARE_MARKER_KIND_CUE_POINT) {
+      found_cue = true;
+    }
+  }
+  REQUIRE(found_key);
+  REQUIRE(found_lyric);
+  REQUIRE(found_cue);
+
+  // Out-of-range index fails cleanly without crashing.
+  SonareProjectMarker oob{};
+  REQUIRE(sonare_project_marker_by_index(project, count, &oob) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project C surface set_marker_ex stores kind and key signature", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  SonareProjectMarker in{};
+  in.id = 0;
+  in.kind = SONARE_MARKER_KIND_KEY_SIGNATURE;
+  in.key_fifths = -3;
+  in.key_minor = 0;
+  in.ppq = 4.0;
+  const std::string key_name = "Eb major";
+  std::copy(key_name.begin(), key_name.end(), in.name);
+  in.name[key_name.size()] = '\0';
+
+  uint32_t out_id = 0;
+  REQUIRE(sonare_project_set_marker_ex(project, &in, &out_id) == SONARE_OK);
+  REQUIRE(out_id != 0);
+
+  SonareProjectMarker got{};
+  REQUIRE(sonare_project_marker_by_index(project, 0, &got) == SONARE_OK);
+  REQUIRE(got.id == out_id);
+  REQUIRE(got.kind == SONARE_MARKER_KIND_KEY_SIGNATURE);
+  REQUIRE(got.key_fifths == -3);
+  REQUIRE(got.key_minor == 0);
+  REQUIRE(got.ppq == 4.0);
+  REQUIRE(std::string(got.name) == "Eb major");
+
+  // Export to SMF and re-import: the key signature survives as a marker kind.
+  uint8_t* bytes = nullptr;
+  size_t len = 0;
+  REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_OK);
+  REQUIRE(bytes != nullptr);
+  std::vector<uint8_t> exported(bytes, bytes + len);
+  sonare_free_bytes(bytes);
+
+  SonareProject* round = nullptr;
+  REQUIRE(sonare_project_create(&round) == SONARE_OK);
+  REQUIRE(sonare_project_import_smf(round, exported.data(), exported.size(), nullptr) == SONARE_OK);
+  SonareProjectMarker rmarker{};
+  REQUIRE(sonare_project_marker_by_index(round, 0, &rmarker) == SONARE_OK);
+  REQUIRE(rmarker.kind == SONARE_MARKER_KIND_KEY_SIGNATURE);
+  REQUIRE(rmarker.key_fifths == -3);
+  REQUIRE(rmarker.key_minor == 0);
+
+  // A key signature with an out-of-range sf value (|fifths| > 7) is rejected so
+  // it cannot serialize to a non-conformant SMF key signature.
+  SonareProjectMarker bad = in;
+  bad.id = 0;
+  bad.key_fifths = 8;
+  uint32_t bad_id = 0;
+  REQUIRE(sonare_project_set_marker_ex(project, &bad, &bad_id) == SONARE_ERROR_INVALID_PARAMETER);
+  bad.key_fifths = -8;
+  REQUIRE(sonare_project_set_marker_ex(project, &bad, &bad_id) == SONARE_ERROR_INVALID_PARAMETER);
+  // The same out-of-range fifths is accepted on a non-key-signature kind, where
+  // the field is unused.
+  bad.kind = SONARE_MARKER_KIND_MARKER;
+  REQUIRE(sonare_project_set_marker_ex(project, &bad, &bad_id) == SONARE_OK);
+
+  sonare_project_destroy(round);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface preserves SMF SysEx through project serialization", "[project]") {
   const std::vector<uint8_t> smf = make_project_sysex_smf();
   const std::vector<uint8_t> payload = {0x7E, 0x7F, 0x09, 0x01, 0xF7};

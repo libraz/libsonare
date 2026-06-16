@@ -289,6 +289,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     out.ppq = m.ppq;
     out.id = m.id;
     out.name = timeline.marker_names[i].c_str();
+    out.kind = m.kind;
+    out.key_fifths = m.key_fifths;
+    out.key_minor = m.key_minor;
     timeline.markers.push_back(out);
   }
 

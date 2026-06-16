@@ -54,6 +54,7 @@ from ._runtime import (
     SonareProjectCompileResult,
     SonareProjectKeySegment,
     SonareProjectLoopRecordingDesc,
+    SonareProjectMarker,
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
     SonareProjectTrackDesc,
@@ -71,6 +72,7 @@ from ._runtime import (
     _get_lib,
     _to_c_float_array,
 )
+from .types import ProjectMarker
 
 # Mirrors SONARE_ERROR_INVALID_STATE in sonare_c.h. The pure MIDI conversion
 # helpers return this when no result is produced (e.g. learn found no binding);
@@ -385,6 +387,17 @@ class Sf2ProgramStatus:
     program: int
     backend: int
     preset_name: str
+
+
+def _marker_name_bytes(name: str | None) -> bytes:
+    """UTF-8-encode a marker name for the fixed 64-byte C ``name`` field.
+
+    Truncates on a codepoint boundary so a split multi-byte sequence never
+    leaves invalid UTF-8 (mirrors the engine binding's ``_fixed_bytes``).
+    """
+    if not name:
+        return b""
+    return name.encode("utf-8")[:63].decode("utf-8", "ignore").encode("utf-8")
 
 
 def _synth_waveform_value(waveform: str | int) -> int:
@@ -2236,6 +2249,45 @@ class Project:
         )
         return int(out_id.value)
 
+    def set_marker_ex(self, marker: ProjectMarker) -> int:
+        """Add or replace a marker from a full :class:`ProjectMarker`.
+
+        Carries the marker ``kind`` and (for the key-signature kind) the
+        structured key. Pass ``marker.id == 0`` to allocate a new marker id;
+        the affected id is returned.
+        """
+        raw = SonareProjectMarker()
+        raw.id = int(marker.id)
+        raw.kind = int(marker.kind) & 0xFF
+        raw.key_fifths = int(marker.key_fifths)
+        raw.key_minor = 1 if marker.key_minor else 0
+        raw.ppq = float(marker.ppq)
+        raw.name = _marker_name_bytes(marker.name)
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_project_set_marker_ex(
+                self._require_handle(), ctypes.byref(raw), ctypes.byref(out_id)
+            )
+        )
+        return int(out_id.value)
+
+    def marker_by_index(self, index: int) -> ProjectMarker:
+        """Read a marker by 0-based stored index, including its kind / key."""
+        raw = SonareProjectMarker()
+        _check(
+            _get_lib().sonare_project_marker_by_index(
+                self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(raw)
+            )
+        )
+        return ProjectMarker(
+            id=int(raw.id),
+            ppq=float(raw.ppq),
+            name=bytes(raw.name).split(b"\x00", 1)[0].decode("utf-8", "replace"),
+            kind=int(raw.kind),
+            key_fifths=int(raw.key_fifths),
+            key_minor=bool(raw.key_minor),
+        )
+
     def set_mixer_scene_json(self, scene_json: str) -> None:
         """Replace the project's mixer scene from scene JSON."""
         _check(
@@ -2322,6 +2374,10 @@ class Project:
         out = ctypes.c_size_t()
         _check(getattr(_get_lib(), fn_name)(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
+
+    def marker_count(self) -> int:
+        """Number of timeline markers in the project."""
+        return self._count("sonare_project_marker_count")
 
     def source_count(self) -> int:
         """Number of registered audio sources in the project."""

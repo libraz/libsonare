@@ -21,10 +21,16 @@
 ///     program change, channel pressure, pitch bend) are converted to UMP via
 ///     the ump.h MIDI-1.0 byte-stream adapter (never hand-rolled).
 ///   - Variable-length quantities and running status are handled on import.
-///   - Meta events: set-tempo, time-signature, track name, marker and
-///     end-of-track are recognized. Set-tempo / time-signature populate the
-///     transport segment vectors, including SMF time-signature metronome bytes;
-///     track name / marker are captured as strings.
+///   - Meta events: set-tempo, time-signature, track name, end-of-track and the
+///     text-class events marker (0x06), text (0x01), lyric (0x05), cue point
+///     (0x07) and key signature (0x59) are recognized. Set-tempo / time-signature
+///     populate the transport segment vectors, including SMF time-signature
+///     metronome bytes; track name is captured as a string. The text-class events
+///     are captured into @ref SmfImportResult::markers as @ref SmfMarker entries
+///     tagged with a @ref SmfMarkerKind. They are collected across all tracks into
+///     one flat, timeline-global list, so a text/lyric event's originating track
+///     (and thus per-note alignment) is not preserved — only its musical-time
+///     position. Key signatures carry the structured fifths/minor pair.
 ///   - SysEx (F0 / F7) payloads are preserved in @ref SmfImportResult::sysex_store
 ///     and represented in clips as SysEx-handle UMP events. F7 escape status is
 ///     normalized to an F0 SysEx event on export because the normalized UMP
@@ -59,10 +65,28 @@ enum class SmfStatus : uint8_t {
   kInvalidArgument,    ///< Null / empty input where data was required.
 };
 
-/// A named marker meta event positioned in musical time.
+/// Kind of a recognized SMF text-class meta event. Distinguishes markers from
+/// the other timeline annotations (text / lyric / cue point / key signature)
+/// that share the flat marker list. Values are part of the cross-surface ABI
+/// (mirrored by SonareMarkerKind) and must not be renumbered.
+enum class SmfMarkerKind : uint8_t {
+  kMarker = 0,        ///< Marker meta (0x06).
+  kText = 1,          ///< Text meta (0x01).
+  kLyric = 2,         ///< Lyric meta (0x05).
+  kCuePoint = 3,      ///< Cue point meta (0x07).
+  kKeySignature = 4,  ///< Key signature meta (0x59).
+};
+
+/// A text-class meta event positioned in musical time. @ref kind distinguishes
+/// markers, text, lyrics, cue points and key signatures. For kKeySignature the
+/// structured key is carried in @ref key_fifths / @ref key_minor and @ref text
+/// holds a human-readable rendering (e.g. "C major") for a display fallback.
 struct SmfMarker {
   double ppq = 0.0;
   std::string text;
+  SmfMarkerKind kind = SmfMarkerKind::kMarker;
+  int8_t key_fifths = 0;   ///< Key signature only: -7..7 (sharps positive).
+  bool key_minor = false;  ///< Key signature only: false = major, true = minor.
 };
 
 /// Result of importing an SMF byte buffer into normalized sonare::midi data.

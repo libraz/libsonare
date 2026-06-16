@@ -175,12 +175,16 @@ std::pair<WarpMapRef, bool> Project::remove_warp_map(WarpRefId id) {
   return {WarpMapRef{}, false};
 }
 
-uint32_t Project::add_marker(double ppq, std::string name) {
+uint32_t Project::add_marker(double ppq, std::string name, uint8_t kind, int8_t key_fifths,
+                             bool key_minor) {
   const uint32_t id = next_marker_id_++;
   ProjectMarker marker;
   marker.ppq = ppq;
   marker.id = id;
   marker.name = std::move(name);
+  marker.kind = kind;
+  marker.key_fifths = key_fifths;
+  marker.key_minor = key_minor;
   markers_.emplace_back(std::move(marker));
   return id;
 }

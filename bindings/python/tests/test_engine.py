@@ -28,6 +28,7 @@ from libsonare import (
     EngineTelemetryError,
     EngineTelemetryType,
     FileClipPageProvider,
+    MarkerKind,
     ParameterInfo,
     RealtimeEngine,
     SonareError,
@@ -575,6 +576,48 @@ def test_realtime_engine_process_and_telemetry() -> None:
         with pytest.raises(SonareError) as bad_monitor_gain_error:
             engine.set_input_monitor(True, math.nan)
         assert bad_monitor_gain_error.value.code == 4
+
+
+def test_engine_marker_kind_and_key_signature_round_trip() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_markers(
+            [
+                EngineMarker(1, 0.0, "verse", kind=MarkerKind.CUE_POINT),
+                EngineMarker(
+                    2,
+                    4.0,
+                    "G major",
+                    kind=MarkerKind.KEY_SIGNATURE,
+                    key_fifths=1,
+                    key_minor=False,
+                ),
+                EngineMarker(
+                    3,
+                    8.0,
+                    "C minor",
+                    kind=MarkerKind.KEY_SIGNATURE,
+                    key_fifths=-3,
+                    key_minor=True,
+                ),
+            ]
+        )
+        assert engine.marker_count() == 3
+
+        cue = engine.marker_by_index(0)
+        assert cue.kind == MarkerKind.CUE_POINT
+        assert cue.name == "verse"
+        assert cue.key_fifths == 0
+        assert cue.key_minor is False
+
+        major = engine.marker(2)
+        assert major.kind == MarkerKind.KEY_SIGNATURE
+        assert major.key_fifths == 1
+        assert major.key_minor is False
+
+        minor = engine.marker(3)
+        assert minor.kind == MarkerKind.KEY_SIGNATURE
+        assert minor.key_fifths == -3
+        assert minor.key_minor is True
 
 
 def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:

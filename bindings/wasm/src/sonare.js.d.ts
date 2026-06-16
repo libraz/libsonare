@@ -581,6 +581,18 @@ export interface WasmEngineMarker {
   id: number;
   ppq: number;
   name?: string;
+  kind?: number;
+  keyFifths?: number;
+  keyMinor?: boolean;
+}
+
+export interface WasmProjectMarker {
+  id: number;
+  ppq: number;
+  name?: string;
+  kind?: number;
+  keyFifths?: number;
+  keyMinor?: boolean;
 }
 
 export interface WasmEngineMetronomeConfig {

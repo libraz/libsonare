@@ -144,10 +144,35 @@ class SonareAutomationPoint(ctypes.Structure):
 
 
 class SonareEngineMarker(ctypes.Structure):
-    """Maps to SonareEngineMarker in sonare_c.h."""
+    """Maps to SonareEngineMarker in sonare_c.h.
+
+    ``kind`` / ``key_fifths`` / ``key_minor`` occupy the 4-byte padding hole
+    after ``id``; the mirror MUST keep this exact layout (id@0, kind@4,
+    key_fifths@5, key_minor@6, ppq@8, name@16) or ctypes calls segfault.
+    """
 
     _fields_ = [
         ("id", ctypes.c_uint32),
+        ("kind", ctypes.c_uint8),
+        ("key_fifths", ctypes.c_int8),
+        ("key_minor", ctypes.c_uint8),
+        ("ppq", ctypes.c_double),
+        ("name", ctypes.c_char * 64),
+    ]
+
+
+class SonareProjectMarker(ctypes.Structure):
+    """Maps to SonareProjectMarker in sonare_c_project.h.
+
+    Same shape / offsets as :class:`SonareEngineMarker` so one binding shape
+    serves both surfaces.
+    """
+
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("kind", ctypes.c_uint8),
+        ("key_fifths", ctypes.c_int8),
+        ("key_minor", ctypes.c_uint8),
         ("ppq", ctypes.c_double),
         ("name", ctypes.c_char * 64),
     ]

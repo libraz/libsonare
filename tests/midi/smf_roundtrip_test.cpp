@@ -220,6 +220,49 @@ std::vector<uint8_t> make_format1_with_conductor_name(const char* song_name) {
   return smf;
 }
 
+// Appends a text-class meta event (0xFF type len payload).
+void push_text_meta(std::vector<uint8_t>* body, uint8_t type, const std::string& text) {
+  push_vlq(body, 0);
+  body->push_back(0xFF);
+  body->push_back(type);
+  push_vlq(body, static_cast<uint32_t>(text.size()));
+  for (char c : text) body->push_back(static_cast<uint8_t>(c));
+}
+
+// Builds a format-0 SMF carrying one of each recognized text-class meta event
+// (text / lyric / cue point / marker / key signature) plus a single note so the
+// track yields a clip. The key signature is sf=1, mi=1 (E minor).
+std::vector<uint8_t> make_meta_classes_smf() {
+  std::vector<uint8_t> body;
+  push_text_meta(&body, 0x01, "memo");   // Text.
+  push_text_meta(&body, 0x05, "la");     // Lyric.
+  push_text_meta(&body, 0x07, "cue1");   // Cue point.
+  push_text_meta(&body, 0x06, "verse");  // Marker.
+  // delta 0, key signature 0xFF 0x59 0x02 sf=1 mi=1 (E minor).
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x59);
+  body.push_back(0x02);
+  body.push_back(0x01);
+  body.push_back(0x01);
+  // delta 0, note-on then delta 480 note-off so a clip exists.
+  body.push_back(0x00);
+  body.push_back(0x90);
+  body.push_back(0x3C);
+  body.push_back(0x64);
+  body.push_back(0x83);
+  body.push_back(0x60);
+  body.push_back(0x80);
+  body.push_back(0x3C);
+  body.push_back(0x00);
+  // delta 0, end-of-track.
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+  return wrap_format0_track(body);
+}
+
 }  // namespace
 
 TEST_CASE("SMF format-1 import preserves the conductor track sequence name", "[midi]") {
@@ -346,6 +389,97 @@ TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
     REQUIRE(a[i].ppq == b[i].ppq);
     REQUIRE(a[i].ump == b[i].ump);
   }
+}
+
+TEST_CASE("SMF import tags text / lyric / cue / marker / key-signature meta with kinds", "[midi]") {
+  using sonare::midi::SmfMarkerKind;
+  const SmfImportResult r = import_smf(make_meta_classes_smf());
+  REQUIRE(r.ok());
+  // None of the text-class meta events are dropped lossily.
+  REQUIRE(r.skipped_events == 0);
+  REQUIRE(r.markers.size() == 5);
+
+  auto by_kind = [&](SmfMarkerKind kind) -> const sonare::midi::SmfMarker* {
+    for (const auto& m : r.markers) {
+      if (m.kind == kind) return &m;
+    }
+    return nullptr;
+  };
+
+  REQUIRE(by_kind(SmfMarkerKind::kText) != nullptr);
+  REQUIRE(by_kind(SmfMarkerKind::kText)->text == "memo");
+  REQUIRE(by_kind(SmfMarkerKind::kLyric) != nullptr);
+  REQUIRE(by_kind(SmfMarkerKind::kLyric)->text == "la");
+  REQUIRE(by_kind(SmfMarkerKind::kCuePoint) != nullptr);
+  REQUIRE(by_kind(SmfMarkerKind::kCuePoint)->text == "cue1");
+  REQUIRE(by_kind(SmfMarkerKind::kMarker) != nullptr);
+  REQUIRE(by_kind(SmfMarkerKind::kMarker)->text == "verse");
+
+  const sonare::midi::SmfMarker* key = by_kind(SmfMarkerKind::kKeySignature);
+  REQUIRE(key != nullptr);
+  REQUIRE(key->key_fifths == 1);
+  REQUIRE(key->key_minor == true);
+  REQUIRE(key->text == "E minor");
+}
+
+TEST_CASE("SMF round-trips text-class meta kinds and key signatures", "[midi]") {
+  using sonare::midi::SmfMarkerKind;
+  const SmfImportResult imported = import_smf(make_meta_classes_smf());
+  REQUIRE(imported.ok());
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  opts.markers = imported.markers;
+  const auto exported = export_smf(imported.clips, imported.tempo_segments,
+                                   imported.time_signatures, imported.clip_names, opts);
+  REQUIRE(exported.ok());
+  REQUIRE(exported.skipped_events == 0);
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.skipped_events == 0);
+  REQUIRE(round.markers.size() == imported.markers.size());
+
+  auto count_kind = [](const SmfImportResult& r, SmfMarkerKind kind) {
+    int n = 0;
+    for (const auto& m : r.markers) {
+      if (m.kind == kind) ++n;
+    }
+    return n;
+  };
+  for (SmfMarkerKind kind : {SmfMarkerKind::kText, SmfMarkerKind::kLyric, SmfMarkerKind::kCuePoint,
+                             SmfMarkerKind::kMarker, SmfMarkerKind::kKeySignature}) {
+    REQUIRE(count_kind(round, kind) == count_kind(imported, kind));
+  }
+
+  for (const auto& m : round.markers) {
+    if (m.kind == SmfMarkerKind::kKeySignature) {
+      REQUIRE(m.key_fifths == 1);
+      REQUIRE(m.key_minor == true);
+    }
+  }
+}
+
+TEST_CASE("SMF key-signature C major round-trips with sf=0 mi=0", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x59);
+  body.push_back(0x02);
+  body.push_back(0x00);  // sf = 0.
+  body.push_back(0x00);  // mi = 0 (major).
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.markers.size() == 1);
+  REQUIRE(imported.markers[0].kind == sonare::midi::SmfMarkerKind::kKeySignature);
+  REQUIRE(imported.markers[0].key_fifths == 0);
+  REQUIRE(imported.markers[0].key_minor == false);
+  REQUIRE(imported.markers[0].text == "C major");
 }
 
 TEST_CASE("SMF time-signature metronome bytes round-trip", "[midi]") {

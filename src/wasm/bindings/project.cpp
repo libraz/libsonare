@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cstring>
 #include <sstream>
 #include <vector>
 
@@ -1281,6 +1282,51 @@ struct ProjectWasm {
     return out_id;
   }
 
+  uint32_t setMarkerEx(val marker) {
+    SonareProjectMarker desc{};
+    desc.id = static_cast<uint32_t>(intProperty(marker, "id", 0));
+    desc.kind = static_cast<uint8_t>(intProperty(marker, "kind", 0));
+    desc.key_fifths = static_cast<int8_t>(intProperty(marker, "keyFifths", 0));
+    desc.key_minor = static_cast<uint8_t>(boolProperty(marker, "keyMinor", false) ? 1 : 0);
+    desc.ppq = objectProperty(marker, "ppq").as<double>();
+    const std::string name = stringProperty(marker, "name", "");
+    std::strncpy(desc.name, name.c_str(), sizeof(desc.name) - 1);
+    desc.name[sizeof(desc.name) - 1] = '\0';
+    uint32_t out_id = 0;
+    const SonareError err = sonare_project_set_marker_ex(project_.get(), &desc, &out_id);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set marker");
+    }
+    return out_id;
+  }
+
+  val markerByIndex(int index) const {
+    SonareProjectMarker desc{};
+    const SonareError err =
+        sonare_project_marker_by_index(project_.get(), static_cast<size_t>(index), &desc);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "marker index out of range");
+    }
+    val out = val::object();
+    out.set("id", desc.id);
+    out.set("ppq", desc.ppq);
+    out.set("name", std::string(desc.name));
+    out.set("kind", static_cast<int>(desc.kind));
+    out.set("keyFifths", static_cast<int>(desc.key_fifths));
+    out.set("keyMinor", desc.key_minor != 0);
+    return out;
+  }
+
+  double markerCount() const {
+    size_t out = 0;
+    const SonareError err = sonare_project_marker_count(project_.get(), &out);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to read marker count");
+    }
+    return static_cast<double>(out);
+  }
+
   double trackCount() const {
     size_t out = 0;
     const SonareError err = sonare_project_track_count(project_.get(), &out);
@@ -1732,6 +1778,9 @@ void registerProjectBindings() {
       .function("getSampleRate", &ProjectWasm::getSampleRate)
       .function("setMixerSceneJson", &ProjectWasm::setMixerSceneJson)
       .function("setMarker", &ProjectWasm::setMarker)
+      .function("setMarkerEx", &ProjectWasm::setMarkerEx)
+      .function("markerByIndex", &ProjectWasm::markerByIndex)
+      .function("markerCount", &ProjectWasm::markerCount)
       .function("trackCount", &ProjectWasm::trackCount)
       .function("sourceCount", &ProjectWasm::sourceCount)
       .function("tempoSegmentCount", &ProjectWasm::tempoSegmentCount)

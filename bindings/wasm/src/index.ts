@@ -245,6 +245,7 @@ export type {
   ProjectLoopMode,
   ProjectLoopRecordingDesc,
   ProjectLoopRecordingResult,
+  ProjectMarker,
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectNotePairValidation,
@@ -268,6 +269,7 @@ export type {
 } from './project';
 export {
   EXPECTED_PROJECT_ABI_VERSION,
+  MarkerKind,
   Project,
   projectAbiVersion,
   SYNTH_BODY_TYPES,

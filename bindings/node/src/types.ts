@@ -1233,10 +1233,37 @@ export interface EngineAutomationPoint {
   curveToNext?: EngineAutomationPointCurve;
 }
 
+/** Structured marker kind ordinals; mirror SonareMarkerKind / SmfMarkerKind. */
+export enum MarkerKind {
+  Marker = 0,
+  Text = 1,
+  Lyric = 2,
+  CuePoint = 3,
+  KeySignature = 4,
+}
+
 export interface EngineMarker {
   id: number;
   ppq: number;
   name?: string;
+  /** Marker kind (MarkerKind ordinal); defaults to MarkerKind.Marker. */
+  kind?: number;
+  /** Key signature only: -7..7 (sharps positive). */
+  keyFifths?: number;
+  /** Key signature only: false = major, true = minor. */
+  keyMinor?: boolean;
+}
+
+export interface ProjectMarker {
+  id: number;
+  ppq: number;
+  name: string;
+  /** Marker kind (MarkerKind ordinal). */
+  kind: number;
+  /** Key signature only: -7..7 (sharps positive). */
+  keyFifths: number;
+  /** Key signature only: false = major, true = minor. */
+  keyMinor: boolean;
 }
 
 export interface EngineMetronomeConfig {

@@ -21,11 +21,29 @@ constexpr uint8_t kSysExStart = 0xF0u;
 constexpr uint8_t kSysExEscape = 0xF7u;
 
 // Recognized meta event type bytes (the byte following 0xFF).
+constexpr uint8_t kMetaText = 0x01u;
 constexpr uint8_t kMetaTrackName = 0x03u;
+constexpr uint8_t kMetaLyric = 0x05u;
 constexpr uint8_t kMetaMarker = 0x06u;
+constexpr uint8_t kMetaCuePoint = 0x07u;
 constexpr uint8_t kMetaEndOfTrack = 0x2Fu;
 constexpr uint8_t kMetaSetTempo = 0x51u;
 constexpr uint8_t kMetaTimeSignature = 0x58u;
+constexpr uint8_t kMetaKeySignature = 0x59u;
+
+// Renders an SMF key signature (sf = fifths -7..7, mi = 0 major / 1 minor) to a
+// human-readable tonic name like "C major" / "A minor", used as a display
+// fallback alongside the structured fields. Out-of-range fifths fall back to C.
+std::string key_signature_name(int8_t fifths, bool minor) {
+  // Circle of fifths from -7 (7 flats) to +7 (7 sharps).
+  static constexpr const char* kMajor[15] = {"Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C",
+                                             "G",  "D",  "A",  "E",  "B",  "F#", "C#"};
+  static constexpr const char* kMinor[15] = {"Ab", "Eb", "Bb", "F",  "C",  "G",  "D", "A",
+                                             "E",  "B",  "F#", "C#", "G#", "D#", "A#"};
+  const int idx = static_cast<int>(fifths) + 7;
+  const char* tonic = (idx >= 0 && idx < 15) ? (minor ? kMinor[idx] : kMajor[idx]) : "C";
+  return std::string(tonic) + (minor ? " minor" : " major");
+}
 
 // Microseconds per minute — the SMF set-tempo meta encodes microseconds per
 // quarter note, so BPM = (us-per-minute) / (us-per-quarter). This is an SMF
@@ -255,11 +273,32 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
           track->name.assign(reinterpret_cast<const char*>(payload), meta_len);
           break;
         }
-        case kMetaMarker: {
+        case kMetaMarker:
+        case kMetaText:
+        case kMetaLyric:
+        case kMetaCuePoint: {
           SmfMarker marker;
           marker.ppq = ppq;
           marker.text.assign(reinterpret_cast<const char*>(payload), meta_len);
-          markers->push_back(marker);
+          marker.kind = meta_type == kMetaText       ? SmfMarkerKind::kText
+                        : meta_type == kMetaLyric    ? SmfMarkerKind::kLyric
+                        : meta_type == kMetaCuePoint ? SmfMarkerKind::kCuePoint
+                                                     : SmfMarkerKind::kMarker;
+          markers->push_back(std::move(marker));
+          break;
+        }
+        case kMetaKeySignature: {
+          if (meta_len >= 2) {
+            SmfMarker marker;
+            marker.ppq = ppq;
+            marker.kind = SmfMarkerKind::kKeySignature;
+            marker.key_fifths = static_cast<int8_t>(payload[0]);
+            marker.key_minor = payload[1] != 0;
+            marker.text = key_signature_name(marker.key_fifths, marker.key_minor);
+            markers->push_back(std::move(marker));
+          } else {
+            ++(*skipped);
+          }
           break;
         }
         case kMetaEndOfTrack:
@@ -575,13 +614,16 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     // Merge tempo + time-sig events sorted by tick so delta times are correct.
     struct MetaItem {
       int64_t tick;
-      int kind;  // 0 = tempo, 1 = time-sig, 2 = marker.
+      int kind;  // 0 = tempo, 1 = time-sig, 2 = text-class marker.
       double bpm;
       int numerator;
       int denominator;
       uint8_t clocks_per_metronome_click;
       uint8_t thirty_seconds_per_quarter;
       std::string text;
+      SmfMarkerKind marker_kind = SmfMarkerKind::kMarker;  // kind == 2 only.
+      int8_t key_fifths = 0;                               // key signature only.
+      bool key_minor = false;                              // key signature only.
     };
     std::vector<MetaItem> items;
     for (const auto& seg : tempo_segments) {
@@ -605,7 +647,8 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                        {}});
     }
     for (const auto& marker : options.markers) {
-      items.push_back({smf_ppq_to_ticks(marker.ppq, ppqn), 2, 0.0, 0, 0, 24, 8, marker.text});
+      items.push_back({smf_ppq_to_ticks(marker.ppq, ppqn), 2, 0.0, 0, 0, 24, 8, marker.text,
+                       marker.kind, marker.key_fifths, marker.key_minor});
     }
     std::stable_sort(items.begin(), items.end(),
                      [](const MetaItem& a, const MetaItem& b) { return a.tick < b.tick; });
@@ -631,9 +674,29 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                                     item.clocks_per_metronome_click,
                                     item.thirty_seconds_per_quarter};
         put_meta(&body, delta, kMetaTimeSignature, payload, 4);
-      } else if (!item.text.empty()) {
-        put_meta(&body, delta, kMetaMarker, reinterpret_cast<const uint8_t*>(item.text.data()),
-                 item.text.size());
+      } else if (item.kind == 2) {
+        const auto* text = reinterpret_cast<const uint8_t*>(item.text.data());
+        switch (item.marker_kind) {
+          case SmfMarkerKind::kKeySignature: {
+            const uint8_t payload[2] = {static_cast<uint8_t>(item.key_fifths),
+                                        static_cast<uint8_t>(item.key_minor ? 1 : 0)};
+            put_meta(&body, delta, kMetaKeySignature, payload, 2);
+            break;
+          }
+          case SmfMarkerKind::kText:
+            put_meta(&body, delta, kMetaText, text, item.text.size());
+            break;
+          case SmfMarkerKind::kLyric:
+            put_meta(&body, delta, kMetaLyric, text, item.text.size());
+            break;
+          case SmfMarkerKind::kCuePoint:
+            put_meta(&body, delta, kMetaCuePoint, text, item.text.size());
+            break;
+          case SmfMarkerKind::kMarker:
+          default:
+            put_meta(&body, delta, kMetaMarker, text, item.text.size());
+            break;
+        }
       }
     }
     // End-of-track.

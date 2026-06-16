@@ -13,6 +13,8 @@
 namespace {
 
 // Shared presence-checked property readers (see sonare_wrap_options.h).
+using sonare_node::BoolProperty;
+using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
@@ -337,12 +339,15 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::GetOverlapPolicy>("getOverlapPolicy"),
           InstanceMethod<&ProjectWrap::SetMixerSceneJson>("setMixerSceneJson"),
           InstanceMethod<&ProjectWrap::SetMarker>("setMarker"),
+          InstanceMethod<&ProjectWrap::SetMarkerEx>("setMarkerEx"),
+          InstanceMethod<&ProjectWrap::MarkerByIndex>("markerByIndex"),
           InstanceMethod<&ProjectWrap::SetTempoSegments>("setTempoSegments"),
           InstanceMethod<&ProjectWrap::SetTimeSignatures>("setTimeSignatures"),
           InstanceMethod<&ProjectWrap::TrackCount>("trackCount"),
           InstanceMethod<&ProjectWrap::SourceCount>("sourceCount"),
           InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount"),
           InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount"),
+          InstanceMethod<&ProjectWrap::MarkerCount>("markerCount"),
           InstanceMethod<&ProjectWrap::Destroy>("destroy"),
           StaticMethod<&ProjectWrap::FromJson>("fromJson"),
           StaticMethod<&ProjectWrap::FromJsonWithDiagnostics>("fromJsonWithDiagnostics"),
@@ -1296,6 +1301,46 @@ Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   return Napi::Number::New(env, out_id);
 }
 
+Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() <= 0 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "expected a marker object").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Object obj = info[0].As<Napi::Object>();
+  SonareProjectMarker marker{};
+  marker.id = static_cast<uint32_t>(IntProperty(obj, "id", 0));
+  marker.kind = static_cast<uint8_t>(IntProperty(obj, "kind", SONARE_MARKER_KIND_MARKER));
+  marker.key_fifths = static_cast<int8_t>(IntProperty(obj, "keyFifths", 0));
+  marker.key_minor = BoolProperty(obj, "keyMinor", false) ? 1 : 0;
+  marker.ppq = DoubleProperty(obj, "ppq", 0.0);
+  const std::string name = obj.Has("name") && !obj.Get("name").IsUndefined()
+                               ? obj.Get("name").As<Napi::String>().Utf8Value()
+                               : std::string();
+  std::strncpy(marker.name, name.c_str(), sizeof(marker.name) - 1);
+  marker.name[sizeof(marker.name) - 1] = '\0';
+  uint32_t out_id = 0;
+  ThrowIfError(env, sonare_project_set_marker_ex(project_, &marker, &out_id));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, out_id);
+}
+
+Napi::Value ProjectWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const size_t index = static_cast<size_t>(NumberArg(info, 0, 0.0));
+  SonareProjectMarker marker{};
+  ThrowIfError(env, sonare_project_marker_by_index(project_, index, &marker));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("id", Napi::Number::New(env, marker.id));
+  out.Set("ppq", Napi::Number::New(env, marker.ppq));
+  out.Set("name", Napi::String::New(env, marker.name));
+  out.Set("kind", Napi::Number::New(env, marker.kind));
+  out.Set("keyFifths", Napi::Number::New(env, marker.key_fifths));
+  out.Set("keyMinor", Napi::Boolean::New(env, marker.key_minor != 0));
+  return out;
+}
+
 Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   std::vector<SonareProjectTempoSegment> segments;
@@ -1382,6 +1427,14 @@ Napi::Value ProjectWrap::TimeSignatureCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   size_t out = 0;
   ThrowIfError(env, sonare_project_time_signature_count(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out));
+}
+
+Napi::Value ProjectWrap::MarkerCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t out = 0;
+  ThrowIfError(env, sonare_project_marker_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
 }

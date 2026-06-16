@@ -25,6 +25,34 @@ export interface ProjectBounceOptions {
   instrumentLatencySamples?: number;
 }
 
+/**
+ * Marker kind ordinals. Mirrors `SonareMarkerKind` in `src/sonare_c_types.h`;
+ * the values are part of the ABI and must not be renumbered.
+ */
+export const MarkerKind = {
+  marker: 0,
+  text: 1,
+  lyric: 2,
+  cuePoint: 3,
+  keySignature: 4,
+} as const;
+
+/** A project timeline marker with its kind and (for key signatures) the key. */
+export interface ProjectMarker {
+  /** Stable marker id (0 when allocating a new id via {@link Project.setMarkerEx}). */
+  id: number;
+  /** Marker position in PPQ (quarter notes). */
+  ppq: number;
+  /** Marker label. */
+  name?: string;
+  /** {@link MarkerKind} ordinal (default 0 = marker). */
+  kind?: number;
+  /** Key signature only: -7..7 (sharps positive). */
+  keyFifths?: number;
+  /** Key signature only: false = major, true = minor. */
+  keyMinor?: boolean;
+}
+
 /** Oscillator waveform for the built-in synth. */
 export type BuiltinSynthWaveform =
   | 'sine'
@@ -627,6 +655,9 @@ interface WasmProject {
   getSampleRate: () => number;
   setMixerSceneJson: (sceneJson: string) => void;
   setMarker: (markerId: number, ppq: number, name: string) => number;
+  setMarkerEx: (marker: ProjectMarker) => number;
+  markerByIndex: (index: number) => ProjectMarker;
+  markerCount: () => number;
   trackCount: () => number;
   sourceCount: () => number;
   tempoSegmentCount: () => number;
@@ -1525,6 +1556,25 @@ export class Project {
    */
   setMarker(markerId: number, ppq: number, name: string): number {
     return this.native.setMarker(markerId, ppq, name);
+  }
+
+  /**
+   * Add or replace a marker from a full {@link ProjectMarker}, including its
+   * {@link MarkerKind} and (for key signatures) the key. Pass `id` 0 to allocate
+   * a new id; returns the stable marker id.
+   */
+  setMarkerEx(marker: ProjectMarker): number {
+    return this.native.setMarkerEx(marker);
+  }
+
+  /** Read a project marker by index (0-based, in stored order). */
+  markerByIndex(index: number): ProjectMarker {
+    return this.native.markerByIndex(index);
+  }
+
+  /** Number of markers in the project. */
+  markerCount(): number {
+    return this.native.markerCount();
   }
 
   /** Number of tracks in the project. */

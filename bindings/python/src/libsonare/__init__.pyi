@@ -601,6 +601,9 @@ from .types import (
     KeyProfile as KeyProfile,
 )
 from .types import (
+    MarkerKind as MarkerKind,
+)
+from .types import (
     MasteringChainResult as MasteringChainResult,
 )
 from .types import (
@@ -650,6 +653,9 @@ from .types import (
 )
 from .types import (
     PitchResult as PitchResult,
+)
+from .types import (
+    ProjectMarker as ProjectMarker,
 )
 from .types import (
     QuantizeConfig as QuantizeConfig,

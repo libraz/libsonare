@@ -50,6 +50,9 @@ inline Napi::Object MarkerToObject(Napi::Env env, const SonareEngineMarker& mark
   out.Set("id", Napi::Number::New(env, marker.id));
   out.Set("ppq", Napi::Number::New(env, marker.ppq));
   out.Set("name", Napi::String::New(env, marker.name));
+  out.Set("kind", Napi::Number::New(env, marker.kind));
+  out.Set("keyFifths", Napi::Number::New(env, marker.key_fifths));
+  out.Set("keyMinor", Napi::Boolean::New(env, marker.key_minor != 0));
   return out;
 }
 

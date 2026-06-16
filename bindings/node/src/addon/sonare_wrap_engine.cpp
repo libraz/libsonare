@@ -406,6 +406,9 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
     Napi::Object obj = input.Get(i).As<Napi::Object>();
     SonareEngineMarker marker{};
     marker.id = obj.Get("id").As<Napi::Number>().Uint32Value();
+    marker.kind = static_cast<uint8_t>(IntProperty(obj, "kind", SONARE_MARKER_KIND_MARKER));
+    marker.key_fifths = static_cast<int8_t>(IntProperty(obj, "keyFifths", 0));
+    marker.key_minor = BoolProperty(obj, "keyMinor", false) ? 1 : 0;
     marker.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
     CopyString(marker.name, sizeof(marker.name),
                obj.Has("name") && !obj.Get("name").IsUndefined()

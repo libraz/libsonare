@@ -193,6 +193,27 @@ SonareError sonare_project_marker_count(const SonareProject* project, size_t* ou
 #endif
 }
 
+SonareError sonare_project_marker_by_index(const SonareProject* project, size_t index,
+                                           SonareProjectMarker* out) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  const std::vector<arr::ProjectMarker>& markers = project->history.project().markers();
+  if (index >= markers.size()) return SONARE_ERROR_INVALID_PARAMETER;
+  const arr::ProjectMarker& m = markers[index];
+  out->id = m.id;
+  out->kind = m.kind;
+  out->key_fifths = m.key_fifths;
+  out->key_minor = m.key_minor ? 1 : 0;
+  out->ppq = m.ppq;
+  const size_t n = std::min(m.name.size(), sizeof(out->name) - 1u);
+  std::memcpy(out->name, m.name.data(), n);
+  out->name[n] = '\0';
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+#endif
+}
+
 SonareError sonare_project_tempo_segment_count(const SonareProject* project, size_t* out_count) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,

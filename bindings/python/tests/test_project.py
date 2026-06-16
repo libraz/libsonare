@@ -17,7 +17,9 @@ import pytest
 from libsonare import (
     BuiltinSynthConfig,
     ExternalInstrument,
+    MarkerKind,
     Project,
+    ProjectMarker,
     SonareError,
     project_abi_version,
 )
@@ -41,6 +43,28 @@ def _make_sysex_smf() -> bytes:
     body = bytearray()
     body.extend([0x00, 0xF0, len(payload)])
     body.extend(payload)
+    body.extend([0x00, 0x90, 0x3C, 0x40, 0x83, 0x60, 0x80, 0x3C, 0x00])
+    body.extend([0x00, 0xFF, 0x2F, 0x00])
+    smf = bytearray()
+    smf.extend(b"MThd")
+    smf.extend((6).to_bytes(4, "big"))
+    smf.extend((0).to_bytes(2, "big"))
+    smf.extend((1).to_bytes(2, "big"))
+    smf.extend((480).to_bytes(2, "big"))
+    smf.extend(b"MTrk")
+    smf.extend(len(body).to_bytes(4, "big"))
+    smf.extend(body)
+    return bytes(smf)
+
+
+def _make_key_signature_smf() -> bytes:
+    """Build a one-track SMF carrying a key-signature meta event (FF 59 02 sf mi).
+
+    ``sf = 1`` (one sharp) and ``mi = 0`` (major) describe G major; a short note
+    follows so the track is non-empty before End-of-Track.
+    """
+    body = bytearray()
+    body.extend([0x00, 0xFF, 0x59, 0x02, 0x01, 0x00])
     body.extend([0x00, 0x90, 0x3C, 0x40, 0x83, 0x60, 0x80, 0x3C, 0x00])
     body.extend([0x00, 0xFF, 0x2F, 0x00])
     smf = bytearray()
@@ -845,6 +869,65 @@ def test_project_getters_setters_and_counts() -> None:
 
         assert project.track_count() == 0
         assert project.source_count() == 0
+    finally:
+        project.close()
+
+
+def test_project_marker_ex_round_trips_kind_and_key() -> None:
+    project = Project()
+    try:
+        plain_id = project.set_marker_ex(ProjectMarker(0, 1.0, "intro"))
+        assert plain_id > 0
+        key_id = project.set_marker_ex(
+            ProjectMarker(
+                0,
+                2.0,
+                "E flat major",
+                kind=MarkerKind.KEY_SIGNATURE,
+                key_fifths=-3,
+                key_minor=False,
+            )
+        )
+        assert key_id > 0 and key_id != plain_id
+        assert project.marker_count() == 2
+
+        # marker_by_index iterates every stored marker in [0, marker_count).
+        ids = [project.marker_by_index(i).id for i in range(project.marker_count())]
+        assert ids == [plain_id, key_id]
+
+        plain = project.marker_by_index(0)
+        assert plain.id == plain_id
+        assert plain.kind == MarkerKind.MARKER
+        assert plain.name == "intro"
+        assert plain.key_fifths == 0
+        assert plain.key_minor is False
+
+        key = project.marker_by_index(1)
+        assert key.id == key_id
+        assert key.kind == MarkerKind.KEY_SIGNATURE
+        assert key.name == "E flat major"
+        assert key.key_fifths == -3
+        assert key.key_minor is False
+
+        with pytest.raises(SonareError):
+            project.marker_by_index(2)
+    finally:
+        project.close()
+
+
+def test_project_import_smf_surfaces_key_signature_marker() -> None:
+    project = Project()
+    try:
+        project.import_smf(_make_key_signature_smf())
+        kinds = [project.marker_by_index(i).kind for i in range(project.marker_count())]
+        assert MarkerKind.KEY_SIGNATURE in kinds
+        key = next(
+            project.marker_by_index(i)
+            for i in range(project.marker_count())
+            if project.marker_by_index(i).kind == MarkerKind.KEY_SIGNATURE
+        )
+        assert key.key_fifths == 1
+        assert key.key_minor is False
     finally:
         project.close()
 

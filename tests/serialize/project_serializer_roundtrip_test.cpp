@@ -125,9 +125,12 @@ Fixture make_fixture() {
   f.midi.events[mclip_id] = events;
   (void)aclip_id;
 
-  // Markers (owned names).
+  // Markers (owned names), including a structured key-signature marker so the
+  // kind / key-signature fields are exercised by the round-trip.
   p.add_marker(0.0, "Intro");
   p.add_marker(1920.0, "Verse \"A\"");
+  p.add_marker(3840.0, "Bb major", /*kind=*/4, /*key_fifths=*/-2, /*key_minor=*/false);
+  p.add_marker(5760.0, "lyric", /*kind=*/2);
 
   // Rich harmonic timeline.
   KeySegment key;
@@ -380,6 +383,9 @@ void check_project_equal(const Project& a, const Project& b) {
     CHECK(a.markers()[i].id == b.markers()[i].id);
     CHECK(a.markers()[i].ppq == b.markers()[i].ppq);
     CHECK(a.markers()[i].name == b.markers()[i].name);
+    CHECK(a.markers()[i].kind == b.markers()[i].kind);
+    CHECK(a.markers()[i].key_fifths == b.markers()[i].key_fifths);
+    CHECK(a.markers()[i].key_minor == b.markers()[i].key_minor);
   }
 
   CHECK(a.annotation().tempo_confidence == b.annotation().tempo_confidence);

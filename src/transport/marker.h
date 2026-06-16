@@ -18,6 +18,12 @@ struct Marker {
   // (e.g. a string literal or a caller-owned stable buffer). Passing a
   // temporary's c_str() will dangle.
   const char* name = "";
+  // Marker kind + key signature. `kind` mirrors SonareMarkerKind values
+  // (0 = marker, 1 = text, 2 = lyric, 3 = cue point, 4 = key signature); the
+  // key fields apply only to the key-signature kind.
+  uint8_t kind = 0;
+  int8_t key_fifths = 0;
+  bool key_minor = false;
 };
 
 class MarkerMap {

@@ -329,7 +329,7 @@ void fill_project_tempo_map(const arr::Project& project, sonare::transport::Temp
 SonareError install_imported_midi(
     SonareProject* project, const std::vector<sonare::transport::TempoSegment>& tempos,
     const std::vector<sonare::transport::TimeSignatureSegment>& sigs,
-    const std::vector<std::pair<double, std::string>>& markers,
+    const std::vector<sonare::midi::SmfMarker>& markers,
     const std::vector<sonare::midi::MidiClip>& clips, const std::vector<std::string>& clip_names,
     const std::vector<double>& clip_lengths_ppq, const sonare::midi::SysExStore& sysex_store,
     uint32_t* out_first_clip_id, const std::string& sequence_name = "") {
@@ -344,7 +344,9 @@ SonareError install_imported_midi(
   if (!tempos.empty()) commands.push_back(std::make_unique<arr::SetTempoSegment>(tempos));
   if (!sigs.empty()) commands.push_back(std::make_unique<arr::SetTimeSignatureSegment>(sigs));
   for (const auto& marker : markers) {
-    commands.push_back(std::make_unique<arr::SetMarker>(0, marker.first, marker.second));
+    commands.push_back(std::make_unique<arr::SetMarker>(0, marker.ppq, marker.text,
+                                                        static_cast<uint8_t>(marker.kind),
+                                                        marker.key_fifths, marker.key_minor));
   }
 
   uint32_t first_clip = 0;

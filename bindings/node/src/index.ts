@@ -95,6 +95,7 @@ import type {
   ProjectLoopMode,
   ProjectLoopRecordingDesc,
   ProjectLoopRecordingResult,
+  ProjectMarker,
   ProjectMidiCcBinding,
   ProjectMidiClipResult,
   ProjectMidiEvent,
@@ -134,6 +135,7 @@ export * from './features.js';
 export * from './metering.js';
 export {
   EXPECTED_PROJECT_ABI_VERSION,
+  MarkerKind,
   SYNTH_BODY_TYPES,
   SYNTH_ENGINE_MODES,
   SYNTH_FILTER_MODELS,
@@ -1514,6 +1516,31 @@ export class Project {
     return this.native.setMarker(markerId, ppq, name);
   }
 
+  /**
+   * Add or replace a marker from a full descriptor, including its kind and key
+   * signature. `marker.id` 0 (or omitted) allocates a new id. Returns the id.
+   */
+  setMarkerEx(marker: {
+    id?: number;
+    ppq: number;
+    name?: string;
+    kind?: number;
+    keyFifths?: number;
+    keyMinor?: boolean;
+  }): number {
+    return this.native.setMarkerEx(marker);
+  }
+
+  /** Read a project marker by index (0-based, in stored order). */
+  markerByIndex(index: number): ProjectMarker {
+    return this.native.markerByIndex(index);
+  }
+
+  /** Number of markers in the project value model. */
+  markerCount(): number {
+    return this.native.markerCount();
+  }
+
   /** Replace the project's tempo segment list. */
   setTempoSegments(segments: ReadonlyArray<ProjectTempoSegment>): void {
     this.native.setTempoSegments(segments);
@@ -2740,6 +2767,7 @@ export type {
   ProjectDiagnostic,
   ProjectLoopRecordingDesc,
   ProjectLoopRecordingResult,
+  ProjectMarker,
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectTrackDesc,

@@ -218,6 +218,12 @@ struct ProjectMarker {
   double ppq = 0.0;
   uint32_t id = 0;
   std::string name;
+  /// Marker kind + key signature. `kind` mirrors SonareMarkerKind values
+  /// (0 = marker, 1 = text, 2 = lyric, 3 = cue point, 4 = key signature); the
+  /// key fields apply only to the key-signature kind.
+  uint8_t kind = 0;
+  int8_t key_fifths = 0;
+  bool key_minor = false;
 };
 
 // ===========================================================================
@@ -393,8 +399,11 @@ class Project {
 
   // ---- Markers -------------------------------------------------------------
 
-  /// Adds a marker (id is allocated here) and returns its stable id.
-  uint32_t add_marker(double ppq, std::string name);
+  /// Adds a marker (id is allocated here) and returns its stable id. `kind`
+  /// mirrors SonareMarkerKind; the key fields apply only to the key-signature
+  /// kind.
+  uint32_t add_marker(double ppq, std::string name, uint8_t kind = 0, int8_t key_fifths = 0,
+                      bool key_minor = false);
   const std::vector<ProjectMarker>& markers() const noexcept { return markers_; }
 
   // ---- Annotation ----------------------------------------------------------

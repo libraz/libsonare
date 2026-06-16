@@ -327,6 +327,9 @@ bool registered_parameter_rejects_realtime(const SonareRealtimeEngine* engine, u
 void fill_c_marker(const transport::Marker& marker, SonareEngineMarker* out) {
   out->id = marker.id;
   out->ppq = marker.ppq;
+  out->kind = marker.kind;
+  out->key_fifths = marker.key_fifths;
+  out->key_minor = marker.key_minor ? 1 : 0;
   copy_text(out->name, sizeof(out->name), marker.name);
 }
 
@@ -649,7 +652,14 @@ SonareError sonare_engine_set_markers(SonareRealtimeEngine* engine,
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     engine->marker_strings.push_back(fixed_text(markers[i].name, sizeof(markers[i].name)));
-    prepared.push_back({markers[i].ppq, markers[i].id, engine->marker_strings.back().c_str()});
+    transport::Marker prepared_marker;
+    prepared_marker.ppq = markers[i].ppq;
+    prepared_marker.id = markers[i].id;
+    prepared_marker.name = engine->marker_strings.back().c_str();
+    prepared_marker.kind = markers[i].kind;
+    prepared_marker.key_fifths = markers[i].key_fifths;
+    prepared_marker.key_minor = markers[i].key_minor != 0;
+    prepared.push_back(prepared_marker);
   }
   engine->engine.set_markers(std::move(prepared));
   return SONARE_OK;

@@ -6,6 +6,7 @@ import {
   ErrorCode,
   engineAbiVersion,
   isSonareError,
+  MarkerKind,
   RealtimeEngine,
   voiceChangerAbiVersion,
 } from '../src/index.js';
@@ -175,6 +176,45 @@ describe('RealtimeEngine native binding', () => {
     }
     expect(badMonitorGainError.code).toBe(ErrorCode.InvalidParameter);
 
+    engine.destroy();
+  });
+
+  it('round-trips marker kind and key signature', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setMarkers([
+      { id: 1, ppq: 0, name: 'intro' },
+      {
+        id: 2,
+        ppq: 4,
+        name: 'G major',
+        kind: MarkerKind.KeySignature,
+        keyFifths: 1,
+        keyMinor: false,
+      },
+      {
+        id: 3,
+        ppq: 8,
+        name: 'A minor',
+        kind: MarkerKind.KeySignature,
+        keyFifths: 0,
+        keyMinor: true,
+      },
+    ]);
+    // A marker with no kind defaults to MarkerKind.Marker with neutral key fields.
+    const intro = engine.markerByIndex(0);
+    expect(intro.kind).toBe(MarkerKind.Marker);
+    expect(intro.keyFifths).toBe(0);
+    expect(intro.keyMinor).toBe(false);
+
+    const gMajor = engine.marker(2);
+    expect(gMajor.kind).toBe(MarkerKind.KeySignature);
+    expect(gMajor.keyFifths).toBe(1);
+    expect(gMajor.keyMinor).toBe(false);
+
+    const aMinor = engine.markerByIndex(2);
+    expect(aMinor.kind).toBe(MarkerKind.KeySignature);
+    expect(aMinor.keyFifths).toBe(0);
+    expect(aMinor.keyMinor).toBe(true);
     engine.destroy();
   });
 
