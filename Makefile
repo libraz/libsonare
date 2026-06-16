@@ -1,6 +1,6 @@
 .PHONY: all build release test test-slow test-optional-fixtures test-librosa-live clean rebuild format lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity
+       test-python test-python-slow test-node test-wasm parity abi-layout abi-layout-check check-abi-version ci-local
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -114,6 +114,35 @@ test-wasm: build-wasm-binding
 # it reads the binding sources directly and exits non-zero on active drift.
 parity:
 	python3 tools/parity/check_parity.py
+
+# Regenerate the authoritative C-ABI struct layout snapshot. Compiles a tiny
+# probe (needs a C++ compiler, not a full build) that reports sizeof/alignof/
+# offsetof straight from the headers. The JSON is tracked; the Python guard
+# (tests/test_abi_layout.py) and the WASM abi-layout vitest compare against it.
+abi-layout:
+	python3 tools/abi/gen_abi_layout.py
+
+# Fail if the committed snapshot is stale (regenerate + git-diff style check).
+abi-layout-check:
+	python3 tools/abi/gen_abi_layout.py --check
+
+# Verify the ABI-version mirror literals in every binding match the C source of
+# truth (per-subsystem + packed aggregate). Stdlib-only, read-only.
+check-abi-version:
+	python3 tools/abi/check_abi_versions.py
+
+# Aggregate the fast, non-modifying mechanical gates so a pre-commit run can't
+# silently skip one. Check-only (run `make format` first to auto-fix); excludes
+# the heavy build + ctest (`make test`) by design. Ordered build-independent
+# checks first, then the compiler-backed layout snapshot check (needs a C++
+# compiler, not a full build).
+ci-local:
+	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' | \
+		xargs -0 clang-format --dry-run --Werror
+	$(MAKE) lint
+	$(MAKE) parity
+	$(MAKE) check-abi-version
+	$(MAKE) abi-layout-check
 
 # Coverage targets
 coverage-build:

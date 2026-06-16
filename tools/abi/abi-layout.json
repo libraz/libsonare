@@ -1,0 +1,5127 @@
+{
+  "SonareAcousticResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "rt60",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "edt",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "c50",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "c80",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "d50",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "rt60_bands",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "edt_bands",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "c50_bands",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "c80_bands",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "band_count",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "name": "confidence",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "is_blind",
+        "offset": 68,
+        "size": 4
+      }
+    ],
+    "size": 72
+  },
+  "SonareAnalysisResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "bpm",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "bpm_confidence",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "key",
+        "offset": 8,
+        "size": 12
+      },
+      {
+        "name": "time_signature",
+        "offset": 20,
+        "size": 12
+      },
+      {
+        "name": "beat_times",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "beat_count",
+        "offset": 40,
+        "size": 8
+      }
+    ],
+    "size": 48
+  },
+  "SonareAutomationLaneDesc": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "target_param_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "points",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "point_count",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
+  "SonareAutomationPoint": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "ppq",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "value",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "curve_to_next",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareBpmAnalysisResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "bpm",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "candidates",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "candidate_count",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "autocorrelation",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "autocorrelation_count",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "tempogram",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "tempogram_count",
+        "offset": 48,
+        "size": 8
+      }
+    ],
+    "size": 56
+  },
+  "SonareBpmCandidate": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "bpm",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 4,
+        "size": 4
+      }
+    ],
+    "size": 8
+  },
+  "SonareBuiltinInstrumentBinding": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "destination_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "config",
+        "offset": 4,
+        "size": 28
+      }
+    ],
+    "size": 32
+  },
+  "SonareBuiltinSynthConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "waveform",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "gain",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "attack_ms",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "decay_ms",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "sustain",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "release_ms",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "polyphony",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 28
+  },
+  "SonareChord": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "root",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "quality",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "start",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "end",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "bass",
+        "offset": 20,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareChordAnalysisResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "chords",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "chord_count",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareChordDetectionOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "min_duration",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "smoothing_window",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "threshold",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "use_triads_only",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "n_fft",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "use_beat_sync",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "use_hmm",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "hmm_beam_width",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "use_key_context",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "key_root",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "key_mode",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "detect_inversions",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "chroma_method",
+        "offset": 52,
+        "size": 4
+      }
+    ],
+    "size": 56
+  },
+  "SonareChromaResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_chroma",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_frames",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "sample_rate",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "features",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "mean_energy",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
+  "SonareClipPageRequest": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "clip_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "channel",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "sample",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareClippingRegion": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "start_sample",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "end_sample",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "peak",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareClippingResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "clipped_samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "clipping_ratio",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "max_clipped_peak",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "regions",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "region_count",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
+  "SonareCompressorConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "threshold_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "ratio",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "attack_ms",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "release_ms",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "knee_db",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "makeup_gain_db",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "auto_makeup",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "detector",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "sidechain_hpf_enabled",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "sidechain_hpf_hz",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "pdr_time_ms",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "pdr_release_scale",
+        "offset": 44,
+        "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareCqtResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_bins",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_frames",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "sample_rate",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "magnitude",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "frequencies",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
+  "SonareDeclickConfig": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "threshold",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "neighbor_ratio",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "max_click_samples",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "lpc_order",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "residual_ratio",
+        "offset": 20,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareDeclipConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "clip_threshold",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "lpc_order",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "iterations",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "lpc_blend",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareDecrackleConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "threshold",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "mode",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "levels",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareDehumConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "fundamental_hz",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "harmonics",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "q",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "adaptive",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "search_range_hz",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "adaptation",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "frame_size",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "pll_bandwidth",
+        "offset": 28,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareDenoiseClassicalConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "mode",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "noise_estimator",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "n_fft",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "dd_alpha",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "gain_floor",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "over_subtraction",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "spectral_floor",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "noise_estimation_quantile",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "speech_presence_gain",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "gain_smoothing",
+        "offset": 40,
+        "size": 4
+      }
+    ],
+    "size": 44
+  },
+  "SonareDereverbClassicalConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "threshold",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "attenuation",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "n_fft",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "t60_sec",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "late_delay_ms",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "over_subtraction",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "spectral_floor",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "wpe_enabled",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "wpe_iterations",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "wpe_taps",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "wpe_strength",
+        "offset": 44,
+        "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareDynamicRangeResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "dynamic_range_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "low_percentile_db",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "high_percentile_db",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "window_rms_db",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "window_count",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
+  "SonareDynamicsResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "dynamic_range_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "peak_db",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "rms_db",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "crest_factor",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "loudness_range_db",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "is_compressed",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "loudness_times",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "loudness_rms_db",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "loudness_count",
+        "offset": 40,
+        "size": 8
+      }
+    ],
+    "size": 48
+  },
+  "SonareEngineBounceOptions": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "total_frames",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "block_size",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "num_channels",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "target_sample_rate",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "source_sample_rate",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "normalize_lufs",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "target_lufs",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "dither",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "dither_bits",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "dither_seed",
+        "offset": 40,
+        "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareEngineBounceResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "interleaved",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "sample_count",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "frames",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "num_channels",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "sample_rate",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "integrated_lufs",
+        "offset": 32,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareEngineBus": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "bus_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "gain_db",
+        "offset": 4,
+        "size": 4
+      }
+    ],
+    "size": 8
+  },
+  "SonareEngineCaptureBuffer": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "channels",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "num_channels",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "capacity_frames",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
+  "SonareEngineCaptureStatus": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "captured_frames",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "overflow_count",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "armed",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "punch_enabled",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "source",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "record_offset_samples",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
+  "SonareEngineClip": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "track_id",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "channels",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "num_channels",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "num_samples",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "start_ppq",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "clip_offset_samples",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "length_samples",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "loop",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "gain",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "fade_in_samples",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "name": "fade_out_samples",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "name": "warp_mode",
+        "offset": 80,
+        "size": 4
+      },
+      {
+        "name": "warp_anchors",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "name": "warp_anchor_count",
+        "offset": 96,
+        "size": 8
+      },
+      {
+        "name": "page_provider",
+        "offset": 104,
+        "size": 8
+      }
+    ],
+    "size": 112
+  },
+  "SonareEngineFreezeOptions": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "total_frames",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "block_size",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "num_channels",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "clip_id",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "start_ppq",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "gain",
+        "offset": 32,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareEngineFreezeResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "clip_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "frames",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "num_channels",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareEngineGraphConnection": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "source_node",
+        "offset": 0,
+        "size": 64
+      },
+      {
+        "name": "source_port",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "dest_node",
+        "offset": 68,
+        "size": 64
+      },
+      {
+        "name": "dest_port",
+        "offset": 132,
+        "size": 4
+      },
+      {
+        "name": "mix",
+        "offset": 136,
+        "size": 4
+      }
+    ],
+    "size": 140
+  },
+  "SonareEngineGraphNode": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "id",
+        "offset": 0,
+        "size": 64
+      },
+      {
+        "name": "type",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "gain_db",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "name": "num_ports",
+        "offset": 72,
+        "size": 4
+      }
+    ],
+    "size": 76
+  },
+  "SonareEngineGraphParameterBinding": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "param_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "node_id",
+        "offset": 4,
+        "size": 64
+      }
+    ],
+    "size": 68
+  },
+  "SonareEngineGraphSpec": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "nodes",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "node_count",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "connections",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "connection_count",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "parameter_bindings",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "parameter_binding_count",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "input_node",
+        "offset": 48,
+        "size": 64
+      },
+      {
+        "name": "output_node",
+        "offset": 112,
+        "size": 64
+      },
+      {
+        "name": "num_channels",
+        "offset": 176,
+        "size": 4
+      }
+    ],
+    "size": 184
+  },
+  "SonareEngineMarker": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "kind",
+        "offset": 4,
+        "size": 1
+      },
+      {
+        "name": "key_fifths",
+        "offset": 5,
+        "size": 1
+      },
+      {
+        "name": "key_minor",
+        "offset": 6,
+        "size": 1
+      },
+      {
+        "name": "ppq",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "name",
+        "offset": 16,
+        "size": 64
+      }
+    ],
+    "size": 80
+  },
+  "SonareEngineMetronomeConfig": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "enabled",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "beat_gain",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "accent_gain",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "click_samples",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "click_seconds",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
+  "SonareEngineMidiClipSchedule": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "track_id",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "start_sample",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "start_ppq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "length_samples",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "loop",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "loop_length_samples",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "destination_id",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "events",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "name": "event_count",
+        "offset": 64,
+        "size": 8
+      }
+    ],
+    "size": 72
+  },
+  "SonareEngineMidiEvent": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "render_frame",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "word0",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "word1",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "word2",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "word3",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "word_count",
+        "offset": 24,
+        "size": 1
+      },
+      {
+        "name": "group",
+        "offset": 25,
+        "size": 1
+      },
+      {
+        "name": "reserved",
+        "offset": 26,
+        "size": 2
+      },
+      {
+        "name": "sysex_handle",
+        "offset": 28,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareEngineTelemetry": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "type",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "error",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "render_frame",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "timeline_sample",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "audible_timeline_sample",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "graph_latency_samples_q8",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "value",
+        "offset": 36,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareEngineTrackLane": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "track_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "sends",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "send_count",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "output_bus_id",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareEngineTrackSend": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "bus_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "level_db",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "enabled",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareEngineWarpAnchor": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "warp_sample",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "source_sample",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareEqSnapshot": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "pre_left",
+        "offset": 0,
+        "size": 1024
+      },
+      {
+        "name": "pre_right",
+        "offset": 1024,
+        "size": 1024
+      },
+      {
+        "name": "post_left",
+        "offset": 2048,
+        "size": 1024
+      },
+      {
+        "name": "post_right",
+        "offset": 3072,
+        "size": 1024
+      },
+      {
+        "name": "pre_count",
+        "offset": 4096,
+        "size": 8
+      },
+      {
+        "name": "post_count",
+        "offset": 4104,
+        "size": 8
+      },
+      {
+        "name": "band_gain_db",
+        "offset": 4112,
+        "size": 96
+      },
+      {
+        "name": "profile_db",
+        "offset": 4208,
+        "size": 64
+      },
+      {
+        "name": "last_auto_gain_db",
+        "offset": 4272,
+        "size": 4
+      },
+      {
+        "name": "seq",
+        "offset": 4280,
+        "size": 8
+      }
+    ],
+    "size": 4288
+  },
+  "SonareGateConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "threshold_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "attack_ms",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "release_ms",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "range_db",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "hold_ms",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "close_threshold_db",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "key_hpf_hz",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 28
+  },
+  "SonareHpssResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "harmonic",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "percussive",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "sample_rate",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareInstrumentBinding": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "destination_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "callbacks",
+        "offset": 8,
+        "size": 40
+      }
+    ],
+    "size": 48
+  },
+  "SonareInstrumentCallbacks": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "user_data",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "prepare",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "on_event",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "render",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "latency_samples",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "tail_samples",
+        "offset": 36,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareInverseResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "rows",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_frames",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "data",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareKey": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "root",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "mode",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareKeyCandidate": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "key",
+        "offset": 0,
+        "size": 12
+      },
+      {
+        "name": "correlation",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareLufsResult": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "integrated_lufs",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "momentary_lufs",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "short_term_lufs",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "loudness_range",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareMasteringChainResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "sample_rate",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "input_lufs",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "output_lufs",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "applied_gain_db",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "stages",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "stages_count",
+        "offset": 40,
+        "size": 8
+      }
+    ],
+    "size": 48
+  },
+  "SonareMasteringChainStereoResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "left",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "right",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "sample_rate",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "input_lufs",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "output_lufs",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "applied_gain_db",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "stages",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "stages_count",
+        "offset": 48,
+        "size": 8
+      }
+    ],
+    "size": 56
+  },
+  "SonareMasteringConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "target_lufs",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "ceiling_db",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "true_peak_oversample",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareMasteringParam": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "key",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "value",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareMasteringResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "samples",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "sample_rate",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "input_lufs",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "output_lufs",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "applied_gain_db",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "latency_samples",
+        "offset": 32,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareMasteringStereoResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "left",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "right",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "sample_rate",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "input_lufs",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "output_lufs",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "applied_gain_db",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "latency_samples",
+        "offset": 40,
+        "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareMelResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_mels",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_frames",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "sample_rate",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "power",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "db",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
+  "SonareMelodyPoint": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "time",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "frequency",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareMelodyResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "points",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "point_count",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "pitch_range_octaves",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "pitch_stability",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "mean_frequency",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "vibrato_rate",
+        "offset": 28,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareMeterTelemetryRecord": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "target_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "render_frame",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "seq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "peak_db_l",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "peak_db_r",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "rms_db_l",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "rms_db_r",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "true_peak_db_l",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "true_peak_db_r",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "max_true_peak_db",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "correlation",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "mono_compat_width",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "momentary_lufs",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "short_term_lufs",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "integrated_lufs",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "name": "gain_reduction_db",
+        "offset": 72,
+        "size": 4
+      },
+      {
+        "name": "dropped_records",
+        "offset": 76,
+        "size": 4
+      }
+    ],
+    "size": 80
+  },
+  "SonareMfccResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_mfcc",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_frames",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "coefficients",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareMidiCcBinding": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "cc_number",
+        "offset": 0,
+        "size": 1
+      },
+      {
+        "name": "channel",
+        "offset": 1,
+        "size": 1
+      },
+      {
+        "name": "kind",
+        "offset": 2,
+        "size": 1
+      },
+      {
+        "name": "cc_lsb_number",
+        "offset": 3,
+        "size": 1
+      },
+      {
+        "name": "selector_msb",
+        "offset": 4,
+        "size": 1
+      },
+      {
+        "name": "selector_lsb",
+        "offset": 5,
+        "size": 1
+      },
+      {
+        "name": "reserved",
+        "offset": 6,
+        "size": 2
+      },
+      {
+        "name": "param_id",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "min_value",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "max_value",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
+  "SonareMidiEventPod": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "ppq",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "data0",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "data1",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareMidiRouteConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "filter_group",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "filter_channel",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "remap_channel",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "thru",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareMixGoniometerPoint": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "left",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "right",
+        "offset": 4,
+        "size": 4
+      }
+    ],
+    "size": 8
+  },
+  "SonareMixMeterSnapshot": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "peak_db_l",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "peak_db_r",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "rms_db_l",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "rms_db_r",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "correlation",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "mono_compat_width",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "mono_compat_peak",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "mono_compat_side_rms",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "likely_mono_compatible",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "momentary_lufs",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "short_term_lufs",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "integrated_lufs",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "gain_reduction_db",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "true_peak_db_l",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "true_peak_db_r",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "max_true_peak_db",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "seq",
+        "offset": 64,
+        "size": 8
+      }
+    ],
+    "size": 72
+  },
+  "SonareNotePairValidation": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "ok",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "unmatched_note_ons",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "unmatched_note_offs",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareParameterInfo": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "name",
+        "offset": 4,
+        "size": 64
+      },
+      {
+        "name": "unit",
+        "offset": 68,
+        "size": 16
+      },
+      {
+        "name": "min_value",
+        "offset": 84,
+        "size": 4
+      },
+      {
+        "name": "max_value",
+        "offset": 88,
+        "size": 4
+      },
+      {
+        "name": "default_value",
+        "offset": 92,
+        "size": 4
+      },
+      {
+        "name": "rt_safe",
+        "offset": 96,
+        "size": 4
+      },
+      {
+        "name": "default_curve",
+        "offset": 100,
+        "size": 4
+      }
+    ],
+    "size": 104
+  },
+  "SonarePhaseScopePoint": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "mid",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "side",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "radius",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "angle_rad",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonarePhaseScopeResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "points",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "point_count",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "correlation",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "average_abs_angle_rad",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "max_radius",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonarePitchResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_frames",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "f0",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "voiced_prob",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "voiced_flag",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "median_f0",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "mean_f0",
+        "offset": 36,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareProjectAssistSidecar": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "module_id",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "schema_version",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "target_track_id",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "region_start_ppq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "region_end_ppq",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "payload",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "payload_len",
+        "offset": 40,
+        "size": 8
+      }
+    ],
+    "size": 48
+  },
+  "SonareProjectBounceOptions": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "total_frames",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "block_size",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "num_channels",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "sample_rate",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "instrument_latency_samples",
+        "offset": 20,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareProjectChordSymbol": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "start_ppq",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "end_ppq",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "root_pc",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "quality",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "extensions",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "extension_count",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "slash_bass_pc",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "roman_numeral",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "modulation_boundary",
+        "offset": 56,
+        "size": 4
+      }
+    ],
+    "size": 64
+  },
+  "SonareProjectClipCompSegment": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "start_ppq",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "end_ppq",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "take_id",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareProjectClipDesc": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "track_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "is_midi",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "start_ppq",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "length_ppq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "source_offset_ppq",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "gain",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "audio_interleaved",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "audio_frames",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "audio_channels",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "audio_sample_rate",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "source_uri",
+        "offset": 64,
+        "size": 8
+      }
+    ],
+    "size": 72
+  },
+  "SonareProjectClipFade": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "length_ppq",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "curve",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareProjectClipTake": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "source_id",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "source_offset_ppq",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "name",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
+  "SonareProjectCompileResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "diagnostics",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "diagnostic_count",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "messages",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "has_timeline",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareProjectDiagnostic": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "code",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "severity",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "target_id",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareProjectKeySegment": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "start_ppq",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "end_ppq",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "tonic_pc",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "mode",
+        "offset": 20,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareProjectLoopRecordingDesc": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "track_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "reserved",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "start_ppq",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "loop_length_ppq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "audio_interleaved",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "audio_frames",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "audio_channels",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "audio_sample_rate",
+        "offset": 44,
+        "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareProjectMarker": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "kind",
+        "offset": 4,
+        "size": 1
+      },
+      {
+        "name": "key_fifths",
+        "offset": 5,
+        "size": 1
+      },
+      {
+        "name": "key_minor",
+        "offset": 6,
+        "size": 1
+      },
+      {
+        "name": "ppq",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "name",
+        "offset": 16,
+        "size": 64
+      }
+    ],
+    "size": 80
+  },
+  "SonareProjectTempoSegment": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "start_ppq",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "bpm",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "start_sample",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "end_bpm",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
+  "SonareProjectTimeSignatureSegment": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "start_ppq",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "numerator",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "denominator",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareProjectTrackDesc": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "kind",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "name",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareProjectWarpAnchor": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "warp_sample",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "source_sample",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareProjectWarpMapDesc": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "name",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "anchors",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "anchor_count",
+        "offset": 24,
+        "size": 8
+      }
+    ],
+    "size": 32
+  },
+  "SonareRealtimeVoiceChangerConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "input_gain_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "output_gain_db",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "wet_mix",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "retune_semitones",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "retune_mix",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "retune_grain_size",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "formant_factor",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "formant_amount",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "formant_body",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "formant_brightness",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "formant_nasal",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "eq_highpass_hz",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "eq_body_db",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "eq_presence_db",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "eq_air_db",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "gate_threshold_db",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "gate_attack_ms",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "gate_release_ms",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "name": "gate_range_db",
+        "offset": 72,
+        "size": 4
+      },
+      {
+        "name": "compressor_threshold_db",
+        "offset": 76,
+        "size": 4
+      },
+      {
+        "name": "compressor_ratio",
+        "offset": 80,
+        "size": 4
+      },
+      {
+        "name": "compressor_attack_ms",
+        "offset": 84,
+        "size": 4
+      },
+      {
+        "name": "compressor_release_ms",
+        "offset": 88,
+        "size": 4
+      },
+      {
+        "name": "compressor_makeup_gain_db",
+        "offset": 92,
+        "size": 4
+      },
+      {
+        "name": "deesser_frequency_hz",
+        "offset": 96,
+        "size": 4
+      },
+      {
+        "name": "deesser_threshold_db",
+        "offset": 100,
+        "size": 4
+      },
+      {
+        "name": "deesser_ratio",
+        "offset": 104,
+        "size": 4
+      },
+      {
+        "name": "deesser_range_db",
+        "offset": 108,
+        "size": 4
+      },
+      {
+        "name": "reverb_mix",
+        "offset": 112,
+        "size": 4
+      },
+      {
+        "name": "reverb_time_ms",
+        "offset": 116,
+        "size": 4
+      },
+      {
+        "name": "reverb_damping",
+        "offset": 120,
+        "size": 4
+      },
+      {
+        "name": "reverb_seed",
+        "offset": 124,
+        "size": 4
+      },
+      {
+        "name": "limiter_ceiling_db",
+        "offset": 128,
+        "size": 4
+      },
+      {
+        "name": "limiter_release_ms",
+        "offset": 132,
+        "size": 4
+      },
+      {
+        "name": "limiter_enable_isp_limiter",
+        "offset": 136,
+        "size": 4
+      },
+      {
+        "name": "limiter_isp_ceiling_dbtp",
+        "offset": 140,
+        "size": 4
+      }
+    ],
+    "size": 144
+  },
+  "SonareRhythmResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "bpm",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "time_signature",
+        "offset": 4,
+        "size": 12
+      },
+      {
+        "name": "groove_type",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "syncopation",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "pattern_regularity",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "tempo_stability",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "beat_intervals",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "beat_interval_count",
+        "offset": 40,
+        "size": 8
+      }
+    ],
+    "size": 48
+  },
+  "SonareRirSynthConfig": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "length_m",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "width_m",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "height_m",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "source_x",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "source_y",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "source_z",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "listener_x",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "listener_y",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "listener_z",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "absorption",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "max_seconds",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "mixing_time_ms",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "crossfade_ms",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "ism_order",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "late_model",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "seed",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "absorption_bands",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "name": "absorption_band_count",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "name": "scattering_bands",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "name": "scattering_band_count",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "name": "material_preset",
+        "offset": 96,
+        "size": 4
+      }
+    ],
+    "size": 104
+  },
+  "SonareRirSynthResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "rir",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "length",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "sample_rate",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "has_error",
+        "offset": 20,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareRoomEstimate": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "volume",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "length_m",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "width_m",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "height_m",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "drr_db",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "absorption_bands",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "rt60_bands",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "band_count",
+        "offset": 40,
+        "size": 8
+      }
+    ],
+    "size": 48
+  },
+  "SonareRoomEstimateConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "aspect_hint_lw",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "aspect_hint_lh",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "reference_absorption",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "min_decay_db",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "noise_floor_margin_db",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "prefer_eyring",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "n_octave_bands",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "mode",
+        "offset": 28,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareRoomMorphConfig": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "length_m",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "width_m",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "height_m",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "source_x",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "source_y",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "source_z",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "listener_x",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "listener_y",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "listener_z",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "absorption",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "source_tail_suppression",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "wet",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "max_seconds",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "mixing_time_ms",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "crossfade_ms",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "ism_order",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "late_model",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "seed",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "name": "absorption_bands",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "name": "absorption_band_count",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "name": "scattering_bands",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "name": "scattering_band_count",
+        "offset": 96,
+        "size": 8
+      },
+      {
+        "name": "material_preset",
+        "offset": 104,
+        "size": 4
+      }
+    ],
+    "size": 112
+  },
+  "SonareSection": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "type",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "start",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "end",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "energy_level",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
+  "SonareSectionResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "sections",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "section_count",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareSf2InstrumentBinding": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "destination_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "config",
+        "offset": 4,
+        "size": 12
+      }
+    ],
+    "size": 16
+  },
+  "SonareSf2InstrumentConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "gain",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "polyphony",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareSf2ProgramStatus": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "channel",
+        "offset": 0,
+        "size": 1
+      },
+      {
+        "name": "program",
+        "offset": 1,
+        "size": 1
+      },
+      {
+        "name": "bank",
+        "offset": 2,
+        "size": 2
+      },
+      {
+        "name": "backend",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "preset_name",
+        "offset": 8,
+        "size": 64
+      }
+    ],
+    "size": 72
+  },
+  "SonareSpectrumResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "frequencies",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "magnitude",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "power",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "db",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "bin_count",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "n_fft",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "sample_rate",
+        "offset": 44,
+        "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareStftResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_bins",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_frames",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "n_fft",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "sample_rate",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "magnitude",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "power",
+        "offset": 32,
+        "size": 8
+      }
+    ],
+    "size": 40
+  },
+  "SonareStreamBarChord": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "bar_index",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "root",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "quality",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "start_time",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
+  "SonareStreamChordChange": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "root",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "quality",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "start_time",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareStreamConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "sample_rate",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_fft",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "n_mels",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "fmin",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "fmax",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "tuning_ref_hz",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "compute_magnitude",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "compute_mel",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "compute_chroma",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "compute_onset",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "compute_spectral",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "emit_every_n_frames",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "magnitude_downsample",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "key_update_interval_sec",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "bpm_update_interval_sec",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "window",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "output_format",
+        "offset": 68,
+        "size": 4
+      }
+    ],
+    "size": 72
+  },
+  "SonareStreamFrames": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_frames",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_mels",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "timestamps",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "mel",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "chroma",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "onset_strength",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "rms_energy",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "spectral_centroid",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "spectral_flatness",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "name": "chord_root",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "name": "chord_quality",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "name": "chord_confidence",
+        "offset": 80,
+        "size": 8
+      }
+    ],
+    "size": 88
+  },
+  "SonareStreamFramesI16": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_frames",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_mels",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "timestamps",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "mel",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "chroma",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "onset_strength",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "rms_energy",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "spectral_centroid",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "spectral_flatness",
+        "offset": 56,
+        "size": 8
+      }
+    ],
+    "size": 64
+  },
+  "SonareStreamFramesU8": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "n_frames",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "n_mels",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "timestamps",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "mel",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "chroma",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "onset_strength",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "rms_energy",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "spectral_centroid",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "spectral_flatness",
+        "offset": 56,
+        "size": 8
+      }
+    ],
+    "size": 64
+  },
+  "SonareStreamPatternScore": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "name",
+        "offset": 0,
+        "size": 64
+      },
+      {
+        "name": "score",
+        "offset": 64,
+        "size": 4
+      }
+    ],
+    "size": 68
+  },
+  "SonareStreamQuantizeConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "mel_db_min",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "mel_db_max",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "onset_max",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "rms_max",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "centroid_max",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
+  "SonareStreamStats": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "total_frames",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "total_samples",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "duration_seconds",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "bpm",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "bpm_confidence",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "bpm_candidate_count",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "key",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "key_minor",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "key_confidence",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "chord_root",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "chord_quality",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "chord_confidence",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "chord_start_time",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "current_bar",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "bar_duration",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "chord_progression_count",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "name": "chord_progression",
+        "offset": 80,
+        "size": 8
+      },
+      {
+        "name": "bar_chord_progression_count",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "name": "bar_chord_progression",
+        "offset": 96,
+        "size": 8
+      },
+      {
+        "name": "pattern_length",
+        "offset": 104,
+        "size": 4
+      },
+      {
+        "name": "voted_pattern_count",
+        "offset": 112,
+        "size": 8
+      },
+      {
+        "name": "voted_pattern",
+        "offset": 120,
+        "size": 8
+      },
+      {
+        "name": "detected_pattern_name",
+        "offset": 128,
+        "size": 64
+      },
+      {
+        "name": "detected_pattern_score",
+        "offset": 192,
+        "size": 4
+      },
+      {
+        "name": "all_pattern_scores_count",
+        "offset": 200,
+        "size": 8
+      },
+      {
+        "name": "all_pattern_scores",
+        "offset": 208,
+        "size": 8
+      },
+      {
+        "name": "accumulated_seconds",
+        "offset": 216,
+        "size": 4
+      },
+      {
+        "name": "used_frames",
+        "offset": 220,
+        "size": 4
+      },
+      {
+        "name": "updated",
+        "offset": 224,
+        "size": 4
+      }
+    ],
+    "size": 232
+  },
+  "SonareStreamingPlatform": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "name",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "target_lufs",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "ceiling_db",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareStringArray": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "items",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "count",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareSynthInstrumentBinding": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "destination_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "patch",
+        "offset": 4,
+        "size": 260
+      }
+    ],
+    "size": 264
+  },
+  "SonareSynthModRouting": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "source",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "destination",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "depth",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareSynthPatch": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "preset",
+        "offset": 4,
+        "size": 32
+      },
+      {
+        "name": "engine_mode",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "waveform",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "unison",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "detune_cents",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "drift_cents",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "drive",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "filter_model",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "filter_output",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "cutoff_hz",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "name": "resonance_q",
+        "offset": 72,
+        "size": 4
+      },
+      {
+        "name": "key_track",
+        "offset": 76,
+        "size": 4
+      },
+      {
+        "name": "env_to_cutoff_cents",
+        "offset": 80,
+        "size": 4
+      },
+      {
+        "name": "vel_to_cutoff_cents",
+        "offset": 84,
+        "size": 4
+      },
+      {
+        "name": "amp_attack_ms",
+        "offset": 88,
+        "size": 4
+      },
+      {
+        "name": "amp_decay_ms",
+        "offset": 92,
+        "size": 4
+      },
+      {
+        "name": "amp_sustain",
+        "offset": 96,
+        "size": 4
+      },
+      {
+        "name": "amp_release_ms",
+        "offset": 100,
+        "size": 4
+      },
+      {
+        "name": "filter_attack_ms",
+        "offset": 104,
+        "size": 4
+      },
+      {
+        "name": "filter_decay_ms",
+        "offset": 108,
+        "size": 4
+      },
+      {
+        "name": "filter_sustain",
+        "offset": 112,
+        "size": 4
+      },
+      {
+        "name": "filter_release_ms",
+        "offset": 116,
+        "size": 4
+      },
+      {
+        "name": "lfo_rate_hz",
+        "offset": 120,
+        "size": 4
+      },
+      {
+        "name": "lfo_to_pitch_cents",
+        "offset": 124,
+        "size": 4
+      },
+      {
+        "name": "lfo2_rate_hz",
+        "offset": 128,
+        "size": 4
+      },
+      {
+        "name": "glide_ms",
+        "offset": 132,
+        "size": 4
+      },
+      {
+        "name": "body",
+        "offset": 136,
+        "size": 4
+      },
+      {
+        "name": "body_mix",
+        "offset": 140,
+        "size": 4
+      },
+      {
+        "name": "stereo_spread",
+        "offset": 144,
+        "size": 4
+      },
+      {
+        "name": "num_mod_routings",
+        "offset": 148,
+        "size": 4
+      },
+      {
+        "name": "mod_routings",
+        "offset": 152,
+        "size": 96
+      },
+      {
+        "name": "gain",
+        "offset": 248,
+        "size": 4
+      },
+      {
+        "name": "polyphony",
+        "offset": 252,
+        "size": 4
+      },
+      {
+        "name": "bus_drive",
+        "offset": 256,
+        "size": 4
+      }
+    ],
+    "size": 260
+  },
+  "SonareTimbreFrame": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "brightness",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "warmth",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "density",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "roughness",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "complexity",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
+  "SonareTimbreResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "brightness",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "warmth",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "density",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "roughness",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "complexity",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "spectral_centroid",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "spectral_centroid_count",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "spectral_flatness",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "spectral_flatness_count",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "spectral_rolloff",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "name": "spectral_rolloff_count",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "name": "timbre_over_time",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "name": "timbre_over_time_count",
+        "offset": 80,
+        "size": 8
+      }
+    ],
+    "size": 88
+  },
+  "SonareTimeSignature": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "numerator",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "denominator",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "confidence",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareTransientShaperConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "attack_gain_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "sustain_gain_db",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "fast_attack_ms",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "fast_release_ms",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "slow_attack_ms",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "slow_release_ms",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "sensitivity",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "max_gain_db",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "gain_smoothing_ms",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "lookahead_ms",
+        "offset": 36,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareTransportState": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "playing",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "looping",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "render_frame",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "sample_position",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "ppq_position",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "bpm",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "loop_start_ppq",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "name": "loop_end_ppq",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "name": "sample_rate",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "name": "bar_start_ppq",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "name": "bar_count",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "name": "time_signature",
+        "offset": 80,
+        "size": 12
+      }
+    ],
+    "size": 96
+  },
+  "SonareTrimSilenceConfig": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "threshold",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "padding_samples",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "mode",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "gate_lufs",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "window_ms",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
+  "SonareVectorscopePoint": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "mid",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "side",
+        "offset": 4,
+        "size": 4
+      }
+    ],
+    "size": 8
+  },
+  "SonareVectorscopeResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "points",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "point_count",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareWaveformPeakPyramidResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "levels",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "level_count",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
+  },
+  "SonareWaveformPeaksResult": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "min",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "max",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "channels",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "bucket_count",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "samples_per_bucket",
+        "offset": 32,
+        "size": 8
+      }
+    ],
+    "size": 40
+  }
+}
