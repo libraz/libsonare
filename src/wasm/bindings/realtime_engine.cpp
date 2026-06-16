@@ -248,6 +248,42 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
     chain->set_chord(chord);
   }
 
+  if (const wasm_json::Value* arp_intervals = root.find("arpeggiator_intervals")) {
+    if (!arp_intervals->is_array()) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "MIDI-FX arpeggiator intervals must be an array");
+    }
+    const auto& values = arp_intervals->as_array();
+    if (values.empty() || values.size() > sonare::midi::ArpeggiatorConfig::kMaxArpSteps) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid MIDI-FX arpeggiator step count");
+    }
+    const double step_ppq = wasmJsonNumberOr(root, "arpeggiator_step_ppq", 0.0);
+    // Gate defaults to a full-length (legato) step when omitted.
+    const double gate_ppq = wasmJsonNumberOr(root, "arpeggiator_gate_ppq", step_ppq);
+    if (!std::isfinite(step_ppq) || step_ppq <= 0.0 || !std::isfinite(gate_ppq) ||
+        gate_ppq <= 0.0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid MIDI-FX arpeggiator timing");
+    }
+    sonare::midi::ArpeggiatorConfig arpeggiator;
+    arpeggiator.enabled = true;
+    arpeggiator.steps = values.size();
+    for (size_t i = 0; i < values.size(); ++i) {
+      if (!values[i].is_number()) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "MIDI-FX arpeggiator intervals must be numeric");
+      }
+      arpeggiator.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
+    }
+    arpeggiator.step_frames = std::max<int64_t>(
+        1, static_cast<int64_t>(std::llround(step_ppq * sonare::midi::kMidiFxPpqScale)));
+    const int64_t gate_frames = std::max<int64_t>(
+        1, static_cast<int64_t>(std::llround(gate_ppq * sonare::midi::kMidiFxPpqScale)));
+    arpeggiator.gate_frames = std::min(gate_frames, arpeggiator.step_frames);
+    chain->set_arpeggiator(arpeggiator);
+  }
+
   const bool has_humanize = wasmJsonHasNumber(root, "humanize_ppq") ||
                             wasmJsonHasNumber(root, "humanize_velocity") ||
                             wasmJsonHasNumber(root, "seed");

@@ -556,9 +556,21 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.clearMidiCcBindings();
       expect(engine.midiCcBindingCount()).toBe(0);
       expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}')).not.toThrow();
+      expect(() =>
+        engine.setMidiFx(
+          0,
+          '{"arpeggiator_intervals":[0,12],"arpeggiator_step_ppq":0.25,"arpeggiator_gate_ppq":0.125}',
+        ),
+      ).not.toThrow();
       expect(() => engine.clearMidiFx(0)).not.toThrow();
       expect(() => engine.setMidiFx(0, '{bad json')).toThrow();
       expect(() => engine.setMidiFx(0, '{"quantize_ppq":0}')).toThrow();
+      expect(() =>
+        engine.setMidiFx(0, '{"arpeggiator_intervals":[],"arpeggiator_step_ppq":0.25}'),
+      ).toThrow();
+      expect(() =>
+        engine.setMidiFx(0, '{"arpeggiator_intervals":[0],"arpeggiator_step_ppq":0}'),
+      ).toThrow();
       engine.setMidiInputSource(0);
       expect(engine.midiInputPendingCount()).toBe(0);
       engine.pushMidiInputNoteOn(0, 0, 60, 100, 3);

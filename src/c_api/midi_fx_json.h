@@ -100,6 +100,32 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     chain->set_chord(chord);
   }
 
+  if (const json::Value* arp_intervals = root.find("arpeggiator_intervals")) {
+    if (!arp_intervals->is_array()) return SONARE_ERROR_INVALID_PARAMETER;
+    const auto& values = arp_intervals->as_array();
+    if (values.empty() || values.size() > sonare::midi::ArpeggiatorConfig::kMaxArpSteps) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    const double step_ppq = number_or(root, "arpeggiator_step_ppq", 0.0);
+    if (!std::isfinite(step_ppq) || step_ppq <= 0.0) return SONARE_ERROR_INVALID_PARAMETER;
+    // Gate defaults to a full-length (legato) step when omitted.
+    const double gate_ppq = number_or(root, "arpeggiator_gate_ppq", step_ppq);
+    if (!std::isfinite(gate_ppq) || gate_ppq <= 0.0) return SONARE_ERROR_INVALID_PARAMETER;
+    sonare::midi::ArpeggiatorConfig arpeggiator;
+    arpeggiator.enabled = true;
+    arpeggiator.steps = values.size();
+    for (size_t i = 0; i < values.size(); ++i) {
+      if (!values[i].is_number()) return SONARE_ERROR_INVALID_PARAMETER;
+      arpeggiator.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
+    }
+    arpeggiator.step_frames = std::max<int64_t>(
+        1, static_cast<int64_t>(std::llround(step_ppq * sonare::midi::kMidiFxPpqScale)));
+    const int64_t gate_frames = std::max<int64_t>(
+        1, static_cast<int64_t>(std::llround(gate_ppq * sonare::midi::kMidiFxPpqScale)));
+    arpeggiator.gate_frames = std::min(gate_frames, arpeggiator.step_frames);
+    chain->set_arpeggiator(arpeggiator);
+  }
+
   const bool has_humanize = has_number(root, "humanize_ppq") ||
                             has_number(root, "humanize_velocity") || has_number(root, "seed");
   if (has_humanize) {

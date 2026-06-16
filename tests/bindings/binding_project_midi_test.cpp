@@ -639,6 +639,61 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface bakes an arpeggiator into gated steps", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  SonareMidiEventPod events[2]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0, 0, 0, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+
+  // Two steps walking root then octave, an eighth-note apart, gated to a
+  // sixteenth. The single held note expands into two short gated note pairs and
+  // the original note-off is consumed by the arpeggiator.
+  const char* config =
+      "{\"arpeggiator_intervals\":[0,12],\"arpeggiator_step_ppq\":0.25,"
+      "\"arpeggiator_gate_ppq\":0.125}";
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, config) == SONARE_OK);
+
+  uint8_t* bytes = nullptr;
+  size_t len = 0;
+  REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_OK);
+  const auto imported = sonare::midi::import_smf(bytes, len);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 4);
+
+  bool saw_root_step = false;
+  bool saw_octave_step = false;
+  for (const auto& event : imported.clips[0].events()) {
+    if (!event.ump.is_note_on()) continue;
+    if (event.ump.note_number() == 60 && event.ppq == Catch::Approx(0.0)) {
+      saw_root_step = true;
+    }
+    if (event.ump.note_number() == 72 && event.ppq == Catch::Approx(0.25)) {
+      saw_octave_step = true;
+    }
+  }
+  REQUIRE(saw_root_step);
+  REQUIRE(saw_octave_step);
+
+  // An empty interval list and a non-positive step are rejected by the parser.
+  REQUIRE(sonare_project_set_midi_fx(
+              project, clip, "{\"arpeggiator_intervals\":[],\"arpeggiator_step_ppq\":0.25}") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_midi_fx(
+              project, clip, "{\"arpeggiator_intervals\":[0],\"arpeggiator_step_ppq\":0}") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_free_bytes(bytes);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface validates MIDI note pairing", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
