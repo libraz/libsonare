@@ -25,6 +25,21 @@ double note_to_hz(uint8_t note) noexcept {
   return 440.0 * std::pow(2.0, (static_cast<double>(note) - 69.0) / 12.0);
 }
 
+// Fixed MPE pitch-bend range (semitones for a full-scale bend in either
+// direction). A configurable range would require RPN 0, which this minimal
+// fallback deliberately does not parse.
+constexpr float kPitchBendRangeSemitones = 2.0f;
+
+// Amplitude boost at full pressure. A multiplier of 1 + depth*pressure keeps
+// pressure == 0 exactly unity (so non-MPE playback is bit-identical).
+constexpr float kPressureModDepth = 1.0f;
+
+// Multiplier on the base phase increment for a bend expressed in semitones.
+double bend_ratio(float semitones) noexcept {
+  if (semitones == 0.0f) return 1.0;
+  return std::pow(2.0, static_cast<double>(semitones) / 12.0);
+}
+
 }  // namespace
 
 namespace {
@@ -84,6 +99,8 @@ void BuiltinSynth::prepare(double sample_rate, int /*max_block_size*/) {
 void BuiltinSynth::reset() {
   for (auto& v : voices_) v = Voice{};
   sustain_down_ = {};
+  channel_bend_semitones_ = {};
+  channel_pressure_ = {};
   next_age_ = 1;
 }
 
@@ -108,8 +125,10 @@ void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity) noexce
   target->note = note;
   target->channel = channel;
   target->phase = 0.0;
-  target->phase_inc = note_to_hz(note) / sample_rate_;
+  target->base_phase_inc = note_to_hz(note) / sample_rate_;
+  target->phase_inc = target->base_phase_inc * bend_ratio(channel_bend_semitones_[channel & 0x0Fu]);
   target->velocity = clampf(velocity, 0.0f, 1.0f);
+  target->poly_pressure = 0.0f;
   target->env = 0.0f;
   target->stage = Stage::kAttack;
   target->key_down = true;
@@ -141,6 +160,37 @@ void BuiltinSynth::sustain_pedal(uint8_t channel, bool down) noexcept {
   }
 }
 
+void BuiltinSynth::pitch_bend(uint8_t channel, uint16_t bend14) noexcept {
+  if (!prepared_) return;
+  const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
+  // 14-bit unsigned, center 8192 -> [-1, +1] -> semitones.
+  const float norm = (static_cast<float>(bend14) - 8192.0f) / 8192.0f;
+  const float semitones = clampf(norm, -1.0f, 1.0f) * kPitchBendRangeSemitones;
+  channel_bend_semitones_[ch] = semitones;
+  const double ratio = bend_ratio(semitones);
+  for (auto& v : voices_) {
+    if (v.active && (v.channel & 0x0Fu) == ch) {
+      v.phase_inc = v.base_phase_inc * ratio;
+    }
+  }
+}
+
+void BuiltinSynth::channel_pressure(uint8_t channel, uint8_t pressure7) noexcept {
+  if (!prepared_) return;
+  channel_pressure_[channel & 0x0Fu] = clampf(static_cast<float>(pressure7) / 127.0f, 0.0f, 1.0f);
+}
+
+void BuiltinSynth::poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept {
+  if (!prepared_) return;
+  const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
+  const float value = clampf(static_cast<float>(pressure7) / 127.0f, 0.0f, 1.0f);
+  for (auto& v : voices_) {
+    if (v.active && v.note == note && (v.channel & 0x0Fu) == ch) {
+      v.poly_pressure = value;
+    }
+  }
+}
+
 void BuiltinSynth::all_notes_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   sustain_down_[channel & 0x0Fu] = false;
@@ -167,10 +217,11 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
       u.message_type() != UmpMessageType::kMidi2ChannelVoice) {
     return;
   }
+  const bool is_midi1 = u.message_type() == UmpMessageType::kMidi1ChannelVoice;
   if (u.is_note_on()) {
     // MIDI 1.0 velocity is 7-bit in data2; MIDI 2.0 carries 16-bit in word[1].
     float vel = 0.0f;
-    if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
+    if (is_midi1) {
       vel = static_cast<float>(u.data2_7bit()) / 127.0f;
     } else {
       vel = static_cast<float>((u.words[1] >> 16) & 0xFFFFu) / 65535.0f;
@@ -178,6 +229,22 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
     note_on(u.channel(), u.note_number(), vel);
   } else if (u.is_note_off()) {
     note_off(u.channel(), u.note_number());
+  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
+    // MIDI 1.0 splits the 14-bit value across data1 (LSB) / data2 (MSB); MIDI 2.0
+    // carries a 32-bit value in word[1] that scales down to the same 14-bit form.
+    const uint16_t bend14 =
+        is_midi1
+            ? static_cast<uint16_t>((static_cast<uint16_t>(u.data2_7bit()) << 7) | u.note_number())
+            : scale_bend_32_to_14(u.words[1]);
+    pitch_bend(u.channel(), bend14);
+  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kChannelPressure)) {
+    // MIDI 1.0 carries the 7-bit pressure in data1 (the note-number slot); MIDI
+    // 2.0 in word[1].
+    const uint8_t pressure7 = is_midi1 ? u.note_number() : scale_cc_32_to_7(u.words[1]);
+    channel_pressure(u.channel(), pressure7);
+  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPolyPressure)) {
+    const uint8_t pressure7 = is_midi1 ? u.data2_7bit() : scale_cc_32_to_7(u.words[1]);
+    poly_pressure(u.channel(), u.note_number(), pressure7);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
     // Channel-mode messages. The controller index rides word[0] bits 8..14 for
     // both protocols (same slot as a note number).
@@ -264,7 +331,11 @@ float BuiltinSynth::render_voice_sample(Voice& v) noexcept {
   v.phase += v.phase_inc;
   if (v.phase >= 1.0) v.phase -= std::floor(v.phase);
 
-  return osc * v.env * v.velocity;
+  // MPE pressure boosts amplitude. Channel and poly pressure combine, clamped to
+  // unity, so the multiplier is exactly 1.0 (no change) when neither is sent.
+  const float pressure = clampf(channel_pressure_[v.channel & 0x0Fu] + v.poly_pressure, 0.0f, 1.0f);
+  const float pressure_gain = 1.0f + kPressureModDepth * pressure;
+  return osc * v.env * v.velocity * pressure_gain;
 }
 
 void BuiltinSynth::process(float* const* channels, int num_channels, int num_samples) {

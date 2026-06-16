@@ -6,9 +6,12 @@
 ///        silence. A richer literature-backed instrument bank (FM, Karplus-Strong,
 ///        modal) is planned separately.
 ///
-/// This fallback intentionally implements only note on/off, sustain, channel
-/// mode, volume, expression and pan. Pitch bend, RPN and NRPN are supported by
-/// NativeSynth/Sf2Player, not by this minimal oscillator fallback.
+/// This fallback implements note on/off, sustain, channel mode, volume,
+/// expression and pan, plus MPE-style expression: per-channel pitch bend
+/// (default +/-2 semitone range) and channel / polyphonic pressure. Because MPE
+/// places each note on its own member channel, per-channel bend and pressure act
+/// per-note. RPN / NRPN (including a configurable bend range) remain the domain
+/// of NativeSynth / Sf2Player, not this minimal oscillator fallback.
 ///
 /// RT contract (inherited from MidiInstrument):
 ///   - prepare() runs on the control thread and is the ONLY place that allocates
@@ -80,10 +83,12 @@ class BuiltinSynth final : public MidiInstrument {
     bool active = false;
     uint8_t note = 0;
     uint8_t channel = 0;
-    double phase = 0.0;      // [0,1)
-    double phase_inc = 0.0;  // cycles per sample
-    float velocity = 0.0f;   // [0,1]
-    float env = 0.0f;        // current envelope level
+    double phase = 0.0;           // [0,1)
+    double base_phase_inc = 0.0;  // cycles per sample at the note pitch (no bend)
+    double phase_inc = 0.0;       // effective increment incl. channel pitch bend
+    float velocity = 0.0f;        // [0,1]
+    float poly_pressure = 0.0f;   // per-note (poly) pressure in [0,1]
+    float env = 0.0f;             // current envelope level
     Stage stage = Stage::kIdle;
     bool key_down = false;
     uint64_t age = 0;  // start order, for deterministic voice stealing
@@ -92,6 +97,12 @@ class BuiltinSynth final : public MidiInstrument {
   void note_on(uint8_t channel, uint8_t note, float velocity) noexcept;
   void note_off(uint8_t channel, uint8_t note) noexcept;
   void sustain_pedal(uint8_t channel, bool down) noexcept;
+  // MPE-style expression. Pitch bend is a per-channel 14-bit value (center 8192)
+  // mapped through a fixed +/-2 semitone range; channel pressure applies to every
+  // voice on the channel, poly pressure to the single matching note.
+  void pitch_bend(uint8_t channel, uint16_t bend14) noexcept;
+  void channel_pressure(uint8_t channel, uint8_t pressure7) noexcept;
+  void poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept;
   // Channel-mode "All Notes Off" (CC#123): release every sounding voice on the
   // channel (graceful, honours the release tail). `all_sound_off` (CC#120)
   // silences them immediately, bypassing the release stage.
@@ -111,6 +122,11 @@ class BuiltinSynth final : public MidiInstrument {
   float release_inc_ = 1.0f;
 
   std::array<bool, 16> sustain_down_{};
+  // Per-channel MPE expression state. Bend is stored in semitones (0 == centered);
+  // pressure in [0,1]. Both default to neutral so a project that sends no
+  // expression bounces bit-identically to the pre-MPE synth.
+  std::array<float, 16> channel_bend_semitones_{};
+  std::array<float, 16> channel_pressure_{};
   std::vector<Voice> voices_;
 };
 
