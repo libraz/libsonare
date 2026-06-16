@@ -4,11 +4,9 @@ import type {
   EngineCaptureStatus,
   EngineClip,
   EngineMarker,
-  EngineMeterTelemetry,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
-  EngineTelemetry,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
@@ -16,7 +14,6 @@ import type {
   EngineTransportState,
   EqBand,
   MixerRealtimeBuffer,
-  RealtimeVoiceChangerConfigInput,
 } from './index';
 import {
   engineCapabilities,
@@ -26,7 +23,6 @@ import {
   RealtimeEngine,
   RealtimeVoiceChanger,
 } from './index';
-import type { AutomationCurve } from './public_types';
 import type { SonareModule } from './sonare.js';
 import type { SonareRtModule } from './sonare-rt';
 
@@ -37,104 +33,168 @@ import type { SonareRtModule } from './sonare-rt';
 // `index` module.
 export { init, isInitialized } from './index';
 
-export interface SonareWorkletProcessorOptions {
-  sceneJson: string;
-  sampleRate?: number;
-  blockSize?: number;
-  stripCount?: number;
-  meterIntervalFrames?: number;
-  meterSharedBuffer?: SharedArrayBuffer;
-  meterRingCapacity?: number;
-  spectrumIntervalFrames?: number;
-  spectrumBands?: number;
-  spectrumSharedBuffer?: SharedArrayBuffer;
-  spectrumRingCapacity?: number;
-}
+import type { WorkletInput, WorkletOutput } from './worklet/audio_types';
+import {
+  isEngineCaptureRequestMessage,
+  isEngineCaptureResponseMessage,
+  isEngineCommandRecord,
+  isEngineSyncMessage,
+  isEngineTelemetryRecord,
+  isEngineTransportRequestMessage,
+  isEngineTransportResponseMessage,
+  isMeterSnapshot,
+  isRealtimeVoiceChangerMessage,
+  isWorkletMessage,
+} from './worklet/guards';
+import {
+  DEFAULT_METRONOME_CONFIG,
+  type ResolvedMetronomeConfig,
+  resolveMetronomeConfig,
+  type SonareEngineCaptureRequestMessage,
+  type SonareEngineCaptureResponseMessage,
+  type SonareEngineInstrumentSyncMessage,
+  type SonareEngineSyncCaptureMessage,
+  type SonareEngineSyncMessage,
+  type SonareEngineTransportFacade,
+  type SonareEngineTransportRequestMessage,
+  type SonareEngineTransportResponseMessage,
+  type SonareRealtimeEngineNodeCapabilities,
+  type SonareRealtimeEngineNodeOptions,
+  type SonareRealtimeEngineWorkletProcessorOptions,
+  type SonareRealtimeVoiceChangerMessage,
+  type SonareRealtimeVoiceChangerWorkletProcessorOptions,
+  type SonareRtRealtimeEngineRuntimeOptions,
+  type SonareWorkletMessage,
+  type SonareWorkletProcessorOptions,
+  type WorkletPort,
+  type WorkletTransport,
+} from './worklet/messages';
+// --- internal modules (split out of this file; bundled back into a single
+// dist/worklet.js by tsup, so the public surface is unchanged) ---
+import {
+  createSonareEngineCommandRingBuffer,
+  createSonareEngineTelemetryRingBuffer,
+  createSonareMeterRingBuffer,
+  ENGINE_MIXER_PARAM_FADER_DB,
+  ENGINE_MIXER_PARAM_PAN,
+  encodeFrameHi,
+  encodeFrameLo,
+  engineMixerBusTarget,
+  engineMixerLaneTarget,
+  engineMixerMasterTarget,
+  engineRingFromSharedBuffer,
+  isRecord,
+  magnitudeToDb,
+  meterFromEngine,
+  meterRingFromSharedBuffer,
+  popSonareEngineCommandRingBuffer,
+  pushSonareEngineCommandRingBuffer,
+  readSonareEngineTelemetryRingBuffer,
+  readSonareMeterRingBuffer,
+  type SharedMeterRingWriter,
+  type SharedSpectrumRingWriter,
+  SONARE_ENGINE_COMMAND_RECORD_BYTES,
+  SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+  SONARE_METER_RING_RECORD_FLOATS,
+  type SonareEngineCommandRecord,
+  type SonareEngineCommandRingBuffer,
+  SonareEngineCommandType,
+  SonareEngineTelemetryError,
+  type SonareEngineTelemetryRecord,
+  type SonareEngineTelemetryRingBuffer,
+  SonareEngineTelemetryType,
+  type SonareMeterRingBuffer,
+  type SonareWorkletMeterSnapshot,
+  type SonareWorkletSpectrumSnapshot,
+  spectrumRingFromSharedBuffer,
+  telemetryFromEngine,
+  toBigInt64,
+  toDb,
+  writeSonareEngineTelemetryRingBuffer,
+} from './worklet/protocol';
 
-export interface SonareRealtimeEngineWorkletProcessorOptions {
-  runtimeTarget?: 'embind' | 'sonare-rt';
-  rtModuleUrl?: string;
-  rtWasmBinary?: ArrayBuffer | Uint8Array;
-  wasmBinary?: ArrayBuffer | Uint8Array;
-  initialSyncMessages?: SonareEngineSyncMessage[];
-  initialCommands?: SonareEngineCommandRecord[];
-  sampleRate?: number;
-  blockSize?: number;
-  channelCount?: number;
-  meterIntervalFrames?: number;
-  commandSharedBuffer?: SharedArrayBuffer;
-  commandRingCapacity?: number;
-  telemetrySharedBuffer?: SharedArrayBuffer;
-  telemetryRingCapacity?: number;
-  meterSharedBuffer?: SharedArrayBuffer;
-  meterRingCapacity?: number;
-}
-
-export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
-  preset?: RealtimeVoiceChangerConfigInput;
-  sampleRate?: number;
-  blockSize?: number;
-  channelCount?: number;
-}
-
-export interface SonareRealtimeVoiceChangerSetConfigMessage {
-  type: 'setConfig';
-  preset: RealtimeVoiceChangerConfigInput;
-}
-
-export interface SonareRealtimeVoiceChangerResetMessage {
-  type: 'reset';
-}
-
-export interface SonareRealtimeVoiceChangerDestroyMessage {
-  type: 'destroy';
-}
-
-export type SonareRealtimeVoiceChangerMessage =
-  | SonareRealtimeVoiceChangerSetConfigMessage
-  | SonareRealtimeVoiceChangerResetMessage
-  | SonareRealtimeVoiceChangerDestroyMessage;
-
-export interface SonareRealtimeEngineNodeCapabilities {
-  mode: 'sab' | 'postMessage';
-  runtimeTarget: 'embind' | 'sonare-rt';
-  sharedArrayBuffer: boolean;
-  atomics: boolean;
-  audioWorklet: boolean;
-  engineAbiVersion?: number;
-  expectedEngineAbiVersion?: number;
-  abiCompatible?: boolean;
-  degradedReason?: string;
-  readyMessage?: boolean;
-}
-
-export interface SonareRealtimeEngineNodeOptions
-  extends SonareRealtimeEngineWorkletProcessorOptions {
-  processorName?: string;
-  moduleUrl?: string | URL;
-  rtModuleUrl?: string;
-  mode?: 'auto' | 'sab' | 'postMessage';
-  engineAbiVersion?: number;
-  expectedEngineAbiVersion?: number;
-  requireAbiCompatible?: boolean;
-  nodeFactory?: (
-    context: BaseAudioContext,
-    processorName: string,
-    options: AudioWorkletNodeOptions,
-  ) => AudioWorkletNode;
-}
-
-export interface SonareRtRealtimeEngineRuntimeOptions {
-  module: SonareRtModule;
-  memory: WebAssembly.Memory;
-  sampleRate?: number;
-  blockSize?: number;
-  channelCount?: number;
-  commandSharedBuffer?: SharedArrayBuffer;
-  commandRingCapacity?: number;
-  telemetrySharedBuffer?: SharedArrayBuffer;
-  telemetryRingCapacity?: number;
-}
+export type {
+  SonareEngineCaptureRequestMessage,
+  SonareEngineCaptureResponseMessage,
+  SonareEngineSyncAutomationMessage,
+  SonareEngineSyncBuiltinInstrumentMessage,
+  SonareEngineSyncCaptureMessage,
+  SonareEngineSyncClipsDeltaMessage,
+  SonareEngineSyncClipsMessage,
+  SonareEngineSyncLoadSoundFontMessage,
+  SonareEngineSyncMarkersMessage,
+  SonareEngineSyncMasterStripEqBandMessage,
+  SonareEngineSyncMasterStripInsertBypassedMessage,
+  SonareEngineSyncMessage,
+  SonareEngineSyncMetronomeMessage,
+  SonareEngineSyncMidiCcMessage,
+  SonareEngineSyncMidiClipsMessage,
+  SonareEngineSyncMidiNoteMessage,
+  SonareEngineSyncMidiPanicMessage,
+  SonareEngineSyncMixerMessage,
+  SonareEngineSyncSf2InstrumentMessage,
+  SonareEngineSyncSynthInstrumentMessage,
+  SonareEngineSyncTempoMessage,
+  SonareEngineSyncTrackStripEqBandMessage,
+  SonareEngineSyncTrackStripInsertBypassedMessage,
+  SonareEngineTransportFacade,
+  SonareEngineTransportRequestMessage,
+  SonareEngineTransportResponseMessage,
+  SonareRealtimeEngineNodeCapabilities,
+  SonareRealtimeEngineNodeOptions,
+  SonareRealtimeEngineWorkletProcessorOptions,
+  SonareRealtimeVoiceChangerDestroyMessage,
+  SonareRealtimeVoiceChangerMessage,
+  SonareRealtimeVoiceChangerResetMessage,
+  SonareRealtimeVoiceChangerSetConfigMessage,
+  SonareRealtimeVoiceChangerWorkletProcessorOptions,
+  SonareRtRealtimeEngineRuntimeOptions,
+  SonareWorkletDestroyMessage,
+  SonareWorkletMessage,
+  SonareWorkletProcessorOptions,
+  SonareWorkletScheduleInsertAutomationMessage,
+  SonareWorkletSetMeterIntervalMessage,
+  SonareWorkletTransportMessage,
+} from './worklet/messages';
+export {
+  createSonareEngineCommandRingBuffer,
+  createSonareEngineTelemetryRingBuffer,
+  createSonareMeterRingBuffer,
+  createSonareSpectrumRingBuffer,
+  decodeFrame,
+  encodeFrameHi,
+  encodeFrameLo,
+  popSonareEngineCommandRingBuffer,
+  pushSonareEngineCommandRingBuffer,
+  readSonareEngineTelemetryRingBuffer,
+  readSonareMeterRingBuffer,
+  readSonareSpectrumRingBuffer,
+  SONARE_ENGINE_COMMAND_RECORD_BYTES,
+  SONARE_ENGINE_RING_HEADER_INTS,
+  SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+  SONARE_METER_RING_HEADER_INTS,
+  SONARE_METER_RING_RECORD_FLOATS,
+  SONARE_SPECTRUM_RING_HEADER_INTS,
+  type SonareEngineCommandRecord,
+  type SonareEngineCommandRingBuffer,
+  SonareEngineCommandType,
+  SonareEngineTelemetryError,
+  type SonareEngineTelemetryRecord,
+  type SonareEngineTelemetryRingBuffer,
+  type SonareEngineTelemetryRingReadResult,
+  SonareEngineTelemetryType,
+  type SonareMeterRingBuffer,
+  type SonareMeterRingReadResult,
+  type SonareSpectrumRingBuffer,
+  type SonareSpectrumRingReadResult,
+  type SonareWorkletMeterSnapshot,
+  type SonareWorkletSpectrumSnapshot,
+  sonareEngineCommandRingBufferByteLength,
+  sonareEngineTelemetryRingBufferByteLength,
+  sonareMeterRingBufferByteLength,
+  sonareSpectrumRingBufferByteLength,
+  writeSonareEngineTelemetryRingBuffer,
+} from './worklet/protocol';
 
 export interface SonareEngineOptions extends SonareRealtimeEngineNodeOptions {
   offlineEngine?: RealtimeEngine;
@@ -142,1011 +202,10 @@ export interface SonareEngineOptions extends SonareRealtimeEngineNodeOptions {
   offlineChannelCount?: number;
 }
 
-export interface SonareEngineTransportFacade {
-  play(sampleTime?: number): boolean;
-  stop(sampleTime?: number): boolean;
-  seekPpq(ppq: number, sampleTime?: number): boolean;
-  seekSeconds(seconds: number, sampleTime?: number): boolean;
-  setTempo(bpm: number): void;
-  setTempoSegments(segments: readonly EngineTempoSegment[]): void;
-  setLoop(startPpq: number, endPpq: number, enabled?: boolean): boolean;
-}
-
 type SuspendableAudioContext = BaseAudioContext & {
   suspend?: () => Promise<void>;
   resume?: () => Promise<void>;
 };
-
-const ENGINE_MIXER_TARGET_BASE = 0x4d580000;
-const ENGINE_MIXER_PARAM_FADER_DB = 1;
-const ENGINE_MIXER_PARAM_PAN = 2;
-
-function engineMixerLaneTarget(laneIndex: number, paramKind: number): number {
-  return ENGINE_MIXER_TARGET_BASE | ((laneIndex & 0xff) << 8) | (paramKind & 0xff);
-}
-
-function engineMixerBusTarget(busIndex: number, paramKind: number): number {
-  return ENGINE_MIXER_TARGET_BASE | (((0xfe - busIndex) & 0xff) << 8) | (paramKind & 0xff);
-}
-
-function engineMixerMasterTarget(paramKind: number): number {
-  return ENGINE_MIXER_TARGET_BASE | (0xff << 8) | (paramKind & 0xff);
-}
-
-type WorkletInput = readonly (readonly Float32Array[])[];
-type WorkletOutput = Float32Array[][];
-
-export interface SonareWorkletScheduleInsertAutomationMessage {
-  type: 'scheduleInsertAutomation';
-  stripIndex: number;
-  insertIndex: number;
-  paramId: number;
-  value: number;
-  samplePos?: number;
-  curve?: AutomationCurve;
-}
-
-export interface SonareWorkletSetMeterIntervalMessage {
-  type: 'setMeterInterval';
-  frames: number;
-}
-
-export interface SonareWorkletDestroyMessage {
-  type: 'destroy';
-}
-
-export type SonareWorkletMessage =
-  | SonareWorkletScheduleInsertAutomationMessage
-  | SonareWorkletSetMeterIntervalMessage
-  | SonareWorkletDestroyMessage;
-
-export interface SonareWorkletMeterSnapshot {
-  type: 'meter';
-  targetId: number;
-  frame: number;
-  peakDbL: number;
-  peakDbR: number;
-  rmsDbL: number;
-  rmsDbR: number;
-  correlation: number;
-  truePeakDbL: number;
-  truePeakDbR: number;
-  momentaryLufs: number;
-  shortTermLufs: number;
-  integratedLufs: number;
-  gainReductionDb: number;
-}
-
-export interface SonareWorkletSpectrumSnapshot {
-  type: 'spectrum';
-  frame: number;
-  bands: Float32Array;
-}
-
-export type SonareWorkletTransportMessage =
-  | SonareWorkletMeterSnapshot
-  | SonareWorkletSpectrumSnapshot
-  | SonareEngineTelemetryRecord;
-
-export const SONARE_METER_RING_HEADER_INTS = 4;
-// Record layout: [frameLo, frameHi, targetId, peakDbL, peakDbR, rmsDbL, rmsDbR,
-// correlation, truePeakDbL, truePeakDbR, momentaryLufs, shortTermLufs,
-// integratedLufs, gainReductionDb].
-// The sample-frame index is monotonically increasing and quickly exceeds the
-// 2^24 exact-integer range of a single Float32 slot (~349 s at 48 kHz), so it is
-// stored split across two Float32 lanes (low 24 bits + high bits) for exact
-// reconstruction. See encodeFrameLo/encodeFrameHi/decodeFrame.
-export const SONARE_METER_RING_RECORD_FLOATS = 14;
-export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
-
-/** Base for splitting a frame index into two exactly-representable Float32 lanes. */
-const SONARE_FRAME_LANE_BASE = 0x1000000; // 2^24
-
-/** Low 24 bits of a frame index (exact in Float32). */
-export function encodeFrameLo(frame: number): number {
-  const f = Math.max(0, Math.floor(frame));
-  return f % SONARE_FRAME_LANE_BASE;
-}
-
-/** High bits of a frame index above 2^24 (exact in Float32 up to ~2^48). */
-export function encodeFrameHi(frame: number): number {
-  const f = Math.max(0, Math.floor(frame));
-  return Math.floor(f / SONARE_FRAME_LANE_BASE);
-}
-
-/** Reconstruct a frame index from its low/high Float32 lanes. */
-export function decodeFrame(lo: number, hi: number): number {
-  return hi * SONARE_FRAME_LANE_BASE + lo;
-}
-export const SONARE_ENGINE_RING_HEADER_INTS = 5;
-export const SONARE_ENGINE_COMMAND_RECORD_BYTES = 32;
-export const SONARE_ENGINE_TELEMETRY_RECORD_BYTES = 48;
-
-export enum SonareEngineCommandType {
-  SetParam = 0,
-  SetParamSmoothed = 1,
-  TransportPlay = 2,
-  TransportStop = 3,
-  TransportSeekSample = 4,
-  TransportSeekPpq = 5,
-  SetTempoMap = 6,
-  SetLoop = 7,
-  SwapGraph = 8,
-  SwapAutomation = 9,
-  SetSoloMute = 10,
-  AddClip = 11,
-  RemoveClip = 12,
-  ArmRecord = 13,
-  Punch = 14,
-  SetMetronome = 15,
-  SetMarker = 16,
-  SeekMarker = 17,
-}
-
-export enum SonareEngineTelemetryType {
-  ProcessBlock = 0,
-  Error = 1,
-}
-
-export enum SonareEngineTelemetryError {
-  None = 0,
-  CommandQueueOverflow = 1,
-  PendingCommandOverflow = 2,
-  BoundaryOverflow = 3,
-  TelemetryOverflow = 4,
-  CaptureOverflow = 5,
-  MaxBlockExceeded = 6,
-  UnknownTarget = 7,
-  NonRealtimeSafeParameter = 8,
-  NotPrepared = 9,
-  NonQueueableCommand = 10,
-  AutomationBindTargetOverflow = 11,
-  StaleAutomationLanes = 12,
-  SmoothedParameterCapacity = 13,
-}
-
-interface WorkletTransport {
-  postMessage?: (
-    message:
-      | SonareWorkletTransportMessage
-      | SonareEngineCaptureResponseMessage
-      | SonareEngineTransportResponseMessage,
-    transfer?: Transferable[],
-  ) => void;
-  onMeter?: (meter: SonareWorkletMeterSnapshot) => void;
-  onSpectrum?: (spectrum: SonareWorkletSpectrumSnapshot) => void;
-}
-
-interface ResolvedMetronomeConfig {
-  beatGain: number;
-  accentGain: number;
-  clickSamples: number;
-}
-
-// Fallback metronome gains/click length used by the worklet consumer until the
-// host posts a 'syncMetronome' config. Aligned with the embind setMetronome
-// defaults (src/wasm/bindings.cpp) so offline and realtime metronomes match.
-const DEFAULT_METRONOME_CONFIG: ResolvedMetronomeConfig = {
-  beatGain: 0.35,
-  accentGain: 0.7,
-  clickSamples: 96,
-};
-
-function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedMetronomeConfig {
-  return {
-    beatGain: config.beatGain ?? DEFAULT_METRONOME_CONFIG.beatGain,
-    accentGain: config.accentGain ?? DEFAULT_METRONOME_CONFIG.accentGain,
-    clickSamples: config.clickSamples ?? DEFAULT_METRONOME_CONFIG.clickSamples,
-  };
-}
-
-export interface SonareMeterRingBuffer {
-  sharedBuffer: SharedArrayBuffer;
-  header: Int32Array;
-  records: Float32Array;
-  capacity: number;
-}
-
-export interface SonareMeterRingReadResult {
-  nextReadIndex: number;
-  meters: SonareWorkletMeterSnapshot[];
-}
-
-export interface SonareSpectrumRingBuffer {
-  sharedBuffer: SharedArrayBuffer;
-  header: Int32Array;
-  records: Float32Array;
-  capacity: number;
-  bands: number;
-}
-
-export interface SonareSpectrumRingReadResult {
-  nextReadIndex: number;
-  spectra: SonareWorkletSpectrumSnapshot[];
-}
-
-export interface SonareEngineCommandRecord {
-  type: SonareEngineCommandType | number;
-  targetId?: number;
-  sampleTime?: number | bigint;
-  argFloat?: number;
-  argInt?: number | bigint;
-}
-
-// Out-of-band control messages posted from the main-thread SonareEngine facade
-// to the worklet engine processor over node.port. Unlike SonareEngineCommandRecord
-// (a small POD POSTed/ringed every block) these carry bulk/structured payloads
-// (clip audio buffers, marker lists, metronome config) that cannot fit the
-// fixed-size SAB command record, so they are applied OUTSIDE process() — the
-// audio-thread equivalent of the engine's control-thread RtPublisher setters.
-export interface SonareEngineSyncClipsMessage {
-  type: 'syncClips';
-  clips: EngineClip[];
-}
-
-export interface SonareEngineSyncClipsDeltaMessage {
-  type: 'syncClipsDelta';
-  upserts: EngineClip[];
-  removeIds: number[];
-}
-
-export interface SonareEngineSyncMidiClipsMessage {
-  type: 'syncMidiClips';
-  clips: EngineMidiClipSchedule[];
-}
-
-export interface SonareEngineSyncMarkersMessage {
-  type: 'syncMarkers';
-  markers: EngineMarker[];
-}
-
-export interface SonareEngineSyncMetronomeMessage {
-  type: 'syncMetronome';
-  config: EngineMetronomeConfig;
-}
-
-export interface SonareEngineSyncAutomationMessage {
-  type: 'syncAutomation';
-  paramId: number;
-  points: EngineAutomationPoint[];
-}
-
-export interface SonareEngineSyncTempoMessage {
-  type: 'syncTempo';
-  bpm: number;
-  timeSignature: { numerator: number; denominator: number };
-  tempoSegments?: EngineTempoSegment[];
-  timeSignatureSegments?: EngineTimeSignatureSegment[];
-}
-
-export interface SonareEngineSyncMixerMessage {
-  type: 'syncMixer';
-  lanes: EngineTrackLane[];
-  buses?: EngineBus[];
-  trackStrips?: Array<{ trackId: number; sceneJson: string }>;
-  busStrips?: Array<{ busId: number; sceneJson: string }>;
-  masterStripJson?: string;
-  /** Lane insert sidechain bindings (replayed after lanes/strips). */
-  laneSidechains?: Array<{ trackId: number; insertIndex: number; sourceTrackId: number }>;
-}
-
-export interface SonareEngineSyncCaptureMessage {
-  type: 'syncCapture';
-  bufferFrames: number;
-  channels: number;
-  source: EngineCaptureStatus['source'];
-  recordOffsetSamples: number;
-  inputMonitor: { enabled: boolean; gain: number };
-}
-
-export interface SonareEngineSyncTrackStripEqBandMessage {
-  type: 'syncTrackStripEqBand';
-  trackId: number;
-  bandIndex: number;
-  bandJson: string;
-}
-
-export interface SonareEngineSyncMasterStripEqBandMessage {
-  type: 'syncMasterStripEqBand';
-  bandIndex: number;
-  bandJson: string;
-}
-
-export interface SonareEngineSyncTrackStripInsertBypassedMessage {
-  type: 'syncTrackStripInsertBypassed';
-  trackId: number;
-  insertIndex: number;
-  bypassed: boolean;
-  resetOnBypass: boolean;
-}
-
-export interface SonareEngineSyncMasterStripInsertBypassedMessage {
-  type: 'syncMasterStripInsertBypassed';
-  insertIndex: number;
-  bypassed: boolean;
-  resetOnBypass: boolean;
-}
-
-export interface SonareEngineSyncBuiltinInstrumentMessage {
-  type: 'syncBuiltinInstrument';
-  destinationId: number;
-  config: { destinationId?: number } & Record<string, unknown>;
-}
-
-export interface SonareEngineSyncSynthInstrumentMessage {
-  type: 'syncSynthInstrument';
-  destinationId: number;
-  patch: Record<string, unknown> | string;
-}
-
-export interface SonareEngineSyncSf2InstrumentMessage {
-  type: 'syncSf2Instrument';
-  destinationId: number;
-  config: { destinationId?: number; gain?: number; polyphony?: number };
-}
-
-export interface SonareEngineSyncLoadSoundFontMessage {
-  type: 'syncLoadSoundFont';
-  data: Uint8Array;
-}
-
-export interface SonareEngineSyncMidiNoteMessage {
-  type: 'syncMidiNoteOn' | 'syncMidiNoteOff';
-  destinationId: number;
-  group: number;
-  channel: number;
-  note: number;
-  velocity: number;
-  renderFrame: number;
-}
-
-export interface SonareEngineSyncMidiCcMessage {
-  type: 'syncMidiCc';
-  destinationId: number;
-  group: number;
-  channel: number;
-  controller: number;
-  value: number;
-  renderFrame: number;
-}
-
-export interface SonareEngineSyncMidiPanicMessage {
-  type: 'syncMidiPanic';
-  renderFrame: number;
-}
-
-type SonareEngineInstrumentSyncMessage =
-  | SonareEngineSyncBuiltinInstrumentMessage
-  | SonareEngineSyncSynthInstrumentMessage
-  | SonareEngineSyncSf2InstrumentMessage
-  | SonareEngineSyncLoadSoundFontMessage;
-
-export type SonareEngineSyncMessage =
-  | SonareEngineSyncClipsMessage
-  | SonareEngineSyncClipsDeltaMessage
-  | SonareEngineSyncMidiClipsMessage
-  | SonareEngineSyncMarkersMessage
-  | SonareEngineSyncMetronomeMessage
-  | SonareEngineSyncAutomationMessage
-  | SonareEngineSyncTempoMessage
-  | SonareEngineSyncMixerMessage
-  | SonareEngineSyncCaptureMessage
-  | SonareEngineSyncTrackStripEqBandMessage
-  | SonareEngineSyncMasterStripEqBandMessage
-  | SonareEngineSyncTrackStripInsertBypassedMessage
-  | SonareEngineSyncMasterStripInsertBypassedMessage
-  | SonareEngineSyncBuiltinInstrumentMessage
-  | SonareEngineSyncSynthInstrumentMessage
-  | SonareEngineSyncSf2InstrumentMessage
-  | SonareEngineSyncLoadSoundFontMessage
-  | SonareEngineSyncMidiNoteMessage
-  | SonareEngineSyncMidiCcMessage
-  | SonareEngineSyncMidiPanicMessage;
-
-export interface SonareEngineTelemetryRecord {
-  type: SonareEngineTelemetryType | number;
-  error: SonareEngineTelemetryError | number;
-  renderFrame: number;
-  timelineSample: number;
-  audibleTimelineSample: number;
-  graphLatencySamplesQ8: number;
-  value: number;
-}
-
-export interface SonareEngineCommandRingBuffer {
-  sharedBuffer: SharedArrayBuffer;
-  header: Int32Array;
-  view: DataView;
-  capacity: number;
-}
-
-export interface SonareEngineTelemetryRingBuffer {
-  sharedBuffer: SharedArrayBuffer;
-  header: Int32Array;
-  view: DataView;
-  capacity: number;
-}
-
-export interface SonareEngineTelemetryRingReadResult {
-  nextReadIndex: number;
-  telemetry: SonareEngineTelemetryRecord[];
-}
-
-interface SharedMeterRingWriter {
-  header: Int32Array;
-  records: Float32Array;
-  capacity: number;
-}
-
-interface SharedSpectrumRingWriter {
-  header: Int32Array;
-  records: Float32Array;
-  capacity: number;
-  bands: number;
-  recordFloats: number;
-}
-
-interface WorkletPort {
-  postMessage?: (message: unknown, transfer?: Transferable[]) => void;
-  onmessage?: (event: { data: unknown }) => void;
-  addEventListener?: (type: 'message', listener: (event: { data: unknown }) => void) => void;
-  start?: () => void;
-}
-
-export interface SonareEngineCaptureRequestMessage {
-  type: 'captureRequest';
-  requestId: number;
-  op: 'status' | 'read' | 'reset';
-}
-
-export interface SonareEngineCaptureResponseMessage {
-  type: 'captureResponse';
-  requestId: number;
-  ok: boolean;
-  status?: EngineCaptureStatus;
-  channels?: Float32Array[] | number[][];
-  error?: string;
-}
-
-export interface SonareEngineTransportRequestMessage {
-  type: 'transportRequest';
-  requestId: number;
-  op: 'state';
-}
-
-export interface SonareEngineTransportResponseMessage {
-  type: 'transportResponse';
-  requestId: number;
-  ok: boolean;
-  state?: EngineTransportState;
-  error?: string;
-}
-
-function toDb(value: number): number {
-  return value > 0 ? 20 * Math.log10(value) : Number.NEGATIVE_INFINITY;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isWorkletMessage(value: unknown): value is SonareWorkletMessage {
-  if (!isRecord(value) || typeof value.type !== 'string') {
-    return false;
-  }
-  return (
-    value.type === 'scheduleInsertAutomation' ||
-    value.type === 'setMeterInterval' ||
-    value.type === 'destroy'
-  );
-}
-
-function isEngineCommandRecord(value: unknown): value is SonareEngineCommandRecord {
-  return isRecord(value) && typeof value.type === 'number';
-}
-
-function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMessage {
-  if (!isRecord(value) || typeof value.type !== 'string') {
-    return false;
-  }
-  return (
-    value.type === 'syncClips' ||
-    value.type === 'syncClipsDelta' ||
-    value.type === 'syncMidiClips' ||
-    value.type === 'syncMarkers' ||
-    value.type === 'syncMetronome' ||
-    value.type === 'syncAutomation' ||
-    value.type === 'syncTempo' ||
-    value.type === 'syncMixer' ||
-    value.type === 'syncCapture' ||
-    value.type === 'syncTrackStripEqBand' ||
-    value.type === 'syncMasterStripEqBand' ||
-    value.type === 'syncTrackStripInsertBypassed' ||
-    value.type === 'syncMasterStripInsertBypassed' ||
-    value.type === 'syncBuiltinInstrument' ||
-    value.type === 'syncSynthInstrument' ||
-    value.type === 'syncSf2Instrument' ||
-    value.type === 'syncLoadSoundFont' ||
-    value.type === 'syncMidiNoteOn' ||
-    value.type === 'syncMidiNoteOff' ||
-    value.type === 'syncMidiCc' ||
-    value.type === 'syncMidiPanic'
-  );
-}
-
-function isEngineCaptureRequestMessage(value: unknown): value is SonareEngineCaptureRequestMessage {
-  return (
-    isRecord(value) &&
-    value.type === 'captureRequest' &&
-    typeof value.requestId === 'number' &&
-    (value.op === 'status' || value.op === 'read' || value.op === 'reset')
-  );
-}
-
-function isEngineCaptureResponseMessage(
-  value: unknown,
-): value is SonareEngineCaptureResponseMessage {
-  return (
-    isRecord(value) &&
-    value.type === 'captureResponse' &&
-    typeof value.requestId === 'number' &&
-    typeof value.ok === 'boolean'
-  );
-}
-
-function isEngineTransportRequestMessage(
-  value: unknown,
-): value is SonareEngineTransportRequestMessage {
-  return (
-    isRecord(value) &&
-    value.type === 'transportRequest' &&
-    typeof value.requestId === 'number' &&
-    value.op === 'state'
-  );
-}
-
-function isEngineTransportResponseMessage(
-  value: unknown,
-): value is SonareEngineTransportResponseMessage {
-  return (
-    isRecord(value) &&
-    value.type === 'transportResponse' &&
-    typeof value.requestId === 'number' &&
-    typeof value.ok === 'boolean'
-  );
-}
-
-function isRealtimeVoiceChangerMessage(value: unknown): value is SonareRealtimeVoiceChangerMessage {
-  if (!isRecord(value) || typeof value.type !== 'string') {
-    return false;
-  }
-  return value.type === 'setConfig' || value.type === 'reset' || value.type === 'destroy';
-}
-
-function isEngineTelemetryRecord(value: unknown): value is SonareEngineTelemetryRecord {
-  return (
-    isRecord(value) &&
-    typeof value.type === 'number' &&
-    typeof value.error === 'number' &&
-    typeof value.renderFrame === 'number' &&
-    typeof value.timelineSample === 'number' &&
-    typeof value.audibleTimelineSample === 'number' &&
-    typeof value.graphLatencySamplesQ8 === 'number' &&
-    typeof value.value === 'number'
-  );
-}
-
-function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnapshot {
-  return (
-    isRecord(value) &&
-    value.type === 'meter' &&
-    typeof value.frame === 'number' &&
-    typeof value.peakDbL === 'number' &&
-    typeof value.peakDbR === 'number' &&
-    typeof value.rmsDbL === 'number' &&
-    typeof value.rmsDbR === 'number' &&
-    typeof value.correlation === 'number' &&
-    (typeof value.targetId === 'number' || value.targetId === undefined)
-  );
-}
-
-export function sonareMeterRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  return (
-    SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
-    clampedCapacity * SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT
-  );
-}
-
-export function createSonareMeterRingBuffer(capacity = 128): SonareMeterRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const sharedBuffer = new SharedArrayBuffer(sonareMeterRingBufferByteLength(clampedCapacity));
-  const ring = meterRingFromSharedBuffer(sharedBuffer, clampedCapacity);
-  Atomics.store(ring.header, 0, 0);
-  Atomics.store(ring.header, 1, clampedCapacity);
-  Atomics.store(ring.header, 2, SONARE_METER_RING_RECORD_FLOATS);
-  Atomics.store(ring.header, 3, 0);
-  return { sharedBuffer, header: ring.header, records: ring.records, capacity: ring.capacity };
-}
-
-export function readSonareMeterRingBuffer(
-  ring: SonareMeterRingBuffer,
-  readIndex = 0,
-): SonareMeterRingReadResult {
-  const writeIndex = Atomics.load(ring.header, 0);
-  const recordFloats = Atomics.load(ring.header, 2) || SONARE_METER_RING_RECORD_FLOATS;
-  const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
-  const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
-  const meters: SonareWorkletMeterSnapshot[] = [];
-  for (let index = firstReadable; index < writeIndex; index++) {
-    const offset = (index % ring.capacity) * recordFloats;
-    meters.push({
-      type: 'meter',
-      frame: decodeFrame(ring.records[offset], ring.records[offset + 1]),
-      targetId: ring.records[offset + 2],
-      peakDbL: ring.records[offset + 3],
-      peakDbR: ring.records[offset + 4],
-      rmsDbL: ring.records[offset + 5],
-      rmsDbR: ring.records[offset + 6],
-      correlation: ring.records[offset + 7],
-      truePeakDbL: ring.records[offset + 8],
-      truePeakDbR: ring.records[offset + 9],
-      momentaryLufs: ring.records[offset + 10],
-      shortTermLufs: ring.records[offset + 11],
-      integratedLufs: ring.records[offset + 12],
-      gainReductionDb: ring.records[offset + 13],
-    });
-  }
-  return { nextReadIndex: writeIndex, meters };
-}
-
-export function sonareSpectrumRingBufferByteLength(capacity: number, bands = 16): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const clampedBands = Math.max(1, Math.floor(bands));
-  // Record layout: [frameLo, frameHi, bandCount, band0, band1, ...]. frame is
-  // split across two Float32 lanes for exact reconstruction beyond 2^24.
-  return (
-    SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
-    clampedCapacity * (3 + clampedBands) * Float32Array.BYTES_PER_ELEMENT
-  );
-}
-
-export function createSonareSpectrumRingBuffer(
-  capacity = 128,
-  bands = 16,
-): SonareSpectrumRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const clampedBands = Math.max(1, Math.floor(bands));
-  const sharedBuffer = new SharedArrayBuffer(
-    sonareSpectrumRingBufferByteLength(clampedCapacity, clampedBands),
-  );
-  const ring = spectrumRingFromSharedBuffer(sharedBuffer, clampedCapacity, clampedBands);
-  Atomics.store(ring.header, 0, 0);
-  Atomics.store(ring.header, 1, clampedCapacity);
-  Atomics.store(ring.header, 2, ring.recordFloats);
-  Atomics.store(ring.header, 3, clampedBands);
-  Atomics.store(ring.header, 4, 0);
-  return {
-    sharedBuffer,
-    header: ring.header,
-    records: ring.records,
-    capacity: ring.capacity,
-    bands: ring.bands,
-  };
-}
-
-export function readSonareSpectrumRingBuffer(
-  ring: SonareSpectrumRingBuffer,
-  readIndex = 0,
-): SonareSpectrumRingReadResult {
-  const writeIndex = Atomics.load(ring.header, 0);
-  const recordFloats = Atomics.load(ring.header, 2) || 3 + ring.bands;
-  const bands = Atomics.load(ring.header, 3) || ring.bands;
-  const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
-  const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
-  const spectra: SonareWorkletSpectrumSnapshot[] = [];
-  for (let index = firstReadable; index < writeIndex; index++) {
-    const offset = (index % ring.capacity) * recordFloats;
-    const values = new Float32Array(bands);
-    values.set(ring.records.subarray(offset + 3, offset + 3 + bands));
-    spectra.push({
-      type: 'spectrum',
-      frame: decodeFrame(ring.records[offset], ring.records[offset + 1]),
-      bands: values,
-    });
-  }
-  return { nextReadIndex: writeIndex, spectra };
-}
-
-export function sonareEngineCommandRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  return (
-    SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
-    clampedCapacity * SONARE_ENGINE_COMMAND_RECORD_BYTES
-  );
-}
-
-export function sonareEngineTelemetryRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  return (
-    SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
-    clampedCapacity * SONARE_ENGINE_TELEMETRY_RECORD_BYTES
-  );
-}
-
-export function createSonareEngineCommandRingBuffer(capacity = 128): SonareEngineCommandRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const sharedBuffer = new SharedArrayBuffer(
-    sonareEngineCommandRingBufferByteLength(clampedCapacity),
-  );
-  const ring = engineRingFromSharedBuffer(
-    sharedBuffer,
-    SONARE_ENGINE_COMMAND_RECORD_BYTES,
-    clampedCapacity,
-  );
-  return { sharedBuffer, header: ring.header, view: ring.view, capacity: ring.capacity };
-}
-
-export function createSonareEngineTelemetryRingBuffer(
-  capacity = 128,
-): SonareEngineTelemetryRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const sharedBuffer = new SharedArrayBuffer(
-    sonareEngineTelemetryRingBufferByteLength(clampedCapacity),
-  );
-  const ring = engineRingFromSharedBuffer(
-    sharedBuffer,
-    SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
-    clampedCapacity,
-  );
-  return { sharedBuffer, header: ring.header, view: ring.view, capacity: ring.capacity };
-}
-
-export function pushSonareEngineCommandRingBuffer(
-  ring: SonareEngineCommandRingBuffer,
-  command: SonareEngineCommandRecord,
-): boolean {
-  const writeIndex = Atomics.load(ring.header, 0);
-  const readIndex = Atomics.load(ring.header, 1);
-  if (writeIndex - readIndex >= ring.capacity) {
-    Atomics.add(ring.header, 4, 1);
-    return false;
-  }
-  writeEngineCommandRecord(
-    ring.view,
-    recordOffset(writeIndex, ring.capacity, SONARE_ENGINE_COMMAND_RECORD_BYTES),
-    command,
-  );
-  Atomics.store(ring.header, 0, writeIndex + 1);
-  return true;
-}
-
-export function popSonareEngineCommandRingBuffer(
-  ring: SonareEngineCommandRingBuffer,
-): SonareEngineCommandRecord | null {
-  const readIndex = Atomics.load(ring.header, 1);
-  const writeIndex = Atomics.load(ring.header, 0);
-  if (readIndex >= writeIndex) {
-    return null;
-  }
-  const command = readEngineCommandRecord(
-    ring.view,
-    recordOffset(readIndex, ring.capacity, SONARE_ENGINE_COMMAND_RECORD_BYTES),
-  );
-  Atomics.store(ring.header, 1, readIndex + 1);
-  return command;
-}
-
-export function writeSonareEngineTelemetryRingBuffer(
-  ring: SonareEngineTelemetryRingBuffer,
-  telemetry: SonareEngineTelemetryRecord,
-): void {
-  const writeIndex = Atomics.load(ring.header, 0);
-  writeEngineTelemetryRecord(
-    ring.view,
-    recordOffset(writeIndex, ring.capacity, SONARE_ENGINE_TELEMETRY_RECORD_BYTES),
-    telemetry,
-  );
-  Atomics.store(ring.header, 0, writeIndex + 1);
-  if (writeIndex + 1 > ring.capacity) {
-    Atomics.store(ring.header, 4, writeIndex + 1 - ring.capacity);
-  }
-}
-
-export function readSonareEngineTelemetryRingBuffer(
-  ring: SonareEngineTelemetryRingBuffer,
-  readIndex = 0,
-): SonareEngineTelemetryRingReadResult {
-  const writeIndex = Atomics.load(ring.header, 0);
-  const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
-  const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
-  const telemetry: SonareEngineTelemetryRecord[] = [];
-  for (let index = firstReadable; index < writeIndex; index++) {
-    telemetry.push(
-      readEngineTelemetryRecord(
-        ring.view,
-        recordOffset(index, ring.capacity, SONARE_ENGINE_TELEMETRY_RECORD_BYTES),
-      ),
-    );
-  }
-  return { nextReadIndex: writeIndex, telemetry };
-}
-
-function meterRingFromSharedBuffer(
-  sharedBuffer: SharedArrayBuffer,
-  fallbackCapacity?: number,
-): SharedMeterRingWriter {
-  const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const header = new Int32Array(sharedBuffer, 0, SONARE_METER_RING_HEADER_INTS);
-  const existingCapacity = Atomics.load(header, 1);
-  const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
-  const minBytes = sonareMeterRingBufferByteLength(capacity);
-  if (sharedBuffer.byteLength < minBytes) {
-    throw new Error('meterSharedBuffer is too small for the requested ring capacity.');
-  }
-  Atomics.store(header, 1, capacity);
-  Atomics.store(header, 2, SONARE_METER_RING_RECORD_FLOATS);
-  return {
-    header,
-    records: new Float32Array(
-      sharedBuffer,
-      headerBytes,
-      capacity * SONARE_METER_RING_RECORD_FLOATS,
-    ),
-    capacity,
-  };
-}
-
-function spectrumRingFromSharedBuffer(
-  sharedBuffer: SharedArrayBuffer,
-  fallbackCapacity?: number,
-  fallbackBands?: number,
-): SharedSpectrumRingWriter {
-  const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const header = new Int32Array(sharedBuffer, 0, SONARE_SPECTRUM_RING_HEADER_INTS);
-  const existingCapacity = Atomics.load(header, 1);
-  const existingBands = Atomics.load(header, 3);
-  const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
-  const bands = Math.max(1, Math.floor(existingBands || fallbackBands || 16));
-  const recordFloats = 3 + bands;
-  const minBytes = sonareSpectrumRingBufferByteLength(capacity, bands);
-  if (sharedBuffer.byteLength < minBytes) {
-    throw new Error('spectrumSharedBuffer is too small for the requested ring capacity.');
-  }
-  Atomics.store(header, 1, capacity);
-  Atomics.store(header, 2, recordFloats);
-  Atomics.store(header, 3, bands);
-  return {
-    header,
-    records: new Float32Array(sharedBuffer, headerBytes, capacity * recordFloats),
-    capacity,
-    bands,
-    recordFloats,
-  };
-}
-
-function engineRingFromSharedBuffer(
-  sharedBuffer: SharedArrayBuffer,
-  recordBytes: number,
-  fallbackCapacity?: number,
-): { header: Int32Array; view: DataView; capacity: number } {
-  const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
-  const header = new Int32Array(sharedBuffer, 0, SONARE_ENGINE_RING_HEADER_INTS);
-  const existingCapacity = Atomics.load(header, 2);
-  const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
-  const minBytes = headerBytes + capacity * recordBytes;
-  if (sharedBuffer.byteLength < minBytes) {
-    throw new Error('engine SharedArrayBuffer is too small for the requested ring capacity.');
-  }
-  Atomics.store(header, 2, capacity);
-  Atomics.store(header, 3, recordBytes);
-  return {
-    header,
-    view: new DataView(sharedBuffer, headerBytes, capacity * recordBytes),
-    capacity,
-  };
-}
-
-function recordOffset(index: number, capacity: number, recordBytes: number): number {
-  return (index % capacity) * recordBytes;
-}
-
-function toBigInt64(value: number | bigint | undefined, fallback: bigint): bigint {
-  if (typeof value === 'bigint') {
-    return value;
-  }
-  if (typeof value === 'number') {
-    return BigInt(Math.trunc(value));
-  }
-  return fallback;
-}
-
-function writeEngineCommandRecord(
-  view: DataView,
-  offset: number,
-  command: SonareEngineCommandRecord,
-): void {
-  view.setUint32(offset, command.type, true);
-  view.setUint32(offset + 4, command.targetId ?? 0, true);
-  view.setBigInt64(offset + 8, toBigInt64(command.sampleTime, -1n), true);
-  // argFloat occupies a full 8-byte Float64 slot (replacing the old Float32 +
-  // 4-byte pad) so PPQ scalars carried here keep full double precision over the
-  // SAB transport, matching the engine's double-precision seek/loop contract.
-  view.setFloat64(offset + 16, command.argFloat ?? 0, true);
-  view.setBigInt64(offset + 24, toBigInt64(command.argInt, 0n), true);
-}
-
-function readEngineCommandRecord(view: DataView, offset: number): SonareEngineCommandRecord {
-  return {
-    type: view.getUint32(offset, true),
-    targetId: view.getUint32(offset + 4, true),
-    sampleTime: Number(view.getBigInt64(offset + 8, true)),
-    argFloat: view.getFloat64(offset + 16, true),
-    argInt: Number(view.getBigInt64(offset + 24, true)),
-  };
-}
-
-function writeEngineTelemetryRecord(
-  view: DataView,
-  offset: number,
-  telemetry: SonareEngineTelemetryRecord,
-): void {
-  view.setUint32(offset, telemetry.type, true);
-  view.setUint32(offset + 4, telemetry.error, true);
-  view.setBigInt64(offset + 8, BigInt(Math.trunc(telemetry.renderFrame)), true);
-  view.setBigInt64(offset + 16, BigInt(Math.trunc(telemetry.timelineSample)), true);
-  view.setBigInt64(offset + 24, BigInt(Math.trunc(telemetry.audibleTimelineSample)), true);
-  view.setInt32(offset + 32, telemetry.graphLatencySamplesQ8, true);
-  view.setUint32(offset + 36, telemetry.value, true);
-  view.setBigInt64(offset + 40, 0n, true);
-}
-
-function readEngineTelemetryRecord(view: DataView, offset: number): SonareEngineTelemetryRecord {
-  return {
-    type: view.getUint32(offset, true),
-    error: view.getUint32(offset + 4, true),
-    renderFrame: Number(view.getBigInt64(offset + 8, true)),
-    timelineSample: Number(view.getBigInt64(offset + 16, true)),
-    audibleTimelineSample: Number(view.getBigInt64(offset + 24, true)),
-    graphLatencySamplesQ8: view.getInt32(offset + 32, true),
-    value: view.getUint32(offset + 36, true),
-  };
-}
-
-function telemetryFromEngine(telemetry: EngineTelemetry): SonareEngineTelemetryRecord {
-  return {
-    type: telemetry.type,
-    error: telemetry.error,
-    renderFrame: telemetry.renderFrame,
-    timelineSample: telemetry.timelineSample,
-    audibleTimelineSample: telemetry.audibleTimelineSample,
-    graphLatencySamplesQ8: telemetry.graphLatencySamplesQ8,
-    value: telemetry.value,
-  };
-}
-
-function meterFromEngine(meter: EngineMeterTelemetry): SonareWorkletMeterSnapshot {
-  return {
-    type: 'meter',
-    targetId: meter.targetId,
-    frame: meter.renderFrame,
-    peakDbL: meter.peakDbL,
-    peakDbR: meter.peakDbR,
-    rmsDbL: meter.rmsDbL,
-    rmsDbR: meter.rmsDbR,
-    correlation: meter.correlation,
-    truePeakDbL: meter.truePeakDbL,
-    truePeakDbR: meter.truePeakDbR,
-    momentaryLufs: meter.momentaryLufs,
-    shortTermLufs: meter.shortTermLufs,
-    integratedLufs: meter.integratedLufs,
-    gainReductionDb: meter.gainReductionDb,
-  };
-}
-
-function magnitudeToDb(value: number): number {
-  return value > 1.0e-12 ? 20 * Math.log10(value) : -120;
-}
 
 /**
  * AudioWorklet-style mixer bridge backed by the package's single `sonare.wasm`.
