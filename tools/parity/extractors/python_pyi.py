@@ -129,6 +129,7 @@ def extract(root: Path) -> Extraction:
         "audio.py",
         "engine.py",
         "_project.py",
+        "_project_synth.py",
         "streaming.py",
         "_effects.py",
         "_mixing.py",
