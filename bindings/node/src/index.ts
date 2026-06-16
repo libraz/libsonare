@@ -17,22 +17,6 @@ import {
   voiceChange as voiceChangeFn,
 } from './effects_mastering.js';
 import { addon } from './native.js';
-import {
-  automationCurveValue,
-  engineAutomationCurveValue,
-  engineAutomationPointValue,
-  meterTapValue,
-  panLawValue,
-  panModeValue,
-  projectAutomationLaneValue,
-  projectAutomationPointValue,
-  projectClipFadeValue,
-  projectFadeCurveValue,
-  projectLoopModeValue,
-  sendTimingValue,
-  trackKindValue,
-  warpModeValue,
-} from './value_coercion.js';
 import type {
   AcousticOptions,
   AcousticResult,
@@ -51,7 +35,6 @@ import type {
   ClipPageRequest,
   DynamicsResult,
   EngineAutomationPoint,
-  EngineAutomationPointCurve,
   EngineBounceOptions,
   EngineBounceResult,
   EngineBus,
@@ -106,7 +89,6 @@ import type {
   ProjectClipFade,
   ProjectClipTake,
   ProjectCompileResult,
-  ProjectFadeCurve,
   ProjectKeySegment,
   ProjectLoopMode,
   ProjectLoopRecordingDesc,
@@ -143,6 +125,19 @@ import {
   assertSamples,
   midi1Event,
 } from './validation.js';
+import {
+  automationCurveValue,
+  engineAutomationPointValue,
+  meterTapValue,
+  panLawValue,
+  panModeValue,
+  projectAutomationLaneValue,
+  projectClipFadeValue,
+  projectLoopModeValue,
+  sendTimingValue,
+  trackKindValue,
+  warpModeValue,
+} from './value_coercion.js';
 
 export * from './analysis.js';
 export * from './effects_mastering.js';
