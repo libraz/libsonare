@@ -15,6 +15,7 @@
 #include "engine/tempo_sync.h"
 #include "metering/lufs.h"
 #include "metering/normalize.h"
+#include "util/constants.h"
 #if defined(SONARE_WITH_MIXING)
 #include "c_api/eq_band_json.h"
 #include "c_api/mixing_internal.h"
@@ -1679,9 +1680,14 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engin
     out[count].channel_count = planes;
     for (int ch = 0; ch < SONARE_METER_MAX_CHANNELS; ++ch) {
       const bool valid = ch < planes;
-      out[count].peak_db[ch] = valid ? record.peak_db[static_cast<size_t>(ch)] : 0.0f;
-      out[count].rms_db[ch] = valid ? record.rms_db[static_cast<size_t>(ch)] : 0.0f;
-      out[count].true_peak_db[ch] = valid ? record.true_peak_db[static_cast<size_t>(ch)] : 0.0f;
+      // Unused surround planes report the dB floor (silence), not 0 dBFS: a host
+      // that ignores channel_count and reads every plane must not see the unused
+      // planes pinned to full scale (which would read as clipping).
+      out[count].peak_db[ch] =
+          valid ? record.peak_db[static_cast<size_t>(ch)] : constants::kFloorDb;
+      out[count].rms_db[ch] = valid ? record.rms_db[static_cast<size_t>(ch)] : constants::kFloorDb;
+      out[count].true_peak_db[ch] =
+          valid ? record.true_peak_db[static_cast<size_t>(ch)] : constants::kFloorDb;
     }
     out[count].max_true_peak_db = record.max_true_peak_db;
     out[count].correlation = record.correlation;

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include "rt/biquad_design.h"
 #include "util/constants.h"
@@ -14,14 +13,6 @@ using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 
 namespace {
-// Finite cap for the side/mid width ratio. When the mid (mono) signal collapses
-// to near-zero while side energy remains (e.g. a fully anti-phase L = -R pair),
-// the raw sqrt(side/mid) ratio diverges to +Inf. A +Inf would propagate
-// verbatim into the meter snapshot and through the C ABI into JSON/host
-// telemetry, where it is non-serializable and breaks downstream consumers.
-// Clamp to a large but finite sentinel that still unambiguously signals
-// "extreme width / mono incompatible".
-constexpr float kMaxMonoCompatWidth = 1.0e6f;
 constexpr double kBs1770SurroundWeight = 1.4125375446227544;
 
 double bs1770_channel_weight(int channel, int channels) noexcept {
@@ -56,6 +47,13 @@ int resolve_true_peak_oversample(int requested) noexcept {
   return 4;
 }
 }  // namespace
+
+float mono_compat_width_from_energy(double mid_energy, double side_energy) noexcept {
+  if (mid_energy > static_cast<double>(kEpsilon)) {
+    return static_cast<float>(std::sqrt(side_energy / mid_energy));
+  }
+  return side_energy > static_cast<double>(kEpsilon) ? kMaxMonoCompatWidth : 0.0f;
+}
 
 double MeterProcessor::filter_sample(int channel, double x) noexcept {
   const size_t c = static_cast<size_t>(channel);
@@ -246,36 +244,26 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     next.correlation =
         denom > static_cast<double>(kEpsilon) ? static_cast<float>(sum_lr / denom) : 0.0f;
     next.mono_compat_side_rms = static_cast<float>(std::sqrt(side_sq_sum / num_samples));
-    if (mid_energy > static_cast<double>(kEpsilon)) {
-      next.mono_compat_width = static_cast<float>(std::sqrt(side_energy / mid_energy));
-    } else {
-      next.mono_compat_width =
-          side_energy > static_cast<double>(kEpsilon) ? kMaxMonoCompatWidth : 0.0f;
-    }
+    next.mono_compat_width = mono_compat_width_from_energy(mid_energy, side_energy);
     next.likely_mono_compatible = next.correlation >= config_.mono_compat_correlation_threshold;
   }
 
   if (config_.measure_lufs && !energy_ring_.empty()) {
     const int lufs_channels = std::min(num_channels, kLufsChannels);
-    // Count the channels actually carrying audio. A true-mono bus presents a
-    // single non-null channel; BS.1770 then weights that one channel, but the
-    // loudness is referenced to a dual-mono pair (a centered mono source must
-    // read identically whether routed as 1 or 2 channels). Without this scale
-    // the single-channel energy is ~3 dB below the equivalent dual-mono energy.
-    int active_channels = 0;
-    for (int ch = 0; ch < lufs_channels; ++ch) {
-      if (channels[ch] != nullptr) ++active_channels;
-    }
-    const double mono_energy_scale = active_channels == 1 ? 2.0 : 1.0;
+    // Combined K-weighted squared energy summed across the present channels, each
+    // scaled by its BS.1770-4 weight. This matches the offline reference exactly
+    // (metering::lufs / the C-ABI lufs_interleaved oracle): a true-mono bus
+    // (single non-null channel) is measured as one unity-weighted channel and so
+    // reads ~3 LU below the equivalent dual-mono pair, with no mono-to-dual-mono
+    // compensation applied. The live meter and the offline measurement therefore
+    // agree on identical channel layouts.
     for (int i = 0; i < num_samples; ++i) {
-      // Combined K-weighted squared energy summed across stereo channels (BS.1770 weight 1.0 each).
       double combined = 0.0;
       for (int ch = 0; ch < lufs_channels; ++ch) {
         if (channels[ch] == nullptr) continue;
         const double y = filter_sample(ch, static_cast<double>(channels[ch][i]));
         combined += bs1770_channel_weight(ch, lufs_channels) * y * y;
       }
-      combined *= mono_energy_scale;
 
       // Slide both running sums over the single ring; subtract the value leaving each window.
       const double leaving_short = energy_ring_[ring_pos_];

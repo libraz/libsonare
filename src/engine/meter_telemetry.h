@@ -22,15 +22,19 @@ struct MeterTelemetryRecord {
   // marshals planes 0/1 (byte-identical); the wide drain marshals
   // [0, channel_count). This is an internal in-process queue record, not a
   // C-ABI type, so widening it costs only a few KB of queue memory natively.
-  std::array<float, mixing::kMaxMeterChannels> peak_db{};
-  std::array<float, mixing::kMaxMeterChannels> rms_db{};
-  std::array<float, mixing::kMaxMeterChannels> true_peak_db{};
-  float max_true_peak_db = 0.0f;
+  // Defaults mirror mixing::MeterSnapshot: every plane and every dB-valued
+  // field starts at the floor, never 0 dBFS, so an unwritten plane (e.g. the
+  // right channel of a mono lane) reports silence rather than full-scale, and
+  // the record is always JSON-safe (no NaN reaches the host).
+  std::array<float, mixing::kMaxMeterChannels> peak_db = mixing::detail::meter_floor_array();
+  std::array<float, mixing::kMaxMeterChannels> rms_db = mixing::detail::meter_floor_array();
+  std::array<float, mixing::kMaxMeterChannels> true_peak_db = mixing::detail::meter_floor_array();
+  float max_true_peak_db = constants::kFloorDb;
   float correlation = 0.0f;
   float mono_compat_width = 0.0f;
-  float momentary_lufs = 0.0f;
-  float short_term_lufs = 0.0f;
-  float integrated_lufs = 0.0f;
+  float momentary_lufs = constants::kFloorDb;
+  float short_term_lufs = constants::kFloorDb;
+  float integrated_lufs = constants::kFloorDb;
   float gain_reduction_db = 0.0f;
   // Number of valid per-plane meters (1..kMaxMeterChannels).
   int channel_count = 0;
@@ -71,6 +75,11 @@ class MeterTelemetryTap {
   mixing::GoniometerBuffer<kGoniometerCapacity> goniometer_{};
   uint32_t target_id_ = 0;
   uint32_t dropped_records_ = 0;
+  // Monotonic sequence for the lightweight (input-monitor) path. The full meter
+  // only bumps its seq inside publish(), so the lightweight path must carry its
+  // own counter or every lightweight record would reuse a stale/zero seq and
+  // break host-side change/drop detection.
+  uint64_t lightweight_seq_ = 0;
 };
 
 }  // namespace sonare::engine

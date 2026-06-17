@@ -111,6 +111,61 @@ TEST_CASE("MeterTelemetryTap publishes lightweight target records", "[engine][me
   REQUIRE(record.peak_db[0] == Approx(-6.0206f).margin(0.01f));
   REQUIRE(record.rms_db[1] == Approx(-12.0412f).margin(0.01f));
   REQUIRE(record.correlation == Approx(-1.0f).margin(0.001f));
-  REQUIRE(std::isnan(record.integrated_lufs));
+
+  // Unmeasured fields must be finite (JSON-safe), not NaN, and sit at the dB
+  // floor so a host can serialize the record without producing invalid JSON.
+  REQUIRE(std::isfinite(record.integrated_lufs));
+  REQUIRE(record.integrated_lufs == Approx(sonare::constants::kFloorDb));
+  REQUIRE(std::isfinite(record.momentary_lufs));
+  REQUIRE(std::isfinite(record.short_term_lufs));
+  REQUIRE(std::isfinite(record.max_true_peak_db));
+  REQUIRE(std::isfinite(record.true_peak_db[0]));
+  REQUIRE(std::isfinite(record.gain_reduction_db));
   REQUIRE_FALSE(tap.pop(record));
+}
+
+TEST_CASE("MeterTelemetryTap lightweight mono input floors the unused plane",
+          "[engine][meter_telemetry]") {
+  // A mono lane writes only plane 0; the right plane must report silence
+  // (the dB floor), never an uninitialized 0 dBFS that pins the meter to clip.
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(48000.0, kBlock, 0, 8);
+
+  std::array<float, kBlock> mono{};
+  mono.fill(0.5f);
+  float* channels[] = {mono.data()};
+  tap.process_lightweight(channels, 1, kBlock, 0, 0xFFFFu);
+
+  sonare::engine::MeterTelemetryRecord record{};
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.channel_count == 1);
+  REQUIRE(record.peak_db[0] == Approx(-6.0206f).margin(0.01f));
+  REQUIRE(record.peak_db[1] == Approx(sonare::constants::kFloorDb));
+  REQUIRE(record.rms_db[1] == Approx(sonare::constants::kFloorDb));
+}
+
+TEST_CASE("MeterTelemetryTap lightweight seq advances monotonically", "[engine][meter_telemetry]") {
+  // The lightweight path carries its own counter; consecutive records must have
+  // strictly increasing seq so host-side change/drop detection works.
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(48000.0, kBlock, 0, 8);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.1f);
+  right.fill(0.1f);
+  float* channels[] = {left.data(), right.data()};
+
+  tap.process_lightweight(channels, 2, kBlock, 0, 0xFFFFu);
+  tap.process_lightweight(channels, 2, kBlock, kBlock, 0xFFFFu);
+  tap.process_lightweight(channels, 2, kBlock, kBlock * 2, 0xFFFFu);
+
+  sonare::engine::MeterTelemetryRecord a{};
+  sonare::engine::MeterTelemetryRecord b{};
+  sonare::engine::MeterTelemetryRecord c{};
+  REQUIRE(tap.pop(a));
+  REQUIRE(tap.pop(b));
+  REQUIRE(tap.pop(c));
+  REQUIRE(b.seq > a.seq);
+  REQUIRE(c.seq > b.seq);
 }

@@ -21,6 +21,25 @@ namespace sonare::mixing {
 /// stereo-only metrics derived from planes 0/1.
 inline constexpr int kMaxMeterChannels = 8;
 
+/// Finite cap for the side/mid width ratio. When the mid (mono) signal collapses
+/// to near-zero while side energy remains (e.g. a fully anti-phase L = -R pair),
+/// the raw sqrt(side/mid) ratio diverges to +Inf, which is non-serializable
+/// through the C ABI into JSON/host telemetry. Clamp to a large but finite
+/// sentinel that still unambiguously signals "extreme width / mono incompatible".
+inline constexpr float kMaxMonoCompatWidth = 1.0e6f;
+
+/// @brief Mono-compatibility width derived from mid/side energy.
+///
+/// Returns sqrt(side_energy / mid_energy) — the RMS ratio of the difference
+/// (side) signal to the sum (mid) signal: 0 = perfectly mono-compatible, ~1 =
+/// fully decorrelated, large/`kMaxMonoCompatWidth` = anti-phase. Both the
+/// realtime MeterProcessor and the lightweight engine telemetry tap derive the
+/// value from this single formula so the two surfaces cannot diverge.
+/// @param mid_energy  Summed squared mid ((L+R)/sqrt2) energy over the block.
+/// @param side_energy Summed squared side ((L-R)/sqrt2) energy over the block.
+/// @return The clamped, finite width metric.
+float mono_compat_width_from_energy(double mid_energy, double side_energy) noexcept;
+
 namespace detail {
 /// std::array of `kMaxMeterChannels` copies of the dB floor — the per-channel
 /// meter arrays default to the floor on every plane, not just the front pair.

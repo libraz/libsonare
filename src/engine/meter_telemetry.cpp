@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include "util/math_utils.h"
 
@@ -44,16 +43,15 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
   MeterTelemetryRecord record{};
   record.target_id = target_id;
   record.render_frame = render_frame;
-  record.seq = meter_.has_value() ? meter_->snapshot().seq : 0;
-  const float nan = std::numeric_limits<float>::quiet_NaN();
-  record.true_peak_db.fill(nan);
-  record.max_true_peak_db = nan;
-  record.momentary_lufs = nan;
-  record.short_term_lufs = nan;
-  record.integrated_lufs = nan;
-  record.gain_reduction_db = nan;
-  record.correlation = nan;
-  record.mono_compat_width = nan;
+  // Own monotonic counter -- the full meter's seq only advances inside the full
+  // publish() path, so reusing it here would stamp every lightweight record
+  // with a stale/zero seq.
+  record.seq = ++lightweight_seq_;
+  // Fields the lightweight path does not measure (true-peak / LUFS / gain
+  // reduction) keep their floor/zero defaults from MeterTelemetryRecord, which
+  // are finite and JSON-safe. Earlier this path stamped NaN, which serialized
+  // to an invalid JSON `NaN` token on the Python host and to a type-violating
+  // `null` on Node/WASM.
 
   // Per-plane peak/RMS up to the surround width. Stereo stays bit-identical
   // (meters == 2); a surround lane/bus now fills all of its planes.
@@ -85,8 +83,16 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
     const double denom = std::sqrt(sum_sq[0] * sum_sq[1]);
     if (denom > 0.0) {
       record.correlation = static_cast<float>(std::clamp(cross / denom, -1.0, 1.0));
-      record.mono_compat_width = 1.0f - std::abs(record.correlation);
     }
+    // Derive the mid/side energy from the per-channel sums already accumulated
+    // above (mid = (L+R)/sqrt2, side = (L-R)/sqrt2), so the lightweight tap
+    // reports the SAME mono_compat_width formula as the full MeterProcessor with
+    // no extra per-sample work. Earlier this path used the cheaper but divergent
+    // 1 - |correlation| proxy.
+    const double channel_energy = sum_sq[0] + sum_sq[1];
+    const double mid_energy = 0.5 * channel_energy + cross;
+    const double side_energy = 0.5 * channel_energy - cross;
+    record.mono_compat_width = mixing::mono_compat_width_from_energy(mid_energy, side_energy);
   }
 
   publish(record);

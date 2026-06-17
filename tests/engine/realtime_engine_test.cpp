@@ -171,11 +171,15 @@ TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
     if (record.target_id == 0xFFFFu) {
       found_input = true;
       REQUIRE(record.peak_db[0] == Catch::Approx(-18.0618f).margin(0.05f));
-      REQUIRE(std::isnan(record.integrated_lufs));
+      // Lightweight targets do not measure loudness: the field stays at the dB
+      // floor (finite, JSON-safe), never NaN.
+      REQUIRE(std::isfinite(record.integrated_lufs));
+      REQUIRE(record.integrated_lufs == Catch::Approx(sonare::constants::kFloorDb));
     } else if (record.target_id == 1) {
       found_lane_1 = true;
       REQUIRE(record.peak_db[0] == Catch::Approx(-3.0103f).margin(0.05f));
-      REQUIRE(std::isnan(record.integrated_lufs));
+      REQUIRE(std::isfinite(record.integrated_lufs));
+      REQUIRE(record.integrated_lufs == Catch::Approx(sonare::constants::kFloorDb));
     } else if (record.target_id == 2) {
       found_lane_2 = true;
       REQUIRE(record.peak_db[0] == Catch::Approx(-12.0412f).margin(0.05f));
