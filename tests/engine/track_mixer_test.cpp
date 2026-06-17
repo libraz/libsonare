@@ -494,3 +494,69 @@ TEST_CASE("TrackMixerRuntime applies embedded EQ band changes", "[engine][track_
   };
   REQUIRE(rms(eq_out) > rms(flat_out) * 1.5);
 }
+
+TEST_CASE("TrackMixerRuntime scatters a lane across a surround master",
+          "[engine][track_mixer][surround]") {
+  constexpr int kBlock = 16;
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  // Strip panned hard to the surround-left speaker (Ls @ -110 deg in 5.1).
+  sonare::mixing::api::Strip spec;
+  spec.id = "vox";
+  spec.surround_pan.azimuth = -110.0f;
+  REQUIRE(mixer.set_track_strip(10, spec));
+  mixer.settle_smoothers();
+
+  // 6-channel master mix: L R C LFE Ls Rs.
+  std::array<std::array<float, kBlock>, 6> planes{};
+  std::array<float*, 6> out{};
+  for (int c = 0; c < 6; ++c) {
+    out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+  }
+
+  REQUIRE(mixer.mix_source(10, source, out.data(), 6, kBlock));
+
+  // The block's final sample is at the fully-ramped target gain: all energy in
+  // Ls (plane 4), the other planes (incl. LFE) silent.
+  REQUIRE(planes[4].back() > 0.9f);
+  for (int c : {0, 1, 2, 3, 5}) {
+    REQUIRE(std::abs(planes[static_cast<size_t>(c)].back()) < 1e-4f);
+  }
+}
+
+TEST_CASE("TrackMixerRuntime stereo render ignores surround pan",
+          "[engine][track_mixer][surround]") {
+  constexpr int kBlock = 16;
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  sonare::mixing::api::Strip spec;
+  spec.id = "vox";
+  spec.surround_pan.azimuth = -110.0f;  // must not affect the stereo path
+  REQUIRE(mixer.set_track_strip(10, spec));
+  mixer.settle_smoothers();
+
+  std::array<float, kBlock> out_l{};
+  std::array<float, kBlock> out_r{};
+  float* out[] = {out_l.data(), out_r.data()};
+  REQUIRE(mixer.mix_source(10, source, out, 2, kBlock));
+
+  // A centered stereo source stays centered: both channels carry equal energy.
+  REQUIRE(out_l.back() > 0.9f);
+  REQUIRE(out_r.back() > 0.9f);
+  REQUIRE(std::abs(out_l.back() - out_r.back()) < 1e-4f);
+}

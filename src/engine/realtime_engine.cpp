@@ -79,6 +79,11 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   meter_tap_.prepare(sample_rate, max_block_size_, 0,
                      telemetry_capacity *
                          (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2));
+  // Spectrum/vectorscope snapshots are interval-gated, so a shallower per-target
+  // ring depth than the meter tap suffices.
+  scope_tap_.prepare(sample_rate, max_block_size_,
+                     8 * (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2),
+                     2048, scope_band_count_);
 #endif
   automation_.prepare(sample_rate, active_tempo_map_);
 #if defined(SONARE_WITH_MIXING)
@@ -1050,6 +1055,42 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #endif
       break;
     }
+    case rt::CommandType::kSetTrackInsertParam: {
+#if defined(SONARE_WITH_MIXING)
+      // target_id = (lane_index << 16) | (insert_index << 8) | param_id; the
+      // control thread resolved the JSON-key name to param_id before enqueuing.
+      const uint32_t packed = command.target_id;
+      const size_t lane_index = (packed >> 16) & 0xFFu;
+      const unsigned int insert_index = (packed >> 8) & 0xFFu;
+      const unsigned int param_id = packed & 0xFFu;
+      if (!track_mixer_runtime_.apply_lane_insert_parameter(lane_index, insert_index, param_id,
+                                                            command.arg.f)) {
+        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                      transport_.sample_position(), command.target_id);
+      }
+#else
+      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                    transport_.sample_position(), command.target_id);
+#endif
+      break;
+    }
+    case rt::CommandType::kSetMasterInsertParam: {
+#if defined(SONARE_WITH_MIXING)
+      // target_id = (insert_index << 8) | param_id (no lane field for master).
+      const uint32_t packed = command.target_id;
+      const unsigned int insert_index = (packed >> 8) & 0xFFu;
+      const unsigned int param_id = packed & 0xFFu;
+      if (owned_master_strip_ == nullptr ||
+          !owned_master_strip_->apply_insert_parameter(insert_index, param_id, command.arg.f)) {
+        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                      transport_.sample_position(), command.target_id);
+      }
+#else
+      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                    transport_.sample_position(), command.target_id);
+#endif
+      break;
+    }
     case rt::CommandType::kSetTempoMap:
     case rt::CommandType::kSetLoop:
     case rt::CommandType::kSwapGraph:
@@ -1163,9 +1204,76 @@ bool RealtimeEngine::set_master_insert_bypassed(unsigned int insert_index, bool 
          owned_master_strip_->set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
 }
 
+bool RealtimeEngine::set_track_insert_param(uint32_t track_id, unsigned int insert_index,
+                                            const std::string& key, float value) noexcept {
+  size_t lane_index = 0;
+  unsigned int param_id = 0;
+  if (!track_mixer_runtime_.resolve_track_insert_param(track_id, insert_index, key, &lane_index,
+                                                       &param_id)) {
+    return false;
+  }
+  if (lane_index > 0xFFu || insert_index > 0xFFu || param_id > 0xFFu) {
+    return false;
+  }
+  rt::Command command;
+  command.type = rt::CommandType::kSetTrackInsertParam;
+  command.target_id = (static_cast<uint32_t>(lane_index) << 16) | ((insert_index & 0xFFu) << 8) |
+                      (param_id & 0xFFu);
+  command.sample_time = -1;  // block head / immediate
+  command.arg.f = value;
+  return push_command(command);
+}
+
+bool RealtimeEngine::set_master_insert_param(unsigned int insert_index, const std::string& key,
+                                             float value) noexcept {
+  if (owned_master_strip_ == nullptr) {
+    return false;
+  }
+  const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
+  if (id < 0) {
+    return false;
+  }
+  const unsigned int param_id = static_cast<unsigned int>(id);
+  if (insert_index > 0xFFu || param_id > 0xFFu) {
+    return false;
+  }
+  rt::Command command;
+  command.type = rt::CommandType::kSetMasterInsertParam;
+  command.target_id = ((insert_index & 0xFFu) << 8) | (param_id & 0xFFu);
+  command.sample_time = -1;  // block head / immediate
+  command.arg.f = value;
+  return push_command(command);
+}
+
 bool RealtimeEngine::set_track_eq_band(uint32_t track_id, size_t band_index,
                                        const mastering::eq::EqBand& band) noexcept {
   const bool ok = track_mixer_runtime_.set_track_eq_band(track_id, band_index, band);
+  if (ok) {
+    update_reported_graph_latency();
+  }
+  return ok;
+}
+
+bool RealtimeEngine::set_track_pan(uint32_t track_id, float pan) noexcept {
+  return track_mixer_runtime_.set_track_pan(track_id, pan);
+}
+
+bool RealtimeEngine::set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept {
+  return track_mixer_runtime_.set_track_pan_law(track_id, law);
+}
+
+bool RealtimeEngine::set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept {
+  return track_mixer_runtime_.set_track_pan_mode(track_id, mode);
+}
+
+bool RealtimeEngine::set_track_dual_pan(uint32_t track_id, float left_pan,
+                                        float right_pan) noexcept {
+  return track_mixer_runtime_.set_track_dual_pan(track_id, left_pan, right_pan);
+}
+
+bool RealtimeEngine::set_track_channel_delay_samples(uint32_t track_id,
+                                                     int delay_samples) noexcept {
+  const bool ok = track_mixer_runtime_.set_track_channel_delay_samples(track_id, delay_samples);
   if (ok) {
     update_reported_graph_latency();
   }
@@ -1182,6 +1290,24 @@ bool RealtimeEngine::set_master_eq_band(size_t band_index,
   } catch (...) {
     return false;
   }
+}
+
+uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames,
+                                                   uint32_t band_count) noexcept {
+  scope_interval_frames_ = std::max(0, interval_frames);
+  const uint32_t clamped = std::clamp<uint32_t>(band_count, 1, ScopeTelemetryRecord::kMaxBands);
+  if (clamped != scope_band_count_) {
+    scope_band_count_ = clamped;
+    if (max_block_size_ > 0) {
+      // Re-prepare the tap with the new band resolution. Control-thread only,
+      // not concurrent with process() (same contract as prepare()).
+      scope_tap_.prepare(
+          sample_rate_, max_block_size_,
+          8 * (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2), 2048,
+          scope_band_count_);
+    }
+  }
+  return scope_tap_.band_count();
 }
 
 bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noexcept {
@@ -1332,6 +1458,11 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   const bool capture_input = capture_source() == CaptureSource::kInput;
   const int scratch_channels =
       std::min<int>(std::max(num_channels, 0), static_cast<int>(sub_channels.size()));
+#if defined(SONARE_WITH_MIXING)
+  // Gate spectrum/vectorscope capture for this block; the per-target taps inside
+  // the mixer + the master tap below self-skip when this block is not due.
+  scope_tap_.begin_block(scope_interval_frames_, num_frames);
+#endif
   if (monitor_out && num_frames > 0 && offset >= 0) {
     for (int ch = 0; ch < scratch_channels; ++ch) {
       if (monitor_out[ch]) {
@@ -1396,7 +1527,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #if defined(SONARE_WITH_MIXING)
         if (!track_mixer_runtime_.render_clips(clip_player_, clip_scratch_channels_.data(),
                                                channels, num_frames, transport_.sample_position(),
-                                               &meter_tap_, transport_.render_frame())) {
+                                               &meter_tap_, transport_.render_frame(),
+                                               &scope_tap_)) {
           clip_player_.process_at(clip_scratch_channels_.data(), channels, num_frames,
                                   transport_.sample_position());
         }
@@ -1416,7 +1548,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #if defined(SONARE_WITH_MIXING)
       if (!track_mixer_runtime_.render_clips(clip_player_, sub_channels.data(), channels,
                                              num_frames, transport_.sample_position(), &meter_tap_,
-                                             transport_.render_frame())) {
+                                             transport_.render_frame(), &scope_tap_)) {
         clip_player_.process_at(sub_channels.data(), channels, num_frames,
                                 transport_.sample_position());
       }
@@ -1430,7 +1562,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #if defined(SONARE_WITH_MIXING)
       if (!track_mixer_runtime_.render_clips(clip_player_, sub_channels.data(), channels,
                                              num_frames, transport_.sample_position(), &meter_tap_,
-                                             transport_.render_frame())) {
+                                             transport_.render_frame(), &scope_tap_)) {
         clip_player_.process_at(sub_channels.data(), channels, num_frames,
                                 transport_.sample_position());
       }
@@ -1477,42 +1609,42 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       // shared scratch (zero, set_transport, process) and is summed into the
       // sub-block, so multitrack MIDI routed to distinct destinations mixes here.
       const transport::TransportState inst_state = transport_.snapshot();
-      instrument_rack_.for_each(
-          [&](uint32_t destination_id, midi::MidiInstrument* instrument) noexcept {
-            for (int ch = 0; ch < channels; ++ch) {
-              std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
-                        midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+      instrument_rack_.for_each([&](uint32_t destination_id,
+                                    midi::MidiInstrument* instrument) noexcept {
+        for (int ch = 0; ch < channels; ++ch) {
+          std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
+                    midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+        }
+        instrument->set_transport(inst_state);
+        instrument->process(midi_instrument_channels_.data(), channels, num_frames);
+        // PDC: an instrument faster than the project's slowest is delayed by the
+        // remainder (total - its own latency) so it stays aligned with the clip
+        // bus and the other instruments. The slowest instrument's delay is 0.
+        if (pdc_total_q8_ > 0) {
+          for (size_t k = 0; k < pdc_instrument_count_; ++k) {
+            if (instrument_pdc_dest_[k] == destination_id) {
+              instrument_pdc_delays_[k].process(midi_instrument_channels_.data(), channels,
+                                                num_frames);
+              break;
             }
-            instrument->set_transport(inst_state);
-            instrument->process(midi_instrument_channels_.data(), channels, num_frames);
-            // PDC: an instrument faster than the project's slowest is delayed by the
-            // remainder (total - its own latency) so it stays aligned with the clip
-            // bus and the other instruments. The slowest instrument's delay is 0.
-            if (pdc_total_q8_ > 0) {
-              for (size_t k = 0; k < pdc_instrument_count_; ++k) {
-                if (instrument_pdc_dest_[k] == destination_id) {
-                  instrument_pdc_delays_[k].process(midi_instrument_channels_.data(), channels,
-                                                    num_frames);
-                  break;
-                }
-              }
-            }
+          }
+        }
 #if defined(SONARE_WITH_MIXING)
-            if (track_mixer_runtime_.mix_source(destination_id, midi_instrument_channels_.data(),
-                                                sub_channels.data(), channels, num_frames,
-                                                &meter_tap_, transport_.render_frame())) {
-              return;
-            }
+        if (track_mixer_runtime_.mix_source(destination_id, midi_instrument_channels_.data(),
+                                            sub_channels.data(), channels, num_frames, &meter_tap_,
+                                            transport_.render_frame(), &scope_tap_)) {
+          return;
+        }
 #endif
-            for (int ch = 0; ch < channels; ++ch) {
-              float* out = sub_channels[static_cast<size_t>(ch)];
-              const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];
-              if (!out) continue;
-              for (int i = 0; i < num_frames; ++i) {
-                out[i] += inst[i];
-              }
-            }
-          });
+        for (int ch = 0; ch < channels; ++ch) {
+          float* out = sub_channels[static_cast<size_t>(ch)];
+          const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];
+          if (!out) continue;
+          for (int i = 0; i < num_frames; ++i) {
+            out[i] += inst[i];
+          }
+        }
+      });
     }
 #endif
     if (transport_rolling) {
@@ -1562,6 +1694,9 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   if (channels > 0 && num_frames > 0) {
 #if defined(SONARE_WITH_MIXING)
     meter_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame());
+    // Master target_id 0 mirrors the master meter target so the host can pair a
+    // master spectrum/vectorscope snapshot with its meter record.
+    scope_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame(), 0);
 #endif
     const float* const* capture_channels =
         capture_input ? reinterpret_cast<const float* const*>(input_capture_channels_.data())

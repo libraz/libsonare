@@ -42,6 +42,7 @@
 #include "engine/meter_telemetry.h"
 #include "engine/mixing_runtime.h"
 #include "engine/monitor_runtime.h"
+#include "engine/scope_telemetry.h"
 #include "engine/track_mixer.h"
 #endif
 
@@ -122,6 +123,14 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool pop_clip_page_request(ClipPageRequest& out) noexcept { return clip_page_requests_.pop(out); }
 #if defined(SONARE_WITH_MIXING)
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
+  bool pop_scope_telemetry(ScopeTelemetryRecord& out) noexcept { return scope_tap_.pop(out); }
+  // Enables per-target spectrum + vectorscope capture. @p interval_frames is the
+  // minimum render-frame gap between published snapshots per block (0 disables
+  // capture). @p band_count (1..ScopeTelemetryRecord::kMaxBands) is the FFT band
+  // resolution; changing it re-prepares the tap, so call from the control thread
+  // while process() is not running. Returns the band count actually applied.
+  uint32_t configure_scope_telemetry(int interval_frames, uint32_t band_count) noexcept;
+  uint32_t scope_band_count() const noexcept { return scope_tap_.band_count(); }
 #endif
   transport::TransportState transport_state_control() const noexcept;
   void set_tempo(double bpm);
@@ -278,9 +287,28 @@ class RealtimeEngine : private ClipPageRequestSink {
                                  bool reset_on_bypass = false) noexcept;
   bool set_master_insert_bypassed(unsigned int insert_index, bool bypassed,
                                   bool reset_on_bypass = false) noexcept;
+  // Realtime change of one channel-strip insert parameter, addressed by the
+  // processor's JSON-key parameter name (the same key used in scene JSON). The
+  // name is resolved to the integer param_id on the control thread, then applied
+  // at the next block head via the command queue. Returns false if the track,
+  // insert, or key is unknown, the param is not realtime-safe, or the queue is
+  // full. lane/insert/param indices must each fit in 8 bits.
+  bool set_track_insert_param(uint32_t track_id, unsigned int insert_index, const std::string& key,
+                              float value) noexcept;
+  bool set_master_insert_param(unsigned int insert_index, const std::string& key,
+                               float value) noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const mastering::eq::EqBand& band) noexcept;
   bool set_master_eq_band(size_t band_index, const mastering::eq::EqBand& band) noexcept;
+  // Granular realtime panner/channel-delay updates for a track lane strip.
+  // Control-thread only. pan/pan-law/pan-mode/dual-pan are glitch-free atomic
+  // writes; channel delay adjusts strip latency and refreshes PDC + reported
+  // graph latency. Each returns false if the track has no bound lane strip.
+  bool set_track_pan(uint32_t track_id, float pan) noexcept;
+  bool set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept;
+  bool set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept;
+  bool set_track_dual_pan(uint32_t track_id, float left_pan, float right_pan) noexcept;
+  bool set_track_channel_delay_samples(uint32_t track_id, int delay_samples) noexcept;
   TrackMixerRuntime& track_mixer() noexcept { return track_mixer_runtime_; }
 
   // Solo/mute + PFL/AFL monitoring stage applied to a registered set of strips.
@@ -422,6 +450,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   Metronome metronome_{};
 #if defined(SONARE_WITH_MIXING)
   MeterTelemetryTap meter_tap_{};
+  ScopeTelemetryTap scope_tap_{};
+  int scope_interval_frames_ = 0;
+  uint32_t scope_band_count_ = 48;
 #endif
   automation::AutomationEngine automation_{};
 #if defined(SONARE_WITH_MIXING)

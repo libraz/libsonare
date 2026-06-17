@@ -19,6 +19,7 @@
 namespace sonare::engine {
 
 class MeterTelemetryTap;
+class ScopeTelemetryTap;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec);
 
@@ -27,6 +28,9 @@ struct TrackLaneConfig {
     uint32_t bus_id = 0;
     float level_db = 0.0f;
     bool enabled = true;
+    /// Whether the send taps the lane pre- or post-fader. Defaults to post-fader
+    /// to match the historical lane-send behavior and the scene-JSON default.
+    mixing::SendTiming timing = mixing::SendTiming::PostFader;
   };
 
   TrackLaneConfig() = default;
@@ -38,11 +42,19 @@ struct TrackLaneConfig {
   /// (group/folder routing); 0 keeps the lane on the master mix. Must
   /// reference a declared bus. Sends are unaffected by the routing.
   uint32_t output_bus_id = 0;
+  /// Input channel layout of the source feeding this lane. Stored but inert
+  /// until the surround DSP path lands (lanes still render stereo in phase 1).
+  ChannelLayout source_layout = ChannelLayout::Stereo;
 };
 
 struct TrackBusConfig {
   uint32_t bus_id = 0;
   float gain_db = 0.0f;
+  /// Channel layout of this bus. A surround layout (5.1/7.1) makes this a
+  /// surround group bus: lanes routed to it are surround-panned, its insert
+  /// chain runs at the bus width (StereoPairOnly inserts see only the front
+  /// pair), and it sums into the master plane-by-plane.
+  ChannelLayout layout = ChannelLayout::Stereo;
 };
 
 class TrackMixerRuntime final : public rt::ProcessorBase {
@@ -50,6 +62,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   static constexpr size_t kMaxTrackLanes = 32;
   static constexpr size_t kMaxBusLanes = 8;
   static constexpr int kMaxLaneChannels = 2;
+  // Widest master mix or group bus the lane scatter can drive (7.1). Lane source
+  // buffers stay stereo (kMaxLaneChannels); the master mix and surround group
+  // buses can be wider when a lane is surround-panned into them.
+  static constexpr int kMaxBusChannels = 8;
 
   enum ParamId : unsigned int {
     kFaderDb = 1,
@@ -78,8 +94,34 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
   bool set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
                                  bool reset_on_bypass = false) noexcept;
+  // Control-thread resolution for a realtime insert-parameter change: maps a
+  // track id + JSON-key parameter name to the strip's lane index and integer
+  // param_id. Reads the lane snapshot and the processor's static descriptor
+  // table only (no audio-state mutation). Returns false if the track, insert, or
+  // key is unknown. The engine enqueues the resolved ids and applies them on the
+  // audio thread via apply_lane_insert_parameter().
+  bool resolve_track_insert_param(uint32_t track_id, unsigned int insert_index,
+                                  const std::string& key, size_t* out_lane_index,
+                                  unsigned int* out_param_id) noexcept;
+  // Audio-thread application of a resolved insert-parameter change. Allocation
+  // free; must run from the audio callback (engine command drain), never
+  // concurrently with process().
+  bool apply_lane_insert_parameter(size_t lane_index, unsigned int insert_index,
+                                   unsigned int param_id, float value) noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const sonare::mastering::eq::EqBand& band) noexcept;
+  // Granular realtime panner/channel-delay updates for a track lane strip.
+  // Control-thread only (run while process() is not concurrent, the same
+  // contract as set_track_insert_bypassed / set_track_eq_band). pan/pan-law/
+  // pan-mode/dual-pan write atomics and are glitch-free; channel delay
+  // reallocates the alignment delay line (like a PDC recompute) and so adjusts
+  // strip latency — callers should treat it as a structural change. Each returns
+  // false if the track id has no bound lane strip.
+  bool set_track_pan(uint32_t track_id, float pan) noexcept;
+  bool set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept;
+  bool set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept;
+  bool set_track_dual_pan(uint32_t track_id, float left_pan, float right_pan) noexcept;
+  bool set_track_channel_delay_samples(uint32_t track_id, int delay_samples) noexcept;
   bool set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept;
   bool set_bus_gain_db_by_index(size_t bus_index, float gain_db) noexcept;
   bool set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus);
@@ -93,7 +135,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   bool render_clips(ClipPlayer& player, float* const* channels, int num_channels, int num_samples,
                     int64_t timeline_sample, MeterTelemetryTap* meter_tap = nullptr,
-                    int64_t render_frame = 0) noexcept;
+                    int64_t render_frame = 0, ScopeTelemetryTap* scope_tap = nullptr) noexcept;
   /// Snaps every lane fader/pan/gate and bus gain smoother to its current
   /// target. Lane smoothers only advance while lanes render, so a freshly
   /// configured runtime would otherwise ramp from its reset values over the
@@ -101,8 +143,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// process() calls; not safe concurrently with the audio thread.
   void settle_smoothers() noexcept;
   bool mix_source(uint32_t track_id, float* const* source, float* const* channels, int num_channels,
-                  int num_samples, MeterTelemetryTap* meter_tap = nullptr,
-                  int64_t render_frame = 0) noexcept;
+                  int num_samples, MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
+                  ScopeTelemetryTap* scope_tap = nullptr) noexcept;
 
  private:
   struct LaneState {
@@ -113,6 +155,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     bool solo = false;
     bool mute = false;
     mixing::ChannelStrip* strip = nullptr;
+    // Per-output-plane scatter gains carried block-to-block so a moving surround
+    // pan ramps click-free. Unused on the stereo path.
+    std::array<float, kMaxBusChannels> surround_gain{};
   };
 
   struct OwnedStrip {
@@ -141,6 +186,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   const BusState* bus_state_for(uint32_t bus_id) const noexcept;
   float* lane_channel(size_t lane_index, int channel) noexcept;
   float* bus_channel(size_t bus_index, int channel) noexcept;
+  // Render width of a configured bus: the channel count of its declared layout,
+  // clamped to kMaxBusChannels. Stereo/mono buses return 2/1 (the phase-1
+  // default); a 5.1/7.1 group bus returns 6/8. Returns 2 for an out-of-range
+  // index (no config) to match the historical stereo bus assumption.
+  int bus_render_channels(size_t bus_index) const noexcept;
   void clear_lane(size_t lane_index, int num_channels, int num_samples) noexcept;
   void clear_bus(size_t bus_index, int num_channels, int num_samples) noexcept;
   void add_source_to_mix(float* const* source, float* const* channels, int num_channels,
@@ -154,14 +204,30 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void deliver_lane_sidechains(size_t lane_index, int num_channels, int num_samples) noexcept;
   void snapshot_sidechain_key(size_t lane_index, int num_channels, int num_samples) noexcept;
   int lane_index_for_track(uint32_t track_id) const noexcept;
+  // Resolves a track id to its bound lane strip, refreshing the lane snapshot
+  // first. Returns nullptr if the track has no active lane strip.
+  mixing::ChannelStrip* lane_strip_for_track(uint32_t track_id) noexcept;
   float* key_channel(size_t lane_index, int channel) noexcept;
   void mix_lane_sends(size_t lane_index, int num_channels, int num_samples,
                       int64_t timeline_sample) noexcept;
-  void process_buses(float* const* channels, int num_channels, int num_samples,
-                     MeterTelemetryTap* meter_tap, int64_t render_frame) noexcept;
+  // Processes every configured bus at its own declared width (FxBus insert
+  // chain, gain, meter/scope) and sums it into the master mix, plane-by-plane,
+  // up to min(bus_width, master_channels). A surround group bus thus widens the
+  // master; a stereo bus into a surround master reaches only the front pair.
+  void process_buses(float* const* channels, int master_channels, int num_samples,
+                     MeterTelemetryTap* meter_tap, int64_t render_frame,
+                     ScopeTelemetryTap* scope_tap) noexcept;
   void apply_lane_to_mix(size_t lane_index, float* const* channels, int num_channels,
                          int num_samples, bool any_solo, MeterTelemetryTap* meter_tap,
-                         int64_t render_frame) noexcept;
+                         int64_t render_frame, ScopeTelemetryTap* scope_tap,
+                         int master_channels) noexcept;
+  // Scatters a lane's (mono/stereo-summed) post-fader signal across a >2-channel
+  // destination (the master mix or a surround group bus) using the strip's
+  // surround pan. @p dest holds dest_channels plane pointers; @p lane_channels
+  // is the lane's own width (1 or 2). Stereo/mono destinations use the legacy
+  // stereo path in apply_lane_to_mix instead.
+  void apply_lane_to_mix_surround(size_t lane_index, float* const* dest, int lane_channels,
+                                  int dest_channels, int num_samples) noexcept;
 
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
@@ -170,7 +236,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Post-strip, pre-fader snapshots of sidechain SOURCE lanes (the lane
   // buffers themselves are mutated in place by the fader/gate/pan stage).
   std::vector<float> key_scratch_;
-  std::array<float*, kMaxLaneChannels> lane_channel_ptrs_{};
+  // Sized to the widest buffer it ever addresses (a surround group bus), not the
+  // ≤2-wide lane buffers, so it can carry up to kMaxBusChannels plane pointers
+  // for bus processing. Lane code fills only the first ≤2 slots.
+  std::array<float*, kMaxBusChannels> lane_channel_ptrs_{};
   std::array<uint32_t, kMaxTrackLanes> active_track_ids_{};
   std::array<LaneState, kMaxTrackLanes> lane_states_{};
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pdc_delays_;

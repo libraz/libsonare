@@ -7,7 +7,9 @@
 #include <stdexcept>
 
 #include "engine/meter_telemetry.h"
+#include "engine/scope_telemetry.h"
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/named_processor.h"
 
 namespace sonare::engine {
 
@@ -63,16 +65,21 @@ std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing:
   strip->set_dual_pan(spec.dual_pan_left, spec.dual_pan_right);
   strip->set_polarity_invert(spec.polarity_invert_left, spec.polarity_invert_right);
   strip->set_channel_delay_samples(spec.channel_delay_samples);
+  strip->set_surround_pan_params({spec.surround_pan.azimuth, spec.surround_pan.elevation,
+                                  spec.surround_pan.divergence, spec.surround_pan.lfe,
+                                  spec.surround_pan.distance});
   for (const auto& insert : spec.inserts) {
     auto processor =
         mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr);
     if (!processor) {
       return nullptr;
     }
+    const bool spo = mastering::api::channel_policy(insert.processor_name) ==
+                     mastering::api::ChannelPolicy::StereoPairOnly;
     if (insert.slot == mixing::api::InsertSlot::PreFader) {
-      strip->add_pre_insert(std::move(processor));
+      strip->add_pre_insert(std::move(processor), spo);
     } else {
-      strip->add_post_insert(std::move(processor));
+      strip->add_post_insert(std::move(processor), spo);
     }
   }
   return strip;
@@ -253,6 +260,34 @@ bool TrackMixerRuntime::set_track_insert_bypassed(uint32_t track_id, unsigned in
   return false;
 }
 
+bool TrackMixerRuntime::resolve_track_insert_param(uint32_t track_id, unsigned int insert_index,
+                                                   const std::string& key, size_t* out_lane_index,
+                                                   unsigned int* out_param_id) noexcept {
+  if (track_id == 0 || out_lane_index == nullptr || out_param_id == nullptr) return false;
+  acquire_lanes();
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    prepare_lanes_from_snapshot(*lanes);
+  }
+  for (size_t i = 0; i < lane_states_.size(); ++i) {
+    LaneState& lane = lane_states_[i];
+    if (lane.track_id != track_id || lane.strip == nullptr) continue;
+    const int id = lane.strip->insert_parameter_id_for_key(insert_index, key);
+    if (id < 0) return false;
+    *out_lane_index = i;
+    *out_param_id = static_cast<unsigned int>(id);
+    return true;
+  }
+  return false;
+}
+
+bool TrackMixerRuntime::apply_lane_insert_parameter(size_t lane_index, unsigned int insert_index,
+                                                    unsigned int param_id, float value) noexcept {
+  if (lane_index >= lane_states_.size()) return false;
+  LaneState& lane = lane_states_[lane_index];
+  if (lane.strip == nullptr) return false;
+  return lane.strip->apply_insert_parameter(insert_index, param_id, value);
+}
+
 bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
                                           const sonare::mastering::eq::EqBand& band) noexcept {
   if (track_id == 0) return false;
@@ -273,6 +308,68 @@ bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
     }
   }
   return false;
+}
+
+mixing::ChannelStrip* TrackMixerRuntime::lane_strip_for_track(uint32_t track_id) noexcept {
+  if (track_id == 0) return nullptr;
+  acquire_lanes();
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    prepare_lanes_from_snapshot(*lanes);
+  }
+  for (LaneState& lane : lane_states_) {
+    if (lane.track_id == track_id && lane.strip != nullptr) {
+      return lane.strip;
+    }
+  }
+  return nullptr;
+}
+
+bool TrackMixerRuntime::set_track_pan(uint32_t track_id, float pan) noexcept {
+  if (!std::isfinite(pan)) return false;
+  mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
+  if (!strip) return false;
+  strip->set_pan(pan);
+  return true;
+}
+
+bool TrackMixerRuntime::set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept {
+  mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
+  if (!strip) return false;
+  strip->set_pan_law(law);
+  return true;
+}
+
+bool TrackMixerRuntime::set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept {
+  mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
+  if (!strip) return false;
+  strip->set_pan_mode(mode);
+  return true;
+}
+
+bool TrackMixerRuntime::set_track_dual_pan(uint32_t track_id, float left_pan,
+                                           float right_pan) noexcept {
+  if (!std::isfinite(left_pan) || !std::isfinite(right_pan)) return false;
+  mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
+  if (!strip) return false;
+  strip->set_dual_pan(left_pan, right_pan);
+  return true;
+}
+
+bool TrackMixerRuntime::set_track_channel_delay_samples(uint32_t track_id,
+                                                        int delay_samples) noexcept {
+  if (delay_samples < 0) return false;
+  mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
+  if (!strip) return false;
+  try {
+    strip->set_channel_delay_samples(delay_samples);
+  } catch (...) {
+    return false;
+  }
+  // Channel delay contributes to strip latency, so refresh PDC alignment.
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    recompute_lane_pdc(*lanes);
+  }
+  return true;
 }
 
 bool TrackMixerRuntime::set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept {
@@ -298,7 +395,9 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
       auto processor =
           mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr);
       if (!processor) return false;
-      fx->add_insert(std::move(processor));
+      const bool spo = mastering::api::channel_policy(insert.processor_name) ==
+                       mastering::api::ChannelPolicy::StereoPairOnly;
+      fx->add_insert(std::move(processor), spo);
     }
   } catch (...) {
     return false;
@@ -314,7 +413,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   max_block_size_ = std::max(max_block_size, 1);
   scratch_.assign(kMaxTrackLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
-  bus_scratch_.assign(kMaxBusLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
+  bus_scratch_.assign(kMaxBusLanes * kMaxBusChannels * static_cast<size_t>(max_block_size_), 0.0f);
   key_scratch_.assign(kMaxTrackLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_),
                       0.0f);
   for (LaneState& lane : lane_states_) {
@@ -386,19 +485,21 @@ void TrackMixerRuntime::flush_pdc_delays() noexcept {
 
 bool TrackMixerRuntime::render_clips(ClipPlayer& player, float* const* channels, int num_channels,
                                      int num_samples, int64_t timeline_sample,
-                                     MeterTelemetryTap* meter_tap, int64_t render_frame) noexcept {
+                                     MeterTelemetryTap* meter_tap, int64_t render_frame,
+                                     ScopeTelemetryTap* scope_tap) noexcept {
   acquire_lanes();
   const std::vector<TrackLaneConfig>* lanes = lanes_.current();
   if (!lanes || lanes->empty()) return false;
   if (!channels || num_channels <= 0 || num_samples <= 0) return true;
-  if (num_channels > kMaxLaneChannels || num_samples > max_block_size_ || scratch_.empty()) {
+  if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) {
     return false;
   }
 
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
   prepare_lanes_from_snapshot(*lanes);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    clear_bus(bus_index, render_channels, num_samples);
+    clear_bus(bus_index, bus_render_channels(bus_index), num_samples);
   }
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     active_track_ids_[lane_index] = (*lanes)[lane_index].track_id;
@@ -417,27 +518,28 @@ bool TrackMixerRuntime::render_clips(ClipPlayer& player, float* const* channels,
   const bool any_solo = any_lane_solo(*lanes);
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     apply_lane_to_mix(lane_index, channels, render_channels, num_samples, any_solo, meter_tap,
-                      render_frame);
+                      render_frame, scope_tap, master_channels);
   }
-  process_buses(channels, render_channels, num_samples, meter_tap, render_frame);
+  process_buses(channels, master_channels, num_samples, meter_tap, render_frame, scope_tap);
   return true;
 }
 
 bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, float* const* channels,
                                    int num_channels, int num_samples, MeterTelemetryTap* meter_tap,
-                                   int64_t render_frame) noexcept {
+                                   int64_t render_frame, ScopeTelemetryTap* scope_tap) noexcept {
   acquire_lanes();
   const std::vector<TrackLaneConfig>* lanes = lanes_.current();
   if (!lanes || lanes->empty()) return false;
   if (!source || !channels || num_channels <= 0 || num_samples <= 0) return true;
-  if (num_channels > kMaxLaneChannels || num_samples > max_block_size_ || scratch_.empty()) {
+  if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) {
     return false;
   }
 
   prepare_lanes_from_snapshot(*lanes);
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    clear_bus(bus_index, render_channels, num_samples);
+    clear_bus(bus_index, bus_render_channels(bus_index), num_samples);
   }
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     if ((*lanes)[lane_index].track_id != track_id) continue;
@@ -454,8 +556,8 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
     process_lane_strip(lane_index, render_channels, num_samples, 0);
     mix_lane_sends(lane_index, render_channels, num_samples, 0);
     apply_lane_to_mix(lane_index, channels, render_channels, num_samples, any_lane_solo(*lanes),
-                      meter_tap, render_frame);
-    process_buses(channels, render_channels, num_samples, meter_tap, render_frame);
+                      meter_tap, render_frame, scope_tap, master_channels);
+    process_buses(channels, master_channels, num_samples, meter_tap, render_frame, scope_tap);
     return true;
   }
 
@@ -558,9 +660,17 @@ float* TrackMixerRuntime::key_channel(size_t lane_index, int channel) noexcept {
 }
 
 float* TrackMixerRuntime::bus_channel(size_t bus_index, int channel) noexcept {
-  const size_t bus_stride = static_cast<size_t>(kMaxLaneChannels) * max_block_size_;
+  const size_t bus_stride = static_cast<size_t>(kMaxBusChannels) * max_block_size_;
   const size_t offset = bus_index * bus_stride + static_cast<size_t>(channel) * max_block_size_;
   return bus_scratch_.data() + offset;
+}
+
+int TrackMixerRuntime::bus_render_channels(size_t bus_index) const noexcept {
+  if (bus_index >= bus_configs_.size()) return kMaxLaneChannels;
+  const int count = channel_count(bus_configs_[bus_index].layout);
+  // Only a surround layout widens a bus; mono/stereo buses keep the phase-1
+  // 2-wide treatment so their summing/processing stays bit-identical.
+  return is_surround_channel_count(count) ? std::min(count, kMaxBusChannels) : kMaxLaneChannels;
 }
 
 void TrackMixerRuntime::clear_lane(size_t lane_index, int num_channels, int num_samples) noexcept {
@@ -614,6 +724,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.solo = false;
     lane.mute = false;
     lane.strip = nullptr;
+    lane.surround_gain.fill(0.0f);
   };
 
   for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
@@ -680,8 +791,8 @@ void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>&
       if (bus_state_for(send.bus_id) == nullptr) {
         throw std::invalid_argument("track send references an unknown bus");
       }
-      strip->add_send(mixing::SendConfig{send.enabled ? send.level_db : -120.0f,
-                                         mixing::SendTiming::PostFader, 5.0f});
+      strip->add_send(
+          mixing::SendConfig{send.enabled ? send.level_db : -120.0f, send.timing, 5.0f});
     }
   }
 }
@@ -802,7 +913,8 @@ void TrackMixerRuntime::mix_lane_sends(size_t lane_index, int num_channels, int 
 }
 
 void TrackMixerRuntime::process_buses(float* const* channels, int num_channels, int num_samples,
-                                      MeterTelemetryTap* meter_tap, int64_t render_frame) noexcept {
+                                      MeterTelemetryTap* meter_tap, int64_t render_frame,
+                                      ScopeTelemetryTap* scope_tap) noexcept {
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     BusState& bus = bus_states_[bus_index];
     if (bus.bus == nullptr) continue;
@@ -821,6 +933,10 @@ void TrackMixerRuntime::process_buses(float* const* channels, int num_channels, 
       meter_tap->process_lightweight(lane_channel_ptrs_.data(), num_channels, num_samples,
                                      render_frame, bus_meter_target(bus_index));
     }
+    if (scope_tap) {
+      scope_tap->process(lane_channel_ptrs_.data(), num_channels, num_samples, render_frame,
+                         bus_meter_target(bus_index));
+    }
     for (int ch = 0; ch < num_channels; ++ch) {
       float* dst = channels[static_cast<size_t>(ch)];
       const float* src = bus_channel(bus_index, ch);
@@ -834,8 +950,9 @@ void TrackMixerRuntime::process_buses(float* const* channels, int num_channels, 
 
 void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* channels,
                                           int num_channels, int num_samples, bool any_solo,
-                                          MeterTelemetryTap* meter_tap,
-                                          int64_t render_frame) noexcept {
+                                          MeterTelemetryTap* meter_tap, int64_t render_frame,
+                                          ScopeTelemetryTap* scope_tap,
+                                          int master_channels) noexcept {
   LaneState& lane = lane_states_[lane_index];
   const bool audible = !lane.mute && (!any_solo || lane.solo);
   lane.gate.set_target(audible ? 1.0f : 0.0f);
@@ -845,6 +962,7 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
   // through the bus gain and inserts. Sends were already tapped pre-fader.
   float* dest_left = channels[0];
   float* dest_right = num_channels >= 2 ? channels[1] : nullptr;
+  bool routed_to_bus = false;
   const std::vector<TrackLaneConfig>* lanes = lanes_.current();
   if (lanes && lane_index < lanes->size() && (*lanes)[lane_index].output_bus_id != 0) {
     const uint32_t output_bus_id = (*lanes)[lane_index].output_bus_id;
@@ -852,24 +970,32 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
       if (bus_configs_[bus_index].bus_id != output_bus_id) continue;
       dest_left = bus_channel(bus_index, 0);
       dest_right = num_channels >= 2 ? bus_channel(bus_index, 1) : nullptr;
+      routed_to_bus = true;
       break;
     }
   }
-  for (int i = 0; i < num_samples; ++i) {
-    const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
-    const float gate = lane.gate.process();
-    const float pan = lane.pan.process();
-    float left_gain = fader * gate;
-    float right_gain = fader * gate;
-    if (num_channels >= 2) {
-      left_gain *= pan <= 0.0f ? 1.0f : 1.0f - pan;
-      right_gain *= pan >= 0.0f ? 1.0f : 1.0f + pan;
-    }
-    lane_channel(lane_index, 0)[i] *= left_gain;
-    if (dest_left) dest_left[i] += lane_channel(lane_index, 0)[i];
-    if (num_channels >= 2 && dest_right) {
-      lane_channel(lane_index, 1)[i] *= right_gain;
-      dest_right[i] += lane_channel(lane_index, 1)[i];
+  // Surround master: a lane summing directly into a >2-channel master mix is
+  // scattered by the surround panner. Group buses stay stereo (phase 1), and
+  // the stereo/mono path below is byte-identical to phase 0.
+  if (!routed_to_bus && is_surround_channel_count(master_channels)) {
+    apply_lane_to_mix_surround(lane_index, channels, num_channels, master_channels, num_samples);
+  } else {
+    for (int i = 0; i < num_samples; ++i) {
+      const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
+      const float gate = lane.gate.process();
+      const float pan = lane.pan.process();
+      float left_gain = fader * gate;
+      float right_gain = fader * gate;
+      if (num_channels >= 2) {
+        left_gain *= pan <= 0.0f ? 1.0f : 1.0f - pan;
+        right_gain *= pan >= 0.0f ? 1.0f : 1.0f + pan;
+      }
+      lane_channel(lane_index, 0)[i] *= left_gain;
+      if (dest_left) dest_left[i] += lane_channel(lane_index, 0)[i];
+      if (num_channels >= 2 && dest_right) {
+        lane_channel(lane_index, 1)[i] *= right_gain;
+        dest_right[i] += lane_channel(lane_index, 1)[i];
+      }
     }
   }
   if (meter_tap) {
@@ -878,6 +1004,60 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
     }
     meter_tap->process_lightweight(lane_channel_ptrs_.data(), num_channels, num_samples,
                                    render_frame, lane_meter_target(lane_index));
+  }
+  if (scope_tap) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      lane_channel_ptrs_[static_cast<size_t>(ch)] = lane_channel(lane_index, ch);
+    }
+    scope_tap->process(lane_channel_ptrs_.data(), num_channels, num_samples, render_frame,
+                       lane_meter_target(lane_index));
+  }
+}
+
+void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* const* channels,
+                                                   int lane_channels, int master_channels,
+                                                   int num_samples) noexcept {
+  LaneState& lane = lane_states_[lane_index];
+  const ChannelLayout dest_layout = layout_from_channel_count(master_channels);
+  mixing::SurroundPanParams params;
+  if (lane.strip != nullptr) {
+    params = lane.strip->surround_pan_params();
+  }
+  mixing::SurroundPanGains target;
+  try {
+    target = mixing::compute_surround_pan_gains(params, dest_layout);
+  } catch (...) {
+    return;
+  }
+  const int planes = std::min(master_channels, mixing::kMaxSurroundPlanes);
+  const float inv_n = num_samples > 0 ? 1.0f / static_cast<float>(num_samples) : 0.0f;
+  for (int i = 0; i < num_samples; ++i) {
+    const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
+    const float gate = lane.gate.process();
+    // Keep the stereo pan smoother advancing so a later stereo render resumes
+    // from the right phase; surround placement comes from the panner, not pan.
+    (void)lane.pan.process();
+    const float fg = fader * gate;
+    float left = lane_channel(lane_index, 0)[i] * fg;
+    lane_channel(lane_index, 0)[i] = left;
+    float src = left;
+    if (lane_channels >= 2) {
+      const float right = lane_channel(lane_index, 1)[i] * fg;
+      lane_channel(lane_index, 1)[i] = right;
+      // -6 dB stereo fold to a point source keeps a correlated centre at unity.
+      src = 0.5f * (left + right);
+    }
+    // Linearly ramp each plane's gain from last block's value to this block's
+    // target so a moving pan does not step.
+    const float t = static_cast<float>(i + 1) * inv_n;
+    for (int p = 0; p < planes; ++p) {
+      const float start = lane.surround_gain[static_cast<size_t>(p)];
+      const float g = start + (target.gain[static_cast<size_t>(p)] - start) * t;
+      if (channels[p] != nullptr) channels[p][i] += g * src;
+    }
+  }
+  for (int p = 0; p < planes; ++p) {
+    lane.surround_gain[static_cast<size_t>(p)] = target.gain[static_cast<size_t>(p)];
   }
 }
 
