@@ -62,12 +62,21 @@ void ScopeTelemetryTap::process(float* const* channels, int num_channels, int nu
   // windowed segment (zero-padding only interpolates the spectrum).
   const int m = std::min(num_frames, n_fft_);
   const float inv_channels = 1.0f / static_cast<float>(std::min(num_channels, 2));
+  // Accumulate the coherent gain (sum) of the window actually applied. The frame
+  // is a Hann window over m samples then zero-padded to n_fft_, so the window
+  // sum depends on m, not n_fft_. Normalizing by this sum (rather than the fixed
+  // 2/n_fft_ used previously) keeps absolute band levels block-size independent;
+  // the old constant under-read by ~20*log10(m/n_fft_) dB whenever m < n_fft_
+  // (e.g. -12 dB at the default 512-sample block into a 2048-point FFT).
+  double window_sum = 0.0;
   for (int i = 0; i < m; ++i) {
     float mono = 0.0f;
     for (int ch = 0; ch < std::min(num_channels, 2); ++ch) {
       if (channels[ch]) mono += channels[ch][i];
     }
-    fft_input_[static_cast<size_t>(i)] = mono * inv_channels * hann_value(i, m, true);
+    const float w = hann_value(i, m, true);
+    window_sum += static_cast<double>(w);
+    fft_input_[static_cast<size_t>(i)] = mono * inv_channels * w;
   }
   for (int i = m; i < n_fft_; ++i) {
     fft_input_[static_cast<size_t>(i)] = 0.0f;
@@ -84,7 +93,10 @@ void ScopeTelemetryTap::process(float* const* channels, int num_channels, int nu
   // Aggregate the single-sided FFT bins into band_count_ linear bands spanning
   // [0, Nyquist], averaging power and converting to dBFS.
   const size_t n_bins = spectrum_.size();
-  const float norm = 2.0f / static_cast<float>(n_fft_);
+  // Single-sided amplitude normalization: a tone of amplitude A windowed by w[]
+  // produces a bin magnitude of A*sum(w)/2, so 2/sum(w) recovers A regardless of
+  // block size or FFT length.
+  const float norm = window_sum > 0.0 ? static_cast<float>(2.0 / window_sum) : 0.0f;
   for (uint32_t band = 0; band < band_count_; ++band) {
     const size_t begin = static_cast<size_t>(band) * n_bins / band_count_;
     size_t end = static_cast<size_t>(band + 1) * n_bins / band_count_;
