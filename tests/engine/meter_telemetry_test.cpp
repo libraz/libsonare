@@ -169,3 +169,38 @@ TEST_CASE("MeterTelemetryTap lightweight seq advances monotonically", "[engine][
   REQUIRE(b.seq > a.seq);
   REQUIRE(c.seq > b.seq);
 }
+
+TEST_CASE("MeterTelemetryTap lightweight mono_compat_width matches the full meter",
+          "[engine][meter_telemetry]") {
+  // The lightweight tap derives mono_compat_width from the same mid/side energy
+  // ratio as the full MeterProcessor (mixing::mono_compat_width_from_energy), not
+  // the cheaper 1 - |correlation| proxy. For a decorrelated stereo pair the two
+  // surfaces must report the same width.
+  constexpr int kFrames = 2048;
+  std::vector<float> left(kFrames);
+  std::vector<float> right(kFrames);
+  for (int i = 0; i < kFrames; ++i) {
+    const float phase = sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) /
+                        static_cast<float>(kSampleRate);
+    left[static_cast<size_t>(i)] = 0.3f * std::sin(phase);
+    // Quadrature partner -> correlation ~0, a nontrivial mid/side width.
+    right[static_cast<size_t>(i)] = 0.3f * std::cos(phase);
+  }
+
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(kSampleRate, kFrames, 7, 8);
+  float* channels[] = {left.data(), right.data()};
+  tap.process_lightweight(channels, 2, kFrames, 0, 7);
+  sonare::engine::MeterTelemetryRecord record{};
+  REQUIRE(tap.pop(record));
+
+  sonare::mixing::MeterConfig config;
+  config.measure_lufs = false;
+  sonare::mixing::MeterProcessor full(config);
+  full.prepare(kSampleRate, kFrames);
+  full.process(channels, 2, kFrames);
+  const auto snapshot = full.snapshot();
+
+  REQUIRE(record.mono_compat_width == Approx(snapshot.mono_compat_width).margin(1e-4f));
+  REQUIRE(record.mono_compat_width > 0.5f);
+}

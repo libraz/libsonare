@@ -132,6 +132,37 @@ TEST_CASE("MeterProcessor LUFS treats a null stereo partner as mono", "[mixing]"
                WithinAbs(mono_snapshot.integrated_lufs, 0.05f));
 }
 
+TEST_CASE("MeterProcessor mono LUFS matches the offline BS.1770 oracle", "[mixing]") {
+  // A true-mono bus is measured as a single unity-weighted BS.1770 channel, with
+  // no dual-mono compensation. The live meter must therefore agree with the
+  // offline lufs_interleaved oracle on an identical 1-channel layout, rather than
+  // reading ~3 LU hot from a mono-to-dual-mono energy scale.
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+  const int total_frames = static_cast<int>(4.0 * kSr);
+  std::vector<float> mono_buffer(static_cast<size_t>(total_frames));
+  for (int i = 0; i < total_frames; ++i) {
+    mono_buffer[static_cast<size_t>(i)] =
+        0.2f * std::sin(sonare::constants::kTwoPi * 1000.0f * static_cast<float>(i) /
+                        static_cast<float>(kSr));
+  }
+
+  sonare::mixing::MeterProcessor live;
+  live.prepare(static_cast<double>(kSr), kBlock);
+  for (int offset = 0; offset < total_frames; offset += kBlock) {
+    const int n = std::min(kBlock, total_frames - offset);
+    float* channels[] = {mono_buffer.data() + offset};
+    live.process(channels, 1, n);
+  }
+  const float live_integrated = live.snapshot().integrated_lufs;
+
+  // Offline oracle on the same mono buffer (interleaved == contiguous for 1 ch).
+  const auto offline = sonare::metering::lufs_interleaved(
+      mono_buffer.data(), static_cast<size_t>(total_frames), 1, kSr);
+
+  REQUIRE_THAT(live_integrated, WithinAbs(offline.integrated_lufs, 0.5f));
+}
+
 TEST_CASE("MeterProcessor max true peak includes surround channels", "[mixing]") {
   constexpr double kSr = 48000.0;
   constexpr int kBlock = 256;
