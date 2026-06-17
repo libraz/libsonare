@@ -16,9 +16,26 @@
 
 namespace sonare::mixing {
 
+/// Widest per-channel meter the snapshot carries (7.1). Peak/RMS/true-peak are
+/// reported per plane up to this count; correlation / mono-compat stay
+/// stereo-only metrics derived from planes 0/1.
+inline constexpr int kMaxMeterChannels = 8;
+
+namespace detail {
+/// std::array of `kMaxMeterChannels` copies of the dB floor — the per-channel
+/// meter arrays default to the floor on every plane, not just the front pair.
+constexpr std::array<float, kMaxMeterChannels> meter_floor_array() noexcept {
+  std::array<float, kMaxMeterChannels> values{};
+  for (float& value : values) {
+    value = constants::kFloorDb;
+  }
+  return values;
+}
+}  // namespace detail
+
 struct MeterSnapshot {
-  std::array<float, 2> peak_db{{constants::kFloorDb, constants::kFloorDb}};
-  std::array<float, 2> rms_db{{constants::kFloorDb, constants::kFloorDb}};
+  std::array<float, kMaxMeterChannels> peak_db = detail::meter_floor_array();
+  std::array<float, kMaxMeterChannels> rms_db = detail::meter_floor_array();
   float correlation = 0.0f;
   float mono_compat_width = 0.0f;
   float mono_compat_peak = 0.0f;
@@ -28,8 +45,12 @@ struct MeterSnapshot {
   float short_term_lufs = constants::kFloorDb;
   float integrated_lufs = constants::kFloorDb;
   float gain_reduction_db = 0.0f;
-  std::array<float, 2> true_peak_db{{constants::kFloorDb, constants::kFloorDb}};
+  std::array<float, kMaxMeterChannels> true_peak_db = detail::meter_floor_array();
   float max_true_peak_db = constants::kFloorDb;
+  // Number of planes carrying valid per-channel meters (1..kMaxMeterChannels).
+  // Consumers iterate [0, channel_count); the legacy stereo marshallers read
+  // planes 0/1 directly and are unaffected.
+  int channel_count = 0;
   uint64_t seq = 0;
 };
 

@@ -18,9 +18,13 @@ struct MeterTelemetryRecord {
   uint32_t target_id = 0;
   int64_t render_frame = 0;
   uint64_t seq = 0;
-  std::array<float, 2> peak_db{};
-  std::array<float, 2> rms_db{};
-  std::array<float, 2> true_peak_db{};
+  // Per-plane meters up to the surround width. The legacy stereo C-ABI drain
+  // marshals planes 0/1 (byte-identical); the wide drain marshals
+  // [0, channel_count). This is an internal in-process queue record, not a
+  // C-ABI type, so widening it costs only a few KB of queue memory natively.
+  std::array<float, mixing::kMaxMeterChannels> peak_db{};
+  std::array<float, mixing::kMaxMeterChannels> rms_db{};
+  std::array<float, mixing::kMaxMeterChannels> true_peak_db{};
   float max_true_peak_db = 0.0f;
   float correlation = 0.0f;
   float mono_compat_width = 0.0f;
@@ -28,6 +32,8 @@ struct MeterTelemetryRecord {
   float short_term_lufs = 0.0f;
   float integrated_lufs = 0.0f;
   float gain_reduction_db = 0.0f;
+  // Number of valid per-plane meters (1..kMaxMeterChannels).
+  int channel_count = 0;
   uint32_t dropped_records = 0;
 };
 

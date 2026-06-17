@@ -186,11 +186,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   const BusState* bus_state_for(uint32_t bus_id) const noexcept;
   float* lane_channel(size_t lane_index, int channel) noexcept;
   float* bus_channel(size_t bus_index, int channel) noexcept;
-  // Render width of a configured bus: the channel count of its declared layout,
-  // clamped to kMaxBusChannels. Stereo/mono buses return 2/1 (the phase-1
-  // default); a 5.1/7.1 group bus returns 6/8. Returns 2 for an out-of-range
-  // index (no config) to match the historical stereo bus assumption.
-  int bus_render_channels(size_t bus_index) const noexcept;
+  // Render width of a configured bus. A surround group bus (5.1/7.1 layout)
+  // renders at its full layout width (6/8). Every non-surround bus renders at
+  // min(master_channels, kMaxLaneChannels) — exactly the historical
+  // render_channels — so mono/stereo buses stay bit-identical regardless of the
+  // master width.
+  int bus_render_channels(size_t bus_index, int master_channels) const noexcept;
   void clear_lane(size_t lane_index, int num_channels, int num_samples) noexcept;
   void clear_bus(size_t bus_index, int num_channels, int num_samples) noexcept;
   void add_source_to_mix(float* const* source, float* const* channels, int num_channels,

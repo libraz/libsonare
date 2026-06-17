@@ -158,6 +158,52 @@ TEST_CASE("MeterProcessor max true peak includes surround channels", "[mixing]")
   REQUIRE(snapshot.max_true_peak_db > 1.0f);
   REQUIRE(snapshot.max_true_peak_db > snapshot.true_peak_db[0] + 10.0f);
   REQUIRE(snapshot.max_true_peak_db > snapshot.true_peak_db[1] + 10.0f);
+  // The loud rear plane (index 2) is now reported per-channel, not only folded
+  // into max_true_peak_db.
+  REQUIRE(snapshot.true_peak_db[2] > 1.0f);
+}
+
+TEST_CASE("MeterProcessor reports per-channel peak and RMS across a surround buffer",
+          "[mixing][surround]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 256;
+  constexpr int kChannels = 6;  // 5.1: L R C LFE Ls Rs
+  std::array<std::array<float, kBlock>, kChannels> planes{};
+  // Halve the amplitude on each successive plane so every meter is independently
+  // identifiable (~6 dB steps).
+  std::array<float, kChannels> amp{0.9f, 0.45f, 0.225f, 0.1125f, 0.05625f, 0.028125f};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int i = 0; i < kBlock; ++i) {
+      planes[static_cast<size_t>(ch)][static_cast<size_t>(i)] =
+          amp[static_cast<size_t>(ch)] * std::sin(sonare::constants::kTwoPi * 1000.0f *
+                                                  static_cast<float>(i) / static_cast<float>(kSr));
+    }
+  }
+  std::array<float*, kChannels> channels{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    channels[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::MeterConfig config;
+  config.measure_lufs = false;
+  config.measure_true_peak = false;
+  sonare::mixing::MeterProcessor meter(config);
+  meter.prepare(kSr, kBlock);
+  meter.process(channels.data(), kChannels, kBlock);
+
+  const auto snapshot = meter.snapshot();
+  REQUIRE(snapshot.channel_count == kChannels);
+  for (int ch = 0; ch < kChannels; ++ch) {
+    REQUIRE(std::isfinite(snapshot.peak_db[static_cast<size_t>(ch)]));
+    REQUIRE(std::isfinite(snapshot.rms_db[static_cast<size_t>(ch)]));
+    if (ch > 0) {
+      // Each plane reads ~6 dB below the previous; require a clear monotone gap.
+      REQUIRE(snapshot.peak_db[static_cast<size_t>(ch)] <
+              snapshot.peak_db[static_cast<size_t>(ch - 1)] - 3.0f);
+      REQUIRE(snapshot.rms_db[static_cast<size_t>(ch)] <
+              snapshot.rms_db[static_cast<size_t>(ch - 1)] - 3.0f);
+    }
+  }
 }
 
 TEST_CASE("ChannelStrip EQ alters signal and position matters", "[mixing]") {

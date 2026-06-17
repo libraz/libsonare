@@ -46,7 +46,7 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
   record.render_frame = render_frame;
   record.seq = meter_.has_value() ? meter_->snapshot().seq : 0;
   const float nan = std::numeric_limits<float>::quiet_NaN();
-  record.true_peak_db = {nan, nan};
+  record.true_peak_db.fill(nan);
   record.max_true_peak_db = nan;
   record.momentary_lufs = nan;
   record.short_term_lufs = nan;
@@ -55,9 +55,13 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
   record.correlation = nan;
   record.mono_compat_width = nan;
 
-  std::array<double, 2> sum_sq{};
-  std::array<float, 2> peak{};
-  for (int ch = 0; ch < std::min(num_channels, 2); ++ch) {
+  // Per-plane peak/RMS up to the surround width. Stereo stays bit-identical
+  // (meters == 2); a surround lane/bus now fills all of its planes.
+  const int meters = std::min(num_channels, mixing::kMaxMeterChannels);
+  record.channel_count = meters;
+  std::array<double, mixing::kMaxMeterChannels> sum_sq{};
+  std::array<float, mixing::kMaxMeterChannels> peak{};
+  for (int ch = 0; ch < meters; ++ch) {
     const float* channel = channels[ch];
     if (!channel) continue;
     for (int i = 0; i < num_frames; ++i) {
@@ -67,10 +71,11 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
     }
   }
 
-  for (size_t ch = 0; ch < 2; ++ch) {
-    const float rms = std::sqrt(sum_sq[ch] / static_cast<double>(num_frames));
-    record.peak_db[ch] = peak[ch] > 0.0f ? 20.0f * std::log10(peak[ch]) : -120.0f;
-    record.rms_db[ch] = rms > 0.0f ? 20.0f * std::log10(rms) : -120.0f;
+  for (int ch = 0; ch < meters; ++ch) {
+    const size_t c = static_cast<size_t>(ch);
+    const float rms = std::sqrt(sum_sq[c] / static_cast<double>(num_frames));
+    record.peak_db[c] = peak[c] > 0.0f ? 20.0f * std::log10(peak[c]) : -120.0f;
+    record.rms_db[c] = rms > 0.0f ? 20.0f * std::log10(rms) : -120.0f;
   }
   if (num_channels >= 2 && channels[0] && channels[1]) {
     double cross = 0.0;
@@ -101,6 +106,7 @@ void MeterTelemetryTap::publish(const mixing::MeterSnapshot& snapshot,
   record.peak_db = snapshot.peak_db;
   record.rms_db = snapshot.rms_db;
   record.true_peak_db = snapshot.true_peak_db;
+  record.channel_count = snapshot.channel_count;
   record.max_true_peak_db = snapshot.max_true_peak_db;
   record.correlation = snapshot.correlation;
   record.mono_compat_width = snapshot.mono_compat_width;

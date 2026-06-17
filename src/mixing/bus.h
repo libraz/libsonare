@@ -4,6 +4,7 @@
 /// @brief Summing bus primitive for subgroup, aux and master buses.
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -31,7 +32,14 @@ class BusProcessor : public rt::ProcessorBase {
 
   void sum_inputs(const std::vector<float* const*>& inputs, float* const* output, int num_channels,
                   int num_samples) const;
-  void add_insert(std::unique_ptr<rt::ProcessorBase> processor);
+  /// Appends an insert to the chain. When @p stereo_pair_only is true the insert
+  /// is a StereoPairOnly processor (catalog channelPolicy): on a surround bus
+  /// (num_channels > 2) it is handed only the front L/R pair so the surround
+  /// planes pass through dry and width-sensitive inserts (e.g. eq.midSide, which
+  /// aborts on a non-stereo width) get their required 2-plane view. On a
+  /// stereo/mono bus the flag is inert and the call is the legacy full-buffer
+  /// path. Mirrors ChannelStrip::add_pre/post_insert.
+  void add_insert(std::unique_ptr<rt::ProcessorBase> processor, bool stereo_pair_only = false);
   size_t num_inserts() const noexcept { return inserts_.size(); }
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);
@@ -62,6 +70,10 @@ class BusProcessor : public rt::ProcessorBase {
   BusRole role_ = BusRole::Subgroup;
   int max_inputs_ = 0;
   std::vector<std::unique_ptr<rt::ProcessorBase>> inserts_;
+  // Parallel to inserts_: 1 marks a StereoPairOnly insert (front-pair-only on a
+  // surround bus). Reserved at construction alongside inserts_ so add_insert
+  // never reallocates it while process() iterates.
+  std::vector<uint8_t> insert_spo_;
   std::vector<InsertSidechain> insert_sidechains_;
   MeterProcessor meter_{};
   double sample_rate_ = 48000.0;

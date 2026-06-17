@@ -560,3 +560,121 @@ TEST_CASE("TrackMixerRuntime stereo render ignores surround pan",
   REQUIRE(out_r.back() > 0.9f);
   REQUIRE(std::abs(out_l.back() - out_r.back()) < 1e-4f);
 }
+
+TEST_CASE("TrackMixerRuntime scatters a lane through a surround group bus into the master",
+          "[engine][track_mixer][surround]") {
+  constexpr int kBlock = 16;
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  // A 5.1 group bus; the lane sums its post-fader output into it instead of the
+  // master, and the bus then carries it through to the 5.1 master.
+  REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::FivePointOne}}));
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({lane}));
+
+  sonare::mixing::api::Strip spec;
+  spec.id = "vox";
+  spec.surround_pan.azimuth = -110.0f;  // Ls
+  REQUIRE(mixer.set_track_strip(10, spec));
+  mixer.settle_smoothers();
+
+  std::array<std::array<float, kBlock>, 6> planes{};
+  std::array<float*, 6> out{};
+  for (int c = 0; c < 6; ++c) {
+    out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+  }
+  REQUIRE(mixer.mix_source(10, source, out.data(), 6, kBlock));
+
+  // The lane is panned to Ls (plane 4) and reaches the master through the bus;
+  // the other planes (incl. LFE) stay silent.
+  REQUIRE(planes[4].back() > 0.9f);
+  for (int c : {0, 1, 2, 3, 5}) {
+    REQUIRE(std::abs(planes[static_cast<size_t>(c)].back()) < 1e-4f);
+  }
+}
+
+TEST_CASE("TrackMixerRuntime surround group bus applies its gain to every plane",
+          "[engine][track_mixer][surround]") {
+  constexpr int kBlock = 16;
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  auto ls_at_bus_gain = [&](float bus_gain_db) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_buses({{1, bus_gain_db, sonare::ChannelLayout::FivePointOne}}));
+    sonare::engine::TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    REQUIRE(mixer.set_track_lanes({lane}));
+    sonare::mixing::api::Strip spec;
+    spec.id = "vox";
+    spec.surround_pan.azimuth = -110.0f;  // Ls
+    REQUIRE(mixer.set_track_strip(10, spec));
+    mixer.settle_smoothers();
+    std::array<std::array<float, kBlock>, 6> planes{};
+    std::array<float*, 6> out{};
+    for (int c = 0; c < 6; ++c) {
+      out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+    }
+    REQUIRE(mixer.mix_source(10, source, out.data(), 6, kBlock));
+    return planes[4].back();
+  };
+
+  // A -6 dB bus halves the surround plane the lane was scattered into.
+  const float unity = ls_at_bus_gain(0.0f);
+  const float halved = ls_at_bus_gain(-6.0205999f);
+  REQUIRE(unity > 0.9f);
+  REQUIRE(std::abs(halved - 0.5f * unity) < 0.01f * unity);
+}
+
+TEST_CASE("TrackMixerRuntime surround group bus feeds eq.midSide a 2-plane view",
+          "[engine][track_mixer][surround]") {
+  // eq.midSide aborts on a non-stereo width. Routed onto a 5.1 group bus its
+  // catalog StereoPairOnly policy must clamp it to the front pair so the
+  // surround render does not terminate (the throw would escape the noexcept
+  // mix path otherwise).
+  constexpr int kBlock = 16;
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::FivePointOne}}));
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({lane}));
+
+  sonare::mixing::api::Strip spec;
+  spec.id = "vox";
+  spec.surround_pan.azimuth = -110.0f;  // Ls
+  REQUIRE(mixer.set_track_strip(10, spec));
+
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  bus.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "eq.midSide", "{}"});
+  REQUIRE(mixer.set_bus_strip(1, bus));
+  mixer.settle_smoothers();
+
+  std::array<std::array<float, kBlock>, 6> planes{};
+  std::array<float*, 6> out{};
+  for (int c = 0; c < 6; ++c) {
+    out[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+  }
+  // No abort: the SPO clamp keeps eq.midSide on the front pair while the lane's
+  // Ls energy passes through the bus untouched on plane 4.
+  REQUIRE(mixer.mix_source(10, source, out.data(), 6, kBlock));
+  REQUIRE(planes[4].back() > 0.9f);
+}

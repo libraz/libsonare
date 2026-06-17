@@ -25,6 +25,7 @@ BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inpu
   // insert_sidechains_ while process() (audio thread) iterates them; a
   // reallocation would invalidate the in-flight pointers/iterators (C++ UB).
   inserts_.reserve(kMaxInserts);
+  insert_spo_.reserve(kMaxInserts);
   insert_sidechains_.reserve(kMaxInserts);
 }
 
@@ -59,7 +60,11 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
     if (inserts_[index]->bypassed()) {
       continue;
     }
-    inserts_[index]->process(channels, num_channels, num_samples);
+    // StereoPairOnly inserts see only the front L/R pair on a surround bus; the
+    // surround planes pass through dry. Inert at num_channels <= 2.
+    const bool spo = index < insert_spo_.size() && insert_spo_[index] != 0;
+    const int insert_channels = (spo && num_channels > 2) ? 2 : num_channels;
+    inserts_[index]->process(channels, insert_channels, num_samples);
   }
   meter_.process(channels, num_channels, num_samples);
 }
@@ -113,7 +118,7 @@ void BusProcessor::sum_inputs(const std::vector<float* const*>& inputs, float* c
   }
 }
 
-void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor) {
+void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor, bool stereo_pair_only) {
   if (!processor) {
     throw SonareException(ErrorCode::InvalidParameter, "insert processor must not be null");
   }
@@ -124,6 +129,7 @@ void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor) {
     processor->prepare(sample_rate_, max_block_size_);
   }
   inserts_.push_back(std::move(processor));
+  insert_spo_.push_back(stereo_pair_only ? 1 : 0);
   insert_sidechains_.resize(inserts_.size());
 }
 

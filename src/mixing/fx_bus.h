@@ -21,7 +21,9 @@ class FxBus : public rt::ProcessorBase {
   int latency_samples_q8() const noexcept override;
   int tail_samples() const noexcept override;
 
-  void add_insert(std::unique_ptr<rt::ProcessorBase> processor);
+  /// Appends an insert. @p stereo_pair_only forwards the catalog channelPolicy
+  /// to BusProcessor so the insert is front-pair-only on a surround bus.
+  void add_insert(std::unique_ptr<rt::ProcessorBase> processor, bool stereo_pair_only = false);
   size_t num_inserts() const noexcept { return bus_.num_inserts(); }
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);

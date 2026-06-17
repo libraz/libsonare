@@ -155,8 +155,11 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   double mid_energy = 0.0;
   double side_energy = 0.0;
 
-  const int meters = std::min(num_channels, 2);
-  std::array<float, 2> sample_peaks{0.0f, 0.0f};
+  // Per-plane peak/RMS up to the surround width. Stereo stays bit-identical
+  // (meters == 2); a 5.1/7.1 bus now fills planes 2..N-1 too.
+  const int meters = std::min(num_channels, kMaxMeterChannels);
+  next.channel_count = meters;
+  std::array<float, kMaxMeterChannels> sample_peaks{};
   for (int ch = 0; ch < meters; ++ch) {
     if (channels[ch] == nullptr) {
       continue;

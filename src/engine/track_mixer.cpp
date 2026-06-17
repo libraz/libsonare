@@ -499,7 +499,7 @@ bool TrackMixerRuntime::render_clips(ClipPlayer& player, float* const* channels,
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   prepare_lanes_from_snapshot(*lanes);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    clear_bus(bus_index, bus_render_channels(bus_index), num_samples);
+    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
   }
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     active_track_ids_[lane_index] = (*lanes)[lane_index].track_id;
@@ -539,7 +539,7 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    clear_bus(bus_index, bus_render_channels(bus_index), num_samples);
+    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
   }
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     if ((*lanes)[lane_index].track_id != track_id) continue;
@@ -665,12 +665,13 @@ float* TrackMixerRuntime::bus_channel(size_t bus_index, int channel) noexcept {
   return bus_scratch_.data() + offset;
 }
 
-int TrackMixerRuntime::bus_render_channels(size_t bus_index) const noexcept {
-  if (bus_index >= bus_configs_.size()) return kMaxLaneChannels;
+int TrackMixerRuntime::bus_render_channels(size_t bus_index, int master_channels) const noexcept {
+  const int stereo_width = std::min(master_channels, kMaxLaneChannels);
+  if (bus_index >= bus_configs_.size()) return stereo_width;
   const int count = channel_count(bus_configs_[bus_index].layout);
-  // Only a surround layout widens a bus; mono/stereo buses keep the phase-1
-  // 2-wide treatment so their summing/processing stays bit-identical.
-  return is_surround_channel_count(count) ? std::min(count, kMaxBusChannels) : kMaxLaneChannels;
+  // Only a surround layout widens a bus; every other bus keeps the historical
+  // min(master, 2) width so its summing/processing stays bit-identical.
+  return is_surround_channel_count(count) ? std::min(count, kMaxBusChannels) : stereo_width;
 }
 
 void TrackMixerRuntime::clear_lane(size_t lane_index, int num_channels, int num_samples) noexcept {
@@ -912,32 +913,41 @@ void TrackMixerRuntime::mix_lane_sends(size_t lane_index, int num_channels, int 
   }
 }
 
-void TrackMixerRuntime::process_buses(float* const* channels, int num_channels, int num_samples,
+void TrackMixerRuntime::process_buses(float* const* channels, int master_channels, int num_samples,
                                       MeterTelemetryTap* meter_tap, int64_t render_frame,
                                       ScopeTelemetryTap* scope_tap) noexcept {
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     BusState& bus = bus_states_[bus_index];
     if (bus.bus == nullptr) continue;
-    for (int ch = 0; ch < num_channels; ++ch) {
+    // Each bus runs its insert chain and gain at its own declared width; a
+    // surround group bus is 6/8 wide, every other bus stays at the historical
+    // min(master, 2) so its output is bit-identical.
+    const int bus_channels = bus_render_channels(bus_index, master_channels);
+    for (int ch = 0; ch < bus_channels; ++ch) {
       lane_channel_ptrs_[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
     }
-    bus.bus->process(lane_channel_ptrs_.data(), num_channels, num_samples);
+    bus.bus->process(lane_channel_ptrs_.data(), bus_channels, num_samples);
     for (int i = 0; i < num_samples; ++i) {
       const float gain = std::pow(10.0f, bus.gain_db.process() / 20.0f);
-      for (int ch = 0; ch < num_channels; ++ch) {
+      for (int ch = 0; ch < bus_channels; ++ch) {
         float* bus_channel_ptr = bus_channel(bus_index, ch);
         if (bus_channel_ptr) bus_channel_ptr[i] *= gain;
       }
     }
+    // Meter the full bus width so a surround group bus publishes per-plane
+    // telemetry (drained via the wide meter drain); the goniometer scope stays a
+    // stereo metric on the front pair.
     if (meter_tap) {
-      meter_tap->process_lightweight(lane_channel_ptrs_.data(), num_channels, num_samples,
+      meter_tap->process_lightweight(lane_channel_ptrs_.data(), bus_channels, num_samples,
                                      render_frame, bus_meter_target(bus_index));
     }
     if (scope_tap) {
-      scope_tap->process(lane_channel_ptrs_.data(), num_channels, num_samples, render_frame,
-                         bus_meter_target(bus_index));
+      scope_tap->process(lane_channel_ptrs_.data(), std::min(bus_channels, kMaxLaneChannels),
+                         num_samples, render_frame, bus_meter_target(bus_index));
     }
-    for (int ch = 0; ch < num_channels; ++ch) {
+    // Sum the bus into the master plane-by-plane, up to the planes both share.
+    const int sum_channels = std::min(bus_channels, master_channels);
+    for (int ch = 0; ch < sum_channels; ++ch) {
       float* dst = channels[static_cast<size_t>(ch)];
       const float* src = bus_channel(bus_index, ch);
       if (!dst || !src) continue;
@@ -962,23 +972,30 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
   // through the bus gain and inserts. Sends were already tapped pre-fader.
   float* dest_left = channels[0];
   float* dest_right = num_channels >= 2 ? channels[1] : nullptr;
+  int dest_channels = master_channels;
   bool routed_to_bus = false;
+  std::array<float*, kMaxBusChannels> bus_planes{};
   const std::vector<TrackLaneConfig>* lanes = lanes_.current();
   if (lanes && lane_index < lanes->size() && (*lanes)[lane_index].output_bus_id != 0) {
     const uint32_t output_bus_id = (*lanes)[lane_index].output_bus_id;
     for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
       if (bus_configs_[bus_index].bus_id != output_bus_id) continue;
+      dest_channels = bus_render_channels(bus_index, master_channels);
       dest_left = bus_channel(bus_index, 0);
-      dest_right = num_channels >= 2 ? bus_channel(bus_index, 1) : nullptr;
+      dest_right = dest_channels >= 2 ? bus_channel(bus_index, 1) : nullptr;
+      for (int ch = 0; ch < dest_channels; ++ch) {
+        bus_planes[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
+      }
       routed_to_bus = true;
       break;
     }
   }
-  // Surround master: a lane summing directly into a >2-channel master mix is
-  // scattered by the surround panner. Group buses stay stereo (phase 1), and
-  // the stereo/mono path below is byte-identical to phase 0.
-  if (!routed_to_bus && is_surround_channel_count(master_channels)) {
-    apply_lane_to_mix_surround(lane_index, channels, num_channels, master_channels, num_samples);
+  // Surround destination: a lane summing into a >2-channel master mix or a
+  // surround group bus is scattered by the surround panner. Stereo/mono
+  // destinations take the byte-identical legacy stereo path below.
+  if (is_surround_channel_count(dest_channels)) {
+    float* const* dest = routed_to_bus ? bus_planes.data() : channels;
+    apply_lane_to_mix_surround(lane_index, dest, num_channels, dest_channels, num_samples);
   } else {
     for (int i = 0; i < num_samples; ++i) {
       const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
@@ -1014,11 +1031,11 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
   }
 }
 
-void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* const* channels,
-                                                   int lane_channels, int master_channels,
+void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* const* dest,
+                                                   int lane_channels, int dest_channels,
                                                    int num_samples) noexcept {
   LaneState& lane = lane_states_[lane_index];
-  const ChannelLayout dest_layout = layout_from_channel_count(master_channels);
+  const ChannelLayout dest_layout = layout_from_channel_count(dest_channels);
   mixing::SurroundPanParams params;
   if (lane.strip != nullptr) {
     params = lane.strip->surround_pan_params();
@@ -1029,7 +1046,7 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
   } catch (...) {
     return;
   }
-  const int planes = std::min(master_channels, mixing::kMaxSurroundPlanes);
+  const int planes = std::min(dest_channels, mixing::kMaxSurroundPlanes);
   const float inv_n = num_samples > 0 ? 1.0f / static_cast<float>(num_samples) : 0.0f;
   for (int i = 0; i < num_samples; ++i) {
     const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
@@ -1053,7 +1070,7 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
     for (int p = 0; p < planes; ++p) {
       const float start = lane.surround_gain[static_cast<size_t>(p)];
       const float g = start + (target.gain[static_cast<size_t>(p)] - start) * t;
-      if (channels[p] != nullptr) channels[p][i] += g * src;
+      if (dest[p] != nullptr) dest[p][i] += g * src;
     }
   }
   for (int p = 0; p < planes; ++p) {
