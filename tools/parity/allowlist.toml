@@ -373,6 +373,13 @@ python = [
 # (events, config) and DERIVES `count` from the events array length — same
 # array-length derivation as lufs_interleaved. (The facade method is
 # `midiRouteEvents` / `route_midi_events`, mapped to this C key.)
+# spectral_edit (all): C is (config, ops, n_ops). Every facade exposes (ops, ...)
+# and DERIVES `n_ops` from the ops array length, then folds the
+# SonareSpectralEditConfig fields — Node/WASM into a trailing options bag
+# (nFft/hopLength/window/healRadiusFrames), Python into keyword args. Passing both
+# the ops array and a redundant count would let them disagree; same ergonomic
+# options-fold + array-length derivation already accepted for midi_route_events.
+# Remapped to C order internally (addon / embind / ctypes). Not order drift.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -386,6 +393,7 @@ node = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
+  "spectral_edit",
   "mel_to_stft",  # Node facade derives matrix extents from typed arrays; C requires explicit dims
   "mel_to_audio", # Node facade derives matrix extents from typed arrays; C requires explicit dims
   "mfcc_to_audio", # Node facade derives matrix extents from typed arrays; C requires explicit dims
@@ -402,6 +410,7 @@ wasm = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
+  "spectral_edit",
   "mel_to_stft",  # WASM facade derives matrix extents from typed arrays; C requires explicit dims
   "mel_to_audio", # WASM facade derives matrix extents from typed arrays; C requires explicit dims
   "mfcc_to_audio", # WASM facade derives matrix extents from typed arrays; C requires explicit dims
@@ -426,6 +435,7 @@ python = [
   "pitch_correct_to_midi_timevarying",
   "midi_cc_learn",
   "midi_route_events",
+  "spectral_edit",
   "mel_to_stft",  # Python facade derives matrix extents from sequences; C requires explicit dims
   "mel_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
   "mfcc_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims

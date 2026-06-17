@@ -3,13 +3,13 @@
 
 The C ABI carries several *independent* version counters, not one:
 
-    SONARE_FEATURE_ABI_VERSION         (src/sonare_c_types.h)
-    SONARE_PROJECT_ABI_VERSION         (src/sonare_c_project.h)
-    SONARE_VOICE_CHANGER_ABI_VERSION   (src/sonare_c_effects.h)
-    SONARE_ACOUSTIC_ABI_VERSION        (src/sonare_c_acoustic.h)
+    SONARE_FEATURE_ABI_VERSION         (include/sonare/sonare_c_types.h)
+    SONARE_PROJECT_ABI_VERSION         (include/sonare/sonare_c_project.h)
+    SONARE_VOICE_CHANGER_ABI_VERSION   (include/sonare/sonare_c_effects.h)
+    SONARE_ACOUSTIC_ABI_VERSION        (include/sonare/sonare_c_acoustic.h)
     kEngineAbiVersion                  (src/rt/command.h)
 
-``SONARE_ABI_VERSION`` (src/sonare_c.h) packs feature/project/voice-changer/
+``SONARE_ABI_VERSION`` (include/sonare/sonare_c.h) packs feature/project/voice-changer/
 acoustic into one ``uint32_t`` (bytes 0..3). Each binding hard-codes mirror
 constants that MUST equal the C source of truth; a stale literal means a binding
 silently accepts an incompatible native library. Bindings that *derive* their
@@ -50,22 +50,22 @@ def _find_int(text: str, pattern: str, source: str) -> int:
 def c_source_of_truth() -> dict[str, int]:
     """The authoritative per-subsystem versions and the packed aggregate."""
     feature = _find_int(
-        _read("src/sonare_c_types.h"),
+        _read("include/sonare/sonare_c_types.h"),
         r"#define\s+SONARE_FEATURE_ABI_VERSION\s+(\w+)",
         "sonare_c_types.h",
     )
     project = _find_int(
-        _read("src/sonare_c_project.h"),
+        _read("include/sonare/sonare_c_project.h"),
         r"#define\s+SONARE_PROJECT_ABI_VERSION\s+(\w+)",
         "sonare_c_project.h",
     )
     voice_changer = _find_int(
-        _read("src/sonare_c_effects.h"),
+        _read("include/sonare/sonare_c_effects.h"),
         r"#define\s+SONARE_VOICE_CHANGER_ABI_VERSION\s+(\w+)",
         "sonare_c_effects.h",
     )
     acoustic = _find_int(
-        _read("src/sonare_c_acoustic.h"),
+        _read("include/sonare/sonare_c_acoustic.h"),
         r"#define\s+SONARE_ACOUSTIC_ABI_VERSION\s+(\w+)",
         "sonare_c_acoustic.h",
     )
@@ -74,7 +74,7 @@ def c_source_of_truth() -> dict[str, int]:
         r"kEngineAbiVersion\s*=\s*(\w+)",
         "rt/command.h",
     )
-    # Mirrors src/sonare_c.h SONARE_ABI_VERSION packing.
+    # Mirrors include/sonare/sonare_c.h SONARE_ABI_VERSION packing.
     aggregate = (
         (feature & 0xFF)
         | ((project & 0xFF) << 8)

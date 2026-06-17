@@ -7,8 +7,9 @@
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #endif
+#include <sonare/sonare_c.h>
+
 #include "core/audio.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare;

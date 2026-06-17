@@ -53,6 +53,19 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    # sonare_spectral_edit
+    lib.sonare_spectral_edit.restype = ctypes.c_int32
+    lib.sonare_spectral_edit.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareSpectralEditConfig),
+        ctypes.POINTER(SonareSpectralRegionOp),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     # sonare_pitch_shift
     lib.sonare_pitch_shift.restype = ctypes.c_int32
     lib.sonare_pitch_shift.argtypes = [

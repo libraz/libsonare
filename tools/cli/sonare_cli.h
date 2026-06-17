@@ -79,8 +79,8 @@
 #include "effects/acoustic/room_morph.h"
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
-#include "sonare_c_project.h"
-#include "sonare_c_types.h"
+#include <sonare/sonare_c_project.h>
+#include <sonare/sonare_c_types.h>
 #endif
 #include "cli_support.h"
 #include "quick.h"

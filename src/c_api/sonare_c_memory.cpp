@@ -1,6 +1,7 @@
+#include <sonare/sonare_c.h>
+
 #include "rt/command.h"
 #include "sonare.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare_c_detail;

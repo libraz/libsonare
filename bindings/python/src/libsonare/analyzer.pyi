@@ -445,6 +445,34 @@ def voice_change(
     formant_factor: float = 1.0,
 ) -> list[float]: ...
 
+class SpectralRegionOp:
+    start_sample: int
+    end_sample: int
+    low_hz: float
+    high_hz: float
+    gain_db: float
+    mode: str | int
+    def __init__(
+        self,
+        start_sample: int,
+        end_sample: int,
+        low_hz: float,
+        high_hz: float,
+        gain_db: float = 0.0,
+        mode: str | int = "gain",
+    ) -> None: ...
+
+def spectral_edit(
+    samples: FloatSamples,
+    sample_rate: int,
+    ops: Sequence[SpectralRegionOp],
+    *,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    window: str | int = "hann",
+    heal_radius_frames: int = 2,
+) -> list[float]: ...
+
 class RealtimeVoiceChangerConfig:
     input_gain_db: float
     output_gain_db: float

@@ -30,10 +30,11 @@
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/final/dither.h"
 #endif
+#include <sonare/sonare_c.h>
+
 #include "rt/command.h"
 #include "rt/gain_processor.h"
 #include "rt/processor_base.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 #if defined(SONARE_WITH_GRAPH)

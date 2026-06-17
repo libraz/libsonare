@@ -24,6 +24,10 @@ from ._ffi import (
     SONARE_DENOISE_NOISE_ESTIMATOR_MCRA,
     SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
     SONARE_OK,
+    SONARE_SPECTRAL_EDIT_MODE_ATTENUATE,
+    SONARE_SPECTRAL_EDIT_MODE_GAIN,
+    SONARE_SPECTRAL_EDIT_MODE_HEAL,
+    SONARE_SPECTRAL_EDIT_MODE_MUTE,
     SONARE_TRIM_SILENCE_MODE_LUFS_GATED,
     SONARE_TRIM_SILENCE_MODE_PEAK,
     SONARE_VC_PRESET_BRIGHT_IDOL,
@@ -42,6 +46,8 @@ from ._ffi import (
     SonareGateConfig,
     SonareHpssResult,
     SonareRealtimeVoiceChangerConfig,
+    SonareSpectralEditConfig,
+    SonareSpectralRegionOp,
     SonareTransientShaperConfig,
     SonareTrimSilenceConfig,
 )
@@ -395,6 +401,147 @@ def note_stretch(
         ctypes.c_int(onset_sample),
         ctypes.c_int(offset_sample),
         ctypes.c_float(stretch_ratio),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+_SPECTRAL_EDIT_MODE_NAMES: dict[str, int] = {
+    "gain": SONARE_SPECTRAL_EDIT_MODE_GAIN,
+    "attenuate": SONARE_SPECTRAL_EDIT_MODE_ATTENUATE,
+    "mute": SONARE_SPECTRAL_EDIT_MODE_MUTE,
+    "heal": SONARE_SPECTRAL_EDIT_MODE_HEAL,
+}
+
+_SPECTRAL_EDIT_WINDOW_NAMES: dict[str, int] = {
+    "hann": 0,
+    "hamming": 1,
+    "blackman": 2,
+    "rectangular": 3,
+}
+
+
+def _coerce_spectral_edit_mode(value: int | str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"unknown spectral edit mode: {value!r}")
+    if isinstance(value, int):
+        if value not in _SPECTRAL_EDIT_MODE_NAMES.values():
+            raise ValueError(f"unknown spectral edit mode: {value!r}")
+        return value
+    key = value.strip().lower().replace("-", "_")
+    if key not in _SPECTRAL_EDIT_MODE_NAMES:
+        raise ValueError(f"unknown spectral edit mode: {value!r}")
+    return _SPECTRAL_EDIT_MODE_NAMES[key]
+
+
+def _coerce_spectral_edit_window(value: int | str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"unknown spectral edit window: {value!r}")
+    if isinstance(value, int):
+        if value not in _SPECTRAL_EDIT_WINDOW_NAMES.values():
+            raise ValueError(f"unknown spectral edit window: {value!r}")
+        return value
+    key = value.strip().lower().replace("-", "_")
+    if key not in _SPECTRAL_EDIT_WINDOW_NAMES:
+        raise ValueError(f"unknown spectral edit window: {value!r}")
+    return _SPECTRAL_EDIT_WINDOW_NAMES[key]
+
+
+@dataclasses.dataclass
+class SpectralRegionOp:
+    """One time x frequency rectangle edit op for :func:`spectral_edit`.
+
+    Mirrors :class:`SonareSpectralRegionOp`. ``mode`` is one of ``"gain"``,
+    ``"attenuate"``, ``"mute"`` or ``"heal"`` (or the matching integer enum
+    value from ``SONARE_SPECTRAL_EDIT_MODE_*``).
+    """
+
+    start_sample: int
+    end_sample: int
+    low_hz: float
+    high_hz: float
+    gain_db: float = 0.0
+    mode: str | int = "gain"
+
+
+def spectral_edit(
+    samples: Sequence[float] | list[float],
+    sample_rate: int,
+    ops: Sequence[SpectralRegionOp],
+    *,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    window: str | int = "hann",
+    heal_radius_frames: int = 2,
+) -> list[float]:
+    """Region-based spectral editing (STFT -> per-op bin/frame masking -> iSTFT).
+
+    Stateless mono transform; the output has the same length and sample rate as
+    the input. Each entry of ``ops`` is a :class:`SpectralRegionOp` describing a
+    time x frequency rectangle that is applied in order. An empty ``ops`` list is
+    the identity transform.
+
+    Args:
+        samples: Audio samples (mono).
+        sample_rate: Sample rate in Hz.
+        ops: Sequence of :class:`SpectralRegionOp` region edits, applied in order.
+        n_fft: STFT size; must be a power of two (default 2048).
+        hop_length: STFT hop; must satisfy ``0 < hop_length <= n_fft / 2``
+            (default 512).
+        window: Analysis window, one of ``"hann"``, ``"hamming"``,
+            ``"blackman"``, ``"rectangular"`` (or the matching integer enum;
+            default ``"hann"``).
+        heal_radius_frames: Neighbour frames each side used by ``"heal"`` mode
+            (default 2).
+
+    Returns:
+        List of edited samples.
+    """
+    _require_pow2_nfft(n_fft)
+    if hop_length <= 0 or hop_length > n_fft // 2:
+        raise ValueError("hop_length must satisfy 0 < hop_length <= n_fft / 2")
+    if heal_radius_frames < 0:
+        raise ValueError("heal_radius_frames must be non-negative")
+    window_value = _coerce_spectral_edit_window(window)
+
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    config = SonareSpectralEditConfig(
+        n_fft=int(n_fft),
+        hop_length=int(hop_length),
+        window=int(window_value),
+        heal_radius_frames=int(heal_radius_frames),
+    )
+
+    n_ops = len(ops)
+    c_ops = None
+    if n_ops > 0:
+        c_ops = (SonareSpectralRegionOp * n_ops)()
+        for i, op in enumerate(ops):
+            c_ops[i] = SonareSpectralRegionOp(
+                start_sample=int(op.start_sample),
+                end_sample=int(op.end_sample),
+                low_hz=float(op.low_hz),
+                high_hz=float(op.high_hz),
+                gain_db=float(op.gain_db),
+                mode=_coerce_spectral_edit_mode(op.mode),
+            )
+
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_spectral_edit(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(config),
+        c_ops,
+        ctypes.c_size_t(n_ops),
         ctypes.byref(out),
         ctypes.byref(out_length),
     )

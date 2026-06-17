@@ -1,8 +1,9 @@
+#include <sonare/sonare_c.h>
+
 #include <cstring>
 #include <memory>
 
 #include "mastering/api/chain.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 

@@ -1,7 +1,7 @@
 # Cross-binding parity checker
 
 libsonare exposes one C++ core through four **hand-written** language surfaces —
-the C ABI (`src/sonare_c.h` + `src/sonare_c_<domain>.{h,cpp}`), Node N-API
+the C ABI (public headers `include/sonare/sonare_c*.h` + implementation `src/c_api/`), Node N-API
 (`bindings/node/`), Python ctypes (`bindings/python/`) and WASM embind
 (`src/wasm/bindings.cpp` + `bindings/wasm/`) — plus a curated Python CLI. Because
 those surfaces are maintained by hand (there is no code generation; the YAML
@@ -126,7 +126,7 @@ central knobs (`input_roles`, `handle_prefixes`).
 ```
 check_parity.py     entry point: load extractors + allowlist + core_map, build report
 extractors/         one parser per surface:
-  c_api.py            sonare_c.h + the sonare_c_<domain>.h headers it includes
+  c_api.py            include/sonare/sonare_c.h + the sonare_c_<domain>.h headers it includes
   python_pyi.py       analyzer.pyi stubs
   node_ts.py / wasm_ts.py / ts_common.py   the TS facades (the index re-export
                       closure: `export ... from './m'` is followed transitively,

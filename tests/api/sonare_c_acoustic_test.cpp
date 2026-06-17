@@ -1,8 +1,8 @@
+#include <sonare/sonare_c.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <vector>
-
-#include "sonare_c.h"
 
 namespace {
 

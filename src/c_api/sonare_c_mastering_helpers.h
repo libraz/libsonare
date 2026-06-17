@@ -1,6 +1,8 @@
 #ifndef SONARE_C_MASTERING_HELPERS_H_
 #define SONARE_C_MASTERING_HELPERS_H_
 
+#include <sonare/sonare_c.h>
+
 #include <cstring>
 #include <memory>
 #include <string>
@@ -11,7 +13,6 @@
 #include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 namespace sonare_c_mastering_detail {

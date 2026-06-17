@@ -1,3 +1,5 @@
+#include <sonare/sonare_c.h>
+
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -8,7 +10,6 @@
 #include "mastering/api/chain.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/streaming_preview.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 

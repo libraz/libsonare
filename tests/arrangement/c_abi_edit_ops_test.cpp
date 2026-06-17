@@ -3,15 +3,15 @@
 /// automation lanes, and the MoveClip wrong-kind guard) including undo/redo
 /// round-trips and deep-equality (serialized bytes) after undo.
 
+#include <sonare/sonare_c.h>
+#include <sonare/sonare_c_project.h>
+
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
-
-#include "sonare_c.h"
-#include "sonare_c_project.h"
 
 namespace {
 

@@ -60,6 +60,7 @@ set(SONARE_SOURCES
   effects/phase_vocoder.cpp
   effects/native_spectral_stretch.cpp
   effects/time_stretch.cpp
+  effects/spectral_edit.cpp
   effects/pitch_shift.cpp
   effects/normalize.cpp
   effects/decompose.cpp
@@ -108,36 +109,36 @@ set(SONARE_SOURCES
   streaming/stream_analyzer_utils.cpp
   streaming/stream_resampler.cpp
   quick.cpp
-  sonare_c.cpp
+  c_api/sonare_c.cpp
   c_api/eq_band_json.cpp
   c_api/core_analysis.cpp
   c_api/core_audio.cpp
   c_api/core_common.cpp
   c_api/core_cqt.cpp
   c_api/core_quick.cpp
-  sonare_c_effects.cpp
-  sonare_c_features.cpp
+  c_api/sonare_c_effects.cpp
+  c_api/sonare_c_features.cpp
   c_api/features_common.cpp
   c_api/features_inverse.cpp
   c_api/features_music.cpp
   c_api/features_spectrogram_mel.cpp
   c_api/features_spectral_pitch.cpp
   c_api/features_streaming.cpp
-  sonare_c_compat.cpp
-  sonare_c_editing.cpp
-  sonare_c_internal.cpp
-  sonare_c_memory.cpp
+  c_api/sonare_c_compat.cpp
+  c_api/sonare_c_editing.cpp
+  c_api/sonare_c_internal.cpp
+  c_api/sonare_c_memory.cpp
 )
 
 set(SONARE_C_MIXING_SOURCES
-  sonare_c_mixing.cpp
+  c_api/sonare_c_mixing.cpp
   c_api/mixing_graph.cpp
   c_api/mixing_mixer.cpp
   c_api/mixing_strip.cpp
 )
 
 set(SONARE_C_PROJECT_SOURCES
-  sonare_c_project.cpp
+  c_api/sonare_c_project.cpp
   c_api/project_bounce.cpp
   c_api/project_core.cpp
   c_api/project_edit.cpp
@@ -202,7 +203,7 @@ add_library(sonare_core_objects OBJECT ${SONARE_SOURCES})
 set_target_properties(sonare_core_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(sonare_core_objects PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
 )
 target_include_directories(sonare_core_objects SYSTEM PUBLIC
   ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -216,7 +217,7 @@ target_compile_options(sonare_core_objects PRIVATE ${SONARE_WARNING_FLAGS})
 add_library(sonare_core STATIC $<TARGET_OBJECTS:sonare_core_objects>)
 
 target_include_directories(sonare_core PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
 )
 target_include_directories(sonare_core SYSTEM PUBLIC
   ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -255,7 +256,7 @@ add_library(sonare_rt STATIC
   transport/transport.cpp
 )
 target_include_directories(sonare_rt PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
 )
 target_include_directories(sonare_rt SYSTEM PUBLIC
   ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -273,7 +274,7 @@ add_library(sonare_automation STATIC
   automation/parameter.cpp
 )
 target_include_directories(sonare_automation PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
 )
 target_include_directories(sonare_automation SYSTEM PUBLIC
   ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -384,7 +385,7 @@ if(BUILD_MASTERING)
     mastering/eq/tilt.cpp
   )
   target_include_directories(sonare_mastering PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_mastering SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -426,7 +427,7 @@ if(BUILD_MIXING)
     mixing/vca_group.cpp
   )
   target_include_directories(sonare_mixing PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_mixing SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -445,7 +446,7 @@ if(BUILD_GRAPH)
     graph/node.cpp
   )
   target_include_directories(sonare_graph PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_graph SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -480,7 +481,7 @@ if(BUILD_MIXING)
 endif()
 add_library(sonare_engine STATIC ${SONARE_ENGINE_SOURCES})
 target_include_directories(sonare_engine PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
 )
 target_include_directories(sonare_engine SYSTEM PUBLIC
   ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -515,7 +516,7 @@ if(BUILD_FX)
     effects/reverb/velvet_reverb.cpp
   )
   target_include_directories(sonare_fx PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_fx SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -554,7 +555,7 @@ if(BUILD_ACOUSTIC_SIM)
     analysis/room_estimator.cpp
   )
   target_include_directories(sonare_acoustic PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_acoustic SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -576,7 +577,7 @@ if(BUILD_PITCH_EDITOR)
     editing/pitch_editor/scale_quantizer.cpp
   )
   target_include_directories(sonare_pitch_editor PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_pitch_editor SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -606,7 +607,7 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer/voice_changer.cpp
   )
   target_include_directories(sonare_voice_changer PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_voice_changer SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -665,7 +666,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/sf2_player.cpp
     midi/synth/gs_layer.cpp
   )
-  target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
   target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)
   if(BUILD_FX)
     # GS system effects (reverb/chorus/delay send-returns) reuse the FX suite;
@@ -692,7 +693,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/edit_compiler.cpp
   )
   target_include_directories(sonare_arrangement PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_arrangement SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft
@@ -722,7 +723,7 @@ if(BUILD_ARRANGEMENT)
     mir/warp.cpp
     mir/key_context.cpp
   )
-  target_include_directories(sonare_mir PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_include_directories(sonare_mir PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
   target_link_libraries(sonare_mir PUBLIC sonare_core sonare_rt sonare_arrangement)
   target_compile_options(sonare_mir PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_mir PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -739,7 +740,7 @@ if(BUILD_ARRANGEMENT)
   add_library(sonare_serialize STATIC
     serialize/project_serializer.cpp
   )
-  target_include_directories(sonare_serialize PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_include_directories(sonare_serialize PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
   target_link_libraries(sonare_serialize PUBLIC
     sonare_arrangement sonare_midi sonare_mir sonare_core)
   if(BUILD_MIXING)
@@ -766,7 +767,7 @@ if(BUILD_ARRANGEMENT)
       midi/assist/assist_registry.cpp
       midi/assist/composition_assist.cpp
     )
-    target_include_directories(sonare_assist PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(sonare_assist PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
     target_link_libraries(sonare_assist PUBLIC sonare_arrangement sonare_midi sonare_mir)
     target_compile_options(sonare_assist PRIVATE ${SONARE_WARNING_FLAGS})
     set_target_properties(sonare_assist PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -779,13 +780,13 @@ if(BUILD_SHARED)
   set(SONARE_SHARED_SOURCES $<TARGET_OBJECTS:sonare_core_objects>)
   if(BUILD_MASTERING)
     list(APPEND SONARE_SHARED_SOURCES
-         sonare_c_mastering_apply.cpp
-         sonare_c_mastering_chain.cpp
-         sonare_c_mastering_dynamics.cpp
-         sonare_c_mastering_eq.cpp
-         sonare_c_mastering_preset.cpp
-         sonare_c_mastering_repair.cpp
-         sonare_c_mastering_streaming.cpp)
+         c_api/sonare_c_mastering_apply.cpp
+         c_api/sonare_c_mastering_chain.cpp
+         c_api/sonare_c_mastering_dynamics.cpp
+         c_api/sonare_c_mastering_eq.cpp
+         c_api/sonare_c_mastering_preset.cpp
+         c_api/sonare_c_mastering_repair.cpp
+         c_api/sonare_c_mastering_streaming.cpp)
   endif()
   if(BUILD_MIXING)
     list(APPEND SONARE_SHARED_SOURCES ${SONARE_C_MIXING_SOURCES})
@@ -793,10 +794,10 @@ if(BUILD_SHARED)
   # Always compile the acoustic C ABI translation unit so the public header's
   # symbols exist in feature-off shared builds; it returns NOT_SUPPORTED unless
   # the acoustic + FX modules are both linked.
-  list(APPEND SONARE_SHARED_SOURCES sonare_c_acoustic.cpp)
-  list(APPEND SONARE_SHARED_SOURCES sonare_c_daw.cpp)
-  list(APPEND SONARE_SHARED_SOURCES sonare_c_engine.cpp)
-  list(APPEND SONARE_SHARED_SOURCES sonare_c_voice_changer.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_acoustic.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_daw.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_voice_changer.cpp)
   # The project (arrangement) C ABI sources are always compiled so their
   # public symbols exist in feature-off shared builds; it returns NOT_SUPPORTED
   # unless the arrangement subsystem is linked (see the BUILD_ARRANGEMENT block).
@@ -809,7 +810,7 @@ if(BUILD_SHARED)
     POSITION_INDEPENDENT_CODE ON
   )
   target_include_directories(sonare_shared PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
   )
   target_include_directories(sonare_shared SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/kissfft

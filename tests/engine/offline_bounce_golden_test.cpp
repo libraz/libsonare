@@ -1,3 +1,5 @@
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
@@ -12,7 +14,6 @@
 #include <tuple>
 #include <vector>
 
-#include "sonare_c.h"
 #include "util/constants.h"
 
 using sonare::constants::kPi;

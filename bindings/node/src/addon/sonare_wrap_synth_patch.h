@@ -2,12 +2,12 @@
 #define SONARE_NODE_SONARE_WRAP_SYNTH_PATCH_H_
 
 #include <napi.h>
+#include <sonare/sonare_c.h>
 
 #include <cstring>
 #include <iterator>
 #include <string>
 
-#include "sonare_c.h"
 #include "sonare_wrap_options.h"
 
 namespace sonare_node {

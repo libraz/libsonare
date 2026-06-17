@@ -3913,6 +3913,68 @@
     ],
     "size": 72
   },
+  "SonareSpectralEditConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "n_fft",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "hop_length",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "window",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "heal_radius_frames",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareSpectralRegionOp": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "start_sample",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "end_sample",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "low_hz",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "high_hz",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "gain_db",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "mode",
+        "offset": 28,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
   "SonareSpectrumResult": {
     "align": 8,
     "fields": [

@@ -74,21 +74,21 @@ set(ADDON_SOURCES
 )
 
 set(SONARE_NODE_C_API_SOURCES
-  ${SONARE_ROOT}/src/sonare_c_mastering_apply.cpp
-  ${SONARE_ROOT}/src/sonare_c_mastering_chain.cpp
-  ${SONARE_ROOT}/src/sonare_c_mastering_dynamics.cpp
-  ${SONARE_ROOT}/src/sonare_c_mastering_eq.cpp
-  ${SONARE_ROOT}/src/sonare_c_mastering_preset.cpp
-  ${SONARE_ROOT}/src/sonare_c_mastering_repair.cpp
-  ${SONARE_ROOT}/src/sonare_c_mastering_streaming.cpp
-  ${SONARE_ROOT}/src/sonare_c_mixing.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_mastering_apply.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_mastering_chain.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_mastering_dynamics.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_mastering_eq.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_mastering_preset.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_mastering_repair.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_mastering_streaming.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_mixing.cpp
   ${SONARE_ROOT}/src/c_api/mixing_graph.cpp
   ${SONARE_ROOT}/src/c_api/mixing_mixer.cpp
   ${SONARE_ROOT}/src/c_api/mixing_strip.cpp
-  ${SONARE_ROOT}/src/sonare_c_daw.cpp
-  ${SONARE_ROOT}/src/sonare_c_engine.cpp
-  ${SONARE_ROOT}/src/sonare_c_voice_changer.cpp
-  ${SONARE_ROOT}/src/sonare_c_project.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_daw.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_engine.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_voice_changer.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_project.cpp
   ${SONARE_ROOT}/src/c_api/project_bounce.cpp
   ${SONARE_ROOT}/src/c_api/project_core.cpp
   ${SONARE_ROOT}/src/c_api/project_edit.cpp
@@ -112,6 +112,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   ${CMAKE_JS_INC}
   ${NAPI_INCLUDE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/src/addon
+  ${SONARE_ROOT}/include
   ${SONARE_ROOT}/src
 )
 

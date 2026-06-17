@@ -2,8 +2,7 @@
 #define SONARE_NODE_SONARE_WRAP_H_
 
 #include <napi.h>
-
-#include "sonare_c.h"
+#include <sonare/sonare_c.h>
 
 class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
  public:
@@ -151,6 +150,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringRepairDereverbClassical(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairTrimSilence(const Napi::CallbackInfo& info);
   static Napi::Value Trim(const Napi::CallbackInfo& info);
+  static Napi::Value SpectralEdit(const Napi::CallbackInfo& info);
 
   // Features - Spectrogram
   static Napi::Value Stft(const Napi::CallbackInfo& info);

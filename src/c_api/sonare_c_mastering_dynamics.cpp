@@ -1,3 +1,5 @@
+#include <sonare/sonare_c.h>
+
 #include <cstring>
 #include <vector>
 
@@ -5,7 +7,6 @@
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/gate.h"
 #include "mastering/dynamics/transient_shaper.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 #include "util/exception.h"
 

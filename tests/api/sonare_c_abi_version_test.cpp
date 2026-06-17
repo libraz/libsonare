@@ -2,11 +2,11 @@
 /// @brief Aggregate C-ABI version accessor, length-checked inverse transforms,
 ///        and the uniform non-finite input policy for the compat transforms.
 
+#include <sonare/sonare_c.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <vector>
-
-#include "sonare_c.h"
 
 TEST_CASE("sonare_abi_version mirrors the compile-time aggregate", "[c_api][abi]") {
   REQUIRE(sonare_abi_version() == SONARE_ABI_VERSION);

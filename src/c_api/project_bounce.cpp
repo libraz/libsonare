@@ -11,10 +11,11 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/synth/synth_presets.h"
 #if defined(SONARE_WITH_MIXING)
+#include <sonare/sonare_c_mixing.h>
+
 #include "c_api/mixing_internal.h"
 #include "engine/mixing_runtime.h"
 #include "mixing/api/scene.h"
-#include "sonare_c_mixing.h"
 #endif
 
 namespace {

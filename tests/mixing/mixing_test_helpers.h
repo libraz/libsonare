@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <sonare/sonare_c.h>
+
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -23,7 +25,6 @@
 #include "metering/lufs.h"
 #include "mixing/meter.h"
 #include "mixing/mixing.h"
-#include "sonare_c.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/db.h"

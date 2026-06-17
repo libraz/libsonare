@@ -5,6 +5,8 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
@@ -21,7 +23,6 @@
 #include "mixing/fx_bus.h"
 #include "mixing/meter.h"
 #include "rt/processor_base.h"
-#include "sonare_c.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;

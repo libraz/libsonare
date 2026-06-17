@@ -6,6 +6,8 @@
 ///        Heap-allocated result fields are released through dedicated
 ///        `sonare_free_*_result` entry points to mirror the rest of the C API.
 
+#include <sonare/sonare_c.h>
+
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -21,7 +23,6 @@
 #include "metering/stereo.h"
 #include "metering/true_peak.h"
 #include "metering/waveform.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare;

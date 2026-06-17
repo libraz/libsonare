@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <cstring>
 #include <limits>
@@ -33,7 +35,6 @@
 #include "feature/vqt.h"
 #include "quick.h"
 #include "sonare.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare;

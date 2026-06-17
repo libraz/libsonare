@@ -4,12 +4,13 @@
 ///        and the extended true-peak oversample-factor validation
 ///        (factor 16 accepted, non-power-of-two rejected).
 
+#include <sonare/sonare_c.h>
+
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <vector>
 
-#include "sonare_c.h"
 #include "util/constants.h"
 
 namespace {

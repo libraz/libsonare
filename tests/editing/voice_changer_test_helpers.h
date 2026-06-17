@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -28,7 +30,6 @@
 #include "editing/voice_changer/streaming_reverb.h"
 #include "editing/voice_changer/voice_changer.h"
 #include "metering/true_peak.h"
-#include "sonare_c.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"

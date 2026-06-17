@@ -1,10 +1,11 @@
+#include <sonare/sonare_c.h>
+
 #include <memory>
 
 #include "c_api/eq_band_json.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare;

@@ -2,6 +2,8 @@
  * Type declarations for the Emscripten-generated WASM module with embind
  */
 
+import type { SpectralRegionOp } from './public_types';
+
 export interface SonareModuleOptions {
   locateFile?: (path: string, prefix: string) => string;
   wasmBinary?: ArrayBuffer | Uint8Array;
@@ -1468,6 +1470,12 @@ export interface SonareModule {
     options: Record<string, unknown>,
   ) => WasmMixResult;
   trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;
+  spectralEdit: (
+    samples: Float32Array,
+    sampleRate: number,
+    ops: SpectralRegionOp[],
+    options: Record<string, unknown>,
+  ) => Float32Array;
 
   // Features - Spectrogram
   stft: (

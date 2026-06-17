@@ -1,5 +1,8 @@
 #pragma once
 
+#include <sonare/sonare_c.h>
+#include <sonare/sonare_c_project.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -10,9 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
-#include "sonare_c_project.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "analysis/beat_analyzer.h"

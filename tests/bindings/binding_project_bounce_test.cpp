@@ -1,8 +1,9 @@
 /// @file binding_project_bounce_test.cpp
 /// @brief Project bounce parity tests.
 
+#include <sonare/sonare_c_mixing.h>
+
 #include "binding_project_parity_test_helpers.h"
-#include "sonare_c_mixing.h"
 
 TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI", "[project]") {
   SonareProject* project = nullptr;

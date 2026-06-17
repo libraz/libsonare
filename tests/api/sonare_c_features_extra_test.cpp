@@ -2,13 +2,14 @@
 /// @brief Tests for the spectral-contrast / poly-features / zero-crossings /
 ///        tuning C API functions added on top of the core feature wrappers.
 
+#include <sonare/sonare_c.h>
+
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <vector>
 
-#include "sonare_c.h"
 #include "util/constants.h"
 
 namespace {

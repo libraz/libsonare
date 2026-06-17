@@ -367,6 +367,40 @@ export interface NoteStretchOptions {
   stretchRatio?: number;
 }
 
+/** How a `spectralEdit` region op modifies the masked bins. */
+export type SpectralEditMode = 'gain' | 'attenuate' | 'mute' | 'heal';
+
+/** Analysis/synthesis window used by `spectralEdit`. */
+export type SpectralEditWindow = 'hann' | 'hamming' | 'blackman' | 'rectangular';
+
+/** One time x frequency rectangle edit op for `spectralEdit`. */
+export interface SpectralRegionOp {
+  /** Region time start (input samples); clamped to [0, length]. Default 0. */
+  startSample?: number;
+  /** Region time end, exclusive (input samples); clamped to [0, length]. Default 0. */
+  endSample?: number;
+  /** Region frequency low edge in Hz; clamped to [0, nyquist]. Default 0. */
+  lowHz?: number;
+  /** Region frequency high edge in Hz; <=0 or >= nyquist means nyquist. Default 0. */
+  highHz?: number;
+  /** Linear gain in dB for 'gain'/'attenuate'; ignored by 'mute'/'heal'. Default 0. */
+  gainDb?: number;
+  /** Edit mode. Default 'gain'. */
+  mode?: SpectralEditMode;
+}
+
+/** STFT + heal parameters for `spectralEdit`. All fields are optional. */
+export interface SpectralEditOptions {
+  /** FFT size; must be a power of two (>= 2). Default 2048. */
+  nFft?: number;
+  /** Hop length; must satisfy 0 < hop <= nFft/2. Default 512. */
+  hopLength?: number;
+  /** Analysis + synthesis window. Default 'hann'. */
+  window?: SpectralEditWindow;
+  /** Neighbour frames each side used by 'heal' (>= 1). Default 2. */
+  healRadiusFrames?: number;
+}
+
 /**
  * Detected beat
  */

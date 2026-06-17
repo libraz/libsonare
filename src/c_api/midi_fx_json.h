@@ -1,11 +1,12 @@
 #pragma once
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 
 #include "midi/midi_fx.h"
-#include "sonare_c.h"
 #include "util/json.h"
 
 namespace sonare_c_detail {

@@ -127,7 +127,7 @@ def _parse_param(decl: str) -> Param:
     )
 
 
-# Local public-API includes: ``#include "sonare_c_effects.h"`` etc. The monolith
+# Local public-API includes: ``#include <sonare/sonare_c_effects.h>`` etc. The monolith
 # ``sonare_c.h`` was split into domain headers (commit 38aa15c), so the canonical
 # C surface is now spread across the headers it pulls in. We follow those local
 # includes transitively to reconstruct the full surface. Internal / helper
@@ -142,10 +142,13 @@ def _is_internal_header(name: str) -> bool:
 def _collect_api_headers(root: Path) -> list[Path]:
     """All public C-API headers, starting from sonare_c.h and following its
     local ``sonare_c*.h`` includes transitively (excluding internal/helpers)."""
+    # Public C-API headers live under include/sonare/; sonare_c.h pulls in its
+    # domain siblings by bare name (resolved relative to that directory).
+    pub = root / "include" / "sonare"
     src = root / "src"
     out: list[Path] = []
     seen: set[Path] = set()
-    queue: list[Path] = [src / "sonare_c.h"]
+    queue: list[Path] = [pub / "sonare_c.h"]
     while queue:
         path = queue.pop(0)
         if path in seen or not path.exists():
@@ -156,7 +159,7 @@ def _collect_api_headers(root: Path) -> list[Path]:
         for inc in _LOCAL_INCLUDE_RE.findall(raw):
             if _is_internal_header(inc):
                 continue
-            child = src / inc
+            child = pub / inc
             if child not in seen:
                 queue.append(child)
     # Generated headers (when codegen is active) as a backstop.

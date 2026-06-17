@@ -332,3 +332,126 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)
 }
+
+namespace {
+
+/// @brief Map a lowercase window string to the SonareWindowType integer.
+/// Returns -1 on an unrecognised name (caller should throw).
+int parse_window_type(const std::string& s) {
+  if (s == "hann") return 0;
+  if (s == "hamming") return 1;
+  if (s == "blackman") return 2;
+  if (s == "rectangular" || s == "rect") return 3;
+  return -1;
+}
+
+/// @brief Map a lowercase spectral-edit mode string to SonareSpectralEditMode.
+/// Returns -1 on an unrecognised name (caller should throw).
+int parse_spectral_edit_mode(const std::string& s) {
+  if (s == "gain") return SONARE_SPECTRAL_EDIT_MODE_GAIN;
+  if (s == "attenuate") return SONARE_SPECTRAL_EDIT_MODE_ATTENUATE;
+  if (s == "mute") return SONARE_SPECTRAL_EDIT_MODE_MUTE;
+  if (s == "heal") return SONARE_SPECTRAL_EDIT_MODE_HEAL;
+  return -1;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples: Float32Array, sampleRate: number, ops: object[], options?: object)
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsArray()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array, sampleRate, ops: object[], options?: object)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sr = info[1].As<Napi::Number>().Int32Value();
+
+  // Build config (optional fourth argument).
+  SonareSpectralEditConfig config{};  // zero-init = all defaults
+  const SonareSpectralEditConfig* config_ptr = nullptr;
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    Napi::Object opts = info[3].As<Napi::Object>();
+    config.n_fft = node_int_option(opts, "nFft", 0);
+    config.hop_length = node_int_option(opts, "hopLength", 0);
+    config.heal_radius_frames = node_int_option(opts, "healRadiusFrames", 0);
+
+    // Parse optional window string.
+    Napi::Value win_val = opts.Get("window");
+    if (!win_val.IsUndefined() && !win_val.IsNull()) {
+      if (!win_val.IsString()) {
+        throw std::runtime_error("spectralEdit: window must be a string");
+      }
+      std::string win_str = win_val.As<Napi::String>().Utf8Value();
+      std::transform(win_str.begin(), win_str.end(), win_str.begin(),
+                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      int win_int = parse_window_type(win_str);
+      if (win_int < 0) {
+        throw std::runtime_error("spectralEdit: unknown window type: " +
+                                 win_val.As<Napi::String>().Utf8Value());
+      }
+      config.window = win_int;
+    }
+    config_ptr = &config;
+  }
+
+  // Build ops array from the JS array of plain objects.
+  auto js_ops = info[2].As<Napi::Array>();
+  const uint32_t n_ops = js_ops.Length();
+  std::vector<SonareSpectralRegionOp> ops(n_ops);
+  for (uint32_t i = 0; i < n_ops; ++i) {
+    Napi::Value item = js_ops.Get(i);
+    if (!item.IsObject()) {
+      throw std::runtime_error("spectralEdit: each op must be a plain object");
+    }
+    Napi::Object op = item.As<Napi::Object>();
+    ops[i].start_sample = Int64Property(op, "startSample", 0);
+    ops[i].end_sample = Int64Property(op, "endSample", static_cast<int64_t>(length));
+    ops[i].low_hz = FloatProperty(op, "lowHz", 0.0f);
+    ops[i].high_hz = FloatProperty(op, "highHz", 0.0f);
+    ops[i].gain_db = FloatProperty(op, "gainDb", 0.0f);
+
+    // Resolve mode: required string field.
+    Napi::Value mode_val = op.Get("mode");
+    if (mode_val.IsUndefined() || mode_val.IsNull()) {
+      ops[i].mode = SONARE_SPECTRAL_EDIT_MODE_GAIN;
+    } else {
+      if (!mode_val.IsString()) {
+        throw std::runtime_error("spectralEdit: op.mode must be a string");
+      }
+      std::string mode_str = mode_val.As<Napi::String>().Utf8Value();
+      std::transform(mode_str.begin(), mode_str.end(), mode_str.begin(),
+                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      int mode_int = parse_spectral_edit_mode(mode_str);
+      if (mode_int < 0) {
+        throw std::runtime_error("spectralEdit: unknown mode: " +
+                                 mode_val.As<Napi::String>().Utf8Value());
+      }
+      ops[i].mode = mode_int;
+    }
+  }
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  SonareError err = sonare_spectral_edit(
+      data, length, sr, config_ptr, n_ops > 0 ? ops.data() : nullptr, n_ops, &out, &out_length);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+
+  auto result = Napi::Float32Array::New(env, out_length);
+  if (out_length > 0 && out != nullptr) {
+    std::memcpy(result.Data(), out, out_length * sizeof(float));
+    sonare_free_floats(out);
+  }
+  return result;
+  SONARE_NODE_CATCH(env)
+}

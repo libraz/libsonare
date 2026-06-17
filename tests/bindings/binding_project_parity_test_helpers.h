@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <sonare/sonare_c.h>
+#include <sonare/sonare_c_project.h>
+
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -14,8 +17,6 @@
 
 #include "midi/smf.h"
 #include "midi/smf2.h"
-#include "sonare_c.h"
-#include "sonare_c_project.h"
 #include "util/constants.h"
 
 namespace {

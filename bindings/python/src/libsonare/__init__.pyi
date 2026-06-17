@@ -29,6 +29,9 @@ from .analyzer import (
     RealtimeVoiceChangerConfig as RealtimeVoiceChangerConfig,
 )
 from .analyzer import (
+    SpectralRegionOp as SpectralRegionOp,
+)
+from .analyzer import (
     StreamingEqualizer as StreamingEqualizer,
 )
 from .analyzer import (
@@ -402,6 +405,9 @@ from .analyzer import (
 )
 from .analyzer import (
     spectral_contrast as spectral_contrast,
+)
+from .analyzer import (
+    spectral_edit as spectral_edit,
 )
 from .analyzer import (
     spectral_flatness as spectral_flatness,

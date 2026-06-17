@@ -57,6 +57,7 @@ add_executable(sonare_tests
   feature/vqt_test.cpp
   effects/hpss_test.cpp
   effects/time_stretch_test.cpp
+  effects/spectral_edit_test.cpp
   effects/pitch_shift_test.cpp
   effects/phase_vocoder_test.cpp
   effects/normalize_test.cpp
@@ -158,7 +159,7 @@ add_executable(sonare_tests
 
 target_link_libraries(sonare_tests PRIVATE sonare_engine Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
-target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
 
 if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
   target_sources(sonare_tests PRIVATE
@@ -206,13 +207,13 @@ if(BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_mastering)
   endif()
   target_sources(sonare_tests PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_apply.cpp
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_chain.cpp
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_dynamics.cpp
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_eq.cpp
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_preset.cpp
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_repair.cpp
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_mastering_streaming.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_apply.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_chain.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_dynamics.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_eq.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_preset.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_repair.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_streaming.cpp
   )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MASTERING=1)
   if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
@@ -243,7 +244,7 @@ if(BUILD_MIXING)
     mixing/routing_capi_test.cpp
   )
   target_sources(sonare_tests PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_mixing.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mixing.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/mixing_graph.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/mixing_mixer.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
@@ -284,7 +285,7 @@ if(BUILD_ACOUSTIC_SIM)
     target_sources(sonare_tests PRIVATE effects/room_morph_test.cpp)
     target_sources(sonare_tests PRIVATE
       api/sonare_c_acoustic_test.cpp
-      ${PROJECT_SOURCE_DIR}/src/sonare_c_acoustic.cpp
+      ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_acoustic.cpp
     )
   endif()
   if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
@@ -313,9 +314,9 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer_limiter_json_test.cpp
   )
   target_sources(sonare_tests PRIVATE engine/offline_bounce_golden_test.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_daw.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_engine.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/sonare_c_voice_changer.cpp)
+  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_daw.cpp)
+  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine.cpp)
+  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_voice_changer.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)
   target_compile_definitions(sonare_tests PRIVATE
     SONARE_WITH_PITCH_EDITOR=1
@@ -370,7 +371,7 @@ if(BUILD_ARRANGEMENT)
   # The headless-project C ABI sources are compiled into the test binary so the
   # parity test drives the real C surface, like the engine/voice-changer TUs.
   target_sources(sonare_tests PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_project.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_project.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit.cpp

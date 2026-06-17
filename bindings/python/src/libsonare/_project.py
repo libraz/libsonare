@@ -1,6 +1,6 @@
 """Headless arrangement / DAW project wrapper for libsonare.
 
-This wraps the curated ``sonare_project_*`` C ABI (``src/sonare_c_project.h``):
+This wraps the curated ``sonare_project_*`` C ABI (``include/sonare/sonare_c_project.h``):
 an opaque :class:`SonareProject` handle over the arrangement control plane
 (Project / EditHistory / EditCompiler / serializer / MIR bridges / SMF).
 
@@ -111,7 +111,7 @@ _SYNTH_WAVEFORM_NAMES = {
     "triangle": SYNTH_WAVEFORM_TRIANGLE,
 }
 
-# Must match SONARE_PROJECT_ABI_VERSION (src/sonare_c_project.h) and the other
+# Must match SONARE_PROJECT_ABI_VERSION (include/sonare/sonare_c_project.h) and the other
 # bindings' expected project ABI constant. A mismatch means the loaded native
 # binary lays out the flat project PODs differently than this wrapper expects,
 # or the arrangement subsystem was compiled out (runtime version 0).

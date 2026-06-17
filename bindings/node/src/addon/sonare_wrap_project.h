@@ -2,8 +2,7 @@
 #define SONARE_NODE_SONARE_WRAP_PROJECT_H_
 
 #include <napi.h>
-
-#include "sonare_c.h"
+#include <sonare/sonare_c.h>
 
 /// @brief N-API ObjectWrap over the opaque headless-project handle
 ///        (@ref SonareProject). Mirrors the @ref RealtimeEngineWrap pattern:

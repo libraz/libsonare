@@ -2,10 +2,9 @@
 #define SONARE_NODE_SONARE_WRAP_MIXER_H_
 
 #include <napi.h>
+#include <sonare/sonare_c.h>
 
 #include <string>
-
-#include "sonare_c.h"
 
 namespace sonare_node {
 

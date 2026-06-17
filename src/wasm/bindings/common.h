@@ -4,6 +4,7 @@
 
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
+#include <sonare/sonare_c.h>
 
 #include <algorithm>
 #include <cctype>
@@ -53,6 +54,7 @@
 #include "effects/preemphasis.h"
 #include "effects/remix.h"
 #include "effects/silence.h"
+#include "effects/spectral_edit.h"
 #include "effects/time_stretch.h"
 #include "engine/realtime_engine.h"
 #include "feature/chroma.h"
@@ -114,7 +116,6 @@
 #include "rt/gain_processor.h"
 #include "rt/processor_base.h"
 #include "sonare.h"
-#include "sonare_c.h"
 #include "streaming/stream_analyzer.h"
 #include "util/db.h"
 #include "util/exception.h"

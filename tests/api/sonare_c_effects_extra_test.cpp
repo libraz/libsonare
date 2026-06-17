@@ -2,12 +2,13 @@
 /// @brief Tests for the extended C API effects wrappers (decompose, nn_filter,
 ///        remix, hpss_with_residual, phase_vocoder).
 
+#include <sonare/sonare_c.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <vector>
 
-#include "sonare_c.h"
 #include "util/constants.h"
 
 namespace {
@@ -220,6 +221,69 @@ TEST_CASE("sonare_phase_vocoder", "[c_api][effects]") {
     REQUIRE(out_len == 0);
 
     REQUIRE(sonare_phase_vocoder(samples.data(), samples.size(), sr, 0.5f, 2048, 512, nullptr,
+                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_spectral_edit", "[c_api][effects]") {
+  const int sr = 22050;
+  auto samples = generate_sine(1000.0f, sr, 0.5f);
+  // add a 5 kHz tone so a band attenuation is measurable.
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] += std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 5000.0f * i / sr);
+  }
+
+  SECTION("null config + zero ops is an identity transform") {
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, nullptr, 0, &out,
+                                 &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_len == samples.size());
+    for (size_t i = 0; i < out_len; ++i) REQUIRE(std::isfinite(out[i]));
+    sonare_free_floats(out);
+  }
+
+  SECTION("attenuating a band runs and returns same-length finite audio") {
+    SonareSpectralEditConfig config;
+    config.n_fft = 2048;
+    config.hop_length = 512;
+    config.window = SONARE_WINDOW_HANN;
+    config.heal_radius_frames = 2;
+
+    SonareSpectralRegionOp op;
+    op.start_sample = 0;
+    op.end_sample = static_cast<int64_t>(samples.size());
+    op.low_hz = 4000.0f;
+    op.high_hz = 6000.0f;
+    op.gain_db = -24.0f;
+    op.mode = SONARE_SPECTRAL_EDIT_MODE_ATTENUATE;
+
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, &config, &op, 1, &out,
+                                 &out_len) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_len == samples.size());
+    for (size_t i = 0; i < out_len; ++i) REQUIRE(std::isfinite(out[i]));
+    sonare_free_floats(out);
+  }
+
+  SECTION("null ops with non-zero count, bad mode, and null out are rejected") {
+    float* out = non_null_sentinel_float_ptr();
+    size_t out_len = 99;
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, nullptr, 3, &out,
+                                 &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_len == 0);
+
+    SonareSpectralRegionOp bad{0, static_cast<int64_t>(samples.size()), 0.0f, 0.0f, 0.0f, 99};
+    out = non_null_sentinel_float_ptr();
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, &bad, 1, &out,
+                                 &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+
+    REQUIRE(sonare_spectral_edit(samples.data(), samples.size(), sr, nullptr, nullptr, 0, nullptr,
                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }

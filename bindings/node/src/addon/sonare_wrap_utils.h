@@ -2,13 +2,13 @@
 #define SONARE_NODE_SONARE_WRAP_UTILS_H_
 
 #include <napi.h>
+#include <sonare/sonare_c.h>
 
 #include <exception>
 #include <new>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
-#include "sonare_c.h"
 #include "util/exception.h"
 
 namespace sonare_node {

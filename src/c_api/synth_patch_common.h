@@ -5,12 +5,13 @@
 ///        project bounce surface and the realtime engine surface (the 2-host
 ///        principle: one patch struct drives both).
 
+#include <sonare/sonare_c_types.h>
+
 #include <algorithm>
 #include <cstring>
 
 #include "midi/synth/native_synth.h"
 #include "midi/synth/synth_presets.h"
-#include "sonare_c_types.h"
 
 namespace sonare_c_detail {
 

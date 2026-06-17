@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
@@ -15,7 +17,6 @@
 #include <string>
 #include <vector>
 
-#include "sonare_c.h"
 #include "util/constants.h"
 
 namespace {

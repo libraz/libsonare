@@ -1,3 +1,5 @@
+#include <sonare/sonare_c.h>
+
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -13,7 +15,6 @@
 #include "feature/rhythm.h"
 #include "feature/tonnetz.h"
 #include "metering/lufs.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 #include "util/frame.h"
 #include "util/padding.h"

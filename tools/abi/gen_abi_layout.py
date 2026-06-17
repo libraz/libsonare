@@ -63,10 +63,11 @@ FFI_MODULES = (
     "libsonare._ffi_types_streaming",
 )
 
-# Headers the probe includes. sonare_c.h transitively pulls in the acoustic /
-# effects / features / mastering / metering / mixing / project / streaming /
-# types headers; the helpers header is standalone.
-PROBE_HEADERS = ("sonare_c.h", "sonare_c_mastering_helpers.h")
+# Headers the probe includes. sonare/sonare_c.h transitively pulls in the
+# acoustic / effects / features / mastering / metering / mixing / project /
+# streaming / types public headers (under include/sonare/); the helpers header
+# is an internal C-API header under src/c_api/.
+PROBE_HEADERS = ("sonare/sonare_c.h", "c_api/sonare_c_mastering_helpers.h")
 
 # ctypes Structure subclasses that intentionally do NOT correspond to a public C
 # typedef of the same name (binding-internal helpers). Excluded from the probe.
@@ -159,6 +160,8 @@ def build_and_run(probe_src: str, cxx: str) -> dict:
         compile_cmd = [
             cxx,
             "-std=c++17",
+            "-I",
+            str(REPO_ROOT / "include"),
             "-I",
             str(REPO_ROOT / "src"),
             str(src_path),

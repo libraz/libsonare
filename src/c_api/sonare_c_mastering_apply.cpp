@@ -1,3 +1,5 @@
+#include <sonare/sonare_c.h>
+
 #include <cstring>
 #include <memory>
 #include <sstream>
@@ -8,7 +10,6 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/maximizer/loudness_optimize.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 

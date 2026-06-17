@@ -18,7 +18,8 @@
 #include "midi/instrument.h"
 #include "midi/synth/sf2_file.h"
 #endif
-#include "sonare_c.h"
+#include <sonare/sonare_c.h>
+
 #include "util/exception.h"
 #include "util/types.h"
 

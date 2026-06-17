@@ -2137,3 +2137,48 @@ export interface ProjectAssistSidecar {
   regionEndPpq: number;
   payload: Uint8Array;
 }
+
+/**
+ * How a {@link SpectralRegionOp} modifies the masked STFT bins. Mirrors the C
+ * `SonareSpectralEditMode`:
+ * - `'gain'`: multiply magnitude by `10^(gainDb/20)` (phase kept).
+ * - `'attenuate'`: gain with a (typically negative) `gainDb`.
+ * - `'mute'`: hard-zero the masked bins (`gainDb` ignored).
+ * - `'heal'`: tonal continuation from neighbouring time frames.
+ */
+export type SpectralEditMode = 'gain' | 'attenuate' | 'mute' | 'heal';
+
+/**
+ * One time x frequency rectangle edit op for {@link spectralEdit}. Ops apply in
+ * array order. Mirrors the C `SonareSpectralRegionOp`.
+ */
+export interface SpectralRegionOp {
+  /** Region time start in input samples (clamped to `[0, length]`). Default 0. */
+  startSample?: number;
+  /** Region time end (exclusive) in input samples. Default = signal length. */
+  endSample?: number;
+  /** Region frequency low edge in Hz (clamped to `[0, nyquist]`). Default 0. */
+  lowHz?: number;
+  /** Region frequency high edge in Hz; `<= 0` or `>= nyquist` means nyquist. Default 0. */
+  highHz?: number;
+  /** Gain in dB for `'gain'` / `'attenuate'`; ignored by `'mute'` / `'heal'`. Default 0. */
+  gainDb?: number;
+  /** How the op modifies the masked bins. Default `'gain'`. */
+  mode?: SpectralEditMode;
+}
+
+/**
+ * STFT + heal parameters for {@link spectralEdit}. All fields are optional;
+ * omitted fields take the documented native defaults. Mirrors the C
+ * `SonareSpectralEditConfig`.
+ */
+export interface SpectralEditOptions {
+  /** FFT size; must be a power of two `>= 2`. Default 2048. */
+  nFft?: number;
+  /** Hop length; must satisfy `0 < hop <= nFft / 2`. Default 512. */
+  hopLength?: number;
+  /** Analysis/synthesis window. Default `'hann'`. */
+  window?: 'hann' | 'hamming' | 'blackman' | 'rectangular';
+  /** Neighbour frames each side used by `'heal'`. Default 2. */
+  healRadiusFrames?: number;
+}

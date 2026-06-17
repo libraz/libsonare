@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sonare/sonare_c.h>
+
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -17,7 +19,6 @@
 #include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 #include "streaming/stream_analyzer.h"
 #include "streaming/stream_config.h"

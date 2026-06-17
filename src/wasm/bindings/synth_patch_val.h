@@ -8,13 +8,13 @@
 #ifdef __EMSCRIPTEN__
 
 #include <emscripten/val.h>
+#include <sonare/sonare_c_project.h>
+#include <sonare/sonare_c_types.h>
 
 #include <cstring>
 #include <iterator>
 #include <string>
 
-#include "sonare_c_project.h"
-#include "sonare_c_types.h"
 #include "wasm/bindings/common.h"
 
 namespace sonare_wasm_synth {

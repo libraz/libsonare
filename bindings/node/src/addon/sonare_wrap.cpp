@@ -291,6 +291,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MasteringRepairTrimSilence,
                                   "masteringRepairTrimSilence"));
   exports.Set("trim", Napi::Function::New(env, &SonareWrap::Trim, "trim"));
+  exports.Set("spectralEdit", Napi::Function::New(env, &SonareWrap::SpectralEdit, "spectralEdit"));
 
   // Features - Spectrogram
   exports.Set("stft", Napi::Function::New(env, &SonareWrap::Stft, "stft"));

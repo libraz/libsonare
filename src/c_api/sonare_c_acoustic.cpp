@@ -1,4 +1,4 @@
-#include "sonare_c_acoustic.h"
+#include <sonare/sonare_c_acoustic.h>
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 #include <algorithm>

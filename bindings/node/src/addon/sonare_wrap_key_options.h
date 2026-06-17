@@ -2,13 +2,12 @@
 #define SONARE_NODE_SONARE_WRAP_KEY_OPTIONS_H_
 
 #include <napi.h>
+#include <sonare/sonare_c.h>
 
 #include <algorithm>
 #include <cctype>
 #include <string>
 #include <vector>
-
-#include "sonare_c.h"
 
 namespace sonare_node {
 

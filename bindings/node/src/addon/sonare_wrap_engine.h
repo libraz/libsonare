@@ -2,10 +2,9 @@
 #define SONARE_NODE_SONARE_WRAP_ENGINE_H_
 
 #include <napi.h>
+#include <sonare/sonare_c.h>
 
 #include <vector>
-
-#include "sonare_c.h"
 
 class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
  public:

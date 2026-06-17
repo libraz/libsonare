@@ -39,13 +39,13 @@ if(BUILD_ARRANGEMENT)
   # part of any static lib the CLI links, so compile them directly here, and
   # link the arrangement subsystem libs the C ABI resolves against.
   target_sources(sonare PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_project.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_project.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
-    ${PROJECT_SOURCE_DIR}/src/sonare_c_memory.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_memory.cpp
   )
   target_link_libraries(sonare PRIVATE
     sonare_arrangement sonare_serialize sonare_midi sonare_mir
@@ -57,7 +57,7 @@ if(BUILD_ARRANGEMENT)
     # and routing graph are not in any static lib the CLI already links. Compile
     # them in (BUILD_MIXING implies BUILD_GRAPH, see the top-level CMakeLists).
     target_sources(sonare PRIVATE
-      ${PROJECT_SOURCE_DIR}/src/sonare_c_mixing.cpp
+      ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mixing.cpp
       ${PROJECT_SOURCE_DIR}/src/c_api/mixing_graph.cpp
       ${PROJECT_SOURCE_DIR}/src/c_api/mixing_mixer.cpp
       ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
@@ -69,6 +69,7 @@ endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
 
 target_include_directories(sonare PRIVATE
+  ${PROJECT_SOURCE_DIR}/include
   ${PROJECT_SOURCE_DIR}/src
   ${PROJECT_SOURCE_DIR}/tools
   ${PROJECT_SOURCE_DIR}/tools/cli

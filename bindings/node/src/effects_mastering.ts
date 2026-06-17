@@ -18,6 +18,8 @@ import type {
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerOptions,
   SoloProcessor,
+  SpectralEditOptions,
+  SpectralRegionOp,
   StereoAnalysis,
   StreamAnalyzerConfig,
   StreamAnalyzerStats,
@@ -125,6 +127,31 @@ export function timeStretch(samples: Float32Array, rate: number, sampleRate = 22
     throw new TypeError('timeStretch: rate must be a finite number');
   }
   return addon.timeStretch(samples, sampleRate, rate);
+}
+
+/**
+ * Region-based spectral editing: STFT -> per-op time x frequency bin/frame
+ * masking -> iSTFT. A stateless mono transform whose output has the same length
+ * and sample rate as the input.
+ *
+ * Each {@link SpectralRegionOp} in `ops` is a time x frequency rectangle applied
+ * in array order (gain / attenuate / mute / heal). Passing an empty `ops` array
+ * is the identity transform (the input is returned). Wraps the C
+ * `sonare_spectral_edit`.
+ *
+ * @param samples - Mono input audio.
+ * @param sampleRate - Sample rate in Hz.
+ * @param ops - Region ops applied in order.
+ * @param options - Optional STFT + heal configuration.
+ * @returns The edited audio (same length as `samples`).
+ */
+export function spectralEdit(
+  samples: Float32Array,
+  sampleRate: number,
+  ops: SpectralRegionOp[] = [],
+  options: SpectralEditOptions = {},
+): Float32Array {
+  return addon.spectralEdit(samples, sampleRate, ops, options);
 }
 
 export function pitchShift(

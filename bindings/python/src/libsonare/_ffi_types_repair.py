@@ -179,4 +179,35 @@ class SonareTrimSilenceConfig(ctypes.Structure):
     ]
 
 
+# SonareSpectralRegionOp.mode values.
+SONARE_SPECTRAL_EDIT_MODE_GAIN = 0
+SONARE_SPECTRAL_EDIT_MODE_ATTENUATE = 1
+SONARE_SPECTRAL_EDIT_MODE_MUTE = 2
+SONARE_SPECTRAL_EDIT_MODE_HEAL = 3
+
+
+class SonareSpectralEditConfig(ctypes.Structure):
+    """Maps to SonareSpectralEditConfig in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("n_fft", ctypes.c_int),
+        ("hop_length", ctypes.c_int),
+        ("window", ctypes.c_int),
+        ("heal_radius_frames", ctypes.c_int),
+    ]
+
+
+class SonareSpectralRegionOp(ctypes.Structure):
+    """Maps to SonareSpectralRegionOp in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("start_sample", ctypes.c_int64),
+        ("end_sample", ctypes.c_int64),
+        ("low_hz", ctypes.c_float),
+        ("high_hz", ctypes.c_float),
+        ("gain_db", ctypes.c_float),
+        ("mode", ctypes.c_int),
+    ]
+
+
 __all__ = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]

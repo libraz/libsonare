@@ -1,3 +1,5 @@
+#include <sonare/sonare_c.h>
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -14,8 +16,8 @@
 #include "effects/phase_vocoder.h"
 #include "effects/pitch_shift.h"
 #include "effects/remix.h"
+#include "effects/spectral_edit.h"
 #include "effects/time_stretch.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare;
@@ -242,4 +244,61 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
     *out = release_array(data);
     return SONARE_OK;
   });
+}
+
+namespace {
+
+/// @brief Maps a SonareWindowType int to the core WindowType (defaults to Hann).
+WindowType spectral_edit_window(int value) {
+  switch (value) {
+    case SONARE_WINDOW_HAMMING:
+      return WindowType::Hamming;
+    case SONARE_WINDOW_BLACKMAN:
+      return WindowType::Blackman;
+    case SONARE_WINDOW_RECTANGULAR:
+      return WindowType::Rectangular;
+    case SONARE_WINDOW_HANN:
+    default:
+      return WindowType::Hann;
+  }
+}
+
+}  // namespace
+
+SonareError sonare_spectral_edit(const float* samples, size_t length, int sample_rate,
+                                 const SonareSpectralEditConfig* config,
+                                 const SonareSpectralRegionOp* ops, size_t n_ops, float** out,
+                                 size_t* out_length) {
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
+  // ops may be NULL iff there are no ops (identity transform).
+  if (ops == nullptr && n_ops != 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SpectralEditConfig core_config;  // n_fft=2048, hop=512, Hann, heal_radius=2
+  if (config != nullptr) {
+    if (config->n_fft != 0) core_config.n_fft = config->n_fft;
+    if (config->hop_length != 0) core_config.hop_length = config->hop_length;
+    core_config.window = spectral_edit_window(config->window);
+    if (config->heal_radius_frames != 0)
+      core_config.heal_radius_frames = config->heal_radius_frames;
+  }
+
+  std::vector<SpectralRegionOp> core_ops(n_ops);
+  for (size_t i = 0; i < n_ops; ++i) {
+    if (ops[i].mode < SONARE_SPECTRAL_EDIT_MODE_GAIN ||
+        ops[i].mode > SONARE_SPECTRAL_EDIT_MODE_HEAL)
+      return SONARE_ERROR_INVALID_PARAMETER;
+    core_ops[i].start_sample = ops[i].start_sample;
+    core_ops[i].end_sample = ops[i].end_sample;
+    core_ops[i].low_hz = ops[i].low_hz;
+    core_ops[i].high_hz = ops[i].high_hz;
+    core_ops[i].gain_db = ops[i].gain_db;
+    core_ops[i].mode = static_cast<SpectralEditMode>(ops[i].mode);
+  }
+
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [&](const Audio& audio) -> Audio {
+                            return spectral_edit(audio, core_config, core_ops.data(), n_ops);
+                          });
 }

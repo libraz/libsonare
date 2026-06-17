@@ -1,9 +1,9 @@
 #include <napi.h>
+#include <sonare/sonare_c.h>
 
 #include <string>
 #include <vector>
 
-#include "sonare_c.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_engine.h"
 #include "sonare_wrap_project.h"

@@ -23,6 +23,7 @@ import {
   realtimeVoiceChangerPresetConfig,
   remix,
   spectralContrast,
+  spectralEdit,
   voiceCharacterPresetId,
   zeroCrossings,
 } from '../src/index';
@@ -36,6 +37,24 @@ function makeSine(durationSec: number, freqHz: number): Float32Array {
     out[i] = 0.5 * Math.sin((2 * Math.PI * freqHz * i) / SR);
   }
   return out;
+}
+
+/** Single-frequency power estimate (Goertzel), used to probe a tone's energy. */
+function goertzelPower(x: ArrayLike<number>, freqHz: number): number {
+  const w = (2 * Math.PI * freqHz) / SR;
+  const cw = Math.cos(w);
+  const sw = Math.sin(w);
+  const coeff = 2 * cw;
+  let s1 = 0;
+  let s2 = 0;
+  for (let i = 0; i < x.length; i++) {
+    const s0 = x[i] + coeff * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
+  const real = s1 - s2 * cw;
+  const imag = s2 * sw;
+  return real * real + imag * imag;
 }
 
 function allFinite(arr: ArrayLike<number>): boolean {
@@ -200,6 +219,39 @@ describe('newly exposed WASM functions', () => {
     expect(out.length).toBeGreaterThan(0);
     expect(out.length).toBeLessThan(x.length);
     expect(allFinite(out)).toBe(true);
+  });
+
+  it('spectralEdit with no ops is an identity transform', () => {
+    const x = makeSine(0.5, 440);
+    const out = spectralEdit(x, SR, []);
+    expect(out.length).toBe(x.length);
+    expect(allFinite(out)).toBe(true);
+    const skip = 2048;
+    let sig = 0;
+    let noise = 0;
+    for (let i = skip; i < x.length - skip; i++) {
+      sig += x[i] * x[i];
+      const d = x[i] - out[i];
+      noise += d * d;
+    }
+    expect(10 * Math.log10(sig / noise)).toBeGreaterThan(20);
+  });
+
+  it('spectralEdit attenuates a frequency band', () => {
+    const n = Math.floor(SR * 0.5);
+    const x = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      x[i] =
+        0.4 * Math.sin((2 * Math.PI * 1000 * i) / SR) +
+        0.4 * Math.sin((2 * Math.PI * 5000 * i) / SR);
+    }
+    const out = spectralEdit(x, SR, [
+      { startSample: 0, endSample: n, lowHz: 4000, highHz: 6000, gainDb: -24, mode: 'attenuate' },
+    ]);
+    expect(out.length).toBe(n);
+    // 5 kHz tone drops substantially; 1 kHz tone is preserved.
+    expect(goertzelPower(out, 5000)).toBeLessThan(goertzelPower(x, 5000) * 0.1);
+    expect(goertzelPower(out, 1000)).toBeGreaterThan(goertzelPower(x, 1000) * 0.5);
   });
 
   it('hpssWithResidual splits into three signals', () => {

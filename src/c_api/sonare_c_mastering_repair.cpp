@@ -1,3 +1,5 @@
+#include <sonare/sonare_c.h>
+
 #include <cstring>
 #include <memory>
 
@@ -9,7 +11,6 @@
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 #include "util/exception.h"
 

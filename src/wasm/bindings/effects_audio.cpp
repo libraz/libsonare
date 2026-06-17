@@ -332,6 +332,88 @@ val js_trim(val samples, int sample_rate, float threshold_db) {
   return vectorToFloat32Array(out_vec);
 }
 
+namespace {
+
+// Map a spectral-edit mode string ('gain'|'attenuate'|'mute'|'heal') to the
+// SpectralEditMode enum. Defaults to Gain when the value is absent.
+SpectralEditMode parseSpectralEditMode(val mode) {
+  if (mode.isUndefined() || mode.isNull()) return SpectralEditMode::Gain;
+  std::string s = mode.as<std::string>();
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (s == "gain") return SpectralEditMode::Gain;
+  if (s == "attenuate") return SpectralEditMode::Attenuate;
+  if (s == "mute") return SpectralEditMode::Mute;
+  if (s == "heal") return SpectralEditMode::Heal;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "spectralEdit: unknown mode: " + s);
+}
+
+// Map a window string ('hann'|'hamming'|'blackman'|'rectangular') to WindowType.
+WindowType parseSpectralEditWindow(val window) {
+  std::string s = window.as<std::string>();
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (s == "hann") return WindowType::Hann;
+  if (s == "hamming") return WindowType::Hamming;
+  if (s == "blackman") return WindowType::Blackman;
+  if (s == "rectangular") return WindowType::Rectangular;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "spectralEdit: unknown window: " + s);
+}
+
+}  // namespace
+
+// Region-based spectral editing (STFT -> per-op bin/frame masking -> iSTFT).
+// Mirrors the core sonare::spectral_edit. @p ops is a JS array of region objects
+// { startSample, endSample, lowHz, highHz, gainDb, mode } and @p options is an
+// optional config bag { nFft, hopLength, window, healRadiusFrames }. Returns the
+// edited audio (same length/sample rate as the input) as a Float32Array.
+val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  SpectralEditConfig config;
+  if (!options.isUndefined() && !options.isNull()) {
+    if (options.hasOwnProperty("nFft")) config.n_fft = options["nFft"].as<int>();
+    if (options.hasOwnProperty("hopLength")) config.hop_length = options["hopLength"].as<int>();
+    if (options.hasOwnProperty("window")) {
+      config.window = parseSpectralEditWindow(options["window"]);
+    }
+    if (options.hasOwnProperty("healRadiusFrames")) {
+      config.heal_radius_frames = options["healRadiusFrames"].as<int>();
+    }
+  }
+
+  std::vector<SpectralRegionOp> region_ops;
+  if (!ops.isUndefined() && !ops.isNull()) {
+    const uint32_t n = ops["length"].as<uint32_t>();
+    region_ops.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      val op = ops[i];
+      SpectralRegionOp region;
+      // Sample positions arrive as plain JS numbers; read as double and cast to
+      // int64 (mirrors project.cpp's totalFrames) so callers need not pass BigInt.
+      if (op.hasOwnProperty("startSample")) {
+        region.start_sample = static_cast<int64_t>(op["startSample"].as<double>());
+      }
+      if (op.hasOwnProperty("endSample")) {
+        region.end_sample = static_cast<int64_t>(op["endSample"].as<double>());
+      }
+      if (op.hasOwnProperty("lowHz")) region.low_hz = op["lowHz"].as<float>();
+      if (op.hasOwnProperty("highHz")) region.high_hz = op["highHz"].as<float>();
+      if (op.hasOwnProperty("gainDb")) region.gain_db = op["gainDb"].as<float>();
+      region.mode =
+          op.hasOwnProperty("mode") ? parseSpectralEditMode(op["mode"]) : SpectralEditMode::Gain;
+      region_ops.push_back(region);
+    }
+  }
+
+  Audio result = spectral_edit(audio, config, region_ops.data(), region_ops.size());
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
 void registerEffectsAudioBindings() {
   function("hpss", &js_hpss);
   function("harmonic", &js_harmonic);
@@ -350,6 +432,7 @@ void registerEffectsAudioBindings() {
   function("phaseVocoder", &js_phase_vocoder);
   function("normalize", &js_normalize);
   function("trim", &js_trim);
+  function("spectralEdit", &js_spectral_edit);
 }
 
 #endif  // __EMSCRIPTEN__

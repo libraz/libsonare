@@ -844,6 +844,54 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate, float rate,
                                  int n_fft, int hop_length, float** out, size_t* out_length);
 
+/// @brief How a spectral region op modifies the masked STFT bins.
+typedef enum {
+  SONARE_SPECTRAL_EDIT_MODE_GAIN = 0,      /* multiply magnitude by 10^(gain_db/20); phase kept */
+  SONARE_SPECTRAL_EDIT_MODE_ATTENUATE = 1, /* gain with a (typically negative) gain_db */
+  SONARE_SPECTRAL_EDIT_MODE_MUTE = 2,      /* hard zero the masked bins (gain_db ignored) */
+  SONARE_SPECTRAL_EDIT_MODE_HEAL = 3,      /* tonal continuation from neighbouring time frames */
+} SonareSpectralEditMode;
+
+/// @brief STFT + heal parameters for @ref sonare_spectral_edit.
+/// @details Zero-init friendly: every "0 => default" field below picks the
+///          documented default so a memset(0) config is the all-defaults case.
+typedef struct {
+  int n_fft;              /* 0 => default 2048; must be a power of two (>= 2) */
+  int hop_length;         /* 0 => default 512; must satisfy 0 < hop <= n_fft/2 */
+  int window;             /* SonareWindowType (sonare_c_streaming.h); 0 = Hann */
+  int heal_radius_frames; /* 0 => default 2; neighbour frames each side used by Heal */
+} SonareSpectralEditConfig;
+
+/// @brief One time x frequency rectangle edit op (POD; ops apply in array order).
+typedef struct {
+  int64_t start_sample; /* region time start (input samples); clamped to [0, length] */
+  int64_t end_sample;   /* region time end, exclusive; clamped to [0, length] */
+  float low_hz;         /* region frequency low edge (Hz); clamped to [0, nyquist] */
+  float high_hz;        /* region frequency high edge (Hz); <=0 or >= nyquist => nyquist */
+  float gain_db;        /* for GAIN/ATTENUATE; ignored by MUTE/HEAL */
+  int mode;             /* SonareSpectralEditMode */
+} SonareSpectralRegionOp;
+
+/// @brief Region-based spectral editing: STFT -> per-op bin/frame masking -> iSTFT.
+/// @details Stateless mono transform; output has the same length/sample rate as the
+///          input. @p config may be NULL (all defaults). @p ops may be NULL iff
+///          @p n_ops is 0 (identity transform that returns the input). Each op is a
+///          time x frequency rectangle applied in order; see @ref SonareSpectralEditMode.
+///          The returned array is heap-allocated and MUST be released with
+///          @ref sonare_free_floats.
+/// @param samples Input audio (mono).
+/// @param length Number of samples.
+/// @param sample_rate Sample rate.
+/// @param config STFT + heal config, or NULL for all defaults.
+/// @param ops Array of @p n_ops region ops, or NULL iff @p n_ops == 0.
+/// @param n_ops Number of region ops.
+/// @param out Receives the edited audio buffer.
+/// @param out_length Receives the output length.
+SonareError sonare_spectral_edit(const float* samples, size_t length, int sample_rate,
+                                 const SonareSpectralEditConfig* config,
+                                 const SonareSpectralRegionOp* ops, size_t n_ops, float** out,
+                                 size_t* out_length);
+
 #ifdef __cplusplus
 }
 #endif

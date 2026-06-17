@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -19,7 +21,6 @@
 #include "mixing/fx_bus.h"
 #include "mixing/send.h"
 #include "rt/processor_base.h"
-#include "sonare_c.h"
 #include "sonare_c_internal.h"
 
 struct SonareMixer;

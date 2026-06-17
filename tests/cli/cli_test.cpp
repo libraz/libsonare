@@ -1,6 +1,7 @@
 /// @file cli_test.cpp
 /// @brief Tests for the sonare CLI tool.
 
+#include <sonare/sonare_c_project.h>
 #include <unistd.h>
 
 #include <array>
@@ -17,7 +18,6 @@
 
 #include "core/audio.h"
 #include "core/audio_io.h"
-#include "sonare_c_project.h"
 #include "util/constants.h"
 
 using namespace sonare;
