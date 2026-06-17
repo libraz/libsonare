@@ -491,6 +491,7 @@ Value scene_to_value(const mixing::api::Scene& scene) {
     so["id"] = s.id;
     so["inputTrimDb"] = s.input_trim_db;
     so["faderDb"] = s.fader_db;
+    so["vcaOffsetDb"] = s.vca_offset_db;
     so["pan"] = s.pan;
     so["width"] = s.width;
     so["muted"] = s.muted;
@@ -503,6 +504,22 @@ Value scene_to_value(const mixing::api::Scene& scene) {
     so["polarityInvertRight"] = s.polarity_invert_right;
     so["panLaw"] = s.pan_law;
     so["channelDelaySamples"] = s.channel_delay_samples;
+    // Surround source layout + pan: omit at the stereo / centered-point default
+    // so existing stereo scenes serialize unchanged (mirrors scene_json.cpp).
+    if (s.source_layout != ChannelLayout::Stereo) {
+      so["sourceLayout"] = channel_layout_to_string(s.source_layout);
+    }
+    const mixing::api::SurroundPan& sp = s.surround_pan;
+    if (sp.azimuth != 0.0f || sp.elevation != 0.0f || sp.divergence != 0.0f || sp.lfe != 0.0f ||
+        sp.distance != 1.0f) {
+      Object pan;
+      pan["azimuth"] = sp.azimuth;
+      pan["elevation"] = sp.elevation;
+      pan["divergence"] = sp.divergence;
+      pan["lfe"] = sp.lfe;
+      pan["distance"] = sp.distance;
+      so["surroundPan"] = std::move(pan);
+    }
     Array inserts;
     for (const auto& ins : s.inserts) inserts.push_back(insert_to_json(ins));
     so["inserts"] = std::move(inserts);
@@ -524,6 +541,11 @@ Value scene_to_value(const mixing::api::Scene& scene) {
     Object bo;
     bo["id"] = b.id;
     bo["role"] = b.role;
+    // Omit at the stereo default so existing stereo scenes are unchanged; only
+    // surround buses carry the field (mirrors scene_json.cpp).
+    if (b.layout != ChannelLayout::Stereo) {
+      bo["layout"] = channel_layout_to_string(b.layout);
+    }
     Array inserts;
     for (const auto& ins : b.inserts) inserts.push_back(insert_to_json(ins));
     bo["inserts"] = std::move(inserts);
@@ -812,6 +834,7 @@ mixing::api::Scene scene_from_value(const Value& v) {
       s.id = str_or(sv, "id", "");
       s.input_trim_db = static_cast<float>(num_or_any(sv, "inputTrimDb", "input_trim_db", 0.0));
       s.fader_db = static_cast<float>(num_or_any(sv, "faderDb", "fader_db", 0.0));
+      s.vca_offset_db = static_cast<float>(num_or_any(sv, "vcaOffsetDb", "vca_offset_db", 0.0));
       s.pan = static_cast<float>(num_or(sv, "pan", 0.0));
       s.width = static_cast<float>(num_or(sv, "width", 1.0));
       s.muted = bool_or(sv, "muted", false);
@@ -826,6 +849,18 @@ mixing::api::Scene scene_from_value(const Value& v) {
       s.pan_law = static_cast<int>(num_or_any(sv, "panLaw", "pan_law", 0.0));
       s.channel_delay_samples =
           static_cast<int>(num_or_any(sv, "channelDelaySamples", "channel_delay_samples", 0.0));
+      if (const std::string layout = str_or(sv, "sourceLayout", ""); !layout.empty()) {
+        ChannelLayout parsed = ChannelLayout::Stereo;
+        if (channel_layout_from_string(layout, parsed)) s.source_layout = parsed;
+      }
+      if (const auto* sp = object_at(sv, "surroundPan")) {
+        const Value spv(*sp);
+        s.surround_pan.azimuth = static_cast<float>(num_or(spv, "azimuth", 0.0));
+        s.surround_pan.elevation = static_cast<float>(num_or(spv, "elevation", 0.0));
+        s.surround_pan.divergence = static_cast<float>(num_or(spv, "divergence", 0.0));
+        s.surround_pan.lfe = static_cast<float>(num_or(spv, "lfe", 0.0));
+        s.surround_pan.distance = static_cast<float>(num_or(spv, "distance", 1.0));
+      }
       if (const auto* iarr = array_at(sv, "inserts")) {
         for (const auto& iv : *iarr) {
           if (iv.is_object()) s.inserts.push_back(insert_from_json(iv));
@@ -852,6 +887,10 @@ mixing::api::Scene scene_from_value(const Value& v) {
       mixing::api::Bus b;
       b.id = str_or(bv, "id", "");
       b.role = str_or(bv, "role", "aux");
+      if (const std::string layout = str_or(bv, "layout", ""); !layout.empty()) {
+        ChannelLayout parsed = ChannelLayout::Stereo;
+        if (channel_layout_from_string(layout, parsed)) b.layout = parsed;
+      }
       if (const auto* iarr = array_at(bv, "inserts")) {
         for (const auto& iv : *iarr) {
           if (iv.is_object()) b.inserts.push_back(insert_from_json(iv));

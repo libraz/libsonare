@@ -172,6 +172,15 @@ Fixture make_fixture() {
   s.fader_db = -3.5f;
   s.pan = 0.25f;
   s.muted = false;
+  // Surround + VCA persistence (regression guard: these once round-tripped to
+  // their defaults because the project serializer's local scene walker dropped
+  // them).
+  s.vca_offset_db = -1.25f;
+  s.source_layout = ChannelLayout::FivePointOne;
+  s.surround_pan.azimuth = 0.5f;
+  s.surround_pan.divergence = 0.3f;
+  s.surround_pan.lfe = 0.2f;
+  s.surround_pan.distance = 0.8f;
   mixing::api::Insert strip_insert;
   strip_insert.slot = mixing::api::InsertSlot::PreFader;
   strip_insert.processor_name = "sonare.eq";
@@ -185,6 +194,7 @@ Fixture make_fixture() {
   s.sends.push_back(send);
   scene.strips.push_back(s);
   mixing::api::Bus master("bus.main", "master");
+  master.layout = ChannelLayout::FivePointOne;  // surround bus layout must persist
   mixing::api::Insert master_insert;
   master_insert.slot = mixing::api::InsertSlot::PostFader;
   master_insert.processor_name = "sonare.compressor";
@@ -296,7 +306,12 @@ bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
       a.dual_pan_left != b.dual_pan_left || a.dual_pan_right != b.dual_pan_right ||
       a.polarity_invert_left != b.polarity_invert_left ||
       a.polarity_invert_right != b.polarity_invert_right || a.pan_law != b.pan_law ||
-      a.channel_delay_samples != b.channel_delay_samples || a.inserts.size() != b.inserts.size() ||
+      a.channel_delay_samples != b.channel_delay_samples || a.vca_offset_db != b.vca_offset_db ||
+      a.source_layout != b.source_layout || a.surround_pan.azimuth != b.surround_pan.azimuth ||
+      a.surround_pan.elevation != b.surround_pan.elevation ||
+      a.surround_pan.divergence != b.surround_pan.divergence ||
+      a.surround_pan.lfe != b.surround_pan.lfe ||
+      a.surround_pan.distance != b.surround_pan.distance || a.inserts.size() != b.inserts.size() ||
       a.sends.size() != b.sends.size()) {
     return false;
   }
@@ -310,7 +325,10 @@ bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
 }
 
 bool eq(const mixing::api::Bus& a, const mixing::api::Bus& b) {
-  if (a.id != b.id || a.role != b.role || a.inserts.size() != b.inserts.size()) return false;
+  if (a.id != b.id || a.role != b.role || a.layout != b.layout ||
+      a.inserts.size() != b.inserts.size()) {
+    return false;
+  }
   for (size_t i = 0; i < a.inserts.size(); ++i) {
     if (!eq(a.inserts[i], b.inserts[i])) return false;
   }
