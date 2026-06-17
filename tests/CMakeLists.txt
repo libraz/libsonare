@@ -227,6 +227,7 @@ if(BUILD_MIXING)
     engine/mixing_runtime_test.cpp
     engine/monitor_runtime_test.cpp
     engine/track_mixer_test.cpp
+    mixing/downmix_test.cpp
     mixing/golden_hash_test.cpp
     mixing/insert_automation_c_api_test.cpp
     mixing/mixing_meter_panner_capi_test.cpp
@@ -236,6 +237,7 @@ if(BUILD_MIXING)
     mixing/mixing_meter_lufs_integration_test.cpp
     mixing/no_alloc_allocators.cpp
     mixing/no_alloc_engine_mixing_test.cpp
+    mixing/surround_panner_test.cpp
     mixing/no_alloc_mastering_eq_test.cpp
     mixing/no_alloc_mastering_dynamics_test.cpp
     mixing/no_alloc_voice_reverb_test.cpp

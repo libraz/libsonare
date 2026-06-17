@@ -26,6 +26,24 @@ SendTiming send_timing_from_string(const std::string& value) {
   throw SonareException(ErrorCode::InvalidParameter, "unknown send timing: " + value);
 }
 
+// Reads an optional channel-layout string field. Absent -> fallback (so old
+// scenes without the field round-trip as stereo). Present-but-invalid throws,
+// matching the strict behavior of the slot/timing enums above.
+ChannelLayout channel_layout_or(const JsonValue& object, const char* key, ChannelLayout fallback) {
+  const auto* value = object.find(key);
+  if (!value) return fallback;
+  if (!value->is_string()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string("channel layout must be a string: ") + key);
+  }
+  ChannelLayout layout = fallback;
+  if (!channel_layout_from_string(value->as_string(), layout)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "unknown channel layout: " + value->as_string());
+  }
+  return layout;
+}
+
 // ---------------------------------------------------------------------------
 // Tree walkers. All parsing is delegated to util::json::parse (one shared
 // grammar, one locale-safe number parser). The walkers below populate Scene
@@ -125,6 +143,14 @@ Strip strip_from_value(const JsonValue& object) {
   strip.polarity_invert_right = bool_or(object, "polarityInvertRight", strip.polarity_invert_right);
   strip.pan_law = int_or(object, "panLaw", strip.pan_law);
   strip.channel_delay_samples = int_or(object, "channelDelaySamples", strip.channel_delay_samples);
+  strip.source_layout = channel_layout_or(object, "sourceLayout", strip.source_layout);
+  if (const auto* sp = object.find("surroundPan"); sp && sp->is_object()) {
+    strip.surround_pan.azimuth = number_or(*sp, "azimuth", strip.surround_pan.azimuth);
+    strip.surround_pan.elevation = number_or(*sp, "elevation", strip.surround_pan.elevation);
+    strip.surround_pan.divergence = number_or(*sp, "divergence", strip.surround_pan.divergence);
+    strip.surround_pan.lfe = number_or(*sp, "lfe", strip.surround_pan.lfe);
+    strip.surround_pan.distance = number_or(*sp, "distance", strip.surround_pan.distance);
+  }
   if (const auto* inserts = object.find("inserts")) strip.inserts = inserts_from_value(*inserts);
   if (const auto* sends = object.find("sends")) strip.sends = sends_from_value(*sends);
   return strip;
@@ -144,6 +170,7 @@ Bus bus_from_value(const JsonValue& object) {
   Bus bus;
   bus.id = string_or(object, "id", bus.id);
   bus.role = string_or(object, "role", bus.role);
+  bus.layout = channel_layout_or(object, "layout", bus.layout);
   if (const auto* inserts = object.find("inserts")) bus.inserts = inserts_from_value(*inserts);
   return bus;
 }
@@ -259,6 +286,24 @@ JsonValue strip_to_value(const Strip& strip) {
   object.emplace("polarityInvertRight", JsonValue(strip.polarity_invert_right));
   object.emplace("panLaw", JsonValue(strip.pan_law));
   object.emplace("channelDelaySamples", JsonValue(strip.channel_delay_samples));
+  // Omit when stereo (the default) so existing stereo scenes serialize
+  // byte-identically; only surround sources carry the field.
+  if (strip.source_layout != ChannelLayout::Stereo) {
+    object.emplace("sourceLayout", JsonValue(channel_layout_to_string(strip.source_layout)));
+  }
+  // Omit at the centered point-source default so existing scenes are unchanged;
+  // only a moved surround pan carries the object.
+  const SurroundPan& sp = strip.surround_pan;
+  if (sp.azimuth != 0.0f || sp.elevation != 0.0f || sp.divergence != 0.0f || sp.lfe != 0.0f ||
+      sp.distance != 1.0f) {
+    sonare::util::json::Object pan;
+    pan.emplace("azimuth", JsonValue(sp.azimuth));
+    pan.emplace("elevation", JsonValue(sp.elevation));
+    pan.emplace("divergence", JsonValue(sp.divergence));
+    pan.emplace("lfe", JsonValue(sp.lfe));
+    pan.emplace("distance", JsonValue(sp.distance));
+    object.emplace("surroundPan", JsonValue(std::move(pan)));
+  }
   object.emplace("inserts", inserts_to_value(strip.inserts));
   object.emplace("sends", sends_to_value(strip.sends));
   return JsonValue(std::move(object));
@@ -268,6 +313,11 @@ JsonValue bus_to_value(const Bus& bus) {
   sonare::util::json::Object object;
   object.emplace("id", JsonValue(bus.id));
   object.emplace("role", JsonValue(bus.role));
+  // Omit when stereo (the default) so existing stereo scenes serialize
+  // byte-identically; only surround buses carry the field.
+  if (bus.layout != ChannelLayout::Stereo) {
+    object.emplace("layout", JsonValue(channel_layout_to_string(bus.layout)));
+  }
   object.emplace("inserts", inserts_to_value(bus.inserts));
   return JsonValue(std::move(object));
 }

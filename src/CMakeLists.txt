@@ -417,6 +417,7 @@ if(BUILD_MIXING)
     mixing/automation_lane.cpp
     mixing/bus.cpp
     mixing/channel_strip.cpp
+    mixing/downmix.cpp
     mixing/fx_bus.cpp
     mixing/gain.cpp
     mixing/meter.cpp
@@ -424,6 +425,7 @@ if(BUILD_MIXING)
     mixing/panner.cpp
     mixing/send.cpp
     mixing/stereo_width.cpp
+    mixing/surround_panner.cpp
     mixing/vca_group.cpp
   )
   target_include_directories(sonare_mixing PUBLIC
@@ -474,6 +476,7 @@ endif()
 if(BUILD_MIXING)
   list(APPEND SONARE_ENGINE_SOURCES
     engine/meter_telemetry.cpp
+    engine/scope_telemetry.cpp
     engine/mixing_runtime.cpp
     engine/monitor_runtime.cpp
     engine/track_mixer.cpp

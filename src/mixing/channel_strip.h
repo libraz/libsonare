@@ -18,6 +18,7 @@
 #include "mixing/panner.h"
 #include "mixing/send.h"
 #include "mixing/stereo_width.h"
+#include "mixing/surround_panner.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mixing {
@@ -114,6 +115,27 @@ class ChannelStrip : public rt::ProcessorBase {
   float dual_pan_left() const noexcept { return panner_.dual_pan_left(); }
   float dual_pan_right() const noexcept { return panner_.dual_pan_right(); }
 
+  // Surround pan position, applied by the engine when the strip feeds a
+  // >2-channel destination (the stereo panner above still drives stereo
+  // destinations). Stored as atomics so the audio thread can read it while a
+  // control-thread setter updates it. Inert for stereo output.
+  void set_surround_pan_params(const SurroundPanParams& p) noexcept {
+    surround_azimuth_.store(p.azimuth, std::memory_order_relaxed);
+    surround_elevation_.store(p.elevation, std::memory_order_relaxed);
+    surround_divergence_.store(p.divergence, std::memory_order_relaxed);
+    surround_lfe_.store(p.lfe, std::memory_order_relaxed);
+    surround_distance_.store(p.distance, std::memory_order_relaxed);
+  }
+  SurroundPanParams surround_pan_params() const noexcept {
+    SurroundPanParams p;
+    p.azimuth = surround_azimuth_.load(std::memory_order_relaxed);
+    p.elevation = surround_elevation_.load(std::memory_order_relaxed);
+    p.divergence = surround_divergence_.load(std::memory_order_relaxed);
+    p.lfe = surround_lfe_.load(std::memory_order_relaxed);
+    p.distance = surround_distance_.load(std::memory_order_relaxed);
+    return p;
+  }
+
   void set_muted(bool muted) noexcept;
   bool muted() const noexcept;
   bool effectively_muted() const noexcept;
@@ -146,8 +168,13 @@ class ChannelStrip : public rt::ProcessorBase {
   MeterSnapshot meter_snapshot(TapPoint tap) const noexcept;
 
   // Inserts are control-thread mutators and must not run concurrently with process().
-  void add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor);
-  void add_post_insert(std::unique_ptr<rt::ProcessorBase> processor);
+  // @p stereo_pair_only marks an inherently-stereo insert (mastering ChannelPolicy
+  // StereoPairOnly): on a surround buffer (num_channels > 2) it is handed only the
+  // front L/R pair so it never corrupts (or, like eq.midSide, aborts on) the
+  // surround planes, which pass through dry. The default (false, Multichannel) is
+  // the byte-identical legacy path — a single full-buffer call.
+  void add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor, bool stereo_pair_only = false);
+  void add_post_insert(std::unique_ptr<rt::ProcessorBase> processor, bool stereo_pair_only = false);
   size_t num_pre_inserts() const noexcept { return pre_inserts_.size(); }
   size_t num_post_inserts() const noexcept { return post_inserts_.size(); }
 
@@ -158,6 +185,17 @@ class ChannelStrip : public rt::ProcessorBase {
   bool schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
                                   int64_t sample_pos, float value,
                                   AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+  // Applies an insert parameter immediately (no automation lane, no allocation).
+  // AUDIO-THREAD ONLY: mutates processor coefficients that process() reads, so
+  // it must run from the audio callback (e.g. an engine command drained at the
+  // block head), never concurrently with process(). Returns false for an
+  // out-of-range insert or a param the processor reports non-RT-safe.
+  bool apply_insert_parameter(unsigned int insert_index, unsigned int param_id,
+                              float value) noexcept;
+  // Resolves a processor JSON-key parameter name to its integer param_id for the
+  // insert at @p insert_index, or -1 if unknown. Control-thread API: reads the
+  // processor's static descriptor table, touching no mutable audio state.
+  int insert_parameter_id_for_key(unsigned int insert_index, const std::string& key) const noexcept;
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);
   void clear_insert_sidechains() noexcept;
@@ -228,8 +266,9 @@ class ChannelStrip : public rt::ProcessorBase {
                        int tap_offset);
   void apply_automation_event(const AutomationEvent& event) noexcept;
   void process_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
-                            float* const* channels, int num_channels, int num_samples,
-                            size_t first_insert_index, int sidechain_offset);
+                            const std::vector<uint8_t>& stereo_pair_only, float* const* channels,
+                            int num_channels, int num_samples, size_t first_insert_index,
+                            int sidechain_offset);
 
   struct InsertSidechain {
     std::array<const float*, kMaxStackChannels> channels{};
@@ -243,6 +282,11 @@ class ChannelStrip : public rt::ProcessorBase {
   GainProcessor fader_;
   PannerProcessor panner_;
   StereoWidthProcessor width_;
+  std::atomic<float> surround_azimuth_{0.0f};
+  std::atomic<float> surround_elevation_{0.0f};
+  std::atomic<float> surround_divergence_{0.0f};
+  std::atomic<float> surround_lfe_{0.0f};
+  std::atomic<float> surround_distance_{1.0f};
   sonare::mastering::eq::ParametricEq eq_;
   // Both taps measure true-peak so a metering UI sees real inter-sample peaks
   // pre- and post-fader rather than a floor reading on the pre-fader tap.
@@ -251,6 +295,10 @@ class ChannelStrip : public rt::ProcessorBase {
   GoniometerBuffer<kGoniometerCapacity> goniometer_;
   std::vector<std::unique_ptr<rt::ProcessorBase>> pre_inserts_;
   std::vector<std::unique_ptr<rt::ProcessorBase>> post_inserts_;
+  // Index-parallel to pre_inserts_ / post_inserts_: 1 = StereoPairOnly (front
+  // L/R pair only on a surround buffer), 0 = Multichannel (full-buffer call).
+  std::vector<uint8_t> pre_insert_spo_;
+  std::vector<uint8_t> post_insert_spo_;
   std::vector<InsertSidechain> insert_sidechains_;
   struct InsertAutomationLane {
     AutomationTarget target{};

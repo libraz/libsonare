@@ -1,6 +1,8 @@
+#include <set>
 #include <string>
 #include <vector>
 
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 
 namespace sonare::mastering::api {
@@ -119,6 +121,99 @@ std::vector<std::string> pair_analysis_names() {
 
 std::vector<std::string> stereo_analysis_names() {
   return {"stereo.monoCompatCheck", "stereo.monoCompatCheckLogBands"};
+}
+
+ChannelPolicy channel_policy(const std::string& id) {
+  // Inherently-stereo processors: they operate on planes 0/1 and pass any
+  // surround planes through dry. Everything else processes all planes correctly
+  // in a single full-buffer call (Multichannel), which is also the safe default
+  // for any unlisted/legacy id. Mirrors the per-process() channel-handling audit
+  // (the 6 stereo-image processors, eq.midSide, multiband.imager, and every
+  // reverb/modulation/delay effect).
+  static const std::set<std::string> kStereoPairOnly = {
+      "stereo.imager",
+      "stereo.monoMaker",
+      "stereo.stereoBalance",
+      "stereo.haasEnhancer",
+      "stereo.phaseAlign",
+      "stereo.autoPan",
+      "eq.midSide",
+      "multiband.imager",
+      "effects.reverb.plate",
+      "effects.reverb.dattorro",
+      "effects.reverb.fdn",
+      "effects.reverb.velvet",
+      "effects.reverb.convolution",
+      "effects.reverb.room",
+      "effects.acoustic.roomMorph",
+      "effects.modulation.chorus",
+      "effects.modulation.ensemble",
+      "effects.modulation.flanger",
+      "effects.modulation.phaser",
+      "effects.delay.stereo",
+  };
+  return kStereoPairOnly.count(id) != 0 ? ChannelPolicy::StereoPairOnly
+                                        : ChannelPolicy::Multichannel;
+}
+
+const char* channel_policy_to_string(ChannelPolicy policy) noexcept {
+  switch (policy) {
+    case ChannelPolicy::Multichannel:
+      return "multichannel";
+    case ChannelPolicy::StereoPairOnly:
+      return "stereoPairOnly";
+    case ChannelPolicy::PerChannel:
+      return "perChannel";
+    case ChannelPolicy::Passthrough:
+      return "passthrough";
+  }
+  return "multichannel";
+}
+
+std::string processor_catalog_json() {
+  const std::set<std::string> insert_set = [] {
+    const auto names = insert_factory_names();
+    return std::set<std::string>(names.begin(), names.end());
+  }();
+  const std::set<std::string> pair_set = [] {
+    const auto names = pair_processor_names();
+    return std::set<std::string>(names.begin(), names.end());
+  }();
+  const std::set<std::string> stereo_set = [] {
+    const auto names = stereo_processor_names();
+    return std::set<std::string>(names.begin(), names.end());
+  }();
+
+  // Sorted union of every id the host might surface, so realtime-only ids (e.g.
+  // effects.reverb.room) and pair ids absent from processor_names() are covered.
+  std::set<std::string> ids;
+  for (const auto& name : processor_names()) ids.insert(name);
+  for (const auto& name : insert_set) ids.insert(name);
+  for (const auto& name : pair_set) ids.insert(name);
+
+  std::string out = "[";
+  bool first = true;
+  for (const std::string& id : ids) {
+    if (!first) out += ',';
+    first = false;
+    const bool realtime_insertable = insert_set.count(id) != 0;
+    const bool is_pair = pair_set.count(id) != 0;
+    const char* kind = is_pair ? "pair" : (realtime_insertable ? "realtime" : "offline");
+    out += "{\"id\":\"";
+    out += id;
+    out += "\",\"kind\":\"";
+    out += kind;
+    out += "\",\"realtimeInsertable\":";
+    out += realtime_insertable ? "true" : "false";
+    out += ",\"stereoOnly\":";
+    out += stereo_set.count(id) != 0 ? "true" : "false";
+    out += ",\"channelPolicy\":\"";
+    out += channel_policy_to_string(channel_policy(id));
+    out += '"';
+    out += '}';
+  }
+  out += ']';
+  return out;
 }
 
 }  // namespace sonare::mastering::api

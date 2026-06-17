@@ -293,3 +293,100 @@ TEST_CASE("load_audio reports extension and ffmpeg hint for unsupported file", "
   std::remove(tmp_path.c_str());
 }
 #endif  // !SONARE_WITH_FFMPEG
+
+namespace {
+
+std::vector<uint8_t> read_file_bytes(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  return std::vector<uint8_t>((std::istreambuf_iterator<char>(in)),
+                              std::istreambuf_iterator<char>());
+}
+
+uint16_t le16(const std::vector<uint8_t>& b, size_t off) {
+  return static_cast<uint16_t>(b[off] | (b[off + 1] << 8));
+}
+
+uint32_t le32(const std::vector<uint8_t>& b, size_t off) {
+  return static_cast<uint32_t>(b[off]) | (static_cast<uint32_t>(b[off + 1]) << 8) |
+         (static_cast<uint32_t>(b[off + 2]) << 16) | (static_cast<uint32_t>(b[off + 3]) << 24);
+}
+
+}  // namespace
+
+TEST_CASE("save_wav_multichannel writes WAVE_FORMAT_EXTENSIBLE for 5.1", "[audio_io]") {
+  const std::string path = "test_surround_51.wav";
+  const size_t frames = 4;
+  const int channels = 6;
+  std::vector<float> interleaved(frames * channels);
+  for (size_t i = 0; i < interleaved.size(); ++i) {
+    interleaved[i] = static_cast<float>(i) / 100.0f;  // small distinct values
+  }
+
+  save_wav_multichannel(path, interleaved.data(), frames, channels, ChannelLayout::FivePointOne,
+                        48000, 16);
+  const std::vector<uint8_t> bytes = read_file_bytes(path);
+
+  REQUIRE(bytes.size() >= 68);
+  REQUIRE(std::memcmp(bytes.data(), "RIFF", 4) == 0);
+  REQUIRE(std::memcmp(bytes.data() + 8, "WAVE", 4) == 0);
+  REQUIRE(std::memcmp(bytes.data() + 12, "fmt ", 4) == 0);
+  REQUIRE(le32(bytes, 16) == 40);      // fmt chunk size (EXTENSIBLE)
+  REQUIRE(le16(bytes, 20) == 0xFFFE);  // WAVE_FORMAT_EXTENSIBLE
+  REQUIRE(le16(bytes, 22) == 6);       // channels
+  REQUIRE(le32(bytes, 24) == 48000);   // sample rate
+  REQUIRE(le16(bytes, 32) == 6 * 2);   // block align (6ch * 16-bit)
+  REQUIRE(le16(bytes, 34) == 16);      // bits per sample
+  REQUIRE(le16(bytes, 36) == 22);      // cbSize
+  REQUIRE(le32(bytes, 40) == 0x3Fu);   // dwChannelMask (FL FR FC LFE BL BR)
+  REQUIRE(bytes[44] == 0x01);          // PCM sub-format GUID first byte
+  REQUIRE(std::memcmp(bytes.data() + 60, "data", 4) == 0);
+  REQUIRE(le32(bytes, 64) == frames * channels * 2);  // data size
+
+  // Sample round-trip: decode the first interleaved frame from the data chunk.
+  const size_t data_off = 68;
+  for (int c = 0; c < channels; ++c) {
+    auto raw = static_cast<int16_t>(le16(bytes, data_off + static_cast<size_t>(c) * 2));
+    const float decoded = static_cast<float>(raw) / 32767.0f;
+    REQUIRE_THAT(decoded, Catch::Matchers::WithinAbs(interleaved[static_cast<size_t>(c)], 1e-4f));
+  }
+
+  std::remove(path.c_str());
+}
+
+TEST_CASE("save_wav_multichannel keeps stereo/mono as plain PCM", "[audio_io]") {
+  const std::string path = "test_stereo_plain.wav";
+  const size_t frames = 8;
+  const int channels = 2;
+  std::vector<float> interleaved(frames * channels, 0.25f);
+
+  save_wav_multichannel(path, interleaved.data(), frames, channels, ChannelLayout::Stereo, 44100,
+                        16);
+  const std::vector<uint8_t> bytes = read_file_bytes(path);
+
+  REQUIRE(std::memcmp(bytes.data(), "RIFF", 4) == 0);
+  REQUIRE(le16(bytes, 20) == 0x0001);  // WAVE_FORMAT_PCM, not EXTENSIBLE
+  REQUIRE(le16(bytes, 22) == 2);
+  std::remove(path.c_str());
+}
+
+TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "[audio_io]") {
+  const std::string path = "test_surround_71.wav";
+  const size_t frames = 2;
+  const int channels = 8;
+  std::vector<float> interleaved(frames * channels, 0.0f);
+
+  save_wav_multichannel(path, interleaved.data(), frames, channels, ChannelLayout::SevenPointOne,
+                        48000, 24);
+  const std::vector<uint8_t> bytes = read_file_bytes(path);
+  REQUIRE(le16(bytes, 20) == 0xFFFE);
+  REQUIRE(le16(bytes, 22) == 8);
+  REQUIRE(le16(bytes, 34) == 24);                     // 24-bit
+  REQUIRE(le32(bytes, 40) == 0x63Fu);                 // 7.1 mask
+  REQUIRE(le32(bytes, 64) == frames * channels * 3);  // 24-bit = 3 bytes/sample
+  std::remove(path.c_str());
+
+  // channel_count must match the layout.
+  REQUIRE_THROWS_AS(save_wav_multichannel(path, interleaved.data(), frames, 6,
+                                          ChannelLayout::SevenPointOne, 48000, 16),
+                    sonare::SonareException);
+}

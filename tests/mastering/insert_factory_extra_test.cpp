@@ -18,6 +18,7 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "rt/processor_base.h"
 
@@ -469,4 +470,128 @@ TEST_CASE("streaming preset equals pop preset", "[mastering][presets]") {
           pop.maximizer.true_peak_limiter.config.ceiling_db);
   REQUIRE(streaming.dynamics.compressor.config.threshold_db ==
           pop.dynamics.compressor.config.threshold_db);
+}
+
+TEST_CASE("processor_catalog_json classifies every id consistently with the source lists",
+          "[mastering][catalog]") {
+  const std::string json = sonare::mastering::api::processor_catalog_json();
+  REQUIRE(json.front() == '[');
+  REQUIRE(json.back() == ']');
+
+  // Every realtime-insertable id is reported as kind "realtime" with the flag set
+  // (none of the insert ids are pair processors, so the precedence resolves to
+  // realtime). This is the invariant the host relies on to avoid offering an id
+  // the realtime strip would reject.
+  for (const auto& id : sonare::mastering::api::insert_factory_names()) {
+    const std::string entry =
+        "{\"id\":\"" + id + "\",\"kind\":\"realtime\",\"realtimeInsertable\":true";
+    REQUIRE(json.find(entry) != std::string::npos);
+  }
+
+  // Pair processors are reported as kind "pair" and are never realtime-insertable.
+  for (const auto& id : sonare::mastering::api::pair_processor_names()) {
+    const std::string entry =
+        "{\"id\":\"" + id + "\",\"kind\":\"pair\",\"realtimeInsertable\":false";
+    REQUIRE(json.find(entry) != std::string::npos);
+  }
+
+  // A whole-file processor that is not built as a streaming insert is offline and
+  // not realtime-insertable (loudnessOptimize needs the full signal).
+  REQUIRE(json.find(
+              "{\"id\":\"maximizer.loudnessOptimize\",\"kind\":\"offline\",\"realtimeInsertable\":"
+              "false") != std::string::npos);
+
+  // stereoOnly is surfaced independently of kind: eq.midSide is realtime-insertable
+  // yet has no mono implementation, so it is realtime + stereoOnly. It is also an
+  // inherently-stereo processor, so its channelPolicy is "stereoPairOnly".
+  REQUIRE(json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
+                    "\"stereoOnly\":true,\"channelPolicy\":\"stereoPairOnly\"}") !=
+          std::string::npos);
+
+  // Realtime-only ids that are absent from processor_names() are still reported.
+  if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {
+    REQUIRE(
+        json.find("{\"id\":\"effects.reverb.room\",\"kind\":\"realtime\",\"realtimeInsertable\":"
+                  "true") != std::string::npos);
+  }
+}
+
+TEST_CASE(
+    "channel_policy tags inherently-stereo processors StereoPairOnly and the rest "
+    "Multichannel",
+    "[mastering][catalog]") {
+  using sonare::mastering::api::channel_policy;
+  using sonare::mastering::api::ChannelPolicy;
+
+  // The inherently-stereo set: stereo-image processors, eq.midSide,
+  // multiband.imager, and every reverb/modulation/delay effect operate on the
+  // front L/R pair and pass surround planes through dry.
+  const std::array<const char*, 20> spo = {"stereo.imager",
+                                           "stereo.monoMaker",
+                                           "stereo.stereoBalance",
+                                           "stereo.haasEnhancer",
+                                           "stereo.phaseAlign",
+                                           "stereo.autoPan",
+                                           "eq.midSide",
+                                           "multiband.imager",
+                                           "effects.reverb.plate",
+                                           "effects.reverb.dattorro",
+                                           "effects.reverb.fdn",
+                                           "effects.reverb.velvet",
+                                           "effects.reverb.convolution",
+                                           "effects.reverb.room",
+                                           "effects.acoustic.roomMorph",
+                                           "effects.modulation.chorus",
+                                           "effects.modulation.ensemble",
+                                           "effects.modulation.flanger",
+                                           "effects.modulation.phaser",
+                                           "effects.delay.stereo"};
+  for (const char* id : spo) {
+    REQUIRE(channel_policy(id) == ChannelPolicy::StereoPairOnly);
+  }
+
+  // Per-channel and linked-dynamics processors process every plane in one call.
+  for (const char* id : {"dynamics.compressor", "eq.parametric", "saturation.tape",
+                         "multiband.compressor", "maximizer.maximizer"}) {
+    REQUIRE(channel_policy(id) == ChannelPolicy::Multichannel);
+  }
+
+  // An unknown/legacy id defaults to Multichannel (one full-buffer call never
+  // drops channels).
+  REQUIRE(channel_policy("does.not.exist") == ChannelPolicy::Multichannel);
+
+  // Wire strings are stable.
+  REQUIRE(std::string(sonare::mastering::api::channel_policy_to_string(
+              ChannelPolicy::Multichannel)) == "multichannel");
+  REQUIRE(std::string(sonare::mastering::api::channel_policy_to_string(
+              ChannelPolicy::StereoPairOnly)) == "stereoPairOnly");
+}
+
+TEST_CASE("offline->realtime candidate processors are already realtime-insertable",
+          "[mastering][catalog]") {
+  // The processors studio flagged as "offline-only" candidates for realtime
+  // promotion are in fact already realtime-insertable: each builds as a streaming
+  // insert and the catalog classifies it kind "realtime". No promotion work is
+  // required; realtime-insertability is distinct from per-parameter realtime
+  // safety (the latter is reported by sonare_mastering_insert_param_info).
+  const std::string json = sonare::mastering::api::processor_catalog_json();
+  for (const char* id : {"eq.dynamic", "multiband.dynamicEq", "eq.midSide", "eq.linearPhase",
+                         "dynamics.vocalRider", "dynamics.parallelComp"}) {
+    DYNAMIC_SECTION(id) {
+      REQUIRE(ListContains(insert_factory_names(), id));
+      REQUIRE(make_insert(id, "{}") != nullptr);
+      const std::string entry =
+          std::string("{\"id\":\"") + id + "\",\"kind\":\"realtime\",\"realtimeInsertable\":true";
+      REQUIRE(json.find(entry) != std::string::npos);
+    }
+  }
+
+  // The genuinely whole-file processors remain offline in the catalog.
+  for (const char* id : {"maximizer.loudnessOptimize", "repair.declick", "final.dither"}) {
+    DYNAMIC_SECTION(id) {
+      REQUIRE_FALSE(ListContains(insert_factory_names(), id));
+      const std::string entry = std::string("{\"id\":\"") + id + "\",\"kind\":\"offline\"";
+      REQUIRE(json.find(entry) != std::string::npos);
+    }
+  }
 }

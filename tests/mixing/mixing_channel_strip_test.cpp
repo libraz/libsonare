@@ -1,7 +1,9 @@
 /// @file mixing_channel_strip_test.cpp
 /// @brief Mixing channel strip tests.
 
+#include "mastering/api/insert_factory.h"
 #include "mixing_test_helpers.h"
+#include "util/exception.h"
 
 TEST_CASE("BusProcessor sums multiple stereo inputs", "[mixing]") {
   std::array<float, 4> in1_l{1.0f, 2.0f, 3.0f, 4.0f};
@@ -160,6 +162,109 @@ TEST_CASE("ChannelStrip pre and post inserts wrap fader pan and width", "[mixing
     REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(2.0f * fader_gain * 3.0f, 0.0001f));
     REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(2.0f * fader_gain * 3.0f, 0.0001f));
   }
+}
+
+TEST_CASE("ChannelStrip StereoPairOnly insert touches only the front pair on a surround buffer",
+          "[mixing][surround]") {
+  // Six planes, distinct DC per plane (1..6). At 0 dB fader / center pan the
+  // only stage that can alter a plane is the insert, so the surround planes
+  // (2..5) must come through untouched when the insert is StereoPairOnly.
+  constexpr int kCh = 6;
+  constexpr int kN = 4;
+  std::array<std::array<float, kN>, kCh> planes{};
+  std::array<float*, kCh> ptrs{};
+  for (int ch = 0; ch < kCh; ++ch) {
+    planes[static_cast<size_t>(ch)].fill(static_cast<float>(ch + 1));
+    ptrs[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<ScaleProcessor>(2.0f), /*stereo_pair_only=*/true);
+  strip.prepare(48000.0, kN);
+  strip.process(ptrs.data(), kCh, kN);
+
+  for (int i = 0; i < kN; ++i) {
+    // Front pair scaled by the insert.
+    REQUIRE_THAT(planes[0][static_cast<size_t>(i)], WithinAbs(2.0f, 0.0001f));
+    REQUIRE_THAT(planes[1][static_cast<size_t>(i)], WithinAbs(4.0f, 0.0001f));
+    // Surround planes pass through dry (insert never saw them).
+    REQUIRE_THAT(planes[2][static_cast<size_t>(i)], WithinAbs(3.0f, 0.0001f));
+    REQUIRE_THAT(planes[3][static_cast<size_t>(i)], WithinAbs(4.0f, 0.0001f));
+    REQUIRE_THAT(planes[4][static_cast<size_t>(i)], WithinAbs(5.0f, 0.0001f));
+    REQUIRE_THAT(planes[5][static_cast<size_t>(i)], WithinAbs(6.0f, 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip Multichannel insert processes every plane on a surround buffer",
+          "[mixing][surround]") {
+  constexpr int kCh = 6;
+  constexpr int kN = 4;
+  std::array<std::array<float, kN>, kCh> planes{};
+  std::array<float*, kCh> ptrs{};
+  for (int ch = 0; ch < kCh; ++ch) {
+    planes[static_cast<size_t>(ch)].fill(static_cast<float>(ch + 1));
+    ptrs[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  // Default (Multichannel): one full-buffer call scales every plane.
+  strip.add_pre_insert(std::make_unique<ScaleProcessor>(2.0f));
+  strip.prepare(48000.0, kN);
+  strip.process(ptrs.data(), kCh, kN);
+
+  for (int ch = 0; ch < kCh; ++ch) {
+    for (int i = 0; i < kN; ++i) {
+      REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(i)],
+                   WithinAbs(2.0f * static_cast<float>(ch + 1), 0.0001f));
+    }
+  }
+}
+
+TEST_CASE("ChannelStrip StereoPairOnly wrapper feeds eq.midSide a 2-plane view (no abort)",
+          "[mixing][surround]") {
+  // eq.midSide throws on a non-stereo width. The StereoPairOnly wrapper must
+  // hand it exactly the front pair so a 5.1 buffer processes cleanly; a
+  // Multichannel (unwrapped) build would pass all 6 planes and abort.
+  constexpr int kCh = 6;
+  constexpr int kN = 8;
+  auto make_strip = [](bool spo) {
+    auto strip = std::make_unique<sonare::mixing::ChannelStrip>(
+        sonare::mixing::ChannelStripConfig{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+    auto insert = sonare::mastering::api::make_insert("eq.midSide", "{}");
+    REQUIRE(insert != nullptr);
+    strip->add_pre_insert(std::move(insert), spo);
+    strip->prepare(48000.0, kN);
+    return strip;
+  };
+  auto buffer = [] {
+    auto planes = std::make_unique<std::array<std::array<float, kN>, kCh>>();
+    for (int ch = 0; ch < kCh; ++ch) {
+      (*planes)[static_cast<size_t>(ch)].fill(static_cast<float>(ch + 1) * 0.1f);
+    }
+    return planes;
+  };
+
+  auto wrapped = make_strip(/*spo=*/true);
+  auto wrapped_planes = buffer();
+  std::array<float*, kCh> wrapped_ptrs{};
+  for (int ch = 0; ch < kCh; ++ch)
+    wrapped_ptrs[static_cast<size_t>(ch)] = (*wrapped_planes)[static_cast<size_t>(ch)].data();
+  REQUIRE_NOTHROW(wrapped->process(wrapped_ptrs.data(), kCh, kN));
+  // Surround planes pass through dry.
+  for (int ch = 2; ch < kCh; ++ch) {
+    for (int i = 0; i < kN; ++i) {
+      REQUIRE_THAT((*wrapped_planes)[static_cast<size_t>(ch)][static_cast<size_t>(i)],
+                   WithinAbs(static_cast<float>(ch + 1) * 0.1f, 0.0001f));
+    }
+  }
+
+  // Without the wrapper the same processor aborts the 6-channel block.
+  auto unwrapped = make_strip(/*spo=*/false);
+  auto unwrapped_planes = buffer();
+  std::array<float*, kCh> unwrapped_ptrs{};
+  for (int ch = 0; ch < kCh; ++ch)
+    unwrapped_ptrs[static_cast<size_t>(ch)] = (*unwrapped_planes)[static_cast<size_t>(ch)].data();
+  REQUIRE_THROWS_AS(unwrapped->process(unwrapped_ptrs.data(), kCh, kN), sonare::SonareException);
 }
 
 TEST_CASE("ChannelStrip input trim starts the fixed strip order", "[mixing]") {

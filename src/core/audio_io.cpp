@@ -360,6 +360,132 @@ void save_wav(const std::string& path, const std::vector<float>& samples, int sa
               int bits_per_sample) {
   save_wav(path, samples.data(), samples.size(), sample_rate, bits_per_sample);
 }
+
+namespace {
+
+/// Packs normalized float samples into the on-disk PCM byte stream: 16-bit
+/// little-endian int16 or 24-bit tightly-packed 3-byte little-endian, clamped to
+/// [-1, 1].
+std::vector<uint8_t> pack_pcm_bytes(const float* samples, size_t n_samples, int bits_per_sample) {
+  std::vector<uint8_t> bytes(n_samples * static_cast<size_t>(bits_per_sample / 8));
+  if (bits_per_sample == 16) {
+    for (size_t i = 0; i < n_samples; ++i) {
+      float clamped = std::max(-1.0f, std::min(1.0f, samples[i]));
+      auto v = static_cast<int16_t>(clamped * 32767.0f);
+      bytes[i * 2 + 0] = static_cast<uint8_t>(v & 0xFF);
+      bytes[i * 2 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+    }
+  } else {  // 24-bit
+    for (size_t i = 0; i < n_samples; ++i) {
+      float clamped = std::max(-1.0f, std::min(1.0f, samples[i]));
+      auto v = static_cast<int32_t>(clamped * 8388607.0f);  // 2^23 - 1
+      bytes[i * 3 + 0] = static_cast<uint8_t>(v & 0xFF);
+      bytes[i * 3 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+      bytes[i * 3 + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
+    }
+  }
+  return bytes;
+}
+
+void write_le16(std::ostream& os, uint16_t value) {
+  const uint8_t b[2] = {static_cast<uint8_t>(value & 0xFF),
+                        static_cast<uint8_t>((value >> 8) & 0xFF)};
+  os.write(reinterpret_cast<const char*>(b), 2);
+}
+
+void write_le32(std::ostream& os, uint32_t value) {
+  const uint8_t b[4] = {
+      static_cast<uint8_t>(value & 0xFF), static_cast<uint8_t>((value >> 8) & 0xFF),
+      static_cast<uint8_t>((value >> 16) & 0xFF), static_cast<uint8_t>((value >> 24) & 0xFF)};
+  os.write(reinterpret_cast<const char*>(b), 4);
+}
+
+/// Hand-writes a WAVE_FORMAT_EXTENSIBLE PCM file. The pinned dr_wav (v0.14.4)
+/// has no channelMask field and rejects EXTENSIBLE on write, so surround beds
+/// must be serialized directly.
+void write_wav_extensible(const std::string& path, const float* interleaved, size_t n_frames,
+                          int channel_count, uint32_t channel_mask, int sample_rate,
+                          int bits_per_sample) {
+  const int bytes_per_sample = bits_per_sample / 8;
+  const size_t n_samples = n_frames * static_cast<size_t>(channel_count);
+  const std::vector<uint8_t> pcm = pack_pcm_bytes(interleaved, n_samples, bits_per_sample);
+
+  const auto data_size = static_cast<uint32_t>(pcm.size());
+  const auto block_align = static_cast<uint16_t>(channel_count * bytes_per_sample);
+  const auto byte_rate = static_cast<uint32_t>(sample_rate) * block_align;
+  const uint32_t fmt_size = 40;  // 16 base + 2 (cbSize) + 22 (extension)
+  const uint32_t riff_size = 4 + (8 + fmt_size) + (8 + data_size);
+
+  // KSDATAFORMAT_SUBTYPE_PCM = {00000001-0000-0010-8000-00AA00389B71}, stored
+  // as little-endian Data1/2/3 followed by the 8 Data4 bytes verbatim.
+  static const uint8_t kPcmSubFormat[16] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+                                            0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71};
+
+  std::ofstream os(path, std::ios::binary);
+  SONARE_CHECK_MSG(os.is_open(), ErrorCode::DecodeFailed, "Failed to create WAV file: " + path);
+
+  os.write("RIFF", 4);
+  write_le32(os, riff_size);
+  os.write("WAVE", 4);
+
+  os.write("fmt ", 4);
+  write_le32(os, fmt_size);
+  write_le16(os, 0xFFFE);  // WAVE_FORMAT_EXTENSIBLE
+  write_le16(os, static_cast<uint16_t>(channel_count));
+  write_le32(os, static_cast<uint32_t>(sample_rate));
+  write_le32(os, byte_rate);
+  write_le16(os, block_align);
+  write_le16(os, static_cast<uint16_t>(bits_per_sample));
+  write_le16(os, 22);                                      // cbSize
+  write_le16(os, static_cast<uint16_t>(bits_per_sample));  // wValidBitsPerSample
+  write_le32(os, channel_mask);
+  os.write(reinterpret_cast<const char*>(kPcmSubFormat), 16);
+
+  os.write("data", 4);
+  write_le32(os, data_size);
+  os.write(reinterpret_cast<const char*>(pcm.data()), static_cast<std::streamsize>(pcm.size()));
+  os.flush();
+  SONARE_CHECK_MSG(os.good(), ErrorCode::DecodeFailed, "Failed to write WAV file: " + path);
+}
+
+}  // namespace
+
+void save_wav_multichannel(const std::string& path, const float* interleaved, size_t n_frames,
+                           int channel_count, ChannelLayout layout, int sample_rate,
+                           int bits_per_sample) {
+  SONARE_CHECK_MSG(interleaved != nullptr, ErrorCode::InvalidParameter, "Samples pointer is null");
+  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "No frames to save");
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
+  SONARE_CHECK_MSG(bits_per_sample == 16 || bits_per_sample == 24, ErrorCode::InvalidParameter,
+                   "bits_per_sample must be 16 or 24");
+  SONARE_CHECK_MSG(channel_count == sonare::channel_count(layout), ErrorCode::InvalidParameter,
+                   "channel_count does not match the layout");
+
+  if (channel_count <= 2) {
+    // Plain WAVE_FORMAT_PCM for mono/stereo (maximum compatibility, and
+    // bit-identical to the existing mono/stereo writer).
+    drwav_data_format format;
+    format.container = drwav_container_riff;
+    format.format = DR_WAVE_FORMAT_PCM;
+    format.channels = static_cast<drwav_uint32>(channel_count);
+    format.sampleRate = static_cast<drwav_uint32>(sample_rate);
+    format.bitsPerSample = static_cast<drwav_uint32>(bits_per_sample);
+
+    drwav wav;
+    drwav_bool32 ok = drwav_init_file_write(&wav, path.c_str(), &format, nullptr);
+    SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to create WAV file: " + path);
+
+    const std::vector<uint8_t> pcm =
+        pack_pcm_bytes(interleaved, n_frames * static_cast<size_t>(channel_count), bits_per_sample);
+    drwav_uint64 written = drwav_write_pcm_frames(&wav, n_frames, pcm.data());
+    drwav_uninit(&wav);
+    SONARE_CHECK_MSG(written == n_frames, ErrorCode::DecodeFailed, "Failed to write all frames");
+    return;
+  }
+
+  write_wav_extensible(path, interleaved, n_frames, channel_count, wave_channel_mask(layout),
+                       sample_rate, bits_per_sample);
+}
 #endif  // !__EMSCRIPTEN__
 
 }  // namespace sonare
