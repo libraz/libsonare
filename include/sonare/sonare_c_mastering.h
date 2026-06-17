@@ -132,7 +132,11 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
                                                         SonareMasteringChainStereoResult* out);
 
 /// @brief Returns built-in preset identifiers, separated by '\n'.
-/// @details Pointer is owned by libsonare and remains valid for the program lifetime.
+/// @details Backed by thread-local storage filled on first use; the pointer is
+///   valid for the calling thread's lifetime (and stays valid across later API
+///   calls on that thread, unlike @ref sonare_mastering_insert_param_names). Do
+///   NOT cache it across threads or use it after the producing thread exits, and
+///   do NOT free it.
 const char* sonare_mastering_preset_names(void);
 
 /// @brief Apply a preset chain to mono audio.
@@ -179,8 +183,10 @@ const char* sonare_mastering_stereo_analysis_names(void);
 ///   set, and @ref sonare_mastering_pair_processor_names, so realtime-only and
 ///   pair-only ids are still reported. Lets hosts filter a processor picker by
 ///   realtime-insertability instead of offering ids the rt strip would reject.
-/// @details Pointer is owned by libsonare and remains valid for the program
-///          lifetime; the caller must NOT free it (mirrors
+/// @details Backed by thread-local storage filled on first use; the pointer is
+///          valid for the calling thread's lifetime and stays valid across later
+///          API calls on that thread. Do NOT cache it across threads or use it
+///          after the producing thread exits, and do NOT free it (mirrors
 ///          @ref sonare_mastering_processor_names).
 const char* sonare_mastering_processor_catalog(void);
 
@@ -189,8 +195,10 @@ const char* sonare_mastering_processor_catalog(void);
 ///        creative effects.* reverbs / modulation / delay when the build has FX
 ///        support. Use these to discover valid insert names instead of
 ///        hardcoding magic strings.
-/// @details Pointer is owned by libsonare and remains valid for the program
-///          lifetime; the caller must NOT free it (mirrors
+/// @details Backed by thread-local storage filled on first use; the pointer is
+///          valid for the calling thread's lifetime and stays valid across later
+///          API calls on that thread. Do NOT cache it across threads or use it
+///          after the producing thread exits, and do NOT free it (mirrors
 ///          @ref sonare_mastering_processor_names).
 const char* sonare_mastering_insert_names(void);
 
@@ -201,9 +209,10 @@ const char* sonare_mastering_insert_names(void);
 ///   loading it: any supplied key NOT in this list is silently ignored by the
 ///   processor (and would be reported via @ref sonare_last_warning_message on a
 ///   scene load). Band/sub-band processors enumerate their indexed
-///   `band{i}.<field>` keys. Unlike the program-lifetime @ref
-///   sonare_mastering_insert_names, the returned pointer is a thread-local valid
-///   only until the next API call on the same thread; the caller must NOT free it.
+///   `band{i}.<field>` keys. Unlike @ref sonare_mastering_insert_names (which
+///   stays valid across later API calls on the calling thread), this pointer is
+///   thread-local valid only until the next API call on the same thread; the
+///   caller must NOT free it.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_names(const char* name);
 
