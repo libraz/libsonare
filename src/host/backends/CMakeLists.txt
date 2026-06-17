@@ -38,28 +38,18 @@ if(BUILD_COREMIDI)
   message(STATUS "libsonare: building CoreMIDI host backend (sonare_host_coremidi)")
 endif()
 
-if(BUILD_AU_HOST OR BUILD_VST3_HOST)
-  add_library(sonare_host_plughost STATIC)
+if(BUILD_AU_HOST)
+  find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
+  find_library(AUDIOUNIT_FRAMEWORK AudioUnit REQUIRED)
+  find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
+  find_library(COREAUDIO_FRAMEWORK CoreAudio REQUIRED)
+
+  add_library(sonare_host_plughost STATIC plughost/au_instrument_provider.mm)
   target_link_libraries(sonare_host_plughost PUBLIC sonare_engine)
-  target_link_libraries(sonare_host_plughost PRIVATE ${COREFOUNDATION_FRAMEWORK})
+  target_link_libraries(sonare_host_plughost PRIVATE
+    ${AUDIOTOOLBOX_FRAMEWORK} ${AUDIOUNIT_FRAMEWORK} ${AVFOUNDATION_FRAMEWORK}
+    ${COREAUDIO_FRAMEWORK} ${COREFOUNDATION_FRAMEWORK})
   set_target_properties(sonare_host_plughost PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-  if(BUILD_AU_HOST)
-    find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
-    find_library(AUDIOUNIT_FRAMEWORK AudioUnit REQUIRED)
-    find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
-    find_library(COREAUDIO_FRAMEWORK CoreAudio REQUIRED)
-    target_sources(sonare_host_plughost PRIVATE plughost/au_instrument_provider.mm)
-    target_link_libraries(sonare_host_plughost PRIVATE
-      ${AUDIOTOOLBOX_FRAMEWORK} ${AUDIOUNIT_FRAMEWORK} ${AVFOUNDATION_FRAMEWORK}
-      ${COREAUDIO_FRAMEWORK})
-    target_compile_definitions(sonare_host_plughost PRIVATE SONARE_HOST_WITH_AU=1)
-    message(STATUS "libsonare: building Audio Unit plugin host (sonare_host_plughost)")
-  endif()
-
-  if(BUILD_VST3_HOST)
-    # VST3 needs the Steinberg VST3 SDK (license / submodule). Wired here once the
-    # SDK path is provided; the bridge TU is plughost/vst3_instrument_provider.cpp.
-    message(WARNING "libsonare: BUILD_VST3_HOST is set but the VST3 SDK bridge is not yet wired; building AU host only")
-  endif()
+  target_compile_definitions(sonare_host_plughost PRIVATE SONARE_HOST_WITH_AU=1)
+  message(STATUS "libsonare: building Audio Unit plugin host (sonare_host_plughost)")
 endif()

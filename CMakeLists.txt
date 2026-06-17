@@ -40,7 +40,6 @@ option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
 option(BUILD_COREAUDIO "macOS CoreAudio host backend (host::AudioDevice)" OFF)
 option(BUILD_COREMIDI  "macOS CoreMIDI host backend (host::MidiInputSource/Sink)" OFF)
 option(BUILD_AU_HOST   "macOS Audio Unit plugin host (host::InstrumentProvider)" OFF)
-option(BUILD_VST3_HOST "VST3 plugin host (requires the VST3 SDK)" OFF)
 
 if(BUILD_MIXING AND NOT BUILD_MASTERING)
   message(STATUS "libsonare: BUILD_MIXING requires BUILD_MASTERING; enabling BUILD_MASTERING")
@@ -150,11 +149,11 @@ add_subdirectory(src)
 # Host backends depend on sonare_engine/midi (defined under src) and on system
 # frameworks, so they are wired after src and only when explicitly enabled on a
 # macOS host. They are leaf targets: core links never reverse-depend on them.
-if(BUILD_COREAUDIO OR BUILD_COREMIDI OR BUILD_AU_HOST OR BUILD_VST3_HOST)
+if(BUILD_COREAUDIO OR BUILD_COREMIDI OR BUILD_AU_HOST)
   if(APPLE)
     add_subdirectory(src/host/backends)
   else()
-    message(STATUS "libsonare: host backends (CoreAudio/CoreMIDI/AU/VST3) are macOS-only; ignoring on this platform")
+    message(STATUS "libsonare: host backends (CoreAudio/CoreMIDI/AU) are macOS-only; ignoring on this platform")
   endif()
 endif()
 
