@@ -126,7 +126,12 @@ SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurrou
   strip->scene_strip.surround_pan.elevation = pan->elevation;
   strip->scene_strip.surround_pan.divergence = std::clamp(pan->divergence, 0.0f, 1.0f);
   strip->scene_strip.surround_pan.lfe = std::clamp(pan->lfe, 0.0f, 1.0f);
-  strip->scene_strip.surround_pan.distance = pan->distance;
+  // distance is a positive scale with a core default of 1.0; SonareSurroundPan
+  // has no C field initializers, so a zero-initialized struct (a C host that
+  // only sets azimuth) arrives with distance == 0. Treat distance <= 0 as the
+  // "keep default" sentinel so such hosts match the Node/Python facades (which
+  // inject 1.0) instead of persisting a meaningless distance:0 into the scene.
+  strip->scene_strip.surround_pan.distance = pan->distance > 0.0f ? pan->distance : 1.0f;
   return SONARE_OK;
   SONARE_C_CATCH
 }
