@@ -52,6 +52,8 @@ std::vector<ImageSource> shoebox_image_sources(const ShoeboxRoom& room,
                                                const SourceListener& placement, int max_order) {
   std::vector<ImageSource> out;
   if (max_order < 0) return out;
+  // Bound the lattice so a hostile/typo'd order cannot exhaust memory (order^3).
+  max_order = std::min(max_order, kMaxImageSourceOrder);
 
   const float lx = room.dims.length, ly = room.dims.width, lz = room.dims.height;
   const Vec3 s = placement.source;
@@ -168,6 +170,9 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
                                                   const SourceListener& placement, int max_order) {
   std::vector<ImageSource> out;
   if (max_order < 0 || room.faces.empty()) return out;
+  // Bound the breadth-first expansion so a hostile/typo'd order cannot exhaust
+  // memory (cost ~ faces^order).
+  max_order = std::min(max_order, kMaxImageSourceOrder);
 
   VoxelGrid grid;
   grid.build(room.faces);

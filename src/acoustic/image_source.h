@@ -17,6 +17,16 @@ namespace sonare::acoustic {
 /// @brief Speed of sound in air at ~20 °C (m/s).
 inline constexpr float kSoundSpeed = 343.0f;
 
+/// @brief Hard upper bound on the image-source reflection order.
+///
+/// Shoebox image-source cost grows ~ order^3 and polyhedral ~ faces^order, so an
+/// unbounded user-supplied order is a memory/CPU exhaustion (DoS) vector — order
+/// 200 already wants gigabytes. Perceptually useful early-reflection orders are
+/// ~6–10; the late tail carries the dense diffuse energy beyond that. The image
+/// generators clamp to this ceiling so no public surface (including WASM, which
+/// bypasses the C-ABI validation) can drive an explosion.
+inline constexpr int kMaxImageSourceOrder = 12;
+
 /// @brief A mirrored (image) source contributing one early reflection.
 ///
 /// `reflection` holds the per-octave-band pressure reflection product

@@ -374,3 +374,19 @@ TEST_CASE("synthesize_early_ir skips non-finite image distances", "[acoustic][im
   for (float s : ir) all_finite = all_finite && std::isfinite(s);
   REQUIRE(all_finite);
 }
+
+TEST_CASE("shoebox image order is clamped to the safe maximum", "[acoustic][image_source]") {
+  // An unbounded user-supplied order is a memory-exhaustion (DoS) vector
+  // (cost ~ order^3). A request far above the ceiling must clamp, not explode,
+  // and yield exactly the bounded order-ceiling set.
+  const ShoeboxRoom room = make_room(5.0f, 4.0f, 3.0f, 0.2f);
+  const SourceListener pl{{1.0f, 1.0f, 1.0f}, {2.0f, 3.0f, 2.0f}};
+
+  const auto at_cap = shoebox_image_sources(room, pl, kMaxImageSourceOrder);
+  const auto absurd = shoebox_image_sources(room, pl, 100000);
+  REQUIRE(absurd.size() == at_cap.size());
+
+  int max_order = 0;
+  for (const auto& im : absurd) max_order = std::max(max_order, im.order);
+  REQUIRE(max_order == kMaxImageSourceOrder);
+}

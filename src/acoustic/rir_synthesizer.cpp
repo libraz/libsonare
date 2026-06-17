@@ -58,8 +58,17 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
 
   const float sr = static_cast<float>(sample_rate);
 
+  // Bound the image-source order: cost grows ~ order^3, so an unbounded value is
+  // a memory/CPU exhaustion vector. shoebox_image_sources clamps internally; we
+  // mirror the clamp here only to inform the caller via a diagnostic.
+  const int ism_order = std::min(config.ism_order, kMaxImageSourceOrder);
+  if (config.ism_order > kMaxImageSourceOrder) {
+    result.diagnostics.push_back({Diagnostic::Severity::Warning, "acoustic.ism_order_clamped",
+                                  "ism_order exceeded the safe maximum and was clamped"});
+  }
+
   // Early reflections (image-source) and the per-band reverberation time.
-  const std::vector<ImageSource> images = shoebox_image_sources(room, placement, config.ism_order);
+  const std::vector<ImageSource> images = shoebox_image_sources(room, placement, ism_order);
   const Audio early_audio = synthesize_early_ir(images, sample_rate);
   const ReverbTime rt = shoebox_reverb_time(room, config.late_model);
 
