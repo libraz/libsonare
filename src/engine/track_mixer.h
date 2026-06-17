@@ -146,6 +146,35 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                   int num_samples, MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
                   ScopeTelemetryTap* scope_tap = nullptr) noexcept;
 
+  // Staged variant of mix_source for mixing several sources (e.g. an instrument
+  // rack) into shared buses within one block. A bus's insert chain is stateful
+  // (reverb tails, compressor envelopes) and must advance exactly once per block:
+  // calling mix_source() per source would clear and re-process every bus once per
+  // source, advancing reverb N times and summing N bus passes into the master.
+  // Instead: begin_source_mix() once (clears all buses), mix_source_into_lane()
+  // per source (accumulates each lane's dry signal and sends without touching the
+  // bus chain), then finish_source_mix() once (runs the bus chains and sums them
+  // into the master). A single source through this trio is bit-identical to
+  // mix_source(). Note: a track carrying BOTH clips (rendered via render_clips)
+  // and rack instruments still routes its bus twice in a block -- keep a track
+  // clip-only or instrument-only when it feeds a shared bus.
+  bool begin_source_mix(int num_channels, int num_samples) noexcept;
+  // Mixes one source into its matching lane. Reads the lane snapshot prepared by
+  // begin_source_mix(); does NOT clear or process buses. Returns false only when
+  // the lane config is empty/invalid (caller should sum the source directly);
+  // both a matched lane and a direct-summed unmatched source return true. Sets
+  // @p routed_through_lane true only when the source matched a lane, so the
+  // caller knows finish_source_mix() must run.
+  bool mix_source_into_lane(uint32_t track_id, float* const* source, float* const* channels,
+                            int num_channels, int num_samples, bool& routed_through_lane,
+                            MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
+                            ScopeTelemetryTap* scope_tap = nullptr) noexcept;
+  // Runs every bus insert chain once and sums the buses into the master. Call
+  // once after the last mix_source_into_lane() of a block.
+  void finish_source_mix(float* const* channels, int num_channels, int num_samples,
+                         MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
+                         ScopeTelemetryTap* scope_tap = nullptr) noexcept;
+
  private:
   struct LaneState {
     uint32_t track_id = 0;

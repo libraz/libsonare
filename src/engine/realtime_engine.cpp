@@ -1609,42 +1609,67 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       // shared scratch (zero, set_transport, process) and is summed into the
       // sub-block, so multitrack MIDI routed to distinct destinations mixes here.
       const transport::TransportState inst_state = transport_.snapshot();
-      instrument_rack_.for_each([&](uint32_t destination_id,
-                                    midi::MidiInstrument* instrument) noexcept {
-        for (int ch = 0; ch < channels; ++ch) {
-          std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
-                    midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
-        }
-        instrument->set_transport(inst_state);
-        instrument->process(midi_instrument_channels_.data(), channels, num_frames);
-        // PDC: an instrument faster than the project's slowest is delayed by the
-        // remainder (total - its own latency) so it stays aligned with the clip
-        // bus and the other instruments. The slowest instrument's delay is 0.
-        if (pdc_total_q8_ > 0) {
-          for (size_t k = 0; k < pdc_instrument_count_; ++k) {
-            if (instrument_pdc_dest_[k] == destination_id) {
-              instrument_pdc_delays_[k].process(midi_instrument_channels_.data(), channels,
-                                                num_frames);
-              break;
-            }
-          }
-        }
 #if defined(SONARE_WITH_MIXING)
-        if (track_mixer_runtime_.mix_source(destination_id, midi_instrument_channels_.data(),
-                                            sub_channels.data(), channels, num_frames, &meter_tap_,
-                                            transport_.render_frame(), &scope_tap_)) {
-          return;
-        }
+      // Clear the shared buses once before mixing the whole rack so a stateful
+      // bus insert chain (e.g. a shared reverb tail or compressor envelope)
+      // advances exactly once per block, not once per instrument. Each instrument
+      // accumulates into its lane/sends via mix_source_into_lane (no bus
+      // processing); finish_source_mix runs the bus chains once afterwards. When
+      // no lanes are configured this stays false and each source is summed
+      // directly, exactly as before.
+      const bool lane_mix_ready = track_mixer_runtime_.begin_source_mix(channels, num_frames);
+      bool any_lane_routed = false;
 #endif
-        for (int ch = 0; ch < channels; ++ch) {
-          float* out = sub_channels[static_cast<size_t>(ch)];
-          const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];
-          if (!out) continue;
-          for (int i = 0; i < num_frames; ++i) {
-            out[i] += inst[i];
-          }
-        }
-      });
+      instrument_rack_.for_each(
+          [&](uint32_t destination_id, midi::MidiInstrument* instrument) noexcept {
+            for (int ch = 0; ch < channels; ++ch) {
+              std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
+                        midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+            }
+            instrument->set_transport(inst_state);
+            instrument->process(midi_instrument_channels_.data(), channels, num_frames);
+            // PDC: an instrument faster than the project's slowest is delayed by the
+            // remainder (total - its own latency) so it stays aligned with the clip
+            // bus and the other instruments. The slowest instrument's delay is 0.
+            if (pdc_total_q8_ > 0) {
+              for (size_t k = 0; k < pdc_instrument_count_; ++k) {
+                if (instrument_pdc_dest_[k] == destination_id) {
+                  instrument_pdc_delays_[k].process(midi_instrument_channels_.data(), channels,
+                                                    num_frames);
+                  break;
+                }
+              }
+            }
+#if defined(SONARE_WITH_MIXING)
+            if (lane_mix_ready) {
+              bool routed_through_lane = false;
+              if (track_mixer_runtime_.mix_source_into_lane(
+                      destination_id, midi_instrument_channels_.data(), sub_channels.data(),
+                      channels, num_frames, routed_through_lane, &meter_tap_,
+                      transport_.render_frame(), &scope_tap_)) {
+                any_lane_routed = any_lane_routed || routed_through_lane;
+                return;
+              }
+            }
+#endif
+            for (int ch = 0; ch < channels; ++ch) {
+              float* out = sub_channels[static_cast<size_t>(ch)];
+              const float* inst = midi_instrument_channels_[static_cast<size_t>(ch)];
+              if (!out) continue;
+              for (int i = 0; i < num_frames; ++i) {
+                out[i] += inst[i];
+              }
+            }
+          });
+#if defined(SONARE_WITH_MIXING)
+      // Process the shared bus chains once and sum them into the sub-block. Only
+      // when at least one instrument routed through a lane -- mirrors the historic
+      // behaviour where the rack stage touched the buses only on a lane match.
+      if (lane_mix_ready && any_lane_routed) {
+        track_mixer_runtime_.finish_source_mix(sub_channels.data(), channels, num_frames,
+                                               &meter_tap_, transport_.render_frame(), &scope_tap_);
+      }
+#endif
     }
 #endif
     if (transport_rolling) {

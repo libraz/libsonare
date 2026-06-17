@@ -535,12 +535,54 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
     return false;
   }
 
+  // Self-contained single-source mix: clear the buses, mix this one source into
+  // its lane, then process the buses once -- exactly begin/into-lane/finish for
+  // one source (kept bit-identical to the historical inline implementation).
   prepare_lanes_from_snapshot(*lanes);
-  const int render_channels = std::min(num_channels, kMaxLaneChannels);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
   }
+  bool routed_through_lane = false;
+  mix_source_into_lane(track_id, source, channels, num_channels, num_samples, routed_through_lane,
+                       meter_tap, render_frame, scope_tap);
+  if (routed_through_lane) {
+    process_buses(channels, master_channels, num_samples, meter_tap, render_frame, scope_tap);
+  }
+  return true;
+}
+
+bool TrackMixerRuntime::begin_source_mix(int num_channels, int num_samples) noexcept {
+  acquire_lanes();
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (!lanes || lanes->empty()) return false;
+  if (num_channels <= 0 || num_samples <= 0) return false;
+  if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) {
+    return false;
+  }
+  prepare_lanes_from_snapshot(*lanes);
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
+  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
+    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
+  }
+  return true;
+}
+
+bool TrackMixerRuntime::mix_source_into_lane(uint32_t track_id, float* const* source,
+                                             float* const* channels, int num_channels,
+                                             int num_samples, bool& routed_through_lane,
+                                             MeterTelemetryTap* meter_tap, int64_t render_frame,
+                                             ScopeTelemetryTap* scope_tap) noexcept {
+  routed_through_lane = false;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (!lanes || lanes->empty()) return false;
+  if (!source || !channels || num_channels <= 0 || num_samples <= 0) return true;
+  if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) {
+    return false;
+  }
+
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     if ((*lanes)[lane_index].track_id != track_id) continue;
     clear_lane(lane_index, render_channels, num_samples);
@@ -557,13 +599,22 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
     mix_lane_sends(lane_index, render_channels, num_samples, 0);
     apply_lane_to_mix(lane_index, channels, render_channels, num_samples, any_lane_solo(*lanes),
                       meter_tap, render_frame, scope_tap, master_channels);
-    process_buses(channels, master_channels, num_samples, meter_tap, render_frame, scope_tap);
+    routed_through_lane = true;
     return true;
   }
 
   // Destination 0 and currently-unconfigured destinations stay on the main bus.
   add_source_to_mix(source, channels, render_channels, num_samples);
   return true;
+}
+
+void TrackMixerRuntime::finish_source_mix(float* const* channels, int num_channels, int num_samples,
+                                          MeterTelemetryTap* meter_tap, int64_t render_frame,
+                                          ScopeTelemetryTap* scope_tap) noexcept {
+  if (!channels || num_channels <= 0 || num_samples <= 0) return;
+  if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) return;
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
+  process_buses(channels, master_channels, num_samples, meter_tap, render_frame, scope_tap);
 }
 
 bool TrackMixerRuntime::lane_config_valid(

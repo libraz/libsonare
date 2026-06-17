@@ -1,6 +1,7 @@
 #include "engine/track_mixer.h"
 
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <memory>
@@ -677,4 +678,87 @@ TEST_CASE("TrackMixerRuntime surround group bus feeds eq.midSide a 2-plane view"
   // Ls energy passes through the bus untouched on plane 4.
   REQUIRE(mixer.mix_source(10, source, out.data(), 6, kBlock));
   REQUIRE(planes[4].back() > 0.9f);
+}
+
+TEST_CASE("TrackMixerRuntime stages a multi-source rack through a shared bus once per block",
+          "[engine][track_mixer]") {
+  using Catch::Approx;
+  // Two sources routed to one stateful bus (an FDN reverb) must drive that bus
+  // with the SUM of their sends and advance its tail exactly once per block. The
+  // staged begin/into-lane/finish path is therefore bit-identical to a single
+  // lane carrying the combined source through the same bus -- whereas calling
+  // mix_source() per source would clear and re-process the reverb once per
+  // source, advancing the tail twice per block. Running several blocks lets that
+  // time dilation accumulate into the reverb tail so the equivalence is sensitive
+  // to it, not just to the first (near-dry) block.
+  constexpr int kBlock = 64;
+  constexpr int kBlocks = 8;
+
+  auto make_reverb_bus = [](sonare::engine::TrackMixerRuntime& mixer) {
+    REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+    sonare::mixing::api::Bus bus;
+    bus.id = "1";
+    bus.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "effects.reverb.fdn", "{}"});
+    REQUIRE(mixer.set_bus_strip(1, bus));
+  };
+  auto lane_to_bus = [](uint32_t track_id) {
+    sonare::engine::TrackLaneConfig lane{track_id};
+    lane.sends.push_back({1, 0.0f});  // 0 dB post-fader send into bus 1
+    return lane;
+  };
+
+  // Reference: one lane carrying (a+b) through the bus, processed once per block.
+  sonare::engine::TrackMixerRuntime ref;
+  ref.prepare(48000.0, kBlock);
+  make_reverb_bus(ref);
+  REQUIRE(ref.set_track_lanes({lane_to_bus(10)}));
+  ref.settle_smoothers();
+
+  // Staged: two lanes (a and b) accumulated into the shared bus, finished once.
+  sonare::engine::TrackMixerRuntime staged;
+  staged.prepare(48000.0, kBlock);
+  make_reverb_bus(staged);
+  REQUIRE(staged.set_track_lanes({lane_to_bus(10), lane_to_bus(20)}));
+  staged.settle_smoothers();
+
+  float total_energy = 0.0f;
+  for (int block = 0; block < kBlocks; ++block) {
+    std::array<float, kBlock> a{};
+    std::array<float, kBlock> b{};
+    std::array<float, kBlock> sum{};
+    for (int i = 0; i < kBlock; ++i) {
+      const float t = static_cast<float>(block * kBlock + i);
+      a[static_cast<size_t>(i)] = std::sin(0.07f * t);
+      b[static_cast<size_t>(i)] = 0.5f * std::cos(0.11f * t);
+      sum[static_cast<size_t>(i)] = a[static_cast<size_t>(i)] + b[static_cast<size_t>(i)];
+    }
+    float* a_src[] = {a.data(), a.data()};
+    float* b_src[] = {b.data(), b.data()};
+    float* sum_src[] = {sum.data(), sum.data()};
+
+    std::array<float, kBlock> ref_l{};
+    std::array<float, kBlock> ref_r{};
+    float* ref_out[] = {ref_l.data(), ref_r.data()};
+    REQUIRE(ref.mix_source(10, sum_src, ref_out, 2, kBlock));
+
+    std::array<float, kBlock> st_l{};
+    std::array<float, kBlock> st_r{};
+    float* st_out[] = {st_l.data(), st_r.data()};
+    REQUIRE(staged.begin_source_mix(2, kBlock));
+    bool routed_a = false;
+    bool routed_b = false;
+    REQUIRE(staged.mix_source_into_lane(10, a_src, st_out, 2, kBlock, routed_a));
+    REQUIRE(staged.mix_source_into_lane(20, b_src, st_out, 2, kBlock, routed_b));
+    REQUIRE(routed_a);
+    REQUIRE(routed_b);
+    staged.finish_source_mix(st_out, 2, kBlock);
+
+    for (int i = 0; i < kBlock; ++i) {
+      REQUIRE(st_l[static_cast<size_t>(i)] == Approx(ref_l[static_cast<size_t>(i)]).margin(1e-5f));
+      REQUIRE(st_r[static_cast<size_t>(i)] == Approx(ref_r[static_cast<size_t>(i)]).margin(1e-5f));
+      total_energy += std::abs(ref_l[static_cast<size_t>(i)]);
+    }
+  }
+  // Sanity: the bus + dry path actually produced signal (not an all-silent match).
+  REQUIRE(total_energy > 0.0f);
 }
