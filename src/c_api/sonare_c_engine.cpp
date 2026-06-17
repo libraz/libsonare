@@ -1660,6 +1660,47 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
 #endif
 }
 
+SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engine,
+                                                     SonareMeterTelemetryRecordWide* out,
+                                                     size_t max_records, size_t* out_count) {
+  if (!engine || !out_count || (max_records > 0 && !out)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+#if defined(SONARE_WITH_MIXING)
+  size_t count = 0;
+  engine::MeterTelemetryRecord record{};
+  while (count < max_records && engine->engine.pop_meter_telemetry(record)) {
+    out[count].target_id = record.target_id;
+    out[count].render_frame = record.render_frame;
+    out[count].seq = record.seq;
+    const int planes =
+        std::clamp(record.channel_count, 0, static_cast<int>(SONARE_METER_MAX_CHANNELS));
+    out[count].channel_count = planes;
+    for (int ch = 0; ch < SONARE_METER_MAX_CHANNELS; ++ch) {
+      const bool valid = ch < planes;
+      out[count].peak_db[ch] = valid ? record.peak_db[static_cast<size_t>(ch)] : 0.0f;
+      out[count].rms_db[ch] = valid ? record.rms_db[static_cast<size_t>(ch)] : 0.0f;
+      out[count].true_peak_db[ch] = valid ? record.true_peak_db[static_cast<size_t>(ch)] : 0.0f;
+    }
+    out[count].max_true_peak_db = record.max_true_peak_db;
+    out[count].correlation = record.correlation;
+    out[count].mono_compat_width = record.mono_compat_width;
+    out[count].momentary_lufs = record.momentary_lufs;
+    out[count].short_term_lufs = record.short_term_lufs;
+    out[count].integrated_lufs = record.integrated_lufs;
+    out[count].gain_reduction_db = record.gain_reduction_db;
+    out[count].dropped_records = record.dropped_records;
+    ++count;
+  }
+  *out_count = count;
+  return SONARE_OK;
+#else
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
+}
+
 SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine,
                                                     int interval_frames, unsigned int band_count,
                                                     unsigned int* out_band_count) {

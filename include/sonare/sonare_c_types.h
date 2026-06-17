@@ -182,6 +182,33 @@ typedef struct {
   uint32_t dropped_records;
 } SonareMeterTelemetryRecord;
 
+/* Widest per-plane meter the wide telemetry record carries (7.1). */
+#define SONARE_METER_MAX_CHANNELS 8
+
+/* Per-plane meter snapshot for a surround mix target. Mirrors
+   engine::MeterTelemetryRecord with the per-channel peak/rms/true_peak arrays
+   exposed (planes [0, channel_count)). Drained with
+   sonare_engine_drain_meter_telemetry_wide. The legacy stereo
+   SonareMeterTelemetryRecord stays the byte-identical fast path for <=2ch
+   targets; hosts pick the drain matching their target's bus layout. */
+typedef struct {
+  uint32_t target_id;
+  int64_t render_frame;
+  uint64_t seq;
+  int32_t channel_count;
+  float peak_db[SONARE_METER_MAX_CHANNELS];
+  float rms_db[SONARE_METER_MAX_CHANNELS];
+  float true_peak_db[SONARE_METER_MAX_CHANNELS];
+  float max_true_peak_db;
+  float correlation;
+  float mono_compat_width;
+  float momentary_lufs;
+  float short_term_lufs;
+  float integrated_lufs;
+  float gain_reduction_db;
+  uint32_t dropped_records;
+} SonareMeterTelemetryRecordWide;
+
 #define SONARE_SCOPE_MAX_BANDS 64
 #define SONARE_SCOPE_MAX_POINTS 32
 
@@ -1060,6 +1087,16 @@ static_assert(offsetof(SonareMeterTelemetryRecord, peak_db_l) == 24u,
               "SonareMeterTelemetryRecord meter prefix offset changed");
 static_assert(offsetof(SonareMeterTelemetryRecord, dropped_records) == 76u,
               "SonareMeterTelemetryRecord dropped_records offset changed");
+static_assert(sizeof(SonareMeterTelemetryRecordWide) == 160u,
+              "SonareMeterTelemetryRecordWide layout changed");
+static_assert(offsetof(SonareMeterTelemetryRecordWide, render_frame) == 8u,
+              "SonareMeterTelemetryRecordWide render_frame offset changed");
+static_assert(offsetof(SonareMeterTelemetryRecordWide, channel_count) == 24u,
+              "SonareMeterTelemetryRecordWide channel_count offset changed");
+static_assert(offsetof(SonareMeterTelemetryRecordWide, peak_db) == 28u,
+              "SonareMeterTelemetryRecordWide meter prefix offset changed");
+static_assert(offsetof(SonareMeterTelemetryRecordWide, dropped_records) == 152u,
+              "SonareMeterTelemetryRecordWide dropped_records offset changed");
 
 static_assert(sizeof(SonareTransportState) == 96u, "SonareTransportState layout changed");
 static_assert(offsetof(SonareTransportState, render_frame) == 8u,

@@ -2328,6 +2328,87 @@
     ],
     "size": 80
   },
+  "SonareMeterTelemetryRecordWide": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "target_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "render_frame",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "seq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "channel_count",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "peak_db",
+        "offset": 28,
+        "size": 32
+      },
+      {
+        "name": "rms_db",
+        "offset": 60,
+        "size": 32
+      },
+      {
+        "name": "true_peak_db",
+        "offset": 92,
+        "size": 32
+      },
+      {
+        "name": "max_true_peak_db",
+        "offset": 124,
+        "size": 4
+      },
+      {
+        "name": "correlation",
+        "offset": 128,
+        "size": 4
+      },
+      {
+        "name": "mono_compat_width",
+        "offset": 132,
+        "size": 4
+      },
+      {
+        "name": "momentary_lufs",
+        "offset": 136,
+        "size": 4
+      },
+      {
+        "name": "short_term_lufs",
+        "offset": 140,
+        "size": 4
+      },
+      {
+        "name": "integrated_lufs",
+        "offset": 144,
+        "size": 4
+      },
+      {
+        "name": "gain_reduction_db",
+        "offset": 148,
+        "size": 4
+      },
+      {
+        "name": "dropped_records",
+        "offset": 152,
+        "size": 4
+      }
+    ],
+    "size": 160
+  },
   "SonareMfccResult": {
     "align": 8,
     "fields": [

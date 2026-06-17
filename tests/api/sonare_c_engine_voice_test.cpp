@@ -358,7 +358,7 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
           SONARE_ERROR_INVALID_PARAMETER);
 
   // A surround bus layout (5.1 = 2) is accepted; an out-of-range layout value
-  // is rejected (the field is validated even though it is inert in phase 1).
+  // is rejected.
   SonareEngineBus surround_bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1}};
   REQUIRE(sonare_engine_set_track_buses(engine, surround_bus, 1) == SONARE_OK);
   SonareEngineBus bad_layout_bus[] = {{1, 0.0f, 99}};
@@ -2384,6 +2384,69 @@ TEST_CASE("sonare_engine scope telemetry reports a tone's spectrum and goniomete
 #else
   REQUIRE(sonare_engine_configure_scope_telemetry(engine, kBlock, 32, nullptr) ==
           SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_drain_meter_telemetry_wide reports per-plane meters for a surround bus",
+          "[c_api][engine][surround]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+  std::array<float, kFrames> source{};
+  source.fill(0.5f);
+  const float* channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  // A 5.1 group bus; the lane routes into it and is panned hard to Ls (-110deg).
+  SonareEngineBus buses[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 1, 1}};  // output_bus_id = 1
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  const char* strip_json = R"({"version":1,"buses":[{"id":"master","role":"master"}],)"
+                           R"("strips":[{"id":"s","surroundPan":{"azimuth":-110}}]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, strip_json) == SONARE_OK);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<std::array<float, kBlock>, 6> planes{};
+  std::array<float*, 6> io{};
+  for (int c = 0; c < 6; ++c) {
+    io[static_cast<size_t>(c)] = planes[static_cast<size_t>(c)].data();
+  }
+  REQUIRE(sonare_engine_process(engine, io.data(), 6, kBlock) == SONARE_OK);
+
+  std::array<SonareMeterTelemetryRecordWide, 16> meters{};
+  size_t meter_count = 0;
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, meters.data(), meters.size(),
+                                                   &meter_count) == SONARE_OK);
+  // The 5.1 group bus meter (target 33) publishes all six planes; the surround
+  // lane lands on Ls (plane 4), well above the silent front-left plane.
+  bool found_wide_bus = false;
+  for (size_t i = 0; i < meter_count; ++i) {
+    if (meters[i].target_id != 33) continue;
+    found_wide_bus = true;
+    REQUIRE(meters[i].channel_count == 6);
+    REQUIRE(meters[i].peak_db[4] > meters[i].peak_db[0] + 10.0f);
+  }
+  REQUIRE(found_wide_bus);
+#else
+  std::array<SonareMeterTelemetryRecordWide, 1> meters{};
+  size_t meter_count = 0;
+  REQUIRE(sonare_engine_drain_meter_telemetry_wide(engine, meters.data(), meters.size(),
+                                                   &meter_count) == SONARE_ERROR_NOT_SUPPORTED);
 #endif
 
   sonare_engine_destroy(engine);

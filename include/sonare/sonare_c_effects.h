@@ -589,6 +589,17 @@ SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEn
 SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count);
+/// @brief Drains pending meter telemetry as per-plane (wide) records for
+///   surround targets. Same underlying queue as
+///   @ref sonare_engine_drain_meter_telemetry — a host picks the drain matching
+///   its target's bus layout; do not call both for one target. Each record
+///   carries channel_count valid planes in peak_db/rms_db/true_peak_db.
+/// @param out Caller-owned array receiving up to @p max_records entries.
+/// @param max_records Capacity of @p out. May be 0 to query without copying.
+/// @param out_count Receives the number of records written.
+SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engine,
+                                                     SonareMeterTelemetryRecordWide* out,
+                                                     size_t max_records, size_t* out_count);
 /// @brief Enables/configures per-target spectrum + vectorscope telemetry.
 /// @param interval_frames Minimum render-frame gap between published snapshots
 ///   (0 disables capture). @param band_count Requested FFT band resolution
