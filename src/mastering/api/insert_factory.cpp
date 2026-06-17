@@ -815,4 +815,28 @@ std::vector<std::string> insert_param_names(const std::string& name) {
   return names;
 }
 
+std::string insert_param_info_json(const std::string& name) {
+  // Build a throwaway processor (like insert_param_names) and read its published
+  // JSON-key -> param_id descriptor table. rtSafe is derived per id so hosts can
+  // tell which params accept realtime changes from the audio thread.
+  ParamMap params;
+  auto processor = build_insert(name, params);
+  std::string out = "[";
+  if (processor != nullptr) {
+    const auto descriptors = processor->parameter_descriptors();
+    for (size_t index = 0; index < descriptors.size(); ++index) {
+      if (index > 0) out += ',';
+      out += "{\"name\":\"";
+      out += descriptors[index].key;
+      out += "\",\"id\":";
+      out += std::to_string(descriptors[index].id);
+      out += ",\"rtSafe\":";
+      out += processor->parameter_is_realtime_safe(descriptors[index].id) ? "true" : "false";
+      out += '}';
+    }
+  }
+  out += ']';
+  return out;
+}
+
 }  // namespace sonare::mastering::api

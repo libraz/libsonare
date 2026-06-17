@@ -75,4 +75,16 @@ std::vector<std::string> insert_factory_names();
 ///         feature, e.g. FX).
 std::vector<std::string> insert_param_names(const std::string& name);
 
+/// @brief Realtime-automatable parameter descriptors for an insert processor.
+/// @param name Processor name (see make_insert()).
+/// @return A JSON array string `[{"name","id","rtSafe"}, ...]` mapping each
+///         realtime-automatable parameter's JSON key to the integer param_id
+///         accepted by the engine's realtime insert-parameter setter, with
+///         `rtSafe` reporting whether the param can be changed from the audio
+///         thread. Returns `[]` for an unknown @p name or a processor that
+///         exposes no automatable parameters. Unlike insert_param_names (which
+///         lists every construction key), this lists only the keys reachable via
+///         set_parameter, i.e. the realtime-controllable subset.
+std::string insert_param_info_json(const std::string& name);
+
 }  // namespace sonare::mastering::api
