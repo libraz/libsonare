@@ -66,6 +66,12 @@ export interface EngineTrackLane {
    * (group/folder routing); 0 or absent keeps the lane on the master mix.
    */
   outputBusId?: number;
+  /**
+   * Input channel layout of the source feeding this lane (`SonareChannelLayout`:
+   * 0 mono, 1 stereo, 2 5.1, 3 7.1). Absent defaults to stereo. Stored but inert
+   * until the surround DSP path lands.
+   */
+  sourceChannelLayout?: number;
 }
 
 export interface EngineBus {
@@ -545,7 +551,8 @@ export class RealtimeEngine {
           ...lane,
           sends: lane.sends.map((send) => ({
             ...send,
-            sendTiming: send.sendTiming === undefined ? 1 : sendTimingCode(send.sendTiming),
+            // Post-fader (0) is the default for an omitted sendTiming.
+            sendTiming: send.sendTiming === undefined ? 0 : sendTimingCode(send.sendTiming),
           })),
         };
       }),
@@ -804,7 +811,9 @@ export class RealtimeEngine {
    * Drains pending meter telemetry as per-plane (wide) records for a surround
    * target. Use this for a surround mix target; {@link drainMeterTelemetry}
    * stays the stereo fast path. The two share one queue — call only one per
-   * target.
+   * target. The live AudioWorklet path owns the queue via the stereo drain, so
+   * this wide drain is for an offline (non-worklet) engine instance; per-plane
+   * surround meters are not delivered over the live worklet meter ring.
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
     return this.native.drainMeterTelemetryWide(maxRecords);

@@ -653,6 +653,36 @@ describe('Sonare WASM Module', () => {
       const zeroGainFrozen = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
       expect(zeroGainFrozen[0][0]).toBeCloseTo(0, 4);
       expect(zeroGainFrozen[1][0]).toBeCloseTo(0, 4);
+      // Unsupported bounce channel counts (3/4/5/7 have no speaker layout) must
+      // be rejected, matching the C-ABI oracle round-trip, instead of silently
+      // writing garbage planes.
+      expect(() =>
+        engine.bounceOffline({
+          totalFrames: 256,
+          blockSize: 128,
+          numChannels: 3,
+          sourceSampleRate: 48000,
+          targetSampleRate: 48000,
+        }),
+      ).toThrow();
+      // freezeOffline must reject a non-finite/negative gain or startPpq (gain:0
+      // stays valid -- that is the tested zero-gain freeze above).
+      for (const bad of [
+        { gain: Number.NaN },
+        { gain: -1 },
+        { startPpq: Number.NaN },
+        { startPpq: -1 },
+      ]) {
+        expect(() =>
+          engine.freezeOffline({
+            totalFrames: 128,
+            blockSize: 128,
+            numChannels: 2,
+            clipId: 79,
+            ...bad,
+          }),
+        ).toThrow();
+      }
       engine.destroy();
     });
 

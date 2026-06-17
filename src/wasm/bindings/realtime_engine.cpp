@@ -1424,6 +1424,15 @@ class RealtimeEngineWasm {
       sonare::engine::TrackLaneConfig config{track_id};
       if (lane_val.typeOf().as<std::string>() == "object") {
         config.output_bus_id = static_cast<uint32_t>(intProperty(lane_val, "outputBusId", 0));
+        // Absent defaults to stereo, matching the C ABI / Node surfaces. An
+        // out-of-range layout is rejected like the C ABI's is_valid check.
+        const int raw_layout = intProperty(lane_val, "sourceChannelLayout",
+                                           static_cast<int>(sonare::ChannelLayout::Stereo));
+        if (raw_layout < 0 || !sonare::is_valid_channel_layout(static_cast<uint8_t>(raw_layout))) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "invalid source channel layout");
+        }
+        config.source_layout = static_cast<sonare::ChannelLayout>(raw_layout);
       }
       if (lane_val.typeOf().as<std::string>() == "object" && !lane_val["sends"].isUndefined() &&
           !lane_val["sends"].isNull()) {
@@ -1432,9 +1441,11 @@ class RealtimeEngineWasm {
         config.sends.reserve(static_cast<size_t>(send_count));
         for (int send_index = 0; send_index < send_count; ++send_index) {
           val send = sends[send_index];
-          // sendTiming defaults to post-fader (1) to match the historical lane
-          // send behavior and the scene-JSON default.
-          const sonare::mixing::SendTiming timing = intProperty(send, "sendTiming", 1) == 0
+          // sendTiming integer mirrors SonareSendTiming (0 = post, 1 = pre) and
+          // defaults to post-fader, matching the historical lane-send behavior
+          // and the scene-JSON default. Post is value 0, so an omitted or zeroed
+          // value resolves to post-fader.
+          const sonare::mixing::SendTiming timing = intProperty(send, "sendTiming", 0) == 1
                                                         ? sonare::mixing::SendTiming::PreFader
                                                         : sonare::mixing::SendTiming::PostFader;
           config.sends.push_back({static_cast<uint32_t>(intProperty(send, "busId", 0)),
@@ -1916,6 +1927,14 @@ class RealtimeEngineWasm {
         target_sample_rate <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bounce options");
     }
+    // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
+    // 6 = 5.1, 8 = 7.1); counts like 3/4/5/7 have no layout and would silently
+    // leave their extra planes unpanned. Mirror the C-ABI oracle round-trip
+    // (sonare_c_engine.cpp) so WASM rejects them instead of writing garbage planes.
+    if (sonare::channel_count(sonare::layout_from_channel_count(num_channels)) != num_channels) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "unsupported bounce channel count");
+    }
 
     std::vector<std::vector<float>> channels(static_cast<size_t>(num_channels),
                                              std::vector<float>(static_cast<size_t>(total_frames)));
@@ -2014,6 +2033,15 @@ class RealtimeEngineWasm {
     schedule.length_samples = total_frames;
     schedule.loop = false;
     schedule.gain = floatProperty(options_val, "gain", 1.0f);
+    // Mirror the C-ABI oracle (sonare_c_engine.cpp): a non-finite or negative
+    // startPpq yields an undefined clip position, and a non-finite/negative gain
+    // fills NaN or phase-inverts the frozen clip. Reject up front instead of
+    // letting WASM produce a corrupt freeze where C/Node/Python error.
+    if (!std::isfinite(schedule.start_ppq) || schedule.start_ppq < 0.0 ||
+        !std::isfinite(schedule.gain) || schedule.gain < 0.0f) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid freeze startPpq or gain");
+    }
     clip_storage_ = std::move(new_storage);
     clip_ptrs_ = std::move(new_ptrs);
     engine_.set_clips({schedule});
@@ -2047,6 +2075,7 @@ class RealtimeEngineWasm {
   val drainMeterTelemetry(int max_records) {
     val out = val::array();
     if (max_records <= 0) return out;
+#if defined(SONARE_WITH_MIXING)
     sonare::engine::MeterTelemetryRecord meter{};
     int count = 0;
     while (count < max_records && engine_.pop_meter_telemetry(meter)) {
@@ -2070,6 +2099,9 @@ class RealtimeEngineWasm {
       item.set("droppedRecords", meter.dropped_records);
       out.set(count++, item);
     }
+#else
+    (void)max_records;
+#endif
     return out;
   }
 
@@ -2079,6 +2111,7 @@ class RealtimeEngineWasm {
   val drainMeterTelemetryWide(int max_records) {
     val out = val::array();
     if (max_records <= 0) return out;
+#if defined(SONARE_WITH_MIXING)
     sonare::engine::MeterTelemetryRecord meter{};
     int count = 0;
     while (count < max_records && engine_.pop_meter_telemetry(meter)) {
@@ -2111,6 +2144,9 @@ class RealtimeEngineWasm {
       item.set("droppedRecords", meter.dropped_records);
       out.set(count++, item);
     }
+#else
+    (void)max_records;
+#endif
     return out;
   }
 

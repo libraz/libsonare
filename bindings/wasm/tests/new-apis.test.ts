@@ -590,6 +590,16 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('accepts a lane sourceChannelLayout and rejects an out-of-range one', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      // Valid layouts (0 mono .. 3 7.1) and an omitted layout are accepted.
+      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 2 }])).not.toThrow();
+      expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
+      // Out-of-range layout is rejected like the C ABI is_valid_channel_layout.
+      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 9 }])).toThrow();
+      engine.destroy();
+    });
+
     it('settles smoothed lane faders before an offline render starts', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setTempo(120);

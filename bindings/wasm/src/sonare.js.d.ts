@@ -549,6 +549,11 @@ export interface WasmEngineTrackLane {
    * (group/folder routing); 0 or absent keeps the lane on the master mix.
    */
   outputBusId?: number;
+  /**
+   * Input channel layout of the source feeding this lane (`SonareChannelLayout`:
+   * 0 mono, 1 stereo, 2 5.1, 3 7.1). Absent defaults to stereo.
+   */
+  sourceChannelLayout?: number;
 }
 
 export interface WasmEngineBus {
@@ -690,6 +695,11 @@ export interface WasmEngineScopeTelemetry {
   seq: number;
   droppedRecords: number;
   bands: number[];
+  /**
+   * Goniometer/vectorscope sample points as `{ left, right }` objects. The
+   * Python surface exposes the same data as `(left, right)` tuples; this
+   * representation difference is intentional, the values match.
+   */
   points: { left: number; right: number }[];
 }
 

@@ -1094,6 +1094,17 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.transport?.postMessage?.(record);
   }
 
+  // Drains the engine meter telemetry queue into the stereo meter ring / transport.
+  //
+  // Shared-queue contract: `drainMeterTelemetry` and `drainMeterTelemetryWide`
+  // pop the SAME single-consumer telemetry queue, so exactly ONE of them may run
+  // per engine. The live worklet path owns the queue via the stereo drain below;
+  // the worklet meter ring (SONARE_METER_RING_RECORD_FLOATS) is a fixed stereo
+  // layout carrying planes 0/1 plus the correlation/LUFS summary. Per-plane
+  // surround meters are NOT delivered over the live worklet ring — a host that
+  // needs them must use the offline `drainMeterTelemetryWide()` API on a
+  // non-worklet engine instance (do not also call it on a worklet-driven engine,
+  // or the two drains will starve each other).
   private publishMeters(): void {
     if (this.meterIntervalFrames <= 0 || (!this.transport && !this.meterRing)) {
       return;
