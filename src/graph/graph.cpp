@@ -85,7 +85,16 @@ bool Graph::set_node_sidechain_ports(const std::string& node_id, int first_port,
   if (target == nullptr) {
     return false;
   }
-  return target->set_sidechain_ports(first_port, num_ports);
+  const bool changed = target->set_sidechain_ports(first_port, num_ports);
+  // Sidechain port assignment is a routing change: invalidate the compiled
+  // topology so it is rebuilt before the next process pass, consistent with
+  // connect/disconnect above. (Today sidechains are resolved at process time
+  // and do not affect topo order, so this is currently latent — but keeping the
+  // invariant avoids a stale-topology bug if that ever changes.)
+  if (changed) {
+    compiled_ = false;
+  }
+  return changed;
 }
 
 bool Graph::compile() {
