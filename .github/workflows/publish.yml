@@ -13,10 +13,10 @@ jobs:
   publish-npm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: mymindstorm/setup-emsdk@v14
+      - uses: actions/checkout@v5
+      - uses: mymindstorm/setup-emsdk@v16
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22.22.3'
           registry-url: 'https://registry.npmjs.org'
@@ -25,7 +25,7 @@ jobs:
       - run: corepack enable
       - run: corepack prepare yarn@4.15.0 --activate
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             bindings/wasm/.yarn/cache
@@ -60,7 +60,7 @@ jobs:
         run: yarn test
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
@@ -92,7 +92,7 @@ jobs:
           # macOS x86_64 omitted: GitHub no longer provides Intel macOS runners
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Eigen3 (Linux)
         if: runner.os == 'Linux'
@@ -102,7 +102,7 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install eigen
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -136,7 +136,7 @@ jobs:
           python3 -c "import libsonare; print(f'Version: {libsonare.version()}')"
           cd bindings/python && python3 -m pytest tests/ -x -q
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: wheel-${{ matrix.os }}-${{ matrix.arch }}
           path: bindings/python/dist/*.whl
@@ -151,7 +151,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: wheel-*
           path: dist/
