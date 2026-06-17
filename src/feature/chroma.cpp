@@ -64,7 +64,10 @@ Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
 
   std::vector<float> chroma_features =
       apply_chroma_filterbank(power.data(), n_bins, n_frames, filterbank.data(), n_chroma);
-  chroma_features = normalize_chroma_columns(std::move(chroma_features), n_chroma, n_frames, 2);
+  // librosa.feature.chroma_stft normalizes each frame with norm=np.inf (L-inf /
+  // max norm) by default; match it so analyze()/chroma_stft agree with librosa
+  // (and with the L-inf chroma_cqt path) per-frame, not just in argmax.
+  chroma_features = normalize_chroma_columns(std::move(chroma_features), n_chroma, n_frames, 0);
 
   return Chroma(std::move(chroma_features), n_chroma, n_frames, sr, spec.hop_length());
 }

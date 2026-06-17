@@ -18,7 +18,6 @@
 using namespace sonare;
 using namespace sonare::constants;
 using namespace sonare::test;
-using Catch::Matchers::WithinAbs;
 
 TEST_CASE("chroma reference compatibility", "[chroma][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/chroma.json");
@@ -65,11 +64,13 @@ TEST_CASE("chroma reference compatibility", "[chroma][reference]") {
       REQUIRE(chroma.n_chroma() == expected_n_chroma);
       REQUIRE(chroma.n_frames() == expected_n_frames);
 
-      // The reference fixture was generated with librosa's L-inf chroma
-      // normalization, but Chroma::from_spectrogram (this code path) still
-      // does L2 per-frame normalization. Keep the pitch-class shape check
-      // here; exact L-inf parity is covered by the chroma_cqt reference test
-      // below and by the L-inf default test in tests/util/chroma_cqt_test.cpp.
+      // Chroma::from_spectrogram now L-inf normalizes per frame, matching
+      // librosa.feature.chroma_stft's default norm=np.inf (the fixture was
+      // generated with that default). The exact normalization convention is
+      // verified by the per-frame max==1 guarantee below; the residual
+      // per-class spread vs librosa comes from chroma filterbank / tuning
+      // details (a separate parity concern), so here we only require the
+      // dominant pitch class to agree.
       const auto& ref_mean = entry["mean_per_class"].as_array();
       auto mean_energy = chroma.mean_energy();
       REQUIRE(mean_energy.size() == ref_mean.size());
@@ -93,6 +94,18 @@ TEST_CASE("chroma reference compatibility", "[chroma][reference]") {
         }
       }
       REQUIRE(our_dominant == ref_dominant);
+
+      // Every per-frame max is 1 (or 0 for silent frames) under L-inf norm.
+      const float* d = chroma.data();
+      const int nc = chroma.n_chroma();
+      const int nf = chroma.n_frames();
+      for (int t = 0; t < nf; ++t) {
+        float max_abs = 0.0f;
+        for (int cidx = 0; cidx < nc; ++cidx) {
+          max_abs = std::max(max_abs, std::abs(d[cidx * nf + t]));
+        }
+        REQUIRE((max_abs < 1e-6f || std::abs(max_abs - 1.0f) < 1e-4f));
+      }
     }
   }
 }

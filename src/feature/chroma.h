@@ -147,14 +147,14 @@ class Chroma {
   std::array<float, 12> weighted_mean_energy(const std::vector<float>& frame_weights) const;
 
   /// @brief Computes normalized chromagram per frame.
-  /// @param norm Norm type: 2 for L2 normalization (matches the librosa
-  ///   chroma_stft default), 1 for L1, 0 or other for L-inf (max) norm.
+  /// @param norm Norm type: 0 or other for L-inf (max) norm, 1 for L1, 2 for
+  ///   L2 normalization.
   /// @return Normalized chromagram [n_chroma x n_frames]
-  /// @note Calling `normalize()` without arguments uses L2 to preserve
-  ///   librosa parity with `librosa.feature.chroma_stft` (default norm=2).
-  ///   This also matches the L2 per-frame normalization already applied
-  ///   inside `Chroma::compute` / `Chroma::from_spectrogram`.
-  std::vector<float> normalize(int norm = 2) const;
+  /// @note Calling `normalize()` without arguments uses L-inf (max) norm to
+  ///   match `librosa.feature.chroma_stft`'s default `norm=np.inf`. This also
+  ///   matches the L-inf per-frame normalization already applied inside
+  ///   `Chroma::compute` / `Chroma::from_spectrogram`.
+  std::vector<float> normalize(int norm = 0) const;
 
   /// @brief Returns the dominant pitch class for each frame.
   /// @return Vector of pitch class indices (0=C, 1=C#, ..., 11=B)
