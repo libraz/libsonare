@@ -253,8 +253,12 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
             transport::TimeSignatureSegment seg;
             seg.start_ppq = ppq;
             seg.time_sig.numerator = static_cast<int>(payload[0]);
-            // SMF stores the denominator as a power of two (2 => 2^2 = 4).
-            if (payload[1] >= 31) {
+            // SMF stores the denominator as a power of two (2 => 2^2 = 4). The
+            // exporter caps the exponent at 7 (128th-note denominator), so
+            // reject any exponent it could not reproduce: this keeps
+            // import -> export round-trips symmetric instead of silently
+            // re-quantizing an oversized denominator down to 128 on write.
+            if (payload[1] > 7) {
               ++(*skipped);
               break;
             }

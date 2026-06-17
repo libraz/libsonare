@@ -520,6 +520,32 @@ TEST_CASE("SMF time-signature metronome bytes round-trip", "[midi]") {
   REQUIRE(round.time_signatures[0].thirty_seconds_per_quarter == 6);
 }
 
+TEST_CASE("SMF import skips a time-signature denominator the exporter cannot reproduce", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x58);
+  body.push_back(0x04);
+  body.push_back(0x04);  // numerator 4.
+  body.push_back(0x08);  // exponent 8 (denominator 256) — beyond the exporter's cap of 7.
+  body.push_back(0x18);
+  body.push_back(0x08);
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  // The oversized denominator is dropped (counted as a skipped event), not
+  // silently kept and re-quantized to 128 on a later export. The importer then
+  // substitutes its default 4/4 segment since none was parsed.
+  REQUIRE(imported.skipped_events >= 1);
+  for (const auto& seg : imported.time_signatures) {
+    REQUIRE(seg.time_sig.denominator != 256);
+  }
+}
+
 TEST_CASE("SMF import derives clip length from end-of-track tick", "[midi]") {
   std::vector<uint8_t> body;
   body.push_back(0x00);
