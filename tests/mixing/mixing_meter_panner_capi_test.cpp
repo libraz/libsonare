@@ -317,6 +317,43 @@ TEST_CASE("Mixing C API preserves dual pan in scene JSON", "[mixing][capi]") {
   sonare_mixer_destroy(restored);
 }
 
+TEST_CASE("Mixing C API preserves surround pan in scene JSON", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "surround");
+  REQUIRE(strip != nullptr);
+
+  REQUIRE(sonare_strip_set_surround_pan(nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareSurroundPan pan{};
+  pan.azimuth = -45.0f;
+  pan.divergence = 0.25f;
+  pan.lfe = 0.5f;
+  pan.distance = 1.0f;
+  REQUIRE(sonare_strip_set_surround_pan(strip, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_set_surround_pan(strip, &pan) == SONARE_OK);
+
+  char* json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const std::string scene_json(json);
+  REQUIRE(scene_json.find("\"surroundPan\"") != std::string::npos);
+  REQUIRE(scene_json.find("\"azimuth\":-45") != std::string::npos);
+  REQUIRE(scene_json.find("\"lfe\":0.5") != std::string::npos);
+  sonare_free_string(json);
+  sonare_mixer_destroy(mixer);
+
+  SonareMixer* restored = sonare_mixer_from_scene_json(scene_json.c_str(), 48000, 8);
+  REQUIRE(restored != nullptr);
+  char* restored_json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(restored, &restored_json) == SONARE_OK);
+  REQUIRE(restored_json != nullptr);
+  const std::string restored_scene_json(restored_json);
+  REQUIRE(restored_scene_json.find("\"azimuth\":-45") != std::string::npos);
+  REQUIRE(restored_scene_json.find("\"divergence\":0.25") != std::string::npos);
+  sonare_free_string(restored_json);
+  sonare_mixer_destroy(restored);
+}
+
 TEST_CASE("Mixing C API preserves pan mode set via set_pan in scene JSON", "[mixing][capi]") {
   SonareMixer* mixer = sonare_mixer_create(48000, 8);
   REQUIRE(mixer != nullptr);

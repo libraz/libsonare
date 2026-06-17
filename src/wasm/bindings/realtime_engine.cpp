@@ -1432,9 +1432,14 @@ class RealtimeEngineWasm {
         config.sends.reserve(static_cast<size_t>(send_count));
         for (int send_index = 0; send_index < send_count; ++send_index) {
           val send = sends[send_index];
+          // sendTiming defaults to post-fader (1) to match the historical lane
+          // send behavior and the scene-JSON default.
+          const sonare::mixing::SendTiming timing = intProperty(send, "sendTiming", 1) == 0
+                                                        ? sonare::mixing::SendTiming::PreFader
+                                                        : sonare::mixing::SendTiming::PostFader;
           config.sends.push_back({static_cast<uint32_t>(intProperty(send, "busId", 0)),
                                   floatProperty(send, "levelDb", 0.0f),
-                                  boolProperty(send, "enabled", true)});
+                                  boolProperty(send, "enabled", true), timing});
         }
       }
       configs.push_back(std::move(config));
@@ -1604,6 +1609,109 @@ class RealtimeEngineWasm {
     (void)insert_index;
     (void)bypassed;
     (void)reset_on_bypass;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripInsertParamByName(uint32_t track_id, unsigned int insert_index,
+                                      const std::string& param_name, float value) {
+#if defined(SONARE_WITH_MIXING)
+    if (!engine_.set_track_insert_param(track_id, insert_index, param_name, value)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip insert parameter target");
+    }
+#else
+    (void)track_id;
+    (void)insert_index;
+    (void)param_name;
+    (void)value;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setMasterStripInsertParamByName(unsigned int insert_index, const std::string& param_name,
+                                       float value) {
+#if defined(SONARE_WITH_MIXING)
+    if (!engine_.set_master_insert_param(insert_index, param_name, value)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid master strip insert parameter target");
+    }
+#else
+    (void)insert_index;
+    (void)param_name;
+    (void)value;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripPan(uint32_t track_id, float pan) {
+#if defined(SONARE_WITH_MIXING)
+    if (!engine_.set_track_pan(track_id, pan)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip pan target");
+    }
+#else
+    (void)track_id;
+    (void)pan;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripPanLaw(uint32_t track_id, int pan_law) {
+#if defined(SONARE_WITH_MIXING)
+    if (pan_law < 0 || pan_law > 3) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
+    }
+    if (!engine_.set_track_pan_law(track_id, static_cast<sonare::mixing::PanLaw>(pan_law))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip pan-law target");
+    }
+#else
+    (void)track_id;
+    (void)pan_law;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripPanMode(uint32_t track_id, int pan_mode) {
+#if defined(SONARE_WITH_MIXING)
+    if (pan_mode < 0 || pan_mode > 2) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    }
+    if (!engine_.set_track_pan_mode(track_id, static_cast<sonare::mixing::PanMode>(pan_mode))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip pan-mode target");
+    }
+#else
+    (void)track_id;
+    (void)pan_mode;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripDualPan(uint32_t track_id, float left_pan, float right_pan) {
+#if defined(SONARE_WITH_MIXING)
+    if (!engine_.set_track_dual_pan(track_id, left_pan, right_pan)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip dual-pan target");
+    }
+#else
+    (void)track_id;
+    (void)left_pan;
+    (void)right_pan;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  void setTrackStripChannelDelaySamples(uint32_t track_id, int delay_samples) {
+#if defined(SONARE_WITH_MIXING)
+    if (!engine_.set_track_channel_delay_samples(track_id, delay_samples)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid track strip channel-delay target");
+    }
+#else
+    (void)track_id;
+    (void)delay_samples;
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
 #endif
   }
@@ -1959,6 +2067,49 @@ class RealtimeEngineWasm {
     return out;
   }
 
+  unsigned int configureScopeTelemetry(int interval_frames, unsigned int band_count) {
+#if defined(SONARE_WITH_MIXING)
+    return engine_.configure_scope_telemetry(interval_frames, band_count);
+#else
+    (void)interval_frames;
+    (void)band_count;
+    return 0;
+#endif
+  }
+
+  val drainScopeTelemetry(int max_records) {
+    val out = val::array();
+    if (max_records <= 0) return out;
+#if defined(SONARE_WITH_MIXING)
+    sonare::engine::ScopeTelemetryRecord rec{};
+    int count = 0;
+    while (count < max_records && engine_.pop_scope_telemetry(rec)) {
+      val item = val::object();
+      item.set("targetId", rec.target_id);
+      item.set("renderFrame", static_cast<double>(rec.render_frame));
+      item.set("seq", static_cast<double>(rec.seq));
+      item.set("droppedRecords", rec.dropped_records);
+      val bands = val::array();
+      for (uint32_t b = 0; b < rec.band_count && b < rec.bands.size(); ++b) {
+        bands.set(b, rec.bands[b]);
+      }
+      item.set("bands", bands);
+      val points = val::array();
+      for (uint32_t p = 0; p < rec.point_count && p < rec.points.size(); ++p) {
+        val point = val::object();
+        point.set("left", rec.points[p].left);
+        point.set("right", rec.points[p].right);
+        points.set(p, point);
+      }
+      item.set("points", points);
+      out.set(count++, item);
+    }
+#else
+    (void)max_records;
+#endif
+    return out;
+  }
+
  private:
   // Maps a JS-supplied queue depth to the engine's size_t capacity. A value <= 0
   // selects the engine default (1024), matching the Node/Python bindings.
@@ -2228,6 +2379,16 @@ void registerRealtimeEngineBindings() {
       .function("setMasterStripJson", &RealtimeEngineWasm::setMasterStripJson)
       .function("setMasterStripEqBandJson", &RealtimeEngineWasm::setMasterStripEqBandJson)
       .function("setMasterStripInsertBypassed", &RealtimeEngineWasm::setMasterStripInsertBypassed)
+      .function("setTrackStripInsertParamByName",
+                &RealtimeEngineWasm::setTrackStripInsertParamByName)
+      .function("setMasterStripInsertParamByName",
+                &RealtimeEngineWasm::setMasterStripInsertParamByName)
+      .function("setTrackStripPan", &RealtimeEngineWasm::setTrackStripPan)
+      .function("setTrackStripPanLaw", &RealtimeEngineWasm::setTrackStripPanLaw)
+      .function("setTrackStripPanMode", &RealtimeEngineWasm::setTrackStripPanMode)
+      .function("setTrackStripDualPan", &RealtimeEngineWasm::setTrackStripDualPan)
+      .function("setTrackStripChannelDelaySamples",
+                &RealtimeEngineWasm::setTrackStripChannelDelaySamples)
       .function("createClipPageProvider", &RealtimeEngineWasm::createClipPageProvider)
       .function("supplyClipPage", &RealtimeEngineWasm::supplyClipPage)
       .function("clearClipPage", &RealtimeEngineWasm::clearClipPage)
@@ -2251,7 +2412,9 @@ void registerRealtimeEngineBindings() {
       .function("bounceOffline", &RealtimeEngineWasm::bounceOffline)
       .function("freezeOffline", &RealtimeEngineWasm::freezeOffline)
       .function("drainTelemetry", &RealtimeEngineWasm::drainTelemetry)
-      .function("drainMeterTelemetry", &RealtimeEngineWasm::drainMeterTelemetry);
+      .function("drainMeterTelemetry", &RealtimeEngineWasm::drainMeterTelemetry)
+      .function("configureScopeTelemetry", &RealtimeEngineWasm::configureScopeTelemetry)
+      .function("drainScopeTelemetry", &RealtimeEngineWasm::drainScopeTelemetry);
 }
 
 #endif  // __EMSCRIPTEN__

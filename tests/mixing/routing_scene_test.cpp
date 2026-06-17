@@ -326,6 +326,98 @@ TEST_CASE("Scene-loaded mixer exposes strip meter and goniometer snapshots", "[m
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("Scene channel layout round-trips and defaults to stereo", "[mixing][routing]") {
+  using sonare::ChannelLayout;
+
+  // A surround master plus a 5.1-source strip serialize their layout fields and
+  // parse back to the same enum values.
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip src;
+  src.id = "src";
+  src.source_layout = ChannelLayout::FivePointOne;
+  scene.strips.push_back(src);
+  sonare::mixing::api::Bus master("master", "master");
+  master.layout = ChannelLayout::SevenPointOne;
+  scene.buses.push_back(master);
+  scene.connections.push_back({"src", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("\"sourceLayout\":\"5.1\"") != std::string::npos);
+  REQUIRE(json.find("\"layout\":\"7.1\"") != std::string::npos);
+
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.strips.size() == 1);
+  REQUIRE(restored.strips[0].source_layout == ChannelLayout::FivePointOne);
+  REQUIRE(restored.buses.size() == 1);
+  REQUIRE(restored.buses[0].layout == ChannelLayout::SevenPointOne);
+}
+
+TEST_CASE("Scene omits the layout fields when stereo (byte-compat)", "[mixing][routing]") {
+  using sonare::ChannelLayout;
+
+  // Default (stereo) layouts must not emit the new fields, so existing stereo
+  // scenes serialize byte-identically and absent fields parse back as stereo.
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip src;
+  src.id = "src";
+  scene.strips.push_back(src);
+  scene.buses.push_back({"master", "master"});
+  scene.connections.push_back({"src", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("sourceLayout") == std::string::npos);
+  REQUIRE(json.find("\"layout\"") == std::string::npos);
+
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.strips[0].source_layout == ChannelLayout::Stereo);
+  REQUIRE(restored.buses[0].layout == ChannelLayout::Stereo);
+}
+
+TEST_CASE("Scene surround pan round-trips and omits at the default", "[mixing][routing]") {
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip moved;
+  moved.id = "moved";
+  moved.surround_pan.azimuth = -45.0f;
+  moved.surround_pan.divergence = 0.25f;
+  moved.surround_pan.lfe = 0.5f;
+  scene.strips.push_back(moved);
+  sonare::mixing::api::Strip centered;  // all defaults -> must not emit the object
+  centered.id = "centered";
+  scene.strips.push_back(centered);
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("surroundPan") != std::string::npos);
+
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.strips.size() == 2);
+  REQUIRE(restored.strips[0].surround_pan.azimuth == -45.0f);
+  REQUIRE(restored.strips[0].surround_pan.divergence == 0.25f);
+  REQUIRE(restored.strips[0].surround_pan.lfe == 0.5f);
+  REQUIRE(restored.strips[0].surround_pan.distance == 1.0f);  // reserved default
+  // The centered strip carries no surroundPan and parses back to the default.
+  REQUIRE(restored.strips[1].surround_pan.azimuth == 0.0f);
+  REQUIRE(restored.strips[1].surround_pan.divergence == 0.0f);
+  REQUIRE(restored.strips[1].surround_pan.distance == 1.0f);
+}
+
+TEST_CASE("Scene JSON rejects an unknown channel layout string", "[mixing][routing]") {
+  const std::string bad_bus = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master", "layout": "9.2"}],
+    "strips": [{"id": "vocal"}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(bad_bus), sonare::SonareException);
+
+  const std::string bad_type = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master", "layout": 6}],
+    "strips": [{"id": "vocal"}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(bad_type), sonare::SonareException);
+}
+
 TEST_CASE("Routed mixer scene round-trip preserves VCA groups", "[mixing][routing]") {
   constexpr int kSr = 48000;
   constexpr int kBlock = 64;

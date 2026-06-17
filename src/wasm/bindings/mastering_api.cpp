@@ -6,6 +6,7 @@
 
 #include "common.h"
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/named_processor.h"
 
 val js_mastering_processor_names() {
   val out = val::array();
@@ -39,6 +40,19 @@ val js_mastering_insert_param_names(std::string name) {
   }
   return out;
 }
+
+// Realtime-automatable parameter descriptors for an insert processor, as a JSON
+// array string [{"name","id","rtSafe"}, ...]. The TS facade parses it; "[]" for
+// an unknown name or a processor with no automatable parameters.
+std::string js_mastering_insert_param_info(std::string name) {
+  return mastering::api::insert_param_info_json(name);
+}
+
+// Machine-readable classification catalog for every named processor id, as a JSON
+// array string [{"id","kind","realtimeInsertable","stereoOnly"}, ...]. The TS
+// facade parses it; lets a host filter a processor picker by realtime
+// insertability instead of offering ids the realtime strip would reject.
+std::string js_mastering_processor_catalog() { return mastering::api::processor_catalog_json(); }
 
 // ---------------------------------------------------------------------------
 // Mastering presets (high-level master_audio API).
@@ -327,6 +341,8 @@ void registerMasteringApiBindings() {
   function("masteringProcessorNames", &js_mastering_processor_names);
   function("masteringInsertNames", &js_mastering_insert_names);
   function("masteringInsertParamNames", &js_mastering_insert_param_names);
+  function("masteringInsertParamInfo", &js_mastering_insert_param_info);
+  function("masteringProcessorCatalog", &js_mastering_processor_catalog);
   function("masteringPairProcessorNames", &js_mastering_pair_processor_names);
   function("masteringPairAnalysisNames", &js_mastering_pair_analysis_names);
   function("masteringStereoAnalysisNames", &js_mastering_stereo_analysis_names);

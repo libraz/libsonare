@@ -116,6 +116,21 @@ SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float 
   SONARE_C_CATCH
 }
 
+SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurroundPan* pan) {
+  if (!strip || !pan) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  // Stored on the scene strip; inert until the surround DSP path consumes it.
+  strip->scene_strip.surround_pan.azimuth = std::clamp(pan->azimuth, -180.0f, 180.0f);
+  strip->scene_strip.surround_pan.elevation = pan->elevation;
+  strip->scene_strip.surround_pan.divergence = std::clamp(pan->divergence, 0.0f, 1.0f);
+  strip->scene_strip.surround_pan.lfe = std::clamp(pan->lfe, 0.0f, 1.0f);
+  strip->scene_strip.surround_pan.distance = pan->distance;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_strip_set_width(SonareStrip* strip, float width) {
   if (!strip) {
     return SONARE_ERROR_INVALID_PARAMETER;

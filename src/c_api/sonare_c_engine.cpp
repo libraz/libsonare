@@ -9,6 +9,7 @@
 
 #include "automation/parameter.h"
 #include "core/audio.h"
+#include "core/channel_layout.h"
 #include "core/resample.h"
 #include "engine/realtime_engine.h"
 #include "engine/tempo_sync.h"
@@ -16,6 +17,7 @@
 #include "metering/normalize.h"
 #if defined(SONARE_WITH_MIXING)
 #include "c_api/eq_band_json.h"
+#include "c_api/mixing_internal.h"
 #include "mixing/api/scene.h"
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -889,12 +891,17 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
     if (lanes[i].send_count > 0 && lanes[i].sends == nullptr) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
+    if (!is_valid_channel_layout(lanes[i].source_channel_layout)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     engine::TrackLaneConfig lane{lanes[i].track_id};
     lane.output_bus_id = lanes[i].output_bus_id;
+    lane.source_layout = static_cast<ChannelLayout>(lanes[i].source_channel_layout);
     lane.sends.reserve(lanes[i].send_count);
     for (size_t send_index = 0; send_index < lanes[i].send_count; ++send_index) {
       const SonareEngineTrackSend& send = lanes[i].sends[send_index];
-      lane.sends.push_back({send.bus_id, send.level_db, send.enabled != 0});
+      lane.sends.push_back({send.bus_id, send.level_db, send.enabled != 0,
+                            sonare_c_mixing_detail::to_send_timing(send.send_timing)});
     }
     configs.push_back(std::move(lane));
   }
@@ -930,7 +937,11 @@ SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
   SONARE_C_TRY
   configs.reserve(bus_count);
   for (size_t i = 0; i < bus_count; ++i) {
-    configs.push_back({buses[i].bus_id, buses[i].gain_db});
+    if (!is_valid_channel_layout(buses[i].channel_layout)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    configs.push_back(
+        {buses[i].bus_id, buses[i].gain_db, static_cast<ChannelLayout>(buses[i].channel_layout)});
   }
   return engine->engine.set_track_buses(std::move(configs)) ? SONARE_OK
                                                             : SONARE_ERROR_INVALID_PARAMETER;
@@ -1083,6 +1094,126 @@ SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine*
   SONARE_C_TRY
   return engine->engine.set_master_insert_bypassed(insert_index, bypassed != 0,
                                                    reset_on_bypass != 0)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                               uint32_t track_id,
+                                                               unsigned int insert_index,
+                                                               const char* param_name,
+                                                               float value) {
+  if (!engine || track_id == 0 || !param_name || param_name[0] == '\0') {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)insert_index;
+  (void)value;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_track_insert_param(track_id, insert_index, param_name, value)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                                unsigned int insert_index,
+                                                                const char* param_name,
+                                                                float value) {
+  if (!engine || !param_name || param_name[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  (void)value;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_master_insert_param(insert_index, param_name, value)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_pan(SonareRealtimeEngine* engine, uint32_t track_id,
+                                              float pan) {
+  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)pan;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_track_pan(track_id, pan) ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_pan_law(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                  int pan_law) {
+  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)pan_law;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_track_pan_law(track_id, sonare_c_mixing_detail::to_pan_law(pan_law))
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_pan_mode(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                   int pan_mode) {
+  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)pan_mode;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_track_pan_mode(track_id, sonare_c_mixing_detail::to_pan_mode(pan_mode))
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                   float left_pan, float right_pan) {
+  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)left_pan;
+  (void)right_pan;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_track_dual_pan(track_id, left_pan, right_pan)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEngine* engine,
+                                                                uint32_t track_id,
+                                                                int delay_samples) {
+  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)delay_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_track_channel_delay_samples(track_id, delay_samples)
              ? SONARE_OK
              : SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_CATCH
@@ -1354,6 +1485,13 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
       options->source_sample_rate <= 0 || options->dither_bits < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
+  // 6 = 5.1, 8 = 7.1). Counts like 3/4/5/7 have no layout and would silently
+  // leave their extra planes unpanned, so reject them up front.
+  if (sonare::channel_count(sonare::layout_from_channel_count(options->num_channels)) !=
+      options->num_channels) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   std::vector<std::vector<float>> channels(
       static_cast<size_t>(options->num_channels),
@@ -1512,6 +1650,57 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
     out[count].integrated_lufs = record.integrated_lufs;
     out[count].gain_reduction_db = record.gain_reduction_db;
     out[count].dropped_records = record.dropped_records;
+    ++count;
+  }
+  *out_count = count;
+  return SONARE_OK;
+#else
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine,
+                                                    int interval_frames, unsigned int band_count,
+                                                    unsigned int* out_band_count) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if defined(SONARE_WITH_MIXING)
+  const uint32_t applied =
+      engine->engine.configure_scope_telemetry(interval_frames, static_cast<uint32_t>(band_count));
+  if (out_band_count) *out_band_count = applied;
+  return SONARE_OK;
+#else
+  (void)interval_frames;
+  (void)band_count;
+  if (out_band_count) *out_band_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+SonareError sonare_engine_drain_scope_telemetry(SonareRealtimeEngine* engine,
+                                                SonareScopeTelemetryRecord* out, size_t max_records,
+                                                size_t* out_count) {
+  if (!engine || !out_count || (max_records > 0 && !out)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+#if defined(SONARE_WITH_MIXING)
+  size_t count = 0;
+  engine::ScopeTelemetryRecord record{};
+  while (count < max_records && engine->engine.pop_scope_telemetry(record)) {
+    out[count].target_id = record.target_id;
+    out[count].render_frame = record.render_frame;
+    out[count].seq = record.seq;
+    out[count].dropped_records = record.dropped_records;
+    out[count].band_count = record.band_count;
+    for (uint32_t b = 0; b < record.band_count && b < SONARE_SCOPE_MAX_BANDS; ++b) {
+      out[count].bands[b] = record.bands[b];
+    }
+    out[count].point_count = record.point_count;
+    for (uint32_t p = 0; p < record.point_count && p < SONARE_SCOPE_MAX_POINTS; ++p) {
+      out[count].points[2 * p] = record.points[p].left;
+      out[count].points[2 * p + 1] = record.points[p].right;
+    }
     ++count;
   }
   *out_count = count;

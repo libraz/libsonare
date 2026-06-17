@@ -182,6 +182,25 @@ typedef struct {
   uint32_t dropped_records;
 } SonareMeterTelemetryRecord;
 
+#define SONARE_SCOPE_MAX_BANDS 64
+#define SONARE_SCOPE_MAX_POINTS 32
+
+/* Mirrors engine::ScopeTelemetryRecord: a fixed-size spectrum + goniometer
+   (vectorscope) snapshot for one mix target, published by the engine's scope tap
+   and drained with sonare_engine_drain_scope_telemetry. band_count entries of
+   bands[] (FFT magnitude in dBFS, linear-spaced over [0, Nyquist]) and
+   point_count interleaved left/right pairs of points[] are valid. */
+typedef struct {
+  uint32_t target_id;
+  int64_t render_frame;
+  uint64_t seq;
+  uint32_t dropped_records;
+  uint32_t band_count;
+  float bands[SONARE_SCOPE_MAX_BANDS];
+  uint32_t point_count;
+  float points[SONARE_SCOPE_MAX_POINTS * 2];
+} SonareScopeTelemetryRecord;
+
 /* Read-only snapshot of the engine transport state. */
 typedef struct {
   int playing;
@@ -306,7 +325,23 @@ typedef struct {
   uint32_t bus_id;
   float level_db;
   int enabled;
+  /* Pre/post-fader tap point (SonareSendTiming: 0 = pre, 1 = post). The lane-send
+     path historically tapped post-fader, so callers building this struct should
+     set SONARE_SEND_TIMING_POST_FADER to preserve that behavior; a zero-init
+     leaves it pre-fader. */
+  int send_timing;
 } SonareEngineTrackSend;
+
+/* Speaker bed layout for a bus or source. Values match sonare::ChannelLayout
+   and are part of the ABI / JSON wire format — never renumber.
+   Plane order is WAVE_FORMAT_EXTENSIBLE (also ITU-R BS.2051 / SMPTE):
+     5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Lss Rss Ls Rs. */
+typedef enum {
+  SONARE_CHANNEL_LAYOUT_MONO = 0,
+  SONARE_CHANNEL_LAYOUT_STEREO = 1,
+  SONARE_CHANNEL_LAYOUT_5_1 = 2,
+  SONARE_CHANNEL_LAYOUT_7_1 = 3,
+} SonareChannelLayout;
 
 typedef struct {
   uint32_t track_id;
@@ -315,11 +350,19 @@ typedef struct {
   /* Bus the lane's post-fader output sums into instead of the master mix
      (group/folder routing); 0 keeps the lane on the master mix. */
   uint32_t output_bus_id;
+  /* Input channel layout of the source feeding this lane (SonareChannelLayout).
+     0 (mono) / 1 (stereo) keep existing behavior; surround upmix is applied by
+     the panner once the surround DSP path lands. */
+  uint8_t source_channel_layout;
 } SonareEngineTrackLane;
 
 typedef struct {
   uint32_t bus_id;
   float gain_db;
+  /* Channel layout of this bus (SonareChannelLayout). The master bus carries the
+     project output layout. Defaults to stereo; stored but inert until the
+     surround DSP path lands. */
+  uint8_t channel_layout;
 } SonareEngineBus;
 
 typedef struct {

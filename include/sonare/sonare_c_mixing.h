@@ -62,6 +62,19 @@ typedef struct {
   float right;
 } SonareMixGoniometerPoint;
 
+// Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
+// azimuth (-180..180 deg, 0 = front-center, + = right), divergence (0 = point
+// source, 1 = spread across the front) and lfe (0..1 scalar send into the LFE
+// plane); elevation and distance are reserved (0 / 1 in phase 1). Stored and
+// serialized but inert until the surround DSP path applies it.
+typedef struct {
+  float azimuth;
+  float elevation;
+  float divergence;
+  float lfe;
+  float distance;
+} SonareSurroundPan;
+
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
 SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db);
@@ -71,6 +84,11 @@ SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db);
 // the mode: 0 = Balance, 1 = StereoPan, 2 = DualPan.
 SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
+// Sets the strip's surround pan position (used when the strip feeds a >2-channel
+// bus). Returns SONARE_ERROR_INVALID_PARAMETER if strip or pan is NULL. The
+// values are stored on the strip/scene and inert until the surround DSP path
+// applies them.
+SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurroundPan* pan);
 SonareError sonare_strip_set_width(SonareStrip* strip, float width);
 SonareError sonare_strip_set_muted(SonareStrip* strip, int muted);
 // Sets the strip's solo state. Solo changes take effect on the next process

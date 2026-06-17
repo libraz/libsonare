@@ -1043,9 +1043,14 @@
         "name": "gain_db",
         "offset": 4,
         "size": 4
+      },
+      {
+        "name": "channel_layout",
+        "offset": 8,
+        "size": 1
       }
     ],
-    "size": 8
+    "size": 12
   },
   "SonareEngineCaptureBuffer": {
     "align": 8,
@@ -1608,6 +1613,11 @@
         "name": "output_bus_id",
         "offset": 24,
         "size": 4
+      },
+      {
+        "name": "source_channel_layout",
+        "offset": 28,
+        "size": 1
       }
     ],
     "size": 32
@@ -1629,9 +1639,14 @@
         "name": "enabled",
         "offset": 8,
         "size": 4
+      },
+      {
+        "name": "send_timing",
+        "offset": 12,
+        "size": 4
       }
     ],
-    "size": 12
+    "size": 16
   },
   "SonareEngineWarpAnchor": {
     "align": 8,
@@ -3798,6 +3813,52 @@
     ],
     "size": 112
   },
+  "SonareScopeTelemetryRecord": {
+    "align": 8,
+    "fields": [
+      {
+        "name": "target_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "render_frame",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "seq",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "dropped_records",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "band_count",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "bands",
+        "offset": 32,
+        "size": 256
+      },
+      {
+        "name": "point_count",
+        "offset": 288,
+        "size": 4
+      },
+      {
+        "name": "points",
+        "offset": 292,
+        "size": 256
+      }
+    ],
+    "size": 552
+  },
   "SonareSection": {
     "align": 4,
     "fields": [
@@ -4612,6 +4673,37 @@
       }
     ],
     "size": 16
+  },
+  "SonareSurroundPan": {
+    "align": 4,
+    "fields": [
+      {
+        "name": "azimuth",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "elevation",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "divergence",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "lfe",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "distance",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
   },
   "SonareSynthInstrumentBinding": {
     "align": 4,

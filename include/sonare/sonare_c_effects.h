@@ -472,6 +472,60 @@ SonareError sonare_engine_set_master_strip_eq_band_json(SonareRealtimeEngine* en
 SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine* engine,
                                                            unsigned int insert_index, int bypassed,
                                                            int reset_on_bypass);
+/// @brief Realtime change of one track-strip insert parameter, addressed by the
+///        processor's JSON-key parameter name.
+/// @details @p param_name is a key returned by @ref sonare_mastering_insert_param_info
+///   (which also gives each param's `rtSafe` flag). The name is resolved to the
+///   integer param_id on the control thread and applied at the next block head
+///   via the realtime command queue, so this is safe to call during playback
+///   without rebuilding the strip. @p insert_index addresses the combined pre/post
+///   insert sequence. Returns SONARE_ERROR_INVALID_PARAMETER if the track, insert,
+///   or name is unknown, the param is not realtime-safe, or the command queue is
+///   full; track/insert/param indices must each fit in 8 bits.
+SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                               uint32_t track_id,
+                                                               unsigned int insert_index,
+                                                               const char* param_name, float value);
+/// @brief Realtime change of one master-strip insert parameter by JSON-key name.
+/// @details Master-strip counterpart of @ref sonare_engine_set_track_strip_insert_param_by_name.
+SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                                unsigned int insert_index,
+                                                                const char* param_name,
+                                                                float value);
+/// @brief Realtime change of a track lane strip's pan position.
+/// @details Control-thread mutation; glitch-free (atomic). Returns
+///   SONARE_ERROR_INVALID_PARAMETER if @p track_id has no bound lane strip or
+///   @p pan is not finite. The pan mode is unchanged; use
+///   @ref sonare_engine_set_track_strip_pan_mode to switch modes.
+SonareError sonare_engine_set_track_strip_pan(SonareRealtimeEngine* engine, uint32_t track_id,
+                                              float pan);
+/// @brief Realtime change of a track lane strip's pan law.
+/// @details @p pan_law uses SonarePanLaw (0=-3 dB, 1=-4.5 dB, 2=-6 dB, 3=linear).
+///   Control-thread mutation; glitch-free. Returns SONARE_ERROR_INVALID_PARAMETER
+///   if the track has no bound lane strip or @p pan_law is unknown.
+SonareError sonare_engine_set_track_strip_pan_law(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                  int pan_law);
+/// @brief Realtime change of a track lane strip's pan mode.
+/// @details @p pan_mode uses SonarePanMode (0=balance, 1=stereo pan, 2=dual pan).
+///   Control-thread mutation; glitch-free. Returns SONARE_ERROR_INVALID_PARAMETER
+///   if the track has no bound lane strip or @p pan_mode is unknown.
+SonareError sonare_engine_set_track_strip_pan_mode(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                   int pan_mode);
+/// @brief Realtime change of a track lane strip's dual-pan left/right positions.
+/// @details Both positions are in [-1, 1]. Takes effect under pan mode dual pan.
+///   Control-thread mutation; glitch-free. Returns SONARE_ERROR_INVALID_PARAMETER
+///   if the track has no bound lane strip or a position is not finite.
+SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                   float left_pan, float right_pan);
+/// @brief Realtime change of a track lane strip's inter-channel alignment delay.
+/// @details @p delay_samples is a non-negative whole-sample delay. This adjusts
+///   strip latency, so PDC and the reported graph latency are refreshed; treat it
+///   as a structural change (do not call concurrently with
+///   @ref sonare_engine_process). Returns SONARE_ERROR_INVALID_PARAMETER if the
+///   track has no bound lane strip or @p delay_samples is negative.
+SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEngine* engine,
+                                                                uint32_t track_id,
+                                                                int delay_samples);
 SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_samples,
                                              int64_t page_frames,
                                              SonareClipPageProvider** out_provider);
@@ -534,6 +588,23 @@ SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEn
 /// @param out_count Receives the number of records written.
 SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
+                                                size_t* out_count);
+/// @brief Enables/configures per-target spectrum + vectorscope telemetry.
+/// @param interval_frames Minimum render-frame gap between published snapshots
+///   (0 disables capture). @param band_count Requested FFT band resolution
+///   (1..SONARE_SCOPE_MAX_BANDS); changing it re-prepares the tap, so call from
+///   the control thread while @ref sonare_engine_process is not running.
+/// @param out_band_count Optional; receives the band count actually applied.
+SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine,
+                                                    int interval_frames, unsigned int band_count,
+                                                    unsigned int* out_band_count);
+/// @brief Drains pending spectrum + vectorscope telemetry records.
+/// @param out Caller-owned array receiving up to @p max_records entries.
+/// @param max_records Capacity of @p out. May be 0 to query without copying.
+/// @param out_count Receives the number of records written. Each record carries
+///   band_count FFT bands and point_count interleaved left/right goniometer pairs.
+SonareError sonare_engine_drain_scope_telemetry(SonareRealtimeEngine* engine,
+                                                SonareScopeTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count);
 /// @brief Pushes a live parameter value to the engine (immediate jump).
 /// @param param_id Target parameter id.

@@ -151,6 +151,14 @@ const char* sonare_mastering_insert_names(void) {
   return join_names(sonare::mastering::api::insert_factory_names(), names);
 }
 
+const char* sonare_mastering_processor_catalog(void) {
+  static thread_local std::string catalog;
+  if (catalog.empty()) {
+    catalog = sonare::mastering::api::processor_catalog_json();
+  }
+  return catalog.c_str();
+}
+
 const char* sonare_mastering_insert_param_names(const char* name) {
   // Unlike the no-arg *_names getters this depends on the argument, so it cannot
   // use the program-lifetime cache: recompute into a thread-local each call
@@ -168,6 +176,19 @@ const char* sonare_mastering_insert_param_names(const char* name) {
   }
   names = stream.str();
   return names.c_str();
+}
+
+const char* sonare_mastering_insert_param_info(const char* name) {
+  // Argument-dependent like sonare_mastering_insert_param_names: recompute into a
+  // thread-local each call (valid until the next call on the same thread).
+  static thread_local std::string info;
+  info.clear();
+  if (name == nullptr) {
+    info = "[]";
+    return info.c_str();
+  }
+  info = sonare::mastering::api::insert_param_info_json(name);
+  return info.c_str();
 }
 
 SonareError sonare_mastering_apply_pair_processor_ex(

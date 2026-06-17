@@ -169,6 +169,21 @@ const char* sonare_mastering_pair_processor_names(void);
 const char* sonare_mastering_pair_analysis_names(void);
 const char* sonare_mastering_stereo_analysis_names(void);
 
+/// @brief Machine-readable classification catalog for every named processor id.
+/// @return A JSON array string `[{"id","kind","realtimeInsertable","stereoOnly"},
+///   ...]` (UTF-8). `kind` is one of "realtime" / "offline" / "pair" (pair >
+///   realtime > offline precedence); `realtimeInsertable` is true exactly for the
+///   ids in @ref sonare_mastering_insert_names (the set that always succeeds as a
+///   realtime scene insert); `stereoOnly` flags processors with no mono path. The
+///   id universe is the union of @ref sonare_mastering_processor_names, the insert
+///   set, and @ref sonare_mastering_pair_processor_names, so realtime-only and
+///   pair-only ids are still reported. Lets hosts filter a processor picker by
+///   realtime-insertability instead of offering ids the rt strip would reject.
+/// @details Pointer is owned by libsonare and remains valid for the program
+///          lifetime; the caller must NOT free it (mirrors
+///          @ref sonare_mastering_processor_names).
+const char* sonare_mastering_processor_catalog(void);
+
 /// @brief Returns the channel-strip insert / FX processor names that
 ///        sonare_mixing scene inserts can build, separated by '\n'. Includes the
 ///        creative effects.* reverbs / modulation / delay when the build has FX
@@ -191,6 +206,20 @@ const char* sonare_mastering_insert_names(void);
 ///   only until the next API call on the same thread; the caller must NOT free it.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_names(const char* name);
+
+/// @brief Realtime-automatable parameter descriptors for an insert processor.
+/// @return A JSON array string `[{"name","id","rtSafe"}, ...]` (UTF-8). Each
+///   entry maps a processor JSON-key parameter name to the integer `id` used by
+///   @ref sonare_engine_set_track_strip_insert_param_by_name (and the master
+///   variant), with `rtSafe` reporting whether the param can be changed live
+///   from the audio thread. Returns `"[]"` for an unknown @p name or a processor
+///   with no automatable parameters. Unlike @ref
+///   sonare_mastering_insert_param_names (every construction key), this lists
+///   only the realtime-controllable subset. The returned pointer is a
+///   thread-local valid only until the next API call on the same thread; the
+///   caller must NOT free it.
+/// @param name Insert processor name (see @ref sonare_mastering_insert_names).
+const char* sonare_mastering_insert_param_info(const char* name);
 
 SonareError sonare_mastering_apply_pair_processor(const char* processor_name, const float* source,
                                                   const float* reference, size_t length,

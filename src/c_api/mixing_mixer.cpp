@@ -1,4 +1,5 @@
 #include "c_api/mixing_internal.h"
+#include "mastering/api/named_processor.h"
 
 using namespace sonare_c_mixing_detail;
 
@@ -279,10 +280,12 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
           }
           ignored_param_notes.push_back(std::move(note));
         }
+        const bool spo = sonare::mastering::api::channel_policy(insert.processor_name) ==
+                         sonare::mastering::api::ChannelPolicy::StereoPairOnly;
         if (insert.slot == sonare::mixing::api::InsertSlot::PreFader) {
-          strip->strip.add_pre_insert(std::move(processor));
+          strip->strip.add_pre_insert(std::move(processor), spo);
         } else {
-          strip->strip.add_post_insert(std::move(processor));
+          strip->strip.add_post_insert(std::move(processor), spo);
         }
       }
       for (const auto& send : scene_strip.sends) {

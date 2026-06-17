@@ -230,6 +230,27 @@ class MixerWasm {
                     "failed to set dual pan");
   }
 
+  // Sets the strip's surround pan from a JS object {azimuth, elevation,
+  // divergence, lfe, distance}; absent/non-numeric fields fall back to the
+  // centered point-source default.
+  void setSurroundPan(unsigned int strip_index, val pan) {
+    const auto field = [&](const char* key, float fallback) {
+      val value = pan[key];
+      return (!value.isUndefined() && !value.isNull() &&
+              value.typeOf().as<std::string>() == "number")
+                 ? value.as<float>()
+                 : fallback;
+    };
+    SonareSurroundPan sp{};
+    sp.azimuth = field("azimuth", 0.0f);
+    sp.elevation = field("elevation", 0.0f);
+    sp.divergence = field("divergence", 0.0f);
+    sp.lfe = field("lfe", 0.0f);
+    sp.distance = field("distance", 1.0f);
+    checkStripError(sonare_strip_set_surround_pan(stripAt(strip_index), &sp),
+                    "failed to set surround pan");
+  }
+
   // Adds a post-construction send to the strip. timing: 0 = pre-fader,
   // 1 = post-fader. Returns the new send's index.
   size_t addSend(unsigned int strip_index, std::string id, std::string destination_bus_id,
@@ -978,6 +999,7 @@ void registerMixingBindings() {
       .function("setChannelDelaySamples", &MixerWasm::setChannelDelaySamples)
       .function("setVcaOffsetDb", &MixerWasm::setVcaOffsetDb)
       .function("setDualPan", &MixerWasm::setDualPan)
+      .function("setSurroundPan", &MixerWasm::setSurroundPan)
       .function("addSend", &MixerWasm::addSend)
       .function("setSendDb", &MixerWasm::setSendDb)
       .function("removeSend", &MixerWasm::removeSend)
