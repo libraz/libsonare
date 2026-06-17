@@ -145,9 +145,11 @@ const METER_TAP_VALUES: Record<MeterTap, number> = {
   postFader: 1,
 };
 
+// Mirrors SonareSendTiming: post-fader is 0 so a zero-initialized C ABI send
+// defaults to post-fader. (Distinct from METER_TAP_VALUES, which keeps 0=pre.)
 const SEND_TIMING_VALUES: Record<SendTiming, number> = {
-  preFader: 0,
-  postFader: 1,
+  postFader: 0,
+  preFader: 1,
 };
 
 export function automationCurveValue(curve: AutomationCurve): number {

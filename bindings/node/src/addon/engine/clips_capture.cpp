@@ -247,8 +247,9 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
                                  send_obj.Get("enabled").As<Napi::Boolean>().Value()
                              ? 1
                              : 0;
-          // Default to post-fader (1) when sendTiming is absent to preserve the
-          // historical behavior before the field existed.
+          // Default to post-fader when sendTiming is absent to preserve the
+          // historical behavior before the field existed (post-fader is the
+          // zero value of SonareSendTiming).
           send.send_timing = send_obj.Has("sendTiming") && !send_obj.Get("sendTiming").IsUndefined()
                                  ? send_obj.Get("sendTiming").As<Napi::Number>().Int32Value()
                                  : SONARE_SEND_TIMING_POST_FADER;

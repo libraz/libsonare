@@ -329,6 +329,18 @@ TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine track send zero-init defaults to post-fader", "[c_api][engine]") {
+  // Post-fader is the zero value of SonareSendTiming, so a zero-initialized
+  // SonareEngineTrackSend taps post-fader (the historical lane-send behavior)
+  // instead of silently flipping to pre-fader. The integer enum is never
+  // serialized (scene/project JSON uses the strings "pre"/"post"), so this
+  // ordering is wire-safe.
+  STATIC_REQUIRE(SONARE_SEND_TIMING_POST_FADER == 0);
+  STATIC_REQUIRE(SONARE_SEND_TIMING_PRE_FADER == 1);
+  SonareEngineTrackSend zero_init{};
+  REQUIRE(zero_init.send_timing == SONARE_SEND_TIMING_POST_FADER);
+}
+
 TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 40;

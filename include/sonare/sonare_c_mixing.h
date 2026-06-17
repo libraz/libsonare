@@ -31,8 +31,12 @@ typedef enum {
 } SonarePanLaw;
 
 typedef enum {
-  SONARE_SEND_TIMING_PRE_FADER = 0,
-  SONARE_SEND_TIMING_POST_FADER = 1
+  /* Post-fader is value 0 so a zero-initialized SonareEngineTrackSend defaults to
+     the historical lane-send behavior (post-fader) instead of silently flipping
+     to pre-fader. The integer is an in-memory ABI detail only -- scene/project
+     JSON serializes send timing as the strings "pre"/"post", never this enum. */
+  SONARE_SEND_TIMING_POST_FADER = 0,
+  SONARE_SEND_TIMING_PRE_FADER = 1
 } SonareSendTiming;
 
 typedef enum { SONARE_METER_TAP_PRE_FADER = 0, SONARE_METER_TAP_POST_FADER = 1 } SonareMeterTap;

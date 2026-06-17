@@ -352,10 +352,10 @@ typedef struct {
   uint32_t bus_id;
   float level_db;
   int enabled;
-  /* Pre/post-fader tap point (SonareSendTiming: 0 = pre, 1 = post). The lane-send
-     path historically tapped post-fader, so callers building this struct should
-     set SONARE_SEND_TIMING_POST_FADER to preserve that behavior; a zero-init
-     leaves it pre-fader. */
+  /* Pre/post-fader tap point (SonareSendTiming: 0 = post, 1 = pre). Post-fader is
+     value 0 so a zero-initialized struct defaults to the historical lane-send
+     post-fader behavior; set SONARE_SEND_TIMING_PRE_FADER explicitly for a
+     pre-fader send. */
   int send_timing;
 } SonareEngineTrackSend;
 

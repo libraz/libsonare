@@ -271,7 +271,7 @@ def _meter_tap_value(value: MeterTap | str | int) -> int:
 
 
 def _send_timing_value(value: SendTiming | str | int) -> int:
-    """Resolve a send timing to its C enum value (0 pre-fader, 1 post-fader)."""
+    """Resolve a send timing to its C enum value (0 post-fader, 1 pre-fader)."""
     if isinstance(value, SendTiming):
         return int(value)
     if isinstance(value, int):

@@ -52,5 +52,10 @@ export function meterTapCode(tap: MeterTap | number): number {
 }
 
 export function sendTimingCode(timing: SendTiming | number): number {
-  return timing === 'preFader' || timing === 0 ? 0 : 1;
+  // Mirrors SonareSendTiming: post-fader is 0 (so an omitted/zeroed value is
+  // post-fader), pre-fader is 1. A raw number is passed through as the C ABI int.
+  if (typeof timing === 'number') {
+    return timing;
+  }
+  return timing === 'preFader' ? 1 : 0;
 }

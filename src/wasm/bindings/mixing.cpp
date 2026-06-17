@@ -251,8 +251,8 @@ class MixerWasm {
                     "failed to set surround pan");
   }
 
-  // Adds a post-construction send to the strip. timing: 0 = pre-fader,
-  // 1 = post-fader. Returns the new send's index.
+  // Adds a post-construction send to the strip. timing mirrors SonareSendTiming:
+  // 0 = post-fader, 1 = pre-fader. Returns the new send's index.
   size_t addSend(unsigned int strip_index, std::string id, std::string destination_bus_id,
                  float send_db, int timing) {
     size_t index = 0;

@@ -122,10 +122,15 @@ class MeterTap(IntEnum):
 
 
 class SendTiming(IntEnum):
-    """Pre/post-fader timing of a mixer strip send."""
+    """Pre/post-fader timing of a mixer strip send.
 
-    PRE_FADER = 0
-    POST_FADER = 1
+    POST_FADER is 0 so a zero-initialized C ABI send defaults to post-fader; the
+    integer mirrors ``SonareSendTiming`` and is never serialized (scene/project
+    JSON uses the strings ``"pre"``/``"post"``).
+    """
+
+    POST_FADER = 0
+    PRE_FADER = 1
 
 
 class SectionType(IntEnum):
@@ -1261,8 +1266,9 @@ class MeterTelemetryRecordWide:
     """A per-plane meter snapshot for a surround mix target.
 
     ``peak_db``/``rms_db``/``true_peak_db`` carry ``channel_count`` valid planes
-    in canonical WAVE order (L R C LFE Ls Rs [Lss Rss]). Use this drain for a
-    surround target; ``MeterTelemetryRecord`` stays the stereo fast path.
+    in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Lss Rss Ls
+    Rs). Use this drain for a surround target; ``MeterTelemetryRecord`` stays the
+    stereo fast path.
     """
 
     target_id: int
@@ -1284,7 +1290,12 @@ class MeterTelemetryRecordWide:
 
 @dataclass(frozen=True, slots=True)
 class ScopeTelemetryRecord:
-    """A spectrum/vectorscope snapshot drained from the realtime engine."""
+    """A spectrum/vectorscope snapshot drained from the realtime engine.
+
+    Each vectorscope point is an ``(left, right)`` tuple — the idiomatic Python
+    shape. The Node / WASM surfaces expose the same data as ``{left, right}``
+    objects; this representation difference is intentional, the values match.
+    """
 
     target_id: int
     render_frame: int
