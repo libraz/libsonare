@@ -1479,8 +1479,14 @@ class RealtimeEngineWasm {
     configs.reserve(static_cast<size_t>(count));
     for (int i = 0; i < count; ++i) {
       val bus = buses[i];
+      const int layout_value = intProperty(bus, "channelLayout", 1);
+      if (!sonare::is_valid_channel_layout(static_cast<uint8_t>(layout_value))) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "invalid bus channel layout");
+      }
       configs.push_back({static_cast<uint32_t>(intProperty(bus, "busId", 0)),
-                         floatProperty(bus, "gainDb", 0.0f)});
+                         floatProperty(bus, "gainDb", 0.0f),
+                         static_cast<sonare::ChannelLayout>(layout_value)});
     }
     if (!engine_.set_track_buses(std::move(configs))) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -2067,6 +2073,47 @@ class RealtimeEngineWasm {
     return out;
   }
 
+  // Per-plane meter drain for surround targets. peakDb/rmsDb/truePeakDb are JS
+  // arrays of channelCount planes (canonical WAVE order); drainMeterTelemetry
+  // stays the stereo fast path. Shares one queue with it — call only one.
+  val drainMeterTelemetryWide(int max_records) {
+    val out = val::array();
+    if (max_records <= 0) return out;
+    sonare::engine::MeterTelemetryRecord meter{};
+    int count = 0;
+    while (count < max_records && engine_.pop_meter_telemetry(meter)) {
+      val item = val::object();
+      item.set("targetId", meter.target_id);
+      item.set("renderFrame", static_cast<double>(meter.render_frame));
+      item.set("seq", static_cast<double>(meter.seq));
+      int planes = meter.channel_count;
+      if (planes < 0) planes = 0;
+      if (planes > sonare::mixing::kMaxMeterChannels) planes = sonare::mixing::kMaxMeterChannels;
+      item.set("channelCount", planes);
+      val peak = val::array();
+      val rms = val::array();
+      val true_peak = val::array();
+      for (int ch = 0; ch < planes; ++ch) {
+        peak.set(ch, meter.peak_db[static_cast<size_t>(ch)]);
+        rms.set(ch, meter.rms_db[static_cast<size_t>(ch)]);
+        true_peak.set(ch, meter.true_peak_db[static_cast<size_t>(ch)]);
+      }
+      item.set("peakDb", peak);
+      item.set("rmsDb", rms);
+      item.set("truePeakDb", true_peak);
+      item.set("maxTruePeakDb", meter.max_true_peak_db);
+      item.set("correlation", meter.correlation);
+      item.set("monoCompatWidth", meter.mono_compat_width);
+      item.set("momentaryLufs", meter.momentary_lufs);
+      item.set("shortTermLufs", meter.short_term_lufs);
+      item.set("integratedLufs", meter.integrated_lufs);
+      item.set("gainReductionDb", meter.gain_reduction_db);
+      item.set("droppedRecords", meter.dropped_records);
+      out.set(count++, item);
+    }
+    return out;
+  }
+
   unsigned int configureScopeTelemetry(int interval_frames, unsigned int band_count) {
 #if defined(SONARE_WITH_MIXING)
     return engine_.configure_scope_telemetry(interval_frames, band_count);
@@ -2413,6 +2460,7 @@ void registerRealtimeEngineBindings() {
       .function("freezeOffline", &RealtimeEngineWasm::freezeOffline)
       .function("drainTelemetry", &RealtimeEngineWasm::drainTelemetry)
       .function("drainMeterTelemetry", &RealtimeEngineWasm::drainMeterTelemetry)
+      .function("drainMeterTelemetryWide", &RealtimeEngineWasm::drainMeterTelemetryWide)
       .function("configureScopeTelemetry", &RealtimeEngineWasm::configureScopeTelemetry)
       .function("drainScopeTelemetry", &RealtimeEngineWasm::drainScopeTelemetry);
 }

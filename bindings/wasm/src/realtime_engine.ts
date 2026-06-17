@@ -15,6 +15,7 @@ import type {
   WasmEngineGraphSpec,
   WasmEngineMarker,
   WasmEngineMeterTelemetry,
+  WasmEngineMeterTelemetryWide,
   WasmEngineMetronomeConfig,
   WasmEngineParameterInfo,
   WasmEngineProcessWithMonitorResult,
@@ -40,6 +41,7 @@ export type EngineFreezeOptions = WasmEngineFreezeOptions;
 export type EngineFreezeResult = WasmEngineFreezeResult;
 export type EngineTelemetry = WasmEngineTelemetry;
 export type EngineMeterTelemetry = WasmEngineMeterTelemetry;
+export type EngineMeterTelemetryWide = WasmEngineMeterTelemetryWide;
 export type EngineScopeTelemetry = WasmEngineScopeTelemetry;
 export type EngineTransportState = WasmEngineTransportState;
 export type EngineTempoSegment = WasmEngineTempoSegment;
@@ -69,6 +71,13 @@ export interface EngineTrackLane {
 export interface EngineBus {
   busId: number;
   gainDb?: number;
+  /**
+   * Channel layout of the bus (`SonareChannelLayout`: 0 mono, 1 stereo, 2 5.1,
+   * 3 7.1). A surround layout makes this a surround group bus: lanes routed to
+   * it are surround-panned and it sums into the master plane-by-plane. Defaults
+   * to stereo.
+   */
+  channelLayout?: number;
 }
 
 export interface EngineMidiEvent {
@@ -789,6 +798,16 @@ export class RealtimeEngine {
 
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
     return this.native.drainMeterTelemetry(maxRecords);
+  }
+
+  /**
+   * Drains pending meter telemetry as per-plane (wide) records for a surround
+   * target. Use this for a surround mix target; {@link drainMeterTelemetry}
+   * stays the stereo fast path. The two share one queue — call only one per
+   * target.
+   */
+  drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
+    return this.native.drainMeterTelemetryWide(maxRecords);
   }
 
   /**

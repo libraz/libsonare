@@ -46,6 +46,7 @@ import type {
   EngineGraphSpec,
   EngineMarker,
   EngineMeterTelemetry,
+  EngineMeterTelemetryWide,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
@@ -948,6 +949,16 @@ export class RealtimeEngine {
   /** Drain pending meter telemetry records published by the engine's meter tap. */
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
     return this.native.drainMeterTelemetry(maxRecords);
+  }
+
+  /**
+   * Drain pending meter telemetry as per-plane (wide) records for a surround
+   * target. Use this for a surround mix target; {@link drainMeterTelemetry}
+   * stays the stereo fast path. The two share one queue, so call only one per
+   * target.
+   */
+  drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
+    return this.native.drainMeterTelemetryWide(maxRecords);
   }
 
   /**
@@ -2664,6 +2675,7 @@ export type {
   EngineGraphSpec,
   EngineMarker,
   EngineMeterTelemetry,
+  EngineMeterTelemetryWide,
   EngineMetronomeConfig,
   EngineParameterInfo,
   EngineScopeTelemetry,

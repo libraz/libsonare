@@ -81,6 +81,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value FreezeOffline(const Napi::CallbackInfo& info);
   Napi::Value DrainTelemetry(const Napi::CallbackInfo& info);
   Napi::Value DrainMeterTelemetry(const Napi::CallbackInfo& info);
+  Napi::Value DrainMeterTelemetryWide(const Napi::CallbackInfo& info);
   Napi::Value ConfigureScopeTelemetry(const Napi::CallbackInfo& info);
   Napi::Value DrainScopeTelemetry(const Napi::CallbackInfo& info);
   Napi::Value SetParameter(const Napi::CallbackInfo& info);

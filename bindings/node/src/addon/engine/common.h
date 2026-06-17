@@ -127,6 +127,39 @@ inline Napi::Object MeterTelemetryToObject(Napi::Env env,
   return out;
 }
 
+inline Napi::Object MeterTelemetryWideToObject(Napi::Env env,
+                                               const SonareMeterTelemetryRecordWide& record) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("targetId", Napi::Number::New(env, record.target_id));
+  out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
+  out.Set("seq", Napi::Number::New(env, static_cast<double>(record.seq)));
+  int planes = record.channel_count;
+  if (planes < 0) planes = 0;
+  if (planes > SONARE_METER_MAX_CHANNELS) planes = SONARE_METER_MAX_CHANNELS;
+  out.Set("channelCount", Napi::Number::New(env, planes));
+  Napi::Array peak_db = Napi::Array::New(env, static_cast<size_t>(planes));
+  Napi::Array rms_db = Napi::Array::New(env, static_cast<size_t>(planes));
+  Napi::Array true_peak_db = Napi::Array::New(env, static_cast<size_t>(planes));
+  for (int ch = 0; ch < planes; ++ch) {
+    const auto idx = static_cast<uint32_t>(ch);
+    peak_db.Set(idx, Napi::Number::New(env, record.peak_db[ch]));
+    rms_db.Set(idx, Napi::Number::New(env, record.rms_db[ch]));
+    true_peak_db.Set(idx, Napi::Number::New(env, record.true_peak_db[ch]));
+  }
+  out.Set("peakDb", peak_db);
+  out.Set("rmsDb", rms_db);
+  out.Set("truePeakDb", true_peak_db);
+  out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_db));
+  out.Set("correlation", Napi::Number::New(env, record.correlation));
+  out.Set("monoCompatWidth", Napi::Number::New(env, record.mono_compat_width));
+  out.Set("momentaryLufs", Napi::Number::New(env, record.momentary_lufs));
+  out.Set("shortTermLufs", Napi::Number::New(env, record.short_term_lufs));
+  out.Set("integratedLufs", Napi::Number::New(env, record.integrated_lufs));
+  out.Set("gainReductionDb", Napi::Number::New(env, record.gain_reduction_db));
+  out.Set("droppedRecords", Napi::Number::New(env, record.dropped_records));
+  return out;
+}
+
 inline Napi::Object ScopeTelemetryToObject(Napi::Env env,
                                            const SonareScopeTelemetryRecord& record) {
   Napi::Object out = Napi::Object::New(env);

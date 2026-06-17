@@ -363,7 +363,7 @@ describe('RealtimeEngine native binding', () => {
     expect(duplicateBusError.code).toBe(ErrorCode.InvalidParameter);
 
     // A surround bus/source layout flows through to the native struct fields
-    // (stored but inert in phase 1; the native side validates the enum range).
+    // (the native side validates the enum range).
     expect(() => engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }])).not.toThrow();
     expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 2 }])).not.toThrow();
 
@@ -428,6 +428,47 @@ describe('RealtimeEngine native binding', () => {
       1,
       '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
     );
+    engine.destroy();
+  });
+
+  it('drains per-plane meter telemetry for a surround group bus', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    const frames = 256;
+    engine.setClips([
+      {
+        id: 1,
+        trackId: 10,
+        channels: [new Float32Array(frames).fill(0.5)],
+        startPpq: 0,
+        lengthSamples: frames,
+      },
+    ]);
+    // 5.1 group bus; the lane routes into it and is panned hard to Ls.
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]);
+    engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
+    engine.setTrackStripJson(
+      10,
+      '{"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
+    );
+    engine.play();
+    engine.process([
+      new Float32Array(frames),
+      new Float32Array(frames),
+      new Float32Array(frames),
+      new Float32Array(frames),
+      new Float32Array(frames),
+      new Float32Array(frames),
+    ]);
+    const wide = engine.drainMeterTelemetryWide();
+    const busMeter = wide.find((record) => record.targetId === 33);
+    expect(busMeter).toBeDefined();
+    if (!busMeter) {
+      throw new Error('expected a 5.1 bus meter');
+    }
+    expect(busMeter.channelCount).toBe(6);
+    expect(busMeter.peakDb).toHaveLength(6);
+    // Ls (plane 4) carries the panned lane, well above the silent front-left.
+    expect(busMeter.peakDb[4]).toBeGreaterThan(busMeter.peakDb[0] + 10);
     engine.destroy();
   });
 

@@ -646,6 +646,9 @@ from .types import (
     MeterTelemetryRecord as MeterTelemetryRecord,
 )
 from .types import (
+    MeterTelemetryRecordWide as MeterTelemetryRecordWide,
+)
+from .types import (
     MfccResult as MfccResult,
 )
 from .types import (

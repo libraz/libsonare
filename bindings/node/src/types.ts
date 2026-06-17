@@ -1189,6 +1189,45 @@ export interface EngineMeterTelemetry {
   droppedRecords: number;
 }
 
+/**
+ * Per-plane meter telemetry record drained from
+ * {@link RealtimeEngine.drainMeterTelemetryWide} for a surround target. The
+ * `peakDb`/`rmsDb`/`truePeakDb` arrays carry `channelCount` planes in canonical
+ * WAVE order (L R C LFE Ls Rs [Lss Rss]).
+ */
+export interface EngineMeterTelemetryWide {
+  /** Meter tap target id (e.g. master/bus identifier). */
+  targetId: number;
+  /** Render-frame timestamp of the snapshot. */
+  renderFrame: number;
+  /** Monotonic sequence number. */
+  seq: number;
+  /** Number of valid per-plane meters (1..8). */
+  channelCount: number;
+  /** Per-plane peak level in dB (length `channelCount`). */
+  peakDb: number[];
+  /** Per-plane RMS level in dB (length `channelCount`). */
+  rmsDb: number[];
+  /** Per-plane true-peak level in dB (length `channelCount`). */
+  truePeakDb: number[];
+  /** Maximum true-peak across channels in dB. */
+  maxTruePeakDb: number;
+  /** Stereo correlation in `[-1, 1]` (front pair). */
+  correlation: number;
+  /** Mono-compatibility width metric (front pair). */
+  monoCompatWidth: number;
+  /** Momentary loudness (LUFS). */
+  momentaryLufs: number;
+  /** Short-term loudness (LUFS). */
+  shortTermLufs: number;
+  /** Integrated loudness (LUFS). */
+  integratedLufs: number;
+  /** Gain reduction in dB. */
+  gainReductionDb: number;
+  /** Number of records dropped before this snapshot. */
+  droppedRecords: number;
+}
+
 /** Scope telemetry record drained from {@link RealtimeEngine.drainScopeTelemetry}. */
 export interface EngineScopeTelemetry {
   /** Scope tap target id (0 = master, `laneIndex + 1` for lanes, `33 + busIndex` for buses). */

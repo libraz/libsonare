@@ -422,6 +422,7 @@ export type {
   EngineGraphSpec,
   EngineMarker,
   EngineMeterTelemetry,
+  EngineMeterTelemetryWide,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineMidiEvent,

@@ -149,8 +149,8 @@ def test_engine_track_buses_route_lane_sends() -> None:
             engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 1, "gain_db": 0.0}])
         assert duplicate_bus_error.value.code == 4
 
-        # A surround bus/source layout flows through to the native struct fields
-        # (stored but inert in phase 1); an out-of-range value is rejected.
+        # A surround bus/source layout flows through to the native struct fields;
+        # an out-of-range value is rejected.
         engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
         with pytest.raises(SonareError):
             engine.set_track_buses([{"bus_id": 1, "channel_layout": 99}])
@@ -199,6 +199,39 @@ def test_engine_track_buses_route_lane_sends() -> None:
             1,
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
         )
+
+
+def test_engine_drain_meter_telemetry_wide_surround_bus() -> None:
+    frames = 256
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[0.5] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        # 5.1 group bus; the lane routes into it and is panned hard to Ls.
+        engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
+        engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
+        engine.set_track_strip_json(
+            10,
+            '{"version":1,"buses":[{"id":"master","role":"master"}],'
+            '"strips":[{"id":"s","surroundPan":{"azimuth":-110}}]}',
+        )
+        engine.play()
+        engine.process([[0.0] * frames for _ in range(6)])
+        wide = engine.drain_meter_telemetry_wide()
+        bus_meter = next((r for r in wide if r.target_id == 33), None)
+        assert bus_meter is not None
+        assert bus_meter.channel_count == 6
+        assert len(bus_meter.peak_db) == 6
+        # Ls (plane 4) carries the panned lane, above the silent front-left.
+        assert bus_meter.peak_db[4] > bus_meter.peak_db[0] + 10.0
 
 
 def test_engine_track_strip_json_routes_lane_strip() -> None:

@@ -35,6 +35,7 @@ from ._runtime import (
     EngineTelemetryError,
     EngineTelemetryType,
     MeterTelemetryRecord,
+    MeterTelemetryRecordWide,
     PanLaw,
     ParameterInfo,
     ScopeTelemetryRecord,
@@ -62,6 +63,7 @@ from ._runtime import (
     SonareEngineTrackSend,
     SonareEngineWarpAnchor,
     SonareMeterTelemetryRecord,
+    SonareMeterTelemetryRecordWide,
     SonareParameterInfo,
     SonareScopeTelemetryRecord,
     SonareTransportState,
@@ -1006,6 +1008,27 @@ class RealtimeEngine(_EngineMidiMixin):
         )
         return [_meter_telemetry_from_c(raw[i]) for i in range(written.value)]
 
+    def drain_meter_telemetry_wide(self, max_records: int = 1024) -> list[MeterTelemetryRecordWide]:
+        """Drain pending per-plane meter telemetry for a surround target.
+
+        Use this drain for a surround mix target; :meth:`drain_meter_telemetry`
+        stays the stereo fast path. The two share one queue, so call only one
+        per target.
+        """
+        if max_records <= 0:
+            return []
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_drain_meter_telemetry_wide"):
+            raise RuntimeError("libsonare was built without meter-telemetry support")
+        raw = (SonareMeterTelemetryRecordWide * int(max_records))()
+        written = ctypes.c_size_t()
+        _check(
+            lib.sonare_engine_drain_meter_telemetry_wide(
+                self._require_handle(), raw, int(max_records), ctypes.byref(written)
+            )
+        )
+        return [_meter_telemetry_wide_from_c(raw[i]) for i in range(written.value)]
+
     def configure_scope_telemetry(self, interval_frames: int, band_count: int) -> int:
         """Enable scope telemetry publishing and return the applied band count.
 
@@ -1414,6 +1437,29 @@ def _meter_telemetry_from_c(raw: SonareMeterTelemetryRecord) -> MeterTelemetryRe
         rms_db_r=float(raw.rms_db_r),
         true_peak_db_l=float(raw.true_peak_db_l),
         true_peak_db_r=float(raw.true_peak_db_r),
+        max_true_peak_db=float(raw.max_true_peak_db),
+        correlation=float(raw.correlation),
+        mono_compat_width=float(raw.mono_compat_width),
+        momentary_lufs=float(raw.momentary_lufs),
+        short_term_lufs=float(raw.short_term_lufs),
+        integrated_lufs=float(raw.integrated_lufs),
+        gain_reduction_db=float(raw.gain_reduction_db),
+        dropped_records=int(raw.dropped_records),
+    )
+
+
+def _meter_telemetry_wide_from_c(
+    raw: SonareMeterTelemetryRecordWide,
+) -> MeterTelemetryRecordWide:
+    planes = max(0, min(int(raw.channel_count), len(raw.peak_db)))
+    return MeterTelemetryRecordWide(
+        target_id=int(raw.target_id),
+        render_frame=int(raw.render_frame),
+        seq=int(raw.seq),
+        channel_count=planes,
+        peak_db=[float(raw.peak_db[i]) for i in range(planes)],
+        rms_db=[float(raw.rms_db[i]) for i in range(planes)],
+        true_peak_db=[float(raw.true_peak_db[i]) for i in range(planes)],
         max_true_peak_db=float(raw.max_true_peak_db),
         correlation=float(raw.correlation),
         mono_compat_width=float(raw.mono_compat_width),

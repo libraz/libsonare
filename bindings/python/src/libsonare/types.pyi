@@ -1071,6 +1071,41 @@ class MeterTelemetryRecord:
         dropped_records: int,
     ) -> None: ...
 
+class MeterTelemetryRecordWide:
+    target_id: int
+    render_frame: int
+    seq: int
+    channel_count: int
+    peak_db: list[float]
+    rms_db: list[float]
+    true_peak_db: list[float]
+    max_true_peak_db: float
+    correlation: float
+    mono_compat_width: float
+    momentary_lufs: float
+    short_term_lufs: float
+    integrated_lufs: float
+    gain_reduction_db: float
+    dropped_records: int
+    def __init__(
+        self,
+        target_id: int,
+        render_frame: int,
+        seq: int,
+        channel_count: int,
+        peak_db: list[float],
+        rms_db: list[float],
+        true_peak_db: list[float],
+        max_true_peak_db: float,
+        correlation: float,
+        mono_compat_width: float,
+        momentary_lufs: float,
+        short_term_lufs: float,
+        integrated_lufs: float,
+        gain_reduction_db: float,
+        dropped_records: int,
+    ) -> None: ...
+
 class ScopeTelemetryRecord:
     target_id: int
     render_frame: int

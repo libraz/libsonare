@@ -249,6 +249,23 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetry(const Napi::CallbackInfo& in
   return out;
 }
 
+Napi::Value RealtimeEngineWrap::DrainMeterTelemetryWide(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const size_t max_records = info.Length() > 0 && !info[0].IsUndefined()
+                                 ? static_cast<size_t>(info[0].As<Napi::Number>().Int64Value())
+                                 : 1024;
+  std::vector<SonareMeterTelemetryRecordWide> records(max_records);
+  size_t written = 0;
+  ThrowIfError(env, sonare_engine_drain_meter_telemetry_wide(engine_, records.data(),
+                                                             records.size(), &written));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Array out = Napi::Array::New(env, written);
+  for (size_t i = 0; i < written; ++i) {
+    out.Set(static_cast<uint32_t>(i), MeterTelemetryWideToObject(env, records[i]));
+  }
+  return out;
+}
+
 Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const int interval_frames = info[0].As<Napi::Number>().Int32Value();

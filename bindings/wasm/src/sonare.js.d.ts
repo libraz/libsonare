@@ -554,6 +554,7 @@ export interface WasmEngineTrackLane {
 export interface WasmEngineBus {
   busId: number;
   gainDb?: number;
+  channelLayout?: number;
 }
 
 export interface WasmClipPageRequest {
@@ -655,6 +656,24 @@ export interface WasmEngineMeterTelemetry {
   rmsDbR: number;
   truePeakDbL: number;
   truePeakDbR: number;
+  maxTruePeakDb: number;
+  correlation: number;
+  monoCompatWidth: number;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  gainReductionDb: number;
+  droppedRecords: number;
+}
+
+export interface WasmEngineMeterTelemetryWide {
+  targetId: number;
+  renderFrame: number;
+  seq: number;
+  channelCount: number;
+  peakDb: number[];
+  rmsDb: number[];
+  truePeakDb: number[];
   maxTruePeakDb: number;
   correlation: number;
   monoCompatWidth: number;
@@ -919,6 +938,7 @@ export interface WasmRealtimeEngine {
   freezeOffline: (options: WasmEngineFreezeOptions) => WasmEngineFreezeResult;
   drainTelemetry: (maxRecords: number) => WasmEngineTelemetry[];
   drainMeterTelemetry: (maxRecords: number) => WasmEngineMeterTelemetry[];
+  drainMeterTelemetryWide: (maxRecords: number) => WasmEngineMeterTelemetryWide[];
   configureScopeTelemetry: (intervalFrames: number, bandCount: number) => number;
   drainScopeTelemetry: (maxRecords: number) => WasmEngineScopeTelemetry[];
   delete: () => void;

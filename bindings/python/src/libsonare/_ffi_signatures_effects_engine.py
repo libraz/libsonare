@@ -630,6 +630,14 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_size_t),
         ]
+    if hasattr(lib, "sonare_engine_drain_meter_telemetry_wide"):
+        lib.sonare_engine_drain_meter_telemetry_wide.restype = ctypes.c_int32
+        lib.sonare_engine_drain_meter_telemetry_wide.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMeterTelemetryRecordWide),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
     if hasattr(lib, "sonare_engine_configure_scope_telemetry"):
         lib.sonare_engine_configure_scope_telemetry.restype = ctypes.c_int32
         lib.sonare_engine_configure_scope_telemetry.argtypes = [

@@ -1257,6 +1257,32 @@ class MeterTelemetryRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class MeterTelemetryRecordWide:
+    """A per-plane meter snapshot for a surround mix target.
+
+    ``peak_db``/``rms_db``/``true_peak_db`` carry ``channel_count`` valid planes
+    in canonical WAVE order (L R C LFE Ls Rs [Lss Rss]). Use this drain for a
+    surround target; ``MeterTelemetryRecord`` stays the stereo fast path.
+    """
+
+    target_id: int
+    render_frame: int
+    seq: int
+    channel_count: int
+    peak_db: list[float]
+    rms_db: list[float]
+    true_peak_db: list[float]
+    max_true_peak_db: float
+    correlation: float
+    mono_compat_width: float
+    momentary_lufs: float
+    short_term_lufs: float
+    integrated_lufs: float
+    gain_reduction_db: float
+    dropped_records: int
+
+
+@dataclass(frozen=True, slots=True)
 class ScopeTelemetryRecord:
     """A spectrum/vectorscope snapshot drained from the realtime engine."""
 
