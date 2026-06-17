@@ -7,6 +7,8 @@ import {
   engineAbiVersion,
   isSonareError,
   MarkerKind,
+  masteringInsertParamInfo,
+  masteringProcessorCatalog,
   RealtimeEngine,
   voiceChangerAbiVersion,
 } from '../src/index.js';
@@ -179,6 +181,55 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('configures and drains scope telemetry', () => {
+    const sampleRate = 48000;
+    const blockSize = 256;
+    const engine = new RealtimeEngine(sampleRate, blockSize);
+    expect(engine.configureScopeTelemetry(256, 32)).toBe(32);
+
+    const toneFreq = 1000;
+    const frames = blockSize * 16;
+    const left = new Float32Array(frames);
+    const right = new Float32Array(frames);
+    for (let i = 0; i < frames; i++) {
+      const sample = 0.5 * Math.sin((2 * Math.PI * toneFreq * i) / sampleRate);
+      left[i] = sample;
+      right[i] = sample;
+    }
+    engine.setClips([
+      {
+        id: 1,
+        trackId: 10,
+        channels: [left, right],
+        startPpq: 0,
+        lengthSamples: frames,
+      },
+    ]);
+    engine.setTrackLanes([10]);
+    engine.play();
+
+    let records: ReturnType<typeof engine.drainScopeTelemetry> = [];
+    for (let block = 0; block < 12; block++) {
+      engine.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+      records = records.concat(engine.drainScopeTelemetry());
+    }
+
+    const master = records.find((record) => record.targetId === 0);
+    expect(master).toBeDefined();
+    if (!master) {
+      throw new Error('expected a master scope record');
+    }
+    expect(master.bands).toHaveLength(32);
+    const argmax = master.bands.reduce(
+      (best, value, index) => (value > master.bands[best] ? index : best),
+      0,
+    );
+    expect(argmax).toBeLessThanOrEqual(2);
+    expect(master.points.length).toBeGreaterThan(0);
+
+    engine.destroy();
+  });
+
   it('round-trips marker kind and key signature', () => {
     const engine = new RealtimeEngine(48000, 128);
     engine.setMarkers([
@@ -310,6 +361,11 @@ describe('RealtimeEngine native binding', () => {
       throw new Error('expected SonareError');
     }
     expect(duplicateBusError.code).toBe(ErrorCode.InvalidParameter);
+
+    // A surround bus/source layout flows through to the native struct fields
+    // (stored but inert in phase 1; the native side validates the enum range).
+    expect(() => engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }])).not.toThrow();
+    expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 2 }])).not.toThrow();
 
     engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: 0, enabled: true }] }]);
     for (const lane of [
@@ -453,6 +509,44 @@ describe('RealtimeEngine native binding', () => {
     const processed = engine.process([new Float32Array(256)]);
     expect(processed[0].at(-1)).toBeGreaterThan(1.2);
     expect(processed[0].at(-1)).toBeLessThan(1.4);
+    engine.destroy();
+  });
+
+  it('applies realtime track strip pan setters', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    const frames = 256 * 4;
+    engine.setClips([
+      {
+        id: 1,
+        trackId: 10,
+        channels: [new Float32Array(frames).fill(1)],
+        startPpq: 0,
+        lengthSamples: frames,
+      },
+    ]);
+    engine.setTrackLanes([10]);
+    engine.setTrackStripJson(
+      10,
+      '{"version":1,"strips":[{"id":"track-10","panLaw":3}],"buses":[],"connections":[]}',
+    );
+
+    expect(() => engine.setTrackStripPanLaw(10, 'linear0dB')).not.toThrow();
+    expect(() => engine.setTrackStripPanMode(10, 'balance')).not.toThrow();
+    expect(() => engine.setTrackStripChannelDelaySamples(10, 0)).not.toThrow();
+    expect(() => engine.setTrackStripDualPan(10, -1, -1)).not.toThrow();
+
+    // Hard-left pan: the left output channel must dominate the right.
+    engine.setTrackStripPanMode(10, 'balance');
+    engine.setTrackStripPan(10, -1);
+    engine.settleParameters();
+    engine.play();
+    let panned: Float32Array[] = [new Float32Array(256), new Float32Array(256)];
+    for (let block = 0; block < 4; block += 1) {
+      panned = engine.process([new Float32Array(256), new Float32Array(256)]);
+    }
+    const leftLevel = Math.abs(panned[0].at(-1) ?? 0);
+    const rightLevel = Math.abs(panned[1].at(-1) ?? 0);
+    expect(leftLevel).toBeGreaterThan(rightLevel);
     engine.destroy();
   });
 
@@ -1065,6 +1159,103 @@ describe('RealtimeEngine native binding', () => {
     expect(badSoundFontError.code).toBe(ErrorCode.InvalidFormat);
 
     engine.setMidiClips([]);
+    engine.destroy();
+  });
+
+  it('exposes the mastering processor catalog with role and capability flags', () => {
+    const catalog = masteringProcessorCatalog();
+    expect(catalog.length).toBeGreaterThan(0);
+
+    const byId = (id: string) => catalog.find((e) => e.id === id);
+
+    const compressor = byId('dynamics.compressor');
+    expect(compressor).toBeDefined();
+    expect(compressor?.kind).toBe('realtime');
+    expect(compressor?.realtimeInsertable).toBe(true);
+    // Per-channel/linked processors process every plane in one call.
+    expect(compressor?.channelPolicy).toBe('multichannel');
+
+    const abCrossfade = byId('match.abCrossfade');
+    expect(abCrossfade).toBeDefined();
+    expect(abCrossfade?.kind).toBe('pair');
+
+    const loudnessOptimize = byId('maximizer.loudnessOptimize');
+    expect(loudnessOptimize).toBeDefined();
+    expect(loudnessOptimize?.kind).toBe('offline');
+    expect(loudnessOptimize?.realtimeInsertable).toBe(false);
+
+    const midSide = byId('eq.midSide');
+    expect(midSide).toBeDefined();
+    expect(midSide?.stereoOnly).toBe(true);
+    // Inherently-stereo processors are wrapped on the front L/R pair.
+    expect(midSide?.channelPolicy).toBe('stereoPairOnly');
+
+    const imager = byId('stereo.imager');
+    expect(imager?.channelPolicy).toBe('stereoPairOnly');
+  });
+
+  it('reports realtime insert param descriptors and changes them live', () => {
+    const info = masteringInsertParamInfo('effects.reverb.fdn');
+    if (info.length === 0) {
+      return; // FX not built in this configuration.
+    }
+    const dryWet = info.find((d) => d.name === 'dryWet');
+    expect(dryWet).toBeDefined();
+    expect(dryWet?.rtSafe).toBe(true);
+    expect(typeof dryWet?.id).toBe('number');
+    expect(masteringInsertParamInfo('nope.nope')).toEqual([]);
+
+    const engine = new RealtimeEngine(48000, 256);
+    const frames = 256 * 16;
+    const source = new Float32Array(frames);
+    for (let i = 0; i < frames; i++) {
+      source[i] = Math.sin((2 * Math.PI * 1000 * i) / 48000);
+    }
+    engine.setClips([
+      { id: 1, trackId: 10, channels: [source], startPpq: 0, lengthSamples: frames },
+    ]);
+    engine.setTrackLanes([10]);
+    engine.setTrackStripJson(
+      10,
+      JSON.stringify({
+        version: 1,
+        strips: [
+          {
+            id: 'track-10',
+            inserts: [
+              {
+                slot: 'pre',
+                processor: 'effects.reverb.fdn',
+                params: '{"dryWet":0.0,"decaySec":2.0}',
+              },
+            ],
+          },
+        ],
+        buses: [],
+        connections: [],
+      }),
+    );
+
+    // Bad arguments are rejected.
+    expect(() => engine.setTrackStripInsertParamByName(0, 0, 'dryWet', 1)).toThrow();
+    expect(() => engine.setTrackStripInsertParamByName(10, 0, 'bogusParam', 1)).toThrow();
+
+    engine.play();
+    let dry = new Float32Array(256);
+    for (let b = 0; b < 8; b++) {
+      dry = engine.process([new Float32Array(256)])[0];
+    }
+    const dryRms = rms(dry);
+
+    engine.setTrackStripInsertParamByName(10, 0, 'dryWet', 1.0);
+    let wet = new Float32Array(256);
+    for (let b = 0; b < 8; b++) {
+      wet = engine.process([new Float32Array(256)])[0];
+    }
+    const wetRms = rms(wet);
+
+    expect(dryRms).toBeGreaterThan(0);
+    expect(Math.abs(wetRms - dryRms)).toBeGreaterThan(0.05 * dryRms);
     engine.destroy();
   });
 });

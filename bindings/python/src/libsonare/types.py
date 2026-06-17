@@ -101,6 +101,19 @@ class PanLaw(IntEnum):
     LINEAR_0DB = 3
 
 
+class ChannelLayout(IntEnum):
+    """Speaker bed layout for a bus or source (mirrors SonareChannelLayout).
+
+    Plane order is WAVE_FORMAT_EXTENSIBLE: ``FIVE_POINT_ONE`` = L R C LFE Ls Rs,
+    ``SEVEN_POINT_ONE`` = L R C LFE Lss Rss Ls Rs.
+    """
+
+    MONO = 0
+    STEREO = 1
+    FIVE_POINT_ONE = 2
+    SEVEN_POINT_ONE = 3
+
+
 class MeterTap(IntEnum):
     """Tap point at which a strip meter snapshot is read."""
 
@@ -1241,6 +1254,18 @@ class MeterTelemetryRecord:
     integrated_lufs: float
     gain_reduction_db: float
     dropped_records: int
+
+
+@dataclass(frozen=True, slots=True)
+class ScopeTelemetryRecord:
+    """A spectrum/vectorscope snapshot drained from the realtime engine."""
+
+    target_id: int
+    render_frame: int
+    seq: int
+    dropped_records: int
+    bands: list[float]
+    points: list[tuple[float, float]]
 
 
 @dataclass(frozen=True, slots=True)

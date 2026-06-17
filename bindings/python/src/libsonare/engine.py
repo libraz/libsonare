@@ -35,7 +35,10 @@ from ._runtime import (
     EngineTelemetryError,
     EngineTelemetryType,
     MeterTelemetryRecord,
+    PanLaw,
     ParameterInfo,
+    ScopeTelemetryRecord,
+    SendTiming,
     SonareAutomationPoint,
     SonareClipPageRequest,
     SonareEngineBounceOptions,
@@ -60,6 +63,7 @@ from ._runtime import (
     SonareEngineWarpAnchor,
     SonareMeterTelemetryRecord,
     SonareParameterInfo,
+    SonareScopeTelemetryRecord,
     SonareTransportState,
     TimeSignature,
     TransportState,
@@ -67,6 +71,9 @@ from ._runtime import (
     _check,
     _from_c_float_array,
     _get_lib,
+    _pan_law_value,
+    _pan_mode_value,
+    _send_timing_value,
 )
 
 # Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
@@ -503,6 +510,10 @@ class RealtimeEngine(_EngineMidiMixin):
         raw = (SonareEngineTrackLane * len(lanes))()
         send_arrays: list[object] = []
         for i, lane in enumerate(lanes):
+            # ctypes zero-inits source_channel_layout to 0 (mono); default to
+            # stereo (ChannelLayout.STEREO) so callers that omit it keep the
+            # prior stereo behavior.
+            raw[i].source_channel_layout = 1
             if isinstance(lane, Mapping):
                 raw[i].track_id = int(lane["track_id"] if "track_id" in lane else lane["trackId"])
                 sends = lane.get("sends", [])
@@ -518,12 +529,26 @@ class RealtimeEngine(_EngineMidiMixin):
                             send["level_db"] if "level_db" in send else send.get("levelDb", 0.0)
                         )
                         send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
+                        # Default to post-fader so callers that omit the timing
+                        # key keep the prior behavior.
+                        timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
+                        send_array[send_index].send_timing = (
+                            _send_timing_value(timing)
+                            if timing is not None
+                            else int(SendTiming.POST_FADER)
+                        )
                     raw[i].sends = send_array
                     raw[i].send_count = len(sends)
                     send_arrays.append(send_array)
                 raw[i].output_bus_id = int(
                     lane["output_bus_id"] if "output_bus_id" in lane else lane.get("outputBusId", 0)
                 )
+                if "source_channel_layout" in lane or "sourceChannelLayout" in lane:
+                    raw[i].source_channel_layout = int(
+                        lane["source_channel_layout"]
+                        if "source_channel_layout" in lane
+                        else lane["sourceChannelLayout"]
+                    )
             else:
                 raw[i].track_id = int(lane)
         _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
@@ -545,6 +570,14 @@ class RealtimeEngine(_EngineMidiMixin):
         for i, bus in enumerate(buses):
             raw[i].bus_id = int(bus["bus_id"] if "bus_id" in bus else bus["busId"])
             raw[i].gain_db = float(bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0))
+            # ctypes zero-inits channel_layout to 0 (mono); default to stereo
+            # (ChannelLayout.STEREO) unless the caller specifies it.
+            if "channel_layout" in bus or "channelLayout" in bus:
+                raw[i].channel_layout = int(
+                    bus["channel_layout"] if "channel_layout" in bus else bus["channelLayout"]
+                )
+            else:
+                raw[i].channel_layout = 1
         _check(_get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses)))
 
     def set_bus_strip_json(self, bus_id: int, scene_json: str) -> None:
@@ -600,6 +633,70 @@ class RealtimeEngine(_EngineMidiMixin):
             )
         )
 
+    def set_track_strip_insert_param_by_name(
+        self, track_id: int, insert_index: int, param_name: str, value: float
+    ) -> None:
+        _check(
+            _get_lib().sonare_engine_set_track_strip_insert_param_by_name(
+                self._require_handle(),
+                int(track_id),
+                int(insert_index),
+                param_name.encode("utf-8"),
+                float(value),
+            )
+        )
+
+    def set_track_strip_pan(self, track_id: int, pan: float) -> None:
+        """Set a track strip's pan position (-1.0 hard left .. 1.0 hard right)."""
+        _check(
+            _get_lib().sonare_engine_set_track_strip_pan(
+                self._require_handle(),
+                int(track_id),
+                float(pan),
+            )
+        )
+
+    def set_track_strip_pan_law(self, track_id: int, pan_law: PanLaw | str | int) -> None:
+        """Set a track strip's pan law (``PanLaw`` enum, name, or int 0..3)."""
+        _check(
+            _get_lib().sonare_engine_set_track_strip_pan_law(
+                self._require_handle(),
+                int(track_id),
+                _pan_law_value(pan_law),
+            )
+        )
+
+    def set_track_strip_pan_mode(self, track_id: int, pan_mode: str | int) -> None:
+        """Set a track strip's pan mode (name 'balance'/'stereo-pan'/'dual-pan', or int 0..2)."""
+        _check(
+            _get_lib().sonare_engine_set_track_strip_pan_mode(
+                self._require_handle(),
+                int(track_id),
+                _pan_mode_value(pan_mode),
+            )
+        )
+
+    def set_track_strip_dual_pan(self, track_id: int, left_pan: float, right_pan: float) -> None:
+        """Set a track strip's dual-pan positions for the left and right channels."""
+        _check(
+            _get_lib().sonare_engine_set_track_strip_dual_pan(
+                self._require_handle(),
+                int(track_id),
+                float(left_pan),
+                float(right_pan),
+            )
+        )
+
+    def set_track_strip_channel_delay_samples(self, track_id: int, delay_samples: int) -> None:
+        """Set a track strip's inter-channel delay in samples (Haas widening)."""
+        _check(
+            _get_lib().sonare_engine_set_track_strip_channel_delay_samples(
+                self._require_handle(),
+                int(track_id),
+                int(delay_samples),
+            )
+        )
+
     def set_master_strip_json(self, scene_json: str) -> None:
         _check(
             _get_lib().sonare_engine_set_master_strip_json(
@@ -635,6 +732,18 @@ class RealtimeEngine(_EngineMidiMixin):
                 int(insert_index),
                 1 if bypassed else 0,
                 1 if reset_on_bypass else 0,
+            )
+        )
+
+    def set_master_strip_insert_param_by_name(
+        self, insert_index: int, param_name: str, value: float
+    ) -> None:
+        _check(
+            _get_lib().sonare_engine_set_master_strip_insert_param_by_name(
+                self._require_handle(),
+                int(insert_index),
+                param_name.encode("utf-8"),
+                float(value),
             )
         )
 
@@ -896,6 +1005,43 @@ class RealtimeEngine(_EngineMidiMixin):
             )
         )
         return [_meter_telemetry_from_c(raw[i]) for i in range(written.value)]
+
+    def configure_scope_telemetry(self, interval_frames: int, band_count: int) -> int:
+        """Enable scope telemetry publishing and return the applied band count.
+
+        ``interval_frames`` is the minimum render-frame spacing between snapshots;
+        ``band_count`` is the requested number of spectrum bands (clamped by the
+        engine). Returns the band count the engine actually applied.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_configure_scope_telemetry"):
+            raise RuntimeError("libsonare was built without scope-telemetry support")
+        applied = ctypes.c_uint()
+        _check(
+            lib.sonare_engine_configure_scope_telemetry(
+                self._require_handle(),
+                int(interval_frames),
+                int(band_count),
+                ctypes.byref(applied),
+            )
+        )
+        return int(applied.value)
+
+    def drain_scope_telemetry(self, max_records: int = 1024) -> list[ScopeTelemetryRecord]:
+        """Drain pending scope telemetry records published by the engine."""
+        if max_records <= 0:
+            return []
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_drain_scope_telemetry"):
+            raise RuntimeError("libsonare was built without scope-telemetry support")
+        raw = (SonareScopeTelemetryRecord * int(max_records))()
+        written = ctypes.c_size_t()
+        _check(
+            lib.sonare_engine_drain_scope_telemetry(
+                self._require_handle(), raw, int(max_records), ctypes.byref(written)
+            )
+        )
+        return [_scope_telemetry_from_c(raw[i]) for i in range(written.value)]
 
     def set_parameter(self, param_id: int, value: float, render_frame: int = -1) -> None:
         """Push a live parameter value to the engine (immediate jump).
@@ -1276,4 +1422,19 @@ def _meter_telemetry_from_c(raw: SonareMeterTelemetryRecord) -> MeterTelemetryRe
         integrated_lufs=float(raw.integrated_lufs),
         gain_reduction_db=float(raw.gain_reduction_db),
         dropped_records=int(raw.dropped_records),
+    )
+
+
+def _scope_telemetry_from_c(raw: SonareScopeTelemetryRecord) -> ScopeTelemetryRecord:
+    band_count = int(raw.band_count)
+    point_count = int(raw.point_count)
+    bands = [float(raw.bands[i]) for i in range(band_count)]
+    points = [(float(raw.points[2 * i]), float(raw.points[2 * i + 1])) for i in range(point_count)]
+    return ScopeTelemetryRecord(
+        target_id=int(raw.target_id),
+        render_frame=int(raw.render_frame),
+        seq=int(raw.seq),
+        dropped_records=int(raw.dropped_records),
+        bands=bands,
+        points=points,
     )

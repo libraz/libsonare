@@ -131,6 +131,18 @@ def test_simple_strip_setters_do_not_raise(mixer) -> None:
     mixer.set_dual_pan("vocal", -0.3, 0.4)
 
 
+def test_set_surround_pan_reflected_in_scene(mixer) -> None:
+    """set_surround_pan stores azimuth/divergence/lfe on the strip's scene object."""
+    mixer.set_surround_pan("vocal", azimuth=-45.0, divergence=0.25, lfe=0.5)
+    scene = json.loads(mixer.to_scene_json())
+    by_id = {strip["id"]: strip for strip in scene["strips"]}
+    pan = by_id["vocal"]["surroundPan"]
+    assert pan["azimuth"] == pytest.approx(-45.0)
+    assert pan["divergence"] == pytest.approx(0.25)
+    assert pan["lfe"] == pytest.approx(0.5)
+    assert pan["distance"] == pytest.approx(1.0)
+
+
 def test_soloed_and_solo_safe_reflected_in_scene(mixer) -> None:
     """set_soloed / set_solo_safe are reflected in the re-serialized scene."""
     scene_before = json.loads(mixer.to_scene_json())

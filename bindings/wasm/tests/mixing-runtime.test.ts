@@ -50,6 +50,9 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(() => mixer.setChannelDelaySamples(vocal, 0)).not.toThrow();
         expect(() => mixer.setVcaOffsetDb(vocal, -1.5)).not.toThrow();
         expect(() => mixer.setDualPan(vocal, -0.3, 0.4)).not.toThrow();
+        expect(() =>
+          mixer.setSurroundPan(vocal, { azimuth: -45, divergence: 0.25, lfe: 0.5 }),
+        ).not.toThrow();
 
         const sendIndex = mixer.addSend(vocal, 'rt-send', 'vocal-verb', -20, 'postFader');
         expect(typeof sendIndex).toBe('number');

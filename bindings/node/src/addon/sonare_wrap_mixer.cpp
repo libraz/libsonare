@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 namespace sonare_node {
@@ -61,6 +62,7 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::SetChannelDelaySamples>("setChannelDelaySamples"),
           InstanceMethod<&MixerWrap::SetVcaOffsetDb>("setVcaOffsetDb"),
           InstanceMethod<&MixerWrap::SetDualPan>("setDualPan"),
+          InstanceMethod<&MixerWrap::SetSurroundPan>("setSurroundPan"),
           InstanceMethod<&MixerWrap::AddSend>("addSend"),
           InstanceMethod<&MixerWrap::SetSendDb>("setSendDb"),
           InstanceMethod<&MixerWrap::RemoveSend>("removeSend"),
@@ -590,6 +592,30 @@ Napi::Value MixerWrap::SetDualPan(const Napi::CallbackInfo& info) {
                                               info[2].As<Napi::Number>().FloatValue());
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to set strip dual pan: ");
+  }
+  return env.Undefined();
+}
+
+Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[1].IsObject()) {
+    Napi::TypeError::New(env, "Expected (strip, pan: SurroundPan)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  const Napi::Object obj = info[1].As<Napi::Object>();
+  SonareSurroundPan pan{};
+  pan.azimuth = node_float_option(obj, "azimuth", 0.0f);
+  pan.elevation = node_float_option(obj, "elevation", 0.0f);
+  pan.divergence = node_float_option(obj, "divergence", 0.0f);
+  pan.lfe = node_float_option(obj, "lfe", 0.0f);
+  pan.distance = node_float_option(obj, "distance", 1.0f);
+  SonareError err = sonare_strip_set_surround_pan(strip, &pan);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "failed to set strip surround pan: ");
   }
   return env.Undefined();
 }

@@ -62,6 +62,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value SetChannelDelaySamples(const Napi::CallbackInfo& info);
   Napi::Value SetVcaOffsetDb(const Napi::CallbackInfo& info);
   Napi::Value SetDualPan(const Napi::CallbackInfo& info);
+  Napi::Value SetSurroundPan(const Napi::CallbackInfo& info);
 
   // Sends.
   Napi::Value AddSend(const Napi::CallbackInfo& info);

@@ -897,6 +897,84 @@ export function masteringInsertParamNames(name: string): string[] {
   return addon.masteringInsertParamNames(name);
 }
 
+/** One realtime-automatable parameter of an insert processor. */
+export interface MasteringInsertParamInfo {
+  /** JSON-key parameter name, as used in scene insert params. */
+  name: string;
+  /** Integer param id for realtime automation lanes / MIDI-CC binding. */
+  id: number;
+  /** Whether the param can be changed live from the audio thread. */
+  rtSafe: boolean;
+}
+
+/**
+ * Returns the realtime-automatable parameter descriptors for an insert / FX
+ * processor: each entry maps a JSON-key parameter name to the integer id used by
+ * realtime automation and reports whether it is realtime-safe. Unlike
+ * {@link masteringInsertParamNames} (every construction key), this lists only the
+ * realtime-controllable subset — the keys accepted by
+ * {@link RealtimeEngine.setTrackStripInsertParamByName}. Returns an empty array
+ * for an unknown name or a processor with no automatable parameters.
+ *
+ * @param name - Insert processor name (see {@link masteringInsertNames}).
+ */
+export function masteringInsertParamInfo(name: string): MasteringInsertParamInfo[] {
+  const json = addon.masteringInsertParamInfo(name);
+  return JSON.parse(json) as MasteringInsertParamInfo[];
+}
+
+/**
+ * How a processor handles a buffer with more than two channels (a surround
+ * bed). `multichannel` processes every plane in one call; `stereoPairOnly`
+ * operates on the front L/R pair and passes any surround planes through dry.
+ * `perChannel`/`passthrough` are reserved and unused by the current catalog.
+ */
+export type MasteringChannelPolicy =
+  | 'multichannel'
+  | 'stereoPairOnly'
+  | 'perChannel'
+  | 'passthrough';
+
+/** One mastering processor's role in the catalog. */
+export interface MasteringProcessorCatalogEntry {
+  /** Stable processor id (e.g. `dynamics.compressor`, `match.abCrossfade`). */
+  id: string;
+  /**
+   * Coarse role: `pair` (two-input source/reference), `realtime` (usable as a
+   * live insert), or `offline` (whole-buffer only). Precedence is
+   * `pair > realtime > offline`: a processor that fits more than one role is
+   * reported under the highest one.
+   */
+  kind: 'realtime' | 'offline' | 'pair';
+  /**
+   * Whether the processor belongs to the realtime-insert set (the processors
+   * accepted as live track-strip inserts). Mirrors {@link masteringInsertNames}.
+   */
+  realtimeInsertable: boolean;
+  /** Whether the processor requires a stereo signal (e.g. mid/side EQ). */
+  stereoOnly: boolean;
+  /**
+   * How the mixer wraps the processor on a >2-channel (surround) bus insert:
+   * `multichannel` (one full-buffer call) or `stereoPairOnly` (front L/R pair,
+   * surround planes passed through dry).
+   */
+  channelPolicy: MasteringChannelPolicy;
+}
+
+/**
+ * Returns the full mastering processor catalog: every processor id paired with
+ * its coarse role and capability flags. `kind` follows the precedence
+ * `pair > realtime > offline`, so a processor usable in more than one role is
+ * reported under the highest. `realtimeInsertable` matches the realtime-insert
+ * set ({@link masteringInsertNames}). Hosts use it to filter a processor picker
+ * — e.g. to show only realtime-insertable entries for a live track strip, or to
+ * gate stereo-only entries on mono material.
+ */
+export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
+  const json = addon.masteringProcessorCatalog();
+  return JSON.parse(json) as MasteringProcessorCatalogEntry[];
+}
+
 /**
  * Apply a two-input `match.*` processor. `source` and `reference` may have
  * independent lengths — the match primitives consume each buffer at its own

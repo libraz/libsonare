@@ -137,6 +137,16 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetMasterStripEqBandJson>("setMasterStripEqBandJson"),
           InstanceMethod<&RealtimeEngineWrap::SetMasterStripInsertBypassed>(
               "setMasterStripInsertBypassed"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripInsertParamByName>(
+              "setTrackStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::SetMasterStripInsertParamByName>(
+              "setMasterStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripPan>("setTrackStripPan"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanLaw>("setTrackStripPanLaw"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanMode>("setTrackStripPanMode"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripDualPan>("setTrackStripDualPan"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackStripChannelDelaySamples>(
+              "setTrackStripChannelDelaySamples"),
           InstanceMethod<&RealtimeEngineWrap::CreateClipPageProvider>("createClipPageProvider"),
           InstanceMethod<&RealtimeEngineWrap::SupplyClipPage>("supplyClipPage"),
           InstanceMethod<&RealtimeEngineWrap::ClearClipPage>("clearClipPage"),
@@ -161,6 +171,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::FreezeOffline>("freezeOffline"),
           InstanceMethod<&RealtimeEngineWrap::DrainTelemetry>("drainTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::DrainMeterTelemetry>("drainMeterTelemetry"),
+          InstanceMethod<&RealtimeEngineWrap::ConfigureScopeTelemetry>("configureScopeTelemetry"),
+          InstanceMethod<&RealtimeEngineWrap::DrainScopeTelemetry>("drainScopeTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::SetParameter>("setParameter"),
           InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
           InstanceMethod<&RealtimeEngineWrap::SetSoloMute>("setSoloMute"),

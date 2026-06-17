@@ -26,6 +26,12 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_float,
             ctypes.c_float,
         ]
+        if hasattr(lib, "sonare_strip_set_surround_pan"):
+            lib.sonare_strip_set_surround_pan.restype = ctypes.c_int32
+            lib.sonare_strip_set_surround_pan.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(SonareSurroundPan),
+            ]
         lib.sonare_strip_set_width.restype = ctypes.c_int32
         lib.sonare_strip_set_width.argtypes = [ctypes.c_void_p, ctypes.c_float]
         lib.sonare_strip_set_muted.restype = ctypes.c_int32

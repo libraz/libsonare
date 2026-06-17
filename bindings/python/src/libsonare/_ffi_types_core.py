@@ -97,6 +97,25 @@ class SonareMeterTelemetryRecord(ctypes.Structure):
     ]
 
 
+SONARE_SCOPE_MAX_BANDS = 64
+SONARE_SCOPE_MAX_POINTS = 32
+
+
+class SonareScopeTelemetryRecord(ctypes.Structure):
+    """Maps to SonareScopeTelemetryRecord in sonare_c.h."""
+
+    _fields_ = [
+        ("target_id", ctypes.c_uint32),
+        ("render_frame", ctypes.c_int64),
+        ("seq", ctypes.c_uint64),
+        ("dropped_records", ctypes.c_uint32),
+        ("band_count", ctypes.c_uint32),
+        ("bands", ctypes.c_float * SONARE_SCOPE_MAX_BANDS),
+        ("point_count", ctypes.c_uint32),
+        ("points", ctypes.c_float * (SONARE_SCOPE_MAX_POINTS * 2)),
+    ]
+
+
 class SonareTransportState(ctypes.Structure):
     """Maps to SonareTransportState in sonare_c.h."""
 
@@ -220,6 +239,7 @@ class SonareEngineTrackSend(ctypes.Structure):
         ("bus_id", ctypes.c_uint32),
         ("level_db", ctypes.c_float),
         ("enabled", ctypes.c_int),
+        ("send_timing", ctypes.c_int),
     ]
 
 
@@ -231,6 +251,7 @@ class SonareEngineTrackLane(ctypes.Structure):
         ("sends", ctypes.POINTER(SonareEngineTrackSend)),
         ("send_count", ctypes.c_size_t),
         ("output_bus_id", ctypes.c_uint32),
+        ("source_channel_layout", ctypes.c_uint8),
     ]
 
 
@@ -240,6 +261,7 @@ class SonareEngineBus(ctypes.Structure):
     _fields_ = [
         ("bus_id", ctypes.c_uint32),
         ("gain_db", ctypes.c_float),
+        ("channel_layout", ctypes.c_uint8),
     ]
 
 

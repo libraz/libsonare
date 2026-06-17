@@ -206,6 +206,9 @@ from .analyzer import (
     mastering_insert_names as mastering_insert_names,
 )
 from .analyzer import (
+    mastering_insert_param_info as mastering_insert_param_info,
+)
+from .analyzer import (
     mastering_insert_param_names as mastering_insert_param_names,
 )
 from .analyzer import (
@@ -228,6 +231,9 @@ from .analyzer import (
 )
 from .analyzer import (
     mastering_process_stereo as mastering_process_stereo,
+)
+from .analyzer import (
+    mastering_processor_catalog as mastering_processor_catalog,
 )
 from .analyzer import (
     mastering_processor_names as mastering_processor_names,
@@ -515,6 +521,9 @@ from .types import (
 )
 from .types import (
     BpmCandidate as BpmCandidate,
+)
+from .types import (
+    ChannelLayout as ChannelLayout,
 )
 from .types import (
     Chord as Chord,

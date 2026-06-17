@@ -2,7 +2,7 @@
  * Type declarations for the Emscripten-generated WASM module with embind
  */
 
-import type { SpectralRegionOp } from './public_types';
+import type { SpectralRegionOp, SurroundPan } from './public_types';
 
 export interface SonareModuleOptions {
   locateFile?: (path: string, prefix: string) => string;
@@ -665,6 +665,15 @@ export interface WasmEngineMeterTelemetry {
   droppedRecords: number;
 }
 
+export interface WasmEngineScopeTelemetry {
+  targetId: number;
+  renderFrame: number;
+  seq: number;
+  droppedRecords: number;
+  bands: number[];
+  points: { left: number; right: number }[];
+}
+
 export interface WasmEngineCaptureStatus {
   capturedFrames: number;
   overflowCount: number;
@@ -806,6 +815,18 @@ export interface WasmRealtimeEngine {
     bypassed: boolean,
     resetOnBypass: boolean,
   ) => void;
+  setTrackStripInsertParamByName: (
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ) => void;
+  setMasterStripInsertParamByName: (insertIndex: number, paramName: string, value: number) => void;
+  setTrackStripPan: (trackId: number, pan: number) => void;
+  setTrackStripPanLaw: (trackId: number, panLaw: number) => void;
+  setTrackStripPanMode: (trackId: number, panMode: number) => void;
+  setTrackStripDualPan: (trackId: number, leftPan: number, rightPan: number) => void;
+  setTrackStripChannelDelaySamples: (trackId: number, delaySamples: number) => void;
   createClipPageProvider: (numChannels: number, numSamples: number, pageFrames: number) => number;
   supplyClipPage: (providerId: number, pageIndex: number, channels: Float32Array[]) => void;
   clearClipPage: (providerId: number, pageIndex: number) => void;
@@ -898,6 +919,8 @@ export interface WasmRealtimeEngine {
   freezeOffline: (options: WasmEngineFreezeOptions) => WasmEngineFreezeResult;
   drainTelemetry: (maxRecords: number) => WasmEngineTelemetry[];
   drainMeterTelemetry: (maxRecords: number) => WasmEngineMeterTelemetry[];
+  configureScopeTelemetry: (intervalFrames: number, bandCount: number) => number;
+  drainScopeTelemetry: (maxRecords: number) => WasmEngineScopeTelemetry[];
   delete: () => void;
 }
 
@@ -2060,6 +2083,7 @@ export interface WasmMixer {
   setChannelDelaySamples: (stripIndex: number, delaySamples: number) => void;
   setVcaOffsetDb: (stripIndex: number, offsetDb: number) => void;
   setDualPan: (stripIndex: number, leftPan: number, rightPan: number) => void;
+  setSurroundPan: (stripIndex: number, pan: SurroundPan) => void;
   addSend: (
     stripIndex: number,
     id: string,

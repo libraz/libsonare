@@ -1,11 +1,13 @@
 import {
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
+  createSonareScopeRingBuffer,
   describe,
   expect,
   it,
   pushSonareEngineCommandRingBuffer,
   readSonareEngineTelemetryRingBuffer,
+  readSonareScopeRingBuffer,
   registerSonareRealtimeEngineWorkletProcessor,
   SonareEngineCommandType,
   SonareEngineTelemetryError,
@@ -610,6 +612,63 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(posted).toEqual(
           expect.arrayContaining([expect.objectContaining({ type: 'meter' })]),
         );
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('publishes scope telemetry (FFT spectrum + goniometer) into the SAB scope ring', () => {
+      const blockSize = 256;
+      const sampleRate = 48000;
+      const toneHz = 1000;
+      const scopeRing = createSonareScopeRingBuffer(64, 32);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate,
+        blockSize,
+        channelCount: 2,
+        scopeSharedBuffer: scopeRing.sharedBuffer,
+        scopeRingCapacity: scopeRing.capacity,
+        scopeBands: scopeRing.bands,
+        scopeIntervalFrames: blockSize,
+      });
+      try {
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        let phase = 0;
+        for (let block = 0; block < 12; block++) {
+          const inL = new Float32Array(blockSize);
+          const inR = new Float32Array(blockSize);
+          for (let i = 0; i < blockSize; i++) {
+            const s = 0.5 * Math.sin((2 * Math.PI * toneHz * phase) / sampleRate);
+            inL[i] = s;
+            inR[i] = s;
+            phase++;
+          }
+          expect(
+            processor.process(
+              [[inL, inR]],
+              [[new Float32Array(blockSize), new Float32Array(blockSize)]],
+            ),
+          ).toBe(true);
+        }
+
+        const read = readSonareScopeRingBuffer(scopeRing);
+        expect(read.scopes.length).toBeGreaterThan(0);
+        const master = read.scopes.find((scope) => scope.targetId === 0);
+        expect(master).toBeDefined();
+        if (master) {
+          expect(master.bands.length).toBe(32);
+          let peak = 0;
+          for (let b = 1; b < master.bands.length; b++) {
+            if (master.bands[b] > master.bands[peak]) {
+              peak = b;
+            }
+          }
+          // 1 kHz over a 32-band [0, 24 kHz] split -> band 0/1.
+          expect(peak).toBeLessThanOrEqual(2);
+          expect(master.bands[peak]).toBeGreaterThan(master.bands[24] + 20);
+          // A mono-correlated tone scatters along the goniometer diagonal.
+          expect(master.points.length).toBeGreaterThan(0);
+        }
       } finally {
         processor.destroy();
       }

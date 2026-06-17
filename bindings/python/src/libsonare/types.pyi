@@ -49,6 +49,12 @@ class PanLaw(IntEnum):
     CONST_6DB = 2
     LINEAR_0DB = 3
 
+class ChannelLayout(IntEnum):
+    MONO = 0
+    STEREO = 1
+    FIVE_POINT_ONE = 2
+    SEVEN_POINT_ONE = 3
+
 class MeterTap(IntEnum):
     PRE_FADER = 0
     POST_FADER = 1
@@ -1063,6 +1069,23 @@ class MeterTelemetryRecord:
         integrated_lufs: float,
         gain_reduction_db: float,
         dropped_records: int,
+    ) -> None: ...
+
+class ScopeTelemetryRecord:
+    target_id: int
+    render_frame: int
+    seq: int
+    dropped_records: int
+    bands: list[float]
+    points: list[tuple[float, float]]
+    def __init__(
+        self,
+        target_id: int,
+        render_frame: int,
+        seq: int,
+        dropped_records: int,
+        bands: list[float],
+        points: list[tuple[float, float]],
     ) -> None: ...
 
 class TransportState:

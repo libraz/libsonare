@@ -740,6 +740,29 @@ Napi::Value SonareWrap::MasteringInsertParamNames(const Napi::CallbackInfo& info
   return out;
 }
 
+Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (name: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  // sonare_mastering_insert_param_info(name) returns a thread-local JSON array
+  // string (NOT to be freed); "[]" for an unknown name. The TS facade parses it
+  // into the typed MasteringInsertParamInfo[].
+  const std::string name = info[0].As<Napi::String>().Utf8Value();
+  const char* json = sonare_mastering_insert_param_info(name.c_str());
+  return Napi::String::New(env, json != nullptr ? json : "[]");
+}
+
+Napi::Value SonareWrap::MasteringProcessorCatalog(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // sonare_mastering_processor_catalog() returns a program-lifetime JSON array
+  // string (NOT to be freed). The TS facade parses it into the typed
+  // MasteringProcessorCatalogEntry[].
+  const char* json = sonare_mastering_processor_catalog();
+  return Napi::String::New(env, json != nullptr ? json : "[]");
+}
+
 Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||

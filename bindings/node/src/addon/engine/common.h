@@ -127,6 +127,29 @@ inline Napi::Object MeterTelemetryToObject(Napi::Env env,
   return out;
 }
 
+inline Napi::Object ScopeTelemetryToObject(Napi::Env env,
+                                           const SonareScopeTelemetryRecord& record) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("targetId", Napi::Number::New(env, record.target_id));
+  out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
+  out.Set("seq", Napi::Number::New(env, static_cast<double>(record.seq)));
+  out.Set("droppedRecords", Napi::Number::New(env, record.dropped_records));
+  Napi::Array bands = Napi::Array::New(env, record.band_count);
+  for (uint32_t i = 0; i < record.band_count; ++i) {
+    bands.Set(i, Napi::Number::New(env, record.bands[i]));
+  }
+  out.Set("bands", bands);
+  Napi::Array points = Napi::Array::New(env, record.point_count);
+  for (uint32_t i = 0; i < record.point_count; ++i) {
+    Napi::Object point = Napi::Object::New(env);
+    point.Set("left", Napi::Number::New(env, record.points[i * 2]));
+    point.Set("right", Napi::Number::New(env, record.points[i * 2 + 1]));
+    points.Set(i, point);
+  }
+  out.Set("points", points);
+  return out;
+}
+
 struct ChannelBlock {
   std::vector<std::vector<float>> storage;
   std::vector<float*> pointers;

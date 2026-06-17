@@ -55,6 +55,12 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
         if hasattr(lib, "sonare_mastering_insert_param_names"):
             lib.sonare_mastering_insert_param_names.restype = ctypes.c_char_p
             lib.sonare_mastering_insert_param_names.argtypes = [ctypes.c_char_p]
+        if hasattr(lib, "sonare_mastering_insert_param_info"):
+            lib.sonare_mastering_insert_param_info.restype = ctypes.c_char_p
+            lib.sonare_mastering_insert_param_info.argtypes = [ctypes.c_char_p]
+        if hasattr(lib, "sonare_mastering_processor_catalog"):
+            lib.sonare_mastering_processor_catalog.restype = ctypes.c_char_p
+            lib.sonare_mastering_processor_catalog.argtypes = []
         lib.sonare_mastering_apply_pair_processor.restype = ctypes.c_int32
         lib.sonare_mastering_apply_pair_processor.argtypes = [
             ctypes.c_char_p,

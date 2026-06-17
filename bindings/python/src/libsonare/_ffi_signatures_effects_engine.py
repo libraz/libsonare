@@ -420,6 +420,51 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.c_int,
         ]
+    if hasattr(lib, "sonare_engine_set_track_strip_insert_param_by_name"):
+        lib.sonare_engine_set_track_strip_insert_param_by_name.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_strip_insert_param_by_name.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_char_p,
+            ctypes.c_float,
+        ]
+    if hasattr(lib, "sonare_engine_set_track_strip_pan"):
+        lib.sonare_engine_set_track_strip_pan.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_strip_pan.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+        ]
+    if hasattr(lib, "sonare_engine_set_track_strip_pan_law"):
+        lib.sonare_engine_set_track_strip_pan_law.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_strip_pan_law.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_set_track_strip_pan_mode"):
+        lib.sonare_engine_set_track_strip_pan_mode.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_strip_pan_mode.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_set_track_strip_dual_pan"):
+        lib.sonare_engine_set_track_strip_dual_pan.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_strip_dual_pan.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+            ctypes.c_float,
+        ]
+    if hasattr(lib, "sonare_engine_set_track_strip_channel_delay_samples"):
+        lib.sonare_engine_set_track_strip_channel_delay_samples.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_strip_channel_delay_samples.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+        ]
     if hasattr(lib, "sonare_engine_set_master_strip_json"):
         lib.sonare_engine_set_master_strip_json.restype = ctypes.c_int32
         lib.sonare_engine_set_master_strip_json.argtypes = [
@@ -440,6 +485,14 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint,
             ctypes.c_int,
             ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_set_master_strip_insert_param_by_name"):
+        lib.sonare_engine_set_master_strip_insert_param_by_name.restype = ctypes.c_int32
+        lib.sonare_engine_set_master_strip_insert_param_by_name.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_char_p,
+            ctypes.c_float,
         ]
     lib.sonare_clip_page_provider_create.restype = ctypes.c_int32
     lib.sonare_clip_page_provider_create.argtypes = [
@@ -574,6 +627,22 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_engine_drain_meter_telemetry.argtypes = [
             ctypes.c_void_p,
             ctypes.POINTER(SonareMeterTelemetryRecord),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    if hasattr(lib, "sonare_engine_configure_scope_telemetry"):
+        lib.sonare_engine_configure_scope_telemetry.restype = ctypes.c_int32
+        lib.sonare_engine_configure_scope_telemetry.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_uint,
+            ctypes.POINTER(ctypes.c_uint),
+        ]
+    if hasattr(lib, "sonare_engine_drain_scope_telemetry"):
+        lib.sonare_engine_drain_scope_telemetry.restype = ctypes.c_int32
+        lib.sonare_engine_drain_scope_telemetry.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareScopeTelemetryRecord),
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_size_t),
         ]

@@ -52,6 +52,13 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   telemetryRingCapacity?: number;
   meterSharedBuffer?: SharedArrayBuffer;
   meterRingCapacity?: number;
+  // Scope telemetry (FFT spectrum + goniometer): opt-in. The ring is created
+  // only when scopeIntervalFrames > 0, since the per-block FFT is heavier than
+  // the meter path. scopeBands selects the linear band resolution.
+  scopeIntervalFrames?: number;
+  scopeBands?: number;
+  scopeSharedBuffer?: SharedArrayBuffer;
+  scopeRingCapacity?: number;
 }
 
 export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
@@ -288,6 +295,52 @@ export interface SonareEngineSyncMasterStripInsertBypassedMessage {
   resetOnBypass: boolean;
 }
 
+export interface SonareEngineSyncTrackStripInsertParamByNameMessage {
+  type: 'syncTrackStripInsertParamByName';
+  trackId: number;
+  insertIndex: number;
+  paramName: string;
+  value: number;
+}
+
+export interface SonareEngineSyncMasterStripInsertParamByNameMessage {
+  type: 'syncMasterStripInsertParamByName';
+  insertIndex: number;
+  paramName: string;
+  value: number;
+}
+
+export interface SonareEngineSyncTrackStripPanMessage {
+  type: 'syncTrackStripPan';
+  trackId: number;
+  pan: number;
+}
+
+export interface SonareEngineSyncTrackStripPanLawMessage {
+  type: 'syncTrackStripPanLaw';
+  trackId: number;
+  panLaw: number;
+}
+
+export interface SonareEngineSyncTrackStripPanModeMessage {
+  type: 'syncTrackStripPanMode';
+  trackId: number;
+  panMode: number;
+}
+
+export interface SonareEngineSyncTrackStripDualPanMessage {
+  type: 'syncTrackStripDualPan';
+  trackId: number;
+  leftPan: number;
+  rightPan: number;
+}
+
+export interface SonareEngineSyncTrackStripChannelDelaySamplesMessage {
+  type: 'syncTrackStripChannelDelaySamples';
+  trackId: number;
+  delaySamples: number;
+}
+
 export interface SonareEngineSyncBuiltinInstrumentMessage {
   type: 'syncBuiltinInstrument';
   destinationId: number;
@@ -356,6 +409,13 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMasterStripEqBandMessage
   | SonareEngineSyncTrackStripInsertBypassedMessage
   | SonareEngineSyncMasterStripInsertBypassedMessage
+  | SonareEngineSyncTrackStripInsertParamByNameMessage
+  | SonareEngineSyncMasterStripInsertParamByNameMessage
+  | SonareEngineSyncTrackStripPanMessage
+  | SonareEngineSyncTrackStripPanLawMessage
+  | SonareEngineSyncTrackStripPanModeMessage
+  | SonareEngineSyncTrackStripDualPanMessage
+  | SonareEngineSyncTrackStripChannelDelaySamplesMessage
   | SonareEngineSyncBuiltinInstrumentMessage
   | SonareEngineSyncSynthInstrumentMessage
   | SonareEngineSyncSf2InstrumentMessage

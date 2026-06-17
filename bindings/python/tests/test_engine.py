@@ -12,6 +12,7 @@ from libsonare import (
     AutomationCurve,
     AutomationPoint,
     BuiltinSynthConfig,
+    ChannelLayout,
     ClipPageProvider,
     EngineBounceOptions,
     EngineClip,
@@ -31,6 +32,7 @@ from libsonare import (
     MarkerKind,
     ParameterInfo,
     RealtimeEngine,
+    ScopeTelemetryRecord,
     SonareError,
     engine_abi_version,
     voice_changer_abi_version,
@@ -146,6 +148,14 @@ def test_engine_track_buses_route_lane_sends() -> None:
         with pytest.raises(SonareError) as duplicate_bus_error:
             engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 1, "gain_db": 0.0}])
         assert duplicate_bus_error.value.code == 4
+
+        # A surround bus/source layout flows through to the native struct fields
+        # (stored but inert in phase 1); an out-of-range value is rejected.
+        engine.set_track_buses([{"bus_id": 1, "channel_layout": ChannelLayout.FIVE_POINT_ONE}])
+        with pytest.raises(SonareError):
+            engine.set_track_buses([{"bus_id": 1, "channel_layout": 99}])
+        with pytest.raises(SonareError):
+            engine.set_track_lanes([{"track_id": 10, "source_channel_layout": 99}])
 
         engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0}]}])
         bad_lanes = [
@@ -1001,3 +1011,116 @@ def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
             engine.load_soundfont(b"not sf2")
         assert bad_soundfont_error.value.code == 2
         engine.set_midi_clips([])
+
+
+def test_engine_track_strip_pan_and_send_setters() -> None:
+    frames = 256 * 4
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[1.0] * frames, [1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_track_lanes([10])
+        # A lane strip must exist before its pan can be set.
+        engine.set_track_strip_json(
+            10,
+            '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+        )
+
+        # An unknown / zero track id is rejected by every setter.
+        with pytest.raises(SonareError) as bad_pan_error:
+            engine.set_track_strip_pan(0, -1.0)
+        assert bad_pan_error.value.code == 4
+        with pytest.raises(SonareError):
+            engine.set_track_strip_pan_law(0, "linear")
+        with pytest.raises(SonareError):
+            engine.set_track_strip_pan_mode(0, "balance")
+        with pytest.raises(SonareError):
+            engine.set_track_strip_dual_pan(0, -1.0, 1.0)
+        with pytest.raises(SonareError):
+            engine.set_track_strip_channel_delay_samples(0, 8)
+
+        # Pan law / mode accept enum names and ints; the helpers coerce them.
+        engine.set_track_strip_pan_law(10, "linear")
+        engine.set_track_strip_pan_mode(10, "stereo-pan")
+        engine.set_track_strip_channel_delay_samples(10, 0)
+        engine.set_track_strip_dual_pan(10, 0.0, 0.0)
+
+        # Hard-left pan should leave the left channel louder than the right.
+        engine.set_track_strip_pan(10, -1.0)
+        engine.play()
+        left, right = engine.process([[0.0] * 256, [0.0] * 256])
+        left_rms = math.sqrt(sum(s * s for s in left) / len(left))
+        right_rms = math.sqrt(sum(s * s for s in right) / len(right))
+        assert left_rms > right_rms
+
+
+def test_engine_track_lane_send_timing_defaults_to_post_fader() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
+        # An explicit timing value and the camelCase / snake_case aliases are
+        # all accepted; omitting it keeps the prior post-fader behavior.
+        engine.set_track_lanes(
+            [
+                {
+                    "track_id": 10,
+                    "sends": [
+                        {"bus_id": 1, "level_db": 0.0, "timing": "pre-fader"},
+                    ],
+                },
+                {
+                    "track_id": 20,
+                    "sends": [
+                        {"bus_id": 1, "level_db": 0.0, "send_timing": 1},
+                    ],
+                },
+                {
+                    "track_id": 30,
+                    "sends": [
+                        {"bus_id": 1, "level_db": 0.0},
+                    ],
+                },
+            ]
+        )
+
+
+def test_realtime_engine_scope_telemetry() -> None:
+    sample_rate = 48000.0
+    block = 256
+    num_blocks = 12
+    total = block * num_blocks
+    freq = 1000.0
+    tone = [0.5 * math.sin(2.0 * math.pi * freq * n / sample_rate) for n in range(total)]
+    with RealtimeEngine(sample_rate=sample_rate, max_block_size=block) as engine:
+        applied = engine.configure_scope_telemetry(256, 32)
+        assert applied == 32
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=201,
+                    channels=[list(tone), list(tone)],
+                    start_ppq=0.0,
+                    length_samples=total,
+                )
+            ]
+        )
+        engine.play()
+        for _ in range(num_blocks):
+            engine.process([[0.0] * block, [0.0] * block])
+        records = engine.drain_scope_telemetry()
+        assert records
+        master = [r for r in records if r.target_id == 0]
+        assert master
+        record = master[-1]
+        assert isinstance(record, ScopeTelemetryRecord)
+        assert len(record.bands) == 32
+        assert len(record.points) > 0
+        argmax = max(range(len(record.bands)), key=lambda i: record.bands[i])
+        assert argmax <= 2

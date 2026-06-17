@@ -1,7 +1,8 @@
+import { panLawCode, panModeCode, sendTimingCode } from './codes';
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type { SynthPatch } from './project';
-import type { EqBand } from './public_types';
+import type { EqBand, PanLaw, PanMode, SendTiming } from './public_types';
 import type {
   WasmClipPageRequest,
   WasmEngineAutomationPoint,
@@ -17,6 +18,7 @@ import type {
   WasmEngineMetronomeConfig,
   WasmEngineParameterInfo,
   WasmEngineProcessWithMonitorResult,
+  WasmEngineScopeTelemetry,
   WasmEngineTelemetry,
   WasmEngineTempoSegment,
   WasmEngineTimeSignatureSegment,
@@ -38,6 +40,7 @@ export type EngineFreezeOptions = WasmEngineFreezeOptions;
 export type EngineFreezeResult = WasmEngineFreezeResult;
 export type EngineTelemetry = WasmEngineTelemetry;
 export type EngineMeterTelemetry = WasmEngineMeterTelemetry;
+export type EngineScopeTelemetry = WasmEngineScopeTelemetry;
 export type EngineTransportState = WasmEngineTransportState;
 export type EngineTempoSegment = WasmEngineTempoSegment;
 export type EngineTimeSignatureSegment = WasmEngineTimeSignatureSegment;
@@ -46,6 +49,11 @@ export interface EngineTrackSend {
   busId: number;
   levelDb?: number;
   enabled?: boolean;
+  /**
+   * Pre/post-fader tap point. Defaults to post-fader when omitted, matching the
+   * historical lane-send behavior and the scene-JSON default.
+   */
+  sendTiming?: SendTiming | number;
 }
 
 export interface EngineTrackLane {
@@ -515,7 +523,23 @@ export class RealtimeEngine {
 
   setTrackLanes(lanes: Array<number | EngineTrackLane>): void {
     this.native.setTrackLanes(
-      lanes.map((lane) => (typeof lane === 'number' ? { trackId: lane } : lane)),
+      lanes.map((lane) => {
+        if (typeof lane === 'number') {
+          return { trackId: lane };
+        }
+        if (!lane.sends) {
+          return lane;
+        }
+        // Normalize each send's pre/post tap point to the integer the native
+        // layer reads (defaults to post-fader when omitted).
+        return {
+          ...lane,
+          sends: lane.sends.map((send) => ({
+            ...send,
+            sendTiming: send.sendTiming === undefined ? 1 : sendTimingCode(send.sendTiming),
+          })),
+        };
+      }),
     );
   }
 
@@ -599,6 +623,55 @@ export class RealtimeEngine {
     resetOnBypass = false,
   ): void {
     this.native.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
+  }
+
+  /**
+   * Changes one track-strip insert parameter in realtime, addressed by the
+   * processor's JSON-key parameter name (see {@link masteringInsertParamInfo}).
+   * Applied at the next block head via the engine command queue; safe during
+   * playback. Throws if the track, insert, or name is unknown, the param is not
+   * realtime-safe, or the command queue is full.
+   */
+  setTrackStripInsertParamByName(
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.native.setTrackStripInsertParamByName(trackId, insertIndex, paramName, value);
+  }
+
+  /** Master-strip counterpart of {@link setTrackStripInsertParamByName}. */
+  setMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
+    this.native.setMasterStripInsertParamByName(insertIndex, paramName, value);
+  }
+
+  /** Sets a track lane strip's pan position in realtime (glitch-free). */
+  setTrackStripPan(trackId: number, pan: number): void {
+    this.native.setTrackStripPan(trackId, pan);
+  }
+
+  /** Sets a track lane strip's pan law in realtime. */
+  setTrackStripPanLaw(trackId: number, panLaw: PanLaw | number): void {
+    this.native.setTrackStripPanLaw(trackId, panLawCode(panLaw));
+  }
+
+  /** Sets a track lane strip's pan mode in realtime. */
+  setTrackStripPanMode(trackId: number, panMode: PanMode | number): void {
+    this.native.setTrackStripPanMode(trackId, panModeCode(panMode));
+  }
+
+  /** Sets a track lane strip's dual-pan left/right positions in realtime. */
+  setTrackStripDualPan(trackId: number, leftPan: number, rightPan: number): void {
+    this.native.setTrackStripDualPan(trackId, leftPan, rightPan);
+  }
+
+  /**
+   * Sets a track lane strip's inter-channel alignment delay (whole samples).
+   * Adjusts strip latency, so PDC and reported graph latency are refreshed.
+   */
+  setTrackStripChannelDelaySamples(trackId: number, delaySamples: number): void {
+    this.native.setTrackStripChannelDelaySamples(trackId, delaySamples);
   }
 
   createClipPageProvider(
@@ -716,6 +789,21 @@ export class RealtimeEngine {
 
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
     return this.native.drainMeterTelemetry(maxRecords);
+  }
+
+  /**
+   * Enables per-target spectrum + vectorscope capture. @param intervalFrames is
+   * the minimum render-frame gap between snapshots (0 disables). @param bandCount
+   * is the FFT band resolution (1..64); changing it re-prepares the tap. Returns
+   * the band count actually applied.
+   */
+  configureScopeTelemetry(intervalFrames: number, bandCount: number): number {
+    return this.native.configureScopeTelemetry(intervalFrames, bandCount);
+  }
+
+  /** Drains pending spectrum + vectorscope snapshots (per mix target). */
+  drainScopeTelemetry(maxRecords = 1024): EngineScopeTelemetry[] {
+    return this.native.drainScopeTelemetry(maxRecords);
   }
 
   destroy(): void {

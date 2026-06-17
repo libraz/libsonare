@@ -15,6 +15,7 @@ import type {
   PanLaw,
   PanMode,
   SendTiming,
+  SurroundPan,
 } from './public_types';
 
 export interface MixerRealtimeBuffer {
@@ -346,6 +347,14 @@ export class Mixer {
   /** Set independent left/right pan positions (dual-pan mode). */
   setDualPan(stripIndex: number, leftPan: number, rightPan: number): void {
     this.mixer.setDualPan(stripIndex, leftPan, rightPan);
+  }
+
+  /**
+   * Set the strip's surround pan position, used when it feeds a >2-channel bus.
+   * Stored on the scene; inert until the surround DSP path applies it.
+   */
+  setSurroundPan(stripIndex: number, pan: SurroundPan): void {
+    this.mixer.setSurroundPan(stripIndex, pan);
   }
 
   /**

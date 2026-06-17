@@ -81,6 +81,34 @@ def test_named_mastering_processors() -> None:
         libsonare.mastering_process("stereo.imager", samples, sample_rate=sr, params={"width": 1.1})
 
 
+def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
+    """The processor catalog classifies kind and exposes capability flags."""
+    import libsonare
+
+    catalog = libsonare.mastering_processor_catalog()
+    assert isinstance(catalog, list)
+    assert len(catalog) > 0
+
+    by_id = {entry["id"]: entry for entry in catalog}
+
+    compressor = by_id["dynamics.compressor"]
+    assert compressor["kind"] == "realtime"
+    assert compressor["realtimeInsertable"] is True
+    # Per-channel/linked processors process every plane in one call.
+    assert compressor["channelPolicy"] == "multichannel"
+
+    assert by_id["match.abCrossfade"]["kind"] == "pair"
+
+    optimize = by_id["maximizer.loudnessOptimize"]
+    assert optimize["kind"] == "offline"
+    assert optimize["realtimeInsertable"] is False
+
+    assert by_id["eq.midSide"]["stereoOnly"] is True
+    # Inherently-stereo processors are wrapped on the front L/R pair.
+    assert by_id["eq.midSide"]["channelPolicy"] == "stereoPairOnly"
+    assert by_id["stereo.imager"]["channelPolicy"] == "stereoPairOnly"
+
+
 def test_mastering_pair_accepts_differing_reference_length() -> None:
     """Pair process/analyze accept a reference that differs in length from source."""
     import libsonare

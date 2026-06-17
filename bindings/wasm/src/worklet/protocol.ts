@@ -49,6 +49,11 @@ export const SONARE_METER_RING_HEADER_INTS = 4;
 // reconstruction. See encodeFrameLo/encodeFrameHi/decodeFrame.
 export const SONARE_METER_RING_RECORD_FLOATS = 14;
 export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
+// Scope ring header: [writeIndex, capacity, recordFloats, bands, maxPoints,
+// reserved]. Record layout: [frameLo, frameHi, targetId, bandCount, pointCount,
+// band0..band(bands-1), l0, r0, l1, r1, ... (maxPoints stereo pairs)].
+export const SONARE_SCOPE_RING_HEADER_INTS = 6;
+export const SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS = 5;
 
 /** Base for splitting a frame index into two exactly-representable Float32 lanes. */
 const SONARE_FRAME_LANE_BASE = 0x1000000; // 2^24
@@ -139,6 +144,46 @@ export interface SonareSpectrumRingBuffer {
 export interface SonareSpectrumRingReadResult {
   nextReadIndex: number;
   spectra: SonareWorkletSpectrumSnapshot[];
+}
+
+/**
+ * A single target-addressed scope record drained from the realtime engine's
+ * scope ring: an FFT magnitude spectrum plus a decimated goniometer/vectorscope
+ * point cloud. Unlike {@link SonareWorkletSpectrumSnapshot} (the legacy
+ * coarse-DFT meter spectrum), this carries a `targetId` (master/lane/bus) and a
+ * stereo point cloud, mirroring the engine's `ScopeTelemetryRecord`.
+ */
+export interface SonareWorkletScopeSnapshot {
+  type: 'scope';
+  targetId: number;
+  frame: number;
+  /** Linear-band magnitudes in dB (length = the configured band count). */
+  bands: Float32Array;
+  /** Interleaved stereo goniometer points: [l0, r0, l1, r1, ...]. */
+  points: Float32Array;
+}
+
+export interface SonareScopeRingBuffer {
+  sharedBuffer: SharedArrayBuffer;
+  header: Int32Array;
+  records: Float32Array;
+  capacity: number;
+  bands: number;
+  maxPoints: number;
+}
+
+export interface SonareScopeRingReadResult {
+  nextReadIndex: number;
+  scopes: SonareWorkletScopeSnapshot[];
+}
+
+export interface SharedScopeRingWriter {
+  header: Int32Array;
+  records: Float32Array;
+  capacity: number;
+  bands: number;
+  maxPoints: number;
+  recordFloats: number;
 }
 
 export interface SonareEngineCommandRecord {
@@ -306,6 +351,129 @@ export function readSonareSpectrumRingBuffer(
     });
   }
   return { nextReadIndex: writeIndex, spectra };
+}
+
+export function sonareScopeRingRecordFloats(bands: number, maxPoints: number): number {
+  return SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bands + 2 * maxPoints;
+}
+
+export function sonareScopeRingBufferByteLength(
+  capacity: number,
+  bands = 48,
+  maxPoints = 32,
+): number {
+  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedBands = Math.max(1, Math.floor(bands));
+  const clampedPoints = Math.max(0, Math.floor(maxPoints));
+  return (
+    SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+    clampedCapacity *
+      sonareScopeRingRecordFloats(clampedBands, clampedPoints) *
+      Float32Array.BYTES_PER_ELEMENT
+  );
+}
+
+export function createSonareScopeRingBuffer(
+  capacity = 64,
+  bands = 48,
+  maxPoints = 32,
+): SonareScopeRingBuffer {
+  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedBands = Math.max(1, Math.floor(bands));
+  const clampedPoints = Math.max(0, Math.floor(maxPoints));
+  const sharedBuffer = new SharedArrayBuffer(
+    sonareScopeRingBufferByteLength(clampedCapacity, clampedBands, clampedPoints),
+  );
+  const ring = scopeRingFromSharedBuffer(
+    sharedBuffer,
+    clampedCapacity,
+    clampedBands,
+    clampedPoints,
+  );
+  Atomics.store(ring.header, 0, 0);
+  Atomics.store(ring.header, 1, clampedCapacity);
+  Atomics.store(ring.header, 2, ring.recordFloats);
+  Atomics.store(ring.header, 3, clampedBands);
+  Atomics.store(ring.header, 4, clampedPoints);
+  Atomics.store(ring.header, 5, 0);
+  return {
+    sharedBuffer,
+    header: ring.header,
+    records: ring.records,
+    capacity: ring.capacity,
+    bands: ring.bands,
+    maxPoints: ring.maxPoints,
+  };
+}
+
+export function readSonareScopeRingBuffer(
+  ring: SonareScopeRingBuffer,
+  readIndex = 0,
+): SonareScopeRingReadResult {
+  const writeIndex = Atomics.load(ring.header, 0);
+  const bands = Atomics.load(ring.header, 3) || ring.bands;
+  const maxPoints = Atomics.load(ring.header, 4);
+  const recordFloats =
+    Atomics.load(ring.header, 2) || sonareScopeRingRecordFloats(bands, maxPoints);
+  const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
+  const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
+  const scopes: SonareWorkletScopeSnapshot[] = [];
+  for (let index = firstReadable; index < writeIndex; index++) {
+    const offset = (index % ring.capacity) * recordFloats;
+    const bandCount = Math.min(bands, Math.max(0, ring.records[offset + 3]));
+    const pointCount = Math.min(maxPoints, Math.max(0, ring.records[offset + 4]));
+    const bandsView = new Float32Array(bandCount);
+    bandsView.set(
+      ring.records.subarray(
+        offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS,
+        offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bandCount,
+      ),
+    );
+    const pointsBase = offset + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bands;
+    const pointsView = new Float32Array(pointCount * 2);
+    pointsView.set(ring.records.subarray(pointsBase, pointsBase + pointCount * 2));
+    scopes.push({
+      type: 'scope',
+      frame: decodeFrame(ring.records[offset], ring.records[offset + 1]),
+      targetId: ring.records[offset + 2],
+      bands: bandsView,
+      points: pointsView,
+    });
+  }
+  return { nextReadIndex: writeIndex, scopes };
+}
+
+export function scopeRingFromSharedBuffer(
+  sharedBuffer: SharedArrayBuffer,
+  fallbackCapacity?: number,
+  fallbackBands?: number,
+  fallbackMaxPoints?: number,
+): SharedScopeRingWriter {
+  const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+  const header = new Int32Array(sharedBuffer, 0, SONARE_SCOPE_RING_HEADER_INTS);
+  const existingCapacity = Atomics.load(header, 1);
+  const existingBands = Atomics.load(header, 3);
+  const existingMaxPoints = Atomics.load(header, 4);
+  const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
+  const bands = Math.max(1, Math.floor(existingBands || fallbackBands || 48));
+  const maxPoints = Math.max(0, Math.floor(existingMaxPoints || (fallbackMaxPoints ?? 32)));
+  const recordFloats = sonareScopeRingRecordFloats(bands, maxPoints);
+  const minBytes = sonareScopeRingBufferByteLength(capacity, bands, maxPoints);
+  if (sharedBuffer.byteLength < minBytes) {
+    throw new Error('scopeSharedBuffer is too small for the requested ring capacity.');
+  }
+  Atomics.store(header, 1, capacity);
+  Atomics.store(header, 2, recordFloats);
+  Atomics.store(header, 3, bands);
+  Atomics.store(header, 4, maxPoints);
+  return {
+    header,
+    records: new Float32Array(sharedBuffer, headerBytes, capacity * recordFloats),
+    capacity,
+    bands,
+    maxPoints,
+    recordFloats,
+  };
 }
 
 export function sonareEngineCommandRingBufferByteLength(capacity: number): number {

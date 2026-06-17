@@ -49,6 +49,7 @@ import type {
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
+  EngineScopeTelemetry,
   EngineTelemetry,
   EngineTrackLane,
   EngineTransportState,
@@ -110,6 +111,7 @@ import type {
   StftDbResult,
   StftResult,
   StripRef,
+  SurroundPan,
   SynthEnumTables,
   SynthPatch,
   SynthWaveform,
@@ -683,7 +685,22 @@ export class RealtimeEngine {
 
   setTrackLanes(lanes: Array<number | EngineTrackLane>): void {
     this.native.setTrackLanes(
-      lanes.map((lane) => (typeof lane === 'number' ? { trackId: lane } : lane)),
+      lanes.map((lane) => {
+        if (typeof lane === 'number') {
+          return { trackId: lane };
+        }
+        if (lane.sends === undefined) {
+          return lane;
+        }
+        return {
+          ...lane,
+          sends: lane.sends.map((send) =>
+            send.sendTiming === undefined
+              ? send
+              : { ...send, sendTiming: sendTimingValue(send.sendTiming) },
+          ),
+        };
+      }),
     );
   }
 
@@ -749,6 +766,84 @@ export class RealtimeEngine {
     resetOnBypass = false,
   ): void {
     this.native.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
+  }
+
+  /**
+   * Changes one track-strip insert parameter in realtime, addressed by the
+   * processor's JSON-key parameter name (see {@link masteringInsertParamInfo}).
+   * Applied at the next block head via the engine command queue; safe during
+   * playback. Throws if the track, insert, or name is unknown, the param is not
+   * realtime-safe, or the command queue is full.
+   */
+  setTrackStripInsertParamByName(
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.native.setTrackStripInsertParamByName(trackId, insertIndex, paramName, value);
+  }
+
+  /** Master-strip counterpart of {@link setTrackStripInsertParamByName}. */
+  setMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
+    this.native.setMasterStripInsertParamByName(insertIndex, paramName, value);
+  }
+
+  /**
+   * Sets a track lane strip's pan position (-1..1) in realtime. Applied at the
+   * next block head via the engine command queue; safe during playback.
+   *
+   * @param trackId Lane the strip belongs to.
+   * @param pan Pan position from -1 (hard left) to 1 (hard right).
+   */
+  setTrackStripPan(trackId: number, pan: number): void {
+    this.native.setTrackStripPan(trackId, pan);
+  }
+
+  /**
+   * Sets a track lane strip's pan law in realtime. Applied at the next block
+   * head via the engine command queue; safe during playback.
+   *
+   * @param trackId Lane the strip belongs to.
+   * @param panLaw Pan law as an enum name, the enum, or the raw int.
+   */
+  setTrackStripPanLaw(trackId: number, panLaw: PanLaw | number): void {
+    this.native.setTrackStripPanLaw(trackId, panLawValue(panLaw));
+  }
+
+  /**
+   * Sets a track lane strip's pan mode in realtime. Applied at the next block
+   * head via the engine command queue; safe during playback.
+   *
+   * @param trackId Lane the strip belongs to.
+   * @param panMode Pan mode as an enum name, the enum, or the raw int.
+   */
+  setTrackStripPanMode(trackId: number, panMode: PanMode): void {
+    this.native.setTrackStripPanMode(trackId, panModeValue(panMode));
+  }
+
+  /**
+   * Sets a track lane strip's independent left/right pan positions (dual-pan
+   * mode) in realtime. Applied at the next block head via the engine command
+   * queue; safe during playback.
+   *
+   * @param trackId Lane the strip belongs to.
+   * @param leftPan Left-channel pan position from -1 to 1.
+   * @param rightPan Right-channel pan position from -1 to 1.
+   */
+  setTrackStripDualPan(trackId: number, leftPan: number, rightPan: number): void {
+    this.native.setTrackStripDualPan(trackId, leftPan, rightPan);
+  }
+
+  /**
+   * Sets a track lane strip's per-channel delay in samples in realtime. Applied
+   * at the next block head via the engine command queue; safe during playback.
+   *
+   * @param trackId Lane the strip belongs to.
+   * @param delaySamples Channel delay in samples.
+   */
+  setTrackStripChannelDelaySamples(trackId: number, delaySamples: number): void {
+    this.native.setTrackStripChannelDelaySamples(trackId, delaySamples);
   }
 
   supplyClipPage(providerId: number, pageIndex: number, channels: Float32Array[]): void {
@@ -853,6 +948,22 @@ export class RealtimeEngine {
   /** Drain pending meter telemetry records published by the engine's meter tap. */
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
     return this.native.drainMeterTelemetry(maxRecords);
+  }
+
+  /**
+   * Enable or configure per-target spectrum + vectorscope telemetry.
+   *
+   * @param intervalFrames - Minimum render-frame gap between published snapshots; `0` disables capture
+   * @param bandCount - Requested FFT band resolution (1..64); changing it re-prepares the tap
+   * @returns The band count actually applied
+   */
+  configureScopeTelemetry(intervalFrames: number, bandCount: number): number {
+    return this.native.configureScopeTelemetry(intervalFrames, bandCount);
+  }
+
+  /** Drain pending spectrum + vectorscope telemetry records published by the engine's scope tap. */
+  drainScopeTelemetry(maxRecords = 1024): EngineScopeTelemetry[] {
+    return this.native.drainScopeTelemetry(maxRecords);
   }
 
   /**
@@ -2356,6 +2467,14 @@ export class Mixer {
   }
 
   /**
+   * Set a strip's surround pan position, used when the strip feeds a >2-channel
+   * bus. Stored on the scene; inert until the surround DSP path applies it.
+   */
+  setSurroundPan(strip: StripRef, pan: SurroundPan): void {
+    this.native.setSurroundPan(strip, pan);
+  }
+
+  /**
    * Add a post-construction send from a strip to a destination bus.
    *
    * @returns The 0-based index of the new send (use with {@link setSendDb} /
@@ -2522,6 +2641,7 @@ export type {
   BpmCandidate,
   BuiltinInstrumentConfig,
   BuiltinSynthConfig,
+  ChannelLayout,
   Chord,
   ChordAnalysisResult,
   ChordChromaMethod,
@@ -2546,6 +2666,7 @@ export type {
   EngineMeterTelemetry,
   EngineMetronomeConfig,
   EngineParameterInfo,
+  EngineScopeTelemetry,
   EngineTelemetry,
   EngineTelemetryError,
   EngineTelemetryType,
@@ -2626,6 +2747,7 @@ export type {
   StreamingPlatform,
   StreamQuantizeConfig,
   StripRef,
+  SurroundPan,
   SynthBodyType,
   SynthEngineMode,
   SynthEnumTables,

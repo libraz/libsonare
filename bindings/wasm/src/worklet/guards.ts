@@ -47,6 +47,13 @@ export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMe
     value.type === 'syncMasterStripEqBand' ||
     value.type === 'syncTrackStripInsertBypassed' ||
     value.type === 'syncMasterStripInsertBypassed' ||
+    value.type === 'syncTrackStripInsertParamByName' ||
+    value.type === 'syncMasterStripInsertParamByName' ||
+    value.type === 'syncTrackStripPan' ||
+    value.type === 'syncTrackStripPanLaw' ||
+    value.type === 'syncTrackStripPanMode' ||
+    value.type === 'syncTrackStripDualPan' ||
+    value.type === 'syncTrackStripChannelDelaySamples' ||
     value.type === 'syncBuiltinInstrument' ||
     value.type === 'syncSynthInstrument' ||
     value.type === 'syncSf2Instrument' ||

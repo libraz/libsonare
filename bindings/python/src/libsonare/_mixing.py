@@ -6,7 +6,7 @@ import ctypes
 import typing
 from collections.abc import Sequence
 
-from ._ffi import SonareMixGoniometerPoint
+from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
 from ._runtime import (
     AutomationCurve,
     MeterTap,
@@ -322,6 +322,34 @@ class Mixer:
                 handle, ctypes.c_float(left), ctypes.c_float(right)
             )
         )
+
+    def set_surround_pan(
+        self,
+        strip: StripRef,
+        *,
+        azimuth: float = 0.0,
+        elevation: float = 0.0,
+        divergence: float = 0.0,
+        lfe: float = 0.0,
+        distance: float = 1.0,
+    ) -> None:
+        """Set a strip's surround pan position (used when feeding a >2-channel bus).
+
+        Phase 1 honors ``azimuth`` (-180..180 deg, 0 = front-center),
+        ``divergence`` (0 = point source, 1 = spread across the front) and
+        ``lfe`` (0..1 send into the LFE plane); ``elevation``/``distance`` are
+        reserved. Stored on the scene and inert until the surround DSP path
+        applies it.
+        """
+        handle = self._strip_handle(strip)
+        pan = SonareSurroundPan(
+            azimuth=azimuth,
+            elevation=elevation,
+            divergence=divergence,
+            lfe=lfe,
+            distance=distance,
+        )
+        _check(_get_lib().sonare_strip_set_surround_pan(handle, ctypes.byref(pan)))
 
     def set_fader_db(self, strip: StripRef, db: float) -> None:
         """Set a strip's fader gain in dB (takes effect without a recompile)."""

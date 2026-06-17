@@ -1033,6 +1033,24 @@ export interface MasteringChainStereoResult {
 
 export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;
 
+/**
+ * Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
+ * `azimuth`/`divergence`/`lfe`; `elevation`/`distance` are reserved. All fields
+ * are optional and default to a centered point source.
+ */
+export interface SurroundPan {
+  /** -180..180 deg, 0 = front-center, positive = right. */
+  azimuth?: number;
+  /** Reserved (no height beds in phase 1). */
+  elevation?: number;
+  /** 0 = point source, 1 = spread across the front. */
+  divergence?: number;
+  /** 0..1 scalar send into the LFE plane. */
+  lfe?: number;
+  /** Reserved (focus/spread), defaults to 1. */
+  distance?: number;
+}
+
 export interface MixOptions {
   inputTrimDb?: number | number[];
   faderDb?: number | number[];
@@ -1171,6 +1189,22 @@ export interface EngineMeterTelemetry {
   droppedRecords: number;
 }
 
+/** Scope telemetry record drained from {@link RealtimeEngine.drainScopeTelemetry}. */
+export interface EngineScopeTelemetry {
+  /** Scope tap target id (0 = master, `laneIndex + 1` for lanes, `33 + busIndex` for buses). */
+  targetId: number;
+  /** Render-frame timestamp of the snapshot. */
+  renderFrame: number;
+  /** Monotonic sequence number. */
+  seq: number;
+  /** Number of records dropped before this snapshot. */
+  droppedRecords: number;
+  /** FFT magnitude spectrum in dBFS, linear-spaced over `[0, Nyquist]`. */
+  bands: number[];
+  /** Goniometer/vectorscope sample points (left/right pairs). */
+  points: { left: number; right: number }[];
+}
+
 /** Read-only engine transport snapshot from {@link RealtimeEngine.getTransportState}. */
 export interface EngineTransportState {
   /** Whether the transport is currently playing. */
@@ -1291,6 +1325,13 @@ export interface EngineClip {
   pageProvider?: number | { readonly id: number };
 }
 
+/**
+ * Speaker bed layout for a bus or source, mirroring the C enum
+ * `SonareChannelLayout`: `0` = mono, `1` = stereo, `2` = 5.1 (L R C LFE Ls Rs),
+ * `3` = 7.1 (L R C LFE Lss Rss Ls Rs).
+ */
+export type ChannelLayout = 0 | 1 | 2 | 3;
+
 export interface EngineTrackLane {
   trackId: number;
   sends?: EngineTrackSend[];
@@ -1299,17 +1340,33 @@ export interface EngineTrackLane {
    * (group/folder routing); 0 or absent keeps the lane on the master mix.
    */
   outputBusId?: number;
+  /**
+   * Input channel layout of the source feeding this lane. Absent defaults to
+   * stereo. Stored but inert until the surround DSP path lands.
+   */
+  sourceChannelLayout?: ChannelLayout;
 }
 
 export interface EngineTrackSend {
   busId: number;
   levelDb?: number;
   enabled?: boolean;
+  /**
+   * Tap point for the send relative to the lane fader. Absent defaults to
+   * post-fader, preserving the behavior before this field existed.
+   */
+  sendTiming?: SendTiming | number;
 }
 
 export interface EngineBus {
   busId: number;
   gainDb?: number;
+  /**
+   * Channel layout of this bus. Absent defaults to stereo. The master bus
+   * carries the project output layout. Stored but inert until the surround DSP
+   * path lands.
+   */
+  channelLayout?: ChannelLayout;
 }
 
 export interface ClipPageRequest {

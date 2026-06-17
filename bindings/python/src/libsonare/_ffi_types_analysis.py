@@ -60,6 +60,18 @@ class SonareMixGoniometerPoint(ctypes.Structure):
     ]
 
 
+class SonareSurroundPan(ctypes.Structure):
+    """Maps to SonareSurroundPan in sonare_c.h."""
+
+    _fields_ = [
+        ("azimuth", ctypes.c_float),
+        ("elevation", ctypes.c_float),
+        ("divergence", ctypes.c_float),
+        ("lfe", ctypes.c_float),
+        ("distance", ctypes.c_float),
+    ]
+
+
 class SonareBpmCandidate(ctypes.Structure):
     """Maps to SonareBpmCandidate in sonare_c.h."""
 

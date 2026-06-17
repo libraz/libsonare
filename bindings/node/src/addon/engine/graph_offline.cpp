@@ -248,3 +248,31 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetry(const Napi::CallbackInfo& in
   }
   return out;
 }
+
+Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const int interval_frames = info[0].As<Napi::Number>().Int32Value();
+  const unsigned int band_count = info[1].As<Napi::Number>().Uint32Value();
+  unsigned int applied = 0;
+  ThrowIfError(
+      env, sonare_engine_configure_scope_telemetry(engine_, interval_frames, band_count, &applied));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, applied);
+}
+
+Napi::Value RealtimeEngineWrap::DrainScopeTelemetry(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const size_t max_records = info.Length() > 0 && !info[0].IsUndefined()
+                                 ? static_cast<size_t>(info[0].As<Napi::Number>().Int64Value())
+                                 : 1024;
+  std::vector<SonareScopeTelemetryRecord> records(max_records);
+  size_t written = 0;
+  ThrowIfError(
+      env, sonare_engine_drain_scope_telemetry(engine_, records.data(), records.size(), &written));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Array out = Napi::Array::New(env, written);
+  for (size_t i = 0; i < written; ++i) {
+    out.Set(static_cast<uint32_t>(i), ScopeTelemetryToObject(env, records[i]));
+  }
+  return out;
+}

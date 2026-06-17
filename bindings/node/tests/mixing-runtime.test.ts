@@ -55,6 +55,18 @@ describe('Mixer runtime methods', () => {
     expect(() => mixer.setDualPan('host', -0.5, 0.5)).not.toThrow();
   });
 
+  it('stores surround pan on the strip scene', () => {
+    expect(() =>
+      mixer.setSurroundPan('host', { azimuth: -45, divergence: 0.25, lfe: 0.5 }),
+    ).not.toThrow();
+    const scene = JSON.parse(mixer.toSceneJson());
+    const host = scene.strips.find((strip: { id: string }) => strip.id === 'host');
+    expect(host.surroundPan.azimuth).toBeCloseTo(-45, 5);
+    expect(host.surroundPan.divergence).toBeCloseTo(0.25, 5);
+    expect(host.surroundPan.lfe).toBeCloseTo(0.5, 5);
+    expect(host.surroundPan.distance).toBeCloseTo(1, 5);
+  });
+
   it('returns a numeric index from addSend and accepts setSendDb', () => {
     const sendIndex = mixer.addSend('host', 'host-extra', 'master', -6, 'postFader');
     expect(typeof sendIndex).toBe('number');

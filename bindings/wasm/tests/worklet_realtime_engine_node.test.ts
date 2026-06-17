@@ -92,6 +92,43 @@ describe('SonareRealtimeEngineNode', () => {
       expect(posted.at(-1)).toMatchObject({ type: SonareEngineCommandType.TransportStop });
     });
 
+    it('creates the scope ring only when scope telemetry is requested', async () => {
+      const makeNode = (scopeIntervalFrames?: number) =>
+        SonareRealtimeEngineNode.create(fakeContext(), {
+          moduleUrl: 'sonare-worklet.js',
+          blockSize: 128,
+          channelCount: 2,
+          scopeIntervalFrames,
+          scopeBands: 32,
+          nodeFactory: (_context, _name, options) => {
+            lastOptions = options;
+            return {
+              port: { postMessage: () => undefined, onmessage: undefined },
+              disconnect: () => undefined,
+            } as unknown as AudioWorkletNode;
+          },
+        });
+      let lastOptions: AudioWorkletNodeOptions | undefined;
+
+      const off = await makeNode();
+      expect(off.scopeRing).toBeUndefined();
+      expect(off.pollScope()).toEqual([]);
+      expect(
+        (lastOptions?.processorOptions as { scopeSharedBuffer?: SharedArrayBuffer })
+          ?.scopeSharedBuffer,
+      ).toBeUndefined();
+      off.destroy();
+
+      const on = await makeNode(128);
+      expect(on.scopeRing).toBeDefined();
+      expect(on.scopeRing?.bands).toBe(32);
+      expect(
+        (lastOptions?.processorOptions as { scopeSharedBuffer?: SharedArrayBuffer })
+          ?.scopeSharedBuffer,
+      ).toBeInstanceOf(SharedArrayBuffer);
+      on.destroy();
+    });
+
     it('falls back to postMessage commands when requested', async () => {
       const posted: unknown[] = [];
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
@@ -262,6 +299,12 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTrackBuses([{ busId: 100, gainDb: -3 }]);
         engine.setSends(3, [{ busId: 100, levelDb: -6, enabled: true }]);
         expect(engine.setBusGain(100, -9)).toBe(true);
+        // Realtime strip panner / channel-delay controls (R5).
+        engine.setTrackStripPan(3, -1);
+        engine.setTrackStripPanLaw(3, 'const6dB');
+        engine.setTrackStripPanMode(3, 'dualPan');
+        engine.setTrackStripDualPan(3, -1, 1);
+        engine.setTrackStripChannelDelaySamples(3, 32);
         const busStripJson =
           '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[]}],"connections":[]}';
         engine.setBusStripJson(100, busStripJson);
@@ -407,6 +450,20 @@ describe('SonareRealtimeEngineNode', () => {
               insertIndex: 0,
               bypassed: true,
               resetOnBypass: true,
+            }),
+            expect.objectContaining({ type: 'syncTrackStripPan', trackId: 3, pan: -1 }),
+            expect.objectContaining({ type: 'syncTrackStripPanLaw', trackId: 3, panLaw: 2 }),
+            expect.objectContaining({ type: 'syncTrackStripPanMode', trackId: 3, panMode: 2 }),
+            expect.objectContaining({
+              type: 'syncTrackStripDualPan',
+              trackId: 3,
+              leftPan: -1,
+              rightPan: 1,
+            }),
+            expect.objectContaining({
+              type: 'syncTrackStripChannelDelaySamples',
+              trackId: 3,
+              delaySamples: 32,
             }),
             expect.objectContaining({
               type: 'syncMixer',

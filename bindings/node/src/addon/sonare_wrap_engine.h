@@ -50,6 +50,13 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetMasterStripJson(const Napi::CallbackInfo& info);
   Napi::Value SetMasterStripEqBandJson(const Napi::CallbackInfo& info);
   Napi::Value SetMasterStripInsertBypassed(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripInsertParamByName(const Napi::CallbackInfo& info);
+  Napi::Value SetMasterStripInsertParamByName(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripPan(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripPanLaw(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripPanMode(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripDualPan(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackStripChannelDelaySamples(const Napi::CallbackInfo& info);
   Napi::Value CreateClipPageProvider(const Napi::CallbackInfo& info);
   Napi::Value SupplyClipPage(const Napi::CallbackInfo& info);
   Napi::Value ClearClipPage(const Napi::CallbackInfo& info);
@@ -74,6 +81,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value FreezeOffline(const Napi::CallbackInfo& info);
   Napi::Value DrainTelemetry(const Napi::CallbackInfo& info);
   Napi::Value DrainMeterTelemetry(const Napi::CallbackInfo& info);
+  Napi::Value ConfigureScopeTelemetry(const Napi::CallbackInfo& info);
+  Napi::Value DrainScopeTelemetry(const Napi::CallbackInfo& info);
   Napi::Value SetParameter(const Napi::CallbackInfo& info);
   Napi::Value SetParameterSmoothed(const Napi::CallbackInfo& info);
   Napi::Value SetSoloMute(const Napi::CallbackInfo& info);

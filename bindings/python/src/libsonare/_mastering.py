@@ -153,6 +153,57 @@ def mastering_insert_param_names(name: str) -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+def mastering_insert_param_info(name: str) -> list[dict[str, Any]]:
+    """Return parameter metadata for a given insert/FX processor.
+
+    Each entry describes one parameter the insert reads, with keys ``name``
+    (camelCase parameter name), ``id`` (stable numeric parameter id) and
+    ``rtSafe`` (whether the parameter can be changed on the realtime audio
+    thread). Returns an empty list for an unknown ``name`` (or one whose
+    insert needs an unavailable build feature, e.g. FX).
+
+    The native layer returns a thread-local JSON array string the caller must
+    NOT free (same convention as the other mastering getters).
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_insert_param_info"):
+        raise RuntimeError("libsonare was built without mastering support")
+    raw = lib.sonare_mastering_insert_param_info(name.encode("utf-8"))
+    if not raw:
+        return []
+    parsed = json.loads(raw.decode("utf-8"))
+    return cast("list[dict[str, Any]]", parsed)
+
+
+def mastering_processor_catalog() -> list[dict[str, Any]]:
+    """Return the full catalog of mastering processors.
+
+    Each entry describes one processor with keys ``id`` (camelCase processor
+    id, e.g. ``dynamics.compressor``), ``kind`` (one of ``"realtime"``,
+    ``"offline"`` or ``"pair"``), ``realtimeInsertable`` (whether the processor
+    can run as a realtime insert), ``stereoOnly`` (whether it requires a
+    stereo signal) and ``channelPolicy`` (how the mixer wraps the processor on
+    a >2-channel surround bus insert: ``"multichannel"`` for one full-buffer
+    call, ``"stereoPairOnly"`` for front-L/R-only with surround planes passed
+    through dry). ``kind`` follows the precedence pair > realtime > offline:
+    a processor exposed as a pair processor is reported as ``"pair"``, an
+    otherwise realtime-capable processor as ``"realtime"``, and the remainder
+    as ``"offline"``. Returns an empty list when the build lacks mastering
+    support.
+
+    The native layer returns a program-lifetime JSON array string the caller
+    must NOT free (same convention as the other mastering getters).
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_processor_catalog"):
+        return []
+    raw = lib.sonare_mastering_processor_catalog()
+    if not raw:
+        return []
+    parsed = json.loads(raw.decode("utf-8"))
+    return cast("list[dict[str, Any]]", parsed)
+
+
 def mastering_process(
     processor_name: str,
     samples: Sequence[float] | list[float],

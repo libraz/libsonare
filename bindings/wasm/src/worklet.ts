@@ -1,3 +1,4 @@
+import { panLawCode, panModeCode } from './codes';
 import type {
   EngineAutomationPoint,
   EngineBus,
@@ -7,6 +8,7 @@ import type {
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
   EngineParameterInfo,
+  EngineScopeTelemetry,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
@@ -14,6 +16,8 @@ import type {
   EngineTransportState,
   EqBand,
   MixerRealtimeBuffer,
+  PanLaw,
+  PanMode,
 } from './index';
 import {
   engineCapabilities,
@@ -75,6 +79,7 @@ import {
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareMeterRingBuffer,
+  createSonareScopeRingBuffer,
   ENGINE_MIXER_PARAM_FADER_DB,
   ENGINE_MIXER_PARAM_PAN,
   encodeFrameHi,
@@ -91,11 +96,14 @@ import {
   pushSonareEngineCommandRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareMeterRingBuffer,
+  readSonareScopeRingBuffer,
   type SharedMeterRingWriter,
+  type SharedScopeRingWriter,
   type SharedSpectrumRingWriter,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
   SONARE_METER_RING_RECORD_FLOATS,
+  SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS,
   type SonareEngineCommandRecord,
   type SonareEngineCommandRingBuffer,
   SonareEngineCommandType,
@@ -104,8 +112,11 @@ import {
   type SonareEngineTelemetryRingBuffer,
   SonareEngineTelemetryType,
   type SonareMeterRingBuffer,
+  type SonareScopeRingBuffer,
   type SonareWorkletMeterSnapshot,
+  type SonareWorkletScopeSnapshot,
   type SonareWorkletSpectrumSnapshot,
+  scopeRingFromSharedBuffer,
   spectrumRingFromSharedBuffer,
   telemetryFromEngine,
   toBigInt64,
@@ -160,6 +171,7 @@ export {
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareMeterRingBuffer,
+  createSonareScopeRingBuffer,
   createSonareSpectrumRingBuffer,
   decodeFrame,
   encodeFrameHi,
@@ -168,12 +180,14 @@ export {
   pushSonareEngineCommandRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareMeterRingBuffer,
+  readSonareScopeRingBuffer,
   readSonareSpectrumRingBuffer,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
   SONARE_METER_RING_HEADER_INTS,
   SONARE_METER_RING_RECORD_FLOATS,
+  SONARE_SCOPE_RING_HEADER_INTS,
   SONARE_SPECTRUM_RING_HEADER_INTS,
   type SonareEngineCommandRecord,
   type SonareEngineCommandRingBuffer,
@@ -185,13 +199,17 @@ export {
   SonareEngineTelemetryType,
   type SonareMeterRingBuffer,
   type SonareMeterRingReadResult,
+  type SonareScopeRingBuffer,
+  type SonareScopeRingReadResult,
   type SonareSpectrumRingBuffer,
   type SonareSpectrumRingReadResult,
   type SonareWorkletMeterSnapshot,
+  type SonareWorkletScopeSnapshot,
   type SonareWorkletSpectrumSnapshot,
   sonareEngineCommandRingBufferByteLength,
   sonareEngineTelemetryRingBufferByteLength,
   sonareMeterRingBufferByteLength,
+  sonareScopeRingBufferByteLength,
   sonareSpectrumRingBufferByteLength,
   writeSonareEngineTelemetryRingBuffer,
 } from './worklet/protocol';
@@ -532,6 +550,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   private commandRing?: SonareEngineCommandRingBuffer;
   private telemetryRing?: SonareEngineTelemetryRingBuffer;
   private meterRing?: SharedMeterRingWriter;
+  private scopeRing?: SharedScopeRingWriter;
   private transport?: WorkletTransport;
   private meterIntervalFrames: number;
   private lastMeterFrame = Number.NEGATIVE_INFINITY;
@@ -575,6 +594,13 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.meterRing = options.meterSharedBuffer
       ? meterRingFromSharedBuffer(options.meterSharedBuffer, options.meterRingCapacity)
       : undefined;
+    this.scopeRing = options.scopeSharedBuffer
+      ? scopeRingFromSharedBuffer(
+          options.scopeSharedBuffer,
+          options.scopeRingCapacity,
+          options.scopeBands,
+        )
+      : undefined;
     this.engine = new RealtimeEngine(this.sampleRate, this.blockSize);
     // Allocate persistent WASM-heap scratch (worst case: channelCount channels x
     // blockSize frames) and acquire the per-channel heap views once.
@@ -582,6 +608,13 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.channelBuffers = new Array(this.channelCount);
     for (let ch = 0; ch < this.channelCount; ch++) {
       this.channelBuffers[ch] = this.engine.getChannelBuffer(ch, this.blockSize);
+    }
+    // Arm the engine's scope producer only when a scope ring was provided. The
+    // band count follows the ring's record layout so writeScopeRing never
+    // overruns its slot.
+    if (this.scopeRing) {
+      const interval = Math.max(1, Math.floor(options.scopeIntervalFrames ?? this.blockSize));
+      this.engine.configureScopeTelemetry(interval, this.scopeRing.bands);
     }
   }
 
@@ -660,6 +693,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     this.publishTelemetry();
     this.publishMeters();
+    this.publishScope();
     return true;
   }
 
@@ -777,6 +811,36 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.bypassed,
           message.resetOnBypass,
         );
+        break;
+      case 'syncTrackStripInsertParamByName':
+        this.engine.setTrackStripInsertParamByName(
+          message.trackId,
+          message.insertIndex,
+          message.paramName,
+          message.value,
+        );
+        break;
+      case 'syncMasterStripInsertParamByName':
+        this.engine.setMasterStripInsertParamByName(
+          message.insertIndex,
+          message.paramName,
+          message.value,
+        );
+        break;
+      case 'syncTrackStripPan':
+        this.engine.setTrackStripPan(message.trackId, message.pan);
+        break;
+      case 'syncTrackStripPanLaw':
+        this.engine.setTrackStripPanLaw(message.trackId, message.panLaw);
+        break;
+      case 'syncTrackStripPanMode':
+        this.engine.setTrackStripPanMode(message.trackId, message.panMode);
+        break;
+      case 'syncTrackStripDualPan':
+        this.engine.setTrackStripDualPan(message.trackId, message.leftPan, message.rightPan);
+        break;
+      case 'syncTrackStripChannelDelaySamples':
+        this.engine.setTrackStripChannelDelaySamples(message.trackId, message.delaySamples);
         break;
       case 'syncBuiltinInstrument':
         this.engine.setBuiltinInstrument(message.config, message.destinationId);
@@ -1085,6 +1149,46 @@ export class SonareRealtimeEngineWorkletProcessor {
     // and store an ever-growing value, not a dropped-record count. Readers
     // already detect silent overrun via firstReadable = max(readIndex,
     // writeIndex - capacity), so header slot 3 is left at its initial 0.
+  }
+
+  // Drains the engine's scope producer (FFT spectrum + goniometer points) into
+  // the lock-free SAB scope ring. Only the embind runtime publishes scope
+  // telemetry; the sonare-rt runtime owns its own transport. No allocation on
+  // the render path: records are written field-by-field into the ring.
+  private publishScope(): void {
+    const ring = this.scopeRing;
+    if (!ring) {
+      return;
+    }
+    for (const item of this.engine.drainScopeTelemetry(64)) {
+      this.writeScopeRing(ring, item);
+    }
+  }
+
+  private writeScopeRing(ring: SharedScopeRingWriter, record: EngineScopeTelemetry): void {
+    const writeIndex = Atomics.load(ring.header, 0);
+    const base = (writeIndex % ring.capacity) * ring.recordFloats;
+    ring.records[base] = encodeFrameLo(record.renderFrame);
+    ring.records[base + 1] = encodeFrameHi(record.renderFrame);
+    ring.records[base + 2] = record.targetId;
+    const bandCount = Math.min(ring.bands, record.bands.length);
+    ring.records[base + 3] = bandCount;
+    const pointCount = Math.min(ring.maxPoints, record.points.length);
+    ring.records[base + 4] = pointCount;
+    const bandsBase = base + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS;
+    for (let i = 0; i < bandCount; i++) {
+      ring.records[bandsBase + i] = record.bands[i];
+    }
+    const pointsBase = bandsBase + ring.bands;
+    for (let i = 0; i < pointCount; i++) {
+      const point = record.points[i];
+      ring.records[pointsBase + 2 * i] = point.left;
+      ring.records[pointsBase + 2 * i + 1] = point.right;
+    }
+    Atomics.store(ring.header, 0, writeIndex + 1);
+    // Like writeMeterRing, writeIndex is a free-running monotonic counter; the
+    // reader detects silent overrun via firstReadable, so the overflow slot
+    // (header[5]) stays at its initial 0.
   }
 
   private commandRingFromSharedBuffer(
@@ -1510,11 +1614,14 @@ export class SonareRealtimeEngineNode {
   readonly commandRing?: SonareEngineCommandRingBuffer;
   readonly telemetryRing?: SonareEngineTelemetryRingBuffer;
   readonly meterRing?: SonareMeterRingBuffer;
+  readonly scopeRing?: SonareScopeRingBuffer;
   readonly ready: Promise<void>;
   private telemetryReadIndex = 0;
   private meterReadIndex = 0;
+  private scopeReadIndex = 0;
   private telemetryListeners = new Set<(telemetry: SonareEngineTelemetryRecord) => void>();
   private meterListeners = new Set<(meter: SonareWorkletMeterSnapshot) => void>();
+  private scopeListeners = new Set<(scope: SonareWorkletScopeSnapshot) => void>();
   private captureRequestId = 1;
   private readonly captureRequests = new Map<
     number,
@@ -1541,12 +1648,14 @@ export class SonareRealtimeEngineNode {
     commandRing?: SonareEngineCommandRingBuffer,
     telemetryRing?: SonareEngineTelemetryRingBuffer,
     meterRing?: SonareMeterRingBuffer,
+    scopeRing?: SonareScopeRingBuffer,
   ) {
     this.node = node;
     this.capabilities = capabilities;
     this.commandRing = commandRing;
     this.telemetryRing = telemetryRing;
     this.meterRing = meterRing;
+    this.scopeRing = scopeRing;
     this.ready = new Promise((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
@@ -1645,6 +1754,14 @@ export class SonareRealtimeEngineNode {
       mode === 'sab' && runtimeTarget === 'embind'
         ? createSonareMeterRingBuffer(options.meterRingCapacity ?? 128)
         : undefined;
+    // Scope ring (FFT spectrum + goniometer): opt-in, embind-only. The
+    // per-block FFT is heavier than the meter path, so it is created only when
+    // the caller requests scope telemetry via scopeIntervalFrames > 0.
+    const scopeIntervalFrames = Math.max(0, Math.floor(options.scopeIntervalFrames ?? 0));
+    const scopeRing =
+      mode === 'sab' && runtimeTarget === 'embind' && scopeIntervalFrames > 0
+        ? createSonareScopeRingBuffer(options.scopeRingCapacity ?? 64, options.scopeBands ?? 48)
+        : undefined;
     const channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       runtimeTarget,
@@ -1659,6 +1776,10 @@ export class SonareRealtimeEngineNode {
       telemetryRingCapacity: telemetryRing?.capacity,
       meterSharedBuffer: meterRing?.sharedBuffer,
       meterRingCapacity: meterRing?.capacity,
+      scopeSharedBuffer: scopeRing?.sharedBuffer,
+      scopeRingCapacity: scopeRing?.capacity,
+      scopeBands: scopeRing?.bands,
+      scopeIntervalFrames: scopeRing ? scopeIntervalFrames : undefined,
       wasmBinary: options.wasmBinary,
       initialSyncMessages: options.initialSyncMessages,
       initialCommands: options.initialCommands,
@@ -1692,6 +1813,7 @@ export class SonareRealtimeEngineNode {
       commandRing,
       telemetryRing,
       meterRing,
+      scopeRing,
     );
   }
 
@@ -1787,6 +1909,21 @@ export class SonareRealtimeEngineNode {
     return read.meters;
   }
 
+  // Drains scope telemetry (FFT spectrum + goniometer points) published into the
+  // SAB scope ring and forwards each record to onScope listeners. A no-op unless
+  // the node was created with scopeIntervalFrames > 0 (embind SAB mode).
+  pollScope(): SonareWorkletScopeSnapshot[] {
+    if (!this.scopeRing) {
+      return [];
+    }
+    const read = readSonareScopeRingBuffer(this.scopeRing, this.scopeReadIndex);
+    this.scopeReadIndex = read.nextReadIndex;
+    for (const scope of read.scopes) {
+      this.emitScope(scope);
+    }
+    return read.scopes;
+  }
+
   onTelemetry(callback: (telemetry: SonareEngineTelemetryRecord) => void): () => void {
     this.telemetryListeners.add(callback);
     return () => {
@@ -1798,6 +1935,13 @@ export class SonareRealtimeEngineNode {
     this.meterListeners.add(callback);
     return () => {
       this.meterListeners.delete(callback);
+    };
+  }
+
+  onScope(callback: (scope: SonareWorkletScopeSnapshot) => void): () => void {
+    this.scopeListeners.add(callback);
+    return () => {
+      this.scopeListeners.delete(callback);
     };
   }
 
@@ -1818,6 +1962,7 @@ export class SonareRealtimeEngineNode {
     this.transportRequests.clear();
     this.telemetryListeners.clear();
     this.meterListeners.clear();
+    this.scopeListeners.clear();
   }
 
   private emitTelemetry(telemetry: SonareEngineTelemetryRecord): void {
@@ -1829,6 +1974,12 @@ export class SonareRealtimeEngineNode {
   private emitMeter(meter: SonareWorkletMeterSnapshot): void {
     for (const listener of this.meterListeners) {
       listener(meter);
+    }
+  }
+
+  private emitScope(scope: SonareWorkletScopeSnapshot): void {
+    for (const listener of this.scopeListeners) {
+      listener(scope);
     }
   }
 
@@ -2377,6 +2528,56 @@ export class SonareEngine {
     });
   }
 
+  setTrackStripInsertParamByName(
+    target: string | number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    const laneIndex = this.ensureTrackLane(target);
+    const trackId = this.trackLaneIds[laneIndex];
+    this.offlineEngine.setTrackStripInsertParamByName(trackId, insertIndex, paramName, value);
+    this.postSync({
+      type: 'syncTrackStripInsertParamByName',
+      trackId,
+      insertIndex,
+      paramName,
+      value,
+    });
+  }
+
+  setTrackStripPan(target: string | number, pan: number): void {
+    const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
+    this.offlineEngine.setTrackStripPan(trackId, pan);
+    this.postSync({ type: 'syncTrackStripPan', trackId, pan });
+  }
+
+  setTrackStripPanLaw(target: string | number, panLaw: PanLaw | number): void {
+    const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
+    const code = panLawCode(panLaw);
+    this.offlineEngine.setTrackStripPanLaw(trackId, code);
+    this.postSync({ type: 'syncTrackStripPanLaw', trackId, panLaw: code });
+  }
+
+  setTrackStripPanMode(target: string | number, panMode: PanMode | number): void {
+    const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
+    const code = panModeCode(panMode);
+    this.offlineEngine.setTrackStripPanMode(trackId, code);
+    this.postSync({ type: 'syncTrackStripPanMode', trackId, panMode: code });
+  }
+
+  setTrackStripDualPan(target: string | number, leftPan: number, rightPan: number): void {
+    const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
+    this.offlineEngine.setTrackStripDualPan(trackId, leftPan, rightPan);
+    this.postSync({ type: 'syncTrackStripDualPan', trackId, leftPan, rightPan });
+  }
+
+  setTrackStripChannelDelaySamples(target: string | number, delaySamples: number): void {
+    const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
+    this.offlineEngine.setTrackStripChannelDelaySamples(trackId, delaySamples);
+    this.postSync({ type: 'syncTrackStripChannelDelaySamples', trackId, delaySamples });
+  }
+
   setStripEq(target: string | number, bandIndex: number, band: EqBand | string): void {
     if (target === 'master') {
       this.setMasterStripEqBand(bandIndex, band);
@@ -2437,6 +2638,29 @@ export class SonareEngine {
       bypassed,
       resetOnBypass,
     });
+  }
+
+  setMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
+    this.offlineEngine.setMasterStripInsertParamByName(insertIndex, paramName, value);
+    this.postSync({
+      type: 'syncMasterStripInsertParamByName',
+      insertIndex,
+      paramName,
+      value,
+    });
+  }
+
+  setStripInsertParamByName(
+    target: string | number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    if (target === 'master') {
+      this.setMasterStripInsertParamByName(insertIndex, paramName, value);
+      return;
+    }
+    this.setTrackStripInsertParamByName(target, insertIndex, paramName, value);
   }
 
   setMasterChain(sceneJson: string): void {
@@ -2746,6 +2970,10 @@ export class SonareEngine {
     return this.realtimeNode.onMeter(callback);
   }
 
+  onScope(callback: (scope: SonareWorkletScopeSnapshot) => void): () => void {
+    return this.realtimeNode.onScope(callback);
+  }
+
   onTelemetry(callback: (telemetry: SonareEngineTelemetryRecord) => void): () => void {
     return this.realtimeNode.onTelemetry(callback);
   }
@@ -2756,6 +2984,10 @@ export class SonareEngine {
 
   pollMeters(): SonareWorkletMeterSnapshot[] {
     return this.realtimeNode.pollMeters();
+  }
+
+  pollScope(): SonareWorkletScopeSnapshot[] {
+    return this.realtimeNode.pollScope();
   }
 
   destroy(): void {

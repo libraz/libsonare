@@ -5,7 +5,13 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, masteringInsertParamNames } from '../dist/index.js';
+import {
+  init,
+  Mixer,
+  masteringInsertParamInfo,
+  masteringInsertParamNames,
+  masteringProcessorCatalog,
+} from '../dist/index.js';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -23,6 +29,50 @@ describe('insert param validation (WASM)', () => {
     expect(masteringInsertParamNames('eq.parametric')).toContain('band0.frequencyHz');
     // Unknown name -> empty list (no throw).
     expect(masteringInsertParamNames('not.a.real.processor')).toEqual([]);
+  });
+
+  it('reports realtime-automatable insert param descriptors', () => {
+    const info = masteringInsertParamInfo('effects.reverb.fdn');
+    if (info.length === 0) {
+      return; // FX not built in this configuration.
+    }
+    const dryWet = info.find((d) => d.name === 'dryWet');
+    expect(dryWet).toBeDefined();
+    expect(dryWet?.rtSafe).toBe(true);
+    expect(typeof dryWet?.id).toBe('number');
+    // Dattorro publishes a non-realtime-safe param (modDepthSamples).
+    const dat = masteringInsertParamInfo('effects.reverb.dattorro');
+    expect(dat.find((d) => d.name === 'modDepthSamples')?.rtSafe).toBe(false);
+    // Unknown name -> empty list.
+    expect(masteringInsertParamInfo('not.a.real.processor')).toEqual([]);
+  });
+
+  it('classifies processors in the realtime/offline/pair catalog', () => {
+    const catalog = masteringProcessorCatalog();
+    expect(catalog.length).toBeGreaterThan(0);
+    const byId = new Map(catalog.map((entry) => [entry.id, entry]));
+    // Realtime-insertable id.
+    expect(byId.get('dynamics.compressor')).toMatchObject({
+      kind: 'realtime',
+      realtimeInsertable: true,
+      channelPolicy: 'multichannel',
+    });
+    // Pair (two-input match.*) id.
+    expect(byId.get('match.abCrossfade')?.kind).toBe('pair');
+    // Whole-file-only id.
+    expect(byId.get('maximizer.loudnessOptimize')).toMatchObject({
+      kind: 'offline',
+      realtimeInsertable: false,
+    });
+    // stereoOnly is surfaced independently of kind.
+    expect(byId.get('eq.midSide')?.stereoOnly).toBe(true);
+    // channelPolicy: inherently-stereo processors are wrapped on the L/R pair.
+    expect(byId.get('eq.midSide')?.channelPolicy).toBe('stereoPairOnly');
+    expect(byId.get('stereo.imager')?.channelPolicy).toBe('stereoPairOnly');
+    // realtimeInsertable entries form the always-succeeds scene-insert set.
+    const insertable = catalog.filter((entry) => entry.realtimeInsertable).map((entry) => entry.id);
+    expect(insertable).toContain('dynamics.compressor');
+    expect(insertable).not.toContain('maximizer.loudnessOptimize');
   });
 
   it('surfaces silently-ignored insert params as scene warnings', () => {
