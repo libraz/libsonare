@@ -375,13 +375,24 @@ val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
 
   SpectralEditConfig config;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("nFft")) config.n_fft = options["nFft"].as<int>();
-    if (options.hasOwnProperty("hopLength")) config.hop_length = options["hopLength"].as<int>();
+    // Mirror the C-ABI oracle (sonare_spectral_edit): a value of 0 means "keep
+    // the core default" rather than forcing an invalid 0 into the core, which
+    // requires n_fft/hop_length >= 1 and heal_radius_frames >= 1. Previously the
+    // WASM path passed 0 through verbatim and threw where Node/Python succeeded.
+    if (options.hasOwnProperty("nFft")) {
+      const int n_fft = options["nFft"].as<int>();
+      if (n_fft != 0) config.n_fft = n_fft;
+    }
+    if (options.hasOwnProperty("hopLength")) {
+      const int hop_length = options["hopLength"].as<int>();
+      if (hop_length != 0) config.hop_length = hop_length;
+    }
     if (options.hasOwnProperty("window")) {
       config.window = parseSpectralEditWindow(options["window"]);
     }
     if (options.hasOwnProperty("healRadiusFrames")) {
-      config.heal_radius_frames = options["healRadiusFrames"].as<int>();
+      const int heal_radius = options["healRadiusFrames"].as<int>();
+      if (heal_radius != 0) config.heal_radius_frames = heal_radius;
     }
   }
 
@@ -392,6 +403,11 @@ val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
     for (uint32_t i = 0; i < n; ++i) {
       val op = ops[i];
       SpectralRegionOp region;
+      // An omitted endSample defaults to the whole signal (matches the Node
+      // facade, sonare_wrap_effects.cpp). The core defaults end_sample to 0,
+      // which would otherwise make an omitted endSample a silent no-op here while
+      // Node processes the full region.
+      region.end_sample = static_cast<int64_t>(data.size());
       // Sample positions arrive as plain JS numbers; read as double and cast to
       // int64 (mirrors project.cpp's totalFrames) so callers need not pass BigInt.
       if (op.hasOwnProperty("startSample")) {

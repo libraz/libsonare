@@ -254,6 +254,43 @@ describe('newly exposed WASM functions', () => {
     expect(goertzelPower(out, 1000)).toBeGreaterThan(goertzelPower(x, 1000) * 0.5);
   });
 
+  it('spectralEdit omitted endSample spans the whole signal', () => {
+    // An omitted endSample defaults to the signal length (matching Node), so a
+    // mute region with only startSample muted the full band -- previously the
+    // WASM path left end_sample at 0 and silently did nothing.
+    const n = Math.floor(SR * 0.5);
+    const x = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      x[i] =
+        0.4 * Math.sin((2 * Math.PI * 1000 * i) / SR) +
+        0.4 * Math.sin((2 * Math.PI * 5000 * i) / SR);
+    }
+    const out = spectralEdit(x, SR, [{ startSample: 0, lowHz: 4000, highHz: 6000, mode: 'mute' }]);
+    expect(out.length).toBe(n);
+    expect(goertzelPower(out, 5000)).toBeLessThan(goertzelPower(x, 5000) * 0.1);
+  });
+
+  it('spectralEdit healRadiusFrames:0 keeps the core default (matches C ABI)', () => {
+    const x = makeSine(0.5, 440);
+    // 0 means "keep the default" at the C-ABI oracle; WASM must not throw here.
+    const out = spectralEdit(x, SR, [], { healRadiusFrames: 0 });
+    expect(out.length).toBe(x.length);
+    expect(allFinite(out)).toBe(true);
+  });
+
+  it('spectralEdit nFft:0 / hopLength:0 keep the core defaults', () => {
+    const x = makeSine(0.5, 440);
+    const out = spectralEdit(x, SR, [], { nFft: 0, hopLength: 0 });
+    expect(out.length).toBe(x.length);
+    expect(allFinite(out)).toBe(true);
+  });
+
+  it('spectralEdit rejects an out-of-range sampleRate', () => {
+    const x = makeSine(0.1, 440);
+    expect(() => spectralEdit(x, 10, [])).toThrow();
+    expect(() => spectralEdit(x, 1_000_000, [])).toThrow();
+  });
+
   it('hpssWithResidual splits into three signals', () => {
     const r = hpssWithResidual(makeSine(1, 440));
     expect(r.harmonic.length).toBe(r.percussive.length);

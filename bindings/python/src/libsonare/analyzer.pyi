@@ -454,10 +454,10 @@ class SpectralRegionOp:
     mode: str | int
     def __init__(
         self,
-        start_sample: int,
-        end_sample: int,
-        low_hz: float,
-        high_hz: float,
+        start_sample: int = 0,
+        end_sample: int = -1,
+        low_hz: float = 0.0,
+        high_hz: float = 0.0,
         gain_db: float = 0.0,
         mode: str | int = "gain",
     ) -> None: ...

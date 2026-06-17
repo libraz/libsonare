@@ -24,7 +24,7 @@ import type {
 import type { ProgressCallback } from './sonare.js';
 import { RealtimeVoiceChanger } from './streaming_mixing';
 import type { ValidateOptions } from './validation';
-import { assertSamples } from './validation';
+import { assertSampleRate, assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -362,6 +362,7 @@ export function spectralEdit(
   options: SpectralEditOptions & ValidateOptions = {},
 ): Float32Array {
   assertSamples('spectralEdit', samples, options.validate !== false);
+  assertSampleRate('spectralEdit', sampleRate);
   return requireModule().spectralEdit(samples, sampleRate, ops, options as Record<string, unknown>);
 }
 

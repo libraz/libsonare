@@ -377,7 +377,7 @@ export type SpectralEditWindow = 'hann' | 'hamming' | 'blackman' | 'rectangular'
 export interface SpectralRegionOp {
   /** Region time start (input samples); clamped to [0, length]. Default 0. */
   startSample?: number;
-  /** Region time end, exclusive (input samples); clamped to [0, length]. Default 0. */
+  /** Region time end, exclusive (input samples); clamped to [0, length]. Default = signal length. */
   endSample?: number;
   /** Region frequency low edge in Hz; clamped to [0, nyquist]. Default 0. */
   lowHz?: number;

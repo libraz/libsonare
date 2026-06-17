@@ -688,6 +688,9 @@ from .types import (
     RoomEstimate as RoomEstimate,
 )
 from .types import (
+    ScopeTelemetryRecord as ScopeTelemetryRecord,
+)
+from .types import (
     Section as Section,
 )
 from .types import (

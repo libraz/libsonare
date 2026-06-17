@@ -78,6 +78,30 @@ def test_mute_mode_zeros_a_band() -> None:
     assert high_after < high_before * 0.05
 
 
+def test_omitted_end_sample_spans_whole_signal() -> None:
+    # An omitted end_sample (the -1 sentinel) must edit the whole signal, like
+    # the Node/WASM facades whose endSample defaults to the signal length. A
+    # region with start_sample=0 and no end_sample should mute the whole band.
+    x = _sine(1000.0, 0.5) + _sine(5000.0, 0.5)
+    op = libsonare.SpectralRegionOp(start_sample=0, low_hz=4000.0, high_hz=6000.0, mode="mute")
+    out = np.asarray(libsonare.spectral_edit(x, SR, [op]), dtype=np.float32)
+    assert len(out) == len(x)
+    high_before = _band_energy(x, 4000.0, 6000.0)
+    high_after = _band_energy(out, 4000.0, 6000.0)
+    assert high_after < high_before * 0.05
+
+
+def test_heal_radius_frames_zero_uses_core_default() -> None:
+    # heal_radius_frames=0 must succeed (the C-ABI oracle remaps 0 -> default 2),
+    # matching the Node path; only negative values are rejected.
+    x = _sine(440.0, 0.5)
+    out = np.asarray(libsonare.spectral_edit(x, SR, [], heal_radius_frames=0), dtype=np.float32)
+    assert len(out) == len(x)
+    assert np.all(np.isfinite(out))
+    with pytest.raises((ValueError, Exception)):
+        libsonare.spectral_edit(x, SR, [], heal_radius_frames=-1)
+
+
 def test_invalid_parameters_raise() -> None:
     x = _sine(440.0, 0.25)
     with pytest.raises((ValueError, Exception)):

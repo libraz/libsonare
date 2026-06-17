@@ -460,12 +460,16 @@ class SpectralRegionOp:
     Mirrors :class:`SonareSpectralRegionOp`. ``mode`` is one of ``"gain"``,
     ``"attenuate"``, ``"mute"`` or ``"heal"`` (or the matching integer enum
     value from ``SONARE_SPECTRAL_EDIT_MODE_*``).
+
+    An omitted ``end_sample`` (left at the ``-1`` sentinel) spans to the end of
+    the signal, matching the Node/WASM facades where ``endSample`` defaults to
+    the signal length.
     """
 
-    start_sample: int
-    end_sample: int
-    low_hz: float
-    high_hz: float
+    start_sample: int = 0
+    end_sample: int = -1
+    low_hz: float = 0.0
+    high_hz: float = 0.0
     gain_db: float = 0.0
     mode: str | int = "gain"
 
@@ -502,6 +506,13 @@ def spectral_edit(
 
     Returns:
         List of edited samples.
+
+    Note:
+        ``n_fft``/``hop_length``/``heal_radius_frames`` are validated eagerly here
+        and raise :class:`ValueError`, the idiomatic Python contract. The Node and
+        WASM surfaces accept the same valid inputs but delegate rejection to the
+        C++ core, so an invalid value surfaces as a ``SonareError`` there. The
+        accepted input range is identical across surfaces.
     """
     _require_pow2_nfft(n_fft)
     if hop_length <= 0 or hop_length > n_fft // 2:
@@ -524,9 +535,12 @@ def spectral_edit(
     if n_ops > 0:
         c_ops = (SonareSpectralRegionOp * n_ops)()
         for i, op in enumerate(ops):
+            # An omitted end_sample (-1 sentinel) spans to the end of the signal,
+            # matching the Node/WASM facades; the core clamps to [0, length].
+            end_sample = int(op.end_sample) if op.end_sample >= 0 else length
             c_ops[i] = SonareSpectralRegionOp(
                 start_sample=int(op.start_sample),
-                end_sample=int(op.end_sample),
+                end_sample=end_sample,
                 low_hz=float(op.low_hz),
                 high_hz=float(op.high_hz),
                 gain_db=float(op.gain_db),
