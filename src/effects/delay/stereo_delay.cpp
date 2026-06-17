@@ -121,4 +121,9 @@ bool StereoDelay::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> StereoDelay::parameter_descriptors() const {
+  return {
+      {"delayTimeLMs", 0}, {"delayTimeRMs", 1}, {"feedback", 2}, {"pingPong", 3}, {"dryWet", 4}};
+}
+
 }  // namespace sonare::effects::delay

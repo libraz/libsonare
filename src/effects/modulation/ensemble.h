@@ -13,6 +13,7 @@
 /// polarity).
 
 #include <array>
+#include <vector>
 
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
@@ -51,6 +52,7 @@ class Ensemble : public rt::ProcessorBase {
   //   5 = tone_hz        (clamped to [500, 20000])
   //   6 = dry_wet        (clamped to [0, 1])
   bool set_parameter(unsigned int param_id, float value) override;
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   EnsembleConfig config_{};

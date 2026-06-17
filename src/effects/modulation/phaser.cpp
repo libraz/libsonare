@@ -92,6 +92,10 @@ bool Phaser::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Phaser::parameter_descriptors() const {
+  return {{"rateHz", 0}, {"minHz", 1}, {"maxHz", 2}, {"dryWet", 3}};
+}
+
 void Phaser::reset() {
   for (auto& state : x1_) {
     std::fill(state.begin(), state.end(), 0.0f);

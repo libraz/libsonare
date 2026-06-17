@@ -4,6 +4,7 @@
 /// @brief Zero-latency stereo feedback delay.
 
 #include <array>
+#include <vector>
 
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
@@ -36,6 +37,7 @@ class StereoDelay : public rt::ProcessorBase {
   //   3 = ping_pong (clamped to [0, 1] in process())
   //   4 = dry_wet (clamped to [0, 1], smoothed in process())
   bool set_parameter(unsigned int param_id, float value) override;
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   StereoDelayConfig config_{};

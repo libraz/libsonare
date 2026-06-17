@@ -172,4 +172,8 @@ bool ConvolutionReverb::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> ConvolutionReverb::parameter_descriptors() const {
+  return {{"dryWet", 0}};
+}
+
 }  // namespace sonare::effects::reverb

@@ -97,6 +97,10 @@ bool Flanger::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Flanger::parameter_descriptors() const {
+  return {{"rateHz", 0}, {"depthMs", 1}, {"centerDelayMs", 2}, {"feedback", 3}, {"dryWet", 4}};
+}
+
 void Flanger::reset() {
   for (auto& delay : delays_) {
     delay.reset();

@@ -4,6 +4,7 @@
 /// @brief Small colorless-style feedback delay network reverb.
 
 #include <array>
+#include <vector>
 
 #include "effects/common/dc_blocker.h"
 #include "rt/delay_line.h"
@@ -30,6 +31,7 @@ class FdnReverb : public rt::ProcessorBase {
   //   1 = hf_damping (recomputes per-line absorption coefficients in place)
   //   2 = dry_wet (clamped to [0, 1] in process())
   bool set_parameter(unsigned int param_id, float value) override;
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   // Recomputes the per-line one-pole absorption coefficients from the current

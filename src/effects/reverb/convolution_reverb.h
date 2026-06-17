@@ -48,6 +48,7 @@ class ConvolutionReverb : public rt::ProcessorBase {
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = dry_wet (clamped to [0, 1] in process())
   bool set_parameter(unsigned int param_id, float value) override;
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   /// Latency equals the partitioned-convolution block size: input is buffered
   /// until a full partition is available before being processed.

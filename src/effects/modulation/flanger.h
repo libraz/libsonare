@@ -4,6 +4,7 @@
 /// @brief Stereo flanger with feedback.
 
 #include <array>
+#include <vector>
 
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
@@ -34,6 +35,7 @@ class Flanger : public rt::ProcessorBase {
   //   3 = feedback (clamped to [-0.95, 0.95] in process())
   //   4 = dry_wet
   bool set_parameter(unsigned int param_id, float value) override;
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   FlangerConfig config_{};

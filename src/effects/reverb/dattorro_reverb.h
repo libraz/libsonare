@@ -45,6 +45,7 @@ class DattorroReverb : public rt::ProcessorBase {
   // pre-delay buffer and requires prepare().
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   /// @brief Schroeder allpass: out = -g*in + buf[read]; buf[write] = in + g*out.

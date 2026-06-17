@@ -116,6 +116,10 @@ bool FdnReverb::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> FdnReverb::parameter_descriptors() const {
+  return {{"decay", 0}, {"damping", 1}, {"dryWet", 2}};
+}
+
 void FdnReverb::reset() {
   for (auto& delay : delays_) {
     delay.reset();

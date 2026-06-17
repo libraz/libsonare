@@ -95,6 +95,10 @@ bool Chorus::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Chorus::parameter_descriptors() const {
+  return {{"rateHz", 0}, {"depthMs", 1}, {"centerDelayMs", 2}, {"dryWet", 3}};
+}
+
 void Chorus::reset() {
   for (auto& delay : delays_) {
     delay.reset();

@@ -330,6 +330,10 @@ bool DattorroReverb::parameter_is_realtime_safe(unsigned int param_id) const noe
   return param_id != 4u;
 }
 
+std::vector<rt::ParamDescriptor> DattorroReverb::parameter_descriptors() const {
+  return {{"decay", 0}, {"damping", 1}, {"dryWet", 2}, {"modRateHz", 3}, {"modDepthSamples", 4}};
+}
+
 void DattorroReverb::reset() {
   std::fill(pre_delay_buf_.begin(), pre_delay_buf_.end(), 0.0f);
   pre_delay_index_ = 0;

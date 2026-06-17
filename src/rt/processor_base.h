@@ -13,6 +13,19 @@
 
 namespace sonare::rt {
 
+/// @brief Maps a processor's JSON-key parameter name to the integer @c param_id
+///        accepted by @c set_parameter / @c parameter_is_realtime_safe.
+/// @details The construction surface (scene JSON, mastering params) addresses
+///   parameters by string key, while realtime automation addresses them by
+///   integer id. These two namespaces are otherwise disconnected; a processor
+///   that supports realtime parameter changes publishes the bridge here so hosts
+///   can target a param by its familiar JSON key. @c rt_safe is derived from
+///   @c parameter_is_realtime_safe(id) at query time, not stored.
+struct ParamDescriptor {
+  std::string key;
+  unsigned int id = 0;
+};
+
 class ProcessorBase {
  public:
   ProcessorBase() = default;
@@ -111,6 +124,14 @@ class ProcessorBase {
     (void)param_id;
     return true;
   }
+
+  // Publishes the JSON-key -> param_id bridge for this processor so hosts can
+  // target an automatable parameter by its construction-time string key (the
+  // same keys accepted in scene JSON / mastering params) rather than a private
+  // integer id. Default: no named parameters. Control thread only (allocates);
+  // returns static descriptor data and touches no mutable audio state, so it is
+  // safe to call concurrently with process() on the audio thread.
+  virtual std::vector<ParamDescriptor> parameter_descriptors() const { return {}; }
 
   // Opaque instance-state persistence for host session save/restore. save_state
   // appends the processor's full restorable state (preset + automatable

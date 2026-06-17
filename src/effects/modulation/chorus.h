@@ -4,6 +4,7 @@
 /// @brief Stereo chorus built from modulated fractional delays.
 
 #include <array>
+#include <vector>
 
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
@@ -32,6 +33,7 @@ class Chorus : public rt::ProcessorBase {
   //   2 = center_delay_ms
   //   3 = dry_wet
   bool set_parameter(unsigned int param_id, float value) override;
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   ChorusConfig config_{};

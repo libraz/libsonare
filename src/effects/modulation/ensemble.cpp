@@ -123,4 +123,9 @@ bool Ensemble::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Ensemble::parameter_descriptors() const {
+  return {{"rateSlowHz", 0},    {"rateFastHz", 1}, {"depthSlowMs", 2}, {"depthFastMs", 3},
+          {"centerDelayMs", 4}, {"toneHz", 5},     {"dryWet", 6}};
+}
+
 }  // namespace sonare::effects::modulation

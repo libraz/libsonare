@@ -21,7 +21,8 @@ inline constexpr uint32_t kEngineAbiVersion = 3;
 //        kSetParam, kSetParamSmoothed, kTransportPlay, kTransportStop,
 //        kTransportSeekSample, kTransportSeekPpq, kSeekMarker,
 //        kMidiNoteOnImmediate, kMidiNoteOffImmediate, kMidiCcImmediate,
-//        kMidiAllNotesOff (a.k.a. MIDI panic), kSetSoloMute.
+//        kMidiAllNotesOff (a.k.a. MIDI panic), kSetSoloMute,
+//        kSetTrackInsertParam, kSetMasterInsertParam.
 //
 //      Live scalar MIDI commands stay strictly POD: they synthesize a UMP from
 //      packed scalar fields (no pointer, no variable-length payload) and route
@@ -89,6 +90,17 @@ enum class CommandType : uint16_t {
   //   target_id   = ignored (panic is global across the sequencer's table).
   //   sample_time = render frame to fire at.
   kMidiAllNotesOff,
+  // Immediate (live) realtime change of one channel-strip insert parameter.
+  // Applied at the block head via the strip's allocation-free
+  // ChannelStrip::apply_insert_parameter(); the control thread resolves the
+  // JSON-key parameter name to its integer param_id before enqueuing. POD/scalar:
+  //   target_id   = (lane_index << 16) | (insert_index << 8) | param_id.
+  //   sample_time = render frame to fire at (<0 / past => block head).
+  //   arg.f       = parameter value.
+  kSetTrackInsertParam,
+  // Same as kSetTrackInsertParam but targets the master strip (no lane field):
+  //   target_id   = (insert_index << 8) | param_id.
+  kSetMasterInsertParam,
 };
 
 union CommandArg {
