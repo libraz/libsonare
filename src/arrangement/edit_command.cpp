@@ -1221,7 +1221,10 @@ EditCommandPtr RemoveMarkerInternal::invert(const Project& before,
                                             const MidiContentStore& /*store_before*/) const {
   for (const ProjectMarker& m : before.markers()) {
     if (m.id == id_) {
-      return std::make_unique<SetMarker>(id_, m.ppq, m.name);
+      // Restore every field, not just ppq/name: dropping kind/key_fifths/
+      // key_minor would resurrect a key-signature marker as a plain marker and
+      // corrupt the key map on undo.
+      return std::make_unique<SetMarker>(id_, m.ppq, m.name, m.kind, m.key_fifths, m.key_minor);
     }
   }
   return nullptr;

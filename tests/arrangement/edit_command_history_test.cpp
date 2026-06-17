@@ -207,7 +207,9 @@ bool project_equal(const Project& a, const Project& b) {
   if (a.markers().size() != b.markers().size()) return false;
   for (size_t i = 0; i < a.markers().size(); ++i) {
     if (a.markers()[i].id != b.markers()[i].id || a.markers()[i].ppq != b.markers()[i].ppq ||
-        a.markers()[i].name != b.markers()[i].name) {
+        a.markers()[i].name != b.markers()[i].name || a.markers()[i].kind != b.markers()[i].kind ||
+        a.markers()[i].key_fifths != b.markers()[i].key_fifths ||
+        a.markers()[i].key_minor != b.markers()[i].key_minor) {
       return false;
     }
   }
@@ -795,6 +797,34 @@ TEST_CASE("Timeline command round-trips", "[arrangement]") {
     chords.push_back(c);
     check_round_trip(f.project, store, std::make_unique<SetHarmonySegment>(chords));
   }
+}
+
+TEST_CASE("RemoveMarkerInternal invert restores a key-signature marker fully", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+
+  // A key-signature marker (kind 4) carrying key data that a plain
+  // ppq+name-only inverse would silently drop.
+  const uint32_t id = f.project.add_marker(480.0, "key", /*kind=*/4, /*key_fifths=*/-3,
+                                           /*key_minor=*/true);
+
+  const Project before = f.project;
+  RemoveMarkerInternal remove(id);
+  EditCommandPtr inverse = remove.invert(before, store);
+  REQUIRE(inverse != nullptr);
+
+  REQUIRE(remove.apply(f.project, store));
+  REQUIRE(f.project.markers().empty());
+
+  REQUIRE(inverse->apply(f.project, store));
+  REQUIRE(f.project.markers().size() == 1);
+  const ProjectMarker& restored = f.project.markers().front();
+  CHECK(restored.id == id);
+  CHECK(restored.ppq == 480.0);
+  CHECK(restored.name == "key");
+  CHECK(restored.kind == 4);
+  CHECK(restored.key_fifths == -3);
+  CHECK(restored.key_minor == true);
 }
 
 TEST_CASE("SetSampleRate rejects invalid values atomically", "[arrangement]") {
