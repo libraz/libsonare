@@ -37,6 +37,11 @@ class MonitorRuntime {
   void process_strip(size_t index, float* const* channels, int num_channels, int num_samples,
                      int64_t timeline_sample, float* const* monitor_out = nullptr) noexcept;
 
+  /// Snaps every active strip's mute-gain smoother (and the strip's own gain
+  /// stages) to their steady-state targets so the next render block opens
+  /// without a ramp-in, keeping an offline bounce deterministic.
+  void settle() noexcept;
+
   size_t size() const noexcept { return size_.load(std::memory_order_acquire); }
   bool muted(size_t index) const noexcept;
   bool soloed(size_t index) const noexcept;

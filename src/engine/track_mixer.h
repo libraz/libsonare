@@ -187,6 +187,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     // Per-output-plane scatter gains carried block-to-block so a moving surround
     // pan ramps click-free. Unused on the stereo path.
     std::array<float, kMaxBusChannels> surround_gain{};
+    // False until the first surround block has run: the first block snaps the
+    // scatter gains to their target (no fade-in from silence) so a bounce is
+    // deterministic regardless of the pre-roll settle pass, and a live first
+    // block does not click. Subsequent blocks ramp from the carried value.
+    bool surround_primed = false;
   };
 
   struct OwnedStrip {

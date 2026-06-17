@@ -23,6 +23,11 @@ class GainProcessor : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
+  /// Snaps the gain smoother to its current target so the next block starts at
+  /// the steady-state gain instead of ramping in. Used by the engine's
+  /// settle-before-offline-render pass to keep a bounce deterministic.
+  void settle() noexcept;
+
   void set_gain_db(float gain_db) noexcept;
   float gain_db() const noexcept { return gain_db_.load(std::memory_order_relaxed); }
 

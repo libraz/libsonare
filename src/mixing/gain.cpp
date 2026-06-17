@@ -33,6 +33,13 @@ void GainProcessor::reset() {
   smoother_.reset(db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
 }
 
+void GainProcessor::settle() noexcept {
+  // Snap straight to the current steady-state gain (the same target process()
+  // would smooth toward) so the next render block opens at that gain with no
+  // ramp-in, keeping an offline bounce deterministic.
+  smoother_.reset(db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
+}
+
 void GainProcessor::set_gain_db(float gain_db) noexcept {
   gain_db_.store(gain_db, std::memory_order_relaxed);
 }
@@ -45,6 +52,12 @@ void GainProcessor::add_vca_group_offset_db(float delta_db) noexcept {
   // VCA-group contributions accumulate (a strip may belong to several groups).
   // Group membership changes are serialized on the control thread, so a plain
   // load/store read-modify-write is sufficient here.
+  //
+  // The offset is maintained as a running sum of dB deltas, so repeated group
+  // gain moves accumulate float32 rounding error. The drift is bounded by
+  // ~epsilon * (number of moves) in dB and is inaudible for any realistic
+  // session; a member's exact offset could be recomputed from the owning groups
+  // if a registry existed, but that precision is not worth the coupling here.
   vca_group_offset_db_.store(vca_group_offset_db_.load(std::memory_order_relaxed) + delta_db,
                              std::memory_order_relaxed);
 }

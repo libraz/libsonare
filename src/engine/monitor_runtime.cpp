@@ -175,4 +175,14 @@ void MonitorRuntime::update_target(StripState& state) noexcept {
   state.mute_gain.set_target(effectively_muted ? 0.0f : 1.0f);
 }
 
+void MonitorRuntime::settle() noexcept {
+  const size_t count = size_.load(std::memory_order_acquire);
+  for (size_t i = 0; i < count; ++i) {
+    StripState& state = strips_[i];
+    update_target(state);
+    state.mute_gain.reset(state.mute_gain.target());
+    if (state.strip != nullptr) state.strip->settle();
+  }
+}
+
 }  // namespace sonare::engine

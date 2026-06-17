@@ -514,6 +514,15 @@ void ChannelStrip::reset() {
   zero_taps(send_temp_, kPreparedChannels, max_block_size_);
 }
 
+void ChannelStrip::settle() noexcept {
+  // Snap the gain stages to their steady-state targets so the first rendered
+  // block does not ramp in from the previous gain. Unlike reset(), this does
+  // not clear automation, meters, or insert state -- it only quiesces the
+  // gain smoothers ahead of a deterministic offline render.
+  input_trim_.settle();
+  fader_.settle();
+}
+
 int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
 
 int ChannelStrip::latency_samples_q8() const noexcept { return post_fader_latency_samples_q8(); }

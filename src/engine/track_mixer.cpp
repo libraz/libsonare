@@ -471,6 +471,9 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
     lane.fader_db.reset(lane.fader_db.target());
     lane.pan.reset(lane.pan.target());
     lane.gate.reset(lane.gate.target());
+    // Quiesce the lane's channel-strip gain stages too so the first rendered
+    // block opens without an insert/fader ramp-in.
+    if (lane.strip != nullptr) lane.strip->settle();
   }
   for (BusState& bus : bus_states_) {
     bus.gain_db.reset(bus.gain_db.target());
@@ -777,6 +780,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.mute = false;
     lane.strip = nullptr;
     lane.surround_gain.fill(0.0f);
+    lane.surround_primed = false;
   };
 
   for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
@@ -1098,6 +1102,16 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
     return;
   }
   const int planes = std::min(dest_channels, mixing::kMaxSurroundPlanes);
+  // First surround block for this lane: snap the carried scatter gains to the
+  // target so the block starts at full placement instead of fading in from
+  // silence. This makes an offline bounce deterministic (no dependence on a
+  // pre-roll settle pass) and avoids a first-block click live.
+  if (!lane.surround_primed) {
+    for (int p = 0; p < planes; ++p) {
+      lane.surround_gain[static_cast<size_t>(p)] = target.gain[static_cast<size_t>(p)];
+    }
+    lane.surround_primed = true;
+  }
   const float inv_n = num_samples > 0 ? 1.0f / static_cast<float>(num_samples) : 0.0f;
   for (int i = 0; i < num_samples; ++i) {
     const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);

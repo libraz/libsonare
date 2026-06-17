@@ -3,6 +3,7 @@
 /// @file channel_strip.h
 /// @brief Commercial-grade channel strip: EQ, fader, pan, meter, and aux sends.
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -67,6 +68,11 @@ class ChannelStrip : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void process_at(float* const* channels, int num_channels, int num_samples, int64_t block_start);
   void reset() override;
+  /// Snaps the strip's gain-stage smoothers (input trim + fader) to their
+  /// steady-state targets so the next render block opens without a ramp-in,
+  /// keeping an offline bounce deterministic. Pan/width/EQ smoothers settle over
+  /// their short (~5 ms) window on the first block and are not snapped here.
+  void settle() noexcept;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
   int tail_samples() const noexcept override;
@@ -120,10 +126,13 @@ class ChannelStrip : public rt::ProcessorBase {
   // destinations). Stored as atomics so the audio thread can read it while a
   // control-thread setter updates it. Inert for stereo output.
   void set_surround_pan_params(const SurroundPanParams& p) noexcept {
-    surround_azimuth_.store(p.azimuth, std::memory_order_relaxed);
+    // Clamp on store so a read-back via surround_pan_params() reports the same
+    // effective values SurroundPannerProcessor::set_params would, and matches
+    // the clamping compute_surround_pan_gains applies at render time.
+    surround_azimuth_.store(std::clamp(p.azimuth, -180.0f, 180.0f), std::memory_order_relaxed);
     surround_elevation_.store(p.elevation, std::memory_order_relaxed);
-    surround_divergence_.store(p.divergence, std::memory_order_relaxed);
-    surround_lfe_.store(p.lfe, std::memory_order_relaxed);
+    surround_divergence_.store(std::clamp(p.divergence, 0.0f, 1.0f), std::memory_order_relaxed);
+    surround_lfe_.store(std::clamp(p.lfe, 0.0f, 1.0f), std::memory_order_relaxed);
     surround_distance_.store(p.distance, std::memory_order_relaxed);
   }
   SurroundPanParams surround_pan_params() const noexcept {

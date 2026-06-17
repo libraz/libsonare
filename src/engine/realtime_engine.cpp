@@ -1363,6 +1363,9 @@ void RealtimeEngine::settle_parameters() noexcept {
 #if defined(SONARE_WITH_MIXING)
   track_mixer_runtime_.settle_smoothers();
 #endif
+  // Quiesce the engine-side monitor (solo/mute) smoothers and their strips so a
+  // bounce that starts muted/soloed opens at the steady-state gain.
+  monitor_runtime_.settle();
 }
 
 void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexcept {
