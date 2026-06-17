@@ -243,8 +243,10 @@ TEST_CASE("MidiFx handles MIDI 2.0 note events without down-converting", "[midi]
   REQUIRE(out.events[0].ump.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
   REQUIRE(out.events[0].ump.channel() == 3);
   REQUIRE(out.events[0].ump.note_number() == 72);
-  REQUIRE(static_cast<uint16_t>(out.events[0].ump.words[1] >> 16u) ==
-          sonare::midi::scale_velocity_7_to_16(32));
+  // Velocity is shaped in the full 16-bit domain: 0x8000 (32768) scaled by 0.5
+  // is 16384, with no lossy 7-bit round-trip (which would have collapsed the
+  // input to scale_velocity_16_to_7(0x8000)=64, halved to 32, then re-expanded).
+  REQUIRE(static_cast<uint16_t>(out.events[0].ump.words[1] >> 16u) == 16384);
   REQUIRE(out.events[1].ump.note_number() == 79);
   REQUIRE(out.events[2].ump.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
   REQUIRE(out.events[2].ump.is_note_off());

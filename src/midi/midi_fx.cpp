@@ -57,6 +57,14 @@ int clamp_velocity_on(int velocity) noexcept {
   return velocity;
 }
 
+int clamp_velocity16_on(int velocity) noexcept {
+  // MIDI 2.0 equivalent of clamp_velocity_on: keep at least 1 (never a
+  // note-off) and cap at the full 16-bit range.
+  if (velocity < 1) return 1;
+  if (velocity > 65535) return 65535;
+  return velocity;
+}
+
 float clamp01(float v) noexcept {
   if (v < 0.0f) return 0.0f;
   if (v > 1.0f) return 1.0f;
@@ -137,6 +145,21 @@ uint8_t note_velocity7(const Ump& ump) noexcept {
   return midi1_velocity7(ump);
 }
 
+uint16_t note_velocity16(const Ump& ump) noexcept {
+  if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+    return static_cast<uint16_t>(ump.words[1] >> 16u);
+  }
+  return scale_velocity_7_to_16(midi1_velocity7(ump));
+}
+
+/// Rewrites a MIDI 2.0 note-on velocity in the full 16-bit domain, preserving
+/// the note number and note-on attribute bytes.
+Ump make_midi2_note_on_velocity16(const Ump& src, uint8_t note, uint16_t velocity16) noexcept {
+  const uint8_t attr_type = static_cast<uint8_t>(src.words[0] & 0xFFu);
+  const uint16_t attr_data = static_cast<uint16_t>(src.words[1] & 0xFFFFu);
+  return make_midi2_note_on(src.group, src.channel(), note, velocity16, attr_type, attr_data);
+}
+
 Ump make_note(const Ump& src, bool note_on, uint8_t note, uint8_t velocity7) noexcept {
   if (src.message_type() == UmpMessageType::kMidi2ChannelVoice) {
     const uint16_t velocity16 = scale_velocity_7_to_16(velocity7);
@@ -204,16 +227,28 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
     }
 
     // ---- 2. Velocity curve (note-on only) ----
+    // The curve is defined in normalized [0, 1] space so the same config maps
+    // cleanly onto either resolution: MIDI 2.0 notes are shaped in the full
+    // 16-bit domain (no 7-bit round-trip), MIDI 1.0 notes in the 7-bit domain.
+    // `offset` is in 7-bit velocity units, so it normalizes by 127.
     if (velocity_.enabled && note_on) {
-      const float v = static_cast<float>(note_velocity7(ev.ump));
-      float shaped = v;
+      const bool midi2 = ev.ump.message_type() == UmpMessageType::kMidi2ChannelVoice;
+      const float full_scale = midi2 ? 65535.0f : 127.0f;
+      const float raw =
+          static_cast<float>(midi2 ? note_velocity16(ev.ump) : note_velocity7(ev.ump));
+      float normalized = raw / full_scale;
       if (velocity_.gamma != 1.0f && velocity_.gamma > 0.0f) {
-        const float normalized = v / 127.0f;
-        shaped = std::pow(normalized, velocity_.gamma) * 127.0f;
+        normalized = std::pow(normalized, velocity_.gamma);
       }
-      shaped = shaped * velocity_.scale + velocity_.offset;
-      const int mapped = clamp_velocity_on(static_cast<int>(std::lround(shaped)));
-      ev.ump = make_note(ev.ump, true, ev.ump.note_number(), static_cast<uint8_t>(mapped));
+      const float shaped = normalized * velocity_.scale + velocity_.offset / 127.0f;
+      if (midi2) {
+        const int mapped = clamp_velocity16_on(static_cast<int>(std::lround(shaped * 65535.0f)));
+        ev.ump = make_midi2_note_on_velocity16(ev.ump, ev.ump.note_number(),
+                                               static_cast<uint16_t>(mapped));
+      } else {
+        const int mapped = clamp_velocity_on(static_cast<int>(std::lround(shaped * 127.0f)));
+        ev.ump = make_note(ev.ump, true, ev.ump.note_number(), static_cast<uint8_t>(mapped));
+      }
     }
 
     // ---- 3. Chord expansion (note-on/off) ----
@@ -290,8 +325,9 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
 
           MidiEvent on_ev;
           on_ev.render_frame = onset;
-          on_ev.ump =
-              make_note(ev.ump, true, static_cast<uint8_t>(arp_note), note_velocity7(ev.ump));
+          // Preserve the source velocity at its native resolution (full 16-bit
+          // for MIDI 2.0) instead of round-tripping through 7 bits.
+          on_ev.ump = make_note_preserving_velocity(ev.ump, true, static_cast<uint8_t>(arp_note));
           shape_and_push(on_ev, ordinal++);
 
           MidiEvent off_ev;
@@ -311,7 +347,9 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
         if (per_note_controller) {
           note_ev.ump = make_per_note_controller_preserving_value(ev.ump, notes[n]);
         } else {
-          note_ev.ump = make_note(ev.ump, note_on, notes[n], note_velocity7(ev.ump));
+          // Preserve the source velocity at its native resolution (full 16-bit
+          // for MIDI 2.0) instead of round-tripping through 7 bits.
+          note_ev.ump = make_note_preserving_velocity(ev.ump, note_on, notes[n]);
         }
         shape_and_push(note_ev, i);
       }
