@@ -154,6 +154,19 @@ bool ParametricEq::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> ParametricEq::parameter_descriptors() const {
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(kMaxBands * 3u);
+  // Keys mirror the construction-time band prefix (configure_parametric): band<b>.<field>.
+  for (unsigned int b = 0; b < kMaxBands; ++b) {
+    const std::string prefix = "band" + std::to_string(b) + ".";
+    descriptors.push_back({prefix + "frequencyHz", b * 3u + 0u});
+    descriptors.push_back({prefix + "gainDb", b * 3u + 1u});
+    descriptors.push_back({prefix + "q", b * 3u + 2u});
+  }
+  return descriptors;
+}
+
 void ParametricEq::clear_band(size_t index) {
   validate_band_index(index);
   bands_[index] = {};

@@ -81,6 +81,8 @@ class RoomMorphProcessor : public rt::ProcessorBase {
   ///   0 = wet (target-room mix, [0,1])
   ///   1 = source_tail_suppression ([0,1])
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=dryWet, 1=sourceTailSuppression
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   /// Synthesized target RIR length in samples (valid after `prepare`).
   int target_ir_size() const noexcept { return reverb_.ir_size(); }

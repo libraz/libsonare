@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstddef>
+#include <vector>
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
@@ -30,6 +31,8 @@ class GraphicEq : public rt::ProcessorBase {
   //                             band Q is derived from gain via
   //                             band_q_for_gain_db()).
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: id b (0 .. kNumBands-1) = "band<b>GainDb".
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   float gain_db(size_t index) const;
   float center_frequency(size_t index) const;

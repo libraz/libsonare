@@ -272,6 +272,25 @@ bool DynamicEq::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> DynamicEq::parameter_descriptors() const {
+  // Mirror set_parameter's per-band id layout (kParamsPerBand fields per band,
+  // band b occupying ids kParamsPerBand*b .. +10) using the same camelCase keys
+  // accepted at construction (see configure_dynamic_eq_bands), prefixed with the
+  // band index so name-addressed automation resolves to the correct band.
+  static constexpr std::array<const char*, kParamsPerBand> kFieldKeys{
+      "frequencyHz", "staticGainDb",    "q",        "thresholdDb", "ratio",      "rangeDb",
+      "sidechainQ",  "sidechainFreqHz", "attackMs", "releaseMs",   "lookaheadMs"};
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(kMaxBands * kParamsPerBand);
+  for (unsigned int b = 0; b < kMaxBands; ++b) {
+    const std::string prefix = "band" + std::to_string(b) + ".";
+    for (unsigned int field = 0; field < kParamsPerBand; ++field) {
+      descriptors.push_back({prefix + kFieldKeys[field], b * kParamsPerBand + field});
+    }
+  }
+  return descriptors;
+}
+
 void DynamicEq::validate_index(size_t index) {
   if (index >= kMaxBands) {
     throw SonareException(ErrorCode::InvalidParameter, "dynamic EQ band index out of range");

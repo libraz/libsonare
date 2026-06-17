@@ -129,6 +129,10 @@ bool AirBand::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> AirBand::parameter_descriptors() const {
+  return {{"amount", 0}, {"shelfFrequencyHz", 1}, {"dynamicThresholdDb", 2}, {"dynamicRangeDb", 3}};
+}
+
 void AirBand::validate_config(const AirBandConfig& config) {
   if (!(config.amount >= 0.0f && config.amount <= 1.0f) || !(config.shelf_frequency_hz > 0.0f) ||
       config.dynamic_range_db < 0.0f) {

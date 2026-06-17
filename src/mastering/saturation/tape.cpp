@@ -173,6 +173,11 @@ bool Tape::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Tape::parameter_descriptors() const {
+  return {{"driveDb", 0},  {"saturation", 1}, {"hysteresis", 2}, {"outputGainDb", 3},
+          {"speedIps", 4}, {"headBumpDb", 5}, {"bias", 6},       {"gapLoss", 7}};
+}
+
 void Tape::validate_config(const TapeConfig& config) {
   if (config.saturation < 0.0f || config.saturation > 1.0f || config.hysteresis < 0.0f ||
       config.hysteresis > 1.0f || config.speed_ips <= 0.0f || config.head_bump_db < 0.0f ||

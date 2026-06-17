@@ -3,6 +3,8 @@
 /// @file imager.h
 /// @brief Stereo width processor.
 
+#include <vector>
+
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
@@ -30,6 +32,8 @@ class Imager : public rt::ProcessorBase {
   //   1 = output_gain_db
   //   2 = decorrelation_amount (clamped to [0, 1])
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=width, 1=outputGainDb, 2=decorrelationAmount
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   struct Allpass {

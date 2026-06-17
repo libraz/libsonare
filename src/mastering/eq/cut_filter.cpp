@@ -185,6 +185,10 @@ bool CutFilter::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> CutFilter::parameter_descriptors() const {
+  return {{"highPassFrequencyHz", 0}, {"highPassQ", 1}, {"lowPassFrequencyHz", 2}, {"lowPassQ", 3}};
+}
+
 void CutFilter::apply_high_pass() {
   high_pass_.frequency_hz = clamp_frequency(high_pass_.frequency_hz, sample_rate_);
   build_sections(high_pass_sections_, EqBandType::HighPass, high_pass_.frequency_hz, high_pass_.q,

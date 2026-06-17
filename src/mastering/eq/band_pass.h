@@ -3,6 +3,8 @@
 /// @file band_pass.h
 /// @brief Dedicated band-pass and notch filters.
 
+#include <vector>
+
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
 
@@ -28,6 +30,8 @@ class BandPassEq : public rt::ProcessorBase {
   //   2 = notch frequency_hz (clamped to (0 Hz, Nyquist))
   //   3 = notch Q (clamped to > 0)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=bandPassFrequencyHz, 1=bandPassQ, 2=notchFrequencyHz, 3=notchQ
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   const EqBand& band_pass() const;
   const EqBand& notch() const;

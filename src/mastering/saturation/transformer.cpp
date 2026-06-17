@@ -72,6 +72,10 @@ bool Transformer::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Transformer::parameter_descriptors() const {
+  return {{"driveDb", 0}, {"asymmetry", 1}, {"mix", 2}};
+}
+
 void Transformer::validate_config(const TransformerConfig& config) {
   if (config.mix < 0.0f || config.mix > 1.0f || config.asymmetry < -1.0f ||
       config.asymmetry > 1.0f) {

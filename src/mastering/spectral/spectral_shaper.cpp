@@ -146,6 +146,11 @@ bool SpectralShaper::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> SpectralShaper::parameter_descriptors() const {
+  return {{"threshold", 0}, {"amount", 1},    {"frequencyHz", 2}, {"highFrequencyHz", 3},
+          {"attackMs", 4},  {"releaseMs", 5}, {"rangeDb", 6}};
+}
+
 void SpectralShaper::validate_config(const SpectralShaperConfig& config) {
   if (!(config.threshold >= 0.0f) || !(config.amount >= 0.0f && config.amount <= 1.0f) ||
       !(config.frequency_hz > 0.0f) || !(config.high_frequency_hz > config.frequency_hz) ||

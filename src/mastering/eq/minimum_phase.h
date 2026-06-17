@@ -7,6 +7,8 @@
 /// reconstruction engine. It exposes the low-latency Natural Phase path by
 /// forcing supported bands through the Vicanek coefficient design.
 
+#include <vector>
+
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
 
@@ -31,6 +33,10 @@ class MinimumPhaseEq : public rt::ProcessorBase {
   bool set_parameter(unsigned int param_id, float value) override {
     return eq_.set_parameter(param_id, value);
   }
+
+  // Automatable parameters: band `b` -> 3*b=band{b}.frequencyHz,
+  // 3*b+1=band{b}.gainDb, 3*b+2=band{b}.q, for b in [0, kMaxBands).
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   const EqBand& band(size_t index) const;
   int latency_samples() const noexcept override { return 0; }

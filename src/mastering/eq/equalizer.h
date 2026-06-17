@@ -49,6 +49,9 @@ class EqualizerProcessor : public rt::ProcessorBase {
   /// @return true if the id maps to a valid band/parameter and was applied.
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
+  // Automatable parameters per band b (ids 3*b + field), keyed as
+  // "band<b>.<key>": field 0=frequencyHz, 1=gainDb, 2=q.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   void set_phase_mode(PhaseMode mode);
   PhaseMode phase_mode() const noexcept { return phase_mode_; }

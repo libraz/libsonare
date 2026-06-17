@@ -83,6 +83,10 @@ bool MultibandExciter::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> MultibandExciter::parameter_descriptors() const {
+  return {{"frequencyHz", 0}, {"driveDb", 1}, {"amount", 2}, {"q", 3}, {"evenOddMix", 4}};
+}
+
 void MultibandExciter::validate_config(const MultibandExciterConfig& config) {
   if (config.bands.size() != config.crossover.cutoffs_hz.size() + 1) {
     throw SonareException(ErrorCode::InvalidParameter,

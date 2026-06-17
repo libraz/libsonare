@@ -86,6 +86,10 @@ bool HaasEnhancer::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> HaasEnhancer::parameter_descriptors() const {
+  return {{"delayMs", 0}, {"mix", 1}};
+}
+
 bool HaasEnhancer::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // delay_ms reallocates the delay line; everything else is an in-place scalar.
   return param_id != 0;

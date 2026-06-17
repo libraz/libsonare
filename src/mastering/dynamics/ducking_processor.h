@@ -3,6 +3,8 @@
 /// @file ducking_processor.h
 /// @brief Thin sidechain ducking wrapper for mix/voiceover workflows.
 
+#include <vector>
+
 #include "mastering/dynamics/sidechain_router.h"
 
 namespace sonare::mastering::dynamics {
@@ -49,6 +51,8 @@ class DuckingProcessor : public rt::ProcessorBase {
   //   4 = range_db (clamped to >= 0)
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static SidechainRouterConfig to_router_config(const DuckingConfig& config);

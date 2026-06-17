@@ -165,4 +165,9 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> AmpSim::parameter_descriptors() const {
+  return {{"drive", 0},    {"bassDb", 1},     {"midDb", 2},
+          {"trebleDb", 3}, {"presenceDb", 4}, {"levelDb", 5}};
+}
+
 }  // namespace sonare::mastering::saturation

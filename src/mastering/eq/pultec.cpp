@@ -191,6 +191,18 @@ bool PultecEq::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> PultecEq::parameter_descriptors() const {
+  return {{"lowFrequencyHz", 0},
+          {"lowBoost", 1},
+          {"lowAttenuation", 2},
+          {"highBoostFrequencyHz", 3},
+          {"highBoost", 4},
+          {"highBandwidth", 5},
+          {"highAttenuationFrequencyHz", 6},
+          {"highAttenuation", 7},
+          {"outputDrive", 8}};
+}
+
 float PultecEq::clamp_amount(float amount) { return std::clamp(amount, 0.0f, 10.0f); }
 
 float PultecEq::validate_frequency(float frequency_hz) {

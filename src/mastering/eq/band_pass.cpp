@@ -35,6 +35,10 @@ bool BandPassEq::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> BandPassEq::parameter_descriptors() const {
+  return {{"bandPassFrequencyHz", 0}, {"bandPassQ", 1}, {"notchFrequencyHz", 2}, {"notchQ", 3}};
+}
+
 void BandPassEq::clear_band_pass() { eq_.clear_band(0); }
 
 void BandPassEq::clear_notch() { eq_.clear_band(1); }

@@ -33,6 +33,8 @@ class PhaseAlign : public rt::ProcessorBase {
   //       and therefore the delay-line size are unchanged, so the Lagrange
   //       interpolator simply reads the new fraction on the next sample)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=fractionalDelaySamples
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const PhaseAlignConfig& config);

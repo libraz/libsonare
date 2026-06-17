@@ -1,6 +1,7 @@
 #include "mastering/eq/mid_side_eq.h"
 
 #include <algorithm>
+#include <string>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
@@ -83,6 +84,25 @@ void MidSideEq::clear_side_band(size_t index) { side_eq_.clear_band(index); }
 void MidSideEq::clear() {
   mid_eq_.clear();
   side_eq_.clear();
+}
+
+std::vector<rt::ParamDescriptor> MidSideEq::parameter_descriptors() const {
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(6 * kMaxBands);
+  constexpr unsigned int kSideBase = 3u * static_cast<unsigned int>(kMaxBands);
+  for (unsigned int b = 0; b < static_cast<unsigned int>(kMaxBands); ++b) {
+    const std::string mid = "midBand" + std::to_string(b) + ".";
+    descriptors.push_back({mid + "frequencyHz", 3u * b});
+    descriptors.push_back({mid + "gainDb", 3u * b + 1u});
+    descriptors.push_back({mid + "q", 3u * b + 2u});
+  }
+  for (unsigned int b = 0; b < static_cast<unsigned int>(kMaxBands); ++b) {
+    const std::string side = "sideBand" + std::to_string(b) + ".";
+    descriptors.push_back({side + "frequencyHz", kSideBase + 3u * b});
+    descriptors.push_back({side + "gainDb", kSideBase + 3u * b + 1u});
+    descriptors.push_back({side + "q", kSideBase + 3u * b + 2u});
+  }
+  return descriptors;
 }
 
 const EqBand& MidSideEq::mid_band(size_t index) const { return mid_eq_.band(index); }

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string>
 
 #include "util/exception.h"
 
@@ -54,6 +55,16 @@ bool GraphicEq::set_parameter(unsigned int param_id, float value) {
   gains_db_[index] = value;
   rebuild_band(index);
   return true;
+}
+
+std::vector<rt::ParamDescriptor> GraphicEq::parameter_descriptors() const {
+  // Construction-time keys mirror configure_graphic(): "band<index>GainDb".
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(kNumBands);
+  for (unsigned int index = 0; index < kNumBands; ++index) {
+    descriptors.push_back({"band" + std::to_string(index) + "GainDb", index});
+  }
+  return descriptors;
 }
 
 void GraphicEq::set_gain_for_frequency(float frequency_hz, float gain_db) {

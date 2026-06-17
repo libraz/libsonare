@@ -290,6 +290,19 @@ bool LinearPhaseEq::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> LinearPhaseEq::parameter_descriptors() const {
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(kMaxBands * 3u);
+  // Keys mirror the construction-time band prefix (configure_parametric): band<b>.<field>.
+  for (unsigned int b = 0; b < kMaxBands; ++b) {
+    const std::string prefix = "band" + std::to_string(b) + ".";
+    descriptors.push_back({prefix + "frequencyHz", b * 3u + 0u});
+    descriptors.push_back({prefix + "gainDb", b * 3u + 1u});
+    descriptors.push_back({prefix + "q", b * 3u + 2u});
+  }
+  return descriptors;
+}
+
 bool LinearPhaseEq::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   (void)param_id;
   return false;

@@ -201,6 +201,11 @@ bool VocalRider::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> VocalRider::parameter_descriptors() const {
+  return {{"targetDb", 0},  {"maxBoostDb", 1},   {"maxCutDb", 2},        {"attackMs", 3},
+          {"releaseMs", 4}, {"outputGainDb", 5}, {"gainSmoothingMs", 6}, {"noiseFloorDb", 7}};
+}
+
 void VocalRider::validate_config(const VocalRiderConfig& config) {
   if (config.max_boost_db < 0.0f || config.max_cut_db < 0.0f || config.attack_ms < 0.0f ||
       config.release_ms < 0.0f || config.gain_smoothing_ms < 0.0f) {

@@ -66,6 +66,9 @@ class DeEsser : public rt::ProcessorBase {
   //   5 = range_db (clamped to >= 0)
   //   6 = bandpass_q (clamped to > 0)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=frequencyHz, 1=thresholdDb, 2=ratio, 3=attackMs, 4=releaseMs,
+  // 5=rangeDb, 6=bandpassQ
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const DeEsserConfig& config);

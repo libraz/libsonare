@@ -3,6 +3,8 @@
 /// @file auto_pan.h
 /// @brief LFO-based stereo auto panner.
 
+#include <vector>
+
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
@@ -29,6 +31,8 @@ class AutoPan : public rt::ProcessorBase {
   //   1 = depth (clamped to [0, 1])
   //   2 = phase
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=rateHz, 1=depth, 2=phase
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const AutoPanConfig& config);

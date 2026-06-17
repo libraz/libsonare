@@ -55,13 +55,18 @@ class Gate : public rt::ProcessorBase {
   const GateConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
 
-  // Automatable parameters (RT-safe; attack/release coeffs are recomputed per
-  // block inside process(), so they take effect on the next block):
+  // RT-safe: set_parameter updates the audio thread's live working config
+  // (active_) in place and re-derives coefficients without publishing a snapshot
+  // (no allocation), so it is safe to apply from the audio callback. The
+  // control-thread mirror (config_) is kept in sync so config() reads back the
+  // automated state; only the snapshot publish (the allocation) is dropped.
   //   0 = threshold_db (close_threshold_db kept <= threshold_db)
   //   1 = attack_ms (clamped to >= 0)
   //   2 = release_ms (clamped to >= 0)
   //   3 = range_db (clamped to <= 0)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=thresholdDb, 1=attackMs, 2=releaseMs, 3=rangeDb.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const GateConfig& config);
@@ -92,6 +97,11 @@ class Gate : public rt::ProcessorBase {
   ///        from this, the audio thread re-runs @ref update_coefficients
   ///        before processing.
   const GateConfig* applied_snapshot_ = nullptr;
+  /// @brief The audio thread's live working configuration. Seeded from the
+  ///        adopted snapshot on each set_config change and mutated in place by
+  ///        @ref set_parameter (RT-safe automation, no publish). The per-sample
+  ///        loop reads this, not the snapshot.
+  GateConfig active_{};
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

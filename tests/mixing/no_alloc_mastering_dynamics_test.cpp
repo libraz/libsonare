@@ -206,3 +206,88 @@ TEST_CASE("ChannelStrip add_insert enforces kMaxInserts cap", "[mixing][rt-safet
   REQUIRE_THROWS_AS(strip.add_post_insert(std::make_unique<ScaleProcessor>(1.0f)),
                     sonare::SonareException);
 }
+
+// ============================================================================
+// H-1 regression: realtime automation of dynamics inserts must not allocate on
+// the audio thread, and parameter_is_realtime_safe() must honestly report which
+// parameters the mixing automation path may apply from the audio callback.
+// ============================================================================
+
+#include "mastering/dynamics/brickwall_limiter.h"
+#include "mastering/dynamics/limiter.h"
+
+TEST_CASE("Limiter set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The limiter reads derived scalars (threshold_db_ / release_coeff_) in its
+  // per-sample loop, so set_parameter updates them in place with no shared_ptr
+  // publish. Automating ceiling/release from the audio thread must not allocate,
+  // and the parameters must report realtime-safe so the mixing path applies them.
+  sonare::mastering::dynamics::Limiter limiter({-3.0f, 1.0f, 50.0f});
+  limiter.prepare(48000.0, 128);
+  REQUIRE(limiter.parameter_is_realtime_safe(0));
+  REQUIRE(limiter.parameter_is_realtime_safe(1));
+  {
+    AllocationGuard guard;
+    REQUIRE(limiter.set_parameter(0, -6.0f));
+    REQUIRE(limiter.set_parameter(1, 80.0f));
+    REQUIRE(guard.count() == 0);
+  }
+  // The in-place threshold update takes effect without a snapshot publish: a
+  // full-scale block is limited toward the new -6 dB ceiling.
+  std::array<float, 128> buf{};
+  buf.fill(1.0f);
+  float* chans[] = {buf.data()};
+  limiter.process(chans, 1, 128);
+  REQUIRE(buf[127] < 0.6f);  // ~ -6 dB ceiling (0.501) plus lookahead smoothing
+}
+
+TEST_CASE("Compressor set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The compressor reads a live working config (active_) in its per-sample loop;
+  // set_parameter mutates active_ and re-derives coefficients in place with no
+  // snapshot publish, so audio-thread automation must not allocate, and every
+  // parameter must report realtime-safe so the mixing path applies it.
+  sonare::mastering::dynamics::Compressor compressor;
+  compressor.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 12; ++id) {
+    REQUIRE(compressor.parameter_is_realtime_safe(id));
+  }
+  {
+    AllocationGuard guard;
+    REQUIRE(compressor.set_parameter(0, -48.0f));  // threshold
+    REQUIRE(compressor.set_parameter(1, 8.0f));    // ratio
+    REQUIRE(compressor.set_parameter(7, 1.0f));    // detector mode
+    REQUIRE(guard.count() == 0);
+  }
+  // In-place threshold/ratio drop takes effect without a publish: a loud tone is
+  // compressed below its input level.
+  std::array<float, 128> buf{};
+  buf.fill(0.8f);
+  float* chans[] = {buf.data()};
+  compressor.process(chans, 1, 128);
+  REQUIRE(std::abs(buf[127]) < 0.8f);
+}
+
+TEST_CASE("Gate and BrickwallLimiter set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // Both read a live working config (active_) in process(); set_parameter mutates
+  // it in place (gate re-derives coefficients; brickwall forwards ceiling/release
+  // to the inner limiter's in-place setters) with no snapshot publish.
+  sonare::mastering::dynamics::Gate gate({-50.0f, 2.0f, 80.0f, -80.0f, 0.0f, -50.0f, 120.0f});
+  gate.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 4; ++id) {
+    REQUIRE(gate.parameter_is_realtime_safe(id));
+  }
+  sonare::mastering::dynamics::BrickwallLimiter brickwall;
+  brickwall.prepare(48000.0, 128);
+  REQUIRE(brickwall.parameter_is_realtime_safe(0));
+  REQUIRE(brickwall.parameter_is_realtime_safe(1));
+  {
+    AllocationGuard guard;
+    REQUIRE(gate.set_parameter(0, -40.0f));
+    REQUIRE(gate.set_parameter(2, 120.0f));
+    REQUIRE(brickwall.set_parameter(0, -3.0f));
+    REQUIRE(brickwall.set_parameter(1, 100.0f));
+    REQUIRE(guard.count() == 0);
+  }
+}

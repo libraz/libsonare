@@ -28,6 +28,7 @@ using Catch::Matchers::WithinAbs;
 using sonare::mastering::api::chain_config_from_json;
 using sonare::mastering::api::chain_config_to_json;
 using sonare::mastering::api::insert_factory_names;
+using sonare::mastering::api::insert_param_info_json;
 using sonare::mastering::api::insert_param_names;
 using sonare::mastering::api::make_insert;
 using sonare::mastering::api::make_insert_with_ir;
@@ -592,6 +593,40 @@ TEST_CASE("offline->realtime candidate processors are already realtime-insertabl
       REQUIRE_FALSE(ListContains(insert_factory_names(), id));
       const std::string entry = std::string("{\"id\":\"") + id + "\",\"kind\":\"offline\"";
       REQUIRE(json.find(entry) != std::string::npos);
+    }
+  }
+}
+
+TEST_CASE("Mastering inserts publish non-empty automation parameter descriptors",
+          "[mastering][automation]") {
+  // Before parameter_descriptors() was overridden, every mastering insert returned
+  // "[]" from insert_param_info_json(), so name-addressed realtime automation
+  // (sonare_engine_set_track_strip_insert_param_by_name and friends) was a silent
+  // no-op for the entire mastering catalog. Each insert below must now publish at
+  // least one {name,id,rtSafe} descriptor whose name is the construction-time JSON
+  // key, with a band-prefixed layout for the multiband inserts.
+  struct Expect {
+    const char* name;
+    const char* key_fragment;
+  };
+  const Expect cases[] = {
+      {"dynamics.compressor", "\"name\":\"thresholdDb\""},
+      {"dynamics.gate", "\"name\":\"thresholdDb\""},
+      {"dynamics.limiter", "\"name\":\"thresholdDb\""},
+      {"eq.parametric", "\"name\":\""},
+      {"saturation.tape", "\"name\":\"driveDb\""},
+      {"stereo.imager", "\"name\":\"width\""},
+      {"maximizer.maximizer", "\"name\":\"ceilingDb\""},
+      {"multiband.saturation", "\"name\":\"band0.driveDb\""},
+  };
+  for (const auto& c : cases) {
+    DYNAMIC_SECTION(c.name) {
+      const std::string info = insert_param_info_json(c.name);
+      INFO("info = " << info);
+      REQUIRE(info != "[]");
+      REQUIRE(info.find("\"id\":") != std::string::npos);
+      REQUIRE(info.find("\"rtSafe\":") != std::string::npos);
+      REQUIRE(info.find(c.key_fragment) != std::string::npos);
     }
   }
 }

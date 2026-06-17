@@ -77,6 +77,10 @@ bool Maximizer::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Maximizer::parameter_descriptors() const {
+  return {{"inputGainDb", 0}, {"ceilingDb", 1}, {"releaseMs", 2}};
+}
+
 bool Maximizer::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   return param_id != 1u;
 }

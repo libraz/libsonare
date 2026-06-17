@@ -43,6 +43,9 @@ class MultibandLimiter : public rt::ProcessorBase {
   // and would reset audio state.
   static constexpr unsigned int kBandStride = 2;
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters per band b: b*kBandStride+0=band{b}.thresholdDb,
+  // b*kBandStride+1=band{b}.releaseMs (one block per configured band).
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const MultibandLimiterConfig& config);

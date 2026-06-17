@@ -79,6 +79,10 @@ bool BitCrusher::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
+  return {{"bitDepth", 0}, {"mix", 1}};
+}
+
 void BitCrusher::validate_config(const BitCrusherConfig& config) {
   if (config.bit_depth < 1 || config.bit_depth > 24 || config.downsample_factor < 1 ||
       config.mix < 0.0f || config.mix > 1.0f) {

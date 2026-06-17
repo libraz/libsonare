@@ -31,6 +31,8 @@ class AirBand : public rt::ProcessorBase {
   //   2 = dynamic_threshold_db
   //   3 = dynamic_range_db (clamped to >= 0)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=amount, 1=shelfFrequencyHz, 2=dynamicThresholdDb, 3=dynamicRangeDb
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   using Biquad = rt::BiquadState;
 

@@ -184,6 +184,11 @@ bool ParallelComp::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> ParallelComp::parameter_descriptors() const {
+  return {{"thresholdDb", 0},  {"ratio", 1}, {"attackMs", 2},       {"releaseMs", 3},
+          {"makeupGainDb", 4}, {"mix", 5},   {"outputCeilingDb", 6}};
+}
+
 void ParallelComp::validate_config(const ParallelCompConfig& config) {
   if (!(config.ratio >= 1.0f) || config.attack_ms < 0.0f || config.release_ms < 0.0f ||
       config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.output_ceiling_db)) {

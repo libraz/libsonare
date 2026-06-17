@@ -60,6 +60,12 @@ bool ApiStyleEq::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> ApiStyleEq::parameter_descriptors() const {
+  return {{"lowFrequencyHz", 0},  {"lowGainDb", 1},          {"lowMidFrequencyHz", 2},
+          {"lowMidGainDb", 3},    {"highMidFrequencyHz", 4}, {"highMidGainDb", 5},
+          {"highFrequencyHz", 6}, {"highGainDb", 7}};
+}
+
 void ApiStyleEq::clear_band(Band band) {
   const size_t i = index(band);
   bands_[i].gain_db = 0.0f;

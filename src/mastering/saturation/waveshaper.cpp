@@ -73,6 +73,10 @@ bool Waveshaper::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Waveshaper::parameter_descriptors() const {
+  return {{"driveDb", 0}, {"mix", 1}, {"outputGainDb", 2}};
+}
+
 float Waveshaper::db_to_linear(float db) { return ::sonare::db_to_linear(db); }
 
 float Waveshaper::shape(float sample, const WaveshaperConfig& config) {

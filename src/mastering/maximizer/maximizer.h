@@ -3,6 +3,8 @@
 /// @file maximizer.h
 /// @brief Input-gain maximizer with a hard output ceiling.
 
+#include <vector>
+
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "rt/processor_base.h"
 
@@ -30,6 +32,8 @@ class Maximizer : public rt::ProcessorBase {
   //   1 = ceiling_db (clamped <= 0; not audio-thread safe, rejected by mixer automation)
   //   2 = release_ms (clamped to >= 0; in-place via inner limiter)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=inputGainDb, 1=ceilingDb, 2=releaseMs
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:

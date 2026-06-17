@@ -31,6 +31,8 @@ class SoftClipper : public rt::ProcessorBase {
   // ceiling is NOT automatable: it normalizes the ADAA input, so changing it
   // would require clearing the antiderivative history. aliasing is an enum.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=driveDb, 1=mix
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const SoftClipperConfig& config);

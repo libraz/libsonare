@@ -3,6 +3,8 @@
 /// @file stereo_balance.h
 /// @brief Left/right balance and pan style gain processor.
 
+#include <vector>
+
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
@@ -26,6 +28,8 @@ class StereoBalance : public rt::ProcessorBase {
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = balance (clamped to [-1, 1])
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=balance
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const StereoBalanceConfig& config);

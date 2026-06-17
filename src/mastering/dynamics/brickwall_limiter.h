@@ -4,6 +4,7 @@
 /// @brief Hard-ceiling limiter that guarantees sample peaks do not exceed the ceiling.
 
 #include <memory>
+#include <vector>
 
 #include "mastering/dynamics/limiter.h"
 #include "rt/processor_base.h"
@@ -63,11 +64,19 @@ class BrickwallLimiter : public rt::ProcessorBase {
   int hard_clip_count() const noexcept { return hard_clip_count_; }
   int latency_samples() const noexcept override { return limiter_.latency_samples(); }
 
-  // Automatable parameters (RT-safe, no allocation, no state reset):
+  // RT-safe: set_parameter updates the audio thread's live working config
+  // (active_) in place — the hard-clip stage reads active_.ceiling_db and the
+  // inner limiter's threshold/release are forwarded via its in-place setters —
+  // without publishing a snapshot (no allocation), so it is safe to apply from
+  // the audio callback. The control-thread mirror (config_) is kept in sync so
+  // config() reads back the automated state; only the snapshot publish (the
+  // allocation) is dropped.
   //   0 = ceiling_db
   //   1 = release_ms (clamped to >= 0)
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=ceilingDb, 1=releaseMs
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const BrickwallLimiterConfig& config);
@@ -102,6 +111,11 @@ class BrickwallLimiter : public rt::ProcessorBase {
   ///        from this, the audio thread re-runs @ref update_coefficients
   ///        before processing.
   const BrickwallLimiterConfig* applied_snapshot_ = nullptr;
+  /// @brief The audio thread's live working configuration. Seeded from the
+  ///        adopted snapshot on each set_config change and mutated in place by
+  ///        @ref set_parameter (RT-safe automation, no publish). The hard-clip
+  ///        stage reads active_.ceiling_db, not the snapshot.
+  BrickwallLimiterConfig active_{};
   Limiter limiter_;
   bool prepared_ = false;
   double sample_rate_ = 48000.0;

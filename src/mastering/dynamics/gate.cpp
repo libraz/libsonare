@@ -16,6 +16,7 @@ namespace sonare::mastering::dynamics {
 Gate::Gate(GateConfig config)
     : config_(config), config_publisher_(std::make_unique<rt::RtPublisher<GateConfig>>()) {
   validate_config(config_);
+  active_ = config_;
   // Seed the publisher so a downstream audio thread that starts before
   // prepare() sees a defined snapshot. prepare() will publish again with
   // post-prepare derived state already applied so the first audio block does
@@ -33,7 +34,10 @@ void Gate::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
-  update_coefficients(config_);
+  // Seed the audio thread's live working config from the prepared baseline and
+  // derive its coefficients; the per-sample loop reads active_, not config_.
+  active_ = config_;
+  update_coefficients(active_);
   prepared_ = true;
   hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
   hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
@@ -57,14 +61,16 @@ const GateConfig* Gate::adopt_snapshot_for_block() noexcept {
   config_publisher_->acquire();
   const GateConfig* current = config_publisher_->current();
   if (current && current != applied_snapshot_) {
-    update_coefficients(*current);
+    // A new set_config snapshot supersedes any in-place automation: copy it into
+    // the live working config and re-derive coefficients from it.
+    active_ = *current;
+    update_coefficients(active_);
     applied_snapshot_ = current;
   }
-  // Fallback path: only reachable if the constructor's initial publish was
-  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
-  // was never called. In that case use the control-thread mirror; the per-
-  // sample loop is itself guarded by prepared_ so this path stays defined.
-  return current ? current : &config_;
+  // The per-sample loop always reads the live working config (active_), which
+  // set_parameter mutates in place without publishing. active_ is seeded in the
+  // constructor and prepare(), so it is defined even before the first snapshot.
+  return &active_;
 }
 
 void Gate::process(float* const* channels, int num_channels, int num_samples) {
@@ -152,26 +158,38 @@ void Gate::set_config(const GateConfig& config) {
 }
 
 bool Gate::set_parameter(unsigned int param_id, float value) {
+  // RT-safe in-place automation: mutate the audio thread's live working config
+  // and re-derive its coefficients. No shared_ptr publish, no allocation; the
+  // control-thread mirror (config_) and the published snapshot stay untouched.
   switch (param_id) {
     case 0:
-      config_.threshold_db = value;
+      active_.threshold_db = value;
       // Keep the hysteresis invariant close_threshold_db <= threshold_db.
-      config_.close_threshold_db = std::min(config_.close_threshold_db, config_.threshold_db);
+      active_.close_threshold_db = std::min(active_.close_threshold_db, active_.threshold_db);
       break;
     case 1:
-      config_.attack_ms = std::max(0.0f, value);
+      active_.attack_ms = std::max(0.0f, value);
       break;
     case 2:
-      config_.release_ms = std::max(0.0f, value);
+      active_.release_ms = std::max(0.0f, value);
       break;
     case 3:
-      config_.range_db = std::min(0.0f, value);
+      active_.range_db = std::min(0.0f, value);
       break;
     default:
       return false;
   }
-  config_publisher_->publish(std::make_shared<const GateConfig>(config_));
+  // Mirror the live value into the control-thread config so config() reads back
+  // the automated state (matching the historical contract); this writes config_
+  // only, never the published snapshot, so no allocation occurs. set_parameter
+  // and set_config still must not run concurrently (single-producer contract).
+  config_ = active_;
+  update_coefficients(active_);
   return true;
+}
+
+std::vector<rt::ParamDescriptor> Gate::parameter_descriptors() const {
+  return {{"thresholdDb", 0}, {"attackMs", 1}, {"releaseMs", 2}, {"rangeDb", 3}};
 }
 
 void Gate::validate_config(const GateConfig& config) {

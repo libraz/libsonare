@@ -68,6 +68,9 @@ class VocalRider : public rt::ProcessorBase {
   //   6 = gain_smoothing_ms (clamped to >= 0)
   //   7 = noise_floor_db
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=targetDb, 1=maxBoostDb, 2=maxCutDb, 3=attackMs,
+  //   4=releaseMs, 5=outputGainDb, 6=gainSmoothingMs, 7=noiseFloorDb
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const VocalRiderConfig& config);

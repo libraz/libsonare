@@ -122,6 +122,11 @@ bool AdaptiveRelease::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> AdaptiveRelease::parameter_descriptors() const {
+  return {{"ceilingDb", 0}, {"minReleaseMs", 1}, {"maxReleaseMs", 2},      {"crestWindowMs", 3},
+          {"crestLow", 4},  {"crestHigh", 5},    {"releaseSmoothingMs", 6}};
+}
+
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
   if (config.lookahead_ms < 0.0f || config.min_release_ms < 0.0f ||
       config.max_release_ms < config.min_release_ms || config.crest_window_ms <= 0.0f ||

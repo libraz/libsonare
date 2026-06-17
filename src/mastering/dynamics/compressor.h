@@ -81,14 +81,17 @@ class Compressor : public rt::ProcessorBase {
   //  10 = pdr_time_ms (clamped to >= 0)
   //  11 = pdr_release_scale (clamped to >= 1)
   //
-  // set_parameter mutates the control-thread mirror (config_) and publishes it
-  // as a new snapshot for the audio thread to adopt on the next block. It is
-  // therefore NOT realtime-safe under the snapshot model — the shared_ptr
-  // allocation matches set_config() (same contract as Limiter::set_parameter).
-  // It MUST NOT be called concurrently with set_config(); the single-producer
-  // hand-off contract of RtPublisher covers either path individually, not both
-  // at once.
+  // RT-safe: set_parameter updates the audio thread's live working config
+  // (active_) in place and re-derives the scalar coefficients without publishing
+  // a new snapshot (no allocation), so it is safe to apply from the audio
+  // callback. The control-thread mirror (config_) is kept in sync so config()
+  // reads back the automated state; only the snapshot publish (the allocation)
+  // is dropped. MUST NOT run concurrently with set_config() (single producer).
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs,
+  // 4=makeupGainDb, 5=kneeDb, 6=autoMakeup, 7=detector, 8=sidechainHpfEnabled,
+  // 9=sidechainHpfHz, 10=pdrTimeMs, 11=pdrReleaseScale.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const CompressorConfig& config);
@@ -124,6 +127,12 @@ class Compressor : public rt::ProcessorBase {
   ///        from this, the audio thread re-runs @ref update_coefficients
   ///        before processing.
   const CompressorConfig* applied_snapshot_ = nullptr;
+  /// @brief The audio thread's live working configuration. Seeded from the
+  ///        adopted snapshot on each set_config change and mutated in place by
+  ///        @ref set_parameter (RT-safe automation, no publish). The per-sample
+  ///        loop reads this, not the snapshot, so an in-place parameter change
+  ///        takes effect without a shared_ptr allocation.
+  CompressorConfig active_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
   // RMS pre-smoothing state (for Rms / LogRms detectors). Rms = 10 ms window,

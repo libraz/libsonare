@@ -67,6 +67,8 @@ class UpwardExpander : public rt::ProcessorBase {
   // single-producer hand-off contract of RtPublisher covers either path
   // individually, not both at once.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const UpwardExpanderConfig& config);

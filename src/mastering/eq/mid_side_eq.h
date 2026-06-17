@@ -39,6 +39,11 @@ class MidSideEq : public rt::ProcessorBase {
     return side_eq_.set_parameter(param_id - kSideBase, value);
   }
 
+  // Automatable parameters: for each band b in [0, kMaxBands) the mid section
+  // exposes ids 3*b..3*b+2 as midBand{b}.{frequencyHz,gainDb,q}, and the side
+  // section exposes ids 3*kMaxBands+3*b..+2 as sideBand{b}.{frequencyHz,gainDb,q}.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
+
   const EqBand& mid_band(size_t index) const;
   const EqBand& side_band(size_t index) const;
 

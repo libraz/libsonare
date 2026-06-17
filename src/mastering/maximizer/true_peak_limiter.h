@@ -56,6 +56,8 @@ class TruePeakLimiter : public rt::ProcessorBase {
   // lookahead_ms, oversample_factor and apply_gain_at_input_rate are NOT
   // automatable (they resize buffers or switch processing modes).
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=ceilingDb, 1=releaseMs
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:

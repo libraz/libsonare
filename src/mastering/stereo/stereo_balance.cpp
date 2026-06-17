@@ -78,6 +78,10 @@ bool StereoBalance::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> StereoBalance::parameter_descriptors() const {
+  return {{"balance", 0}};
+}
+
 void StereoBalance::validate_config(const StereoBalanceConfig& config) {
   if (config.balance < -1.0f || config.balance > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "stereo balance must be in [-1, 1]");

@@ -187,6 +187,10 @@ bool MultibandImager::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> MultibandImager::parameter_descriptors() const {
+  return {{"width", 0}, {"decorrelationAmount", 1}};
+}
+
 void MultibandImager::validate_config(const MultibandImagerConfig& config) {
   const size_t expected_bands = config.crossover.cutoffs_hz.size() + 1;
   if (config.bands.size() != expected_bands) {

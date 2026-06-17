@@ -157,6 +157,10 @@ bool Expander::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> Expander::parameter_descriptors() const {
+  return {{"thresholdDb", 0}, {"ratio", 1}, {"attackMs", 2}, {"releaseMs", 3}, {"rangeDb", 4}};
+}
+
 void Expander::validate_config(const ExpanderConfig& config) {
   if (!(config.ratio >= 1.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "expander ratio must be at least 1");

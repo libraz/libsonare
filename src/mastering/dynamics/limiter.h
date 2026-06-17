@@ -81,6 +81,8 @@ class Limiter : public rt::ProcessorBase {
   //   1 = release_ms (clamped to >= 0)
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=thresholdDb, 1=releaseMs
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const LimiterConfig& config);

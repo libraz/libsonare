@@ -1,6 +1,8 @@
 #include "mastering/multiband/multiband_dynamic_eq.h"
 
 #include <algorithm>
+#include <array>
+#include <string>
 #include <utility>
 
 #include "rt/scoped_no_denormals.h"
@@ -134,6 +136,30 @@ bool MultibandDynamicEq::set_parameter(unsigned int param_id, float value) {
     bands[dyn_band] = processors_[crossover_band].band(dyn_band);
   }
   return true;
+}
+
+std::vector<rt::ParamDescriptor> MultibandDynamicEq::parameter_descriptors() const {
+  // Mirror set_parameter's id layout: crossover band `cb` occupies a block of
+  // kParamsPerCrossoverBand ids, within which the DynamicEq per-band layout
+  // applies (kParamsPerBand fields per dynamic band; see DynamicEq::set_parameter
+  // for the field order). The keys match the construction-time convention
+  // band{cb}.dyn{db}.<field> read by populate_dynamic_eq_bands.
+  static constexpr std::array<const char*, eq::DynamicEq::kParamsPerBand> kFieldKeys{
+      "frequencyHz", "staticGainDb",    "q",        "thresholdDb", "ratio",      "rangeDb",
+      "sidechainQ",  "sidechainFreqHz", "attackMs", "releaseMs",   "lookaheadMs"};
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(processors_.size() * kParamsPerCrossoverBand);
+  for (unsigned int cb = 0; cb < processors_.size(); ++cb) {
+    const unsigned int block = cb * kParamsPerCrossoverBand;
+    for (unsigned int db = 0; db < eq::DynamicEq::kMaxBands; ++db) {
+      const std::string prefix = "band" + std::to_string(cb) + ".dyn" + std::to_string(db) + ".";
+      const unsigned int band_offset = db * eq::DynamicEq::kParamsPerBand;
+      for (unsigned int field = 0; field < eq::DynamicEq::kParamsPerBand; ++field) {
+        descriptors.push_back({prefix + kFieldKeys[field], block + band_offset + field});
+      }
+    }
+  }
+  return descriptors;
 }
 
 void MultibandDynamicEq::validate_config(const MultibandDynamicEqConfig& config) {

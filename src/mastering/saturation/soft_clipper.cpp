@@ -60,6 +60,10 @@ bool SoftClipper::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> SoftClipper::parameter_descriptors() const {
+  return {{"driveDb", 0}, {"mix", 1}};
+}
+
 void SoftClipper::validate_config(const SoftClipperConfig& config) {
   if (!(config.ceiling > 0.0f) || config.mix < 0.0f || config.mix > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid soft clipper configuration");

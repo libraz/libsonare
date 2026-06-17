@@ -94,6 +94,10 @@ bool PresenceEnhancer::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> PresenceEnhancer::parameter_descriptors() const {
+  return {{"amount", 0}, {"drive", 1}, {"centerFrequencyHz", 2}, {"q", 3}};
+}
+
 void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {
   if (!(config.amount >= 0.0f && config.amount <= 1.0f) || !(config.drive > 0.0f) ||
       !(config.center_frequency_hz > 0.0f) || !(config.q > 0.0f)) {

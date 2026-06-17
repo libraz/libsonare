@@ -67,6 +67,9 @@ class ParallelComp : public rt::ProcessorBase {
   //   5 = mix (clamped to [0, 1])
   //   6 = output_ceiling_db
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=makeupGainDb, 5=mix,
+  // 6=outputCeilingDb
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const ParallelCompConfig& config);

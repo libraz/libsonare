@@ -115,6 +115,10 @@ bool RoomMorphProcessor::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> RoomMorphProcessor::parameter_descriptors() const {
+  return {{"dryWet", 0}, {"sourceTailSuppression", 1}};
+}
+
 Audio room_morph(const Audio& recording, const RoomMorphConfig& config) {
   if (recording.empty()) {
     return recording;

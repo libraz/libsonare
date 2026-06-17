@@ -202,6 +202,10 @@ bool Tube::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Tube::parameter_descriptors() const {
+  return {{"driveDb", 0}, {"bias", 1}, {"mix", 2}, {"biasV", 3}, {"harmonicDrive", 4}};
+}
+
 void Tube::validate_config(const TubeConfig& config) {
   if (config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.bias_v) ||
       config.harmonic_drive < 0.0f || config.harmonic_drive > 1.0f ||

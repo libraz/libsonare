@@ -12,6 +12,11 @@ void ShelvingEq::process(float* const* channels, int num_channels, int num_sampl
 
 void ShelvingEq::reset() { eq_.reset(); }
 
+std::vector<rt::ParamDescriptor> ShelvingEq::parameter_descriptors() const {
+  return {{"lowFrequencyHz", 0},  {"lowGainDb", 1},  {"lowQ", 2},
+          {"highFrequencyHz", 3}, {"highGainDb", 4}, {"highQ", 5}};
+}
+
 void ShelvingEq::set_low_shelf(float frequency_hz, float gain_db, float q, bool enabled) {
   eq_.set_band(0, {EqBandType::LowShelf, frequency_hz, gain_db, q, enabled});
 }

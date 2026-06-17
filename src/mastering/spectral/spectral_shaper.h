@@ -38,6 +38,9 @@ class SpectralShaper : public rt::ProcessorBase {
   //   5 = release_ms (clamped to >= 0; re-prepares envelope followers)
   //   6 = range_db (clamped to >= 0)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=threshold, 1=amount, 2=frequencyHz,
+  //   3=highFrequencyHz, 4=attackMs, 5=releaseMs, 6=rangeDb
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const SpectralShaperConfig& config);

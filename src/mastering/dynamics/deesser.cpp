@@ -183,6 +183,11 @@ bool DeEsser::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> DeEsser::parameter_descriptors() const {
+  return {{"frequencyHz", 0}, {"thresholdDb", 1}, {"ratio", 2},    {"attackMs", 3},
+          {"releaseMs", 4},   {"rangeDb", 5},     {"bandpassQ", 6}};
+}
+
 void DeEsser::validate_config(const DeEsserConfig& config) {
   if (!(config.frequency_hz > 0.0f) || !(config.ratio >= 1.0f) || config.attack_ms < 0.0f ||
       config.release_ms < 0.0f || config.range_db < 0.0f || !(config.bandpass_q > 0.0f)) {

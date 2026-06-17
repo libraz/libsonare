@@ -52,6 +52,12 @@ class MultibandDynamicEq : public rt::ProcessorBase {
   // bands that are disabled (the default) are no-ops until enabled via config.
   // Ids past the last crossover band are rejected (return false).
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: keyed band{cb}.dyn{db}.<field> mirroring the
+  // construction keys (see populate_dynamic_eq_bands). Crossover band `cb`
+  // occupies kParamsPerCrossoverBand ids; within each block the DynamicEq band
+  // layout applies (kParamsPerBand fields per dynamic band, e.g. 0=frequencyHz,
+  // 1=staticGainDb, ... 10=lookaheadMs).
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const MultibandDynamicEqConfig& config);

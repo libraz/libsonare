@@ -93,6 +93,10 @@ bool SoftKneeMax::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> SoftKneeMax::parameter_descriptors() const {
+  return {{"inputGainDb", 0}, {"ceilingDb", 1}, {"kneeDb", 2}, {"releaseMs", 3}};
+}
+
 bool SoftKneeMax::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   return param_id != 1u;
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "mastering/maximizer/maximizer.h"
 
 namespace sonare::mastering::maximizer {
@@ -27,6 +29,8 @@ class SoftKneeMax : public rt::ProcessorBase {
   //   2 = knee_db (clamped >= 0; applied per block, no coefficients)
   //   3 = release_ms (clamped >= 0; in-place via inner maximizer)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=inputGainDb, 1=ceilingDb, 2=kneeDb, 3=releaseMs
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:

@@ -61,6 +61,8 @@ class Expander : public rt::ProcessorBase {
   //   3 = release_ms (clamped to >= 0)
   //   4 = range_db (clamped to <= 0)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const ExpanderConfig& config);

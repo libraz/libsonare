@@ -1,6 +1,7 @@
 #include "mastering/multiband/multiband_compressor.h"
 
 #include <algorithm>
+#include <string>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
@@ -132,6 +133,23 @@ bool MultibandCompressor::set_parameter(unsigned int param_id, float value) {
     return true;
   }
   return false;
+}
+
+std::vector<rt::ParamDescriptor> MultibandCompressor::parameter_descriptors() const {
+  // Mirrors set_parameter exactly: id = band * kBandStride + band_param, valid
+  // for every band that exists (band < compressors_.size()) and band_param in
+  // [0, kBandStride). Keys use the construction-time band{i}.<field> convention.
+  static constexpr const char* kBandParamKeys[kBandStride] = {"thresholdDb", "ratio", "attackMs",
+                                                              "releaseMs", "makeupGainDb"};
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(compressors_.size() * kBandStride);
+  for (unsigned int band = 0; band < compressors_.size(); ++band) {
+    const std::string prefix = "band" + std::to_string(band) + ".";
+    for (unsigned int band_param = 0; band_param < kBandStride; ++band_param) {
+      descriptors.push_back({prefix + kBandParamKeys[band_param], band * kBandStride + band_param});
+    }
+  }
+  return descriptors;
 }
 
 void MultibandCompressor::validate_config(const MultibandCompressorConfig& config) {

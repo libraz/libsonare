@@ -65,6 +65,10 @@ bool MonoMaker::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> MonoMaker::parameter_descriptors() const {
+  return {{"amount", 0}};
+}
+
 void MonoMaker::validate_config(const MonoMakerConfig& config) {
   if (config.amount < 0.0f || config.amount > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "mono maker amount must be in [0, 1]");

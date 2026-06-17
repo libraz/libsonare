@@ -31,6 +31,8 @@ class PresenceEnhancer : public rt::ProcessorBase {
   //   2 = center_frequency_hz (clamped to > 0; recomputes bandpass coefficients)
   //   3 = q (clamped to > 0; recomputes bandpass coefficients)
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=amount, 1=drive, 2=centerFrequencyHz, 3=q
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   using Biquad = rt::BiquadState;
 

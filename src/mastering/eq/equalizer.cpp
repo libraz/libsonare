@@ -248,6 +248,23 @@ bool EqualizerProcessor::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> EqualizerProcessor::parameter_descriptors() const {
+  // Mirror set_parameter's per-band id layout (3 fields per band, band b
+  // occupying ids 3*b .. 3*b+2) using the same camelCase keys accepted at
+  // construction (see eq_band), prefixed with the band index so name-addressed
+  // automation resolves to the correct band.
+  static constexpr std::array<const char*, 3> kFieldKeys{"frequencyHz", "gainDb", "q"};
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(kMaxBands * kFieldKeys.size());
+  for (unsigned int b = 0; b < kMaxBands; ++b) {
+    const std::string prefix = "band" + std::to_string(b) + ".";
+    for (unsigned int field = 0; field < kFieldKeys.size(); ++field) {
+      descriptors.push_back({prefix + kFieldKeys[field], b * 3u + field});
+    }
+  }
+  return descriptors;
+}
+
 bool EqualizerProcessor::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   const size_t band_index = param_id / 3u;
   if (band_index >= kMaxBands) {

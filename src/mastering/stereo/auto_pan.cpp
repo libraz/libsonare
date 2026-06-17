@@ -87,6 +87,10 @@ bool AutoPan::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> AutoPan::parameter_descriptors() const {
+  return {{"rateHz", 0}, {"depth", 1}, {"phase", 2}};
+}
+
 void AutoPan::validate_config(const AutoPanConfig& config) {
   if (config.rate_hz < 0.0f || config.depth < 0.0f || config.depth > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid auto pan configuration");

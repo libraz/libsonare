@@ -33,6 +33,9 @@ class HardClipper : public rt::ProcessorBase {
   // discontinuity is inaudible and acceptable. aliasing is an enum (not exposed).
   bool set_parameter(unsigned int param_id, float value) override;
 
+  // Automatable parameters: 0=ceiling
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
+
   /// @brief Returns the processing latency in samples for the active mode.
   /// @details None/Adaa1/Oversample4x add no integer latency here; Adaa2 adds one sample.
   int latency_samples() const noexcept override;

@@ -66,6 +66,8 @@ class MultibandSaturation : public rt::ProcessorBase {
   // per-band enable switch, and the saturation type are not automatable.
   static constexpr unsigned int kBandStride = 3;
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters (per-band block): 0=driveDb, 1=mix, 2=outputGainDb
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const MultibandSaturationConfig& config);

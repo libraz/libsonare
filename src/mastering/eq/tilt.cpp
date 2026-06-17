@@ -65,6 +65,10 @@ bool TiltEq::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> TiltEq::parameter_descriptors() const {
+  return {{"tiltDb", 0}, {"pivotHz", 1}};
+}
+
 void TiltEq::update_bands() {
   const bool enabled = tilt_db_ != 0.0f;
   const float half_tilt = tilt_db_ * 0.5f;

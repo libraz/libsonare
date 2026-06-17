@@ -3,6 +3,8 @@
 /// @file shelving.h
 /// @brief Dedicated low/high shelving equalizer.
 
+#include <vector>
+
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
@@ -35,6 +37,9 @@ class ShelvingEq : public rt::ProcessorBase {
   bool set_parameter(unsigned int param_id, float value) override {
     return param_id <= 5u && eq_.set_parameter(param_id, value);
   }
+  // Automatable parameters: 0=lowFrequencyHz, 1=lowGainDb, 2=lowQ,
+  // 3=highFrequencyHz, 4=highGainDb, 5=highQ.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   const EqBand& low_shelf() const;
   const EqBand& high_shelf() const;

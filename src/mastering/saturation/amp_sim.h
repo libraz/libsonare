@@ -64,6 +64,8 @@ class AmpSim : public rt::ProcessorBase {
   //   5 = level_db
   // `cab` is a discrete topology switch and is not exposed.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=drive, 1=bassDb, 2=midDb, 3=trebleDb, 4=presenceDb, 5=levelDb.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const AmpSimConfig& config);

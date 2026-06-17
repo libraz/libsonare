@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "mastering/maximizer/true_peak_limiter.h"
 
 namespace sonare::mastering::maximizer {
@@ -45,6 +47,9 @@ class AdaptiveRelease : public rt::ProcessorBase {
   //   6 = release_smoothing_ms (clamped to >= 0)
   // lookahead_ms is NOT automatable (it resizes the inner lookahead buffers).
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=ceilingDb, 1=minReleaseMs, 2=maxReleaseMs,
+  // 3=crestWindowMs, 4=crestLow, 5=crestHigh, 6=releaseSmoothingMs.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const AdaptiveReleaseConfig& config);

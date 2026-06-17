@@ -65,6 +65,10 @@ bool HardClipper::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> HardClipper::parameter_descriptors() const {
+  return {{"ceiling", 0}};
+}
+
 void HardClipper::rebuild_adaa() {
   const size_t channels = hard_clip_adaa_.size();
   hard_clip_adaa_.clear();

@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstddef>
+#include <vector>
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
@@ -38,6 +39,10 @@ class ApiStyleEq : public rt::ProcessorBase {
   // Values are snapped exactly as set_band() does, preserving the stepped
   // proportional-Q character; Q is still derived from gain via proportional_q().
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=lowFrequencyHz, 1=lowGainDb, 2=lowMidFrequencyHz,
+  // 3=lowMidGainDb, 4=highMidFrequencyHz, 5=highMidGainDb, 6=highFrequencyHz,
+  // 7=highGainDb.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   float frequency(Band band) const;
   float gain_db(Band band) const;

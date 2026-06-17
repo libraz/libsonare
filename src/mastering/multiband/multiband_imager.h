@@ -52,6 +52,8 @@ class MultibandImager : public rt::ProcessorBase {
   // switches are not automatable.
   static constexpr unsigned int kBandStride = 2;
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters (per-band block): 0=width, 1=decorrelationAmount
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   struct Allpass {

@@ -26,6 +26,7 @@ BrickwallLimiter::BrickwallLimiter(BrickwallLimiterConfig config)
     : config_(config),
       config_publisher_(std::make_unique<rt::RtPublisher<BrickwallLimiterConfig>>()) {
   validate_config(config_);
+  active_ = config_;
   // Seed the publisher so a downstream audio thread that starts before
   // prepare() sees a defined snapshot. prepare() will publish again with
   // post-prepare derived state already applied so the first audio block does
@@ -49,6 +50,9 @@ void BrickwallLimiter::prepare(double sample_rate, int max_block_size) {
   // release updates via update_coefficients().
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
   limiter_.prepare(sample_rate_, max_block_size_);
+  // Seed the audio thread's live working config from the prepared baseline; the
+  // hard-clip stage reads active_.ceiling_db, not config_.
+  active_ = config_;
   prepared_ = true;
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
@@ -70,14 +74,17 @@ const BrickwallLimiterConfig* BrickwallLimiter::adopt_snapshot_for_block() noexc
   config_publisher_->acquire();
   const BrickwallLimiterConfig* current = config_publisher_->current();
   if (current && current != applied_snapshot_) {
-    update_coefficients(*current);
+    // A new set_config snapshot supersedes any in-place automation: copy it into
+    // the live working config and re-derive (forward ceiling/release to the
+    // inner limiter in place).
+    active_ = *current;
+    update_coefficients(active_);
     applied_snapshot_ = current;
   }
-  // Fallback path: only reachable if the constructor's initial publish was
-  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
-  // was never called. In that case use the control-thread mirror; the per-
-  // sample loop is itself guarded by prepared_ so this path stays defined.
-  return current ? current : &config_;
+  // The hard-clip stage always reads the live working config (active_), which
+  // set_parameter mutates in place without publishing. active_ is seeded in the
+  // constructor and prepare(), so it is defined even before the first snapshot.
+  return &active_;
 }
 
 void BrickwallLimiter::process(float* const* channels, int num_channels, int num_samples) {
@@ -173,25 +180,31 @@ void BrickwallLimiter::set_release_ms_in_place(float release_ms) noexcept {
 }
 
 bool BrickwallLimiter::set_parameter(unsigned int param_id, float value) {
+  // RT-safe in-place automation: mutate the audio thread's live working config
+  // (active_) and forward ceiling/release to the inner limiter via its in-place
+  // setters (update_coefficients). No shared_ptr publish, no allocation; the
+  // control-thread mirror (config_) and the published snapshot stay untouched.
   switch (param_id) {
     case 0:
-      config_.ceiling_db = value;
-      // The inner limiter uses ceiling_db as its threshold; forward it so the
-      // soft limiting stage tracks the new ceiling without resetting state.
-      // The inner set_parameter publishes its own snapshot internally.
-      limiter_.set_parameter(0, value);
+      active_.ceiling_db = value;
       break;
     case 1:
-      config_.release_ms = std::max(0.0f, value);
-      limiter_.set_release_ms(config_.release_ms);
+      active_.release_ms = std::max(0.0f, value);
       break;
     default:
       return false;
   }
-  // Publish the mutated config_ as a new snapshot so the audio thread adopts
-  // it on the next block. NOT realtime-safe (shared_ptr allocation).
-  config_publisher_->publish(std::make_shared<const BrickwallLimiterConfig>(config_));
+  // Mirror the live value into the control-thread config so config() reads back
+  // the automated state (matching the historical contract); this writes config_
+  // only, never the published snapshot, so no allocation occurs. set_parameter
+  // and set_config still must not run concurrently (single-producer contract).
+  config_ = active_;
+  update_coefficients(active_);
   return true;
+}
+
+std::vector<rt::ParamDescriptor> BrickwallLimiter::parameter_descriptors() const {
+  return {{"ceilingDb", 0}, {"releaseMs", 1}};
 }
 
 void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {

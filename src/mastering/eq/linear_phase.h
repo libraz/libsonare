@@ -56,6 +56,9 @@ class LinearPhaseEq : public rt::ProcessorBase {
   // history. It is not audio-thread safe; ChannelStrip insert automation rejects
   // these params via parameter_is_realtime_safe().
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: per band `b` (0 .. kMaxBands-1), id 3*b+0 = "band<b>.frequencyHz",
+  // 3*b+1 = "band<b>.gainDb", 3*b+2 = "band<b>.q" (keys match the construction-time band prefix).
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
   const EqBand& band(size_t index) const;

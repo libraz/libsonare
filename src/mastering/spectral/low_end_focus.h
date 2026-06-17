@@ -30,6 +30,8 @@ class LowEndFocus : public rt::ProcessorBase {
   //   2 = subharmonic_amount (clamped to [0, 1])
   //   3 = transient_tightness (clamped to [0, 1])
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=cutoffHz, 1=width, 2=subharmonicAmount, 3=transientTightness
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const LowEndFocusConfig& config);

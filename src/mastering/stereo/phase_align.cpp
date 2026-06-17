@@ -76,6 +76,10 @@ bool PhaseAlign::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> PhaseAlign::parameter_descriptors() const {
+  return {{"fractionalDelaySamples", 0}};
+}
+
 void PhaseAlign::validate_config(const PhaseAlignConfig& config) {
   if (config.delay_samples < 0 || config.fractional_delay_samples < 0.0f ||
       config.fractional_delay_samples >= 1.0f) {

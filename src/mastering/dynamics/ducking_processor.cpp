@@ -70,6 +70,10 @@ bool DuckingProcessor::set_parameter(unsigned int param_id, float value) {
   return router_.set_parameter(param_id, value);
 }
 
+std::vector<rt::ParamDescriptor> DuckingProcessor::parameter_descriptors() const {
+  return {{"thresholdDb", 0}, {"ratio", 1}, {"attackMs", 2}, {"releaseMs", 3}, {"rangeDb", 4}};
+}
+
 SidechainRouterConfig DuckingProcessor::to_router_config(const DuckingConfig& config) {
   if (config.lookahead_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "ducking lookahead must be non-negative");

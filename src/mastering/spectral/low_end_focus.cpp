@@ -108,6 +108,10 @@ bool LowEndFocus::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> LowEndFocus::parameter_descriptors() const {
+  return {{"cutoffHz", 0}, {"width", 1}, {"subharmonicAmount", 2}, {"transientTightness", 3}};
+}
+
 void LowEndFocus::validate_config(const LowEndFocusConfig& config) {
   if (!(config.cutoff_hz > 0.0f) || !(config.width >= 0.0f && config.width <= 2.0f) ||
       !(config.subharmonic_amount >= 0.0f && config.subharmonic_amount <= 1.0f) ||

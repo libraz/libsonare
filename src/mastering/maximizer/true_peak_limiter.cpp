@@ -330,6 +330,10 @@ bool TruePeakLimiter::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> TruePeakLimiter::parameter_descriptors() const {
+  return {{"ceilingDb", 0}, {"releaseMs", 1}};
+}
+
 bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   return param_id != 0u;
 }

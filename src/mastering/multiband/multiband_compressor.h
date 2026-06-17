@@ -49,6 +49,10 @@ class MultibandCompressor : public rt::ProcessorBase {
   // requires rebuilding the crossover filters and would reset audio state.
   static constexpr unsigned int kBandStride = 5;
   bool set_parameter(unsigned int param_id, float value) override;
+  // One descriptor per (band, band_param) pair currently handled by
+  // set_parameter, keyed band{i}.<field> to match construction-time JSON:
+  // +0=thresholdDb, +1=ratio, +2=attackMs, +3=releaseMs, +4=makeupGainDb.
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const MultibandCompressorConfig& config);

@@ -3,6 +3,8 @@
 /// @file gain_processor.h
 /// @brief Trivial pass-through and gain graph processors shared by the bindings.
 
+#include <vector>
+
 #include "rt/processor_base.h"
 #include "util/db.h"
 
@@ -38,6 +40,8 @@ class GainProcessor final : public ProcessorBase {
     gain_ = db_to_linear(value);
     return true;
   }
+  // Automatable parameters: 0=gainDb
+  std::vector<ParamDescriptor> parameter_descriptors() const override { return {{"gainDb", 0}}; }
   bool parameter_is_realtime_safe(unsigned int) const noexcept override { return true; }
 
  private:

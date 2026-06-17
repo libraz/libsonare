@@ -121,6 +121,10 @@ bool Exciter::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Exciter::parameter_descriptors() const {
+  return {{"frequencyHz", 0}, {"driveDb", 1}, {"amount", 2}, {"q", 3}, {"evenOddMix", 4}};
+}
+
 void Exciter::update_coeff_preserving_state() {
   // RT-safe automation path: recompute the prototype coefficients, then copy only
   // the coefficient fields into each live filter, leaving the delay state (z1/z2)

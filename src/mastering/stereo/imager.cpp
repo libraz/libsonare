@@ -131,6 +131,10 @@ bool Imager::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+std::vector<rt::ParamDescriptor> Imager::parameter_descriptors() const {
+  return {{"width", 0}, {"outputGainDb", 1}, {"decorrelationAmount", 2}};
+}
+
 void Imager::validate_config(const ImagerConfig& config) {
   if (config.width < 0.0f || config.decorrelation_amount < 0.0f ||
       config.decorrelation_amount > 1.0f) {

@@ -33,6 +33,8 @@ class BitCrusher : public rt::ProcessorBase {
   // downsample_factor changes the hold cadence and dither_type is an enum, so
   // neither is exposed here.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=bitDepth, 1=mix
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const BitCrusherConfig& config);

@@ -195,6 +195,12 @@ bool TransientShaper::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> TransientShaper::parameter_descriptors() const {
+  return {{"attackGainDb", 0},  {"sustainGainDb", 1}, {"fastAttackMs", 2},
+          {"fastReleaseMs", 3}, {"slowAttackMs", 4},  {"slowReleaseMs", 5},
+          {"sensitivity", 6},   {"maxGainDb", 7},     {"gainSmoothingMs", 8}};
+}
+
 void TransientShaper::validate_config(const TransientShaperConfig& config) {
   if (config.fast_attack_ms < 0.0f || config.fast_release_ms < 0.0f ||
       config.slow_attack_ms < 0.0f || config.slow_release_ms < 0.0f || config.sensitivity < 0.0f ||

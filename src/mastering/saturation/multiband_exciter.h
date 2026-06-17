@@ -40,6 +40,8 @@ class MultibandExciter : public rt::ProcessorBase {
   //   4 = even_odd_mix (all bands)
   // The kept config_ mirror stays consistent so config() reflects automation.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=frequencyHz, 1=driveDb, 2=amount, 3=q, 4=evenOddMix
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const MultibandExciterConfig& config);

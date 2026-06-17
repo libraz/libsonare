@@ -68,6 +68,9 @@ class Tape : public rt::ProcessorBase {
   // state in states_ and the biquad delay state are preserved. oversample_factor
   // is a discrete mode and is not exposed.
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=driveDb, 1=saturation, 2=hysteresis, 3=outputGainDb,
+  //   4=speedIps, 5=headBumpDb, 6=bias, 7=gapLoss
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   static void validate_config(const TapeConfig& config);

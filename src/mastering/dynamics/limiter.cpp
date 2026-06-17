@@ -177,22 +177,27 @@ void Limiter::set_threshold_in_place(float threshold_db) noexcept {
 }
 
 bool Limiter::set_parameter(unsigned int param_id, float value) {
+  // RT-safe: route to the in-place setters, which update the scalar coefficients
+  // the per-sample loop reads (threshold_db_ / release_coeff_) WITHOUT publishing
+  // a new shared_ptr snapshot. adopt_snapshot_for_block() only re-derives those
+  // scalars when a *new* snapshot is adopted, so an in-place automation value
+  // persists block-to-block. The control-thread config_ mirror is intentionally
+  // left untouched (same contract as set_threshold_in_place / set_release_ms_in_place),
+  // so parameter_is_realtime_safe() correctly stays true (default).
   switch (param_id) {
     case 0:
-      config_.threshold_db = value;
-      break;
+      set_threshold_in_place(value);
+      return true;
     case 1:
-      config_.release_ms = std::max(0.0f, value);
-      break;
+      set_release_ms_in_place(std::max(0.0f, value));
+      return true;
     default:
       return false;
   }
-  // Publish the mutated config_ as a new snapshot so the audio thread adopts
-  // it (and re-derives release_coeff_ via update_coefficients) on the next
-  // block. set_parameter is therefore NOT realtime-safe under the snapshot
-  // model — the shared_ptr allocation matches set_config().
-  config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
-  return true;
+}
+
+std::vector<rt::ParamDescriptor> Limiter::parameter_descriptors() const {
+  return {{"thresholdDb", 0}, {"releaseMs", 1}};
 }
 
 void Limiter::validate_config(const LimiterConfig& config) {

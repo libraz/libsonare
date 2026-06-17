@@ -1,6 +1,7 @@
 #include "mastering/multiband/multiband_expander.h"
 
 #include <algorithm>
+#include <string>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
@@ -112,6 +113,21 @@ bool MultibandExpander::set_parameter(unsigned int param_id, float value) {
     return true;
   }
   return false;
+}
+
+std::vector<rt::ParamDescriptor> MultibandExpander::parameter_descriptors() const {
+  // Mirror the per-band block layout of set_parameter: each band forwards its
+  // local param ids to dynamics::Expander, so reuse the Expander descriptors and
+  // offset both the id and the construction-time JSON key by the band index.
+  std::vector<rt::ParamDescriptor> descriptors;
+  for (size_t band = 0; band < expanders_.size(); ++band) {
+    const std::string prefix = "band" + std::to_string(band) + ".";
+    const unsigned int base = static_cast<unsigned int>(band) * kBandStride;
+    for (const auto& band_descriptor : expanders_[band].parameter_descriptors()) {
+      descriptors.push_back({prefix + band_descriptor.key, base + band_descriptor.id});
+    }
+  }
+  return descriptors;
 }
 
 void MultibandExpander::validate_config(const MultibandExpanderConfig& config) {

@@ -1,6 +1,7 @@
 #include "mastering/multiband/multiband_limiter.h"
 
 #include <algorithm>
+#include <string>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
@@ -125,6 +126,17 @@ bool MultibandLimiter::set_parameter(unsigned int param_id, float value) {
     return true;
   }
   return false;
+}
+
+std::vector<rt::ParamDescriptor> MultibandLimiter::parameter_descriptors() const {
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(limiters_.size() * kBandStride);
+  for (unsigned int band = 0; band < limiters_.size(); ++band) {
+    const std::string prefix = "band" + std::to_string(band) + ".";
+    descriptors.push_back({prefix + "thresholdDb", band * kBandStride + 0});
+    descriptors.push_back({prefix + "releaseMs", band * kBandStride + 1});
+  }
+  return descriptors;
 }
 
 void MultibandLimiter::validate_config(const MultibandLimiterConfig& config) {

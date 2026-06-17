@@ -3,6 +3,8 @@
 /// @file tilt.h
 /// @brief Simple two-shelf tilt equalizer.
 
+#include <vector>
+
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
 
@@ -25,6 +27,8 @@ class TiltEq : public rt::ProcessorBase {
   //   0 = tilt_db (positive boosts highs / cuts lows; signed)
   //   1 = pivot_hz (clamped to (0 Hz, Nyquist))
   bool set_parameter(unsigned int param_id, float value) override;
+  // Automatable parameters: 0=tiltDb, 1=pivotHz
+  std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
   void update_bands();

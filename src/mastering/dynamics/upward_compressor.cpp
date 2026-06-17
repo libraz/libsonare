@@ -157,6 +157,10 @@ bool UpwardCompressor::set_parameter(unsigned int param_id, float value) {
   return true;
 }
 
+std::vector<rt::ParamDescriptor> UpwardCompressor::parameter_descriptors() const {
+  return {{"thresholdDb", 0}, {"ratio", 1}, {"attackMs", 2}, {"releaseMs", 3}, {"rangeDb", 4}};
+}
+
 void UpwardCompressor::validate_config(const UpwardCompressorConfig& config) {
   if (!(config.ratio >= 1.0f) || config.range_db < 0.0f || config.attack_ms < 0.0f ||
       config.release_ms < 0.0f) {
