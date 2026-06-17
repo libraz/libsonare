@@ -38,7 +38,12 @@ void downmix(ChannelLayout from, ChannelLayout to, const float* const* in, float
   };
 
   // Worst-case (all inputs at full scale, in phase) peak of one folded front
-  // channel, used as the normalization divisor.
+  // channel, used as the normalization divisor. This guarantees the stereo fold
+  // never clips, NOT that loudness is preserved: real (decorrelated) material
+  // sums incoherently, so the in-phase divisor leaves a typical downmix a few dB
+  // quieter than the source. The trade-off is intentional — clip-safety over
+  // loudness-match; callers that need loudness parity should re-normalize the
+  // result (e.g. to a target LUFS) rather than rely on this peak divisor.
   const auto stereo_peak = [&]() {
     const float surround = (from == ChannelLayout::SevenPointOne) ? 2.0f : 1.0f;
     return 1.0f + kMinus3dB * (1.0f + surround) + lfe;

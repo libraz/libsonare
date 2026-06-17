@@ -71,6 +71,13 @@ SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, Cha
 
 /// Realtime surround panner: smooths each output-plane gain with a one-pole and
 /// scatters a (mono-summed) lane signal additively across the destination planes.
+///
+/// Both this processor and TrackMixerRuntime's inline lane scatter compute their
+/// placement from the shared @ref compute_surround_pan_gains; they differ only in
+/// per-plane gain smoothing (this uses a one-pole, the lane scatter a per-block
+/// linear ramp). The live mixer path uses the lane scatter; this processor is a
+/// standalone building block. The smoothing styles are intentionally not unified
+/// (no audible difference, and they have separate call sites).
 class SurroundPannerProcessor {
  public:
   explicit SurroundPannerProcessor(ChannelLayout layout = ChannelLayout::FivePointOne,

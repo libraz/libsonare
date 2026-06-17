@@ -282,6 +282,14 @@ double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sa
     }
     return pos;
   };
+  // NOTE: for a comp part that starts mid-clip under repitch warp, both
+  // clip_offset_samples (the part's source start) and the warp map (offset by
+  // warp_reference_offset_samples inside map_position) carry the part's source
+  // position, so a non-first comp part can be double-offset here. A standalone
+  // clip (clip_offset_samples == 0 or warp_reference_offset_samples == 0) is
+  // unaffected. Correcting this requires a comp+repitch-warp golden to pin the
+  // expected source read before changing the offset composition; left as-is to
+  // avoid regressing the working standalone-repitch and non-warp comp paths.
   if (clip.loop) {
     const int64_t loop_len = clip.loop_length_samples > 0
                                  ? std::min<int64_t>(clip.loop_length_samples, source_len)

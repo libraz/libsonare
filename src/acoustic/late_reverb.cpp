@@ -62,6 +62,13 @@ float gaussian(SplitMix64& rng) noexcept {
 // Zero-phase octave bandpass (forward + backward biquad pass), matching the
 // analyzer's RBJ bandpass at Q = sqrt(2) so a tail's measured per-band RT60
 // tracks the design value.
+//
+// This is a deliberately minimal forward/backward biquad and is not routed
+// through apply_biquad_filtfilt (filters/iir.cpp): that helper adds lfilter_zi
+// edge-condition seeding, whereas here the input is white noise that is later
+// per-band RMS-normalized and cross-faded, so zero initial conditions are fine
+// and the seeded-vs-zero difference in the late tail is inaudible. Kept separate
+// rather than sharing the filtfilt path (its to_filter_coeffs is file-local).
 void bandpass_zero_phase(std::vector<float>& x, float center_hz, int sample_rate) {
   const float w0 = static_cast<float>(kTwoPiD) * center_hz / static_cast<float>(sample_rate);
   const rt::BiquadCoeffs coeffs = rt::rbj_bandpass(w0, kSqrt2);

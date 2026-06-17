@@ -80,6 +80,15 @@ std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& m
   if (onset_config.center && !onset_env.empty() && aligned_mel_config.hop_length > 0) {
     int frame_offset = aligned_mel_config.n_fft / (2 * aligned_mel_config.hop_length);
     if (frame_offset > 0) {
+      // Right-shift by frame_offset to align onset spikes to the centered STFT
+      // frame times. The output length is kept equal to the mel frame count
+      // (librosa parity — downstream beat/tempo/meter analyzers assume this), so
+      // the last `frame_offset` frames shift off the end: a real onset within
+      // the final n_fft/(2*hop) frames of the signal is not reported. This is
+      // benign for typical clip lengths but loses terminal onsets on very short
+      // inputs. Fixing the terminal alignment to full librosa parity requires a
+      // librosa-live numerical comparison of the rhythm stack (see the audit
+      // coverage gap) before changing the shift, to avoid regressing beat/tempo.
       std::vector<float> shifted(onset_env.size(), 0.0f);
       for (size_t i = 0; i < onset_env.size(); ++i) {
         size_t shifted_index = i + static_cast<size_t>(frame_offset);
