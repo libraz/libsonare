@@ -104,18 +104,14 @@ inline Napi::Object MeterTelemetryToObject(Napi::Env env,
   out.Set("targetId", Napi::Number::New(env, record.target_id));
   out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
   out.Set("seq", Napi::Number::New(env, static_cast<double>(record.seq)));
-  Napi::Array peak_db = Napi::Array::New(env, 2);
-  peak_db.Set(0u, Napi::Number::New(env, record.peak_db_l));
-  peak_db.Set(1u, Napi::Number::New(env, record.peak_db_r));
-  out.Set("peakDb", peak_db);
-  Napi::Array rms_db = Napi::Array::New(env, 2);
-  rms_db.Set(0u, Napi::Number::New(env, record.rms_db_l));
-  rms_db.Set(1u, Napi::Number::New(env, record.rms_db_r));
-  out.Set("rmsDb", rms_db);
-  Napi::Array true_peak_db = Napi::Array::New(env, 2);
-  true_peak_db.Set(0u, Napi::Number::New(env, record.true_peak_db_l));
-  true_peak_db.Set(1u, Napi::Number::New(env, record.true_peak_db_r));
-  out.Set("truePeakDb", true_peak_db);
+  // Scalar L/R fields mirror the C ABI record (and the Python / WASM surfaces),
+  // so stereo meter code reads the same field names on every binding.
+  out.Set("peakDbL", Napi::Number::New(env, record.peak_db_l));
+  out.Set("peakDbR", Napi::Number::New(env, record.peak_db_r));
+  out.Set("rmsDbL", Napi::Number::New(env, record.rms_db_l));
+  out.Set("rmsDbR", Napi::Number::New(env, record.rms_db_r));
+  out.Set("truePeakDbL", Napi::Number::New(env, record.true_peak_db_l));
+  out.Set("truePeakDbR", Napi::Number::New(env, record.true_peak_db_r));
   out.Set("maxTruePeakDb", Napi::Number::New(env, record.max_true_peak_db));
   out.Set("correlation", Napi::Number::New(env, record.correlation));
   out.Set("monoCompatWidth", Napi::Number::New(env, record.mono_compat_width));

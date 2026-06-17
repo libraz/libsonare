@@ -837,11 +837,14 @@ export class RealtimeEngine {
   }
 
   /**
-   * Sets a track lane strip's per-channel delay in samples in realtime. Applied
-   * at the next block head via the engine command queue; safe during playback.
+   * Sets a track lane strip's inter-channel alignment delay in samples.
+   * `delaySamples` is a non-negative whole-sample delay. This changes strip
+   * latency, so PDC and the reported graph latency are rebuilt — treat it as a
+   * structural change: do NOT call it concurrently with {@link process}. Stop
+   * playback (or otherwise quiesce the audio callback) before calling.
    *
    * @param trackId Lane the strip belongs to.
-   * @param delaySamples Channel delay in samples.
+   * @param delaySamples Non-negative channel delay in samples.
    */
   setTrackStripChannelDelaySamples(trackId: number, delaySamples: number): void {
     this.native.setTrackStripChannelDelaySamples(trackId, delaySamples);

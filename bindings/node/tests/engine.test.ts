@@ -1130,8 +1130,10 @@ describe('RealtimeEngine native binding', () => {
     const meterRecords = engine.drainMeterTelemetry();
     expect(Array.isArray(meterRecords)).toBe(true);
     for (const record of meterRecords) {
-      expect(record.peakDb).toHaveLength(2);
-      expect(record.rmsDb).toHaveLength(2);
+      expect(typeof record.peakDbL).toBe('number');
+      expect(typeof record.peakDbR).toBe('number');
+      expect(typeof record.rmsDbL).toBe('number');
+      expect(typeof record.rmsDbR).toBe('number');
       expect(Number.isFinite(record.integratedLufs)).toBe(true);
     }
     engine.destroy();

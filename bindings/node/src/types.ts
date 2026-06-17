@@ -1165,12 +1165,18 @@ export interface EngineMeterTelemetry {
   renderFrame: number;
   /** Monotonic sequence number. */
   seq: number;
-  /** Per-channel peak level in dB `[left, right]`. */
-  peakDb: [number, number];
-  /** Per-channel RMS level in dB `[left, right]`. */
-  rmsDb: [number, number];
-  /** Per-channel true-peak level in dB `[left, right]`. */
-  truePeakDb: [number, number];
+  /** Left-channel peak level in dB. */
+  peakDbL: number;
+  /** Right-channel peak level in dB. */
+  peakDbR: number;
+  /** Left-channel RMS level in dB. */
+  rmsDbL: number;
+  /** Right-channel RMS level in dB. */
+  rmsDbR: number;
+  /** Left-channel true-peak level in dB. */
+  truePeakDbL: number;
+  /** Right-channel true-peak level in dB. */
+  truePeakDbR: number;
   /** Maximum true-peak across channels in dB. */
   maxTruePeakDb: number;
   /** Stereo correlation in `[-1, 1]`. */
@@ -1193,7 +1199,7 @@ export interface EngineMeterTelemetry {
  * Per-plane meter telemetry record drained from
  * {@link RealtimeEngine.drainMeterTelemetryWide} for a surround target. The
  * `peakDb`/`rmsDb`/`truePeakDb` arrays carry `channelCount` planes in canonical
- * WAVE order (L R C LFE Ls Rs [Lss Rss]).
+ * WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Lss Rss Ls Rs).
  */
 export interface EngineMeterTelemetryWide {
   /** Meter tap target id (e.g. master/bus identifier). */
@@ -1240,7 +1246,11 @@ export interface EngineScopeTelemetry {
   droppedRecords: number;
   /** FFT magnitude spectrum in dBFS, linear-spaced over `[0, Nyquist]`. */
   bands: number[];
-  /** Goniometer/vectorscope sample points (left/right pairs). */
+  /**
+   * Goniometer/vectorscope sample points as `{ left, right }` objects. The
+   * Python surface exposes the same data as `(left, right)` tuples; this
+   * representation difference is intentional, the values match.
+   */
   points: { left: number; right: number }[];
 }
 

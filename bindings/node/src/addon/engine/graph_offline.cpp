@@ -268,6 +268,11 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetryWide(const Napi::CallbackInfo
 
 Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "configureScopeTelemetry expects (intervalFrames, bandCount) numbers")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   const int interval_frames = info[0].As<Napi::Number>().Int32Value();
   const unsigned int band_count = info[1].As<Napi::Number>().Uint32Value();
   unsigned int applied = 0;
