@@ -224,6 +224,7 @@ endif()
 if(BUILD_MIXING)
   target_sources(sonare_tests PRIVATE
     engine/meter_telemetry_test.cpp
+    engine/scope_telemetry_test.cpp
     engine/mixing_runtime_test.cpp
     engine/monitor_runtime_test.cpp
     engine/track_mixer_test.cpp
@@ -392,6 +393,26 @@ if(BUILD_ARRANGEMENT)
     target_sources(sonare_tests PRIVATE assist/assist_seam_test.cpp)
     target_link_libraries(sonare_tests PRIVATE sonare_assist)
     target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ASSIST=1)
+  endif()
+endif()
+
+# macOS host backend tests. Built only when a backend is enabled on APPLE; the
+# backend static libs are defined in src/host/backends (added before this
+# subdirectory). Live-device / system-AU cases inside are tagged "[.]" and stay
+# out of the default ctest run.
+if(APPLE AND (BUILD_COREAUDIO OR BUILD_COREMIDI OR BUILD_AU_HOST))
+  target_sources(sonare_tests PRIVATE host/macos_backends_test.cpp)
+  if(BUILD_COREAUDIO)
+    target_link_libraries(sonare_tests PRIVATE sonare_host_coreaudio)
+    target_compile_definitions(sonare_tests PRIVATE SONARE_HOST_TEST_COREAUDIO=1)
+  endif()
+  if(BUILD_COREMIDI)
+    target_link_libraries(sonare_tests PRIVATE sonare_host_coremidi)
+    target_compile_definitions(sonare_tests PRIVATE SONARE_HOST_TEST_COREMIDI=1)
+  endif()
+  if(BUILD_AU_HOST)
+    target_link_libraries(sonare_tests PRIVATE sonare_host_plughost)
+    target_compile_definitions(sonare_tests PRIVATE SONARE_HOST_TEST_AU=1)
   endif()
 endif()
 
