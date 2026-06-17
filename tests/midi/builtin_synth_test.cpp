@@ -135,6 +135,31 @@ TEST_CASE("BuiltinSynth Reset All Controllers lifts sustain pedal", "[midi][synt
   REQUIRE(render_peak(&synth, 256) == 0.0f);
 }
 
+TEST_CASE("BuiltinSynth Reset All Controllers recenters pitch bend and clears pressure",
+          "[midi][synth]") {
+  constexpr double kSampleRate = 48000.0;
+  BuiltinSynth synth(BuiltinSynthConfig{});  // Default sine: clean zero crossings.
+  synth.prepare(kSampleRate, 0);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 100)));  // A4.
+  render_peak(&synth, 4096);  // Settle into sustain.
+  const float centered = estimate_freq(&synth, 24000, kSampleRate);
+  const float level_before = render_peak(&synth, 512);
+  REQUIRE(centered == Catch::Approx(440.0f).margin(4.0f));
+  REQUIRE(level_before > 0.0f);
+
+  // Apply a full upward bend and full channel pressure: pitch rises, level rises.
+  synth.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, 0, 16383)));
+  synth.on_event(0, event(sonare::midi::make_midi1_channel_pressure(0, 0, 127)));
+  REQUIRE(estimate_freq(&synth, 24000, kSampleRate) > centered * 1.10f);
+  REQUIRE(render_peak(&synth, 512) > level_before * 1.5f);
+
+  // Reset All Controllers must recenter pitch AND drop the residual pressure.
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 121, 0)));
+  REQUIRE(estimate_freq(&synth, 24000, kSampleRate) == Catch::Approx(centered).margin(4.0f));
+  REQUIRE(render_peak(&synth, 512) == Catch::Approx(level_before).epsilon(0.05));
+}
+
 TEST_CASE("BuiltinSynth pitch bend retunes sounding voices on the channel", "[midi][synth]") {
   constexpr double kSampleRate = 48000.0;
   BuiltinSynthConfig config;  // Default sine waveform: clean zero crossings.

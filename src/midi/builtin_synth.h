@@ -108,6 +108,12 @@ class BuiltinSynth final : public MidiInstrument {
   // silences them immediately, bypassing the release stage.
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
+  // Channel-mode "Reset All Controllers" (CC#121): lift the damper and return
+  // every continuous controller this synth honours to its neutral value --
+  // pitch bend to center (restoring active voices' pitch) and channel/poly
+  // pressure to zero. Without the bend/pressure reset a prior MPE expression
+  // would bleed into subsequent notes (detuned pitch, residual +pressure gain).
+  void reset_all_controllers(uint8_t channel) noexcept;
   float render_voice_sample(Voice& v) noexcept;
 
   BuiltinSynthConfig config_{};

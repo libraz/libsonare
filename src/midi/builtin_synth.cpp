@@ -210,6 +210,22 @@ void BuiltinSynth::all_sound_off(uint8_t channel) noexcept {
   }
 }
 
+void BuiltinSynth::reset_all_controllers(uint8_t channel) noexcept {
+  if (!prepared_) return;
+  const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
+  // Lift the damper and release any keys it was holding.
+  sustain_pedal(ch, false);
+  // Recenter pitch bend and restore the unbent pitch of every active voice.
+  channel_bend_semitones_[ch] = 0.0f;
+  channel_pressure_[ch] = 0.0f;
+  for (auto& v : voices_) {
+    if (v.active && (v.channel & 0x0Fu) == ch) {
+      v.phase_inc = v.base_phase_inc;
+      v.poly_pressure = 0.0f;
+    }
+  }
+}
+
 void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) noexcept {
   if (!prepared_) return;
   const Ump& u = event.ump;
@@ -260,8 +276,8 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
       case 120:  // All Sound Off — immediate silence.
         all_sound_off(channel);
         break;
-      case 121:  // Reset All Controllers — lift damper and release sustained keys.
-        sustain_pedal(channel, false);
+      case 121:  // Reset All Controllers — lift damper, recenter bend, clear pressure.
+        reset_all_controllers(channel);
         break;
       case 123:  // All Notes Off — graceful release.
       case 124:  // Omni Off / On and Mono/Poly mode changes also imply notes-off.
