@@ -322,8 +322,10 @@ bool TruePeakLimiter::set_parameter(unsigned int param_id, float value) {
       return true;
     case 1:
       // In-place: recomputes time constants and forwards to inner limiter
-      // without clearing lookahead or gain-envelope state.
-      set_release_ms(std::max(0.0f, value));
+      // without clearing lookahead or gain-envelope state. Must use the noexcept
+      // in-place setter (it clamps internally) so this RT-safe parameter never
+      // throws or re-prepares on the audio thread.
+      set_release_ms_in_place(value);
       return true;
     default:
       return false;
