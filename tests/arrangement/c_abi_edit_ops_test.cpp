@@ -508,6 +508,16 @@ TEST_CASE("C-ABI set_track_gain/mute/solo/pan with undo", "[project][c-abi-edit]
   REQUIRE(sonare_project_set_track_solo(project, 999999, 1) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_set_track_pan(project, 999999, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
 
+  // Non-finite / negative numeric inputs are rejected at the ABI boundary, matching
+  // the set_clip_gain contract, and leave the project unmutated.
+  REQUIRE(sonare_project_set_track_gain(project, fx.track, -0.1f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_gain(project, fx.track, std::nanf("")) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_pan(project, fx.track, std::nanf("")) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(serialize(project) == before);
+
   sonare_project_destroy(project);
 }
 

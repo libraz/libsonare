@@ -767,7 +767,9 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
 
 SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track_id, float gain) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || track_id == 0 || !std::isfinite(gain) || gain < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackGain>(track_id, gain);
@@ -809,7 +811,7 @@ SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track
 
 SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_id, float pan) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || track_id == 0 || !std::isfinite(pan)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackPan>(track_id, pan);

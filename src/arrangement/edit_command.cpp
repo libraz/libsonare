@@ -356,7 +356,7 @@ bool SetTrackGain::apply(Project& project, MidiContentStore& /*store*/) {
   if (t == nullptr) {
     return false;
   }
-  t->gain = std::max(0.0f, gain_);
+  t->gain = std::isfinite(gain_) ? std::max(0.0f, gain_) : 1.0f;
   return true;
 }
 
@@ -410,7 +410,7 @@ bool SetTrackPan::apply(Project& project, MidiContentStore& /*store*/) {
   if (t == nullptr) {
     return false;
   }
-  t->pan = std::clamp(pan_, -1.0f, 1.0f);
+  t->pan = std::isfinite(pan_) ? std::clamp(pan_, -1.0f, 1.0f) : 0.0f;
   return true;
 }
 
