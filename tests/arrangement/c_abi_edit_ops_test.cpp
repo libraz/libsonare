@@ -475,6 +475,42 @@ TEST_CASE("C-ABI set_track_route with undo", "[project][c-abi-edit]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("C-ABI set_track_gain/mute/solo/pan with undo", "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  AudioFixture fx = add_audio_track_clip(project, 0.0, 4.0);
+  const std::string before = serialize(project);
+
+  REQUIRE(sonare_project_set_track_gain(project, fx.track, 0.5f) == SONARE_OK);
+  REQUIRE(serialize(project) != before);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+
+  REQUIRE(sonare_project_set_track_mute(project, fx.track, 1) == SONARE_OK);
+  REQUIRE(serialize(project) != before);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+
+  REQUIRE(sonare_project_set_track_solo(project, fx.track, 1) == SONARE_OK);
+  REQUIRE(serialize(project) != before);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+
+  REQUIRE(sonare_project_set_track_pan(project, fx.track, -0.5f) == SONARE_OK);
+  REQUIRE(serialize(project) != before);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+
+  // Invalid track ids are rejected for every setter.
+  REQUIRE(sonare_project_set_track_gain(project, 0, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_gain(project, 999999, 1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_mute(project, 999999, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_solo(project, 999999, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_pan(project, 999999, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C-ABI set_track_kind with undo", "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

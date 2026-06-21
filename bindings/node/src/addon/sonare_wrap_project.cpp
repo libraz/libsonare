@@ -289,6 +289,10 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetWarpMap>("setWarpMap"),
           InstanceMethod<&ProjectWrap::RemoveWarpMap>("removeWarpMap"),
           InstanceMethod<&ProjectWrap::SetTrackMidiDestination>("setTrackMidiDestination"),
+          InstanceMethod<&ProjectWrap::SetTrackGain>("setTrackGain"),
+          InstanceMethod<&ProjectWrap::SetTrackMute>("setTrackMute"),
+          InstanceMethod<&ProjectWrap::SetTrackSolo>("setTrackSolo"),
+          InstanceMethod<&ProjectWrap::SetTrackPan>("setTrackPan"),
           InstanceMethod<&ProjectWrap::RemoveClip>("removeClip"),
           InstanceMethod<&ProjectWrap::SetClipGain>("setClipGain"),
           InstanceMethod<&ProjectWrap::SetClipFade>("setClipFade"),
@@ -689,6 +693,34 @@ Napi::Value ProjectWrap::SetTrackMidiDestination(const Napi::CallbackInfo& info)
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_project_set_track_midi_destination(project_, Uint32Arg(info, 0, 0),
                                                               Uint32Arg(info, 1, 0)));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetTrackGain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_track_gain(project_, Uint32Arg(info, 0, 0),
+                                                  static_cast<float>(NumberArg(info, 1, 1.0))));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetTrackMute(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const int mute = info.Length() > 1 && info[1].ToBoolean().Value() ? 1 : 0;
+  ThrowIfError(env, sonare_project_set_track_mute(project_, Uint32Arg(info, 0, 0), mute));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetTrackSolo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const int solo = info.Length() > 1 && info[1].ToBoolean().Value() ? 1 : 0;
+  ThrowIfError(env, sonare_project_set_track_solo(project_, Uint32Arg(info, 0, 0), solo));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetTrackPan(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_track_pan(project_, Uint32Arg(info, 0, 0),
+                                                 static_cast<float>(NumberArg(info, 1, 0.0))));
   return env.Undefined();
 }
 

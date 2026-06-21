@@ -234,6 +234,10 @@ Value track_to_json(const arrangement::Track& t) {
   o["id"] = static_cast<double>(t.id);
   o["name"] = t.name;
   o["kind"] = static_cast<int>(t.kind);
+  o["gain"] = static_cast<double>(t.gain);
+  o["mute"] = t.mute;
+  o["solo"] = t.solo;
+  o["pan"] = static_cast<double>(t.pan);
   o["channel_strip_ref"] = t.channel_strip_ref;
   o["output_target"] = t.output_target;
   o["midi_destination_id"] = static_cast<double>(t.midi_destination_id);
@@ -618,6 +622,10 @@ arrangement::Track track_from_json(const Value& v) {
   t.id = uint_or(v, "id", 0);
   t.name = str_or(v, "name", "");
   t.kind = static_cast<arrangement::Track::Kind>(uint_or(v, "kind", 0));
+  t.gain = std::max(0.0f, static_cast<float>(num_or(v, "gain", 1.0)));
+  t.mute = bool_or(v, "mute", false);
+  t.solo = bool_or(v, "solo", false);
+  t.pan = std::clamp(static_cast<float>(num_or(v, "pan", 0.0)), -1.0f, 1.0f);
   t.channel_strip_ref = str_or(v, "channel_strip_ref", "");
   t.output_target = str_or(v, "output_target", "");
   t.midi_destination_id = uint_or(v, "midi_destination_id", 0);

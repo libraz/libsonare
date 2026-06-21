@@ -251,6 +251,34 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
         ]
 
+        lib.sonare_project_set_track_gain.restype = ctypes.c_int32
+        lib.sonare_project_set_track_gain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+        ]
+
+        lib.sonare_project_set_track_mute.restype = ctypes.c_int32
+        lib.sonare_project_set_track_mute.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int32,
+        ]
+
+        lib.sonare_project_set_track_solo.restype = ctypes.c_int32
+        lib.sonare_project_set_track_solo.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int32,
+        ]
+
+        lib.sonare_project_set_track_pan.restype = ctypes.c_int32
+        lib.sonare_project_set_track_pan.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_float,
+        ]
+
         lib.sonare_project_remove_clip.restype = ctypes.c_int32
         lib.sonare_project_remove_clip.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
 

@@ -384,6 +384,37 @@ struct ProjectWasm {
     }
   }
 
+  void setTrackGain(uint32_t track_id, float gain) {
+    const SonareError err = sonare_project_set_track_gain(project_.get(), track_id, gain);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set track gain");
+    }
+  }
+
+  void setTrackMute(uint32_t track_id, bool mute) {
+    const SonareError err = sonare_project_set_track_mute(project_.get(), track_id, mute ? 1 : 0);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set track mute");
+    }
+  }
+
+  void setTrackSolo(uint32_t track_id, bool solo) {
+    const SonareError err = sonare_project_set_track_solo(project_.get(), track_id, solo ? 1 : 0);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to set track solo");
+    }
+  }
+
+  void setTrackPan(uint32_t track_id, float pan) {
+    const SonareError err = sonare_project_set_track_pan(project_.get(), track_id, pan);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set track pan");
+    }
+  }
+
   void undo() {
     const SonareError err = sonare_project_undo(project_.get());
     if (err != SONARE_OK) {
@@ -1731,6 +1762,10 @@ void registerProjectBindings() {
       .function("setWarpMap", &ProjectWasm::setWarpMap)
       .function("removeWarpMap", &ProjectWasm::removeWarpMap)
       .function("setTrackMidiDestination", &ProjectWasm::setTrackMidiDestination)
+      .function("setTrackGain", &ProjectWasm::setTrackGain)
+      .function("setTrackMute", &ProjectWasm::setTrackMute)
+      .function("setTrackSolo", &ProjectWasm::setTrackSolo)
+      .function("setTrackPan", &ProjectWasm::setTrackPan)
       .function("undo", &ProjectWasm::undo)
       .function("redo", &ProjectWasm::redo)
       .function("setMidiEvents", &ProjectWasm::setMidiEvents)

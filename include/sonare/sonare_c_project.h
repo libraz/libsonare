@@ -1153,6 +1153,30 @@ SonareError sonare_project_remove_warp_map(SonareProject* project, uint32_t warp
 SonareError sonare_project_set_track_midi_destination(SonareProject* project, uint32_t track_id,
                                                       uint32_t destination_id);
 
+/// @brief Sets a track's linear playback gain (1.0 = unity) via an undoable edit
+///        command. The arrangement compiler folds the track's gain/mute/solo/pan
+///        into the track's channel strip (synthesizing one when the track is not
+///        bound to a strip), so the value applies uniformly to the track's audio
+///        and MIDI. @p gain is clamped to >= 0; @p track_id must reference an
+///        existing track.
+SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track_id, float gain);
+
+/// @brief Sets a track's mute flag via an undoable edit command. A muted track is
+///        silent. @p track_id must reference an existing track. See
+///        @ref sonare_project_set_track_gain for how track controls are applied.
+SonareError sonare_project_set_track_mute(SonareProject* project, uint32_t track_id, int mute);
+
+/// @brief Sets a track's solo flag via an undoable edit command. When any track is
+///        soloed, only soloed tracks sound. @p track_id must reference an existing
+///        track. See @ref sonare_project_set_track_gain for how controls apply.
+SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track_id, int solo);
+
+/// @brief Sets a track's stereo balance in [-1, +1] (0 = center) via an undoable
+///        edit command. @p pan is clamped to the valid range. @p track_id must
+///        reference an existing track. See @ref sonare_project_set_track_gain for
+///        how track controls are applied.
+SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_id, float pan);
+
 /// @brief Removes a clip via an undoable edit command. @p clip_id must
 ///        reference an existing clip. Undo restores the clip (and its MIDI
 ///        content) at its original position.

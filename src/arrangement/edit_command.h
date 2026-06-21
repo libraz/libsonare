@@ -225,6 +225,64 @@ class SetTrackMidiDestination final : public EditCommand {
   uint32_t destination_id_;
 };
 
+/// Sets a track's linear playback gain (folded into clip gain at compile time).
+/// Deterministic, undoable.
+class SetTrackGain final : public EditCommand {
+ public:
+  SetTrackGain(TrackId id, float gain) : id_(id), gain_(gain) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetTrackGain"; }
+
+ private:
+  TrackId id_;
+  float gain_;
+};
+
+/// Sets a track's mute flag. Deterministic, undoable.
+class SetTrackMute final : public EditCommand {
+ public:
+  SetTrackMute(TrackId id, bool mute) : id_(id), mute_(mute) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetTrackMute"; }
+
+ private:
+  TrackId id_;
+  bool mute_;
+};
+
+/// Sets a track's solo flag. Deterministic, undoable.
+class SetTrackSolo final : public EditCommand {
+ public:
+  SetTrackSolo(TrackId id, bool solo) : id_(id), solo_(solo) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetTrackSolo"; }
+
+ private:
+  TrackId id_;
+  bool solo_;
+};
+
+/// Sets a track's stereo balance in [-1, +1] (folded into per-channel clip
+/// level at compile time). Deterministic, undoable.
+class SetTrackPan final : public EditCommand {
+ public:
+  SetTrackPan(TrackId id, float pan) : id_(id), pan_(pan) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "SetTrackPan"; }
+
+ private:
+  TrackId id_;
+  float pan_;
+};
+
 // ===========================================================================
 // Clip commands
 // ===========================================================================

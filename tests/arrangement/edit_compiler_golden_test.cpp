@@ -2,9 +2,11 @@
 /// @brief compiler / RT snapshot golden + determinism tests.
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "arrangement/edit_command.h"
@@ -15,6 +17,7 @@
 #include "midi/ump.h"
 #include "rt/command.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 using sonare::constants::kTwoPi;
 
@@ -138,6 +141,58 @@ TEST_CASE("compile -> offline bounce is deterministic across two renders", "[arr
   REQUIRE(r2.timeline.has_value());
   const std::vector<float> c = render(*r2.timeline, frames);
   REQUIRE(a == c);
+}
+
+TEST_CASE("track gain/pan fold into a synthesized strip, not the clip", "[arrangement]") {
+  Fixture f = make_fixture();
+  REQUIRE(arr::SetTrackGain(f.track_id, 0.5f).apply(f.project, f.midi));
+  REQUIRE(arr::SetTrackPan(f.track_id, 0.5f).apply(f.project, f.midi));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+
+  // The clip schedule keeps only the clip's own gain (1.0); the track's gain is
+  // applied downstream by the strip, so it must not be double-folded here.
+  REQUIRE(r.timeline->audio_clips.front().gain == Catch::Approx(1.0f));
+  REQUIRE(r.timeline->audio_clips.front().pan == Catch::Approx(0.0f));
+
+  // A strip was synthesized for the unbound track and the track is bound to it.
+  REQUIRE(r.timeline->mixer.bindings.size() == 1);
+  REQUIRE(r.timeline->mixer.bindings.front().track_id == f.track_id);
+  const std::string& strip_id = r.timeline->mixer.bindings.front().strip_id;
+  const auto& strips = r.timeline->mixer.scene.strips;
+  const auto it =
+      std::find_if(strips.begin(), strips.end(), [&](const auto& s) { return s.id == strip_id; });
+  REQUIRE(it != strips.end());
+  REQUIRE(it->fader_db == Catch::Approx(sonare::linear_to_db(0.5f)));
+  REQUIRE(it->pan == Catch::Approx(0.5f));
+  REQUIRE_FALSE(it->muted);
+}
+
+TEST_CASE("track mute mutes its strip without dropping the clip", "[arrangement]") {
+  Fixture f = make_fixture();
+  REQUIRE(arr::SetTrackMute(f.track_id, true).apply(f.project, f.midi));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  REQUIRE(r.timeline->mixer.bindings.size() == 1);
+  const std::string& strip_id = r.timeline->mixer.bindings.front().strip_id;
+  const auto& strips = r.timeline->mixer.scene.strips;
+  const auto it =
+      std::find_if(strips.begin(), strips.end(), [&](const auto& s) { return s.id == strip_id; });
+  REQUIRE(it != strips.end());
+  REQUIRE(it->muted);
+}
+
+TEST_CASE("a neutral track synthesizes no strip", "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE(r.timeline.has_value());
+  // Default gain/pan/mute/solo leave existing strips untouched and add none.
+  REQUIRE(r.timeline->mixer.scene.strips.size() == f.project.scene().strips.size());
+  REQUIRE(r.timeline->mixer.bindings.empty());
 }
 
 TEST_CASE("compiled snapshot is a fully-allocated immutable RT object", "[arrangement]") {

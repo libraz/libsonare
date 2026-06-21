@@ -3,11 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "core/resample.h"
 #include "engine/tempo_sync.h"
 #include "midi/midi_clip.h"
+#include "util/db.h"
 
 namespace sonare::arrangement {
 
@@ -48,6 +50,54 @@ bool clip_matches_track_kind(const Project& project, const EditClip& clip,
   if (track->kind == Track::Kind::kMidi) return kind == SourceKind::kMidi;
   return false;
 }
+
+// True when at least one track is soloed (then non-soloed tracks are silent).
+bool any_track_soloed(const Project& project) noexcept {
+  for (const Track& track : project.tracks()) {
+    if (track.solo) return true;
+  }
+  return false;
+}
+
+// Linear gain a track contributes, folding in mute and solo. A muted track, or a
+// non-soloed track while any track is soloed, is silent (0). Missing track -> 1.
+float effective_track_gain(const Track* track, bool any_solo) noexcept {
+  if (track == nullptr) return 1.0f;
+  if (track->mute) return 0.0f;
+  if (any_solo && !track->solo) return 0.0f;
+  return track->gain;
+}
+
+// Stereo balance a track contributes (the player applies it per output channel),
+// clamped to the valid range. Missing track -> center (0).
+float effective_track_pan(const Track* track) noexcept {
+  if (track == nullptr) return 0.0f;
+  return std::clamp(track->pan, -1.0f, 1.0f);
+}
+
+#if defined(SONARE_WITH_MIXING)
+// True when a track produces no sound: explicitly muted, soloed out, or its gain
+// has been pulled to silence.
+bool track_is_silenced(const Track& track, bool any_solo) noexcept {
+  return track.mute || (any_solo && !track.solo) || track.gain <= 0.0f;
+}
+
+// Generates a scene-unique strip id for a track that carries gain/pan/mute/solo
+// but is not bound to an explicit channel strip (mirrors the bounce path's
+// synthetic-strip naming).
+std::string unique_track_strip_id(const mixing::api::Scene& scene) {
+  constexpr const char* kBase = "__sonare_track_strip__";
+  auto exists = [&](const std::string& candidate) {
+    return std::any_of(scene.strips.begin(), scene.strips.end(),
+                       [&](const mixing::api::Strip& strip) { return strip.id == candidate; });
+  };
+  if (!exists(kBase)) return kBase;
+  for (int suffix = 1;; ++suffix) {
+    std::string candidate = std::string(kBase) + "_" + std::to_string(suffix);
+    if (!exists(candidate)) return candidate;
+  }
+}
+#endif
 
 // Fills a deterministic transport::TempoMap from the project's plain segment
 // data. When the project has no tempo segments a single 120 BPM segment is used
@@ -304,11 +354,49 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   }
 
   // ---- Mixer scene + Track->Strip bindings ---------------------------------
+  // A Track owns its gain/mute/solo/pan; the channel strip is where they take
+  // effect (uniformly across the track's audio and MIDI stems). In mixing builds
+  // we therefore fold each track's controls into its bound strip, synthesizing a
+  // minimal strip for tracks that carry non-default controls without an explicit
+  // binding. Strip defaults are identity, so a neutral track never perturbs an
+  // existing strip. The no-mixing fallback keeps folding gain/pan into the per
+  // -clip schedules below.
+  const bool any_solo = any_track_soloed(project);
   timeline.mixer.scene = project.scene();
   for (const auto& track : project.tracks()) {
+#if defined(SONARE_WITH_MIXING)
+    const bool silenced = track_is_silenced(track, any_solo);
+    const float track_pan = effective_track_pan(&track);
+    const bool needs_mix = track.gain != 1.0f || track_pan != 0.0f || silenced;
+
+    mixing::api::Strip* strip = nullptr;
+    if (!track.channel_strip_ref.empty()) {
+      for (mixing::api::Strip& s : timeline.mixer.scene.strips) {
+        if (s.id == track.channel_strip_ref) {
+          strip = &s;
+          break;
+        }
+      }
+    }
+    std::string strip_id = track.channel_strip_ref;
+    if (strip == nullptr && needs_mix) {
+      mixing::api::Strip synth;
+      synth.id = unique_track_strip_id(timeline.mixer.scene);
+      strip_id = synth.id;
+      timeline.mixer.scene.strips.push_back(std::move(synth));
+      strip = &timeline.mixer.scene.strips.back();
+    }
+    if (strip != nullptr) {
+      if (track.gain > 0.0f) strip->fader_db += linear_to_db(track.gain);
+      strip->pan = std::clamp(strip->pan + track_pan, -1.0f, 1.0f);
+      strip->muted = strip->muted || silenced;
+      timeline.mixer.bindings.push_back(MixerStripBinding{track.id, strip_id});
+    }
+#else
     if (!track.channel_strip_ref.empty()) {
       timeline.mixer.bindings.push_back(MixerStripBinding{track.id, track.channel_strip_ref});
     }
+#endif
   }
 #if !defined(SONARE_WITH_MIXING)
   if (!timeline.mixer.bindings.empty()) {
@@ -551,8 +639,17 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       const engine::FadeCurve fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
       const engine::FadeCurve fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);
 
+      // The track's gain/mute/solo/pan take effect at its channel strip (see the
+      // mixer-scene pass above), so the clip schedule carries only the clip's own
+      // gain. Builds without the mixing runtime have no strip stage, so they fall
+      // back to folding the track's contribution straight into the clip here.
+#if defined(SONARE_WITH_MIXING)
+      const float track_gain = 1.0f;
+#else
+      const float track_gain = effective_track_gain(project.find_track(clip.track_id), any_solo);
+#endif
       engine::ClipSchedule sched(clip.id, buffer, clip.start_ppq + part.start_ppq, start_sample,
-                                 clip_offset_samples, length_samples, loop, clip.gain,
+                                 clip_offset_samples, length_samples, loop, clip.gain * track_gain,
                                  fade_in_samples, fade_out_samples, fade_in_curve, fade_out_curve,
                                  /*clip_has_separate_fade_out_curve=*/true);
       sched.loop_length_samples = loop_length_samples;
@@ -573,6 +670,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         sched.warp_anchors = std::move(anchors);
       }
       sched.track_id = clip.track_id;
+#if !defined(SONARE_WITH_MIXING)
+      sched.pan = effective_track_pan(project.find_track(clip.track_id));
+#endif
       sched.storage = std::move(storage);
       timeline.audio_clips.push_back(std::move(sched));
     }
@@ -601,6 +701,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     if (clip.length_ppq <= 0.0 || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0) {
       add_diag(&result, Diagnostic::Code::kInvalidPpq, Diagnostic::Severity::kError, clip.id,
                "MIDI clip has non-positive length or negative start/offset PPQ");
+      continue;
+    }
+    // A muted (or non-soloed-while-soloing) track emits no notes.
+    if (effective_track_gain(project.find_track(clip.track_id), any_solo) <= 0.0f) {
       continue;
     }
 

@@ -120,6 +120,10 @@ struct ClipSchedule {
   /// Source-track id carried from the arrangement clip. 0 = unset.
   uint32_t track_id = 0;
   float gain = 1.0f;
+  /// Stereo balance in [-1, +1] (0 = center). Applied per output channel by the
+  /// player: positive attenuates left, negative attenuates right. Folded from
+  /// the source track's pan at compile time.
+  float pan = 0.0f;
   int64_t fade_in_samples = 0;
   int64_t fade_out_samples = 0;
   /// Optional whole-clip fade domain for schedule fragments (for example comp

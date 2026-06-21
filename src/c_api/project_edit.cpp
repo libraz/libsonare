@@ -765,6 +765,62 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
 #endif
 }
 
+SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track_id, float gain) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::SetTrackGain>(track_id, gain);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, gain);
+#endif
+}
+
+SonareError sonare_project_set_track_mute(SonareProject* project, uint32_t track_id, int mute) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::SetTrackMute>(track_id, mute != 0);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, mute);
+#endif
+}
+
+SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track_id, int solo) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::SetTrackSolo>(track_id, solo != 0);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, solo);
+#endif
+}
+
+SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_id, float pan) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  auto command = std::make_unique<arr::SetTrackPan>(track_id, pan);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, pan);
+#endif
+}
+
 SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;

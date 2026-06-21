@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from libsonare import Project, mastering_insert_names
+from libsonare import Project, SonareError, mastering_insert_names
 
 
 def _audio_project() -> tuple[Project, int, int]:
@@ -85,6 +85,24 @@ def test_set_track_route_undo() -> None:
     assert p.to_json() != before
     p.undo()
     assert p.to_json() == before
+
+
+def test_set_track_gain_mute_solo_pan_undo() -> None:
+    p, track, _clip = _audio_project()
+    before = p.to_json()
+    for apply in (
+        lambda: p.set_track_gain(track, 0.5),
+        lambda: p.set_track_mute(track, True),
+        lambda: p.set_track_solo(track, True),
+        lambda: p.set_track_pan(track, -0.5),
+    ):
+        apply()
+        assert p.to_json() != before
+        p.undo()
+        assert p.to_json() == before
+
+    with pytest.raises(SonareError):
+        p.set_track_gain(999999, 1.0)
 
 
 def test_automation_lane_add_edit_remove() -> None:

@@ -149,6 +149,32 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('sets track gain / mute / solo / pan and undoes them', () => {
+    const project = Project.create();
+    const trackId = project.addTrack({ kind: 'audio', name: 'lead' });
+    const before = project.toJson();
+
+    project.setTrackGain(trackId, 0.5);
+    expect(project.toJson()).toContain('"gain":0.5');
+    project.setTrackMute(trackId, true);
+    expect(project.toJson()).toContain('"mute":true');
+    project.setTrackSolo(trackId, true);
+    expect(project.toJson()).toContain('"solo":true');
+    project.setTrackPan(trackId, -0.25);
+    expect(project.toJson()).toContain('"pan":-0.25');
+
+    project.undo();
+    project.undo();
+    project.undo();
+    project.undo();
+    expect(project.toJson()).toBe(before);
+
+    expect(() => project.setTrackGain(9999, 1)).toThrow();
+    expect(() => project.setTrackPan(9999, 0)).toThrow();
+
+    project.destroy();
+  });
+
   it('sets a clip warp reference and undoes it', () => {
     const project = Project.create();
     const trackId = project.addTrack({ kind: 'audio', name: 'audio' });

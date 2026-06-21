@@ -351,6 +351,78 @@ EditCommandPtr SetTrackMidiDestination::invert(const Project& before,
   return std::make_unique<SetTrackMidiDestination>(id_, t->midi_destination_id);
 }
 
+bool SetTrackGain::apply(Project& project, MidiContentStore& /*store*/) {
+  Track* t = project.find_track_mutable(id_);
+  if (t == nullptr) {
+    return false;
+  }
+  t->gain = std::max(0.0f, gain_);
+  return true;
+}
+
+EditCommandPtr SetTrackGain::invert(const Project& before,
+                                    const MidiContentStore& /*store_before*/) const {
+  const Track* t = before.find_track(id_);
+  if (t == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetTrackGain>(id_, t->gain);
+}
+
+bool SetTrackMute::apply(Project& project, MidiContentStore& /*store*/) {
+  Track* t = project.find_track_mutable(id_);
+  if (t == nullptr) {
+    return false;
+  }
+  t->mute = mute_;
+  return true;
+}
+
+EditCommandPtr SetTrackMute::invert(const Project& before,
+                                    const MidiContentStore& /*store_before*/) const {
+  const Track* t = before.find_track(id_);
+  if (t == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetTrackMute>(id_, t->mute);
+}
+
+bool SetTrackSolo::apply(Project& project, MidiContentStore& /*store*/) {
+  Track* t = project.find_track_mutable(id_);
+  if (t == nullptr) {
+    return false;
+  }
+  t->solo = solo_;
+  return true;
+}
+
+EditCommandPtr SetTrackSolo::invert(const Project& before,
+                                    const MidiContentStore& /*store_before*/) const {
+  const Track* t = before.find_track(id_);
+  if (t == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetTrackSolo>(id_, t->solo);
+}
+
+bool SetTrackPan::apply(Project& project, MidiContentStore& /*store*/) {
+  Track* t = project.find_track_mutable(id_);
+  if (t == nullptr) {
+    return false;
+  }
+  t->pan = std::clamp(pan_, -1.0f, 1.0f);
+  return true;
+}
+
+EditCommandPtr SetTrackPan::invert(const Project& before,
+                                   const MidiContentStore& /*store_before*/) const {
+  const Track* t = before.find_track(id_);
+  if (t == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<SetTrackPan>(id_, t->pan);
+}
+
 // ===========================================================================
 // Clip commands
 // ===========================================================================

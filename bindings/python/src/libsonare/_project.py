@@ -1271,6 +1271,46 @@ class Project:
             )
         )
 
+    def set_track_gain(self, track_id: int, gain: float) -> None:
+        """Set a track's linear playback gain (1.0 = unity; >= 0) via an undoable edit.
+
+        The compiler folds the track's gain/mute/solo/pan into its channel strip,
+        so the value applies uniformly to the track's audio and MIDI.
+        """
+        g = float(gain)
+        if not math.isfinite(g) or g < 0.0:
+            raise ValueError("gain must be a finite number >= 0")
+        _check(_get_lib().sonare_project_set_track_gain(self._require_handle(), int(track_id), g))
+
+    def set_track_mute(self, track_id: int, mute: bool) -> None:
+        """Set a track's mute flag via an undoable edit (a muted track is silent)."""
+        _check(
+            _get_lib().sonare_project_set_track_mute(
+                self._require_handle(), int(track_id), 1 if mute else 0
+            )
+        )
+
+    def set_track_solo(self, track_id: int, solo: bool) -> None:
+        """Set a track's solo flag via an undoable edit.
+
+        When any track is soloed, only soloed tracks sound.
+        """
+        _check(
+            _get_lib().sonare_project_set_track_solo(
+                self._require_handle(), int(track_id), 1 if solo else 0
+            )
+        )
+
+    def set_track_pan(self, track_id: int, pan: float) -> None:
+        """Set a track's stereo balance in [-1, +1] (0 = center) via an undoable edit.
+
+        ``pan`` is clamped to the valid range by the core.
+        """
+        p = float(pan)
+        if not math.isfinite(p):
+            raise ValueError("pan must be a finite number")
+        _check(_get_lib().sonare_project_set_track_pan(self._require_handle(), int(track_id), p))
+
     def remove_clip(self, clip_id: int) -> None:
         """Remove a clip via an undoable edit command (undo restores it)."""
         _check(_get_lib().sonare_project_remove_clip(self._require_handle(), int(clip_id)))

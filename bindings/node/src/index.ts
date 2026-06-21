@@ -1774,6 +1774,26 @@ export class Project {
     this.native.setTrackMidiDestination(trackId, destinationId);
   }
 
+  /** Set a track's linear playback gain (1.0 = unity; >= 0) via an undoable edit. */
+  setTrackGain(trackId: number, gain: number): void {
+    this.native.setTrackGain(trackId, gain);
+  }
+
+  /** Set a track's mute flag via an undoable edit (a muted track is silent). */
+  setTrackMute(trackId: number, mute: boolean): void {
+    this.native.setTrackMute(trackId, mute);
+  }
+
+  /** Set a track's solo flag via an undoable edit (when any track is soloed, only soloed tracks sound). */
+  setTrackSolo(trackId: number, solo: boolean): void {
+    this.native.setTrackSolo(trackId, solo);
+  }
+
+  /** Set a track's stereo balance in [-1, +1] (0 = center) via an undoable edit. */
+  setTrackPan(trackId: number, pan: number): void {
+    this.native.setTrackPan(trackId, pan);
+  }
+
   /** Remove a clip via an undoable edit (undo restores it + its MIDI content). */
   removeClip(clipId: number): void {
     this.native.removeClip(clipId);

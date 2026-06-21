@@ -188,6 +188,21 @@ struct Track {
   std::string name;
   Kind kind = Kind::kAudio;
 
+  /// Linear playback gain applied to every clip on the track (1.0 = unity). The
+  /// arrangement compiler folds this into each clip's effective gain.
+  float gain = 1.0f;
+
+  /// Mute: when true the track is silenced (effective gain 0). Solo: when any
+  /// track is soloed, only soloed tracks sound. Both are folded into the
+  /// compiled clip gain (audio) and suppress MIDI clip scheduling when silent.
+  bool mute = false;
+  bool solo = false;
+
+  /// Stereo balance in [-1, +1] (0 = center). The arrangement compiler folds
+  /// this into the clip's per-channel playback level: positive attenuates the
+  /// left output, negative attenuates the right (center leaves both untouched).
+  float pan = 0.0f;
+
   /// Link to the mixing::api::Scene Strip by its string id (Track <-> Strip
   /// binding). Empty means "not yet bound to a strip".
   std::string channel_strip_ref;

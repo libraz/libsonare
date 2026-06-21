@@ -10,6 +10,18 @@ namespace sonare::engine {
 
 using sonare::constants::kHalfPi;
 
+namespace {
+/// Linear balance law for a stereo output channel. pan in [-1, +1]: positive
+/// (right) attenuates the left channel, negative (left) attenuates the right;
+/// center and any channel beyond the first stereo pair are left at unity.
+float pan_channel_gain(float pan, int channel) noexcept {
+  pan = std::clamp(pan, -1.0f, 1.0f);
+  if (channel == 0) return pan > 0.0f ? 1.0f - pan : 1.0f;
+  if (channel == 1) return pan < 0.0f ? 1.0f + pan : 1.0f;
+  return 1.0f;
+}
+}  // namespace
+
 void ClipBoundaryList::clear() noexcept {
   size = 0;
   overflowed = false;
@@ -159,7 +171,8 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
       for (int ch = 0; ch < num_channels; ++ch) {
         if (!channels[ch]) continue;
         const int src_ch = std::min(ch, source_channel_count(clip) - 1);
-        channels[ch][i] += sample_channel(clip, src_ch, source_pos) * gain;
+        const float ch_gain = gain * pan_channel_gain(clip.pan, ch);
+        channels[ch][i] += sample_channel(clip, src_ch, source_pos) * ch_gain;
       }
     }
   }
