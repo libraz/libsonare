@@ -118,10 +118,10 @@ double bs1770_channel_weight(int channel, int channels) {
       if (channel == 4 || channel == 5) return kBs1770SurroundWeight;
       return 1.0;
     case 8:
-      // 7.1: L, R, C, LFE(3), Ls(4), Rs(5), Lb(6), Rb(7).
-      // NON-NORMATIVE: BS.1770-4 does not define a 7.1 weighting; the rear pair
-      // (Lb/Rb) is treated like the side surrounds (+1.5 dB) as a reasonable
-      // extension rather than a standard-mandated value.
+      // 7.1: L, R, C, LFE(3), Lss(4), Rss(5), Ls(6), Rs(7) (canonical order, see
+      // core/channel_layout.h). NON-NORMATIVE: BS.1770-4 does not define a 7.1
+      // weighting; the rear/back pair (Ls/Rs) is treated like the side surrounds
+      // (Lss/Rss, +1.5 dB) as a reasonable extension rather than a standard value.
       if (channel == 3) return 0.0;                    // LFE excluded.
       if (channel >= 4) return kBs1770SurroundWeight;  // side + rear surround.
       return 1.0;
