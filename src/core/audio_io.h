@@ -23,6 +23,18 @@ enum class AudioFormat {
 /// @brief Result of audio loading: samples and sample rate.
 using AudioLoadResult = std::tuple<std::vector<float>, int>;
 
+/// @brief Result of multichannel audio loading: deinterleaved channels plus the
+///        sample rate. Each inner vector is one channel of equal length.
+struct AudioLoadResultMC {
+  std::vector<std::vector<float>> channels;
+  int sample_rate = 0;
+  /// @brief True when @ref channels reflects the source's native channel layout.
+  ///        False when the source was downmixed before deinterleaving (the
+  ///        FFmpeg fallback path returns a single, already-mono channel), so a
+  ///        @c channels.size() of 1 is a downmix rather than a mono source.
+  bool native_channels = true;
+};
+
 /// @brief Options for audio loading.
 struct AudioLoadOptions {
   /// @brief Maximum file size in bytes (0 = no limit).
@@ -72,6 +84,18 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size);
 /// @throws SonareException on file not found, unknown format, file too large, or decode error
 AudioLoadResult load_audio(const std::string& path,
                            const AudioLoadOptions& options = kDefaultLoadOptions);
+
+/// @brief Loads an audio file preserving its channels (auto-detect format).
+/// @details Unlike @ref load_audio (which downmixes to mono), this returns each
+///          source channel deinterleaved. WAV and MP3 are decoded to their
+///          native channel count; other formats decoded via the FFmpeg fallback
+///          are returned as a single (already downmixed) channel.
+/// @param path Path to audio file
+/// @param options Loading options (max file size, etc.)
+/// @return Deinterleaved channels (each normalized to [-1,1]) plus sample rate
+/// @throws SonareException on file not found, unknown format, too large, or decode error
+AudioLoadResultMC load_audio_multichannel(const std::string& path,
+                                          const AudioLoadOptions& options = kDefaultLoadOptions);
 
 /// @brief Loads audio from memory buffer (auto-detect format).
 /// @param data Pointer to audio data

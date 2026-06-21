@@ -187,6 +187,70 @@ std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
 }
 #endif  // !__EMSCRIPTEN__
 
+/// @brief Splits an interleaved buffer into per-channel planes of equal length.
+AudioLoadResultMC deinterleave(const float* interleaved, size_t total_samples, int channels,
+                               int sample_rate) {
+  AudioLoadResultMC result;
+  result.sample_rate = sample_rate;
+  const size_t frames = total_samples / static_cast<size_t>(channels);
+  result.channels.assign(static_cast<size_t>(channels), std::vector<float>(frames));
+  for (size_t f = 0; f < frames; ++f) {
+    for (int ch = 0; ch < channels; ++ch) {
+      result.channels[static_cast<size_t>(ch)][f] =
+          interleaved[f * static_cast<size_t>(channels) + static_cast<size_t>(ch)];
+    }
+  }
+  return result;
+}
+
+/// @brief Decodes a WAV buffer to its native deinterleaved channels.
+AudioLoadResultMC load_buffer_wav_mc(const uint8_t* data, size_t size) {
+  drwav wav;
+  drwav_bool32 ok = drwav_init_memory(&wav, data, size, nullptr);
+  SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to parse WAV data");
+
+  int sample_rate = static_cast<int>(wav.sampleRate);
+  int channels = static_cast<int>(wav.channels);
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid WAV sample rate");
+  SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
+                   "Invalid WAV channel count");
+
+  std::vector<float> samples(wav.totalPCMFrameCount * static_cast<size_t>(channels));
+  drwav_uint64 frames_read =
+      drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, samples.data());
+  drwav_uninit(&wav);
+
+  SONARE_CHECK_MSG(frames_read > 0, ErrorCode::DecodeFailed, "No audio frames in WAV data");
+  return deinterleave(samples.data(), static_cast<size_t>(frames_read) * channels, channels,
+                      sample_rate);
+}
+
+/// @brief Decodes an MP3 buffer to its native deinterleaved channels.
+AudioLoadResultMC load_buffer_mp3_mc(const uint8_t* data, size_t size) {
+  mp3dec_t mp3d;
+  mp3dec_file_info_t info;
+  mp3dec_init(&mp3d);
+  int result = mp3dec_load_buf(&mp3d, data, size, &info, nullptr, nullptr);
+  SONARE_CHECK_MSG(result == 0, ErrorCode::DecodeFailed, "Failed to decode MP3 data");
+
+  Mp3BufferGuard buffer_guard;
+  buffer_guard.ptr = info.buffer;
+
+  SONARE_CHECK_MSG(info.samples > 0, ErrorCode::DecodeFailed, "No audio samples in MP3 data");
+  int sample_rate = info.hz;
+  int channels = info.channels;
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid MP3 sample rate");
+  SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
+                   "Invalid MP3 channel count");
+
+  constexpr float kInt16Scale = 1.0f / 32768.0f;
+  std::vector<float> samples(static_cast<size_t>(info.samples));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = static_cast<float>(info.buffer[i]) * kInt16Scale;
+  }
+  return deinterleave(samples.data(), samples.size(), channels, sample_rate);
+}
+
 }  // namespace
 
 AudioFormat detect_format(const uint8_t* data, size_t size) {
@@ -306,6 +370,32 @@ AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& opti
 #endif
   }
   return load_buffer(data.data(), data.size());
+}
+
+AudioLoadResultMC load_audio_multichannel(const std::string& path,
+                                          const AudioLoadOptions& options) {
+  std::vector<uint8_t> data = read_file(path, options.max_file_size);
+  AudioFormat format = detect_format(data.data(), data.size());
+  switch (format) {
+    case AudioFormat::WAV:
+      return load_buffer_wav_mc(data.data(), data.size());
+    case AudioFormat::MP3:
+      return load_buffer_mp3_mc(data.data(), data.size());
+    default: {
+      // Other containers/codecs go through the FFmpeg fallback, which downmixes
+      // to mono; surface that as a single channel (no native deinterleave path).
+#ifdef SONARE_WITH_FFMPEG
+      AudioLoadResult mono = load_buffer_ffmpeg(data.data(), data.size());
+      AudioLoadResultMC result;
+      result.sample_rate = std::get<1>(mono);
+      result.channels.push_back(std::move(std::get<0>(mono)));
+      result.native_channels = false;
+      return result;
+#else
+      SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_file_message(path));
+#endif
+    }
+  }
 }
 
 void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
