@@ -187,6 +187,12 @@ std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
 }
 #endif  // !__EMSCRIPTEN__
 
+#ifndef __EMSCRIPTEN__
+// The multichannel decoders below are only reachable from the path-based
+// load_audio_multichannel (also host-only), and depend on the dr_wav / minimp3
+// headers that are not included under emscripten. Guard them out of the WASM
+// build so they do not trip -Werror=unused-function.
+
 /// @brief Splits an interleaved buffer into per-channel planes of equal length.
 AudioLoadResultMC deinterleave(const float* interleaved, size_t total_samples, int channels,
                                int sample_rate) {
@@ -250,6 +256,7 @@ AudioLoadResultMC load_buffer_mp3_mc(const uint8_t* data, size_t size) {
   }
   return deinterleave(samples.data(), samples.size(), channels, sample_rate);
 }
+#endif  // !__EMSCRIPTEN__
 
 }  // namespace
 

@@ -231,6 +231,19 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('setTrackGain / setTrackMute / setTrackSolo / setTrackPan apply without throwing', () => {
+    const { project, trackId } = buildAudioProject();
+    try {
+      expect(() => project.setTrackGain(trackId, 0.5)).not.toThrow();
+      expect(() => project.setTrackMute(trackId, true)).not.toThrow();
+      expect(() => project.setTrackSolo(trackId, true)).not.toThrow();
+      expect(() => project.setTrackPan(trackId, -0.25)).not.toThrow();
+      expect(() => project.setTrackGain(999999, 1)).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
   it('automation lane add / edit / remove round-trips', () => {
     const { project, trackId } = buildAudioProject();
     try {
