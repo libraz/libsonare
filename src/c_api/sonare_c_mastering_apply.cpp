@@ -132,23 +132,31 @@ const char* sonare_mastering_processor_names(void) {
 }
 
 const char* sonare_mastering_pair_processor_names(void) {
+  // Cache once per thread: the name set is static, and the header promises the
+  // pointer stays valid across later API calls on the thread (like
+  // sonare_mastering_processor_names). Recomputing would reassign the
+  // thread_local and invalidate a previously-returned pointer.
   static thread_local std::string names;
-  return join_names(sonare::mastering::api::pair_processor_names(), names);
+  if (names.empty()) join_names(sonare::mastering::api::pair_processor_names(), names);
+  return names.c_str();
 }
 
 const char* sonare_mastering_pair_analysis_names(void) {
   static thread_local std::string names;
-  return join_names(sonare::mastering::api::pair_analysis_names(), names);
+  if (names.empty()) join_names(sonare::mastering::api::pair_analysis_names(), names);
+  return names.c_str();
 }
 
 const char* sonare_mastering_stereo_analysis_names(void) {
   static thread_local std::string names;
-  return join_names(sonare::mastering::api::stereo_analysis_names(), names);
+  if (names.empty()) join_names(sonare::mastering::api::stereo_analysis_names(), names);
+  return names.c_str();
 }
 
 const char* sonare_mastering_insert_names(void) {
   static thread_local std::string names;
-  return join_names(sonare::mastering::api::insert_factory_names(), names);
+  if (names.empty()) join_names(sonare::mastering::api::insert_factory_names(), names);
+  return names.c_str();
 }
 
 const char* sonare_mastering_processor_catalog(void) {
