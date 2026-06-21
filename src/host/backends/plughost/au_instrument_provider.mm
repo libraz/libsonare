@@ -7,6 +7,7 @@
 #include <AudioToolbox/AudioToolbox.h>
 #include <AudioUnit/AudioUnit.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -129,6 +130,16 @@ class AuMidiInstrument final : public midi::MidiInstrument {
     if (unit_ == nullptr || num_channels <= 0) return;
     const int chans = num_channels > static_cast<int>(kMaxChannels) ? static_cast<int>(kMaxChannels)
                                                                     : num_channels;
+    // Deliver events in non-decreasing intra-block frame order. AUs expect the
+    // MusicDeviceMIDIEvent offset to be monotonic within one render cycle, but
+    // on_event queues in arrival order, which can interleave across clips routed
+    // to the same destination. stable_sort keeps same-frame events (e.g. a
+    // note-off before a note-on at the same frame) in their queued order, and is
+    // bounded (<= kEventQueueDepth) with no heap allocation.
+    std::stable_sort(events_.begin(), events_.begin() + event_count_,
+                     [](const midi::MidiEvent& a, const midi::MidiEvent& b) {
+                       return a.render_frame < b.render_frame;
+                     });
     // Flush queued events at their intra-block sample offset before rendering.
     for (size_t i = 0; i < event_count_; ++i) {
       const int64_t offset = events_[i].render_frame - position_;
@@ -367,13 +378,19 @@ bool AuInstrumentProvider::parameter_descriptor(const PluginDescriptor& descript
           out->min_value = info.minValue;
           out->max_value = info.maxValue;
           out->default_value = info.defaultValue;
-          if ((info.flags & kAudioUnitParameterFlag_CFNameRelease) &&
+          // HasCFNameString signals a CF name is PRESENT; CFNameRelease signals
+          // the caller must release it. Gating presence on CFNameRelease (as
+          // before) dropped the CF name for AUs that expose a static, non-owned
+          // CF string, falling back to the deprecated char[] info.name.
+          if ((info.flags & kAudioUnitParameterFlag_HasCFNameString) &&
               info.cfNameString != nullptr) {
             char nbuf[128];
             if (CFStringGetCString(info.cfNameString, nbuf, sizeof(nbuf), kCFStringEncodingUTF8)) {
               out->name = nbuf;
             }
-            CFRelease(info.cfNameString);
+            if (info.flags & kAudioUnitParameterFlag_CFNameRelease) {
+              CFRelease(info.cfNameString);
+            }
           } else {
             out->name = info.name;
           }
