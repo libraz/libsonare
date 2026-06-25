@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libsonare-native",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "Audio analysis library - Node.js binding (native N-API)",
   "type": "module",
   "main": "dist/index.js",

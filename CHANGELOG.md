@@ -1,5 +1,62 @@
 # Changelog
 
+## v1.4.0 (2026-06-25)
+
+### macOS host backends (experimental)
+
+- Added experimental native macOS audio/MIDI host backends so a project can drive real hardware without an external host: a CoreAudio output backend, a CoreMIDI input/output backend, and an Audio Unit (AU) instrument host. They are macOS-only, built behind off-by-default `BUILD_COREAUDIO` / `BUILD_COREMIDI` / `BUILD_AU_HOST` options, add no C-ABI surface, and ship in no published package (npm / PyPI / WASM) — a source-build opt-in that may still change. The unwired `BUILD_VST3_HOST` placeholder was removed. When lowering MIDI 2.0 program changes to MIDI 1.0 for the host, the preceding bank-select pair is preserved, and AU MIDI events are sorted by render frame before dispatch.
+
+### Surround & multichannel mixing
+
+- Added surround channel layouts (mono through 7.1), a layout-aware downmix and a surround panner to the mixer, with per-plane meters and surround group-bus rendering in the realtime engine. The track strip gains dual-pan, pan-law and pan-mode controls plus a per-channel delay, exposed via `sonare_engine_set_track_strip_pan` / `set_track_strip_dual_pan` / `set_track_strip_pan_law` / `set_track_strip_pan_mode` / `set_track_strip_channel_delay_samples`. Scene JSON now persists the surround layout, pan and VCA offset so a surround mix round-trips. Wired on Node, Python and WASM.
+- The core gained `load_audio_multichannel`, preserving the file's native channel layout instead of folding to mono/stereo; host-only multichannel decoders are guarded on WASM.
+
+### Realtime scope & meter telemetry
+
+- Added a realtime scope-telemetry tap (`sonare_engine_configure_scope_telemetry` / `sonare_engine_drain_scope_telemetry`) and a wide meter-telemetry drain (`sonare_engine_drain_meter_telemetry` / `sonare_engine_drain_meter_telemetry_wide`) so hosts can read per-band scope levels and wide multichannel metering off the engine. Scope band levels are block-size independent, and the meter drain reports a defined floor instead of full-scale/NaN. Surfaced across Node, Python and WASM, with scalar L/R meter telemetry fields on Node.
+
+### Realtime parameter automation
+
+- Effects, mastering and mixer processors now publish JSON-key parameter descriptors that enumerate the parameters a host can automate in realtime, including realtime-automatable insert parameter info (`sonare_mastering_insert_param_info`, `sonare_mastering_processor_catalog`) and insert/pan automation. Reserved mixer parameters are driven directly from automation lanes. Insert and master-strip insert parameters can be set by name (`set_track_strip_insert_param_by_name` / `set_master_strip_insert_param_by_name`). Exposed on every binding.
+
+### Region-based spectral editing
+
+- Added region-based spectral editing (`sonare_spectral_edit`): apply gain/attenuation to a time–frequency region of a signal. Wired with consistent behaviour across the Python, WASM and C-ABI surfaces.
+
+### Track editing & group routing
+
+- Added track-level edit commands — `sonare_project_set_track_gain` / `set_track_mute` / `set_track_solo` / `set_track_pan` / `set_track_midi_destination` (plus `sonare_project_remove_warp_map`) — with non-finite / negative gain and pan rejected at the C-ABI boundary. The track mixer gained group-bus routing and per-lane sidechain keys, exposed on the WASM `SonareEngine` facade as `setTrackOutputBus` / `setLaneSidechain` and on the other bindings. Instrument racks are mixed into their shared buses once per block.
+
+### MIDI & synth
+
+- The built-in synth gained MPE pitch-bend and per-note pressure, honours Reset All Controllers, and the MIDI-FX JSON config parses arpeggiator keys. Live control changes (14-bit / RPN / NRPN) are decoded at full resolution and MIDI 2.0 note velocity is shaped in the full 16-bit domain.
+
+### Analysis
+
+- `chroma_stft` now matches librosa's L-infinity per-frame normalization.
+
+### ABI guards
+
+- Added an ABI version mirror consistency check (`make check-abi-version`) and a ctypes struct-layout guard (`make abi-layout` / `abi-layout-check`) with make targets, so an ABI mirror desync or a ctypes layout drift fails as a red test instead of a runtime segfault. The layout guard also asserts ctypes mirror field types, not just byte layout.
+
+### Deterministic offline bounce
+
+- Offline renders settle (snap) all smoothed gain and effect parameters before rendering (`settle_parameters`), so a bounce is deterministic and independent of the live smoother state at render time.
+
+### Bug fixes
+
+- Engine: warped mid-clip comp parts no longer double-offset the source read; `time_to_frames` saturates instead of casting an out-of-range float to int; lane remap is skipped on an unchanged config in hot mixer commands; block-final automation values are preserved past the per-block event cap; engine markers are staged atomically to avoid a use-after-free on rejection; and the compiled graph topology is invalidated when sidechain ports change.
+- MIDI: `MidiFxChain::process` sorts its fixed-capacity output buffer in place (binary insertion sort) instead of via `std::stable_sort`, which requested a temporary heap buffer — restoring zero heap allocation on the audio thread while keeping the same render-frame / off-before-on event ordering.
+- Mastering: `dynamics` `set_parameter` is RT-safe via an in-place working config (with a noexcept in-place `release_ms` setter); standalone `loudnessOptimize` honours `releaseMs` and `applyGainAtInputRate`; and mastering name-getter return pointers are stabilized across repeated calls and gated on a write-once flag.
+- Mixing: VCA group offset accumulates with an atomic read-modify-write; send timing defaults to post-fader across all surfaces.
+- Analysis & util: `OnsetAnalyzer` detects flat-topped onset peaks; DTW/RQA and NNLS guard integer index overflow; the acoustic image-source reflection order is clamped.
+- Audio I/O: WAV write rounds float samples to the nearest PCM integer.
+- Validation hardening: the Node addon throws on an invalid compressor detector instead of falling back; WASM rejects a voice-changer channel count that differs from the prepared layout, rejects non-positive melody/sections params, aligns detailed-analysis config validation with the C ABI, validates offline audio input through a shared core helper, and validates engine bounce/freeze/lane inputs against the C-ABI oracle; `StreamAnalyzer` rejects malformed config geometry on every surface; and undoing `RemoveMarker` restores all marker fields.
+
+### CI
+
+- Bumped the GitHub Actions workflows to the Node 24 runtime.
+
 ## v1.3.3 (2026-06-12)
 
 ### SMF meta events & structured markers

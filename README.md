@@ -677,8 +677,13 @@ for analysis/mastering-only builds.
 | Warp modes (repitch / tempo-sync)| Program / bank, per-clip MIDI-FX | Bounce through built-in synths |
 | Auto-tempo, snap-to-grid         | Per-track MIDI destination route | C / Node / Python / WASM / CLI |
 
-The arrangement runtime is the headless core only: there is no UI, device
-setup, or plugin-host implementation (see [Non-goals](#non-goals)). Project state
+The arrangement runtime is the headless core only: there is no UI, and the
+default published packages ship no device setup or plugin-host implementation —
+the engine processes blocks and the host owns the audio callback. Optional,
+off-by-default **experimental** macOS host backends (CoreAudio / CoreMIDI / AU)
+cover that layer for source builds; see
+[Platform host backends](#platform-host-backends-experimental-opt-in-macos)
+and [Non-goals](#non-goals). Project state
 serializes to deterministic, byte-stable JSON, and `bounce` is bit-identical for
 the same project and options within one build.
 
@@ -697,6 +702,25 @@ Instruments are deterministic (seeded per-voice variation, no RNG) and need no
 bundled data: the NativeSynth GM bank renders all 128 programs and the drum map
 from pure DSP, and a host-supplied `.sf2` upgrades programs to sampled sound
 with per-program fallback reported honestly in the SoundFont manifest.
+
+### Platform host backends (experimental, opt-in, macOS)
+
+**Experimental.** Optional native macOS host backends let a project drive real
+hardware and host Audio Unit instruments without an external DAW. They are early,
+may change, and are not covered by the cross-binding parity guarantees. Each is an
+independent leaf library, **off by default** and guarded by `if(APPLE)`:
+
+| Backend                  | CMake option        | Provides                                  |
+|--------------------------|---------------------|-------------------------------------------|
+| CoreAudio (AUHAL)        | `BUILD_COREAUDIO`   | Audio device output / the audio callback  |
+| CoreMIDI                 | `BUILD_COREMIDI`    | MIDI in/out (incl. MIDI 2.0 protocol)     |
+| Audio Unit host          | `BUILD_AU_HOST`     | Hosting system AU instruments             |
+
+These add **no C-ABI surface** and are **not** included in the published npm /
+PyPI / WASM packages — they are a source-build, macOS-only opt-in for callers who
+want a turnkey device/instrument layer instead of owning the audio callback
+themselves. Cross-platform I/O abstraction and third-party VST/CLAP loading
+remain out of scope (see [Non-goals](#non-goals)).
 
 ## Performance
 
@@ -777,12 +801,16 @@ Full docs and browser-local demos: **[libsonare.libraz.net](https://libsonare.li
 
 libsonare intentionally does **not** include:
 
-- **A UI or DAW application workflow** — no editor, no device setup; libsonare
-  is the headless arrangement/runtime core and callers provide those layers
-- **Plugin hosting** (VST/AU/CLAP loading) — the engine hosts its own inserts
-  and instruments; third-party plugin formats are out of scope
-- **Real-time I/O abstraction** (PortAudio/JACK/CoreAudio wrappers) — the
-  engine processes blocks; the host owns the audio callback and devices
+- **A UI or DAW application workflow** — no editor; libsonare is the headless
+  arrangement/runtime core and callers provide that layer
+- **Third-party plugin hosting** (VST/CLAP loading) — the engine hosts its own
+  inserts and instruments; cross-format plugin loading is out of scope. (An
+  experimental, opt-in, off-by-default macOS **AU** host backend exists for
+  source builds.)
+- **Cross-platform real-time I/O abstraction** (PortAudio/JACK wrappers) — by
+  default the engine processes blocks and the host owns the audio callback and
+  devices. (Experimental, opt-in, off-by-default macOS **CoreAudio / CoreMIDI**
+  backends cover this on macOS source builds; they ship in no published package.)
 - **Bundled sample data** — the SF2 player plays host-supplied SoundFonts;
   no sample content ships in the binaries (the GM synth fallback is pure DSP)
 - **Deep-learning models** (no bundled weights, no inference runtime) — keeps
