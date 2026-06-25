@@ -105,8 +105,13 @@ sonare::mastering::dynamics::DetectorMode parse_compressor_detector(
     throw std::runtime_error("unknown compressor detector mode: " +
                              value.As<Napi::String>().Utf8Value());
   }
-  Napi::TypeError::New(env, "detector must be a string or number").ThrowAsJavaScriptException();
-  return fallback;
+  // Throw rather than ThrowAsJavaScriptException()+return: the latter only
+  // schedules a pending JS exception and lets C++ control fall through, so the
+  // caller would keep running with `fallback` while an exception is pending. The
+  // sibling error paths above all throw std::runtime_error; match them so the
+  // N-API wrapper converts it and stops here.
+  (void)env;
+  throw std::runtime_error("detector must be a string or number");
 }
 
 template <typename Processor>

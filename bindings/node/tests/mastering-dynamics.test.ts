@@ -61,6 +61,15 @@ describe('masteringDynamicsCompressor (Node)', () => {
     const b = masteringDynamicsCompressor(x, SR, { detector: 0 }).samples;
     expect(Array.from(a)).toEqual(Array.from(b));
   });
+
+  it('rejects an invalid detector type instead of silently falling back', () => {
+    // A non-string/number detector must throw, not schedule a pending exception
+    // and keep running with the fallback mode.
+    const x = sine(440);
+    expect(() => masteringDynamicsCompressor(x, SR, { detector: {} as never })).toThrow();
+    expect(() => masteringDynamicsCompressor(x, SR, { detector: 'bogus' as never })).toThrow();
+    expect(() => masteringDynamicsCompressor(x, SR, { detector: 7 as never })).toThrow();
+  });
 });
 
 describe('masteringDynamicsGate (Node)', () => {
