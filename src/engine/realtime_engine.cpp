@@ -689,13 +689,12 @@ void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int nu
     const midi::MidiEvent& event = live_midi_input_events_[i];
     if (event.render_frame < render_start_frame) continue;
     if (event.render_frame >= render_end_frame) break;
-    uint8_t cc = 0;
-    float norm = 0.0f;
+    // Kind-aware live decode: accumulates 14-bit MSB/LSB and RPN/NRPN selector +
+    // Data Entry state so high-resolution controllers drive the parameter at full
+    // precision instead of MSB-only 7 bits (see CcMap::observe_live_cc).
     uint32_t param_id = 0;
     float mapped_value = 0.0f;
-    if (midi::cc_number_of(event.ump, &cc) && midi::cc_normalized_value(event.ump, &norm) &&
-        midi_cc_map_.lookup_param(cc, event.ump.channel(), &param_id) &&
-        midi_cc_map_.value_to_unit(cc, event.ump.channel(), norm, &mapped_value)) {
+    if (midi_cc_map_.observe_live_cc(event.ump, &param_id, &mapped_value)) {
       automation_.set_parameter(param_id, mapped_value);
     }
     midi_sequencer_.inject_event(live_midi_input_destination_id_, event.render_frame, event.ump);

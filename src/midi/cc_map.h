@@ -139,6 +139,25 @@ class CcMap {
   bool value_to_unit(uint8_t cc_number, uint8_t channel, float norm,
                      float* out_unit) const noexcept;
 
+  /// AUDIO thread: decode a live control-change UMP at the binding's full
+  /// resolution. Unlike the cc_number-only lookup_param/value_to_unit pair, this
+  /// is kind-aware: it accumulates 14-bit MSB/LSB pairs and RPN/NRPN selector +
+  /// Data Entry state per channel (mirroring the learn state machine), so a
+  /// high-resolution controller drives its parameter at 14-bit precision instead
+  /// of the MSB-only 7 bits, and Data Entry routes to the currently-selected
+  /// RPN/NRPN binding. A plain 7-bit bound CC (and any MIDI 2.0 control-change,
+  /// already full-resolution) resolves immediately. Selector / LSB-only / unbound
+  /// messages update state and return false. On a resolved value writes the
+  /// target param id to @p out_param and the unit value to @p out_unit and
+  /// returns true. RT-safe: no allocation, no lock; mutates only the per-channel
+  /// live-decode state. Must be called from a single (audio) thread.
+  bool observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) noexcept;
+
+  /// Resets the per-channel live-decode accumulator state (14-bit MSB pending,
+  /// RPN/NRPN selectors, Data Entry MSB). Does not touch bindings. Call when the
+  /// live input stream is (re)started so stale partial state cannot leak across.
+  void reset_live_decode() noexcept;
+
   // -- CONTROL thread: CC <-> automation conversion ------------------------
 
   /// Append a Breakpoint at `ppq` for the parameter bound to this control-change
@@ -191,6 +210,38 @@ class CcMap {
   bool nrpn_lsb_valid_ = false;
   uint8_t nrpn_msb_ = 0;
   uint8_t nrpn_lsb_ = 0;
+
+  // Per-channel live-decode accumulator (AUDIO thread; observe_live_cc only).
+  // Distinct from the control-thread learn state above.
+  struct LiveChannelState {
+    // 14-bit Control Change: MSB (CC 0..31) seen, awaiting its LSB (CC msb+32).
+    bool cc_msb_valid = false;
+    uint8_t cc_msb_number = 0;
+    uint8_t cc_msb_value = 0;
+    // Currently-addressed RPN/NRPN selector and which space is active.
+    bool nrpn_active = false;
+    uint8_t rpn_msb = 0x7Fu;
+    uint8_t rpn_lsb = 0x7Fu;
+    uint8_t nrpn_msb = 0x7Fu;
+    uint8_t nrpn_lsb = 0x7Fu;
+    // Data Entry MSB (CC 6) last value, combined with the LSB (CC 38) into the
+    // 14-bit Data Entry value.
+    uint8_t data_msb = 0;
+  };
+  std::array<LiveChannelState, 16> live_{};
+
+  // Kind-aware binding lookup for the live-decode path: finds a binding by an
+  // arbitrary predicate, preferring an exact-channel match over kCcAnyChannel.
+  template <typename Pred>
+  size_t find_live_binding(uint8_t channel, Pred pred) const noexcept {
+    size_t any_idx = kMaxBindings;
+    for (size_t i = 0; i < count_; ++i) {
+      if (!pred(bindings_[i])) continue;
+      if (bindings_[i].channel == channel) return i;
+      if (bindings_[i].channel == kCcAnyChannel) any_idx = i;
+    }
+    return any_idx;
+  }
 };
 
 }  // namespace sonare::midi

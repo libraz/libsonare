@@ -5,6 +5,7 @@
 ///        capture draining queued events into a MidiClip with correct PPQ/order.
 
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -31,6 +32,7 @@ using sonare::midi::kRouteNoRemap;
 using sonare::midi::make_midi1_control_change;
 using sonare::midi::make_midi1_note_off;
 using sonare::midi::make_midi1_note_on;
+using sonare::midi::make_midi2_control_change;
 using sonare::midi::MidiCapture;
 using sonare::midi::MidiClip;
 using sonare::midi::MidiEvent;
@@ -263,6 +265,100 @@ TEST_CASE("CcMap MIDI learn assembles RPN and NRPN selectors", "[midi]") {
     REQUIRE(learned.selector_lsb == 34);
     REQUIRE(learned.param_id == 91);
   }
+}
+
+TEST_CASE("CcMap observe_live_cc decodes 14-bit CC at full resolution", "[midi]") {
+  CcMap map;
+  CcBinding b;
+  b.cc_number = 1;  // MSB controller (mod wheel)
+  b.channel = 2;
+  b.param_id = 88;
+  b.min_value = 0.0f;
+  b.max_value = 1.0f;
+  b.kind = sonare::midi::CcBindingKind::kControlChange14;
+  b.cc_lsb_number = 33;  // LSB controller (1 + 32)
+  REQUIRE(map.bind(b));
+
+  uint32_t param = 0;
+  float unit = 0.0f;
+  // MSB alone resolves at MSB resolution (LSB assumed 0).
+  REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 1, 64), &param, &unit));
+  REQUIRE(param == 88);
+  REQUIRE(std::abs(unit - (64.0f * 128.0f) / 16383.0f) < 1e-4f);
+
+  // The following LSB completes the 14-bit value — it is NOT dropped.
+  REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 2, 33, 12), &param, &unit));
+  REQUIRE(param == 88);
+  const float expected = static_cast<float>((64 << 7) | 12) / 16383.0f;
+  REQUIRE(std::abs(unit - expected) < 1e-5f);
+  // Distinct from the MSB-only value, proving the LSB participates.
+  REQUIRE(unit > (64.0f * 128.0f) / 16383.0f);
+
+  // An LSB with no preceding MSB on a fresh channel state is ignored.
+  map.reset_live_decode();
+  REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 2, 33, 5), &param, &unit));
+}
+
+TEST_CASE("CcMap observe_live_cc routes RPN/NRPN Data Entry to the selected binding", "[midi]") {
+  CcMap map;
+  uint32_t param = 0;
+  float unit = 0.0f;
+
+  SECTION("RPN") {
+    CcBinding b;
+    b.cc_number = 6;  // Data Entry MSB
+    b.channel = 3;
+    b.param_id = 90;
+    b.min_value = 0.0f;
+    b.max_value = 1.0f;
+    b.kind = sonare::midi::CcBindingKind::kRpn;
+    b.selector_msb = 0;
+    b.selector_lsb = 1;  // RPN 0,1 (pitch-bend range)
+    REQUIRE(map.bind(b));
+
+    // Select RPN 0,1; selector messages do not emit.
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 3, 101, 0), &param, &unit));
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 3, 100, 1), &param, &unit));
+    // Data Entry MSB then LSB resolve to the RPN binding at 14-bit.
+    REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 3, 6, 64), &param, &unit));
+    REQUIRE(param == 90);
+    REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 3, 38, 10), &param, &unit));
+    const float expected = static_cast<float>((64 << 7) | 10) / 16383.0f;
+    REQUIRE(std::abs(unit - expected) < 1e-5f);
+  }
+
+  SECTION("NRPN selection wins over a stale RPN selector") {
+    CcBinding b;
+    b.cc_number = 6;
+    b.channel = 4;
+    b.param_id = 91;
+    b.min_value = 0.0f;
+    b.max_value = 1.0f;
+    b.kind = sonare::midi::CcBindingKind::kNrpn;
+    b.selector_msb = 12;
+    b.selector_lsb = 34;
+    REQUIRE(map.bind(b));
+
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 4, 99, 12), &param, &unit));
+    REQUIRE_FALSE(map.observe_live_cc(make_midi1_control_change(0, 4, 98, 34), &param, &unit));
+    REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 4, 6, 100), &param, &unit));
+    REQUIRE(param == 91);
+  }
+}
+
+TEST_CASE("CcMap observe_live_cc keeps plain 7-bit and MIDI 2.0 CC working", "[midi]") {
+  CcMap map;
+  map.bind(CcBinding{74, 4, 200, 0.0f, 1.0f});
+  uint32_t param = 0;
+  float unit = 0.0f;
+  // Plain 7-bit MIDI 1.0 control-change.
+  REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 4, 74, 127), &param, &unit));
+  REQUIRE(param == 200);
+  REQUIRE(std::abs(unit - 1.0f) < 1e-4f);
+  // MIDI 2.0 control-change carries full 32-bit resolution directly.
+  REQUIRE(map.observe_live_cc(make_midi2_control_change(0, 4, 74, 0xFFFFFFFFu), &param, &unit));
+  REQUIRE(param == 200);
+  REQUIRE(std::abs(unit - 1.0f) < 1e-4f);
 }
 
 TEST_CASE("CcMap param_to_cc round-trips value", "[midi]") {

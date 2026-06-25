@@ -114,6 +114,7 @@ void CcMap::clear() noexcept {
   nrpn_msb_valid_ = false;
   nrpn_lsb_valid_ = false;
   learn_baseline_valid_ = false;
+  reset_live_decode();
 }
 
 void CcMap::begin_learn(uint32_t param_id, float min_value, float max_value,
@@ -303,6 +304,133 @@ bool CcMap::value_to_unit(uint8_t cc_number, uint8_t channel, float norm,
   if (any_idx != kMaxBindings) {
     const CcBinding& b = bindings_[any_idx];
     *out_unit = b.min_value + norm * (b.max_value - b.min_value);
+    return true;
+  }
+  return false;
+}
+
+void CcMap::reset_live_decode() noexcept {
+  for (auto& state : live_) {
+    state = LiveChannelState{};
+  }
+}
+
+bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) noexcept {
+  if (out_param == nullptr || out_unit == nullptr) {
+    return false;
+  }
+  uint8_t cc = 0;
+  if (!cc_number_of(ump, &cc)) {
+    return false;
+  }
+  const uint8_t channel = ump.channel();
+
+  // MIDI 2.0 control-change already carries full resolution in word[1]; resolve
+  // directly (14-bit MSB/LSB reassembly is a MIDI 1.0 construct).
+  if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+    float norm = 0.0f;
+    uint32_t param = 0;
+    if (!cc_normalized_value(ump, &norm) || !lookup_param(cc, channel, &param) ||
+        !value_to_unit(cc, channel, norm, out_unit)) {
+      return false;
+    }
+    *out_param = param;
+    return true;
+  }
+
+  const uint8_t value7 = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
+  LiveChannelState& st = live_[channel & 0x0Fu];
+
+  auto emit_from = [&](size_t idx, float norm) {
+    const CcBinding& b = bindings_[idx];
+    *out_param = b.param_id;
+    *out_unit = b.min_value + norm * (b.max_value - b.min_value);
+  };
+
+  // RPN/NRPN selector messages address a parameter; they never emit a value.
+  if (cc == kRpnMsb) {
+    st.rpn_msb = value7;
+    st.nrpn_active = false;
+    return false;
+  }
+  if (cc == kRpnLsb) {
+    st.rpn_lsb = value7;
+    st.nrpn_active = false;
+    return false;
+  }
+  if (cc == kNrpnMsb) {
+    st.nrpn_msb = value7;
+    st.nrpn_active = true;
+    return false;
+  }
+  if (cc == kNrpnLsb) {
+    st.nrpn_lsb = value7;
+    st.nrpn_active = true;
+    return false;
+  }
+
+  // Data Entry drives the currently-selected RPN/NRPN binding at 14 bits.
+  if (cc == kDataEntryMsb || cc == kDataEntryLsb) {
+    const bool nrpn = st.nrpn_active;
+    const uint8_t sel_msb = nrpn ? st.nrpn_msb : st.rpn_msb;
+    const uint8_t sel_lsb = nrpn ? st.nrpn_lsb : st.rpn_lsb;
+    const CcBindingKind want = nrpn ? CcBindingKind::kNrpn : CcBindingKind::kRpn;
+    const size_t idx = find_live_binding(channel, [&](const CcBinding& b) {
+      return b.kind == want && b.selector_msb == sel_msb && b.selector_lsb == sel_lsb;
+    });
+    if (idx == kMaxBindings) {
+      return false;
+    }
+    uint16_t value14 = 0;
+    if (cc == kDataEntryMsb) {
+      st.data_msb = value7;
+      value14 = static_cast<uint16_t>(static_cast<uint16_t>(value7) << 7u);
+    } else {
+      value14 = static_cast<uint16_t>((static_cast<uint16_t>(st.data_msb) << 7u) | value7);
+    }
+    emit_from(idx, static_cast<float>(value14) / kCc14BitMax);
+    return true;
+  }
+
+  // 14-bit Control Change LSB (CC 32..63): combine with the pending MSB.
+  if (cc >= 32 && cc < 64) {
+    const size_t idx = find_live_binding(channel, [&](const CcBinding& b) {
+      return b.kind == CcBindingKind::kControlChange14 && b.cc_lsb_number == cc;
+    });
+    if (idx != kMaxBindings) {
+      if (st.cc_msb_valid && static_cast<uint8_t>(st.cc_msb_number + 32u) == cc) {
+        const uint16_t value14 =
+            static_cast<uint16_t>((static_cast<uint16_t>(st.cc_msb_value) << 7u) | value7);
+        emit_from(idx, static_cast<float>(value14) / kCc14BitMax);
+        return true;
+      }
+      // An LSB with no matching MSB yet: hold until the MSB arrives.
+      return false;
+    }
+    // Not a 14-bit LSB binding -> fall through to plain 7-bit handling.
+  }
+
+  // 14-bit Control Change MSB (CC 0..31): emit at MSB resolution (LSB 0 until it
+  // arrives) and remember it so the following LSB completes the 14-bit value.
+  if (cc < 32) {
+    const size_t idx = find_live_binding(channel, [&](const CcBinding& b) {
+      return b.kind == CcBindingKind::kControlChange14 && b.cc_number == cc;
+    });
+    if (idx != kMaxBindings) {
+      st.cc_msb_valid = true;
+      st.cc_msb_number = cc;
+      st.cc_msb_value = value7;
+      const uint16_t value14 = static_cast<uint16_t>(static_cast<uint16_t>(value7) << 7u);
+      emit_from(idx, static_cast<float>(value14) / kCc14BitMax);
+      return true;
+    }
+  }
+
+  // Plain 7-bit Control Change.
+  uint32_t param = 0;
+  if (lookup_param(cc, channel, &param) &&
+      value_to_unit(cc, channel, static_cast<float>(value7) / kCc7BitMax, out_unit)) {
+    *out_param = param;
     return true;
   }
   return false;
