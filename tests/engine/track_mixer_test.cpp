@@ -286,6 +286,44 @@ TEST_CASE("TrackMixerRuntime applies lane fader pan and solo mute", "[engine][tr
   REQUIRE(out_r.back() < 0.1f);
 }
 
+TEST_CASE("TrackMixerRuntime applies repeated lane commands without a republish",
+          "[engine][track_mixer]") {
+  // Regression for the lane-remap skip: when the published config is unchanged,
+  // the hot fader/solo/mute path skips the LaneState remap. Repeated commands
+  // on different lanes must still each land on the correct lane (the skip must
+  // not stomp or misroute already-applied state).
+  std::array<float, 256> source_a{};
+  std::array<float, 256> source_b{};
+  source_a.fill(1.0f);
+  source_b.fill(1.0f);
+  const float* a[] = {source_a.data()};
+  const float* b[] = {source_b.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 256);
+  player.set_clips({clip_for_track(1, 10, a, 1, 256), clip_for_track(2, 20, b, 1, 256)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 256);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  std::array<float, 256> out_l{};
+  float* out[] = {out_l.data()};
+  REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+
+  // Two commands in a row with no intervening republish: the second hits the
+  // remap-skip path. Pull lane 0 down hard and leave lane 1 alone.
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb, -60.0f));
+  REQUIRE(mixer.set_lane_parameter(1, sonare::engine::TrackMixerRuntime::kFaderDb, 0.0f));
+  for (int block = 0; block < 8; ++block) {
+    out_l.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out, 1, 256, 0));
+  }
+  // Only lane 1 (unity) survives -> ~1.0, not ~2.0 (both) or near-silence.
+  REQUIRE(out_l.back() > 0.85f);
+  REQUIRE(out_l.back() < 1.15f);
+}
+
 TEST_CASE("TrackMixerRuntime carries lane smoother state by track id across reorders",
           "[engine][track_mixer]") {
   std::array<float, 256> source_a{};

@@ -145,7 +145,10 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
                                            float value) noexcept {
   acquire_lanes();
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
-    prepare_lanes_from_snapshot(*lanes);
+    // Skip the full LaneState remap when the published config is unchanged: this
+    // hot automation path only reads/writes lane_states_[lane_index], which is
+    // already arranged for the current snapshot.
+    if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   }
   if (lane_index >= lane_count()) return false;
   LaneState& lane = lane_states_[lane_index];
@@ -168,7 +171,9 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
 bool TrackMixerRuntime::set_lane_solo_mute(size_t lane_index, bool solo, bool mute) noexcept {
   acquire_lanes();
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
-    prepare_lanes_from_snapshot(*lanes);
+    // Unchanged config -> lane_states_ is already arranged; skip the remap (see
+    // set_lane_parameter).
+    if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   }
   if (lane_index >= lane_count()) return false;
   LaneState& lane = lane_states_[lane_index];
@@ -809,6 +814,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
   }
 
   lane_states_ = next;
+  applied_lane_snapshot_ = &lanes;
 }
 
 void TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept {

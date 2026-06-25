@@ -284,6 +284,14 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   size_t sidechain_binding_count_ = 0;
   std::vector<OwnedStrip> owned_strips_;
   mutable rt::RtPublisher<std::vector<TrackLaneConfig>> lanes_;
+  // The lane snapshot whose arrangement lane_states_ currently reflects. Set by
+  // prepare_lanes_from_snapshot; the hot control-thread automation commands
+  // (fader/pan/solo/mute) compare lanes_.current() against it and skip the
+  // 2 x kMaxTrackLanes LaneState remap when the published config is unchanged.
+  // Compared by identity only, never dereferenced (so a retired snapshot pointer
+  // is safe); the sole publisher (set_track_lanes) always remaps synchronously,
+  // so a still-current snapshot is always the applied one.
+  const std::vector<TrackLaneConfig>* applied_lane_snapshot_ = nullptr;
   int latency_samples_q8_ = 0;
 };
 
