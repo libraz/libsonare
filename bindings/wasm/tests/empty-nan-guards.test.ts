@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyzeBpm,
+  analyzeDynamics,
+  analyzeRhythm,
+  analyzeTimbre,
   detectBpm,
   init,
   lufs,
@@ -176,6 +179,32 @@ describe('native backstop closes gaps the JS guards missed (WASM)', () => {
   });
   it('meteringDcOffset rejects an out-of-range sample rate', () => {
     expect(() => meteringDcOffset(sine(), 100)).toThrow();
+  });
+});
+
+describe('detailed-analysis config geometry matches the C ABI (WASM)', () => {
+  // The detailed analyzers call the C++ analyzer classes directly (no C ABI
+  // round-trip), so the WASM bindings must enforce the same config contract the
+  // flat C ABI does instead of letting the analyzer silently clamp.
+  const audio = sine(SR);
+  it('analyzeBpm rejects an inverted BPM range', () => {
+    expect(() => analyzeBpm(audio, SR, { bpmMin: 200, bpmMax: 100 })).toThrow();
+  });
+  it('analyzeBpm rejects a non-positive bpmMin', () => {
+    expect(() => analyzeBpm(audio, SR, { bpmMin: 0 })).toThrow();
+  });
+  it('analyzeRhythm rejects an inverted BPM range', () => {
+    expect(() => analyzeRhythm(audio, SR, { bpmMin: 200, bpmMax: 100 })).toThrow();
+  });
+  it('analyzeDynamics rejects a non-positive window', () => {
+    expect(() => analyzeDynamics(audio, SR, { windowSec: 0 })).toThrow();
+  });
+  it('analyzeDynamics rejects a negative compression threshold', () => {
+    expect(() => analyzeDynamics(audio, SR, { compressionThreshold: -1 })).toThrow();
+  });
+  it('analyzeTimbre rejects non-positive nMels/nMfcc', () => {
+    expect(() => analyzeTimbre(audio, SR, { nMels: 0 })).toThrow();
+    expect(() => analyzeTimbre(audio, SR, { nMfcc: 0 })).toThrow();
   });
 });
 
