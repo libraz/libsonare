@@ -286,32 +286,32 @@ double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sa
   const int64_t source_len =
       std::min<int64_t>(clip.length_samples, source_sample_count(clip) - clip.clip_offset_samples);
   if (source_len <= 0) return -1;
-  const auto map_position = [&clip](double pos) noexcept {
-    if (clip.warp_mode == WarpMode::kRepitch && clip.warp_anchors &&
-        clip.warp_anchors->size() >= 2) {
-      return map_warp_to_source(
-          *clip.warp_anchors,
-          pos + static_cast<double>(std::max<int64_t>(0, clip.warp_reference_offset_samples)));
+  // The warp anchors map a clip-timeline position (measured from clip start) to an
+  // absolute source position, so under active warp the map alone resolves the read
+  // — clip_offset_samples must NOT be added on top. For a comp part that starts
+  // mid-clip, warp_reference_offset_samples carries the part's clip-timeline onset,
+  // so map_warp(warp_reference_offset_samples + position) already yields the source
+  // the warp curve assigns to that timeline region. Adding clip_offset_samples
+  // there (the non-warp source-start mechanism) double-counts the onset offset and
+  // a non-first comp part reads too far into the source. A whole clip leaves both
+  // offsets at 0, so the warped and non-warped paths agree.
+  const bool warp_active =
+      clip.warp_mode == WarpMode::kRepitch && clip.warp_anchors && clip.warp_anchors->size() >= 2;
+  const double warp_ref =
+      static_cast<double>(std::max<int64_t>(0, clip.warp_reference_offset_samples));
+  const auto resolve = [&clip, warp_active, warp_ref](double pos) noexcept {
+    if (warp_active) {
+      return map_warp_to_source(*clip.warp_anchors, pos + warp_ref);
     }
-    return pos;
+    return static_cast<double>(clip.clip_offset_samples) + pos;
   };
-  // NOTE: for a comp part that starts mid-clip under repitch warp, both
-  // clip_offset_samples (the part's source start) and the warp map (offset by
-  // warp_reference_offset_samples inside map_position) carry the part's source
-  // position, so a non-first comp part can be double-offset here. A standalone
-  // clip (clip_offset_samples == 0 or warp_reference_offset_samples == 0) is
-  // unaffected. Correcting this requires a comp+repitch-warp golden to pin the
-  // expected source read before changing the offset composition; left as-is to
-  // avoid regressing the working standalone-repitch and non-warp comp paths.
   if (clip.loop) {
     const int64_t loop_len = clip.loop_length_samples > 0
                                  ? std::min<int64_t>(clip.loop_length_samples, source_len)
                                  : source_len;
-    return static_cast<double>(clip.clip_offset_samples) +
-           map_position(static_cast<double>(position % loop_len));
+    return resolve(static_cast<double>(position % loop_len));
   }
-  return static_cast<double>(clip.clip_offset_samples) +
-         map_position(static_cast<double>(position));
+  return resolve(static_cast<double>(position));
 }
 
 int ClipPlayer::source_channel_count(const ClipSchedule& clip) noexcept {

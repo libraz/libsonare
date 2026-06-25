@@ -395,6 +395,72 @@ TEST_CASE("ClipPlayer repitch warp maps warped positions to source positions",
   REQUIRE_THAT(out_l[3], WithinAbs(15.0f, 1.0e-6f));
 }
 
+TEST_CASE("ClipPlayer repitch warp on a mid-clip comp part does not double-offset the source",
+          "[engine][clip_player]") {
+  // A comp part that starts partway into its clip carries both clip_offset_samples
+  // (the part's source start) and warp_reference_offset_samples (the part's
+  // timeline offset from clip start). Under an identity warp map the warped read
+  // must match the warp-off read, otherwise the offset is counted twice.
+  std::array<float, 8> source{0.0f, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f};
+  const float* channels[] = {source.data()};
+  auto identity = std::make_shared<std::vector<sonare::engine::WarpAnchor>>(
+      std::vector<sonare::engine::WarpAnchor>{{0.0, 0.0}, {8.0, 8.0}});
+
+  // Part starts at timeline sample 2, reads source from index 2, plays 4 samples.
+  sonare::engine::ClipSchedule clip{1, {channels, 1, 8}, 0.0, 2, 2, 4, false, 1.0f, 0, 0};
+  clip.warp_mode = sonare::engine::WarpMode::kRepitch;
+  clip.warp_reference_offset_samples = 2;
+  clip.warp_anchors = identity;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip});
+
+  std::array<float, 4> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 4, 2);
+
+  // Without the fix this reads source[4..7] (40,50,60,70): clip_offset 2 added on
+  // top of the absolute warp position map_warp(warp_ref 2 + position). Under the
+  // identity map the warp curve already resolves the part's timeline to source
+  // index warp_ref + position, so the read is source[2..5] with no extra offset.
+  REQUIRE_THAT(out_l[0], WithinAbs(20.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[1], WithinAbs(30.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[2], WithinAbs(40.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[3], WithinAbs(50.0f, 1.0e-6f));
+}
+
+TEST_CASE("ClipPlayer repitch warp on a mid-clip comp part follows the absolute warp curve",
+          "[engine][clip_player]") {
+  // Same comp scenario but with a 2:1 stretch (8 warp samples map to 4 source
+  // samples). The warp map is authoritative for the absolute source position, so
+  // the read is map_warp(warp_ref + position) and clip_offset is not re-applied.
+  std::array<float, 16> source{};
+  for (size_t i = 0; i < source.size(); ++i) source[i] = static_cast<float>(i) * 10.0f;
+  const float* channels[] = {source.data()};
+  auto half_speed = std::make_shared<std::vector<sonare::engine::WarpAnchor>>(
+      std::vector<sonare::engine::WarpAnchor>{{0.0, 0.0}, {8.0, 4.0}});
+
+  sonare::engine::ClipSchedule clip{1, {channels, 1, 16}, 0.0, 4, 4, 4, false, 1.0f, 0, 0};
+  clip.warp_mode = sonare::engine::WarpMode::kRepitch;
+  clip.warp_reference_offset_samples = 4;
+  clip.warp_anchors = half_speed;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip});
+
+  std::array<float, 4> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 4, 4);
+
+  // source_pos = map_warp(4 + position) = 0.5 * (4 + position) -> 2, 2.5, 3, 3.5.
+  REQUIRE_THAT(out_l[0], WithinAbs(20.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[1], WithinAbs(25.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[2], WithinAbs(30.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[3], WithinAbs(35.0f, 1.0e-6f));
+}
+
 TEST_CASE("ClipPlayer does not silently identity-render unbaked tempo-sync clips",
           "[engine][clip_player]") {
   std::array<float, 4> source{1.0f, 2.0f, 3.0f, 4.0f};
