@@ -56,7 +56,30 @@ void sort_render_events_stable(std::vector<MidiEvent>& events) {
 
 void sort_render_events_stable(MidiEvent* events, size_t count) {
   if (events == nullptr || count < 2) return;
-  std::stable_sort(events, events + count, render_event_before);
+  // Binary insertion sort: stable and fully in place. std::stable_sort requests
+  // a temporary heap buffer (operator new), which is forbidden on the audio
+  // thread -- this overload exists precisely for the fixed-capacity MidiFxBuffer
+  // that process() sorts per block. Event counts here are small (a few dozen,
+  // capped at MidiFxBuffer::kCapacity), so the O(n^2) moves are negligible.
+  for (size_t i = 1; i < count; ++i) {
+    MidiEvent key = events[i];
+    // upper_bound keeps equal-key elements in their original relative order
+    // (stability), matching render_event_before's deterministic tiebreak.
+    size_t lo = 0;
+    size_t hi = i;
+    while (lo < hi) {
+      const size_t mid = lo + (hi - lo) / 2;
+      if (render_event_before(key, events[mid])) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    for (size_t j = i; j > lo; --j) {
+      events[j] = events[j - 1];
+    }
+    events[lo] = key;
+  }
 }
 
 void MidiClip::set_events(std::vector<MidiClipEvent> events) { events_ = std::move(events); }

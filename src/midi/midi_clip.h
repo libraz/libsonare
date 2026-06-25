@@ -94,6 +94,9 @@ bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept;
 void sort_render_events_stable(std::vector<MidiEvent>& events);
 
 /// Pointer-range overload for fixed-capacity buffers that are not std::vector.
+/// Allocation-free (binary insertion sort, in place) so it is safe to call on
+/// the audio thread -- unlike the std::vector overload, which uses
+/// std::stable_sort and may request a temporary heap buffer.
 void sort_render_events_stable(MidiEvent* events, size_t count);
 
 /// Loop policy for a scheduled MIDI clip.
