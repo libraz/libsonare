@@ -22,14 +22,22 @@ SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, Cha
   const int count = channel_count(layout);
   SONARE_CHECK_MSG(count > 2, ErrorCode::InvalidParameter,
                    "surround panner requires a >2-channel layout");
+  // Phase-1 layouts top out at 7.1 (kMaxSurroundPlanes). Asserting the upper
+  // bound also lets the optimizer prove every count-indexed access into the
+  // fixed-size point/spread/gain arrays below stays in range.
+  SONARE_CHECK_MSG(count <= kMaxSurroundPlanes, ErrorCode::InvalidParameter,
+                   "surround panner layout exceeds the maximum plane count");
 
   const SpeakerRole* roles = speaker_roles(layout);
   const int lfe = lfe_index(layout);
 
-  // Build the horizontal ring of non-LFE speakers, sorted by azimuth.
+  // Build the horizontal ring of non-LFE speakers, sorted by azimuth. The
+  // `ring_size < kMaxSurroundPlanes` guard is redundant for valid layouts (count
+  // <= 7.1 = kMaxSurroundPlanes) but makes the bound explicit so the optimizer
+  // can prove the fixed-size `ring` array is never overrun.
   RingNode ring[kMaxSurroundPlanes];
   int ring_size = 0;
-  for (int p = 0; p < count; ++p) {
+  for (int p = 0; p < count && ring_size < kMaxSurroundPlanes; ++p) {
     if (p == lfe) continue;
     ring[ring_size++] = {p, speaker_azimuth_deg(roles[p])};
   }
