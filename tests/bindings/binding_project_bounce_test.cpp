@@ -1016,3 +1016,71 @@ TEST_CASE("bounce retunes sequential synth notes to each note's pitch, not the f
 
   sonare_project_destroy(project);
 }
+
+TEST_CASE("channel-strip bounce opens at the static fader gain without a first-block ramp",
+          "[project]") {
+  // Regression for the bounce-settle defect: a strip with a non-default static
+  // fader fed a constant source used to fade in over the first ~5 ms block,
+  // because neither bounce path snapped its smoothers before the audible render.
+  // The very first frame must already sit at the configured fader gain.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  // -6.0206 dB == 0.5 linear. A constant 0.5 source through this strip settles to
+  // 0.25; if the fader smoother ramps in from 0 dB (unity) the first frame is
+  // near the unattenuated 0.5 instead.
+  const char* scene_json =
+      "{\"version\":1,\"strips\":[{\"id\":\"s0\",\"faderDb\":-6.0206}],"
+      "\"buses\":[{\"id\":\"master\",\"role\":\"master\"}],"
+      "\"connections\":[{\"source\":\"s0\",\"destination\":\"master\"}]}";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "dc";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track, "s0", nullptr) == SONARE_OK);
+
+  constexpr int kClipFrames = 2048;  // ~43 ms: well past the 5 ms fader smoother.
+  std::vector<float> dc(static_cast<size_t>(kClipFrames) * 2, 0.5f);
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track;
+  clip_desc.is_midi = 0;
+  clip_desc.start_ppq = 0.0;
+  clip_desc.length_ppq = static_cast<double>(kClipFrames) / 24000.0;  // 120 BPM, 48 kHz.
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = dc.data();
+  clip_desc.audio_frames = kClipFrames;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 1024;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == 2048u);  // 1024 frames * 2 channels.
+
+  // The steady-state level (a late frame) is the reference.
+  const float steady_l = out[2u * 1000u];
+  const float steady_r = out[2u * 1000u + 1u];
+  REQUIRE(steady_l == Catch::Approx(0.25f).margin(1e-4f));
+  REQUIRE(steady_r == Catch::Approx(0.25f).margin(1e-4f));
+
+  // The decisive assertion: the first frame must already be at the steady gain,
+  // not the ~0.5 a fade-in from unity would produce.
+  REQUIRE(out[0] == Catch::Approx(steady_l).margin(1e-4f));
+  REQUIRE(out[1] == Catch::Approx(steady_r).margin(1e-4f));
+
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}

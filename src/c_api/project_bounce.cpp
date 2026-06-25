@@ -105,6 +105,25 @@ void render_timeline(const arr::CompiledTimeline& timeline,
     engine.set_midi_instrument(hosted.destination_id, hosted.instrument);
   }
 
+  // Prime the parameter smoothers before the audible render so a non-default
+  // static fader/pan does not fade in over the first ~5 ms block. Lane fader/pan
+  // smoothers only advance while lanes render, so one process() pass with the
+  // transport stopped applies automation at the start position and drains queued
+  // commands (setting the smoother targets), then settle_parameters() snaps the
+  // smoothers to those targets. Without this the bounce's first block ramps in
+  // from 0 dB / centre, which live playback never does and which breaks bit-exact
+  // determinism. The primed block renders into a throwaway buffer.
+  {
+    std::vector<std::vector<float>> prime(
+        static_cast<size_t>(num_channels),
+        std::vector<float>(static_cast<size_t>(block_size), 0.0f));
+    std::vector<float*> prime_ptrs;
+    prime_ptrs.reserve(prime.size());
+    for (auto& channel : prime) prime_ptrs.push_back(channel.data());
+    engine.process(prime_ptrs.data(), num_channels, block_size);
+    engine.settle_parameters();
+  }
+
   sonare::rt::Command play{};
   play.type = sonare::rt::CommandType::kTransportPlay;
   play.sample_time = -1;
@@ -269,6 +288,22 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
   if (mixer == nullptr) return nullptr;
   sonare_c_mixing_detail::build_and_compile(mixer);
   schedule_mixer_automation(timeline, routing, sample_rate, mixer);
+
+  // Snap each strip's fader/input-trim smoother to its steady-state target so the
+  // mixer summing pass opens at the configured gain instead of fading in from the
+  // previous value over the first ~5 ms block. This keeps the offline bounce
+  // deterministic; without it a non-default static fader ramps in on the master.
+  // (Pan/width ramp over their short window by design -- see ChannelStrip::settle.)
+  for (const std::string& strip_id : routing.strip_ids) {
+    if (SonareStrip* strip = sonare_mixer_strip_by_id(mixer, strip_id.c_str())) {
+      strip->strip.settle();
+    }
+  }
+  if (!direct_strip_id.empty()) {
+    if (SonareStrip* strip = sonare_mixer_strip_by_id(mixer, direct_strip_id.c_str())) {
+      strip->strip.settle();
+    }
+  }
   return mixer;
 }
 
