@@ -116,10 +116,29 @@ def emit_probe(structs: dict[str, list[str]]) -> str:
         "#include <cstddef>",
         "#include <cstdint>",
         "#include <cstdio>",
+        "#include <type_traits>",
         "",
     ]
     lines += [f'#include "{header}"' for header in PROBE_HEADERS]
     lines += [
+        "",
+        "// Coarse type category for a field, so the ctypes guard catches a"
+        " same-width type",
+        "// swap (e.g. uint32 -> int32, or int32 -> float) that sizeof/offsetof"
+        " alone miss.",
+        "template <typename T>",
+        "const char* field_kind() {",
+        "  if constexpr (std::is_floating_point_v<T>) return \"float\";",
+        "  else if constexpr (std::is_pointer_v<T>) return \"pointer\";",
+        "  // ctypes mirrors C enums as c_int by convention regardless of the",
+        "  // underlying type the compiler picks (clang gives non-negative enums",
+        "  // an unsigned underlying type), so normalize enums to \"signed\";"
+        " the byte size is still guarded separately.",
+        "  else if constexpr (std::is_enum_v<T>) return \"signed\";",
+        "  else if constexpr (std::is_integral_v<T>)"
+        " return std::is_signed_v<T> ? \"signed\" : \"unsigned\";",
+        "  else return \"aggregate\";  // struct / union / array",
+        "}",
         "",
         "int main() {",
         '  std::printf("{\\n");',
@@ -136,9 +155,10 @@ def emit_probe(structs: dict[str, list[str]]) -> str:
             field_sep = "" if f_idx == len(field_names) - 1 else ","
             lines.append(
                 f'  std::printf("    {{\\"name\\": \\"{field}\\", '
-                f'\\"offset\\": %zu, \\"size\\": %zu}}{field_sep}\\n", '
+                f'\\"offset\\": %zu, \\"size\\": %zu, \\"kind\\": \\"%s\\"}}{field_sep}\\n", '
                 f"offsetof({struct}, {field}), "
-                f"sizeof(((({struct}*)0)->{field})));"
+                f"sizeof(((({struct}*)0)->{field})), "
+                f"field_kind<decltype((({struct}*)0)->{field})>());"
             )
         lines.append(f'  std::printf("  ]}}{struct_sep}\\n");')
     lines += [
