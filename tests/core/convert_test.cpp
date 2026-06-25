@@ -107,6 +107,19 @@ TEST_CASE("time_to_samples saturates instead of overflowing int", "[convert]") {
           std::numeric_limits<int>::min());
 }
 
+TEST_CASE("time_to_frames saturates instead of overflowing int", "[convert]") {
+  // A huge time would floor to a float beyond INT_MAX; casting an out-of-range
+  // float to int is UB. The double+clamp guard must saturate instead.
+  REQUIRE(time_to_frames(1.0e20f, 48000, 512) == std::numeric_limits<int>::max());
+  REQUIRE(time_to_frames(-1.0e20f, 48000, 512) == std::numeric_limits<int>::min());
+  REQUIRE(time_to_frames(std::numeric_limits<float>::infinity(), 48000, 512) ==
+          std::numeric_limits<int>::max());
+  REQUIRE(time_to_frames(-std::numeric_limits<float>::infinity(), 48000, 512) ==
+          std::numeric_limits<int>::min());
+  // Normal values are unaffected.
+  REQUIRE(time_to_frames(1.5f, 48000, 512) == 140);  // floor(1.5*48000/512)
+}
+
 TEST_CASE("hz_to_note / note_to_hz", "[convert]") {
   REQUIRE(hz_to_note(440.0f) == "A4");
   REQUIRE(hz_to_note(261.63f) == "C4");

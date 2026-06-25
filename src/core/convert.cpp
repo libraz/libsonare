@@ -138,9 +138,17 @@ int time_to_frames(float time, int sr, int hop_length) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "time_to_frames: sr and hop_length must be positive");
   }
-  // Use floor for deterministic frame conversion.
+  // Compute in double and saturate into int before casting: a large time (long
+  // file) would otherwise floor to a float beyond INT_MAX and casting an
+  // out-of-range float to int is undefined behaviour. Mirrors the double+clamp
+  // guard used by time_to_samples.
+  const double frames = std::floor(static_cast<double>(time) * static_cast<double>(sr) /
+                                   static_cast<double>(hop_length));
+  if (!std::isfinite(frames)) {
+    return frames < 0.0 ? std::numeric_limits<int>::min() : std::numeric_limits<int>::max();
+  }
   return static_cast<int>(
-      std::floor(time * static_cast<float>(sr) / static_cast<float>(hop_length)));
+      std::clamp<double>(frames, std::numeric_limits<int>::min(), std::numeric_limits<int>::max()));
 }
 
 float samples_to_time(int samples, int sr) {
