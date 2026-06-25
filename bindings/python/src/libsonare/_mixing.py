@@ -396,7 +396,7 @@ class Mixer:
 
         ``timing`` accepts a :class:`SendTiming` enum, a name
         (``"pre_fader"``/``"post_fader"`` or ``"pre"``/``"post"``), or an int
-        (``0`` pre-fader, ``1`` post-fader). Call :meth:`compile` after adding
+        (``0`` post-fader, ``1`` pre-fader). Call :meth:`compile` after adding
         sends before processing.
         """
         handle = self._strip_handle(strip)
