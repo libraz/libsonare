@@ -21,6 +21,7 @@ TransientShaper::TransientShaper(TransientShaperConfig config)
     : config_(config),
       config_publisher_(std::make_unique<rt::RtPublisher<TransientShaperConfig>>()) {
   validate_config(config_);
+  active_ = config_;
   // Seed the publisher so a downstream audio thread that starts before
   // prepare() sees a defined snapshot. prepare() will publish again with
   // post-prepare derived state already applied so the first audio block does
@@ -39,6 +40,7 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
+  active_ = config_;
   const size_t channel_count = kRealtimePreparedChannels;
   fast_followers_.assign(channel_count, {});
   slow_followers_.assign(channel_count, {});
@@ -47,7 +49,7 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
   const size_t lookahead_samples = static_cast<size_t>(std::max(lookahead_samples_, 0));
   lookahead_.assign(channel_count, std::vector<float>(lookahead_samples, 0.0f));
   lookahead_index_.assign(channel_count, 0);
-  update_coefficients(config_);
+  update_coefficients(active_);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
@@ -68,14 +70,16 @@ const TransientShaperConfig* TransientShaper::adopt_snapshot_for_block() noexcep
   config_publisher_->acquire();
   const TransientShaperConfig* current = config_publisher_->current();
   if (current && current != applied_snapshot_) {
-    update_coefficients(*current);
+    // A newly published snapshot (set_config) supersedes any in-place
+    // set_parameter automation: copy it into the working config and re-derive.
+    active_ = *current;
+    update_coefficients(active_);
     applied_snapshot_ = current;
   }
-  // Fallback path: only reachable if the constructor's initial publish was
-  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
-  // was never called. In that case use the control-thread mirror; the per-
-  // sample loop is itself guarded by prepared_ so this path stays defined.
-  return current ? current : &config_;
+  // The per-sample loop always reads the working config (active_), seeded in the
+  // constructor and refreshed above; set_parameter mutates it in place without
+  // publishing, so no allocation occurs on the audio thread.
+  return &active_;
 }
 
 void TransientShaper::process(float* const* channels, int num_channels, int num_samples) {
@@ -158,40 +162,46 @@ void TransientShaper::set_config(const TransientShaperConfig& config) {
 }
 
 bool TransientShaper::set_parameter(unsigned int param_id, float value) {
+  // RT-safe in-place automation: mutate the audio thread's working config and
+  // re-derive coefficients. No shared_ptr publish, no allocation; the published
+  // snapshot stays untouched and the control-thread mirror (config_) is updated
+  // so config() reads back the automated state. set_parameter and set_config
+  // must not run concurrently (single-producer contract).
   switch (param_id) {
     case 0:
-      config_.attack_gain_db = value;
+      active_.attack_gain_db = value;
       break;
     case 1:
-      config_.sustain_gain_db = value;
+      active_.sustain_gain_db = value;
       break;
     case 2:
-      config_.fast_attack_ms = std::max(0.0f, value);
+      active_.fast_attack_ms = std::max(0.0f, value);
       break;
     case 3:
-      config_.fast_release_ms = std::max(0.0f, value);
+      active_.fast_release_ms = std::max(0.0f, value);
       break;
     case 4:
-      config_.slow_attack_ms = std::max(0.0f, value);
+      active_.slow_attack_ms = std::max(0.0f, value);
       break;
     case 5:
-      config_.slow_release_ms = std::max(0.0f, value);
+      active_.slow_release_ms = std::max(0.0f, value);
       break;
     case 6:
-      config_.sensitivity = std::max(0.0f, value);
+      active_.sensitivity = std::max(0.0f, value);
       break;
     case 7:
-      config_.max_gain_db = std::max(0.0f, value);
+      active_.max_gain_db = std::max(0.0f, value);
       break;
     case 8:
       // Recompute the cached smoother coefficient in place; preserves the
       // running gain state. RT-safe (no allocation).
-      config_.gain_smoothing_ms = std::max(0.0f, value);
+      active_.gain_smoothing_ms = std::max(0.0f, value);
       break;
     default:
       return false;
   }
-  config_publisher_->publish(std::make_shared<const TransientShaperConfig>(config_));
+  update_coefficients(active_);
+  config_ = active_;
   return true;
 }
 

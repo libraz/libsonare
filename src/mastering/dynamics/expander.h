@@ -84,6 +84,12 @@ class Expander : public rt::ProcessorBase {
   const ExpanderConfig* adopt_snapshot_for_block() noexcept;
 
   ExpanderConfig config_{};
+  /// @brief Audio-thread working configuration. The per-sample loop reads this
+  ///        (not the published snapshot directly) so RT-safe set_parameter can
+  ///        mutate it in place and re-derive coefficients without allocating a
+  ///        new snapshot. adopt_snapshot_for_block copies a freshly published
+  ///        snapshot into it at block start; set_parameter mutates it directly.
+  ExpanderConfig active_{};
   /// @brief Lock-free single-producer (config thread) / single-consumer (audio
   ///        thread) snapshot publisher. Held by @c unique_ptr so Expander
   ///        itself remains move-constructible (RtPublisher deletes its copy

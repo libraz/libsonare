@@ -215,6 +215,9 @@ TEST_CASE("ChannelStrip add_insert enforces kMaxInserts cap", "[mixing][rt-safet
 
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/limiter.h"
+#include "mastering/dynamics/parallel_comp.h"
+#include "mastering/dynamics/sidechain_router.h"
+#include "mastering/dynamics/vocal_rider.h"
 
 TEST_CASE("Limiter set_parameter automation performs no heap allocation",
           "[mastering][dynamics][rt]") {
@@ -266,6 +269,199 @@ TEST_CASE("Compressor set_parameter automation performs no heap allocation",
   float* chans[] = {buf.data()};
   compressor.process(chans, 1, 128);
   REQUIRE(std::abs(buf[127]) < 0.8f);
+}
+
+TEST_CASE("DeEsser set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The de-esser reads a live working config (active_) in process(); set_parameter
+  // mutates active_ and re-derives coefficients in place with no snapshot publish,
+  // so audio-thread automation must not allocate and every parameter must report
+  // realtime-safe so the mixing path applies it.
+  sonare::mastering::dynamics::DeEsser deesser;
+  deesser.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 7; ++id) {
+    REQUIRE(deesser.parameter_is_realtime_safe(id));
+  }
+  std::array<float, 128> buf{};
+  buf.fill(0.05f);
+  float* chans[] = {buf.data()};
+  deesser.process(chans, 1, 128);  // adopt the initial snapshot before guarding
+  {
+    AllocationGuard guard;
+    REQUIRE(deesser.set_parameter(0, 7000.0f));  // frequency
+    REQUIRE(deesser.set_parameter(1, -30.0f));   // threshold
+    REQUIRE(deesser.set_parameter(2, 6.0f));     // ratio
+    REQUIRE(guard.count() == 0);
+  }
+  // The in-place change is reflected in config() without a publish.
+  REQUIRE(deesser.config().threshold_db == -30.0f);
+}
+
+TEST_CASE("Expander set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The expander reads a live working config (active_) in process(); set_parameter
+  // mutates active_ and re-derives coefficients in place with no snapshot publish.
+  sonare::mastering::dynamics::Expander expander;
+  expander.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 5; ++id) {
+    REQUIRE(expander.parameter_is_realtime_safe(id));
+  }
+  std::array<float, 128> buf{};
+  buf.fill(0.05f);
+  float* chans[] = {buf.data()};
+  expander.process(chans, 1, 128);  // adopt the initial snapshot before guarding
+  {
+    AllocationGuard guard;
+    REQUIRE(expander.set_parameter(0, -36.0f));  // threshold
+    REQUIRE(expander.set_parameter(1, 3.0f));    // ratio
+    REQUIRE(expander.set_parameter(4, -48.0f));  // range
+    REQUIRE(guard.count() == 0);
+  }
+  REQUIRE(expander.config().threshold_db == -36.0f);
+}
+
+TEST_CASE("TransientShaper set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The transient shaper reads a live working config (active_) in process();
+  // set_parameter mutates active_ and re-derives coefficients in place with no
+  // snapshot publish.
+  sonare::mastering::dynamics::TransientShaper shaper;
+  shaper.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 9; ++id) {
+    REQUIRE(shaper.parameter_is_realtime_safe(id));
+  }
+  std::array<float, 128> buf{};
+  buf.fill(0.05f);
+  float* chans[] = {buf.data()};
+  shaper.process(chans, 1, 128);  // adopt the initial snapshot before guarding
+  {
+    AllocationGuard guard;
+    REQUIRE(shaper.set_parameter(0, 6.0f));   // attack gain
+    REQUIRE(shaper.set_parameter(6, 0.5f));   // sensitivity
+    REQUIRE(shaper.set_parameter(8, 10.0f));  // gain smoothing
+    REQUIRE(guard.count() == 0);
+  }
+  REQUIRE(shaper.config().attack_gain_db == 6.0f);
+}
+
+TEST_CASE("SidechainRouter set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The sidechain router reads a live working config (active_) in process();
+  // set_parameter mutates active_ and re-derives coefficients in place with no
+  // snapshot publish.
+  sonare::mastering::dynamics::SidechainRouter router;
+  router.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 5; ++id) {
+    REQUIRE(router.parameter_is_realtime_safe(id));
+  }
+  std::array<float, 128> buf{};
+  buf.fill(0.05f);
+  float* chans[] = {buf.data()};
+  router.process(chans, 1, 128);  // adopt the initial snapshot before guarding
+  {
+    AllocationGuard guard;
+    REQUIRE(router.set_parameter(0, -18.0f));  // threshold
+    REQUIRE(router.set_parameter(1, 6.0f));    // ratio
+    REQUIRE(router.set_parameter(4, 24.0f));   // range
+    REQUIRE(guard.count() == 0);
+  }
+  REQUIRE(router.config().threshold_db == -18.0f);
+}
+
+TEST_CASE("UpwardCompressor set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The upward compressor reads a live working config (active_) in process();
+  // set_parameter mutates active_ and re-derives coefficients in place with no
+  // snapshot publish.
+  sonare::mastering::dynamics::UpwardCompressor compressor;
+  compressor.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 5; ++id) {
+    REQUIRE(compressor.parameter_is_realtime_safe(id));
+  }
+  std::array<float, 128> buf{};
+  buf.fill(0.05f);
+  float* chans[] = {buf.data()};
+  compressor.process(chans, 1, 128);  // adopt the initial snapshot before guarding
+  {
+    AllocationGuard guard;
+    REQUIRE(compressor.set_parameter(0, -24.0f));  // threshold
+    REQUIRE(compressor.set_parameter(1, 3.0f));    // ratio
+    REQUIRE(compressor.set_parameter(4, 18.0f));   // range
+    REQUIRE(guard.count() == 0);
+  }
+  REQUIRE(compressor.config().threshold_db == -24.0f);
+}
+
+TEST_CASE("UpwardExpander set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The upward expander reads a live working config (active_) in process();
+  // set_parameter mutates active_ and re-derives coefficients in place with no
+  // snapshot publish.
+  sonare::mastering::dynamics::UpwardExpander expander;
+  expander.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 5; ++id) {
+    REQUIRE(expander.parameter_is_realtime_safe(id));
+  }
+  std::array<float, 128> buf{};
+  buf.fill(0.05f);
+  float* chans[] = {buf.data()};
+  expander.process(chans, 1, 128);  // adopt the initial snapshot before guarding
+  {
+    AllocationGuard guard;
+    REQUIRE(expander.set_parameter(0, -18.0f));  // threshold
+    REQUIRE(expander.set_parameter(1, 2.0f));    // ratio
+    REQUIRE(expander.set_parameter(4, 18.0f));   // range
+    REQUIRE(guard.count() == 0);
+  }
+  REQUIRE(expander.config().threshold_db == -18.0f);
+}
+
+TEST_CASE("VocalRider set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The vocal rider reads a live working config (active_) in process();
+  // set_parameter mutates active_ and re-derives coefficients in place with no
+  // snapshot publish.
+  sonare::mastering::dynamics::VocalRider rider;
+  rider.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 8; ++id) {
+    REQUIRE(rider.parameter_is_realtime_safe(id));
+  }
+  std::array<float, 128> buf{};
+  buf.fill(0.05f);
+  float* chans[] = {buf.data()};
+  rider.process(chans, 1, 128);  // adopt the initial snapshot before guarding
+  {
+    AllocationGuard guard;
+    REQUIRE(rider.set_parameter(0, -12.0f));  // target
+    REQUIRE(rider.set_parameter(3, 30.0f));   // attack
+    REQUIRE(rider.set_parameter(6, 50.0f));   // gain smoothing
+    REQUIRE(guard.count() == 0);
+  }
+  REQUIRE(rider.config().target_db == -12.0f);
+}
+
+TEST_CASE("ParallelComp set_parameter automation performs no heap allocation",
+          "[mastering][dynamics][rt]") {
+  // The parallel compressor reads a live working config (active_) in process();
+  // set_parameter mutates active_ and re-derives coefficients in place with no
+  // snapshot publish.
+  sonare::mastering::dynamics::ParallelComp comp;
+  comp.prepare(48000.0, 128);
+  for (unsigned int id = 0; id < 7; ++id) {
+    REQUIRE(comp.parameter_is_realtime_safe(id));
+  }
+  std::array<float, 128> buf{};
+  buf.fill(0.05f);
+  float* chans[] = {buf.data()};
+  comp.process(chans, 1, 128);  // adopt the initial snapshot before guarding
+  {
+    AllocationGuard guard;
+    REQUIRE(comp.set_parameter(0, -24.0f));  // threshold
+    REQUIRE(comp.set_parameter(1, 6.0f));    // ratio
+    REQUIRE(comp.set_parameter(5, 0.7f));    // mix
+    REQUIRE(guard.count() == 0);
+  }
+  REQUIRE(comp.config().threshold_db == -24.0f);
 }
 
 TEST_CASE("Gate and BrickwallLimiter set_parameter automation performs no heap allocation",

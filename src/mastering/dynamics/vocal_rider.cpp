@@ -15,6 +15,7 @@ namespace sonare::mastering::dynamics {
 VocalRider::VocalRider(VocalRiderConfig config)
     : config_(config), config_publisher_(std::make_unique<rt::RtPublisher<VocalRiderConfig>>()) {
   validate_config(config_);
+  active_ = config_;
   // Seed the publisher so a downstream audio thread that starts before
   // prepare() sees a defined snapshot. prepare() will publish again with
   // post-prepare derived state already applied so the first audio block does
@@ -41,7 +42,8 @@ void VocalRider::prepare(double sample_rate, int max_block_size) {
   if (unlinked_gain_state_db_.size() < kRealtimePreparedChannels) {
     unlinked_gain_state_db_.resize(kRealtimePreparedChannels, 0.0f);
   }
-  update_coefficients(config_);
+  active_ = config_;
+  update_coefficients(active_);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
@@ -62,14 +64,16 @@ const VocalRiderConfig* VocalRider::adopt_snapshot_for_block() noexcept {
   config_publisher_->acquire();
   const VocalRiderConfig* current = config_publisher_->current();
   if (current && current != applied_snapshot_) {
-    update_coefficients(*current);
+    // A newly published snapshot (set_config) supersedes any in-place
+    // set_parameter automation: copy it into the working config and re-derive.
+    active_ = *current;
+    update_coefficients(active_);
     applied_snapshot_ = current;
   }
-  // Fallback path: only reachable if the constructor's initial publish was
-  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
-  // was never called. In that case use the control-thread mirror; the per-
-  // sample loop is itself guarded by prepared_ so this path stays defined.
-  return current ? current : &config_;
+  // The per-sample loop always reads the working config (active_), seeded in the
+  // constructor and refreshed above; set_parameter mutates it in place without
+  // publishing, so no allocation occurs on the audio thread.
+  return &active_;
 }
 
 void VocalRider::process(float* const* channels, int num_channels, int num_samples) {
@@ -167,37 +171,43 @@ void VocalRider::set_config(const VocalRiderConfig& config) {
 }
 
 bool VocalRider::set_parameter(unsigned int param_id, float value) {
+  // RT-safe in-place automation: mutate the audio thread's working config and
+  // re-derive coefficients. No shared_ptr publish, no allocation; the published
+  // snapshot stays untouched and the control-thread mirror (config_) is updated
+  // so config() reads back the automated state. set_parameter and set_config
+  // must not run concurrently (single-producer contract).
   switch (param_id) {
     case 0:
-      config_.target_db = value;
+      active_.target_db = value;
       break;
     case 1:
-      config_.max_boost_db = std::max(0.0f, value);
+      active_.max_boost_db = std::max(0.0f, value);
       break;
     case 2:
-      config_.max_cut_db = std::max(0.0f, value);
+      active_.max_cut_db = std::max(0.0f, value);
       break;
     case 3:
-      config_.attack_ms = std::max(0.0f, value);
+      active_.attack_ms = std::max(0.0f, value);
       break;
     case 4:
-      config_.release_ms = std::max(0.0f, value);
+      active_.release_ms = std::max(0.0f, value);
       break;
     case 5:
-      config_.output_gain_db = value;
+      active_.output_gain_db = value;
       break;
     case 6:
       // The smoothing coefficient is derived per sample from this value, so a
       // plain update is RT-safe and preserves the running gain state.
-      config_.gain_smoothing_ms = std::max(0.0f, value);
+      active_.gain_smoothing_ms = std::max(0.0f, value);
       break;
     case 7:
-      config_.noise_floor_db = value;
+      active_.noise_floor_db = value;
       break;
     default:
       return false;
   }
-  config_publisher_->publish(std::make_shared<const VocalRiderConfig>(config_));
+  update_coefficients(active_);
+  config_ = active_;
   return true;
 }
 

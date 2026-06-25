@@ -22,6 +22,7 @@ using sonare::constants::kPiD;
 DeEsser::DeEsser(DeEsserConfig config)
     : config_(config), config_publisher_(std::make_unique<rt::RtPublisher<DeEsserConfig>>()) {
   validate_config(config_);
+  active_ = config_;
   // Seed the publisher so a downstream audio thread that starts before
   // prepare() sees a defined snapshot. prepare() will publish again with
   // post-prepare derived state already applied so the first audio block does
@@ -39,6 +40,7 @@ void DeEsser::prepare(double sample_rate, int max_block_size) {
 
   sample_rate_ = sample_rate;
   prepared_ = true;
+  active_ = config_;
   if (bandpass_.size() < kRealtimePreparedChannels) {
     bandpass_.resize(kRealtimePreparedChannels, filter_coeffs_);
   }
@@ -48,7 +50,7 @@ void DeEsser::prepare(double sample_rate, int max_block_size) {
   if (followers_.size() < kRealtimePreparedChannels) {
     followers_.resize(kRealtimePreparedChannels);
   }
-  update_coefficients(config_);
+  update_coefficients(active_);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
@@ -69,14 +71,16 @@ const DeEsserConfig* DeEsser::adopt_snapshot_for_block() noexcept {
   config_publisher_->acquire();
   const DeEsserConfig* current = config_publisher_->current();
   if (current && current != applied_snapshot_) {
-    update_coefficients(*current);
+    // A newly published snapshot (set_config) supersedes any in-place
+    // set_parameter automation: copy it into the working config and re-derive.
+    active_ = *current;
+    update_coefficients(active_);
     applied_snapshot_ = current;
   }
-  // Fallback path: only reachable if the constructor's initial publish was
-  // dropped (ring full, which cannot happen on a fresh publisher) AND prepare
-  // was never called. In that case use the control-thread mirror; the per-
-  // sample loop is itself guarded by prepared_ so this path stays defined.
-  return current ? current : &config_;
+  // The per-sample loop always reads the working config (active_), seeded in the
+  // constructor and refreshed above; set_parameter mutates it in place without
+  // publishing, so no allocation occurs on the audio thread.
+  return &active_;
 }
 
 void DeEsser::process(float* const* channels, int num_channels, int num_samples) {
@@ -152,34 +156,40 @@ void DeEsser::set_config(const DeEsserConfig& config) {
 }
 
 bool DeEsser::set_parameter(unsigned int param_id, float value) {
+  // RT-safe in-place automation: mutate the audio thread's working config and
+  // re-derive coefficients. No shared_ptr publish, no allocation; the published
+  // snapshot stays untouched and the control-thread mirror (config_) is updated
+  // so config() reads back the automated state. set_parameter and set_config
+  // must not run concurrently (single-producer contract).
   switch (param_id) {
     case 0:
       // Keep frequency positive (validate_config invariant); update_coefficients
       // clamps the effective cutoff to a valid range and preserves filter state.
-      config_.frequency_hz = std::max(value, 1.0f);
+      active_.frequency_hz = std::max(value, 1.0f);
       break;
     case 1:
-      config_.threshold_db = value;
+      active_.threshold_db = value;
       break;
     case 2:
-      config_.ratio = std::max(1.0f, value);
+      active_.ratio = std::max(1.0f, value);
       break;
     case 3:
-      config_.attack_ms = std::max(0.0f, value);
+      active_.attack_ms = std::max(0.0f, value);
       break;
     case 4:
-      config_.release_ms = std::max(0.0f, value);
+      active_.release_ms = std::max(0.0f, value);
       break;
     case 5:
-      config_.range_db = std::max(0.0f, value);
+      active_.range_db = std::max(0.0f, value);
       break;
     case 6:
-      config_.bandpass_q = std::max(1.0e-3f, value);
+      active_.bandpass_q = std::max(1.0e-3f, value);
       break;
     default:
       return false;
   }
-  config_publisher_->publish(std::make_shared<const DeEsserConfig>(config_));
+  update_coefficients(active_);
+  config_ = active_;
   return true;
 }
 
