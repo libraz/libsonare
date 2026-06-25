@@ -87,6 +87,7 @@ class RealtimeVoiceChangerWrapper {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "invalid interleaved channel count");
     }
+    require_prepared_channels(channels);
     if (output["length"].as<int>() < length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "output buffer is too small");
@@ -163,6 +164,7 @@ class RealtimeVoiceChangerWrapper {
           sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.getInterleavedInputBuffer: frames exceed max block size");
     }
+    require_prepared_channels(num_channels);
     ensure_interleaved_capacity(static_cast<size_t>(num_frames), num_channels);
     const size_t length = static_cast<size_t>(num_frames) * static_cast<size_t>(num_channels);
     return val(typed_memory_view(length, interleaved_input_.data()));
@@ -179,6 +181,7 @@ class RealtimeVoiceChangerWrapper {
           sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.getInterleavedOutputBuffer: frames exceed max block size");
     }
+    require_prepared_channels(num_channels);
     ensure_interleaved_capacity(static_cast<size_t>(num_frames), num_channels);
     const size_t length = static_cast<size_t>(num_frames) * static_cast<size_t>(num_channels);
     return val(typed_memory_view(length, interleaved_output_.data()));
@@ -195,6 +198,7 @@ class RealtimeVoiceChangerWrapper {
           sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.processPreparedInterleaved: frames exceed max block size");
     }
+    require_prepared_channels(num_channels);
     const size_t frames = static_cast<size_t>(num_frames);
     const size_t channel_count = static_cast<size_t>(num_channels);
     const size_t length = frames * channel_count;
@@ -307,6 +311,20 @@ class RealtimeVoiceChangerWrapper {
       throw sonare::SonareException(
           sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.prepare() must be called before processing");
+    }
+  }
+
+  /// Reject a channel count that differs from the prepared layout. The voice
+  /// changer is configured for prepared_channels_ at prepare() time, so feeding
+  /// a different count would grow the scratch buffers and call process_block
+  /// with a count the changer never allocated state for. This mirrors the planar
+  /// path's per-channel range check (getPlanarChannelBuffer) so every interleaved
+  /// entry point rejects a runtime channel-count mismatch identically.
+  void require_prepared_channels(int channels) const {
+    if (channels != prepared_channels_) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "RealtimeVoiceChanger: channel count must match the prepared layout");
     }
   }
 

@@ -76,6 +76,24 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     changer.delete();
   });
 
+  it('rejects an interleaved channel count that differs from the prepared layout', () => {
+    // The changer is prepared for 1 channel; feeding 2 interleaved channels must
+    // be rejected (symmetric with the planar path's channel range check) instead
+    // of silently growing the scratch buffers and processing a layout the
+    // changer was never prepared for.
+    const changer = new RealtimeVoiceChanger('bright-idol');
+    changer.prepare(SR, BLOCK, 1);
+    const stereo = new Float32Array(BLOCK * 2);
+    expect(() => changer.processInterleaved(stereo, 2)).toThrow();
+    expect(() => changer.processInterleavedInto(stereo, 2, new Float32Array(BLOCK * 2))).toThrow();
+    expect(() => changer.getInterleavedInputBuffer(BLOCK, 2)).toThrow();
+    expect(() => changer.getInterleavedOutputBuffer(BLOCK, 2)).toThrow();
+    expect(() => changer.processPreparedInterleaved(BLOCK, 2)).toThrow();
+    // The prepared count still works.
+    expect(() => changer.processInterleaved(new Float32Array(BLOCK), 1)).not.toThrow();
+    changer.delete();
+  });
+
   it('interleaved stereo prepared path matches processInterleavedInto', () => {
     const channels = 2;
     const changerA = new RealtimeVoiceChanger('bright-idol');
