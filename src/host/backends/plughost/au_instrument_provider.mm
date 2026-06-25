@@ -43,18 +43,15 @@ bool decode_id(const std::string& id, AudioComponentDescription& out) {
   return true;
 }
 
-/// Lower a UMP to a MIDI 1.0 status/data byte triple for MusicDeviceMIDIEvent.
-/// Returns false for UMPs with no MIDI 1.0 channel-voice equivalent.
-bool ump_to_midi1_bytes(const midi::Ump& ump, uint8_t& status, uint8_t& data1, uint8_t& data2) {
-  midi::Ump lowered = ump;
-  if (ump.message_type() == midi::UmpMessageType::kMidi2ChannelVoice) {
-    lowered = midi::midi2_to_midi1(ump);
-  }
-  if (lowered.word_count == 0 ||
-      lowered.message_type() != midi::UmpMessageType::kMidi1ChannelVoice) {
+/// Extract the MIDI 1.0 status/data byte triple from an already-lowered MIDI 1.0
+/// channel-voice UMP. Returns false for any other UMP. Lowering from MIDI 2.0
+/// (including the multi-message bank-select + program-change expansion) is done
+/// by midi2_to_midi1_messages before this is called.
+bool midi1_ump_to_bytes(const midi::Ump& ump, uint8_t& status, uint8_t& data1, uint8_t& data2) {
+  if (ump.word_count == 0 || ump.message_type() != midi::UmpMessageType::kMidi1ChannelVoice) {
     return false;
   }
-  const uint32_t w = lowered.words[0];
+  const uint32_t w = ump.words[0];
   status = static_cast<uint8_t>((w >> 16) & 0xFFu);
   data1 = static_cast<uint8_t>((w >> 8) & 0x7Fu);
   data2 = static_cast<uint8_t>(w & 0x7Fu);
@@ -146,9 +143,15 @@ class AuMidiInstrument final : public midi::MidiInstrument {
       const UInt32 frame = offset < 0              ? 0
                            : offset >= num_samples ? static_cast<UInt32>(num_samples - 1)
                                                    : static_cast<UInt32>(offset);
-      uint8_t status = 0, d1 = 0, d2 = 0;
-      if (ump_to_midi1_bytes(events_[i].ump, status, d1, d2)) {
-        MusicDeviceMIDIEvent(unit_, status, d1, d2, frame);
+      // Lower MIDI 2.0 to one or more MIDI 1.0 messages at the same frame. A
+      // bank-valid program change expands to CC#0, CC#32, then Program Change so
+      // the AU selects the intended bank/patch instead of dropping the bank.
+      const midi::Midi1MessageList lowered = midi::midi2_to_midi1_messages(events_[i].ump);
+      for (size_t m = 0; m < lowered.count; ++m) {
+        uint8_t status = 0, d1 = 0, d2 = 0;
+        if (midi1_ump_to_bytes(lowered.messages[m], status, d1, d2)) {
+          MusicDeviceMIDIEvent(unit_, status, d1, d2, frame);
+        }
       }
     }
     event_count_ = 0;

@@ -137,6 +137,42 @@ inline Ump convert_for_destination(const Ump& ump, const SoundDestination& desti
   return out;
 }
 
+/// Multi-message form of @ref convert_for_destination. Identical for messages
+/// that lower to a single UMP, but a MIDI 2.0 program change with the bank-valid
+/// flag, sent to a MIDI 1.0 port, expands to CC#0 (bank MSB), CC#32 (bank LSB)
+/// and Program Change so the device selects the intended bank/patch instead of
+/// dropping the bank. The external port's group is applied to every emitted
+/// message. RT-safe; no allocation. Callers send `messages[0..count)` in order.
+inline Midi1MessageList convert_for_destination_messages(
+    const Ump& ump, const SoundDestination& destination) noexcept {
+  Midi1MessageList out;
+  const bool to_midi2 = destination_emits_midi2(destination);
+  if (!to_midi2) {
+    out = midi2_to_midi1_messages(ump);
+  }
+  // Up-conversion / passthrough, and any non-channel-voice message the
+  // multi-message lowering does not expand, fall back to the single-UMP path
+  // (which up-converts, passes through, and applies the group).
+  if (out.count == 0) {
+    const Ump single = convert_for_destination(ump, destination);
+    if (single.word_count != 0) {
+      out.messages[0] = single;
+      out.count = 1;
+    }
+    return out;
+  }
+  if (destination.kind == DestinationKind::kExternalPort) {
+    const uint8_t group = static_cast<uint8_t>(destination.external_port.group & 0x0Fu);
+    for (uint8_t i = 0; i < out.count; ++i) {
+      Ump& m = out.messages[i];
+      if (m.word_count == 0) continue;
+      m.group = group;
+      m.words[0] = (m.words[0] & ~(0x0Fu << 24u)) | (static_cast<uint32_t>(group) << 24u);
+    }
+  }
+  return out;
+}
+
 /// Maps a stable `destination_id` (the id carried on a MidiClipSchedule and used
 /// by the sequencer) to a SoundDestination descriptor. CONTROL-thread owned;
 /// build / edit time only, MAY allocate. The RT path never touches this table —
