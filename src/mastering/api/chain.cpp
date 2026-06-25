@@ -249,11 +249,10 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
       detail::apply_gain_db(data, gain_db);
       applied_gain_db += gain_db;
     }
-    mastering::maximizer::TruePeakLimiterConfig limiter_config;
-    limiter_config.ceiling_db = config_.loudness.ceiling_db;
-    limiter_config.oversample_factor = config_.loudness.true_peak_oversample;
-    limiter_config.release_ms = config_.loudness.release_ms;
-    limiter_config.apply_gain_at_input_rate = config_.loudness.apply_gain_at_input_rate;
+    const mastering::maximizer::TruePeakLimiterConfig limiter_config =
+        mastering::maximizer::loudness_limiter_config(
+            config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
+            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
@@ -453,11 +452,10 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
       detail::apply_gain_db(left, right, gain_db);
       applied_gain_db += gain_db;
     }
-    mastering::maximizer::TruePeakLimiterConfig limiter_config;
-    limiter_config.ceiling_db = config_.loudness.ceiling_db;
-    limiter_config.oversample_factor = config_.loudness.true_peak_oversample;
-    limiter_config.release_ms = config_.loudness.release_ms;
-    limiter_config.apply_gain_at_input_rate = config_.loudness.apply_gain_at_input_rate;
+    const mastering::maximizer::TruePeakLimiterConfig limiter_config =
+        mastering::maximizer::loudness_limiter_config(
+            config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
+            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(

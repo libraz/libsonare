@@ -15,15 +15,19 @@
 // determinism rather than comparing audio output.
 
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "core/audio.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/compressor.h"
+#include "mastering/maximizer/loudness_optimize.h"
+#include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/multiband/multiband_expander.h"
 #include "mastering/multiband/multiband_limiter.h"
@@ -274,5 +278,83 @@ TEST_CASE("multiband custom cutoff count builds and processes",
     auto* mb = dynamic_cast<MultibandSaturation*>(processor.get());
     REQUIRE(mb != nullptr);
     REQUIRE(mb->config().bands.size() == 4);
+  }
+}
+
+// --- M-1: standalone loudnessOptimize honored only a subset of its params -----
+//
+// The per-processor maximizer.loudnessOptimize branch (mono and stereo) dropped
+// releaseMs / applyGainAtInputRate, so the standalone optimizer limited with the
+// factory defaults while the identical settings inside a chain used the supplied
+// values. All three loudness-stage call sites (standalone mono, standalone
+// stereo, in-chain) now build the true-peak limiter through the shared
+// loudness_limiter_config() helper, so they stay in lockstep on every field.
+
+TEST_CASE("loudness_limiter_config maps all four loudness limiter fields",
+          "[mastering][maximizer][param_wiring]") {
+  const auto cfg = sonare::mastering::maximizer::loudness_limiter_config(-2.5f, 8, 173.0f, true);
+  REQUIRE(cfg.ceiling_db == -2.5f);
+  REQUIRE(cfg.oversample_factor == 8);
+  REQUIRE(cfg.release_ms == 173.0f);  // dropped by the standalone path before the fix
+  REQUIRE(cfg.apply_gain_at_input_rate == true);
+}
+
+TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param through",
+          "[mastering][maximizer][param_wiring]") {
+  constexpr int sr = 48000;
+  constexpr std::size_t n = 4096;
+  // Quiet sine so loudness normalization applies positive gain and the true-peak
+  // limiter actually runs (its release / input-rate path is what release_ms and
+  // applyGainAtInputRate select).
+  std::vector<float> left(n);
+  std::vector<float> right(n);
+  for (std::size_t k = 0; k < n; ++k) {
+    const float t = static_cast<float>(k) / static_cast<float>(sr);
+    left[k] = 0.05f * std::sin(2.0f * 3.14159265358979323846f * 220.0f * t);
+    right[k] = 0.05f * std::sin(2.0f * 3.14159265358979323846f * 221.0f * t);
+  }
+
+  // Non-default everything, including a release time and the detect-only path
+  // the old standalone branch ignored.
+  const std::vector<Param> params{{"targetLufs", -16.0},
+                                  {"ceilingDb", -1.5},
+                                  {"truePeakOversample", 4.0},
+                                  {"releaseMs", 200.0},
+                                  {"applyGainAtInputRate", 1.0}};
+
+  SECTION("mono path matches a direct loudness_optimize() with the same config") {
+    sonare::mastering::maximizer::LoudnessOptimizeConfig config;
+    config.target_lufs = -16.0f;
+    config.ceiling_db = -1.5f;
+    config.true_peak_oversample = 4;
+    config.release_ms = 200.0f;
+    config.apply_gain_at_input_rate = true;
+    const auto direct = sonare::mastering::maximizer::loudness_optimize(
+        sonare::Audio::from_buffer(left.data(), n, sr), config);
+    const std::vector<float> expected(direct.audio.data(),
+                                      direct.audio.data() + direct.audio.size());
+
+    const auto dispatched = sonare::mastering::api::apply_named_processor(
+        "maximizer.loudnessOptimize", left.data(), n, sr, params);
+    REQUIRE(dispatched.samples == expected);
+  }
+
+  SECTION("stereo path matches the identical in-chain loudness stage") {
+    const auto standalone = apply_named_processor_stereo("maximizer.loudnessOptimize", left.data(),
+                                                         right.data(), n, sr, params);
+
+    MasteringChainConfig cfg;
+    cfg.loudness.enabled = true;
+    cfg.loudness.target_lufs = -16.0f;
+    cfg.loudness.ceiling_db = -1.5f;
+    cfg.loudness.true_peak_oversample = 4;
+    cfg.loudness.release_ms = 200.0f;
+    cfg.loudness.apply_gain_at_input_rate = true;
+    sonare::mastering::api::MasteringChain chain(cfg);
+    const auto chained = chain.process_stereo(left.data(), right.data(), n, sr);
+
+    REQUIRE(standalone.left.size() == chained.left.size());
+    REQUIRE(standalone.left == chained.left);
+    REQUIRE(standalone.right == chained.right);
   }
 }

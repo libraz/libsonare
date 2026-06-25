@@ -11,6 +11,12 @@ struct LoudnessOptimizeConfig {
   float target_lufs = -14.0f;
   float ceiling_db = -1.0f;
   int true_peak_oversample = 4;
+  /// Release time of the post true-peak limiter, in milliseconds. Mirrors
+  /// @ref TruePeakLimiterConfig::release_ms so the standalone helper and the
+  /// in-chain loudness stage limit identically.
+  float release_ms = 50.0f;
+  /// @copydoc TruePeakLimiterConfig::apply_gain_at_input_rate
+  bool apply_gain_at_input_rate = false;
 };
 
 struct LoudnessOptimizeResult {

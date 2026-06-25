@@ -252,6 +252,9 @@ void configure_processor(const std::string& name, const ParamMap& params,
     config.target_lufs = f(params, "targetLufs", config.target_lufs);
     config.ceiling_db = f(params, "ceilingDb", config.ceiling_db);
     config.true_peak_oversample = i(params, "truePeakOversample", config.true_peak_oversample);
+    config.release_ms = f(params, "releaseMs", config.release_ms);
+    config.apply_gain_at_input_rate =
+        b(params, "applyGainAtInputRate", config.apply_gain_at_input_rate);
     auto result = maximizer::loudness_optimize(audio, config);
     samples.assign(result.audio.data(), result.audio.data() + result.audio.size());
     applied_gain_db += result.applied_gain_db;
@@ -560,11 +563,12 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     multiband::MultibandDynamicEq p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
   } else if (name == "maximizer.loudnessOptimize") {
-    maximizer::TruePeakLimiterConfig config;
-    config.ceiling_db = f(map, "ceilingDb", config.ceiling_db);
-    config.oversample_factor = i(map, "truePeakOversample", config.oversample_factor);
-    config.apply_gain_at_input_rate =
-        b(map, "applyGainAtInputRate", config.apply_gain_at_input_rate);
+    maximizer::TruePeakLimiterConfig defaults;
+    const maximizer::TruePeakLimiterConfig config = maximizer::loudness_limiter_config(
+        f(map, "ceilingDb", defaults.ceiling_db),
+        i(map, "truePeakOversample", defaults.oversample_factor),
+        f(map, "releaseMs", defaults.release_ms),
+        b(map, "applyGainAtInputRate", defaults.apply_gain_at_input_rate));
     // Clamp the static normalization gain to the ceiling headroom (mirrors the
     // mono loudness_optimize() helper) so the limiter is not overdriven into
     // distortion.

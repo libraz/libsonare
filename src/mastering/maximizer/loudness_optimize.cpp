@@ -44,9 +44,9 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   // leading delayed samples to keep the output time-aligned (mirrors the chain's
   // run_processor_mono helper).
   const int num_samples = static_cast<int>(samples.size());
-  TruePeakLimiterConfig limiter_config;
-  limiter_config.ceiling_db = config.ceiling_db;
-  limiter_config.oversample_factor = config.true_peak_oversample;
+  const TruePeakLimiterConfig limiter_config =
+      loudness_limiter_config(config.ceiling_db, config.true_peak_oversample, config.release_ms,
+                              config.apply_gain_at_input_rate);
   TruePeakLimiter limiter(limiter_config);
   limiter.prepare(static_cast<double>(audio.sample_rate()), num_samples);
   const int latency = limiter.latency_samples();

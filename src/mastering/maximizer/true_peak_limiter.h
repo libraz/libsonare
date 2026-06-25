@@ -30,6 +30,26 @@ struct TruePeakLimiterConfig {
   bool apply_gain_at_input_rate = false;
 };
 
+/// @brief Builds the limiter config the loudness-normalization stage runs after
+///        applying its static normalization gain.
+/// @details The standalone @ref loudness_optimize helper, the per-processor
+///          loudness stages, and the in-chain mono/stereo loudness stages all
+///          run the same true-peak limiter. Routing every one through this
+///          single constructor keeps them in lockstep on every field — a
+///          standalone path that read only a subset (e.g. dropped @p release_ms
+///          or @p apply_gain_at_input_rate) would limit differently from the
+///          identical settings inside a chain.
+inline TruePeakLimiterConfig loudness_limiter_config(float ceiling_db, int oversample_factor,
+                                                     float release_ms,
+                                                     bool apply_gain_at_input_rate) {
+  TruePeakLimiterConfig config;
+  config.ceiling_db = ceiling_db;
+  config.oversample_factor = oversample_factor;
+  config.release_ms = release_ms;
+  config.apply_gain_at_input_rate = apply_gain_at_input_rate;
+  return config;
+}
+
 class TruePeakLimiter : public rt::ProcessorBase {
  public:
   explicit TruePeakLimiter(TruePeakLimiterConfig config = {});
