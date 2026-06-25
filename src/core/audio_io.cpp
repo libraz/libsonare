@@ -39,8 +39,8 @@ constexpr int kMinSupportedChannels = 1;
 /// @brief Extracts a lowercase file extension (including the leading dot) from a path.
 /// @return The extension (e.g. ".m4a"), or an empty string if none is found.
 /// @note Only used by the unsupported-format messages; with FFmpeg enabled, any
-///       decoder error surfaces via @ref load_buffer_ffmpeg / @ref load_ffmpeg
-///       so the extension hint is no longer needed.
+///       decoder error surfaces via @ref load_buffer_ffmpeg so the extension
+///       hint is no longer needed.
 std::string extract_extension(const std::string& path) {
   // Find the last '.' after the last path separator so directory dots are ignored.
   size_t sep = path.find_last_of("/\\");

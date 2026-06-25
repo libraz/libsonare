@@ -25,13 +25,4 @@ namespace sonare {
 /// @throws SonareException on any FFmpeg or decoding error.
 AudioLoadResult load_buffer_ffmpeg(const uint8_t* data, size_t size);
 
-/// @brief Loads an audio file using FFmpeg (libavformat/libavcodec).
-/// @details Equivalent to @ref load_buffer_ffmpeg but operates directly on a
-///          file path; useful when the format cannot be sniffed from the first
-///          few bytes (e.g. fragmented MP4 / certain Ogg variants).
-/// @param path Path to the audio file.
-/// @return Tuple of (mono samples normalized to [-1,1], sample rate).
-/// @throws SonareException on any FFmpeg or decoding error.
-AudioLoadResult load_ffmpeg(const std::string& path);
-
 }  // namespace sonare

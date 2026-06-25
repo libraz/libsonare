@@ -377,14 +377,4 @@ AudioLoadResult load_buffer_ffmpeg(const uint8_t* data, size_t size) {
   return decode_first_audio_stream(format_ctx.get());
 }
 
-AudioLoadResult load_ffmpeg(const std::string& path) {
-  AVFormatContext* fmt_raw = nullptr;
-  int ret = avformat_open_input(&fmt_raw, path.c_str(), nullptr, nullptr);
-  SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
-                   "FFmpeg: avformat_open_input failed for '" + path + "': " + ff_err(ret));
-  AVFormatContextPtr format_ctx(fmt_raw);
-
-  return decode_first_audio_stream(format_ctx.get());
-}
-
 }  // namespace sonare
