@@ -51,6 +51,19 @@ TEST_CASE("Manual VCA trim and group membership accumulate independently", "[mix
   REQUIRE_THAT(gain.vca_offset_db(), WithinAbs(-1.5f, 0.0001f));  // 1.5 + (-3)
 }
 
+TEST_CASE("VCA group offset accumulates exactly across many moves", "[mixing]") {
+  // add_vca_group_offset_db is an atomic read-modify-write (CAS loop); repeated
+  // group gain moves must net to the exact running sum with no lost update.
+  sonare::mixing::GainProcessor gain({0.0f, 0.0f});
+  float expected = 0.0f;
+  for (int i = 0; i < 1000; ++i) {
+    const float delta = (i % 2 == 0) ? 0.25f : -0.125f;
+    gain.add_vca_group_offset_db(delta);
+    expected += delta;
+  }
+  REQUIRE_THAT(gain.vca_group_offset_db(), WithinAbs(expected, 0.01f));
+}
+
 TEST_CASE("MixerController computes solo implied mute outside audio thread", "[mixing]") {
   sonare::mixing::ChannelStrip vocal;
   sonare::mixing::ChannelStrip drums;

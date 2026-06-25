@@ -50,16 +50,20 @@ void GainProcessor::set_vca_offset_db(float offset_db) noexcept {
 
 void GainProcessor::add_vca_group_offset_db(float delta_db) noexcept {
   // VCA-group contributions accumulate (a strip may belong to several groups).
-  // Group membership changes are serialized on the control thread, so a plain
-  // load/store read-modify-write is sufficient here.
+  // Group membership changes are serialized on the control thread, but use an
+  // atomic fetch_add rather than a separate load/store read-modify-write so the
+  // accumulation stays correct even if two group moves overlap, at no extra cost
+  // on the control path.
   //
   // The offset is maintained as a running sum of dB deltas, so repeated group
   // gain moves accumulate float32 rounding error. The drift is bounded by
   // ~epsilon * (number of moves) in dB and is inaudible for any realistic
   // session; a member's exact offset could be recomputed from the owning groups
   // if a registry existed, but that precision is not worth the coupling here.
-  vca_group_offset_db_.store(vca_group_offset_db_.load(std::memory_order_relaxed) + delta_db,
-                             std::memory_order_relaxed);
+  float expected = vca_group_offset_db_.load(std::memory_order_relaxed);
+  while (!vca_group_offset_db_.compare_exchange_weak(expected, expected + delta_db,
+                                                     std::memory_order_relaxed)) {
+  }
 }
 
 float GainProcessor::vca_offset_db() const noexcept {
