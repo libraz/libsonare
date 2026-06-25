@@ -106,6 +106,15 @@ strict = true
 python_version = "3.11"
 mypy_path = "src"
 
+# numpy's published stubs use PEP 695 `type` statements, which mypy rejects as a
+# syntax error when checking against our 3.11 target (requires-python >= 3.11).
+# Our public stubs expose only built-in container types, never numpy types, so
+# skip following numpy rather than dropping 3.11 coverage of our own code.
+[[tool.mypy.overrides]]
+module = "numpy.*"
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
 [tool.rye]
 dev-dependencies = [
     "mypy>=1.13",
