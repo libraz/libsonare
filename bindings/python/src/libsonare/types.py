@@ -1454,6 +1454,11 @@ class StreamFrames:
 
     Matrix fields are flattened row-major ``[n_frames x stride]`` lists
     (``mel`` stride is ``n_mels``, ``chroma`` stride is 12).
+
+    ``mel`` here is LINEAR mel power (not dB) — the raw per-frame mel energies.
+    The quantized read paths (:class:`StreamFramesU8` / :class:`StreamFramesI16`)
+    convert to dB before packing, so their ``mel`` is dB-scaled; this float
+    buffer is not.
     """
 
     n_frames: int
@@ -1472,6 +1477,10 @@ class StreamFrames:
 
 @dataclass(frozen=True, slots=True)
 class StreamFramesU8:
+    """Quantized (uint8) frame batch. ``mel`` is in dB, quantized over
+    ``[mel_db_min, mel_db_max]`` (unlike :class:`StreamFrames`, whose float
+    ``mel`` is linear power)."""
+
     n_frames: int
     n_mels: int
     timestamps: list[float]
@@ -1485,6 +1494,10 @@ class StreamFramesU8:
 
 @dataclass(frozen=True, slots=True)
 class StreamFramesI16:
+    """Quantized (int16) frame batch. ``mel`` is in dB, quantized over
+    ``[mel_db_min, mel_db_max]`` (unlike :class:`StreamFrames`, whose float
+    ``mel`` is linear power)."""
+
     n_frames: int
     n_mels: int
     timestamps: list[float]

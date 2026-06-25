@@ -116,8 +116,12 @@ struct AnalyzerStats {
 struct FrameBuffer {
   size_t n_frames = 0;  ///< Number of frames in buffer
 
-  std::vector<float> timestamps;         ///< [n_frames]
-  std::vector<float> mel;                ///< [n_frames * n_mels] (row-major)
+  std::vector<float> timestamps;  ///< [n_frames]
+  /// [n_frames * n_mels] (row-major). LINEAR mel power, not dB — the raw
+  /// per-frame mel energies. The quantized read paths (@ref
+  /// QuantizedFrameBufferU8 / @ref QuantizedFrameBufferI16) convert this to dB
+  /// before packing, so their `mel` is dB-scaled; this float buffer is not.
+  std::vector<float> mel;
   std::vector<float> chroma;             ///< [n_frames * 12] (row-major)
   std::vector<float> onset_strength;     ///< [n_frames]
   std::vector<float> rms_energy;         ///< [n_frames]

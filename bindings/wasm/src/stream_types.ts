@@ -75,6 +75,11 @@ export interface FrameBuffer {
   /** Number of mel bands; flat `mel` is `[nFrames * nMels]` row-major. */
   nMels: number;
   timestamps: Float32Array;
+  /**
+   * Mel spectrogram in LINEAR power (not dB) — the raw per-frame mel energies.
+   * The quantized read paths (`readFramesU8` / `readFramesI16`) convert to dB
+   * before packing, so their `mel` is dB-scaled; this float buffer is not.
+   */
   mel: Float32Array;
   chroma: Float32Array;
   onsetStrength: Float32Array;
@@ -109,6 +114,7 @@ export interface StreamFramesU8 {
   nFrames: number;
   nMels: number;
   timestamps: Float32Array;
+  /** Row-major `[nFrames * nMels]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
   mel: Uint8Array;
   chroma: Uint8Array;
   onsetStrength: Uint8Array;
@@ -121,6 +127,7 @@ export interface StreamFramesI16 {
   nFrames: number;
   nMels: number;
   timestamps: Float32Array;
+  /** Row-major `[nFrames * nMels]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
   mel: Int16Array;
   chroma: Int16Array;
   onsetStrength: Int16Array;

@@ -80,7 +80,8 @@ typedef struct {
   int n_frames;             /* Number of frames in this batch */
   int n_mels;               /* Mel bands per frame (mel stride) */
   float* timestamps;        /* [n_frames] */
-  float* mel;               /* [n_frames * n_mels] */
+  float* mel;               /* [n_frames * n_mels] linear mel power (NOT dB; the
+                               U8/I16 quantized variants pack dB instead) */
   float* chroma;            /* [n_frames * 12] */
   float* onset_strength;    /* [n_frames] */
   float* rms_energy;        /* [n_frames] */
@@ -95,7 +96,7 @@ typedef struct {
   int n_frames;
   int n_mels;
   float* timestamps;
-  uint8_t* mel;
+  uint8_t* mel; /* [n_frames * n_mels] mel in dB, quantized over [mel_db_min, mel_db_max] */
   uint8_t* chroma;
   uint8_t* onset_strength;
   uint8_t* rms_energy;
@@ -107,7 +108,7 @@ typedef struct {
   int n_frames;
   int n_mels;
   float* timestamps;
-  int16_t* mel;
+  int16_t* mel; /* [n_frames * n_mels] mel in dB, quantized over [mel_db_min, mel_db_max] */
   int16_t* chroma;
   int16_t* onset_strength;
   int16_t* rms_energy;
