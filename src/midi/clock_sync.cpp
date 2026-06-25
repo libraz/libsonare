@@ -13,6 +13,12 @@ bool valid_mtc_time(const MtcTime& time) noexcept {
 }
 
 void advance_mtc_frames(MtcTime* time, int frames) noexcept {
+  // Advances by integer frame counting. For kFps29_97Drop this rolls over at a
+  // true 30 frames/second (mtc_fps reports 30): it does NOT skip drop-frame
+  // numbers (frames 0/1 at each non-tenth minute) nor apply the ~0.1% 29.97
+  // pulldown, so generated drop-frame timecode tracks frame count, not broadcast
+  // wall-clock. Drop-frame compensation is a caller concern; add it here only
+  // when a consumer that needs broadcast-accurate drop-frame is wired up.
   if (time == nullptr || frames <= 0 || !valid_mtc_time(*time)) {
     return;
   }

@@ -66,6 +66,12 @@ class Audio {
   /// @param start_time Start time in seconds
   /// @param end_time End time in seconds (negative means end of audio)
   /// @return New Audio object sharing the same buffer
+  /// @note Time bounds are converted to sample indices by truncation toward zero
+  ///       (floor for the non-negative times this accepts), not rounding: the
+  ///       boundary sample is `floor(time * sample_rate)`. A negative start_time
+  ///       clamps to 0. This truncation is the contract — surfaces must not
+  ///       "fix" it to round, which would diverge the slice bounds across
+  ///       bindings.
   Audio slice(float start_time, float end_time = -1.0f) const;
 
   /// @brief Creates a slice by sample indices (shared buffer, zero-copy).
