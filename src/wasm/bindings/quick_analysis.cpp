@@ -165,13 +165,16 @@ val analysisResultToVal(const AnalysisResult& result) {
   timbre.set("complexity", result.timbre.complexity);
   out.set("timbre", timbre);
 
-  // Dynamics
+  // Dynamics. Field order mirrors analysis_result_to_json /
+  // analysis_result_schema_paths (crestFactor before loudnessRangeDb) so the two
+  // hand-maintained serializers read identically; both are anchored to the same
+  // canonical schema by the cross-surface field-set tests.
   val dynamics = val::object();
   dynamics.set("dynamicRangeDb", result.dynamics.dynamic_range_db);
   dynamics.set("peakDb", result.dynamics.peak_db);
   dynamics.set("rmsDb", result.dynamics.rms_db);
-  dynamics.set("loudnessRangeDb", result.dynamics.loudness_range_db);
   dynamics.set("crestFactor", result.dynamics.crest_factor);
+  dynamics.set("loudnessRangeDb", result.dynamics.loudness_range_db);
   dynamics.set("isCompressed", result.dynamics.is_compressed);
   out.set("dynamics", dynamics);
 
