@@ -350,6 +350,10 @@ export function hpssWithResidual(
  * Channel-weighted multichannel loudness + LRA (BS.1770 / EBU R128) from an
  * interleaved buffer of `frames * channels` samples. The per-channel frame
  * count is derived from the buffer length and `channels`.
+ *
+ * Pass the buffer's actual `sampleRate`: the default (22050) is non-standard for
+ * audio, and K-weighting is sample-rate dependent, so a wrong rate yields wrong
+ * loudness.
  */
 export function lufsInterleaved(
   samples: Float32Array,
@@ -359,7 +363,11 @@ export function lufsInterleaved(
   return addon.lufsInterleaved(samples, channels, sampleRate);
 }
 
-/** Standards-compliant EBU R128 loudness range (LRA) in LU. */
+/**
+ * Standards-compliant EBU R128 loudness range (LRA) in LU. Pass the buffer's
+ * actual `sampleRate`: the default (22050) is non-standard and K-weighting is
+ * sample-rate dependent.
+ */
 export function ebur128LoudnessRange(samples: Float32Array, sampleRate = 22050): number {
   return addon.ebur128LoudnessRange(samples, sampleRate);
 }
@@ -693,6 +701,11 @@ export function nnlsChroma(
   return addon.nnlsChroma(samples, sampleRate);
 }
 
+/**
+ * Integrated/momentary/short-term LUFS + loudness range. Pass the buffer's
+ * actual `sampleRate`: the default (22050) is non-standard for audio, and
+ * K-weighting is sample-rate dependent, so a wrong rate yields wrong loudness.
+ */
 export function lufs(
   samples: Float32Array,
   sampleRate = 22050,
@@ -702,6 +715,10 @@ export function lufs(
   return addon.lufs(samples, sampleRate);
 }
 
+/**
+ * Per-block momentary LUFS series. Pass the buffer's actual `sampleRate`: the
+ * default (22050) is non-standard and K-weighting is sample-rate dependent.
+ */
 export function momentaryLufs(
   samples: Float32Array,
   sampleRate = 22050,
@@ -711,6 +728,10 @@ export function momentaryLufs(
   return addon.momentaryLufs(samples, sampleRate);
 }
 
+/**
+ * Per-block short-term LUFS series. Pass the buffer's actual `sampleRate`: the
+ * default (22050) is non-standard and K-weighting is sample-rate dependent.
+ */
 export function shortTermLufs(
   samples: Float32Array,
   sampleRate = 22050,

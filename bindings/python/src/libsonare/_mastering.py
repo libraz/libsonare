@@ -37,7 +37,12 @@ def mastering(
     ceiling_db: float = -1.0,
     true_peak_oversample: int = 4,
 ) -> MasteringResult:
-    """Apply mastering loudness normalization with a true-peak ceiling."""
+    """Apply mastering loudness normalization with a true-peak ceiling.
+
+    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
+    for audio, and the LUFS measurement driving normalization is sample-rate
+    dependent, so a wrong rate mis-targets the loudness.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_process"):
         raise RuntimeError("libsonare was built without mastering support")

@@ -931,7 +931,12 @@ def lufs(
     *,
     validate: bool = True,
 ) -> LufsResult:
-    """Compute integrated/momentary/short-term LUFS and loudness range."""
+    """Compute integrated/momentary/short-term LUFS and loudness range.
+
+    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
+    for audio, and ITU-R BS.1770 K-weighting is sample-rate dependent, so a wrong
+    rate yields wrong loudness.
+    """
     sample_buf = _validate_samples("lufs", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -957,7 +962,11 @@ def momentary_lufs(
     *,
     validate: bool = True,
 ) -> list[float]:
-    """Compute the per-block momentary LUFS time series."""
+    """Compute the per-block momentary LUFS time series.
+
+    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
+    and K-weighting is sample-rate dependent.
+    """
     sample_buf = _validate_samples("momentary_lufs", samples, validate=validate)
     return _call_float_transform(
         "sonare_momentary_lufs",
@@ -972,7 +981,11 @@ def short_term_lufs(
     *,
     validate: bool = True,
 ) -> list[float]:
-    """Compute the per-block short-term LUFS time series."""
+    """Compute the per-block short-term LUFS time series.
+
+    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
+    and K-weighting is sample-rate dependent.
+    """
     sample_buf = _validate_samples("short_term_lufs", samples, validate=validate)
     return _call_float_transform(
         "sonare_short_term_lufs",
@@ -993,7 +1006,9 @@ def lufs_interleaved(
     Args:
         samples: Interleaved input buffer of ``frames * channels`` values.
         channels: Channel count (must be > 0).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz. The default (22050) is non-standard for
+            audio; pass the buffer's actual rate, as K-weighting is sample-rate
+            dependent and a wrong rate yields wrong loudness.
 
     Returns:
         A :class:`LufsResult` with integrated/momentary/short-term LUFS and
@@ -1032,7 +1047,11 @@ def ebur128_loudness_range(
     *,
     validate: bool = True,
 ) -> float:
-    """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer."""
+    """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer.
+
+    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
+    and K-weighting is sample-rate dependent.
+    """
     sample_buf = _validate_samples("ebur128_loudness_range", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)

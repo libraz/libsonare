@@ -371,7 +371,9 @@ export function tempogramRatio(
  * Measure loudness (EBU R128 / ITU-R BS.1770).
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param sampleRate - Sample rate in Hz. The default (22050) is non-standard for
+ *   audio; pass the buffer's actual rate, as K-weighting is sample-rate
+ *   dependent and a wrong rate yields wrong loudness.
  * @returns Loudness measurement result
  */
 export function lufs(
@@ -388,7 +390,8 @@ export function lufs(
  * Compute the momentary loudness (LUFS) over time.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param sampleRate - Sample rate in Hz. The default (22050) is non-standard and
+ *   K-weighting is sample-rate dependent; pass the buffer's actual rate.
  * @returns Momentary LUFS values over time
  */
 export function momentaryLufs(
@@ -405,7 +408,8 @@ export function momentaryLufs(
  * Compute the short-term loudness (LUFS) over time.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param sampleRate - Sample rate in Hz. The default (22050) is non-standard and
+ *   K-weighting is sample-rate dependent; pass the buffer's actual rate.
  * @returns Short-term LUFS values over time
  */
 export function shortTermLufs(

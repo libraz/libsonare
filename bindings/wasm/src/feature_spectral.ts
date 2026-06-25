@@ -218,6 +218,10 @@ export function hpssWithResidual(
  * Channel-weighted multichannel integrated loudness + LRA (ITU-R BS.1770 /
  * EBU R128) from an interleaved buffer of `frames * channels` samples. The
  * per-channel frame count is derived from the buffer length and `channels`.
+ *
+ * Pass the buffer's actual `sampleRate`: the default (22050) is non-standard for
+ * audio, and K-weighting is sample-rate dependent, so a wrong rate yields wrong
+ * loudness.
  */
 export function lufsInterleaved(
   samples: Float32Array,
@@ -231,7 +235,9 @@ export function lufsInterleaved(
 }
 
 /**
- * Standards-compliant EBU R128 loudness range (LRA) in LU.
+ * Standards-compliant EBU R128 loudness range (LRA) in LU. Pass the buffer's
+ * actual `sampleRate`: the default (22050) is non-standard and K-weighting is
+ * sample-rate dependent.
  */
 export function ebur128LoudnessRange(samples: Float32Array, sampleRate = 22050): number {
   return requireModule().ebur128LoudnessRange(samples, sampleRate);
