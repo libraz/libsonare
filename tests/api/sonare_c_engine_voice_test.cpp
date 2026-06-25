@@ -1318,6 +1318,49 @@ TEST_CASE("sonare_engine_bounce_offline maps non-finite loudness targets to the 
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_set_markers rejects an invalid list without dangling the live markers",
+          "[c_api][engine]") {
+  // Regression: a failed re-set must leave the previously committed markers
+  // intact. The old code cleared the engine's name storage before validating,
+  // so a mid-list rejection left the live MarkerMap pointing at freed strings
+  // (use-after-free on the next marker query, caught under ASan).
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareEngineMarker good[2]{};
+  good[0].id = 11;
+  good[0].ppq = 1.0;
+  std::strncpy(good[0].name, "intro", sizeof(good[0].name) - 1);
+  good[1].id = 12;
+  good[1].ppq = 2.0;
+  std::strncpy(good[1].name, "chorus", sizeof(good[1].name) - 1);
+  REQUIRE(sonare_engine_set_markers(engine, good, 2) == SONARE_OK);
+
+  // Re-set with a second entry carrying a non-finite ppq -> must be rejected.
+  SonareEngineMarker bad[2]{};
+  bad[0].id = 21;
+  bad[0].ppq = 0.5;
+  std::strncpy(bad[0].name, "verse", sizeof(bad[0].name) - 1);
+  bad[1].id = 22;
+  bad[1].ppq = std::numeric_limits<double>::quiet_NaN();
+  std::strncpy(bad[1].name, "bridge", sizeof(bad[1].name) - 1);
+  REQUIRE(sonare_engine_set_markers(engine, bad, 2) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // The original markers (and their names) must still be readable.
+  size_t marker_count = 0;
+  REQUIRE(sonare_engine_marker_count(engine, &marker_count) == SONARE_OK);
+  REQUIRE(marker_count == 2);
+  SonareEngineMarker marker_out{};
+  REQUIRE(sonare_engine_marker_by_index(engine, 0, &marker_out) == SONARE_OK);
+  REQUIRE(marker_out.id == 11);
+  REQUIRE(std::strcmp(marker_out.name, "intro") == 0);
+  REQUIRE(sonare_engine_marker(engine, 12, &marker_out) == SONARE_OK);
+  REQUIRE(std::strcmp(marker_out.name, "chorus") == 0);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <deque>
 #include <memory>
 #include <string>
 #include <utility>
@@ -648,23 +649,31 @@ SonareError sonare_engine_set_markers(SonareRealtimeEngine* engine,
                                       const SonareEngineMarker* markers, size_t marker_count) {
   if (!engine || (marker_count > 0 && !markers)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  engine->marker_strings.clear();
+  // All-or-nothing: stage the names and markers in local storage so a mid-list
+  // validation failure leaves the engine's existing marker store (and the
+  // non-owning Marker::name pointers into engine->marker_strings) untouched.
+  // Clearing engine->marker_strings before validation would dangle the live
+  // MarkerMap on early return -> use-after-free in later marker queries.
+  // marker_strings is a std::deque, so element addresses stay stable across
+  // push_back and across the move below.
+  std::deque<std::string> staged_strings;
   std::vector<transport::Marker> prepared;
   prepared.reserve(marker_count);
   for (size_t i = 0; i < marker_count; ++i) {
     if (!std::isfinite(markers[i].ppq) || markers[i].ppq < 0.0) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    engine->marker_strings.push_back(fixed_text(markers[i].name, sizeof(markers[i].name)));
+    staged_strings.push_back(fixed_text(markers[i].name, sizeof(markers[i].name)));
     transport::Marker prepared_marker;
     prepared_marker.ppq = markers[i].ppq;
     prepared_marker.id = markers[i].id;
-    prepared_marker.name = engine->marker_strings.back().c_str();
+    prepared_marker.name = staged_strings.back().c_str();
     prepared_marker.kind = markers[i].kind;
     prepared_marker.key_fifths = markers[i].key_fifths;
     prepared_marker.key_minor = markers[i].key_minor != 0;
     prepared.push_back(prepared_marker);
   }
+  engine->marker_strings = std::move(staged_strings);
   engine->engine.set_markers(std::move(prepared));
   return SONARE_OK;
   SONARE_C_CATCH
