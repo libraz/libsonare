@@ -132,6 +132,19 @@ val vectorToFloat32Array(const std::vector<float>& vec);
 val vectorToInt32Array(const std::vector<int>& vec);
 val vectorToUint8Array(const std::vector<uint8_t>& vec);
 std::vector<float> float32ArrayToVector(val arr);
+/// @brief Loads a JS Float32Array into an Audio after the shared offline-input
+/// validation (rejects null/empty, an out-of-range sampleRate, an oversized
+/// buffer, and any non-finite sample). Mirrors the C ABI validate_audio_params
+/// so the WASM surface rejects the same inputs even though it bypasses the
+/// C-ABI translation unit. @throws SonareException(InvalidParameter).
+Audio loadValidatedAudio(val samples, int sample_rate);
+/// @brief Interleaved sibling for the (samples, channels, sampleRate) facade.
+/// Validates channels > 0, the shared offline-input rules over the whole buffer,
+/// and that the length is a whole number of frames (no silent truncation of a
+/// trailing partial frame). Writes the per-channel frame count to @p frames and
+/// returns the copied samples. @throws SonareException(InvalidParameter).
+std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,
+                                            size_t* frames);
 std::vector<int32_t> int32ArrayToVector(val arr);
 std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);

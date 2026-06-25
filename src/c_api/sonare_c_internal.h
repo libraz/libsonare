@@ -54,9 +54,13 @@ using sonare::Audio;
 using sonare::ChordQuality;
 using sonare::SonareException;
 
-constexpr int kMinSampleRate = 8000;
-constexpr int kMaxSampleRate = 384000;
-constexpr size_t kMaxBufferSize = 500000000;
+// Aliases of the canonical core limits (sonare::k*AudioSampleRate /
+// kMaxAudioBufferSize in core/audio.h). Kept under these C-ABI names so the
+// many existing call sites stay unchanged while the bounds have a single
+// source of truth shared with the WASM bindings.
+constexpr int kMinSampleRate = sonare::kMinAudioSampleRate;
+constexpr int kMaxSampleRate = sonare::kMaxAudioSampleRate;
+constexpr size_t kMaxBufferSize = sonare::kMaxAudioBufferSize;
 
 std::string& last_error_storage();
 void set_last_error(const char* msg);

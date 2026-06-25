@@ -8,10 +8,12 @@ import {
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
+  meteringDcOffset,
   meteringPeakDb,
   meteringRmsDb,
   meteringStereoCorrelation,
   meteringTruePeakDb,
+  pitchYin,
   voiceChange,
   voiceChangeRealtime,
 } from '../src/index';
@@ -138,21 +140,42 @@ describe('NaN/Inf guards (WASM)', () => {
   });
 });
 
-describe('validate=false skips NaN check (WASM)', () => {
-  it('lufs with validate=false does not throw on NaN', () => {
+describe('validate=false skips the JS index scan but the native core still rejects (WASM)', () => {
+  // { validate: false } only skips the JS-side O(n) scan that names the exact
+  // index. The native core always re-validates (matching the C ABI / Node /
+  // Python), so a non-finite buffer still throws — just without the indexed JS
+  // message. This closes the former footgun where validate:false pushed NaN
+  // straight into the DSP.
+  it('lufs with validate=false no longer reports the JS index, but still throws natively', () => {
     expect(() => lufs(withNaN(), SR, { validate: false })).not.toThrow(
-      /samples contains NaN or Inf/,
+      /samples contains NaN or Inf at index/,
     );
+    expect(() => lufs(withNaN(), SR, { validate: false })).toThrow();
   });
-  it('detectBpm with validate=false does not throw on NaN', () => {
-    expect(() => detectBpm(withNaN(), SR, { validate: false })).not.toThrow(
-      /samples contains NaN or Inf/,
-    );
-  });
-  it('masteringDynamicsCompressor with validate=false does not throw on NaN', () => {
+  it('masteringDynamicsCompressor with validate=false still throws natively on NaN', () => {
     expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).not.toThrow(
-      /samples contains NaN or Inf/,
+      /samples contains NaN or Inf at index/,
     );
+    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).toThrow();
+  });
+});
+
+describe('native backstop closes gaps the JS guards missed (WASM)', () => {
+  // These wrappers previously had no JS guard (pitchYin) or guarded the samples
+  // but not the sample rate (metering*), so out-of-range / non-finite input
+  // diverged from the other surfaces. The shared native validation now rejects
+  // them uniformly.
+  it('pitchYin rejects an empty buffer', () => {
+    expect(() => pitchYin(new Float32Array(0), SR)).toThrow();
+  });
+  it('pitchYin rejects NaN', () => {
+    expect(() => pitchYin(withNaN(), SR)).toThrow();
+  });
+  it('pitchYin rejects an out-of-range sample rate', () => {
+    expect(() => pitchYin(sine(), 100)).toThrow();
+  });
+  it('meteringDcOffset rejects an out-of-range sample rate', () => {
+    expect(() => meteringDcOffset(sine(), 100)).toThrow();
   });
 });
 

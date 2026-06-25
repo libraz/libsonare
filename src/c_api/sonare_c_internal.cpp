@@ -45,13 +45,12 @@ SonareError map_sonare_exception(const SonareException& e) {
 
 SonareError validate_audio_params(const float* samples, size_t length, int sample_rate) {
   clear_last_error();
-  if (samples == nullptr || length == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (length > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
-  for (size_t i = 0; i < length; ++i) {
-    if (!std::isfinite(samples[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  // Delegate to the shared core policy so the C ABI and the WASM bindings (which
+  // bypass this translation unit) enforce identical empty/range/finite rules.
+  try {
+    sonare::validate_offline_audio_input(samples, length, sample_rate);
+  } catch (const SonareException& e) {
+    return map_sonare_exception(e);
   }
   return SONARE_OK;
 }

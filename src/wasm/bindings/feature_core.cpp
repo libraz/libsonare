@@ -214,6 +214,7 @@ val js_plp(val onset_envelope, int sample_rate, int hop_length, float tempo_min,
 
 val js_onset_envelope(val samples, int sample_rate, int n_fft, int hop_length, int n_mels) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;
@@ -225,6 +226,7 @@ val js_onset_envelope(val samples, int sample_rate, int n_fft, int hop_length, i
 val js_onset_strength_multi(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
                             int n_bands) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   MelConfig mel_config;
   mel_config.n_fft = n_fft;

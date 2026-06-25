@@ -72,6 +72,27 @@ std::vector<float> float32ArrayToVector(val arr) {
   return result;
 }
 
+Audio loadValidatedAudio(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  return Audio::from_buffer(data.data(), data.size(), sample_rate);
+}
+
+std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,
+                                            size_t* frames) {
+  if (channels <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "channels must be positive");
+  }
+  std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  if (data.size() % static_cast<size_t>(channels) != 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "interleaved sample count must be a whole number of frames");
+  }
+  if (frames != nullptr) *frames = data.size() / static_cast<size_t>(channels);
+  return data;
+}
+
 // Int32 sibling of float32ArrayToVector. Used where a JS Int32Array carries
 // integer sample indices (e.g. remix interval boundaries) that must not be
 // round-tripped through float32 — values above 2^24 lose precision as float.

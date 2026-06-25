@@ -15,6 +15,7 @@
 val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, float start_bpm,
                    int n_fft, int hop_length, int max_candidates) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   BpmConfig config;
   config.bpm_min = bpm_min;
@@ -50,6 +51,7 @@ val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, f
 val js_analyze_rhythm(val samples, int sample_rate, float bpm_min, float bpm_max, float start_bpm,
                       int n_fft, int hop_length) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   RhythmConfig config;
   config.bpm_min = bpm_min;
@@ -81,6 +83,7 @@ val js_analyze_rhythm(val samples, int sample_rate, float bpm_min, float bpm_max
 val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_length,
                         float compression_threshold) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   DynamicsConfig config;
   config.window_sec = window_sec;
@@ -106,6 +109,7 @@ val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_
 val js_analyze_timbre(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
                       int n_mfcc, float window_sec) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   TimbreConfig config;
   config.n_fft = n_fft;

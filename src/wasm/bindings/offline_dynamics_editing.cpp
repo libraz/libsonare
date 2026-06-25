@@ -65,6 +65,7 @@ val makeDynamicsResult(const std::vector<float>& samples, int latency_samples) {
 
 val js_mastering_dynamics_compressor(val samples, int sample_rate, val options) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::CompressorConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("thresholdDb")) {
@@ -100,6 +101,7 @@ val js_mastering_dynamics_compressor(val samples, int sample_rate, val options) 
 
 val js_mastering_dynamics_gate(val samples, int sample_rate, val options) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::GateConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("thresholdDb")) {
@@ -122,6 +124,7 @@ val js_mastering_dynamics_gate(val samples, int sample_rate, val options) {
 
 val js_mastering_dynamics_transient_shaper(val samples, int sample_rate, val options) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::TransientShaperConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("attackGainDb")) {

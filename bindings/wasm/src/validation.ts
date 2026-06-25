@@ -2,6 +2,13 @@
  * Per-call validation options accepted by guarded wrappers. Empty-buffer
  * checks are always performed; pass `{ validate: false }` to opt out of the
  * O(n) NaN/Inf scan on hot paths.
+ *
+ * `{ validate: false }` only skips this JS-side pre-scan (which raises a
+ * `RangeError` naming the exact offending index). It is NOT a way to push
+ * non-finite samples into the core: the native layer always re-validates the
+ * buffer (see `validate_offline_audio_input` in the C++ core), matching the C
+ * ABI / Node / Python surfaces, so an NaN/Inf buffer still throws — just with a
+ * generic native message instead of the indexed JS one.
  */
 export interface ValidateOptions {
   validate?: boolean;

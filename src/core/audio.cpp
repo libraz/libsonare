@@ -14,6 +14,19 @@ Audio::Audio(std::shared_ptr<const std::vector<float>> buffer, size_t offset, si
              int sample_rate)
     : buffer_(std::move(buffer)), offset_(offset), length_(length), sample_rate_(sample_rate) {}
 
+void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate) {
+  SONARE_CHECK_MSG(samples != nullptr && length != 0, ErrorCode::InvalidParameter,
+                   "audio input must be a non-empty buffer");
+  SONARE_CHECK_MSG(sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate,
+                   ErrorCode::InvalidParameter, "sample_rate is out of the supported range");
+  SONARE_CHECK_MSG(length <= kMaxAudioBufferSize, ErrorCode::InvalidParameter,
+                   "audio buffer is too large");
+  for (std::size_t i = 0; i < length; ++i) {
+    SONARE_CHECK_MSG(std::isfinite(samples[i]), ErrorCode::InvalidParameter,
+                     "audio buffer contains a non-finite sample");
+  }
+}
+
 Audio Audio::from_buffer(const float* samples, size_t size, int sample_rate) {
   SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
   // Reject null + size>0 to avoid UB in the iterator-pair vector constructor.

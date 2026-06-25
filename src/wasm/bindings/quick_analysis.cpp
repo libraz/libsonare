@@ -78,6 +78,7 @@ void processStereo(sonare::rt::ProcessorBase& processor, std::vector<float>& lef
 }
 
 float integratedLufs(const std::vector<float>& samples, int sample_rate) {
+  validate_offline_audio_input(samples.data(), samples.size(), sample_rate);
   Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
   return metering::lufs(audio).integrated_lufs;
 }
@@ -326,6 +327,7 @@ val js_detect_chords(val samples, int sample_rate, float min_duration, float smo
   }
 
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   ChordConfig config;
@@ -362,6 +364,7 @@ val js_chord_functional_analysis(val samples, int key_root, int key_mode, int sa
   validateKey(key_root, key_mode);
 
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   ChordConfig config;
@@ -451,6 +454,7 @@ val acousticParametersToVal(const AcousticParameters& params) {
 
 val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
@@ -461,6 +465,7 @@ val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
                        int n_third_octave_subbands, float min_decay_db,
                        float noise_floor_margin_db) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
@@ -605,6 +610,7 @@ val js_estimate_room(val samples, int sample_rate, val opts) {
   validateAcousticSampleRate(sample_rate);
   std::vector<float> data = float32ArrayToVector(samples);
   validateAcousticInput(data);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   sonare::RoomEstimateConfig config;
   config.aspect_hint_lw = floatProperty(opts, "aspectHintLw", config.aspect_hint_lw);
@@ -653,6 +659,7 @@ val js_room_morph(val samples, int sample_rate, val opts) {
   validateAcousticSampleRate(sample_rate);
   std::vector<float> data = float32ArrayToVector(samples);
   validateAcousticInput(data);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   sonare::effects::acoustic::RoomMorphConfig config;
   config.target = roomFromVal(opts, 0.2f);
@@ -683,6 +690,7 @@ val js_room_morph(val samples, int sample_rate, val opts) {
 val js_analyze_with_progress(val samples, int sample_rate, val progress_callback) {
   std::vector<float> data = float32ArrayToVector(samples);
 
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   MusicAnalyzer analyzer(audio);
 

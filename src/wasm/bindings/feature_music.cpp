@@ -11,6 +11,7 @@
 
 val js_chroma(val samples, int sample_rate, int n_fft, int hop_length) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   ChromaConfig config;
@@ -62,6 +63,7 @@ val chromaToVal(const Chroma& chroma) {
 
 val js_chroma_cens(val samples, int sample_rate, int hop_length, int n_chroma) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   ChromaCensConfig config;
@@ -72,6 +74,7 @@ val js_chroma_cens(val samples, int sample_rate, int hop_length, int n_chroma) {
 
 val js_bass_chroma(val samples, int sample_rate, int hop_length, int n_chroma) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   BassChromaConfig config;
@@ -82,6 +85,7 @@ val js_bass_chroma(val samples, int sample_rate, int hop_length, int n_chroma) {
 
 val js_nnls_chroma(val samples, int sample_rate) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   Chroma chroma = nnls_chroma(audio);
@@ -105,6 +109,7 @@ val js_nnls_chroma(val samples, int sample_rate) {
 val js_analyze_sections(val samples, int sample_rate, int n_fft = 2048, int hop_length = 512,
                         float min_section_sec = 4.0f) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   // Fall back to the struct defaults when raw emscripten passes 0 for a
@@ -138,6 +143,7 @@ val js_analyze_melody(val samples, int sample_rate, float fmin = 65.0f, float fm
                       int frame_length = 2048, int hop_length = 256, float threshold = 0.1f,
                       bool use_pyin = false, bool center = true) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   // Fall back to the struct defaults when raw emscripten passes 0 for a
@@ -197,6 +203,7 @@ val cqtResultToVal(const CqtResult& result) {
 val js_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
            int bins_per_octave) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   CqtConfig config;
@@ -211,6 +218,7 @@ val js_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
 val js_pseudo_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
                   int bins_per_octave) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   CqtConfig config;
@@ -225,6 +233,7 @@ val js_pseudo_cqt(val samples, int sample_rate, int hop_length, float fmin, int 
 val js_hybrid_cqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
                   int bins_per_octave) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   CqtConfig config;
@@ -239,6 +248,7 @@ val js_hybrid_cqt(val samples, int sample_rate, int hop_length, float fmin, int 
 val js_vqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
            int bins_per_octave, float gamma) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
   VqtConfig config;

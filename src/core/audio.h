@@ -95,4 +95,26 @@ class Audio {
   int sample_rate_;
 };
 
+/// @name Offline-analysis input limits
+/// Shared sample-rate / buffer-size bounds enforced on every offline-analysis
+/// entry point. The C ABI (validate_audio_params) and the WASM bindings — which
+/// bypass the C-ABI translation unit and call the C++ core directly — both
+/// funnel through validate_offline_audio_input, so the empty-input / range /
+/// finite policy is identical on every surface.
+/// @{
+inline constexpr int kMinAudioSampleRate = 8000;
+inline constexpr int kMaxAudioSampleRate = 384000;
+inline constexpr std::size_t kMaxAudioBufferSize = 500000000;
+
+/// @brief Validates an offline-analysis audio buffer (single source of truth).
+/// @param samples       Pointer to mono/interleaved float sample data.
+/// @param length        Number of float samples.
+/// @param sample_rate   Sample rate in Hz.
+/// @throws SonareException(InvalidParameter) for a null/empty buffer, a
+///         @p sample_rate outside [kMinAudioSampleRate, kMaxAudioSampleRate], a
+///         @p length above kMaxAudioBufferSize, or any non-finite sample. Empty
+///         audio is never a valid zero-length analysis, matching the C ABI.
+void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate);
+/// @}
+
 }  // namespace sonare

@@ -329,6 +329,7 @@ std::vector<mastering::maximizer::StreamingPlatform> streamingPlatformsFromVal(v
 
 std::string js_mastering_streaming_preview(val samples, int sample_rate, val platforms_obj) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   const Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   const auto platforms = streamingPlatformsFromVal(platforms_obj);
   const auto results = platforms.empty()
