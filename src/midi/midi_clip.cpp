@@ -26,23 +26,30 @@ int same_time_rank(const Ump& ump) noexcept {
   return 4;
 }
 
+bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept {
+  if (a.render_frame != b.render_frame) return a.render_frame < b.render_frame;
+  const int ra = same_time_rank(a.ump);
+  const int rb = same_time_rank(b.ump);
+  if (ra != rb) return ra < rb;
+  // Deterministic tiebreak on note then channel then first word so identical
+  // timestamps are fully ordered regardless of insertion order. Mirrors
+  // MidiClip::sort_stable.
+  if (a.ump.note_number() != b.ump.note_number()) {
+    return a.ump.note_number() < b.ump.note_number();
+  }
+  if (a.ump.channel() != b.ump.channel()) {
+    return a.ump.channel() < b.ump.channel();
+  }
+  return a.ump.words[0] < b.ump.words[0];
+}
+
 void sort_render_events_stable(std::vector<MidiEvent>& events) {
-  std::stable_sort(events.begin(), events.end(), [](const MidiEvent& a, const MidiEvent& b) {
-    if (a.render_frame != b.render_frame) return a.render_frame < b.render_frame;
-    const int ra = same_time_rank(a.ump);
-    const int rb = same_time_rank(b.ump);
-    if (ra != rb) return ra < rb;
-    // Deterministic tiebreak on note then channel then first word so identical
-    // timestamps are fully ordered regardless of insertion order. Mirrors
-    // MidiClip::sort_stable.
-    if (a.ump.note_number() != b.ump.note_number()) {
-      return a.ump.note_number() < b.ump.note_number();
-    }
-    if (a.ump.channel() != b.ump.channel()) {
-      return a.ump.channel() < b.ump.channel();
-    }
-    return a.ump.words[0] < b.ump.words[0];
-  });
+  std::stable_sort(events.begin(), events.end(), render_event_before);
+}
+
+void sort_render_events_stable(MidiEvent* events, size_t count) {
+  if (events == nullptr || count < 2) return;
+  std::stable_sort(events, events + count, render_event_before);
 }
 
 void MidiClip::set_events(std::vector<MidiClipEvent> events) { events_ = std::move(events); }

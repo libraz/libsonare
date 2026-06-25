@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "midi/midi_clip.h"
+
 namespace sonare::midi {
 namespace {
 
@@ -359,6 +361,14 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
       shape_and_push(ev, i);
     }
   }
+
+  // Quantize/humanize move events in render_frame and arp/chord fan-out emits in
+  // production order, so `out` is not time-ordered after the per-event passes.
+  // Stable-sort the whole block by render_frame with the shared off-before-on
+  // tiebreak (same contract as MidiClip / live render events), so every consumer
+  // -- sequencer, AU/external MIDI ports -- receives in-block time order without
+  // re-sorting downstream.
+  sort_render_events_stable(out->events.data(), out->size);
 }
 
 }  // namespace sonare::midi

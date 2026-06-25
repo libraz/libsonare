@@ -349,6 +349,45 @@ TEST_CASE("MidiFx arpeggiator expands a held note into gated steps", "[midi]") {
   REQUIRE(out.events[4].ump.note_number() == 67);
 }
 
+TEST_CASE("MidiFx output is render-frame ordered after chord + arpeggiator fan-out", "[midi]") {
+  // Chord fan-out emits note-major (all arp steps of chord note 0, then all of
+  // note 1, ...), so the per-step render frames restart from the onset for each
+  // chord note -- the raw production order is NOT time-sorted. The chain must
+  // stable-sort the buffer before returning so every consumer (sequencer, AU /
+  // external MIDI ports) receives in-block time order with note-off before
+  // note-on at the same frame, without re-sorting downstream.
+  MidiFxChain fx;
+  fx.prepare();
+  ChordConfig c;
+  c.enabled = true;
+  c.count = 2;
+  c.intervals = {0, 4};
+  fx.set_chord(c);
+  ArpeggiatorConfig a;
+  a.enabled = true;
+  a.steps = 2;
+  a.intervals = {0, 12};
+  a.step_frames = 100;
+  a.gate_frames = 50;
+  fx.set_arpeggiator(a);
+
+  std::vector<MidiEvent> in = {note_on(0, 60, 100), note_off(400, 60)};
+  MidiFxBuffer out;
+  fx.process(in.data(), in.size(), &out);
+
+  // 2 chord notes x 2 steps x (on+off) = 8 events.
+  REQUIRE(out.size == 8);
+  for (size_t i = 1; i < out.size; ++i) {
+    REQUIRE(out.events[i].render_frame >= out.events[i - 1].render_frame);
+    // At an identical frame, note-off must precede note-on.
+    if (out.events[i].render_frame == out.events[i - 1].render_frame) {
+      const bool on_before_off =
+          out.events[i - 1].ump.is_note_on() && out.events[i].ump.is_note_off();
+      REQUIRE_FALSE(on_before_off);
+    }
+  }
+}
+
 TEST_CASE("MidiFx humanize is reproducible for a fixed seed and differs across seeds", "[midi]") {
   HumanizeConfig h;
   h.enabled = true;

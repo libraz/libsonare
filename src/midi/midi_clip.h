@@ -80,12 +80,21 @@ class MidiClip {
 /// same-timestamp ties identically.
 int same_time_rank(const Ump& ump) noexcept;
 
+/// Strict-weak ordering used by every render-event sort: ascending render_frame,
+/// then same_time_rank (note-off before note-on), then a deterministic
+/// note/channel/first-word tiebreak. Exposed so fixed-capacity buffers (e.g.
+/// MidiFxBuffer) can sort in place with the same contract.
+bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept;
+
 /// Stable-sorts absolute render-frame MidiEvents ascending by render_frame, then
 /// by same_time_rank (note-off before note-on) and a deterministic
 /// note/channel/word tiebreak. The live/realtime clip paths call this so their
 /// same-frame ordering matches the offline MidiClip::sort_stable contract
 /// (MidiClipSchedule::events documents off-before-on at the same frame).
 void sort_render_events_stable(std::vector<MidiEvent>& events);
+
+/// Pointer-range overload for fixed-capacity buffers that are not std::vector.
+void sort_render_events_stable(MidiEvent* events, size_t count);
 
 /// Loop policy for a scheduled MIDI clip.
 enum class MidiLoopMode : uint8_t {
