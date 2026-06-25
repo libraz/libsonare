@@ -186,6 +186,35 @@ TEST_CASE("detect_onsets quick function", "[onset_analyzer]") {
   }
 }
 
+TEST_CASE("OnsetAnalyzer detects a flat-topped peak", "[onset_analyzer]") {
+  // A plateau of equal maxima used to be rejected entirely: every frame on the
+  // plateau had an equal neighbour, so the old `>= current` test marked none of
+  // them a local maximum. Peak picking must now accept the first plateau frame.
+  std::vector<float> onset_strength(60, 0.0f);
+  // A 3-frame flat top at frames 20, 21, 22 (all equal), with a rising edge.
+  onset_strength[19] = 0.5f;
+  onset_strength[20] = 1.0f;
+  onset_strength[21] = 1.0f;
+  onset_strength[22] = 1.0f;
+  onset_strength[23] = 0.4f;
+
+  OnsetDetectConfig config;
+  config.pre_max = 1;
+  config.post_max = 1;
+  config.pre_avg = 1;
+  config.post_avg = 1;
+  config.wait = 1;
+  config.delta = 0.0f;
+  config.threshold = 0.5f;
+
+  OnsetAnalyzer analyzer(onset_strength, 22050, 512, config);
+  auto frames = analyzer.onset_frames();
+
+  REQUIRE(frames.size() == 1);
+  // The first frame of the plateau is the detected onset (left edge).
+  REQUIRE(frames.front() == 20);
+}
+
 TEST_CASE("OnsetAnalyzer wait parameter", "[onset_analyzer]") {
   // Create onset strength envelope with consecutive peaks
   std::vector<float> onset_strength(100, 0.0f);

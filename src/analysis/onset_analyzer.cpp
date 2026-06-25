@@ -20,7 +20,11 @@ OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config
   mel_config.hop_length = config.hop_length;
   mel_config.n_mels = constants::kDefaultNMels;
 
-  // Use the OnsetConfig from feature/onset.h
+  // Use the OnsetConfig from feature/onset.h. This internal detection pipeline
+  // opts into detrend explicitly (the public OnsetConfig default is
+  // detrend=false to match librosa.onset.onset_strength); removing the slow
+  // baseline sharpens peak picking, consistent with the bpm / beat / music /
+  // audio-profile analyzers, which all force detrend=true here too.
   OnsetConfig feature_onset_cfg;
   feature_onset_cfg.lag = 1;
   feature_onset_cfg.detrend = true;
@@ -75,10 +79,18 @@ void OnsetAnalyzer::detect_onsets() {
     // Check if above threshold
     if (current <= threshold) continue;
 
-    // Check if local maximum
+    // Check if local maximum. Use a strict comparison on the left and a
+    // non-strict one on the right so a flat-topped peak (a plateau of equal
+    // values) yields exactly its first frame as the onset, instead of being
+    // rejected entirely because an equal neighbour exists. This matches
+    // librosa's peak picking (and the in-repo onset reference convention
+    // `x[i] > x[i-1] && x[i] >= x[i+1]`).
     bool is_max = true;
     for (int j = i - config_.pre_max; j <= i + config_.post_max; ++j) {
-      if (j != i && onset_strength_[j] >= current) {
+      if (j == i) continue;
+      const bool dominated =
+          (j < i) ? (onset_strength_[j] >= current) : (onset_strength_[j] > current);
+      if (dominated) {
         is_max = false;
         break;
       }
