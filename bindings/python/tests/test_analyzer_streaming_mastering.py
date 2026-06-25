@@ -8,6 +8,29 @@ import math
 from ._analyzer_helpers import *
 
 
+def test_stream_analyzer_rejects_malformed_config_geometry() -> None:
+    """StreamAnalyzer rejects malformed config geometry, matching every surface.
+
+    The shared C++ constructor and the flat C ABI enforce the same relationship
+    and positive-value contract, so Python construction raises instead of
+    silently producing garbage spectra.
+    """
+    from libsonare import SonareError, StreamAnalyzer, StreamConfig
+
+    for bad in (
+        StreamConfig(sample_rate=0),
+        StreamConfig(n_fft=0),
+        StreamConfig(n_mels=0),
+        StreamConfig(n_fft=1024, hop_length=2048),
+        StreamConfig(fmin=8000.0, fmax=4000.0),
+    ):
+        with pytest.raises(SonareError):
+            StreamAnalyzer(bad)
+
+    # A well-formed config still constructs.
+    StreamAnalyzer(StreamConfig(sample_rate=22050)).close()
+
+
 def test_streaming_mastering_chain_processes_mono_block() -> None:
     """StreamingMasteringChain processes a 512-sample mono block in place."""
     from libsonare import StreamingMasteringChain

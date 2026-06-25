@@ -10,6 +10,7 @@
 #include "filters/mel.h"
 #include "streaming/stream_analyzer_utils.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare {
@@ -34,6 +35,41 @@ static_assert(static_cast<int>(ChordQuality::Sus2Add4) < kNumChordQualities,
               "bump it in stream_analyzer.h when adding a new quality");
 
 StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
+  /// Reject malformed geometry that would silently yield *wrong* results (as
+  /// opposed to the degenerate-but-safe sizing params clamped below). The flat C
+  /// ABI rejects these before construction; mirror the same relationship and
+  /// positive-value contract here so direct C++/Node/WASM construction fails
+  /// identically instead of producing garbage spectra. Note compute_magnitude,
+  /// window and output_format are validated at the binding layer (the C++ enums
+  /// are intrinsically valid and compute_magnitude is a real core feature the
+  /// SOA read paths simply don't surface), so they are intentionally not
+  /// re-checked here.
+  const auto finite_positive = [](float v) { return std::isfinite(v) && v > 0.0f; };
+  const auto finite_non_negative = [](float v) { return std::isfinite(v) && v >= 0.0f; };
+  if (config_.sample_rate <= 0)
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamConfig: sample_rate must be positive");
+  if (config_.n_fft <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "StreamConfig: n_fft must be positive");
+  if (config_.n_mels <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "StreamConfig: n_mels must be positive");
+  if (config_.hop_length > config_.n_fft)
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamConfig: hop_length must not exceed n_fft");
+  if (!finite_non_negative(config_.fmin) || !finite_non_negative(config_.fmax))
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamConfig: fmin/fmax must be finite and non-negative");
+  if (config_.fmax > 0.0f && config_.fmax <= config_.fmin)
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamConfig: fmax must be greater than fmin");
+  if (!finite_positive(config_.tuning_ref_hz))
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamConfig: tuning_ref_hz must be finite and positive");
+  if (!finite_positive(config_.key_update_interval_sec) ||
+      !finite_positive(config_.bpm_update_interval_sec))
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamConfig: key/bpm_update_interval_sec must be finite and positive");
+
   /// Clamp loop/sizing parameters that the C-ABI validates but that direct
   /// C++/Node/WASM construction can pass through unchecked. A
   /// magnitude_downsample of 0 would integer-divide n_bins() by zero when

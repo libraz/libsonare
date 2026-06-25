@@ -1,7 +1,10 @@
 /// @file stream_analyzer_core_test.cpp
 /// @brief StreamAnalyzer core behavior tests.
 
+#include <limits>
+
 #include "stream_analyzer_test_helpers.h"
+#include "util/exception.h"
 
 TEST_CASE("StreamConfig helpers", "[streaming]") {
   StreamConfig config;
@@ -304,6 +307,64 @@ TEST_CASE("StreamAnalyzer clamps degenerate sizing params", "[streaming][edge]")
   auto frames = analyzer.read_frames(4);
   REQUIRE_FALSE(frames.empty());
   REQUIRE(frames[0].magnitude.size() == static_cast<size_t>(config.n_bins()));
+}
+
+TEST_CASE("StreamAnalyzer rejects malformed config geometry", "[streaming][edge]") {
+  // Relationship and positive-value checks that the flat C ABI enforces before
+  // construction must also fire on direct C++/Node/WASM construction, otherwise
+  // those surfaces silently produce garbage spectra instead of an error. These
+  // are distinct from the degenerate sizing params (hop/emit/downsample) which
+  // are deliberately clamped, not rejected, for crash-safety.
+  auto base = []() {
+    StreamConfig c;
+    c.sample_rate = 22050;
+    c.n_fft = 2048;
+    c.hop_length = 512;
+    return c;
+  };
+
+  SECTION("non-positive sample_rate") {
+    StreamConfig c = base();
+    c.sample_rate = 0;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("non-positive n_fft") {
+    StreamConfig c = base();
+    c.n_fft = 0;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("non-positive n_mels") {
+    StreamConfig c = base();
+    c.n_mels = 0;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("hop_length exceeds n_fft") {
+    StreamConfig c = base();
+    c.hop_length = c.n_fft + 1;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("negative fmin") {
+    StreamConfig c = base();
+    c.fmin = -1.0f;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("fmax not greater than fmin") {
+    StreamConfig c = base();
+    c.fmin = 8000.0f;
+    c.fmax = 4000.0f;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("non-positive tuning_ref_hz") {
+    StreamConfig c = base();
+    c.tuning_ref_hz = 0.0f;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("non-finite update interval") {
+    StreamConfig c = base();
+    c.bpm_update_interval_sec = std::numeric_limits<float>::infinity();
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("valid config still constructs") { REQUIRE_NOTHROW(StreamAnalyzer(base())); }
 }
 
 TEST_CASE("StreamAnalyzer SOA read", "[streaming]") {

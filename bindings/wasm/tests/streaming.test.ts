@@ -51,6 +51,19 @@ describe('StreamAnalyzer', () => {
         /computeMagnitude is not supported/,
       );
     });
+
+    it('rejects malformed config geometry like the C ABI', () => {
+      // The shared StreamAnalyzer constructor enforces the same relationship and
+      // positive-value contract as the flat C ABI, so WASM construction fails
+      // instead of silently producing garbage spectra.
+      expect(() => new StreamAnalyzer({ sampleRate: 0 })).toThrow();
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, nFft: 0 })).toThrow();
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, nMels: 0 })).toThrow();
+      expect(
+        () => new StreamAnalyzer({ sampleRate: 22050, nFft: 1024, hopLength: 2048 }),
+      ).toThrow();
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, fmin: 8000, fmax: 4000 })).toThrow();
+    });
   });
 
   describe('chord progression', () => {

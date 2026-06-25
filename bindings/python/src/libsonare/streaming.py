@@ -59,6 +59,9 @@ class StreamAnalyzer:
     """
 
     def __init__(self, config: StreamConfig | None = None) -> None:
+        # Set first so a failed create (e.g. rejected malformed config) leaves a
+        # valid attribute for __del__/close() instead of raising AttributeError.
+        self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
         if not hasattr(lib, "sonare_stream_analyzer_create"):
             raise RuntimeError("libsonare was built without StreamAnalyzer support")
@@ -86,7 +89,7 @@ class StreamAnalyzer:
             raw.output_format = int(config.output_format)
         handle = ctypes.c_void_p()
         _check(lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)))
-        self._handle: ctypes.c_void_p | None = handle
+        self._handle = handle
 
     def close(self) -> None:
         if self._handle is not None:

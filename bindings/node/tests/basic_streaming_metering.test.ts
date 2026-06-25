@@ -329,4 +329,15 @@ describe('StreamAnalyzer quantize-config override', () => {
     const fallback = wide.readFramesU8(4);
     expect(fallback.nMels).toBe(32);
   });
+
+  it('rejects malformed config geometry like the C ABI', () => {
+    // The shared StreamAnalyzer constructor enforces the same relationship and
+    // positive-value contract as the flat C ABI, so direct Node construction
+    // throws instead of silently producing garbage spectra.
+    expect(() => new StreamAnalyzer({ sampleRate: 0 })).toThrow();
+    expect(() => new StreamAnalyzer({ sampleRate: SR, nFft: 0 })).toThrow();
+    expect(() => new StreamAnalyzer({ sampleRate: SR, nMels: 0 })).toThrow();
+    expect(() => new StreamAnalyzer({ sampleRate: SR, nFft: 1024, hopLength: 2048 })).toThrow();
+    expect(() => new StreamAnalyzer({ sampleRate: SR, fmin: 8000, fmax: 4000 })).toThrow();
+  });
 });
