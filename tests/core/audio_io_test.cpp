@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -389,4 +390,32 @@ TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "
   REQUIRE_THROWS_AS(save_wav_multichannel(path, interleaved.data(), frames, 6,
                                           ChannelLayout::SevenPointOne, 48000, 16),
                     sonare::SonareException);
+}
+
+TEST_CASE("save_wav quantizes 16-bit PCM by rounding to nearest, not truncating", "[audio_io]") {
+  // Pick float samples whose scaled magnitude has a fractional part > 0.5 so
+  // round-half-away-from-zero and toward-zero truncation disagree. The old
+  // writer truncated (static_cast), losing up to a full LSB and ~3 dB SNR vs a
+  // libsndfile-style nearest-neighbor encoder.
+  const std::vector<float> original = {
+      100.7f / 32767.0f,   // +: trunc 100, round 101
+      -100.7f / 32767.0f,  // -: trunc -100, round -101 (away from zero)
+      50.2f / 32767.0f,    // control: trunc == round == 50
+      0.0f,
+  };
+  const std::vector<int16_t> expected = {101, -101, 50, 0};
+
+  const std::string path = "test_pcm16_rounding.wav";
+  save_wav(path, original, 48000, 16);
+  auto [loaded, loaded_sr] = load_wav(path);
+  std::remove(path.c_str());
+
+  REQUIRE(loaded_sr == 48000);
+  REQUIRE(loaded.size() == original.size());
+  // dr_wav reconstructs int16 V as V / 32768, so the stored integer is
+  // recoverable exactly by rounding the loaded float back.
+  for (size_t i = 0; i < expected.size(); ++i) {
+    const long stored = std::lround(static_cast<double>(loaded[i]) * 32768.0);
+    REQUIRE(stored == expected[i]);
+  }
 }

@@ -1,6 +1,7 @@
 #include "core/audio_io.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 // File-path I/O is unavailable in WebAssembly builds; the core exposes only the
@@ -405,6 +406,29 @@ AudioLoadResultMC load_audio_multichannel(const std::string& path,
   }
 }
 
+namespace {
+
+/// Quantizes a normalized float sample to signed 16-bit PCM using
+/// round-half-away-from-zero (@c std::lroundf), the nearest-neighbor rounding
+/// libsndfile and other reference encoders use, instead of C++'s default
+/// toward-zero truncation. The input is clamped to [-1, 1] and the rounded
+/// result to the int16 range so a +1.0 peak cannot overflow.
+int16_t float_to_pcm16(float sample) {
+  const float clamped = std::max(-1.0f, std::min(1.0f, sample));
+  const long v = std::lroundf(clamped * 32767.0f);
+  return static_cast<int16_t>(std::max<long>(-32768, std::min<long>(32767, v)));
+}
+
+/// Quantizes a normalized float sample to a signed 24-bit PCM value (held in an
+/// int32) using the same round-to-nearest behavior as @ref float_to_pcm16.
+int32_t float_to_pcm24(float sample) {
+  const float clamped = std::max(-1.0f, std::min(1.0f, sample));
+  const long v = std::lroundf(clamped * 8388607.0f);  // 2^23 - 1
+  return static_cast<int32_t>(std::max<long>(-8388608, std::min<long>(8388607, v)));
+}
+
+}  // namespace
+
 void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
               int bits_per_sample) {
   SONARE_CHECK_MSG(samples != nullptr, ErrorCode::InvalidParameter, "Samples pointer is null");
@@ -428,8 +452,7 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
     // Convert float to int16
     std::vector<int16_t> int_samples(n_samples);
     for (size_t i = 0; i < n_samples; ++i) {
-      float clamped = std::max(-1.0f, std::min(1.0f, samples[i]));
-      int_samples[i] = static_cast<int16_t>(clamped * 32767.0f);
+      int_samples[i] = float_to_pcm16(samples[i]);
     }
     drwav_uint64 written = drwav_write_pcm_frames(&wav, n_samples, int_samples.data());
     drwav_uninit(&wav);
@@ -441,8 +464,7 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
     // misaligned. Build the exact 3-byte-per-sample byte stream it expects.
     std::vector<uint8_t> bytes(n_samples * 3);
     for (size_t i = 0; i < n_samples; ++i) {
-      float clamped = std::max(-1.0f, std::min(1.0f, samples[i]));
-      int32_t v = static_cast<int32_t>(clamped * 8388607.0f);  // 2^23 - 1
+      int32_t v = float_to_pcm24(samples[i]);
       bytes[i * 3 + 0] = static_cast<uint8_t>(v & 0xFF);
       bytes[i * 3 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
       bytes[i * 3 + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
@@ -467,15 +489,13 @@ std::vector<uint8_t> pack_pcm_bytes(const float* samples, size_t n_samples, int 
   std::vector<uint8_t> bytes(n_samples * static_cast<size_t>(bits_per_sample / 8));
   if (bits_per_sample == 16) {
     for (size_t i = 0; i < n_samples; ++i) {
-      float clamped = std::max(-1.0f, std::min(1.0f, samples[i]));
-      auto v = static_cast<int16_t>(clamped * 32767.0f);
+      auto v = float_to_pcm16(samples[i]);
       bytes[i * 2 + 0] = static_cast<uint8_t>(v & 0xFF);
       bytes[i * 2 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
     }
   } else {  // 24-bit
     for (size_t i = 0; i < n_samples; ++i) {
-      float clamped = std::max(-1.0f, std::min(1.0f, samples[i]));
-      auto v = static_cast<int32_t>(clamped * 8388607.0f);  // 2^23 - 1
+      auto v = float_to_pcm24(samples[i]);
       bytes[i * 3 + 0] = static_cast<uint8_t>(v & 0xFF);
       bytes[i * 3 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
       bytes[i * 3 + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
