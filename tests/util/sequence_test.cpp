@@ -7,6 +7,8 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <vector>
 
+#include "util/exception.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 
@@ -34,6 +36,20 @@ TEST_CASE("rqa on a perfect identity matrix returns rate=1/n", "[util][sequence]
   auto stats = rqa(R.data(), 3);
   REQUIRE_THAT(stats.recurrence_rate, WithinAbs(3.0f / 9.0f, 1e-6f));
   REQUIRE(stats.max_diagonal_length == 3);
+}
+
+TEST_CASE("dtw rejects a cell count that would overflow int", "[util][sequence][dtw]") {
+  // X_cols * Y_cols here is 2.5e9 > INT_MAX; the int index `i * Y_cols + j`
+  // would overflow (UB). The guard must reject the dimensions before reading any
+  // sample (so a tiny buffer is safe to pass).
+  std::vector<float> tiny{0.0f};
+  REQUIRE_THROWS_AS(dtw(tiny.data(), 1, 50000, tiny.data(), 1, 50000), SonareException);
+}
+
+TEST_CASE("rqa rejects a matrix size that would overflow int", "[util][sequence][rqa]") {
+  // n * n is 2.5e9 > INT_MAX; the guard must reject before iterating.
+  std::vector<float> tiny{0.0f};
+  REQUIRE_THROWS_AS(rqa(tiny.data(), 50000), SonareException);
 }
 
 TEST_CASE("viterbi finds a single dominant state", "[util][sequence][viterbi]") {

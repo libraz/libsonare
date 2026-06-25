@@ -117,10 +117,13 @@ std::vector<float> nnls(const float* A, int A_rows, int A_cols, const float* B, 
 
   // Build A once and pre-compute the normal-equation matrices. AtA is shared
   // across all columns of B.
+  // Flatten indices are promoted to size_t so a large dictionary (A_rows *
+  // A_cols, A_rows * B_cols, A_cols * B_cols) cannot overflow int (UB) when the
+  // row-major offset is formed.
   Eigen::MatrixXd Ad(A_rows, A_cols);
   for (int i = 0; i < A_rows; ++i) {
     for (int j = 0; j < A_cols; ++j) {
-      Ad(i, j) = static_cast<double>(A[i * A_cols + j]);
+      Ad(i, j) = static_cast<double>(A[static_cast<size_t>(i) * A_cols + j]);
     }
   }
   const Eigen::MatrixXd AtA = Ad.transpose() * Ad;
@@ -129,12 +132,12 @@ std::vector<float> nnls(const float* A, int A_rows, int A_cols, const float* B, 
   Eigen::VectorXd b(A_rows);
   for (int c = 0; c < B_cols; ++c) {
     for (int i = 0; i < A_rows; ++i) {
-      b[i] = static_cast<double>(B[i * B_cols + c]);
+      b[i] = static_cast<double>(B[static_cast<size_t>(i) * B_cols + c]);
     }
     Eigen::VectorXd Atb = Ad.transpose() * b;
     Eigen::VectorXd x = nnls_with_normal(AtA, Atb, max_iter, static_cast<double>(tol));
     for (int j = 0; j < A_cols; ++j) {
-      X[j * B_cols + c] = static_cast<float>(x[j]);
+      X[static_cast<size_t>(j) * B_cols + c] = static_cast<float>(x[j]);
     }
   }
   return X;

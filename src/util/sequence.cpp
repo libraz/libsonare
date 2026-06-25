@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 
 #include "util/exception.h"
@@ -69,6 +70,14 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
   if (X_rows != Y_rows)
     throw SonareException(ErrorCode::InvalidParameter, "dtw: feature dims must match");
   if (X_cols <= 0 || Y_cols <= 0) return {};
+  // The cost/accumulation matrices are indexed with the int expression
+  // `i * Y_cols + j`; reject a cell count that would overflow int (UB) before
+  // any allocation. The largest index is X_cols * Y_cols - 1, so guard that
+  // product. (~46k x 46k cells is already far beyond any musical alignment.)
+  if (static_cast<int64_t>(X_cols) * static_cast<int64_t>(Y_cols) >
+      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "dtw: cost matrix too large");
+  }
 
   // Resolve the step pattern. Default is symmetric P0: {(1,1),(1,0),(0,1)}.
   std::vector<std::pair<int, int>> steps =
@@ -175,6 +184,12 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
 RqaResult rqa(const float* rec, int n) {
   RqaResult out;
   if (rec == nullptr || n <= 0) return out;
+  // rec is an n x n matrix indexed with the int expression `i * n + j`; reject a
+  // size whose element count would overflow int (UB) before iterating.
+  if (static_cast<int64_t>(n) * static_cast<int64_t>(n) >
+      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "rqa: recurrence matrix too large");
+  }
   int n2 = n * n;
   int n_rec = 0;
   for (int i = 0; i < n2; ++i)
