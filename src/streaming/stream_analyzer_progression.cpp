@@ -323,9 +323,13 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     int vote_count = 0;
 
     for (int f = start_frame; f < end_frame; ++f) {
-      /// Median-smooth chroma over a small window around this frame, using the
-      /// same per-bin median as the live tracking path (compute_median_chroma)
-      /// so the retroactive and live chord estimates agree on identical audio.
+      /// Median-smooth chroma with the same per-bin median as the live tracking
+      /// path (compute_median_chroma), but over a window *centered* on this
+      /// frame. The retroactive pass owns the full history, so it can look ahead
+      /// for a symmetric, more accurate estimate; the live path is causal and
+      /// can only trail. The two therefore agree in the steady interior of a bar
+      /// but may differ by a frame near bar boundaries — this look-ahead is
+      /// intentional, not a bit-exact match of the live estimate.
       int smooth_start = std::max(0, f - kChordSmoothingFrames / 2);
       int smooth_end = std::min(retroactive_frames, f + kChordSmoothingFrames / 2);
       std::deque<std::array<float, 12>> window(full_chroma_history_.begin() + smooth_start,

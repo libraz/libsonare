@@ -31,6 +31,15 @@ struct ConvolutionReverbConfig {
   std::uint32_t seed = 0x5151ABCDu;
 };
 
+/// @brief FFT partitioned convolution reverb.
+///
+/// Every channel is convolved with the same impulse response — the one loaded
+/// via load_ir(), or the synthesized decaying-noise IR otherwise. This is
+/// by design: a convolution reverb reproduces the supplied IR faithfully, so a
+/// mono IR yields an inter-channel-correlated (mono) tail. Stereo width must
+/// come from supplying a genuinely decorrelated multichannel IR; this processor
+/// does not synthesize per-channel decorrelation (unlike an algorithmic reverb,
+/// where decorrelation is a property of the algorithm rather than the input).
 class ConvolutionReverb : public rt::ProcessorBase {
  public:
   ConvolutionReverb() = default;
