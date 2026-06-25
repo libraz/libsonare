@@ -480,6 +480,20 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
+          "[c_api][mastering]") {
+  // The header promises the returned pointer stays valid across later API calls
+  // on the thread. The name caches are gated on a write-once flag (not on the
+  // string being empty), so repeated calls must return the very same pointer
+  // without recomputing/reassigning the thread_local.
+  REQUIRE(sonare_mastering_processor_names() == sonare_mastering_processor_names());
+  REQUIRE(sonare_mastering_pair_processor_names() == sonare_mastering_pair_processor_names());
+  REQUIRE(sonare_mastering_pair_analysis_names() == sonare_mastering_pair_analysis_names());
+  REQUIRE(sonare_mastering_stereo_analysis_names() == sonare_mastering_stereo_analysis_names());
+  REQUIRE(sonare_mastering_insert_names() == sonare_mastering_insert_names());
+  REQUIRE(sonare_mastering_processor_catalog() == sonare_mastering_processor_catalog());
+}
+
 TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
           "[c_api][mastering]") {
   // The one-shot named-processor path must validate repair enum params the same
