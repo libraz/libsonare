@@ -70,14 +70,40 @@ float aggregate_gain_reduction_db(
   return reduction_db;
 }
 
+/// @brief Store a consumed automation event, collapsing into the last slot on
+///        overflow so no breakpoint is ever silently dropped after the lane's
+///        ring tail has already advanced.
+/// @details consume_block() advances the SPSC lane tail for every event it
+///          emits, so an event the caller fails to store is gone for good — and
+///          because the dropped events are the highest-offset ones, the affected
+///          parameter would stay stuck at the last *stored* value and never reach
+///          its true block-final value (permanent divergence). Deferring them to
+///          the next block is not an option: a sample_pos < the next block_start
+///          is reclassified as a baseline (past) event and loses its offset. So
+///          on overflow we overwrite the last slot with the newer (higher-offset)
+///          event: the block-final value is preserved and only intra-block
+///          segmentation resolution degrades. For the single-target fader/pan/
+///          width lanes (events are offset-monotonic) this is exact. The shared
+///          insert array mixes up to kMaxInsertAutomationLanes single-target
+///          lanes, so only the last-overflowing target's final value is kept;
+///          this is still strictly better than dropping and is the documented
+///          graceful-degradation limit under extreme multi-lane density.
+template <size_t Capacity>
+void store_block_event(std::array<AutomationBlockEvent, Capacity>& dest, size_t& count,
+                       const AutomationBlockEvent& event) {
+  if (count < dest.size()) {
+    dest[count++] = event;
+  } else {
+    dest[dest.size() - 1] = event;
+  }
+}
+
 template <typename Lane, size_t Capacity>
 size_t consume_events(Lane& lane, int64_t block_start, int num_samples,
                       std::array<AutomationBlockEvent, Capacity>& dest) {
   size_t count = 0;
   lane.consume_block(block_start, num_samples, [&](const AutomationBlockEvent& event) {
-    if (count < dest.size()) {
-      dest[count++] = event;
-    }
+    store_block_event(dest, count, event);
   });
   return count;
 }
@@ -212,9 +238,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     InsertAutomationLane& lane = insert_automation_[li];
     if (!lane.lane) continue;
     lane.lane->consume_block(block_start, num_samples, [&](const AutomationBlockEvent& event) {
-      if (insert_count < insert_events.size()) {
-        insert_events[insert_count++] = event;
-      }
+      store_block_event(insert_events, insert_count, event);
     });
   }
   sort_events_by_offset(insert_events, insert_count);

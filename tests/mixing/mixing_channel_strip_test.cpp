@@ -328,6 +328,35 @@ TEST_CASE("ChannelStrip applies fader automation at block sample offsets", "[mix
   REQUIRE(strip.meter_snapshot().seq == 1);
 }
 
+TEST_CASE("ChannelStrip reaches the block-final fader value past the per-block event cap",
+          "[mixing]") {
+  // More automation breakpoints than kMaxAutomationEventsPerBlock (128) fall in
+  // one block. consume_block() advances the SPSC lane tail for every event, so
+  // any breakpoint the strip fails to store is gone permanently -- and because
+  // the dropped ones are the highest-offset events, the fader used to stay stuck
+  // at the value of the 128th breakpoint and never reach its true block-final
+  // value. The overflow-collapse policy must still land the parameter on the
+  // last breakpoint's value.
+  constexpr int kNumEvents = 200;  // > 128 cap
+  constexpr int kBlock = 256;
+  std::vector<float> left(kBlock, 1.0f);
+  std::vector<float> right(kBlock, 1.0f);
+  float* channels[] = {left.data(), right.data()};
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, kBlock);
+  // Hold curves so no synthetic interpolation events inflate the count: the
+  // block contains exactly kNumEvents breakpoints. Every intermediate event
+  // parks the fader at -60 dB; only the final one opens it to -3 dB.
+  for (int i = 0; i < kNumEvents; ++i) {
+    const float db = (i == kNumEvents - 1) ? -3.0f : -60.0f;
+    REQUIRE(strip.schedule_fader_automation(i, db, sonare::mixing::AutomationCurveType::Hold));
+  }
+  strip.process_at(channels, 2, kBlock, 0);
+
+  REQUIRE_THAT(strip.fader_db(), WithinAbs(-3.0f, 0.0001f));
+}
+
 TEST_CASE("ChannelStrip segmented path reports block-max gain reduction", "[mixing]") {
   // With sample-accurate automation, process_at() splits the block into
   // segments. The pre-insert's last_gain_reduction_db() reflects only the most
