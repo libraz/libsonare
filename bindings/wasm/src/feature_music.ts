@@ -257,11 +257,21 @@ export function analyzeMelody(
   const fmin = options.fmin ?? 65.0;
   const fmax = options.fmax ?? 2093.0;
   validateFrequencyBounds('analyzeMelody', fmin, fmax);
+  // The melody tracker's fmin is a YIN pitch floor: 0 is meaningless, and the
+  // flat C ABI (sonare_analyze_melody) rejects it. validateFrequencyBounds only
+  // guards fmin >= 0, so enforce strict positivity here for parity.
+  if (fmin <= 0) {
+    throw new RangeError('analyzeMelody: fmin must be positive');
+  }
   validatePositiveIntegers('analyzeMelody', {
     frameLength: options.frameLength ?? 2048,
     hopLength: options.hopLength ?? 256,
   });
-  assertFiniteScalar('analyzeMelody', options.threshold ?? 0.1, 'threshold');
+  const threshold = options.threshold ?? 0.1;
+  assertFiniteScalar('analyzeMelody', threshold, 'threshold');
+  if (threshold <= 0) {
+    throw new RangeError('analyzeMelody: threshold must be positive');
+  }
   return requireModule().analyzeMelody(
     samples,
     sampleRate,

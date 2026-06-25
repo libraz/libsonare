@@ -852,7 +852,12 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => cqt(signal, SR, 0)).toThrow(/hopLength/);
       expect(() => vqt(signal, SR, 512, 32.7, 24, 12, Number.NaN)).toThrow(/gamma/);
       expect(() => analyzeSections(signal, SR, { minSectionSec: 0 })).toThrow(/minSectionSec/);
+      expect(() => analyzeSections(signal, SR, { nFft: 0 })).toThrow(/nFft/);
       expect(() => analyzeMelody(signal, SR, { fmin: 400, fmax: 200 })).toThrow(/fmax/);
+      // Strictly-positive parity with the C ABI (sonare_analyze_melody): a zero
+      // fmin or threshold is rejected, not silently replaced with the default.
+      expect(() => analyzeMelody(signal, SR, { fmin: 0 })).toThrow(/fmin/);
+      expect(() => analyzeMelody(signal, SR, { threshold: 0 })).toThrow(/threshold/);
       expect(() => onsetEnvelope(new Float32Array(), SR)).toThrow(/empty/);
       expect(() => fourierTempogram(new Float32Array([1, Number.POSITIVE_INFINITY]), SR)).toThrow(
         /NaN|Inf/,

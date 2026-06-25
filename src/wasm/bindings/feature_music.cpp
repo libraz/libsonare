@@ -110,15 +110,20 @@ val js_analyze_sections(val samples, int sample_rate, int n_fft = 2048, int hop_
                         float min_section_sec = 4.0f) {
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  // Mirror the flat C ABI config contract (sonare_analyze_sections): reject
+  // non-positive sizing instead of silently substituting struct defaults, so
+  // WASM rejects identically to the C ABI / Node. The TS layer (which always
+  // passes explicit values) carries the matching guards.
+  if (n_fft <= 0 || hop_length <= 0 || min_section_sec < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "analyzeSections: require nFft > 0, hopLength > 0, minSectionSec >= 0");
+  }
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
-  // Fall back to the struct defaults when raw emscripten passes 0 for a
-  // missing argument, so the JS-facing defaults stay consistent with the
-  // C ABI / Node bindings (n_fft=2048, hop_length=512, min_section_sec=4.0).
   SectionConfig config;
-  if (n_fft > 0) config.n_fft = n_fft;
-  if (hop_length > 0) config.hop_length = hop_length;
-  if (min_section_sec > 0.0f) config.min_section_sec = min_section_sec;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.min_section_sec = min_section_sec;
 
   SectionAnalyzer analyzer(audio, config);
 
@@ -144,20 +149,23 @@ val js_analyze_melody(val samples, int sample_rate, float fmin = 65.0f, float fm
                       bool use_pyin = false, bool center = true) {
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  // Mirror the flat C ABI config contract (sonare_analyze_melody_ex): reject an
+  // inverted/zero frequency range, non-positive sizing and a non-positive
+  // threshold instead of silently substituting struct defaults. use_pyin/center
+  // are plain bools selecting the pYIN tracker and frame centering.
+  if (fmin <= 0.0f || fmax <= fmin || frame_length <= 0 || hop_length <= 0 || threshold <= 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "analyzeMelody: require fmin > 0, fmax > fmin, frameLength > 0, "
+                          "hopLength > 0, threshold > 0");
+  }
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
 
-  // Fall back to the struct defaults when raw emscripten passes 0 for a
-  // missing argument, so the JS-facing defaults stay consistent with the
-  // C ABI / Node bindings (fmin=65, fmax=2093, frame_length=2048,
-  // hop_length=256, threshold=0.1). use_pyin/center are plain bools (default
-  // use_pyin=false, center=true) selecting the pYIN tracker and frame
-  // centering, matching MelodyConfig::use_pyin / MelodyConfig::center.
   MelodyConfig config;
-  if (fmin > 0.0f) config.fmin = fmin;
-  if (fmax > 0.0f) config.fmax = fmax;
-  if (frame_length > 0) config.frame_length = frame_length;
-  if (hop_length > 0) config.hop_length = hop_length;
-  if (threshold > 0.0f) config.threshold = threshold;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.frame_length = frame_length;
+  config.hop_length = hop_length;
+  config.threshold = threshold;
   config.use_pyin = use_pyin;
   config.center = center;
 
