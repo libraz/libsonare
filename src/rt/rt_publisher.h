@@ -39,6 +39,7 @@
 
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <cstddef>
 #include <memory>
 #include <thread>
@@ -90,7 +91,19 @@ class RtPublisher {
   /// the publish ring to the newest pending value, retiring the previously held
   /// snapshot and any superseded ones (wait-free push, no alloc, no free here).
   /// Call once at block start.
+  ///
+  /// Single-consumer contract: this is the consumer side of the SPSC publish
+  /// ring, so at most one thread may be inside acquire() at any instant. That is
+  /// normally the audio thread; a control thread may also call it to read back
+  /// its own just-published snapshot, but ONLY while the audio thread is
+  /// quiescent (never concurrently). A concurrent call races the ring's tail and
+  /// the retire push — a debug-only flag below catches that violation.
   void acquire() noexcept {
+#ifndef NDEBUG
+    const bool reentered = in_acquire_.exchange(true, std::memory_order_acq_rel);
+    assert(!reentered &&
+           "RtPublisher::acquire() is single-consumer; a concurrent acquire() was detected");
+#endif
     std::shared_ptr<const T> popped;
     while (!audio_current_ || retire_ring_.can_push()) {
       if (!publish_ring_.pop(popped)) {
@@ -102,6 +115,9 @@ class RtPublisher {
       audio_current_ = std::move(popped);
     }
     acquire_pending();
+#ifndef NDEBUG
+    in_acquire_.store(false, std::memory_order_release);
+#endif
   }
 
   /// Raw pointer to the snapshot currently held by the audio thread, or nullptr
@@ -219,6 +235,11 @@ class RtPublisher {
 
   std::shared_ptr<const T> control_current_;  // control thread
   std::shared_ptr<const T> audio_current_;    // audio thread
+
+#ifndef NDEBUG
+  // Debug-only single-consumer guard for acquire() (see its contract above).
+  std::atomic<bool> in_acquire_{false};
+#endif
 };
 
 /// Multi-reader, lock-free snapshot holder for immutable state that is read

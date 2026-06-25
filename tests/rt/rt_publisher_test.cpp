@@ -53,6 +53,19 @@ TEST_CASE("RtPublisher publish then acquire exposes the published value", "[rt][
   REQUIRE(*publisher.current() == 42);
 }
 
+TEST_CASE("RtPublisher tolerates repeated sequential acquire calls", "[rt][publisher]") {
+  // The single-consumer debug guard must reset on each return, so a consumer
+  // calling acquire() back-to-back (e.g. the audio thread every block, or a
+  // control thread reading back between publishes) never trips it.
+  sonare::rt::RtPublisher<int> publisher;
+  REQUIRE(publisher.publish(std::make_shared<const int>(7)));
+  for (int i = 0; i < 1000; ++i) {
+    publisher.acquire();
+  }
+  REQUIRE(publisher.current() != nullptr);
+  REQUIRE(*publisher.current() == 7);
+}
+
 TEST_CASE("RtPublisher acquire adopts the newest of several pending publishes", "[rt][publisher]") {
   CountedSnapshot::destroyed.store(0);
   sonare::rt::RtPublisher<CountedSnapshot> publisher;
