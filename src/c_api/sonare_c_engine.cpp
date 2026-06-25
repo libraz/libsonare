@@ -1847,10 +1847,9 @@ SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
       if (!midi_event_from_c(src.events[j], &event)) return SONARE_ERROR_INVALID_PARAMETER;
       dst.events.push_back(event);
     }
-    std::sort(dst.events.begin(), dst.events.end(),
-              [](const midi::MidiEvent& a, const midi::MidiEvent& b) {
-                return a.render_frame < b.render_frame;
-              });
+    // Stable sort with the off-before-on tiebreak so a same-frame re-trigger
+    // releases before re-attacking, matching the offline clip path.
+    midi::sort_render_events_stable(dst.events);
     schedules.push_back(std::move(dst));
   }
   engine->engine.set_midi_clips(std::move(schedules));

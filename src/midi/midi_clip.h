@@ -74,6 +74,19 @@ class MidiClip {
   std::vector<MidiClipEvent> events_;
 };
 
+/// Deterministic ordering rank for events at the SAME timestamp: note-off (0)
+/// before bank-select (1) / program-change (3) / other CC (4) before note-on
+/// (5). Shared by the clip and live render-event sorts so every path breaks
+/// same-timestamp ties identically.
+int same_time_rank(const Ump& ump) noexcept;
+
+/// Stable-sorts absolute render-frame MidiEvents ascending by render_frame, then
+/// by same_time_rank (note-off before note-on) and a deterministic
+/// note/channel/word tiebreak. The live/realtime clip paths call this so their
+/// same-frame ordering matches the offline MidiClip::sort_stable contract
+/// (MidiClipSchedule::events documents off-before-on at the same frame).
+void sort_render_events_stable(std::vector<MidiEvent>& events);
+
 /// Loop policy for a scheduled MIDI clip.
 enum class MidiLoopMode : uint8_t {
   kOneShot = 0,

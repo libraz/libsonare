@@ -722,10 +722,9 @@ class RealtimeEngineWasm {
         event.ump = ump;
         clip.events.push_back(event);
       }
-      std::sort(clip.events.begin(), clip.events.end(),
-                [](const sonare::midi::MidiEvent& a, const sonare::midi::MidiEvent& b) {
-                  return a.render_frame < b.render_frame;
-                });
+      // Stable sort with the off-before-on tiebreak so a same-frame re-trigger
+      // releases before re-attacking, matching the offline clip path.
+      sonare::midi::sort_render_events_stable(clip.events);
       clips.push_back(std::move(clip));
     }
     engine_.set_midi_clips(std::move(clips));

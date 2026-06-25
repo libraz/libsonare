@@ -94,6 +94,46 @@ TEST_CASE("MidiClip sort_stable orders by ppq, note-off before note-on, stable t
   REQUIRE(clip.events() == before);
 }
 
+TEST_CASE("sort_render_events_stable orders same-frame events note-off before note-on", "[midi]") {
+  // The live/realtime clip paths (C-ABI and WASM setMidiClips) feed absolute
+  // render-frame events through this shared sort. A same-frame re-trigger must
+  // release before re-attacking, matching the offline MidiClip path — otherwise
+  // the new note-on can be dropped/blipped.
+  auto re = [](int64_t frame, const Ump& ump) {
+    MidiEvent e;
+    e.render_frame = frame;
+    e.ump = ump;
+    return e;
+  };
+  std::vector<MidiEvent> events;
+  // Note-on inserted BEFORE the note-off at the SAME frame (480).
+  events.push_back(re(480, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  events.push_back(re(480, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  // Two note-ons at the same frame: deterministic ascending-note tiebreak.
+  events.push_back(re(480, sonare::midi::make_midi1_note_on(0, 0, 72, 90)));
+  events.push_back(re(480, sonare::midi::make_midi1_note_on(0, 0, 64, 90)));
+  events.push_back(re(0, sonare::midi::make_midi1_note_on(0, 0, 48, 80)));
+
+  sonare::midi::sort_render_events_stable(events);
+  REQUIRE(events.size() == 5);
+  REQUIRE(events[0].render_frame == 0);
+  REQUIRE(events[0].ump.note_number() == 48);
+  // Frame 480 group: note-off (rank 0) precedes the note-ons.
+  REQUIRE(events[1].render_frame == 480);
+  REQUIRE(events[1].ump.is_note_off());
+  REQUIRE(events[1].ump.note_number() == 60);
+  // Then note-ons in ascending note order: 60, 64, 72.
+  REQUIRE(events[2].ump.is_note_on());
+  REQUIRE(events[2].ump.note_number() == 60);
+  REQUIRE(events[3].ump.note_number() == 64);
+  REQUIRE(events[4].ump.note_number() == 72);
+
+  // Idempotent.
+  const auto before = events;
+  sonare::midi::sort_render_events_stable(events);
+  REQUIRE(events == before);
+}
+
 TEST_CASE("MidiClip validate_note_pairs reports matched and unmatched notes", "[midi]") {
   {
     MidiClip clip;

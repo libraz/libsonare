@@ -5,11 +5,11 @@
 #include <utility>
 
 namespace sonare::midi {
-namespace {
 
-// A deterministic ordering rank for events sharing the same PPQ. Note-off must
-// precede note-on so a same-timestamp re-trigger releases before re-attacking
-// (no stuck note). Other messages fall in between by status nibble.
+// A deterministic ordering rank for events sharing the same timestamp. Note-off
+// must precede note-on so a same-timestamp re-trigger releases before
+// re-attacking (no stuck/dropped note). Other messages fall in between by status
+// nibble.
 int same_time_rank(const Ump& ump) noexcept {
   if (ump.is_note_off()) return 0;
   if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice) {
@@ -26,7 +26,24 @@ int same_time_rank(const Ump& ump) noexcept {
   return 4;
 }
 
-}  // namespace
+void sort_render_events_stable(std::vector<MidiEvent>& events) {
+  std::stable_sort(events.begin(), events.end(), [](const MidiEvent& a, const MidiEvent& b) {
+    if (a.render_frame != b.render_frame) return a.render_frame < b.render_frame;
+    const int ra = same_time_rank(a.ump);
+    const int rb = same_time_rank(b.ump);
+    if (ra != rb) return ra < rb;
+    // Deterministic tiebreak on note then channel then first word so identical
+    // timestamps are fully ordered regardless of insertion order. Mirrors
+    // MidiClip::sort_stable.
+    if (a.ump.note_number() != b.ump.note_number()) {
+      return a.ump.note_number() < b.ump.note_number();
+    }
+    if (a.ump.channel() != b.ump.channel()) {
+      return a.ump.channel() < b.ump.channel();
+    }
+    return a.ump.words[0] < b.ump.words[0];
+  });
+}
 
 void MidiClip::set_events(std::vector<MidiClipEvent> events) { events_ = std::move(events); }
 
