@@ -12,7 +12,8 @@ namespace sonare::midi {
 // nibble.
 int same_time_rank(const Ump& ump) noexcept {
   if (ump.is_note_off()) return 0;
-  if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice) {
+  const auto message_type = ump.message_type();
+  if (message_type == UmpMessageType::kMidi1ChannelVoice) {
     const auto status = static_cast<UmpStatus>(ump.status_nibble());
     if (status == UmpStatus::kControlChange) {
       const uint8_t controller = ump.note_number();
@@ -21,6 +22,12 @@ int same_time_rank(const Ump& ump) noexcept {
       return 4;
     }
     if (status == UmpStatus::kProgramChange) return 3;
+  } else if (message_type == UmpMessageType::kMidi2ChannelVoice) {
+    // MIDI 2.0 carries bank select inside the program-change message itself, so
+    // there is no separate bank-select CC to order ahead of it; rank the banked
+    // PC before note-on exactly like the MIDI 1.0 program change, so a note at
+    // the same timestamp uses the new program/bank.
+    if (static_cast<UmpStatus>(ump.status_nibble()) == UmpStatus::kProgramChange) return 3;
   }
   if (ump.is_note_on()) return 5;
   return 4;

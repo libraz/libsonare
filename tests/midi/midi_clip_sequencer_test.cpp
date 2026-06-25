@@ -191,6 +191,22 @@ TEST_CASE("MidiClip sort_stable keeps bank select before program change at same 
   REQUIRE(e[4].ump.is_note_on());
 }
 
+TEST_CASE("MidiClip sort_stable orders a MIDI 2.0 banked program change before note-on", "[midi]") {
+  // MIDI 2.0 carries bank select inside the program-change UMP, so it must rank
+  // ahead of a same-ppq note-on (so the note uses the new program/bank), just
+  // like a MIDI 1.0 program change.
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi2_note_on(0, 0, 60, 0x4000, 0, 0)));
+  clip.add_event(ev(0.0, sonare::midi::make_midi2_program_change(0, 0, 5, 1, 2, true)));
+
+  clip.sort_stable();
+  const auto& e = clip.events();
+  REQUIRE(e.size() == 2);
+  REQUIRE(e[0].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kProgramChange));
+  REQUIRE(e[1].ump.is_note_on());
+}
+
 TEST_CASE("MidiClip to_render_events converts PPQ to render frames via the tempo map", "[midi]") {
   // 120 BPM, 48000 Hz: one quarter note = 0.5 s = 24000 samples.
   sonare::transport::TempoMap map;
