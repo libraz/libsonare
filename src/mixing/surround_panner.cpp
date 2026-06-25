@@ -41,8 +41,19 @@ SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, Cha
     if (p == lfe) continue;
     ring[ring_size++] = {p, speaker_azimuth_deg(roles[p])};
   }
-  std::sort(ring, ring + ring_size,
-            [](const RingNode& a, const RingNode& b) { return a.azimuth < b.azimuth; });
+  // Insertion sort by azimuth. ring_size <= kMaxSurroundPlanes (8) so this is
+  // trivially cheap; it also avoids a GCC -Warray-bounds false positive that
+  // fires when std::sort's inlined insertion pass is analysed over this small
+  // fixed-size stack array.
+  for (int i = 1; i < ring_size; ++i) {
+    const RingNode key = ring[i];
+    int j = i - 1;
+    while (j >= 0 && ring[j].azimuth > key.azimuth) {
+      ring[j + 1] = ring[j];
+      --j;
+    }
+    ring[j + 1] = key;
+  }
 
   // Point-source gains: constant-power crossfade between the two adjacent
   // speakers bracketing the target azimuth (rear arc wraps last -> first).
