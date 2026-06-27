@@ -459,6 +459,24 @@ TEST_CASE("project round-trip preserves all fields", "[serialize]") {
   CHECK(result.midi == f.midi);  // MidiContentStore deep-equal.
 }
 
+TEST_CASE("project deserialize rejects an unsupported embedded scene version", "[serialize]") {
+  // The embedded mixer scene carries its own version. A value the build does not
+  // understand must be rejected (surfaced as a diagnostic, project reset) rather
+  // than silently mis-read, mirroring the standalone scene_from_json guard.
+  Fixture f = make_fixture();
+  f.project.scene().version = 2;  // a future, unsupported scene schema version
+  const std::string s = project_to_json(f.project, f.midi);
+
+  auto result = project_from_json(s);
+  CHECK_FALSE(result.ok());
+  CHECK(result.has_error());
+
+  // A version-1 scene still round-trips cleanly.
+  f.project.scene().version = 1;
+  auto ok_result = project_from_json(project_to_json(f.project, f.midi));
+  REQUIRE(ok_result.ok());
+}
+
 TEST_CASE("project scene JSON uses stable camelCase keys", "[serialize]") {
   Fixture f = make_fixture();
   const auto root = util::json::parse(project_to_json(f.project, f.midi));

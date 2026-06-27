@@ -254,6 +254,37 @@ TEST_CASE("MidiFx handles MIDI 2.0 note events without down-converting", "[midi]
   REQUIRE(out.events[3].ump.note_number() == 79);
 }
 
+TEST_CASE("MidiFx humanize preserves MIDI 2.0 velocity resolution", "[midi]") {
+  // Two note-ons whose 16-bit velocities differ by less than one 7-bit step
+  // (0x4000 and 0x4100 both map to 7-bit 32 via v16 >> 9). Humanized in
+  // separate single-note passes they share ordinal 0 and therefore the same
+  // deterministic jitter. If humanize collapsed the velocity to 7 bits the two
+  // outputs would be identical; in the full 16-bit domain they keep their exact
+  // 0x100 (256) separation.
+  HumanizeConfig h;
+  h.enabled = true;
+  h.seed = 12345u;
+  h.timing_frames = 0;
+  h.velocity_amount = 5;
+
+  auto humanized_velocity = [&](uint16_t base_velocity16) {
+    MidiFxChain fx;
+    fx.prepare();
+    fx.set_humanize(h);
+    const MidiEvent in[] = {{10, sonare::midi::make_midi2_note_on(1, 3, 60, base_velocity16)}};
+    MidiFxBuffer out;
+    fx.process(in, 1, &out);
+    REQUIRE(out.size == 1);
+    REQUIRE(out.events[0].ump.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+    REQUIRE(out.events[0].ump.is_note_on());
+    return static_cast<int>(static_cast<uint16_t>(out.events[0].ump.words[1] >> 16u));
+  };
+
+  const int low = humanized_velocity(0x4000u);
+  const int high = humanized_velocity(0x4100u);
+  REQUIRE(high - low == 0x100);
+}
+
 TEST_CASE("MidiFx maps MIDI 2.0 per-note controller notes without changing controller value",
           "[midi]") {
   MidiFxChain fx;

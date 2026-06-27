@@ -301,10 +301,22 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
         }
         if (humanize_.velocity_amount > 0 && is_midi_channel_voice(shaped.ump) &&
             shaped.ump.is_note_on()) {
-          const int jitter = static_cast<int>(rng.symmetric(humanize_.velocity_amount));
-          const int v = clamp_velocity_on(static_cast<int>(note_velocity7(shaped.ump)) + jitter);
-          shaped.ump =
-              make_note(shaped.ump, true, shaped.ump.note_number(), static_cast<uint8_t>(v));
+          // velocity_amount is expressed in 7-bit velocity units. MIDI 2.0 notes
+          // are jittered in the full 16-bit domain (no 7-bit round-trip) so the
+          // resolution is preserved, matching the velocity-curve stage above;
+          // MIDI 1.0 notes stay in the 7-bit domain.
+          const int jitter7 = static_cast<int>(rng.symmetric(humanize_.velocity_amount));
+          if (shaped.ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+            const int jitter16 = jitter7 * 65535 / 127;
+            const int v16 =
+                clamp_velocity16_on(static_cast<int>(note_velocity16(shaped.ump)) + jitter16);
+            shaped.ump = make_midi2_note_on_velocity16(shaped.ump, shaped.ump.note_number(),
+                                                       static_cast<uint16_t>(v16));
+          } else {
+            const int v = clamp_velocity_on(static_cast<int>(note_velocity7(shaped.ump)) + jitter7);
+            shaped.ump =
+                make_note(shaped.ump, true, shaped.ump.note_number(), static_cast<uint8_t>(v));
+          }
         }
       }
       push_or_overflow(shaped, out);

@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "mastering/api/audio_utils.h"
@@ -24,6 +25,34 @@ TEST_CASE("MasteringChain passes through with empty config (mono)", "[mastering]
   REQUIRE(result.samples.size() == samples.size());
   REQUIRE(result.sample_rate == 44100);
   REQUIRE(result.stages.empty());
+}
+
+TEST_CASE("MasteringChain validates offline input at the core (all surfaces inherit)",
+          "[mastering][chain]") {
+  // Centralized validation in process_mono/process_stereo so every binding
+  // (C ABI, Node, WASM, Python) rejects degenerate input identically instead of
+  // silently producing empty/garbage results.
+  MasteringChain chain(MasteringChainConfig{});
+  std::vector<float> ok(2048, 0.1f);
+
+  SECTION("empty input") {
+    REQUIRE_THROWS_AS(chain.process_mono(nullptr, 0, 44100), SonareException);
+  }
+  SECTION("out-of-range sample rate") {
+    REQUIRE_THROWS_AS(chain.process_mono(ok.data(), ok.size(), 100), SonareException);
+    REQUIRE_THROWS_AS(chain.process_mono(ok.data(), ok.size(), 10000000), SonareException);
+  }
+  SECTION("non-finite sample") {
+    std::vector<float> bad = ok;
+    bad[10] = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE_THROWS_AS(chain.process_mono(bad.data(), bad.size(), 44100), SonareException);
+  }
+  SECTION("stereo validates both channels") {
+    std::vector<float> bad = ok;
+    bad[5] = std::numeric_limits<float>::infinity();
+    REQUIRE_THROWS_AS(chain.process_stereo(ok.data(), bad.data(), ok.size(), 44100),
+                      SonareException);
+  }
 }
 
 TEST_CASE("MasteringChain reports enabled stage names in result", "[mastering][chain]") {

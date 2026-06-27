@@ -260,3 +260,30 @@ def test_mixing_presets_and_stereo_mix() -> None:
             sample_rate=48000,
             fader_db=[-6.0206],  # only one entry for two strips
         )
+
+
+def test_mastering_chain_validates_offline_input() -> None:
+    """The offline mastering chain rejects empty / out-of-range-rate / non-finite
+    input. Validation lives in the C++ core (MasteringChain::process_mono /
+    process_stereo), so every surface (C ABI, Node, WASM, Python) behaves the
+    same way."""
+    import libsonare
+
+    sr = 44100
+    ok = [0.1 * math.sin(2 * math.pi * 220 * i / sr) for i in range(2048)]
+
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering_chain([], sample_rate=sr)
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering_chain(ok, sample_rate=100)
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering_chain(ok, sample_rate=10_000_000)
+
+    bad = list(ok)
+    bad[10] = float("nan")
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering_chain(bad, sample_rate=sr)
+
+    # Valid input still masters and preserves length.
+    result = libsonare.mastering_chain(ok, sample_rate=sr)
+    assert len(result.samples) == len(ok)

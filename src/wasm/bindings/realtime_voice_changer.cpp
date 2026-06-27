@@ -49,6 +49,7 @@ class RealtimeVoiceChangerWrapper {
   val processMono(val samples) {
     require_prepared();
     const int length = samples["length"].as<int>();
+    require_block_within_max(length);
     ensure_mono_capacity(static_cast<size_t>(length));
     copyFloat32Array(samples, mono_input_, static_cast<size_t>(length));
     changer_.process_block(mono_input_.data(), mono_output_.data(), length);
@@ -61,6 +62,7 @@ class RealtimeVoiceChangerWrapper {
   void processMonoInto(val samples, val output) {
     require_prepared();
     const int length = samples["length"].as<int>();
+    require_block_within_max(length);
     if (output["length"].as<int>() < length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "output buffer is too small");
@@ -93,6 +95,7 @@ class RealtimeVoiceChangerWrapper {
                                     "output buffer is too small");
     }
     const size_t frames = static_cast<size_t>(length / channels);
+    require_block_within_max(static_cast<int>(frames));
     ensure_interleaved_capacity(frames, channels);
     for (int ch = 0; ch < channels; ++ch) {
       for (size_t i = 0; i < frames; ++i) {
@@ -311,6 +314,18 @@ class RealtimeVoiceChangerWrapper {
       throw sonare::SonareException(
           sonare::ErrorCode::InvalidParameter,
           "RealtimeVoiceChanger.prepare() must be called before processing");
+    }
+  }
+
+  /// Reject a per-call block that exceeds the prepared max_block_size. The core
+  /// process_block early-returns (emitting stale/garbage scratch) for an
+  /// oversized block; the prepared API already guards this, so the legacy
+  /// element-wise paths must too — mirroring the C-ABI behaviour of throwing.
+  void require_block_within_max(int block) const {
+    if (block > max_block_size_) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "RealtimeVoiceChanger: block size exceeds the prepared "
+                                    "max block size");
     }
   }
 

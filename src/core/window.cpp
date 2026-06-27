@@ -51,8 +51,9 @@ const std::vector<float>& get_window_cached(WindowType type, int length, bool pe
 }
 
 std::vector<float> hann_window(int length, bool periodic) {
-  if (length <= 1) {
-    return std::vector<float>(length, 1.0f);
+  if (length <= 0) return {};
+  if (length == 1) {
+    return std::vector<float>(1, 1.0f);
   }
   std::vector<float> window(length);
   for (int i = 0; i < length; ++i) {
@@ -73,8 +74,9 @@ float hann_value(int index, int length, bool periodic) {
 }
 
 std::vector<float> hamming_window(int length, bool periodic) {
-  if (length <= 1) {
-    return std::vector<float>(length, 1.0f);
+  if (length <= 0) return {};
+  if (length == 1) {
+    return std::vector<float>(1, 1.0f);
   }
   std::vector<float> window(length);
   const float divisor = window_divisor(length, periodic);
@@ -85,8 +87,9 @@ std::vector<float> hamming_window(int length, bool periodic) {
 }
 
 std::vector<float> blackman_window(int length, bool periodic) {
-  if (length <= 1) {
-    return std::vector<float>(length, 1.0f);
+  if (length <= 0) return {};
+  if (length == 1) {
+    return std::vector<float>(1, 1.0f);
   }
   std::vector<float> window(length);
   constexpr float a0 = 0.42f;
@@ -100,6 +103,9 @@ std::vector<float> blackman_window(int length, bool periodic) {
   return window;
 }
 
-std::vector<float> rectangular_window(int length) { return std::vector<float>(length, 1.0f); }
+std::vector<float> rectangular_window(int length) {
+  if (length <= 0) return {};
+  return std::vector<float>(length, 1.0f);
+}
 
 }  // namespace sonare

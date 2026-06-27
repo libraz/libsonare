@@ -13,6 +13,12 @@ extern "C" {
 // Mastering
 // ============================================================================
 
+// Config for the simple one-shot sonare_mastering_process / _stereo helpers.
+// These expose only the three most common knobs and run the maximizer with a
+// FIXED limiter release and in full apply (not detect-only) mode. To tune the
+// limiter release_ms, select detect-only, or chain other processors, use the
+// named-processor path (sonare_mastering_apply_named_processor with
+// "maximizer.loudnessOptimize") or the full MasteringChain API instead.
 typedef struct {
   float target_lufs;
   float ceiling_db;

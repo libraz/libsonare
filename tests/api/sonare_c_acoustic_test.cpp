@@ -144,6 +144,50 @@ TEST_CASE("sonare acoustic C API zero-init late_model selects the Eyring default
   sonare_free_rir_synth_result(&sabine_rir);
 }
 
+TEST_CASE("sonare acoustic C API zero-init seed matches the library default", "[c_api][acoustic]") {
+  // A {}-zeroed config leaves seed == 0. It must resolve to the C++/Node/Python/
+  // WASM library default (1) so a default-constructed config produces the same
+  // deterministic RIR on every surface, rather than silently seeding with 0.
+  SonareRirSynthConfig base = valid_rir_config();
+  base.absorption = 0.3f;
+  base.max_seconds = 0.4f;  // long enough that the seeded late tail contributes
+
+  SonareRirSynthConfig zero_seed = base;
+  zero_seed.seed = 0u;  // the zeroed value
+  SonareRirSynthConfig one_seed = base;
+  one_seed.seed = 1u;  // the explicit library default
+  SonareRirSynthConfig other_seed = base;
+  other_seed.seed = 9999u;  // a different seed must diverge
+
+  SonareRirSynthResult zero_rir{};
+  SonareRirSynthResult one_rir{};
+  SonareRirSynthResult other_rir{};
+  REQUIRE(sonare_synthesize_rir(&zero_seed, 48000, &zero_rir) == SONARE_OK);
+  REQUIRE(sonare_synthesize_rir(&one_seed, 48000, &one_rir) == SONARE_OK);
+  REQUIRE(sonare_synthesize_rir(&other_seed, 48000, &other_rir) == SONARE_OK);
+  REQUIRE(zero_rir.length > 0);
+
+  // zero-init seed == explicit seed 1 (identical length and samples).
+  REQUIRE(zero_rir.length == one_rir.length);
+  bool matches_one = true;
+  for (size_t i = 0; i < zero_rir.length && matches_one; ++i) {
+    matches_one = std::abs(zero_rir.rir[i] - one_rir.rir[i]) <= 1e-6f;
+  }
+  REQUIRE(matches_one);
+
+  // A different seed produces a different late tail (the seed is actually used).
+  bool differs_from_other = zero_rir.length != other_rir.length;
+  const size_t common = zero_rir.length < other_rir.length ? zero_rir.length : other_rir.length;
+  for (size_t i = 0; i < common && !differs_from_other; ++i) {
+    differs_from_other = std::abs(zero_rir.rir[i] - other_rir.rir[i]) > 1e-6f;
+  }
+  REQUIRE(differs_from_other);
+
+  sonare_free_rir_synth_result(&zero_rir);
+  sonare_free_rir_synth_result(&one_rir);
+  sonare_free_rir_synth_result(&other_rir);
+}
+
 TEST_CASE("sonare acoustic C API morph zero-init late_model matches Eyring", "[c_api][acoustic]") {
   // The same zero-init == Eyring guarantee for the morph path: a {}-zeroed
   // SonareRoomMorphConfig must render identically to an explicit Eyring morph

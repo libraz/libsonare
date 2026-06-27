@@ -155,6 +155,12 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
       const float gain = clip.gain * fade_gain(clip, position);
       if (num_channels == 1) {
         if (!channels[0]) continue;
+        // Mono live monitoring sums the source channels at unity, intentionally
+        // IGNORING clip pan: it is a mono-compatibility monitor, not a panned
+        // render. A mono BOUNCE differs by design — it renders the panned stereo
+        // master and downmixes 0.5*(L+R) (see project_bounce.cpp), so a panned
+        // clip A/B'd between mono monitor and mono bounce shows a level/balance
+        // difference. Keep this contract in mind when comparing the two.
         float mono = 0.0f;
         int contributing = 0;
         const int source_channels = source_channel_count(clip);
@@ -283,9 +289,6 @@ double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sa
   if (clip.warp_mode == WarpMode::kTempoSync) return -1;
   const int64_t position = timeline_sample - clip.start_sample;
   if (position < 0 || position >= clip.length_samples) return -1;
-  const int64_t source_len =
-      std::min<int64_t>(clip.length_samples, source_sample_count(clip) - clip.clip_offset_samples);
-  if (source_len <= 0) return -1;
   // The warp anchors map a clip-timeline position (measured from clip start) to an
   // absolute source position, so under active warp the map alone resolves the read
   // — clip_offset_samples must NOT be added on top. For a comp part that starts
@@ -297,6 +300,16 @@ double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sa
   // offsets at 0, so the warped and non-warped paths agree.
   const bool warp_active =
       clip.warp_mode == WarpMode::kRepitch && clip.warp_anchors && clip.warp_anchors->size() >= 2;
+  // Under active warp the source read is driven entirely by the warp map, so
+  // clip_offset_samples is NOT consumed here — subtracting it (as the non-warp path
+  // does) would wrongly drive source_len <= 0 and silence a comp part whose
+  // clip_offset_samples approaches the source length. The outer read guard
+  // (source_pos vs source_sample_count) still bounds the actual reads.
+  const int64_t source_len =
+      warp_active ? std::min<int64_t>(clip.length_samples, source_sample_count(clip))
+                  : std::min<int64_t>(clip.length_samples,
+                                      source_sample_count(clip) - clip.clip_offset_samples);
+  if (source_len <= 0) return -1;
   const double warp_ref =
       static_cast<double>(std::max<int64_t>(0, clip.warp_reference_offset_samples));
   const auto resolve = [&clip, warp_active, warp_ref](double pos) noexcept {
@@ -306,6 +319,11 @@ double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sa
     return static_cast<double>(clip.clip_offset_samples) + pos;
   };
   if (clip.loop) {
+    // Hard integer-modulo wrap with NO crossfade / declick / zero-cross snap at
+    // the loop seam (identical in live and bounce). If the loop boundary is not
+    // zero-aligned the seam can click — callers should pre-trim the loop region
+    // to a zero crossing (or to a whole number of cycles). This matches the
+    // common DAW hard-loop contract.
     const int64_t loop_len = clip.loop_length_samples > 0
                                  ? std::min<int64_t>(clip.loop_length_samples, source_len)
                                  : source_len;

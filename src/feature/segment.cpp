@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <numeric>
 #include <unordered_map>
@@ -134,6 +135,12 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
                           "cross_similarity: mode must be 'connectivity' or 'affinity'");
   }
   if (X_cols <= 0 || Y_cols <= 0) return {};
+  // The output is indexed with the int expression `i * Y_cols + j`; reject a size
+  // whose element count would overflow int (UB) before iterating.
+  if (static_cast<int64_t>(X_cols) * static_cast<int64_t>(Y_cols) >
+      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "cross_similarity: matrix too large");
+  }
 
   if (mode == "affinity") {
     // librosa default: k = min(n_ref, 2*ceil(sqrt(n_ref))).
@@ -186,6 +193,12 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
   if (data == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "recurrence_matrix: null input");
   if (cols <= 0) return {};
+  // The output is indexed with the int expression `i * cols + j`; reject a size
+  // whose element count would overflow int (UB) before iterating.
+  if (static_cast<int64_t>(cols) * static_cast<int64_t>(cols) >
+      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "recurrence_matrix: matrix too large");
+  }
   if (width < 1) width = 1;
 
   if (mode == "affinity") {
@@ -245,6 +258,12 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
 std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad) {
   if (rec == nullptr || n <= 0) return {};
   int n_lags = pad ? (2 * n - 1) : n;
+  // The output is indexed with the int expression `i * n_lags + col`; reject a
+  // size whose element count would overflow int (UB) before iterating.
+  if (static_cast<int64_t>(n) * static_cast<int64_t>(n_lags) >
+      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "recurrence_to_lag: matrix too large");
+  }
   std::vector<float> out(static_cast<size_t>(n) * n_lags, 0.0f);
   int offset = pad ? (n - 1) : 0;
   for (int i = 0; i < n; ++i) {

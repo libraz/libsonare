@@ -74,3 +74,19 @@ TEST_CASE("viterbi_discriminative respects state priors", "[util][sequence][vite
   REQUIRE(path.size() == 3);
   for (int s : path) REQUIRE(s == 0);
 }
+
+TEST_CASE("viterbi rejects dimensions that overflow int indexing", "[util][sequence][viterbi]") {
+  // n_states * n_steps (and n_states * n_states) are computed as int expressions
+  // when indexing the trellis / transition matrix; a size whose product exceeds
+  // INT_MAX is rejected before any allocation or pointer dereference, so the
+  // dummy pointers below are never read.
+  float dummy = 0.0f;
+  REQUIRE_THROWS_AS(viterbi(&dummy, 50000, 50000, &dummy, nullptr), SonareException);
+  REQUIRE_THROWS_AS(viterbi_discriminative(&dummy, 50000, 50000, &dummy, &dummy, nullptr),
+                    SonareException);
+
+  // A modestly sized valid problem still runs (no false positive from the guard).
+  std::vector<float> log_prob(2 * 3, -0.1f);
+  std::vector<float> trans{0.9f, 0.1f, 0.1f, 0.9f};
+  REQUIRE_NOTHROW(viterbi(log_prob.data(), 2, 3, trans.data(), nullptr));
+}

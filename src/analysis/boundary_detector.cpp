@@ -3,6 +3,8 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 
 #include "core/spectrum.h"
 #include "feature/chroma.h"
@@ -184,7 +186,19 @@ void BoundaryDetector::combine_features(const std::vector<float>& mfcc_features,
 void BoundaryDetector::compute_self_similarity() {
   if (n_frames_ == 0) return;
 
-  ssm_.resize(n_frames_ * n_frames_);
+  // The SSM is an n_frames_ x n_frames_ matrix indexed with the int expression
+  // `row * n_frames_ + col`; reject a size whose element count would overflow int
+  // (UB) before allocating. Very long inputs (e.g. ~18 min at the default
+  // hop=512/sr=22050) cross this bound, so this throws a clean error instead of
+  // wrapping to a small allocation followed by huge out-of-bounds Eigen access.
+  if (static_cast<int64_t>(n_frames_) * static_cast<int64_t>(n_frames_) >
+      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "BoundaryDetector: self-similarity matrix too large; "
+                          "input audio is too long for structural analysis");
+  }
+
+  ssm_.resize(static_cast<size_t>(n_frames_) * static_cast<size_t>(n_frames_));
 
   // Features are already L2-normalized, so cosine similarity = dot product
   // SSM = features @ features^T
@@ -217,7 +231,7 @@ float BoundaryDetector::compute_checkerboard_kernel(int center) const {
       int row = center + i;
       int col = center + j;
 
-      float ssm_val = ssm_[row * n_frames_ + col];
+      float ssm_val = ssm_[static_cast<size_t>(row) * static_cast<size_t>(n_frames_) + col];
 
       // Checkerboard pattern: + - / - +
       int sign = ((i < 0 && j < 0) || (i >= 0 && j >= 0)) ? 1 : -1;

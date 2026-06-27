@@ -136,7 +136,10 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   RirSynthConfig rc;
   rc.ism_order = config->ism_order < 0 ? 0 : config->ism_order;
   rc.late_model = reverb_model_from_int(config->late_model);
-  rc.seed = config->seed;
+  // seed == 0 means "keep the library default" (1), so a zero-initialized POD
+  // produces the same deterministic RIR as the C++/Node/Python/WASM defaults
+  // instead of silently seeding with 0.
+  if (config->seed != 0) rc.seed = config->seed;
   rc.max_seconds = config->max_seconds;
   rc.mixing_time_ms = config->mixing_time_ms;
   // crossfade_ms == 0 means "keep the library default"; a true zero crossfade is
@@ -242,7 +245,8 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
         cfg.source_tail_suppression = config->source_tail_suppression;
         cfg.wet = config->wet;
         cfg.ism_order = config->ism_order < 0 ? 0 : config->ism_order;
-        cfg.seed = config->seed;
+        // seed == 0 keeps the library default (1); see synthesize_rir above.
+        if (config->seed != 0) cfg.seed = config->seed;
         cfg.max_seconds = config->max_seconds;
         cfg.late_model = reverb_model_from_int(config->late_model);
         cfg.mixing_time_ms = config->mixing_time_ms;  // 0 = auto (~sqrt(V) ms)

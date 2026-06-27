@@ -96,6 +96,12 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   std::string("Unknown ") + what + " name: '" + name + "'");
   }
+  // Reject non-number, non-string values (e.g. a boolean) instead of coercing
+  // them to a bogus ordinal, matching the Node addon's enum reader.
+  if (value.typeOf().as<std::string>() != "number") {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string("Expected ") + what + " to be a number or string");
+  }
   *out = value.as<int>();
 }
 

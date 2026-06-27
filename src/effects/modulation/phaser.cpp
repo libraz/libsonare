@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
@@ -46,6 +47,7 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0 || channels[0] == nullptr) {
     return;
   }
+  rt::ScopedNoDenormals no_denormals;
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
   const bool stereo = right != left;

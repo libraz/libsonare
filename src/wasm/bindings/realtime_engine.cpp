@@ -326,14 +326,26 @@ std::unique_ptr<rt::ProcessorBase> makeWasmGraphProcessor(val node) {
 
 class RealtimeEngineWasm {
  public:
+  // Mirror the C-ABI guard (sonare_engine_prepare): reject a non-positive
+  // sample_rate / max_block_size instead of silently falling back to a default,
+  // which would leave the engine's sample-rate state internally inconsistent.
+  static void validatePrepare(double sample_rate, int max_block_size) {
+    if (sample_rate <= 0.0 || max_block_size <= 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "prepare: sample_rate and max_block_size must be positive");
+    }
+  }
+
   RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
                      int telemetry_capacity) {
+    validatePrepare(sample_rate, max_block_size);
     engine_.prepare(sample_rate, max_block_size, capacity(command_capacity),
                     capacity(telemetry_capacity));
   }
 
   void prepare(double sample_rate, int max_block_size, int command_capacity,
                int telemetry_capacity) {
+    validatePrepare(sample_rate, max_block_size);
     engine_.prepare(sample_rate, max_block_size, capacity(command_capacity),
                     capacity(telemetry_capacity));
   }
@@ -416,6 +428,13 @@ class RealtimeEngineWasm {
     engine_.set_tempo_segments(std::move(parsed));
   }
   void setTimeSignature(int numerator, int denominator) {
+    // Mirror the C-ABI guard (sonare_engine_set_time_signature): reject a
+    // non-positive numerator/denominator instead of silently collapsing to 1/1
+    // (tempo_map clamps with std::max(...,1)).
+    if (numerator <= 0 || denominator <= 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setTimeSignature: numerator and denominator must be positive");
+    }
     engine_.set_time_signature(numerator, denominator);
   }
   void setTimeSignatureSegments(val segments) {
@@ -448,6 +467,14 @@ class RealtimeEngineWasm {
     return engine_.sample_at_ppq(ppq);
   }
   void setLoop(double start_ppq, double end_ppq, bool enabled) {
+    // Mirror the C-ABI guard (sonare_engine_set_loop): reject non-finite or
+    // negative bounds, and an empty/inverted range when enabling the loop.
+    if (!std::isfinite(start_ppq) || !std::isfinite(end_ppq) || start_ppq < 0.0 || end_ppq < 0.0 ||
+        (enabled && end_ppq <= start_ppq)) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "setLoop: bounds must be finite, non-negative, and end > start");
+    }
     engine_.set_loop(start_ppq, end_ppq, enabled);
   }
 

@@ -739,7 +739,7 @@ void RealtimeEngine::recompute_pdc() noexcept {
   // source must be delayed to meet it. Clip audio (zero latency) is delayed by
   // the full total; an instrument that already self-delays by L_i needs only the
   // remaining (total - L_i). After both, all sources coincide at +total. Tracked
-  // in Q8.8 so an instrument's sub-sample latency is compensated too (M-45).
+  // in Q8.8 so an instrument's sub-sample latency is compensated too.
   pdc_total_q8_ = instrument_rack_.max_latency_samples_q8();
   clip_pdc_delay_.set_delay_q8(pdc_total_q8_);
   pdc_instrument_count_ = 0;

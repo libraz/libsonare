@@ -79,7 +79,7 @@ typedef struct {
   float crossfade_ms;   /* equal-power crossfade width around the mixing time (ms) */
   int ism_order;        /* image-source reflection order (>= 0) */
   int late_model;       /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
-  unsigned int seed;    /* deterministic late-tail seed */
+  unsigned int seed;    /* deterministic late-tail seed; 0 = library default (1) */
   /* Optional per-octave-band wall absorption/scattering (125/250/500/1k/2k/4k..
    * Hz). When absorption_bands != NULL and absorption_band_count > 0 it
    * overrides the scalar `absorption` (unless material_preset selects a preset).
@@ -148,8 +148,8 @@ typedef struct {
   float mixing_time_ms;          /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
   float crossfade_ms;            /* equal-power crossfade width around mixing time (ms) */
   int ism_order;
-  int late_model; /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
-  unsigned int seed;
+  int late_model;    /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
+  unsigned int seed; /* deterministic late-tail seed; 0 = library default (1) */
   /* Optional per-octave-band target-wall absorption/scattering; see
    * SonareRirSynthConfig. */
   const float* absorption_bands;

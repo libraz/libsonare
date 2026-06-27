@@ -87,3 +87,17 @@ TEST_CASE("window edge cases", "[window]") {
     REQUIRE(std::isfinite(blackman[1]));
   }
 }
+
+TEST_CASE("window builders return empty for non-positive length", "[window]") {
+  // A negative length must not reach the std::vector(length, ...) constructor
+  // (which would convert it to a huge size_t and attempt a giant allocation).
+  REQUIRE(hann_window(-1).empty());
+  REQUIRE(hamming_window(-4).empty());
+  REQUIRE(blackman_window(-10).empty());
+  REQUIRE(rectangular_window(-2).empty());
+  REQUIRE(hann_window(0).empty());
+
+  // length == 1 still yields a single unity sample.
+  REQUIRE(hann_window(1).size() == 1);
+  REQUIRE(rectangular_window(1).size() == 1);
+}

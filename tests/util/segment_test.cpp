@@ -7,6 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
 
+#include "util/exception.h"
+
 using namespace sonare;
 
 namespace {
@@ -85,4 +87,18 @@ TEST_CASE("path_enhance preserves shape", "[util][segment]") {
   std::vector<float> R(9, 1.0f);
   auto enhanced = path_enhance(R.data(), 3, 3);
   REQUIRE(enhanced.size() == 9);
+}
+
+TEST_CASE("segment matrix builders reject overflowing dimensions", "[util][segment]") {
+  // cross_similarity / recurrence_matrix index their output with int expressions
+  // (`i * cols + j`); a column count whose squared element count exceeds INT_MAX
+  // is rejected before allocation or any pointer read, so the dummy pointer is
+  // never dereferenced.
+  float dummy = 0.0f;
+  REQUIRE_THROWS_AS(
+      cross_similarity(&dummy, 1, 50000, &dummy, 1, 50000, 0, "cosine", "connectivity"),
+      SonareException);
+  REQUIRE_THROWS_AS(recurrence_matrix(&dummy, 1, 50000, 0, 1, false, "cosine", "connectivity"),
+                    SonareException);
+  REQUIRE_THROWS_AS(recurrence_to_lag(&dummy, 50000, true), SonareException);
 }

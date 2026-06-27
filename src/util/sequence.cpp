@@ -225,6 +225,14 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
     throw SonareException(ErrorCode::InvalidParameter, "viterbi: null input");
   }
   if (n_states <= 0 || n_steps <= 0) return {};
+  // The trellis is indexed with the int expressions `s * n_steps + t` and the
+  // transition matrix with `p * n_states + s`; reject sizes whose element counts
+  // would overflow int (UB) before iterating, matching dtw/rqa above.
+  const int64_t int_max = static_cast<int64_t>(std::numeric_limits<int>::max());
+  if (static_cast<int64_t>(n_states) * static_cast<int64_t>(n_steps) > int_max ||
+      static_cast<int64_t>(n_states) * static_cast<int64_t>(n_states) > int_max) {
+    throw SonareException(ErrorCode::InvalidParameter, "viterbi: trellis too large");
+  }
   const float minus_inf = -std::numeric_limits<float>::infinity();
   std::vector<float> trellis(static_cast<size_t>(n_states) * n_steps, minus_inf);
   std::vector<int> backtrack(static_cast<size_t>(n_states) * n_steps, 0);
@@ -274,6 +282,13 @@ std::vector<int> viterbi_discriminative(const float* posteriors, int n_states, i
                                         const float* p_init) {
   if (posteriors == nullptr || transition == nullptr || p_state == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "viterbi_discriminative: null input");
+  }
+  if (n_states <= 0 || n_steps <= 0) return {};
+  // Mirror viterbi's overflow guard: this function indexes `s * n_steps + t` with
+  // int arithmetic in the loop below, before delegating to viterbi().
+  if (static_cast<int64_t>(n_states) * static_cast<int64_t>(n_steps) >
+      static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "viterbi_discriminative: trellis too large");
   }
   std::vector<float> log_prob(static_cast<size_t>(n_states) * n_steps);
   for (int s = 0; s < n_states; ++s) {

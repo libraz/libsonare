@@ -430,6 +430,39 @@ TEST_CASE("ClipPlayer repitch warp on a mid-clip comp part does not double-offse
   REQUIRE_THAT(out_l[3], WithinAbs(50.0f, 1.0e-6f));
 }
 
+TEST_CASE("ClipPlayer repitch warp does not silence a comp part with a large clip offset",
+          "[engine][clip_player]") {
+  // A comp part repitch-warped from a take with a large source offset must play
+  // the warped audio, not silence. The source-length gate previously subtracted
+  // clip_offset_samples even under warp, so clip_offset_samples >= source length
+  // drove source_len <= 0 and the clip returned silence. Under warp the read is
+  // resolved entirely by the warp map, so clip_offset_samples must not gate it.
+  std::array<float, 8> source{0.0f, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f};
+  const float* channels[] = {source.data()};
+  auto identity = std::make_shared<std::vector<sonare::engine::WarpAnchor>>(
+      std::vector<sonare::engine::WarpAnchor>{{0.0, 0.0}, {8.0, 8.0}});
+
+  // clip_offset_samples == source length (8). Without the fix source_len = 0.
+  sonare::engine::ClipSchedule clip{1, {channels, 1, 8}, 0.0, 0, 8, 4, false, 1.0f, 0, 0};
+  clip.warp_mode = sonare::engine::WarpMode::kRepitch;
+  clip.warp_reference_offset_samples = 0;
+  clip.warp_anchors = identity;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip});
+
+  std::array<float, 4> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 4, 0);
+
+  // Warp map is identity, warp_ref 0: source_pos = position, reads source[0..3].
+  REQUIRE_THAT(out_l[0], WithinAbs(0.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[1], WithinAbs(10.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[2], WithinAbs(20.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[3], WithinAbs(30.0f, 1.0e-6f));
+}
+
 TEST_CASE("ClipPlayer repitch warp on a mid-clip comp part follows the absolute warp curve",
           "[engine][clip_player]") {
   // Same comp scenario but with a 2:1 stretch (8 warp samples map to 4 source

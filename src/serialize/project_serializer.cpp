@@ -17,6 +17,7 @@
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 namespace sonare::serialize {
@@ -835,6 +836,12 @@ bool bool_or_any(const Value& obj, const char* primary, const char* legacy, bool
 mixing::api::Scene scene_from_value(const Value& v) {
   mixing::api::Scene scene;
   scene.version = static_cast<int>(num_or(v, "version", 1.0));
+  // Mirror the standalone scene_from_json guard: reject an embedded mixer scene
+  // whose version exceeds what this build understands instead of silently
+  // mis-reading a future schema. Version 1 is the only supported value today.
+  if (scene.version != 1) {
+    throw SonareException(ErrorCode::InvalidParameter, "unsupported embedded mixer scene version");
+  }
   if (const auto* arr = array_at(v, "strips")) {
     for (const auto& sv : *arr) {
       if (!sv.is_object()) continue;
@@ -1245,6 +1252,11 @@ DeserializeResult project_from_json(const std::string& json_text) {
         m.ppq = num_or(mv, "ppq", 0.0);
         m.name = str_or(mv, "name", "");
         m.kind = static_cast<uint8_t>(uint_or(mv, "kind", 0));
+        // key_fifths/key_minor are written only for the key-signature kind (4)
+        // but read unconditionally: non-key markers simply default to 0/false
+        // (their correct zero values), so the round-trip is lossless. Benign
+        // today; keep in mind if a non-key marker ever gains meaningful key
+        // fields, in which case the write side must serialize them too.
         m.key_fifths = static_cast<int8_t>(num_or(mv, "key_fifths", 0.0));
         m.key_minor = bool_or(mv, "key_minor", false);
         if (m.id > max_marker_id) max_marker_id = m.id;

@@ -138,6 +138,14 @@ describe('Sonare WASM NativeSynth', () => {
     expect(synthPatchRoundTripForTest({ preset: null } as unknown as SynthPatch).preset).toBe('');
   });
 
+  it('rejects a non-number, non-string enum field instead of coercing it', () => {
+    // A boolean (or any non-number/non-string) for an enum field must throw,
+    // matching the Node addon's enum reader, rather than silently coercing
+    // `true` to ordinal 1 (a bogus oscillator).
+    expect(() => synthPatchRoundTripForTest({ waveform: true } as unknown as SynthPatch)).toThrow();
+    expect(() => synthPatchRoundTripForTest({ engineMode: {} } as unknown as SynthPatch)).toThrow();
+  });
+
   it('bounces preset patches deterministically', () => {
     const project = buildMidiOnlyProject();
     try {

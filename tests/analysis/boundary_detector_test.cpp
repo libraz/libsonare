@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -244,4 +245,21 @@ TEST_CASE("BoundaryDetector peak distance", "[boundary_detector]") {
     float distance = times[i] - times[i - 1];
     REQUIRE(distance >= config.peak_distance * 0.9f);  // Allow small tolerance
   }
+}
+
+TEST_CASE("BoundaryDetector rejects audio too long for the self-similarity matrix",
+          "[boundary][.][slow]") {
+  // When the frame count exceeds ~46341, n_frames * n_frames overflows a signed
+  // 32-bit int. The detector must throw a clean InvalidParameter instead of
+  // wrapping to a small allocation followed by a multi-GB out-of-bounds access.
+  // Use a small n_fft/hop so the frame count is reached with a modest buffer.
+  BoundaryConfig config;
+  config.n_fft = 512;
+  config.hop_length = 128;
+  const int sr = 22050;
+  const size_t n_samples = static_cast<size_t>(48000) * 128;  // > 46341 frames
+  std::vector<float> samples(n_samples, 0.0f);
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  REQUIRE_THROWS_AS(BoundaryDetector(audio, config), SonareException);
 }
