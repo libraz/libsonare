@@ -832,7 +832,8 @@ export function projectAbiVersion(): number {
  * names instead of hardcoding magic strings.
  */
 export function synthPresetNames(): string[] {
-  return projectModule().synthPresetNames();
+  // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
+  return Array.from(projectModule().synthPresetNames());
 }
 
 /**
@@ -842,7 +843,11 @@ export function synthPresetNames(): string[] {
  * throw.
  */
 export function synthPresetPatch(name: string): SynthPatch {
-  return projectModule().synthPresetPatch(name);
+  // embind returns a val::object whose constructor is not this realm's Object, so a
+  // direct return is not structured-cloneable (breaks postMessage to a Worker).
+  // Spreading into a fresh literal re-roots it as a plain Object; modRoutings is
+  // already a plain member array.
+  return { ...projectModule().synthPresetPatch(name) };
 }
 
 export function synthEnumTables(): SynthEnumTables {

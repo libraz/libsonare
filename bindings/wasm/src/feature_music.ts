@@ -204,15 +204,19 @@ export function analyzeSections(
   if ((options.minSectionSec ?? 4.0) <= 0) {
     throw new RangeError('analyzeSections: minSectionSec must be positive');
   }
-  return requireModule()
-    .analyzeSections(
-      samples,
-      sampleRate,
-      options.nFft ?? 2048,
-      options.hopLength ?? 512,
-      options.minSectionSec ?? 4.0,
-    )
-    .map((s) => ({ ...s, type: s.type as SectionType }));
+  // The embind value marshalling returns an array whose constructor is not this
+  // realm's Array; chaining .map() onto it propagates that constructor via
+  // Symbol.species, leaving a result that structuredClone (and so postMessage to
+  // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
+  // plain Array before mapping.
+  const sections = requireModule().analyzeSections(
+    samples,
+    sampleRate,
+    options.nFft ?? 2048,
+    options.hopLength ?? 512,
+    options.minSectionSec ?? 4.0,
+  );
+  return Array.from(sections, (s) => ({ ...s, type: s.type as SectionType }));
 }
 
 /** Options for {@link analyzeMelody}. All fields are optional. */

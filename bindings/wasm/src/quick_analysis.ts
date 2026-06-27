@@ -107,20 +107,24 @@ export function detectKeyCandidates(
   options: KeyDetectionOptions = {},
 ): KeyCandidate[] {
   validateAnalysisInput('detectKeyCandidates', samples, sampleRate, options);
-  return requireModule()
-    ._detectKeyCandidates(
-      samples,
-      sampleRate,
-      options.nFft ?? 4096,
-      options.hopLength ?? 512,
-      options.useHpss ?? false,
-      options.loudnessWeighted ?? false,
-      options.highPassHz ?? 0,
-      keyModeValues(options.modes),
-      keyProfileValue(options.profile),
-      options.genreHint ?? '',
-    )
-    .map(convertKeyCandidate);
+  // The embind value marshalling returns an array whose constructor is not this
+  // realm's Array; chaining .map() onto it propagates that constructor via
+  // Symbol.species, leaving a result that structuredClone (and so postMessage to
+  // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
+  // plain Array before mapping.
+  const candidates = requireModule()._detectKeyCandidates(
+    samples,
+    sampleRate,
+    options.nFft ?? 4096,
+    options.hopLength ?? 512,
+    options.useHpss ?? false,
+    options.loudnessWeighted ?? false,
+    options.highPassHz ?? 0,
+    keyModeValues(options.modes),
+    keyProfileValue(options.profile),
+    options.genreHint ?? '',
+  );
+  return Array.from(candidates, convertKeyCandidate);
 }
 
 /**

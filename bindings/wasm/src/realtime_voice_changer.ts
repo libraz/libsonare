@@ -259,7 +259,8 @@ export class RealtimeVoiceChanger {
 }
 
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
-  return getSonareModule().realtimeVoiceChangerPresetNames() as VoicePresetId[];
+  // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
+  return Array.from(getSonareModule().realtimeVoiceChangerPresetNames()) as VoicePresetId[];
 }
 
 export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {

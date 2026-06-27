@@ -391,7 +391,10 @@ export function mastering(
 }
 
 export function masteringProcessorNames(): SoloProcessor[] {
-  return requireModule().masteringProcessorNames() as SoloProcessor[];
+  // embind hands back a vector whose constructor is not this realm's Array, so the
+  // result is not structured-cloneable (breaks postMessage to a Worker).
+  // Array.from() re-roots it as a plain Array. Same for the sibling *Names() below.
+  return Array.from(requireModule().masteringProcessorNames()) as SoloProcessor[];
 }
 
 /**
@@ -416,9 +419,11 @@ export function masteringInsertNames(): string[] {
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  */
 export function masteringInsertParamNames(name: string): string[] {
-  return (
-    requireModule() as unknown as { masteringInsertParamNames: (name: string) => string[] }
-  ).masteringInsertParamNames(name);
+  return Array.from(
+    (
+      requireModule() as unknown as { masteringInsertParamNames: (name: string) => string[] }
+    ).masteringInsertParamNames(name),
+  );
 }
 
 /** One realtime-automatable parameter of an insert processor. */
@@ -497,15 +502,15 @@ export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
 }
 
 export function masteringPairProcessorNames(): PairProcessor[] {
-  return requireModule().masteringPairProcessorNames() as PairProcessor[];
+  return Array.from(requireModule().masteringPairProcessorNames()) as PairProcessor[];
 }
 
 export function masteringPairAnalysisNames(): PairAnalysis[] {
-  return requireModule().masteringPairAnalysisNames() as PairAnalysis[];
+  return Array.from(requireModule().masteringPairAnalysisNames()) as PairAnalysis[];
 }
 
 export function masteringStereoAnalysisNames(): StereoAnalysis[] {
-  return requireModule().masteringStereoAnalysisNames() as StereoAnalysis[];
+  return Array.from(requireModule().masteringStereoAnalysisNames()) as StereoAnalysis[];
 }
 
 export function masteringProcess(
@@ -947,7 +952,7 @@ export function masteringChainStereoWithProgress(
  * @returns Preset names in display order (e.g. "pop", "edm", "aiMusic")
  */
 export function masteringPresetNames(): MasteringPreset[] {
-  return requireModule().masteringPresetNames() as MasteringPreset[];
+  return Array.from(requireModule().masteringPresetNames()) as MasteringPreset[];
 }
 
 /**
@@ -1036,7 +1041,7 @@ export function masterAudioStereoWithProgress(
 }
 
 export function mixingScenePresetNames(): string[] {
-  return requireModule().mixingScenePresetNames();
+  return Array.from(requireModule().mixingScenePresetNames());
 }
 
 /**

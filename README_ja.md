@@ -9,403 +9,97 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net/ja/)
 
-**解析からアレンジまで、依存ライブラリ不要のオーディオエンジン —
-librosa互換の解析、放送品質のマスタリングとミキシング、内蔵インストゥルメント、
-そしてリアルタイムのヘッドレスDAWランタイムを、C++・Python・Node.js・ブラウザへ
-単一の Apache-2.0 ライセンスで。**
+**解析からアレンジまで。依存ライブラリ不要のオーディオエンジンです。**
+librosa 互換の解析、放送品質のマスタリング／ミキシング、内蔵インストゥルメント、
+リアルタイムのヘッドレス DAW ランタイムを、C++・Python・Node.js・ブラウザに、
+Apache-2.0 ひとつで提供します。
 
-ランタイム依存ゼロ、ネイティブとWebAssemblyを単一のC++コードベースで。
-楽曲を解析し、マスタリングし、再生し、MIDIを内蔵インストゥルメントで
-レンダリングする同じDSPが、C++でもブラウザ（WASM + AudioWorklet）でも
-そのまま動きます — ランタイムにPython不要、GPL/AGPLなし、モデル重みなし。
+ネイティブと WebAssembly を単一の C++ コードベースで動かします。楽曲を解析し、
+マスタリングし、再生し、MIDI を内蔵インストゥルメントで鳴らす——その同じ DSP が、
+C++ でもブラウザ（WASM + AudioWorklet）でも同一に動作します。ランタイム依存ゼロ、
+実行時 Python 不要、GPL/AGPL なし、モデル重みなし。
 
-📖 **[ドキュメント](https://libsonare.libraz.net/ja/)** &nbsp;·&nbsp; 🎧 **[ブラウザ完結デモ](https://libsonare.libraz.net/ja/demos)** &nbsp;·&nbsp; [はじめに](https://libsonare.libraz.net/ja/docs/getting-started)
+📖 **[ドキュメント](https://libsonare.libraz.net/ja/)** &nbsp;·&nbsp; 🎧 **[ブラウザ完結デモ](https://libsonare.libraz.net/ja/demos)** &nbsp;·&nbsp; **[はじめに](https://libsonare.libraz.net/ja/docs/getting-started)**
 
-- **解析（librosa互換）** — BPM・キー・コード（Viterbi/HMM平滑化・転回形・
-  キーコンテキスト）・ビート・ダウンビート・拍子・セクション・音色・ダイナミクス・
-  ピッチ（YIN / pYIN）・テンポグラム／PLP・NNLSクロマ・EBU R128 ラウドネス
-  （LUFS。マルチチャンネル入力には BS.1770-4 のサラウンドチャンネル重み付けを適用）・
-  音響特性（ブラインドRT60/EDT、または実測IRからの Lundeby 打ち切りつき
-  ISO準拠 RT60/EDT/C50/C80/D50）。
-  デフォルト値はlibrosaに揃え、CIで生成したlibrosaリファレンス値と照合検証しています。
-- **マスタリング（76個の名前付きDSPプロセッサ）** —
-  EQ、ダイナミクス、マルチバンド、ステレオ、サチュレーション、リペア、マキシマイザー、
-  リファレンスマッチング。公開された規格・論文に基づく実装です:
-  ITU-R BS.1770-4 ラウドネスとインターサンプル・トゥルーピークリミッティング、
-  オールパス位相補償付き Linkwitz-Riley クロスオーバー、Vicanek matched-Z バイクァッド、
-  ADAAアンチエイリアスのクリッパー、チューブサチュレーションとギターアンプシミュの
-  Dempwolf 12AX7 三極管モデル、Lemireスライディング最大、
-  ポリフェーズFIRオーバーサンプリング。
-  リペア系は意図的に古典的DSP（spectral subtraction / MMSE-STSA / LogMMSE）で、
-  DNN音源分離やスペクトル修復は対象外です。
-- **ミキシング / ルーティング** — リアルタイムセーフなチャンネルストリップ／バスモデル
-  （デノーマル対策・ロックフリーなパラメータ変更・プラグインディレイ補償）に、
-  パンモード、幅、センド、FXバス、ゴニオメーター／トゥルーピーク計測、シーンプリセット、
-  オフラインステレオレンダリングを備えます。
-- **編集 & クリエイティブFX** — タイムストレッチ／ピッチシフト、ピッチ補正、
-  ノート区間ストレッチ、ボイスチェンジ（ピッチ＋フォルマント）、5種のリバーブエンジン
-  （convolution / Dattorro plate / FDN / velvet-noise、そして幾何ベースのルームエンジン）、
-  コーラス／フランジャー／フェイザー／BBDストリングマシンアンサンブル、
+## できること
+
+- **解析（librosa 互換）** — BPM、キー、コード（HMM 平滑化・転回形・キーコンテキスト）、
+  ビート／ダウンビート、拍子、セクション、音色、ダイナミクス、ピッチ（YIN／pYIN）、
+  テンポグラム／PLP、NNLS クロマ、EBU R128 ラウドネス、音響特性（ブラインドまたは実測 IR
+  からの RT60／EDT／C50／C80／D50）。デフォルト値は librosa に揃え、CI で librosa の
+  リファレンス値と照合しています。
+- **マスタリング** — 76 個の名前付き DSP プロセッサ（EQ、ダイナミクス、マルチバンド、
+  ステレオ、サチュレーション、リペア、マキシマイザー、リファレンスマッチング）。
+  ITU-R BS.1770-4 のラウドネス／トゥルーピーク制限、Linkwitz-Riley クロスオーバー、
+  Vicanek matched-Z バイクァッド、ADAA クリッパー、Dempwolf 12AX7 三極管モデル、
+  ポリフェーズ FIR オーバーサンプリングなど、公開規格・論文に基づく実装です。
+  リペア系は DNN 音源分離ではなく古典的 DSP で構成しています。
+- **ミキシング／ルーティング** — リアルタイムセーフなチャンネルストリップ／バスモデル
+  （デノーマル対策、ロックフリーなパラメータ変更、プラグインディレイ補償）。パンモード、
+  センド、FX バス、計測、シーンプリセット、オフラインレンダリングを備えます。
+- **編集 & クリエイティブ FX** — タイムストレッチ／ピッチシフト、ピッチ補正、ノート区間
+  ストレッチ、ボイスチェンジ、5 種のリバーブエンジン、モジュレーション系エフェクト、
   ステレオディレイ、ギターアンプシミュ、ダッキング。
-- **幾何ベースのルームアコースティクス** — シューボックス形状からルームインパルス
-  レスポンスを合成（`synthesizeRir`）、録音から等価なルームをブラインド推定
-  （`estimateRoom` → 体積／寸法／帯域別吸音率／DRR ＋ 正直な信頼度）、録音の残響を
-  目標ルームへモーフィング（`roomMorph`）。依存なし・決定論的。
-- **内蔵インストゥルメント（MIDIが無音にならない）** — パッチ駆動の NativeSynth は
-  7種のシンセシスエンジン（4種のクラシックなフィルタモデルを持つバーチャルアナログ減算、
-  FM、Karplus-Strong 撥弦、モーダルパーカッション、加算式ドローバーオルガン、
-  膜振動パーカッション、導波路アコースティックピアノ）、モジュレーションマトリクス、
-  名前付きプリセット、そして全128プログラム＋ドラムマップをデータ不要でカバーする
-  GMフォールバックバンクを備えます。ホスト供給のSoundFontを読み込めば
-  GS互換のSF2プレーヤー（16パートマルチティンバー、GS NRPN/SysEx、
-  リバーブ／コーラス／ディレイセンド）が引き継ぎ、未カバーのプログラムは
-  シンセにフォールバック — その内訳はプログラム別マニフェストで正直に報告されます。
-- **ヘッドレス DAW / アレンジメントランタイム** — オーディオ＆MIDIのトラック／クリップで
-  プロジェクトを構築（split / trim / move を完全な undo/redo つきで）、ループ録音
-  コンピングのためのテイクとコンプレーン、クリップ別ワープモード
-  （リピッチ／テンポシンク）、MIDI 1.0/2.0 シーケンス、Standard MIDI File と
-  MIDI 2.0 Clip File（`SMF2CLIP`）の入出力、オートテンポとスナップトゥグリッド、
-  決定論的でバイト安定なJSONの保存／読み込み、構造化診断つきのレンダリング可能
-  タイムラインへのコンパイル、そしてオフラインバウンス — 直接にも、内蔵
-  インストゥルメント経由でも。C ABI・Python・Node・WASM・CLI で利用できます。
-- **リアルタイムエンジン** — サンプル精度・アロケーションフリーの再生エンジン:
-  ループ／マーカー／メトロノームつきトランスポート、ワープ対応のクリップ再生、
-  メモリに収まらないクリップのためのページ式オーディオストリーミング
-  （ロックフリーのページ要求キュー）、内蔵インストゥルメントを通したライブMIDI入力、
-  ロックフリーのコマンド／テレメトリキューによるパラメータオートメーション、
-  キャプチャ／レコーディング（入力・出力ソース、パンチイン／アウト、ループ録音テイク、
-  入力モニタリング）。同じエンジンが AudioWorklet グルー層を通してブラウザでも動きます。
+- **ルームアコースティクス** — シューボックス形状からルームインパルスレスポンスを合成、
+  録音から等価なルームをブラインド推定、録音の残響を目標ルームへモーフィング。
+  依存なし・決定論的です。
+- **内蔵インストゥルメント** — パッチ駆動の NativeSynth（7 種のシンセシスエンジン、
+  モジュレーションマトリクス、名前付きプリセット）と、全 128 プログラム＋ドラムを
+  データ不要でカバーする GM フォールバックにより、MIDI が無音になりません。ホスト供給の
+  SoundFont を読み込めば GS 互換の 16 パート SF2 プレーヤーが引き継ぎ、未カバーの
+  プログラムはシンセにフォールバックします。
+- **ヘッドレス DAW ランタイム** — オーディオ＆MIDI のトラック／クリップでプロジェクトを構築
+  （split／trim／move、undo／redo つき）。テイクとコンプレーン、クリップ別ワープ、
+  MIDI 1.0／2.0 シーケンス、SMF・MIDI 2.0 Clip File の入出力、決定論的でバイト安定な JSON、
+  内蔵インストゥルメント経由のオフラインバウンスに対応します。
+- **リアルタイムエンジン** — サンプル精度・アロケーションフリーの再生エンジン。トランスポート、
+  ワープ対応のクリップ再生、巨大クリップのページ式ストリーミング、ライブ MIDI 入力、
+  ロックフリーのオートメーション、キャプチャ／レコーディング。同じエンジンが AudioWorklet を
+  通してブラウザでも動きます。
+
+各機能・各ランタイム・各プロセッサの詳細な API は
+[ドキュメント](https://libsonare.libraz.net/ja/)を参照してください。
 
 ## インストール
 
 ```bash
-npm install @libraz/libsonare   # JavaScript / TypeScript (WASM、Float32Arrayを受け取り)
-pip install libsonare            # Python（WAV/MP3対応。M4A/AACは「対応音声フォーマット」参照）
+npm install @libraz/libsonare   # JavaScript / TypeScript（WASM、Float32Array を渡す）
+pip install libsonare            # Python（WAV/MP3。M4A/AAC などは「対応フォーマット」参照）
 ```
 
-Node.jsでネイティブにファイルをデコードしたい場合は、
-[`@libraz/libsonare-native`](bindings/node/) をソースからビルドします:
-
-```bash
-cd bindings/node
-yarn install
-yarn build  # pkg-configでFFmpegを自動検出（無ければWAV/MP3、有ればM4A/AAC/FLAC/OGGも対応）
-```
-
-明示的に切り替えたい場合:
-
-```bash
-SONARE_FFMPEG=0 yarn build  # FFmpegを使わない
-SONARE_FFMPEG=1 yarn build  # FFmpegを必須（dev libs不在ならビルド失敗）
-```
+Node.js でファイルをネイティブにデコードしたい場合は、
+[`@libraz/libsonare-native`](bindings/node/) をソースからビルドします（pkg-config で
+FFmpeg を自動検出します）。ネイティブビルドや FFmpeg まわりの詳細は
+[インストールガイド](https://libsonare.libraz.net/ja/docs/installation)を参照してください。
 
 ## クイックスタート
 
+以下は代表的な機能だけを示したものです。ランタイムごとの完全な API は
+ドキュメントサイトにあります。
+
 ### JavaScript / TypeScript (WASM)
 
-`@libraz/libsonare` はデコード済みの `Float32Array` を受け取ります（Web Audio APIや
-JSデコーダで取得してください）。マスタリングDSPは標準のWASMビルドに同梱されています。
-
-**解析**
+`@libraz/libsonare` はデコード済みの `Float32Array` を受け取ります（Web Audio API や
+JS デコーダで用意してください）。
 
 ```typescript
-import { init, detectBpm, detectKey, analyze } from '@libraz/libsonare';
+import { init, analyze, detectKey, masterAudio } from '@libraz/libsonare';
 
 await init();
 
-const bpm = detectBpm(samples, sampleRate);
-const key = detectKey(samples, sampleRate);  // { name: "C major", confidence: 0.95 }
-const result = analyze(samples, sampleRate);
+const result = analyze(samples, sampleRate);   // BPM・キー・コード・セクションなど
+const key = detectKey(samples, sampleRate);     // { name: "C major", confidence: 0.95 }
 
-// 詳細なキー判定オプションは明示指定時のみ有効です。デフォルト動作は維持されます。
-const keyWithOptions = detectKey(samples, sampleRate, {
-  useHpss: true,
-  loudnessWeighted: true,
-  highPassHz: 80,
-  nFft: 4096,
-  hopLength: 512,
-});
+// 名前付きプリセットで一括マスタリング。
+const mastered = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
 ```
 
-**音響特性**
-
-```typescript
-import {
-  analyzeImpulseResponse,
-  detectAcoustic,
-  estimateRoom,
-  synthesizeRir,
-  roomMorph,
-} from '@libraz/libsonare';
-
-// 通常音源: ブラインドRT60/EDT推定。ブラインド解析では C50/C80/D50 は NaN。
-const blind = detectAcoustic(samples, sampleRate);
-
-// インパルス応答: ISO方式の RT60/EDT と明瞭度指標。
-const room = analyzeImpulseResponse(irSamples, sampleRate);
-
-// 録音から等価なルームをブラインド推定: 体積／寸法／帯域別吸音率／DRR と信頼度。
-const estimate = estimateRoom(samples, sampleRate);
-
-// シューボックス形状からルームインパルスレスポンスを合成。
-const { rir } = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2 });
-
-// 録音の残響を目標ルームへモーフィング（クリエイティブFX）。
-const morphed = roomMorph(samples, sampleRate, { lengthM: 12, widthM: 9, wet: 0.6 });
-```
-
-**リズム & コード**
-
-```typescript
-import { analyze, detectDownbeats, detectChords } from '@libraz/libsonare';
-
-const downbeats = detectDownbeats(samples, sampleRate);  // 小節頭の時刻（秒）
-const { timeSignature } = analyze(samples, sampleRate);  // { numerator: 4, denominator: 4 }
-
-// コード検出の追加機能はすべて明示指定時のみ有効です（デフォルト動作は維持されます）。
-const chords = detectChords(samples, sampleRate, {
-  useHmm: true,            // Viterbi/HMM による時間方向の平滑化
-  detectInversions: true,  // 検出したベース音からスラッシュコードを判定
-  useKeyContext: true,     // キー内のコードを優先
-  chromaMethod: 'nnls',    // 通常のSTFTクロマの代わりにNNLSクロマを使用
-});
-```
-
-**テンポグラム・NNLSクロマ・ラウドネス**
-
-```typescript
-import {
-  onsetEnvelope, tempogram, fourierTempogram, tempogramRatio, plp,
-  nnlsChroma, lufs,
-} from '@libraz/libsonare';
-
-// オンセット強度包絡線がテンポ領域の特徴量の入力になります。
-const env = onsetEnvelope(samples, sampleRate);
-const tg = tempogram(env, sampleRate);          // { winLength, nFrames, data }
-const ft = fourierTempogram(env, sampleRate);   // { nBins, nFrames, data }
-const ratios = tempogramRatio(tg.data, tg.winLength, sampleRate);
-const pulse = plp(env, sampleRate);             // 主要な局所パルス
-
-const chroma = nnlsChroma(samples, sampleRate); // { nChroma: 12, nFrames, data }
-
-// EBU R128 ラウドネス計測（マスタリングのラウドネス目標とは別物）。
-const loud = lufs(samples, sampleRate);
-// { integratedLufs, momentaryLufs, shortTermLufs, loudnessRange }
-```
-
-**ピッチと音色の結果**
-
-`pitchYin` と `pitchPyin` は、デフォルトでは無声フレームの `f0` を `NaN` のまま返します。これは librosa に近いピッチ列として扱うためです。後段の処理で有限値だけを扱いたい場合は `fillNa: true` を指定すると、無声フレームが `0` になります。
-
-`analyzeTimbre` は音色の集計値に加えて、解析窓ごとの時系列 `timbreOverTime` も返します。各要素には brightness、warmth、density、roughness、complexity が含まれます。
-
-| 実行環境 | ピッチのオプション | 時間変化する音色フィールド |
-|----------|--------------------|----------------------------|
-| JavaScript / WASM / Node | `fillNa` | `timbreOverTime` |
-| Python | `fill_na` | `timbre_over_time`（`timbreOverTime` エイリアスあり） |
-| C ABI | `fill_na` | `timbre_over_time` + `timbre_over_time_count` |
-
-**スペクトル特徴・分解・エフェクト（librosa互換）**
-
-```typescript
-import {
-  spectralContrast, polyFeatures, zeroCrossings, pitchTuning, estimateTuning,
-  decompose, nnFilter, remix, phaseVocoder, hpssWithResidual,
-  lufsInterleaved, ebur128LoudnessRange,
-} from '@libraz/libsonare';
-
-// スペクトル特徴
-const contrast = spectralContrast(samples, sampleRate); // Matrix2d (nBands+1) x nFrames
-const poly = polyFeatures(samples, sampleRate);         // Matrix2d (order+1) x nFrames
-const crossings = zeroCrossings(samples);               // ゼロ交差インデックス（Int32Array）
-
-// チューニング推定（ビン単位の偏差）
-const tuning = estimateTuning(samples, sampleRate);
-const fromF0 = pitchTuning(frequencies);
-
-// スペクトログラム分解: NMF 因子 + 最近傍フィルタリング
-const { w, h } = decompose(spectrogram, nFeatures, nFrames, 8); // n_components = 8
-const filtered = nnFilter(spectrogram, nFeatures, nFrames);
-
-// エフェクト: 区間リミックス、フェーズボコーダによる時間伸縮、HPSS + 残差
-const remixed = remix(samples, Int32Array.from([0, 22050, 44100, 66150]));
-const faster = phaseVocoder(samples, 1.5, sampleRate);  // rate > 1 で高速化
-const { harmonic, percussive, residual } = hpssWithResidual(samples, sampleRate);
-
-// マルチチャンネル／規格準拠ラウドネス（BS.1770-4 サラウンド重み付け）
-const multi = lufsInterleaved(interleaved, 2, sampleRate); // チャンネル重み付き LUFS + LRA
-const lra = ebur128LoudnessRange(samples, sampleRate);     // EBU R128 ラウドネスレンジ（LU）
-```
-
-**マスタリング**
-
-```typescript
-import {
-  init,
-  masteringChain,
-  masteringChainStereo,
-  masteringPairAnalyze,
-  masteringPairProcess,
-  masteringPairProcessorNames,
-  masteringProcess,
-  masteringProcessorNames,
-} from '@libraz/libsonare';
-
-await init();
-
-const mastered = masteringChain(samples, sampleRate, {
-  eq: { tiltDb: 1.0 },
-  dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
-  saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
-  loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
-});
-
-const stereo = masteringChainStereo(left, right, sampleRate, {
-  stereo: { imager: { width: 1.1 }, monoMaker: { amount: 0.2 } },
-  loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
-});
-
-// 単一の名前付きプロセッサを適用
-const compressed = masteringProcess('dynamics.compressor', samples, sampleRate, {
-  thresholdDb: -24,
-  ratio: 1.5,
-});
-
-// リファレンス参照のマスタリング
-const matched = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
-  mix: 0.25,
-});
-const loudnessJson = masteringPairAnalyze(
-  'match.referenceLoudness', source, reference, sampleRate,
-);
-
-// 利用可能なプロセッサ名を取得
-masteringProcessorNames();     // ['dynamics.compressor', 'eq.parametric', ...]
-masteringPairProcessorNames(); // ['match.abCrossfade', ...]
-```
-
-プリセットを使った一括マスタリングと、ブロック単位のストリーミング版も
-利用できます。WASMでは `masteringChain` / `StreamingMasteringChain` の
-config が**ネスト形式**、`masterAudio` の overrides のみ **フラットな
-ドット記法キー**（Node / Python の overrides と同じ）になります:
-
-```typescript
-// プリセット適用（一括）とストリーミング版
-import { masterAudio, masteringPresetNames, StreamingMasteringChain } from '@libraz/libsonare';
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
-const out = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
-
-const chain = new StreamingMasteringChain({ eq: { tiltDb: 0.5 } });
-chain.prepare(48000, 512, 1);
-const block = chain.processMono(new Float32Array(512));
-chain.delete();
-```
-
-**ミキシング**
-
-```typescript
-import { mixStereo, mixingScenePresetJson, mixingScenePresetNames } from '@libraz/libsonare';
-
-mixingScenePresetNames(); // ['vocalReverbSend', ...]
-const sceneJson = mixingScenePresetJson('vocalReverbSend');
-
-const mix = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
-  faderDb: [-3, -12],
-  pan: [0, -0.2],
-  width: [1, 0.9],
-});
-// { left, right, meters }
-```
-
-**DAW編集系DSP**
-
-```typescript
-import { noteStretch, pitchCorrectToMidi, voiceChange } from '@libraz/libsonare';
-
-const corrected = pitchCorrectToMidi(samples, sampleRate, 69, 70);
-const stretchedNote = noteStretch(samples, sampleRate, 12000, 24000, 1.25);
-const changed = voiceChange(samples, sampleRate, 5, 1.1);
-```
-
-**ヘッドレス DAW プロジェクト**
-
-```typescript
-import { Project } from '@libraz/libsonare';
-
-// WASM は `new Project()` で構築。Node ネイティブは `Project.create()` を使います。
-// それ以外のメソッド面は同一です。
-const project = new Project();
-project.setSampleRate(48000);
-
-// 楽曲上の位置は PPQ（4分音符）。
-const { clipId } = project.addMidiClip(0, 4);          // { trackId, clipId }
-project.setMidiEvents(clipId, [
-  Project.midiNoteOn(0, 0, 0, 60, 100),                // ppq, group, channel, note, velocity
-  Project.midiNoteOff(1, 0, 0, 60),
-]);
-
-const json = project.toJson();                         // 決定論的・ビルド内でバイト安定
-const smf = project.exportSmf();                       // Uint8Array — Standard MIDI File
-const midi2 = project.exportClipFile();                // Uint8Array — MIDI 2.0 Clip File（ロスレス）
-
-const { hasTimeline, diagnostics } = project.compile();
-const audio = project.bounce({ numChannels: 2 });      // インターリーブ Float32Array
-// オーディオクリップはそのままレンダリングされます。MIDIクリップには
-// インストゥルメントが必要です（totalFrames省略時は長さを自動導出）:
-const midiMix = project.bounceWithBuiltinInstrument({ waveform: 'saw' });
-
-project.delete();                                      // Node ネイティブ: project.destroy()
-```
-
-**内蔵インストゥルメント**
-
-```typescript
-import { Project, synthPresetNames } from '@libraz/libsonare';
-
-// フルNativeSynthを名前付きプリセット（減算 / FM / Karplus-Strong / モーダル /
-// 加算 / パーカッション / 導波路ピアノ）またはカスタムパッチで:
-synthPresetNames(); // ['sine', 'saw-lead', ..., 'drum-kit', 'acoustic-piano']
-const synthMix = project.bounceWithSynthInstrument('va:saw-lead');
-
-// あるいはホスト供給のSoundFontでサンプル音源を — GS互換SF2プレーヤーが
-// 読み込み済みプログラムを、GMシンセフォールバックが残りをカバーします:
-project.loadSoundFont(sf2Bytes);                       // Uint8Array
-project.soundFontManifest();                           // プログラム別バックエンド: 'sf2' | 'synth'
-const sf2Mix = project.bounceWithSf2Instrument();
-```
-
-**リアルタイムエンジン**
-
-```typescript
-import { RealtimeEngine } from '@libraz/libsonare';
-
-const engine = new RealtimeEngine(48000, 128);
-engine.setTempo(120);
-engine.setClips(clips);                    // スケジュールされたオーディオクリップ（ワープ任意）
-engine.setSynthInstrument('va:saw-lead');  // ライブMIDIがNativeSynthを鳴らす
-engine.setMidiInputSource();
-engine.pushMidiInputNoteOn(0, 0, 60, 100); // group, channel, note, velocity
-engine.play();
-const out = engine.process([new Float32Array(128), new Float32Array(128)]);
-```
-
-ブラウザでは `SonareRealtimeEngineNode`（worklet エントリポイント）が同じ
-エンジンを AudioWorklet 内で動かします。ロックフリーのコマンド／テレメトリ／
-メーターリングを備え、ページ式クリップストリーミング（`popClipPageRequest` ＋
-ページプロバイダ。ブラウザ向けにOPFSベースのプロバイダを同梱）により
-任意の長さのクリップをメモリ外に保てます。
+→ [JavaScript API](https://libsonare.libraz.net/ja/docs/js-api) · [ブラウザ / WASM](https://libsonare.libraz.net/ja/docs/wasm)
 
 ### Python
 
-`pip install libsonare` で提供されるホイールは **WAV/MP3のみ対応** です
-（librosa / pydub / soundfile と同じ慣習）。M4A/AAC/FLAC/OGG を扱う場合は、
-事前に外部 `ffmpeg` で変換するか、FFmpegをリンクしたソースビルドを行ってください:
-
-```bash
-SONARE_FFMPEG=1 pip install libsonare --no-binary libsonare
-# システム側のFFmpeg dev libsが必要:
-# brew install ffmpeg / apt install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
-```
+`pip install libsonare` で入るホイールは WAV/MP3 のみ対応です。それ以外の形式は事前に
+`ffmpeg` で変換するか、FFmpeg をリンクしてビルドしてください（[対応フォーマット](#対応フォーマット)参照）。
 
 ```python
 import libsonare
@@ -413,193 +107,20 @@ import libsonare
 audio = libsonare.Audio.from_file("song.mp3")
 print(f"BPM: {audio.detect_bpm()}, Key: {audio.detect_key()}")
 
-# 詳細なキー判定オプションは明示指定時のみ有効です。デフォルト動作は維持されます。
-key_with_options = audio.detect_key(
-    use_hpss=True,
-    loudness_weighted=True,
-    high_pass_hz=80.0,
-)
-
-acoustic = audio.detect_acoustic()  # ブラインドRT60/EDT。C50/C80/D50 は NaN
-ir_params = libsonare.analyze_impulse_response(ir_samples, sample_rate=sr)
-
-# ダウンビート・拍子・コードの追加機能（すべて明示指定時のみ有効）
-downbeats = audio.detect_downbeats()              # 小節頭の時刻（秒）
-time_signature = audio.analyze().time_signature   # 例: 4/4
-chords = audio.detect_chords(
-    use_hmm=True,             # Viterbi/HMM による時間方向の平滑化
-    detect_inversions=True,   # 検出したベース音からスラッシュコードを判定
-    use_key_context=True,     # キー内のコードを優先
-    chroma_method="nnls",     # 通常のSTFTクロマの代わりにNNLSクロマを使用
-)
-
-# テンポグラム / NNLSクロマ / EBU R128 ラウドネス
-env = audio.onset_envelope()                     # オンセット強度包絡線
-n_frames, tg = libsonare.tempogram(env, sample_rate=sr)
-n_frames_ft, ft = libsonare.fourier_tempogram(env, sample_rate=sr)
-ratios = libsonare.tempogram_ratio(tg)
-pulse = libsonare.plp(env, sample_rate=sr)
-
-nf, chroma = audio.nnls_chroma()                 # (n_frames, 12 x n_frames の行優先配列)
-
-loud = audio.lufs()  # integrated_lufs / momentary_lufs / short_term_lufs / loudness_range を返す
-mom = audio.momentary_lufs()                     # ブロック単位の時系列
-short = audio.short_term_lufs()
-
-# librosa互換のスペクトル特徴・分解・エフェクト
-contrast = libsonare.spectral_contrast(samples, sample_rate=sr)  # (n_bands+1) x n_frames
-poly = libsonare.poly_features(samples, sample_rate=sr)          # (order+1) x n_frames
-crossings = libsonare.zero_crossings(samples)                    # ゼロ交差インデックス
-tuning = libsonare.estimate_tuning(samples, sample_rate=sr)      # 偏差（ビン単位）
-offset = libsonare.pitch_tuning(frequencies)
-
-w, h = libsonare.decompose(spectrogram, n_features, n_frames, 8)  # NMF 因子
-filtered = libsonare.nn_filter(spectrogram, n_features, n_frames)
-
-remixed = libsonare.remix(samples, [0, sr, 2 * sr, 3 * sr], sample_rate=sr)
-faster = libsonare.phase_vocoder(samples, sample_rate=sr, rate=1.5)
-hpss = libsonare.hpss_with_residual(samples, sample_rate=sr)      # harmonic/percussive/residual
-
-multi = libsonare.lufs_interleaved(interleaved, channels=2, sample_rate=sr)
-lra = libsonare.ebur128_loudness_range(samples, sample_rate=sr)   # EBU R128 LRA (LU)
-
-# マスタリング — 返り値は MasteringResult(samples, sample_rate,
-# input_lufs, output_lufs, applied_gain_db, latency_samples)
 result = audio.mastering(target_lufs=-14.0, ceiling_db=-1.0)
-print(f"{result.input_lufs:.1f} LUFS → {result.output_lufs:.1f} LUFS "
-      f"(gain {result.applied_gain_db:+.2f} dB)")
-
-# 単一プロセッサ / リファレンス参照解析
-compressed = libsonare.mastering_process(
-    "dynamics.compressor", samples, sample_rate=44100,
-    params={"thresholdDb": -24, "ratio": 1.5},
-)
-loudness_json = libsonare.mastering_pair_analyze(
-    "match.referenceLoudness", source, reference, sample_rate=44100,
-)
-
-# 利用可能なプロセッサ名を取得
-libsonare.mastering_processor_names()       # ['dynamics.compressor', ...]
-libsonare.mastering_pair_processor_names()  # ['match.abCrossfade', ...]
-
-# プリセットを使った一括マスタリング + ストリーミング
-libsonare.mastering_preset_names()  # ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
-result = libsonare.master_audio(samples, sample_rate=sr, preset='aiMusic',
-                                 overrides={'loudness.targetLufs': -13})
-
-with libsonare.StreamingMasteringChain({'eq.tilt.tiltDb': 0.5}) as chain:
-    chain.prepare(44100, 512, 1)
-    out = chain.process_mono([0.0] * 512)
-
-# ミキシングプリセットとオフラインステレオレンダリング
-libsonare.mixing_scene_preset_names()  # ['vocalReverbSend', ...]
-scene_json = libsonare.mixing_scene_preset_json("vocalReverbSend")
-mix = libsonare.mix_stereo(
-    [(vocal_l, vocal_r), (music_l, music_r)],
-    sample_rate=sr,
-    fader_db=[-3.0, -12.0],
-    pan=[0.0, -0.2],
-    width=[1.0, 0.9],
-)
-
-# ヘッドレス DAW プロジェクト（オーディオ + MIDI アレンジ。PPQ = 4分音符）
-with libsonare.Project() as project:
-    project.set_sample_rate(48000)
-    track_id, clip_id = project.add_midi_clip(0.0, 4.0)
-    project.set_midi_events(clip_id, [
-        libsonare.Project.midi_note_on(0.0, 0, 0, 60, 100),
-        libsonare.Project.midi_note_off(1.0, 0, 0, 60),
-    ])
-    json_str = project.to_json()           # 決定論的・ビルド内でバイト安定
-    smf = project.export_smf()             # bytes — Standard MIDI File
-    result = project.compile()             # has_timeline / messages / diagnostics
-    audio = project.bounce(num_channels=2) # (frames, channels) の float32 ndarray
-    # MIDIクリップにはインストゥルメントが必要です。内蔵シンセが音声に
-    # レンダリングします（total_frames省略時は長さを自動導出）:
-    midi_mix = project.bounce_with_builtin_instrument(
-        libsonare.BuiltinSynthConfig(waveform="saw")
-    )
-    # ...あるいはフルNativeSynthを名前付きプリセットで（減算 / FM /
-    # Karplus-Strong / モーダル / 加算 / パーカッション / 導波路ピアノ —
-    # libsonare.synth_preset_names() 参照）:
-    synth_mix = project.bounce_with_synth_instrument("va:saw-lead")
-    # ...あるいはホスト供給のSoundFontでサンプル音源を（GS互換SF2プレーヤー。
-    # SoundFontが未カバーのプログラムはシンセにフォールバック）:
-    project.load_soundfont(sf2_bytes)
-    project.soundfont_manifest()       # プログラム別バックエンド: 'sf2' | 'synth'
-    sf2_mix = project.bounce_with_sf2_instrument()
-
-# リアルタイムエンジン: サンプル精度のトランスポート、ワープ対応クリップ再生、
-# 内蔵インストゥルメント経由のライブMIDI、キャプチャ／レコーディング
-engine = libsonare.RealtimeEngine(48000, 128)
-engine.set_tempo(120.0)
-engine.set_synth_instrument("va:saw-lead")
-engine.set_midi_input_source()
-engine.push_midi_input_note_on(0, 0, 60, 100)
-engine.play()
-block = engine.process([[0.0] * 128, [0.0] * 128])
+print(f"{result.input_lufs:.1f} LUFS → {result.output_lufs:.1f} LUFS")
 ```
 
-### Python CLI
+→ [Python API](https://libsonare.libraz.net/ja/docs/python-api) · [CLI](https://libsonare.libraz.net/ja/docs/cli)
 
-```bash
-pip install libsonare
-
-# 解析
-sonare analyze song.mp3
-# > Estimated BPM : 161.00 BPM  (conf 75.0%)
-# > Estimated Key : C major  (conf 100.0%)
-
-sonare bpm song.mp3 --json
-
-# 拡張解析（C++ CLI と同等）
-sonare acoustic room.wav --json          # ブラインドRT60/EDT（--ir でIRベースの明瞭度指標）
-sonare estimate-room room.wav --json     # ブラインド推定: 体積／寸法／吸音率／DRR ＋ 信頼度
-sonare synthesize-rir --length 7 --width 5 --height 3 -o rir.wav   # 形状からRIRを合成
-sonare room-morph dry.wav --length 12 --width 9 --wet 0.6 -o morphed.wav  # 目標ルームへモーフィング
-sonare lufs song.wav --series            # EBU R128 integrated/momentary/short-term
-sonare rhythm song.wav --json
-sonare dynamics song.wav --json
-sonare timbre song.wav --json
-sonare tempogram song.wav --json
-sonare nnls-chroma song.wav --json
-
-# マスタリング
-sonare mastering song.wav -o mastered.wav --target-lufs -14
-sonare mastering-processor song.wav --processor dynamics.compressor \
-    --params thresholdDb=-24,ratio=1.5 -o compressed.wav
-sonare mastering-pair-analyze source.wav --reference reference.wav \
-    --analysis match.referenceLoudness
-sonare mastering-processors                 # 利用可能なプロセッサ一覧
-
-# ミキシング
-sonare mix --preset vocalReverbSend
-sonare mix --scene scene.json --input vocal.wav --input drums.wav -o mix.wav
-
-# DAW編集系DSP
-sonare pitch-correct vocal.wav --current-midi 69 --target-midi 70 -o corrected.wav
-sonare note-stretch vocal.wav --onset 12000 --offset 24000 --ratio 1.25 -o stretched.wav
-sonare voice-change vocal.wav --pitch-semitones 5 --formant-factor 1.1 -o changed.wav
-
-# ヘッドレス DAW プロジェクト（アレンジ / MIDI）
-sonare project new -o song.json                          # 空のプロジェクトを作成
-sonare project validate --in song.json                   # プロジェクトJSONを往復／検証
-sonare project compile --in song.json                    # コンパイル + 診断を表示
-sonare project bounce --in song.json -o mix.wav          # オフラインでWAVにレンダリング
-sonare project bounce --in song.json -o mix.wav --synth va:saw-lead  # MIDIをNativeSynthで
-sonare project synth-presets                             # NativeSynthプリセット一覧
-sonare project export-smf --in song.json -o song.mid     # テンポマップ + MIDIクリップ → SMF
-sonare project import-smf --smf song.mid -o song.json     # SMF → 新規プロジェクトJSON
-sonare project export-midi2 --in song.json -o song.midi2 # → MIDI 2.0 Clip File（ロスレス）
-sonare project import-midi2 --midi2 song.midi2 -o song.json
-sonare midi-render --in song.json -o synth.wav --synth e-piano  # MIDIプロジェクト → NativeSynthレンダリング
-```
+`sonare` コマンドは Python パッケージに同梱されています
+（`sonare analyze song.mp3`、`sonare mastering …`、`sonare project …` など）。
 
 ### C++
 
 ```cpp
-#include <sonare/sonare.h>           // 解析 + 特徴量 + エフェクト
-#include <sonare/mastering/master.h> // マスタリングチェイン & プロセッサ
+#include "sonare.h"            // 解析 + 特徴量 + エフェクト
+#include "mastering/master.h"  // マスタリングチェイン & プロセッサ
 
 auto audio = sonare::Audio::from_file("music.mp3");
 auto result = sonare::MusicAnalyzer(audio).analyze();
@@ -607,213 +128,57 @@ std::cout << "BPM: " << result.bpm
           << ", Key: " << result.key.to_string() << std::endl;
 ```
 
-## 機能
+→ [C++ API](https://libsonare.libraz.net/ja/docs/cpp-api)
 
-### 解析（librosa互換）
+## 対応フォーマット
 
-| 音楽                  | スペクトル / ピッチ  | ストリーミング       |
-|-----------------------|----------------------|----------------------|
-| BPM / テンポ          | STFT / iSTFT         | リアルタイム解析     |
-| キー検出              | メルスペクトログラム | 逐次BPM              |
-| ビート / ダウンビート | MFCC                 | 逐次キー             |
-| 拍子 / メーター       | クロマ / NNLSクロマ  | オンセットイベント   |
-| コード(HMM/転回形)    | CQT / VQT            |                      |
-| セクション検出        | テンポグラム / PLP   |                      |
-| 音色 / ダイナミクス   | スペクトル特徴量     |                      |
-| RT60 / EDT / C50      | 音響特性解析         |                      |
-| ピッチ (YIN/pYIN)     | オンセット検出       |                      |
-| ラウドネス(EBU R128)  | オンセット包絡線     |                      |
-
-### マスタリング（76個のDSPプロセッサ）
-
-| ダイナミクス                | EQ                          | マルチバンド / ステレオ                  |
-|-----------------------------|-----------------------------|------------------------------------------|
-| コンプレッサー              | パラメトリック / グラフィック | マルチバンドコンプレッサー / EQ / リミッター |
-| リミッター / ブリックウォール| リニアフェーズ / ミニマムフェーズ | Linkwitz-Riley クロスオーバー（位相補償）|
-| エキスパンダー / ゲート     | ダイナミックEQ              | ステレオイメージャー / M-S / Haas        |
-| ディエッサー                | パッシブ / ステップ式EQ     | フェーズアライン / モノメーカー / 互換   |
-| トランジェントシェイパー    | チルト / シェルビング       |                                          |
-
-| サチュレーション / リペア              | マキシマイザー / マッチ                  | ビルディングブロック          |
-|---------------------------------------|-----------------------------------------|-------------------------------|
-| チューブ (Dempwolf 12AX7) / テープ    | トゥルーピークリミッター (ITU-R BS.1770-4) | ポリフェーズFIRオーバーサンプラ |
-| トランス / エキサイター / ビットクラッシャー | ラウドネスオプティマイザ (LUFSターゲット) | ADAAアンチエイリアスシェイピング |
-| ギターアンプシミュ（ドライブ/トーン/キャビ） | アダプティブリリース              | Vicanek matched-Z バイクァッド |
-| デクリック / デクリップ / デクラックル | リファレンスEQ / ラウドネス / スペクトラム | パーティションドコンボルバー   |
-| デノイズ / ディリバーブ / デハム      |                                         |                               |
-
-リペア系は意図的に古典的DSPに限定しています。`denoise_classical` は明示的な
-ノイズ推定に基づく spectral subtraction、MMSE-STSA、LogMMSE を扱い、
-DNN復元、音源分離、対話型スペクトル修復はスコープ外です。
-
-EQ の位相モードは既存互換を維持します。Zero Latency は RBJ バイクァッドを
-既定のまま使い、Natural Phase は Vicanek matched-Z IIR に解決します。
-高域シェルフで Vicanek の端点ゲイン誤差が固定許容値を超える場合は RBJ に
-フォールバックします。
-
-マスタリングはデフォルトでビルドされます（`BUILD_MASTERING=ON`）。
-`cmake -DBUILD_MASTERING=OFF` で解析専用ビルド（バイナリを小さく）にもできます。
-
-### ミキシング / ルーティング
-
-| チャンネルストリップ       | ルーティング / シーンAPI      | メーター / QA                 |
-|----------------------------|-------------------------------|-------------------------------|
-| 入力トリム / フェーダー / 極性 | センドとFXバス             | ピーク / RMS / トゥルーピーク |
-| バランス / ステレオ / デュアルパン | バスインサートとグラフPDC | 相関 / モノ幅                 |
-| 幅とゲインオートメーション | C / Node / Python / WASM / CLI| Golden hash とRTテスト        |
-| インサートホスティング / サイドチェイン | 永続シーンミキサー | 処理中の無アロケーション検証 |
-
-ミキシングはデフォルトでビルドされます（`BUILD_MIXING=ON`）。
-インサートホスティングにはマスタリングのプロセッサインターフェースを利用します。
-解析／マスタリング専用ビルドにする場合は `cmake -DBUILD_MIXING=OFF` を指定してください。
-
-### ヘッドレス DAW / アレンジメント
-
-| アレンジメントモデル          | MIDI とファイル入出力           | コンパイル & レンダリング      |
-|-------------------------------|---------------------------------|--------------------------------|
-| オーディオ/MIDI/AUX トラック・クリップ | MIDI 1.0 + MIDI 2.0 シーケンス | レンダリング可能タイムラインへコンパイル |
-| split / trim / move、undo / redo | SMF の入出力                | 構造化されたコンパイル診断     |
-| テイク・コンプレーン・ループコンピング | MIDI 2.0 Clip File（ロスレス） | 決定論的なオフラインバウンス   |
-| ワープモード（リピッチ/テンポシンク） | プログラム/バンク、クリップ別MIDI-FX | 内蔵シンセ経由のバウンス |
-| オートテンポ・スナップトゥグリッド | トラック別MIDIデスティネーション | C / Node / Python / WASM / CLI |
-
-アレンジメントランタイムはヘッドレスのコアのみです。UIは含まず、既定の公開パッケージには
-デバイス設定もプラグインホスト実装も含みません — エンジンはブロックを処理し、オーディオ
-コールバックはホストが所有します。任意・既定OFFの**実験的**な macOS ホストバックエンド
-（CoreAudio / CoreMIDI / AU）がソースビルド向けにその層を補います（[プラットフォーム
-ホストバックエンド](#プラットフォームホストバックエンド実験的オプトインmacos)・
-[非目標](#非目標non-goals)参照）。プロジェクト状態は
-決定論的でバイト安定なJSONにシリアライズされ、`bounce` は同一プロジェクト・同一オプションなら
-ビルド内でビット一致します。
-
-### インストゥルメント & リアルタイムエンジン
-
-| 内蔵インストゥルメント            | リアルタイム再生                   | キャプチャ / ライブ入力        |
-|-----------------------------------|------------------------------------|-------------------------------|
-| NativeSynth: 7種のシンセシスエンジン | サンプル精度のトランスポート＆ループ | 入力／出力キャプチャソース  |
-| 4種のバーチャルアナログフィルタモデル | マーカー・メトロノーム・カウントイン | パンチイン/アウト・録音オフセット |
-| モジュレーションマトリクス・2LFO・グライド | ワープ対応クリップ再生      | ループ録音テイク              |
-| GMフォールバックバンク（128＋ドラム） | ページ式クリップストリーミング（ロックフリー） | 入力モニタリング   |
-| SF2/GS SoundFontプレーヤー（16パート） | オートメーション・テレメトリ・メーター | ライブMIDI入力（ノート/CC/PB） |
-| 名前付きプリセット＋カスタムパッチ | ブラウザ AudioWorklet グルー       | MIDI-FX・CCパラメータバインド |
-
-インストゥルメントは決定論的（シードされたボイス別ばらつき、RNGなし）で、
-同梱データを必要としません。NativeSynth の GMバンクは全128プログラムと
-ドラムマップを純粋なDSPでレンダリングし、ホスト供給の `.sf2` を読み込めば
-プログラム単位でサンプル音源にアップグレードされます — フォールバックの内訳は
-SoundFontマニフェストで正直に報告されます。
-
-### プラットフォームホストバックエンド（実験的・オプトイン・macOS）
-
-**実験的。** 任意のネイティブ macOS ホストバックエンドにより、外部 DAW なしで
-プロジェクトから実機を駆動し、Audio Unit インストゥルメントをホストできます。初期段階で
-変更の可能性があり、クロスバインディングのパリティ保証の対象外です。それぞれ独立した
-リーフライブラリで、**既定OFF**・`if(APPLE)` ガード付きです。
-
-| バックエンド             | CMakeオプション     | 提供内容                                   |
-|--------------------------|---------------------|--------------------------------------------|
-| CoreAudio (AUHAL)        | `BUILD_COREAUDIO`   | オーディオデバイス出力／オーディオコールバック |
-| CoreMIDI                 | `BUILD_COREMIDI`    | MIDI 入出力（MIDI 2.0 プロトコル含む）     |
-| Audio Unit ホスト        | `BUILD_AU_HOST`     | システム AU インストゥルメントのホスティング |
-
-これらは **C-ABI を一切公開せず**、公開パッケージ（npm / PyPI / WASM）にも含まれません —
-オーディオコールバックを自前で持つ代わりに、すぐ使えるデバイス／インストゥルメント層を
-求める呼び出し側向けの、macOS 限定・ソースビルドのオプトインです。クロスプラットフォームの
-I/O 抽象化とサードパーティ VST/CLAP の読み込みはスコープ外のままです（[非目標](#非目標non-goals)参照）。
-
-## パフォーマンス
-
-解析はネイティブC++で動作し、効果のある箇所（HPSSメディアンフィルタ、
-`analyze()` のフルパイプライン）でマルチスレッドを使用します。ベンチマーク用素材では、
-HPSSやpYINなどの反復アルゴリズムとフルパイプラインはlibrosaの相当処理より明確に高速です。
-一方、FFT律速の単発特徴量（STFT、Mel、MFCC）はおおむね同等です。
-WebAssemblyはシングルスレッドのため、マルチスレッドによる高速化は適用されません。
-
-マスタリングDSPでは、ITU仕様準拠のポリフェーズオーバーサンプリング、
-ADAA（積分による反エイリアス）、ホットパスでのSIMD対応Eigen線形代数を採用しています。
-
-測定方法と特徴量ごとの数値は、
-[ベンチマーク](https://libsonare.libraz.net/ja/docs/benchmarks)を参照してください。
-
-## librosa互換性
-
-デフォルトパラメータはlibrosaに揃えています:
-- サンプルレート: 22050 Hz
-- n_fft: 2048, hop_length: 512, n_mels: 128
-- fmin: 0.0, fmax: sr/2
-
-## 対応音声フォーマット
-
-| フォーマット | デフォルト¹ | FFmpegあり² | WASM (`@libraz/libsonare`) |
-|--------------|-------------|-------------|----------------------------|
-| WAV (PCM 16/24/32, float32) | ✅ | ✅ | n/a (sampleを直接渡す) |
+| フォーマット | デフォルト¹ | FFmpeg あり² | WASM (`@libraz/libsonare`) |
+|--------------|-------------|--------------|----------------------------|
+| WAV (PCM 16/24/32, float32) | ✅ | ✅ | n/a（sample を直接渡す） |
 | MP3 | ✅ | ✅ | n/a |
-| M4A / AAC / FLAC / OGG / Opus / WMA / ... | ❌（明示エラー） | ✅ | n/a (Web Audio APIを使用) |
+| M4A / AAC / FLAC / OGG / Opus / WMA / … | ❌（明示エラー） | ✅ | n/a（Web Audio API を使用） |
 
-¹ **デフォルト**: PyPIホイール（`pip install libsonare`）と、FFmpeg dev libsが
-無い環境でのソースビルド。PyPIホイールはこのモードに固定されており、
-ユーザの `libavformat` の有無に左右されません。
+¹ **デフォルト**: PyPI ホイールと、FFmpeg dev libs が無い環境でのソースビルド。ホイールは
+このモードに固定されているため、インストールがユーザの `libavformat` の有無に左右されません。
 
-² **FFmpegあり**: FFmpegをリンクしたソースビルド。CMakeはpkg-config経由で
-自動検出します（`-DSONARE_WITH_FFMPEG=AUTO` がデフォルト）。
-`-DSONARE_WITH_FFMPEG=ON`/`OFF` で強制できます。Python:
-`SONARE_FFMPEG=1 pip install libsonare --no-binary libsonare`。
-Nodeネイティブ: `SONARE_FFMPEG=1 yarn build`。
+² **FFmpeg あり**: FFmpeg をリンクしたソースビルド。CMake が pkg-config 経由で自動検出します
+（`-DSONARE_WITH_FFMPEG=AUTO`）。Python: `SONARE_FFMPEG=1 pip install libsonare --no-binary
+libsonare`、Node ネイティブ: `SONARE_FFMPEG=1 yarn build`。
 
-WASMは設計上ファイルデコーダを同梱しません。
-Web Audio APIなどでデコードした `Float32Array` を渡してください。
+WASM は設計上ファイルデコーダを同梱しません。Web Audio API などでデコードした
+`Float32Array` を渡してください。
 
 ## ソースからビルド
 
 ```bash
-# ネイティブ（FFmpeg自動検出。マスタリングとミキシングはデフォルトでON）
-make build && make test
-
-# 解析専用（バイナリを小さくしたいとき）
-cmake -B build -DBUILD_MASTERING=OFF -DBUILD_MIXING=OFF && cmake --build build
-
-# WebAssembly（マスタリング同梱）
-make wasm
-
-# リリースビルド（最適化）
-make release
+make build && make test   # ネイティブ。FFmpeg 自動検出、マスタリング＋ミキシングは既定 ON
+make wasm                  # WebAssembly
+make release               # 最適化ビルド
 ```
+
+`-DBUILD_MASTERING=OFF` / `-DBUILD_MIXING=OFF` で解析専用の小さいバイナリにできます。
+任意・実験的・既定 OFF の macOS ホストバックエンド（CoreAudio／CoreMIDI／AU ホスト）が
+ソースビルド向けにデバイス I/O と AU ホスティングを補いますが、公開パッケージには含まれません。
+ビルドオプションの詳細は[アーキテクチャ](https://libsonare.libraz.net/ja/docs/architecture)を参照してください。
 
 ## ドキュメント
 
-ドキュメントとブラウザ完結デモ: **[libsonare.libraz.net](https://libsonare.libraz.net/ja/)**（[デモ](https://libsonare.libraz.net/ja/demos)）。
+完全なドキュメントとブラウザ完結デモは
+**[libsonare.libraz.net](https://libsonare.libraz.net/ja/)**（[デモ](https://libsonare.libraz.net/ja/demos)）にあります。
 
-**まず読む**
-- [イントロダクション](https://libsonare.libraz.net/ja/docs/introduction) · [はじめに](https://libsonare.libraz.net/ja/docs/getting-started) · [インストール](https://libsonare.libraz.net/ja/docs/installation) · [使用例](https://libsonare.libraz.net/ja/docs/examples)
+- **学ぶ** — [イントロダクション](https://libsonare.libraz.net/ja/docs/introduction) · [はじめに](https://libsonare.libraz.net/ja/docs/getting-started) · [インストール](https://libsonare.libraz.net/ja/docs/installation) · [使用例](https://libsonare.libraz.net/ja/docs/examples)
+- **ランタイム別 API** — [ブラウザ / WASM](https://libsonare.libraz.net/ja/docs/wasm) · [JavaScript](https://libsonare.libraz.net/ja/docs/js-api) · [Python](https://libsonare.libraz.net/ja/docs/python-api) · [Node.js ネイティブ](https://libsonare.libraz.net/ja/docs/native-bindings) · [C++](https://libsonare.libraz.net/ja/docs/cpp-api) · [CLI](https://libsonare.libraz.net/ja/docs/cli)
+- **目的別** — [マスタリングプロセッサ](https://libsonare.libraz.net/ja/docs/mastering-processors) · [ミキシング](https://libsonare.libraz.net/ja/docs/mixing) · [編集 DSP](https://libsonare.libraz.net/ja/docs/editing-dsp) · [リアルタイムとストリーミング](https://libsonare.libraz.net/ja/docs/realtime-streaming) · [ルーム音響](https://libsonare.libraz.net/ja/docs/acoustic-analysis)
+- **詳細** — [アーキテクチャ](https://libsonare.libraz.net/ja/docs/architecture) · [librosa 互換性](https://libsonare.libraz.net/ja/docs/librosa-compatibility) · [ベンチマーク](https://libsonare.libraz.net/ja/docs/benchmarks) · [用語集](https://libsonare.libraz.net/ja/docs/glossary)
 
-**利用環境別 API**
-- [ブラウザ / WASM](https://libsonare.libraz.net/ja/docs/wasm) · [JavaScript](https://libsonare.libraz.net/ja/docs/js-api) · [Python](https://libsonare.libraz.net/ja/docs/python-api) · [Node.js ネイティブ](https://libsonare.libraz.net/ja/docs/native-bindings) · [C++](https://libsonare.libraz.net/ja/docs/cpp-api) · [CLI](https://libsonare.libraz.net/ja/docs/cli)
+## 含まないもの（Non-goals）
 
-**作りたいもの別**
-- [マスタリングプロセッサ](https://libsonare.libraz.net/ja/docs/mastering-processors) · [ミキシングエンジン](https://libsonare.libraz.net/ja/docs/mixing) · [編集 DSP](https://libsonare.libraz.net/ja/docs/editing-dsp) · [リアルタイムとストリーミング](https://libsonare.libraz.net/ja/docs/realtime-streaming) · [ルーム音響解析](https://libsonare.libraz.net/ja/docs/acoustic-analysis)
-
-**詳しく知る**
-- [アーキテクチャ](https://libsonare.libraz.net/ja/docs/architecture) · [librosa互換性](https://libsonare.libraz.net/ja/docs/librosa-compatibility) · [ベンチマーク](https://libsonare.libraz.net/ja/docs/benchmarks) · [用語集](https://libsonare.libraz.net/ja/docs/glossary)
-
-## 非目標（Non-goals）
-
-libsonare は意図的に次の機能を含めません。
-
-- **UI や DAW アプリケーションワークフロー** — エディタは含みません。
-  libsonare はヘッドレスなアレンジメント/ランタイムコアで、その層は呼び出し側が提供します
-- **サードパーティのプラグインホスティング**（VST/CLAP の読み込み）— エンジンは自前の
-  インサートとインストゥルメントをホストします。横断的なプラグイン形式の読み込みはスコープ外です
-  （実験的・オプトイン・既定OFFの macOS **AU** ホストバックエンドがソースビルド向けに存在します）
-- **クロスプラットフォームのリアルタイム I/O 抽象化**（PortAudio/JACK ラッパー）—
-  既定ではエンジンはブロックを処理し、オーディオコールバックとデバイスはホストが所有します
-  （実験的・オプトイン・既定OFFの macOS **CoreAudio / CoreMIDI** バックエンドが macOS の
-  ソースビルドでこれを補いますが、公開パッケージには一切含まれません）
-- **サンプルデータの同梱** — SF2プレーヤーはホスト供給の SoundFont を再生します。
-  バイナリにサンプル素材は含まれません（GMシンセフォールバックは純粋なDSPです）
-- **深層学習モデル**（同梱するモデル重みなし、推論ランタイムなし）— 依存ゼロと Apache-2.0 の純度を保つためです
-
-この境界により、libsonare は **解析 + マスタリング + ミキシング + インストゥルメント +
-ヘッドレスなアレンジメント/リアルタイムランタイム** に集中し、依存ゼロの性質を維持できます。
+libsonare はアプリケーションではなくヘッドレスなエンジンです。UI や DAW ワークフロー、
+サードパーティのプラグインホスティング（VST/CLAP）、クロスプラットフォームのリアルタイム
+I/O 抽象化、サンプルデータの同梱、深層学習モデルは意図的に含みません。オーディオコールバックと
+UI は呼び出し側が所有します（I/O 境界の唯一の例外が、オプトイン・非公開の実験的 macOS
+バックエンドです）。この線引きが、依存ゼロと Apache-2.0 の純度を保ちます。背景は
+[Non-goals](https://libsonare.libraz.net/ja/docs/architecture)を参照してください。
 
 ## ライセンス
 
