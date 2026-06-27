@@ -6,7 +6,7 @@
 #include "common.h"
 
 val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_db,
-                 int true_peak_oversample) {
+                 int true_peak_oversample, float release_ms, bool apply_gain_at_input_rate) {
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
@@ -15,6 +15,9 @@ val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_
   config.target_lufs = target_lufs;
   config.ceiling_db = ceiling_db;
   config.true_peak_oversample = true_peak_oversample;
+  // release_ms == 0 keeps the C++ default (50 ms); only a positive value overrides.
+  if (release_ms > 0.0f) config.release_ms = release_ms;
+  config.apply_gain_at_input_rate = apply_gain_at_input_rate;
 
   auto result = mastering::maximizer::loudness_optimize(audio, config);
   std::vector<float> out_vec(result.audio.data(), result.audio.data() + result.audio.size());

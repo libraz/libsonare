@@ -128,6 +128,47 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(result.length == 0);
   }
 
+  SECTION("accepts release_ms / apply_gain_at_input_rate and keeps zero-init behavior") {
+    // These appended fields complete the simple helper's coverage of the
+    // maximizer config (release_ms / apply_gain_at_input_rate already exist on
+    // the chain and named-processor paths). The single-pass helper pre-clamps the
+    // static gain to the ceiling, so the limiter rarely reduces gain and the
+    // knobs are near-inert here; the contract verified is that they are accepted,
+    // produce valid output, and that a zero-initialized config still reproduces
+    // the library default (50 ms release, input-rate gain off).
+    auto samples = generate_sine(440.0f, 22050, 0.5f);
+    for (auto& sample : samples) sample *= 0.2f;
+
+    auto run = [&](float release_ms, int apply_gain_at_input_rate) {
+      SonareMasteringConfig config{};
+      config.target_lufs = -14.0f;
+      config.ceiling_db = -1.0f;
+      config.true_peak_oversample = 4;
+      config.release_ms = release_ms;
+      config.apply_gain_at_input_rate = apply_gain_at_input_rate;
+      SonareMasteringResult result{};
+      REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result) ==
+              SONARE_OK);
+      std::vector<float> out(result.samples, result.samples + result.length);
+      sonare_free_mastering_result(&result);
+      return out;
+    };
+
+    // Non-default values must still produce valid, finite, full-length output.
+    const std::vector<float> tuned = run(250.0f, 1);
+    REQUIRE(tuned.size() == samples.size());
+    for (float value : tuned) REQUIRE(std::isfinite(value));
+
+    // A zero-initialized config (release_ms == 0) must reproduce the explicit
+    // library default (50 ms) so older callers see no behavior change.
+    const std::vector<float> zero = run(0.0f, 0);
+    const std::vector<float> fifty = run(50.0f, 0);
+    REQUIRE(zero.size() == fifty.size());
+    for (size_t i = 0; i < zero.size(); ++i) {
+      REQUIRE(std::abs(zero[i] - fifty[i]) <= 1.0e-6f);
+    }
+  }
+
   SECTION("rejects invalid parameters") {
     auto samples = generate_sine(440.0f, 22050, 1.0f);
     SonareMasteringConfig config{};

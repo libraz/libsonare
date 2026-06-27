@@ -177,20 +177,33 @@ TEST_CASE("C-ABI set_clip_loop applies and undo restores", "[project][c-abi-edit
   AudioFixture fx = add_audio_track_clip(project, 0.0, 8.0);
   const std::string before = serialize(project);
 
-  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0, 0.0) ==
+          SONARE_OK);
   REQUIRE(serialize(project) != before);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
 
   // Turning loop off with length 0 is valid.
-  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_OFF, 0.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_OFF, 0.0, 0.0) ==
+          SONARE_OK);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
 
-  // Invalid: looping with non-positive length, bad mode, bad clip.
-  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 0.0) ==
+  // A loop crossfade round-trips through serialization and undo restores it.
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 4.0, 0.5) ==
+          SONARE_OK);
+  const std::string with_crossfade = serialize(project);
+  REQUIRE(with_crossfade.find("loop_crossfade_ppq") != std::string::npos);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+
+  // Invalid: looping with non-positive length, bad mode, bad clip, negative crossfade.
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 0.0, 0.0) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, 7, 2.0) == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_project_set_clip_loop(project, 999999, SONARE_LOOP_MODE_LOOP, 2.0) ==
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, 7, 2.0, 0.0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_clip_loop(project, 999999, SONARE_LOOP_MODE_LOOP, 2.0, 0.0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0, -1.0) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
@@ -253,7 +266,7 @@ TEST_CASE("C-ABI set_clip_takes and comp segments apply and undo", "[project][c-
 
   segments[1].take_id = 2;
   REQUIRE(sonare_project_set_clip_comp_segments(project, fx.clip, segments, 2) == SONARE_OK);
-  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0) ==
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0, 0.0) ==
           SONARE_ERROR_INVALID_STATE);
 
   SonareProjectClipCompSegment whole_segment{};
@@ -261,7 +274,8 @@ TEST_CASE("C-ABI set_clip_takes and comp segments apply and undo", "[project][c-
   whole_segment.end_ppq = 8.0;
   whole_segment.take_id = 1;
   REQUIRE(sonare_project_set_clip_comp_segments(project, fx.clip, &whole_segment, 1) == SONARE_OK);
-  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 2.0, 0.0) ==
+          SONARE_OK);
   REQUIRE(sonare_project_set_clip_comp_segments(project, fx.clip, segments, 2) ==
           SONARE_ERROR_INVALID_PARAMETER);
 

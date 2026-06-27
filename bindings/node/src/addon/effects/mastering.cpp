@@ -58,6 +58,14 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : -1.0f;
   config.true_peak_oversample =
       info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 4;
+  // release_ms: only a positive value overrides the library default (50 ms), so
+  // 0 (or an omitted arg) keeps the previous fixed-release behavior.
+  if (info.Length() >= 6 && info[5].IsNumber()) {
+    const float release = info[5].As<Napi::Number>().FloatValue();
+    if (release > 0.0f) config.release_ms = release;
+  }
+  config.apply_gain_at_input_rate =
+      info.Length() >= 7 && info[6].IsBoolean() ? info[6].As<Napi::Boolean>().Value() : false;
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   auto result = sonare::mastering::maximizer::loudness_optimize(audio, config);

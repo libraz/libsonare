@@ -110,6 +110,13 @@ struct ClipSchedule {
   int64_t length_samples = 0;
   bool loop = false;
   int64_t loop_length_samples = 0;
+  /// Equal-power crossfade length, in samples, applied at the loop seam so a
+  /// non-zero-aligned loop boundary does not click. 0 (default) keeps the hard
+  /// integer-modulo wrap. The crossfade is period-preserving: it blends the loop
+  /// tail with the source material immediately before the loop start, so it needs
+  /// that many source samples of pre-roll (clip_offset_samples) and is clamped to
+  /// the available pre-roll and to half the loop length. Ignored under warp.
+  int64_t loop_crossfade_samples = 0;
   /// Control-plane warp reference id carried from the arrangement clip. The
   /// player never dereferences project/model state on the audio thread; RT warp
   /// playback uses the immutable anchor snapshot below.
@@ -190,6 +197,17 @@ class ClipPlayer final : public rt::ProcessorBase {
   static float fade_gain(const ClipSchedule& clip, int64_t position) noexcept;
   static int64_t local_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
   static double source_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
+  /// Resolved source read for one timeline sample. Normally a single read
+  /// (@c pos with @c gain == 1, @c partner_gain == 0); inside a loop-seam
+  /// crossfade it additionally returns the pre-roll partner read and the
+  /// equal-power blend gains so the caller can sum both source reads.
+  struct LoopRead {
+    double pos = -1.0;          // primary source position, or < 0 if no read
+    double partner = -1.0;      // crossfade partner (pre-roll) source position
+    float gain = 1.0f;          // primary read gain
+    float partner_gain = 0.0f;  // partner read gain (0 => single read)
+  };
+  static LoopRead resolve_loop_read(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
   static int source_channel_count(const ClipSchedule& clip) noexcept;
   static int64_t source_sample_count(const ClipSchedule& clip) noexcept;
   void notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample) noexcept;

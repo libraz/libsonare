@@ -28,8 +28,12 @@ struct BoundaryConfig {
 
 /// @brief Detected boundary event.
 struct Boundary {
-  float time;      ///< Boundary time in seconds
-  int frame;       ///< Boundary frame index
+  float time;      ///< Boundary time in seconds (authoritative output)
+  int frame;       ///< Index into the analysis grid. Equals the STFT frame index
+                   ///< at the configured hop_length for normal-length inputs. For
+                   ///< long-form inputs the feature grid is mean-pooled, so this
+                   ///< is an index into the pooled grid (not the raw STFT frame);
+                   ///< use @c time for sample/second mapping in that case.
   float strength;  ///< Boundary strength (novelty score)
 };
 
@@ -82,6 +86,11 @@ class BoundaryDetector {
   void combine_features(const std::vector<float>& mfcc_features, int mfcc_frames,
                         const std::vector<float>& chroma_features, int chroma_frames);
   void compute_self_similarity();
+  /// @brief Mean-pools the feature grid so the SSM stays within bounds.
+  /// @details No-op (stride 1) unless n_frames_ exceeds the SSM cap; otherwise it
+  /// averages consecutive frames into pooled, re-normalized feature vectors and
+  /// records the pooling stride in frame_stride_ so boundary times stay correct.
+  void downsample_features();
   void compute_novelty_curve();
   void detect_boundaries();
   float compute_checkerboard_kernel(int center) const;
@@ -92,6 +101,7 @@ class BoundaryDetector {
   std::vector<float> ssm_;       // Self-similarity matrix
   int n_frames_;
   int n_features_;
+  int frame_stride_ = 1;  // feature pooling factor (>1 only for long-form inputs)
   int sr_;
   int hop_length_;
   BoundaryConfig config_;

@@ -786,7 +786,7 @@ Napi::Value ProjectWrap::SetClipLoop(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_project_set_clip_loop(project_, Uint32Arg(info, 0, 0),
                                                  static_cast<int>(NumberArg(info, 1, 0.0)),
-                                                 NumberArg(info, 2, 0.0)));
+                                                 NumberArg(info, 2, 0.0), NumberArg(info, 3, 0.0)));
   return env.Undefined();
 }
 

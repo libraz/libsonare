@@ -560,6 +560,8 @@ def mastering(
     target_lufs: float = -14.0,
     ceiling_db: float = -1.0,
     true_peak_oversample: int = 4,
+    release_ms: float = 0.0,
+    apply_gain_at_input_rate: bool = False,
 ) -> MasteringResult: ...
 def mastering_assistant_suggest(
     samples: FloatSamples,

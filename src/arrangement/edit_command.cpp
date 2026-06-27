@@ -729,8 +729,12 @@ bool SetClipLoop::apply(Project& project, MidiContentStore& /*store*/) {
       (!(loop_length_ppq_ > 0.0) || comp_segments_split_clip(c->comp_segments, c->length_ppq))) {
     return false;
   }
+  if (!(loop_crossfade_ppq_ >= 0.0)) {  // rejects negatives and NaN
+    return false;
+  }
   c->loop_mode = mode_;
   c->loop_length_ppq = loop_length_ppq_;
+  c->loop_crossfade_ppq = loop_crossfade_ppq_;
   return true;
 }
 
@@ -740,7 +744,8 @@ EditCommandPtr SetClipLoop::invert(const Project& before,
   if (c == nullptr) {
     return nullptr;
   }
-  return std::make_unique<SetClipLoop>(id_, c->loop_mode, c->loop_length_ppq);
+  return std::make_unique<SetClipLoop>(id_, c->loop_mode, c->loop_length_ppq,
+                                       c->loop_crossfade_ppq);
 }
 
 bool SetClipWarpRef::apply(Project& project, MidiContentStore& /*store*/) {

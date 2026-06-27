@@ -24,6 +24,10 @@ inline sonare::mastering::maximizer::LoudnessOptimizeConfig to_cpp_config(
     cpp.target_lufs = config->target_lufs;
     cpp.ceiling_db = config->ceiling_db;
     cpp.true_peak_oversample = config->true_peak_oversample;
+    // release_ms == 0 keeps the C++ default (50 ms); only a positive value
+    // overrides it, so a zero-initialized config behaves as before.
+    if (config->release_ms > 0.0f) cpp.release_ms = config->release_ms;
+    cpp.apply_gain_at_input_rate = config->apply_gain_at_input_rate != 0;
   }
   return cpp;
 }

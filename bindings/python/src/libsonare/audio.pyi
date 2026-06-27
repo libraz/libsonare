@@ -144,7 +144,12 @@ class Audio:
     def voice_change_realtime(self, preset: str = "bright-idol") -> list[float]: ...
     def normalize(self, target_db: float = -3.0) -> list[float]: ...
     def mastering(
-        self, target_lufs: float = -14.0, ceiling_db: float = -1.0, true_peak_oversample: int = 4
+        self,
+        target_lufs: float = -14.0,
+        ceiling_db: float = -1.0,
+        true_peak_oversample: int = 4,
+        release_ms: float = 0.0,
+        apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult: ...
     def mastering_process(
         self, processor_name: SoloProcessor, params: MasteringParams | None = None

@@ -1199,8 +1199,12 @@ SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_i
 ///        command. @p loop_mode is a @ref SonareProjectLoopMode ordinal. When
 ///        @p loop_mode is SONARE_LOOP_MODE_LOOP, @p loop_length_ppq must be
 ///        finite and > 0; otherwise it must be finite and >= 0.
+/// @param loop_crossfade_ppq Optional equal-power crossfade length at the loop
+///        seam, in PPQ (must be finite and >= 0; 0 = hard loop). Applied only
+///        when looping; the engine clamps it to the clip's available pre-roll
+///        (source offset) and to half the loop, and ignores it under warp.
 SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_id, int loop_mode,
-                                         double loop_length_ppq);
+                                         double loop_length_ppq, double loop_crossfade_ppq);
 
 /// @brief Rebinds a clip to a different (already-registered) source via an
 ///        undoable edit command. @p source_id must reference an existing source;

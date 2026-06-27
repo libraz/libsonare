@@ -67,6 +67,10 @@ describe('Sonare WASM Project edit ops', () => {
       ).not.toThrow();
       expect(() => project.setClipLoop(clipId, 'loop', 2)).not.toThrow();
       expect(() => project.setClipLoop(clipId, 'off', 0)).not.toThrow();
+      // Optional loop crossfade: accepted when >= 0, rejected when negative.
+      expect(() => project.setClipLoop(clipId, 'loop', 2, 0.5)).not.toThrow();
+      expect(project.toJson()).toContain('loop_crossfade_ppq');
+      expect(() => project.setClipLoop(clipId, 'loop', 2, -1)).toThrow();
     } finally {
       project.delete();
     }

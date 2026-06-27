@@ -3,8 +3,11 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 #include <memory>
 #include <vector>
+
+#include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -368,6 +371,69 @@ TEST_CASE("ClipPlayer honors explicit audio loop length", "[engine][clip_player]
   REQUIRE(out_l[3] == 20.0f);
   REQUIRE(out_l[4] == 10.0f);
   REQUIRE(out_l[5] == 20.0f);
+}
+
+TEST_CASE("ClipPlayer equal-power crossfades the loop seam with pre-roll material",
+          "[engine][clip_player]") {
+  // Source layout: pre-roll [0,4) = {10,11,12,13}, looped region [4,8) = {20,21,22,23}.
+  // clip_offset=4 makes [4,8) the loop body and leaves [0,4) as pre-roll for the
+  // seam crossfade.
+  std::array<float, 8> source{10.0f, 11.0f, 12.0f, 13.0f, 20.0f, 21.0f, 22.0f, 23.0f};
+  const float* channels[] = {source.data()};
+
+  auto render = [&](int64_t crossfade) {
+    sonare::engine::ClipSchedule clip{1, {channels, 1, 8}, 0.0, 0, 4, 8, true, 1.0f, 0, 0};
+    clip.loop_length_samples = 4;
+    clip.loop_crossfade_samples = crossfade;
+
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000.0, 8);
+    player.set_clips({clip});
+
+    std::array<float, 8> out_l{};
+    float* out[] = {out_l.data()};
+    player.process_at(out, 1, 8, 0);
+    return out_l;
+  };
+
+  // Hard loop (crossfade 0): exact integer-modulo wrap, behavior unchanged.
+  const auto hard = render(0);
+  REQUIRE_THAT(hard[3], WithinAbs(23.0f, 1.0e-6f));
+  REQUIRE_THAT(hard[7], WithinAbs(23.0f, 1.0e-6f));
+
+  // Crossfade 2: the last two samples of each loop blend the tail with the
+  // pre-roll. frac=0 at local==2 leaves it untouched; at local==3 (frac=0.5) it
+  // is the equal-power mix cos(pi/4)*src[7] + sin(pi/4)*src[3].
+  const auto faded = render(2);
+  const float w = std::sin(sonare::constants::kHalfPi * 0.5f);  // == cos at frac 0.5
+  REQUIRE_THAT(faded[0], WithinAbs(20.0f, 1.0e-6f));
+  REQUIRE_THAT(faded[1], WithinAbs(21.0f, 1.0e-6f));
+  REQUIRE_THAT(faded[2], WithinAbs(22.0f, 1.0e-6f));  // frac 0 -> pure tail
+  REQUIRE_THAT(faded[3], WithinAbs(w * (23.0f + 13.0f), 1.0e-5f));
+  REQUIRE_THAT(faded[7], WithinAbs(w * (23.0f + 13.0f), 1.0e-5f));
+}
+
+TEST_CASE("ClipPlayer loop crossfade falls back to a hard loop without pre-roll",
+          "[engine][clip_player]") {
+  // clip_offset=0 leaves no pre-roll, so the crossfade clamps to zero and the
+  // loop stays a hard integer-modulo wrap regardless of loop_crossfade_samples.
+  std::array<float, 4> source{20.0f, 21.0f, 22.0f, 23.0f};
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipSchedule clip{1, {channels, 1, 4}, 0.0, 0, 0, 8, true, 1.0f, 0, 0};
+  clip.loop_length_samples = 4;
+  clip.loop_crossfade_samples = 2;
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 8);
+  player.set_clips({clip});
+
+  std::array<float, 8> out_l{};
+  float* out[] = {out_l.data()};
+  player.process_at(out, 1, 8, 0);
+
+  REQUIRE_THAT(out_l[3], WithinAbs(23.0f, 1.0e-6f));
+  REQUIRE_THAT(out_l[7], WithinAbs(23.0f, 1.0e-6f));
 }
 
 TEST_CASE("ClipPlayer repitch warp maps warped positions to source positions",

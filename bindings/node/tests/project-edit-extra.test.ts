@@ -247,6 +247,16 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
+  it('setClipLoop accepts an optional loop crossfade and rejects a negative one', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    project.setClipLoop(clip, 'loop', 2, 0.5);
+    expect(project.toJson()).toContain('loop_crossfade_ppq');
+    expect(() => project.setClipLoop(clip, 'loop', 2, -1)).toThrow();
+    project.destroy();
+  });
+
   it('duplicateClip returns a fresh id and undoes', () => {
     const project = Project.create();
     const track = project.addTrack({ kind: 'audio' });

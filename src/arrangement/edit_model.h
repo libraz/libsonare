@@ -152,6 +152,11 @@ struct EditClip {
   LoopMode loop_mode = LoopMode::kOff;
   /// Loop length in PPQ. Used only when loop_mode == kLoop; must be > 0 then.
   double loop_length_ppq = 0.0;
+  /// Optional equal-power crossfade length at the loop seam, in PPQ. 0 (default)
+  /// keeps the hard loop wrap. Applied only when loop_mode == kLoop; the engine
+  /// clamps it to the available pre-roll (the clip's source offset) and to half
+  /// the loop, and ignores it under warp. Must be >= 0.
+  double loop_crossfade_ppq = 0.0;
 
   /// Optional warp reference id (0 = none). Reserved for warp markers; stored
   /// here so warp data can be attached without changing the project model.

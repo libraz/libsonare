@@ -303,6 +303,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
             ctypes.c_int,
             ctypes.c_double,
+            ctypes.c_double,
         ]
 
         lib.sonare_project_set_clip_source.restype = ctypes.c_int32

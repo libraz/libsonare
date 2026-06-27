@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { masterAudio, masteringChain, masteringChainStereo } from '../src/index';
+import { masterAudio, mastering, masteringChain, masteringChainStereo } from '../src/index';
 
 const SR = 44100;
 
@@ -50,5 +50,27 @@ describe('mastering offline input validation (inherited from the C++ core)', () 
     const x = sine(4096);
     const result = masteringChain(x, SR);
     expect(result.samples.length).toBe(x.length);
+  });
+});
+
+describe('simple mastering() accepts the appended maximizer knobs', () => {
+  it('accepts releaseMs / applyGainAtInputRate and returns valid output', () => {
+    const x = sine(4096, 220, 0.2);
+    const result = mastering(x, SR, {
+      targetLufs: -14,
+      releaseMs: 250,
+      applyGainAtInputRate: true,
+    });
+    expect(result.samples.length).toBe(x.length);
+    expect(result.samples.every((v) => Number.isFinite(v))).toBe(true);
+  });
+
+  it('treats releaseMs 0 (or omitted) as the library default', () => {
+    const x = sine(4096, 220, 0.2);
+    const omitted = mastering(x, SR, { targetLufs: -14 });
+    const zero = mastering(x, SR, { targetLufs: -14, releaseMs: 0 });
+    const explicit = mastering(x, SR, { targetLufs: -14, releaseMs: 50 });
+    expect(zero.samples).toEqual(omitted.samples);
+    expect(zero.samples).toEqual(explicit.samples);
   });
 });

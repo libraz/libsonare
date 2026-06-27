@@ -54,8 +54,15 @@ def test_set_clip_fade_and_loop_round_trip() -> None:
     assert p.to_json() != before
     p.undo()
     assert p.to_json() == before
+    # An optional loop crossfade round-trips through serialization and undo.
+    p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=12.0)
+    assert "loop_crossfade_ppq" in p.to_json()
+    p.undo()
+    assert p.to_json() == before
     with pytest.raises((ValueError, Exception)):
         p.set_clip_loop(clip, "loop", 0.0)  # looping needs length > 0
+    with pytest.raises((ValueError, Exception)):
+        p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=-1.0)  # crossfade must be >= 0
 
 
 def test_duplicate_clip_allocates_new_id() -> None:

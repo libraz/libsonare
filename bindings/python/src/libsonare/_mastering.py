@@ -36,12 +36,18 @@ def mastering(
     target_lufs: float = -14.0,
     ceiling_db: float = -1.0,
     true_peak_oversample: int = 4,
+    release_ms: float = 0.0,
+    apply_gain_at_input_rate: bool = False,
 ) -> MasteringResult:
     """Apply mastering loudness normalization with a true-peak ceiling.
 
     Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
     for audio, and the LUFS measurement driving normalization is sample-rate
     dependent, so a wrong rate mis-targets the loudness.
+
+    ``release_ms`` tunes the post true-peak limiter release; ``0`` keeps the
+    library default (50 ms). ``apply_gain_at_input_rate`` applies the static
+    loudness gain at the input (pre-oversample) rate.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_process"):
@@ -52,6 +58,8 @@ def mastering(
         target_lufs=target_lufs,
         ceiling_db=ceiling_db,
         true_peak_oversample=true_peak_oversample,
+        release_ms=release_ms,
+        apply_gain_at_input_rate=1 if apply_gain_at_input_rate else 0,
     )
     out = SonareMasteringResult()
     rc = lib.sonare_mastering_process(

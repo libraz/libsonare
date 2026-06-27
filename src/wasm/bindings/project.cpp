@@ -1015,9 +1015,10 @@ struct ProjectWasm {
     }
   }
 
-  void setClipLoop(uint32_t clip_id, int loop_mode, double loop_length_ppq) {
-    const SonareError err =
-        sonare_project_set_clip_loop(project_.get(), clip_id, loop_mode, loop_length_ppq);
+  void setClipLoop(uint32_t clip_id, int loop_mode, double loop_length_ppq,
+                   double loop_crossfade_ppq) {
+    const SonareError err = sonare_project_set_clip_loop(project_.get(), clip_id, loop_mode,
+                                                         loop_length_ppq, loop_crossfade_ppq);
     if (err != SONARE_OK) {
       throwCError(err, "failed to set clip loop");
     }

@@ -31,6 +31,31 @@ def test_mastering_returns_audio_and_loudness_metadata() -> None:
         audio.close()
 
 
+def test_mastering_accepts_release_and_input_rate_knobs() -> None:
+    """The appended maximizer knobs are accepted and zero-init stays default."""
+    import libsonare
+
+    sr = 22050
+    samples = [0.2 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr // 2)]
+
+    tuned = libsonare.mastering(
+        samples,
+        sample_rate=sr,
+        target_lufs=-14.0,
+        release_ms=250.0,
+        apply_gain_at_input_rate=True,
+    )
+    assert len(tuned.samples) == len(samples)
+    assert all(math.isfinite(v) for v in tuned.samples)
+
+    # release_ms == 0 (or omitted) must reproduce the library default (50 ms).
+    omitted = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0)
+    zero = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0, release_ms=0.0)
+    explicit = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0, release_ms=50.0)
+    assert zero.samples == omitted.samples
+    assert zero.samples == explicit.samples
+
+
 def test_named_mastering_processors() -> None:
     """Named mastering processors are exposed through the shared API."""
     import libsonare

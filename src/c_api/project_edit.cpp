@@ -882,7 +882,7 @@ SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_i
 }
 
 SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_id, int loop_mode,
-                                         double loop_length_ppq) {
+                                         double loop_length_ppq, double loop_crossfade_ppq) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || loop_mode < SONARE_LOOP_MODE_OFF ||
       loop_mode > SONARE_LOOP_MODE_LOOP) {
@@ -892,17 +892,20 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
   if (looping ? !finite_positive(loop_length_ppq) : !finite_non_negative(loop_length_ppq)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  if (!finite_non_negative(loop_crossfade_ppq)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   if (project->history.project().find_clip(clip_id) == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetClipLoop>(clip_id, static_cast<arr::LoopMode>(loop_mode),
-                                                    loop_length_ppq);
+                                                    loop_length_ppq, loop_crossfade_ppq);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, loop_mode, loop_length_ppq);
+  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, loop_mode, loop_length_ppq, loop_crossfade_ppq);
 #endif
 }
 

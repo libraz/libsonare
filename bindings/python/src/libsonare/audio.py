@@ -628,6 +628,8 @@ class Audio:
         target_lufs: float = -14.0,
         ceiling_db: float = -1.0,
         true_peak_oversample: int = 4,
+        release_ms: float = 0.0,
+        apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult:
         """Apply mastering loudness normalization with a true-peak ceiling."""
         return _mastering(
@@ -636,6 +638,8 @@ class Audio:
             target_lufs,
             ceiling_db,
             true_peak_oversample,
+            release_ms,
+            apply_gain_at_input_rate,
         )
 
     def mastering_process(

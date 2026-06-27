@@ -287,6 +287,8 @@ Value clip_to_json(const arrangement::EditClip& c) {
   o["fade_out"] = fade_to_json(c.fade_out);
   o["loop_mode"] = static_cast<int>(c.loop_mode);
   o["loop_length_ppq"] = c.loop_length_ppq;
+  // Optional; only emitted when set so existing projects round-trip byte-for-byte.
+  if (c.loop_crossfade_ppq != 0.0) o["loop_crossfade_ppq"] = c.loop_crossfade_ppq;
   o["warp_ref_id"] = static_cast<double>(c.warp_ref_id);
   o["warp_mode"] = static_cast<int>(c.warp_mode);
   if (!c.takes.empty()) {
@@ -675,6 +677,7 @@ arrangement::EditClip clip_from_json(const Value& v) {
   if (const auto* fo = object_at(v, "fade_out")) c.fade_out = fade_from_json(Value(*fo));
   c.loop_mode = static_cast<arrangement::LoopMode>(uint_or(v, "loop_mode", 0));
   c.loop_length_ppq = num_or(v, "loop_length_ppq", 0.0);
+  c.loop_crossfade_ppq = num_or(v, "loop_crossfade_ppq", 0.0);
   c.warp_ref_id = uint_or(v, "warp_ref_id", 0);
   c.warp_mode = static_cast<arrangement::WarpMode>(uint_or(v, "warp_mode", 0));
   if (const auto* arr = array_at(v, "takes")) {

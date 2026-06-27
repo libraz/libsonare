@@ -636,6 +636,14 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                     0,
                     tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_length_ppq) - start_sample)
               : 0;
+      // Loop-seam crossfade length, converted from PPQ the same way as the loop
+      // length. The engine clamps it to the available pre-roll and half the loop.
+      const int64_t loop_crossfade_samples =
+          loop && clip.loop_crossfade_ppq > 0.0
+              ? std::max<int64_t>(
+                    0, tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_crossfade_ppq) -
+                           start_sample)
+              : 0;
       const engine::FadeCurve fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
       const engine::FadeCurve fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);
 
@@ -653,6 +661,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                                  fade_in_samples, fade_out_samples, fade_in_curve, fade_out_curve,
                                  /*clip_has_separate_fade_out_curve=*/true);
       sched.loop_length_samples = loop_length_samples;
+      sched.loop_crossfade_samples = loop_crossfade_samples;
       sched.fade_reference_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
       sched.fade_reference_length_samples = clip_length_samples;
       sched.warp_ref_id = clip.warp_ref_id;

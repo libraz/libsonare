@@ -147,11 +147,22 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
     const int end = static_cast<int>(std::min<int64_t>(num_samples, clip_end - timeline_sample));
     for (int i = start; i < end; ++i) {
       const int64_t position = timeline_sample + i - clip.start_sample;
-      const double source_pos = source_position(clip, timeline_sample + i);
+      const LoopRead read = resolve_loop_read(clip, timeline_sample + i);
+      const double source_pos = read.pos;
       if (!(source_pos >= 0.0) ||
           source_pos >= static_cast<double>(std::max<int64_t>(source_sample_count(clip), 0))) {
         continue;
       }
+      // One source-channel read, summing the loop-seam crossfade partner when
+      // active (partner_gain == 0 for the common single-read path, so this is the
+      // unchanged read otherwise).
+      const auto read_source = [&](int src_ch) noexcept {
+        float value = sample_channel(clip, src_ch, source_pos) * read.gain;
+        if (read.partner_gain > 0.0f) {
+          value += sample_channel(clip, src_ch, read.partner) * read.partner_gain;
+        }
+        return value;
+      };
       const float gain = clip.gain * fade_gain(clip, position);
       if (num_channels == 1) {
         if (!channels[0]) continue;
@@ -165,8 +176,7 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
         int contributing = 0;
         const int source_channels = source_channel_count(clip);
         for (int src_ch = 0; src_ch < source_channels; ++src_ch) {
-          const float sample = sample_channel(clip, src_ch, source_pos);
-          mono += sample;
+          mono += read_source(src_ch);
           ++contributing;
         }
         if (contributing > 0) {
@@ -178,7 +188,7 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
         if (!channels[ch]) continue;
         const int src_ch = std::min(ch, source_channel_count(clip) - 1);
         const float ch_gain = gain * pan_channel_gain(clip.pan, ch);
-        channels[ch][i] += sample_channel(clip, src_ch, source_pos) * ch_gain;
+        channels[ch][i] += read_source(src_ch) * ch_gain;
       }
     }
   }
@@ -286,9 +296,15 @@ double map_warp_to_source(const std::vector<WarpAnchor>& anchors, double warp_sa
 }
 
 double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sample) noexcept {
-  if (clip.warp_mode == WarpMode::kTempoSync) return -1;
+  return resolve_loop_read(clip, timeline_sample).pos;
+}
+
+ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
+                                                   int64_t timeline_sample) noexcept {
+  LoopRead read;
+  if (clip.warp_mode == WarpMode::kTempoSync) return read;
   const int64_t position = timeline_sample - clip.start_sample;
-  if (position < 0 || position >= clip.length_samples) return -1;
+  if (position < 0 || position >= clip.length_samples) return read;
   // The warp anchors map a clip-timeline position (measured from clip start) to an
   // absolute source position, so under active warp the map alone resolves the read
   // — clip_offset_samples must NOT be added on top. For a comp part that starts
@@ -309,7 +325,7 @@ double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sa
       warp_active ? std::min<int64_t>(clip.length_samples, source_sample_count(clip))
                   : std::min<int64_t>(clip.length_samples,
                                       source_sample_count(clip) - clip.clip_offset_samples);
-  if (source_len <= 0) return -1;
+  if (source_len <= 0) return read;
   const double warp_ref =
       static_cast<double>(std::max<int64_t>(0, clip.warp_reference_offset_samples));
   const auto resolve = [&clip, warp_active, warp_ref](double pos) noexcept {
@@ -319,17 +335,35 @@ double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sa
     return static_cast<double>(clip.clip_offset_samples) + pos;
   };
   if (clip.loop) {
-    // Hard integer-modulo wrap with NO crossfade / declick / zero-cross snap at
-    // the loop seam (identical in live and bounce). If the loop boundary is not
-    // zero-aligned the seam can click — callers should pre-trim the loop region
-    // to a zero crossing (or to a whole number of cycles). This matches the
-    // common DAW hard-loop contract.
     const int64_t loop_len = clip.loop_length_samples > 0
                                  ? std::min<int64_t>(clip.loop_length_samples, source_len)
                                  : source_len;
-    return resolve(static_cast<double>(position % loop_len));
+    const int64_t local = position % loop_len;
+    read.pos = resolve(static_cast<double>(local));
+    // Optional loop-seam crossfade: blend the loop tail with the source material
+    // immediately before the loop start (pre-roll), so a non-zero-aligned seam
+    // does not click. Period-preserving (the loop still repeats every loop_len),
+    // so it needs loop_crossfade_samples of pre-roll before the loop start and is
+    // clamped to the available pre-roll (clip_offset_samples) and to half the
+    // loop. Disabled under warp; when no pre-roll is available it falls back to
+    // the hard integer-modulo wrap (the common DAW hard-loop contract).
+    if (clip.loop_crossfade_samples > 0 && !warp_active) {
+      const int64_t xfade =
+          std::min({clip.loop_crossfade_samples, clip.clip_offset_samples, loop_len / 2});
+      if (xfade > 0 && local >= loop_len - xfade) {
+        const double frac =
+            static_cast<double>(local - (loop_len - xfade)) / static_cast<double>(xfade);
+        // Pre-roll partner: clip_offset + (local - loop_len) lands in
+        // [clip_offset - xfade, clip_offset), guaranteed valid by the clamp above.
+        read.partner = resolve(static_cast<double>(local - loop_len));
+        read.gain = static_cast<float>(std::cos(frac * kHalfPi));
+        read.partner_gain = static_cast<float>(std::sin(frac * kHalfPi));
+      }
+    }
+    return read;
   }
-  return resolve(static_cast<double>(position));
+  read.pos = resolve(static_cast<double>(position));
+  return read;
 }
 
 int ClipPlayer::source_channel_count(const ClipSchedule& clip) noexcept {

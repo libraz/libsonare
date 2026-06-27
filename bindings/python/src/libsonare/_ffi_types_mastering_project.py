@@ -14,6 +14,8 @@ class SonareMasteringConfig(ctypes.Structure):
         ("target_lufs", ctypes.c_float),
         ("ceiling_db", ctypes.c_float),
         ("true_peak_oversample", ctypes.c_int32),
+        ("release_ms", ctypes.c_float),
+        ("apply_gain_at_input_rate", ctypes.c_int32),
     ]
 
 

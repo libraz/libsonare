@@ -438,8 +438,11 @@ class SetClipFade final : public EditCommand {
 
 class SetClipLoop final : public EditCommand {
  public:
-  SetClipLoop(ClipId id, LoopMode mode, double loop_length_ppq)
-      : id_(id), mode_(mode), loop_length_ppq_(loop_length_ppq) {}
+  SetClipLoop(ClipId id, LoopMode mode, double loop_length_ppq, double loop_crossfade_ppq = 0.0)
+      : id_(id),
+        mode_(mode),
+        loop_length_ppq_(loop_length_ppq),
+        loop_crossfade_ppq_(loop_crossfade_ppq) {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
@@ -449,6 +452,7 @@ class SetClipLoop final : public EditCommand {
   ClipId id_;
   LoopMode mode_;
   double loop_length_ppq_;
+  double loop_crossfade_ppq_;
 };
 
 class SetClipWarpRef final : public EditCommand {

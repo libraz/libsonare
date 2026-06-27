@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "util/constants.h"
-#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -247,19 +246,44 @@ TEST_CASE("BoundaryDetector peak distance", "[boundary_detector]") {
   }
 }
 
-TEST_CASE("BoundaryDetector rejects audio too long for the self-similarity matrix",
+TEST_CASE("BoundaryDetector pools long audio instead of overflowing the SSM",
           "[boundary][.][slow]") {
-  // When the frame count exceeds ~46341, n_frames * n_frames overflows a signed
-  // 32-bit int. The detector must throw a clean InvalidParameter instead of
-  // wrapping to a small allocation followed by a multi-GB out-of-bounds access.
-  // Use a small n_fft/hop so the frame count is reached with a modest buffer.
+  // Past ~46340 frames the n_frames * n_frames SSM index would overflow a signed
+  // 32-bit int (UB) and the matrix would grow without bound. The detector must
+  // instead mean-pool the feature grid down to a bounded size and still return a
+  // usable, internally-consistent result (no crash, no throw). Use a small
+  // n_fft/hop so the frame count is reached with a modest buffer.
   BoundaryConfig config;
   config.n_fft = 512;
   config.hop_length = 128;
+  config.threshold = 0.1f;
   const int sr = 22050;
-  const size_t n_samples = static_cast<size_t>(48000) * 128;  // > 46341 frames
-  std::vector<float> samples(n_samples, 0.0f);
+  // Two distinct halves so the pooled novelty curve still carries structure.
+  const size_t half = static_cast<size_t>(24000) * 128;  // each half > 23k frames
+  std::vector<float> samples(half * 2, 0.0f);
+  for (size_t i = 0; i < half; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 220.0f * t);
+    samples[half + i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 880.0f * t);
+  }
   Audio audio = Audio::from_vector(std::move(samples), sr);
 
-  REQUIRE_THROWS_AS(BoundaryDetector(audio, config), SonareException);
+  BoundaryDetector detector(audio, config);  // total > 46340 frames -> pooling
+
+  // Pooling must not silence the analysis: a novelty curve still exists and is
+  // normalized to [0, 1], and boundary times stay non-negative, sorted, and
+  // within the audio duration (proving the pooled time mapping is consistent).
+  const auto& novelty = detector.novelty_curve();
+  REQUIRE(!novelty.empty());
+  for (float v : novelty) {
+    REQUIRE(v >= 0.0f);
+    REQUIRE(v <= 1.0f);
+  }
+  const float duration = audio.duration();
+  const auto times = detector.boundary_times();
+  for (size_t i = 0; i < times.size(); ++i) {
+    REQUIRE(times[i] >= 0.0f);
+    REQUIRE(times[i] <= duration);
+    if (i > 0) REQUIRE(times[i] > times[i - 1]);
+  }
 }

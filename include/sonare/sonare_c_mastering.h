@@ -14,15 +14,28 @@ extern "C" {
 // ============================================================================
 
 // Config for the simple one-shot sonare_mastering_process / _stereo helpers.
-// These expose only the three most common knobs and run the maximizer with a
-// FIXED limiter release and in full apply (not detect-only) mode. To tune the
-// limiter release_ms, select detect-only, or chain other processors, use the
-// named-processor path (sonare_mastering_apply_named_processor with
-// "maximizer.loudnessOptimize") or the full MasteringChain API instead.
+// These run the maximizer in full apply (not detect-only) mode. To select
+// detect-only mode or chain other processors, use the named-processor path
+// (sonare_mastering_apply_named_processor with "maximizer.loudnessOptimize") or
+// the full MasteringChain API instead.
+//
+// The struct is zero-init friendly: a field left 0 uses the library default
+// (target_lufs/ceiling_db are real values, so pass them explicitly). release_ms
+// and apply_gain_at_input_rate are appended so older zero-initialized callers
+// keep the previous fixed-release / input-rate-off behavior.
 typedef struct {
   float target_lufs;
   float ceiling_db;
   int true_peak_oversample;
+  // Post true-peak limiter release in ms. 0 => library default (50 ms). NOTE: the
+  // single-pass helper pre-clamps the static gain to the ceiling, so the limiter
+  // rarely reduces gain and this knob is mostly inert here; for audible release
+  // control use the named-processor / MasteringChain path. Exposed for config
+  // parity with those paths and the C++ LoudnessOptimizeConfig.
+  float release_ms;
+  // Apply the static loudness gain at the input (pre-oversample) rate. 0 => off
+  // (default); nonzero => on. Matches TruePeakLimiterConfig::apply_gain_at_input_rate.
+  int apply_gain_at_input_rate;
 } SonareMasteringConfig;
 
 typedef struct {

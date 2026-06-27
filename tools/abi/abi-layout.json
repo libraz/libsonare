@@ -2377,9 +2377,21 @@
         "name": "true_peak_oversample",
         "offset": 8,
         "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "release_ms",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "apply_gain_at_input_rate",
+        "offset": 16,
+        "size": 4
       }
     ],
-    "size": 12
+    "size": 20
   },
   "SonareMasteringParam": {
     "align": 8,

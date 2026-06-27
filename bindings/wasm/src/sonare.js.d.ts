@@ -1357,6 +1357,8 @@ export interface SonareModule {
     targetLufs: number,
     ceilingDb: number,
     truePeakOversample: number,
+    releaseMs: number,
+    applyGainAtInputRate: boolean,
   ) => WasmMasteringResult;
   masteringProcessorNames: () => string[];
   masteringPairProcessorNames: () => string[];

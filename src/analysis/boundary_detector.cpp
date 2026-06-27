@@ -3,8 +3,6 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
-#include <limits>
 
 #include "core/spectrum.h"
 #include "feature/chroma.h"
@@ -33,6 +31,18 @@ void normalize_feature(float* feature, int n) {
     }
   }
 }
+
+// Largest SSM side length kept at full per-hop resolution. Past this the
+// checkerboard kernel's `row * n_frames_ + col` int index overflows (UB) and the
+// matrix grows without bound, so longer inputs are pooled (see below). Inputs at
+// or below this length are never pooled, so their behavior is unchanged.
+constexpr int kMaxSsmFrames = 46340;  // floor(sqrt(INT_MAX))
+
+// When an input exceeds kMaxSsmFrames, the feature grid is mean-pooled down to at
+// most this many frames. This both bounds the SSM memory (~kPooledTargetFrames^2
+// floats ≈ 256 MB) and keeps the int index well clear of overflow, trading time
+// resolution for the ability to analyze long-form audio (DJ sets, podcasts).
+constexpr int kPooledTargetFrames = 8192;
 
 }  // namespace
 
@@ -183,20 +193,49 @@ void BoundaryDetector::combine_features(const std::vector<float>& mfcc_features,
   }
 }
 
+void BoundaryDetector::downsample_features() {
+  if (n_frames_ <= kMaxSsmFrames || n_features_ <= 0) return;
+
+  // Ceil-divide so the pooled frame count never exceeds kPooledTargetFrames.
+  const int stride = (n_frames_ + kPooledTargetFrames - 1) / kPooledTargetFrames;
+  if (stride <= 1) return;
+  const int reduced = (n_frames_ + stride - 1) / stride;
+
+  std::vector<float> pooled(static_cast<size_t>(reduced) * static_cast<size_t>(n_features_), 0.0f);
+  for (int r = 0; r < reduced; ++r) {
+    const int begin = r * stride;
+    const int end = std::min(begin + stride, n_frames_);
+    float* dst = &pooled[static_cast<size_t>(r) * static_cast<size_t>(n_features_)];
+    for (int f = begin; f < end; ++f) {
+      const float* src = &features_[static_cast<size_t>(f) * static_cast<size_t>(n_features_)];
+      for (int c = 0; c < n_features_; ++c) {
+        dst[c] += src[c];
+      }
+    }
+    // Mean-pool then re-L2-normalize so cosine similarity stays a plain dot
+    // product (the SSM relies on unit-length feature vectors).
+    const float inv = 1.0f / static_cast<float>(end - begin);
+    for (int c = 0; c < n_features_; ++c) {
+      dst[c] *= inv;
+    }
+    normalize_feature(dst, n_features_);
+  }
+
+  features_ = std::move(pooled);
+  n_frames_ = reduced;
+  frame_stride_ = stride;
+}
+
 void BoundaryDetector::compute_self_similarity() {
   if (n_frames_ == 0) return;
 
   // The SSM is an n_frames_ x n_frames_ matrix indexed with the int expression
-  // `row * n_frames_ + col`; reject a size whose element count would overflow int
-  // (UB) before allocating. Very long inputs (e.g. ~18 min at the default
-  // hop=512/sr=22050) cross this bound, so this throws a clean error instead of
-  // wrapping to a small allocation followed by huge out-of-bounds Eigen access.
-  if (static_cast<int64_t>(n_frames_) * static_cast<int64_t>(n_frames_) >
-      static_cast<int64_t>(std::numeric_limits<int>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "BoundaryDetector: self-similarity matrix too large; "
-                          "input audio is too long for structural analysis");
-  }
+  // `row * n_frames_ + col`, which overflows int (UB) past ~46340 frames. Very
+  // long inputs (e.g. >~18 min at the default hop=512/sr=22050) cross this bound,
+  // so instead of failing we mean-pool the feature grid down to the cap: the
+  // matrix size (and memory) stays bounded and structural analysis still returns
+  // a coarser-resolution result. Inputs at or below the cap are untouched.
+  downsample_features();
 
   ssm_.resize(static_cast<size_t>(n_frames_) * static_cast<size_t>(n_frames_));
 
@@ -269,8 +308,10 @@ void BoundaryDetector::compute_novelty_curve() {
 void BoundaryDetector::detect_boundaries() {
   if (novelty_curve_.empty()) return;
 
-  // Convert peak distance to frames
-  float hop_duration = static_cast<float>(hop_length_) / sr_;
+  // Convert peak distance to frames. Under long-form pooling each analysis frame
+  // spans frame_stride_ hops, so the effective hop duration scales accordingly;
+  // frame_stride_ is 1 (no change) for all normal-length inputs.
+  float hop_duration = static_cast<float>(hop_length_) * static_cast<float>(frame_stride_) / sr_;
   int min_peak_distance = static_cast<int>(config_.peak_distance / hop_duration);
   min_peak_distance = std::max(1, min_peak_distance);
 

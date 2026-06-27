@@ -382,6 +382,8 @@ export function mastering(
     options.targetLufs ?? -14.0,
     options.ceilingDb ?? -1.0,
     options.truePeakOversample ?? 4,
+    options.releaseMs ?? 0, // 0 => library default (50 ms)
+    options.applyGainAtInputRate ?? false,
   );
 }
 

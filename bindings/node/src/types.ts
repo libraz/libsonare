@@ -360,6 +360,10 @@ export interface MasteringOptions {
   ceilingDb?: number;
   /** True-peak oversampling factor. Default 4. */
   truePeakOversample?: number;
+  /** Post true-peak limiter release in ms. Default 0 => library default (50 ms). */
+  releaseMs?: number;
+  /** Apply the static loudness gain at the input (pre-oversample) rate. Default false. */
+  applyGainAtInputRate?: boolean;
 }
 
 /** Options for {@link noteStretch}. All fields are optional. */

@@ -96,6 +96,7 @@ Fixture make_fixture() {
   aclip.fade_out = {128.0, FadeCurve::kLogarithmic};
   aclip.loop_mode = LoopMode::kLoop;
   aclip.loop_length_ppq = 960.0;
+  aclip.loop_crossfade_ppq = 48.0;
   aclip.warp_ref_id = 5;
   aclip.warp_mode = WarpMode::kTempoSync;
   aclip.takes = {{1, 0, 120.0, "take A"}, {2, audio_sid, 360.0, "take B"}};
@@ -263,8 +264,9 @@ bool eq(const EditClip& a, const EditClip& b) {
          a.fade_in.length_ppq == b.fade_in.length_ppq && a.fade_in.curve == b.fade_in.curve &&
          a.fade_out.length_ppq == b.fade_out.length_ppq && a.fade_out.curve == b.fade_out.curve &&
          a.loop_mode == b.loop_mode && a.loop_length_ppq == b.loop_length_ppq &&
-         a.warp_ref_id == b.warp_ref_id && a.warp_mode == b.warp_mode && a.takes == b.takes &&
-         a.active_take_id == b.active_take_id && a.comp_segments == b.comp_segments;
+         a.loop_crossfade_ppq == b.loop_crossfade_ppq && a.warp_ref_id == b.warp_ref_id &&
+         a.warp_mode == b.warp_mode && a.takes == b.takes && a.active_take_id == b.active_take_id &&
+         a.comp_segments == b.comp_segments;
 }
 
 bool eq(const ChordSymbol& a, const ChordSymbol& b) {
