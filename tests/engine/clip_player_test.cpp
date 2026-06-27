@@ -107,6 +107,57 @@ TEST_CASE("ClipPlayer can render tracks separately without changing summed outpu
   }
 }
 
+TEST_CASE("ClipPlayer mono live monitoring matches the mono bounce downmix",
+          "[engine][clip_player]") {
+  // A mono BOUNCE renders the panned stereo pair and downmixes 0.5*(L+R)
+  // (project_bounce.cpp). Mono live monitoring must preview the same result so
+  // a panned clip A/B'd between the two agrees in level and balance.
+  std::array<float, 4> source{1.0f, 2.0f, 3.0f, 4.0f};
+  const float* mono_src[] = {source.data()};
+
+  auto stereo_downmix = [&](float pan) {
+    sonare::engine::ClipSchedule clip{1, {mono_src, 1, 4}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+    clip.pan = pan;
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000.0, 4);
+    player.set_clips({clip});
+    std::array<float, 4> l{};
+    std::array<float, 4> r{};
+    float* stereo[] = {l.data(), r.data()};
+    player.process_at(stereo, 2, 4, 0);
+    std::array<float, 4> down{};
+    for (size_t i = 0; i < down.size(); ++i) down[i] = 0.5f * (l[i] + r[i]);
+    return down;
+  };
+
+  auto mono_live = [&](float pan) {
+    sonare::engine::ClipSchedule clip{1, {mono_src, 1, 4}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+    clip.pan = pan;
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000.0, 4);
+    player.set_clips({clip});
+    std::array<float, 4> m{};
+    float* mono[] = {m.data()};
+    player.process_at(mono, 1, 4, 0);
+    return m;
+  };
+
+  // Hard-right pan: bounce drops to -6 dB; live must follow, not stay at unity.
+  const auto right_down = stereo_downmix(1.0f);
+  const auto right_live = mono_live(1.0f);
+  for (size_t i = 0; i < source.size(); ++i) {
+    REQUIRE_THAT(right_live[i], WithinAbs(right_down[i], 1.0e-6f));
+    REQUIRE_THAT(right_live[i], WithinAbs(0.5f * source[i], 1.0e-6f));
+  }
+
+  // Center pan stays at unity (the linear balance law leaves both channels at
+  // 1.0, so 0.5*(L+R) collapses to the source read) — common case unchanged.
+  const auto center_live = mono_live(0.0f);
+  for (size_t i = 0; i < source.size(); ++i) {
+    REQUIRE_THAT(center_live[i], WithinAbs(source[i], 1.0e-6f));
+  }
+}
+
 TEST_CASE("ClipPlayer reads paged provider samples and silences page misses",
           "[engine][clip_player]") {
   auto provider = std::make_shared<TestPagedProvider>(std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f},

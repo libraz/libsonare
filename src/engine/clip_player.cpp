@@ -166,22 +166,20 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
       const float gain = clip.gain * fade_gain(clip, position);
       if (num_channels == 1) {
         if (!channels[0]) continue;
-        // Mono live monitoring sums the source channels at unity, intentionally
-        // IGNORING clip pan: it is a mono-compatibility monitor, not a panned
-        // render. A mono BOUNCE differs by design — it renders the panned stereo
-        // master and downmixes 0.5*(L+R) (see project_bounce.cpp), so a panned
-        // clip A/B'd between mono monitor and mono bounce shows a level/balance
-        // difference. Keep this contract in mind when comparing the two.
-        float mono = 0.0f;
-        int contributing = 0;
-        const int source_channels = source_channel_count(clip);
-        for (int src_ch = 0; src_ch < source_channels; ++src_ch) {
-          mono += read_source(src_ch);
-          ++contributing;
+        // Mono live monitoring previews the mono BOUNCE: it renders the panned
+        // stereo pair (clip pan applied per channel, a mono source fanned to
+        // both channels, a stereo/multichannel source split L/R) and downmixes
+        // 0.5*(L+R), matching project_bounce.cpp. With the linear balance law a
+        // centered clip (pan=0) leaves both channels at unity, so 0.5*(L+R)
+        // collapses to the source read and only off-center clips change — live
+        // and mono bounce now agree in level and balance for any pan.
+        const int last_src = source_channel_count(clip) - 1;
+        float lr = 0.0f;
+        for (int ch = 0; ch < 2; ++ch) {
+          const int src_ch = std::min(ch, last_src);
+          lr += read_source(src_ch) * pan_channel_gain(clip.pan, ch);
         }
-        if (contributing > 0) {
-          channels[0][i] += (mono / static_cast<float>(contributing)) * gain;
-        }
+        channels[0][i] += 0.5f * lr * gain;
         continue;
       }
       for (int ch = 0; ch < num_channels; ++ch) {
