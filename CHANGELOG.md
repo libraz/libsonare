@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.4.1 (2026-06-28)
+
+### Looping, mastering & long-form analysis
+
+- `sonare_project_set_clip_loop` gained a `loop_crossfade_ppq` argument: an equal-power crossfade at the loop seam that blends the loop tail with the pre-roll source material (clamped to the available clip offset and half the loop, disabled under warp). It is serialized only when non-zero, so existing projects round-trip unchanged. Added across the Node, Python, WASM and C-ABI surfaces in lockstep.
+- `SonareMasteringConfig` gained `release_ms` (0 keeps the 50 ms library default) and `apply_gain_at_input_rate`; zero-initialized callers keep their previous behaviour. Propagated through the mastering helpers and all four surfaces.
+- `BoundaryDetector` now accepts long-form input that exceeds the self-similarity int-index cap (~46340 frames) by mean-pooling features to at most 8192 frames and re-normalizing, instead of throwing `InvalidParameter`. Boundary times stay accurate; the `frame` field indexes the pooled grid for long inputs, so callers should map positions via the `time` field.
+
+### Bug fixes
+
+- Mono live monitoring now matches the mono bounce downmix: a panned clip A/B'd between the live monitor and the bounce agrees in level and balance, and a centered clip stays at unity.
+- WASM embind vector and object returns are re-rooted into the calling realm's `Array`/`Object`, so results from `*Names()`, preset and section/key-candidate calls survive `structuredClone` / `postMessage` to a Worker.
+- Hardened input validation and integer-overflow guards across surfaces: `MasteringChain` and `StreamAnalyzer` reject empty / out-of-range / non-finite input in the core so every binding inherits the checks; the WASM realtime engine and voice changer now validate `prepare()` / `setTimeSignature()` / `setLoop()` and block-size arguments that the WASM build otherwise bypassed; self-similarity, Viterbi, segment and window builders gained the int-overflow guards already used elsewhere; repitch-warped comp parts with a large source offset play instead of being silenced; and MIDI 2.0 note velocity is humanized in the full 16-bit domain.
+
 ## v1.4.0 (2026-06-25)
 
 ### macOS host backends (experimental)
