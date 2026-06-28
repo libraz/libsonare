@@ -854,6 +854,12 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncSf2Instrument':
         this.engine.setSf2Instrument(message.config, message.destinationId);
         break;
+      case 'syncMidiFx':
+        this.engine.setMidiFx(message.destinationId, message.configJson ?? '');
+        break;
+      case 'syncClearMidiFx':
+        this.engine.clearMidiFx(message.destinationId);
+        break;
       case 'syncMidiNoteOn':
         this.engine.pushMidiNoteOn(
           message.destinationId,
@@ -1381,6 +1387,8 @@ export class SonareRtRealtimeEngineRuntime {
       case 'syncSynthInstrument':
       case 'syncSf2Instrument':
       case 'syncLoadSoundFont':
+      case 'syncMidiFx':
+      case 'syncClearMidiFx':
       case 'syncMidiNoteOn':
       case 'syncMidiNoteOff':
       case 'syncMidiCc':
@@ -2739,6 +2747,27 @@ export class SonareEngine {
     const destinationId = this.resolveTargetId(trackId);
     this.offlineEngine.setSf2Instrument(config, destinationId);
     this.postInstrumentSync({ type: 'syncSf2Instrument', destinationId, config });
+  }
+
+  /**
+   * Install or replace a live, non-destructive MIDI-FX insert for one
+   * destination. The insert transforms the destination's MIDI before
+   * synthesis (transpose, quantize, velocity shaping, humanize, harmonize,
+   * arpeggiate) without rewriting any stored notes, so it can be bypassed by
+   * {@link clearMidiFx}. The config JSON is the flat object the engine's
+   * MIDI-FX accepts (the same schema as the offline `Project.bakeMidiFx`).
+   */
+  setMidiFx(trackId: string | number, configJson: string): void {
+    const destinationId = this.resolveTargetId(trackId);
+    this.offlineEngine.setMidiFx(destinationId, configJson);
+    this.postInstrumentSync({ type: 'syncMidiFx', destinationId, configJson });
+  }
+
+  /** Remove the live MIDI-FX insert from one destination (a no-op when none). */
+  clearMidiFx(trackId: string | number): void {
+    const destinationId = this.resolveTargetId(trackId);
+    this.offlineEngine.clearMidiFx(destinationId);
+    this.postInstrumentSync({ type: 'syncClearMidiFx', destinationId });
   }
 
   pushMidiNoteOn(

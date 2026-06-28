@@ -58,6 +58,8 @@ export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMe
     value.type === 'syncSynthInstrument' ||
     value.type === 'syncSf2Instrument' ||
     value.type === 'syncLoadSoundFont' ||
+    value.type === 'syncMidiFx' ||
+    value.type === 'syncClearMidiFx' ||
     value.type === 'syncMidiNoteOn' ||
     value.type === 'syncMidiNoteOff' ||
     value.type === 'syncMidiCc' ||

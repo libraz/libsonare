@@ -364,6 +364,13 @@ export interface SonareEngineSyncLoadSoundFontMessage {
   data: Uint8Array;
 }
 
+export interface SonareEngineSyncMidiFxMessage {
+  type: 'syncMidiFx' | 'syncClearMidiFx';
+  destinationId: number;
+  /** Engine MIDI-FX config JSON; present for 'syncMidiFx', absent for a clear. */
+  configJson?: string;
+}
+
 export interface SonareEngineSyncMidiNoteMessage {
   type: 'syncMidiNoteOn' | 'syncMidiNoteOff';
   destinationId: number;
@@ -393,7 +400,8 @@ export type SonareEngineInstrumentSyncMessage =
   | SonareEngineSyncBuiltinInstrumentMessage
   | SonareEngineSyncSynthInstrumentMessage
   | SonareEngineSyncSf2InstrumentMessage
-  | SonareEngineSyncLoadSoundFontMessage;
+  | SonareEngineSyncLoadSoundFontMessage
+  | SonareEngineSyncMidiFxMessage;
 
 export type SonareEngineSyncMessage =
   | SonareEngineSyncClipsMessage
@@ -420,6 +428,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncSynthInstrumentMessage
   | SonareEngineSyncSf2InstrumentMessage
   | SonareEngineSyncLoadSoundFontMessage
+  | SonareEngineSyncMidiFxMessage
   | SonareEngineSyncMidiNoteMessage
   | SonareEngineSyncMidiCcMessage
   | SonareEngineSyncMidiPanicMessage;

@@ -311,6 +311,9 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setBuiltinInstrument(3, { gain: 0.5 });
         engine.setSynthInstrument(3, 'saw-lead');
         engine.setSf2Instrument(3, { gain: 0.5 });
+        // Live, non-destructive MIDI-FX insert (install then bypass).
+        engine.setMidiFx(3, '{"transpose_semitones":12}');
+        engine.clearMidiFx(3);
         engine.setMidiClips([
           {
             id: 501,
@@ -488,6 +491,12 @@ describe('SonareRealtimeEngineNode', () => {
               destinationId: 3,
               config: { gain: 0.5 },
             }),
+            expect.objectContaining({
+              type: 'syncMidiFx',
+              destinationId: 3,
+              configJson: '{"transpose_semitones":12}',
+            }),
+            expect.objectContaining({ type: 'syncClearMidiFx', destinationId: 3 }),
             expect.objectContaining({
               type: 'syncMidiClips',
               clips: [expect.objectContaining({ id: 501, destinationId: 3 })],
