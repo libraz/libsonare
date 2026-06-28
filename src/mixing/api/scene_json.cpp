@@ -171,6 +171,10 @@ Bus bus_from_value(const JsonValue& object) {
   bus.id = string_or(object, "id", bus.id);
   bus.role = string_or(object, "role", bus.role);
   bus.layout = channel_layout_or(object, "layout", bus.layout);
+  bus.input_trim_db = number_or(object, "inputTrimDb", bus.input_trim_db);
+  bus.width = number_or(object, "width", bus.width);
+  bus.polarity_invert_left = bool_or(object, "polarityInvertLeft", bus.polarity_invert_left);
+  bus.polarity_invert_right = bool_or(object, "polarityInvertRight", bus.polarity_invert_right);
   if (const auto* inserts = object.find("inserts")) bus.inserts = inserts_from_value(*inserts);
   return bus;
 }
@@ -317,6 +321,20 @@ JsonValue bus_to_value(const Bus& bus) {
   // byte-identically; only surround buses carry the field.
   if (bus.layout != ChannelLayout::Stereo) {
     object.emplace("layout", JsonValue(channel_layout_to_string(bus.layout)));
+  }
+  // Trim / width / polarity are likewise omitted at their defaults so a bus that
+  // never engages them stays byte-identical to a pre-existing scene.
+  if (bus.input_trim_db != 0.0f) {
+    object.emplace("inputTrimDb", JsonValue(bus.input_trim_db));
+  }
+  if (bus.width != 1.0f) {
+    object.emplace("width", JsonValue(bus.width));
+  }
+  if (bus.polarity_invert_left) {
+    object.emplace("polarityInvertLeft", JsonValue(bus.polarity_invert_left));
+  }
+  if (bus.polarity_invert_right) {
+    object.emplace("polarityInvertRight", JsonValue(bus.polarity_invert_right));
   }
   object.emplace("inserts", inserts_to_value(bus.inserts));
   return JsonValue(std::move(object));

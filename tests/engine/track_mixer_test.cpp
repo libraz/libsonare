@@ -800,3 +800,119 @@ TEST_CASE("TrackMixerRuntime stages a multi-source rack through a shared bus onc
   // Sanity: the bus + dry path actually produced signal (not an all-silent match).
   REQUIRE(total_energy > 0.0f);
 }
+
+TEST_CASE("TrackMixerRuntime applies a bus input trim to its output", "[engine][track_mixer]") {
+  constexpr int kBlock = 64;
+  constexpr int kBlocks = 16;  // > the 5 ms trim smoother time constant.
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  // Routes the DC stereo source through a stereo group bus and returns the
+  // master front-left sample once the bus trim smoother has settled.
+  auto front_left_at_trim = [&](float trim_db) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+    sonare::engine::TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    REQUIRE(mixer.set_track_lanes({lane}));
+    sonare::mixing::api::Bus bus;
+    bus.id = "1";
+    bus.input_trim_db = trim_db;
+    REQUIRE(mixer.set_bus_strip(1, bus));
+    mixer.settle_smoothers();
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    float* out[] = {out_l.data(), out_r.data()};
+    for (int block = 0; block < kBlocks; ++block) {
+      out_l.fill(0.0f);
+      out_r.fill(0.0f);
+      REQUIRE(mixer.mix_source(10, source, out, 2, kBlock));
+    }
+    return out_l.back();
+  };
+
+  const float unity = front_left_at_trim(0.0f);
+  const float halved = front_left_at_trim(-6.0205999f);  // -6 dB -> x0.5
+  REQUIRE(std::abs(unity) > 0.1f);
+  REQUIRE(std::abs(halved - 0.5f * unity) < 0.01f * std::abs(unity));
+}
+
+TEST_CASE("TrackMixerRuntime inverts a bus front-pair polarity", "[engine][track_mixer]") {
+  constexpr int kBlock = 64;
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  auto fronts = [&](bool invert_left, bool invert_right) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+    sonare::engine::TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    REQUIRE(mixer.set_track_lanes({lane}));
+    sonare::mixing::api::Bus bus;
+    bus.id = "1";
+    bus.polarity_invert_left = invert_left;
+    bus.polarity_invert_right = invert_right;
+    REQUIRE(mixer.set_bus_strip(1, bus));
+    mixer.settle_smoothers();
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    float* out[] = {out_l.data(), out_r.data()};
+    REQUIRE(mixer.mix_source(10, source, out, 2, kBlock));
+    return std::pair<float, float>{out_l.back(), out_r.back()};
+  };
+
+  const auto [unity_l, unity_r] = fronts(false, false);
+  const auto [flipped_l, flipped_r] = fronts(true, false);
+  REQUIRE(std::abs(unity_l) > 0.1f);
+  // Inverting only the left channel negates it and leaves the right untouched.
+  REQUIRE(std::abs(flipped_l - (-unity_l)) < 1e-5f);
+  REQUIRE(std::abs(flipped_r - unity_r) < 1e-5f);
+}
+
+TEST_CASE("TrackMixerRuntime applies a bus stereo width to its output", "[engine][track_mixer]") {
+  constexpr int kBlock = 64;
+  constexpr int kBlocks = 16;  // > the 5 ms width smoother time constant.
+  // A pure-side stereo source (L = +1, R = -1): width 0 collapses it to the
+  // (silent) mid, width 1 preserves it.
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(-1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  auto front_energy_at_width = [&](float width) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+    sonare::engine::TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    REQUIRE(mixer.set_track_lanes({lane}));
+    sonare::mixing::api::Bus bus;
+    bus.id = "1";
+    bus.width = width;
+    REQUIRE(mixer.set_bus_strip(1, bus));
+    mixer.settle_smoothers();
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    float* out[] = {out_l.data(), out_r.data()};
+    for (int block = 0; block < kBlocks; ++block) {
+      out_l.fill(0.0f);
+      out_r.fill(0.0f);
+      REQUIRE(mixer.mix_source(10, source, out, 2, kBlock));
+    }
+    return out_l.back() * out_l.back() + out_r.back() * out_r.back();
+  };
+
+  const float wide = front_energy_at_width(1.0f);
+  const float narrow = front_energy_at_width(0.0f);
+  REQUIRE(wide > 0.1f);
+  REQUIRE(narrow < wide * 0.05f);
+}

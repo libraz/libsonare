@@ -400,6 +400,59 @@ TEST_CASE("Scene surround pan round-trips and omits at the default", "[mixing][r
   REQUIRE(restored.strips[1].surround_pan.distance == 1.0f);
 }
 
+TEST_CASE("Scene bus trim/width/polarity round-trip and omit at defaults", "[mixing][routing]") {
+  // A bus that engages its output trim, width, and polarity serializes those
+  // fields and parses them back; a default bus emits none of them so an existing
+  // stereo scene stays byte-identical.
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip src;
+  src.id = "src";
+  scene.strips.push_back(src);
+
+  sonare::mixing::api::Bus shaped("group", "aux");
+  shaped.input_trim_db = -4.5f;
+  shaped.width = 1.5f;
+  shaped.polarity_invert_left = true;
+  scene.buses.push_back(shaped);
+  scene.buses.push_back({"master", "master"});  // all defaults -> no extra keys
+  scene.connections.push_back({"src", "group"});
+  scene.connections.push_back({"group", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  // The bus-specific values appear (strips emit their own defaults, so only these
+  // distinctive values pin the bus serialization).
+  REQUIRE(json.find("\"inputTrimDb\":-4.5") != std::string::npos);
+  REQUIRE(json.find("\"width\":1.5") != std::string::npos);
+  REQUIRE(json.find("\"polarityInvertLeft\":true") != std::string::npos);
+
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.buses.size() == 2);
+  REQUIRE(restored.buses[0].id == "group");
+  REQUIRE_THAT(restored.buses[0].input_trim_db, WithinAbs(-4.5f, 0.001f));
+  REQUIRE_THAT(restored.buses[0].width, WithinAbs(1.5f, 0.001f));
+  REQUIRE(restored.buses[0].polarity_invert_left);
+  REQUIRE_FALSE(restored.buses[0].polarity_invert_right);
+  // The master bus parses back to neutral output processing.
+  REQUIRE(restored.buses[1].id == "master");
+  REQUIRE(restored.buses[1].input_trim_db == 0.0f);
+  REQUIRE(restored.buses[1].width == 1.0f);
+  REQUIRE_FALSE(restored.buses[1].polarity_invert_left);
+  REQUIRE_FALSE(restored.buses[1].polarity_invert_right);
+}
+
+TEST_CASE("Scene omits bus trim/width/polarity at defaults (byte-compat)", "[mixing][routing]") {
+  // A strip-free scene isolates the bus serialization: a default bus must not
+  // emit any of the new output-processing keys, so a pre-existing scene stays
+  // byte-identical.
+  sonare::mixing::api::Scene scene;
+  scene.buses.push_back({"master", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("inputTrimDb") == std::string::npos);
+  REQUIRE(json.find("width") == std::string::npos);
+  REQUIRE(json.find("polarityInvert") == std::string::npos);
+}
+
 TEST_CASE("Scene JSON rejects an unknown channel layout string", "[mixing][routing]") {
   const std::string bad_bus = R"({
     "version": 1,

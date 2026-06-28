@@ -4,6 +4,7 @@
 /// @brief Realtime per-track lane mixer used by RealtimeEngine.
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "mixing/fx_bus.h"
+#include "mixing/stereo_width.h"
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
@@ -202,6 +204,14 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   struct BusState {
     uint32_t bus_id = 0;
     rt::ParamSmoother gain_db{0.0f, 5.0f, 48000.0};
+    // Bus output trim / width / polarity, mirroring a strip. Trim and polarity
+    // run before the insert chain, width after it. At their defaults (0 dB /
+    // width 1 / no invert) the per-block processing is skipped entirely, so a
+    // bus that never engages them stays bit-identical.
+    rt::ParamSmoother input_trim_db{0.0f, 5.0f, 48000.0};
+    mixing::StereoWidthProcessor width{1.0f, 5.0f};
+    std::atomic<float> polarity_left{1.0f};
+    std::atomic<float> polarity_right{1.0f};
     std::unique_ptr<mixing::FxBus> bus;
   };
 

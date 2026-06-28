@@ -98,6 +98,14 @@ struct Bus {
   // project output layout. Defaults to stereo; surround layouts are stored but
   // inert until the surround DSP path lands.
   ChannelLayout layout = ChannelLayout::Stereo;
+  // Output processing applied to the bus's summed signal, mirroring a Strip's
+  // input trim / stereo width / polarity. Trim and polarity run before the
+  // insert chain; width runs after it. All three are no-ops at their defaults
+  // (0 dB / width 1 / no invert), so a bus that never sets them is bit-identical.
+  float input_trim_db = 0.0f;
+  float width = 1.0f;
+  bool polarity_invert_left = false;
+  bool polarity_invert_right = false;
   std::vector<Insert> inserts;
 };
 

@@ -109,6 +109,12 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       state.bus_id = bus_configs_[index].bus_id;
       state.gain_db.prepare(sample_rate_, 5.0f);
       state.gain_db.reset(bus_configs_[index].gain_db);
+      // Re-prepare the trim/width smoothers for the current rate without
+      // disturbing any value a prior set_bus_strip already applied.
+      state.input_trim_db.prepare(sample_rate_, 5.0f);
+      if (max_block_size_ > 0) {
+        state.width.prepare(sample_rate_, max_block_size_);
+      }
       if (!state.bus) {
         state.bus = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
       }
@@ -118,6 +124,10 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     } else {
       state.bus_id = 0;
       state.gain_db.reset(0.0f);
+      state.input_trim_db.reset(0.0f);
+      state.width.set_width(1.0f);
+      state.polarity_left.store(1.0f, std::memory_order_relaxed);
+      state.polarity_right.store(1.0f, std::memory_order_relaxed);
       state.bus.reset();
     }
   }
@@ -410,6 +420,10 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   if (max_block_size_ > 0) {
     fx->prepare(sample_rate_, max_block_size_);
   }
+  state->input_trim_db.set_target(std::clamp(bus.input_trim_db, -120.0f, 24.0f));
+  state->width.set_width(bus.width);
+  state->polarity_left.store(bus.polarity_invert_left ? -1.0f : 1.0f, std::memory_order_relaxed);
+  state->polarity_right.store(bus.polarity_invert_right ? -1.0f : 1.0f, std::memory_order_relaxed);
   state->bus = std::move(fx);
   return true;
 }
@@ -436,6 +450,8 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   }
   for (BusState& bus : bus_states_) {
     bus.gain_db.prepare(sample_rate_, 5.0f);
+    bus.input_trim_db.prepare(sample_rate_, 5.0f);
+    bus.width.prepare(sample_rate_, max_block_size_);
     if (bus.bus) {
       bus.bus->prepare(sample_rate_, max_block_size_);
     }
@@ -482,6 +498,7 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
   }
   for (BusState& bus : bus_states_) {
     bus.gain_db.reset(bus.gain_db.target());
+    bus.input_trim_db.reset(bus.input_trim_db.target());
   }
 }
 
@@ -987,7 +1004,38 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
     for (int ch = 0; ch < bus_channels; ++ch) {
       lane_channel_ptrs_[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
     }
+    // Input trim (pre-insert), mirroring a strip. Skipped while the smoother
+    // rests at 0 dB so a never-trimmed bus is bit-identical.
+    if (bus.input_trim_db.current() != 0.0f || bus.input_trim_db.target() != 0.0f) {
+      for (int i = 0; i < num_samples; ++i) {
+        const float trim = std::pow(10.0f, bus.input_trim_db.process() / 20.0f);
+        for (int ch = 0; ch < bus_channels; ++ch) {
+          float* plane = lane_channel_ptrs_[static_cast<size_t>(ch)];
+          if (plane) plane[i] *= trim;
+        }
+      }
+    }
+    // Polarity invert on the front pair (pre-insert), mirroring a strip.
+    const float polarity_l = bus.polarity_left.load(std::memory_order_relaxed);
+    const float polarity_r = bus.polarity_right.load(std::memory_order_relaxed);
+    if (polarity_l < 0.0f && bus_channels >= 1) {
+      if (float* plane = lane_channel_ptrs_[0]) {
+        for (int i = 0; i < num_samples; ++i) plane[i] *= polarity_l;
+      }
+    }
+    if (polarity_r < 0.0f && bus_channels >= 2) {
+      if (float* plane = lane_channel_ptrs_[1]) {
+        for (int i = 0; i < num_samples; ++i) plane[i] *= polarity_r;
+      }
+    }
     bus.bus->process(lane_channel_ptrs_.data(), bus_channels, num_samples);
+    // Stereo width on the front pair (post-insert), mirroring a strip. Skipped at
+    // width 1 because the mid/side round-trip is not guaranteed bit-exact, so a
+    // never-widened bus stays bit-identical.
+    if (bus.width.width() != 1.0f && bus_channels >= 2 && lane_channel_ptrs_[0] &&
+        lane_channel_ptrs_[1]) {
+      bus.width.process(lane_channel_ptrs_.data(), 2, num_samples);
+    }
     for (int i = 0; i < num_samples; ++i) {
       const float gain = std::pow(10.0f, bus.gain_db.process() / 20.0f);
       for (int ch = 0; ch < bus_channels; ++ch) {
