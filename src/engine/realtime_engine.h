@@ -203,6 +203,17 @@ class RealtimeEngine : private ClipPageRequestSink {
   // (channel-voice events tagged with their destination, plus transport/clock
   // bytes tagged host::kTransportDestination when external clock is enabled).
   // RT-safe on the producer side; this consumer side removes drained records.
+  //
+  // render_frame coordinate: sequenced channel-voice events carry the TIMELINE
+  // sample position (which wraps backward on a loop / jumps on a seek), while
+  // clock/transport bytes carry the monotonic DEVICE render frame. The two
+  // coincide during straight playback and diverge only across a loop or seek.
+  // A host scheduling sample-accurately against the audio device clock should
+  // reconcile the two using the per-block telemetry record, which reports both
+  // render_frame and timeline_sample for the block. Unifying the queue onto a
+  // single coordinate would require translating the sequencer's timeline frames
+  // (shared with the instrument rack and live-input injection, which mix both
+  // coordinates) and is intentionally deferred.
   size_t drain_external_midi(host::ExternalMidiRecord* out, size_t capacity) noexcept;
   // Control-thread: enable/disable forwarding MIDI clock (0xF8) and transport
   // (start/continue/stop) bytes to the external output queue so external gear
@@ -279,6 +290,16 @@ class RealtimeEngine : private ClipPageRequestSink {
   uint32_t capture_overflow_count() const noexcept { return capture_sink_.overflow_count(); }
   bool capture_armed() const noexcept { return capture_sink_.armed(); }
   bool capture_punch_enabled() const noexcept { return capture_sink_.punch_enabled(); }
+#if defined(SONARE_WITH_MIXING)
+  /// @brief Total insert-parameter automation slot-table overflows since prepare().
+  /// Sums the master-strip table and the per-lane/bus tables. The same delta is
+  /// surfaced on the telemetry channel as kInsertAutomationOverflow so a host can
+  /// observe dropped automation targets without polling.
+  uint32_t insert_automation_overflow_count() const noexcept {
+    return master_insert_automation_overflow_count_ +
+           track_mixer_runtime_.insert_automation_overflow_count();
+  }
+#endif
   static bool parameter_target_reserved(uint32_t target_id) noexcept;
   automation::AutomationEngine& automation() noexcept { return automation_; }
   const automation::AutomationEngine& automation() const noexcept { return automation_; }
@@ -513,10 +534,14 @@ class RealtimeEngine : private ClipPageRequestSink {
 
     void on_event(uint32_t destination_id, const midi::MidiEvent& event) noexcept override {
       if (is_external(destination_id)) {
+        // An external destination drives its own device queue only -- it is
+        // routed there INSTEAD of the rack and is not also mirrored to the
+        // merged output sink, otherwise a host using both would emit the event
+        // twice to the device path.
         if (external != nullptr) external->send(destination_id, event);
-      } else if (rack != nullptr) {
-        rack->on_event(destination_id, event);
+        return;
       }
+      if (rack != nullptr) rack->on_event(destination_id, event);
       host::MidiOutputSink* sink = output.load(std::memory_order_acquire);
       if (sink != nullptr) sink->send(event);
     }
@@ -671,6 +696,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   uint32_t command_overflow_reported_ = 0;
   uint32_t automation_bind_overflow_reported_ = 0;
   uint32_t automation_stale_lane_reported_ = 0;
+  uint32_t insert_automation_overflow_reported_ = 0;
 };
 
 }  // namespace sonare::engine

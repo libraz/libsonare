@@ -94,6 +94,7 @@ class EngineTelemetryError(IntEnum):
     SMOOTHED_PARAMETER_CAPACITY = 13
     COMMAND_BACKLOG_DEFERRED = 14
     CLIP_PAGE_UNDERRUN = 15
+    INSERT_AUTOMATION_OVERFLOW = 16
 
 class Key:
     root: PitchClass

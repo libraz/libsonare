@@ -1156,7 +1156,8 @@ export type EngineTelemetryError =
   | 12
   | 13
   | 14
-  | 15;
+  | 15
+  | 16;
 
 export interface EngineTelemetry {
   type: EngineTelemetryType;

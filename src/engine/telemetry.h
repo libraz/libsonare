@@ -40,6 +40,11 @@ enum class TelemetryErrorCode : uint16_t {
   // A paged clip source returned a page miss on the audio thread. The value
   // carries the clip id; detailed page requests are drained separately.
   kClipPageUnderrun,
+  // An insert-parameter automation target could not claim a smoother slot
+  // because the per-strip / master slot table was full. The automation is
+  // dropped (existing slots keep advancing); the value carries the number of
+  // drops accrued during the block.
+  kInsertAutomationOverflow,
 };
 
 struct Telemetry {

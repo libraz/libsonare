@@ -390,6 +390,55 @@ TEST_CASE("RealtimeEngine mirrors sequenced MIDI to live output sink", "[engine]
   REQUIRE(drained[1].ump.is_note_off());
 }
 
+TEST_CASE("RealtimeEngine does not mirror external destinations to the merged output sink",
+          "[engine][midi]") {
+  // A destination marked external routes to its own device queue INSTEAD of the
+  // rack; it must not also be mirrored to the merged output sink, or a host
+  // using both would emit the event twice to the device path.
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  CountingInstrument internal;
+  REQUIRE(engine.set_midi_instrument(0, &internal));
+  sonare::host::FixedMidiOutputSink<8> output;
+  engine.set_midi_output_sink(&output);
+  engine.set_midi_destination_external(5, true);
+
+  sonare::midi::MidiClipSchedule internal_clip;
+  internal_clip.id = 1;
+  internal_clip.start_sample = 0;
+  internal_clip.length_samples = 128;
+  internal_clip.destination_id = 0;
+  internal_clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                          {32, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  sonare::midi::MidiClipSchedule external_clip = internal_clip;
+  external_clip.id = 2;
+  external_clip.destination_id = 5;
+  external_clip.events = {{0, sonare::midi::make_midi1_note_on(0, 1, 64, 110)},
+                          {48, sonare::midi::make_midi1_note_off(0, 1, 64, 0)}};
+  engine.set_midi_clips({internal_clip, external_clip});
+  push_play(engine);
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+
+  // The merged sink mirrors ONLY the internal destination's two events.
+  REQUIRE(output.queued_count() == 2);
+  std::array<MidiEvent, 8> drained{};
+  const size_t mirrored = output.drain_queued(drained.data(), drained.size());
+  REQUIRE(mirrored == 2);
+  REQUIRE(drained[0].render_frame == 0);
+  REQUIRE(drained[1].render_frame == 32);
+
+  // The external destination's two events went to the external queue only.
+  std::array<sonare::host::ExternalMidiRecord, 8> ext{};
+  const size_t n = engine.drain_external_midi(ext.data(), ext.size());
+  REQUIRE(n == 2);
+  REQUIRE(ext[0].destination_id == 5);
+  REQUIRE(ext[1].destination_id == 5);
+}
+
 TEST_CASE("RealtimeEngine routes external destinations to the output queue, bypassing the rack",
           "[engine][midi]") {
   RealtimeEngine engine;

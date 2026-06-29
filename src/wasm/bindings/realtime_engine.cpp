@@ -1007,7 +1007,15 @@ class RealtimeEngineWasm {
   // transport/clock bytes carry destinationId === kTransportDestination
   // (0xFFFFFFFF). A single queued channel-voice UMP may lower to more than one
   // item (e.g. a MIDI 2.0 program change with bank select). `max_records` caps
-  // the number of QUEUE records consumed (not output items).
+  // the number of QUEUE records consumed (not output items). UMP types that do
+  // not lower to MIDI 1.0 (SysEx/Data, Utility, MIDI-2-only controllers) emit no
+  // bytes and are skipped.
+  //
+  // renderFrame coordinate: channel-voice events use the timeline sample
+  // position; clock/transport bytes use the monotonic device render frame. They
+  // coincide during straight playback and diverge across a loop/seek -- see
+  // RealtimeEngine::drain_external_midi. Reconcile via the telemetry block's
+  // renderFrame/timelineSample pair when scheduling sample-accurately.
   val drainExternalMidi(int max_records) {
     val out = val::array();
 #if defined(SONARE_WITH_ARRANGEMENT)

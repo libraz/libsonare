@@ -119,6 +119,9 @@ export enum SonareEngineTelemetryError {
   AutomationBindTargetOverflow = 11,
   StaleAutomationLanes = 12,
   SmoothedParameterCapacity = 13,
+  CommandBacklogDeferred = 14,
+  ClipPageUnderrun = 15,
+  InsertAutomationOverflow = 16,
 }
 
 export interface SonareMeterRingBuffer {

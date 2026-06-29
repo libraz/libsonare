@@ -396,6 +396,54 @@ TEST_CASE("Master insert automation lowers master energy through the engine",
   REQUIRE(automated < 0.5 * baseline);
 }
 
+TEST_CASE("Master insert automation slot-table overflow surfaces on the telemetry channel",
+          "[mixing][automation]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_master_strip(compressor_strip("master")));
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  // Claim more distinct master insert targets than the 16-slot table holds by
+  // pushing reserved-id parameter commands. A slot keys on (insert_index,
+  // param_id) only, so distinct synthetic keys exhaust the table; the surplus
+  // must be dropped, counted, and surfaced on the telemetry channel.
+  constexpr int kTargets = 20;
+  constexpr uint32_t kMasterSlots = 16;
+  for (int i = 0; i < kTargets; ++i) {
+    sonare::rt::Command cmd{};
+    cmd.type = sonare::rt::CommandType::kSetParam;
+    cmd.target_id = make_insert_param_id(kInsertStripMaster, static_cast<uint32_t>(i), 0u);
+    cmd.sample_time = -1;
+    cmd.arg.f = 0.25f;
+    REQUIRE(engine.push_command(cmd));
+  }
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  engine.process(io, 2, kBlock);
+
+  REQUIRE(engine.insert_automation_overflow_count() ==
+          static_cast<uint32_t>(kTargets) - kMasterSlots);
+
+  bool saw_overflow = false;
+  uint32_t reported = 0;
+  sonare::engine::Telemetry rec{};
+  while (engine.pop_telemetry(rec)) {
+    if (rec.error == sonare::engine::TelemetryErrorCode::kInsertAutomationOverflow) {
+      saw_overflow = true;
+      reported += rec.value;
+    }
+  }
+  REQUIRE(saw_overflow);
+  REQUIRE(reported == static_cast<uint32_t>(kTargets) - kMasterSlots);
+}
+
 TEST_CASE("Master insert automation slot is cleared when the master strip is replaced",
           "[mixing][automation]") {
   constexpr int kBlock = 256;

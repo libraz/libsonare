@@ -143,6 +143,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   }
   master_insert_automation_overflow_count_ = 0;
 #endif
+  insert_automation_overflow_reported_ = 0;
   telemetry_overflow_count_ = 0;
   automation_bind_overflow_reported_ = automation_.bind_target_overflow_count();
   automation_stale_lane_reported_ = automation_.stale_lane_apply_count();
@@ -452,6 +453,18 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     enqueue_error(TelemetryErrorCode::kStaleAutomationLanes, state.render_frame,
                   state.sample_position, delta);
   }
+#if defined(SONARE_WITH_MIXING)
+  // Insert-parameter automation that could not claim a smoother slot (master or
+  // per-lane/bus table full) is dropped silently in the audio path; surface the
+  // per-block delta so the host can see automation targets going unheard.
+  const uint32_t insert_overflow_total = insert_automation_overflow_count();
+  if (insert_overflow_total != insert_automation_overflow_reported_) {
+    const uint32_t delta = insert_overflow_total - insert_automation_overflow_reported_;
+    insert_automation_overflow_reported_ = insert_overflow_total;
+    enqueue_error(TelemetryErrorCode::kInsertAutomationOverflow, state.render_frame,
+                  state.sample_position, delta);
+  }
+#endif
   if (boundaries.overflowed()) {
     enqueue_error(TelemetryErrorCode::kBoundaryOverflow, state.render_frame, state.sample_position,
                   boundaries.dropped_count());
@@ -1094,15 +1107,17 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #if defined(SONARE_WITH_MIXING)
       // target_id = (lane_index << 16) | (insert_index << 8) | param_id; the
       // control thread resolved the JSON-key name to param_id before enqueuing.
+      // Route through the smoothed insert-param slot table so a manual set snaps
+      // on first touch and glides on repeats -- identical to an automated
+      // breakpoint and to the bus path -- instead of zipping. Control-thread
+      // resolution already rejected unknown targets, so a false return is a
+      // slot-table overflow, surfaced via kInsertAutomationOverflow telemetry.
       const uint32_t packed = command.target_id;
       const size_t lane_index = (packed >> 16) & 0xFFu;
       const unsigned int insert_index = (packed >> 8) & 0xFFu;
       const unsigned int param_id = packed & 0xFFu;
-      if (!track_mixer_runtime_.apply_lane_insert_parameter(lane_index, insert_index, param_id,
-                                                            command.arg.f)) {
-        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                      transport_.sample_position(), command.target_id);
-      }
+      track_mixer_runtime_.route_lane_insert_param_smoothed(lane_index, insert_index, param_id,
+                                                            command.arg.f);
 #else
       enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                     transport_.sample_position(), command.target_id);
@@ -1112,14 +1127,12 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
     case rt::CommandType::kSetMasterInsertParam: {
 #if defined(SONARE_WITH_MIXING)
       // target_id = (insert_index << 8) | param_id (no lane field for master).
+      // Smoothed like the track and bus paths (snap-then-glide) so a manual
+      // master insert tweak does not click. Overflow is surfaced via telemetry.
       const uint32_t packed = command.target_id;
       const unsigned int insert_index = (packed >> 8) & 0xFFu;
       const unsigned int param_id = packed & 0xFFu;
-      if (owned_master_strip_ == nullptr ||
-          !owned_master_strip_->apply_insert_parameter(insert_index, param_id, command.arg.f)) {
-        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                      transport_.sample_position(), command.target_id);
-      }
+      route_master_insert_param_smoothed(insert_index, param_id, command.arg.f);
 #else
       enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                     transport_.sample_position(), command.target_id);
