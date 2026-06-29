@@ -1,5 +1,6 @@
 #include "engine/track_mixer.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -1043,4 +1044,42 @@ TEST_CASE("TrackMixerRuntime applies a bus stereo width to its output", "[engine
   const float narrow = front_energy_at_width(0.0f);
   REQUIRE(wide > 0.1f);
   REQUIRE(narrow < wide * 0.05f);
+}
+
+TEST_CASE("TrackMixerRuntime settles a bus width so the first block opens settled",
+          "[engine][track_mixer]") {
+  constexpr int kBlock = 64;
+  // Pure-side stereo source. Width 0 collapses it to the (silent) mid. If the
+  // width smoother is settled at the configured target the very first rendered
+  // sample is silent; without the settle it would glide down from width 1.0 and
+  // the block would open at near-full side.
+  std::array<float, kBlock> src_l{};
+  std::array<float, kBlock> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(-1.0f);
+  float* source[] = {src_l.data(), src_r.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({lane}));
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  bus.width = 0.0f;
+  REQUIRE(mixer.set_bus_strip(1, bus));
+  mixer.settle_smoothers();
+
+  std::array<float, kBlock> out_l{};
+  std::array<float, kBlock> out_r{};
+  float* out[] = {out_l.data(), out_r.data()};
+  REQUIRE(mixer.mix_source(10, source, out, 2, kBlock));
+
+  float peak = 0.0f;
+  for (int i = 0; i < kBlock; ++i) {
+    peak = std::max(peak, std::abs(out_l[i]));
+    peak = std::max(peak, std::abs(out_r[i]));
+  }
+  REQUIRE(peak < 1.0e-4f);
 }

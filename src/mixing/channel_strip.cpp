@@ -545,6 +545,10 @@ void ChannelStrip::settle() noexcept {
   // gain smoothers ahead of a deterministic offline render.
   input_trim_.settle();
   fader_.settle();
+  // Seed the width smoother from its target as well; set_width() only stores the
+  // target, so a non-default width would otherwise glide from 1.0 over the first
+  // rendered block instead of opening settled.
+  width_.reset();
 }
 
 int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8() >> 8; }

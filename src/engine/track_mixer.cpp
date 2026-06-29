@@ -644,6 +644,10 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
   for (BusState& bus : bus_states_) {
     bus.gain_db.reset(bus.gain_db.target());
     bus.input_trim_gain.reset(bus.input_trim_gain.target());
+    // Seed the width smoother from its target too; set_width() only stores the
+    // target, so without this an offline pre-roll glides width from 1.0 over the
+    // first audible block instead of opening at the configured width.
+    bus.width.reset();
   }
   // Snap each automated insert parameter to its target and push it once, so an
   // offline pre-roll opens at the steady-state value (same determinism as the
