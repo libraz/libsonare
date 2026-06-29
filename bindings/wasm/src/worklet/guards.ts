@@ -50,6 +50,7 @@ export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMe
     value.type === 'syncMasterStripInsertBypassed' ||
     value.type === 'syncTrackStripInsertParamByName' ||
     value.type === 'syncMasterStripInsertParamByName' ||
+    value.type === 'syncBusStripInsertParamByName' ||
     value.type === 'syncTrackStripPan' ||
     value.type === 'syncTrackStripPanLaw' ||
     value.type === 'syncTrackStripPanMode' ||
@@ -64,7 +65,9 @@ export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMe
     value.type === 'syncMidiNoteOn' ||
     value.type === 'syncMidiNoteOff' ||
     value.type === 'syncMidiCc' ||
-    value.type === 'syncMidiPanic'
+    value.type === 'syncMidiPanic' ||
+    value.type === 'syncMidiDestinationExternal' ||
+    value.type === 'syncExternalMidiClock'
   );
 }
 

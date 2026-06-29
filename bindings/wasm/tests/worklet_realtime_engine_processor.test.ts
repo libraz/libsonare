@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import {
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
@@ -678,6 +679,114 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         }
       } finally {
         processor.destroy();
+      }
+    });
+
+    it('routes every producer sync message through the guarded port handler', async () => {
+      // The producers post these over node.port; the worklet's onMessage handler
+      // gates them with isEngineSyncMessage before reaching receiveSync. A message
+      // type missing from the guard is silently dropped, so the live engine never
+      // sees it even though the offline mirror does. Drive each one through the
+      // real registered-processor onMessage path (not receiveSync directly) so a
+      // guard omission fails here instead of shipping a dead feature.
+      const previousProcessor = (
+        globalThis as typeof globalThis & { AudioWorkletProcessor?: unknown }
+      ).AudioWorkletProcessor;
+      const previousRegister = (globalThis as typeof globalThis & { registerProcessor?: unknown })
+        .registerProcessor;
+      type MockPort = {
+        posted: unknown[];
+        onmessage?: (event: { data: unknown }) => void;
+        postMessage: (message: unknown) => void;
+      };
+      let registeredCtor:
+        | (new (options?: {
+            processorOptions?: unknown;
+          }) => { port?: MockPort })
+        | undefined;
+      const receiveSyncSpy = vi.spyOn(
+        SonareRealtimeEngineWorkletProcessor.prototype,
+        'receiveSync',
+      );
+      try {
+        Object.assign(globalThis, {
+          AudioWorkletProcessor: class {
+            port: MockPort = {
+              posted: [],
+              onmessage: undefined,
+              postMessage: (message: unknown) => {
+                this.port.posted.push(message);
+              },
+            };
+          },
+          registerProcessor: (_name: string, ctor: unknown) => {
+            registeredCtor = ctor as typeof registeredCtor;
+          },
+        });
+        registerSonareRealtimeEngineWorkletProcessor();
+        expect(typeof registeredCtor).toBe('function');
+        const Ctor = registeredCtor;
+        if (!Ctor) {
+          throw new Error('processor was not registered');
+        }
+        const instance = new Ctor({
+          processorOptions: { sampleRate: 48000, blockSize: 128, channelCount: 2 },
+        });
+        const port = instance.port;
+        if (!port) {
+          throw new Error('registered processor has no port');
+        }
+        // The embind bridge is constructed asynchronously and posts 'ready'.
+        const start = Date.now();
+        while (!port.posted.some((m) => (m as { type?: string }).type === 'ready')) {
+          if (Date.now() - start > 5000) {
+            throw new Error('engine bridge did not become ready');
+          }
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        // Configure a bus with an insert so the bus-insert-param sync resolves a
+        // real target instead of throwing; this also drives syncMixer (already in
+        // the guard) through the same guarded path.
+        port.onmessage?.({
+          data: {
+            type: 'syncMixer',
+            buses: [{ busId: 200, gainDb: 0 }],
+            lanes: [{ trackId: 10, sends: [{ busId: 200, levelDb: 0, enabled: true }] }],
+            busStrips: [
+              {
+                busId: 200,
+                sceneJson:
+                  '{"version":1,"strips":[],"buses":[{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+              },
+            ],
+          },
+        });
+        receiveSyncSpy.mockClear();
+        const syncMessages = [
+          {
+            type: 'syncBusStripInsertParamByName',
+            busId: 200,
+            insertIndex: 0,
+            paramName: 'band0.gainDb',
+            value: 3,
+          },
+          { type: 'syncMidiDestinationExternal', destinationId: 7, external: true },
+          { type: 'syncExternalMidiClock', enabled: true },
+        ];
+        for (const message of syncMessages) {
+          port.onmessage?.({ data: message });
+        }
+        // A string-typed message the guard does not know must stay dropped.
+        port.onmessage?.({ data: { type: 'totallyUnknownSync' } });
+        expect(receiveSyncSpy.mock.calls.map((call) => (call[0] as { type: string }).type)).toEqual(
+          ['syncBusStripInsertParamByName', 'syncMidiDestinationExternal', 'syncExternalMidiClock'],
+        );
+      } finally {
+        receiveSyncSpy.mockRestore();
+        Object.assign(globalThis, {
+          AudioWorkletProcessor: previousProcessor,
+          registerProcessor: previousRegister,
+        });
       }
     });
 
