@@ -207,8 +207,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     // Bus output trim / width / polarity, mirroring a strip. Trim and polarity
     // run before the insert chain, width after it. At their defaults (0 dB /
     // width 1 / no invert) the per-block processing is skipped entirely, so a
-    // bus that never engages them stays bit-identical.
-    rt::ParamSmoother input_trim_db{0.0f, 5.0f, 48000.0};
+    // bus that never engages them stays bit-identical. The trim smoother holds a
+    // linear gain (not dB), smoothing in the linear domain exactly like the
+    // strip's GainProcessor, so a bus and a strip ramp identically.
+    rt::ParamSmoother input_trim_gain{1.0f, 5.0f, 48000.0};
     mixing::StereoWidthProcessor width{1.0f, 5.0f};
     std::atomic<float> polarity_left{1.0f};
     std::atomic<float> polarity_right{1.0f};

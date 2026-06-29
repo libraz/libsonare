@@ -33,6 +33,13 @@ class StereoWidthProcessor : public rt::ProcessorBase {
   void set_width(float width) noexcept;
   float width() const noexcept { return width_target_.load(std::memory_order_relaxed); }
 
+  /// @brief Current (smoothed) width factor. Lags @ref width() while the
+  /// internal smoother ramps toward a newly set target; equal to @ref width()
+  /// once settled. Callers that skip processing at width 1 must also check this
+  /// so an in-flight ramp back toward 1 is not cut off mid-glide (which would
+  /// jump the side component and click).
+  float current_width() const noexcept { return smoother_.current(); }
+
  private:
   double sample_rate_ = 48000.0;
   float smoothing_ms_ = 5.0f;
