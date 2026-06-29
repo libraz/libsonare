@@ -463,6 +463,64 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   sonare_engine_destroy(engine);
 }
 
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_engine resolves and sets bus/master insert automation ids", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 64) == SONARE_OK);
+
+  SonareEngineBus buses[] = {{1, 0.0f, 1}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  const char* bus_strip_json =
+      R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":0,\"band0.enabled\":1}"}]}],"connections":[]})";
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_strip_json) == SONARE_OK);
+
+  // Resolve a bus insert parameter to its reserved automation id (top 3 bits 111).
+  uint32_t bus_id = 0;
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "band0.gainDb", &bus_id) ==
+          SONARE_OK);
+  REQUIRE((bus_id & 0xE0000000u) == 0xE0000000u);
+  // The reserved id drives an automation lane and a one-off parameter set.
+  SonareAutomationPoint points[] = {{0.0, 6.0f, 0}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, bus_id, points, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter(engine, bus_id, 3.0f, -1) == SONARE_OK);
+  // And the by-name manual set reaches the same target.
+  REQUIRE(sonare_engine_set_bus_strip_insert_param_by_name(engine, 1, 0, "band0.gainDb", -3.0f) ==
+          SONARE_OK);
+
+  // Unknown bus / insert / name are rejected and leave out_id untouched.
+  uint32_t untouched = 0xDEADBEEFu;
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(
+              engine, 9, 0, "band0.gainDb", &untouched) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(untouched == 0xDEADBEEFu);
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "nope", &untouched) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_bus_strip_insert_param_by_name(engine, 9, 0, "band0.gainDb", 1.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  // Argument guards.
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(nullptr, 1, 0, "band0.gainDb", &bus_id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 0, 0, "band0.gainDb", &bus_id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "band0.gainDb", nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  // Master strip insert resolution mirrors the bus path.
+  const char* master_json =
+      R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.compressor","params":"{\"thresholdDb\":-3,\"ratio\":4}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, master_json) == SONARE_OK);
+  uint32_t master_id = 0;
+  REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "thresholdDb", &master_id) ==
+          SONARE_OK);
+  REQUIRE((master_id & 0xE0000000u) == 0xE0000000u);
+  REQUIRE(master_id != bus_id);
+
+  sonare_engine_destroy(engine);
+}
+#endif
+
 TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][engine]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 4;
@@ -953,6 +1011,94 @@ TEST_CASE("sonare_engine scheduled MIDI clips render through built-in instrument
 
   sonare_engine_destroy(engine);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  // Route destination 5 to the external queue instead of an instrument.
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 5, 1) == SONARE_OK);
+  const SonareEngineMidiEvent events[] = {
+      {0, midi1_word(0x9, 1, 64, 110), 0, 0, 0, 1, 0, 0, 0},
+      {48, midi1_word(0x8, 1, 64, 0), 0, 0, 0, 1, 0, 0, 0},
+  };
+  SonareEngineMidiClipSchedule clip{};
+  clip.id = 7;
+  clip.track_id = 5;
+  clip.length_samples = 256;
+  clip.destination_id = 5;
+  clip.events = events;
+  clip.event_count = 2;
+  REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+
+  std::array<SonareExternalMidiEvent, 16> drained{};
+  size_t count = 0;
+  REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), drained.size(), &count) ==
+          SONARE_OK);
+  REQUIRE(count == 2);
+  REQUIRE(drained[0].destination_id == 5);
+  REQUIRE(drained[0].byte_count == 3);
+  REQUIRE((drained[0].bytes[0] & 0xF0u) == 0x90u);  // note on
+  REQUIRE(drained[0].render_frame == 0);
+  REQUIRE(drained[1].destination_id == 5);
+  REQUIRE((drained[1].bytes[0] & 0xF0u) == 0x80u);  // note off
+  REQUIRE(drained[1].render_frame == 48);
+
+  // Overflow telemetry is observable, and a too-small buffer is rejected.
+  uint32_t dropped = 123;
+  REQUIRE(sonare_engine_external_midi_dropped_count(engine, &dropped) == SONARE_OK);
+  REQUIRE(dropped == 0);
+  REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), 2, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  // Argument guards.
+  REQUIRE(sonare_engine_set_midi_destination_external(nullptr, 5, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_external_midi_dropped_count(engine, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine forwards MIDI clock/transport to the external queue", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 24000, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_external_midi_clock_enabled(engine, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, 0) == SONARE_OK);
+
+  std::vector<float> left(24000, 0.0f);
+  std::vector<float> right(24000, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 24000) == SONARE_OK);
+
+  // One Start plus 24 clock ticks (one every 1000 samples at 120 BPM).
+  std::array<SonareExternalMidiEvent, 64> drained{};
+  size_t count = 0;
+  REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), drained.size(), &count) ==
+          SONARE_OK);
+  REQUIRE(count == 25);
+  for (size_t i = 0; i < count; ++i) {
+    REQUIRE(drained[i].destination_id == 0xFFFFFFFFu);
+    REQUIRE(drained[i].byte_count == 1);
+  }
+  REQUIRE(drained[0].bytes[0] == 0xFAu);  // Start
+  REQUIRE(drained[1].bytes[0] == 0xF8u);  // Clock
+
+  sonare_engine_destroy(engine);
+}
+#endif
 
 TEST_CASE("sonare_engine converts PPQ to samples from the tempo map", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;

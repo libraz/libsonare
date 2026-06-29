@@ -52,6 +52,10 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetMasterStripInsertBypassed(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripInsertParamByName(const Napi::CallbackInfo& info);
   Napi::Value SetMasterStripInsertParamByName(const Napi::CallbackInfo& info);
+  Napi::Value SetBusStripInsertParamByName(const Napi::CallbackInfo& info);
+  Napi::Value ResolveTrackInsertAutomationId(const Napi::CallbackInfo& info);
+  Napi::Value ResolveMasterInsertAutomationId(const Napi::CallbackInfo& info);
+  Napi::Value ResolveBusInsertAutomationId(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPan(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPanLaw(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPanMode(const Napi::CallbackInfo& info);
@@ -110,6 +114,10 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value PushMidiNoteOff(const Napi::CallbackInfo& info);
   Napi::Value PushMidiCc(const Napi::CallbackInfo& info);
   Napi::Value PushMidiPanic(const Napi::CallbackInfo& info);
+  Napi::Value SetMidiDestinationExternal(const Napi::CallbackInfo& info);
+  Napi::Value SetExternalMidiClockEnabled(const Napi::CallbackInfo& info);
+  Napi::Value ExternalMidiDroppedCount(const Napi::CallbackInfo& info);
+  Napi::Value DrainExternalMidi(const Napi::CallbackInfo& info);
   Napi::Value GetTransportState(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 

@@ -601,6 +601,9 @@ from .types import (
     EqSpectrumSnapshot as EqSpectrumSnapshot,
 )
 from .types import (
+    ExternalMidiEvent as ExternalMidiEvent,
+)
+from .types import (
     GoniometerPoint as GoniometerPoint,
 )
 from .types import (

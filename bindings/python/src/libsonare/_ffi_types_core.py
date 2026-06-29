@@ -122,6 +122,18 @@ class SonareMeterTelemetryRecordWide(ctypes.Structure):
     ]
 
 
+class SonareExternalMidiEvent(ctypes.Structure):
+    """Maps to SonareExternalMidiEvent in sonare_c.h."""
+
+    _fields_ = [
+        ("destination_id", ctypes.c_uint32),
+        ("byte_count", ctypes.c_uint32),
+        ("render_frame", ctypes.c_int64),
+        ("bytes", ctypes.c_uint8 * 3),
+        ("reserved", ctypes.c_uint8 * 5),
+    ]
+
+
 SONARE_SCOPE_MAX_BANDS = 64
 SONARE_SCOPE_MAX_POINTS = 32
 

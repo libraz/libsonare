@@ -209,6 +209,22 @@ typedef struct {
   uint32_t dropped_records;
 } SonareMeterTelemetryRecordWide;
 
+/* One lowered MIDI 1.0 message drained from the engine's external-MIDI output
+   queue (sonare_engine_drain_external_midi). A single queued channel-voice event
+   may lower to more than one message (e.g. a MIDI 2.0 program change with bank
+   select). destination_id == 0xFFFFFFFF tags a transport/clock byte; otherwise
+   it is the track's MIDI destination id. byte_count is 1..3 valid bytes. The
+   render_frame coordinate matches sonare_engine_drain_external_midi's contract:
+   channel-voice events carry the timeline sample, clock/transport bytes carry
+   the device render frame. */
+typedef struct {
+  uint32_t destination_id;
+  uint32_t byte_count;
+  int64_t render_frame;
+  uint8_t bytes[3];
+  uint8_t reserved[5];
+} SonareExternalMidiEvent;
+
 #define SONARE_SCOPE_MAX_BANDS 64
 #define SONARE_SCOPE_MAX_POINTS 32
 

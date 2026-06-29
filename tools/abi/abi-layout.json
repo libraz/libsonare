@@ -2009,6 +2009,42 @@
     ],
     "size": 4288
   },
+  "SonareExternalMidiEvent": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "destination_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "byte_count",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "render_frame",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "bytes",
+        "offset": 16,
+        "size": 3
+      },
+      {
+        "kind": "aggregate",
+        "name": "reserved",
+        "offset": 19,
+        "size": 5
+      }
+    ],
+    "size": 24
+  },
   "SonareGateConfig": {
     "align": 4,
     "fields": [

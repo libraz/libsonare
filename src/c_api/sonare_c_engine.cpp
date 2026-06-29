@@ -1150,6 +1150,93 @@ SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareRealtimeEn
 #endif
 }
 
+SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                             uint32_t bus_id,
+                                                             unsigned int insert_index,
+                                                             const char* param_name, float value) {
+  if (!engine || bus_id == 0 || !param_name || param_name[0] == '\0') {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)insert_index;
+  (void)value;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_bus_insert_param(bus_id, insert_index, param_name, value)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngine* engine,
+                                                             uint32_t track_id,
+                                                             unsigned int insert_index,
+                                                             const char* param_name,
+                                                             uint32_t* out_id) {
+  if (!engine || track_id == 0 || !param_name || param_name[0] == '\0' || !out_id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  const int64_t id =
+      engine->engine.resolve_track_insert_automation_id(track_id, insert_index, param_name);
+  if (id < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_id = static_cast<uint32_t>(id);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_resolve_master_insert_automation_id(SonareRealtimeEngine* engine,
+                                                              unsigned int insert_index,
+                                                              const char* param_name,
+                                                              uint32_t* out_id) {
+  if (!engine || !param_name || param_name[0] == '\0' || !out_id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  const int64_t id = engine->engine.resolve_master_insert_automation_id(insert_index, param_name);
+  if (id < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_id = static_cast<uint32_t>(id);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_resolve_bus_insert_automation_id(SonareRealtimeEngine* engine,
+                                                           uint32_t bus_id,
+                                                           unsigned int insert_index,
+                                                           const char* param_name,
+                                                           uint32_t* out_id) {
+  if (!engine || bus_id == 0 || !param_name || param_name[0] == '\0' || !out_id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)insert_index;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  const int64_t id =
+      engine->engine.resolve_bus_insert_automation_id(bus_id, insert_index, param_name);
+  if (id < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_id = static_cast<uint32_t>(id);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_set_track_strip_pan(SonareRealtimeEngine* engine, uint32_t track_id,
                                               float pan) {
   if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -2214,6 +2301,92 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
   command.target_id = 0;
   command.sample_time = render_frame;
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* engine,
+                                                        uint32_t destination_id, int external) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)external;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  engine->engine.set_midi_destination_external(destination_id, external != 0);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_external_midi_clock_enabled(SonareRealtimeEngine* engine,
+                                                          int enabled) {
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)enabled;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  engine->engine.set_external_midi_clock_enabled(enabled != 0);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_external_midi_dropped_count(SonareRealtimeEngine* engine,
+                                                      uint32_t* out_count) {
+  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  *out_count = engine->engine.external_midi_dropped_count();
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_drain_external_midi(SonareRealtimeEngine* engine,
+                                              SonareExternalMidiEvent* out, size_t max_events,
+                                              size_t* out_count) {
+  if (!engine || !out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  // A single queue record lowers to at most 3 MIDI-1 messages, so the buffer
+  // must hold at least 3 to guarantee forward progress without losing a record.
+  if (max_events < 3) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = 0;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)max_events;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  size_t written = 0;
+  // Lower one queue record at a time, consuming it only when its (up to 3)
+  // lowered MIDI-1 messages all fit in the remaining output capacity, so the
+  // destructive drain never loses a record that could not be emitted.
+  while (written + 3 <= max_events) {
+    sonare::host::ExternalMidiRecord record{};
+    if (engine->engine.drain_external_midi(&record, 1) == 0) break;
+    const sonare::host::ExternalMidi1Lowered lowered =
+        sonare::host::lower_external_midi_record(record);
+    for (uint8_t m = 0; m < lowered.count; ++m) {
+      const sonare::host::ExternalMidi1Message& msg = lowered.messages[m];
+      SonareExternalMidiEvent& dst = out[written++];
+      dst.destination_id = record.destination_id;
+      dst.byte_count = msg.byte_count;
+      dst.render_frame = record.event.render_frame;
+      dst.bytes[0] = msg.bytes[0];
+      dst.bytes[1] = msg.bytes[1];
+      dst.bytes[2] = msg.bytes[2];
+      dst.reserved[0] = 0;
+      dst.reserved[1] = 0;
+      dst.reserved[2] = 0;
+      dst.reserved[3] = 0;
+      dst.reserved[4] = 0;
+    }
+  }
+  *out_count = written;
+  return SONARE_OK;
+  SONARE_C_CATCH
 #endif
 }
 

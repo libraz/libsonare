@@ -1124,6 +1124,17 @@ class ScopeTelemetryRecord:
         points: list[tuple[float, float]],
     ) -> None: ...
 
+class ExternalMidiEvent:
+    destination_id: int
+    render_frame: int
+    bytes: bytes
+    def __init__(
+        self,
+        destination_id: int,
+        render_frame: int,
+        bytes: bytes,
+    ) -> None: ...
+
 class TransportState:
     playing: bool
     looping: bool

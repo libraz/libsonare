@@ -41,6 +41,7 @@ import type {
   EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
+  EngineExternalMidiEvent,
   EngineFreezeOptions,
   EngineFreezeResult,
   EngineGraphSpec,
@@ -791,6 +792,41 @@ export class RealtimeEngine {
   }
 
   /**
+   * Bus-strip counterpart of {@link setTrackStripInsertParamByName}. The bus
+   * must already exist via {@link setTrackBuses} and carry a strip configured
+   * with {@link setBusStripJson}.
+   */
+  setBusStripInsertParamByName(
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.native.setBusStripInsertParamByName(busId, insertIndex, paramName, value);
+  }
+
+  /**
+   * Resolves a track-lane insert parameter (by its JSON-key name) to the
+   * reserved automation id that can then be driven with
+   * {@link setAutomationLane}, {@link setParameter}, or
+   * {@link setParameterSmoothed}, exactly like a fader/pan id. Returns `-1`
+   * when the track, insert, or name is unknown.
+   */
+  resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
+    return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);
+  }
+
+  /** Master-strip counterpart of {@link resolveTrackInsertAutomationId}. */
+  resolveMasterInsertAutomationId(insertIndex: number, paramName: string): number {
+    return this.native.resolveMasterInsertAutomationId(insertIndex, paramName);
+  }
+
+  /** Bus-strip counterpart of {@link resolveTrackInsertAutomationId}. */
+  resolveBusInsertAutomationId(busId: number, insertIndex: number, paramName: string): number {
+    return this.native.resolveBusInsertAutomationId(busId, insertIndex, paramName);
+  }
+
+  /**
    * Sets a track lane strip's pan position (-1..1) in realtime. Applied at the
    * next block head via the engine command queue; safe during playback.
    *
@@ -1201,6 +1237,41 @@ export class RealtimeEngine {
    */
   pushMidiPanic(renderFrame = -1): void {
     this.native.pushMidiPanic(renderFrame);
+  }
+
+  /**
+   * Routes a MIDI destination (a track lane) to the external-MIDI output queue
+   * instead of the internal instrument rack, so the track drives an external
+   * device. Its sequenced events are buffered for {@link drainExternalMidi}.
+   * Clearing it restores internal-synth playback. Control-thread only.
+   */
+  setMidiDestinationExternal(destinationId: number, external: boolean): void {
+    this.native.setMidiDestinationExternal(destinationId, external);
+  }
+
+  /**
+   * Enables forwarding MIDI clock (0xF8) and transport (start/continue/stop)
+   * bytes to the external output queue, tagged with destination `0xFFFFFFFF`,
+   * so external gear stays tempo-synced. Off by default; control-thread only.
+   */
+  setExternalMidiClockEnabled(enabled: boolean): void {
+    this.native.setExternalMidiClockEnabled(enabled);
+  }
+
+  /** Number of external-MIDI events dropped because the output queue was full. */
+  externalMidiDroppedCount(): number {
+    return this.native.externalMidiDroppedCount();
+  }
+
+  /**
+   * Drains queued external-MIDI events, already lowered to MIDI 1.0 byte
+   * messages so the host can write them straight to an output port. Returns one
+   * entry per lowered message; transport/clock bytes carry
+   * `destinationId === 0xFFFFFFFF`. `maxRecords` caps the number of output
+   * events returned.
+   */
+  drainExternalMidi(maxRecords = 1024): EngineExternalMidiEvent[] {
+    return this.native.drainExternalMidi(maxRecords);
   }
 
   /** Read the current engine transport state (playing/position/ppq/tempo). */
@@ -2702,6 +2773,7 @@ export type {
   EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
+  EngineExternalMidiEvent,
   EngineGraphConnection,
   EngineGraphMix,
   EngineGraphNode,

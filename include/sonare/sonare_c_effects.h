@@ -492,6 +492,42 @@ SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareRealtimeEn
                                                                 unsigned int insert_index,
                                                                 const char* param_name,
                                                                 float value);
+/// @brief Realtime change of one bus-strip insert parameter by JSON-key name.
+/// @details Bus-strip counterpart of @ref sonare_engine_set_track_strip_insert_param_by_name.
+///   @p bus_id must already exist via sonare_engine_set_track_buses and carry a
+///   strip configured by sonare_engine_set_bus_strip_json. Returns
+///   SONARE_ERROR_INVALID_PARAMETER if the bus, insert, or name is unknown.
+SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngine* engine,
+                                                             uint32_t bus_id,
+                                                             unsigned int insert_index,
+                                                             const char* param_name, float value);
+/// @brief Resolves a track-lane insert parameter to its reserved automation id.
+/// @details The returned id can be driven over time with
+///   @ref sonare_engine_set_automation_lane (a PPQ breakpoint lane) or set once
+///   with @ref sonare_engine_set_parameter / @ref sonare_engine_set_parameter_smoothed,
+///   exactly like a fader/pan id. Control-thread resolution of the JSON-key name
+///   to the strip/insert/param triple. Returns SONARE_ERROR_INVALID_PARAMETER if
+///   the track, insert, or name is unknown (and leaves @p out_id untouched).
+SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngine* engine,
+                                                             uint32_t track_id,
+                                                             unsigned int insert_index,
+                                                             const char* param_name,
+                                                             uint32_t* out_id);
+/// @brief Resolves a master-strip insert parameter to its reserved automation id.
+/// @details Master-strip counterpart of
+///   @ref sonare_engine_resolve_track_insert_automation_id.
+SonareError sonare_engine_resolve_master_insert_automation_id(SonareRealtimeEngine* engine,
+                                                              unsigned int insert_index,
+                                                              const char* param_name,
+                                                              uint32_t* out_id);
+/// @brief Resolves a bus-strip insert parameter to its reserved automation id.
+/// @details Bus-strip counterpart of
+///   @ref sonare_engine_resolve_track_insert_automation_id.
+SonareError sonare_engine_resolve_bus_insert_automation_id(SonareRealtimeEngine* engine,
+                                                           uint32_t bus_id,
+                                                           unsigned int insert_index,
+                                                           const char* param_name,
+                                                           uint32_t* out_id);
 /// @brief Realtime change of a track lane strip's pan position.
 /// @details Control-thread mutation; glitch-free (atomic). Returns
 ///   SONARE_ERROR_INVALID_PARAMETER if @p track_id has no bound lane strip or
@@ -799,6 +835,36 @@ SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t de
 /// @brief Queues a MIDI panic (all-notes-off) releasing every sounding note.
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
 SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t render_frame);
+/// @brief Marks a MIDI destination for external routing (or clears it).
+/// @details A destination marked external bypasses the internal instrument rack:
+///   its sequenced events are buffered in the engine's external-MIDI output queue
+///   for the host to drain with @ref sonare_engine_drain_external_midi and deliver
+///   to an external device. Control-thread only. @p external != 0 marks, 0 clears.
+SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* engine,
+                                                        uint32_t destination_id, int external);
+/// @brief Enables forwarding MIDI clock/transport bytes to the external queue.
+/// @details When enabled, MIDI clock (0xF8) and transport (start/continue/stop)
+///   bytes are enqueued tagged with destination 0xFFFFFFFF so external gear can be
+///   tempo-synced. Control-thread only; off by default.
+SonareError sonare_engine_set_external_midi_clock_enabled(SonareRealtimeEngine* engine,
+                                                          int enabled);
+/// @brief Number of external-MIDI events dropped because the queue was full.
+/// @details Advisory telemetry; monotonic within a prepared session.
+SonareError sonare_engine_external_midi_dropped_count(SonareRealtimeEngine* engine,
+                                                      uint32_t* out_count);
+/// @brief Drains queued external-MIDI events, lowered to MIDI 1.0 byte messages.
+/// @details Each output slot is a @ref SonareExternalMidiEvent. A single queued
+///   channel-voice event may lower to more than one output event (e.g. a MIDI 2.0
+///   program change with bank select), so the engine only consumes a queue record
+///   when its lowered messages all fit in the remaining output capacity; the rest
+///   stay queued for the next call. UMP types that do not lower to MIDI 1.0
+///   (SysEx/Data, Utility, MIDI-2-only controllers) are skipped. Writes the number
+///   of output events to @p out_count. @p max_events must be at least 3 (the most
+///   one record can lower to); call repeatedly until @p out_count is 0 to fully
+///   drain. Host/control-thread only.
+SonareError sonare_engine_drain_external_midi(SonareRealtimeEngine* engine,
+                                              SonareExternalMidiEvent* out, size_t max_events,
+                                              size_t* out_count);
 /// @brief Reads the current engine transport state (playing/position/ppq/tempo).
 SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
                                               SonareTransportState* out);

@@ -28,6 +28,7 @@ from libsonare import (
     EngineMidiEvent,
     EngineTelemetryError,
     EngineTelemetryType,
+    ExternalMidiEvent,
     FileClipPageProvider,
     MarkerKind,
     ParameterInfo,
@@ -1157,3 +1158,111 @@ def test_realtime_engine_scope_telemetry() -> None:
         assert len(record.points) > 0
         argmax = max(range(len(record.bands)), key=lambda i: record.bands[i])
         assert argmax <= 2
+
+
+def _midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
+    return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1
+
+
+def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
+        engine.set_bus_strip_json(
+            1,
+            '{"version":1,"strips":[],"buses":[{"id":"1","inserts":['
+            '{"slot":"pre","processor":"eq.parametric",'
+            '"params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,'
+            '\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+        )
+
+        # Resolving an insert parameter yields a reserved automation id
+        # (top three bits set) usable like a fader/pan id.
+        bus_param = engine.resolve_bus_insert_automation_id(1, 0, "band0.gainDb")
+        assert bus_param & 0xE0000000 == 0xE0000000
+        engine.set_automation_lane(bus_param, [AutomationPoint(ppq=0.0, value=6.0)])
+        engine.set_parameter(bus_param, 3.0)
+
+        # The by-name manual set reaches the same target.
+        engine.set_bus_strip_insert_param_by_name(1, 0, "band0.gainDb", -3.0)
+
+        # Unknown bus / insert / name are rejected.
+        with pytest.raises(SonareError) as bad_bus_error:
+            engine.resolve_bus_insert_automation_id(9, 0, "band0.gainDb")
+        assert bad_bus_error.value.code == 4
+        with pytest.raises(SonareError):
+            engine.resolve_bus_insert_automation_id(1, 0, "nope")
+        with pytest.raises(SonareError):
+            engine.set_bus_strip_insert_param_by_name(9, 0, "band0.gainDb", 1.0)
+
+        # Master strip insert resolution mirrors the bus path.
+        engine.set_master_strip_json(
+            '{"version":1,"strips":[{"id":"master","inserts":['
+            '{"slot":"pre","processor":"dynamics.compressor",'
+            '"params":"{\\"thresholdDb\\":-3,\\"ratio\\":4}"}]}],'
+            '"buses":[],"connections":[]}'
+        )
+        master_param = engine.resolve_master_insert_automation_id(0, "thresholdDb")
+        assert master_param & 0xE0000000 == 0xE0000000
+        assert master_param != bus_param
+
+
+def test_engine_drains_external_midi_routing_to_host() -> None:
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        # Route destination 5 to the external queue instead of an instrument.
+        engine.set_midi_destination_external(5, True)
+        engine.set_midi_clips(
+            [
+                EngineMidiClipSchedule(
+                    id=7,
+                    track_id=5,
+                    destination_id=5,
+                    length_samples=256,
+                    events=[
+                        EngineMidiEvent(
+                            0, word0=_midi1_word(0x9, 1, 64, 110), word_count=1, group=1
+                        ),
+                        EngineMidiEvent(
+                            48, word0=_midi1_word(0x8, 1, 64, 0), word_count=1, group=1
+                        ),
+                    ],
+                )
+            ]
+        )
+        engine.play()
+        engine.process([[0.0] * 128, [0.0] * 128])
+
+        drained = engine.drain_external_midi()
+        assert len(drained) == 2
+        assert all(isinstance(event, ExternalMidiEvent) for event in drained)
+        assert drained[0].destination_id == 5
+        assert len(drained[0].bytes) == 3
+        assert drained[0].bytes[0] & 0xF0 == 0x90  # note on
+        assert drained[0].render_frame == 0
+        assert drained[1].destination_id == 5
+        assert drained[1].bytes[0] & 0xF0 == 0x80  # note off
+        assert drained[1].render_frame == 48
+
+        # A drained queue stays empty and overflow telemetry is observable.
+        assert engine.drain_external_midi() == []
+        assert engine.external_midi_dropped_count() == 0
+
+
+def test_engine_forwards_midi_clock_transport_to_external_queue() -> None:
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=24000, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        engine.set_tempo(120.0)
+        engine.set_external_midi_clock_enabled(True)
+        engine.play(0)
+        engine.process([[0.0] * 24000, [0.0] * 24000])
+
+        # One Start plus 24 clock ticks (one every 1000 samples at 120 BPM).
+        drained = engine.drain_external_midi()
+        assert len(drained) == 25
+        for event in drained:
+            assert event.destination_id == 4294967295
+            assert len(event.bytes) == 1
+        assert drained[0].bytes[0] == 0xFA  # Start
+        assert drained[1].bytes[0] == 0xF8  # Clock

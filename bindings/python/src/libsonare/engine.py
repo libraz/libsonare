@@ -34,6 +34,7 @@ from ._runtime import (
     EngineTelemetry,
     EngineTelemetryError,
     EngineTelemetryType,
+    ExternalMidiEvent,
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
     PanLaw,
@@ -62,6 +63,7 @@ from ._runtime import (
     SonareEngineTrackLane,
     SonareEngineTrackSend,
     SonareEngineWarpAnchor,
+    SonareExternalMidiEvent,
     SonareMeterTelemetryRecord,
     SonareMeterTelemetryRecordWide,
     SonareParameterInfo,
@@ -749,6 +751,82 @@ class RealtimeEngine(_EngineMidiMixin):
             )
         )
 
+    def set_bus_strip_insert_param_by_name(
+        self, bus_id: int, insert_index: int, param_name: str, value: float
+    ) -> None:
+        """Realtime change of one bus-strip insert parameter, addressed by name.
+
+        Bus-strip counterpart of :meth:`set_track_strip_insert_param_by_name`;
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_insert_param_by_name(
+                self._require_handle(),
+                int(bus_id),
+                int(insert_index),
+                param_name.encode("utf-8"),
+                float(value),
+            )
+        )
+
+    def resolve_track_insert_automation_id(
+        self, track_id: int, insert_index: int, param_name: str
+    ) -> int:
+        """Resolve a track-lane insert parameter to its reserved automation id.
+
+        The returned id drives :meth:`set_automation_lane`,
+        :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
+        fader/pan id. Raises :class:`SonareError` if the track, insert, or name
+        is unknown.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_engine_resolve_track_insert_automation_id(
+                self._require_handle(),
+                int(track_id),
+                int(insert_index),
+                param_name.encode("utf-8"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
+    def resolve_master_insert_automation_id(self, insert_index: int, param_name: str) -> int:
+        """Resolve a master-strip insert parameter to its reserved automation id.
+
+        Master-strip counterpart of :meth:`resolve_track_insert_automation_id`.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_engine_resolve_master_insert_automation_id(
+                self._require_handle(),
+                int(insert_index),
+                param_name.encode("utf-8"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
+    def resolve_bus_insert_automation_id(
+        self, bus_id: int, insert_index: int, param_name: str
+    ) -> int:
+        """Resolve a bus-strip insert parameter to its reserved automation id.
+
+        Bus-strip counterpart of :meth:`resolve_track_insert_automation_id`;
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_engine_resolve_bus_insert_automation_id(
+                self._require_handle(),
+                int(bus_id),
+                int(insert_index),
+                param_name.encode("utf-8"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
     def set_capture_buffer(self, num_channels: int, capacity_frames: int) -> None:
         if num_channels <= 0:
             raise ValueError("num_channels must be positive")
@@ -1148,6 +1226,91 @@ class RealtimeEngine(_EngineMidiMixin):
             )
         )
         _ = event_arrays
+
+    def set_midi_destination_external(self, destination_id: int, external: bool) -> None:
+        """Mark a MIDI destination for external routing (or clear it).
+
+        A destination marked external bypasses the internal instrument rack; its
+        sequenced events are buffered in the engine's external-MIDI output queue
+        for the host to drain with :meth:`drain_external_midi`. ``external`` False
+        clears the mark.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_midi_destination_external"):
+            raise RuntimeError("libsonare was built without external-MIDI output support")
+        _check(
+            lib.sonare_engine_set_midi_destination_external(
+                self._require_handle(), int(destination_id), 1 if external else 0
+            )
+        )
+
+    def set_external_midi_clock_enabled(self, enabled: bool) -> None:
+        """Enable/disable forwarding MIDI clock/transport bytes to the external queue.
+
+        When enabled, MIDI clock (0xF8) and transport (start/continue/stop) bytes
+        are enqueued tagged with destination id ``0xFFFFFFFF`` so external gear can
+        be tempo-synced. Off by default.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_external_midi_clock_enabled"):
+            raise RuntimeError("libsonare was built without external-MIDI output support")
+        _check(
+            lib.sonare_engine_set_external_midi_clock_enabled(
+                self._require_handle(), 1 if enabled else 0
+            )
+        )
+
+    def external_midi_dropped_count(self) -> int:
+        """Number of external-MIDI events dropped because the queue was full.
+
+        Advisory telemetry; monotonic within a prepared session.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_external_midi_dropped_count"):
+            raise RuntimeError("libsonare was built without external-MIDI output support")
+        out = ctypes.c_uint32()
+        _check(
+            lib.sonare_engine_external_midi_dropped_count(self._require_handle(), ctypes.byref(out))
+        )
+        return int(out.value)
+
+    def drain_external_midi(self, max_records: int = 1024) -> list[ExternalMidiEvent]:
+        """Drain queued external-MIDI events, lowered to MIDI 1.0 byte messages.
+
+        Each returned :class:`ExternalMidiEvent` is one MIDI 1.0 message (1..3
+        bytes). The native drain requires a capacity of at least 3, so the buffer
+        is allocated at ``max(max_records, 3)`` and called repeatedly until the
+        queue is empty.
+        """
+        if max_records <= 0:
+            return []
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_drain_external_midi"):
+            raise RuntimeError("libsonare was built without external-MIDI output support")
+        capacity = max(int(max_records), 3)
+        raw = (SonareExternalMidiEvent * capacity)()
+        written = ctypes.c_size_t()
+        results: list[ExternalMidiEvent] = []
+        while True:
+            _check(
+                lib.sonare_engine_drain_external_midi(
+                    self._require_handle(), raw, capacity, ctypes.byref(written)
+                )
+            )
+            count = int(written.value)
+            for i in range(count):
+                event = raw[i]
+                byte_count = max(0, min(int(event.byte_count), len(event.bytes)))
+                results.append(
+                    ExternalMidiEvent(
+                        destination_id=int(event.destination_id),
+                        render_frame=int(event.render_frame),
+                        bytes=bytes(event.bytes[:byte_count]),
+                    )
+                )
+            if count == 0:
+                break
+        return results
 
     def transport_state(self) -> TransportState:
         """Read the current engine transport state (playing/position/ppq/tempo)."""

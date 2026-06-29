@@ -1,5 +1,6 @@
 #include "sonare_wrap_engine.h"
 
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -141,6 +142,14 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
               "setTrackStripInsertParamByName"),
           InstanceMethod<&RealtimeEngineWrap::SetMasterStripInsertParamByName>(
               "setMasterStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusStripInsertParamByName>(
+              "setBusStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::ResolveTrackInsertAutomationId>(
+              "resolveTrackInsertAutomationId"),
+          InstanceMethod<&RealtimeEngineWrap::ResolveMasterInsertAutomationId>(
+              "resolveMasterInsertAutomationId"),
+          InstanceMethod<&RealtimeEngineWrap::ResolveBusInsertAutomationId>(
+              "resolveBusInsertAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPan>("setTrackStripPan"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanLaw>("setTrackStripPanLaw"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanMode>("setTrackStripPanMode"),
@@ -200,6 +209,12 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::PushMidiNoteOff>("pushMidiNoteOff"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiCc>("pushMidiCc"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiPanic>("pushMidiPanic"),
+          InstanceMethod<&RealtimeEngineWrap::SetMidiDestinationExternal>(
+              "setMidiDestinationExternal"),
+          InstanceMethod<&RealtimeEngineWrap::SetExternalMidiClockEnabled>(
+              "setExternalMidiClockEnabled"),
+          InstanceMethod<&RealtimeEngineWrap::ExternalMidiDroppedCount>("externalMidiDroppedCount"),
+          InstanceMethod<&RealtimeEngineWrap::DrainExternalMidi>("drainExternalMidi"),
           InstanceMethod<&RealtimeEngineWrap::GetTransportState>("getTransportState"),
           InstanceMethod<&RealtimeEngineWrap::Destroy>("destroy"),
       });
@@ -831,6 +846,67 @@ Napi::Value RealtimeEngineWrap::PushMidiPanic(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_engine_push_midi_panic(engine_, OptionalInt64(info, 0, -1)));
   return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetMidiDestinationExternal(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const bool external = info.Length() > 1 && info[1].As<Napi::Boolean>().Value();
+  ThrowIfError(
+      env, sonare_engine_set_midi_destination_external(engine_, destination_id, external ? 1 : 0));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetExternalMidiClockEnabled(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const bool enabled = info.Length() > 0 && info[0].As<Napi::Boolean>().Value();
+  ThrowIfError(env, sonare_engine_set_external_midi_clock_enabled(engine_, enabled ? 1 : 0));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::ExternalMidiDroppedCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  uint32_t count = 0;
+  ThrowIfError(env, sonare_engine_external_midi_dropped_count(engine_, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+// Drains queued external-MIDI events, already lowered to MIDI 1.0 byte
+// messages. Each returned item is { destinationId, renderFrame, bytes:
+// number[] }; transport/clock bytes carry destinationId === 0xFFFFFFFF. A
+// single queued channel-voice event may lower to more than one item, so the
+// C-ABI buffer is drained in batches until the queue is empty. @p maxRecords
+// caps the number of output events produced.
+Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const int max_records =
+      info.Length() > 0 && !info[0].IsUndefined() ? info[0].As<Napi::Number>().Int32Value() : 1024;
+  Napi::Array out = Napi::Array::New(env);
+  if (max_records <= 0) return out;
+  std::array<SonareExternalMidiEvent, 256> records{};
+  uint32_t out_index = 0;
+  while (static_cast<int>(out_index) < max_records) {
+    size_t written = 0;
+    const SonareError err =
+        sonare_engine_drain_external_midi(engine_, records.data(), records.size(), &written);
+    ThrowIfError(env, err);
+    if (env.IsExceptionPending()) return env.Undefined();
+    if (written == 0) break;
+    for (size_t i = 0; i < written && static_cast<int>(out_index) < max_records; ++i) {
+      const SonareExternalMidiEvent& rec = records[i];
+      Napi::Object item = Napi::Object::New(env);
+      item.Set("destinationId", Napi::Number::New(env, static_cast<double>(rec.destination_id)));
+      item.Set("renderFrame", Napi::Number::New(env, static_cast<double>(rec.render_frame)));
+      Napi::Array bytes = Napi::Array::New(env, rec.byte_count);
+      for (uint32_t b = 0; b < rec.byte_count; ++b) {
+        bytes.Set(b, Napi::Number::New(env, rec.bytes[b]));
+      }
+      item.Set("bytes", bytes);
+      out.Set(out_index++, item);
+    }
+  }
+  return out;
 }
 
 Napi::Value RealtimeEngineWrap::GetTransportState(const Napi::CallbackInfo& info) {

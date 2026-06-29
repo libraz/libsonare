@@ -494,6 +494,68 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_char_p,
             ctypes.c_float,
         ]
+    if hasattr(lib, "sonare_engine_set_bus_strip_insert_param_by_name"):
+        lib.sonare_engine_set_bus_strip_insert_param_by_name.restype = ctypes.c_int32
+        lib.sonare_engine_set_bus_strip_insert_param_by_name.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_char_p,
+            ctypes.c_float,
+        ]
+    if hasattr(lib, "sonare_engine_resolve_track_insert_automation_id"):
+        lib.sonare_engine_resolve_track_insert_automation_id.restype = ctypes.c_int32
+        lib.sonare_engine_resolve_track_insert_automation_id.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+    if hasattr(lib, "sonare_engine_resolve_master_insert_automation_id"):
+        lib.sonare_engine_resolve_master_insert_automation_id.restype = ctypes.c_int32
+        lib.sonare_engine_resolve_master_insert_automation_id.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+    if hasattr(lib, "sonare_engine_resolve_bus_insert_automation_id"):
+        lib.sonare_engine_resolve_bus_insert_automation_id.restype = ctypes.c_int32
+        lib.sonare_engine_resolve_bus_insert_automation_id.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+    if hasattr(lib, "sonare_engine_set_midi_destination_external"):
+        lib.sonare_engine_set_midi_destination_external.restype = ctypes.c_int32
+        lib.sonare_engine_set_midi_destination_external.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_set_external_midi_clock_enabled"):
+        lib.sonare_engine_set_external_midi_clock_enabled.restype = ctypes.c_int32
+        lib.sonare_engine_set_external_midi_clock_enabled.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_external_midi_dropped_count"):
+        lib.sonare_engine_external_midi_dropped_count.restype = ctypes.c_int32
+        lib.sonare_engine_external_midi_dropped_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+    if hasattr(lib, "sonare_engine_drain_external_midi"):
+        lib.sonare_engine_drain_external_midi.restype = ctypes.c_int32
+        lib.sonare_engine_drain_external_midi.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareExternalMidiEvent),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
     lib.sonare_clip_page_provider_create.restype = ctypes.c_int32
     lib.sonare_clip_page_provider_create.argtypes = [
         ctypes.c_int,

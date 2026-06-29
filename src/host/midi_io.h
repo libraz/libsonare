@@ -314,6 +314,57 @@ struct ExternalMidiRecord {
   bool operator!=(const ExternalMidiRecord& o) const noexcept { return !(*this == o); }
 };
 
+/// One lowered MIDI 1.0 byte message (1..3 bytes).
+struct ExternalMidi1Message {
+  uint8_t bytes[3] = {0, 0, 0};
+  uint8_t byte_count = 0;
+};
+
+/// The MIDI 1.0 messages a single drained ExternalMidiRecord lowers to. A
+/// channel-voice UMP yields 1 message, except a MIDI 2.0 program change with
+/// bank select which yields up to 3 (two bank-select CCs + the program change).
+struct ExternalMidi1Lowered {
+  ExternalMidi1Message messages[3] = {};
+  uint8_t count = 0;
+};
+
+/// @brief Lowers a drained external-MIDI record to MIDI 1.0 byte messages.
+/// @details Shared by every host surface (WASM / Node / Python / C ABI) so the
+///   lowering rules stay identical. Transport/clock records (destination ==
+///   kTransportDestination) yield one single-byte system message. Channel-voice
+///   UMPs yield 1..3 messages. UMP types that do not lower to MIDI 1.0 (SysEx /
+///   Data, Utility, MIDI-2-only controllers) yield count == 0.
+inline ExternalMidi1Lowered lower_external_midi_record(const ExternalMidiRecord& rec) noexcept {
+  ExternalMidi1Lowered out{};
+  if (rec.destination_id == kTransportDestination) {
+    // System real-time / common byte (clock 0xF8 / start / continue / stop).
+    out.messages[0].bytes[0] = static_cast<uint8_t>((rec.event.ump.words[0] >> 16) & 0xFFu);
+    out.messages[0].byte_count = 1;
+    out.count = 1;
+    return out;
+  }
+  midi::Midi1MessageList list{};
+  switch (rec.event.ump.message_type()) {
+    case midi::UmpMessageType::kMidi1ChannelVoice:
+      list.messages[0] = rec.event.ump;
+      list.count = 1;
+      break;
+    case midi::UmpMessageType::kMidi2ChannelVoice:
+      list = midi::midi2_to_midi1_messages(rec.event.ump);
+      break;
+    default:
+      return out;  // not lowerable to MIDI 1.0
+  }
+  for (uint8_t m = 0; m < list.count && out.count < 3; ++m) {
+    ExternalMidi1Message& msg = out.messages[out.count];
+    const size_t n = midi::ump_to_midi1_bytes(list.messages[m], msg.bytes, sizeof(msg.bytes));
+    if (n == 0) continue;
+    msg.byte_count = static_cast<uint8_t>(n);
+    ++out.count;
+  }
+  return out;
+}
+
 /// Header-only fixed-capacity, destination-tagged MIDI output queue. Unlike
 /// MidiOutputSink (a single merged stream), this preserves the originating
 /// destination so a host can route each track's MIDI to a different external

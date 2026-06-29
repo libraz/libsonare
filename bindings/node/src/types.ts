@@ -1208,6 +1208,29 @@ export interface EngineMeterTelemetry {
 }
 
 /**
+ * One lowered MIDI 1.0 message drained from
+ * {@link RealtimeEngine.drainExternalMidi}. A single queued channel-voice event
+ * may lower to more than one message (e.g. a MIDI 2.0 program change with bank
+ * select), so the drain returns one entry per lowered message.
+ */
+export interface EngineExternalMidiEvent {
+  /**
+   * Originating track MIDI destination id, or the transport sentinel
+   * `0xFFFFFFFF` (4294967295) for clock / start / continue / stop bytes meant
+   * for every external port.
+   */
+  destinationId: number;
+  /**
+   * Render-frame coordinate of the event. Channel-voice events carry the
+   * timeline sample position; clock/transport bytes carry the device render
+   * frame.
+   */
+  renderFrame: number;
+  /** MIDI 1.0 status + data bytes (1..3 entries). */
+  bytes: number[];
+}
+
+/**
  * Per-plane meter telemetry record drained from
  * {@link RealtimeEngine.drainMeterTelemetryWide} for a surround target. The
  * `peakDb`/`rmsDb`/`truePeakDb` arrays carry `channelCount` planes in canonical

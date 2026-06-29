@@ -1301,4 +1301,116 @@ describe('RealtimeEngine native binding', () => {
     expect(Math.abs(wetRms - dryRms)).toBeGreaterThan(0.05 * dryRms);
     engine.destroy();
   });
+
+  it('resolves and sets bus insert automation by name', () => {
+    const engine = new RealtimeEngine(48000, 256, 64, 64);
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 1 }]);
+    engine.setBusStripJson(
+      1,
+      JSON.stringify({
+        version: 1,
+        strips: [],
+        buses: [
+          {
+            id: '1',
+            inserts: [
+              {
+                slot: 'pre',
+                processor: 'eq.parametric',
+                params: JSON.stringify({
+                  'band0.type': 1,
+                  'band0.frequencyHz': 1000,
+                  'band0.gainDb': 0,
+                  'band0.enabled': 1,
+                }),
+              },
+            ],
+          },
+        ],
+        connections: [],
+      }),
+    );
+
+    // Resolve the bus insert parameter to its reserved automation id (top 3 bits 111).
+    const automationId = engine.resolveBusInsertAutomationId(1, 0, 'band0.gainDb');
+    expect(automationId).toBeGreaterThan(0);
+    expect(automationId >>> 29).toBe(0x7);
+
+    // The reserved id drives an automation lane and a one-off parameter set.
+    engine.setAutomationLane(automationId, [{ ppq: 0, value: 6 }]);
+    engine.setParameter(automationId, 3);
+
+    // And the by-name manual set reaches the same target.
+    engine.setBusStripInsertParamByName(1, 0, 'band0.gainDb', -3);
+
+    // Unknown bus / insert / name resolve to -1.
+    expect(engine.resolveBusInsertAutomationId(9, 0, 'band0.gainDb')).toBe(-1);
+    expect(engine.resolveBusInsertAutomationId(1, 0, 'nope')).toBe(-1);
+
+    let badBusError: unknown;
+    try {
+      engine.setBusStripInsertParamByName(9, 0, 'band0.gainDb', 1);
+    } catch (error) {
+      badBusError = error;
+    }
+    expect(isSonareError(badBusError)).toBe(true);
+    if (!isSonareError(badBusError)) {
+      throw new Error('expected SonareError');
+    }
+    expect(badBusError.code).toBe(ErrorCode.InvalidParameter);
+    engine.destroy();
+  });
+
+  it('drains external MIDI routing to the host', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    // Route destination 5 to the external queue instead of an instrument.
+    engine.setMidiDestinationExternal(5, true);
+    engine.setMidiClips([
+      {
+        id: 7,
+        trackId: 5,
+        destinationId: 5,
+        lengthSamples: 256,
+        events: [
+          { renderFrame: 0, word0: midi1Word(0x9, 1, 64, 110), wordCount: 1 },
+          { renderFrame: 48, word0: midi1Word(0x8, 1, 64, 0), wordCount: 1 },
+        ],
+      },
+    ]);
+    engine.play();
+    engine.process([new Float32Array(128), new Float32Array(128)]);
+
+    const drained = engine.drainExternalMidi(16);
+    expect(drained.length).toBe(2);
+    expect(drained[0].destinationId).toBe(5);
+    expect(drained[0].bytes.length).toBe(3);
+    expect(drained[0].bytes[0] & 0xf0).toBe(0x90); // note on
+    expect(drained[0].renderFrame).toBe(0);
+    expect(drained[1].destinationId).toBe(5);
+    expect(drained[1].bytes[0] & 0xf0).toBe(0x80); // note off
+    expect(drained[1].renderFrame).toBe(48);
+
+    expect(engine.externalMidiDroppedCount()).toBe(0);
+    engine.destroy();
+  });
+
+  it('forwards MIDI clock/transport to the external queue', () => {
+    const engine = new RealtimeEngine(48000, 24000);
+    engine.setTempo(120);
+    engine.setExternalMidiClockEnabled(true);
+    engine.play(0);
+
+    engine.process([new Float32Array(24000), new Float32Array(24000)]);
+
+    // One Start plus 24 clock ticks (one every 1000 samples at 120 BPM).
+    const drained = engine.drainExternalMidi(64);
+    expect(drained.length).toBe(25);
+    for (const event of drained) {
+      expect(event.destinationId).toBe(0xffffffff);
+      expect(event.bytes.length).toBe(1);
+    }
+    expect(drained[0].bytes[0]).toBe(0xfa); // Start
+    expect(drained[1].bytes[0]).toBe(0xf8); // Clock
+    engine.destroy();
+  });
 });

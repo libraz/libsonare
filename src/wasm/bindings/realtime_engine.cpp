@@ -1031,34 +1031,18 @@ class RealtimeEngineWasm {
       drained_total += static_cast<int>(batch);
       for (size_t i = 0; i < batch; ++i) {
         const sonare::host::ExternalMidiRecord& rec = records[i];
-        const auto emit = [&](const uint8_t* bytes, size_t n) {
-          if (n == 0) return;
+        // Shared lowering: identical MIDI-1 rules across every host surface.
+        const sonare::host::ExternalMidi1Lowered lowered =
+            sonare::host::lower_external_midi_record(rec);
+        for (uint8_t m = 0; m < lowered.count; ++m) {
+          const sonare::host::ExternalMidi1Message& msg = lowered.messages[m];
           val item = val::object();
           item.set("destinationId", static_cast<double>(rec.destination_id));
           item.set("renderFrame", static_cast<double>(rec.event.render_frame));
           val arr = val::array();
-          for (size_t b = 0; b < n; ++b) arr.set(b, bytes[b]);
+          for (uint8_t b = 0; b < msg.byte_count; ++b) arr.set(b, msg.bytes[b]);
           item.set("bytes", arr);
           out.set(out_count++, item);
-        };
-        if (rec.destination_id == sonare::host::kTransportDestination) {
-          // System real-time / common byte (clock/start/continue/stop).
-          const uint8_t status = static_cast<uint8_t>((rec.event.ump.words[0] >> 16) & 0xFFu);
-          emit(&status, 1);
-          continue;
-        }
-        sonare::midi::Midi1MessageList list{};
-        const auto mt = rec.event.ump.message_type();
-        if (mt == sonare::midi::UmpMessageType::kMidi1ChannelVoice) {
-          list.messages[0] = rec.event.ump;
-          list.count = 1;
-        } else if (mt == sonare::midi::UmpMessageType::kMidi2ChannelVoice) {
-          list = sonare::midi::midi2_to_midi1_messages(rec.event.ump);
-        }
-        for (uint8_t m = 0; m < list.count; ++m) {
-          uint8_t buf[3] = {0, 0, 0};
-          const size_t n = sonare::midi::ump_to_midi1_bytes(list.messages[m], buf, sizeof(buf));
-          emit(buf, n);
         }
       }
     }

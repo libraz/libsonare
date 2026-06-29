@@ -339,7 +339,7 @@ export class RealtimeEngine {
    * block / animation frame. `maxRecords` caps the number of queue records
    * consumed per call.
    */
-  drainExternalMidi(maxRecords = 256): WasmExternalMidiEvent[] {
+  drainExternalMidi(maxRecords = 1024): WasmExternalMidiEvent[] {
     return this.native.drainExternalMidi(maxRecords);
   }
 

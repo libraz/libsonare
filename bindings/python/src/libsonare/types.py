@@ -1307,6 +1307,21 @@ class ScopeTelemetryRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class ExternalMidiEvent:
+    """One lowered MIDI 1.0 message drained from the external-MIDI output queue.
+
+    Each event is a single MIDI 1.0 byte message (``bytes`` is 1..3 bytes). A
+    ``destination_id`` of ``0xFFFFFFFF`` (4294967295) tags a clock/transport byte
+    forwarded for external tempo sync; any other value is the MIDI destination id
+    the event was routed to.
+    """
+
+    destination_id: int
+    render_frame: int
+    bytes: bytes
+
+
+@dataclass(frozen=True, slots=True)
 class TransportState:
     """Read-only snapshot of the realtime engine transport state."""
 
