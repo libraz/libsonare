@@ -256,6 +256,21 @@ export function setSf2Instrument(
   ctx.postInstrumentSync({ type: 'syncSf2Instrument', destinationId, config });
 }
 
+export function setMidiDestinationExternal(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  external: boolean,
+): void {
+  const destinationId = ctx.resolveTargetId(trackId);
+  ctx.offlineEngine.setMidiDestinationExternal(destinationId, external);
+  ctx.postSync({ type: 'syncMidiDestinationExternal', destinationId, external });
+}
+
+export function setExternalMidiClockEnabled(ctx: EngineStripContext, enabled: boolean): void {
+  ctx.offlineEngine.setExternalMidiClockEnabled(enabled);
+  ctx.postSync({ type: 'syncExternalMidiClock', enabled });
+}
+
 export function setMidiFx(
   ctx: EngineStripContext,
   trackId: string | number,

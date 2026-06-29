@@ -5,6 +5,7 @@ import type {
   SonareEngineTransportRequestMessage,
   SonareEngineTransportResponseMessage,
   SonareRealtimeVoiceChangerMessage,
+  SonareWorkletExternalMidiMessage,
   SonareWorkletMessage,
 } from './messages';
 import {
@@ -131,6 +132,12 @@ export function isEngineTelemetryRecord(value: unknown): value is SonareEngineTe
     typeof value.graphLatencySamplesQ8 === 'number' &&
     typeof value.value === 'number'
   );
+}
+
+export function isExternalMidiBatchMessage(
+  value: unknown,
+): value is SonareWorkletExternalMidiMessage {
+  return isRecord(value) && value.type === 'externalMidi' && Array.isArray(value.events);
 }
 
 export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnapshot {

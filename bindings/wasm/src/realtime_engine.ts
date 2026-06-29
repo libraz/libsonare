@@ -24,8 +24,11 @@ import type {
   WasmEngineTempoSegment,
   WasmEngineTimeSignatureSegment,
   WasmEngineTransportState,
+  WasmExternalMidiEvent,
   WasmRealtimeEngine,
 } from './sonare.js';
+
+export type ExternalMidiEvent = WasmExternalMidiEvent;
 
 export type EngineClip = WasmEngineClip;
 export type ClipPageRequest = WasmClipPageRequest;
@@ -306,6 +309,38 @@ export class RealtimeEngine {
 
   midiInputPendingCount(): number {
     return this.native.midiInputPendingCount();
+  }
+
+  /**
+   * Route a destination's (track lane's) MIDI to the external output queue
+   * instead of the internal instrument rack, so the track plays an external
+   * device. Clearing it restores internal-synth playback.
+   */
+  setMidiDestinationExternal(destinationId: number, external: boolean): void {
+    this.native.setMidiDestinationExternal(destinationId, external);
+  }
+
+  /**
+   * Enable/disable forwarding MIDI clock + transport (start/continue/stop) to
+   * the external output queue so external gear tracks the transport tempo.
+   */
+  setExternalMidiClockEnabled(enabled: boolean): void {
+    this.native.setExternalMidiClockEnabled(enabled);
+  }
+
+  /** Count of external-MIDI events dropped because the output queue was full. */
+  externalMidiDroppedCount(): number {
+    return this.native.externalMidiDroppedCount();
+  }
+
+  /**
+   * Drain queued external-MIDI events, already lowered to MIDI 1.0 byte
+   * messages ready to write to a Web MIDI output port. Call once per audio
+   * block / animation frame. `maxRecords` caps the number of queue records
+   * consumed per call.
+   */
+  drainExternalMidi(maxRecords = 256): WasmExternalMidiEvent[] {
+    return this.native.drainExternalMidi(maxRecords);
   }
 
   pushMidiInputNoteOn(

@@ -161,9 +161,27 @@ export type SonareWorkletMessage =
   | SonareWorkletSetMeterIntervalMessage
   | SonareWorkletDestroyMessage;
 
+/** One external-MIDI event delivered to the main thread, lowered to MIDI 1.0
+ * bytes ready for a Web MIDI output port. */
+export interface SonareWorkletExternalMidiEvent {
+  /** Originating track lane, or 0xFFFFFFFF for transport/clock bytes. */
+  destinationId: number;
+  /** Sample position within the producing block. */
+  renderFrame: number;
+  /** MIDI 1.0 status + data bytes (1..3 entries). */
+  bytes: number[];
+}
+
+/** Batch of external-MIDI events posted from the worklet once per render block. */
+export interface SonareWorkletExternalMidiMessage {
+  type: 'externalMidi';
+  events: SonareWorkletExternalMidiEvent[];
+}
+
 export type SonareWorkletTransportMessage =
   | SonareWorkletMeterSnapshot
   | SonareWorkletSpectrumSnapshot
+  | SonareWorkletExternalMidiMessage
   | SonareEngineTelemetryRecord;
 
 export interface WorkletTransport {
@@ -396,6 +414,17 @@ export interface SonareEngineSyncMidiPanicMessage {
   renderFrame: number;
 }
 
+export interface SonareEngineSyncMidiDestinationExternalMessage {
+  type: 'syncMidiDestinationExternal';
+  destinationId: number;
+  external: boolean;
+}
+
+export interface SonareEngineSyncExternalMidiClockMessage {
+  type: 'syncExternalMidiClock';
+  enabled: boolean;
+}
+
 export type SonareEngineInstrumentSyncMessage =
   | SonareEngineSyncBuiltinInstrumentMessage
   | SonareEngineSyncSynthInstrumentMessage
@@ -431,7 +460,9 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMidiFxMessage
   | SonareEngineSyncMidiNoteMessage
   | SonareEngineSyncMidiCcMessage
-  | SonareEngineSyncMidiPanicMessage;
+  | SonareEngineSyncMidiPanicMessage
+  | SonareEngineSyncMidiDestinationExternalMessage
+  | SonareEngineSyncExternalMidiClockMessage;
 
 export interface WorkletPort {
   postMessage?: (message: unknown, transfer?: Transferable[]) => void;

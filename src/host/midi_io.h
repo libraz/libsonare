@@ -294,4 +294,92 @@ class FixedMidiOutputSink final : public MidiOutputSink {
   std::atomic<uint32_t> dropped_count_{0};
 };
 
+/// Reserved destination id for transport / clock bytes that are not bound to a
+/// single track lane. Events tagged with this destination carry a System (UMP
+/// message type 0x1) payload — a MIDI 1.0 System Real-Time / Common byte (clock
+/// 0xF8, start 0xFA, continue 0xFB, stop 0xFC, song-position 0xF2) — meant for
+/// every open external port rather than one track's instrument.
+inline constexpr uint32_t kTransportDestination = 0xFFFFFFFFu;
+
+/// A destination-tagged MIDI output event: which lane (Track.midi_destination_id)
+/// produced it, plus the render-frame-stamped UMP. Trivially copyable so it can
+/// ride the RT output queue. kTransportDestination tags transport/clock bytes.
+struct ExternalMidiRecord {
+  uint32_t destination_id = 0;
+  midi::MidiEvent event{};
+
+  bool operator==(const ExternalMidiRecord& o) const noexcept {
+    return destination_id == o.destination_id && event == o.event;
+  }
+  bool operator!=(const ExternalMidiRecord& o) const noexcept { return !(*this == o); }
+};
+
+/// Header-only fixed-capacity, destination-tagged MIDI output queue. Unlike
+/// MidiOutputSink (a single merged stream), this preserves the originating
+/// destination so a host can route each track's MIDI to a different external
+/// port. send() is RT-safe (audio thread); a host/control thread drains queued
+/// records with drain(). Single-producer/single-consumer by contract; no heap
+/// allocation after construction.
+template <size_t Capacity>
+class FixedExternalMidiOutputQueue {
+ public:
+  static_assert(Capacity > 0, "FixedExternalMidiOutputQueue capacity must be positive");
+
+  /// AUDIO/RT thread: enqueue one destination-tagged event. Returns false if the
+  /// fixed queue overflowed (event dropped, dropped_count() bumped). RT-safe: no
+  /// allocation, no lock-wait, no I/O.
+  bool send(uint32_t destination_id, const midi::MidiEvent& event) noexcept {
+    const size_t write = write_index_.load(std::memory_order_relaxed);
+    const size_t next = increment(write);
+    if (next == read_index_.load(std::memory_order_acquire)) {
+      dropped_count_.fetch_add(1, std::memory_order_relaxed);
+      return false;
+    }
+    queue_[write] = ExternalMidiRecord{destination_id, event};
+    write_index_.store(next, std::memory_order_release);
+    return true;
+  }
+
+  /// HOST/control thread: drain up to `capacity` records into `out`. Drained
+  /// records are removed. No allocation. Returns the count written.
+  size_t drain(ExternalMidiRecord* out, size_t capacity) noexcept {
+    if (out == nullptr || capacity == 0) {
+      return 0;
+    }
+    size_t read = read_index_.load(std::memory_order_relaxed);
+    const size_t write = write_index_.load(std::memory_order_acquire);
+    size_t n = 0;
+    while (read != write && n < capacity) {
+      out[n] = queue_[read];
+      read = increment(read);
+      ++n;
+    }
+    read_index_.store(read, std::memory_order_release);
+    return n;
+  }
+
+  size_t pending_count() const noexcept {
+    return distance(read_index_.load(std::memory_order_acquire),
+                    write_index_.load(std::memory_order_acquire));
+  }
+
+  uint32_t dropped_count() const noexcept { return dropped_count_.load(std::memory_order_relaxed); }
+
+  void reset_telemetry() noexcept { dropped_count_.store(0, std::memory_order_relaxed); }
+
+ private:
+  static constexpr size_t kSlots = Capacity + 1;
+
+  static constexpr size_t increment(size_t index) noexcept { return (index + 1) % kSlots; }
+
+  static constexpr size_t distance(size_t read, size_t write) noexcept {
+    return write >= read ? write - read : kSlots - read + write;
+  }
+
+  std::array<ExternalMidiRecord, kSlots> queue_{};
+  std::atomic<size_t> read_index_{0};
+  std::atomic<size_t> write_index_{0};
+  std::atomic<uint32_t> dropped_count_{0};
+};
+
 }  // namespace sonare::host

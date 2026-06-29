@@ -808,6 +808,59 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
+    it('routes a destination marked external to the MIDI output queue, bypassing its instrument', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setTempo(120);
+      // Bind an instrument to destination 5, then mark it external: the
+      // instrument must be bypassed (silence) and its MIDI must queue instead,
+      // already lowered to MIDI 1.0 bytes.
+      engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+      engine.setMidiDestinationExternal(5, true);
+      engine.setMidiClips([
+        {
+          id: 1,
+          trackId: 5,
+          destinationId: 5,
+          lengthSamples: 8192,
+          events: [
+            { renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 },
+            { renderFrame: 64, word0: midi1Word(0x8, 0, 60, 0), wordCount: 1 },
+          ],
+        },
+      ]);
+      engine.play();
+      const out = engine.process([new Float32Array(128), new Float32Array(128)]);
+      expect(Math.max(rms(out[0]), rms(out[1]))).toBe(0);
+
+      const events = engine.drainExternalMidi(256);
+      expect(events.length).toBe(2);
+      expect(events[0].destinationId).toBe(5);
+      expect(events[0].renderFrame).toBe(0);
+      expect(events[0].bytes).toEqual([0x90, 60, 100]);
+      expect(events[1].bytes).toEqual([0x80, 60, 0]);
+      expect(engine.drainExternalMidi(256).length).toBe(0);
+      engine.destroy();
+    });
+
+    it('forwards transport and clock bytes to the MIDI output queue when enabled', () => {
+      const engine = new RealtimeEngine(48000, 2400);
+      engine.setTempo(120);
+      engine.setExternalMidiClockEnabled(true);
+      engine.seekSample(0);
+      engine.play();
+      engine.process([new Float32Array(2400), new Float32Array(2400)]);
+      const events = engine.drainExternalMidi(256);
+      expect(events.length).toBeGreaterThan(0);
+      // All transport/clock bytes are tagged with the transport sentinel.
+      for (const event of events) {
+        expect(event.destinationId).toBe(0xffffffff);
+      }
+      // Start (0xFA) first, then at least one clock tick (0xF8).
+      expect(events[0].bytes).toEqual([0xfa]);
+      expect(events.some((event) => event.bytes[0] === 0xf8)).toBe(true);
+      engine.destroy();
+    });
+
     it('routes track sends through buses', () => {
       const engine = new RealtimeEngine(48000, 256);
       const frames = 256 * 40;

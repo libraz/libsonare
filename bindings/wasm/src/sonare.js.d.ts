@@ -783,6 +783,23 @@ export interface WasmEngineTimeSignatureSegment {
   denominator: number;
 }
 
+/**
+ * One external-MIDI event drained from the engine, already lowered to MIDI 1.0
+ * bytes ready to write to a Web MIDI output port.
+ */
+export interface WasmExternalMidiEvent {
+  /**
+   * Originating track lane (Track.midi_destination_id), or the transport
+   * sentinel 0xFFFFFFFF for clock / start / continue / stop bytes meant for
+   * every external port.
+   */
+  destinationId: number;
+  /** Sample position within the producing block at which the event fires. */
+  renderFrame: number;
+  /** MIDI 1.0 status + data bytes (1..3 entries). */
+  bytes: number[];
+}
+
 export interface WasmRealtimeEngine {
   prepare: (
     sampleRate: number,
@@ -937,6 +954,10 @@ export interface WasmRealtimeEngine {
     renderFrame: number,
   ) => void;
   pushMidiPanic: (renderFrame: number) => void;
+  setMidiDestinationExternal: (destinationId: number, external: boolean) => void;
+  setExternalMidiClockEnabled: (enabled: boolean) => void;
+  externalMidiDroppedCount: () => number;
+  drainExternalMidi: (maxRecords: number) => WasmExternalMidiEvent[];
   clearParameters: () => void;
   process: (channels: Float32Array[]) => Float32Array[];
   prepareChannels: (numChannels: number, maxFrames: number) => void;

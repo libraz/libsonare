@@ -40,6 +40,7 @@ import type {
   SonareEngineSyncMessage,
   SonareEngineTransportFacade,
   SonareRealtimeEngineNodeCapabilities,
+  SonareWorkletExternalMidiEvent,
 } from './messages';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
@@ -606,6 +607,24 @@ export class SonareEngine {
   }
 
   /**
+   * Route a track's MIDI to the external output (drained via {@link onMidiOut})
+   * instead of an internal instrument, so the track plays an external device.
+   * Pass `external=false` to restore internal-synth playback.
+   */
+  setMidiDestinationExternal(trackId: string | number, external: boolean): void {
+    strips.setMidiDestinationExternal(this.stripContext, trackId, external);
+  }
+
+  /**
+   * Enable/disable forwarding MIDI clock + transport (start/continue/stop) to
+   * the external output so external gear tracks the transport tempo. The bytes
+   * arrive through {@link onMidiOut} tagged with the transport destination.
+   */
+  setExternalMidiClockEnabled(enabled: boolean): void {
+    strips.setExternalMidiClockEnabled(this.stripContext, enabled);
+  }
+
+  /**
    * Install or replace a live, non-destructive MIDI-FX insert for one
    * destination. The insert transforms the destination's MIDI before
    * synthesis (transpose, quantize, velocity shaping, humanize, harmonize,
@@ -766,6 +785,15 @@ export class SonareEngine {
       inputs.push(new Float32Array(frames));
     }
     return this.offlineEngine.renderOffline(inputs, this.offlineBlockSize);
+  }
+
+  /**
+   * Subscribe to external-MIDI batches (already lowered to MIDI 1.0 bytes) for
+   * delivery to Web MIDI output ports. Fires once per render block that
+   * produced events. Returns an unsubscribe function.
+   */
+  onMidiOut(callback: (events: SonareWorkletExternalMidiEvent[]) => void): () => void {
+    return this.realtimeNode.onMidiOut(callback);
   }
 
   onMeter(callback: (meter: SonareWorkletMeterSnapshot) => void): () => void {

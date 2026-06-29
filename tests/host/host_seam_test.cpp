@@ -615,6 +615,47 @@ TEST_CASE("fixed MIDI I/O implementations preserve order and telemetry", "[host]
   REQUIRE(output.dropped_count() == 0);
 }
 
+TEST_CASE("destination-tagged MIDI output queue preserves order, tags, and telemetry", "[host]") {
+  using sonare::host::ExternalMidiRecord;
+  using sonare::host::FixedExternalMidiOutputQueue;
+
+  const Ump on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  const Ump off = sonare::midi::make_midi1_note_off(0, 0, 60, 0);
+  const Ump cc = sonare::midi::make_midi1_control_change(0, 0, 74, 64);
+
+  FixedExternalMidiOutputQueue<2> queue;
+  REQUIRE(queue.send(7, MidiEvent{10, on}));
+  REQUIRE(queue.send(7, MidiEvent{20, off}));
+  // Capacity 2 is full; the third send overflows and is counted.
+  REQUIRE_FALSE(queue.send(9, MidiEvent{30, cc}));
+  REQUIRE(queue.pending_count() == 2);
+  REQUIRE(queue.dropped_count() == 1);
+
+  std::array<ExternalMidiRecord, 1> first{};
+  REQUIRE(queue.drain(first.data(), first.size()) == 1);
+  REQUIRE(first[0].destination_id == 7);
+  REQUIRE(first[0].event.render_frame == 10);
+  REQUIRE(first[0].event.ump.is_note_on());
+  REQUIRE(queue.pending_count() == 1);
+
+  // Draining frees a slot, so a subsequent send succeeds.
+  REQUIRE(queue.send(sonare::host::kTransportDestination, MidiEvent{40, cc}));
+  std::array<ExternalMidiRecord, 4> rest{};
+  REQUIRE(queue.drain(rest.data(), rest.size()) == 2);
+  REQUIRE(rest[0].destination_id == 7);
+  REQUIRE(rest[0].event.render_frame == 20);
+  REQUIRE(rest[0].event.ump.is_note_off());
+  REQUIRE(rest[1].destination_id == sonare::host::kTransportDestination);
+  REQUIRE(rest[1].event.render_frame == 40);
+  REQUIRE(queue.pending_count() == 0);
+
+  queue.reset_telemetry();
+  REQUIRE(queue.dropped_count() == 0);
+  // Defensive: null/zero-capacity drains are no-ops.
+  REQUIRE(queue.drain(nullptr, 4) == 0);
+  REQUIRE(queue.drain(rest.data(), 0) == 0);
+}
+
 TEST_CASE("fixed MIDI input drain clamps negative offsets and sorts in block", "[host]") {
   FixedMidiInputSource<4> input;
   const Ump late = sonare::midi::make_midi1_note_on(0, 0, 64, 100);

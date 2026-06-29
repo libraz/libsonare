@@ -201,6 +201,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.publishTelemetry();
     this.publishMeters();
     this.publishScope();
+    this.publishExternalMidi();
     return true;
   }
 
@@ -399,6 +400,12 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       case 'syncMidiPanic':
         this.engine.pushMidiPanic(message.renderFrame);
+        break;
+      case 'syncMidiDestinationExternal':
+        this.engine.setMidiDestinationExternal(message.destinationId, message.external);
+        break;
+      case 'syncExternalMidiClock':
+        this.engine.setExternalMidiClockEnabled(message.enabled);
         break;
     }
   }
@@ -687,6 +694,21 @@ export class SonareRealtimeEngineWorkletProcessor {
     for (const item of this.engine.drainScopeTelemetry(64)) {
       this.writeScopeRing(ring, item);
     }
+  }
+
+  // Drains queued external-MIDI events (already lowered to MIDI 1.0 bytes) and
+  // forwards them to the main thread for delivery to Web MIDI output ports.
+  // One batch per render block; skipped entirely when nothing is queued, so an
+  // all-internal project never allocates or posts here.
+  private publishExternalMidi(): void {
+    if (!this.transport?.postMessage) {
+      return;
+    }
+    const events = this.engine.drainExternalMidi(256);
+    if (events.length === 0) {
+      return;
+    }
+    this.transport.postMessage({ type: 'externalMidi', events });
   }
 
   private writeScopeRing(ring: SharedScopeRingWriter, record: EngineScopeTelemetry): void {

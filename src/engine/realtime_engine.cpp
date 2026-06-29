@@ -66,6 +66,8 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   // the instrument rack and optionally mirrors them to a live MIDI output seam.
   // Re-prepare every already-registered instrument to the new block size.
   midi_dispatch_sink_.rack = &instrument_rack_;
+  midi_dispatch_sink_.external = &external_midi_queue_;
+  external_clock_sync_sink_.queue = &external_midi_queue_;
   midi_sequencer_.set_sink(&midi_dispatch_sink_);
   instrument_rack_.for_each([&](uint32_t, midi::MidiInstrument* instrument) {
     instrument->prepare(sample_rate_, max_block_size_);
@@ -680,6 +682,23 @@ void RealtimeEngine::emit_midi_clock_block(int64_t timeline_start_sample,
     const int64_t render_frame = render_start_frame + (timeline_tick_frame - timeline_start_sample);
     sync_sink->on_midi_sync_byte(render_frame, midi::kStatusClock);
   }
+}
+
+void RealtimeEngine::set_midi_destination_external(uint32_t destination_id,
+                                                   bool external) noexcept {
+  midi_dispatch_sink_.set_external(destination_id, external);
+}
+
+size_t RealtimeEngine::drain_external_midi(host::ExternalMidiRecord* out,
+                                           size_t capacity) noexcept {
+  return external_midi_queue_.drain(out, capacity);
+}
+
+void RealtimeEngine::set_external_midi_clock_enabled(bool enabled) noexcept {
+  // Enabling registers the engine-internal sync sink so emit_midi_clock_block /
+  // emit_midi_transport_command funnel clock/transport bytes into the external
+  // queue; disabling clears it (and any other registered sync sink).
+  set_midi_sync_sink(enabled ? &external_clock_sync_sink_ : nullptr);
 }
 
 void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int num_frames) noexcept {

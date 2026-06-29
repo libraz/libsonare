@@ -390,6 +390,111 @@ TEST_CASE("RealtimeEngine mirrors sequenced MIDI to live output sink", "[engine]
   REQUIRE(drained[1].ump.is_note_off());
 }
 
+TEST_CASE("RealtimeEngine routes external destinations to the output queue, bypassing the rack",
+          "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  CountingInstrument internal;
+  CountingInstrument external_slot;
+  REQUIRE(engine.set_midi_instrument(0, &internal));
+  REQUIRE(engine.set_midi_instrument(5, &external_slot));
+  // Route destination 5 to the external output INSTEAD of its instrument.
+  engine.set_midi_destination_external(5, true);
+
+  sonare::midi::MidiClipSchedule internal_clip;
+  internal_clip.id = 1;
+  internal_clip.start_sample = 0;
+  internal_clip.length_samples = 128;
+  internal_clip.destination_id = 0;
+  internal_clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                          {32, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  sonare::midi::MidiClipSchedule external_clip = internal_clip;
+  external_clip.id = 2;
+  external_clip.destination_id = 5;
+  external_clip.events = {{0, sonare::midi::make_midi1_note_on(0, 1, 64, 110)},
+                          {48, sonare::midi::make_midi1_note_off(0, 1, 64, 0)}};
+  engine.set_midi_clips({internal_clip, external_clip});
+  push_play(engine);
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+
+  // The internal destination still drives its instrument.
+  REQUIRE(internal.note_on_count_ == 1);
+  REQUIRE(internal.note_off_count_ == 1);
+  // The external destination's instrument is bypassed (no double-trigger).
+  REQUIRE(external_slot.received_events_ == 0);
+
+  // The external events are queued, each tagged with its destination.
+  std::array<sonare::host::ExternalMidiRecord, 8> drained{};
+  const size_t n = engine.drain_external_midi(drained.data(), drained.size());
+  REQUIRE(n == 2);
+  REQUIRE(drained[0].destination_id == 5);
+  REQUIRE(drained[0].event.render_frame == 0);
+  REQUIRE(drained[0].event.ump.is_note_on());
+  REQUIRE(drained[1].destination_id == 5);
+  REQUIRE(drained[1].event.render_frame == 48);
+  REQUIRE(drained[1].event.ump.is_note_off());
+
+  // Clearing the external routing restores internal-rack delivery. Rewind first
+  // so the note-on at frame 0 fires again (the first block advanced the head).
+  engine.set_midi_destination_external(5, false);
+  engine.set_midi_clips({external_clip});
+  sonare::rt::Command rewind{};
+  rewind.type = sonare::rt::CommandType::kTransportSeekSample;
+  rewind.arg.i = 0;
+  rewind.sample_time = -1;
+  REQUIRE(engine.push_command(rewind));
+  push_play(engine);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(channels, 2, 64);
+  REQUIRE(external_slot.received_events_ > 0);
+  REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
+}
+
+TEST_CASE("RealtimeEngine forwards MIDI clock/transport to the external output queue",
+          "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 24000);
+  engine.set_tempo(120.0);
+  engine.set_external_midi_clock_enabled(true);
+
+  sonare::rt::Command play;
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = 0;
+  REQUIRE(engine.push_command(play));
+
+  std::vector<float> left(24000, 0.0f);
+  std::vector<float> right(24000, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 24000);
+
+  // One Start followed by 24 clock ticks (one every 1000 samples at 120 BPM).
+  std::array<sonare::host::ExternalMidiRecord, 64> drained{};
+  const size_t n = engine.drain_external_midi(drained.data(), drained.size());
+  REQUIRE(n == 25);
+  for (size_t i = 0; i < n; ++i) {
+    REQUIRE(drained[i].destination_id == sonare::host::kTransportDestination);
+    REQUIRE(drained[i].event.ump.message_type() == sonare::midi::UmpMessageType::kSystem);
+  }
+  const auto status_byte = [](const sonare::host::ExternalMidiRecord& r) {
+    return static_cast<uint8_t>((r.event.ump.words[0] >> 16) & 0xFFu);
+  };
+  REQUIRE(status_byte(drained[0]) == sonare::midi::kStatusStart);
+  REQUIRE(drained[0].event.render_frame == 0);
+  REQUIRE(status_byte(drained[1]) == sonare::midi::kStatusClock);
+
+  // Disabling forwarding stops further bytes from queueing.
+  engine.set_external_midi_clock_enabled(false);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  engine.process(channels, 2, 24000);
+  REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
+}
+
 TEST_CASE("seek releases sounding notes (no hang)", "[engine][midi]") {
   constexpr double kSr = 48000.0;
   constexpr int kBlock = 256;

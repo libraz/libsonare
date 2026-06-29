@@ -4,6 +4,7 @@ import {
   isEngineCaptureResponseMessage,
   isEngineTelemetryRecord,
   isEngineTransportResponseMessage,
+  isExternalMidiBatchMessage,
   isMeterSnapshot,
 } from './guards';
 import type {
@@ -13,6 +14,7 @@ import type {
   SonareRealtimeEngineNodeCapabilities,
   SonareRealtimeEngineNodeOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
+  SonareWorkletExternalMidiEvent,
 } from './messages';
 import {
   createSonareEngineCommandRingBuffer,
@@ -49,6 +51,7 @@ export class SonareRealtimeEngineNode {
   private telemetryListeners = new Set<(telemetry: SonareEngineTelemetryRecord) => void>();
   private meterListeners = new Set<(meter: SonareWorkletMeterSnapshot) => void>();
   private scopeListeners = new Set<(scope: SonareWorkletScopeSnapshot) => void>();
+  private midiOutListeners = new Set<(events: SonareWorkletExternalMidiEvent[]) => void>();
   private captureRequestId = 1;
   private readonly captureRequests = new Map<
     number,
@@ -115,6 +118,8 @@ export class SonareRealtimeEngineNode {
         this.emitTelemetry(event.data);
       } else if (isMeterSnapshot(event.data)) {
         this.emitMeter(event.data);
+      } else if (isExternalMidiBatchMessage(event.data)) {
+        this.emitMidiOut(event.data.events);
       } else if (isRecord(event.data) && event.data.type === 'ready') {
         this.resolveReady();
       } else if (isRecord(event.data) && event.data.type === 'error') {
@@ -372,6 +377,18 @@ export class SonareRealtimeEngineNode {
     };
   }
 
+  /**
+   * Subscribe to external-MIDI batches drained from the engine (one call per
+   * render block that produced events), already lowered to MIDI 1.0 bytes for a
+   * Web MIDI output port. Returns an unsubscribe function.
+   */
+  onMidiOut(callback: (events: SonareWorkletExternalMidiEvent[]) => void): () => void {
+    this.midiOutListeners.add(callback);
+    return () => {
+      this.midiOutListeners.delete(callback);
+    };
+  }
+
   destroy(): void {
     if (this.destroyed) {
       return;
@@ -390,6 +407,7 @@ export class SonareRealtimeEngineNode {
     this.telemetryListeners.clear();
     this.meterListeners.clear();
     this.scopeListeners.clear();
+    this.midiOutListeners.clear();
   }
 
   private emitTelemetry(telemetry: SonareEngineTelemetryRecord): void {
@@ -401,6 +419,12 @@ export class SonareRealtimeEngineNode {
   private emitMeter(meter: SonareWorkletMeterSnapshot): void {
     for (const listener of this.meterListeners) {
       listener(meter);
+    }
+  }
+
+  private emitMidiOut(events: SonareWorkletExternalMidiEvent[]): void {
+    for (const listener of this.midiOutListeners) {
+      listener(events);
     }
   }
 

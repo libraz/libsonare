@@ -191,6 +191,28 @@ class RealtimeEngine : private ClipPageRequestSink {
   void set_midi_sync_sink(MidiSyncSink* sink) noexcept {
     midi_sync_sink_.store(sink, std::memory_order_release);
   }
+  // Control-thread: route the MIDI of `destination_id` to the external output
+  // queue INSTEAD of the internal instrument rack, so the track plays an
+  // external device rather than a built-in synth. Clearing it (external=false)
+  // restores internal-rack routing. At most InstrumentRack::kMaxInstruments
+  // destinations may be external at once; excess requests are ignored. Routing
+  // a destination external does not by itself produce audio, so no internal
+  // synth voices are stolen for it (the rack never receives its events).
+  void set_midi_destination_external(uint32_t destination_id, bool external) noexcept;
+  // Control/host thread: drain up to `capacity` queued external-MIDI records
+  // (channel-voice events tagged with their destination, plus transport/clock
+  // bytes tagged host::kTransportDestination when external clock is enabled).
+  // RT-safe on the producer side; this consumer side removes drained records.
+  size_t drain_external_midi(host::ExternalMidiRecord* out, size_t capacity) noexcept;
+  // Control-thread: enable/disable forwarding MIDI clock (0xF8) and transport
+  // (start/continue/stop) bytes to the external output queue so external gear
+  // can be tempo-synced to the transport. Off by default.
+  void set_external_midi_clock_enabled(bool enabled) noexcept;
+  // Number of external-MIDI events dropped because the output queue was full
+  // (advisory telemetry; cleared by reset).
+  uint32_t external_midi_dropped_count() const noexcept {
+    return external_midi_queue_.dropped_count();
+  }
   midi::MidiSequencer& midi_sequencer() noexcept { return midi_sequencer_; }
   const midi::MidiSequencer& midi_sequencer() const noexcept { return midi_sequencer_; }
 
@@ -410,13 +432,84 @@ class RealtimeEngine : private ClipPageRequestSink {
   transport::MarkerMap markers_{};
   ClipPlayer clip_player_{};
 #if defined(SONARE_WITH_ARRANGEMENT)
+  // Capacity of the destination-tagged external MIDI output queue (events +
+  // clock/transport bytes buffered between audio blocks until the host drains).
+  static constexpr size_t kExternalMidiQueueCapacity = 1024;
+  using ExternalMidiQueue = host::FixedExternalMidiOutputQueue<kExternalMidiQueueCapacity>;
+
   struct MidiDispatchSink final : midi::MidiEventSink {
+    static constexpr size_t kMaxExternalDestinations = InstrumentRack::kMaxInstruments;
     InstrumentRack* rack = nullptr;
     std::atomic<host::MidiOutputSink*> output{nullptr};
+    // Destination-tagged external output queue (set once in prepare(); nullptr
+    // until then). Events whose destination is marked external are routed here
+    // INSTEAD of the instrument rack, so the track drives an external device
+    // rather than a built-in synth.
+    ExternalMidiQueue* external = nullptr;
+    // Published set of destinations routed externally. Each slot is 0 (empty) or
+    // ((1<<32) | destination_id); the high marker bit keeps destination 0
+    // representable. Linear-scanned on the audio thread (<= 16 slots); the
+    // control thread publishes via set_external().
+    std::array<std::atomic<uint64_t>, kMaxExternalDestinations> external_destinations{};
+
+    static constexpr uint64_t encode(uint32_t destination_id) noexcept {
+      return (uint64_t{1} << 32) | destination_id;
+    }
+    bool is_external(uint32_t destination_id) const noexcept {
+      const uint64_t want = encode(destination_id);
+      for (const auto& slot : external_destinations) {
+        if (slot.load(std::memory_order_acquire) == want) return true;
+      }
+      return false;
+    }
+    // CONTROL thread: mark/unmark a destination as externally routed. Adding
+    // beyond kMaxExternalDestinations is silently ignored.
+    void set_external(uint32_t destination_id, bool on) noexcept {
+      const uint64_t want = encode(destination_id);
+      if (on) {
+        for (auto& slot : external_destinations) {
+          if (slot.load(std::memory_order_acquire) == want) return;
+        }
+        for (auto& slot : external_destinations) {
+          uint64_t empty = 0;
+          if (slot.compare_exchange_strong(empty, want, std::memory_order_acq_rel)) return;
+        }
+        return;
+      }
+      for (auto& slot : external_destinations) {
+        if (slot.load(std::memory_order_acquire) == want) {
+          slot.store(0, std::memory_order_release);
+          return;
+        }
+      }
+    }
+
     void on_event(uint32_t destination_id, const midi::MidiEvent& event) noexcept override {
-      if (rack != nullptr) rack->on_event(destination_id, event);
+      if (is_external(destination_id)) {
+        if (external != nullptr) external->send(destination_id, event);
+      } else if (rack != nullptr) {
+        rack->on_event(destination_id, event);
+      }
       host::MidiOutputSink* sink = output.load(std::memory_order_acquire);
       if (sink != nullptr) sink->send(event);
+    }
+  };
+
+  // Engine-internal MIDI sync sink: encodes each clock/transport byte as a
+  // single-word UMP System message (MT 0x1) and enqueues it into the external
+  // output queue tagged host::kTransportDestination. Registered only while
+  // external clock is enabled.
+  struct ExternalClockSyncSink final : MidiSyncSink {
+    ExternalMidiQueue* queue = nullptr;
+    void on_midi_sync_byte(int64_t render_frame, uint8_t byte) noexcept override {
+      if (queue == nullptr) return;
+      midi::Ump ump{};
+      ump.words[0] = (uint32_t{0x1u} << 28) | (static_cast<uint32_t>(byte) << 16);
+      ump.word_count = 1;
+      midi::MidiEvent event{};
+      event.render_frame = render_frame;
+      event.ump = ump;
+      queue->send(host::kTransportDestination, event);
     }
   };
 
@@ -437,6 +530,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   // caller-owned instrument pointer.
   InstrumentRack instrument_rack_{};
   MidiDispatchSink midi_dispatch_sink_{};
+  // Destination-tagged external MIDI output queue (audio thread produces via the
+  // dispatch sink / clock sink; the host drains with drain_external_midi()).
+  ExternalMidiQueue external_midi_queue_{};
+  ExternalClockSyncSink external_clock_sync_sink_{};
   // Per-block instrument render scratch, allocated in prepare() (channel-planar:
   // kMaxAudioChannels rows of max_block_size_). The audio thread only points
   // into it, never allocates.

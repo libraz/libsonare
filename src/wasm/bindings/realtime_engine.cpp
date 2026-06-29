@@ -966,6 +966,100 @@ class RealtimeEngineWasm {
 #endif
   }
 
+  // Route the MIDI of `destination_id` (a track lane) to the external output
+  // queue instead of the internal instrument rack, so the track plays an
+  // external device. Clearing it restores internal-synth playback.
+  void setMidiDestinationExternal(uint32_t destination_id, bool external) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    engine_.set_midi_destination_external(destination_id, external);
+#else
+    (void)destination_id;
+    (void)external;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  // Enable/disable forwarding MIDI clock + transport (start/continue/stop) to
+  // the external output queue so external gear stays tempo-synced.
+  void setExternalMidiClockEnabled(bool enabled) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    engine_.set_external_midi_clock_enabled(enabled);
+#else
+    (void)enabled;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "arrangement/MIDI engine is not available in this build");
+#endif
+  }
+
+  // Count of external-MIDI events dropped because the output queue was full.
+  uint32_t externalMidiDroppedCount() const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+    return engine_.external_midi_dropped_count();
+#else
+    return 0;
+#endif
+  }
+
+  // Drain queued external-MIDI events, already lowered to MIDI 1.0 byte
+  // messages so the host can write them straight to a Web MIDI output port.
+  // Each returned item is { destinationId, renderFrame, bytes: number[] };
+  // transport/clock bytes carry destinationId === kTransportDestination
+  // (0xFFFFFFFF). A single queued channel-voice UMP may lower to more than one
+  // item (e.g. a MIDI 2.0 program change with bank select). `max_records` caps
+  // the number of QUEUE records consumed (not output items).
+  val drainExternalMidi(int max_records) {
+    val out = val::array();
+#if defined(SONARE_WITH_ARRANGEMENT)
+    if (max_records <= 0) return out;
+    std::array<sonare::host::ExternalMidiRecord, 256> records{};
+    int drained_total = 0;
+    int out_count = 0;
+    while (drained_total < max_records) {
+      size_t want = static_cast<size_t>(max_records - drained_total);
+      if (want > records.size()) want = records.size();
+      const size_t batch = engine_.drain_external_midi(records.data(), want);
+      if (batch == 0) break;
+      drained_total += static_cast<int>(batch);
+      for (size_t i = 0; i < batch; ++i) {
+        const sonare::host::ExternalMidiRecord& rec = records[i];
+        const auto emit = [&](const uint8_t* bytes, size_t n) {
+          if (n == 0) return;
+          val item = val::object();
+          item.set("destinationId", static_cast<double>(rec.destination_id));
+          item.set("renderFrame", static_cast<double>(rec.event.render_frame));
+          val arr = val::array();
+          for (size_t b = 0; b < n; ++b) arr.set(b, bytes[b]);
+          item.set("bytes", arr);
+          out.set(out_count++, item);
+        };
+        if (rec.destination_id == sonare::host::kTransportDestination) {
+          // System real-time / common byte (clock/start/continue/stop).
+          const uint8_t status = static_cast<uint8_t>((rec.event.ump.words[0] >> 16) & 0xFFu);
+          emit(&status, 1);
+          continue;
+        }
+        sonare::midi::Midi1MessageList list{};
+        const auto mt = rec.event.ump.message_type();
+        if (mt == sonare::midi::UmpMessageType::kMidi1ChannelVoice) {
+          list.messages[0] = rec.event.ump;
+          list.count = 1;
+        } else if (mt == sonare::midi::UmpMessageType::kMidi2ChannelVoice) {
+          list = sonare::midi::midi2_to_midi1_messages(rec.event.ump);
+        }
+        for (uint8_t m = 0; m < list.count; ++m) {
+          uint8_t buf[3] = {0, 0, 0};
+          const size_t n = sonare::midi::ump_to_midi1_bytes(list.messages[m], buf, sizeof(buf));
+          emit(buf, n);
+        }
+      }
+    }
+#else
+    (void)max_records;
+#endif
+    return out;
+  }
+
   void pushMidiInputNoteOn(int group, int channel, int note, int velocity,
                            int64_t port_time_samples) {
     pushMidiInputEvent(group, channel, note, velocity, port_time_samples, true);
@@ -2445,6 +2539,10 @@ void registerRealtimeEngineBindings() {
       .function("pushMidiNoteOff", &RealtimeEngineWasm::pushMidiNoteOff)
       .function("pushMidiCc", &RealtimeEngineWasm::pushMidiCc)
       .function("pushMidiPanic", &RealtimeEngineWasm::pushMidiPanic)
+      .function("setMidiDestinationExternal", &RealtimeEngineWasm::setMidiDestinationExternal)
+      .function("setExternalMidiClockEnabled", &RealtimeEngineWasm::setExternalMidiClockEnabled)
+      .function("drainExternalMidi", &RealtimeEngineWasm::drainExternalMidi)
+      .function("externalMidiDroppedCount", &RealtimeEngineWasm::externalMidiDroppedCount)
       .function("clearParameters", &RealtimeEngineWasm::clearParameters)
       .function("getTransportState", &RealtimeEngineWasm::getTransportState)
       .function("play", &RealtimeEngineWasm::play)
