@@ -301,6 +301,57 @@ export class SonareEngine {
   }
 
   /**
+   * Resolves a track-lane insert parameter (JSON-key name) to the reserved
+   * insert-automation id fed straight to setAutomationLane. Declares the track's
+   * mixer lane first (like automationParamId) so the offline engine resolves the
+   * same strip selector the realtime engine uses.
+   *
+   * @param target Track id (declares a mixer lane on first use).
+   * @param insertIndex Index into the strip's combined insert sequence.
+   * @param paramName Processor JSON-key parameter name.
+   * @returns Reserved insert-automation id, or -1 when strip/insert/key unknown.
+   */
+  resolveTrackInsertAutomationId(
+    target: string | number,
+    insertIndex: number,
+    paramName: string,
+  ): number {
+    const laneIndex = this.ensureTrackLane(target);
+    return this.offlineEngine.resolveTrackInsertAutomationId(
+      this.trackLaneIds[laneIndex],
+      insertIndex,
+      paramName,
+    );
+  }
+
+  /**
+   * Resolves a master-strip insert parameter to its reserved insert-automation
+   * id.
+   *
+   * @param insertIndex Index into the master strip's insert sequence.
+   * @param paramName Processor JSON-key parameter name.
+   * @returns Reserved insert-automation id, or -1 when insert/key unknown.
+   */
+  resolveMasterInsertAutomationId(insertIndex: number, paramName: string): number {
+    return this.offlineEngine.resolveMasterInsertAutomationId(insertIndex, paramName);
+  }
+
+  /**
+   * Resolves a bus-strip insert parameter to its reserved insert-automation id.
+   * Declares the mixer bus first so the offline engine resolves the same bus
+   * selector.
+   *
+   * @param busId Bus id (declares the mixer bus on first use).
+   * @param insertIndex Index into the bus strip's insert sequence.
+   * @param paramName Processor JSON-key parameter name.
+   * @returns Reserved insert-automation id, or -1 when bus/insert/key unknown.
+   */
+  resolveBusInsertAutomationId(busId: number, insertIndex: number, paramName: string): number {
+    this.ensureBus(busId);
+    return this.offlineEngine.resolveBusInsertAutomationId(busId, insertIndex, paramName);
+  }
+
+  /**
    * Returns the number of automation lanes installed on the engine, including
    * lanes whose breakpoint list is currently empty.
    *
@@ -548,6 +599,16 @@ export class SonareEngine {
 
   setMasterStripInsertParamByName(insertIndex: number, paramName: string, value: number): void {
     strips.setMasterStripInsertParamByName(this.stripContext, insertIndex, paramName, value);
+  }
+
+  setBusStripInsertParamByName(
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.ensureBus(busId);
+    strips.setBusStripInsertParamByName(this.stripContext, busId, insertIndex, paramName, value);
   }
 
   setStripInsertParamByName(

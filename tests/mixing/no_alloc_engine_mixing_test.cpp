@@ -249,6 +249,41 @@ TEST_CASE("GraphRuntime process performs no heap allocation after prepare", "[en
 }
 #endif
 
+TEST_CASE("TrackMixerRuntime insert automation render performs no heap allocation after prepare",
+          "[engine][track_mixer][rt]") {
+  constexpr int kBlock = 128;
+  std::array<float, kBlock> source{};
+  source.fill(1.0f);
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  sonare::engine::ClipSchedule clip{1, {channels, 1, kBlock}, 0.0, 0, 0, kBlock, true, 1.0f, 0, 0};
+  clip.track_id = 10;
+  player.set_clips({clip});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(std::make_unique<ParameterCaptureProcessor>());
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+  // An active insert-automation slot so the render path advances and pushes the
+  // smoother every block (the steady-state automated path).
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 0.5f));
+
+  std::array<float, kBlock> out{};
+  float* io[] = {out.data()};
+  REQUIRE(mixer.render_clips(player, io, 1, kBlock, 0));
+  // Retarget so the smoother is still moving when the guarded render runs.
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 0.75f));
+
+  AllocationGuard guard;
+  REQUIRE(mixer.render_clips(player, io, 1, kBlock, 0));
+  REQUIRE(guard.count() == 0);
+}
+
 TEST_CASE("BusProcessor post-sum inserts perform no heap allocation after prepare",
           "[mixing][rt]") {
   constexpr int kBlock = 256;

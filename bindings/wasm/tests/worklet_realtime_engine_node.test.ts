@@ -306,8 +306,9 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTrackStripDualPan(3, -1, 1);
         engine.setTrackStripChannelDelaySamples(3, 32);
         const busStripJson =
-          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[]}],"connections":[]}';
+          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}';
         engine.setBusStripJson(100, busStripJson);
+        engine.setBusStripInsertParamByName(100, 0, 'band0.gainDb', 1);
         engine.setBuiltinInstrument(3, { gain: 0.5 });
         engine.setSynthInstrument(3, 'saw-lead');
         engine.setSf2Instrument(3, { gain: 0.5 });

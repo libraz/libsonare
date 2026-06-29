@@ -697,6 +697,28 @@ export class RealtimeEngine {
     this.native.setMasterStripInsertParamByName(insertIndex, paramName, value);
   }
 
+  /** Bus-strip counterpart of {@link setTrackStripInsertParamByName}. */
+  setBusStripInsertParamByName(
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ): void {
+    this.native.setBusStripInsertParamByName(busId, insertIndex, paramName, value);
+  }
+
+  resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
+    return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);
+  }
+
+  resolveMasterInsertAutomationId(insertIndex: number, paramName: string): number {
+    return this.native.resolveMasterInsertAutomationId(insertIndex, paramName);
+  }
+
+  resolveBusInsertAutomationId(busId: number, insertIndex: number, paramName: string): number {
+    return this.native.resolveBusInsertAutomationId(busId, insertIndex, paramName);
+  }
+
   /** Sets a track lane strip's pan position in realtime (glitch-free). */
   setTrackStripPan(trackId: number, pan: number): void {
     this.native.setTrackStripPan(trackId, pan);

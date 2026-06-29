@@ -90,6 +90,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   if (!lane_config_valid(lanes)) return false;
   const auto snapshot = std::make_shared<const std::vector<TrackLaneConfig>>(std::move(lanes));
   if (!lanes_.publish(snapshot)) return false;
+  clear_lane_insert_automations();
   acquire_lanes();
   prepare_lanes_from_snapshot(*snapshot);
   try {
@@ -104,6 +105,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   if (!bus_config_valid(buses)) return false;
   bus_configs_ = std::move(buses);
+  clear_bus_insert_automations();
   for (size_t index = 0; index < bus_states_.size(); ++index) {
     BusState& state = bus_states_[index];
     if (index < bus_configs_.size()) {
@@ -201,6 +203,8 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
   }
   for (LaneState& lane : lane_states_) {
     if (lane.track_id != track_id) continue;
+    const size_t lane_index = static_cast<size_t>(&lane - lane_states_.data());
+    clear_insert_automation_for_lane(lane_index);
     lane.strip = strip;
     if (strip && max_block_size_ > 0) {
       strip->prepare(sample_rate_, max_block_size_);
@@ -217,6 +221,8 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
   }
   for (LaneState& lane : lane_states_) {
     if (lane.track_id != 0) continue;
+    const size_t lane_index = static_cast<size_t>(&lane - lane_states_.data());
+    clear_insert_automation_for_lane(lane_index);
     lane.track_id = track_id;
     lane.strip = strip;
     if (strip && max_block_size_ > 0) {
@@ -302,6 +308,128 @@ bool TrackMixerRuntime::apply_lane_insert_parameter(size_t lane_index, unsigned 
   LaneState& lane = lane_states_[lane_index];
   if (lane.strip == nullptr) return false;
   return lane.strip->apply_insert_parameter(insert_index, param_id, value);
+}
+
+bool TrackMixerRuntime::resolve_bus_insert_param(uint32_t bus_id, unsigned int insert_index,
+                                                 const std::string& key, size_t* out_bus_index,
+                                                 unsigned int* out_param_id) noexcept {
+  if (bus_id == 0 || out_bus_index == nullptr || out_param_id == nullptr) return false;
+  for (size_t i = 0; i < bus_configs_.size() && i < bus_states_.size(); ++i) {
+    if (bus_states_[i].bus_id != bus_id || bus_states_[i].bus == nullptr) continue;
+    const int id = bus_states_[i].bus->insert_parameter_id_for_key(insert_index, key);
+    if (id < 0) return false;
+    *out_bus_index = i;
+    *out_param_id = static_cast<unsigned int>(id);
+    return true;
+  }
+  return false;
+}
+
+bool TrackMixerRuntime::apply_bus_insert_parameter(size_t bus_index, unsigned int insert_index,
+                                                   unsigned int param_id, float value) noexcept {
+  if (bus_index >= bus_states_.size()) return false;
+  mixing::FxBus* bus = bus_states_[bus_index].bus.get();
+  if (bus == nullptr) return false;
+  return bus->apply_insert_parameter(insert_index, param_id, value);
+}
+
+TrackMixerRuntime::InsertAutoSlot* TrackMixerRuntime::find_or_claim_insert_slot(
+    bool is_bus, size_t index, unsigned int insert_index, unsigned int param_id,
+    float value) noexcept {
+  InsertAutoSlot* free_slot = nullptr;
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (slot.active && slot.is_bus == is_bus && slot.index == index &&
+        slot.insert_index == insert_index && slot.param_id == param_id) {
+      return &slot;
+    }
+    if (!slot.active && free_slot == nullptr) {
+      free_slot = &slot;
+    }
+  }
+  if (free_slot == nullptr) {
+    ++insert_automation_overflow_count_;
+    return nullptr;
+  }
+  free_slot->active = true;
+  free_slot->is_bus = is_bus;
+  free_slot->index = index;
+  free_slot->insert_index = insert_index;
+  free_slot->param_id = param_id;
+  // Snap to the first observed value so the smoother does not glide up from the
+  // reset 0 the first time this target is automated.
+  free_slot->smoother.reset(value);
+  return free_slot;
+}
+
+bool TrackMixerRuntime::route_lane_insert_param_smoothed(size_t lane_index,
+                                                         unsigned int insert_index,
+                                                         unsigned int param_id,
+                                                         float value) noexcept {
+  if (!std::isfinite(value)) return false;
+  if (lane_index >= lane_states_.size() || lane_states_[lane_index].strip == nullptr) {
+    return false;
+  }
+  InsertAutoSlot* slot =
+      find_or_claim_insert_slot(false, lane_index, insert_index, param_id, value);
+  if (slot == nullptr) return false;
+  slot->smoother.set_target(value);
+  return true;
+}
+
+bool TrackMixerRuntime::route_bus_insert_param_smoothed(size_t bus_index, unsigned int insert_index,
+                                                        unsigned int param_id,
+                                                        float value) noexcept {
+  if (!std::isfinite(value)) return false;
+  if (bus_index >= bus_states_.size() || bus_states_[bus_index].bus == nullptr) {
+    return false;
+  }
+  InsertAutoSlot* slot = find_or_claim_insert_slot(true, bus_index, insert_index, param_id, value);
+  if (slot == nullptr) return false;
+  slot->smoother.set_target(value);
+  return true;
+}
+
+void TrackMixerRuntime::advance_insert_automations(int num_samples) noexcept {
+  if (num_samples <= 0) return;
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (!slot.active) continue;
+    const float value = slot.smoother.advance(num_samples);
+    if (slot.is_bus) {
+      apply_bus_insert_parameter(slot.index, slot.insert_index, slot.param_id, value);
+    } else {
+      apply_lane_insert_parameter(slot.index, slot.insert_index, slot.param_id, value);
+    }
+  }
+}
+
+void TrackMixerRuntime::clear_insert_automation_for_lane(size_t lane_index) noexcept {
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (slot.active && !slot.is_bus && slot.index == lane_index) {
+      slot.active = false;
+    }
+  }
+}
+
+void TrackMixerRuntime::clear_lane_insert_automations() noexcept {
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (slot.active && !slot.is_bus) {
+      slot.active = false;
+    }
+  }
+}
+
+void TrackMixerRuntime::clear_bus_insert_automations() noexcept {
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (slot.active && slot.is_bus) {
+      slot.active = false;
+    }
+  }
+}
+
+void TrackMixerRuntime::clear_insert_automations() noexcept {
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    slot.active = false;
+  }
 }
 
 bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
@@ -405,6 +533,7 @@ bool TrackMixerRuntime::set_bus_gain_db_by_index(size_t bus_index, float gain_db
 bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus) {
   BusState* state = bus_state_for(bus_id);
   if (!state) return false;
+  const size_t bus_index = static_cast<size_t>(state - bus_states_.data());
   auto fx = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
   try {
     for (const auto& insert : bus.inserts) {
@@ -425,6 +554,11 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   state->width.set_width(bus.width);
   state->polarity_left.store(bus.polarity_invert_left ? -1.0f : 1.0f, std::memory_order_relaxed);
   state->polarity_right.store(bus.polarity_invert_right ? -1.0f : 1.0f, std::memory_order_relaxed);
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (slot.active && slot.is_bus && slot.index == bus_index) {
+      slot.active = false;
+    }
+  }
   state->bus = std::move(fx);
   return true;
 }
@@ -461,6 +595,16 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     delay.set_prepared_channels(kMaxLaneChannels);
     delay.prepare(sample_rate_, max_block_size_);
   }
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    slot.smoother.prepare(sample_rate_, 5.0f);
+    slot.smoother.reset(0.0f);
+    slot.active = false;
+    slot.is_bus = false;
+    slot.index = 0;
+    slot.insert_index = 0;
+    slot.param_id = 0;
+  }
+  insert_automation_overflow_count_ = 0;
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
     prepare_lanes_from_snapshot(*lanes);
     try {
@@ -501,6 +645,19 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
     bus.gain_db.reset(bus.gain_db.target());
     bus.input_trim_gain.reset(bus.input_trim_gain.target());
   }
+  // Snap each automated insert parameter to its target and push it once, so an
+  // offline pre-roll opens at the steady-state value (same determinism as the
+  // fader/pan settle above).
+  for (InsertAutoSlot& slot : insert_auto_slots_) {
+    if (!slot.active) continue;
+    const float target = slot.smoother.target();
+    slot.smoother.reset(target);
+    if (slot.is_bus) {
+      apply_bus_insert_parameter(slot.index, slot.insert_index, slot.param_id, target);
+    } else {
+      apply_lane_insert_parameter(slot.index, slot.insert_index, slot.param_id, target);
+    }
+  }
 }
 
 void TrackMixerRuntime::flush_pdc_delays() noexcept {
@@ -524,6 +681,11 @@ bool TrackMixerRuntime::render_clips(ClipPlayer& player, float* const* channels,
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   prepare_lanes_from_snapshot(*lanes);
+  // Advance the insert-parameter smoothers once for this sub-block before any
+  // lane/bus chain runs, so an automated insert param reaches its processor at
+  // the same cadence as the lane fader smoother (no double advance: the bus
+  // chain runs only inside this call).
+  advance_insert_automations(num_samples);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
   }
@@ -565,6 +727,7 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
   // its lane, then process the buses once -- exactly begin/into-lane/finish for
   // one source (kept bit-identical to the historical inline implementation).
   prepare_lanes_from_snapshot(*lanes);
+  advance_insert_automations(num_samples);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
@@ -587,6 +750,7 @@ bool TrackMixerRuntime::begin_source_mix(int num_channels, int num_samples) noex
     return false;
   }
   prepare_lanes_from_snapshot(*lanes);
+  advance_insert_automations(num_samples);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);

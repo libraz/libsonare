@@ -328,6 +328,14 @@ export interface SonareEngineSyncMasterStripInsertParamByNameMessage {
   value: number;
 }
 
+export interface SonareEngineSyncBusStripInsertParamByNameMessage {
+  type: 'syncBusStripInsertParamByName';
+  busId: number;
+  insertIndex: number;
+  paramName: string;
+  value: number;
+}
+
 export interface SonareEngineSyncTrackStripPanMessage {
   type: 'syncTrackStripPan';
   trackId: number;
@@ -448,6 +456,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMasterStripInsertBypassedMessage
   | SonareEngineSyncTrackStripInsertParamByNameMessage
   | SonareEngineSyncMasterStripInsertParamByNameMessage
+  | SonareEngineSyncBusStripInsertParamByNameMessage
   | SonareEngineSyncTrackStripPanMessage
   | SonareEngineSyncTrackStripPanLawMessage
   | SonareEngineSyncTrackStripPanModeMessage

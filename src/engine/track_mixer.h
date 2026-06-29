@@ -110,6 +110,37 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // concurrently with process().
   bool apply_lane_insert_parameter(size_t lane_index, unsigned int insert_index,
                                    unsigned int param_id, float value) noexcept;
+  // Control-thread resolution for a realtime BUS insert-parameter change: maps a
+  // bus id + JSON-key parameter name to the bus index and integer param_id.
+  // Returns false if the bus, insert, or key is unknown. Mirrors
+  // resolve_track_insert_param for the bus insert chain.
+  bool resolve_bus_insert_param(uint32_t bus_id, unsigned int insert_index, const std::string& key,
+                                size_t* out_bus_index, unsigned int* out_param_id) noexcept;
+  // Audio-thread application of a resolved BUS insert-parameter change.
+  // Allocation free; mirrors apply_lane_insert_parameter for the bus chain.
+  bool apply_bus_insert_parameter(size_t bus_index, unsigned int insert_index,
+                                  unsigned int param_id, float value) noexcept;
+
+  // Sets the smoothed target of a lane / bus insert parameter from a reserved
+  // automation lane. The matching per-(strip, insert, param) one-pole smoother is
+  // advanced once per sub-block (advance_insert_automations) before the strip /
+  // bus chain renders, then pushed to the processor, so a stepped breakpoint lane
+  // glides instead of zipping. Audio-thread only. Returns false when no slot is
+  // free (overflow telemetry).
+  bool route_lane_insert_param_smoothed(size_t lane_index, unsigned int insert_index,
+                                        unsigned int param_id, float value) noexcept;
+  bool route_bus_insert_param_smoothed(size_t bus_index, unsigned int insert_index,
+                                       unsigned int param_id, float value) noexcept;
+  // Number of insert-automation target requests dropped because the slot table
+  // was full (advisory telemetry; mirrors the other *_overflow counters).
+  uint32_t insert_automation_overflow_count() const noexcept {
+    return insert_automation_overflow_count_;
+  }
+  // Releases the insert-automation slots referencing @p lane_index (e.g. when a
+  // lane is removed or fully republished) / every slot. Marks them inactive,
+  // never deallocates. Audio-thread / control-thread between blocks.
+  void clear_insert_automation_for_lane(size_t lane_index) noexcept;
+  void clear_insert_automations() noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const sonare::mastering::eq::EqBand& band) noexcept;
   // Granular realtime panner/channel-delay updates for a track lane strip.
@@ -224,6 +255,34 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
   static constexpr size_t kMaxSidechainBindings = 16;
 
+  // One automated lane/bus insert parameter. A target id is decoded by the engine
+  // router into a (selector, insert, param) triple; the slot's one-pole smoother
+  // carries the value so a stepped breakpoint glides. A slot is identified by
+  // is_bus + index so a track lane and a bus with the same numeric index stay
+  // distinct. Selectors hold integer indices only (no pointers), so a stale slot
+  // resolves to a no-op rather than dangling after a strip swap / republish.
+  struct InsertAutoSlot {
+    bool active = false;
+    bool is_bus = false;
+    size_t index = 0;  // lane index (track) or bus index
+    unsigned int insert_index = 0;
+    unsigned int param_id = 0;
+    rt::ParamSmoother smoother{};
+  };
+  static constexpr size_t kMaxInsertAutomations = 64;
+
+  // Finds the slot matching (is_bus, index, insert, param) or claims a free one.
+  // Returns nullptr only when the table is full (overflow counter bumped). On the
+  // first claim the smoother resets to @p value so it does not fade in from 0.
+  InsertAutoSlot* find_or_claim_insert_slot(bool is_bus, size_t index, unsigned int insert_index,
+                                            unsigned int param_id, float value) noexcept;
+  // Advances every active insert-automation smoother by @p num_samples and pushes
+  // the result to its target. Call exactly once per sub-block, before the lane /
+  // bus chains render, so the smoother cadence matches the lane fader smoother.
+  void advance_insert_automations(int num_samples) noexcept;
+  void clear_lane_insert_automations() noexcept;
+  void clear_bus_insert_automations() noexcept;
+
   bool lane_config_valid(const std::vector<TrackLaneConfig>& lanes) const noexcept;
   bool bus_config_valid(const std::vector<TrackBusConfig>& buses) const noexcept;
   mixing::ChannelStrip* owned_strip_for(uint32_t track_id) noexcept;
@@ -294,6 +353,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::vector<TrackBusConfig> bus_configs_;
   std::array<SidechainBinding, kMaxSidechainBindings> sidechain_bindings_{};
   size_t sidechain_binding_count_ = 0;
+  // Fixed-capacity insert-automation slot table (lane + bus). Prepared once in
+  // prepare(); claimed/advanced on the audio thread with no allocation.
+  std::array<InsertAutoSlot, kMaxInsertAutomations> insert_auto_slots_{};
+  uint32_t insert_automation_overflow_count_ = 0;
   std::vector<OwnedStrip> owned_strips_;
   mutable rt::RtPublisher<std::vector<TrackLaneConfig>> lanes_;
   // The lane snapshot whose arrangement lane_states_ currently reflects. Set by

@@ -516,7 +516,7 @@ class RealtimeEngineWasm {
     return parameterToVal(info);
   }
 
-  val parameterInfo(int id) const {
+  val parameterInfo(double id) const {
     sonare::automation::ParameterInfo info{};
     if (!parameters_.parameter_info(static_cast<uint32_t>(id), &info)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown parameter id");
@@ -524,7 +524,7 @@ class RealtimeEngineWasm {
     return parameterToVal(info);
   }
 
-  void setAutomationLane(int param_id, val points) {
+  void setAutomationLane(double param_id, val points) {
     // NOTE: a registered, explicitly non-RT-safe parameter surfaces
     // synchronously (a throw), whereas setParameter/setParameterSmoothed and
     // the canonical C API (sonare_engine_set_automation_lane) report the same
@@ -616,7 +616,7 @@ class RealtimeEngineWasm {
     }
   }
 
-  void setParameter(int param_id, float value, int64_t render_frame) {
+  void setParameter(double param_id, float value, int64_t render_frame) {
     if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "parameter is not realtime safe");
@@ -632,7 +632,7 @@ class RealtimeEngineWasm {
     }
   }
 
-  void setParameterSmoothed(int param_id, float value, int64_t render_frame) {
+  void setParameterSmoothed(double param_id, float value, int64_t render_frame) {
     if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "parameter is not realtime safe");
@@ -1781,6 +1781,64 @@ class RealtimeEngineWasm {
 #endif
   }
 
+  void setBusStripInsertParamByName(uint32_t bus_id, unsigned int insert_index,
+                                    const std::string& param_name, float value) {
+#if defined(SONARE_WITH_MIXING)
+    if (!engine_.set_bus_insert_param(bus_id, insert_index, param_name, value)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid bus strip insert parameter target");
+    }
+#else
+    (void)bus_id;
+    (void)insert_index;
+    (void)param_name;
+    (void)value;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+  }
+
+  // Resolves a track-lane / master / bus insert parameter (JSON-key name) to the
+  // reserved insert-automation id passed to setAutomationLane. Returns -1 when the
+  // strip, insert, or key is unknown. The id is returned as a double so the full
+  // 32-bit unsigned reserved id (which exceeds the signed-int range) survives the
+  // JS boundary; the caller passes it back to setAutomationLane.
+  double resolveTrackInsertAutomationId(uint32_t track_id, unsigned int insert_index,
+                                        const std::string& param_name) {
+#if defined(SONARE_WITH_MIXING)
+    return static_cast<double>(
+        engine_.resolve_track_insert_automation_id(track_id, insert_index, param_name));
+#else
+    (void)track_id;
+    (void)insert_index;
+    (void)param_name;
+    return -1.0;
+#endif
+  }
+
+  double resolveMasterInsertAutomationId(unsigned int insert_index, const std::string& param_name) {
+#if defined(SONARE_WITH_MIXING)
+    return static_cast<double>(
+        engine_.resolve_master_insert_automation_id(insert_index, param_name));
+#else
+    (void)insert_index;
+    (void)param_name;
+    return -1.0;
+#endif
+  }
+
+  double resolveBusInsertAutomationId(uint32_t bus_id, unsigned int insert_index,
+                                      const std::string& param_name) {
+#if defined(SONARE_WITH_MIXING)
+    return static_cast<double>(
+        engine_.resolve_bus_insert_automation_id(bus_id, insert_index, param_name));
+#else
+    (void)bus_id;
+    (void)insert_index;
+    (void)param_name;
+    return -1.0;
+#endif
+  }
+
   void setTrackStripPan(uint32_t track_id, float pan) {
 #if defined(SONARE_WITH_MIXING)
     if (!engine_.set_track_pan(track_id, pan)) {
@@ -2590,6 +2648,12 @@ void registerRealtimeEngineBindings() {
                 &RealtimeEngineWasm::setTrackStripInsertParamByName)
       .function("setMasterStripInsertParamByName",
                 &RealtimeEngineWasm::setMasterStripInsertParamByName)
+      .function("setBusStripInsertParamByName", &RealtimeEngineWasm::setBusStripInsertParamByName)
+      .function("resolveTrackInsertAutomationId",
+                &RealtimeEngineWasm::resolveTrackInsertAutomationId)
+      .function("resolveMasterInsertAutomationId",
+                &RealtimeEngineWasm::resolveMasterInsertAutomationId)
+      .function("resolveBusInsertAutomationId", &RealtimeEngineWasm::resolveBusInsertAutomationId)
       .function("setTrackStripPan", &RealtimeEngineWasm::setTrackStripPan)
       .function("setTrackStripPanLaw", &RealtimeEngineWasm::setTrackStripPanLaw)
       .function("setTrackStripPanMode", &RealtimeEngineWasm::setTrackStripPanMode)

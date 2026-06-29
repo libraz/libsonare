@@ -155,6 +155,17 @@ export function setMasterStripInsertParamByName(
   ctx.postSync({ type: 'syncMasterStripInsertParamByName', insertIndex, paramName, value });
 }
 
+export function setBusStripInsertParamByName(
+  ctx: EngineStripContext,
+  busId: number,
+  insertIndex: number,
+  paramName: string,
+  value: number,
+): void {
+  ctx.offlineEngine.setBusStripInsertParamByName(busId, insertIndex, paramName, value);
+  ctx.postSync({ type: 'syncBusStripInsertParamByName', busId, insertIndex, paramName, value });
+}
+
 export function pushMidiNoteOn(
   ctx: EngineStripContext,
   trackId: string | number,

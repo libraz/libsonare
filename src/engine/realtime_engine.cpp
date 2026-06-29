@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "engine/insert_automation_id.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/math_utils.h"
 
@@ -93,6 +94,10 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   // to the mixer runtimes instead of the bound-processor table.
   automation_.set_engine_param_router(&RealtimeEngine::route_engine_parameter_thunk, this,
                                       kEngineParamNamespaceMask, kEngineParamNamespace);
+  // The router now claims two disjoint id namespaces (mixer fader/pan plus
+  // insert automation), which a single mask/match cannot express, so gate it on
+  // parameter_target_reserved (static and pure: safe as an audio-thread fn ptr).
+  automation_.set_engine_param_gate(&RealtimeEngine::parameter_target_reserved);
 #endif
   input_capture_storage_.assign(
       static_cast<size_t>(max_block_size_) * input_capture_channels_.size(), 0.0f);
@@ -128,6 +133,16 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
     slot.smoother.prepare(sample_rate_, applied_param_smoothing_ms_);
     slot.smoother.reset(0.0f);
   }
+#if defined(SONARE_WITH_MIXING)
+  for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
+    slot.active = false;
+    slot.insert_index = 0;
+    slot.param_id = 0;
+    slot.smoother.prepare(sample_rate_, 5.0f);
+    slot.smoother.reset(0.0f);
+  }
+  master_insert_automation_overflow_count_ = 0;
+#endif
   telemetry_overflow_count_ = 0;
   automation_bind_overflow_reported_ = automation_.bind_target_overflow_count();
   automation_stale_lane_reported_ = automation_.stale_lane_apply_count();
@@ -800,7 +815,8 @@ void RealtimeEngine::set_capture_punch(int64_t start_sample, int64_t end_sample,
 void RealtimeEngine::reset_capture() noexcept { capture_sink_.reset(); }
 
 bool RealtimeEngine::parameter_target_reserved(uint32_t target_id) noexcept {
-  return (target_id & kEngineParamNamespaceMask) == kEngineParamNamespace;
+  return (target_id & kEngineParamNamespaceMask) == kEngineParamNamespace ||
+         is_insert_param_id(target_id);
 }
 
 #if defined(SONARE_WITH_GRAPH)
@@ -935,10 +951,11 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       break;
     case rt::CommandType::kSetParamSmoothed:
 #if defined(SONARE_WITH_MIXING)
-      if (parameter_target_reserved(command.target_id) &&
-          !route_engine_parameter(command.target_id, command.arg.f)) {
-        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
-                      transport_.sample_position(), command.target_id);
+      if (parameter_target_reserved(command.target_id)) {
+        if (!route_engine_parameter(command.target_id, command.arg.f)) {
+          enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                        transport_.sample_position(), command.target_id);
+        }
         break;
       }
 #endif
@@ -1162,6 +1179,7 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
     return false;
   }
   if (!strip) return false;
+  clear_master_insert_automations();
   owned_master_strip_ = std::move(strip);
   const bool bound = bind_mixing_strip(owned_master_strip_.get());
   if (bound) {
@@ -1263,6 +1281,78 @@ bool RealtimeEngine::set_master_insert_param(unsigned int insert_index, const st
   return push_command(command);
 }
 
+bool RealtimeEngine::set_bus_insert_param(uint32_t bus_id, unsigned int insert_index,
+                                          const std::string& key, float value) noexcept {
+  size_t bus_index = 0;
+  unsigned int param_id = 0;
+  if (!track_mixer_runtime_.resolve_bus_insert_param(bus_id, insert_index, key, &bus_index,
+                                                     &param_id)) {
+    return false;
+  }
+  if (bus_index >= TrackMixerRuntime::kMaxBusLanes || insert_index > 0xFFu || param_id > 0xFFu) {
+    return false;
+  }
+  // Route through the reserved insert-automation id over the generic kSetParam
+  // command: apply_command already forwards reserved ids to the smoothed insert
+  // router, so a manual set glides exactly like an automated breakpoint without a
+  // dedicated command type (no engine ABI change).
+  const uint32_t selector = kInsertStripBusBase - static_cast<uint32_t>(bus_index);
+  rt::Command command;
+  command.type = rt::CommandType::kSetParam;
+  command.target_id = make_insert_param_id(selector, insert_index, param_id);
+  command.sample_time = -1;  // block head / immediate
+  command.arg.f = value;
+  return push_command(command);
+}
+
+int64_t RealtimeEngine::resolve_track_insert_automation_id(uint32_t track_id,
+                                                           unsigned int insert_index,
+                                                           const std::string& key) noexcept {
+  size_t lane_index = 0;
+  unsigned int param_id = 0;
+  if (!track_mixer_runtime_.resolve_track_insert_param(track_id, insert_index, key, &lane_index,
+                                                       &param_id)) {
+    return -1;
+  }
+  if (lane_index > kInsertStripMask || insert_index > kInsertIndexMask ||
+      param_id > kInsertParamFieldMask) {
+    return -1;
+  }
+  return make_insert_param_id(static_cast<uint32_t>(lane_index), insert_index, param_id);
+}
+
+int64_t RealtimeEngine::resolve_master_insert_automation_id(unsigned int insert_index,
+                                                            const std::string& key) noexcept {
+  if (owned_master_strip_ == nullptr) {
+    return -1;
+  }
+  const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
+  if (id < 0) {
+    return -1;
+  }
+  const unsigned int param_id = static_cast<unsigned int>(id);
+  if (insert_index > kInsertIndexMask || param_id > kInsertParamFieldMask) {
+    return -1;
+  }
+  return make_insert_param_id(kInsertStripMaster, insert_index, param_id);
+}
+
+int64_t RealtimeEngine::resolve_bus_insert_automation_id(uint32_t bus_id, unsigned int insert_index,
+                                                         const std::string& key) noexcept {
+  size_t bus_index = 0;
+  unsigned int param_id = 0;
+  if (!track_mixer_runtime_.resolve_bus_insert_param(bus_id, insert_index, key, &bus_index,
+                                                     &param_id)) {
+    return -1;
+  }
+  if (bus_index >= TrackMixerRuntime::kMaxBusLanes || insert_index > kInsertIndexMask ||
+      param_id > kInsertParamFieldMask) {
+    return -1;
+  }
+  const uint32_t selector = kInsertStripBusBase - static_cast<uint32_t>(bus_index);
+  return make_insert_param_id(selector, insert_index, param_id);
+}
+
 bool RealtimeEngine::set_track_eq_band(uint32_t track_id, size_t band_index,
                                        const mastering::eq::EqBand& band) noexcept {
   const bool ok = track_mixer_runtime_.set_track_eq_band(track_id, band_index, band);
@@ -1330,6 +1420,26 @@ uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames,
 
 bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noexcept {
   if (!parameter_target_reserved(target_id)) return false;
+  // Insert-automation namespace: decode (strip selector, insert, param) and set
+  // the matching per-target smoother. Master inserts use this engine's slot
+  // table; lane/bus inserts use the track mixer's. The strip selector is an
+  // integer index, so a stale target resolves to a no-op (dangling-safe).
+  if (is_insert_param_id(target_id)) {
+    const uint32_t strip = insert_param_strip(target_id);
+    const unsigned int insert_index = static_cast<unsigned int>(insert_param_index(target_id));
+    const unsigned int param_id = static_cast<unsigned int>(insert_param_param(target_id));
+    if (strip == kInsertStripMaster) {
+      return route_master_insert_param_smoothed(insert_index, param_id, value);
+    }
+    if (strip <= kInsertStripBusBase &&
+        strip > kInsertStripBusBase - TrackMixerRuntime::kMaxBusLanes) {
+      const size_t bus_index = kInsertStripBusBase - strip;
+      return track_mixer_runtime_.route_bus_insert_param_smoothed(bus_index, insert_index, param_id,
+                                                                  value);
+    }
+    return track_mixer_runtime_.route_lane_insert_param_smoothed(static_cast<size_t>(strip),
+                                                                 insert_index, param_id, value);
+  }
   const uint32_t lane = (target_id & kEngineParamLaneMask) >> kEngineParamLaneShift;
   const uint32_t kind = target_id & kEngineParamKindMask;
   if (lane == kEngineParamLaneMaster) {
@@ -1347,6 +1457,60 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
 bool RealtimeEngine::route_engine_parameter_thunk(void* context, uint32_t param_id,
                                                   float value) noexcept {
   return static_cast<RealtimeEngine*>(context)->route_engine_parameter(param_id, value);
+}
+
+bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_index,
+                                                        unsigned int param_id,
+                                                        float value) noexcept {
+  if (!std::isfinite(value)) return false;
+  MasterInsertAutoSlot* free_slot = nullptr;
+  for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
+    if (slot.active && slot.insert_index == insert_index && slot.param_id == param_id) {
+      slot.smoother.set_target(value);
+      return true;
+    }
+    if (!slot.active && free_slot == nullptr) {
+      free_slot = &slot;
+    }
+  }
+  if (free_slot == nullptr) {
+    ++master_insert_automation_overflow_count_;
+    return false;
+  }
+  free_slot->active = true;
+  free_slot->insert_index = insert_index;
+  free_slot->param_id = param_id;
+  // Snap to the first observed value so the smoother does not glide up from 0.
+  free_slot->smoother.prepare(sample_rate_, 5.0f);
+  free_slot->smoother.reset(value);
+  free_slot->smoother.set_target(value);
+  return true;
+}
+
+void RealtimeEngine::advance_master_insert_automations(int num_steps) noexcept {
+  if (num_steps <= 0 || owned_master_strip_ == nullptr) return;
+  for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
+    if (!slot.active) continue;
+    const float value = slot.smoother.advance(num_steps);
+    owned_master_strip_->apply_insert_parameter(slot.insert_index, slot.param_id, value);
+  }
+}
+
+void RealtimeEngine::settle_master_insert_automations() noexcept {
+  for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
+    if (!slot.active) continue;
+    const float target = slot.smoother.target();
+    slot.smoother.reset(target);
+    if (owned_master_strip_ != nullptr) {
+      owned_master_strip_->apply_insert_parameter(slot.insert_index, slot.param_id, target);
+    }
+  }
+}
+
+void RealtimeEngine::clear_master_insert_automations() noexcept {
+  for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
+    slot.active = false;
+  }
 }
 
 bool RealtimeEngine::add_monitor_strip(mixing::ChannelStrip* strip) noexcept {
@@ -1380,6 +1544,7 @@ void RealtimeEngine::settle_parameters() noexcept {
   }
 #if defined(SONARE_WITH_MIXING)
   track_mixer_runtime_.settle_smoothers();
+  settle_master_insert_automations();
 #endif
   // Quiesce the engine-side monitor (solo/mute) smoothers and their strips so a
   // bounce that starts muted/soloed opens at the steady-state gain.
@@ -1466,6 +1631,12 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
       slot.target_id = 0;
     }
   }
+#if defined(SONARE_WITH_MIXING)
+  // Advance the master-strip insert-automation smoothers at the same sub-block
+  // cadence and push them to the master inserts (lane/bus insert smoothers are
+  // advanced inside the track mixer's own render path).
+  advance_master_insert_automations(num_steps);
+#endif
 }
 
 void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_out, int num_channels,

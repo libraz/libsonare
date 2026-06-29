@@ -132,8 +132,7 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
     if (lane.points().empty()) {
       continue;
     }
-    if (engine_param_router_ != nullptr &&
-        (param_id & engine_param_id_mask_) == engine_param_id_match_) {
+    if (routes_to_engine(param_id)) {
       // Engine-namespace lanes route directly to the engine runtime; they never
       // fall through to the bound-processor resolution below.
       const float value = lane.value_at(ppq);
@@ -172,8 +171,7 @@ bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
   if (!std::isfinite(value)) {
     return false;
   }
-  if (engine_param_router_ != nullptr &&
-      (param_id & engine_param_id_mask_) == engine_param_id_match_) {
+  if (routes_to_engine(param_id)) {
     // Mirror apply(): engine-namespace ids go through the router, never the
     // bound-processor table. A rejected target surfaces like an unknown one.
     const bool routed = engine_param_router_(engine_param_router_context_, param_id, value);

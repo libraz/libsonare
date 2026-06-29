@@ -868,6 +868,19 @@ export interface WasmRealtimeEngine {
     value: number,
   ) => void;
   setMasterStripInsertParamByName: (insertIndex: number, paramName: string, value: number) => void;
+  setBusStripInsertParamByName: (
+    busId: number,
+    insertIndex: number,
+    paramName: string,
+    value: number,
+  ) => void;
+  resolveTrackInsertAutomationId: (
+    trackId: number,
+    insertIndex: number,
+    paramName: string,
+  ) => number;
+  resolveMasterInsertAutomationId: (insertIndex: number, paramName: string) => number;
+  resolveBusInsertAutomationId: (busId: number, insertIndex: number, paramName: string) => number;
   setTrackStripPan: (trackId: number, pan: number) => void;
   setTrackStripPanLaw: (trackId: number, panLaw: number) => void;
   setTrackStripPanMode: (trackId: number, panMode: number) => void;

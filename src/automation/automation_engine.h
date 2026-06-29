@@ -35,6 +35,11 @@ class AutomationEngine {
   /// Router callback for engine-reserved parameter ids. Returns true when the
   /// value was accepted by the engine-side target.
   using EngineParamRouter = bool (*)(void* context, uint32_t param_id, float value);
+  /// Gate predicate selecting which ids route through the engine router. When
+  /// set, it replaces the (id & mask) == match test, so a router can claim two
+  /// disjoint id namespaces (e.g. mixer fader/pan plus insert automation). Pure
+  /// and stateless: configured at prepare time, called on the audio thread.
+  using EngineParamGate = bool (*)(uint32_t param_id);
 
   void prepare(double sample_rate, const transport::TempoMap* tempo_map);
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
@@ -50,6 +55,11 @@ class AutomationEngine {
     engine_param_id_mask_ = id_mask;
     engine_param_id_match_ = id_match;
   }
+  /// Installs a gate predicate (see EngineParamGate). Once set, apply() and
+  /// set_parameter() route an id through the engine router when @p gate returns
+  /// true instead of testing (id & mask) == match; leaving it null preserves the
+  /// single mask/match fast path bit-for-bit. Configure at prepare time.
+  void set_engine_param_gate(EngineParamGate gate) noexcept { engine_param_gate_ = gate; }
   /// Publishes registered parameter metadata used to reject explicitly
   /// non-realtime-safe targets before any RT automation path reaches a
   /// processor. Unregistered ids keep the legacy unknown-target behavior.
@@ -127,6 +137,14 @@ class AutomationEngine {
 
   rt::ProcessorBase* target_for(uint32_t param_id) const noexcept;
   bool registered_parameter_rejects_realtime(uint32_t param_id) const noexcept;
+  // True when @p param_id should route through the engine router. Uses the gate
+  // predicate when installed, otherwise the (id & mask) == match fast path.
+  bool routes_to_engine(uint32_t param_id) const noexcept {
+    return engine_param_router_ != nullptr &&
+           (engine_param_gate_ != nullptr
+                ? engine_param_gate_(param_id)
+                : (param_id & engine_param_id_mask_) == engine_param_id_match_);
+  }
 
   double sample_rate_ = 48000.0;
   const transport::TempoMap* tempo_map_ = nullptr;
@@ -136,6 +154,9 @@ class AutomationEngine {
   void* engine_param_router_context_ = nullptr;
   uint32_t engine_param_id_mask_ = 0;
   uint32_t engine_param_id_match_ = 0;
+  // Optional gate predicate; null keeps the mask/match fast path (see
+  // set_engine_param_gate). Plain member: written once at prepare time.
+  EngineParamGate engine_param_gate_ = nullptr;
   rt::RtSnapshot<std::vector<ParameterInfo>> parameter_metadata_{};
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
   std::atomic<size_t> lane_count_{0};

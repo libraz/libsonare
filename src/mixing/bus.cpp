@@ -133,6 +133,37 @@ void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor, bool
   insert_sidechains_.resize(inserts_.size());
 }
 
+bool BusProcessor::apply_insert_parameter(unsigned int insert_index, unsigned int param_id,
+                                          float value) noexcept {
+  const size_t index = insert_index;
+  if (index >= inserts_.size()) {
+    return false;
+  }
+  rt::ProcessorBase* insert = inserts_[index].get();
+  if (insert == nullptr || !insert->parameter_is_realtime_safe(param_id)) {
+    return false;
+  }
+  return insert->set_parameter(param_id, value);
+}
+
+int BusProcessor::insert_parameter_id_for_key(unsigned int insert_index,
+                                              const std::string& key) const noexcept {
+  const size_t index = insert_index;
+  if (index >= inserts_.size()) {
+    return -1;
+  }
+  const rt::ProcessorBase* insert = inserts_[index].get();
+  if (insert == nullptr) {
+    return -1;
+  }
+  for (const auto& desc : insert->parameter_descriptors()) {
+    if (desc.key == key) {
+      return static_cast<int>(desc.id);
+    }
+  }
+  return -1;
+}
+
 void BusProcessor::set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                                         int num_channels, int num_samples) {
   const size_t index = insert_index;

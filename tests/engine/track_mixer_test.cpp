@@ -5,7 +5,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <memory>
+#include <vector>
 
+#include "mixing/channel_strip.h"
 #include "rt/processor_base.h"
 
 namespace {
@@ -27,6 +29,33 @@ class GainProcessor final : public sonare::rt::ProcessorBase {
   float gain_ = 1.0f;
 };
 
+class AutomatableGainProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] *= gain_;
+      }
+    }
+  }
+  void reset() override {}
+  bool set_parameter(unsigned int param_id, float value) override {
+    if (param_id != 0 || !std::isfinite(value)) return false;
+    gain_ = value;
+    return true;
+  }
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return param_id == 0;
+  }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    return {{"gain", 0}};
+  }
+
+ private:
+  float gain_ = 1.0f;
+};
+
 sonare::engine::ClipSchedule clip_for_track(uint32_t clip_id, uint32_t track_id,
                                             const float* const* samples, int channels, int frames,
                                             float gain = 1.0f) {
@@ -37,6 +66,105 @@ sonare::engine::ClipSchedule clip_for_track(uint32_t clip_id, uint32_t track_id,
 }
 
 }  // namespace
+
+TEST_CASE("TrackMixerRuntime clears lane insert automation slots when lanes change",
+          "[engine][track_mixer]") {
+  std::array<float, 4> source{};
+  source.fill(1.0f);
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 4);
+  player.set_clips({clip_for_track(1, 20, channels, 1, 4)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 4);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  sonare::mixing::ChannelStrip first_strip;
+  first_strip.add_pre_insert(std::make_unique<AutomatableGainProcessor>());
+  REQUIRE(mixer.bind_track_strip(10, &first_strip));
+  REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 0.25f));
+
+  REQUIRE(mixer.set_track_lanes({{20}}));
+  sonare::mixing::ChannelStrip second_strip;
+  second_strip.add_pre_insert(std::make_unique<AutomatableGainProcessor>());
+  REQUIRE(mixer.bind_track_strip(20, &second_strip));
+
+  std::array<float, 4> out{};
+  float* out_channels[] = {out.data()};
+  REQUIRE(mixer.render_clips(player, out_channels, 1, 4, 0));
+
+  REQUIRE(out[0] == Catch::Approx(1.0f).margin(1.0e-6f));
+  REQUIRE(out[3] == Catch::Approx(1.0f).margin(1.0e-6f));
+}
+
+TEST_CASE("TrackMixerRuntime clears bus insert automation slots when bus strip changes",
+          "[engine][track_mixer]") {
+  constexpr int kFrames = 256;
+  std::array<float, kFrames> source{};
+  for (int i = 0; i < kFrames; ++i) {
+    source[static_cast<size_t>(i)] = 0.25f * std::sin(2.0f * 3.14159265358979323846f * 1000.0f *
+                                                      static_cast<float>(i) / 48000.0f);
+  }
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kFrames);
+  player.set_clips({clip_for_track(1, 10, channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_buses({{1, 0.0f}}));
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({lane}));
+
+  sonare::mixing::api::Bus first_bus;
+  first_bus.id = "1";
+  first_bus.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "eq.parametric",
+       R"({"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1})"});
+  REQUIRE(mixer.set_bus_strip(1, first_bus));
+  size_t bus_index = 0;
+  unsigned int param_id = 0;
+  REQUIRE(mixer.resolve_bus_insert_param(1, 0, "band0.gainDb", &bus_index, &param_id));
+  REQUIRE(bus_index == 0);
+  REQUIRE(mixer.route_bus_insert_param_smoothed(bus_index, 0, param_id, 12.0f));
+
+  sonare::mixing::api::Bus second_bus;
+  second_bus.id = "1";
+  second_bus.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "eq.parametric",
+       R"({"band0.type":1,"band0.frequencyHz":1000,"band0.gainDb":0,"band0.enabled":1})"});
+  REQUIRE(mixer.set_bus_strip(1, second_bus));
+
+  sonare::engine::TrackMixerRuntime flat;
+  flat.prepare(48000.0, kFrames);
+  REQUIRE(flat.set_buses({{1, 0.0f}}));
+  REQUIRE(flat.set_track_lanes({lane}));
+  REQUIRE(flat.set_bus_strip(1, second_bus));
+
+  std::array<float, kFrames> out{};
+  std::array<float, kFrames> flat_out{};
+  float* out_channels[] = {out.data()};
+  float* flat_channels[] = {flat_out.data()};
+  for (int block = 0; block < 4; ++block) {
+    out.fill(0.0f);
+    flat_out.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out_channels, 1, kFrames, 0));
+    REQUIRE(flat.render_clips(player, flat_channels, 1, kFrames, 0));
+  }
+
+  auto rms = [](const std::array<float, kFrames>& samples) {
+    double sum = 0.0;
+    for (float sample : samples) {
+      sum += static_cast<double>(sample) * static_cast<double>(sample);
+    }
+    return std::sqrt(sum / static_cast<double>(samples.size()));
+  };
+  REQUIRE(rms(out) == Catch::Approx(rms(flat_out)).margin(1.0e-5));
+}
 
 TEST_CASE("TrackMixerRuntime routes clip tracks into independent lanes", "[engine][track_mixer]") {
   std::array<float, 4> source_a_l{1.0f, 1.0f, 1.0f, 1.0f};

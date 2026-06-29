@@ -319,6 +319,24 @@ class RealtimeEngine : private ClipPageRequestSink {
                               float value) noexcept;
   bool set_master_insert_param(unsigned int insert_index, const std::string& key,
                                float value) noexcept;
+  // Realtime change of one BUS insert parameter, addressed by JSON-key name. The
+  // name is resolved to the integer param_id on the control thread, then applied
+  // at the next block head. Returns false if the bus, insert, or key is unknown,
+  // the param is not realtime-safe, or the queue is full. insert/param must fit
+  // in 8 bits.
+  bool set_bus_insert_param(uint32_t bus_id, unsigned int insert_index, const std::string& key,
+                            float value) noexcept;
+  // Resolves a track-lane / master / bus insert parameter (JSON-key name) to the
+  // reserved insert-automation id used by setAutomationLane / setParameter. The
+  // returned id encodes (strip selector, insert index, processor param id) in the
+  // reserved insert namespace (see insert_automation_id.h). Returns -1 when the
+  // strip, insert, or key is unknown. Control-thread; touches no audio state.
+  int64_t resolve_track_insert_automation_id(uint32_t track_id, unsigned int insert_index,
+                                             const std::string& key) noexcept;
+  int64_t resolve_master_insert_automation_id(unsigned int insert_index,
+                                              const std::string& key) noexcept;
+  int64_t resolve_bus_insert_automation_id(uint32_t bus_id, unsigned int insert_index,
+                                           const std::string& key) noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const mastering::eq::EqBand& band) noexcept;
   bool set_master_eq_band(size_t band_index, const mastering::eq::EqBand& band) noexcept;
@@ -395,6 +413,15 @@ class RealtimeEngine : private ClipPageRequestSink {
   // AutomationEngine::EngineParamRouter trampoline: forwards reserved-namespace
   // automation lane values to route_engine_parameter on @p context.
   static bool route_engine_parameter_thunk(void* context, uint32_t param_id, float value) noexcept;
+  // Sets the smoothed target of a master-strip insert parameter from a reserved
+  // automation lane. The master insert chain lives outside TrackMixerRuntime, so
+  // its automated params get a parallel slot table here, advanced once per
+  // sub-block by tick_smoothed_params (same cadence as the lane/bus slots).
+  bool route_master_insert_param_smoothed(unsigned int insert_index, unsigned int param_id,
+                                          float value) noexcept;
+  void advance_master_insert_automations(int num_steps) noexcept;
+  void settle_master_insert_automations() noexcept;
+  void clear_master_insert_automations() noexcept;
 #endif
   void update_reported_graph_latency() noexcept;
   void enqueue_telemetry(Telemetry telemetry) noexcept;
@@ -557,6 +584,18 @@ class RealtimeEngine : private ClipPageRequestSink {
   std::unique_ptr<mixing::ChannelStrip> owned_master_strip_{};
   MonitorRuntime monitor_runtime_{};
   TrackMixerRuntime track_mixer_runtime_{};
+  // Automated master-strip insert parameters. The master insert chain is not part
+  // of TrackMixerRuntime, so its smoothers live here and are advanced once per
+  // sub-block by tick_smoothed_params, mirroring the lane/bus slot table.
+  static constexpr size_t kMaxMasterInsertAutomations = 16;
+  struct MasterInsertAutoSlot {
+    bool active = false;
+    unsigned int insert_index = 0;
+    unsigned int param_id = 0;
+    rt::ParamSmoother smoother{};
+  };
+  std::array<MasterInsertAutoSlot, kMaxMasterInsertAutomations> master_insert_auto_slots_{};
+  uint32_t master_insert_automation_overflow_count_ = 0;
 #endif
   rt::SpscQueue<rt::Command> commands_{};
   rt::SpscQueue<Telemetry> telemetry_{};

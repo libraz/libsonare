@@ -400,9 +400,16 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
             {
               busId: 200,
               sceneJson:
-                '{"version":1,"strips":[],"buses":[{"id":"200","inserts":[]}],"connections":[]}',
+                '{"version":1,"strips":[],"buses":[{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}',
             },
           ],
+        });
+        processor.receiveSync({
+          type: 'syncBusStripInsertParamByName',
+          busId: 200,
+          insertIndex: 0,
+          paramName: 'band0.gainDb',
+          value: 3,
         });
         processor.receiveSync({
           type: 'syncClips',

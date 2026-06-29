@@ -335,6 +335,14 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.value,
         );
         break;
+      case 'syncBusStripInsertParamByName':
+        this.engine.setBusStripInsertParamByName(
+          message.busId,
+          message.insertIndex,
+          message.paramName,
+          message.value,
+        );
+        break;
       case 'syncTrackStripPan':
         this.engine.setTrackStripPan(message.trackId, message.pan);
         break;
