@@ -468,6 +468,9 @@ set(SONARE_ENGINE_SOURCES
   engine/engine_controller.cpp
   engine/metronome.cpp
   engine/realtime_engine.cpp
+  engine/realtime_engine_lifecycle.cpp
+  engine/realtime_engine_commands.cpp
+  engine/realtime_engine_midi.cpp
   engine/realtime_engine_mixing.cpp
   engine/tempo_sync.cpp
 )
@@ -481,6 +484,8 @@ if(BUILD_MIXING)
     engine/mixing_runtime.cpp
     engine/monitor_runtime.cpp
     engine/track_mixer.cpp
+    engine/track_mixer_params.cpp
+    engine/track_mixer_render.cpp
   )
 endif()
 add_library(sonare_engine STATIC ${SONARE_ENGINE_SOURCES})
@@ -692,7 +697,10 @@ if(BUILD_ARRANGEMENT)
 
   add_library(sonare_arrangement STATIC
     arrangement/edit_model.cpp
-    arrangement/edit_command.cpp
+    arrangement/edit_command_track.cpp
+    arrangement/edit_command_clip.cpp
+    arrangement/edit_command_source_timeline.cpp
+    arrangement/edit_command_midi_assist_internal.cpp
     arrangement/edit_history.cpp
     arrangement/edit_compiler.cpp
   )
@@ -743,6 +751,9 @@ if(BUILD_ARRANGEMENT)
   # round-trip still works without the mixer JSON helpers.
   add_library(sonare_serialize STATIC
     serialize/project_serializer.cpp
+    serialize/project_serializer_encode.cpp
+    serialize/project_serializer_decode.cpp
+    serialize/project_serializer_helpers.cpp
   )
   target_include_directories(sonare_serialize PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
   target_link_libraries(sonare_serialize PUBLIC
