@@ -1278,15 +1278,29 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
     float* const* dest = routed_to_bus ? bus_planes.data() : channels;
     apply_lane_to_mix_surround(lane_index, dest, num_channels, dest_channels, num_samples);
   } else {
+    // Honor the strip's configured pan law (the offline/set_track_pan path
+    // already does). Use the same balance normalization as PannerProcessor's
+    // Balance mode so a centered lane stays at unity for any law and only the
+    // away channel is pulled down — for Linear0dB this is byte-identical to the
+    // previous hardcoded balance. A lane with no strip carries no configured
+    // law, so it keeps the historical Linear0dB balance.
+    const mixing::PanLaw lane_pan_law =
+        lane.strip ? lane.strip->pan_law() : mixing::PanLaw::Linear0dB;
     for (int i = 0; i < num_samples; ++i) {
       const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
       const float gate = lane.gate.process();
       const float pan = lane.pan.process();
       float left_gain = fader * gate;
       float right_gain = fader * gate;
-      if (num_channels >= 2) {
-        left_gain *= pan <= 0.0f ? 1.0f : 1.0f - pan;
-        right_gain *= pan >= 0.0f ? 1.0f : 1.0f + pan;
+      // A centered lane is left at unity (no pan processing) so an unpanned lane
+      // stays bit-exact regardless of the law; only an off-center pan engages
+      // the law-aware, balance-normalized gains.
+      if (num_channels >= 2 && pan != 0.0f) {
+        const mixing::PanGains g = mixing::compute_pan_gains(pan, lane_pan_law);
+        const float norm = std::max(g.left, g.right);
+        const float inv_norm = norm > 0.0f ? 1.0f / norm : 0.0f;
+        left_gain *= g.left * inv_norm;
+        right_gain *= g.right * inv_norm;
       }
       lane_channel(lane_index, 0)[i] *= left_gain;
       if (dest_left) dest_left[i] += lane_channel(lane_index, 0)[i];

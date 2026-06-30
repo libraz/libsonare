@@ -187,10 +187,21 @@ export class SonareRtRealtimeEngineRuntime {
       case 'syncMidiNoteOff':
       case 'syncMidiCc':
       case 'syncMidiPanic':
+      case 'syncTrackStripInsertParamByName':
+      case 'syncMasterStripInsertParamByName':
+      case 'syncBusStripInsertParamByName':
+      case 'syncTrackStripPan':
+      case 'syncTrackStripPanLaw':
+      case 'syncTrackStripPanMode':
+      case 'syncTrackStripDualPan':
+      case 'syncTrackStripChannelDelaySamples':
+      case 'syncMidiDestinationExternal':
+      case 'syncExternalMidiClock':
         // The sonare-rt C ABI exposes no set_clips / set_markers /
-        // set_automation_lane / set_track_lanes, so these mutations cannot
-        // reach a live sonare-rt engine. Surface a clear telemetry error rather
-        // than silently dropping.
+        // set_automation_lane / set_track_lanes / strip insert-param / pan /
+        // external-MIDI mutators, so these cannot reach a live sonare-rt engine.
+        // Surface a clear telemetry error rather than silently dropping (the
+        // default 'embind' runtime wires them fully).
         if (this.telemetryRing) {
           writeSonareEngineTelemetryRingBuffer(this.telemetryRing, {
             type: SonareEngineTelemetryType.Error,
@@ -203,6 +214,14 @@ export class SonareRtRealtimeEngineRuntime {
           });
         }
         break;
+      default: {
+        // Exhaustiveness guard: a newly added sync message must be handled (or
+        // explicitly listed above) — TypeScript fails to compile if `message`
+        // is not narrowed to `never` here.
+        const _exhaustive: never = message;
+        void _exhaustive;
+        break;
+      }
     }
   }
 

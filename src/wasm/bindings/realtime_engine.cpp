@@ -1007,9 +1007,12 @@ class RealtimeEngineWasm {
   // transport/clock bytes carry destinationId === kTransportDestination
   // (0xFFFFFFFF). A single queued channel-voice UMP may lower to more than one
   // item (e.g. a MIDI 2.0 program change with bank select). `max_records` caps
-  // the number of QUEUE records consumed (not output items). UMP types that do
-  // not lower to MIDI 1.0 (SysEx/Data, Utility, MIDI-2-only controllers) emit no
-  // bytes and are skipped.
+  // the number of OUTPUT events produced -- the unit shared by every surface.
+  // To keep that cap lossless we drain one queue record at a time, consuming it
+  // only while at least 3 output slots (the most one record can lower to) remain
+  // in the budget; records that do not fit stay queued for the next call. UMP
+  // types that do not lower to MIDI 1.0 (SysEx/Data, Utility, MIDI-2-only
+  // controllers) emit no bytes and are skipped.
   //
   // renderFrame coordinate: channel-voice events use the timeline sample
   // position; clock/transport bytes use the monotonic device render frame. They
@@ -1020,30 +1023,23 @@ class RealtimeEngineWasm {
     val out = val::array();
 #if defined(SONARE_WITH_ARRANGEMENT)
     if (max_records <= 0) return out;
-    std::array<sonare::host::ExternalMidiRecord, 256> records{};
-    int drained_total = 0;
+    sonare::host::ExternalMidiRecord record{};
     int out_count = 0;
-    while (drained_total < max_records) {
-      size_t want = static_cast<size_t>(max_records - drained_total);
-      if (want > records.size()) want = records.size();
-      const size_t batch = engine_.drain_external_midi(records.data(), want);
-      if (batch == 0) break;
-      drained_total += static_cast<int>(batch);
-      for (size_t i = 0; i < batch; ++i) {
-        const sonare::host::ExternalMidiRecord& rec = records[i];
-        // Shared lowering: identical MIDI-1 rules across every host surface.
-        const sonare::host::ExternalMidi1Lowered lowered =
-            sonare::host::lower_external_midi_record(rec);
-        for (uint8_t m = 0; m < lowered.count; ++m) {
-          const sonare::host::ExternalMidi1Message& msg = lowered.messages[m];
-          val item = val::object();
-          item.set("destinationId", static_cast<double>(rec.destination_id));
-          item.set("renderFrame", static_cast<double>(rec.event.render_frame));
-          val arr = val::array();
-          for (uint8_t b = 0; b < msg.byte_count; ++b) arr.set(b, msg.bytes[b]);
-          item.set("bytes", arr);
-          out.set(out_count++, item);
-        }
+    while (out_count + 3 <= max_records) {
+      if (engine_.drain_external_midi(&record, 1) == 0) break;
+      // Shared lowering: identical MIDI-1 rules across every host surface. With
+      // >=3 slots free, every lowered message of this record fits the budget.
+      const sonare::host::ExternalMidi1Lowered lowered =
+          sonare::host::lower_external_midi_record(record);
+      for (uint8_t m = 0; m < lowered.count; ++m) {
+        const sonare::host::ExternalMidi1Message& msg = lowered.messages[m];
+        val item = val::object();
+        item.set("destinationId", static_cast<double>(record.destination_id));
+        item.set("renderFrame", static_cast<double>(record.event.render_frame));
+        val arr = val::array();
+        for (uint8_t b = 0; b < msg.byte_count; ++b) arr.set(b, msg.bytes[b]);
+        item.set("bytes", arr);
+        out.set(out_count++, item);
       }
     }
 #else

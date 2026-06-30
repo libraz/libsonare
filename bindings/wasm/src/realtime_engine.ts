@@ -336,8 +336,9 @@ export class RealtimeEngine {
   /**
    * Drain queued external-MIDI events, already lowered to MIDI 1.0 byte
    * messages ready to write to a Web MIDI output port. Call once per audio
-   * block / animation frame. `maxRecords` caps the number of queue records
-   * consumed per call.
+   * block / animation frame. `maxRecords` caps the number of output events
+   * returned — the shared unit across every surface. Events past the cap stay
+   * queued for the next call (lossless); call again to drain the rest.
    */
   drainExternalMidi(maxRecords = 1024): WasmExternalMidiEvent[] {
     return this.native.drainExternalMidi(maxRecords);

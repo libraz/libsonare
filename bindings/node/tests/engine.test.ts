@@ -1394,6 +1394,49 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('drains external MIDI losslessly when maxRecords is below the queued count', () => {
+    // Regression for the over-drain data-loss bug: a small maxRecords cap must
+    // not discard events the native call already dequeued. Queue many events,
+    // drain in batches with a cap that is neither a multiple of the internal
+    // 256-slot buffer nor large enough to take everything at once, and assert
+    // every event survives across repeated calls.
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setMidiDestinationExternal(5, true);
+    const events = [];
+    const kNotes = 24; // 48 events total (on+off), well above the cap below
+    for (let i = 0; i < kNotes; i++) {
+      events.push({ renderFrame: i, word0: midi1Word(0x9, 1, 40 + i, 100), wordCount: 1 });
+      events.push({ renderFrame: i, word0: midi1Word(0x8, 1, 40 + i, 0), wordCount: 1 });
+    }
+    engine.setMidiClips([{ id: 7, trackId: 5, destinationId: 5, lengthSamples: 256, events }]);
+    engine.play();
+    engine.process([new Float32Array(128), new Float32Array(128)]);
+
+    const collected = [];
+    for (let guard = 0; guard < 1000; guard++) {
+      const batch = engine.drainExternalMidi(5); // cap < count, not a 256 multiple
+      if (batch.length === 0) break;
+      expect(batch.length).toBeLessThanOrEqual(5);
+      for (const ev of batch) collected.push(ev);
+    }
+
+    expect(collected.length).toBe(2 * kNotes);
+    expect(engine.externalMidiDroppedCount()).toBe(0);
+    // Losslessness: every queued note-on and note-off survives the capped drain.
+    const noteOns = new Set();
+    const noteOffs = new Set();
+    for (const ev of collected) {
+      const status = ev.bytes[0] & 0xf0;
+      if (status === 0x90) noteOns.add(ev.bytes[1]);
+      else if (status === 0x80) noteOffs.add(ev.bytes[1]);
+    }
+    for (let i = 0; i < kNotes; i++) {
+      expect(noteOns.has(40 + i)).toBe(true);
+      expect(noteOffs.has(40 + i)).toBe(true);
+    }
+    engine.destroy();
+  });
+
   it('forwards MIDI clock/transport to the external queue', () => {
     const engine = new RealtimeEngine(48000, 24000);
     engine.setTempo(120);

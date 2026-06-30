@@ -1268,7 +1268,8 @@ export class RealtimeEngine {
    * messages so the host can write them straight to an output port. Returns one
    * entry per lowered message; transport/clock bytes carry
    * `destinationId === 0xFFFFFFFF`. `maxRecords` caps the number of output
-   * events returned.
+   * events returned — the shared unit across every surface. Events past the cap
+   * stay queued for the next call (lossless); call again to drain the rest.
    */
   drainExternalMidi(maxRecords = 1024): EngineExternalMidiEvent[] {
     return this.native.drainExternalMidi(maxRecords);

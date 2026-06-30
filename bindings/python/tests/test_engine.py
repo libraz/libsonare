@@ -1249,6 +1249,46 @@ def test_engine_drains_external_midi_routing_to_host() -> None:
         assert engine.external_midi_dropped_count() == 0
 
 
+def test_engine_drain_external_midi_honors_max_records_cap_losslessly() -> None:
+    # Regression: drain must treat max_records as an output-event cap (not drain
+    # the whole queue), and must not lose events past the cap — they stay queued.
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        engine.set_midi_destination_external(5, True)
+        n_notes = 24
+        events = []
+        for i in range(n_notes):
+            events.append(EngineMidiEvent(i, word0=_midi1_word(0x9, 1, 40 + i, 100), word_count=1, group=1))
+            events.append(EngineMidiEvent(i, word0=_midi1_word(0x8, 1, 40 + i, 0), word_count=1, group=1))
+        engine.set_midi_clips(
+            [EngineMidiClipSchedule(id=7, track_id=5, destination_id=5, length_samples=256, events=events)]
+        )
+        engine.play()
+        engine.process([[0.0] * 128, [0.0] * 128])
+
+        # A single capped drain returns at most the cap and leaves the rest queued.
+        first = engine.drain_external_midi(5)
+        assert len(first) <= 5
+
+        collected = list(first)
+        for _ in range(1000):
+            batch = engine.drain_external_midi(5)
+            if not batch:
+                break
+            assert len(batch) <= 5
+            collected.extend(batch)
+
+        assert len(collected) == 2 * n_notes
+        assert engine.external_midi_dropped_count() == 0
+        # Losslessness: every queued note-on and note-off survives the capped drain.
+        note_ons = {ev.bytes[1] for ev in collected if ev.bytes[0] & 0xF0 == 0x90}
+        note_offs = {ev.bytes[1] for ev in collected if ev.bytes[0] & 0xF0 == 0x80}
+        for i in range(n_notes):
+            assert (40 + i) in note_ons
+            assert (40 + i) in note_offs
+
+
 def test_engine_forwards_midi_clock_transport_to_external_queue() -> None:
     with RealtimeEngine(
         sample_rate=48000.0, max_block_size=24000, command_capacity=16, telemetry_capacity=16

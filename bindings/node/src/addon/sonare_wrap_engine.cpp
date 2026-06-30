@@ -1,5 +1,6 @@
 #include "sonare_wrap_engine.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -875,9 +876,13 @@ Napi::Value RealtimeEngineWrap::ExternalMidiDroppedCount(const Napi::CallbackInf
 // Drains queued external-MIDI events, already lowered to MIDI 1.0 byte
 // messages. Each returned item is { destinationId, renderFrame, bytes:
 // number[] }; transport/clock bytes carry destinationId === 0xFFFFFFFF. A
-// single queued channel-voice event may lower to more than one item, so the
-// C-ABI buffer is drained in batches until the queue is empty. @p maxRecords
-// caps the number of output events produced.
+// single queued channel-voice event may lower to more than one item. @p
+// maxRecords caps the number of output events produced (the unit shared by
+// every surface). The C-ABI capacity passed per call is clamped to the
+// remaining budget so the destructive drain never consumes more events than it
+// can return — events that do not fit stay queued for the next call (lossless).
+// A budget below 3 (the most one record can lower to) stops the drain rather
+// than risk dropping a partially-lowered record.
 Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const int max_records =
@@ -887,13 +892,17 @@ Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info
   std::array<SonareExternalMidiEvent, 256> records{};
   uint32_t out_index = 0;
   while (static_cast<int>(out_index) < max_records) {
+    const size_t remaining = static_cast<size_t>(max_records) - out_index;
+    if (remaining < 3) break;  // too small to lower one record without loss
+    const size_t want = std::min(records.size(), remaining);
     size_t written = 0;
     const SonareError err =
-        sonare_engine_drain_external_midi(engine_, records.data(), records.size(), &written);
+        sonare_engine_drain_external_midi(engine_, records.data(), want, &written);
     ThrowIfError(env, err);
     if (env.IsExceptionPending()) return env.Undefined();
     if (written == 0) break;
-    for (size_t i = 0; i < written && static_cast<int>(out_index) < max_records; ++i) {
+    // written <= want <= remaining, so every drained event fits in the budget.
+    for (size_t i = 0; i < written; ++i) {
       const SonareExternalMidiEvent& rec = records[i];
       Napi::Object item = Napi::Object::New(env);
       item.Set("destinationId", Napi::Number::New(env, static_cast<double>(rec.destination_id)));

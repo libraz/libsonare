@@ -1278,9 +1278,11 @@ class RealtimeEngine(_EngineMidiMixin):
         """Drain queued external-MIDI events, lowered to MIDI 1.0 byte messages.
 
         Each returned :class:`ExternalMidiEvent` is one MIDI 1.0 message (1..3
-        bytes). The native drain requires a capacity of at least 3, so the buffer
-        is allocated at ``max(max_records, 3)`` and called repeatedly until the
-        queue is empty.
+        bytes). ``max_records`` caps the number of output events returned — the
+        shared unit across every surface. Events past the cap stay queued for the
+        next call (lossless); call again to drain the rest. The native drain
+        requires a capacity of at least 3 (the most one record can lower to), so
+        a remaining budget below 3 stops the drain rather than over-fetch.
         """
         if max_records <= 0:
             return []
@@ -1291,13 +1293,20 @@ class RealtimeEngine(_EngineMidiMixin):
         raw = (SonareExternalMidiEvent * capacity)()
         written = ctypes.c_size_t()
         results: list[ExternalMidiEvent] = []
-        while True:
+        while len(results) < max_records:
+            remaining = max_records - len(results)
+            if remaining < 3:
+                break  # too small to lower one record without loss
+            cap = min(capacity, remaining)
             _check(
                 lib.sonare_engine_drain_external_midi(
-                    self._require_handle(), raw, capacity, ctypes.byref(written)
+                    self._require_handle(), raw, cap, ctypes.byref(written)
                 )
             )
             count = int(written.value)
+            if count == 0:
+                break
+            # count <= cap <= remaining, so every drained event fits the budget.
             for i in range(count):
                 event = raw[i]
                 byte_count = max(0, min(int(event.byte_count), len(event.bytes)))
@@ -1308,8 +1317,6 @@ class RealtimeEngine(_EngineMidiMixin):
                         bytes=bytes(event.bytes[:byte_count]),
                     )
                 )
-            if count == 0:
-                break
         return results
 
     def transport_state(self) -> TransportState:

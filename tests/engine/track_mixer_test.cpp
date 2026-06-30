@@ -564,6 +564,48 @@ TEST_CASE("TrackMixerRuntime processes bound ChannelStrip for a track lane",
   REQUIRE(out_l.back() < 1.40f);
 }
 
+TEST_CASE("TrackMixerRuntime lane pan honors the strip's configured pan law",
+          "[engine][track_mixer]") {
+  // Regression for the live-vs-offline pan divergence: lane pan automation must
+  // use the strip's configured pan law (here constant-power), not a hardcoded
+  // linear balance. At pan 0.5 the constant-power away/near ratio (~0.414)
+  // differs from the linear ratio (0.5), so the law is observable.
+  std::array<float, 256> src_l{};
+  std::array<float, 256> src_r{};
+  src_l.fill(1.0f);
+  src_r.fill(1.0f);
+  const float* a[] = {src_l.data(), src_r.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 256);
+  player.set_clips({clip_for_track(1, 10, a, 2, 256)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 256);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  // Bind a stereo strip configured for the constant-power (-3 dB) pan law.
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Const3dB, 5.0f});
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kPan, 0.5f));
+
+  std::array<float, 256> out_l{};
+  std::array<float, 256> out_r{};
+  float* out[] = {out_l.data(), out_r.data()};
+  // Render enough blocks for the 5 ms pan smoother to fully settle.
+  for (int block = 0; block < 12; ++block) {
+    out_l.fill(0.0f);
+    out_r.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out, 2, 256, 0));
+  }
+
+  const float ratio = out_l.back() / out_r.back();
+  // Constant-power balance at pan 0.5: cos(0.75*pi/2)/sin(0.75*pi/2) ~= 0.4142.
+  REQUIRE(ratio == Catch::Approx(0.41421356f).margin(0.01f));
+  // Clearly distinct from the old hardcoded linear balance (ratio 0.5).
+  REQUIRE(ratio < 0.47f);
+}
+
 TEST_CASE("TrackMixerRuntime applies scene EQ insert for a track lane", "[engine][track_mixer]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 4;
