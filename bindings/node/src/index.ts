@@ -811,7 +811,8 @@ export class RealtimeEngine {
    * reserved automation id that can then be driven with
    * {@link setAutomationLane}, {@link setParameter}, or
    * {@link setParameterSmoothed}, exactly like a fader/pan id. Returns `-1`
-   * when the track, insert, or name is unknown.
+   * when the track, insert, or name is unknown. (The Python binding raises a
+   * `SonareError` for an unknown id where Node/WASM return the `-1` sentinel.)
    */
   resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);

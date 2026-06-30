@@ -717,6 +717,13 @@ export class RealtimeEngine {
     this.native.setBusStripInsertParamByName(busId, insertIndex, paramName, value);
   }
 
+  /**
+   * Resolves a track-lane insert parameter (by its JSON-key name) to the
+   * reserved automation id usable with `setAutomationLane` / `setParameter`.
+   * Returns `-1` when the track, insert, or name is unknown. (The Python binding
+   * raises a `SonareError` for an unknown id where Node/WASM return the `-1`
+   * sentinel.)
+   */
   resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);
   }
