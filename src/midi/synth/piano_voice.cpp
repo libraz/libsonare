@@ -137,7 +137,7 @@ int piano_unison_strings(uint8_t note) noexcept {
 }
 
 void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, uint8_t note,
-                           uint8_t velocity, uint64_t seed) noexcept {
+                           uint8_t velocity, uint64_t seed, bool una_corda) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float f0 = note_to_hz(note);
   const float period = static_cast<float>(sr) / f0;
@@ -209,12 +209,14 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
                            std::exp2(-(static_cast<float>(note & 0x7Fu) - 69.0f) / 36.0f);
   contact_samples_ =
       std::clamp(static_cast<int>(contact_ms * 0.001f * static_cast<float>(sr)), 8, 2048);
-  hammer_amp_ = 0.9f * std::pow(vel01, amp_exp);
+  // Una corda shifts the action onto a softer, less-grooved felt patch: a
+  // touch quieter with a darker attack (lower felt-stiffness cutoff).
+  hammer_amp_ = 0.9f * std::pow(vel01, amp_exp) * (una_corda ? 0.8f : 1.0f);
   comb_delay_ = static_cast<int>(std::clamp(params.strike_position, 0.0f, 0.5f) * period + 0.5f);
   exc_pos_ = 0;
   // Felt stiffening: compressed felt (hard strike) passes far more of the
   // pulse's top end — a velocity-driven one-pole on the injected force.
-  const float exc_cutoff = 800.0f * std::exp2(3.0f * vel01);
+  const float exc_cutoff = 800.0f * std::exp2(3.0f * vel01) * (una_corda ? 0.4f : 1.0f);
   exc_alpha_ = std::clamp(1.0f - std::exp(-6.28318530718f * exc_cutoff / static_cast<float>(sr)),
                           0.01f, 1.0f);
   exc_lp_ = 0.0f;

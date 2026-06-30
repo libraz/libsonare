@@ -132,7 +132,7 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
 // ---------------------------------------------------------------------------
 
 void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity,
-                             uint32_t voice_index, float glide_from_hz) noexcept {
+                             uint32_t voice_index, float glide_from_hz, bool una_corda) noexcept {
   patch = &p;
   key_down = true;
   releasing = false;
@@ -159,7 +159,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     percussion.start(p.percussion, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   if (p.mode == SynthEngineMode::kPiano) {
-    piano.start(p.piano, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    piano.start(p.piano, sample_rate, note, velocity, voice_seed(voice_index, note, age),
+                una_corda);
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -448,7 +449,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   }
   // Portamento: glide from the channel's previous note when enabled.
   const float glide_from = patch->glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;
-  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from);
+  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, channels_[ch].una_corda);
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
 
@@ -510,6 +511,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.pitch_bend = 8192;
   st.params.reset();
   sustain_pedal(ch, false);
+  st.una_corda = false;
   refresh_channel_mod(ch);
 }
 
@@ -548,6 +550,9 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       break;
     case 64:
       sustain_pedal(ch, value >= 64);
+      break;
+    case 67:
+      st.una_corda = value >= 64;  // soft pedal (affects notes struck while held)
       break;
     case 98:
       st.params.select_nrpn_lsb(value);

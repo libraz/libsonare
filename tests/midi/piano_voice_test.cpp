@@ -255,6 +255,45 @@ TEST_CASE("the felt hammer maps velocity to brightness", "[midi][synth][piano]")
   REQUIRE(forte_overtones > 1.8 * soft_overtones);
 }
 
+TEST_CASE("the soft pedal voices una corda darker and quieter", "[midi][synth][piano]") {
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+  // Same note and velocity, soft pedal (CC67) engaged vs not. The split is
+  // fixed (note fixed), so this isolates the felt voicing, not register.
+  auto attack = [&](bool soft) {
+    NativeSynthConfig cfg;
+    cfg.patch = piano;
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    if (soft) {
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 67, 127)));
+    }
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));  // C4
+    return render_left(synth, 4096);
+  };
+  // High-frequency energy share, split where the felt-stiffness lowpass acts
+  // (above ~6x C4), so the una-corda softening is measurable.
+  auto hf_fraction = [](const std::vector<float>& tone) {
+    const std::vector<double> power = power_spectrum(tone, 0);
+    const int split = static_cast<int>(std::lround(1570.0 / kRate * kFft));  // ~6 * C4
+    double low = 0.0;
+    double high = 0.0;
+    for (int b = 1; b < static_cast<int>(power.size()); ++b) {
+      (b >= split ? high : low) += power[static_cast<size_t>(b)];
+    }
+    const double total = low + high;
+    return total > 0.0 ? high / total : 0.0;
+  };
+  const std::vector<float> normale = attack(false);
+  const std::vector<float> soft = attack(true);
+  const double hf_normale = hf_fraction(normale);
+  const double hf_soft = hf_fraction(soft);
+  INFO("HF share: normale=" << hf_normale << " soft=" << hf_soft);
+  // Una corda is darker (smaller high-frequency share)...
+  REQUIRE(hf_soft < 0.8 * hf_normale);
+  // ...and a touch quieter at the attack.
+  REQUIRE(rms(soft, 0, 4096) < rms(normale, 0, 4096));
+}
+
 TEST_CASE("the damper kills the string at note-off", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   NativeSynthConfig cfg;

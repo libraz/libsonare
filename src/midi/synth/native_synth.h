@@ -207,8 +207,9 @@ struct NativeSynthVoice : VoiceState {
   /// pool fills them in allocate()); @p voice_index seeds the deterministic
   /// per-voice variation. @p p must outlive the voice. @p glide_from_hz != 0
   /// glides the pitch from that frequency (portamento; needs p.glide_ms > 0).
+  /// @p una_corda engages the soft-pedal voicing (piano mode only).
   void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
-             float glide_from_hz = 0.0f) noexcept;
+             float glide_from_hz = 0.0f, bool una_corda = false) noexcept;
   /// Renders one mono sample. Deactivates when the amp envelope ends.
   float render(const Sf2ChannelMod& mod) noexcept;
   /// Note-off: enter release (ignored by one-shot patches).
@@ -253,6 +254,7 @@ class NativeSynth final : public MidiInstrument {
  private:
   struct ChannelState {
     bool sustain = false;
+    bool una_corda = false;    // CC67 soft pedal
     uint8_t volume = 100;      // CC7
     uint8_t expression = 127;  // CC11
     uint8_t pan = 64;          // CC10
