@@ -197,6 +197,34 @@ TEST_CASE("the synthesized inharmonicity tracks the physical B(note) curve",
   REQUIRE(meas_c6 > meas_c4);
 }
 
+TEST_CASE("piano tuning follows a stretched (Railsback) octave curve", "[midi][synth][piano]") {
+  using sonare::midi::synth::piano_stretch_cents;
+  // A4 is the anchor; the curve is sharp in the treble, flat in the bass, and
+  // grows toward both extremes (clamped to a tasteful range).
+  REQUIRE(piano_stretch_cents(69) == 0.0f);                     // A4 anchor
+  REQUIRE(piano_stretch_cents(96) > 1.0f);                      // C7 sharp
+  REQUIRE(piano_stretch_cents(108) > piano_stretch_cents(96));  // grows up top
+  REQUIRE(piano_stretch_cents(48) < 0.0f);                      // C3 flat
+  REQUIRE(piano_stretch_cents(21) < piano_stretch_cents(48));   // flatter down low
+  REQUIRE(std::fabs(piano_stretch_cents(108)) <= 22.0f);
+  REQUIRE(std::fabs(piano_stretch_cents(21)) <= 22.0f);
+
+  // Spectrally: a treble fundamental lands measurably sharp of equal
+  // temperament (the stretch is FFT-resolvable up high).
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+  const int note = 96;  // C7
+  const double et = note_hz(note);
+  const std::vector<float> tone = render_patch(piano, static_cast<uint8_t>(note), 100, 48000);
+  const std::vector<double> power = power_spectrum(tone, 2048);
+  const double f1 = peak_hz_in(power, et * 0.99, et * 1.02);
+  REQUIRE(f1 > 0.0);
+  const double cents = 1200.0 * std::log2(f1 / et);
+  INFO("C7 measured stretch = " << cents << " cents (intended " << piano_stretch_cents(note)
+                                << ")");
+  REQUIRE(cents > 1.5);   // clearly sharp of ET
+  REQUIRE(cents < 12.0);  // but within the tasteful range
+}
+
 TEST_CASE("the unison string count is graded across the keyboard", "[midi][synth][piano]") {
   using sonare::midi::synth::piano_unison_strings;
   // Single wound strings in the deep bass, wound bichords through the

@@ -74,6 +74,13 @@ float piano_inharmonicity_b(uint8_t note) noexcept;
 /// single-stage decay (no unison aftersound) while the treble couples three.
 int piano_unison_strings(uint8_t note) noexcept;
 
+/// Railsback stretch (cents) added to the equal-tempered pitch of @p note. A
+/// real piano is tuned with progressively widened octaves so the inharmonically
+/// sharp partials of the lower strings lock to the fundamentals above: sharp in
+/// the treble, flat in the bass, zero at the A4 anchor. The perceptual
+/// completion of the stiff-string inharmonicity (piano_inharmonicity_b).
+float piano_stretch_cents(uint8_t note) noexcept;
+
 /// Piano section of a NativeSynthPatch (used when mode == kPiano).
 struct PianoPatchParams {
   /// Coupled unison strings per note (clamped to [1, kMaxPianoStrings]).

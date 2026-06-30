@@ -122,10 +122,20 @@ int piano_unison_strings(uint8_t note) noexcept {
   return 3;               // tenor break up: plain trichords.
 }
 
+float piano_stretch_cents(uint8_t note) noexcept {
+  // Gentle odd cubic through A4 (note 69), clamped to a tasteful range. Real
+  // Railsback curves steepen at the extremes; the clamp stands in for that
+  // without overshooting into an audibly detuned keyboard.
+  const float x = (static_cast<float>(note & 0x7Fu) - 69.0f) / 39.0f;
+  return std::clamp(14.0f * x * x * x, -22.0f, 22.0f);
+}
+
 void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, uint8_t note,
                            uint8_t velocity, uint64_t seed, bool una_corda) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
-  const float f0 = note_to_hz(note);
+  // Stretch tuning widens the octaves so the inharmonic partials lock the way
+  // a tuned grand's do (sharp treble, flat bass; A4 anchored).
+  const float f0 = note_to_hz(note) * std::exp2(piano_stretch_cents(note) / 1200.0f);
   const float period = static_cast<float>(sr) / f0;
   const float w0 = kTwoPi / period;
   VoiceRandomSequence jitter(seed);
