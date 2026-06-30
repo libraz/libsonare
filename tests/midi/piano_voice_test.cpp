@@ -344,6 +344,36 @@ TEST_CASE("the sustain pedal adds sympathetic resonance", "[midi][synth][piano]"
   REQUIRE(wet > 1.03f * dry);
 }
 
+TEST_CASE("the sostenuto pedal holds only the notes down when it engages", "[midi][synth][piano]") {
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+  // Strike C4, optionally work the sostenuto pedal, release the key, then
+  // measure the 1.5-2.0 s tail. A captured note keeps ringing; an uncaptured
+  // one is damped at key-up.
+  auto cc66 = [] { return sonare::midi::make_midi1_control_change(0, 0, 66, 127); };
+  auto tail_rms = [&](bool press_while_held, bool press_before_note) {
+    NativeSynthConfig cfg;
+    cfg.patch = piano;
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    if (press_before_note) synth.on_event(0, event(cc66()));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    render_left(synth, 12000);  // 0.25 s with the key down
+    if (press_while_held) synth.on_event(0, event(cc66()));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    const std::vector<float> tail = render_left(synth, 96000);  // 2 s tail
+    return rms(tail, 72000, 96000);                             // 1.5 - 2.0 s
+  };
+  const float captured = tail_rms(true, false);   // pedal pressed while held
+  const float released = tail_rms(false, false);  // no pedal -> damped
+  const float late = tail_rms(false, true);       // note struck after the press
+  REQUIRE(released > 0.0f);
+  // The note held when the pedal engaged keeps ringing far above the damped
+  // baseline...
+  REQUIRE(captured > 5.0f * released);
+  // ...while a note struck after the press is not captured (unlike sustain).
+  REQUIRE(late < 3.0f * released);
+}
+
 TEST_CASE("piano rendering is deterministic", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   const std::vector<float> first = render_patch(piano, 60, 100, 8192);

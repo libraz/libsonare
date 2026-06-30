@@ -198,6 +198,9 @@ struct NativeSynthVoice : VoiceState {
   /// Seeded per-voice pan scatter (patch stereo_spread; pan units).
   float pan_spread_units = 0.0f;
   bool key_down = false;
+  /// Captured by the sostenuto pedal (CC66): held past key-up until the pedal
+  /// lifts, regardless of the sustain pedal.
+  bool sostenuto = false;
   // Cached stereo gains for the channel pan; recomputed on change.
   float cached_pan_units = 1.0e9f;
   float gain_left = 0.70710678f;
@@ -270,6 +273,7 @@ class NativeSynth final : public MidiInstrument {
   void note_off(uint8_t channel, uint8_t note) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
   void sustain_pedal(uint8_t channel, bool down) noexcept;
+  void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;

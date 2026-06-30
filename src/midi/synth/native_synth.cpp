@@ -136,6 +136,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   patch = &p;
   key_down = true;
   releasing = false;
+  sostenuto = false;
 
   VoiceRandomSequence seq;
   seq.reseed(voice_index, note, age);
@@ -459,7 +460,8 @@ void NativeSynth::note_off(uint8_t channel, uint8_t note) noexcept {
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.note == note && v.channel == ch && v.key_down) {
       v.key_down = false;
-      if (!channels_[ch].sustain) v.release();
+      // The sustain pedal or a sostenuto capture keeps the string ringing.
+      if (!channels_[ch].sustain && !v.sostenuto) v.release();
     }
   }
 }
@@ -471,7 +473,23 @@ void NativeSynth::sustain_pedal(uint8_t channel, bool down) noexcept {
   channels_[ch].sustain = down;
   if (down) return;
   for (NativeSynthVoice& v : pool_) {
-    if (v.active && v.channel == ch && !v.key_down && !v.releasing) v.release();
+    // A sostenuto-captured note stays held even when the sustain pedal lifts.
+    if (v.active && v.channel == ch && !v.key_down && !v.releasing && !v.sostenuto) v.release();
+  }
+}
+
+void NativeSynth::sostenuto_pedal(uint8_t channel, bool down) noexcept {
+  if (!prepared_) return;
+  const uint8_t ch = channel & 0x0Fu;
+  for (NativeSynthVoice& v : pool_) {
+    if (!v.active || v.channel != ch) continue;
+    if (down) {
+      // Capture only the notes whose keys are down at the moment of the press.
+      if (v.key_down) v.sostenuto = true;
+    } else if (v.sostenuto) {
+      v.sostenuto = false;
+      if (!v.key_down && !channels_[ch].sustain) v.release();
+    }
   }
 }
 
@@ -482,6 +500,7 @@ void NativeSynth::all_notes_off(uint8_t channel) noexcept {
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch && !v.releasing) {
       v.key_down = false;
+      v.sostenuto = false;
       v.release();
     }
   }
@@ -511,6 +530,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.pitch_bend = 8192;
   st.params.reset();
   sustain_pedal(ch, false);
+  sostenuto_pedal(ch, false);
   st.una_corda = false;
   refresh_channel_mod(ch);
 }
@@ -550,6 +570,9 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       break;
     case 64:
       sustain_pedal(ch, value >= 64);
+      break;
+    case 66:
+      sostenuto_pedal(ch, value >= 64);
       break;
     case 67:
       st.una_corda = value >= 64;  // soft pedal (affects notes struck while held)
