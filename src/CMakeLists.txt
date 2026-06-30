@@ -141,7 +141,8 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/sonare_c_project.cpp
   c_api/project_bounce.cpp
   c_api/project_core.cpp
-  c_api/project_edit.cpp
+  c_api/project_edit_track.cpp
+  c_api/project_edit_clip.cpp
   c_api/project_midi.cpp
   c_api/project_mir.cpp
   c_api/project_soundfont.cpp
