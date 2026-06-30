@@ -101,6 +101,14 @@ struct PipeOrganRank {
   /// harmonic-rich, brassy spectrum (trumpet / oboe / trompette stops). The
   /// nonlinearity self-limits, so the loop stays bounded.
   float reed = 0.0f;
+  /// Mouth/radiation correction in [0,1]: how brightly the pipe radiates into
+  /// the room. A pipe's open mouth and end are inefficient bass radiators (the
+  /// radiation impedance rises with frequency), so the sound in the room is
+  /// brighter than the pressure inside the column. >0 adds a gentle post-loop
+  /// high-shelf that lifts the upper partials, voicing the pipe's "speak" into
+  /// the air. It is outside the feedback loop, so it never affects pitch or
+  /// stability.
+  float radiation = 0.0f;
 };
 
 /// Flue-pipe section of a NativeSynthPatch (used when mode == kPipeOrgan).
@@ -133,6 +141,9 @@ struct PipeOrganPatchParams {
   /// Reed (lingual) character in [0,1] for the single implicit rank (used only
   /// when rank_count == 0). See PipeOrganRank::reed.
   float reed = 0.0f;
+  /// Mouth/radiation correction in [0,1] for the single implicit rank (used
+  /// only when rank_count == 0). See PipeOrganRank::radiation.
+  float radiation = 0.0f;
 
   /// Registration: number of ranks that sound together (0 = a single implicit
   /// 8' rank built from {stopped, brightness}; >0 uses ranks[0..rank_count)).
@@ -222,6 +233,11 @@ class PipeOrganVoiceCore {
     /// output trim that holds a buzzing reed at a flue pipe's loudness.
     float reed = 0.0f;
     float tone_scale = 1.0f;
+    /// Mouth/radiation high-shelf (post-loop, outside the feedback path): the HF
+    /// lift gain and the one-pole splitter state. rad_gain == 0 is a bypass.
+    float rad_gain = 0.0f;
+    float rad_alpha = 0.0f;
+    float rad_state = 0.0f;
     /// Rank mix gain (level * the chorus normalisation) and noise stream offset.
     float mix = 0.0f;
     uint64_t noise_offset = 0;

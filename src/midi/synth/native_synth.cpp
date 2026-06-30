@@ -154,12 +154,14 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.pipe_organ.release_damp_s =
       std::clamp(sanitize(p.pipe_organ.release_damp_s, 0.08f), 0.01f, 10.0f);
   p.pipe_organ.reed = std::clamp(sanitize(p.pipe_organ.reed, 0.0f), 0.0f, 1.0f);
+  p.pipe_organ.radiation = std::clamp(sanitize(p.pipe_organ.radiation, 0.0f), 0.0f, 1.0f);
   p.pipe_organ.rank_count = std::clamp(p.pipe_organ.rank_count, 0, kMaxPipeRanks);
   for (auto& rank : p.pipe_organ.ranks) {
     rank.footage_mult = std::clamp(sanitize(rank.footage_mult, 1.0f), 0.25f, 16.0f);
     rank.brightness = std::clamp(sanitize(rank.brightness, 0.5f), 0.0f, 1.0f);
     rank.level = std::clamp(sanitize(rank.level, 1.0f), 0.0f, 1.0f);
     rank.reed = std::clamp(sanitize(rank.reed, 0.0f), 0.0f, 1.0f);
+    rank.radiation = std::clamp(sanitize(rank.radiation, 0.0f), 0.0f, 1.0f);
   }
   p.pipe_organ.tremulant_rate_hz =
       std::clamp(sanitize(p.pipe_organ.tremulant_rate_hz, 0.0f), 0.0f, 12.0f);

@@ -114,6 +114,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.pipe_organ.tone_decay_s = 8.0f;
     patch.pipe_organ.breath = 0.45f;
     patch.pipe_organ.chiff = 0.3f;
+    patch.pipe_organ.radiation = 0.4f;  // an open flute speaks brightly into the room
     patch.gain = 0.7f;
     flute.config = from_patch(clamp_synth_patch(patch));
   }
@@ -134,6 +135,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.pipe_organ.tone_decay_s = 8.0f;
     patch.pipe_organ.breath = 0.4f;
     patch.pipe_organ.chiff = 0.25f;
+    patch.pipe_organ.radiation = 0.15f;  // a stopped flute stays soft and hollow
     patch.gain = 0.7f;
     bourdon.config = from_patch(clamp_synth_patch(patch));
   }

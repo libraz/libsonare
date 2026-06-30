@@ -403,12 +403,14 @@ ProgramOverrides build_program_overrides() noexcept {
   o.church_organ.pipe_organ.chiff = 0.45f;
   // GM Church Organ: a principal chorus (plenum) — 16' stopped sub for gravity
   // under an 8'+4'+2-2/3'+2' open principal chorus, the upperwork brighter.
+  // The upperwork (smaller pipes) radiates more brightly into the room than the
+  // wide bass ranks: radiation rises rank by rank, the 16' bourdon staying dark.
   o.church_organ.pipe_organ.rank_count = 5;
-  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.34f, 0.7f};  // 16' bourdon
-  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.6f, 1.0f};              // 8' principal
-  o.church_organ.pipe_organ.ranks[2] = {2.0f, false, 0.66f, 0.85f};            // 4' octave
-  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.72f, 0.5f};             // 2-2/3' quint
-  o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.78f, 0.6f};             // 2' super-octave
+  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.34f, 0.7f, 0.0f, 0.0f};  // 16'
+  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.6f, 1.0f, 0.0f, 0.2f};    // 8' principal
+  o.church_organ.pipe_organ.ranks[2] = {2.0f, false, 0.66f, 0.85f, 0.0f, 0.3f};  // 4' octave
+  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.72f, 0.5f, 0.0f, 0.4f};   // 2-2/3' quint
+  o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.78f, 0.6f, 0.0f, 0.5f};   // 2' super-octave
   // A touch of wind sag so a full chord breathes; tremulant off by default.
   o.church_organ.pipe_organ.wind_sag = 0.25f;
   o.church_organ.stereo_spread = 0.2f;
@@ -424,8 +426,8 @@ ProgramOverrides build_program_overrides() noexcept {
   o.reed_organ.pipe_organ.breath = 0.35f;
   o.reed_organ.pipe_organ.chiff = 0.3f;
   o.reed_organ.pipe_organ.rank_count = 2;
-  o.reed_organ.pipe_organ.ranks[0] = {1.0f, /*stopped=*/false, 0.8f, 1.0f, 0.85f};  // 8' reed
-  o.reed_organ.pipe_organ.ranks[1] = {2.0f, false, 0.82f, 0.55f, 0.7f};             // 4' reed
+  o.reed_organ.pipe_organ.ranks[0] = {1.0f, /*stopped=*/false, 0.8f, 1.0f, 0.85f, 0.25f};  // 8'
+  o.reed_organ.pipe_organ.ranks[1] = {2.0f, false, 0.82f, 0.55f, 0.7f, 0.3f};              // 4'
   o.reed_organ.pipe_organ.wind_sag = 0.2f;
   o.reed_organ.stereo_spread = 0.18f;
   o.reed_organ.gain = 0.6f;

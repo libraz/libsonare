@@ -22,6 +22,14 @@ constexpr float kChiffGain = 0.9f;
 /// Reed valve drive inside the loop saturator: the small-signal gain that lets
 /// the reed self-oscillate into a bright, harmonic-rich limit cycle.
 constexpr float kReedDrive = 2.6f;
+/// Mouth/radiation high-shelf corner (Hz): the absolute frequency above which a
+/// pipe radiates efficiently (radiation impedance ~ rises to ka ~ 1). Fixed in
+/// absolute terms, not per-pitch, because radiation is a property of the room
+/// coupling, not the note.
+constexpr float kRadiationCornerHz = 1400.0f;
+/// Full-radiation HF lift: the post-loop high shelf adds up to this much gain to
+/// the partials above the corner (radiation == 1 -> ~ +8 dB of "speak").
+constexpr float kRadiationLift = 1.5f;
 
 /// Noise draw index bases (kept far apart so the pre-fill, breath and chiff
 /// streams never reuse the same draws on a single per-voice seed). A per-rank
@@ -59,6 +67,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   implicit.brightness = params.brightness;
   implicit.level = 1.0f;
   implicit.reed = params.reed;
+  implicit.radiation = params.radiation;
   const PipeOrganRank* ranks = &implicit;
   int count = 1;
   if (params.rank_count > 0) {
@@ -92,6 +101,15 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     // cycle pins near +-1), so trim the output back toward a flue's loudness.
     pipe.reed = std::clamp(ranks[r].reed, 0.0f, 1.0f);
     pipe.tone_scale = 1.0f - 0.6f * pipe.reed;
+    // Mouth/radiation correction: a post-loop high-shelf (a one-pole splitter
+    // plus an HF lift) emulating the pipe radiating brighter into the room than
+    // the column's internal pressure. Outside the loop, so it cannot move the
+    // pitch or destabilise the feedback. rad_gain == 0 leaves the tone untouched.
+    const float radiation = std::clamp(ranks[r].radiation, 0.0f, 1.0f);
+    pipe.rad_gain = radiation * kRadiationLift;
+    pipe.rad_alpha = std::clamp(
+        1.0f - std::exp(-kTwoPi * kRadiationCornerHz / static_cast<float>(sr)), 0.0f, 1.0f);
+    pipe.rad_state = 0.0f;
 
     const float footage = ranks[r].footage_mult > 0.01f ? ranks[r].footage_mult : 1.0f;
     const float f0 = base_f0 * footage;
@@ -212,7 +230,15 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
     const float out = rt::lagrange3_fractional_delay(pipe.buffer, static_cast<size_t>(pipe.size),
                                                      pipe.write_index, delay_q8, in_dc);
     pipe.lp_state += pipe.alpha * (out - pipe.lp_state);
-    mix += pipe.mix * pipe.tone_scale * (out + chiff);
+
+    // Mouth/radiation high-shelf (post-loop): lift the partials the pipe
+    // radiates more efficiently into the room. rad_gain == 0 is a true bypass.
+    float radiated = out;
+    if (pipe.rad_gain > 0.0f) {
+      pipe.rad_state += pipe.rad_alpha * (out - pipe.rad_state);
+      radiated = out + pipe.rad_gain * (out - pipe.rad_state);
+    }
+    mix += pipe.mix * pipe.tone_scale * (radiated + chiff);
   }
   ++drive_index_;
   return mix;

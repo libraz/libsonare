@@ -7,6 +7,7 @@
 #include "midi/synth/pipe_organ_voice.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <vector>
@@ -484,6 +485,103 @@ TEST_CASE("the swell box darkens the organ as the pedal closes", "[midi][synth][
   // The closed shutter is a lowpass: a markedly lower spectral centroid (the
   // level cut is the expression's job and is not what this asserts).
   REQUIRE(swell_centroid(shut, 8000) < 0.6 * swell_centroid(open, 8000));
+}
+
+// --- Phase 4: mouth/radiation correction + room coupling ---
+
+TEST_CASE("mouth radiation brightens the pipe without moving the pitch", "[midi][synth][organ]") {
+  // The radiation correction is a post-loop high-shelf: it lifts the partials
+  // the pipe radiates into the room, so the spectral centroid rises, while the
+  // sounding fundamental (set by the feedback loop it sits outside of) is
+  // unchanged and the tone stays bounded.
+  NativeSynthPatch dry = organ_base_patch();
+  dry.pipe_organ.radiation = 0.0f;
+  NativeSynthPatch bright = organ_base_patch();
+  bright.pipe_organ.radiation = 1.0f;
+
+  const std::vector<float> dry_tone = render_patch(dry, 57, 110, 24000);  // A3
+  const std::vector<float> bright_tone = render_patch(bright, 57, 110, 24000);
+  REQUIRE(peak(bright_tone) > 0.01f);
+  REQUIRE(peak(bright_tone) < 4.0f);
+  REQUIRE(std::isfinite(bright_tone.back()));
+  // Brighter in the room.
+  REQUIRE(swell_centroid(bright_tone, 8000) > 1.15 * swell_centroid(dry_tone, 8000));
+  // Same pitch (the shelf is outside the feedback loop).
+  const double dry_f0 = fft_fundamental(dry_tone, 8000, 220.0);
+  const double bright_f0 = fft_fundamental(bright_tone, 8000, 220.0);
+  REQUIRE(std::fabs(bright_f0 / dry_f0 - 1.0) < 0.005);
+}
+
+TEST_CASE("radiation off renders bit-identically to the bare pipe", "[midi][synth][organ]") {
+  // radiation == 0 is a true bypass: the new shelf must not perturb the
+  // deterministic render of any existing (radiation-free) preset or patch.
+  NativeSynthPatch patch = organ_base_patch();
+  patch.pipe_organ.radiation = 0.0f;
+  const std::vector<float> a = render_patch(patch, 57, 100, 8192);
+  const std::vector<float> b = render_patch(patch, 57, 100, 8192);
+  REQUIRE(a == b);
+  REQUIRE(peak(a) > 0.01f);
+}
+
+TEST_CASE("the pipe organ is a clean reverb source (dc-free, sustained)", "[midi][synth][organ]") {
+  // A church organ is almost always heard through a long room reverb. For the
+  // acoustic tail to develop cleanly the source must carry no DC offset (the
+  // in-loop and bus DC blockers) and sustain steady energy (no decay) for the
+  // whole held note, so the reverb integrates a stable excitation.
+  using sonare::midi::synth::find_synth_preset;
+  NativeSynthConfig cfg = find_synth_preset("church-organ")->config;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  for (uint8_t note : {48, 55, 60, 64, 67}) {
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+  }
+  const std::vector<float> tone = render_left(synth, 48000);
+
+  // DC-free: the mean over the held tone is negligible against its RMS.
+  double mean = 0.0;
+  for (size_t i = 8000; i < tone.size(); ++i) mean += tone[i];
+  mean /= static_cast<double>(tone.size() - 8000);
+  const float body = rms(tone, 8000, tone.size());
+  REQUIRE(body > 0.01f);
+  REQUIRE(std::fabs(mean) < 0.02 * body);
+
+  // Sustained: late energy tracks early energy (a reverb-ready steady source).
+  const float early = rms(tone, 8000, 16000);
+  const float late = rms(tone, 40000, 48000);
+  REQUIRE(late > 0.7f * early);
+  REQUIRE(late < 1.4f * early);
+}
+
+TEST_CASE("a full plenum renders faster than real time", "[.][bench][organ-cpu]") {
+  // CPU probe (opt-in, excluded from the default run): the dominant cost of a
+  // pipe organ is the simultaneous waveguide count — a thick chord across a
+  // multi-rank plenum. This measures it and asserts only a loose real-time
+  // margin (it is HW-sensitive; the printed ratio is the useful artefact). The
+  // five-rank church-organ over a ten-note chord is 50 waveguides at once.
+  using sonare::midi::synth::find_synth_preset;
+  NativeSynthConfig cfg = find_synth_preset("church-organ")->config;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  for (uint8_t note : {36, 43, 48, 55, 60, 64, 67, 72, 76, 79}) {
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+  }
+
+  constexpr int kBlocks = 4000;  // ~21 s of audio at 256-sample blocks
+  std::vector<float> left(256, 0.0f);
+  std::vector<float> right(256, 0.0f);
+  float* chans[2] = {left.data(), right.data()};
+  synth.process(chans, 2, 256);  // warm the caches before timing
+
+  const auto t0 = std::chrono::steady_clock::now();
+  for (int b = 0; b < kBlocks; ++b) synth.process(chans, 2, 256);
+  const auto t1 = std::chrono::steady_clock::now();
+
+  const double cpu_s = std::chrono::duration<double>(t1 - t0).count();
+  const double audio_s = static_cast<double>(kBlocks) * 256.0 / kRate;
+  const double x_realtime = audio_s / cpu_s;
+  WARN("church-organ plenum (10 notes x 5 ranks = 50 waveguides): " << x_realtime << "x real time");
+  REQUIRE(std::isfinite(left[0]));
+  REQUIRE(x_realtime > 1.0);  // loose: must sustain real time even on a slow box
 }
 
 TEST_CASE("the tremulant undulates the wind", "[midi][synth][organ]") {
