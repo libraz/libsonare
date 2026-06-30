@@ -26,20 +26,21 @@ struct ChromaFilterbankCacheKey {
   int n_fft;
   int n_chroma;
   float tuning;
-  float fmin;
-  int n_octaves;
+  float ctroct;
+  float octwidth;
+  bool base_c;
   ChromaFilterNorm norm;
 
   // Exact equality so the equal/hash contract holds: the hash mixes the raw
-  // float bits of tuning/fmin, so a fuzzy operator== would let two
-  // logically-"equal" keys hash to different buckets and silently miss the
-  // cache (and, on a bucket collision, could even return the wrong entry). The
-  // float fields are quantized at construction (see make_key), so exact
-  // comparison still produces cache hits for near-equal inputs.
+  // float bits, so a fuzzy operator== would let two logically-"equal" keys hash
+  // to different buckets and silently miss the cache (and, on a bucket
+  // collision, could even return the wrong entry). The float fields are
+  // quantized at construction (see make_key), so exact comparison still produces
+  // cache hits for near-equal inputs.
   bool operator==(const ChromaFilterbankCacheKey& other) const {
     return sample_rate == other.sample_rate && n_fft == other.n_fft && n_chroma == other.n_chroma &&
-           n_octaves == other.n_octaves && norm == other.norm && tuning == other.tuning &&
-           fmin == other.fmin;
+           norm == other.norm && tuning == other.tuning && ctroct == other.ctroct &&
+           octwidth == other.octwidth && base_c == other.base_c;
   }
 };
 
@@ -48,23 +49,23 @@ struct ChromaFilterbankCacheKey {
 /// the historical fuzzy tolerances (1e-4) so previously-distinct keys stay
 /// distinct while float noise collapses.
 ChromaFilterbankCacheKey make_key(int sr, int n_fft, const ChromaFilterConfig& config) {
-  constexpr float kTuningGrid = 1e-4f;  // fractions of a chroma bin
-  constexpr float kFminGrid = 1e-4f;    // Hz
+  constexpr float kGrid = 1e-4f;
   return ChromaFilterbankCacheKey{sr,
                                   n_fft,
                                   config.n_chroma,
-                                  quantize(config.tuning, kTuningGrid),
-                                  quantize(config.fmin, kFminGrid),
-                                  config.n_octaves,
+                                  quantize(config.tuning, kGrid),
+                                  quantize(config.ctroct, kGrid),
+                                  quantize(config.octwidth, kGrid),
+                                  config.base_c,
                                   config.norm};
 }
 
 struct ChromaFilterbankCacheKeyHash {
   size_t operator()(const ChromaFilterbankCacheKey& k) const {
     return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.n_fft) << 1) ^
-           (std::hash<int>()(k.n_chroma) << 2) ^ (std::hash<int>()(k.n_octaves) << 3) ^
+           (std::hash<int>()(k.n_chroma) << 2) ^ (std::hash<bool>()(k.base_c) << 3) ^
            (std::hash<int>()(static_cast<int>(k.norm)) << 4) ^ (std::hash<float>()(k.tuning) << 5) ^
-           (std::hash<float>()(k.fmin) << 6);
+           (std::hash<float>()(k.ctroct) << 6) ^ (std::hash<float>()(k.octwidth) << 7);
   }
 };
 
@@ -102,71 +103,68 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
   SONARE_CHECK(n_fft > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_chroma > 0, ErrorCode::InvalidParameter);
 
-  int n_bins = n_fft / 2 + 1;
-  int n_chroma = config.n_chroma;
+  // Direct port of librosa.filters.chroma: Gaussian bumps per FFT bin, an
+  // optional per-octave Gaussian envelope (ctroct/octwidth), column (axis=0)
+  // normalization, and a base-C rotation. See tests/librosa/reference/chroma.json.
+  const int n_bins = n_fft / 2 + 1;
+  const int n_chroma = config.n_chroma;
+  const double a440 =
+      constants::kA4Hz * std::pow(2.0, static_cast<double>(config.tuning) / n_chroma);
 
-  // Minimum frequency (default to C1)
-  float fmin = config.fmin > 0.0f ? config.fmin : constants::kC1Hz;
+  // frqbins[k] = n_chroma * log2(freq_k * 16 / A440); bin 0 is a synthetic value
+  // 1.5 octaves below bin 1 (librosa's broad 0 Hz handling). We need one extra
+  // bin (n_bins) to derive the bin-width difference of the last kept column.
+  auto frqbin = [&](int k) -> double {
+    const double freq = static_cast<double>(k) * sr / n_fft;
+    return n_chroma * std::log2(freq * 16.0 / a440);
+  };
+  std::vector<double> frqbins(n_bins + 1);
+  frqbins[1] = frqbin(1);
+  frqbins[0] = frqbins[1] - 1.5 * n_chroma;
+  for (int k = 2; k <= n_bins; ++k) frqbins[k] = frqbin(k);
 
-  // NOTE: librosa's STFT chroma maps EVERY FFT bin at/above fmin to a pitch
-  // class (no upper octave bound) — ChromaFilterConfig::n_octaves does not apply
-  // to this STFT path (it is a CQT-chroma concept). Bounding by fmin*2^n_octaves
-  // here diverges from the librosa reference, so we intentionally do not cap.
+  std::vector<float> filterbank(static_cast<size_t>(n_chroma) * n_bins, 0.0f);
+  const double n_chroma2 = std::round(0.5 * n_chroma);
+  const int roll = 3 * (n_chroma / 12);  // base_c rotation (rows shift up by 3 per 12)
 
-  // Create filterbank [n_chroma x n_bins]
-  std::vector<float> filterbank(n_chroma * n_bins, 0.0f);
+  for (int k = 0; k < n_bins; ++k) {
+    const double fb = frqbins[k];
+    const double binwidth = std::max(frqbins[k + 1] - frqbins[k], 1.0);
 
-  // For each FFT bin, compute contribution to each chroma bin
-  float bin_width = static_cast<float>(sr) / n_fft;
-
-  for (int k = 1; k < n_bins; ++k) {  // Skip DC bin
-    float freq = k * bin_width;
-
-    if (freq < fmin) {
-      continue;
-    }
-
-    // Get fractional chroma for this frequency
-    float chroma = hz_to_chroma(freq, config.tuning);
-    if (chroma < 0.0f) {
-      continue;
-    }
-
-    // Scale to n_chroma bins
-    float scaled_chroma = chroma * n_chroma / constants::kSemitonesPerOctave;
-
-    // Distribute energy to neighboring chroma bins (using triangular window)
-    int chroma_low = static_cast<int>(std::floor(scaled_chroma)) % n_chroma;
-    int chroma_high = (chroma_low + 1) % n_chroma;
-    float frac = scaled_chroma - std::floor(scaled_chroma);
-
-    // Weight by proximity
-    filterbank[chroma_low * n_bins + k] += (1.0f - frac);
-    filterbank[chroma_high * n_bins + k] += frac;
-  }
-
-  // Normalize each chroma row. librosa.filters.chroma defaults to L2 (norm=2);
-  // we expose L1 / None for callers that need the historical behavior.
-  if (config.norm != ChromaFilterNorm::None) {
+    // Gaussian bumps over the chroma circle (2*D narrows them like librosa).
+    std::vector<double> col(n_chroma);
     for (int c = 0; c < n_chroma; ++c) {
-      float scale = 0.0f;
+      double d = fb - c;
+      d = std::fmod(d + n_chroma2 + 10.0 * n_chroma, static_cast<double>(n_chroma)) - n_chroma2;
+      const double z = 2.0 * d / binwidth;
+      col[c] = std::exp(-0.5 * z * z);
+    }
+
+    // Column normalization (axis=0) — librosa default L2.
+    if (config.norm != ChromaFilterNorm::None) {
+      double scale = 0.0;
       if (config.norm == ChromaFilterNorm::L1) {
-        for (int k = 0; k < n_bins; ++k) {
-          scale += filterbank[c * n_bins + k];
-        }
-      } else {  // L2
-        for (int k = 0; k < n_bins; ++k) {
-          const float v = filterbank[c * n_bins + k];
-          scale += v * v;
-        }
+        for (double v : col) scale += v;
+      } else {
+        for (double v : col) scale += v * v;
         scale = std::sqrt(scale);
       }
-      if (scale > 0.0f) {
-        const float inv = 1.0f / scale;
-        for (int k = 0; k < n_bins; ++k) {
-          filterbank[c * n_bins + k] *= inv;
-        }
+      if (scale > 0.0) {
+        for (double& v : col) v /= scale;
       }
+    }
+
+    // Per-octave Gaussian envelope on the FFT bin (octwidth <= 0 disables it).
+    if (config.octwidth > 0.0f) {
+      const double oct = fb / n_chroma - config.ctroct;
+      const double env = std::exp(-0.5 * (oct / config.octwidth) * (oct / config.octwidth));
+      for (double& v : col) v *= env;
+    }
+
+    // base_c: write the rolled row so pitch class 0 aligns with C.
+    for (int c = 0; c < n_chroma; ++c) {
+      const int dst = roll == 0 ? c : ((c - roll) % n_chroma + n_chroma) % n_chroma;
+      filterbank[static_cast<size_t>(dst) * n_bins + k] = static_cast<float>(col[c]);
     }
   }
 

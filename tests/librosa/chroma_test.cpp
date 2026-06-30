@@ -12,12 +12,35 @@
 #include <vector>
 
 #include "core/spectrum.h"
+#include "filters/chroma.h"
 #include "util/json_reader.h"
 #include "util/math_utils.h"
 
 using namespace sonare;
 using namespace sonare::constants;
 using namespace sonare::test;
+
+TEST_CASE("chroma filterbank matches librosa.filters.chroma",
+          "[chroma][reference][librosa-parity]") {
+  auto json = JsonReader::parse_file("tests/librosa/reference/chroma_filterbank.json");
+  const auto& d = json["data"];
+  const int sr = d["sr"].as_int();
+  const int n_fft = d["n_fft"].as_int();
+  const int n_chroma = d["n_chroma"].as_int();
+  const int n_bins = d["n_bins"].as_int();
+  const auto& expected = d["filterbank"].as_array();
+
+  auto fb = create_chroma_filterbank(sr, n_fft, ChromaFilterConfig{});
+  REQUIRE(fb.size() == expected.size());
+  REQUIRE(static_cast<int>(fb.size()) == n_chroma * n_bins);
+
+  // The Gaussian-bump bank is built in double precision and stored as float, so a
+  // tight absolute tolerance pins exact librosa numerical parity (not just argmax).
+  for (size_t i = 0; i < fb.size(); ++i) {
+    CAPTURE(i, fb[i], expected[i].as_float());
+    REQUIRE(std::abs(fb[i] - expected[i].as_float()) < 1e-5f);
+  }
+}
 
 TEST_CASE("chroma reference compatibility", "[chroma][reference]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/chroma.json");

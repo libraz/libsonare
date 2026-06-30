@@ -8,25 +8,35 @@
 
 namespace sonare {
 
-/// @brief Filterbank row normalization strategy.
-/// @details Mirrors librosa.filters.chroma's ``norm`` parameter. librosa's
-///          default is L2; we expose it here so the filterbank itself is
-///          librosa-compatible.
+/// @brief Filterbank column normalization strategy.
+/// @details Mirrors librosa.filters.chroma's ``norm`` parameter (applied across
+///          chroma bins per FFT column, axis=0). librosa's default is L2.
 enum class ChromaFilterNorm {
   None,  ///< Do not normalize
-  L1,    ///< Each chroma row sums to 1
-  L2,    ///< Each chroma row has unit Euclidean norm (librosa default)
+  L1,    ///< Each FFT column sums to 1 across chroma bins
+  L2,    ///< Each FFT column has unit Euclidean norm across chroma bins (librosa default)
 };
 
 /// @brief Configuration for Chroma filterbank.
+/// @details Mirrors librosa.filters.chroma. The bank uses Gaussian bumps weighted
+///          by a per-octave Gaussian envelope (ctroct/octwidth), matching the
+///          librosa reference rather than a plain triangular interpolation.
 struct ChromaFilterConfig {
   int n_chroma = 12;    ///< Number of chroma bins (typically 12)
   float tuning = 0.0f;  ///< Tuning deviation in fractions of a chroma bin
-  float fmin = 0.0f;    ///< Minimum frequency (0 = C1 ~32.7 Hz)
-  int n_octaves = 7;    ///< Number of octaves to span
-  /// Per-row filter normalization. Defaults to L2 to match librosa's
+  float fmin = 0.0f;    ///< Unused by the STFT chroma bank (kept for ABI stability)
+  int n_octaves = 7;    ///< Unused by the STFT chroma bank (a CQT-chroma concept)
+  /// Per-column filter normalization. Defaults to L2 to match librosa's
   /// ``librosa.filters.chroma(norm=2)`` default.
   ChromaFilterNorm norm = ChromaFilterNorm::L2;
+  /// Center of the per-octave Gaussian weighting, in octaves (librosa ctroct=5).
+  float ctroct = 5.0f;
+  /// Half-width of the per-octave Gaussian weighting, in octaves. <= 0 disables
+  /// the octave envelope entirely (librosa octwidth default 2).
+  float octwidth = 2.0f;
+  /// Rotate the bank so pitch class 0 is C (librosa base_c=True). When false the
+  /// bank is anchored on A, like the raw librosa.filters.chroma(base_c=False).
+  bool base_c = true;
 };
 
 /// @brief Converts frequency to pitch class (0-11, C=0).

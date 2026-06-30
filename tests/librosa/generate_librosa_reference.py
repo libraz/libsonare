@@ -326,6 +326,21 @@ def generate_spectral_features_reference():
     }
 
 
+def generate_chroma_filterbank_reference():
+    """librosa.filters.chroma matrix reference (defaults: L2 norm, ctroct=5,
+    octwidth=2, base_c=True). Pins the STFT chroma filterbank numerically."""
+    sr = 22050
+    n_fft = 2048
+    fb = librosa.filters.chroma(sr=sr, n_fft=n_fft)  # shape (12, 1 + n_fft//2)
+    return {
+        "sr": sr,
+        "n_fft": n_fft,
+        "n_chroma": int(fb.shape[0]),
+        "n_bins": int(fb.shape[1]),
+        "filterbank": fb.astype(np.float64).flatten().tolist(),
+    }
+
+
 def generate_chroma_reference():
     """Chroma feature reference."""
     sr = 22050
@@ -1767,6 +1782,7 @@ def main():
         "tempogram": generate_tempogram_reference(),
         "peak_pick": generate_peak_pick_reference(),
         "peak_pick_plateau": generate_peak_pick_plateau_reference(),
+        "chroma_filterbank": generate_chroma_filterbank_reference(),
         "util_frame": generate_util_frame_reference(),
         "padding": generate_padding_reference(),
         "vector_normalize": generate_normalize_reference(),

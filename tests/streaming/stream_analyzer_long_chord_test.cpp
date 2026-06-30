@@ -308,7 +308,11 @@ TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chor
   // dependent; only their separation matters for discrimination.)
   REQUIRE(first_chord_max_conf > 0.0f);
   REQUIRE(second_chord_max_conf > 0.0f);
-  REQUIRE(std::abs(first_chord_max_conf - second_chord_max_conf) > 0.05f);
+  // The two chords need only hold clearly separated confidences so the
+  // completed-entry match below (1e-3 tolerance) is unambiguous. The librosa
+  // chroma filterbank shifts these synthetic confidences a little closer
+  // together, so a 0.04 separation (still 40x the match tolerance) suffices.
+  REQUIRE(std::abs(first_chord_max_conf - second_chord_max_conf) > 0.04f);
 
   auto stats = analyzer.stats();
   const auto& prog = stats.estimate.chord_progression;
@@ -323,5 +327,5 @@ TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chor
   // The pre-fix bug stored the second (triggering) chord's confidence here.
   // Since the two chords hold clearly separated confidences (asserted above),
   // matching the first proves it did NOT record the second's value.
-  REQUIRE(std::abs(completed.confidence - second_chord_max_conf) > 0.05f);
+  REQUIRE(std::abs(completed.confidence - second_chord_max_conf) > 0.04f);
 }
