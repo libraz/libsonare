@@ -65,8 +65,7 @@ function makeSonareError(raw: SonareModule, thrown: number): SonareError {
  * {@link SonareError}. Only function-valued
  * members are wrapped, and the wrapper is cached per member so repeated access
  * stays cheap; non-function members (typed-array heap views, etc.) pass through
- * unchanged. The dedicated realtime `sonare-rt` module is separate and is not
- * affected by this wrapper.
+ * unchanged.
  */
 function wrapModuleErrors(raw: SonareModule): SonareModule {
   const cache = new Map<PropertyKey, unknown>();

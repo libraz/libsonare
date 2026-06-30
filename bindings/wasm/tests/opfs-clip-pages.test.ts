@@ -1,5 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { createOpfsClipPageProvider, init, RealtimeEngine } from '../dist/index.js';
+import {
+  attachOpfsClipStream,
+  ClipPageStreamer,
+  createOpfsClipPageProvider,
+  init,
+  RealtimeEngine,
+} from '../dist/index.js';
 
 class FakeClipPageWorker {
   listener: ((event: MessageEvent) => void) | null = null;
@@ -136,6 +142,42 @@ describe('createOpfsClipPageProvider', () => {
     expect(await second).toBe(true);
 
     binding.close();
+    engine.destroy();
+  });
+});
+
+describe('attachOpfsClipStream', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('wires a streaming clip in one call and feeds it within the window', async () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const worker = new FakeClipPageWorker();
+    // Default window retains page 0 behind the frontier, so a seek back replays it.
+    const streamer = new ClipPageStreamer(engine);
+    const { provider } = await attachOpfsClipStream(streamer, engine, {
+      path: 'clips/clip.f32',
+      clipId: 400,
+      numChannels: 1,
+      numSamples: 8,
+      pageFrames: 4,
+      worker: worker as unknown as Worker,
+    });
+
+    engine.setClips([{ id: 400, pageProvider: provider, startPpq: 0 }]);
+    engine.play();
+    // Page 0 was primed by attachOpfsClipStream, so the first block plays it.
+    const first = engine.process([new Float32Array(8)]);
+    expect(Array.from(first[0])).toEqual([1, 2, 3, 4, 0, 0, 0, 0]);
+
+    // The miss for page 1 is drained and serviced by the streamer's pump.
+    await streamer.pump();
+    engine.seekSample(0);
+    const second = engine.process([new Float32Array(8)]);
+    expect(Array.from(second[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+
+    streamer.close();
     engine.destroy();
   });
 });

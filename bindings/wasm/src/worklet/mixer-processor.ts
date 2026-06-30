@@ -94,8 +94,7 @@ export class SonareWorkletProcessor {
     // than 128, or a misconfigured blockSize) must NOT return false here:
     // returning false permanently terminates the AudioWorkletProcessor and
     // silently kills the node mid-stream. Instead degrade gracefully by
-    // processing min(frames, blockSize) and zero-filling any remainder, mirroring
-    // the sonare-rt processor's behaviour.
+    // processing min(frames, blockSize) and zero-filling any remainder.
     const usable = Math.min(frames, this.blockSize);
 
     for (let strip = 0; strip < this.realtime.leftInputs.length; strip++) {

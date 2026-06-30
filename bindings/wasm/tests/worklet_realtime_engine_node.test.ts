@@ -183,40 +183,6 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
-    it('can select the dedicated sonare-rt AudioWorklet target', async () => {
-      let capturedName = '';
-      let capturedOptions: AudioWorkletNodeOptions | undefined;
-      const context = fakeContext();
-      const node = await SonareRealtimeEngineNode.create(context, {
-        runtimeTarget: 'sonare-rt',
-        moduleUrl: 'sonare-engine-worklet.js',
-        rtModuleUrl: 'sonare-rt.js',
-        mode: 'postMessage',
-        nodeFactory: (_context, processorName, options) => {
-          capturedName = processorName;
-          capturedOptions = options;
-          return {
-            port: {
-              postMessage: () => undefined,
-              onmessage: undefined,
-            },
-            disconnect: () => undefined,
-          } as unknown as AudioWorkletNode;
-        },
-      });
-
-      expect((context.audioWorklet as unknown as { added: string[] }).added).toEqual([
-        'sonare-engine-worklet.js',
-      ]);
-      expect(capturedName).toBe('sonare-realtime-engine-processor');
-      expect(capturedOptions?.processorOptions).toMatchObject({
-        runtimeTarget: 'sonare-rt',
-        rtModuleUrl: 'sonare-rt.js',
-      });
-      expect(node.capabilities.runtimeTarget).toBe('sonare-rt');
-      node.destroy();
-    });
-
     it('rejects an ABI mismatch before constructing an AudioWorkletNode', async () => {
       let constructed = false;
       await expect(

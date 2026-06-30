@@ -1,0 +1,250 @@
+import {
+  createOpfsClipPageProvider,
+  type OpfsClipPageProviderBinding,
+  type OpfsClipPageProviderOptions,
+} from './opfs_clip_pages';
+import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine';
+
+/**
+ * Minimal engine surface the streamer drives. {@link RealtimeEngine} satisfies
+ * this structurally; tests can supply a lightweight stand-in.
+ */
+export interface ClipPageStreamerEngine {
+  /** Drain one pending audio-thread page-miss request, or `null` when empty. */
+  popClipPageRequest(): ClipPageRequest | null;
+}
+
+/** A paged clip the streamer keeps fed from its backing store. */
+export interface ClipPageStreamSource {
+  /** Clip schedule id passed to `setClips` (matches {@link ClipPageRequest.clipId}). */
+  clipId: number;
+  /** OPFS-backed page provider binding for this clip. */
+  binding: OpfsClipPageProviderBinding;
+  /** Page size in frames (must equal the provider's `pageFrames`). */
+  pageFrames: number;
+  /** Total sample count of the clip source. */
+  numSamples: number;
+}
+
+export interface ClipPageStreamerOptions {
+  /**
+   * Pages to prefetch ahead of the page a miss was reported for. Larger values
+   * hide fetch latency at the cost of more resident memory. Default 2.
+   */
+  readAheadPages?: number;
+  /**
+   * Pages to retain behind the playback frontier before eviction, so a small
+   * backward seek does not immediately miss. Default 1.
+   */
+  retainBehindPages?: number;
+  /**
+   * Upper bound on requests drained per {@link ClipPageStreamer.pump} call, so a
+   * burst of misses cannot spin unbounded. Default 256.
+   */
+  maxRequestsPerPump?: number;
+}
+
+interface SourceState {
+  source: ClipPageStreamSource;
+  lastPage: number;
+  /** Page indices currently supplied to the provider (the resident set). */
+  resident: Set<number>;
+}
+
+/**
+ * Keeps OPFS-paged clips fed within a bounded sliding window around the live
+ * playback position, so a multitrack arrangement never holds its full PCM in
+ * WASM memory.
+ *
+ * The audio thread reports a page miss whenever the {@link ClipPlayer} reads a
+ * sample whose page is not resident. {@link pump} drains those requests, fetches
+ * the missing page plus a read-ahead window from each clip's backing store, and
+ * evicts pages that fall outside the window via the provider's `clear`. The
+ * resident set per clip is therefore bounded to
+ * `retainBehindPages + readAheadPages + 1` pages regardless of clip length.
+ *
+ * Call {@link pump} on a cadence that keeps up with playback — typically once
+ * per animation frame or per worklet control tick on the main/control thread
+ * (never the audio thread; fetches are asynchronous).
+ */
+export class ClipPageStreamer {
+  private readonly engine: ClipPageStreamerEngine;
+  private readonly readAheadPages: number;
+  private readonly retainBehindPages: number;
+  private readonly maxRequestsPerPump: number;
+  private readonly sources = new Map<number, SourceState>();
+  private closed = false;
+
+  constructor(engine: ClipPageStreamerEngine, options: ClipPageStreamerOptions = {}) {
+    this.engine = engine;
+    this.readAheadPages = Math.max(0, Math.floor(options.readAheadPages ?? 2));
+    this.retainBehindPages = Math.max(0, Math.floor(options.retainBehindPages ?? 1));
+    this.maxRequestsPerPump = Math.max(1, Math.floor(options.maxRequestsPerPump ?? 256));
+  }
+
+  /**
+   * Register a paged clip. Pages already supplied to the provider before
+   * registration (for example a primed first page) should be passed in
+   * `initialResidentPages` so they participate in eviction.
+   */
+  addSource(source: ClipPageStreamSource, initialResidentPages: Iterable<number> = []): void {
+    if (source.pageFrames <= 0 || source.numSamples <= 0) {
+      throw new Error('pageFrames and numSamples must be positive');
+    }
+    const lastPage = Math.ceil(source.numSamples / source.pageFrames) - 1;
+    this.sources.set(source.clipId, {
+      source,
+      lastPage,
+      resident: new Set(initialResidentPages),
+    });
+  }
+
+  /** Stop tracking a clip. Does not close its binding (the caller owns that). */
+  removeSource(clipId: number): void {
+    this.sources.delete(clipId);
+  }
+
+  /**
+   * Drain pending page-miss requests, fetch the missing pages plus their
+   * read-ahead window, and evict out-of-window pages. Resolves once this round's
+   * fetches settle. Concurrent fetches are serialized inside each binding.
+   */
+  async pump(): Promise<void> {
+    if (this.closed) {
+      return;
+    }
+    // Collapse this round's misses to the furthest-advanced frontier per clip:
+    // multiple channels of one clip miss the same page, and a run of misses
+    // walks forward, so only the latest position needs servicing.
+    const frontiers = new Map<number, number>();
+    for (let drained = 0; drained < this.maxRequestsPerPump; ++drained) {
+      const request = this.engine.popClipPageRequest();
+      if (!request) {
+        break;
+      }
+      const state = this.sources.get(request.clipId);
+      if (!state) {
+        continue;
+      }
+      const page = Math.floor(request.sample / state.source.pageFrames);
+      const previous = frontiers.get(request.clipId);
+      if (previous === undefined || page > previous) {
+        frontiers.set(request.clipId, page);
+      }
+    }
+
+    const fetches: Promise<unknown>[] = [];
+    for (const [clipId, frontier] of frontiers) {
+      const state = this.sources.get(clipId);
+      if (!state) {
+        continue;
+      }
+      fetches.push(...this.serviceFrontier(state, frontier));
+    }
+    await Promise.all(fetches);
+  }
+
+  /** Close every registered clip's binding and stop tracking. */
+  close(): void {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+    for (const state of this.sources.values()) {
+      state.source.binding.close();
+    }
+    this.sources.clear();
+  }
+
+  private serviceFrontier(state: SourceState, frontier: number): Promise<unknown>[] {
+    const low = Math.max(0, frontier - this.retainBehindPages);
+    const high = Math.min(state.lastPage, frontier + this.readAheadPages);
+
+    // Evict pages outside the window first so a burst of fetches never exceeds
+    // the bound by transiently holding old pages alongside new ones.
+    for (const page of state.resident) {
+      if (page < low || page > high) {
+        state.source.binding.provider.clear(page);
+        state.resident.delete(page);
+      }
+    }
+
+    const fetches: Promise<unknown>[] = [];
+    for (let page = low; page <= high; ++page) {
+      if (state.resident.has(page)) {
+        continue;
+      }
+      // Mark resident eagerly so the same page is not fetched twice across
+      // overlapping windows; drop it again if the fetch reports a miss.
+      state.resident.add(page);
+      const pageIndex = page;
+      fetches.push(
+        state.source.binding.supplyPage(pageIndex).then(
+          (ok) => {
+            if (!ok) {
+              state.resident.delete(pageIndex);
+            }
+            return ok;
+          },
+          (error) => {
+            state.resident.delete(pageIndex);
+            throw error;
+          },
+        ),
+      );
+    }
+    return fetches;
+  }
+}
+
+export interface OpfsClipStreamOptions extends OpfsClipPageProviderOptions {
+  /** Clip schedule id used in `setClips` (matches the page-miss request clipId). */
+  clipId: number;
+  /**
+   * Leading pages fetched synchronously before returning, so playback can start
+   * without an immediate miss. Default 1.
+   */
+  primePages?: number;
+}
+
+export interface OpfsClipStream {
+  binding: OpfsClipPageProviderBinding;
+  /** Pass to `setClips({ pageProvider })` to schedule the streaming clip. */
+  provider: ClipPageProvider;
+}
+
+/**
+ * One-call wiring of an OPFS-backed streaming clip: creates the page provider,
+ * primes the leading pages, and registers it with `streamer` so later misses are
+ * serviced within the bounded window. Returns the binding (for `close`) and the
+ * provider to schedule via `setClips({ pageProvider })`.
+ *
+ * @param streamer Shared streamer pumped on the control thread.
+ * @param engine Engine the provider is created on (the same one `streamer` drives).
+ * @param options Provider options plus `clipId` and optional `primePages`.
+ */
+export async function attachOpfsClipStream(
+  streamer: ClipPageStreamer,
+  engine: RealtimeEngine,
+  options: OpfsClipStreamOptions,
+): Promise<OpfsClipStream> {
+  const { clipId, primePages = 1, ...providerOptions } = options;
+  const binding = createOpfsClipPageProvider(engine, providerOptions);
+  const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;
+  const primed: number[] = [];
+  for (let page = 0; page < primePages && page <= lastPage; ++page) {
+    if (await binding.supplyPage(page)) {
+      primed.push(page);
+    }
+  }
+  streamer.addSource(
+    {
+      clipId,
+      binding,
+      pageFrames: providerOptions.pageFrames,
+      numSamples: providerOptions.numSamples,
+    },
+    primed,
+  );
+  return { binding, provider: binding.provider };
+}

@@ -495,10 +495,41 @@ Capabilities:
   `renderOffline`, `bounceOffline`, `freezeOffline`.
 - **Clip page providers**: `createClipPageProvider` + `supplyClipPage` for
   streaming large clip audio in pages; pair with the OPFS helpers
-  (`createOpfsClipPageProvider`).
+  (`createOpfsClipPageProvider`) and the bounded-memory `ClipPageStreamer`
+  (see below) so a long multitrack arrangement never holds its full PCM in
+  WASM memory.
 - **Telemetry**: `drainTelemetry` / `drainMeterTelemetry`. Inspect runtime
   capabilities (ABI compatibility, SharedArrayBuffer/Atomics) via
   `engineCapabilities()`.
+
+#### Bounded-memory clip streaming
+
+`ClipPageStreamer` keeps OPFS-paged clips fed within a sliding window around the
+playback position, evicting pages that fall outside it. Resident memory per clip
+is bounded to `retainBehindPages + readAheadPages + 1` pages regardless of clip
+length. `attachOpfsClipStream` wires the provider, primes the leading page, and
+registers it in one call; `setClips` schedules the returned `provider`, and
+`pump()` (called on your control-thread tick) services page misses.
+
+```typescript
+import { ClipPageStreamer, attachOpfsClipStream, RealtimeEngine } from '@libraz/libsonare';
+
+const engine = new RealtimeEngine(48000, 128);
+const streamer = new ClipPageStreamer(engine, { readAheadPages: 2, retainBehindPages: 1 });
+
+const { provider } = await attachOpfsClipStream(streamer, engine, {
+  path: 'clips/vocal.f32',
+  clipId: 1,
+  numChannels: 2,
+  numSamples: 26_460_000, // ~10 min at 44.1 kHz, never fully resident
+  pageFrames: 65_536,
+});
+engine.setClips([{ id: 1, pageProvider: provider, startPpq: 0 }]);
+engine.play();
+
+// On each animation frame / control tick:
+await streamer.pump(); // fetch upcoming pages, evict old ones
+```
 
 ### Real-time voice changer
 
@@ -627,8 +658,8 @@ function readMeters() {
 
 For browser DAW-style playback, `SonareEngine` keeps a main-thread
 `RealtimeEngine` mirror for offline renders and synchronizes the live worklet
-engine through control messages. The default runtime target is the embind engine;
-the `sonare-rt` runtime remains a transport-focused fallback.
+engine through control messages. There is a single runtime: the full-featured
+embind engine runs both the main-thread mirror and the AudioWorklet.
 
 ```typescript
 import { init } from '@libraz/libsonare';
@@ -665,8 +696,7 @@ Studio integration notes:
   `sync*`, `captureRequest`, and `transportRequest` message used above to that
   allowlist; otherwise the host may silently drop the new control messages.
 - If a host vendors built worklet bundles, regenerate and reimport
-  `worklet.js`, `worklet.d.ts`, `sonare.js`, `sonare.wasm`,
-  `sonare-rt.js`, `sonare-rt-module.js`, and `sonare-rt.wasm` together.
+  `worklet.js`, `worklet.d.ts`, `sonare.js`, and `sonare.wasm` together.
 
 ### Progress callback
 

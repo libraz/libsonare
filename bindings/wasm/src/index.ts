@@ -30,6 +30,14 @@ import type {
 export type { BrowserAudioDecodeOptions } from './audio';
 export { Audio } from './audio';
 export type {
+  ClipPageStreamerEngine,
+  ClipPageStreamerOptions,
+  ClipPageStreamSource,
+  OpfsClipStream,
+  OpfsClipStreamOptions,
+} from './clip_page_streamer';
+export { attachOpfsClipStream, ClipPageStreamer } from './clip_page_streamer';
+export type {
   CompressorDetector,
   CompressorOptions,
   DeclickOptions,

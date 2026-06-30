@@ -68,57 +68,21 @@ window.runSonareSmoke = async () => {
     ((channel & 0xf) << 16) |
     ((data0 & 0x7f) << 8) |
     (data1 & 0x7f);
-  let engine;
   let mixerEngine;
   let instrumentEngine;
   let captureEngine;
   try {
-    mark('context');
-    const context = new OfflineAudioContext(1, 2048, 48000);
-    const rtWasmBinary = await fetch('/dist/sonare-rt.wasm').then((response) => {
-      if (!response.ok) throw new Error('failed to fetch sonare-rt.wasm: ' + response.status);
-      return response.arrayBuffer();
-    });
     const sonareWasmBinary = await fetch('/dist/sonare.wasm').then((response) => {
       if (!response.ok) throw new Error('failed to fetch sonare.wasm: ' + response.status);
       return response.arrayBuffer();
     });
     await init({ locateFile: (path) => '/dist/' + path, wasmBinary: sonareWasmBinary });
-    mark('create-node');
-    engine = await SonareRealtimeEngineNode.create(context, {
-      runtimeTarget: 'sonare-rt',
-      mode: 'sab',
-      moduleUrl: '/sonare-engine-worklet.js',
-      rtModuleUrl: new URL('/dist/sonare-rt-module.js', location.href).href,
-      rtWasmBinary,
-      blockSize: 128,
-      channelCount: 1,
-      commandRingCapacity: 16,
-      telemetryRingCapacity: 16,
-    });
-    mark('wait-ready');
-    await limit(engine.ready, 'engine.ready');
-    mark('connect');
-    const source = new ConstantSourceNode(context, { offset: 0.25 });
-    source.connect(engine.node);
-    engine.node.connect(context.destination);
-    engine.play();
-    source.start();
-    mark('render');
-    const rendered = await limit(context.startRendering(), 'startRendering', 10000);
-    mark('rendered');
-    const data = rendered.getChannelData(0);
-    const telemetry = engine.pollTelemetry();
-    engine.destroy();
-    let peak = 0;
-    for (const sample of data) peak = Math.max(peak, Math.abs(sample));
 
     mark('mixer-context');
     const mixerContext = new OfflineAudioContext(1, 4096, 48000);
     const clip = new Float32Array(4096).fill(1);
     mark('mixer-create-node');
     mixerEngine = await SonareRealtimeEngineNode.create(mixerContext, {
-      runtimeTarget: 'embind',
       mode: 'sab',
       moduleUrl: '/sonare-embind-engine-worklet.js',
       wasmBinary: sonareWasmBinary.slice(0),
@@ -174,7 +138,6 @@ window.runSonareSmoke = async () => {
     const instrumentContext = new OfflineAudioContext(2, 2048, 48000);
     mark('instrument-create-node');
     instrumentEngine = await SonareRealtimeEngineNode.create(instrumentContext, {
-      runtimeTarget: 'embind',
       mode: 'sab',
       moduleUrl: '/sonare-embind-engine-worklet.js',
       wasmBinary: sonareWasmBinary.slice(0),
@@ -233,7 +196,6 @@ window.runSonareSmoke = async () => {
     const captureContext = new OfflineAudioContext(1, 1024, 48000);
     mark('capture-create-node');
     captureEngine = await SonareRealtimeEngineNode.create(captureContext, {
-      runtimeTarget: 'embind',
       mode: 'sab',
       moduleUrl: '/sonare-embind-engine-worklet.js',
       wasmBinary: sonareWasmBinary.slice(0),
@@ -275,11 +237,8 @@ window.runSonareSmoke = async () => {
       ok: true,
       progress,
       crossOriginIsolated,
-      mode: engine.capabilities.mode,
-      runtimeTarget: engine.capabilities.runtimeTarget,
-      telemetryCount: telemetry.length,
-      lastTimelineSample: telemetry.at(-1)?.timelineSample ?? 0,
-      peak,
+      mode: mixerEngine.capabilities.mode,
+      runtimeTarget: mixerEngine.capabilities.runtimeTarget,
       mixerPeak,
       mixerTailPeak,
       mixerTelemetryCount: mixerTelemetry.length,
@@ -291,7 +250,6 @@ window.runSonareSmoke = async () => {
       capturedPeak,
     };
   } catch (error) {
-    engine?.destroy?.();
     mixerEngine?.destroy?.();
     instrumentEngine?.destroy?.();
     captureEngine?.destroy?.();
@@ -304,15 +262,6 @@ window.runSonareSmoke = async () => {
   }
 };
 </script>`);
-        return;
-      }
-      if (url.pathname === '/sonare-engine-worklet.js') {
-        res.writeHead(200, headers('text/javascript'));
-        res.end(`import createSonareRt from '/dist/sonare-rt-module.js';
-import { registerSonareRealtimeEngineWorkletProcessor } from '/dist/worklet.js';
-globalThis.SonareRtModuleFactory = createSonareRt;
-registerSonareRealtimeEngineWorkletProcessor();
-`);
         return;
       }
       if (url.pathname === '/sonare-embind-engine-worklet.js') {
@@ -482,14 +431,8 @@ async function main() {
     if (!value.ok) throw new Error(`browser smoke failed: ${JSON.stringify(value, null, 2)}`);
     if (!value.crossOriginIsolated) throw new Error('page is not cross-origin isolated');
     if (value.mode !== 'sab') throw new Error(`expected SAB mode, got ${value.mode}`);
-    if (value.runtimeTarget !== 'sonare-rt') {
-      throw new Error(`expected sonare-rt runtime, got ${value.runtimeTarget}`);
-    }
-    if (value.telemetryCount <= 0 || value.lastTimelineSample <= 0) {
-      throw new Error(`missing process telemetry: ${JSON.stringify(value)}`);
-    }
-    if (!(value.peak > 0.01)) {
-      throw new Error(`rendered output is silent: ${JSON.stringify(value)}`);
+    if (value.runtimeTarget !== 'embind') {
+      throw new Error(`expected embind runtime, got ${value.runtimeTarget}`);
     }
     if (!(value.mixerTailPeak > 0.2 && value.mixerTailPeak < 0.4)) {
       throw new Error(`mixer fader did not affect output: ${JSON.stringify(value)}`);

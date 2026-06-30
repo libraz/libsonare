@@ -823,16 +823,5 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         });
       }
     });
-
-    it('rejects direct embind bridge construction for the dedicated sonare-rt target', () => {
-      expect(
-        () =>
-          new SonareRealtimeEngineWorkletProcessor({
-            runtimeTarget: 'sonare-rt',
-            sampleRate: 48000,
-            blockSize: 128,
-          }),
-      ).toThrow(/dedicated Emscripten AudioWorklet module/);
-    });
   });
 });

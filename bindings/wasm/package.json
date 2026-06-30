@@ -16,11 +16,6 @@
       "import": "./dist/worklet.js"
     },
     "./wasm": "./dist/sonare.wasm",
-    "./rt": {
-      "types": "./src/sonare-rt.d.ts",
-      "import": "./dist/sonare-rt.js"
-    },
-    "./rt-wasm": "./dist/sonare-rt.wasm",
     "./package.json": "./package.json"
   },
   "files": [
@@ -30,7 +25,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "yarn build:js && yarn build:wasm",
-    "build:wasm": "mkdir -p build-wasm/em-cache && EM_CACHE=$PWD/build-wasm/em-cache emcmake cmake -S ../.. -B build-wasm -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm/em-cache cmake --build build-wasm && node scripts/write-rt-module-variant.mjs",
+    "build:wasm": "mkdir -p build-wasm/em-cache && EM_CACHE=$PWD/build-wasm/em-cache emcmake cmake -S ../.. -B build-wasm -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm/em-cache cmake --build build-wasm",
     "bench:wasm:isp": "mkdir -p build-wasm-bench/em-cache /tmp/libsonare-wasm-bench && EM_CACHE=$PWD/build-wasm-bench/em-cache emcmake cmake -S ../.. -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-bench/em-cache cmake --build build-wasm-bench --target sonare_mastering_isp_bench && cp build-wasm-bench/bin/sonare_mastering_isp_bench.js /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.cjs && cp build-wasm-bench/bin/sonare_mastering_isp_bench.wasm /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.wasm && node /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.cjs",
     "bench:wasm:phase-vocoder": "mkdir -p build-wasm-bench/em-cache /tmp/libsonare-wasm-bench && EM_CACHE=$PWD/build-wasm-bench/em-cache emcmake cmake -S ../.. -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-bench/em-cache cmake --build build-wasm-bench --target sonare_phase_vocoder_streaming_bench && cp build-wasm-bench/bin/sonare_phase_vocoder_streaming_bench.js /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.cjs && cp build-wasm-bench/bin/sonare_phase_vocoder_streaming_bench.wasm /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.wasm && node /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.cjs",
     "build:js": "tsup",
