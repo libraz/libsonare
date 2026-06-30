@@ -52,6 +52,9 @@ set(ADDON_SOURCES
   src/addon/engine/clips_capture.cpp
   src/addon/engine/graph_offline.cpp
   src/addon/sonare_wrap_project.cpp
+  src/addon/project/edit.cpp
+  src/addon/project/midi_mir.cpp
+  src/addon/project/render.cpp
   src/addon/sonare_wrap.cpp
   src/addon/sonare_wrap_acoustic.cpp
   src/addon/sonare_wrap_analysis.cpp
@@ -67,6 +70,9 @@ set(ADDON_SOURCES
   src/addon/features/rhythm.cpp
   src/addon/features/signal.cpp
   src/addon/sonare_wrap_mixer.cpp
+  src/addon/mixer/strip_state.cpp
+  src/addon/mixer/sends_metering.cpp
+  src/addon/mixer/topology_automation.cpp
   src/addon/sonare_wrap_streaming.cpp
   src/addon/streaming/realtime_voice_changer.cpp
   src/addon/streaming/stream_analyzer.cpp
