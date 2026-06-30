@@ -281,6 +281,30 @@ TEST_CASE("the damper kills the string at note-off", "[midi][synth][piano]") {
   REQUIRE(damped_late < 0.1f * held_late);
 }
 
+TEST_CASE("the sustain pedal adds sympathetic resonance", "[midi][synth][piano]") {
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+  // Steady-state energy of a held note (no note-off, so the sustain pedal's
+  // own note-hold cannot be the difference — only the sympathetic bank is).
+  auto held_energy = [&](bool pedal_down) {
+    NativeSynthConfig cfg;
+    cfg.patch = piano;
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    if (pedal_down) {
+      synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+    }
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));  // C3
+    const std::vector<float> tone = render_left(synth, 96000);                  // 2 s held
+    return rms(tone, 48000, 96000);  // 1.0 - 2.0 s steady window
+  };
+  const float dry = held_energy(false);
+  const float wet = held_energy(true);
+  REQUIRE(dry > 0.0f);
+  INFO("steady RMS: dry=" << dry << " wet=" << wet << " ratio=" << wet / dry);
+  // The lifted dampers ring the shared sympathetic bank, adding energy.
+  REQUIRE(wet > 1.03f * dry);
+}
+
 TEST_CASE("piano rendering is deterministic", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   const std::vector<float> first = render_patch(piano, 60, 100, 8192);

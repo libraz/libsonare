@@ -169,4 +169,43 @@ class PianoVoiceCore {
   float soundboard_mix_ = 0.0f;
 };
 
+/// Pedal-gated sympathetic resonance: a small shared bank of string-mode
+/// resonators driven by the bridge/voice mix while the dampers are lifted
+/// (sustain pedal down). A reduced model of the undamped strings re-radiating
+/// when the dampers are off (Lehtonen, Penttinen, Rauhala & Valimaki 2007).
+/// One bank is shared by the whole instrument (not per voice); the host feeds
+/// it the summed dry mix and adds the returned resonance back.
+///
+/// RT contract: prepare() is the only allocation site (it owns no heap, so it
+/// is in fact allocation-free too); process()/reset() are allocation-free and
+/// deterministic. The excitation is gated by a smoothed damper-open envelope,
+/// and the resonators ring out with extra damping as the dampers fall.
+class PianoResonanceBank {
+ public:
+  /// Tunes the mode bank for @p sample_rate and clears the state.
+  void prepare(double sample_rate) noexcept;
+  /// Clears the resonator state and the damper gate.
+  void reset() noexcept;
+  /// Adds the sympathetic resonance for one input sample. @p damper_open
+  /// (sustain pedal down) gates the excitation through a smoothed envelope;
+  /// returns the resonance to mix into the output.
+  float process(float bridge_in, bool damper_open) noexcept;
+
+ private:
+  static constexpr int kResonanceModes = 16;
+  struct Mode {
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float gain = 0.0f;
+    float y1 = 0.0f;
+    float y2 = 0.0f;
+  };
+  std::array<Mode, kResonanceModes> modes_{};
+  float gate_ = 0.0f;
+  float gate_open_coeff_ = 1.0f;
+  float gate_close_coeff_ = 1.0f;
+  float ringout_ = 1.0f;
+  float out_gain_ = 0.0f;
+};
+
 }  // namespace sonare::midi::synth

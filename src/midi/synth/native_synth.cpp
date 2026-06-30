@@ -381,9 +381,11 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     ks_buffers_.clear();
   }
   piano_string_capacity_ = piano_string_capacity(sample_rate_);
-  if (config_.patch.mode == SynthEngineMode::kPiano) {
+  piano_mode_ = config_.patch.mode == SynthEngineMode::kPiano;
+  if (piano_mode_) {
     piano_buffers_.assign(pool_.size() * static_cast<size_t>(piano_slab_capacity(sample_rate_)),
                           0.0f);
+    resonance_.prepare(sample_rate_);
   } else {
     piano_buffers_.clear();
   }
@@ -405,6 +407,7 @@ void NativeSynth::reset() {
   pool_.reset();
   dc_x1_ = {};
   dc_y1_ = {};
+  resonance_.reset();
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
 }
@@ -617,6 +620,19 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
   float* right = num_channels > 1 ? channels[1] : nullptr;
   const bool mono = right == nullptr;
 
+  // Sympathetic resonance is gated by the dampers being lifted on any channel
+  // (sustain pedal down). Sustain state is fixed for the block (events are
+  // applied before process()).
+  bool damper_open = false;
+  if (piano_mode_) {
+    for (const ChannelState& ch : channels_) {
+      if (ch.sustain) {
+        damper_open = true;
+        break;
+      }
+    }
+  }
+
   for (int i = 0; i < num_samples; ++i) {
     float mix_l = 0.0f;
     float mix_r = 0.0f;
@@ -629,6 +645,13 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
     }
     mix_l *= config_.gain;
     mix_r *= config_.gain;
+    // Pedal-gated sympathetic resonance, driven by the summed dry mix and
+    // folded back into both legs (centre).
+    if (piano_mode_) {
+      const float symp = resonance_.process(0.5f * (mix_l + mix_r), damper_open);
+      mix_l += symp;
+      mix_r += symp;
+    }
     // Gentle gain-neutral bus saturation (glue), then the DC blocker — the
     // physical-model voices can carry a small DC component.
     if (bus_drive_gain_ > 0.0f) {

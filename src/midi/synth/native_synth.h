@@ -293,6 +293,9 @@ class NativeSynth final : public MidiInstrument {
   /// allocated in prepare() only when the patch is a piano.
   std::vector<float> piano_buffers_;
   int piano_string_capacity_ = 0;
+  /// Shared pedal-gated sympathetic resonance bank (piano patches only).
+  PianoResonanceBank resonance_;
+  bool piano_mode_ = false;
 };
 
 /// Returns a copy of @p patch with every field clamped to a safe range.

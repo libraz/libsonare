@@ -321,4 +321,66 @@ void PianoVoiceCore::kill() noexcept {
   contact_samples_ = 0;
 }
 
+void PianoResonanceBank::prepare(double sample_rate) noexcept {
+  const float sr = sample_rate > 0.0 ? static_cast<float>(sample_rate) : 48000.0f;
+  // A reduced set of string modes spread E1..E6 (every 4 semitones) — the
+  // bass-to-mid register where undamped sympathetic resonance is strongest.
+  for (int i = 0; i < kResonanceModes; ++i) {
+    Mode& m = modes_[static_cast<size_t>(i)];
+    const int note = 28 + 4 * i;
+    const float f = 440.0f * std::exp2((static_cast<float>(note) - 69.0f) / 12.0f);
+    if (f >= 0.45f * sr) {
+      m = Mode{};
+      continue;
+    }
+    const float w = kTwoPi * f / sr;
+    const float r = std::exp(-6.907755279f / (sr * 0.6f));  // ~0.6 s ring t60
+    m.a1 = 2.0f * r * std::cos(w);
+    m.a2 = -r * r;
+    // Normalize the resonator to ~unity peak gain (the (1-r) factor cancels
+    // the high-Q resonant boost) so the bank is a weak coupling, not a
+    // runaway bandpass on the played note.
+    m.gain = 1.0f - r;
+    m.y1 = 0.0f;
+    m.y2 = 0.0f;
+  }
+  gate_ = 0.0f;
+  // Damper-open envelope: ~10 ms to lift, ~60 ms to fall.
+  gate_open_coeff_ = 1.0f - std::exp(-1.0f / (0.010f * sr));
+  gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
+  // Extra ring-out applied while the dampers are falling (~0.15 s t60).
+  ringout_ = std::exp(-6.907755279f / (sr * 0.15f));
+  // Weak sympathetic coupling (the played string still dominates).
+  out_gain_ = 0.06f;
+}
+
+void PianoResonanceBank::reset() noexcept {
+  for (Mode& m : modes_) {
+    m.y1 = 0.0f;
+    m.y2 = 0.0f;
+  }
+  gate_ = 0.0f;
+}
+
+float PianoResonanceBank::process(float bridge_in, bool damper_open) noexcept {
+  const float target = damper_open ? 1.0f : 0.0f;
+  gate_ += (damper_open ? gate_open_coeff_ : gate_close_coeff_) * (target - gate_);
+  const float x = gate_ * bridge_in;
+  float sum = 0.0f;
+  for (Mode& m : modes_) {
+    const float y = m.a1 * m.y1 + m.a2 * m.y2 + m.gain * x;
+    m.y2 = m.y1;
+    m.y1 = y;
+    sum += y;
+  }
+  // As the dampers fall back the undamped strings stop ringing quickly.
+  if (!damper_open && gate_ < 0.5f) {
+    for (Mode& m : modes_) {
+      m.y1 *= ringout_;
+      m.y2 *= ringout_;
+    }
+  }
+  return out_gain_ * sum;
+}
+
 }  // namespace sonare::midi::synth
