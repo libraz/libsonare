@@ -13,7 +13,6 @@ import type {
   RealtimeVoiceChangerConfigInput,
 } from '../index';
 import type { AutomationCurve } from '../public_types';
-import type { SonareRtModule } from '../sonare-rt';
 import type {
   SonareEngineCommandRecord,
   SonareEngineTelemetryRecord,
@@ -36,9 +35,6 @@ export interface SonareWorkletProcessorOptions {
 }
 
 export interface SonareRealtimeEngineWorkletProcessorOptions {
-  runtimeTarget?: 'embind' | 'sonare-rt';
-  rtModuleUrl?: string;
-  rtWasmBinary?: ArrayBuffer | Uint8Array;
   wasmBinary?: ArrayBuffer | Uint8Array;
   initialSyncMessages?: SonareEngineSyncMessage[];
   initialCommands?: SonareEngineCommandRecord[];
@@ -88,7 +84,7 @@ export type SonareRealtimeVoiceChangerMessage =
 
 export interface SonareRealtimeEngineNodeCapabilities {
   mode: 'sab' | 'postMessage';
-  runtimeTarget: 'embind' | 'sonare-rt';
+  runtimeTarget: 'embind';
   sharedArrayBuffer: boolean;
   atomics: boolean;
   audioWorklet: boolean;
@@ -103,7 +99,6 @@ export interface SonareRealtimeEngineNodeOptions
   extends SonareRealtimeEngineWorkletProcessorOptions {
   processorName?: string;
   moduleUrl?: string | URL;
-  rtModuleUrl?: string;
   mode?: 'auto' | 'sab' | 'postMessage';
   engineAbiVersion?: number;
   expectedEngineAbiVersion?: number;
@@ -113,18 +108,6 @@ export interface SonareRealtimeEngineNodeOptions
     processorName: string,
     options: AudioWorkletNodeOptions,
   ) => AudioWorkletNode;
-}
-
-export interface SonareRtRealtimeEngineRuntimeOptions {
-  module: SonareRtModule;
-  memory: WebAssembly.Memory;
-  sampleRate?: number;
-  blockSize?: number;
-  channelCount?: number;
-  commandSharedBuffer?: SharedArrayBuffer;
-  commandRingCapacity?: number;
-  telemetrySharedBuffer?: SharedArrayBuffer;
-  telemetryRingCapacity?: number;
 }
 
 export interface SonareEngineTransportFacade {

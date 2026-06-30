@@ -14,7 +14,6 @@ export { SonareRealtimeEngineNode } from './worklet/engine-node';
 export type { SonareEngineOptions } from './worklet/engine-options';
 export { SonareRealtimeEngineWorkletProcessor } from './worklet/engine-processor';
 export { registerSonareRealtimeEngineWorkletProcessor } from './worklet/engine-register';
-export { SonareRtRealtimeEngineRuntime } from './worklet/engine-runtime-rt';
 export type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessage,
@@ -50,7 +49,6 @@ export type {
   SonareRealtimeVoiceChangerResetMessage,
   SonareRealtimeVoiceChangerSetConfigMessage,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
-  SonareRtRealtimeEngineRuntimeOptions,
   SonareWorkletDestroyMessage,
   SonareWorkletMessage,
   SonareWorkletProcessorOptions,

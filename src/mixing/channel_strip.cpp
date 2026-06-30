@@ -549,6 +549,9 @@ void ChannelStrip::settle() noexcept {
   // target, so a non-default width would otherwise glide from 1.0 over the first
   // rendered block instead of opening settled.
   width_.reset();
+  // Snap the pan smoothers to their steady-state gains too, so a non-default
+  // static pan opens settled instead of gliding from center over the first block.
+  panner_.reset();
 }
 
 int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8() >> 8; }

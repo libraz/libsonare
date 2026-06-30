@@ -42,16 +42,13 @@ import {
 /**
  * AudioWorklet-style bridge for the DAW realtime engine facade.
  *
- * The default mode uses the existing `sonare.wasm` embind facade. The
- * `sonare-rt` target is exposed as a selectable runtime target for hosts that
- * load the dedicated Emscripten AudioWorklet module.
+ * Backed by the `sonare.wasm` embind facade.
  */
 export class SonareRealtimeEngineWorkletProcessor {
   private static warnedChannelScratchOverflow = false;
   readonly sampleRate: number;
   readonly blockSize: number;
   readonly channelCount: number;
-  readonly runtimeTarget: 'embind' | 'sonare-rt';
   private engine: RealtimeEngine;
   private closed = false;
   private commandRing?: SonareEngineCommandRingBuffer;
@@ -81,12 +78,6 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.sampleRate = options.sampleRate ?? 48000;
     this.blockSize = options.blockSize ?? 128;
     this.channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
-    this.runtimeTarget = options.runtimeTarget ?? 'embind';
-    if (this.runtimeTarget === 'sonare-rt') {
-      throw new Error(
-        'sonare-rt runtime is provided by the dedicated Emscripten AudioWorklet module; use SonareRealtimeEngineNode.create({ runtimeTarget: "sonare-rt", moduleUrl: ... }) to load it.',
-      );
-    }
     this.transport = transport;
     this.meterIntervalFrames = Math.max(0, Math.floor(options.meterIntervalFrames ?? 2048));
     this.commandRing = options.commandSharedBuffer
@@ -691,9 +682,8 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   // Drains the engine's scope producer (FFT spectrum + goniometer points) into
-  // the lock-free SAB scope ring. Only the embind runtime publishes scope
-  // telemetry; the sonare-rt runtime owns its own transport. No allocation on
-  // the render path: records are written field-by-field into the ring.
+  // the lock-free SAB scope ring. No allocation on the render path: records are
+  // written field-by-field into the ring.
   private publishScope(): void {
     const ring = this.scopeRing;
     if (!ring) {

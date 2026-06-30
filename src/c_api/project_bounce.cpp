@@ -289,11 +289,11 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
   sonare_c_mixing_detail::build_and_compile(mixer);
   schedule_mixer_automation(timeline, routing, sample_rate, mixer);
 
-  // Snap each strip's fader/input-trim smoother to its steady-state target so the
-  // mixer summing pass opens at the configured gain instead of fading in from the
-  // previous value over the first ~5 ms block. This keeps the offline bounce
-  // deterministic; without it a non-default static fader ramps in on the master.
-  // (Pan/width ramp over their short window by design -- see ChannelStrip::settle.)
+  // Snap each strip's fader/input-trim/width/pan smoothers to their steady-state
+  // targets so the mixer summing pass opens at the configured gain instead of
+  // fading in from the previous value over the first ~5 ms block. This keeps the
+  // offline bounce deterministic; without it a non-default static fader ramps in
+  // on the master. (See ChannelStrip::settle for the full set of snapped stages.)
   for (const std::string& strip_id : routing.strip_ids) {
     if (SonareStrip* strip = sonare_mixer_strip_by_id(mixer, strip_id.c_str())) {
       strip->strip.settle();

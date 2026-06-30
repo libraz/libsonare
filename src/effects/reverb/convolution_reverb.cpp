@@ -100,6 +100,8 @@ void ConvolutionReverb::process(float* const* channels, int num_channels, int nu
   // Convolvers/buffers are preallocated for the maximum supported channel count;
   // clamp here so the audio thread never allocates.
   const int channels_to_process = std::min(num_channels, static_cast<int>(convolvers_.size()));
+  // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
+  // smoother, not per-sample (see Chorus::process for the rationale).
   const float wet = std::clamp(dry_wet_, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   for (int ch = 0; ch < channels_to_process; ++ch) {

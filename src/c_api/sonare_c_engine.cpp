@@ -2360,10 +2360,12 @@ SonareError sonare_engine_drain_external_midi(SonareRealtimeEngine* engine,
                                               SonareExternalMidiEvent* out, size_t max_events,
                                               size_t* out_count) {
   if (!engine || !out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  // Initialise the count before any early error return so a defensive consumer
+  // never reads an uninitialised value on the rejected-buffer path.
+  *out_count = 0;
   // A single queue record lowers to at most 3 MIDI-1 messages, so the buffer
   // must hold at least 3 to guarantee forward progress without losing a record.
   if (max_events < 3) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_count = 0;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)max_events;
   return SONARE_ERROR_NOT_SUPPORTED;

@@ -132,7 +132,6 @@ export class SonareRealtimeEngineNode {
     context: BaseAudioContext,
     options: SonareRealtimeEngineNodeOptions = {},
   ): Promise<SonareRealtimeEngineNode> {
-    const runtimeTarget = options.runtimeTarget ?? 'embind';
     const processorName = options.processorName ?? 'sonare-realtime-engine-processor';
     const moduleUrl = options.moduleUrl;
     if (moduleUrl && context.audioWorklet?.addModule) {
@@ -147,9 +146,7 @@ export class SonareRealtimeEngineNode {
               options.engineAbiVersion ===
               (options.expectedEngineAbiVersion ?? options.engineAbiVersion),
           }
-        : runtimeTarget === 'embind'
-          ? engineCapabilities()
-          : undefined;
+        : engineCapabilities();
     if (options.requireAbiCompatible !== false && detectedCapabilities?.abiCompatible === false) {
       throw new Error(
         `Engine ABI mismatch: wasm=${detectedCapabilities.engineAbiVersion}, expected=${detectedCapabilities.expectedEngineAbiVersion}`,
@@ -178,27 +175,21 @@ export class SonareRealtimeEngineNode {
       mode === 'sab'
         ? createSonareEngineTelemetryRingBuffer(options.telemetryRingCapacity ?? 128)
         : undefined;
-    // Meter ring: only the embind runtime publishes engine meters into a SAB
-    // ring (the sonare-rt runtime owns its own meter transport). Lock-free
-    // meter delivery matches the telemetry path and keeps the audio render
-    // callback allocation-free in SAB mode.
+    // Meter ring: the engine publishes meters into a SAB ring. Lock-free meter
+    // delivery matches the telemetry path and keeps the audio render callback
+    // allocation-free in SAB mode.
     const meterRing =
-      mode === 'sab' && runtimeTarget === 'embind'
-        ? createSonareMeterRingBuffer(options.meterRingCapacity ?? 128)
-        : undefined;
-    // Scope ring (FFT spectrum + goniometer): opt-in, embind-only. The
-    // per-block FFT is heavier than the meter path, so it is created only when
-    // the caller requests scope telemetry via scopeIntervalFrames > 0.
+      mode === 'sab' ? createSonareMeterRingBuffer(options.meterRingCapacity ?? 128) : undefined;
+    // Scope ring (FFT spectrum + goniometer): opt-in. The per-block FFT is
+    // heavier than the meter path, so it is created only when the caller
+    // requests scope telemetry via scopeIntervalFrames > 0.
     const scopeIntervalFrames = Math.max(0, Math.floor(options.scopeIntervalFrames ?? 0));
     const scopeRing =
-      mode === 'sab' && runtimeTarget === 'embind' && scopeIntervalFrames > 0
+      mode === 'sab' && scopeIntervalFrames > 0
         ? createSonareScopeRingBuffer(options.scopeRingCapacity ?? 64, options.scopeBands ?? 48)
         : undefined;
     const channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
-      runtimeTarget,
-      rtModuleUrl: options.rtModuleUrl,
-      rtWasmBinary: options.rtWasmBinary,
       sampleRate: options.sampleRate ?? context.sampleRate,
       blockSize: options.blockSize,
       channelCount,
@@ -230,7 +221,7 @@ export class SonareRealtimeEngineNode {
       node,
       {
         mode,
-        runtimeTarget,
+        runtimeTarget: 'embind',
         sharedArrayBuffer,
         atomics,
         audioWorklet,
@@ -238,9 +229,7 @@ export class SonareRealtimeEngineNode {
         expectedEngineAbiVersion: detectedCapabilities?.expectedEngineAbiVersion,
         abiCompatible: detectedCapabilities?.abiCompatible,
         degradedReason,
-        readyMessage:
-          runtimeTarget === 'sonare-rt' ||
-          (runtimeTarget === 'embind' && moduleUrl !== undefined && !options.nodeFactory),
+        readyMessage: moduleUrl !== undefined && !options.nodeFactory,
       },
       commandRing,
       telemetryRing,

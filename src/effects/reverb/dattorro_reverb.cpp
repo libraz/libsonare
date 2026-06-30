@@ -191,6 +191,8 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
 
   const float decay = std::clamp(config_.decay, 0.0f, 0.98f);
   const float damp_d = std::clamp(config_.damping, 0.0f, 1.0f) * 0.4f;
+  // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
+  // smoother, not per-sample (see Chorus::process for the rationale).
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
 

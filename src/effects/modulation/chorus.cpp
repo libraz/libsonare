@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "rt/scoped_no_denormals.h"
+
 namespace sonare::effects::modulation {
 
 namespace {
@@ -48,9 +50,14 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0 || channels[0] == nullptr) {
     return;
   }
+  rt::ScopedNoDenormals no_denormals;
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
   const bool stereo = right != left;
+  // dry/wet and modulation depth are read once per block (not per-sample
+  // smoothed); zipper-free automation relies on the engine's parameter slot
+  // smoother ramping config_ across blocks. A direct RT command bypasses that
+  // smoother, so very fast large jumps on a big block may zipper faintly.
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   for (int i = 0; i < num_samples; ++i) {

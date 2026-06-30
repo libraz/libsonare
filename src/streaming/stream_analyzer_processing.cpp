@@ -128,6 +128,16 @@ void StreamAnalyzer::finalize() {
   }
   finalized_ = true;
 
+  // NOTE: when internal resampling is active the persistent StreamResampler still
+  // holds a constant filter-latency tail (a handful of ms) inside its poly-phase
+  // state that has not yet emerged as output. We intentionally do NOT drain it
+  // here: StreamResampler deliberately never fabricates zero-padded samples (see
+  // its header), and flushing would either inject zeros or restart phase. For a
+  // real-time visualization/analysis stream the final few ms of the filter tail
+  // therefore do not reach frame analysis; at high source rates (e.g. 96 kHz)
+  // that tail is proportionally larger but remains a benign, bounded stream-end
+  // truncation rather than a mid-stream gap.
+
   if (overlap_read_pos_ > 0) {
     overlap_buffer_.erase(overlap_buffer_.begin(),
                           overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(overlap_read_pos_));

@@ -100,6 +100,8 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
 
+  // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
+  // smoother, not per-sample (see Chorus::process for the rationale).
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   const bool stereo = right != left;

@@ -47,6 +47,8 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
   const bool stereo = right != left;
+  // Block-rate dry/wet + modulation depth: smoothed across blocks by the engine
+  // parameter slot smoother, not per-sample (see Chorus::process for the rationale).
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   const float fb = std::clamp(config_.feedback, -0.95f, 0.95f);

@@ -56,6 +56,8 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
   // For mono, alias right to left for reading the (identical) input, but only
   // one output write is performed below so the left result is not clobbered.
   float* right = stereo ? channels[1] : channels[0];
+  // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
+  // smoother, not per-sample (see Chorus::process for the rationale).
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
 

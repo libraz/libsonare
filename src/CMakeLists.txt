@@ -1028,33 +1028,4 @@ if(BUILD_WASM)
     COMMENT "Copying WASM files to bindings/wasm/dist/"
   )
 
-  add_executable(sonare-rt wasm/rt_bindings.cpp)
-  target_link_libraries(sonare-rt PRIVATE sonare_engine)
-  if(BUILD_GRAPH)
-    target_link_libraries(sonare-rt PRIVATE sonare_graph)
-    target_compile_definitions(sonare-rt PRIVATE SONARE_WITH_GRAPH=1)
-  endif()
-  if(BUILD_MIXING)
-    target_link_libraries(sonare-rt PRIVATE sonare_mixing)
-    target_compile_definitions(sonare-rt PRIVATE SONARE_WITH_MIXING=1)
-  endif()
-  target_compile_options(sonare-rt PRIVATE -msimd128)
-  target_link_options(sonare-rt PRIVATE
-    -msimd128
-    -sEXPORT_NAME='SonareRt'
-    -sEXPORTED_FUNCTIONS=['_malloc','_free','_sonare_rt_engine_abi_version','_sonare_rt_engine_create','_sonare_rt_engine_destroy','_sonare_rt_engine_prepare','_sonare_rt_engine_play','_sonare_rt_engine_stop','_sonare_rt_engine_seek_sample','_sonare_rt_engine_seek_ppq','_sonare_rt_engine_set_tempo','_sonare_rt_engine_set_loop','_sonare_rt_engine_seek_marker','_sonare_rt_engine_set_metronome_enabled','_sonare_rt_engine_set_capture_armed','_sonare_rt_engine_set_capture_punch','_sonare_rt_engine_process','_sonare_rt_engine_drain_telemetry']
-    -sMODULARIZE=1
-    -sEXPORT_ES6=1
-    -sALLOW_MEMORY_GROWTH=0
-    -sINITIAL_MEMORY=67108864
-    -sSTACK_SIZE=1048576
-    -sWASM_WORKERS=1
-    -sAUDIO_WORKLET=1
-  )
-  add_custom_command(TARGET sonare-rt POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_SOURCE_DIR}/bindings/wasm/dist
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare-rt> ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare-rt.wasm ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
-    COMMENT "Copying realtime WASM files to bindings/wasm/dist/"
-  )
 endif()
