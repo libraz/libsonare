@@ -148,6 +148,36 @@ TEST_CASE("SMF2 round-trips tempo and time signature via Flex Data", "[midi][smf
   REQUIRE(imported.time_signatures.front().thirty_seconds_per_quarter == 0);
 }
 
+TEST_CASE("SMF2 preserves the position of a non-zero first tempo/time-sig", "[midi][smf2]") {
+  // A clip whose first tempo and time-signature changes do NOT start at tick 0
+  // (e.g. they land at bar 2). The config header only holds the tick-0 initial
+  // state, so these must round-trip at their real positions instead of being
+  // collapsed to ppq 0.
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 64)));
+  clip.add_event(ev(8.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+
+  std::vector<sonare::transport::TempoSegment> tempos = {{4.0, 150.0, 0.0}};
+  sonare::transport::TimeSignatureSegment sig;
+  sig.start_ppq = 4.0;
+  sig.time_sig.numerator = 7;
+  sig.time_sig.denominator = 8;
+  sig.thirty_seconds_per_quarter = 0;
+  std::vector<sonare::transport::TimeSignatureSegment> sigs = {sig};
+
+  const auto exported = export_clip_file(clip, tempos, sigs, Smf2ExportOptions{});
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+
+  REQUIRE(imported.tempo_segments.size() == 1);
+  REQUIRE(imported.tempo_segments.front().start_ppq == Catch::Approx(4.0).margin(0.01));
+  REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(150.0).margin(0.01));
+  REQUIRE(imported.time_signatures.size() == 1);
+  REQUIRE(imported.time_signatures.front().start_ppq == Catch::Approx(4.0).margin(0.01));
+  REQUIRE(imported.time_signatures.front().time_sig.numerator == 7);
+  REQUIRE(imported.time_signatures.front().time_sig.denominator == 8);
+}
+
 TEST_CASE("SMF2 export clamps very low BPM tempo instead of wrapping", "[midi][smf2]") {
   MidiClip clip;
   std::vector<sonare::transport::TempoSegment> tempos = {{0.0, 1.0, 0.0}, {1.0, 0.5, 0.0}};

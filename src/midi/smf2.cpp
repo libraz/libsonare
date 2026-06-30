@@ -642,9 +642,13 @@ Smf2ExportResult export_clip_file(
   put_word(&out, delta_clockstamp_word(0));
   put_word(&out, dctpq_word(dctpq));
 
-  // First tempo / time-signature + optional name live in the config header,
-  // each with a prepended DCS(0).
-  if (!tempo_segments.empty()) {
+  // The config header carries only the tick-0 initial state. A first tempo /
+  // time-signature anchored at start_ppq > 0 (e.g. the first change lands at bar
+  // 2) is NOT moved to tick 0 — it is emitted as a DCS-positioned sequence-data
+  // item below so the round-trip keeps its real position.
+  const bool tempo_in_header = !tempo_segments.empty() && tempo_segments.front().start_ppq == 0.0;
+  const bool tsig_in_header = !time_signatures.empty() && time_signatures.front().start_ppq == 0.0;
+  if (tempo_in_header) {
     const uint32_t tempo10ns = tempo_10ns_from_bpm(tempo_segments.front().bpm);
     put_word(&out, delta_clockstamp_word(0));
     put_word(&out, flex_word0(kFlexBankSetupPerformance, kFlexStatusSetTempo));
@@ -652,7 +656,7 @@ Smf2ExportResult export_clip_file(
     put_word(&out, 0);
     put_word(&out, 0);
   }
-  if (!time_signatures.empty()) {
+  if (tsig_in_header) {
     const auto& seg = time_signatures.front();
     const uint8_t num = static_cast<uint8_t>(std::clamp(seg.time_sig.numerator, 1, 255));
     const uint8_t den = static_cast<uint8_t>(std::clamp(seg.time_sig.denominator, 1, 255));
@@ -684,10 +688,12 @@ Smf2ExportResult export_clip_file(
   put_word(&out, delta_clockstamp_word(0));
   put_stream(&out, kStreamStartOfClip);
 
-  // Build the merged sequence-data item list: tempo / time-sig changes after the
-  // first, plus all clip events.
+  // Build the merged sequence-data item list: every tempo / time-sig segment NOT
+  // already placed in the config header (the tick-0 initial state), plus all clip
+  // events. When the first segment is at a non-zero tick it stays here at its real
+  // position instead of being collapsed into the header.
   std::vector<SeqItem> items;
-  for (size_t i = 1; i < tempo_segments.size(); ++i) {
+  for (size_t i = tempo_in_header ? 1 : 0; i < tempo_segments.size(); ++i) {
     SeqItem item;
     item.tick = ppq_to_tick(tempo_segments[i].start_ppq, dctpq);
     item.order = 0;
@@ -696,7 +702,7 @@ Smf2ExportResult export_clip_file(
     item.word_count = 4;
     items.push_back(item);
   }
-  for (size_t i = 1; i < time_signatures.size(); ++i) {
+  for (size_t i = tsig_in_header ? 1 : 0; i < time_signatures.size(); ++i) {
     const auto& seg = time_signatures[i];
     const uint8_t num = static_cast<uint8_t>(std::clamp(seg.time_sig.numerator, 1, 255));
     const uint8_t den = static_cast<uint8_t>(std::clamp(seg.time_sig.denominator, 1, 255));
