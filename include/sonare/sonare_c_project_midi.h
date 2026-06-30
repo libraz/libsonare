@@ -8,8 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "sonare_c_types.h"
 #include "sonare_c_project_core.h"
+#include "sonare_c_types.h"
 
 #ifdef __cplusplus
 extern "C" {

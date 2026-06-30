@@ -37,9 +37,9 @@ extern "C" {
 //   - engine:    realtime-engine telemetry / transport / bounce / freeze PODs.
 //   - analysis:  feature/effect result PODs + the NativeSynth patch surface.
 //   - functions: audio / detect / analyze prototypes + memory/error/version.
-#include "sonare_c_types_enums.h"
-#include "sonare_c_types_engine.h"
 #include "sonare_c_types_analysis.h"
+#include "sonare_c_types_engine.h"
+#include "sonare_c_types_enums.h"
 #include "sonare_c_types_functions.h"
 
 #ifdef __cplusplus

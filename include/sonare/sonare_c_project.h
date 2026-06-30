@@ -49,8 +49,8 @@
 // body is split into domain sub-headers below, included in dependency order
 // (shared descriptors + lifecycle first, then the function surfaces). Each
 // sub-header is standalone-safe (its own #pragma once / includes / extern "C").
-#include "sonare_c_project_core.h"
-#include "sonare_c_project_instruments.h"
-#include "sonare_c_project_edit.h"
-#include "sonare_c_project_midi.h"
 #include "sonare_c_project_annotate.h"
+#include "sonare_c_project_core.h"
+#include "sonare_c_project_edit.h"
+#include "sonare_c_project_instruments.h"
+#include "sonare_c_project_midi.h"

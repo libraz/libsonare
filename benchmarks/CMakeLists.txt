@@ -7,6 +7,15 @@ target_include_directories(sonare_bench PRIVATE
   ${PROJECT_SOURCE_DIR}/src
 )
 
+if(BUILD_ARRANGEMENT)
+  add_executable(sonare_piano_voice_bench piano_voice_bench.cpp)
+  target_link_libraries(sonare_piano_voice_bench PRIVATE sonare_midi)
+  target_compile_options(sonare_piano_voice_bench PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_piano_voice_bench PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+  )
+endif()
+
 add_executable(sonare_filterbank_bench filterbank_bench.cpp)
 target_link_libraries(sonare_filterbank_bench PRIVATE sonare_core)
 target_compile_options(sonare_filterbank_bench PRIVATE ${SONARE_WARNING_FLAGS})
