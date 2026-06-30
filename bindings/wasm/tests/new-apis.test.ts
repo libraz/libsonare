@@ -231,6 +231,13 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(peak).toBeLessThanOrEqual(1.0);
     });
 
+    it('rejects out-of-range MIDI targets', () => {
+      expect(() => pitchCorrectToMidi(signal, SR, 57, 200)).toThrow();
+      expect(() => pitchCorrectToMidi(signal, SR, 57, -1)).toThrow();
+      expect(() => pitchCorrectToMidi(signal, SR, -1, 60)).toThrow();
+      expect(() => pitchCorrectToMidi(signal, SR, 200, 60)).toThrow();
+    });
+
     it('pitchCorrectToMidiTimevarying follows a caller-supplied F0 contour', () => {
       const hop = 512;
       const nFrames = Math.floor(signal.length / hop) + 1;

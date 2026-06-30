@@ -10,6 +10,7 @@
 #include "core/audio.h"
 #include "core/convert.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare::editing::pitch_editor;
@@ -242,6 +243,33 @@ TEST_CASE("PitchCorrector applies pYIN-verifiable one semitone correction", "[pi
 
   // Plan spec: within +-2 cents. At ~467.5 Hz, 2 cents is about +-0.54 Hz.
   REQUIRE_THAT(median_voiced_f0(corrected_track), WithinAbs(median_voiced_f0(target_track), 0.6f));
+}
+
+TEST_CASE("PitchCorrector rejects out-of-range target and invalid F0 in the core",
+          "[pitch_editor]") {
+  // The validation lives in the core so every surface (C ABI, Node, Python,
+  // WASM) inherits it; Node/WASM previously called the core directly and
+  // returned garbage for these inputs.
+  constexpr int sample_rate = 22050;
+  auto samples = sine(440.0f, sample_rate, sample_rate / 4);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+  const F0Track track = constant_track(440.0f, sample_rate, 256, 8);
+  PitchCorrector corrector;
+
+  // target_midi outside [0, 127] is rejected.
+  REQUIRE_THROWS_AS(corrector.correct_to_midi(audio, track, 200.0f), sonare::SonareException);
+  REQUIRE_THROWS_AS(corrector.correct_to_midi(audio, track, -1.0f), sonare::SonareException);
+
+  // A negative / non-finite F0 in the track is rejected.
+  F0Track bad_f0 = track;
+  bad_f0.f0_hz[0] = -5.0f;
+  REQUIRE_THROWS_AS(corrector.correct_to_midi(audio, bad_f0, 69.0f), sonare::SonareException);
+  F0Track nan_f0 = track;
+  nan_f0.f0_hz[1] = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_THROWS_AS(corrector.correct_to_midi(audio, nan_f0, 69.0f), sonare::SonareException);
+
+  // A valid request still succeeds.
+  REQUIRE_NOTHROW(corrector.correct_to_midi(audio, track, 69.0f));
 }
 
 TEST_CASE("PitchCorrector rejects an F0Track whose sample rate differs from the audio",

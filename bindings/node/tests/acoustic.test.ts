@@ -30,6 +30,17 @@ describe('geometric room acoustics', () => {
     expect(Number.isFinite(est.drrDb)).toBe(true);
   });
 
+  it('treats seed 0 as the library default (1) for cross-surface reproducibility', () => {
+    // seed:0 must keep the RirSynthConfig default (1) — matching the C ABI and
+    // Python — instead of seeding the PRNG with 0 (which gave a different RIR).
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSeconds: 0.3 };
+    const zero = synthesizeRir({ ...base, seed: 0 });
+    const one = synthesizeRir({ ...base, seed: 1 });
+    const two = synthesizeRir({ ...base, seed: 2 });
+    expect(Array.from(zero.rir)).toEqual(Array.from(one.rir));
+    expect(Array.from(zero.rir)).not.toEqual(Array.from(two.rir));
+  });
+
   it('morphs toward a target room and is deterministic', () => {
     const samples = new Float32Array(4000);
     samples[0] = 1.0;

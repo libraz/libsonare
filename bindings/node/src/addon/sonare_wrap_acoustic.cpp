@@ -163,7 +163,11 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   cfg.late_model = node_bool_option(opts, "preferEyring", true)
                        ? sonare::acoustic::ReverbModel::Eyring
                        : sonare::acoustic::ReverbModel::Sabine;
-  cfg.seed = static_cast<unsigned>(std::max(0, node_int_option(opts, "seed", 1)));
+  // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
+  // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
+  // surface instead of seeding the PRNG with 0.
+  if (const int seed_in = node_int_option(opts, "seed", 0); seed_in > 0)
+    cfg.seed = static_cast<unsigned>(seed_in);
   cfg.max_seconds = node_float_option(opts, "maxSeconds", cfg.max_seconds);
   cfg.mixing_time_ms = node_float_option(opts, "mixingTimeMs", cfg.mixing_time_ms);
   cfg.crossfade_ms = node_float_option(opts, "crossfadeMs", cfg.crossfade_ms);
@@ -265,7 +269,11 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
       node_float_option(opts, "sourceTailSuppression", cfg.source_tail_suppression);
   cfg.wet = node_float_option(opts, "wet", cfg.wet);
   cfg.ism_order = std::max(0, node_int_option(opts, "ismOrder", cfg.ism_order));
-  cfg.seed = static_cast<unsigned>(std::max(0, node_int_option(opts, "seed", 1)));
+  // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
+  // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
+  // surface instead of seeding the PRNG with 0.
+  if (const int seed_in = node_int_option(opts, "seed", 0); seed_in > 0)
+    cfg.seed = static_cast<unsigned>(seed_in);
   cfg.max_seconds = node_float_option(opts, "maxSeconds", cfg.max_seconds);
   cfg.late_model = node_bool_option(opts, "preferEyring", true)
                        ? sonare::acoustic::ReverbModel::Eyring

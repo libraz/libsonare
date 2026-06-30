@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -184,6 +185,15 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   int sr = info[1].As<Napi::Number>().Int32Value();
   float current_midi = info[2].As<Napi::Number>().FloatValue();
   float target_midi = info[3].As<Napi::Number>().FloatValue();
+
+  // current_midi is baked into the F0 track below, so the core cannot range-check
+  // it (midi_to_hz(200) is a valid-but-huge frequency). Validate it here exactly
+  // as the C ABI does; target_midi and the F0 track are validated by the core.
+  if (!std::isfinite(current_midi) || current_midi < 0.0f || current_midi > 127.0f) {
+    Napi::RangeError::New(env, "currentMidi must be finite and in [0, 127]")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::PitchCorrector corrector;

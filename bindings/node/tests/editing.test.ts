@@ -42,6 +42,19 @@ describe('editing effects', () => {
     expect(result.length).toBeGreaterThan(0);
   });
 
+  it('rejects out-of-range MIDI / F0 instead of returning garbage', () => {
+    // The C ABI and Python reject these; Node previously returned best-effort
+    // garbage. Validation now lives in the core (and currentMidi in the wrapper).
+    expect(() => pitchCorrectToMidi(tone, SR, 200, 71)).toThrow(); // currentMidi out of range
+    expect(() => pitchCorrectToMidi(tone, SR, 69, 200)).toThrow(); // targetMidi out of range
+    expect(() => pitchCorrectToMidi(tone, SR, 69, -1)).toThrow();
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const badF0 = new Float32Array(nFrames).fill(440);
+    badF0[0] = -5; // negative F0
+    expect(() => pitchCorrectToMidiTimevarying(tone, badF0, 71, SR, hop)).toThrow();
+  });
+
   it('pitchCorrectToMidiTimevarying follows a caller-supplied F0 contour', () => {
     const hop = 512;
     const nFrames = Math.floor(tone.length / hop) + 1;

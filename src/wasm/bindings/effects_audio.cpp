@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include "common.h"
@@ -82,6 +83,13 @@ val js_pitch_shift(val samples, int sample_rate, float semitones) {
 }
 
 val js_pitch_correct_to_midi(val samples, int sample_rate, float current_midi, float target_midi) {
+  // current_midi is baked into the F0 track below, so the core cannot range-check
+  // it (midi_to_hz(200) is a valid-but-huge frequency). Validate it here exactly
+  // as the C ABI does; target_midi and the F0 track are validated by the core.
+  if (!std::isfinite(current_midi) || current_midi < 0.0f || current_midi > 127.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "currentMidi must be finite and in [0, 127]");
+  }
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);

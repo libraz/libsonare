@@ -87,6 +87,15 @@ describe('geometric room acoustics', () => {
     expect(Array.from(zeroMorph)).toEqual(Array.from(defaultMorph));
   });
 
+  it('treats seed 0 as the library default (1) for cross-surface reproducibility', () => {
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSeconds: 0.3 };
+    const zero = synthesizeRir({ ...base, seed: 0 });
+    const one = synthesizeRir({ ...base, seed: 1 });
+    const two = synthesizeRir({ ...base, seed: 2 });
+    expect(Array.from(zero.rir)).toEqual(Array.from(one.rir));
+    expect(Array.from(zero.rir)).not.toEqual(Array.from(two.rir));
+  });
+
   it('honors per-band wall scattering', () => {
     const base = {
       lengthM: 7,

@@ -1205,6 +1205,18 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('rejects MIDI byte arguments that would wrap through the uint8 cast', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setMidiInputSource(0);
+    // group 256 must NOT silently wrap to a valid group 0 — it must throw.
+    expect(() => engine.pushMidiInputNoteOn(256, 0, 60, 100)).toThrow();
+    // A channel of 256 likewise wraps to 0 under a plain cast; reject it.
+    expect(() => engine.pushMidiInputNoteOn(0, 256, 60, 100)).toThrow();
+    // A valid in-range call still works once an input source is enabled.
+    expect(() => engine.pushMidiInputNoteOn(0, 0, 60, 100)).not.toThrow();
+    engine.destroy();
+  });
+
   it('exposes the mastering processor catalog with role and capability flags', () => {
     const catalog = masteringProcessorCatalog();
     expect(catalog.length).toBeGreaterThan(0);

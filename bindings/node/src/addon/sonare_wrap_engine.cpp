@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -52,6 +53,22 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
 
 uint32_t OptionalUint32(const Napi::Object& obj, const char* key, uint32_t fallback) {
   return obj.Has(key) ? obj.Get(key).As<Napi::Number>().Uint32Value() : fallback;
+}
+
+// Reads a MIDI byte argument, rejecting a value that would silently wrap through
+// the uint8_t cast (e.g. 256 -> 0) and slip past the C-ABI range check. Throws a
+// JS RangeError on a non-integer or out-of-[0,255] value; the caller must bail
+// on a pending exception before the native call (the finer MIDI range — group <
+// 16, note < 128, etc. — is still enforced by the C ABI).
+uint8_t MidiByteArg(Napi::Env env, const Napi::CallbackInfo& info, size_t idx, uint8_t fallback) {
+  if (info.Length() <= idx || info[idx].IsUndefined()) return fallback;
+  const double v = info[idx].As<Napi::Number>().DoubleValue();
+  if (!(v >= 0.0) || v > 255.0 || std::floor(v) != v) {
+    Napi::RangeError::New(env, "MIDI byte argument must be an integer in [0, 255]")
+        .ThrowAsJavaScriptException();
+    return fallback;
+  }
+  return static_cast<uint8_t>(v);
 }
 
 int64_t OptionalInt64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
@@ -689,14 +706,11 @@ Napi::Value RealtimeEngineWrap::MidiInstrumentCount(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::PushMidiNoteOn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
-  const uint8_t group =
-      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t channel =
-      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t note =
-      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t velocity =
-      info.Length() > 4 ? static_cast<uint8_t>(info[4].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t group = MidiByteArg(env, info, 1, 0);
+  const uint8_t channel = MidiByteArg(env, info, 2, 0);
+  const uint8_t note = MidiByteArg(env, info, 3, 0);
+  const uint8_t velocity = MidiByteArg(env, info, 4, 0);
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_note_on(engine_, destination_id, group, channel, note,
                                                     velocity, OptionalInt64(info, 5, -1)));
   return env.Undefined();
@@ -704,10 +718,9 @@ Napi::Value RealtimeEngineWrap::PushMidiNoteOn(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint8_t channel =
-      info.Length() > 0 ? static_cast<uint8_t>(info[0].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t controller =
-      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t channel = MidiByteArg(env, info, 0, 0);
+  const uint8_t controller = MidiByteArg(env, info, 1, 0);
+  if (env.IsExceptionPending()) return env.Undefined();
   const uint32_t param_id = info.Length() > 2 ? info[2].As<Napi::Number>().Uint32Value() : 0;
   const float min_value = info.Length() > 3 ? info[3].As<Napi::Number>().FloatValue() : 0.0f;
   const float max_value = info.Length() > 4 ? info[4].As<Napi::Number>().FloatValue() : 1.0f;
@@ -768,14 +781,11 @@ Napi::Value RealtimeEngineWrap::MidiInputPendingCount(const Napi::CallbackInfo& 
 
 Napi::Value RealtimeEngineWrap::PushMidiInputNoteOn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint8_t group =
-      info.Length() > 0 ? static_cast<uint8_t>(info[0].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t channel =
-      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t note =
-      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t velocity =
-      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t group = MidiByteArg(env, info, 0, 0);
+  const uint8_t channel = MidiByteArg(env, info, 1, 0);
+  const uint8_t note = MidiByteArg(env, info, 2, 0);
+  const uint8_t velocity = MidiByteArg(env, info, 3, 0);
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_input_note_on(engine_, group, channel, note, velocity,
                                                           OptionalInt64(info, 4, 0)));
   return env.Undefined();
@@ -783,14 +793,11 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOn(const Napi::CallbackInfo& in
 
 Napi::Value RealtimeEngineWrap::PushMidiInputNoteOff(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint8_t group =
-      info.Length() > 0 ? static_cast<uint8_t>(info[0].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t channel =
-      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t note =
-      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t velocity =
-      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t group = MidiByteArg(env, info, 0, 0);
+  const uint8_t channel = MidiByteArg(env, info, 1, 0);
+  const uint8_t note = MidiByteArg(env, info, 2, 0);
+  const uint8_t velocity = MidiByteArg(env, info, 3, 0);
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_input_note_off(engine_, group, channel, note, velocity,
                                                            OptionalInt64(info, 4, 0)));
   return env.Undefined();
@@ -798,14 +805,11 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOff(const Napi::CallbackInfo& i
 
 Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint8_t group =
-      info.Length() > 0 ? static_cast<uint8_t>(info[0].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t channel =
-      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t controller =
-      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t value =
-      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t group = MidiByteArg(env, info, 0, 0);
+  const uint8_t channel = MidiByteArg(env, info, 1, 0);
+  const uint8_t controller = MidiByteArg(env, info, 2, 0);
+  const uint8_t value = MidiByteArg(env, info, 3, 0);
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_input_cc(engine_, group, channel, controller, value,
                                                      OptionalInt64(info, 4, 0)));
   return env.Undefined();
@@ -814,14 +818,11 @@ Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) 
 Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
-  const uint8_t group =
-      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t channel =
-      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t note =
-      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t velocity =
-      info.Length() > 4 ? static_cast<uint8_t>(info[4].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t group = MidiByteArg(env, info, 1, 0);
+  const uint8_t channel = MidiByteArg(env, info, 2, 0);
+  const uint8_t note = MidiByteArg(env, info, 3, 0);
+  const uint8_t velocity = MidiByteArg(env, info, 4, 0);
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_note_off(engine_, destination_id, group, channel, note,
                                                      velocity, OptionalInt64(info, 5, -1)));
   return env.Undefined();

@@ -54,7 +54,11 @@ Audio PitchCorrector::correct_to_scale(const Audio& audio, const F0Track& track)
 
 Audio PitchCorrector::correct_to_midi_timevarying(const Audio& audio, const F0Track& track,
                                                   float target_midi) const {
-  SONARE_CHECK(std::isfinite(target_midi), ErrorCode::InvalidParameter);
+  // Reject a non-finite or out-of-range target so a bad value cannot turn into a
+  // garbage shift. Validated here in the core so every surface (C ABI, Node,
+  // Python, WASM) inherits the same contract rather than each re-checking.
+  SONARE_CHECK(std::isfinite(target_midi) && target_midi >= 0.0f && target_midi <= 127.0f,
+               ErrorCode::InvalidParameter);
   return correct_timevarying(audio, track, TargetMode::kFixedMidi, target_midi);
 }
 
@@ -112,6 +116,16 @@ Audio PitchCorrector::correct_timevarying(const Audio& audio, const F0Track& tra
   // hop_length is in samples at the track's rate; a rate mismatch would silently apply
   // the correction curve at the wrong time positions and derive a wrong retune tau.
   SONARE_CHECK(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter);
+  // Reject a non-finite or negative F0 (or non-finite voicing probability) so it
+  // cannot turn into garbage output. Validated in the core so every surface
+  // inherits the contract, not just the C ABI.
+  for (size_t i = 0; i < track.f0_hz.size(); ++i) {
+    SONARE_CHECK(std::isfinite(track.f0_hz[i]) && track.f0_hz[i] >= 0.0f,
+                 ErrorCode::InvalidParameter);
+  }
+  for (size_t i = 0; i < track.voiced_prob.size(); ++i) {
+    SONARE_CHECK(std::isfinite(track.voiced_prob[i]), ErrorCode::InvalidParameter);
+  }
   if (audio.empty() || track.n_frames() == 0) {
     return audio.to_mono();
   }

@@ -590,7 +590,11 @@ val js_synthesize_rir(val opts) {
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
-  config.seed = static_cast<unsigned>(std::max(0, intProperty(opts, "seed", 1)));
+  // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
+  // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
+  // surface instead of seeding the PRNG with 0.
+  if (const int seed_in = intProperty(opts, "seed", 0); seed_in > 0)
+    config.seed = static_cast<unsigned>(seed_in);
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
   const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
@@ -671,7 +675,11 @@ val js_room_morph(val samples, int sample_rate, val opts) {
       floatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
   config.wet = floatProperty(opts, "wet", config.wet);
   config.ism_order = std::max(0, intProperty(opts, "ismOrder", config.ism_order));
-  config.seed = static_cast<unsigned>(std::max(0, intProperty(opts, "seed", 1)));
+  // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
+  // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
+  // surface instead of seeding the PRNG with 0.
+  if (const int seed_in = intProperty(opts, "seed", 0); seed_in > 0)
+    config.seed = static_cast<unsigned>(seed_in);
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring

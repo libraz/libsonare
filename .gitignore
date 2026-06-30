@@ -122,3 +122,6 @@ uv.lock
 
 # Local agent notes
 AGENT.md
+
+# Local MCP server config (Serena など、コミットしない)
+.mcp.json

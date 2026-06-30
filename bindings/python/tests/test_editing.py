@@ -28,6 +28,17 @@ def test_pitch_correct_to_midi_function() -> None:
     assert all(math.isfinite(x) for x in result)
 
 
+def test_pitch_correct_to_midi_rejects_out_of_range() -> None:
+    sr = 22050
+    samples = _tone(sr)
+
+    for current, target in ((57.0, 200.0), (57.0, -1.0), (-1.0, 60.0), (200.0, 60.0)):
+        with pytest.raises((ValueError, RuntimeError)):
+            libsonare.pitch_correct_to_midi(
+                samples, sample_rate=sr, current_midi=current, target_midi=target
+            )
+
+
 def test_pitch_correct_to_midi_timevarying_function() -> None:
     sr = 22050
     samples = _tone(sr, freq=220.0)
