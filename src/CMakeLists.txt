@@ -802,6 +802,10 @@ if(BUILD_SHARED)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_daw.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_midi.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_clips.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_mixing.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_capture.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_render.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_voice_changer.cpp)
   # The project (arrangement) C ABI sources are always compiled so their
   # public symbols exist in feature-off shared builds; it returns NOT_SUPPORTED
