@@ -942,11 +942,20 @@ if(BUILD_WASM)
     wasm/bindings/features/spectrogram.cpp
     wasm/bindings/metering/metering.cpp
     wasm/bindings/mixing/mixing.cpp
+    wasm/bindings/mixing/mixing_strip.cpp
+    wasm/bindings/mixing/mixing_automation.cpp
+    wasm/bindings/mixing/mixing_processing.cpp
+    wasm/bindings/mixing/mixing_topology.cpp
     wasm/bindings/mastering/api.cpp
     wasm/bindings/mastering/chain.cpp
     wasm/bindings/offline.cpp
     wasm/bindings/effects/offline_dynamics_editing.cpp
     wasm/bindings/project/project.cpp
+    wasm/bindings/project/project_arrange.cpp
+    wasm/bindings/project/project_edit.cpp
+    wasm/bindings/project/project_midi.cpp
+    wasm/bindings/project/project_bounce.cpp
+    wasm/bindings/project/project_meta.cpp
     wasm/bindings/analysis/quick.cpp
     wasm/bindings/analysis/quick_detailed.cpp
     wasm/bindings/effects/repair.cpp
