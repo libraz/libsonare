@@ -17,10 +17,15 @@ namespace sonare {
 /// @brief Configuration for Chromagram computation.
 struct ChromaConfig {
   // Chroma filterbank settings
-  int n_chroma = 12;    ///< Number of chroma bins (typically 12)
-  float tuning = 0.0f;  ///< Tuning deviation in fractions of a chroma bin
-  float fmin = 0.0f;    ///< Minimum frequency (0 = C1 ~32.7 Hz)
-  int n_octaves = 7;    ///< Number of octaves to span
+  int n_chroma = 12;  ///< Number of chroma bins (typically 12)
+  /// Tuning deviation in fractions of a chroma bin. Defaults to 0 (concert A440).
+  /// NOTE: unlike librosa.feature.chroma_stft -- which estimates tuning from the
+  /// signal when none is given -- this default is a fixed 0 and is NOT
+  /// auto-estimated. For sharp/flat (non-A440) material, pass an estimate_tuning()
+  /// result here so the chroma grid follows the recording's pitch reference.
+  float tuning = 0.0f;
+  float fmin = 0.0f;  ///< Minimum frequency (0 = C1 ~32.7 Hz)
+  int n_octaves = 7;  ///< Number of octaves to span
 
   // STFT settings
   int n_fft = 2048;                      ///< FFT size

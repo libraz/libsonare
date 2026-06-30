@@ -303,6 +303,13 @@ void sonare_free_inverse_result(SonareInverseResult* result);
 // Features - Chroma
 // ============================================================================
 
+/// @brief STFT chromagram (librosa.feature.chroma_stft).
+/// @details The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
+///   librosa.feature.chroma_stft, which estimates tuning from the signal when
+///   none is supplied, this entry point does NOT auto-estimate and exposes no
+///   tuning argument; sharp/flat (non-A440) recordings smear across pitch classes
+///   accordingly. Estimate tuning separately via @ref sonare_estimate_tuning if a
+///   non-A440 reference matters for downstream key/chord detection.
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
                           int hop_length, SonareChromaResult* out);
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,

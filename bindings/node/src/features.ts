@@ -67,6 +67,15 @@ export function mfcc(
   return addon.mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
 }
 
+/**
+ * STFT chromagram (librosa.feature.chroma_stft).
+ *
+ * The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
+ * librosa.feature.chroma_stft — which estimates tuning from the signal when none
+ * is given — this does NOT auto-estimate and exposes no tuning argument, so
+ * sharp/flat (non-A440) recordings smear across pitch classes. Estimate tuning
+ * separately via {@link estimateTuning} if a non-A440 reference matters.
+ */
 export function chroma(
   samples: Float32Array,
   sampleRate = 22050,
