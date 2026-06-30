@@ -1,7 +1,93 @@
 /// @file no_alloc_mastering_eq_test.cpp
 /// @brief Mastering EQ no-allocation realtime tests.
 
+#include "mastering/saturation/bitcrusher.h"
+#include "mastering/saturation/exciter.h"
+#include "mastering/saturation/hard_clipper.h"
+#include "mastering/saturation/soft_clipper.h"
+#include "mastering/saturation/transformer.h"
+#include "mastering/saturation/waveshaper.h"
+#include "mastering/spectral/air_band.h"
+#include "mastering/spectral/presence_enhancer.h"
 #include "no_alloc_test_helpers.h"
+
+namespace {
+
+// Verifies a processor allocates nothing on the audio thread once prepared —
+// including the FIRST process() block and a stereo->mono->stereo channel-count
+// change (which previously reallocated, and for some processors wiped state).
+template <typename Proc>
+void require_no_audio_thread_alloc(Proc& proc) {
+  constexpr int kBlock = 256;
+  proc.prepare(48000.0, kBlock);
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  for (int i = 0; i < kBlock; ++i) {
+    left[static_cast<size_t>(i)] = i == 0 ? 0.8f : 0.05f;
+    right[static_cast<size_t>(i)] = 0.04f;
+  }
+  float* stereo[] = {left.data(), right.data()};
+  float* mono[] = {left.data()};
+
+  AllocationGuard guard;
+  proc.process(stereo, 2, kBlock);  // first block must not allocate
+  proc.process(mono, 1, kBlock);    // channel-count change must not allocate
+  proc.process(stereo, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+}  // namespace
+
+TEST_CASE("Exciter process is allocation free from the first block",
+          "[mastering][saturation][rt]") {
+  sonare::mastering::saturation::Exciter proc{sonare::mastering::saturation::ExciterConfig{}};
+  require_no_audio_thread_alloc(proc);
+}
+
+TEST_CASE("BitCrusher process is allocation free from the first block",
+          "[mastering][saturation][rt]") {
+  sonare::mastering::saturation::BitCrusher proc{sonare::mastering::saturation::BitCrusherConfig{}};
+  require_no_audio_thread_alloc(proc);
+}
+
+TEST_CASE("SoftClipper process is allocation free from the first block",
+          "[mastering][saturation][rt]") {
+  sonare::mastering::saturation::SoftClipper proc{
+      sonare::mastering::saturation::SoftClipperConfig{}};
+  require_no_audio_thread_alloc(proc);
+}
+
+TEST_CASE("HardClipper process is allocation free from the first block",
+          "[mastering][saturation][rt]") {
+  sonare::mastering::saturation::HardClipper proc{
+      sonare::mastering::saturation::HardClipperConfig{}};
+  require_no_audio_thread_alloc(proc);
+}
+
+TEST_CASE("Waveshaper process is allocation free from the first block",
+          "[mastering][saturation][rt]") {
+  sonare::mastering::saturation::Waveshaper proc{sonare::mastering::saturation::WaveshaperConfig{}};
+  require_no_audio_thread_alloc(proc);
+}
+
+TEST_CASE("Transformer process is allocation free from the first block",
+          "[mastering][saturation][rt]") {
+  sonare::mastering::saturation::Transformer proc{
+      sonare::mastering::saturation::TransformerConfig{}};
+  require_no_audio_thread_alloc(proc);
+}
+
+TEST_CASE("AirBand process is allocation free from the first block", "[mastering][spectral][rt]") {
+  sonare::mastering::spectral::AirBand proc{sonare::mastering::spectral::AirBandConfig{}};
+  require_no_audio_thread_alloc(proc);
+}
+
+TEST_CASE("PresenceEnhancer process is allocation free from the first block",
+          "[mastering][spectral][rt]") {
+  sonare::mastering::spectral::PresenceEnhancer proc{
+      sonare::mastering::spectral::PresenceEnhancerConfig{}};
+  require_no_audio_thread_alloc(proc);
+}
 
 TEST_CASE("TruePeakLimiter process performs no heap allocation after prepare",
           "[mastering][maximizer][rt]") {

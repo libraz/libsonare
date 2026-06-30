@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -22,6 +23,13 @@ void BitCrusher::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   prepared_ = true;
+  // Preallocate per-channel state so process() never resizes on the audio
+  // thread (matches Tube/AmpSim).
+  const size_t n = dynamics::kRealtimePreparedChannels;
+  held_.assign(n, 0.0f);
+  counters_.assign(n, 0);
+  rng_state_.assign(n, 0);
+  error_history_.assign(n, {});
   reset();
 }
 
@@ -128,13 +136,19 @@ float BitCrusher::dither_noise(int channel) {
 }
 
 void BitCrusher::ensure_state(int num_channels) {
-  if (held_.size() != static_cast<size_t>(num_channels)) {
-    const auto size = static_cast<size_t>(num_channels);
-    held_.assign(size, 0.0f);
-    counters_.assign(size, 0);
-    rng_state_.assign(size, 0);
-    error_history_.assign(size, {});
-    reset();
+  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
+  // if a caller exceeds it, preserving existing channel state instead of wiping
+  // every channel. Seed the newly added channels' dither RNG to match reset().
+  const auto n = static_cast<size_t>(num_channels);
+  if (held_.size() < n) {
+    const size_t old = held_.size();
+    held_.resize(n, 0.0f);
+    counters_.resize(n, 0);
+    rng_state_.resize(n, 0);
+    error_history_.resize(n, {});
+    for (size_t ch = old; ch < n; ++ch) {
+      rng_state_[ch] = config_.dither_seed + static_cast<uint32_t>(ch * 747796405u);
+    }
   }
 }
 

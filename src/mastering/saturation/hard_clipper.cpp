@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -16,6 +17,16 @@ void HardClipper::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   prepared_ = true;
+  // Preallocate per-channel ADAA state so process() never resizes on the audio
+  // thread (matches Tube/AmpSim).
+  hard_clip_adaa_.clear();
+  hard_clip_adaa_.reserve(dynamics::kRealtimePreparedChannels);
+  hard_clip_adaa2_.clear();
+  hard_clip_adaa2_.reserve(dynamics::kRealtimePreparedChannels);
+  for (size_t i = 0; i < dynamics::kRealtimePreparedChannels; ++i) {
+    hard_clip_adaa_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
+    hard_clip_adaa2_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
+  }
 }
 
 void HardClipper::process(float* const* channels, int num_channels, int num_samples) {
@@ -87,15 +98,11 @@ void HardClipper::validate_config(const HardClipperConfig& config) {
 }
 
 void HardClipper::ensure_state(int num_channels) {
-  if (hard_clip_adaa_.size() != static_cast<size_t>(num_channels)) {
-    hard_clip_adaa_.clear();
-    hard_clip_adaa_.reserve(static_cast<size_t>(num_channels));
-    hard_clip_adaa2_.clear();
-    hard_clip_adaa2_.reserve(static_cast<size_t>(num_channels));
-    for (int i = 0; i < num_channels; ++i) {
-      hard_clip_adaa_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
-      hard_clip_adaa2_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
-    }
+  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
+  // if a caller exceeds it, preserving existing channels' ADAA history.
+  for (size_t i = hard_clip_adaa_.size(); i < static_cast<size_t>(num_channels); ++i) {
+    hard_clip_adaa_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
+    hard_clip_adaa2_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
   }
 }
 

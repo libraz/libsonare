@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -25,7 +26,11 @@ void Exciter::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   prepared_ = true;
-  update_coeff();
+  compute_coeffs();
+  // Preallocate per-channel filter state so process() never resizes on the
+  // audio thread (matches Tube/AmpSim).
+  bandpass_.assign(dynamics::kRealtimePreparedChannels, bandpass_coeffs_);
+  allpass_.assign(dynamics::kRealtimePreparedChannels, allpass_coeffs_);
   reset();
 }
 
@@ -139,9 +144,13 @@ void Exciter::update_coeff_preserving_state() {
 }
 
 void Exciter::ensure_state(int num_channels) {
-  if (bandpass_.size() != static_cast<size_t>(num_channels)) {
-    bandpass_.assign(static_cast<size_t>(num_channels), bandpass_coeffs_);
-    allpass_.assign(static_cast<size_t>(num_channels), allpass_coeffs_);
+  // prepare() preallocates kRealtimePreparedChannels filters so the audio path
+  // never resizes. Only grow (control thread) if a caller exceeds it, and use
+  // resize (not assign) so a stereo->mono->stereo reconfigure keeps each
+  // existing channel's filter state instead of wiping every channel.
+  if (bandpass_.size() < static_cast<size_t>(num_channels)) {
+    bandpass_.resize(static_cast<size_t>(num_channels), bandpass_coeffs_);
+    allpass_.resize(static_cast<size_t>(num_channels), allpass_coeffs_);
   }
 }
 

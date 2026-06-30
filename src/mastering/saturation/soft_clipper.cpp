@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -16,6 +17,10 @@ void SoftClipper::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   prepared_ = true;
+  // Preallocate per-channel ADAA state so process() never resizes on the audio
+  // thread (matches Tube/AmpSim).
+  tanh_adaa_.clear();
+  tanh_adaa_.resize(dynamics::kRealtimePreparedChannels);
 }
 
 void SoftClipper::process(float* const* channels, int num_channels, int num_samples) {
@@ -71,8 +76,9 @@ void SoftClipper::validate_config(const SoftClipperConfig& config) {
 }
 
 void SoftClipper::ensure_state(int num_channels) {
-  if (tanh_adaa_.size() != static_cast<size_t>(num_channels)) {
-    tanh_adaa_.clear();
+  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
+  // if a caller exceeds it, preserving existing channels' ADAA state.
+  if (tanh_adaa_.size() < static_cast<size_t>(num_channels)) {
     tanh_adaa_.resize(static_cast<size_t>(num_channels));
   }
 }

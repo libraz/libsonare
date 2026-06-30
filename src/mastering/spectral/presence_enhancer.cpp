@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -33,7 +34,10 @@ void PresenceEnhancer::prepare(double sample_rate, int max_block_size) {
   }
   sample_rate_ = sample_rate;
   prepared_ = true;
-  bandpass_.clear();
+  // Preallocate per-channel filter state so process() never resizes on the
+  // audio thread (matches Tube/AmpSim).
+  bandpass_.assign(dynamics::kRealtimePreparedChannels,
+                   make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q));
 }
 
 void PresenceEnhancer::process(float* const* channels, int num_channels, int num_samples) {
@@ -59,7 +63,14 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
 void PresenceEnhancer::set_config(const PresenceEnhancerConfig& config) {
   validate_config(config);
   config_ = config;
-  bandpass_.clear();
+  if (prepared_) {
+    // Rebuild the preallocated per-channel filters in place so the next
+    // process() never resizes on the audio thread; keep the channel count.
+    const Biquad fresh = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
+    for (auto& filter : bandpass_) filter = fresh;
+  } else {
+    bandpass_.clear();
+  }
 }
 
 void PresenceEnhancer::reset() {
@@ -106,8 +117,10 @@ void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {
 }
 
 void PresenceEnhancer::ensure_state(int num_channels) {
+  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
+  // if a caller exceeds it, preserving existing channels' filter state.
   const auto target_size = static_cast<size_t>(num_channels);
-  if (bandpass_.size() != target_size) {
+  if (bandpass_.size() < target_size) {
     const size_t old_size = bandpass_.size();
     bandpass_.resize(target_size);
     for (size_t i = old_size; i < target_size; ++i) {

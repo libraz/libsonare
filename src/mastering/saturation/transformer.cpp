@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -20,6 +21,9 @@ void Transformer::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   prepared_ = true;
+  // Preallocate per-channel hysteresis state so process() never resizes on the
+  // audio thread (matches Tube/AmpSim).
+  states_.assign(dynamics::kRealtimePreparedChannels, common::JilesAthertonState{});
   reset();
 }
 
@@ -98,8 +102,10 @@ float Transformer::process_sample(common::JilesAthertonState& state, float input
 }
 
 void Transformer::ensure_state(int num_channels) {
-  if (states_.size() != static_cast<size_t>(num_channels)) {
-    states_.assign(static_cast<size_t>(num_channels), common::JilesAthertonState{});
+  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
+  // if a caller exceeds it, preserving existing channels' hysteresis state.
+  if (states_.size() < static_cast<size_t>(num_channels)) {
+    states_.resize(static_cast<size_t>(num_channels), common::JilesAthertonState{});
   }
 }
 

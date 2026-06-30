@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -47,7 +48,12 @@ void AirBand::prepare(double sample_rate, int max_block_size) {
   }
   sample_rate_ = sample_rate;
   prepared_ = true;
-  rebuild_filters(static_cast<int>(previous_.size()));
+  // Preallocate per-channel state so process() never resizes on the audio
+  // thread (matches Tube/AmpSim).
+  const size_t n = dynamics::kRealtimePreparedChannels;
+  previous_.assign(n, 0.0f);
+  envelope_.assign(n, 0.0f);
+  rebuild_filters(static_cast<int>(n));
 }
 
 void AirBand::process(float* const* channels, int num_channels, int num_samples) {
@@ -141,9 +147,12 @@ void AirBand::validate_config(const AirBandConfig& config) {
 }
 
 void AirBand::ensure_state(int num_channels) {
+  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
+  // if a caller exceeds it. Growing preserves existing channels' filter state
+  // and seeds the new ones; a narrower block is left untouched (no churn).
   const auto target_size = static_cast<size_t>(num_channels);
-  if (previous_.size() != target_size || envelope_.size() != target_size ||
-      shelf_.size() != target_size || detector_.size() != target_size) {
+  if (previous_.size() < target_size || envelope_.size() < target_size ||
+      shelf_.size() < target_size || detector_.size() < target_size) {
     const size_t old_previous_size = previous_.size();
     const size_t old_envelope_size = envelope_.size();
     const size_t old_shelf_size = shelf_.size();
