@@ -153,6 +153,20 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.pipe_organ.chiff_ms = std::clamp(sanitize(p.pipe_organ.chiff_ms, 18.0f), 0.5f, 500.0f);
   p.pipe_organ.release_damp_s =
       std::clamp(sanitize(p.pipe_organ.release_damp_s, 0.08f), 0.01f, 10.0f);
+  p.pipe_organ.reed = std::clamp(sanitize(p.pipe_organ.reed, 0.0f), 0.0f, 1.0f);
+  p.pipe_organ.rank_count = std::clamp(p.pipe_organ.rank_count, 0, kMaxPipeRanks);
+  for (auto& rank : p.pipe_organ.ranks) {
+    rank.footage_mult = std::clamp(sanitize(rank.footage_mult, 1.0f), 0.25f, 16.0f);
+    rank.brightness = std::clamp(sanitize(rank.brightness, 0.5f), 0.0f, 1.0f);
+    rank.level = std::clamp(sanitize(rank.level, 1.0f), 0.0f, 1.0f);
+    rank.reed = std::clamp(sanitize(rank.reed, 0.0f), 0.0f, 1.0f);
+  }
+  p.pipe_organ.tremulant_rate_hz =
+      std::clamp(sanitize(p.pipe_organ.tremulant_rate_hz, 0.0f), 0.0f, 12.0f);
+  p.pipe_organ.tremulant_depth =
+      std::clamp(sanitize(p.pipe_organ.tremulant_depth, 0.0f), 0.0f, 1.0f);
+  p.pipe_organ.wind_sag = std::clamp(sanitize(p.pipe_organ.wind_sag, 0.0f), 0.0f, 1.0f);
+  p.pipe_organ.swell = std::clamp(sanitize(p.pipe_organ.swell, 0.0f), 0.0f, 1.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 3) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
@@ -270,7 +284,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   cached_pan_units = 1.0e9f;  // force pan recompute on first render
 }
 
-float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
+float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
+                               float wind_gain) noexcept {
   if (!active || patch == nullptr) return 0.0f;
 
   // --- modulation sources ---
@@ -323,7 +338,10 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
       patch->mode == SynthEngineMode::kSubtractive ? 0.0f : patch->pitch_offset_cents;
   const float pitch_cents =
       mode_pitch_offset + mod.pitch_cents + vib + drift + offsets.pitch_cents + glide_cents;
-  const float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
+  float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
+  // Shared organ wind: the tremulant / wind-sag pitch factor (1.0 for every
+  // non-pipe voice, which the host always passes through).
+  common *= wind_pitch;
 
   float sample = 0.0f;
   if (patch->mode == SynthEngineMode::kFm) {
@@ -364,8 +382,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
     sample = filter.process(sample, patch->filter_output);
   }
 
-  // --- amplitude ---
-  return sample * level * velocity_gain * patch->gain * mod.gain * offsets.amp_gain;
+  // --- amplitude (wind_gain is the shared tremulant/sag level; 1.0 otherwise) ---
+  return sample * level * velocity_gain * patch->gain * mod.gain * offsets.amp_gain * wind_gain;
 }
 
 void NativeSynthVoice::release() noexcept {
@@ -431,14 +449,23 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     piano_buffers_.clear();
   }
-  // Pipe organ: one flue-pipe delay span per voice slot (the only allocation
-  // site; voices attach their span at note-on).
+  // Pipe organ: one delay slab per voice slot (kMaxPipeRanks pipe spans, so a
+  // registration's ranks all have their own waveguide). The only allocation
+  // site; voices attach their slab at note-on.
   pipe_organ_capacity_ = pipe_organ_buffer_capacity(sample_rate_);
-  if (config_.patch.mode == SynthEngineMode::kPipeOrgan) {
-    pipe_organ_buffers_.assign(pool_.size() * static_cast<size_t>(pipe_organ_capacity_), 0.0f);
+  pipe_organ_mode_ = config_.patch.mode == SynthEngineMode::kPipeOrgan;
+  if (pipe_organ_mode_) {
+    pipe_organ_buffers_.assign(
+        pool_.size() * static_cast<size_t>(pipe_organ_slab_capacity(sample_rate_)), 0.0f);
+    wind_.prepare(sample_rate_, config_.patch.pipe_organ.tremulant_rate_hz,
+                  config_.patch.pipe_organ.tremulant_depth, config_.patch.pipe_organ.wind_sag);
+    swell_depth_ = config_.patch.pipe_organ.swell;
   } else {
     pipe_organ_buffers_.clear();
+    swell_depth_ = 0.0f;
   }
+  swell_lp_l_ = 0.0f;
+  swell_lp_r_ = 0.0f;
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
   const bool gm_kit =
@@ -459,6 +486,9 @@ void NativeSynth::reset() {
   dc_y1_ = {};
   resonance_.reset();
   soundboard_.reset();
+  wind_.reset();
+  swell_lp_l_ = 0.0f;
+  swell_lp_r_ = 0.0f;
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
 }
@@ -490,9 +520,9 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
                         piano_string_capacity_);
   }
   if (!pipe_organ_buffers_.empty()) {
-    voice->pipe_organ.attach(
-        pipe_organ_buffers_.data() + static_cast<size_t>(voice_index) * pipe_organ_capacity_,
-        pipe_organ_capacity_);
+    voice->pipe_organ.attach(pipe_organ_buffers_.data() + static_cast<size_t>(voice_index) *
+                                                              kMaxPipeRanks * pipe_organ_capacity_,
+                             pipe_organ_capacity_);
   }
   // GM kit mode: resolve the struck note through the drum map instead of
   // playing the single configured piece (static patches — safe to keep in the
@@ -744,18 +774,52 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
     }
   }
 
+  // Swell box: the expression pedal (CC11) sets the shutter. The most-closed
+  // pedal across channels darkens the whole division (a bus lowpass). Expression
+  // is fixed for the block, so the cutoff is computed once here. Above ~19 kHz
+  // the shutter is effectively open, so the one-pole is bypassed (swell_active).
+  bool swell_active = false;
+  if (pipe_organ_mode_ && swell_depth_ > 0.0f) {
+    uint8_t closed = 127;
+    for (const ChannelState& ch : channels_) closed = std::min(closed, ch.expression);
+    const float shut = (1.0f - static_cast<float>(closed) / 127.0f) * swell_depth_;
+    const float fc = std::exp(std::log(20000.0f) + shut * (std::log(500.0f) - std::log(20000.0f)));
+    if (fc < 19000.0f) {
+      swell_active = true;
+      swell_coeff_ = std::clamp(
+          1.0f - std::exp(-2.0f * 3.14159265358979f * fc / static_cast<float>(sample_rate_)), 0.0f,
+          1.0f);
+    }
+  }
+
   for (int i = 0; i < num_samples; ++i) {
     float mix_l = 0.0f;
     float mix_r = 0.0f;
+    // Shared wind chest: the tremulant / wind-sag modulation common to every
+    // sounding pipe. Demand is the count of active pipe voices (order-
+    // independent), so the sag is deterministic across bounces.
+    OrganWindSupply::State wind;
+    if (pipe_organ_mode_ && wind_.active()) {
+      int demand = 0;
+      for (const NativeSynthVoice& v : pool_) demand += v.active ? 1 : 0;
+      wind = wind_.process(demand);
+    }
     for (NativeSynthVoice& v : pool_) {
       if (!v.active) continue;
       const Sf2ChannelMod& mod = channel_mods_[v.channel & 0x0Fu];
-      const float s = v.render(mod);
+      const float s = v.render(mod, wind.pitch_ratio, wind.gain);
       mix_l += s * v.gain_left;
       mix_r += s * v.gain_right;
     }
     mix_l *= config_.gain;
     mix_r *= config_.gain;
+    // Swell box shutter: a one-pole lowpass on the bus as the louvres close.
+    if (swell_active) {
+      swell_lp_l_ += swell_coeff_ * (mix_l - swell_lp_l_);
+      swell_lp_r_ += swell_coeff_ * (mix_r - swell_lp_r_);
+      mix_l = swell_lp_l_;
+      mix_r = swell_lp_r_;
+    }
     // Shared modal soundboard plus pedal-gated sympathetic resonance, both
     // driven by the summed dry mix and folded back into both legs (centre).
     if (piano_mode_) {

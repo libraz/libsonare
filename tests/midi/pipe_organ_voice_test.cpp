@@ -249,11 +249,13 @@ TEST_CASE("GM church organ fallback is a flue pipe", "[midi][synth][organ]") {
 
 TEST_CASE("church organ presets select the pipe organ", "[midi][synth][organ]") {
   using sonare::midi::synth::find_synth_preset;
-  for (const char* name : {"church-organ", "church-flute", "church-bourdon"}) {
+  for (const char* name : {"church-organ", "church-flute", "church-bourdon", "church-trumpet"}) {
     const auto* preset = find_synth_preset(name);
     REQUIRE(preset != nullptr);
     REQUIRE(preset->config.patch.mode == SynthEngineMode::kPipeOrgan);
   }
+  // The trumpet is the reed stop.
+  REQUIRE(find_synth_preset("church-trumpet")->config.patch.pipe_organ.ranks[0].reed > 0.0f);
   // The bourdon is the stopped pipe; the principal/flute are open.
   REQUIRE(find_synth_preset("church-bourdon")->config.patch.pipe_organ.stopped == true);
   REQUIRE(find_synth_preset("church-organ")->config.patch.pipe_organ.stopped == false);
@@ -277,4 +279,226 @@ TEST_CASE("pipe organ audio path is allocation-free", "[midi][synth][organ]") {
     synth.process(chans, 2, 256);
     REQUIRE(guard.count() == 0);
   }
+}
+
+// --- Phase 2: registration (multi-rank) + shared wind supply ---
+
+TEST_CASE("a footage rank shifts the sounding pitch", "[midi][synth][organ]") {
+  // A single 4' rank (footage 2) sounds an octave above the played note: A3
+  // (220 Hz) speaks at 440 Hz, proving the footage multiplies the pitch.
+  NativeSynthPatch patch = organ_base_patch();
+  patch.pipe_organ.rank_count = 1;
+  patch.pipe_organ.ranks[0] = {2.0f, /*stopped=*/false, 0.6f, 1.0f};
+  const std::vector<float> tone = render_patch(patch, 57, 110, 48000);  // A3
+  const double estimated = fft_fundamental(tone, 16000, 440.0);
+  REQUIRE(std::fabs(estimated / 440.0 - 1.0) < 0.015);
+}
+
+TEST_CASE("a mutation rank adds a non-harmonic partial", "[midi][synth][organ]") {
+  // Drawing a 5-1/3' quint (footage 1.5) on top of an 8' principal sounds a
+  // partial at 1.5*f0 — a frequency that lies BETWEEN the note's own harmonics
+  // (f0, 2*f0), so a plain 8' pipe has nothing there. The mutation rank is what
+  // puts energy at the twelfth; that is the registration speaking.
+  const double f0 = 220.0;  // A3
+  const auto band_power = [](const std::vector<double>& p, double hz) {
+    const int c = static_cast<int>(std::lround(hz / kRate * kFft));
+    double acc = 0.0;
+    for (int b = c - 2; b <= c + 2; ++b)
+      if (b > 0 && b < static_cast<int>(p.size())) acc += p[static_cast<size_t>(b)];
+    return acc;
+  };
+  NativeSynthPatch single = organ_base_patch();
+  single.pipe_organ.rank_count = 1;
+  single.pipe_organ.ranks[0] = {1.0f, false, 0.6f, 1.0f};  // 8' only
+  NativeSynthPatch chorus = organ_base_patch();
+  chorus.pipe_organ.rank_count = 2;
+  chorus.pipe_organ.ranks[0] = {1.0f, false, 0.6f, 1.0f};  // 8'
+  chorus.pipe_organ.ranks[1] = {1.5f, false, 0.6f, 1.0f};  // 5-1/3' quint
+
+  const std::vector<float> single_tone = render_patch(single, 57, 110, 24000);
+  const std::vector<float> chorus_tone = render_patch(chorus, 57, 110, 24000);
+  const std::vector<double> single_p = power_spectrum(single_tone, 4096);
+  const std::vector<double> chorus_p = power_spectrum(chorus_tone, 4096);
+
+  // Reference the quint band against each tone's own fundamental (cancels the
+  // chorus level normalisation): the quint is buried in the 8', prominent here.
+  const double single_quint = band_power(single_p, 1.5 * f0) / band_power(single_p, f0);
+  const double chorus_quint = band_power(chorus_p, 1.5 * f0) / band_power(chorus_p, f0);
+  REQUIRE(chorus_quint > 10.0 * single_quint);
+}
+
+TEST_CASE("the church organ preset is a stable multi-rank plenum", "[midi][synth][organ]") {
+  using sonare::midi::synth::find_synth_preset;
+  const auto* preset = find_synth_preset("church-organ");
+  REQUIRE(preset != nullptr);
+  REQUIRE(preset->config.patch.pipe_organ.rank_count > 1);
+
+  NativeSynthConfig cfg = preset->config;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  // A sustained chord across the plenum stays bounded and deterministic.
+  for (uint8_t note : {48, 55, 60, 64, 67}) {
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+  }
+  const std::vector<float> tone = render_left(synth, 48000);
+  REQUIRE(peak(tone) > 0.01f);
+  REQUIRE(peak(tone) < 4.0f);
+  REQUIRE(std::isfinite(tone.back()));
+}
+
+TEST_CASE("a multi-rank registration is allocation-free", "[midi][synth][organ]") {
+  using sonare::midi::synth::find_synth_preset;
+  NativeSynthConfig cfg = find_synth_preset("church-organ")->config;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+
+  std::vector<float> left(256, 0.0f);
+  std::vector<float> right(256, 0.0f);
+  float* chans[2] = {left.data(), right.data()};
+  {
+    sonare::test::AllocationGuard guard;
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 100)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    synth.process(chans, 2, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 48, 0)));
+    synth.process(chans, 2, 256);
+    REQUIRE(guard.count() == 0);
+  }
+}
+
+TEST_CASE("wind sag drops pressure under load", "[midi][synth][organ]") {
+  using sonare::midi::synth::OrganWindSupply;
+  OrganWindSupply wind;
+  wind.prepare(kRate, /*tremulant_rate_hz=*/0.0f, /*depth=*/0.0f, /*wind_sag=*/0.5f);
+  REQUIRE(wind.active());
+  // No load: pressure stays full (unity pitch and gain).
+  OrganWindSupply::State idle;
+  for (int i = 0; i < 4800; ++i) idle = wind.process(0);
+  REQUIRE(std::fabs(idle.gain - 1.0f) < 1.0e-3f);
+  REQUIRE(std::fabs(idle.pitch_ratio - 1.0f) < 1.0e-3f);
+  // Sustained heavy demand sags the wind: gain and pitch both fall.
+  OrganWindSupply::State loaded;
+  for (int i = 0; i < 4800; ++i) loaded = wind.process(12);
+  REQUIRE(loaded.gain < 0.97f);
+  REQUIRE(loaded.pitch_ratio < 1.0f);
+}
+
+// --- Phase 3: reed (lingual) pipes ---
+
+/// Harmonic-to-noise ratio: power at the exact harmonic bins (1..16) versus
+/// power at the half-integer bins between them. A periodic, self-oscillating
+/// tone (reed limit cycle) reads high; a broadband, breath-driven tone (flue
+/// pipe) reads low.
+double harmonic_to_noise(const std::vector<float>& buf, size_t from, double f0) {
+  const std::vector<double> ps = power_spectrum(buf, from);
+  double harmonic = 0.0;
+  double between = 0.0;
+  for (int k = 1; k <= 16; ++k) {
+    harmonic += harmonic_power(ps, f0, k);
+    const int b = static_cast<int>(std::lround((k + 0.5) * f0 / kRate * kFft));
+    for (int j = b - 2; j <= b + 2; ++j)
+      if (j > 0 && j < static_cast<int>(ps.size())) between += ps[static_cast<size_t>(j)];
+  }
+  return between > 0.0 ? harmonic / between : 0.0;
+}
+
+TEST_CASE("a reed pipe locks into a periodic tone", "[midi][synth][organ]") {
+  // The saturating reed valve drives the loop into a self-sustaining limit
+  // cycle, so a reed stop is far more periodic (a higher harmonic-to-noise
+  // ratio) than the airy, breath-driven flue pipe — and stays bounded.
+  const double f0 = 220.0;  // A3
+  NativeSynthPatch flue = organ_base_patch();
+  flue.pipe_organ.reed = 0.0f;
+  NativeSynthPatch reed = organ_base_patch();
+  reed.pipe_organ.reed = 1.0f;
+
+  const std::vector<float> flue_tone = render_patch(flue, 57, 110, 24000);
+  const std::vector<float> reed_tone = render_patch(reed, 57, 110, 24000);
+  REQUIRE(peak(reed_tone) > 0.01f);
+  REQUIRE(peak(reed_tone) < 4.0f);
+  REQUIRE(std::isfinite(reed_tone.back()));
+  REQUIRE(harmonic_to_noise(reed_tone, 8000, f0) > 2.0 * harmonic_to_noise(flue_tone, 8000, f0));
+}
+
+TEST_CASE("a reed pipe stays in tune", "[midi][synth][organ]") {
+  // The reed's limit cycle locks to the resonator, so the sounding pitch still
+  // tracks the note (a wider tolerance than the linear flue pipe).
+  NativeSynthPatch reed = organ_base_patch();
+  reed.pipe_organ.reed = 1.0f;
+  const std::vector<float> tone = render_patch(reed, 57, 110, 48000);  // A3 = 220 Hz
+  const double estimated = fft_fundamental(tone, 16000, 220.0);
+  REQUIRE(std::fabs(estimated / 220.0 - 1.0) < 0.03);
+}
+
+TEST_CASE("the reed pipe is stable across the keyboard", "[midi][synth][organ]") {
+  for (uint8_t note : {24, 45, 69, 96}) {
+    NativeSynthPatch reed = organ_base_patch();
+    reed.pipe_organ.reed = 1.0f;
+    reed.pipe_organ.tone_decay_s = 8.0f;
+    const std::vector<float> tone = render_patch(reed, note, 110, 48000);
+    REQUIRE(peak(tone) > 0.01f);
+    REQUIRE(peak(tone) < 4.0f);
+    REQUIRE(std::isfinite(tone.back()));
+  }
+}
+
+TEST_CASE("GM reed organ fallback is a reed pipe", "[midi][synth][organ]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  const NativeSynthPatch& reed = gm_fallback_patch(0, 21);  // Reed Organ
+  REQUIRE(reed.mode == SynthEngineMode::kPipeOrgan);
+  REQUIRE(reed.pipe_organ.rank_count > 0);
+  const std::vector<float> tone = render_patch(reed, 60, 100, 24000);
+  REQUIRE(peak(tone) > 0.01f);
+  REQUIRE(peak(tone) < 4.0f);
+  const double estimated = fft_fundamental(tone, 8000, 261.6256);
+  REQUIRE(std::fabs(estimated / 261.6256 - 1.0) < 0.03);
+}
+
+// --- Phase 3: swell box (expression shutter) ---
+
+/// Spectral centroid (Hz) over a window — a level-independent brightness proxy.
+double swell_centroid(const std::vector<float>& buf, size_t from) {
+  const std::vector<double> ps = power_spectrum(buf, from);
+  double num = 0.0;
+  double den = 0.0;
+  for (size_t b = 1; b < ps.size(); ++b) {
+    num += static_cast<double>(b) * kRate / kFft * ps[b];
+    den += ps[b];
+  }
+  return den > 0.0 ? num / den : 0.0;
+}
+
+TEST_CASE("the swell box darkens the organ as the pedal closes", "[midi][synth][organ]") {
+  using sonare::midi::synth::find_synth_preset;
+  NativeSynthConfig cfg = find_synth_preset("church-organ")->config;  // swell = 0.8
+  const auto play = [&](uint8_t expression) {
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0,
+                   event(sonare::midi::make_midi1_control_change(0, 0, 11, expression)));  // CC11
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    return render_left(synth, 24000);
+  };
+  const std::vector<float> open = play(127);  // shutter fully open
+  const std::vector<float> shut = play(8);    // shutter nearly closed
+  // The closed shutter is a lowpass: a markedly lower spectral centroid (the
+  // level cut is the expression's job and is not what this asserts).
+  REQUIRE(swell_centroid(shut, 8000) < 0.6 * swell_centroid(open, 8000));
+}
+
+TEST_CASE("the tremulant undulates the wind", "[midi][synth][organ]") {
+  using sonare::midi::synth::OrganWindSupply;
+  OrganWindSupply wind;
+  wind.prepare(kRate, /*tremulant_rate_hz=*/5.0f, /*depth=*/0.8f, /*wind_sag=*/0.0f);
+  REQUIRE(wind.active());
+  float lo = 2.0f;
+  float hi = 0.0f;
+  for (int i = 0; i < 48000; ++i) {  // ~5 full undulations
+    const OrganWindSupply::State s = wind.process(1);
+    lo = std::min(lo, s.gain);
+    hi = std::max(hi, s.gain);
+  }
+  // The level visibly tremoles around unity.
+  REQUIRE(hi > 1.05f);
+  REQUIRE(lo < 0.95f);
 }

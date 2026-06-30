@@ -219,6 +219,7 @@ struct ProgramOverrides {
   NativeSynthPatch distortion;       // program 30
   NativeSynthPatch harp;             // program 46 (Orchestral Harp)
   NativeSynthPatch church_organ;     // program 19 (Church Organ, flue pipe)
+  NativeSynthPatch reed_organ;       // program 21 (Reed Organ, lingual pipe)
 };
 
 ProgramOverrides build_program_overrides() noexcept {
@@ -397,13 +398,37 @@ ProgramOverrides build_program_overrides() noexcept {
   o.church_organ.mode = SynthEngineMode::kPipeOrgan;
   o.church_organ.amp_env = env(8.0f, 0.0f, 1.0f, 90.0f);
   o.church_organ.cutoff_hz = 20000.0f;
-  o.church_organ.pipe_organ.stopped = false;
-  o.church_organ.pipe_organ.brightness = 0.62f;
   o.church_organ.pipe_organ.tone_decay_s = 8.0f;
   o.church_organ.pipe_organ.breath = 0.3f;
   o.church_organ.pipe_organ.chiff = 0.45f;
+  // GM Church Organ: a principal chorus (plenum) — 16' stopped sub for gravity
+  // under an 8'+4'+2-2/3'+2' open principal chorus, the upperwork brighter.
+  o.church_organ.pipe_organ.rank_count = 5;
+  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.34f, 0.7f};  // 16' bourdon
+  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.6f, 1.0f};              // 8' principal
+  o.church_organ.pipe_organ.ranks[2] = {2.0f, false, 0.66f, 0.85f};            // 4' octave
+  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.72f, 0.5f};             // 2-2/3' quint
+  o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.78f, 0.6f};             // 2' super-octave
+  // A touch of wind sag so a full chord breathes; tremulant off by default.
+  o.church_organ.pipe_organ.wind_sag = 0.25f;
   o.church_organ.stereo_spread = 0.2f;
   o.church_organ.gain = 0.7f;
+
+  // Program 21 Reed Organ: a lingual reed stop — the saturating reed valve in
+  // the loop buzzes with a bright, brassy spectrum (harmonium / regal colour).
+  // An 8' reed under a 4' reed octave, both open and very bright.
+  o.reed_organ.mode = SynthEngineMode::kPipeOrgan;
+  o.reed_organ.amp_env = env(14.0f, 0.0f, 1.0f, 110.0f);
+  o.reed_organ.cutoff_hz = 20000.0f;
+  o.reed_organ.pipe_organ.tone_decay_s = 6.0f;
+  o.reed_organ.pipe_organ.breath = 0.35f;
+  o.reed_organ.pipe_organ.chiff = 0.3f;
+  o.reed_organ.pipe_organ.rank_count = 2;
+  o.reed_organ.pipe_organ.ranks[0] = {1.0f, /*stopped=*/false, 0.8f, 1.0f, 0.85f};  // 8' reed
+  o.reed_organ.pipe_organ.ranks[1] = {2.0f, false, 0.82f, 0.55f, 0.7f};             // 4' reed
+  o.reed_organ.pipe_organ.wind_sag = 0.2f;
+  o.reed_organ.stereo_spread = 0.18f;
+  o.reed_organ.gain = 0.6f;
 
   o.e_piano = clamp_synth_patch(o.e_piano);
   o.clav = clamp_synth_patch(o.clav);
@@ -418,6 +443,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.distortion = clamp_synth_patch(o.distortion);
   o.harp = clamp_synth_patch(o.harp);
   o.church_organ = clamp_synth_patch(o.church_organ);
+  o.reed_organ = clamp_synth_patch(o.reed_organ);
   return o;
 }
 
@@ -610,6 +636,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
       return program_overrides().xylophone;
     case 19:  // Church Organ (flue pipe)
       return program_overrides().church_organ;
+    case 21:  // Reed Organ (lingual pipe)
+      return program_overrides().reed_organ;
     case 24:  // Acoustic Guitar (nylon)
       return program_overrides().nylon_guitar;
     case 26:  // Electric Guitar (jazz)
@@ -677,7 +705,8 @@ float gm_fallback_max_release_ms() noexcept {
          {&d.kick,         &d.snare,      &d.closed_hat, &d.open_hat,     &d.tom,
           &d.cymbal,       &d.percussion, &o.e_piano,    &o.clav,         &o.glockenspiel,
           &o.vibraphone,   &o.marimba,    &o.xylophone,  &o.nylon_guitar, &o.electric_guitar,
-          &o.muted_guitar, &o.overdriven, &o.distortion, &o.harp,         &o.church_organ}) {
+          &o.muted_guitar, &o.overdriven, &o.distortion, &o.harp,         &o.church_organ,
+          &o.reed_organ}) {
       max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
     }
     return max_ms;

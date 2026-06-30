@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 19;
+constexpr size_t kPresetCount = 20;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -88,8 +88,17 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   t[i++] = {"acoustic-piano", from_patch(gm_fallback_patch(0, 0))};
 
   // --- pipe organ (flue pipe waveguide) ---
-  // The bright open principal, voiced under the GM Church Organ program.
-  t[i++] = {"church-organ", from_patch(gm_fallback_patch(0, 19))};
+  // The full principal chorus (plenum) voiced under the GM Church Organ
+  // program, with a gentle tremulant drawn for the showcase preset.
+  {
+    SynthPreset& organ = t[i++];
+    organ.name = "church-organ";
+    NativeSynthPatch patch = gm_fallback_patch(0, 19);
+    patch.pipe_organ.tremulant_rate_hz = 5.2f;
+    patch.pipe_organ.tremulant_depth = 0.5f;
+    patch.pipe_organ.swell = 0.8f;  // behind a swell shutter (expression = CC11)
+    organ.config = from_patch(clamp_synth_patch(patch));
+  }
   {
     // Open flute: softer and darker than the principal (a wide, breathy stop).
     SynthPreset& flute = t[i++];
@@ -127,6 +136,16 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     patch.pipe_organ.chiff = 0.25f;
     patch.gain = 0.7f;
     bourdon.config = from_patch(clamp_synth_patch(patch));
+  }
+  {
+    // Trompette / reed chorus: lingual reed pipes — the saturating reed valve
+    // buzzes into a bright, brassy self-oscillation (an 8' reed under a 4'),
+    // the fanfare colour of the full organ. Voiced under a swell shutter.
+    SynthPreset& reed = t[i++];
+    reed.name = "church-trumpet";
+    NativeSynthPatch patch = gm_fallback_patch(0, 21);  // the Reed Organ voicing
+    patch.pipe_organ.swell = 0.7f;
+    reed.config = from_patch(clamp_synth_patch(patch));
   }
 
   return t;

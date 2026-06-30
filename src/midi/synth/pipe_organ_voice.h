@@ -2,9 +2,11 @@
 
 /// @file pipe_organ_voice.h
 /// @brief Flue (labial) organ-pipe core for the NativeSynth voice — the
-///        data-free church-organ sketch (the air-driven resonant air column;
-///        Fletcher & Rossing, Fabre & Hirschberg). The reed (lingual) pipe
-///        family and multi-rank registration are layered on in later phases.
+///        data-free church-organ model (the air-driven resonant air column;
+///        Fletcher & Rossing, Fabre & Hirschberg). One note-on sounds a whole
+///        REGISTRATION: the selected ranks (footages) speak together, the way a
+///        drawn stop couples 8'/4'/2' principals or a mixture of upperwork.
+///        The reed (lingual) pipe family is layered on in a later phase.
 ///
 /// A flue pipe is a turbulent air jet across the mouth exciting a resonant air
 /// column. The data-free model here is a SUSTAINED digital waveguide: the
@@ -33,18 +35,25 @@
 ///   4. CHIFF: the brief, brighter onset transient before the pitch settles
 ///      (the pipe "speaking"), a short decaying noise burst — the signature
 ///      that reads as a real pipe rather than a sine drone.
+///   5. REGISTRATION: several ranks at different footages (16'/8'/4'/2-2/3'/2'/…)
+///      sound on one key, each an independent waveguide pipe. A principal chorus
+///      (8'+4'+2') and a mixture (several high ranks in one stop) fall out of
+///      summing decorrelated pipes, the way a real organ builds its plenum.
 ///
-/// The delay buffer is NOT owned by the core: the host instrument allocates one
-/// slab per voice slot in prepare() (the only allocation site) and attach()es a
-/// span before start(). Self-oscillation via a nonlinear jet (true overblowing,
-/// register transitions) is intentionally out of scope for this core; the loop
-/// is unconditionally stable (feedback magnitude < 1).
+/// The delay buffers are NOT owned by the core: the host instrument allocates
+/// one slab per voice slot in prepare() (the only allocation site) sized for
+/// kMaxPipeRanks pipes and attach()es it before start(). Self-oscillation via a
+/// nonlinear jet (true overblowing, register transitions) is intentionally out
+/// of scope for this core; each loop is unconditionally stable (feedback
+/// magnitude < 1). The shared wind supply (tremulant / wind sag) is a separate
+/// host-owned object (OrganWindSupply) folded into the per-sample pitch/level.
 ///
 /// RT contract: attach()/start()/render() are allocation-free (start zeroes /
 /// fills the attached span). Determinism: the breath and chiff noise are the
-/// counter-based (voice_index, note, age) stream, so identical event streams
-/// render bit-identically.
+/// counter-based (voice_index, note, age) stream with a per-rank offset, so
+/// identical event streams render bit-identically.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -52,32 +61,63 @@
 
 namespace sonare::midi::synth {
 
+/// Maximum ranks (pipes) one key sounds at once — covers a principal chorus
+/// plus a several-rank mixture.
+inline constexpr int kMaxPipeRanks = 8;
+
 /// Lowest fundamental the pipe delay line is sized for; covers the 16' octave
 /// (CCC ~16 Hz). Notes below clamp to the buffer (their pitch lands sharp
 /// instead of overflowing).
 inline constexpr float kPipeMinFundamentalHz = 16.0f;
 
-/// Returns the per-voice delay-buffer capacity (in samples) the host must
-/// allocate for @p sample_rate. Sized for a full open-pipe period at the
-/// lowest fundamental (the stopped pipe uses half this).
+/// Returns the per-rank delay-buffer capacity (in samples) for @p sample_rate.
+/// Sized for a full open-pipe period at the lowest fundamental (the stopped
+/// pipe uses half this; a 16' rank sounds an octave down and clamps below CCC).
 inline int pipe_organ_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   return static_cast<int>(sr / kPipeMinFundamentalHz) + 8;
 }
+
+/// Whole-voice slab capacity (samples) the host must allocate: one per-rank
+/// span for every rank slot.
+inline int pipe_organ_slab_capacity(double sample_rate) noexcept {
+  return kMaxPipeRanks * pipe_organ_buffer_capacity(sample_rate);
+}
+
+/// One rank in a registration: an independent flue pipe at a footage (pitch)
+/// multiple of the played note. 16'=0.5, 8'=1, 5-1/3'=1.5, 4'=2, 2-2/3'=3,
+/// 2'=4, 1-3/5'=5, 1-1/3'=6, 1'=8 (the drawbar/Hammond footage ratios).
+struct PipeOrganRank {
+  /// Pitch multiplier (footage): the rank sounds note_f0 * footage_mult.
+  float footage_mult = 1.0f;
+  /// Stopped (gedackt) pipe: odd harmonics only, physically half length.
+  bool stopped = false;
+  /// Loop-lowpass openness in [0,1] (this rank's voicing brightness).
+  float brightness = 0.5f;
+  /// Rank mix level in [0,1] (balance within the stop).
+  float level = 1.0f;
+  /// Reed (lingual) character in [0,1]: 0 = a flue pipe (smooth labial tone);
+  /// >0 folds a saturating reed valve into the loop so the pipe buzzes with a
+  /// harmonic-rich, brassy spectrum (trumpet / oboe / trompette stops). The
+  /// nonlinearity self-limits, so the loop stays bounded.
+  float reed = 0.0f;
+};
 
 /// Flue-pipe section of a NativeSynthPatch (used when mode == kPipeOrgan).
 struct PipeOrganPatchParams {
   /// Stopped pipe (gedackt/bourdon): one end closed, so the column is a
   /// quarter-wave resonator radiating odd harmonics only and the pipe is
   /// physically half the length for the same pitch. false = open pipe
-  /// (principal/flute) with the full harmonic series.
+  /// (principal/flute) with the full harmonic series. Used only for the single
+  /// implicit rank when rank_count == 0.
   bool stopped = false;
   /// Loop-lowpass openness in [0,1]: how slowly the upper harmonics decay
   /// relative to the fundamental (1 = bright/principal, 0 = dull/stopped flute).
+  /// The single-rank voicing when rank_count == 0.
   float brightness = 0.5f;
-  /// Resonator ring t60 at A4 in seconds (the undriven decay). Higher = purer,
-  /// more sharply pitched tone; the note is held by the jet drive regardless,
-  /// and note-off shortens the decay to release_damp_s.
+  /// Resonator ring t60 at A4 in seconds (the undriven decay), shared by every
+  /// rank. Higher = purer, more sharply pitched tone; the note is held by the
+  /// jet drive regardless, and note-off shortens the decay to release_damp_s.
   float tone_decay_s = 4.0f;
   /// Steady jet-turbulence drive in [0,1]: the breath that sustains the tone
   /// and voices the pipe's airiness (0 = the loop decays like a plucked note).
@@ -90,77 +130,164 @@ struct PipeOrganPatchParams {
   /// Damped t60 in seconds applied at note-off (the wind stops, the pipe stops
   /// speaking).
   float release_damp_s = 0.08f;
+  /// Reed (lingual) character in [0,1] for the single implicit rank (used only
+  /// when rank_count == 0). See PipeOrganRank::reed.
+  float reed = 0.0f;
+
+  /// Registration: number of ranks that sound together (0 = a single implicit
+  /// 8' rank built from {stopped, brightness}; >0 uses ranks[0..rank_count)).
+  int rank_count = 0;
+  /// The drawn ranks (footage / pipe type / voicing / balance per pipe).
+  std::array<PipeOrganRank, kMaxPipeRanks> ranks{};
+
+  // --- shared wind supply (read by the host into OrganWindSupply) ---
+  /// Tremulant rate in Hz (0 = tremulant off). A slow undulation of the wind
+  /// pressure heard as a combined pitch + amplitude wobble.
+  float tremulant_rate_hz = 0.0f;
+  /// Tremulant depth in [0,1] (pressure-undulation amount).
+  float tremulant_depth = 0.0f;
+  /// Wind sag in [0,1]: how far the shared wind pressure drops as more pipes
+  /// draw on it, so a full chord sinks slightly in pitch and level then the
+  /// regulator recovers — the breathing of a real wind chest.
+  float wind_sag = 0.0f;
+  /// Swell-box depth in [0,1] (0 = no swell box). A division behind a swell
+  /// shutter: as the expression pedal (CC11) closes, a bus-level shutter darkens
+  /// the organ (a lowpass), the way the closing louvres muffle the pipes. The
+  /// level side of the swell is the expression's existing gain; this is the
+  /// timbral shutter on top. Read by the host into a bus filter.
+  float swell = 0.0f;
 };
 
 /// Per-voice flue-pipe state, embedded in NativeSynthVoice. The voice's
 /// amplitude envelope / filter / mod matrix wrap around this core; render()
-/// returns the raw pipe sample.
+/// returns the summed raw pipe sample (all drawn ranks).
 class PipeOrganVoiceCore {
  public:
   /// CONTROL-thread wiring (or audio-thread pointer assignment before
-  /// start()): hands the core its delay span. The slab outlives the voice.
-  void attach(float* buffer, int capacity) noexcept {
-    buffer_ = buffer;
-    capacity_ = capacity;
+  /// start()): hands the core its delay slab (kMaxPipeRanks spans of
+  /// @p per_rank_capacity). The slab outlives the voice.
+  void attach(float* slab, int per_rank_capacity) noexcept {
+    slab_ = slab;
+    rank_capacity_ = per_rank_capacity;
   }
 
-  /// Configures the pipe for @p note / @p velocity and pre-fills the loop with
-  /// the seeded onset burst. Zeroes the used part of the attached span first.
+  /// Configures the registration for @p note / @p velocity and pre-fills each
+  /// rank's loop with its seeded onset burst. Zeroes the used spans first.
   void start(const PipeOrganPatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
              uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
-  /// (bend / vibrato / drift / tremulant), 1 = on pitch.
+  /// (bend / vibrato / drift / tremulant / wind sag), 1 = on pitch.
   float render(float pitch_ratio) noexcept;
-  /// Note-off: cut the jet drive and damp the loop towards release_damp_s (the
-  /// pipe keeps sounding through the host's release envelope, dying away).
+  /// Note-off: cut the jet drive and damp every loop towards release_damp_s
+  /// (the pipes keep sounding through the host's release envelope, dying away).
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
 
  private:
-  float* buffer_ = nullptr;
-  int capacity_ = 0;
-  /// Circular span actually used for this note (covers bend-down headroom).
-  int size_ = 0;
-  size_t write_index_ = 0;
+  /// One flue pipe (one rank). All per-pipe waveguide state lives here so the
+  /// core can sum kMaxPipeRanks of them.
+  struct Rank {
+    float* buffer = nullptr;
+    /// Circular span actually used for this note (covers bend-down headroom).
+    int size = 0;
+    size_t write_index = 0;
+    /// Ideal loop period (samples) at pitch_ratio == 1: the full period for an
+    /// open pipe, half for a stopped pipe (negative-feedback comb), and divided
+    /// by the rank footage.
+    float base_period = 0.0f;
+    /// Loop delay NOT in the line (feedback path + loop-filter + DC-blocker
+    /// phase delay at the fundamental).
+    float comp = 1.0f;
+    /// Feedback sign: +1 open (full harmonics), -1 stopped (odd harmonics).
+    float sign = 1.0f;
+    /// One-pole loop lowpass y += alpha*(x - y) and its state.
+    float alpha = 1.0f;
+    float lp_state = 0.0f;
+    /// In-loop DC blocker (open comb's DC pressure mode has no radiation).
+    float dc_x1 = 0.0f;
+    float dc_y1 = 0.0f;
+    float dc_r = 0.0f;
+    /// Per-loop amplitude factor for the current / release t60.
+    float loop_gain = 0.0f;
+    float release_gain = 0.0f;
+    /// Sustaining jet drive (steady seeded breath, scaled by the loop loss).
+    float breath_level = 0.0f;
+    float breath_hp_state = 0.0f;
+    float breath_hp_alpha = 0.0f;
+    /// Chiff onset burst (one-pole decay).
+    float chiff_level = 0.0f;
+    float chiff_coeff = 0.0f;
+    /// Reed valve: blend in [0,1] of the saturating nonlinearity, and the
+    /// output trim that holds a buzzing reed at a flue pipe's loudness.
+    float reed = 0.0f;
+    float tone_scale = 1.0f;
+    /// Rank mix gain (level * the chorus normalisation) and noise stream offset.
+    float mix = 0.0f;
+    uint64_t noise_offset = 0;
+  };
 
-  /// Ideal loop period (samples) at pitch_ratio == 1: the full period for an
-  /// open pipe, half the period for a stopped pipe (negative-feedback comb).
-  float base_period_ = 0.0f;
-  /// Samples of loop delay NOT in the delay line (one-sample feedback path +
-  /// the loop filter's phase delay at the fundamental).
-  float loop_comp_ = 1.0f;
-  /// Feedback sign: +1 for the open pipe (full harmonics), -1 for the stopped
-  /// pipe (a negative comb resonating on odd harmonics only).
-  float loop_sign_ = 1.0f;
-  /// One-pole loop lowpass y += alpha * (x - y) and its state.
-  float loop_alpha_ = 1.0f;
-  float lp_state_ = 0.0f;
-  /// In-loop DC blocker: the open pipe's positive comb has a DC pressure mode
-  /// (radiation cannot sustain it physically); removing DC from the circulating
-  /// signal stops that mode from charging up. Harmless to the stopped comb,
-  /// which has no DC resonance.
-  float dc_x1_ = 0.0f;
-  float dc_y1_ = 0.0f;
-  float dc_r_ = 0.0f;
-  /// Per-loop amplitude factor for the current t60 target.
-  float loop_gain_ = 0.0f;
-  /// Per-loop gain for the note-off damped t60 (precomputed at start).
-  float release_gain_ = 0.0f;
+  float* slab_ = nullptr;
+  int rank_capacity_ = 0;
 
-  // Sustaining jet drive (steady seeded breath turbulence, scaled by the loop
-  // loss so the steady level is independent of the ring time).
+  std::array<Rank, kMaxPipeRanks> ranks_{};
+  int rank_count_ = 0;
+
+  // Determinism: one seeded stream, drawn per rank at a high-bit offset so the
+  // ranks never reuse each other's breath/chiff draws.
   VoiceRandomSequence noise_;
   uint64_t drive_index_ = 0;
-  float breath_level_ = 0.0f;
-  // The open pipe's positive-feedback comb resonates at DC as well as the
-  // harmonics; a one-pole high-pass on the breath keeps the broadband jet from
-  // pumping that sub-audio mode into a slow wander.
-  float breath_hp_state_ = 0.0f;
-  float breath_hp_alpha_ = 0.0f;
-  // Chiff: a brighter onset burst added on top, decaying through a one-pole.
-  float chiff_level_ = 0.0f;
-  float chiff_coeff_ = 0.0f;
+};
+
+/// Shared organ wind supply: the wind chest the whole instrument draws on, a
+/// host-owned object (one per NativeSynth, like the piano's shared soundboard).
+/// Two effects ride on the common wind pressure:
+///   - TREMULANT: a slow LFO undulation of the pressure, heard as a combined
+///     pitch vibrato + amplitude tremolo (the classic organ tremulant — both at
+///     once, because pressure sets both the pipe speed and its level).
+///   - WIND SAG: as more pipes draw on the chest the pressure drops, so a full
+///     chord sinks slightly in pitch and loudness, then the regulator recovers.
+///     The "breathing" a fixed electronic organ lacks. The drop follows the
+///     instantaneous demand (a count of sounding pipes) through a one-pole
+///     follower, so it is order-independent and deterministic.
+/// process() returns the per-sample pitch factor (fold into each pipe voice's
+/// pitch_ratio) and level factor (scale the pipe voice's output).
+///
+/// RT contract: prepare() is the only configuration site (owns no heap);
+/// process()/reset() are allocation-free and deterministic (no RNG / clock).
+class OrganWindSupply {
+ public:
+  struct State {
+    float pitch_ratio = 1.0f;
+    float gain = 1.0f;
+  };
+
+  /// Tunes the wind chest for @p sample_rate. @p tremulant_rate_hz <= 0 turns
+  /// the tremulant off; @p wind_sag is the pressure-drop depth in [0,1].
+  void prepare(double sample_rate, float tremulant_rate_hz, float tremulant_depth,
+               float wind_sag) noexcept;
+  /// Clears the LFO phase and the pressure follower (full pressure).
+  void reset() noexcept;
+  /// Advances the wind one sample under @p demand sounding pipes; returns the
+  /// shared pitch/level modulation. Inactive (no tremulant, no sag) returns a
+  /// unity state cheaply.
+  State process(int demand) noexcept;
+  /// Whether any wind modulation is configured (host can skip the per-sample
+  /// demand count and the State plumbing when false).
+  bool active() const noexcept { return active_; }
+
+ private:
+  bool active_ = false;
+  double sr_ = 48000.0;
+  // Tremulant LFO (deterministic phase accumulator).
+  double trem_phase_ = 0.0;
+  double trem_inc_ = 0.0;
+  float trem_pitch_cents_ = 0.0f;
+  float trem_amp_ = 0.0f;
+  // Wind-sag pressure follower: pressure relaxes toward 1 - sag*load.
+  float sag_depth_ = 0.0f;
+  float pressure_ = 1.0f;
+  float follow_coeff_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth

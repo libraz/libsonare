@@ -222,7 +222,9 @@ struct NativeSynthVoice : VoiceState {
   void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
              float glide_from_hz = 0.0f, bool una_corda = false) noexcept;
   /// Renders one mono sample. Deactivates when the amp envelope ends.
-  float render(const Sf2ChannelMod& mod) noexcept;
+  /// @p wind_pitch / @p wind_gain carry the shared organ wind modulation
+  /// (tremulant / wind sag); 1.0 leaves the voice unmodulated.
+  float render(const Sf2ChannelMod& mod, float wind_pitch = 1.0f, float wind_gain = 1.0f) noexcept;
   /// Note-off: enter release (ignored by one-shot patches).
   void release() noexcept;
   /// Immediate silence (All Sound Off / steal-kill).
@@ -313,10 +315,19 @@ class NativeSynth final : public MidiInstrument {
   /// Shared modal soundboard body (piano patches only).
   PianoSoundboard soundboard_;
   bool piano_mode_ = false;
-  /// Pipe-organ delay slab: one pipe_organ_buffer_capacity() span per voice
-  /// slot, allocated in prepare() only when the patch is a pipe organ.
+  /// Pipe-organ delay slab: one kMaxPipeRanks-pipe slab per voice slot,
+  /// allocated in prepare() only when the patch is a pipe organ.
   std::vector<float> pipe_organ_buffers_;
-  int pipe_organ_capacity_ = 0;
+  int pipe_organ_capacity_ = 0;  // per-rank span
+  bool pipe_organ_mode_ = false;
+  /// Shared organ wind chest (tremulant / wind sag); pipe-organ patches only.
+  OrganWindSupply wind_;
+  /// Swell box: a bus-level shutter lowpass driven by the expression pedal
+  /// (CC11). swell_depth_ == 0 disables it; the one-pole state is per leg.
+  float swell_depth_ = 0.0f;
+  float swell_coeff_ = 1.0f;  // recomputed per block from the shutter position
+  float swell_lp_l_ = 0.0f;
+  float swell_lp_r_ = 0.0f;
 };
 
 /// Returns a copy of @p patch with every field clamped to a safe range.

@@ -6,7 +6,9 @@
 ///        pool + bus polish) covering one §E catalog entry: the subtractive
 ///        leads/pads/basses, the FM e-piano/bell/brass, the Karplus-Strong
 ///        pluck/electric-guitar/harp, the modal marimba/glass, the drawbar
-///        organ, the GM drum kit and the extended-waveguide acoustic piano.
+///        organ, the GM drum kit, the extended-waveguide acoustic piano and
+///        the church organ (the flue-pipe principal chorus / flute / stopped
+///        bourdon and the lingual reed trumpet).
 ///
 /// The returned pointers reference static const data: safe to copy, safe to
 /// keep for the process lifetime, never invalidated.
