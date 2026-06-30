@@ -7,7 +7,7 @@
 #include <cmath>
 #include <limits>
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 // ============================================================================
 // Effects

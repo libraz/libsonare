@@ -3,7 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 // ============================================================================
 // Detailed per-domain analyzers (BPM / Rhythm / Dynamics / Timbre).

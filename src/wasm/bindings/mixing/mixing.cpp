@@ -3,7 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 val js_mixing_scene_preset_names() {
   val out = val::array();

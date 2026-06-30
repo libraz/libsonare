@@ -3,7 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 // ---------------------------------------------------------------------------
 // StreamingMasteringChain wrapper (block-by-block streaming).

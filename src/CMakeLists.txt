@@ -933,37 +933,37 @@ if(BUILD_WASM)
 
   set(SONARE_WASM_BINDING_SOURCES
     wasm/bindings.cpp
-    wasm/bindings/common.cpp
-    wasm/bindings/effects_audio.cpp
-    wasm/bindings/feature_core.cpp
-    wasm/bindings/feature_music.cpp
-    wasm/bindings/feature_pitch.cpp
-    wasm/bindings/feature_spectral.cpp
-    wasm/bindings/feature_spectrogram.cpp
-    wasm/bindings/metering.cpp
-    wasm/bindings/mixing.cpp
-    wasm/bindings/mastering_api.cpp
-    wasm/bindings/mastering_chain.cpp
+    wasm/bindings/common/common.cpp
+    wasm/bindings/effects/audio.cpp
+    wasm/bindings/features/core.cpp
+    wasm/bindings/features/music.cpp
+    wasm/bindings/features/pitch.cpp
+    wasm/bindings/features/spectral.cpp
+    wasm/bindings/features/spectrogram.cpp
+    wasm/bindings/metering/metering.cpp
+    wasm/bindings/mixing/mixing.cpp
+    wasm/bindings/mastering/api.cpp
+    wasm/bindings/mastering/chain.cpp
     wasm/bindings/offline.cpp
-    wasm/bindings/offline_dynamics_editing.cpp
-    wasm/bindings/project.cpp
-    wasm/bindings/quick_analysis.cpp
-    wasm/bindings/quick_analysis_detailed.cpp
-    wasm/bindings/repair.cpp
-    wasm/bindings/realtime_voice_changer.cpp
-    wasm/bindings/realtime_engine.cpp
-    wasm/bindings/realtime_engine_transport.cpp
-    wasm/bindings/realtime_engine_params.cpp
-    wasm/bindings/realtime_engine_midi.cpp
-    wasm/bindings/realtime_engine_mixer.cpp
-    wasm/bindings/realtime_engine_clips.cpp
-    wasm/bindings/realtime_engine_capture.cpp
-    wasm/bindings/realtime_engine_processing.cpp
-    wasm/bindings/realtime_engine_telemetry.cpp
-    wasm/bindings/stream_analyzer.cpp
-    wasm/bindings/streaming_equalizer.cpp
-    wasm/bindings/streaming_mastering_chain.cpp
-    wasm/bindings/streaming_retune.cpp
+    wasm/bindings/effects/offline_dynamics_editing.cpp
+    wasm/bindings/project/project.cpp
+    wasm/bindings/analysis/quick.cpp
+    wasm/bindings/analysis/quick_detailed.cpp
+    wasm/bindings/effects/repair.cpp
+    wasm/bindings/effects/realtime_voice_changer.cpp
+    wasm/bindings/realtime/engine.cpp
+    wasm/bindings/realtime/transport.cpp
+    wasm/bindings/realtime/params.cpp
+    wasm/bindings/realtime/midi.cpp
+    wasm/bindings/realtime/mixer.cpp
+    wasm/bindings/realtime/clips.cpp
+    wasm/bindings/realtime/capture.cpp
+    wasm/bindings/realtime/processing.cpp
+    wasm/bindings/realtime/telemetry.cpp
+    wasm/bindings/analysis/stream_analyzer.cpp
+    wasm/bindings/mastering/streaming_equalizer.cpp
+    wasm/bindings/mastering/streaming_chain.cpp
+    wasm/bindings/streaming/retune.cpp
   )
 
   add_executable(sonare ${SONARE_WASM_BINDING_SOURCES})

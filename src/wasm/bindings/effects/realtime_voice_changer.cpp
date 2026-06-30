@@ -3,7 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 std::string realtimeVoiceChangerConfigTextFromVal(val config) {
   if (config.isNull() || config.isUndefined()) return "neutral-monitor";

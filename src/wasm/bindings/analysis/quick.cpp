@@ -4,7 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include "analysis/analysis_json.h"
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 std::vector<Mode> modesFromVal(val modes) {
   std::vector<Mode> out;

@@ -3,7 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 // ============================================================================
 // Analysis - LUFS metering

@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "midi/synth/sf2_player.h"
 #endif

@@ -4,9 +4,9 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "common.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "wasm/bindings/common/common.h"
 
 val js_mastering_processor_names() {
   val out = val::array();

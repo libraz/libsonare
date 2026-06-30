@@ -3,7 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "bindings/common.h"
+#include "bindings/common/common.h"
 
 using namespace emscripten;
 using namespace sonare;

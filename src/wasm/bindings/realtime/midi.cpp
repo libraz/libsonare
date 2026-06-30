@@ -6,8 +6,8 @@
 #include "c_api/synth_patch_common.h"
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
-#include "synth_patch_val.h"
 #include "util/json.h"
+#include "wasm/bindings/common/synth_patch_val.h"
 
 namespace wasm_json = sonare::util::json;
 

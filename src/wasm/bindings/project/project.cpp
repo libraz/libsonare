@@ -7,8 +7,8 @@
 #include <sstream>
 #include <vector>
 
-#include "common.h"
-#include "synth_patch_val.h"
+#include "wasm/bindings/common/common.h"
+#include "wasm/bindings/common/synth_patch_val.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 // ============================================================================

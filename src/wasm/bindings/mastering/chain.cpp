@@ -3,7 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_db,
                  int true_peak_oversample, float release_ms, bool apply_gain_at_input_rate) {

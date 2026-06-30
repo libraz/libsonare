@@ -5,7 +5,7 @@
 
 #include <cmath>
 
-#include "common.h"
+#include "wasm/bindings/common/common.h"
 
 // ---------------------------------------------------------------------------
 // StreamingEqualizer wrapper (block-by-block streaming EqualizerProcessor).

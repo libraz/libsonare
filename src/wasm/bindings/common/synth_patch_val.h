@@ -15,7 +15,7 @@
 #include <iterator>
 #include <string>
 
-#include "wasm/bindings/common.h"
+#include "wasm/bindings/common/common.h"
 
 namespace sonare_wasm_synth {
 
