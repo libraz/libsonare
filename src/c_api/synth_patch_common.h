@@ -29,6 +29,8 @@ static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kPercussion
               SONARE_SYNTH_ENGINE_PERCUSSION);
 static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kPiano) + 1 ==
               SONARE_SYNTH_ENGINE_PIANO);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kPipeOrgan) + 1 ==
+              SONARE_SYNTH_ENGINE_PIPE_ORGAN);
 
 static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSine) + 1 ==
               SONARE_SYNTH_OSC_SINE);

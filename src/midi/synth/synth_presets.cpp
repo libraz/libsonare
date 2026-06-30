@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 16;
+constexpr size_t kPresetCount = 19;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -86,6 +86,48 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   }
 
   t[i++] = {"acoustic-piano", from_patch(gm_fallback_patch(0, 0))};
+
+  // --- pipe organ (flue pipe waveguide) ---
+  // The bright open principal, voiced under the GM Church Organ program.
+  t[i++] = {"church-organ", from_patch(gm_fallback_patch(0, 19))};
+  {
+    // Open flute: softer and darker than the principal (a wide, breathy stop).
+    SynthPreset& flute = t[i++];
+    flute.name = "church-flute";
+    NativeSynthPatch patch{};
+    patch.mode = SynthEngineMode::kPipeOrgan;
+    patch.amp_env.attack_ms = 12.0f;
+    patch.amp_env.sustain = 1.0f;
+    patch.amp_env.release_ms = 120.0f;
+    patch.cutoff_hz = 20000.0f;
+    patch.pipe_organ.stopped = false;
+    patch.pipe_organ.brightness = 0.4f;
+    patch.pipe_organ.tone_decay_s = 8.0f;
+    patch.pipe_organ.breath = 0.45f;
+    patch.pipe_organ.chiff = 0.3f;
+    patch.gain = 0.7f;
+    flute.config = from_patch(clamp_synth_patch(patch));
+  }
+  {
+    // Bourdon / gedackt: a stopped pipe — closed at one end, so it speaks an
+    // octave lower for its length and radiates odd harmonics only (a soft,
+    // hollow flute).
+    SynthPreset& bourdon = t[i++];
+    bourdon.name = "church-bourdon";
+    NativeSynthPatch patch{};
+    patch.mode = SynthEngineMode::kPipeOrgan;
+    patch.amp_env.attack_ms = 14.0f;
+    patch.amp_env.sustain = 1.0f;
+    patch.amp_env.release_ms = 120.0f;
+    patch.cutoff_hz = 20000.0f;
+    patch.pipe_organ.stopped = true;
+    patch.pipe_organ.brightness = 0.35f;
+    patch.pipe_organ.tone_decay_s = 8.0f;
+    patch.pipe_organ.breath = 0.4f;
+    patch.pipe_organ.chiff = 0.25f;
+    patch.gain = 0.7f;
+    bourdon.config = from_patch(clamp_synth_patch(patch));
+  }
 
   return t;
 }

@@ -24,6 +24,7 @@ _SYNTH_ENGINE_MODES = {
     "additive": 5,
     "percussion": 6,
     "piano": 7,
+    "pipe-organ": 8,
 }
 _SYNTH_OSC_WAVEFORMS = {
     "default": 0,

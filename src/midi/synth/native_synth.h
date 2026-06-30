@@ -40,6 +40,7 @@
 #include "midi/synth/oscillator.h"
 #include "midi/synth/percussion_voice.h"
 #include "midi/synth/piano_voice.h"
+#include "midi/synth/pipe_organ_voice.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
 
@@ -54,6 +55,7 @@ enum class SynthEngineMode : int {
   kAdditive = 4,       // drawbar organ (additive_voice.h)
   kPercussion = 5,     // membrane modal + filtered noise (percussion_voice.h)
   kPiano = 6,          // extended waveguide piano (piano_voice.h)
+  kPipeOrgan = 7,      // sustained waveguide flue pipe (pipe_organ_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -150,6 +152,9 @@ struct NativeSynthPatch {
 
   /// Extended waveguide piano (used when mode == kPiano).
   PianoPatchParams piano;
+
+  /// Sustained waveguide flue pipe (used when mode == kPipeOrgan).
+  PipeOrganPatchParams pipe_organ;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -182,6 +187,9 @@ struct NativeSynthVoice : VoiceState {
   /// Piano string core; like KS, the host attach()es its delay slab before
   /// start().
   PianoVoiceCore piano;
+  /// Flue-pipe core; like KS, the host attach()es its delay span before
+  /// start().
+  PipeOrganVoiceCore pipe_organ;
   BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
@@ -305,6 +313,10 @@ class NativeSynth final : public MidiInstrument {
   /// Shared modal soundboard body (piano patches only).
   PianoSoundboard soundboard_;
   bool piano_mode_ = false;
+  /// Pipe-organ delay slab: one pipe_organ_buffer_capacity() span per voice
+  /// slot, allocated in prepare() only when the patch is a pipe organ.
+  std::vector<float> pipe_organ_buffers_;
+  int pipe_organ_capacity_ = 0;
 };
 
 /// Returns a copy of @p patch with every field clamped to a safe range.

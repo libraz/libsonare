@@ -146,6 +146,13 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.piano.hammer_contact_ms = std::clamp(sanitize(p.piano.hammer_contact_ms, 1.2f), 0.2f, 10.0f);
   p.piano.soundboard = std::clamp(sanitize(p.piano.soundboard, 0.25f), 0.0f, 1.0f);
   p.piano.release_damp_s = std::clamp(sanitize(p.piano.release_damp_s, 0.1f), 0.01f, 10.0f);
+  p.pipe_organ.brightness = std::clamp(sanitize(p.pipe_organ.brightness, 0.5f), 0.0f, 1.0f);
+  p.pipe_organ.tone_decay_s = std::clamp(sanitize(p.pipe_organ.tone_decay_s, 4.0f), 0.05f, 60.0f);
+  p.pipe_organ.breath = std::clamp(sanitize(p.pipe_organ.breath, 0.35f), 0.0f, 1.0f);
+  p.pipe_organ.chiff = std::clamp(sanitize(p.pipe_organ.chiff, 0.5f), 0.0f, 1.0f);
+  p.pipe_organ.chiff_ms = std::clamp(sanitize(p.pipe_organ.chiff_ms, 18.0f), 0.5f, 500.0f);
+  p.pipe_organ.release_damp_s =
+      std::clamp(sanitize(p.pipe_organ.release_damp_s, 0.08f), 0.01f, 10.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 3) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
@@ -187,6 +194,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   if (p.mode == SynthEngineMode::kPiano) {
     piano.start(p.piano, sample_rate, note, velocity, voice_seed(voice_index, note, age),
                 una_corda);
+  }
+  if (p.mode == SynthEngineMode::kPipeOrgan) {
+    pipe_organ.start(p.pipe_organ, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -328,6 +338,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod) noexcept {
     sample = percussion.render(common);
   } else if (patch->mode == SynthEngineMode::kPiano) {
     sample = piano.render(common);
+  } else if (patch->mode == SynthEngineMode::kPipeOrgan) {
+    sample = pipe_organ.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -368,6 +380,7 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kKarplusStrong) ks.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kModal) modal.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kPiano) piano.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kPipeOrgan) pipe_organ.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -379,6 +392,7 @@ void NativeSynthVoice::kill() noexcept {
   additive.kill();
   percussion.kill();
   piano.kill();
+  pipe_organ.kill();
   active = false;
   releasing = false;
 }
@@ -416,6 +430,14 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     soundboard_.prepare(sample_rate_, config_.patch.piano.soundboard);
   } else {
     piano_buffers_.clear();
+  }
+  // Pipe organ: one flue-pipe delay span per voice slot (the only allocation
+  // site; voices attach their span at note-on).
+  pipe_organ_capacity_ = pipe_organ_buffer_capacity(sample_rate_);
+  if (config_.patch.mode == SynthEngineMode::kPipeOrgan) {
+    pipe_organ_buffers_.assign(pool_.size() * static_cast<size_t>(pipe_organ_capacity_), 0.0f);
+  } else {
+    pipe_organ_buffers_.clear();
   }
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
@@ -466,6 +488,11 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
     voice->piano.attach(piano_buffers_.data() + static_cast<size_t>(voice_index) *
                                                     kMaxPianoStrings * piano_string_capacity_,
                         piano_string_capacity_);
+  }
+  if (!pipe_organ_buffers_.empty()) {
+    voice->pipe_organ.attach(
+        pipe_organ_buffers_.data() + static_cast<size_t>(voice_index) * pipe_organ_capacity_,
+        pipe_organ_capacity_);
   }
   // GM kit mode: resolve the struck note through the drum map instead of
   // playing the single configured piece (static patches — safe to keep in the

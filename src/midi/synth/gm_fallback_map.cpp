@@ -218,6 +218,7 @@ struct ProgramOverrides {
   NativeSynthPatch overdriven;       // program 29
   NativeSynthPatch distortion;       // program 30
   NativeSynthPatch harp;             // program 46 (Orchestral Harp)
+  NativeSynthPatch church_organ;     // program 19 (Church Organ, flue pipe)
 };
 
 ProgramOverrides build_program_overrides() noexcept {
@@ -390,6 +391,20 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harp.ks.release_damp_s = 1.0f;
   o.harp.body_mix = 0.3f;  // large open soundboard, less boxy than the guitar
 
+  // Church organ: a bright open principal flue pipe (method (8)). Sustained
+  // waveguide, prompt chiff speech, no decay while keyed; the amp envelope
+  // just gates the wind on and off.
+  o.church_organ.mode = SynthEngineMode::kPipeOrgan;
+  o.church_organ.amp_env = env(8.0f, 0.0f, 1.0f, 90.0f);
+  o.church_organ.cutoff_hz = 20000.0f;
+  o.church_organ.pipe_organ.stopped = false;
+  o.church_organ.pipe_organ.brightness = 0.62f;
+  o.church_organ.pipe_organ.tone_decay_s = 8.0f;
+  o.church_organ.pipe_organ.breath = 0.3f;
+  o.church_organ.pipe_organ.chiff = 0.45f;
+  o.church_organ.stereo_spread = 0.2f;
+  o.church_organ.gain = 0.7f;
+
   o.e_piano = clamp_synth_patch(o.e_piano);
   o.clav = clamp_synth_patch(o.clav);
   o.glockenspiel = clamp_synth_patch(o.glockenspiel);
@@ -402,6 +417,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.overdriven = clamp_synth_patch(o.overdriven);
   o.distortion = clamp_synth_patch(o.distortion);
   o.harp = clamp_synth_patch(o.harp);
+  o.church_organ = clamp_synth_patch(o.church_organ);
   return o;
 }
 
@@ -592,6 +608,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
       return program_overrides().marimba;
     case 13:  // Xylophone
       return program_overrides().xylophone;
+    case 19:  // Church Organ (flue pipe)
+      return program_overrides().church_organ;
     case 24:  // Acoustic Guitar (nylon)
       return program_overrides().nylon_guitar;
     case 26:  // Electric Guitar (jazz)
@@ -656,10 +674,10 @@ float gm_fallback_max_release_ms() noexcept {
     const DrumPatches& d = drum_patches();
     const ProgramOverrides& o = program_overrides();
     for (const NativeSynthPatch* p :
-         {&d.kick, &d.snare, &d.closed_hat, &d.open_hat, &d.tom, &d.cymbal, &d.percussion,
-          &o.e_piano, &o.clav, &o.glockenspiel, &o.vibraphone, &o.marimba, &o.xylophone,
-          &o.nylon_guitar, &o.electric_guitar, &o.muted_guitar, &o.overdriven, &o.distortion,
-          &o.harp}) {
+         {&d.kick,         &d.snare,      &d.closed_hat, &d.open_hat,     &d.tom,
+          &d.cymbal,       &d.percussion, &o.e_piano,    &o.clav,         &o.glockenspiel,
+          &o.vibraphone,   &o.marimba,    &o.xylophone,  &o.nylon_guitar, &o.electric_guitar,
+          &o.muted_guitar, &o.overdriven, &o.distortion, &o.harp,         &o.church_organ}) {
       max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
     }
     return max_ms;

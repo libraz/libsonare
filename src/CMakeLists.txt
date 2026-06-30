@@ -668,6 +668,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/additive_voice.cpp
     midi/synth/percussion_voice.cpp
     midi/synth/piano_voice.cpp
+    midi/synth/pipe_organ_voice.cpp
     midi/synth/native_synth.cpp
     midi/synth/gm_fallback_map.cpp
     midi/synth/synth_presets.cpp

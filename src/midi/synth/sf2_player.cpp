@@ -97,6 +97,14 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
           ? fallback_pool_.size() * static_cast<size_t>(piano_slab_capacity(sample_rate_))
           : 0,
       0.0f);
+  // The Church Organ GM program is a flue-pipe waveguide voice; give every
+  // fallback slot its delay span here too.
+  fallback_pipe_organ_capacity_ = pipe_organ_buffer_capacity(sample_rate_);
+  fallback_pipe_organ_buffers_.assign(
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(fallback_pipe_organ_capacity_)
+          : 0,
+      0.0f);
   reset_all_state(/*reverb_send_default=*/0);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
@@ -287,6 +295,11 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
                                                              kMaxPianoStrings *
                                                              fallback_piano_string_capacity_,
                         fallback_piano_string_capacity_);
+  }
+  if (!fallback_pipe_organ_buffers_.empty()) {
+    voice->pipe_organ.attach(fallback_pipe_organ_buffers_.data() +
+                                 static_cast<size_t>(voice_index) * fallback_pipe_organ_capacity_,
+                             fallback_pipe_organ_capacity_);
   }
   voice->start(patch, sample_rate_, velocity, voice_index);
 }
