@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <vector>
 
 #include "core/convert.h"
@@ -56,14 +57,16 @@ Chroma Chroma::from_spectrogram(const Spectrogram& spec, int sr,
   int n_chroma = chroma_config.n_chroma;
 
   // Create chroma filterbank (cached — repeated calls reuse the same matrix).
-  const std::vector<float>& filterbank =
+  // The shared handle keeps the filterbank alive across the apply() call even if
+  // another thread evicts the cache entry concurrently.
+  std::shared_ptr<const std::vector<float>> filterbank =
       get_chroma_filterbank_cached(sr, spec.n_fft(), chroma_config);
 
   // Apply filterbank to power spectrum
   const std::vector<float>& power = spec.power();
 
   std::vector<float> chroma_features =
-      apply_chroma_filterbank(power.data(), n_bins, n_frames, filterbank.data(), n_chroma);
+      apply_chroma_filterbank(power.data(), n_bins, n_frames, filterbank->data(), n_chroma);
   // librosa.feature.chroma_stft normalizes each frame with norm=np.inf (L-inf /
   // max norm) by default; match it so analyze()/chroma_stft agree with librosa
   // (and with the L-inf chroma_cqt path) per-frame, not just in argmax.

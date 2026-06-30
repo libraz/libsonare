@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 #include "filters/dct.h"
 #include "util/constants.h"
@@ -47,14 +48,15 @@ MelSpectrogram MelSpectrogram::from_spectrogram(const Spectrogram& spec, int sr,
   if (config.fmax <= 0.0f) {
     config.fmax = static_cast<float>(sr) / 2.0f;
   }
-  const std::vector<float>& filterbank = get_mel_filterbank_cached(sr, spec.n_fft(), config);
+  std::shared_ptr<const std::vector<float>> filterbank =
+      get_mel_filterbank_cached(sr, spec.n_fft(), config);
 
   // Apply filterbank to power spectrum
   const std::vector<float>& power = spec.power();
 
   // Convert from row-major [n_bins x n_frames] to column-major for matrix multiply
   std::vector<float> mel_power =
-      apply_mel_filterbank(power.data(), n_bins, n_frames, filterbank.data(), n_mels);
+      apply_mel_filterbank(power.data(), n_bins, n_frames, filterbank->data(), n_mels);
 
   return MelSpectrogram(std::move(mel_power), n_mels, n_frames, sr, spec.hop_length());
 }

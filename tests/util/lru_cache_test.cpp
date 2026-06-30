@@ -3,9 +3,12 @@
 
 #include "util/lru_cache.h"
 
+#include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <memory>
 #include <string>
+#include <thread>
+#include <vector>
 
 using namespace sonare;
 
@@ -79,6 +82,46 @@ TEST_CASE("LruCache clear drops all entries", "[util][lru]") {
     return 11;
   }) == 11);
   REQUIRE(builds == 1);  // entry was cleared, so it rebuilds
+}
+
+TEST_CASE("LruCache get_or_build value survives concurrent eviction", "[util][lru]") {
+  // Regression: get_or_build must copy the value out under the lock, so a handle
+  // returned to one thread cannot be invalidated by another thread evicting the
+  // entry. With a shared_ptr value type, the returned handle pins the payload
+  // alive even after the map node is erased. We hammer a tiny cache from many
+  // threads with more distinct keys than its capacity, forcing constant
+  // eviction, and dereference every returned handle. Under the old by-reference
+  // contract this raced into a use-after-free (caught by TSan/ASan).
+  constexpr int kCapacity = 8;
+  constexpr int kThreads = 8;
+  constexpr int kIters = 4000;
+  constexpr int kKeySpace = 64;  // >> capacity, so eviction is frequent
+
+  LruCache<int, std::shared_ptr<const int>, std::hash<int>> cache(kCapacity);
+  std::atomic<bool> corrupted{false};
+  std::atomic<int> start{0};
+
+  std::vector<std::thread> threads;
+  threads.reserve(kThreads);
+  for (int t = 0; t < kThreads; ++t) {
+    threads.emplace_back([&, t] {
+      while (start.load() == 0) {  // release threads together to maximize overlap
+      }
+      for (int i = 0; i < kIters; ++i) {
+        int key = (i * 7 + t * 13) % kKeySpace;
+        std::shared_ptr<const int> handle =
+            cache.get_or_build(key, [key] { return std::make_shared<const int>(key * 1000); });
+        // The handle must stay valid and consistent while other threads evict.
+        if (!handle || *handle != key * 1000) {
+          corrupted.store(true);
+        }
+      }
+    });
+  }
+
+  start.store(1);
+  for (auto& th : threads) th.join();
+  REQUIRE_FALSE(corrupted.load());
 }
 
 TEST_CASE("LruCache get_or_build_value returns an owning copy", "[util][lru]") {

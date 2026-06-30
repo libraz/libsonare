@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 #include "core/spectrum.h"
 #include "filters/dct.h"
@@ -28,14 +29,15 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
   }
   const int n_freq = mel_config.n_fft / 2 + 1;
   MelFilterConfig fcfg = mel_config.to_mel_filter_config();
-  const std::vector<float>& filterbank = get_mel_filterbank_cached(sr, mel_config.n_fft, fcfg);
+  std::shared_ptr<const std::vector<float>> filterbank =
+      get_mel_filterbank_cached(sr, mel_config.n_fft, fcfg);
 
   // librosa.feature.inverse.mel_to_stft solves `min ||M - W @ S||^2  s.t. S >= 0`
   // column-wise using scipy.optimize.nnls when available, where W is the mel
   // filterbank `[n_mels x n_freq]`. We mirror that with our own active-set
   // solver. A is W (n_mels x n_freq), B is M (n_mels x n_frames), X is S
   // (n_freq x n_frames).
-  return nnls(filterbank.data(), n_mels, n_freq, M, n_frames);
+  return nnls(filterbank->data(), n_mels, n_freq, M, n_frames);
 }
 
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,

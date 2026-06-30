@@ -170,16 +170,16 @@ TEST_CASE("get_mel_filterbank_cached returns same matrix for same key", "[mel][c
   MelFilterConfig config;
   config.n_mels = 64;
 
-  const std::vector<float>& a = get_mel_filterbank_cached(sr, n_fft, config);
-  const std::vector<float>& b = get_mel_filterbank_cached(sr, n_fft, config);
-  REQUIRE(a.data() == b.data());
-  REQUIRE(a.size() == static_cast<size_t>(config.n_mels * (n_fft / 2 + 1)));
+  auto a = get_mel_filterbank_cached(sr, n_fft, config);
+  auto b = get_mel_filterbank_cached(sr, n_fft, config);
+  REQUIRE(a->data() == b->data());
+  REQUIRE(a->size() == static_cast<size_t>(config.n_mels * (n_fft / 2 + 1)));
 
   // The cached values must match a freshly built filterbank.
   std::vector<float> fresh = create_mel_filterbank(sr, n_fft, config);
-  REQUIRE(a.size() == fresh.size());
+  REQUIRE(a->size() == fresh.size());
   for (size_t i = 0; i < fresh.size(); ++i) {
-    REQUIRE_THAT(a[i], WithinAbs(fresh[i], 1e-6f));
+    REQUIRE_THAT((*a)[i], WithinAbs(fresh[i], 1e-6f));
   }
 }
 
@@ -193,9 +193,9 @@ TEST_CASE("get_mel_filterbank_cached treats fmax=0 as sr/2", "[mel][cache]") {
   MelFilterConfig config_explicit = config_default;
   config_explicit.fmax = static_cast<float>(sr) / 2.0f;
 
-  const std::vector<float>& a = get_mel_filterbank_cached(sr, n_fft, config_default);
-  const std::vector<float>& b = get_mel_filterbank_cached(sr, n_fft, config_explicit);
-  REQUIRE(a.data() == b.data());
+  auto a = get_mel_filterbank_cached(sr, n_fft, config_default);
+  auto b = get_mel_filterbank_cached(sr, n_fft, config_explicit);
+  REQUIRE(a->data() == b->data());
 }
 
 TEST_CASE("get_mel_filterbank_cached distinguishes different keys", "[mel][cache]") {
@@ -210,14 +210,14 @@ TEST_CASE("get_mel_filterbank_cached distinguishes different keys", "[mel][cache
   c3.n_mels = 40;
   c3.htk = true;
 
-  const std::vector<float>& a = get_mel_filterbank_cached(sr, n_fft, c1);
-  const std::vector<float>& b = get_mel_filterbank_cached(sr, n_fft, c2);
-  const std::vector<float>& c = get_mel_filterbank_cached(sr, n_fft, c3);
+  auto a = get_mel_filterbank_cached(sr, n_fft, c1);
+  auto b = get_mel_filterbank_cached(sr, n_fft, c2);
+  auto c = get_mel_filterbank_cached(sr, n_fft, c3);
 
-  REQUIRE(a.data() != b.data());
-  REQUIRE(a.data() != c.data());
-  REQUIRE(b.data() != c.data());
-  REQUIRE(a.size() != b.size());  // different n_mels → different shape
+  REQUIRE(a->data() != b->data());
+  REQUIRE(a->data() != c->data());
+  REQUIRE(b->data() != c->data());
+  REQUIRE(a->size() != b->size());  // different n_mels → different shape
 }
 
 TEST_CASE("get_mel_filterbank_cached evicts oldest entries past capacity", "[mel][cache]") {
@@ -231,7 +231,7 @@ TEST_CASE("get_mel_filterbank_cached evicts oldest entries past capacity", "[mel
 
   MelFilterConfig first;
   first.n_mels = 16;
-  const void* first_ptr = get_mel_filterbank_cached(sr, n_fft, first).data();
+  const void* first_ptr = get_mel_filterbank_cached(sr, n_fft, first)->data();
 
   constexpr int kPressure = 32;
   for (int i = 0; i < kPressure; ++i) {
@@ -244,7 +244,7 @@ TEST_CASE("get_mel_filterbank_cached evicts oldest entries past capacity", "[mel
 
   // After kPressure unique inserts, the original entry must have been evicted
   // and rebuilt — pointers cannot match if the storage was freed.
-  const void* first_ptr_after = get_mel_filterbank_cached(sr, n_fft, first).data();
+  const void* first_ptr_after = get_mel_filterbank_cached(sr, n_fft, first)->data();
   REQUIRE(first_ptr_after != first_ptr);
 }
 
@@ -264,7 +264,7 @@ TEST_CASE("get_mel_filterbank_cached promotes on hit (true LRU)", "[mel][cache]"
   // Step 1: insert A
   MelFilterConfig a;
   a.n_mels = 16;
-  const void* a_ptr = get_mel_filterbank_cached(sr, n_fft, a).data();
+  const void* a_ptr = get_mel_filterbank_cached(sr, n_fft, a)->data();
 
   // Step 2: fill the remaining cache slots with 7 more distinct keys.
   // kMaxMelCacheSize is 8 today; we touch exactly cap-1 entries so A is the
@@ -277,7 +277,7 @@ TEST_CASE("get_mel_filterbank_cached promotes on hit (true LRU)", "[mel][cache]"
   }
 
   // Step 3: re-touch A → splice to front of LRU.
-  const void* a_ptr_promoted = get_mel_filterbank_cached(sr, n_fft, a).data();
+  const void* a_ptr_promoted = get_mel_filterbank_cached(sr, n_fft, a)->data();
   REQUIRE(a_ptr_promoted == a_ptr);  // still the same storage
 
   // Step 4: insert one new key. Under FIFO this would evict A; under true LRU
@@ -287,6 +287,6 @@ TEST_CASE("get_mel_filterbank_cached promotes on hit (true LRU)", "[mel][cache]"
   (void)get_mel_filterbank_cached(sr, n_fft, new_key);
 
   // Step 5: A must still be cached → same pointer.
-  const void* a_ptr_after = get_mel_filterbank_cached(sr, n_fft, a).data();
+  const void* a_ptr_after = get_mel_filterbank_cached(sr, n_fft, a)->data();
   REQUIRE(a_ptr_after == a_ptr);
 }

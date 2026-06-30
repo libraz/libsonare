@@ -3,6 +3,7 @@
 /// @file mel.h
 /// @brief Mel filterbank generation.
 
+#include <memory>
 #include <vector>
 
 namespace sonare {
@@ -42,13 +43,13 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
 /// @param sr Sample rate in Hz
 /// @param n_fft FFT size
 /// @param config Mel filterbank configuration (full identity is used as cache key)
-/// @return Const reference to cached filterbank [n_mels x n_bins]
+/// @return Shared handle to the cached filterbank [n_mels x n_bins]
 /// @details Thread-safe (guarded by a mutex). Uses an LRU eviction policy bounded
-///          by a small fixed capacity (see implementation). The returned
-///          reference is stable until evicted; copy the data if you need to keep
-///          it across long-lived calls.
-const std::vector<float>& get_mel_filterbank_cached(int sr, int n_fft,
-                                                    const MelFilterConfig& config);
+///          by a small fixed capacity (see implementation). The returned handle
+///          owns a reference to the immutable filterbank, so it stays valid even
+///          if the entry is evicted by another thread after this call returns.
+std::shared_ptr<const std::vector<float>> get_mel_filterbank_cached(int sr, int n_fft,
+                                                                    const MelFilterConfig& config);
 
 /// @brief Applies Mel filterbank to power spectrum.
 /// @param power Power spectrum [n_bins x n_frames] in row-major order

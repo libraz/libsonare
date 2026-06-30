@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <cmath>
+#include <memory>
 
 #include "core/convert.h"
 #include "util/constants.h"
@@ -172,14 +173,18 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
   return filterbank;
 }
 
-const std::vector<float>& get_chroma_filterbank_cached(int sr, int n_fft,
-                                                       const ChromaFilterConfig& config) {
+std::shared_ptr<const std::vector<float>> get_chroma_filterbank_cached(
+    int sr, int n_fft, const ChromaFilterConfig& config) {
   ChromaFilterbankCacheKey key = make_key(sr, n_fft, config);
 
-  // Build outside the lock — see get_mel_filterbank_cached for rationale.
-  static LruCache<ChromaFilterbankCacheKey, std::vector<float>, ChromaFilterbankCacheKeyHash> cache(
-      kMaxChromaCacheSize);
-  return cache.get_or_build(key, [&] { return create_chroma_filterbank(sr, n_fft, config); });
+  // Cache shared_ptrs to immutable filterbanks — see get_mel_filterbank_cached
+  // for rationale (build outside the lock; handle survives concurrent eviction).
+  static LruCache<ChromaFilterbankCacheKey, std::shared_ptr<const std::vector<float>>,
+                  ChromaFilterbankCacheKeyHash>
+      cache(kMaxChromaCacheSize);
+  return cache.get_or_build(key, [&] {
+    return std::make_shared<const std::vector<float>>(create_chroma_filterbank(sr, n_fft, config));
+  });
 }
 
 std::vector<float> apply_chroma_filterbank(const float* power, int n_bins, int n_frames,

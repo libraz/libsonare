@@ -3,6 +3,7 @@
 /// @file chroma.h
 /// @brief Chroma filterbank generation.
 
+#include <memory>
 #include <vector>
 
 namespace sonare {
@@ -52,12 +53,12 @@ std::vector<float> create_chroma_filterbank(
 /// @param sr Sample rate in Hz
 /// @param n_fft FFT size
 /// @param config Chroma filterbank configuration (full identity is used as key)
-/// @return Const reference to cached filterbank [n_chroma x n_bins]
+/// @return Shared handle to the cached filterbank [n_chroma x n_bins]
 /// @details Thread-safe (guarded by a mutex). Uses an LRU eviction policy
-///          bounded by a small fixed capacity (see implementation). The
-///          returned reference is stable until evicted; copy if you need to
-///          keep it across long-lived calls.
-const std::vector<float>& get_chroma_filterbank_cached(
+///          bounded by a small fixed capacity (see implementation). The returned
+///          handle owns a reference to the immutable filterbank, so it stays
+///          valid even if the entry is evicted by another thread after this call.
+std::shared_ptr<const std::vector<float>> get_chroma_filterbank_cached(
     int sr, int n_fft, const ChromaFilterConfig& config = ChromaFilterConfig());
 
 /// @brief Applies chroma filterbank to power spectrum.

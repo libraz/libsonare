@@ -189,16 +189,16 @@ TEST_CASE("get_chroma_filterbank_cached returns same matrix for same key", "[chr
   ChromaFilterConfig config;
   config.n_chroma = 12;
 
-  const std::vector<float>& a = get_chroma_filterbank_cached(sr, n_fft, config);
-  const std::vector<float>& b = get_chroma_filterbank_cached(sr, n_fft, config);
-  REQUIRE(a.data() == b.data());
-  REQUIRE(a.size() == static_cast<size_t>(config.n_chroma * (n_fft / 2 + 1)));
+  auto a = get_chroma_filterbank_cached(sr, n_fft, config);
+  auto b = get_chroma_filterbank_cached(sr, n_fft, config);
+  REQUIRE(a->data() == b->data());
+  REQUIRE(a->size() == static_cast<size_t>(config.n_chroma * (n_fft / 2 + 1)));
 
   // The cached matrix must match a fresh build.
   std::vector<float> fresh = create_chroma_filterbank(sr, n_fft, config);
-  REQUIRE(a.size() == fresh.size());
+  REQUIRE(a->size() == fresh.size());
   for (size_t i = 0; i < fresh.size(); ++i) {
-    REQUIRE_THAT(a[i], WithinAbs(fresh[i], 1e-6f));
+    REQUIRE_THAT((*a)[i], WithinAbs(fresh[i], 1e-6f));
   }
 }
 
@@ -220,17 +220,17 @@ TEST_CASE("get_chroma_filterbank_cached hits on bitwise-different but equal fmin
   ChromaFilterConfig b = a;
   b.fmin = 32.70000005f;  // logically equal (UI-derived float noise)
 
-  const std::vector<float>& fb_a = get_chroma_filterbank_cached(sr, n_fft, a);
-  const std::vector<float>& fb_b = get_chroma_filterbank_cached(sr, n_fft, b);
+  auto fb_a = get_chroma_filterbank_cached(sr, n_fft, a);
+  auto fb_b = get_chroma_filterbank_cached(sr, n_fft, b);
 
   // Same cached object: a cache HIT, not a redundant rebuild.
-  REQUIRE(fb_a.data() == fb_b.data());
+  REQUIRE(fb_a->data() == fb_b->data());
 
   // A near-equal tuning (below the 1e-4 grid) must also hit the same entry.
   ChromaFilterConfig c = a;
   c.tuning = 0.000001f;
-  const std::vector<float>& fb_c = get_chroma_filterbank_cached(sr, n_fft, c);
-  REQUIRE(fb_a.data() == fb_c.data());
+  auto fb_c = get_chroma_filterbank_cached(sr, n_fft, c);
+  REQUIRE(fb_a->data() == fb_c->data());
 }
 
 TEST_CASE("get_chroma_filterbank_cached distinguishes different keys", "[chroma][cache]") {
@@ -245,14 +245,14 @@ TEST_CASE("get_chroma_filterbank_cached distinguishes different keys", "[chroma]
   c3.n_chroma = 12;
   c3.norm = ChromaFilterNorm::L1;
 
-  const std::vector<float>& a = get_chroma_filterbank_cached(sr, n_fft, c1);
-  const std::vector<float>& b = get_chroma_filterbank_cached(sr, n_fft, c2);
-  const std::vector<float>& c = get_chroma_filterbank_cached(sr, n_fft, c3);
+  auto a = get_chroma_filterbank_cached(sr, n_fft, c1);
+  auto b = get_chroma_filterbank_cached(sr, n_fft, c2);
+  auto c = get_chroma_filterbank_cached(sr, n_fft, c3);
 
-  REQUIRE(a.data() != b.data());
-  REQUIRE(a.data() != c.data());
-  REQUIRE(b.data() != c.data());
-  REQUIRE(a.size() != b.size());  // different n_chroma → different shape
+  REQUIRE(a->data() != b->data());
+  REQUIRE(a->data() != c->data());
+  REQUIRE(b->data() != c->data());
+  REQUIRE(a->size() != b->size());  // different n_chroma → different shape
 }
 
 TEST_CASE("get_chroma_filterbank_cached evicts oldest entries past capacity", "[chroma][cache]") {
@@ -262,7 +262,7 @@ TEST_CASE("get_chroma_filterbank_cached evicts oldest entries past capacity", "[
   ChromaFilterConfig first;
   first.n_chroma = 12;
   first.tuning = 0.0f;
-  const void* first_ptr = get_chroma_filterbank_cached(sr, n_fft, first).data();
+  const void* first_ptr = get_chroma_filterbank_cached(sr, n_fft, first)->data();
 
   // Pressure-test by inserting more distinct keys than the cap. The chroma
   // cache uses kMaxChromaCacheSize = 8 today; the test only requires eviction
@@ -275,7 +275,7 @@ TEST_CASE("get_chroma_filterbank_cached evicts oldest entries past capacity", "[
     (void)get_chroma_filterbank_cached(sr, n_fft, c);
   }
 
-  const void* first_ptr_after = get_chroma_filterbank_cached(sr, n_fft, first).data();
+  const void* first_ptr_after = get_chroma_filterbank_cached(sr, n_fft, first)->data();
   REQUIRE(first_ptr_after != first_ptr);
 }
 
@@ -289,7 +289,7 @@ TEST_CASE("get_chroma_filterbank_cached promotes on hit (true LRU)", "[chroma][c
   ChromaFilterConfig a;
   a.n_chroma = 12;
   a.tuning = 0.0f;
-  const void* a_ptr = get_chroma_filterbank_cached(sr, n_fft, a).data();
+  const void* a_ptr = get_chroma_filterbank_cached(sr, n_fft, a)->data();
 
   // Fill the remaining slots (cap-1 = 7 today).
   constexpr int kFill = 7;
@@ -301,7 +301,7 @@ TEST_CASE("get_chroma_filterbank_cached promotes on hit (true LRU)", "[chroma][c
   }
 
   // Re-touch A → must splice to MRU.
-  const void* a_ptr_promoted = get_chroma_filterbank_cached(sr, n_fft, a).data();
+  const void* a_ptr_promoted = get_chroma_filterbank_cached(sr, n_fft, a)->data();
   REQUIRE(a_ptr_promoted == a_ptr);
 
   // Insert one new key → eviction triggers; under true LRU A survives.
@@ -310,6 +310,6 @@ TEST_CASE("get_chroma_filterbank_cached promotes on hit (true LRU)", "[chroma][c
   new_key.tuning = 0.01f * static_cast<float>(kFill + 1);
   (void)get_chroma_filterbank_cached(sr, n_fft, new_key);
 
-  const void* a_ptr_after = get_chroma_filterbank_cached(sr, n_fft, a).data();
+  const void* a_ptr_after = get_chroma_filterbank_cached(sr, n_fft, a)->data();
   REQUIRE(a_ptr_after == a_ptr);
 }

@@ -21,17 +21,20 @@ namespace sonare {
 /// value stay valid until that specific entry is evicted (a rehash does not
 /// move nodes), which is what makes the `const Value&` return contract safe.
 ///
-/// Two construction strategies are offered because the existing caches in this
-/// library use both, and each is the right trade-off for its value type:
-///  - `get_or_build` builds the value *outside* the lock and returns it by
-///    `const&`. Use it when the value is expensive to build and cheap to keep
-///    referenced in place (e.g. a large `std::vector<float>` filterbank): unique
-///    keys then build concurrently rather than serializing on the mutex.
-///  - `get_or_build_value` builds the value *inside* the lock and returns it by
-///    value. Use it when callers take ownership of the result and need it to
-///    survive concurrent eviction (e.g. a struct of `std::shared_ptr`s): the
-///    copy is made while the lock is held, so the returned value cannot be
-///    invalidated by another thread evicting the entry.
+/// Both accessors return the value *by value*, copied while the lock is held,
+/// so the result can never be invalidated by another thread evicting the entry
+/// after the call returns. They differ only in where the build runs:
+///  - `get_or_build` builds the value *outside* the lock, so unique keys build
+///    concurrently rather than serializing on the mutex. Use it when the build
+///    is expensive; the value type should be cheap to copy (e.g. a
+///    `std::shared_ptr` to an immutable filterbank), since the copy is taken on
+///    every call.
+///  - `get_or_build_value` builds the value *inside* the lock, serializing
+///    unique-key builds. Use it when the build itself is cheap.
+///
+/// @warning Never hold a reference into the cache across the lock release: a
+/// concurrent eviction can destroy the map node. Returning by value (copied
+/// under the lock) is what keeps these accessors safe for multi-threaded use.
 ///
 /// @tparam Key   Hashable, equality-comparable cache key.
 /// @tparam Value Cached value type.
@@ -44,10 +47,11 @@ class LruCache {
 
   /// @brief Returns the value for @p key, building it via @p build on a miss.
   /// @details The build runs outside the lock; a concurrent build of the same
-  /// key is reconciled by a re-check (the late insert is dropped). The returned
-  /// reference is valid until the entry is evicted.
+  /// key is reconciled by a re-check (the late insert is dropped). The result
+  /// is copied out while the lock is held, so it stays valid even if another
+  /// thread evicts the entry immediately afterward.
   template <typename Build>
-  const Value& get_or_build(const Key& key, Build&& build) {
+  Value get_or_build(const Key& key, Build&& build) {
     {
       std::lock_guard<std::mutex> lock(mutex_);
       if (const Value* hit = touch_locked(key)) return *hit;
