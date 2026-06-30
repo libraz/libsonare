@@ -80,7 +80,6 @@ import type {
   NoteStretchOptions,
   PanLaw,
   PanMode,
-  PitchCorrectOptions,
   PitchResult,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,

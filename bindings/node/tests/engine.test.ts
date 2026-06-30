@@ -1451,9 +1451,13 @@ describe('RealtimeEngine native binding', () => {
     const collected = [];
     for (let guard = 0; guard < 1000; guard++) {
       const batch = engine.drainExternalMidi(5); // cap < count, not a 256 multiple
-      if (batch.length === 0) break;
+      if (batch.length === 0) {
+        break;
+      }
       expect(batch.length).toBeLessThanOrEqual(5);
-      for (const ev of batch) collected.push(ev);
+      for (const ev of batch) {
+        collected.push(ev);
+      }
     }
 
     expect(collected.length).toBe(2 * kNotes);
@@ -1463,8 +1467,11 @@ describe('RealtimeEngine native binding', () => {
     const noteOffs = new Set();
     for (const ev of collected) {
       const status = ev.bytes[0] & 0xf0;
-      if (status === 0x90) noteOns.add(ev.bytes[1]);
-      else if (status === 0x80) noteOffs.add(ev.bytes[1]);
+      if (status === 0x90) {
+        noteOns.add(ev.bytes[1]);
+      } else if (status === 0x80) {
+        noteOffs.add(ev.bytes[1]);
+      }
     }
     for (let i = 0; i < kNotes; i++) {
       expect(noteOns.has(40 + i)).toBe(true);

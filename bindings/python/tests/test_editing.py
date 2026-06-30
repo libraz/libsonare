@@ -94,7 +94,7 @@ def test_pitch_correct_timevarying_scale_and_knobs() -> None:
     gentle = libsonare.pitch_correct_timevarying(
         samples, f0, sample_rate=sr, hop_length=hop, target_midi=59.0, retune_amount=0.25
     )
-    assert any(abs(a - b) > 1e-6 for a, b in zip(full, gentle))
+    assert any(abs(a - b) > 1e-6 for a, b in zip(full, gentle, strict=True))
 
     # Out-of-range knobs are rejected.
     with pytest.raises((ValueError, RuntimeError)):
