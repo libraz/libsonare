@@ -65,6 +65,13 @@ inline int piano_slab_capacity(double sample_rate) noexcept {
 /// with a small bass floor. Drives the per-note dispersion allpass design.
 float piano_inharmonicity_b(uint8_t note) noexcept;
 
+/// Number of coupled unison strings a real grand strings @p note with: a
+/// single wound string in the deep bass, a wound bichord through the
+/// bass-tenor region, and a plain trichord from the tenor break up. Used as
+/// a per-register cap on the patch's string count, so the bass keeps its
+/// single-stage decay (no unison aftersound) while the treble couples three.
+int piano_unison_strings(uint8_t note) noexcept;
+
 /// Piano section of a NativeSynthPatch (used when mode == kPiano).
 struct PianoPatchParams {
   /// Coupled unison strings per note (clamped to [1, kMaxPianoStrings]).

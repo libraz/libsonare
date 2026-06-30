@@ -129,6 +129,13 @@ float piano_inharmonicity_b(uint8_t note) noexcept {
   return std::max(b, 2.0e-5f);
 }
 
+int piano_unison_strings(uint8_t note) noexcept {
+  const int n = static_cast<int>(note & 0x7Fu);
+  if (n <= 29) return 1;  // A0..F1: single wound string.
+  if (n <= 47) return 2;  // F#1..B2: wound bichords.
+  return 3;               // tenor break up: plain trichords.
+}
+
 void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, uint8_t note,
                            uint8_t velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -158,7 +165,10 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   const float t60_fast = std::max(0.05f, params.decay_fast_s) * scale;
   const float t60_slow = std::max(t60_fast, params.decay_slow_s * scale);
 
-  num_strings_ = std::clamp(params.strings, 1, kMaxPianoStrings);
+  // The patch string count is the treble voicing; the real grand strings the
+  // bass with fewer (a single wound string has no unison aftersound).
+  num_strings_ =
+      std::clamp(std::min(params.strings, piano_unison_strings(note)), 1, kMaxPianoStrings);
   const float spread = std::max(0.0f, params.detune_cents);
   for (int i = 0; i < num_strings_; ++i) {
     String& s = strings_[static_cast<size_t>(i)];

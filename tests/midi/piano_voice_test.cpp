@@ -197,6 +197,18 @@ TEST_CASE("the synthesized inharmonicity tracks the physical B(note) curve",
   REQUIRE(meas_c6 > meas_c4);
 }
 
+TEST_CASE("the unison string count is graded across the keyboard", "[midi][synth][piano]") {
+  using sonare::midi::synth::piano_unison_strings;
+  // Single wound strings in the deep bass, wound bichords through the
+  // bass-tenor, plain trichords from the tenor break up.
+  REQUIRE(piano_unison_strings(21) == 1);   // A0
+  REQUIRE(piano_unison_strings(29) == 1);   // F1
+  REQUIRE(piano_unison_strings(30) == 2);   // F#1
+  REQUIRE(piano_unison_strings(47) == 2);   // B2
+  REQUIRE(piano_unison_strings(48) == 3);   // C3
+  REQUIRE(piano_unison_strings(108) == 3);  // C8
+}
+
 TEST_CASE("coupled unison strings produce a two-stage decay", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   // 4 seconds of a held C4.
