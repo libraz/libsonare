@@ -103,20 +103,6 @@ float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
   return a;
 }
 
-/// Soundboard dominant-mode sketch (Hz / t60 s / weight). Fixed data-free
-/// voicing shared by every piano patch.
-struct SoundboardModeSpec {
-  float freq_hz;
-  float t60_s;
-  float weight;
-};
-constexpr SoundboardModeSpec kSoundboardModes[4] = {
-    {113.0f, 0.30f, 1.0f},
-    {196.0f, 0.25f, 0.8f},
-    {285.0f, 0.20f, 0.6f},
-    {392.0f, 0.18f, 0.5f},
-};
-
 }  // namespace
 
 float piano_inharmonicity_b(uint8_t note) noexcept {
@@ -220,24 +206,6 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   exc_alpha_ = std::clamp(1.0f - std::exp(-6.28318530718f * exc_cutoff / static_cast<float>(sr)),
                           0.01f, 1.0f);
   exc_lp_ = 0.0f;
-
-  // Soundboard bank (fixed data-free voicing).
-  soundboard_mix_ = std::clamp(params.soundboard, 0.0f, 1.0f);
-  for (size_t m = 0; m < soundboard_.size(); ++m) {
-    SoundboardMode& mode = soundboard_[m];
-    const SoundboardModeSpec& spec = kSoundboardModes[m];
-    if (spec.freq_hz >= 0.45f * static_cast<float>(sr)) {
-      mode = SoundboardMode{};
-      continue;
-    }
-    const float w = kTwoPi * spec.freq_hz / static_cast<float>(sr);
-    const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * spec.t60_s));
-    mode.a1 = 2.0f * r * std::cos(w);
-    mode.a2 = -r * r;
-    mode.gain = spec.weight * std::sin(w);
-    mode.y1 = 0.0f;
-    mode.y2 = 0.0f;
-  }
 }
 
 float PianoVoiceCore::hammer_force(int64_t n) const noexcept {
@@ -291,19 +259,6 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
   }
   bridge_ = lp_sum / static_cast<float>(num_strings_);
   sum += knock;
-
-  // Soundboard resonators driven by the bridge sum (including the knock).
-  if (soundboard_mix_ > 0.0f) {
-    float sb = 0.0f;
-    for (SoundboardMode& mode : soundboard_) {
-      if (mode.gain == 0.0f && mode.a1 == 0.0f) continue;
-      const float y = mode.a1 * mode.y1 + mode.a2 * mode.y2 + mode.gain * sum;
-      mode.y2 = mode.y1;
-      mode.y1 = y;
-      sb += y;
-    }
-    sum += soundboard_mix_ * sb;
-  }
   return sum;
 }
 
@@ -317,7 +272,6 @@ void PianoVoiceCore::release() noexcept {
 
 void PianoVoiceCore::kill() noexcept {
   for (String& s : strings_) s = String{};
-  for (SoundboardMode& mode : soundboard_) mode = SoundboardMode{};
   num_strings_ = 0;
   hammer_amp_ = 0.0f;
   contact_samples_ = 0;
@@ -381,6 +335,62 @@ float PianoResonanceBank::process(float bridge_in, bool damper_open) noexcept {
       m.y1 *= ringout_;
       m.y2 *= ringout_;
     }
+  }
+  return out_gain_ * sum;
+}
+
+void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
+  const float sr = sample_rate > 0.0 ? static_cast<float>(sample_rate) : 48000.0f;
+  out_gain_ = std::clamp(mix, 0.0f, 1.0f);
+  // Modes log-spread across the soundboard's radiating band. A perfectly
+  // geometric spacing would comb; a deterministic per-mode nudge breaks the
+  // periodicity (no RNG — derived from the index so bounces stay bit-stable).
+  constexpr float kFLow = 92.0f;
+  constexpr float kFHigh = 5400.0f;
+  for (int i = 0; i < kSoundboardModes; ++i) {
+    Mode& m = modes_[static_cast<size_t>(i)];
+    const float u = static_cast<float>(i) / static_cast<float>(kSoundboardModes - 1);
+    const uint32_t h = (static_cast<uint32_t>(i) + 1u) * 2654435761u;
+    const float jit = (static_cast<float>((h >> 9) & 0xFFFFu) / 65535.0f - 0.5f) * 0.08f;
+    const float f = kFLow * std::pow(kFHigh / kFLow, u) * (1.0f + jit);
+    if (f >= 0.45f * sr) {
+      m = Mode{};
+      continue;
+    }
+    const float w = kTwoPi * f / sr;
+    // Damping rises with frequency: the low body modes ring ~0.28 s, the high
+    // modes are broad and brief (~0.03 s).
+    const float t60 = std::clamp(0.28f * std::pow(kFLow / f, 0.55f), 0.03f, 0.30f);
+    const float r = std::exp(-6.907755279f / (sr * t60));
+    m.a1 = 2.0f * r * std::cos(w);
+    m.a2 = -r * r;
+    // Radiation envelope: a low-mid tilt plus a broad bridge formant near
+    // ~320 Hz, where a grand soundboard radiates most efficiently.
+    const float tilt = std::pow(320.0f / f, 0.35f);
+    const float l = std::log(f / 320.0f);
+    const float formant = 1.0f + 0.6f * std::exp(-l * l / 0.9f);
+    // Unity-peak normalization (the (1-r) factor cancels the resonant boost),
+    // so the bank is a body colour, not a runaway bandpass on the input.
+    m.gain = tilt * formant * (1.0f - r);
+    m.y1 = 0.0f;
+    m.y2 = 0.0f;
+  }
+}
+
+void PianoSoundboard::reset() noexcept {
+  for (Mode& m : modes_) {
+    m.y1 = 0.0f;
+    m.y2 = 0.0f;
+  }
+}
+
+float PianoSoundboard::process(float in) noexcept {
+  float sum = 0.0f;
+  for (Mode& m : modes_) {
+    const float y = m.a1 * m.y1 + m.a2 * m.y2 + m.gain * in;
+    m.y2 = m.y1;
+    m.y1 = y;
+    sum += y;
   }
   return out_gain_ * sum;
 }

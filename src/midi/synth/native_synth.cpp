@@ -103,6 +103,11 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.percussion.pitch_drop = std::clamp(sanitize(p.percussion.pitch_drop, 0.0f), 0.0f, 8.0f);
   p.percussion.pitch_drop_ms =
       std::clamp(sanitize(p.percussion.pitch_drop_ms, 40.0f), 1.0f, 2000.0f);
+  p.percussion.strike_r = std::clamp(sanitize(p.percussion.strike_r, 0.0f), 0.0f, 1.0f);
+  p.percussion.strike_theta = sanitize(p.percussion.strike_theta, 0.0f);
+  for (float& alpha : p.percussion.mode_alpha) {
+    alpha = std::clamp(sanitize(alpha, 0.0f), 0.0f, 64.0f);
+  }
   p.percussion.noise_gain = std::clamp(sanitize(p.percussion.noise_gain, 0.0f), 0.0f, 4.0f);
   p.percussion.noise_decay_ms =
       std::clamp(sanitize(p.percussion.noise_decay_ms, 150.0f), 1.0f, 20000.0f);
@@ -388,6 +393,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     piano_buffers_.assign(pool_.size() * static_cast<size_t>(piano_slab_capacity(sample_rate_)),
                           0.0f);
     resonance_.prepare(sample_rate_);
+    soundboard_.prepare(sample_rate_, config_.patch.piano.soundboard);
   } else {
     piano_buffers_.clear();
   }
@@ -410,6 +416,7 @@ void NativeSynth::reset() {
   dc_x1_ = {};
   dc_y1_ = {};
   resonance_.reset();
+  soundboard_.reset();
   channels_ = {};
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
 }
@@ -673,12 +680,14 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
     }
     mix_l *= config_.gain;
     mix_r *= config_.gain;
-    // Pedal-gated sympathetic resonance, driven by the summed dry mix and
-    // folded back into both legs (centre).
+    // Shared modal soundboard plus pedal-gated sympathetic resonance, both
+    // driven by the summed dry mix and folded back into both legs (centre).
     if (piano_mode_) {
-      const float symp = resonance_.process(0.5f * (mix_l + mix_r), damper_open);
-      mix_l += symp;
-      mix_r += symp;
+      const float dry_mono = 0.5f * (mix_l + mix_r);
+      const float body = soundboard_.process(dry_mono);
+      const float symp = resonance_.process(dry_mono, damper_open);
+      mix_l += body + symp;
+      mix_r += body + symp;
     }
     // Gentle gain-neutral bus saturation (glue), then the DC blocker — the
     // physical-model voices can carry a small DC component.

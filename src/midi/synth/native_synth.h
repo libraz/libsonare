@@ -301,6 +301,8 @@ class NativeSynth final : public MidiInstrument {
   int piano_string_capacity_ = 0;
   /// Shared pedal-gated sympathetic resonance bank (piano patches only).
   PianoResonanceBank resonance_;
+  /// Shared modal soundboard body (piano patches only).
+  PianoSoundboard soundboard_;
   bool piano_mode_ = false;
 };
 

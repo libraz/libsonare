@@ -344,6 +344,41 @@ TEST_CASE("the sustain pedal adds sympathetic resonance", "[midi][synth][piano]"
   REQUIRE(wet > 1.03f * dry);
 }
 
+TEST_CASE("the shared soundboard adds a modal body resonance", "[midi][synth][piano]") {
+  NativeSynthPatch piano = gm_fallback_patch(0, 0);
+  auto render_with_board = [&](float mix) {
+    piano.piano.soundboard = mix;
+    return render_patch(piano, 60, 100, 48000);  // C4, 1 s
+  };
+  const std::vector<float> off = render_with_board(0.0f);
+  const std::vector<float> on = render_with_board(0.30f);
+
+  // The unity-peak resonator bank colours rather than blows up: the output
+  // stays finite and within a sane factor of the board-off render.
+  float peak_on = 0.0f;
+  for (float s : on) peak_on = std::max(peak_on, std::fabs(s));
+  REQUIRE(std::isfinite(peak_on));
+  const float rms_off = rms(off, 0, 48000);
+  const float rms_on = rms(on, 0, 48000);
+  REQUIRE(rms_off > 0.0f);
+  REQUIRE(rms_on < 2.5f * rms_off);
+
+  // Body energy below the played fundamental (C4 ~262 Hz): the board's low
+  // modes radiate there, where the dry string itself has almost nothing.
+  auto sub_fundamental_energy = [](const std::vector<float>& tone) {
+    const std::vector<double> power = power_spectrum(tone, 0);
+    const int lo = static_cast<int>(std::lround(80.0 / kRate * kFft));
+    const int hi = static_cast<int>(std::lround(220.0 / kRate * kFft));
+    double acc = 0.0;
+    for (int b = lo; b < hi; ++b) acc += power[static_cast<size_t>(b)];
+    return acc;
+  };
+  const double body_off = sub_fundamental_energy(off);
+  const double body_on = sub_fundamental_energy(on);
+  INFO("sub-fundamental energy: off=" << body_off << " on=" << body_on);
+  REQUIRE(body_on > 1.5 * body_off);
+}
+
 TEST_CASE("the sostenuto pedal holds only the notes down when it engages", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   // Strike C4, optionally work the sostenuto pedal, release the key, then

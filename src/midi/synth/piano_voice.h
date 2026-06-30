@@ -24,9 +24,11 @@
 ///      loops share a bridge; the coherent (bridge-moving) component decays
 ///      at the fast "prompt sound" rate while the residual decays at the
 ///      slow "aftersound" rate — the double decay + shimmer signature.
-///   4. SOUNDBOARD: a small fixed bank of low-Q resonators driven by the
-///      bridge sum approximates the soundboard's dominant modes (the cheap
-///      end of commuted synthesis), mixed in at a patch-set level.
+///   4. SOUNDBOARD: a single shared modal bank (PianoSoundboard, below) driven
+///      by the summed instrument output approximates the soundboard's dominant
+///      radiating modes (the cheap end of commuted synthesis). It is host-owned
+///      and instrument-wide, not per voice, so a chord shares one board the way
+///      a real grand does; the per-note hammer knock still radiates through it.
 ///
 /// The string delay slabs are NOT owned by the core: the host instrument
 /// allocates one slab per voice slot in prepare() (the only allocation
@@ -137,14 +139,6 @@ class PianoVoiceCore {
     float g_fast = 0.0f;
   };
 
-  struct SoundboardMode {
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float gain = 0.0f;
-    float y1 = 0.0f;
-    float y2 = 0.0f;
-  };
-
   /// Analytic raised-cosine hammer force at sample @p n (0 outside contact).
   float hammer_force(int64_t n) const noexcept;
 
@@ -166,10 +160,6 @@ class PianoVoiceCore {
   float hammer_amp_ = 0.0f;
   float exc_alpha_ = 1.0f;
   float exc_lp_ = 0.0f;
-
-  // Soundboard bank.
-  std::array<SoundboardMode, 4> soundboard_{};
-  float soundboard_mix_ = 0.0f;
 };
 
 /// Pedal-gated sympathetic resonance: a small shared bank of string-mode
@@ -208,6 +198,43 @@ class PianoResonanceBank {
   float gate_open_coeff_ = 1.0f;
   float gate_close_coeff_ = 1.0f;
   float ringout_ = 1.0f;
+  float out_gain_ = 0.0f;
+};
+
+/// Shared modal soundboard: one fixed bank of second-order resonators, spread
+/// across the soundboard's radiating range with a frequency-graded damping and
+/// a low-mid radiation envelope, driven by the summed instrument output and
+/// added back in parallel as a body coloration (the cheap, data-free end of
+/// commuted synthesis). One board is shared by the whole instrument (not per
+/// voice), so chords couple into a common body the way a real grand's strings
+/// all drive one soundboard. The synthetic modal data is designed from plate
+/// heuristics, so it needs no measured impulse response; the architecture is
+/// the same if the coefficients are later refit to a measured admittance.
+///
+/// RT contract: prepare() is the only configuration site (it owns no heap);
+/// process()/reset() are allocation-free and deterministic. Each resonator is
+/// unity-peak normalized so the bank colours rather than rings away.
+class PianoSoundboard {
+ public:
+  /// Tunes the mode bank for @p sample_rate and stores the patch @p mix in
+  /// [0,1] (the soundboard return level); clears the resonator state.
+  void prepare(double sample_rate, float mix) noexcept;
+  /// Clears the resonator state.
+  void reset() noexcept;
+  /// Adds the soundboard colour for one summed input sample; returns the
+  /// (mix-scaled) board contribution to fold back into the output.
+  float process(float in) noexcept;
+
+ private:
+  static constexpr int kSoundboardModes = 28;
+  struct Mode {
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float gain = 0.0f;
+    float y1 = 0.0f;
+    float y2 = 0.0f;
+  };
+  std::array<Mode, kSoundboardModes> modes_{};
   float out_gain_ = 0.0f;
 };
 
