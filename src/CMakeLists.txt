@@ -468,6 +468,7 @@ set(SONARE_ENGINE_SOURCES
   engine/engine_controller.cpp
   engine/metronome.cpp
   engine/realtime_engine.cpp
+  engine/realtime_engine_mixing.cpp
   engine/tempo_sync.cpp
 )
 if(BUILD_GRAPH)
@@ -800,6 +801,7 @@ if(BUILD_SHARED)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_acoustic.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_daw.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_midi.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_voice_changer.cpp)
   # The project (arrangement) C ABI sources are always compiled so their
   # public symbols exist in feature-off shared builds; it returns NOT_SUPPORTED
@@ -950,6 +952,14 @@ if(BUILD_WASM)
     wasm/bindings/repair.cpp
     wasm/bindings/realtime_voice_changer.cpp
     wasm/bindings/realtime_engine.cpp
+    wasm/bindings/realtime_engine_transport.cpp
+    wasm/bindings/realtime_engine_params.cpp
+    wasm/bindings/realtime_engine_midi.cpp
+    wasm/bindings/realtime_engine_mixer.cpp
+    wasm/bindings/realtime_engine_clips.cpp
+    wasm/bindings/realtime_engine_capture.cpp
+    wasm/bindings/realtime_engine_processing.cpp
+    wasm/bindings/realtime_engine_telemetry.cpp
     wasm/bindings/stream_analyzer.cpp
     wasm/bindings/streaming_equalizer.cpp
     wasm/bindings/streaming_mastering_chain.cpp
