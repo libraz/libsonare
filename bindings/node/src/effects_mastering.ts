@@ -14,6 +14,7 @@ import type {
   NoteStretchOptions,
   PairAnalysis,
   PairProcessor,
+  PitchCorrectOptions,
   RealtimeVoiceChangerConfig,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerOptions,
@@ -201,6 +202,26 @@ export function pitchCorrectToMidiTimevarying(
     voiced,
     voicedProb,
   );
+}
+
+/**
+ * Contour-following pitch correction toward a fixed MIDI note OR a musical
+ * scale, with tunable retune strength and vibrato preservation.
+ *
+ * Generalises {@link pitchCorrectToMidiTimevarying}: the same caller-supplied
+ * per-frame `f0Hz` contour drives correction, but {@link options.mode} selects
+ * between a fixed-MIDI target (`'midi'`, default) and scale quantisation
+ * (`'scale'`), and the retune knobs (`retuneAmount`, `maxCorrectionSemitones`,
+ * `retuneSpeedMs`, `vibratoThresholdCents`) shape natural-vs-robotic correction.
+ */
+export function pitchCorrectTimevarying(
+  samples: Float32Array,
+  f0Hz: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  options: PitchCorrectOptions = {},
+): Float32Array {
+  return addon.pitchCorrectTimevarying(samples, sampleRate, f0Hz, hopLength, options);
 }
 
 export function noteStretch(

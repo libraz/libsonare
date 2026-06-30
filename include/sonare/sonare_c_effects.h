@@ -51,6 +51,52 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      const int32_t* voiced, size_t n_frames,
                                                      int hop_length, float target_midi, float** out,
                                                      size_t* out_length);
+
+/// @brief Target selector for @ref sonare_pitch_correct_timevarying.
+typedef enum {
+  SONARE_PITCH_TARGET_FIXED_MIDI = 0,  ///< Retune every voiced frame toward @c target_midi.
+  SONARE_PITCH_TARGET_SCALE = 1,       ///< Snap each voiced frame to the nearest scale degree.
+} SonarePitchTargetMode;
+
+/// @brief Tunable configuration for @ref sonare_pitch_correct_timevarying.
+/// @details Zero-initialising this struct is NOT a valid default — populate it
+///          via @ref sonare_pitch_correction_config_default first, then override
+///          the fields you care about.
+typedef struct {
+  int32_t target_mode;         ///< @ref SonarePitchTargetMode.
+  float target_midi;           ///< Target note when @c target_mode is FIXED_MIDI ([0,127]).
+  int32_t scale_root;          ///< Scale root pitch class (0=C .. 11=B) when target_mode is SCALE.
+  uint32_t scale_mode_mask;    ///< 12-bit degree mask, bit i = semitone i above the root enabled.
+  float scale_reference_midi;  ///< Reference MIDI anchoring the scale grid (default 69 = A4).
+  float retune_amount;         ///< Correction strength [0,1]; 1 = full snap, 0 = bypass.
+  float max_correction_semitones;  ///< Hard clamp on per-frame correction magnitude.
+  float retune_speed_ms;           ///< Retune IIR time constant (ms); larger = slower glide.
+  float vibrato_threshold_cents;   ///< Corrections below this are bypassed to preserve vibrato.
+} SonarePitchCorrectionConfig;
+
+/// @brief Fills @p config with the library defaults (major scale, full retune).
+/// @details Mirrors the core PitchCorrectionConfig defaults: FIXED_MIDI target,
+///          C-major mask, reference A4, retune 1.0, 12-semitone clamp, 50 ms
+///          glide, 20-cent vibrato threshold.
+SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* config);
+
+/// @brief Per-frame pitch correction toward a fixed MIDI note OR a musical scale.
+/// @details Generalises @ref sonare_pitch_correct_to_midi_timevarying: the same
+///          caller-supplied F0 contour drives correction, but @p config selects
+///          between a fixed-MIDI target and scale quantisation and exposes the
+///          retune-strength / vibrato-preservation knobs. Pass NULL for @p config
+///          to use the library defaults.
+/// @param f0_hz       Per-frame measured F0 in Hz (@p n_frames entries, required).
+/// @param voiced_prob Per-frame voicing probability [0,1], or NULL.
+/// @param voiced      Per-frame voiced flags (non-zero = voiced), or NULL.
+/// @param hop_length  F0 hop in samples (> 0).
+/// @note The returned array is heap-allocated and MUST be released with
+///       @ref sonare_free_floats.
+SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length, int sample_rate,
+                                             const float* f0_hz, const float* voiced_prob,
+                                             const int32_t* voiced, size_t n_frames, int hop_length,
+                                             const SonarePitchCorrectionConfig* config, float** out,
+                                             size_t* out_length);
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length);

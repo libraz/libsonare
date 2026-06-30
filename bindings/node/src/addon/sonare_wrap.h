@@ -100,6 +100,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value PitchShift(const Napi::CallbackInfo& info);
   static Napi::Value PitchCorrectToMidi(const Napi::CallbackInfo& info);
   static Napi::Value PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& info);
+  static Napi::Value PitchCorrectTimevarying(const Napi::CallbackInfo& info);
   static Napi::Value NoteStretch(const Napi::CallbackInfo& info);
   static Napi::Value VoiceChange(const Napi::CallbackInfo& info);
   static Napi::Value VoiceCharacterPresetId(const Napi::CallbackInfo& info);

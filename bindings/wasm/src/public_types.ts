@@ -361,6 +361,32 @@ export interface MasteringOptions {
   applyGainAtInputRate?: boolean;
 }
 
+/** Options for `pitchCorrectTimevarying`. All fields are optional. */
+export interface PitchCorrectOptions extends ValidateOptions {
+  /** `'midi'` retunes toward `targetMidi`; `'scale'` snaps to the key. Default `'midi'`. */
+  mode?: 'midi' | 'scale';
+  /** Fixed target note when `mode` is `'midi'`, in `[0, 127]`. Default 69 (A4). */
+  targetMidi?: number;
+  /** Scale root pitch class (0=C .. 11=B) when `mode` is `'scale'`. Default 0. */
+  scaleRoot?: number;
+  /** 12-bit degree mask, bit `i` = semitone `i` above the root enabled. Default C major. */
+  scaleModeMask?: number;
+  /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
+  referenceMidi?: number;
+  /** Correction strength in `[0, 1]`; 1 = full snap, 0 = bypass. Default 1. */
+  retuneAmount?: number;
+  /** Hard clamp on per-frame correction magnitude (semitones). Default 12. */
+  maxCorrectionSemitones?: number;
+  /** Retune IIR time constant (ms); larger = slower glide. Default 50. */
+  retuneSpeedMs?: number;
+  /** Corrections below this are bypassed to preserve vibrato (cents). Default 20. */
+  vibratoThresholdCents?: number;
+  /** Per-frame voiced flags (non-zero = voiced); omit to treat all frames as voiced. */
+  voiced?: Int32Array;
+  /** Per-frame voicing probability in `[0, 1]`; omit to derive from `voiced`. */
+  voicedProb?: Float32Array;
+}
+
 /** Options for `noteStretch`. All fields are optional. */
 export interface NoteStretchOptions {
   /** Note onset position in samples (selects the region). Default 0. */

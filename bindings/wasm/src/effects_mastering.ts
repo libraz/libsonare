@@ -14,6 +14,7 @@ import type {
   NoteStretchOptions,
   PairAnalysis,
   PairProcessor,
+  PitchCorrectOptions,
   RealtimeVoiceChangerConfigInput,
   SoloProcessor,
   SpectralEditOptions,
@@ -186,6 +187,51 @@ export function pitchCorrectToMidiTimevarying(
     hopLength,
     voicedF32,
     voicedProb,
+  );
+}
+
+/**
+ * Contour-following pitch correction toward a fixed MIDI note OR a musical
+ * scale, with tunable retune strength and vibrato preservation.
+ *
+ * Generalises {@link pitchCorrectToMidiTimevarying}: the same caller-supplied
+ * per-frame `f0Hz` contour drives correction, but `options.mode` selects between
+ * a fixed-MIDI target (`'midi'`, default) and scale quantisation (`'scale'`),
+ * and the retune knobs shape natural-vs-robotic correction.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
+ * @param sampleRate - Sample rate in Hz
+ * @param hopLength - F0 hop in samples (frame i covers sample i*hopLength)
+ * @param options - Target mode + retune knobs + optional voiced/voicedProb arrays
+ * @returns Pitch-corrected audio
+ */
+export function pitchCorrectTimevarying(
+  samples: Float32Array,
+  f0Hz: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  options: PitchCorrectOptions = {},
+): Float32Array {
+  assertSamples('pitchCorrectTimevarying', samples, options.validate !== false);
+  if (options.voiced && options.voiced.length !== f0Hz.length) {
+    throw new RangeError('pitchCorrectTimevarying: voiced length must match f0Hz length');
+  }
+  if (options.voicedProb && options.voicedProb.length !== f0Hz.length) {
+    throw new RangeError('pitchCorrectTimevarying: voicedProb length must match f0Hz length');
+  }
+  // The embind layer reads the companion arrays as Float32Array (voiced uses
+  // 0.0/1.0); convert here so a single native conversion path suffices.
+  const nativeOptions = {
+    ...options,
+    voiced: options.voiced ? Float32Array.from(options.voiced) : undefined,
+  };
+  return requireModule().pitchCorrectTimevarying(
+    samples,
+    sampleRate,
+    f0Hz,
+    hopLength,
+    nativeOptions,
   );
 }
 

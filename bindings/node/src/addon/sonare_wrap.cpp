@@ -178,6 +178,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("pitchCorrectToMidiTimevarying",
               Napi::Function::New(env, &SonareWrap::PitchCorrectToMidiTimevarying,
                                   "pitchCorrectToMidiTimevarying"));
+  exports.Set(
+      "pitchCorrectTimevarying",
+      Napi::Function::New(env, &SonareWrap::PitchCorrectTimevarying, "pitchCorrectTimevarying"));
   exports.Set("noteStretch", Napi::Function::New(env, &SonareWrap::NoteStretch, "noteStretch"));
   exports.Set("voiceChange", Napi::Function::New(env, &SonareWrap::VoiceChange, "voiceChange"));
   exports.Set(

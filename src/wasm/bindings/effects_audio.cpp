@@ -143,6 +143,74 @@ val js_pitch_correct_to_midi_timevarying(val samples, int sample_rate, val f0_hz
   return vectorToFloat32Array(out_vec);
 }
 
+val js_pitch_correct_timevarying(val samples, int sample_rate, val f0_hz, int hop_length,
+                                 val options) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  const size_t n_frames = f0.size();
+
+  editing::pitch_editor::PitchCorrectionConfig config{};
+  bool scale_mode = false;
+  float target_midi = constants::kMidiA4;
+  bool has_voiced = false;
+  bool has_prob = false;
+  std::vector<float> voiced_vec;
+  std::vector<float> prob_vec;
+  if (!options.isUndefined() && !options.isNull()) {
+    const std::string mode = stringProperty(options, "mode", "midi");
+    scale_mode = mode == "scale";
+    target_midi = floatProperty(options, "targetMidi", target_midi);
+    config.scale.root = intProperty(options, "scaleRoot", config.scale.root);
+    config.scale.mode_mask = static_cast<uint16_t>(
+        intProperty(options, "scaleModeMask", static_cast<int>(config.scale.mode_mask)) & 0x0FFF);
+    config.scale.reference_midi =
+        floatProperty(options, "referenceMidi", config.scale.reference_midi);
+    config.retune_amount = floatProperty(options, "retuneAmount", config.retune_amount);
+    config.max_correction_semitones =
+        floatProperty(options, "maxCorrectionSemitones", config.max_correction_semitones);
+    config.retune_speed_ms = floatProperty(options, "retuneSpeedMs", config.retune_speed_ms);
+    config.vibrato_threshold_cents =
+        floatProperty(options, "vibratoThresholdCents", config.vibrato_threshold_cents);
+    val voiced = options["voiced"];
+    val voiced_prob = options["voicedProb"];
+    has_voiced = !voiced.isUndefined() && !voiced.isNull();
+    has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+    if (has_voiced) voiced_vec = float32ArrayToVector(voiced);
+    if (has_prob) prob_vec = float32ArrayToVector(voiced_prob);
+  }
+  if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "voiced and voicedProb must match f0Hz length");
+  }
+  if (!scale_mode && (!std::isfinite(target_midi) || target_midi < 0.0f || target_midi > 127.0f)) {
+    throw SonareException(ErrorCode::InvalidParameter, "targetMidi must be finite and in [0, 127]");
+  }
+  if (config.scale.root < 0 || config.scale.root > 11 || !std::isfinite(config.retune_amount) ||
+      config.retune_amount < 0.0f || config.retune_amount > 1.0f) {
+    throw SonareException(ErrorCode::InvalidParameter, "pitch-correction config out of range");
+  }
+
+  editing::pitch_editor::F0Track track;
+  track.sample_rate = sample_rate;
+  track.hop_length = hop_length;
+  track.f0_hz = f0;
+  track.voiced.resize(n_frames);
+  track.voiced_prob.resize(n_frames);
+  for (size_t i = 0; i < n_frames; ++i) {
+    const bool is_voiced = has_voiced ? (voiced_vec[i] != 0.0f) : true;
+    track.voiced[i] = is_voiced;
+    track.voiced_prob[i] = has_prob ? prob_vec[i] : (is_voiced ? 1.0f : 0.0f);
+  }
+
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  editing::pitch_editor::PitchCorrector corrector(config);
+  Audio result = scale_mode ? corrector.correct_to_scale_timevarying(audio, track)
+                            : corrector.correct_to_midi_timevarying(audio, track, target_midi);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
 val js_note_stretch(val samples, int sample_rate, int onset_sample, int offset_sample,
                     float stretch_ratio) {
   std::vector<float> data = float32ArrayToVector(samples);
@@ -460,6 +528,7 @@ void registerEffectsAudioBindings() {
   function("pitchShift", &js_pitch_shift);
   function("pitchCorrectToMidi", &js_pitch_correct_to_midi);
   function("pitchCorrectToMidiTimevarying", &js_pitch_correct_to_midi_timevarying);
+  function("pitchCorrectTimevarying", &js_pitch_correct_timevarying);
   function("noteStretch", &js_note_stretch);
   function("voiceChange", &js_voice_change);
   function("decompose", &js_decompose);

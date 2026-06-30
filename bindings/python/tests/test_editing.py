@@ -68,6 +68,45 @@ def test_pitch_correct_to_midi_timevarying_function() -> None:
         )
 
 
+def test_pitch_correct_timevarying_scale_and_knobs() -> None:
+    sr = 22050
+    samples = _tone(sr, freq=220.0)
+    hop = 512
+    n_frames = len(samples) // hop + 1
+    f0 = [220.0] * n_frames
+
+    # NULL-equivalent defaults behave like the fixed-MIDI path.
+    base = libsonare.pitch_correct_timevarying(samples, f0, sample_rate=sr, hop_length=hop)
+    assert len(base) == len(samples)
+    assert all(math.isfinite(x) for x in base)
+
+    # Scale mode snaps the contour to the configured key.
+    scaled = libsonare.pitch_correct_timevarying(
+        samples, f0, sample_rate=sr, hop_length=hop, mode="scale", scale_root=0
+    )
+    assert len(scaled) == len(samples)
+    assert all(math.isfinite(x) for x in scaled)
+
+    # A lower retune_amount produces a different correction than a full snap.
+    full = libsonare.pitch_correct_timevarying(
+        samples, f0, sample_rate=sr, hop_length=hop, target_midi=59.0, retune_amount=1.0
+    )
+    gentle = libsonare.pitch_correct_timevarying(
+        samples, f0, sample_rate=sr, hop_length=hop, target_midi=59.0, retune_amount=0.25
+    )
+    assert any(abs(a - b) > 1e-6 for a, b in zip(full, gentle))
+
+    # Out-of-range knobs are rejected.
+    with pytest.raises((ValueError, RuntimeError)):
+        libsonare.pitch_correct_timevarying(
+            samples, f0, sample_rate=sr, hop_length=hop, retune_amount=2.0
+        )
+    with pytest.raises((ValueError, RuntimeError)):
+        libsonare.pitch_correct_timevarying(
+            samples, f0, sample_rate=sr, hop_length=hop, target_midi=200.0
+        )
+
+
 def test_note_stretch_function() -> None:
     sr = 22050
     samples = _tone(sr)

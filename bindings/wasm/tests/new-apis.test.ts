@@ -29,6 +29,7 @@ import {
   noteStretch,
   onsetEnvelope,
   onsetStrengthMulti,
+  pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
   plp,
@@ -252,6 +253,35 @@ describe('v1.2 feature additions (WASM)', () => {
       const voicedProb = new Float32Array(nFrames).fill(1);
       const out2 = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced, voicedProb);
       expect(out2.length).toBe(signal.length);
+    });
+
+    it('pitchCorrectTimevarying supports scale mode and retune-strength knobs', () => {
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+
+      const base = pitchCorrectTimevarying(signal, f0, SR, hop);
+      expect(base.length).toBe(signal.length);
+      expect(allFinite(base)).toBe(true);
+
+      const scaled = pitchCorrectTimevarying(signal, f0, SR, hop, { mode: 'scale', scaleRoot: 0 });
+      expect(scaled.length).toBe(signal.length);
+      expect(allFinite(scaled)).toBe(true);
+
+      const full = pitchCorrectTimevarying(signal, f0, SR, hop, {
+        targetMidi: 59,
+        retuneAmount: 1,
+      });
+      const gentle = pitchCorrectTimevarying(signal, f0, SR, hop, {
+        targetMidi: 59,
+        retuneAmount: 0.25,
+      });
+      expect(full.some((x, i) => Math.abs(x - gentle[i]) > 1e-6)).toBe(true);
+
+      expect(() =>
+        pitchCorrectTimevarying(signal, f0, SR, hop, { targetMidi: 59, retuneAmount: 2 }),
+      ).toThrow();
+      expect(() => pitchCorrectTimevarying(signal, f0, SR, hop, { targetMidi: 200 })).toThrow();
     });
 
     it('pitchCorrectToMidiTimevarying rejects mismatched companion arrays', () => {

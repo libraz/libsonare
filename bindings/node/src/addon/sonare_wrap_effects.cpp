@@ -258,6 +258,83 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples, sampleRate, f0Hz, hopLength, options?)
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
+      !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, f0Hz Float32Array, hopLength)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sr = info[1].As<Napi::Number>().Int32Value();
+  auto f0 = info[2].As<Napi::Float32Array>();
+  const size_t n_frames = f0.ElementLength();
+  int hop_length = info[3].As<Napi::Number>().Int32Value();
+
+  SonarePitchCorrectionConfig config{};
+  sonare_pitch_correction_config_default(&config);
+  std::vector<int32_t> voiced;
+  std::vector<float> voiced_prob;
+  const int32_t* voiced_ptr = nullptr;
+  const float* prob_ptr = nullptr;
+  if (info.Length() > 4 && info[4].IsObject()) {
+    Napi::Object opts = info[4].As<Napi::Object>();
+    if (opts.Has("mode") && opts.Get("mode").IsString()) {
+      std::string mode = opts.Get("mode").As<Napi::String>().Utf8Value();
+      config.target_mode =
+          mode == "scale" ? SONARE_PITCH_TARGET_SCALE : SONARE_PITCH_TARGET_FIXED_MIDI;
+    }
+    config.target_midi = sonare_node::node_float_option(opts, "targetMidi", config.target_midi);
+    config.scale_root = sonare_node::node_int_option(opts, "scaleRoot", config.scale_root);
+    config.scale_mode_mask = static_cast<uint32_t>(sonare_node::node_int_option(
+        opts, "scaleModeMask", static_cast<int>(config.scale_mode_mask)));
+    config.scale_reference_midi =
+        sonare_node::node_float_option(opts, "referenceMidi", config.scale_reference_midi);
+    config.retune_amount =
+        sonare_node::node_float_option(opts, "retuneAmount", config.retune_amount);
+    config.max_correction_semitones = sonare_node::node_float_option(
+        opts, "maxCorrectionSemitones", config.max_correction_semitones);
+    config.retune_speed_ms =
+        sonare_node::node_float_option(opts, "retuneSpeedMs", config.retune_speed_ms);
+    config.vibrato_threshold_cents = sonare_node::node_float_option(opts, "vibratoThresholdCents",
+                                                                    config.vibrato_threshold_cents);
+    if (opts.Has("voiced") && IsInt32Array(opts.Get("voiced"))) {
+      auto arr = opts.Get("voiced").As<Napi::Int32Array>();
+      voiced.assign(arr.Data(), arr.Data() + arr.ElementLength());
+      voiced_ptr = voiced.data();
+    }
+    if (opts.Has("voicedProb") && IsFloat32Array(opts.Get("voicedProb"))) {
+      auto arr = opts.Get("voicedProb").As<Napi::Float32Array>();
+      voiced_prob.assign(arr.Data(), arr.Data() + arr.ElementLength());
+      prob_ptr = voiced_prob.data();
+    }
+  }
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  SonareError err =
+      sonare_pitch_correct_timevarying(data, length, sr, f0.Data(), prob_ptr, voiced_ptr, n_frames,
+                                       hop_length, &config, &out, &out_length);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  auto result = Napi::Float32Array::New(env, out_length);
+  if (out_length > 0 && out != nullptr) {
+    std::memcpy(result.Data(), out, out_length * sizeof(float));
+    sonare_free_floats(out);
+  }
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 

@@ -201,6 +201,10 @@ node = [
   "engine_bounce_options_default",
   "stream_analyzer_config_default",
   "stream_quantize_config_default",
+  # pitch_correction_config_default seeds a SonarePitchCorrectionConfig POD with
+  # the documented defaults; the facade pitchCorrectTimevarying applies them
+  # inline through its PitchCorrectOptions bag, so there is no 1:1 facade member.
+  "pitch_correction_config_default",
   # External-instrument bounce is deliberately Python-only: Node batch jobs never
   # play instruments, and a synchronous JS render callback fired from deep in the
   # offline graph overflows V8's shared C++/JS stack. The interactive/native path
@@ -254,6 +258,7 @@ wasm = [
   "engine_bounce_options_default",
   "stream_analyzer_config_default",
   "stream_quantize_config_default",
+  "pitch_correction_config_default",
   # --- WASM platform / API-shape differences ---
   # No host filesystem and no compressed-audio decoder in the WASM build: the
   # WASM Audio class is a pure-JS sample wrapper constructed via Audio.fromBuffer.
@@ -320,6 +325,9 @@ python = [
   "engine_bounce_options_default",
   "stream_analyzer_config_default",
   "stream_quantize_config_default",
+  # pitch_correct_timevarying seeds its SonarePitchCorrectionConfig by calling
+  # this internally; not re-exposed as a standalone public function.
+  "pitch_correction_config_default",
 ]
 
 # ---------------------------------------------------------------------------
@@ -363,6 +371,13 @@ python = [
 # from the f0_hz array length — passing both the contour array and a redundant
 # frame count would let them disagree. Remapped to C order internally (ctypes /
 # addon / embind wrappers). Documented ergonomic convenience, not order drift.
+# pitch_correct_timevarying (all): C is (f0_hz, voiced_prob, voiced, n_frames,
+# hop_length, config). Every facade exposes (f0_hz, sampleRate, hopLength, ...)
+# and DERIVES n_frames from the f0_hz array length, then folds the
+# SonarePitchCorrectionConfig fields + the voiced/voicedProb companion arrays —
+# Node/WASM into a trailing PitchCorrectOptions bag, Python into keyword args.
+# Same ergonomic options-fold + array-length derivation as spectral_edit /
+# pitch_correct_to_midi_timevarying. Remapped to C order internally. Not order drift.
 # midi_cc_learn (node/wasm/python): C is (events, count, param_id, min_value,
 # max_value, min_movement). The facades DERIVE `count` from the events array
 # length; Node/WASM additionally fold the optional (min_value, max_value,
@@ -391,6 +406,7 @@ node = [
   "chord_functional_analysis",
   "analyze_melody",
   "pitch_correct_to_midi_timevarying",
+  "pitch_correct_timevarying",
   "midi_cc_learn",
   "midi_route_events",
   "spectral_edit",
@@ -408,6 +424,7 @@ wasm = [
   "lufs_interleaved",
   "chord_functional_analysis",
   "pitch_correct_to_midi_timevarying",
+  "pitch_correct_timevarying",
   "midi_cc_learn",
   "midi_route_events",
   "spectral_edit",
@@ -433,6 +450,7 @@ python = [
   "chord_functional_analysis",
   "analyze_melody",
   "pitch_correct_to_midi_timevarying",
+  "pitch_correct_timevarying",
   "midi_cc_learn",
   "midi_route_events",
   "spectral_edit",

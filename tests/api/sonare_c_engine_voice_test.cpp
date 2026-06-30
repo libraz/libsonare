@@ -1292,6 +1292,73 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
   REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050, f0.data(),
                                                    nullptr, nullptr, n_frames, hop, 200.0f, &out,
                                                    &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // Unified config entry: NULL config behaves like the fixed-MIDI default path.
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_pitch_correct_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                           nullptr, nullptr, n_frames, hop, nullptr, &out,
+                                           &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  sonare_free_floats(out);
+
+  // Scale-correction mode snaps the contour to the configured key (C major).
+  SonarePitchCorrectionConfig config{};
+  REQUIRE(sonare_pitch_correction_config_default(&config) == SONARE_OK);
+  REQUIRE(config.retune_amount == 1.0f);
+  config.target_mode = SONARE_PITCH_TARGET_SCALE;
+  config.scale_root = 0;
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_pitch_correct_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                           nullptr, nullptr, n_frames, hop, &config, &out,
+                                           &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  for (size_t i = 0; i < out_length; ++i) {
+    REQUIRE(std::isfinite(out[i]));
+  }
+  sonare_free_floats(out);
+
+  // A lower retune_amount produces a different (gentler) correction than a full snap.
+  SonarePitchCorrectionConfig fixed_full{};
+  REQUIRE(sonare_pitch_correction_config_default(&fixed_full) == SONARE_OK);
+  fixed_full.target_midi = 71.0f;
+  float* full_out = nullptr;
+  size_t full_len = 0;
+  REQUIRE(sonare_pitch_correct_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                           nullptr, nullptr, n_frames, hop, &fixed_full, &full_out,
+                                           &full_len) == SONARE_OK);
+  SonarePitchCorrectionConfig fixed_half = fixed_full;
+  fixed_half.retune_amount = 0.25f;
+  float* half_out = nullptr;
+  size_t half_len = 0;
+  REQUIRE(sonare_pitch_correct_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                           nullptr, nullptr, n_frames, hop, &fixed_half, &half_out,
+                                           &half_len) == SONARE_OK);
+  REQUIRE(full_len == half_len);
+  bool retune_amount_changes_output = false;
+  for (size_t i = 0; i < full_len; ++i) {
+    if (std::abs(full_out[i] - half_out[i]) > 1e-6f) {
+      retune_amount_changes_output = true;
+      break;
+    }
+  }
+  REQUIRE(retune_amount_changes_output);
+  sonare_free_floats(full_out);
+  sonare_free_floats(half_out);
+
+  // Out-of-range config knobs are rejected.
+  SonarePitchCorrectionConfig bad{};
+  REQUIRE(sonare_pitch_correction_config_default(&bad) == SONARE_OK);
+  bad.retune_amount = 2.0f;
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_pitch_correct_timevarying(samples.data(), samples.size(), 22050, f0.data(),
+                                           nullptr, nullptr, n_frames, hop, &bad, &out,
+                                           &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_pitch_correction_config_default(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare_voice_change_realtime processes mono and interleaved stereo buffers",

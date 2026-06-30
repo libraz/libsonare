@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   noteStretch,
+  pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
   RealtimeVoiceChanger,
@@ -69,6 +70,36 @@ describe('editing effects', () => {
     const voicedProb = new Float32Array(nFrames).fill(1);
     const result2 = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced, voicedProb);
     expect(result2.length).toBe(tone.length);
+  });
+
+  it('pitchCorrectTimevarying supports scale mode and retune-strength knobs', () => {
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const f0 = new Float32Array(nFrames).fill(440);
+
+    // Default (no options) behaves like the fixed-MIDI path and stays finite.
+    const base = pitchCorrectTimevarying(tone, f0, SR, hop);
+    expect(base.length).toBe(tone.length);
+    expect(base.every((x) => Number.isFinite(x))).toBe(true);
+
+    // Scale mode snaps to the configured key without throwing.
+    const scaled = pitchCorrectTimevarying(tone, f0, SR, hop, { mode: 'scale', scaleRoot: 0 });
+    expect(scaled.length).toBe(tone.length);
+    expect(scaled.every((x) => Number.isFinite(x))).toBe(true);
+
+    // A lower retuneAmount produces a different correction than a full snap.
+    const full = pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 1 });
+    const gentle = pitchCorrectTimevarying(tone, f0, SR, hop, {
+      targetMidi: 71,
+      retuneAmount: 0.25,
+    });
+    expect(full.some((x, i) => Math.abs(x - gentle[i]) > 1e-6)).toBe(true);
+
+    // Out-of-range knobs are rejected.
+    expect(() =>
+      pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 2 }),
+    ).toThrow();
+    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 200 })).toThrow();
   });
 
   it('noteStretch returns a non-empty Float32Array', () => {

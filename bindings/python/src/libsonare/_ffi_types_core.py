@@ -6,6 +6,26 @@ import ctypes
 
 # --- C structures ---
 
+# SonarePitchCorrectionConfig.target_mode values.
+SONARE_PITCH_TARGET_FIXED_MIDI = 0
+SONARE_PITCH_TARGET_SCALE = 1
+
+
+class SonarePitchCorrectionConfig(ctypes.Structure):
+    """Maps to SonarePitchCorrectionConfig in sonare_c.h."""
+
+    _fields_ = [
+        ("target_mode", ctypes.c_int32),
+        ("target_midi", ctypes.c_float),
+        ("scale_root", ctypes.c_int32),
+        ("scale_mode_mask", ctypes.c_uint32),
+        ("scale_reference_midi", ctypes.c_float),
+        ("retune_amount", ctypes.c_float),
+        ("max_correction_semitones", ctypes.c_float),
+        ("retune_speed_ms", ctypes.c_float),
+        ("vibrato_threshold_cents", ctypes.c_float),
+    ]
+
 
 class SonareKey(ctypes.Structure):
     """Maps to SonareKey in sonare_c.h."""

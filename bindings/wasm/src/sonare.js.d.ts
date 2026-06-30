@@ -1372,6 +1372,25 @@ export interface SonareModule {
     voiced?: Float32Array,
     voicedProb?: Float32Array,
   ) => Float32Array;
+  pitchCorrectTimevarying: (
+    samples: Float32Array,
+    sampleRate: number,
+    f0Hz: Float32Array,
+    hopLength: number,
+    options: {
+      mode?: string;
+      targetMidi?: number;
+      scaleRoot?: number;
+      scaleModeMask?: number;
+      referenceMidi?: number;
+      retuneAmount?: number;
+      maxCorrectionSemitones?: number;
+      retuneSpeedMs?: number;
+      vibratoThresholdCents?: number;
+      voiced?: Float32Array;
+      voicedProb?: Float32Array;
+    },
+  ) => Float32Array;
   noteStretch: (
     samples: Float32Array,
     sampleRate: number,

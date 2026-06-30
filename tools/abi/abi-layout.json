@@ -3275,6 +3275,66 @@
     ],
     "size": 32
   },
+  "SonarePitchCorrectionConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "target_mode",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "target_midi",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "scale_root",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "scale_mode_mask",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "scale_reference_midi",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "retune_amount",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_correction_semitones",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "retune_speed_ms",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "vibrato_threshold_cents",
+        "offset": 32,
+        "size": 4
+      }
+    ],
+    "size": 36
+  },
   "SonarePitchResult": {
     "align": 8,
     "fields": [

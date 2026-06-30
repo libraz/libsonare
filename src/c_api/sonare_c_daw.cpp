@@ -86,6 +86,97 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
 #endif
 }
 
+SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* config) {
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  const editing::pitch_editor::PitchCorrectionConfig defaults{};
+  config->target_mode = SONARE_PITCH_TARGET_FIXED_MIDI;
+  config->target_midi = constants::kMidiA4;
+  config->scale_root = defaults.scale.root;
+  config->scale_mode_mask = defaults.scale.mode_mask;
+  config->scale_reference_midi = defaults.scale.reference_midi;
+  config->retune_amount = defaults.retune_amount;
+  config->max_correction_semitones = defaults.max_correction_semitones;
+  config->retune_speed_ms = defaults.retune_speed_ms;
+  config->vibrato_threshold_cents = defaults.vibrato_threshold_cents;
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(config);
+#endif
+}
+
+SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length, int sample_rate,
+                                             const float* f0_hz, const float* voiced_prob,
+                                             const int32_t* voiced, size_t n_frames, int hop_length,
+                                             const SonarePitchCorrectionConfig* config, float** out,
+                                             size_t* out_length) {
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (!out || !out_length || !f0_hz || n_frames == 0 || hop_length <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  // Resolve the config (NULL = library defaults), validating every numeric knob
+  // so a NaN/out-of-range value cannot poison the retune pipeline.
+  editing::pitch_editor::PitchCorrectionConfig core_config{};
+  bool scale_mode = false;
+  if (config) {
+    scale_mode = config->target_mode == SONARE_PITCH_TARGET_SCALE;
+    if (config->target_mode != SONARE_PITCH_TARGET_FIXED_MIDI &&
+        config->target_mode != SONARE_PITCH_TARGET_SCALE) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (!scale_mode && (!std::isfinite(config->target_midi) || config->target_midi < 0.0f ||
+                        config->target_midi > 127.0f)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (config->scale_root < 0 || config->scale_root > 11 ||
+        !std::isfinite(config->scale_reference_midi) || !std::isfinite(config->retune_amount) ||
+        config->retune_amount < 0.0f || config->retune_amount > 1.0f ||
+        !std::isfinite(config->max_correction_semitones) ||
+        config->max_correction_semitones < 0.0f || !std::isfinite(config->retune_speed_ms) ||
+        config->retune_speed_ms < 0.0f || !std::isfinite(config->vibrato_threshold_cents) ||
+        config->vibrato_threshold_cents < 0.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    core_config.scale.root = config->scale_root;
+    core_config.scale.mode_mask = static_cast<uint16_t>(config->scale_mode_mask & 0x0FFFu);
+    core_config.scale.reference_midi = config->scale_reference_midi;
+    core_config.retune_amount = config->retune_amount;
+    core_config.max_correction_semitones = config->max_correction_semitones;
+    core_config.retune_speed_ms = config->retune_speed_ms;
+    core_config.vibrato_threshold_cents = config->vibrato_threshold_cents;
+  }
+  const float target_midi = config ? config->target_midi : constants::kMidiA4;
+
+  // Reject a non-finite or negative F0 so it cannot turn into garbage output.
+  for (size_t i = 0; i < n_frames; ++i) {
+    if (!std::isfinite(f0_hz[i]) || f0_hz[i] < 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
+    if (voiced_prob && !std::isfinite(voiced_prob[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    editing::pitch_editor::PitchCorrector corrector(core_config);
+    editing::pitch_editor::F0Track track;
+    track.sample_rate = sample_rate;
+    track.hop_length = hop_length;
+    track.f0_hz.assign(f0_hz, f0_hz + n_frames);
+    track.voiced.resize(n_frames);
+    track.voiced_prob.resize(n_frames);
+    for (size_t i = 0; i < n_frames; ++i) {
+      const bool is_voiced = voiced ? (voiced[i] != 0) : true;
+      track.voiced[i] = is_voiced;
+      track.voiced_prob[i] = voiced_prob ? voiced_prob[i] : (is_voiced ? 1.0f : 0.0f);
+    }
+    Audio result = scale_mode ? corrector.correct_to_scale_timevarying(audio, track)
+                              : corrector.correct_to_midi_timevarying(audio, track, target_midi);
+    return copy_audio_result(result, out, out_length);
+  });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
+                              hop_length, config, out, out_length);
+#endif
+}
+
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length) {

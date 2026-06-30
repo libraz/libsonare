@@ -24,6 +24,8 @@ from ._ffi import (
     SONARE_DENOISE_NOISE_ESTIMATOR_MCRA,
     SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
     SONARE_OK,
+    SONARE_PITCH_TARGET_FIXED_MIDI,
+    SONARE_PITCH_TARGET_SCALE,
     SONARE_SPECTRAL_EDIT_MODE_ATTENUATE,
     SONARE_SPECTRAL_EDIT_MODE_GAIN,
     SONARE_SPECTRAL_EDIT_MODE_HEAL,
@@ -45,6 +47,7 @@ from ._ffi import (
     SonareDereverbClassicalConfig,
     SonareGateConfig,
     SonareHpssResult,
+    SonarePitchCorrectionConfig,
     SonareRealtimeVoiceChangerConfig,
     SonareSpectralEditConfig,
     SonareSpectralRegionOp,
@@ -360,6 +363,111 @@ def pitch_correct_to_midi_timevarying(
         ctypes.c_size_t(n_frames),
         ctypes.c_int(hop_length),
         ctypes.c_float(target_midi),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+def pitch_correct_timevarying(
+    samples: Sequence[float] | list[float],
+    f0_hz: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    *,
+    mode: str = "midi",
+    target_midi: float = 69.0,
+    scale_root: int = 0,
+    scale_mode_mask: int | None = None,
+    reference_midi: float | None = None,
+    retune_amount: float | None = None,
+    max_correction_semitones: float | None = None,
+    retune_speed_ms: float | None = None,
+    vibrato_threshold_cents: float | None = None,
+    voiced: Sequence[int] | list[int] | None = None,
+    voiced_prob: Sequence[float] | list[float] | None = None,
+) -> list[float]:
+    """Contour-following pitch correction toward a fixed MIDI note OR a scale.
+
+    Generalises :func:`pitch_correct_to_midi_timevarying`: the same
+    caller-supplied per-frame ``f0_hz`` contour drives correction, but ``mode``
+    selects between a fixed-MIDI target (``"midi"``) and scale quantisation
+    (``"scale"``), and the retune knobs shape natural-vs-robotic correction.
+
+    Args:
+        samples: Audio samples.
+        f0_hz: Per-frame measured F0 in Hz (one entry per analysis frame).
+        sample_rate: Sample rate in Hz (default 22050).
+        hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
+        mode: ``"midi"`` retunes toward ``target_midi``; ``"scale"`` snaps to the key.
+        target_midi: Fixed target note when ``mode == "midi"`` (in ``[0, 127]``).
+        scale_root: Scale root pitch class (0=C .. 11=B) when ``mode == "scale"``.
+        scale_mode_mask: 12-bit degree mask; ``None`` keeps the library default (C major).
+        reference_midi: Reference MIDI anchoring the scale grid; ``None`` keeps the default.
+        retune_amount: Correction strength in ``[0, 1]``; ``None`` keeps the default (1.0).
+        max_correction_semitones: Per-frame correction clamp; ``None`` keeps the default.
+        retune_speed_ms: Retune IIR time constant (ms); ``None`` keeps the default.
+        vibrato_threshold_cents: Vibrato-preserve threshold; ``None`` keeps the default.
+        voiced: Optional per-frame voiced flags (non-zero = voiced).
+        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``.
+
+    Returns:
+        List of pitch-corrected samples.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_pitch_correct_timevarying"):
+        raise RuntimeError("libsonare was built without pitch-editor support")
+
+    config = SonarePitchCorrectionConfig()
+    _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
+    config.target_mode = (
+        SONARE_PITCH_TARGET_SCALE if mode == "scale" else SONARE_PITCH_TARGET_FIXED_MIDI
+    )
+    config.target_midi = float(target_midi)
+    config.scale_root = int(scale_root)
+    if scale_mode_mask is not None:
+        config.scale_mode_mask = int(scale_mode_mask) & 0x0FFF
+    if reference_midi is not None:
+        config.scale_reference_midi = float(reference_midi)
+    if retune_amount is not None:
+        config.retune_amount = float(retune_amount)
+    if max_correction_semitones is not None:
+        config.max_correction_semitones = float(max_correction_semitones)
+    if retune_speed_ms is not None:
+        config.retune_speed_ms = float(retune_speed_ms)
+    if vibrato_threshold_cents is not None:
+        config.vibrato_threshold_cents = float(vibrato_threshold_cents)
+
+    c_array, length = _to_c_float_array(samples)
+    f0_array, n_frames = _to_c_float_array(f0_hz)
+    prob_array = None
+    if voiced_prob is not None:
+        prob_array, prob_len = _to_c_float_array(voiced_prob)
+        if prob_len != n_frames:
+            raise ValueError("voiced_prob must have the same length as f0_hz")
+    voiced_array = None
+    if voiced is not None:
+        voiced_seq = [int(v) for v in voiced]
+        if len(voiced_seq) != n_frames:
+            raise ValueError("voiced must have the same length as f0_hz")
+        voiced_array = (ctypes.c_int32 * n_frames)(*voiced_seq)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_pitch_correct_timevarying(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        f0_array,
+        prob_array,
+        voiced_array,
+        ctypes.c_size_t(n_frames),
+        ctypes.c_int(hop_length),
+        ctypes.byref(config),
         ctypes.byref(out),
         ctypes.byref(out_length),
     )

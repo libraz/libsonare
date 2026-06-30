@@ -344,6 +344,9 @@ from .analyzer import (
     phase_vocoder as phase_vocoder,
 )
 from .analyzer import (
+    pitch_correct_timevarying as pitch_correct_timevarying,
+)
+from .analyzer import (
     pitch_correct_to_midi as pitch_correct_to_midi,
 )
 from .analyzer import (
