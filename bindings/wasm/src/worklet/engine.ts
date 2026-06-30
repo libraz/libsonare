@@ -19,21 +19,24 @@ import type {
 import { RealtimeEngine } from '../index';
 import type { EngineAutomationContext } from './engine-automation';
 import * as automation from './engine-automation';
+import type { EngineCaptureContext } from './engine-capture-facade';
+import * as capture from './engine-capture-facade';
 import type { EngineClipContext } from './engine-clips';
 import * as clips from './engine-clips';
 import type { EngineMarkerContext } from './engine-markers';
 import * as markers from './engine-markers';
+import type { EngineMixerContext } from './engine-mixer-facade';
+import * as mixer from './engine-mixer-facade';
 import { SonareRealtimeEngineNode } from './engine-node';
-import {
-  buildCaptureConfig,
-  buildTransportFacade,
-  type CaptureOptions,
-  normalizeTrackLanes,
-} from './engine-offline';
+import { buildTransportFacade, type CaptureOptions } from './engine-offline';
 import type { SonareEngineOptions, SuspendableAudioContext } from './engine-options';
+import type { EngineParameterContext } from './engine-parameter-facade';
+import * as parameter from './engine-parameter-facade';
 import type { EngineStripContext } from './engine-strips';
 import * as strips from './engine-strips';
-import { buildMixerLanes, buildTempoSync, resolveParamId, resolveTargetId } from './engine-sync';
+import { resolveParamId, resolveTargetId } from './engine-sync';
+import type { EngineTempoContext } from './engine-tempo-facade';
+import * as tempo from './engine-tempo-facade';
 import type {
   SonareEngineInstrumentSyncMessage,
   SonareEngineSyncCaptureMessage,
@@ -45,7 +48,6 @@ import type {
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
   ENGINE_MIXER_PARAM_PAN,
-  engineMixerBusTarget,
   engineMixerLaneTarget,
   engineMixerMasterTarget,
   SonareEngineCommandType,
@@ -160,87 +162,39 @@ export class SonareEngine {
   }
 
   setTempo(bpm: number): void {
-    this.tempoBpm = bpm;
-    this.tempoSegments = [{ startPpq: 0, bpm }];
-    this.offlineEngine.setTempo(bpm);
-    this.postTempoSync();
-    this.realtimeNode.sendCommand({
-      type: SonareEngineCommandType.SetTempoMap,
-      sampleTime: -1,
-      argFloat: bpm,
-    });
+    tempo.setTempo(this.tempoContext, bpm);
   }
 
   setTempoSegments(segments: readonly EngineTempoSegment[]): void {
-    this.tempoSegments = segments.map((segment) => ({ ...segment }));
-    this.tempoBpm = this.tempoSegments[0]?.bpm ?? this.tempoBpm;
-    this.offlineEngine.setTempoSegments(this.tempoSegments);
-    this.postTempoSync();
+    tempo.setTempoSegments(this.tempoContext, segments);
   }
 
   setTimeSignature(numerator: number, denominator: number): void {
-    this.timeSignature = { numerator, denominator };
-    this.timeSignatureSegments = [{ startPpq: 0, numerator, denominator }];
-    this.offlineEngine.setTimeSignature(numerator, denominator);
-    this.postTempoSync();
+    tempo.setTimeSignature(this.tempoContext, numerator, denominator);
   }
 
   setTimeSignatureSegments(segments: readonly EngineTimeSignatureSegment[]): void {
-    this.timeSignatureSegments = segments.map((segment) => ({ ...segment }));
-    const first = this.timeSignatureSegments[0];
-    if (first) {
-      this.timeSignature = { numerator: first.numerator, denominator: first.denominator };
-    }
-    this.offlineEngine.setTimeSignatureSegments(this.timeSignatureSegments);
-    this.postTempoSync();
+    tempo.setTimeSignatureSegments(this.tempoContext, segments);
   }
 
   setLoop(startPpq: number, endPpq: number, enabled = true): boolean {
-    this.offlineEngine.setLoop(startPpq, endPpq, enabled);
-    // Transport precision contract: the SAB command record carries exactly one
-    // Float64 lane (argFloat) and one Int64 lane (argInt). startPpq travels in
-    // argFloat with full double precision, matching the offline engine; endPpq
-    // is carried as micro-PPQ (round(endPpq * 1e6)) in the integer lane and
-    // divided back by 1e6 on the consumer. Loop ENDS are therefore snapped to
-    // the nearest 1e-6 PPQ over the realtime transport (max 5e-7 PPQ drift),
-    // while loop STARTS and the offline path stay exact. This is intentional:
-    // the record has no second free Float64 lane, and a micro-PPQ grid on the
-    // loop end is well below audible/sample-accurate resolution at any tempo.
-    return this.realtimeNode.sendCommand({
-      type: SonareEngineCommandType.SetLoop,
-      targetId: enabled ? 1 : 0,
-      sampleTime: -1,
-      argFloat: startPpq,
-      argInt: Math.round(endPpq * 1_000_000),
-    });
+    return tempo.setLoop(this.tempoContext, startPpq, endPpq, enabled);
   }
 
   countInEndSample(startSample: number, bars: number): number {
-    return this.offlineEngine.countInEndSample(startSample, bars);
+    return tempo.countInEndSample(this.tempoContext, startSample, bars);
   }
 
-  async getTransportState(): Promise<EngineTransportState> {
-    const state = await this.realtimeNode.requestTransportState();
-    this.latestTransportState = state;
-    return state;
+  getTransportState(): Promise<EngineTransportState> {
+    return tempo.getTransportState(this.tempoContext);
   }
 
   cachedTransportState(): EngineTransportState | undefined {
-    return this.latestTransportState;
+    return tempo.cachedTransportState(this.tempoContext);
   }
 
   setParam(nodeId: string, param: string | number, value: number): boolean {
-    const paramId = this.resolveParamId(nodeId, param);
-    // Mirror the change into the offline engine so a subsequent offline render
-    // reflects the live value, then push a sample-accurate command to the
-    // realtime runtime (mirrors setTempo/setLoop above).
-    this.offlineEngine.setParameter(paramId, value);
-    return this.realtimeNode.sendCommand({
-      type: SonareEngineCommandType.SetParam,
-      targetId: paramId,
-      sampleTime: -1,
-      argFloat: value,
-    });
+    return parameter.setParam(this.parameterContext, nodeId, param, value);
   }
 
   scheduleParam(
@@ -283,11 +237,7 @@ export class SonareEngine {
    * @returns Reserved engine parameter id for the strip parameter.
    */
   automationParamId(target: string | number, kind: 'faderDb' | 'pan'): number {
-    const paramKind = kind === 'pan' ? ENGINE_MIXER_PARAM_PAN : ENGINE_MIXER_PARAM_FADER_DB;
-    if (target === 'master') {
-      return engineMixerMasterTarget(paramKind);
-    }
-    return engineMixerLaneTarget(this.ensureTrackLane(target), paramKind);
+    return parameter.automationParamId(this.parameterContext, target, kind);
   }
 
   /**
@@ -297,7 +247,7 @@ export class SonareEngine {
    * @returns Reserved engine parameter id for the bus fader gain (dB).
    */
   busAutomationParamId(busId: number): number {
-    return engineMixerBusTarget(this.ensureBus(busId), ENGINE_MIXER_PARAM_FADER_DB);
+    return parameter.busAutomationParamId(this.parameterContext, busId);
   }
 
   /**
@@ -316,9 +266,9 @@ export class SonareEngine {
     insertIndex: number,
     paramName: string,
   ): number {
-    const laneIndex = this.ensureTrackLane(target);
-    return this.offlineEngine.resolveTrackInsertAutomationId(
-      this.trackLaneIds[laneIndex],
+    return parameter.resolveTrackInsertAutomationId(
+      this.parameterContext,
+      target,
       insertIndex,
       paramName,
     );
@@ -333,7 +283,7 @@ export class SonareEngine {
    * @returns Reserved insert-automation id, or -1 when insert/key unknown.
    */
   resolveMasterInsertAutomationId(insertIndex: number, paramName: string): number {
-    return this.offlineEngine.resolveMasterInsertAutomationId(insertIndex, paramName);
+    return parameter.resolveMasterInsertAutomationId(this.parameterContext, insertIndex, paramName);
   }
 
   /**
@@ -347,8 +297,12 @@ export class SonareEngine {
    * @returns Reserved insert-automation id, or -1 when bus/insert/key unknown.
    */
   resolveBusInsertAutomationId(busId: number, insertIndex: number, paramName: string): number {
-    this.ensureBus(busId);
-    return this.offlineEngine.resolveBusInsertAutomationId(busId, insertIndex, paramName);
+    return parameter.resolveBusInsertAutomationId(
+      this.parameterContext,
+      busId,
+      insertIndex,
+      paramName,
+    );
   }
 
   /**
@@ -358,26 +312,15 @@ export class SonareEngine {
    * @returns Engine-side automation lane count.
    */
   automationLaneCount(): number {
-    return this.offlineEngine.automationLaneCount();
+    return parameter.automationLaneCount(this.parameterContext);
   }
 
   listParameters(): EngineParameterInfo[] {
-    const parameters: EngineParameterInfo[] = [];
-    for (let index = 0; index < this.offlineEngine.parameterCount(); index++) {
-      parameters.push(this.offlineEngine.parameterInfoByIndex(index));
-    }
-    return parameters;
+    return parameter.listParameters(this.parameterContext);
   }
 
   setSoloMute(target: string | number, solo: boolean, mute: boolean): boolean {
-    const laneIndex = this.ensureTrackLane(target);
-    this.offlineEngine.setSoloMute(laneIndex, solo, mute);
-    return this.realtimeNode.sendCommand({
-      type: SonareEngineCommandType.SetSoloMute,
-      targetId: laneIndex,
-      sampleTime: -1,
-      argInt: (mute ? 0x1 : 0) | (solo ? 0x2 : 0),
-    });
+    return parameter.setSoloMute(this.parameterContext, target, solo, mute);
   }
 
   setStripGain(target: string | number, db: number): boolean {
@@ -400,24 +343,7 @@ export class SonareEngine {
    * @param lanes Track ids or lane descriptors in the desired lane order.
    */
   setTrackLanes(lanes: ReadonlyArray<number | EngineTrackLane>): void {
-    const { entries, ids } = normalizeTrackLanes(this.trackLaneIds, lanes);
-    for (const entry of entries) {
-      if (entry.sends) {
-        this.trackSends.set(
-          entry.trackId,
-          entry.sends.map((send) => ({ ...send })),
-        );
-      }
-      if (entry.outputBusId !== undefined) {
-        if (entry.outputBusId === 0) {
-          this.trackOutputBus.delete(entry.trackId);
-        } else {
-          this.trackOutputBus.set(entry.trackId, entry.outputBusId);
-        }
-      }
-    }
-    this.trackLaneIds.splice(0, this.trackLaneIds.length, ...ids);
-    this.syncMixer();
+    mixer.setTrackLanes(this.mixerContext, lanes);
   }
 
   /**
@@ -425,14 +351,7 @@ export class SonareEngine {
    * the master mix (group/folder routing); busId 0 restores the master mix.
    */
   setTrackOutputBus(target: string | number, busId: number): void {
-    const laneIndex = this.ensureTrackLane(target);
-    const trackId = this.trackLaneIds[laneIndex];
-    if (busId === 0) {
-      this.trackOutputBus.delete(trackId);
-    } else {
-      this.trackOutputBus.set(trackId, busId);
-    }
-    this.syncMixer();
+    mixer.setTrackOutputBus(this.mixerContext, target, busId);
   }
 
   /**
@@ -445,47 +364,19 @@ export class SonareEngine {
     insertIndex: number,
     sourceTarget: string | number | null,
   ): void {
-    const laneIndex = this.ensureTrackLane(target);
-    const trackId = this.trackLaneIds[laneIndex];
-    const key = `${trackId}:${insertIndex}`;
-    let sourceTrackId = 0;
-    if (sourceTarget !== null) {
-      const sourceIndex = this.ensureTrackLane(sourceTarget);
-      sourceTrackId = this.trackLaneIds[sourceIndex];
-    }
-    if (sourceTrackId === 0) {
-      this.laneSidechains.delete(key);
-    } else {
-      this.laneSidechains.set(key, { trackId, insertIndex, sourceTrackId });
-    }
-    this.offlineEngine.setLaneSidechain(trackId, insertIndex, sourceTrackId);
-    this.postSync({
-      type: 'syncMixer',
-      lanes: this.mixerLanes(),
-      laneSidechains: [{ trackId, insertIndex, sourceTrackId }],
-    });
+    mixer.setLaneSidechain(this.mixerContext, target, insertIndex, sourceTarget);
   }
 
   setSends(target: string | number, sends: EngineTrackSend[]): void {
-    const laneIndex = this.ensureTrackLane(target);
-    const trackId = this.trackLaneIds[laneIndex];
-    this.trackSends.set(
-      trackId,
-      sends.map((send) => ({ ...send })),
-    );
-    this.syncMixer();
+    mixer.setSends(this.mixerContext, target, sends);
   }
 
   setTrackBuses(buses: EngineBus[]): void {
-    this.buses.splice(0, this.buses.length, ...buses.map((bus) => ({ ...bus })));
-    this.syncMixer();
+    mixer.setTrackBuses(this.mixerContext, buses);
   }
 
   setBusGain(busId: number, db: number): boolean {
-    const busIndex = this.ensureBus(busId);
-    this.buses[busIndex] = { ...this.buses[busIndex], busId, gainDb: db };
-    this.offlineEngine.setTrackBuses(this.buses);
-    return this.sendSmoothedParam(engineMixerBusTarget(busIndex, ENGINE_MIXER_PARAM_FADER_DB), db);
+    return mixer.setBusGain(this.mixerContext, busId, db);
   }
 
   setTrackStripJson(target: string | number, sceneJson: string): void {
@@ -573,10 +464,7 @@ export class SonareEngine {
   }
 
   setBusStripJson(busId: number, sceneJson: string): void {
-    this.ensureBus(busId);
-    this.offlineEngine.setBusStripJson(busId, sceneJson);
-    this.busStripJson.set(busId, sceneJson);
-    this.syncMixer();
+    mixer.setBusStripJson(this.mixerContext, busId, sceneJson);
   }
 
   setMasterStripJson(sceneJson: string): void {
@@ -741,56 +629,27 @@ export class SonareEngine {
   }
 
   configureCapture(options: CaptureOptions): void {
-    const config = buildCaptureConfig(options, this.offlineChannelCount);
-    this.offlineEngine.setCaptureBuffer(config.channels, config.bufferFrames);
-    this.offlineEngine.setCaptureSource(config.source);
-    this.offlineEngine.setRecordOffsetSamples(config.recordOffsetSamples);
-    this.offlineEngine.setInputMonitor(config.inputMonitor.enabled, config.inputMonitor.gain);
-    this.captureConfig = config;
-    this.postSync({ type: 'syncCapture', ...this.captureConfig });
+    capture.configureCapture(this.captureContext, options);
   }
 
   armRecord(trackId: string | number, enabled: boolean): boolean {
-    if (enabled && !this.captureConfig) {
-      throw new Error('Capture buffer is not configured');
-    }
-    this.offlineEngine.armCapture(enabled);
-    return this.realtimeNode.sendCommand({
-      type: SonareEngineCommandType.ArmRecord,
-      targetId: this.resolveTargetId(trackId),
-      sampleTime: -1,
-      argInt: enabled ? 1 : 0,
-    });
+    return capture.armRecord(this.captureContext, trackId, enabled);
   }
 
   punch(inPpq: number, outPpq: number): boolean {
-    const inSample = this.offlineEngine.sampleAtPpq(inPpq);
-    const outSample = this.offlineEngine.sampleAtPpq(outPpq);
-    this.offlineEngine.setCapturePunch(inSample, outSample, true);
-    // Carry BOTH endpoints as already-converted SAMPLES so the realtime engine
-    // agrees with the offline engine. The previous code sent the raw PPQ out
-    // point and let the consumer multiply by sampleRate (treating PPQ as
-    // seconds), which ignored tempo and produced a punch-out ~2x too large at
-    // 120 BPM. argInt = in sample, argFloat = out sample (full-precision double).
-    return this.realtimeNode.sendCommand({
-      type: SonareEngineCommandType.Punch,
-      sampleTime: -1,
-      argInt: inSample,
-      argFloat: outSample,
-    });
+    return capture.punch(this.captureContext, inPpq, outPpq);
   }
 
   captureStatus(): Promise<EngineCaptureStatus> {
-    return this.realtimeNode.requestCaptureStatus();
+    return capture.captureStatus(this.captureContext);
   }
 
   capturedAudio(): Promise<Float32Array[]> {
-    return this.realtimeNode.requestCapturedAudio();
+    return capture.capturedAudio(this.captureContext);
   }
 
   async resetCapture(): Promise<void> {
-    this.offlineEngine.resetCapture();
-    await this.realtimeNode.requestCaptureReset();
+    return capture.resetCapture(this.captureContext);
   }
 
   setMetronome(opts: EngineMetronomeConfig): void {
@@ -893,33 +752,11 @@ export class SonareEngine {
   }
 
   private mixerLanes(): EngineTrackLane[] {
-    return buildMixerLanes(this.trackLaneIds, this.trackSends, this.trackOutputBus);
+    return mixer.mixerLanes(this.mixerContext);
   }
 
   private syncMixer(): void {
-    const lanes = this.mixerLanes();
-    const buses = this.buses.map((bus) => ({ ...bus }));
-    this.offlineEngine.setTrackBuses(buses);
-    if (lanes.length > 0) {
-      this.offlineEngine.setTrackLanes(lanes);
-    }
-    const trackStrips = Array.from(this.trackStripJson, ([trackId, sceneJson]) => ({
-      trackId,
-      sceneJson,
-    }));
-    const busStrips = Array.from(this.busStripJson, ([busId, sceneJson]) => ({
-      busId,
-      sceneJson,
-    }));
-    this.postSync({
-      type: 'syncMixer',
-      lanes,
-      buses,
-      trackStrips,
-      laneSidechains: Array.from(this.laneSidechains.values()),
-      busStrips,
-      masterStripJson: this.masterStripJson,
-    });
+    mixer.syncMixer(this.mixerContext);
   }
 
   private postInstrumentSync(message: SonareEngineInstrumentSyncMessage): void {
@@ -943,17 +780,6 @@ export class SonareEngine {
     }
   }
 
-  private postTempoSync(): void {
-    this.postSync(
-      buildTempoSync(
-        this.tempoBpm,
-        this.timeSignature,
-        this.tempoSegments,
-        this.timeSignatureSegments,
-      ),
-    );
-  }
-
   // Posts an out-of-band control-sync message to the worklet engine processor.
   // Sync messages use a string `type` so the worklet's message handler routes
   // them to receiveSync() (numeric `type` is reserved for SonareEngineCommandRecord).
@@ -962,6 +788,30 @@ export class SonareEngine {
       return;
     }
     this.realtimeNode.node.port.postMessage(message);
+  }
+
+  // Collaborator surface handed to the mixer/routing free functions so they can
+  // mutate the routing stores (held by reference), mirror into the offline
+  // engine, post mixer-sync messages, and declare lanes/buses without a
+  // back-reference to the whole engine.
+  private get mixerContext(): EngineMixerContext {
+    return {
+      offlineEngine: this.offlineEngine,
+      trackLaneIds: this.trackLaneIds,
+      trackSends: this.trackSends,
+      trackOutputBus: this.trackOutputBus,
+      laneSidechains: this.laneSidechains,
+      buses: this.buses,
+      trackStripJson: this.trackStripJson,
+      busStripJson: this.busStripJson,
+      postSync: (message) => this.postSync(message),
+      ensureTrackLane: (target) => this.ensureTrackLane(target),
+      ensureBus: (busId) => this.ensureBus(busId),
+      mixerLanes: () => this.mixerLanes(),
+      syncMixer: () => this.syncMixer(),
+      sendSmoothedParam: (paramId, value) => this.sendSmoothedParam(paramId, value),
+      getMasterStripJson: () => this.masterStripJson,
+    };
   }
 
   // Collaborator surface handed to the strip/pan/EQ/insert/MIDI free functions
@@ -987,6 +837,69 @@ export class SonareEngine {
       automationLanes: this.automationLanes,
       postSync: (message) => this.postSync(message),
       resolveParamId: (nodeId, param) => this.resolveParamId(nodeId, param),
+    };
+  }
+
+  // Collaborator surface handed to the capture/record/punch free functions so
+  // they can mirror into and query the offline engine, command the realtime
+  // node, and read/write the capture config without a back-reference.
+  private get captureContext(): EngineCaptureContext {
+    return {
+      offlineEngine: this.offlineEngine,
+      realtimeNode: this.realtimeNode,
+      offlineChannelCount: this.offlineChannelCount,
+      postSync: (message) => this.postSync(message),
+      getCaptureConfig: () => this.captureConfig,
+      setCaptureConfig: (config) => {
+        this.captureConfig = config;
+      },
+      resolveTargetId: (target) => this.resolveTargetId(target),
+    };
+  }
+
+  // Collaborator surface handed to the parameter / automation-id resolution
+  // free functions so they can mirror into and query the offline engine,
+  // command the realtime node, and declare lanes/buses without holding a
+  // back-reference to the whole engine.
+  private get parameterContext(): EngineParameterContext {
+    return {
+      offlineEngine: this.offlineEngine,
+      realtimeNode: this.realtimeNode,
+      trackLaneIds: this.trackLaneIds,
+      resolveParamId: (nodeId, param) => this.resolveParamId(nodeId, param),
+      ensureTrackLane: (target) => this.ensureTrackLane(target),
+      ensureBus: (busId) => this.ensureBus(busId),
+    };
+  }
+
+  // Collaborator surface handed to the tempo / time-signature free functions so
+  // they can mirror into the offline engine, command the realtime node, post
+  // tempo-sync messages, and mutate the engine's tempo-map state by reference.
+  private get tempoContext(): EngineTempoContext {
+    return {
+      offlineEngine: this.offlineEngine,
+      realtimeNode: this.realtimeNode,
+      postSync: (message) => this.postSync(message),
+      getTempoBpm: () => this.tempoBpm,
+      setTempoBpm: (bpm) => {
+        this.tempoBpm = bpm;
+      },
+      getTimeSignature: () => this.timeSignature,
+      setTimeSignature: (signature) => {
+        this.timeSignature = signature;
+      },
+      getTempoSegments: () => this.tempoSegments,
+      setTempoSegments: (segments) => {
+        this.tempoSegments = segments;
+      },
+      getTimeSignatureSegments: () => this.timeSignatureSegments,
+      setTimeSignatureSegments: (segments) => {
+        this.timeSignatureSegments = segments;
+      },
+      setLatestTransportState: (state) => {
+        this.latestTransportState = state;
+      },
+      getLatestTransportState: () => this.latestTransportState,
     };
   }
 
