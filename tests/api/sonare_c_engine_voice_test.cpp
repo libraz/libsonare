@@ -1134,6 +1134,60 @@ TEST_CASE("sonare_engine forwards MIDI clock/transport to the external queue", "
 
   sonare_engine_destroy(engine);
 }
+
+TEST_CASE("sonare_engine external MIDI stays monotonic across a loop wrap", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 120.0) == SONARE_OK);  // 1 beat = 24000 samples
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 5, 1) == SONARE_OK);
+
+  // A note on at sample 0 and off at 12000, looping over the first beat
+  // (ppq 0..1 == samples 0..24000). Each loop iteration re-dispatches both
+  // events; the timeline sample wraps back to 0 while the device frame keeps
+  // rising, so the drained device render frames must stay non-decreasing.
+  const SonareEngineMidiEvent events[] = {
+      {0, midi1_word(0x9, 1, 64, 110), 0, 0, 0, 1, 0, 0, 0},
+      {12000, midi1_word(0x8, 1, 64, 0), 0, 0, 0, 1, 0, 0, 0},
+  };
+  SonareEngineMidiClipSchedule clip{};
+  clip.id = 7;
+  clip.track_id = 5;
+  clip.length_samples = 24000;
+  clip.destination_id = 5;
+  clip.events = events;
+  clip.event_count = 2;
+  REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_loop(engine, 0.0, 1.0, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+
+  // Process ~2.5 loop iterations and collect every drained channel-voice event.
+  std::vector<int64_t> frames;
+  std::array<SonareExternalMidiEvent, 64> drained{};
+  for (int block = 0; block < 470; ++block) {
+    REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+    size_t count = 0;
+    REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), drained.size(), &count) ==
+            SONARE_OK);
+    for (size_t i = 0; i < count; ++i) {
+      if (drained[i].destination_id == 5) frames.push_back(drained[i].render_frame);
+    }
+  }
+
+  // We crossed the loop boundary at least twice, so both events re-fired.
+  REQUIRE(frames.size() >= 4);
+  for (size_t i = 1; i < frames.size(); ++i) {
+    REQUIRE(frames[i] >= frames[i - 1]);  // monotonic device frames, no inversion
+  }
+  // The device frame keeps climbing past the loop length instead of resetting.
+  REQUIRE(frames.back() >= 24000);
+
+  sonare_engine_destroy(engine);
+}
 #endif
 
 TEST_CASE("sonare_engine converts PPQ to samples from the tempo map", "[c_api][engine]") {

@@ -213,10 +213,10 @@ typedef struct {
    queue (sonare_engine_drain_external_midi). A single queued channel-voice event
    may lower to more than one message (e.g. a MIDI 2.0 program change with bank
    select). destination_id == 0xFFFFFFFF tags a transport/clock byte; otherwise
-   it is the track's MIDI destination id. byte_count is 1..3 valid bytes. The
-   render_frame coordinate matches sonare_engine_drain_external_midi's contract:
-   channel-voice events carry the timeline sample, clock/transport bytes carry
-   the device render frame. */
+   it is the track's MIDI destination id. byte_count is 1..3 valid bytes.
+   render_frame is the monotonic DEVICE render frame for every record (sequenced
+   channel-voice events, live input, and clock/transport bytes alike), so drained
+   events stay in dispatch order across a loop wrap or seek. */
 typedef struct {
   uint32_t destination_id;
   uint32_t byte_count;

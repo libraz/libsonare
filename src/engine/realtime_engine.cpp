@@ -1795,7 +1795,15 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // and the audio they drive stay in the same sub-block.
     if (transport_rolling) {
       emit_midi_clock_block(transport_.sample_position(), transport_.render_frame(), num_frames);
+      // The sequencer stamps events in TIMELINE samples; translate them to the
+      // monotonic DEVICE render frame as they enter the external output queue so
+      // a loop wrap (timeline jumps backward, device keeps rising) cannot invert
+      // their order. Restored to 0 afterwards so the device-framed all-notes-off
+      // / command dispatch paths pass through untranslated.
+      midi_dispatch_sink_.timeline_to_device_offset =
+          transport_.render_frame() - transport_.sample_position();
       midi_sequencer_.process_block(transport_.sample_position(), num_frames);
+      midi_dispatch_sink_.timeline_to_device_offset = 0;
     }
     dispatch_live_midi_input(transport_.render_frame(), num_frames);
     // Host-instrument audio injection: sum the instrument's render into the

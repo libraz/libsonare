@@ -206,16 +206,14 @@ class RealtimeEngine : private ClipPageRequestSink {
   // bytes tagged host::kTransportDestination when external clock is enabled).
   // RT-safe on the producer side; this consumer side removes drained records.
   //
-  // render_frame coordinate: sequenced channel-voice events carry the TIMELINE
-  // sample position (which wraps backward on a loop / jumps on a seek), while
-  // clock/transport bytes carry the monotonic DEVICE render frame. The two
-  // coincide during straight playback and diverge only across a loop or seek.
-  // A host scheduling sample-accurately against the audio device clock should
-  // reconcile the two using the per-block telemetry record, which reports both
-  // render_frame and timeline_sample for the block. Unifying the queue onto a
-  // single coordinate would require translating the sequencer's timeline frames
-  // (shared with the instrument rack and live-input injection, which mix both
-  // coordinates) and is intentionally deferred.
+  // render_frame coordinate: every record -- sequenced channel-voice events,
+  // live-input injection, and clock/transport bytes -- carries the monotonic
+  // DEVICE render frame. Sequenced events are stamped in timeline samples
+  // internally and translated to the device frame as they enter the queue (the
+  // dispatch sink's per-sub-block offset), so the drained order stays monotonic
+  // across a loop wrap or seek (where the timeline jumps but the device clock
+  // keeps rising). A host can schedule directly against the device clock without
+  // reconciling coordinates.
   size_t drain_external_midi(host::ExternalMidiRecord* out, size_t capacity) noexcept;
   // Control-thread: enable/disable forwarding MIDI clock (0xF8) and transport
   // (start/continue/stop) bytes to the external output queue so external gear
@@ -501,6 +499,14 @@ class RealtimeEngine : private ClipPageRequestSink {
     // representable. Linear-scanned on the audio thread (<= 16 slots); the
     // control thread publishes via set_external().
     std::array<std::atomic<uint64_t>, kMaxExternalDestinations> external_destinations{};
+    // AUDIO thread only: added to a sequenced external event's render_frame to
+    // convert it from the TIMELINE sample position (which wraps backward on a
+    // loop / jumps on a seek) to the monotonic DEVICE render frame, so every
+    // record in the external output queue shares the device coordinate and stays
+    // in dispatch order across loop boundaries. process() sets this to
+    // (render_frame - sample_position) around the sequencer's process_block and
+    // restores 0 for the device-framed all-notes-off / command paths.
+    int64_t timeline_to_device_offset = 0;
 
     static constexpr uint64_t encode(uint32_t destination_id) noexcept {
       return (uint64_t{1} << 32) | destination_id;
@@ -543,8 +549,15 @@ class RealtimeEngine : private ClipPageRequestSink {
         // An external destination drives its own device queue only -- it is
         // routed there INSTEAD of the rack and is not also mirrored to the
         // merged output sink, otherwise a host using both would emit the event
-        // twice to the device path.
-        if (external != nullptr) external->send(destination_id, event);
+        // twice to the device path. Stamp the queued record with the DEVICE
+        // render frame (timeline render frame + the per-sub-block offset) so the
+        // queue stays monotonic across loop wraps; the rack copy below is left in
+        // its native timeline frame.
+        if (external != nullptr) {
+          midi::MidiEvent device_event = event;
+          device_event.render_frame += timeline_to_device_offset;
+          external->send(destination_id, device_event);
+        }
         return;
       }
       if (rack != nullptr) rack->on_event(destination_id, event);
