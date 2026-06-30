@@ -712,9 +712,9 @@ void RealtimeEngine::emit_midi_clock_block(int64_t timeline_start_sample,
   }
 }
 
-void RealtimeEngine::set_midi_destination_external(uint32_t destination_id,
+bool RealtimeEngine::set_midi_destination_external(uint32_t destination_id,
                                                    bool external) noexcept {
-  midi_dispatch_sink_.set_external(destination_id, external);
+  return midi_dispatch_sink_.set_external(destination_id, external);
 }
 
 size_t RealtimeEngine::drain_external_midi(host::ExternalMidiRecord* out,

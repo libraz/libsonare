@@ -597,6 +597,23 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('reports external-destination table overflow and validates smoothing ms', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      for (let id = 0; id < 16; id++) {
+        engine.setMidiDestinationExternal(id, true);
+      }
+      expect(() => engine.setMidiDestinationExternal(3, true)).not.toThrow();
+      expect(() => engine.setMidiDestinationExternal(99, true)).toThrow();
+      engine.setMidiDestinationExternal(3, false);
+      expect(() => engine.setMidiDestinationExternal(99, true)).not.toThrow();
+
+      expect(() => engine.setParamSmoothingMs(0)).not.toThrow();
+      expect(() => engine.setParamSmoothingMs(75)).not.toThrow();
+      expect(() => engine.setParamSmoothingMs(-1)).toThrow();
+      expect(() => engine.setParamSmoothingMs(Number.NaN)).toThrow();
+      engine.destroy();
+    });
+
     it('accepts a lane sourceChannelLayout and rejects an out-of-range one', () => {
       const engine = new RealtimeEngine(48000, 128);
       // Valid layouts (0 mono .. 3 7.1) and an omitted layout are accepted.

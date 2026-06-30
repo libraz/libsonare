@@ -1406,6 +1406,30 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('reports external-destination table overflow instead of silently routing internally', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    for (let id = 0; id < 16; id++) {
+      engine.setMidiDestinationExternal(id, true);
+    }
+    // Re-marking an existing destination is idempotent.
+    expect(() => engine.setMidiDestinationExternal(3, true)).not.toThrow();
+    // The 17th distinct destination overflows the slot table.
+    expect(() => engine.setMidiDestinationExternal(99, true)).toThrow();
+    // Freeing a slot lets the next mark succeed.
+    engine.setMidiDestinationExternal(3, false);
+    expect(() => engine.setMidiDestinationExternal(99, true)).not.toThrow();
+    engine.destroy();
+  });
+
+  it('accepts a custom smoothed-parameter ramp time and rejects bad values', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setParamSmoothingMs(0)).not.toThrow();
+    expect(() => engine.setParamSmoothingMs(75)).not.toThrow();
+    expect(() => engine.setParamSmoothingMs(-1)).toThrow();
+    expect(() => engine.setParamSmoothingMs(Number.NaN)).toThrow();
+    engine.destroy();
+  });
+
   it('drains external MIDI losslessly when maxRecords is below the queued count', () => {
     // Regression for the over-drain data-loss bug: a small maxRecords cap must
     // not discard events the native call already dequeued. Queue many events,

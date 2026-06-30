@@ -809,6 +809,7 @@ export interface WasmRealtimeEngine {
   ) => void;
   setParameter: (paramId: number, value: number, renderFrame: number) => void;
   setParameterSmoothed: (paramId: number, value: number, renderFrame: number) => void;
+  setParamSmoothingMs: (smoothingMs: number) => void;
   setSoloMute: (laneIndex: number, solo: boolean, mute: boolean, renderFrame: number) => void;
   getTransportState: () => WasmEngineTransportState;
   play: (renderFrame: number) => void;

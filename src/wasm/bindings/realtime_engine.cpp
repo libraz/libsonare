@@ -648,6 +648,14 @@ class RealtimeEngineWasm {
     }
   }
 
+  void setParamSmoothingMs(float smoothing_ms) {
+    if (!std::isfinite(smoothing_ms) || smoothing_ms < 0.0f) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "smoothing_ms must be finite and non-negative");
+    }
+    engine_.set_param_smoothing_ms(smoothing_ms);
+  }
+
   void setSoloMute(uint32_t lane_index, bool solo, bool mute, int64_t render_frame) {
     sonare::rt::Command command{};
     command.type = sonare::rt::CommandType::kSetSoloMute;
@@ -971,7 +979,10 @@ class RealtimeEngineWasm {
   // external device. Clearing it restores internal-synth playback.
   void setMidiDestinationExternal(uint32_t destination_id, bool external) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-    engine_.set_midi_destination_external(destination_id, external);
+    if (!engine_.set_midi_destination_external(destination_id, external)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "external MIDI destination table is full");
+    }
 #else
     (void)destination_id;
     (void)external;
@@ -2562,6 +2573,7 @@ void registerRealtimeEngineBindings() {
       .function("prepare", &RealtimeEngineWasm::prepare)
       .function("setParameter", &RealtimeEngineWasm::setParameter)
       .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
+      .function("setParamSmoothingMs", &RealtimeEngineWasm::setParamSmoothingMs)
       .function("setSoloMute", &RealtimeEngineWasm::setSoloMute)
       .function("setMidiClips", &RealtimeEngineWasm::setMidiClips)
       .function("setBuiltinInstrument", &RealtimeEngineWasm::setBuiltinInstrument)

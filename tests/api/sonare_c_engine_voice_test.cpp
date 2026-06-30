@@ -1069,6 +1069,42 @@ TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][eng
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine reports external-destination table overflow", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  // The slot table holds 16 distinct external destinations.
+  for (uint32_t id = 0; id < 16; ++id) {
+    REQUIRE(sonare_engine_set_midi_destination_external(engine, id, 1) == SONARE_OK);
+  }
+  // Re-marking an already-external destination is idempotent, not an overflow.
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 3, 1) == SONARE_OK);
+  // A 17th distinct destination overflows instead of silently routing internally.
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 99, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  // Freeing a slot lets the next mark succeed.
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 3, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 99, 1) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_param_smoothing_ms validates its argument", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  REQUIRE(sonare_engine_set_param_smoothing_ms(engine, 0.0f) == SONARE_OK);
+  REQUIRE(sonare_engine_set_param_smoothing_ms(engine, 75.0f) == SONARE_OK);
+  REQUIRE(sonare_engine_set_param_smoothing_ms(engine, -1.0f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_param_smoothing_ms(engine, std::nanf("")) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_param_smoothing_ms(nullptr, 10.0f) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine forwards MIDI clock/transport to the external queue", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

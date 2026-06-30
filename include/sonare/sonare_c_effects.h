@@ -662,6 +662,12 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
 /// @brief Pushes a live parameter value to the engine using a smoothed ramp.
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame);
+/// @brief Sets the default ramp time (ms) for engine-level smoothed parameters.
+/// @details Applies to every smoothed parameter change -- fader/pan glides,
+///          insert-parameter automation, and MIDI-CC mappings. The default is
+///          20 ms; pass 0 for instant (un-ramped) changes. @p smoothing_ms must
+///          be finite and >= 0.
+SonareError sonare_engine_set_param_smoothing_ms(SonareRealtimeEngine* engine, float smoothing_ms);
 SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t lane_index, int solo,
                                         int mute, int64_t render_frame);
 
@@ -840,6 +846,9 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
 ///   its sequenced events are buffered in the engine's external-MIDI output queue
 ///   for the host to drain with @ref sonare_engine_drain_external_midi and deliver
 ///   to an external device. Control-thread only. @p external != 0 marks, 0 clears.
+///   At most 16 destinations can be external at once; marking a 17th distinct
+///   destination returns @ref SONARE_ERROR_INVALID_PARAMETER instead of silently
+///   routing it to the internal rack.
 SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* engine,
                                                         uint32_t destination_id, int external);
 /// @brief Enables forwarding MIDI clock/transport bytes to the external queue.

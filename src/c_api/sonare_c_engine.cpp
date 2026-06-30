@@ -1882,6 +1882,14 @@ SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, u
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
 }
 
+SonareError sonare_engine_set_param_smoothing_ms(SonareRealtimeEngine* engine, float smoothing_ms) {
+  if (!engine || !std::isfinite(smoothing_ms) || smoothing_ms < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  engine->engine.set_param_smoothing_ms(smoothing_ms);
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t lane_index, int solo,
                                         int mute, int64_t render_frame) {
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
@@ -2313,7 +2321,9 @@ SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* en
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
-  engine->engine.set_midi_destination_external(destination_id, external != 0);
+  if (!engine->engine.set_midi_destination_external(destination_id, external != 0)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 #endif

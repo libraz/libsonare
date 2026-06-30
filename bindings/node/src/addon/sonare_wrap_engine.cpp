@@ -203,6 +203,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::DrainScopeTelemetry>("drainScopeTelemetry"),
           InstanceMethod<&RealtimeEngineWrap::SetParameter>("setParameter"),
           InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
+          InstanceMethod<&RealtimeEngineWrap::SetParamSmoothingMs>("setParamSmoothingMs"),
           InstanceMethod<&RealtimeEngineWrap::SetSoloMute>("setSoloMute"),
           InstanceMethod<&RealtimeEngineWrap::ClearParameters>("clearParameters"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiClips>("setMidiClips"),
@@ -566,6 +567,13 @@ Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& i
   const float value = info.Length() > 1 ? info[1].As<Napi::Number>().FloatValue() : 0.0f;
   ThrowIfError(env, sonare_engine_set_parameter_smoothed(engine_, param_id, value,
                                                          OptionalInt64(info, 2, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetParamSmoothingMs(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const float smoothing_ms = info.Length() > 0 ? info[0].As<Napi::Number>().FloatValue() : 0.0f;
+  ThrowIfError(env, sonare_engine_set_param_smoothing_ms(engine_, smoothing_ms));
   return env.Undefined();
 }
 

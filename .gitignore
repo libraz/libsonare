@@ -125,3 +125,4 @@ AGENT.md
 
 # Local MCP server config (Serena など、コミットしない)
 .mcp.json
+.serena/

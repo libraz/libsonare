@@ -198,7 +198,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // destinations may be external at once; excess requests are ignored. Routing
   // a destination external does not by itself produce audio, so no internal
   // synth voices are stolen for it (the rack never receives its events).
-  void set_midi_destination_external(uint32_t destination_id, bool external) noexcept;
+  // Returns false when enabling a new external destination would exceed the
+  // kMaxExternalDestinations slot table; true otherwise (idempotent enable/disable).
+  bool set_midi_destination_external(uint32_t destination_id, bool external) noexcept;
   // Control/host thread: drain up to `capacity` queued external-MIDI records
   // (channel-voice events tagged with their destination, plus transport/clock
   // bytes tagged host::kTransportDestination when external clock is enabled).
@@ -510,26 +512,30 @@ class RealtimeEngine : private ClipPageRequestSink {
       }
       return false;
     }
-    // CONTROL thread: mark/unmark a destination as externally routed. Adding
-    // beyond kMaxExternalDestinations is silently ignored.
-    void set_external(uint32_t destination_id, bool on) noexcept {
+    // CONTROL thread: mark/unmark a destination as externally routed. Returns
+    // false only when enabling a new destination and all kMaxExternalDestinations
+    // slots are already taken (so the caller can surface the overflow instead of
+    // silently routing the track to the internal rack); enabling an
+    // already-external destination and any disable are idempotent and return true.
+    bool set_external(uint32_t destination_id, bool on) noexcept {
       const uint64_t want = encode(destination_id);
       if (on) {
         for (auto& slot : external_destinations) {
-          if (slot.load(std::memory_order_acquire) == want) return;
+          if (slot.load(std::memory_order_acquire) == want) return true;
         }
         for (auto& slot : external_destinations) {
           uint64_t empty = 0;
-          if (slot.compare_exchange_strong(empty, want, std::memory_order_acq_rel)) return;
+          if (slot.compare_exchange_strong(empty, want, std::memory_order_acq_rel)) return true;
         }
-        return;
+        return false;
       }
       for (auto& slot : external_destinations) {
         if (slot.load(std::memory_order_acquire) == want) {
           slot.store(0, std::memory_order_release);
-          return;
+          return true;
         }
       }
+      return true;
     }
 
     void on_event(uint32_t destination_id, const midi::MidiEvent& event) noexcept override {

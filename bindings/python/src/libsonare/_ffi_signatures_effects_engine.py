@@ -731,6 +731,12 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_float,
             ctypes.c_int64,
         ]
+    if hasattr(lib, "sonare_engine_set_param_smoothing_ms"):
+        lib.sonare_engine_set_param_smoothing_ms.restype = ctypes.c_int32
+        lib.sonare_engine_set_param_smoothing_ms.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+        ]
     if hasattr(lib, "sonare_engine_set_solo_mute"):
         lib.sonare_engine_set_solo_mute.restype = ctypes.c_int32
         lib.sonare_engine_set_solo_mute.argtypes = [

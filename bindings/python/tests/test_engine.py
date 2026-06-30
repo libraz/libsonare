@@ -1249,6 +1249,34 @@ def test_engine_drains_external_midi_routing_to_host() -> None:
         assert engine.external_midi_dropped_count() == 0
 
 
+def test_engine_external_destination_table_overflow() -> None:
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        for dest_id in range(16):
+            engine.set_midi_destination_external(dest_id, True)
+        # Re-marking an existing destination is idempotent.
+        engine.set_midi_destination_external(3, True)
+        # The 17th distinct destination overflows the slot table.
+        with pytest.raises((ValueError, RuntimeError)):
+            engine.set_midi_destination_external(99, True)
+        # Freeing a slot lets the next mark succeed.
+        engine.set_midi_destination_external(3, False)
+        engine.set_midi_destination_external(99, True)
+
+
+def test_engine_set_param_smoothing_ms_validates_argument() -> None:
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        engine.set_param_smoothing_ms(0.0)
+        engine.set_param_smoothing_ms(75.0)
+        with pytest.raises((ValueError, RuntimeError)):
+            engine.set_param_smoothing_ms(-1.0)
+        with pytest.raises((ValueError, RuntimeError)):
+            engine.set_param_smoothing_ms(float("nan"))
+
+
 def test_engine_drain_external_midi_honors_max_records_cap_losslessly() -> None:
     # Regression: drain must treat max_records as an output-event cap (not drain
     # the whole queue), and must not lose events past the cap — they stay queued.
@@ -1259,10 +1287,18 @@ def test_engine_drain_external_midi_honors_max_records_cap_losslessly() -> None:
         n_notes = 24
         events = []
         for i in range(n_notes):
-            events.append(EngineMidiEvent(i, word0=_midi1_word(0x9, 1, 40 + i, 100), word_count=1, group=1))
-            events.append(EngineMidiEvent(i, word0=_midi1_word(0x8, 1, 40 + i, 0), word_count=1, group=1))
+            events.append(
+                EngineMidiEvent(i, word0=_midi1_word(0x9, 1, 40 + i, 100), word_count=1, group=1)
+            )
+            events.append(
+                EngineMidiEvent(i, word0=_midi1_word(0x8, 1, 40 + i, 0), word_count=1, group=1)
+            )
         engine.set_midi_clips(
-            [EngineMidiClipSchedule(id=7, track_id=5, destination_id=5, length_samples=256, events=events)]
+            [
+                EngineMidiClipSchedule(
+                    id=7, track_id=5, destination_id=5, length_samples=256, events=events
+                )
+            ]
         )
         engine.play()
         engine.process([[0.0] * 128, [0.0] * 128])
