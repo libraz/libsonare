@@ -464,21 +464,48 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
 void NativeSynth::note_off(uint8_t channel, uint8_t note) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
+  const ChannelState& st = channels_[ch];
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.note == note && v.channel == ch && v.key_down) {
       v.key_down = false;
-      // The sustain pedal or a sostenuto capture keeps the string ringing.
-      if (!channels_[ch].sustain && !v.sostenuto) v.release();
+      // A sostenuto capture holds the note regardless of the sustain pedal.
+      if (v.sostenuto) continue;
+      if (!st.sustain) {
+        v.release();  // pedal up: the damper falls now
+      } else if (st.sustain_level < 127 && v.patch != nullptr &&
+                 v.patch->mode == SynthEngineMode::kPiano) {
+        // Half-pedal: the partially raised damper rests on the string.
+        v.piano.damp(static_cast<float>(127 - st.sustain_level) / 63.0f);
+      }
+      // else (full pedal): the string rings on freely.
     }
   }
 }
 
-void NativeSynth::sustain_pedal(uint8_t channel, bool down) noexcept {
+void NativeSynth::sustain_cc(uint8_t channel, uint8_t value) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
-  if (channels_[ch].sustain == down) return;
-  channels_[ch].sustain = down;
-  if (down) return;
+  ChannelState& st = channels_[ch];
+  const bool was_down = st.sustain;
+  st.sustain_level = value;
+  st.sustain = value >= 64;
+  if (st.sustain) {
+    // Half-pedal: a partially raised damper still rests on the strings, so held
+    // (key-up) notes ring on at an intermediate rate; a full lift (127) leaves
+    // them ringing freely. Key-down and sostenuto-captured notes keep their
+    // dampers mechanically off, so they are untouched.
+    if (value < 127) {
+      const float strength = static_cast<float>(127 - value) / 63.0f;
+      for (NativeSynthVoice& v : pool_) {
+        if (v.active && v.channel == ch && !v.key_down && !v.sostenuto && v.patch != nullptr &&
+            v.patch->mode == SynthEngineMode::kPiano) {
+          v.piano.damp(strength);
+        }
+      }
+    }
+    return;
+  }
+  if (!was_down) return;
   for (NativeSynthVoice& v : pool_) {
     // A sostenuto-captured note stays held even when the sustain pedal lifts.
     if (v.active && v.channel == ch && !v.key_down && !v.releasing && !v.sostenuto) v.release();
@@ -504,6 +531,7 @@ void NativeSynth::all_notes_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   channels_[ch].sustain = false;
+  channels_[ch].sustain_level = 0;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch && !v.releasing) {
       v.key_down = false;
@@ -517,6 +545,7 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   channels_[ch].sustain = false;
+  channels_[ch].sustain_level = 0;
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.channel == ch) v.kill();
   }
@@ -536,7 +565,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.expression = 127;
   st.pitch_bend = 8192;
   st.params.reset();
-  sustain_pedal(ch, false);
+  sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
   st.una_corda = false;
   refresh_channel_mod(ch);
@@ -576,7 +605,7 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       }
       break;
     case 64:
-      sustain_pedal(ch, value >= 64);
+      sustain_cc(ch, value);
       break;
     case 66:
       sostenuto_pedal(ch, value >= 64);

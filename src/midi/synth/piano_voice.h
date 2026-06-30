@@ -129,6 +129,11 @@ class PianoVoiceCore {
   float render(float pitch_ratio) noexcept;
   /// Note-off: the damper caps both decay stages at release_damp_s.
   void release() noexcept;
+  /// Half-pedal: a damper resting partially on the string. @p strength in
+  /// [0,1] sets the contact — 0 leaves the natural ring untouched, 1 reaches
+  /// the full release() damping, and intermediate values cap the decay at a
+  /// geometrically interpolated t60 (a light touch slows the ring gently).
+  void damp(float strength) noexcept;
   /// Immediate silence.
   void kill() noexcept;
 

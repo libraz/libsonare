@@ -407,6 +407,32 @@ TEST_CASE("the shared soundboard adds a modal body resonance", "[midi][synth][pi
   REQUIRE(body_on > 1.5 * body_off);
 }
 
+TEST_CASE("the half pedal damps held notes at an intermediate rate", "[midi][synth][piano]") {
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+  // Strike C3, set the sustain pedal to a depth, release the key, then measure
+  // the tail. A fuller pedal lifts the damper further, so the note rings longer.
+  auto tail_after = [&](bool pedal, uint8_t depth) {
+    NativeSynthConfig cfg;
+    cfg.patch = piano;
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));  // C3
+    render_left(synth, 12000);                                                  // 0.25 s held
+    if (pedal) synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, depth)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 48, 0)));
+    const std::vector<float> tail = render_left(synth, 96000);  // 2 s tail
+    return rms(tail, 19200, 38400);                             // 0.4 - 0.8 s after note-off
+  };
+  const float none = tail_after(false, 0);   // pedal up -> full damp
+  const float half = tail_after(true, 90);   // half pedal -> partial damp
+  const float full = tail_after(true, 127);  // full pedal -> rings freely
+  REQUIRE(none > 0.0f);
+  // Graded: the half pedal rings clearly longer than a full damp, and the full
+  // pedal clearly longer than the half.
+  REQUIRE(half > 5.0f * none);
+  REQUIRE(full > 2.0f * half);
+}
+
 TEST_CASE("the sostenuto pedal holds only the notes down when it engages", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   // Strike C4, optionally work the sostenuto pedal, release the key, then

@@ -103,6 +103,20 @@ float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
   return a;
 }
 
+/// Per-loop gain for a damper resting partially on the string: the decay time
+/// t60 ~ -K/ln(gain) is interpolated geometrically between the natural ring
+/// @p natural and the full-damper gain @p damped as the contact @p strength
+/// goes 0 -> 1, so a light touch slows the ring gently while firm contact
+/// reaches the full damp.
+float partial_damp_gain(float natural, float damped, float strength) noexcept {
+  const float ln_nat = std::log(std::max(natural, 1.0e-6f));
+  const float ln_dmp = std::log(std::max(damped, 1.0e-6f));
+  if (ln_nat >= -1.0e-7f) return damped;  // no natural decay: jump to the damp
+  const float a = std::log(-ln_nat);
+  const float b = std::log(-ln_dmp);
+  return std::exp(-std::exp(a + strength * (b - a)));
+}
+
 }  // namespace
 
 float piano_inharmonicity_b(uint8_t note) noexcept {
@@ -277,6 +291,20 @@ void PianoVoiceCore::release() noexcept {
     String& s = strings_[static_cast<size_t>(i)];
     s.g_slow = std::min(s.g_slow, release_gain_);
     s.g_fast = std::min(s.g_fast, release_gain_);
+  }
+}
+
+void PianoVoiceCore::damp(float strength) noexcept {
+  strength = std::clamp(strength, 0.0f, 1.0f);
+  if (strength <= 0.0f) return;
+  if (strength >= 1.0f) {
+    release();
+    return;
+  }
+  for (int i = 0; i < num_strings_; ++i) {
+    String& s = strings_[static_cast<size_t>(i)];
+    s.g_slow = std::min(s.g_slow, partial_damp_gain(s.g_slow, release_gain_, strength));
+    s.g_fast = std::min(s.g_fast, partial_damp_gain(s.g_fast, release_gain_, strength));
   }
 }
 

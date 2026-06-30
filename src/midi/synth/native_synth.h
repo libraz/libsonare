@@ -256,12 +256,13 @@ class NativeSynth final : public MidiInstrument {
 
  private:
   struct ChannelState {
-    bool sustain = false;
-    bool una_corda = false;    // CC67 soft pedal
-    uint8_t volume = 100;      // CC7
-    uint8_t expression = 127;  // CC11
-    uint8_t pan = 64;          // CC10
-    uint8_t mod_wheel = 0;     // CC1
+    bool sustain = false;       // CC64 >= 64 (dampers lifted)
+    uint8_t sustain_level = 0;  // raw CC64 (half-pedal damper position)
+    bool una_corda = false;     // CC67 soft pedal
+    uint8_t volume = 100;       // CC7
+    uint8_t expression = 127;   // CC11
+    uint8_t pan = 64;           // CC10
+    uint8_t mod_wheel = 0;      // CC1
     uint16_t pitch_bend = 8192;
     ChannelParamState params;
     float bend_range_cents = 200.0f;
@@ -272,7 +273,7 @@ class NativeSynth final : public MidiInstrument {
   void note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
   void note_off(uint8_t channel, uint8_t note) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
-  void sustain_pedal(uint8_t channel, bool down) noexcept;
+  void sustain_cc(uint8_t channel, uint8_t value) noexcept;
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
