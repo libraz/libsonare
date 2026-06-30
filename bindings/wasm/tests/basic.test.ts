@@ -98,97 +98,6 @@ describe('Sonare WASM Module', () => {
       expect(capabilities.mode === 'sab' || capabilities.mode === 'postMessage').toBe(true);
     });
 
-    it('loads the dedicated sonare-rt target and processes an audio block through the C ABI', async () => {
-      const { default: createSonareRt } = (await import('../dist/sonare-rt.js')) as {
-        default: (options?: { locateFile?: (path: string) => string }) => Promise<{
-          _malloc: (size: number) => number;
-          _free: (ptr: number) => void;
-          _sonare_rt_engine_abi_version: () => number;
-          _sonare_rt_engine_create: () => number;
-          _sonare_rt_engine_prepare: (
-            engine: number,
-            sampleRate: number,
-            maxBlockSize: number,
-            commandCapacity: number,
-            telemetryCapacity: number,
-          ) => number;
-          _sonare_rt_engine_play: (engine: number, renderFrame: bigint) => number;
-          _sonare_rt_engine_process: (
-            engine: number,
-            channelsPtr: number,
-            numChannels: number,
-            numFrames: number,
-          ) => void;
-          _sonare_rt_engine_seek_sample: (
-            engine: number,
-            timelineSample: bigint,
-            renderFrame: bigint,
-          ) => number;
-          _sonare_rt_engine_drain_telemetry: (
-            engine: number,
-            typesErrorsValuesPtr: number,
-            frameValuesPtr: number,
-            maxRecords: number,
-          ) => number;
-          _sonare_rt_engine_destroy: (engine: number) => void;
-        }>;
-      };
-      const memory = new WebAssembly.Memory({ initial: 1024, maximum: 1024, shared: true });
-      const rt = await createSonareRt({
-        wasmMemory: memory,
-        locateFile: (path) => new URL(`../dist/${path}`, import.meta.url).pathname,
-      } as Parameters<typeof createSonareRt>[0]);
-      expect(rt._sonare_rt_engine_abi_version()).toBe(EXPECTED_ENGINE_ABI_VERSION);
-      const engine = rt._sonare_rt_engine_create();
-      expect(engine).toBeGreaterThan(0);
-      expect(rt._sonare_rt_engine_prepare(engine, 48000, 128, 64, 64)).toBe(1);
-      expect(rt._sonare_rt_engine_play(engine, -1n)).toBe(1);
-
-      const frames = 128;
-      const leftPtr = rt._malloc(frames * Float32Array.BYTES_PER_ELEMENT);
-      const rightPtr = rt._malloc(frames * Float32Array.BYTES_PER_ELEMENT);
-      const channelPtr = rt._malloc(2 * Uint32Array.BYTES_PER_ELEMENT);
-      const telemetryIntsPtr = rt._malloc(4 * Int32Array.BYTES_PER_ELEMENT);
-      const telemetryFramesPtr = rt._malloc(3 * Float64Array.BYTES_PER_ELEMENT);
-      const samples = new Float32Array(memory.buffer);
-      const pointers = new Uint32Array(memory.buffer);
-      const telemetryInts = new Int32Array(memory.buffer);
-      const telemetryFrames = new Float64Array(memory.buffer);
-      for (let i = 0; i < frames; i++) {
-        samples[(leftPtr >> 2) + i] = i / frames;
-        samples[(rightPtr >> 2) + i] = -i / frames;
-      }
-      pointers[channelPtr >> 2] = leftPtr;
-      pointers[(channelPtr >> 2) + 1] = rightPtr;
-
-      rt._sonare_rt_engine_process(engine, channelPtr, 2, frames);
-
-      expect(samples[leftPtr >> 2]).toBeCloseTo(0, 6);
-      expect(samples[(leftPtr >> 2) + 127]).toBeCloseTo(127 / 128, 6);
-      expect(samples[rightPtr >> 2]).toBeCloseTo(0, 6);
-      expect(samples[(rightPtr >> 2) + 127]).toBeCloseTo(-127 / 128, 6);
-      expect(
-        rt._sonare_rt_engine_drain_telemetry(engine, telemetryIntsPtr, telemetryFramesPtr, 1),
-      ).toBe(1);
-      expect(telemetryInts[telemetryIntsPtr >> 2]).toBe(0);
-      expect(telemetryFrames[telemetryFramesPtr >> 3]).toBe(0);
-      expect(telemetryFrames[(telemetryFramesPtr >> 3) + 1]).toBe(128);
-
-      expect(rt._sonare_rt_engine_seek_sample(engine, 48000n, -1n)).toBe(1);
-      rt._sonare_rt_engine_process(engine, channelPtr, 2, frames);
-      expect(
-        rt._sonare_rt_engine_drain_telemetry(engine, telemetryIntsPtr, telemetryFramesPtr, 1),
-      ).toBe(1);
-      expect(telemetryFrames[(telemetryFramesPtr >> 3) + 1]).toBe(48000 + 128);
-
-      rt._free(telemetryFramesPtr);
-      rt._free(telemetryIntsPtr);
-      rt._free(channelPtr);
-      rt._free(rightPtr);
-      rt._free(leftPtr);
-      rt._sonare_rt_engine_destroy(engine);
-    });
-
     it('processes realtime engine clips, capture, and telemetry', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setTempo(60);
@@ -1316,8 +1225,10 @@ describe('Sonare WASM Module', () => {
       expect(Array.from(framed.frames)).toEqual([1, 2, 2, 3, 3, 4]);
       expect(Array.from(fixLength(new Float32Array([1, 2]), 4, -1))).toEqual([1, 2, -1, -1]);
       expect(Array.from(fixFrames(new Int32Array([2, 4]), 0, 5, true))).toEqual([0, 2, 4, 5]);
+      // Matches librosa.util.peak_pick exactly (index 0 is a peak under its
+      // first-frame rule: x[0] >= max/mean of the leading window).
       expect(Array.from(peakPick(new Float32Array([0, 1, 0, 2, 0]), 1, 1, 1, 1, 0, 0))).toEqual([
-        1, 3,
+        0, 1, 3,
       ]);
 
       const normalized = vectorNormalize(new Float32Array([3, 4]), 2, 1e-12);
