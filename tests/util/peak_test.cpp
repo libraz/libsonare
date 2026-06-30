@@ -56,12 +56,31 @@ TEST_CASE("peak_pick matches librosa output", "[librosa][util][peak]") {
   auto got = peak_pick(input, pre_max, post_max, pre_avg, post_avg, delta, wait);
   const auto& expected_arr = d["expected_peaks"].as_array();
 
-  // Allow ±1 sample tolerance per detected peak (librosa includes a different
-  // edge-window convention but inner peaks should align exactly).
   REQUIRE(got.size() == expected_arr.size());
   for (size_t i = 0; i < got.size(); ++i) {
-    int e = expected_arr[i].as_int();
-    CAPTURE(i, got[i], e);
-    REQUIRE(std::abs(got[i] - e) <= 1);
+    CAPTURE(i, got[i], expected_arr[i].as_int());
+    REQUIRE(got[i] == expected_arr[i].as_int());
+  }
+}
+
+TEST_CASE("peak_pick matches librosa on a plateau-heavy envelope", "[librosa][util][peak]") {
+  // Plateaus and a decaying trailing slope with a small wait are exactly where an
+  // inclusive-vs-exclusive local-max / moving-average window off-by-one emitted
+  // spurious peaks. The C++ window must now match librosa's array slices exactly.
+  auto json = JsonReader::parse_file("tests/librosa/reference/peak_pick_plateau.json");
+  const auto& d = json["data"];
+  const auto& input_arr = d["input"].as_array();
+  std::vector<float> input;
+  input.reserve(input_arr.size());
+  for (const auto& v : input_arr) input.push_back(v.as_float());
+
+  auto got = peak_pick(input, d["pre_max"].as_int(), d["post_max"].as_int(), d["pre_avg"].as_int(),
+                       d["post_avg"].as_int(), d["delta"].as_float(), d["wait"].as_int());
+  const auto& expected_arr = d["expected_peaks"].as_array();
+
+  REQUIRE(got.size() == expected_arr.size());
+  for (size_t i = 0; i < got.size(); ++i) {
+    CAPTURE(i, got[i], expected_arr[i].as_int());
+    REQUIRE(got[i] == expected_arr[i].as_int());
   }
 }

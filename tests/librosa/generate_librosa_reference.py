@@ -23,21 +23,25 @@ def generate_convert_reference():
 
     refs = []
     for hz in test_hz:
-        refs.append({
-            "hz": hz,
-            "mel_slaney": float(librosa.hz_to_mel(hz, htk=False)),
-            "mel_htk": float(librosa.hz_to_mel(hz, htk=True)),
-            "midi": float(librosa.hz_to_midi(hz)),
-        })
+        refs.append(
+            {
+                "hz": hz,
+                "mel_slaney": float(librosa.hz_to_mel(hz, htk=False)),
+                "mel_htk": float(librosa.hz_to_mel(hz, htk=True)),
+                "midi": float(librosa.hz_to_midi(hz)),
+            }
+        )
 
     # Inverse conversions
     test_mel = [0, 5, 10, 15, 20, 25, 30]
     for mel in test_mel:
-        refs.append({
-            "mel": mel,
-            "hz_slaney": float(librosa.mel_to_hz(mel, htk=False)),
-            "hz_htk": float(librosa.mel_to_hz(mel, htk=True)),
-        })
+        refs.append(
+            {
+                "mel": mel,
+                "hz_slaney": float(librosa.mel_to_hz(mel, htk=False)),
+                "hz_htk": float(librosa.mel_to_hz(mel, htk=True)),
+            }
+        )
 
     return refs
 
@@ -53,16 +57,18 @@ def generate_mel_filterbank_reference():
                     mel = librosa.filters.mel(
                         sr=sr, n_fft=n_fft, n_mels=n_mels, htk=htk
                     )
-                    refs.append({
-                        "sr": sr,
-                        "n_fft": n_fft,
-                        "n_mels": n_mels,
-                        "htk": htk,
-                        "shape": list(mel.shape),
-                        "sum": float(mel.sum()),
-                        "max": float(mel.max()),
-                        "row_sums": mel.sum(axis=1).tolist(),
-                    })
+                    refs.append(
+                        {
+                            "sr": sr,
+                            "n_fft": n_fft,
+                            "n_mels": n_mels,
+                            "htk": htk,
+                            "shape": list(mel.shape),
+                            "sum": float(mel.sum()),
+                            "max": float(mel.max()),
+                            "row_sums": mel.sum(axis=1).tolist(),
+                        }
+                    )
 
     return refs
 
@@ -89,17 +95,19 @@ def generate_mfcc_reference():
                     if f < mfcc.shape[1]:
                         frame_data[str(f)] = mfcc[:, f].tolist()
 
-                refs.append({
-                    "signal": "440Hz_tone",
-                    "sr": sr,
-                    "n_mfcc": n_mfcc,
-                    "n_mels": n_mels,
-                    "lifter": lifter,
-                    "shape": list(mfcc.shape),
-                    "mean": mfcc.mean(axis=1).tolist(),
-                    "std": mfcc.std(axis=1).tolist(),
-                    "selected_frames": frame_data,
-                })
+                refs.append(
+                    {
+                        "signal": "440Hz_tone",
+                        "sr": sr,
+                        "n_mfcc": n_mfcc,
+                        "n_mels": n_mels,
+                        "lifter": lifter,
+                        "shape": list(mfcc.shape),
+                        "mean": mfcc.mean(axis=1).tolist(),
+                        "std": mfcc.std(axis=1).tolist(),
+                        "selected_frames": frame_data,
+                    }
+                )
 
     return refs
 
@@ -118,11 +126,13 @@ def generate_tempo_reference():
 
         detected = librosa.feature.tempo(y=y, sr=sr)
 
-        refs.append({
-            "true_tempo": true_tempo,
-            "detected_tempo": float(detected[0]),
-            "tolerance_percent": 5.0,
-        })
+        refs.append(
+            {
+                "true_tempo": true_tempo,
+                "detected_tempo": float(detected[0]),
+                "tolerance_percent": 5.0,
+            }
+        )
 
     return refs
 
@@ -135,7 +145,7 @@ def generate_onset_strength_reference():
     y = np.zeros(int(duration * sr))
     for t_val in [0.2, 0.4, 0.6, 0.8]:
         idx = int(t_val * sr)
-        y[idx:idx+100] = np.hanning(100)
+        y[idx : idx + 100] = np.hanning(100)
 
     refs = []
     for hop_length in [256, 512]:
@@ -143,22 +153,25 @@ def generate_onset_strength_reference():
 
         # Find top 5 peaks
         from scipy.signal import find_peaks
+
         peaks, _ = find_peaks(onset_env, height=onset_env.max() * 0.3)
         peak_heights = onset_env[peaks]
         top_indices = np.argsort(peak_heights)[-5:]
         top_peaks = sorted(peaks[top_indices].tolist())
 
-        refs.append({
-            "signal": "impulse_train",
-            "sr": sr,
-            "hop_length": hop_length,
-            "shape": list(onset_env.shape),
-            "max": float(onset_env.max()),
-            "mean": float(onset_env.mean()),
-            "nonzero_count": int(np.count_nonzero(onset_env > 0.1)),
-            "envelope": onset_env.tolist(),
-            "top_peak_frames": top_peaks,
-        })
+        refs.append(
+            {
+                "signal": "impulse_train",
+                "sr": sr,
+                "hop_length": hop_length,
+                "shape": list(onset_env.shape),
+                "max": float(onset_env.max()),
+                "mean": float(onset_env.mean()),
+                "nonzero_count": int(np.count_nonzero(onset_env > 0.1)),
+                "envelope": onset_env.tolist(),
+                "top_peak_frames": top_peaks,
+            }
+        )
 
     return refs
 
@@ -174,17 +187,19 @@ def generate_stft_reference():
     refs = []
     for n_fft, hop_length in [(2048, 512), (1024, 256)]:
         S = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=hop_length))
-        refs.append({
-            "signal": "440Hz_tone",
-            "sr": sr,
-            "n_fft": n_fft,
-            "hop_length": hop_length,
-            "shape": list(S.shape),
-            "magnitude_sum": float(S.sum()),
-            "magnitude_max": float(S.max()),
-            # Store full magnitude matrix (flattened, row-major: [n_bins, n_frames])
-            "magnitude": S.flatten().tolist(),
-        })
+        refs.append(
+            {
+                "signal": "440Hz_tone",
+                "sr": sr,
+                "n_fft": n_fft,
+                "hop_length": hop_length,
+                "shape": list(S.shape),
+                "magnitude_sum": float(S.sum()),
+                "magnitude_max": float(S.max()),
+                # Store full magnitude matrix (flattened, row-major: [n_bins, n_frames])
+                "magnitude": S.flatten().tolist(),
+            }
+        )
 
     return refs
 
@@ -196,24 +211,30 @@ def generate_power_to_db_reference():
     scalar_refs = []
     for val in test_values:
         db = librosa.power_to_db(np.array([val]), ref=1.0, amin=1e-10, top_db=None)
-        scalar_refs.append({
-            "power": val,
-            "db": float(db[0]),
-        })
+        scalar_refs.append(
+            {
+                "power": val,
+                "db": float(db[0]),
+            }
+        )
 
     # Also test with top_db=80 (librosa default)
     scalar_refs_topdb = []
     for val in test_values:
         db = librosa.power_to_db(np.array([val]), ref=1.0, amin=1e-10, top_db=80.0)
-        scalar_refs_topdb.append({
-            "power": val,
-            "db": float(db[0]),
-        })
+        scalar_refs_topdb.append(
+            {
+                "power": val,
+                "db": float(db[0]),
+            }
+        )
 
     # Mel spectrogram dB test
     sr = 22050
     y = librosa.tone(440.0, sr=sr, duration=1.0)
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, n_fft=2048, hop_length=512)
+    S = librosa.feature.melspectrogram(
+        y=y, sr=sr, n_mels=128, n_fft=2048, hop_length=512
+    )
     S_db = librosa.power_to_db(S, ref=1.0, amin=1e-10, top_db=None)
 
     return {
@@ -226,7 +247,7 @@ def generate_power_to_db_reference():
             "shape": list(S_db.shape),
             "mean_per_band": S_db.mean(axis=1).tolist(),
             "std_per_band": S_db.std(axis=1).tolist(),
-        }
+        },
     }
 
 
@@ -256,16 +277,18 @@ def generate_zcr_rms_reference():
     ]:
         zcr = librosa.feature.zero_crossing_rate(y, frame_length=2048, hop_length=512)
         rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)
-        refs.append({
-            "signal": name,
-            "sr": sr,
-            "frame_length": 2048,
-            "hop_length": 512,
-            "zcr_shape": list(zcr.shape),
-            "zcr": zcr.flatten().tolist(),
-            "rms_shape": list(rms.shape),
-            "rms": rms.flatten().tolist(),
-        })
+        refs.append(
+            {
+                "signal": name,
+                "sr": sr,
+                "frame_length": 2048,
+                "hop_length": 512,
+                "zcr_shape": list(zcr.shape),
+                "zcr": zcr.flatten().tolist(),
+                "rms_shape": list(rms.shape),
+                "rms": rms.flatten().tolist(),
+            }
+        )
 
     return refs
 
@@ -276,8 +299,10 @@ def generate_spectral_features_reference():
     duration = 1.0
 
     # Two-tone signal
-    t = np.arange(0, duration, 1.0/sr)
-    y = (np.sin(2 * np.pi * 440 * t) + np.sin(2 * np.pi * 880 * t)).astype(np.float32) * 0.5
+    t = np.arange(0, duration, 1.0 / sr)
+    y = (np.sin(2 * np.pi * 440 * t) + np.sin(2 * np.pi * 880 * t)).astype(
+        np.float32
+    ) * 0.5
 
     S = np.abs(librosa.stft(y, n_fft=2048, hop_length=512))
 
@@ -309,27 +334,35 @@ def generate_chroma_reference():
     refs = []
 
     # C major chord (C4 + E4 + G4)
-    t = np.arange(0, duration, 1.0/sr)
-    y = (np.sin(2*np.pi*261.63*t) + np.sin(2*np.pi*329.63*t) + np.sin(2*np.pi*392.0*t)).astype(np.float32) / 3.0
+    t = np.arange(0, duration, 1.0 / sr)
+    y = (
+        np.sin(2 * np.pi * 261.63 * t)
+        + np.sin(2 * np.pi * 329.63 * t)
+        + np.sin(2 * np.pi * 392.0 * t)
+    ).astype(np.float32) / 3.0
     chroma = librosa.feature.chroma_stft(y=y, sr=sr, n_fft=2048, hop_length=512)
-    refs.append({
-        "signal": "C_major_chord",
-        "sr": sr,
-        "shape": list(chroma.shape),
-        "mean_per_class": chroma.mean(axis=1).tolist(),
-        "chroma": chroma.flatten().tolist(),
-    })
+    refs.append(
+        {
+            "signal": "C_major_chord",
+            "sr": sr,
+            "shape": list(chroma.shape),
+            "mean_per_class": chroma.mean(axis=1).tolist(),
+            "chroma": chroma.flatten().tolist(),
+        }
+    )
 
     # 440Hz tone (should peak at A)
     y_a = librosa.tone(440.0, sr=sr, duration=duration)
     chroma_a = librosa.feature.chroma_stft(y=y_a, sr=sr, n_fft=2048, hop_length=512)
-    refs.append({
-        "signal": "440Hz_tone",
-        "sr": sr,
-        "shape": list(chroma_a.shape),
-        "mean_per_class": chroma_a.mean(axis=1).tolist(),
-        "chroma": chroma_a.flatten().tolist(),
-    })
+    refs.append(
+        {
+            "signal": "440Hz_tone",
+            "sr": sr,
+            "shape": list(chroma_a.shape),
+            "mean_per_class": chroma_a.mean(axis=1).tolist(),
+            "chroma": chroma_a.flatten().tolist(),
+        }
+    )
 
     return refs
 
@@ -340,13 +373,23 @@ def generate_cqt_reference():
     duration = 1.0
     y = librosa.tone(440.0, sr=sr, duration=duration)
 
-    fmin = librosa.note_to_hz('C1')  # ~32.7 Hz
+    fmin = librosa.note_to_hz("C1")  # ~32.7 Hz
     n_bins = 84
     bins_per_octave = 12
 
-    C = np.abs(librosa.cqt(y, sr=sr, fmin=fmin, n_bins=n_bins,
-                            bins_per_octave=bins_per_octave, hop_length=512))
-    freqs = librosa.cqt_frequencies(n_bins=n_bins, fmin=fmin, bins_per_octave=bins_per_octave)
+    C = np.abs(
+        librosa.cqt(
+            y,
+            sr=sr,
+            fmin=fmin,
+            n_bins=n_bins,
+            bins_per_octave=bins_per_octave,
+            hop_length=512,
+        )
+    )
+    freqs = librosa.cqt_frequencies(
+        n_bins=n_bins, fmin=fmin, bins_per_octave=bins_per_octave
+    )
 
     return {
         "signal": "440Hz_tone",
@@ -360,7 +403,9 @@ def generate_cqt_reference():
         "magnitude_max": float(C.max()),
         "frequencies": freqs.tolist(),
         # Store first 5 frames
-        "frames": C[:, :5].flatten().tolist() if C.shape[1] >= 5 else C.flatten().tolist(),
+        "frames": C[:, :5].flatten().tolist()
+        if C.shape[1] >= 5
+        else C.flatten().tolist(),
         "n_stored_frames": min(5, C.shape[1]),
     }
 
@@ -370,8 +415,9 @@ def generate_icqt_reference():
     sr = 22050
     n_samples = 8192
     t = np.arange(n_samples, dtype=np.float64) / sr
-    y = (0.7 * np.sin(2.0 * np.pi * 440.0 * t) +
-         0.3 * np.sin(2.0 * np.pi * 660.0 * t)).astype(np.float32)
+    y = (
+        0.7 * np.sin(2.0 * np.pi * 440.0 * t) + 0.3 * np.sin(2.0 * np.pi * 660.0 * t)
+    ).astype(np.float32)
 
     fmin = librosa.note_to_hz("C4")
     n_bins = 12
@@ -428,30 +474,36 @@ def generate_yin_reference():
     # 440Hz tone
     y = librosa.tone(440.0, sr=sr, duration=duration)
     f0 = librosa.yin(y, fmin=65, fmax=2093, sr=sr, frame_length=2048, hop_length=512)
-    refs.append({
-        "signal": "440Hz_tone",
-        "sr": sr,
-        "fmin": 65,
-        "fmax": 2093,
-        "frame_length": 2048,
-        "hop_length": 512,
-        "shape": list(f0.shape),
-        "f0": f0.tolist(),
-    })
+    refs.append(
+        {
+            "signal": "440Hz_tone",
+            "sr": sr,
+            "fmin": 65,
+            "fmax": 2093,
+            "frame_length": 2048,
+            "hop_length": 512,
+            "shape": list(f0.shape),
+            "f0": f0.tolist(),
+        }
+    )
 
     # Chirp 200-800Hz
     y_chirp = librosa.chirp(fmin=200, fmax=800, sr=sr, duration=duration)
-    f0_chirp = librosa.yin(y_chirp, fmin=65, fmax=2093, sr=sr, frame_length=2048, hop_length=512)
-    refs.append({
-        "signal": "chirp_200_800Hz",
-        "sr": sr,
-        "fmin": 65,
-        "fmax": 2093,
-        "frame_length": 2048,
-        "hop_length": 512,
-        "shape": list(f0_chirp.shape),
-        "f0": f0_chirp.tolist(),
-    })
+    f0_chirp = librosa.yin(
+        y_chirp, fmin=65, fmax=2093, sr=sr, frame_length=2048, hop_length=512
+    )
+    refs.append(
+        {
+            "signal": "chirp_200_800Hz",
+            "sr": sr,
+            "fmin": 65,
+            "fmax": 2093,
+            "frame_length": 2048,
+            "hop_length": 512,
+            "shape": list(f0_chirp.shape),
+            "f0": f0_chirp.tolist(),
+        }
+    )
 
     return refs
 
@@ -485,19 +537,21 @@ def generate_pyin_reference():
     ]
     for name, y in signals:
         f0, voiced_flag, voiced_prob = librosa.pyin(y, sr=sr, **params)
-        refs.append({
-            "signal": name,
-            "sr": sr,
-            **params,
-            "shape": list(f0.shape),
-            "f0": f0.tolist(),
-            "voiced_flag": voiced_flag.astype(bool).tolist(),
-            "voiced_prob": voiced_prob.tolist(),
-            "acceptance": {
-                "f0_cents_tolerance": 10.0,
-                "max_voiced_flag_mismatch_ratio": 0.01,
-            },
-        })
+        refs.append(
+            {
+                "signal": name,
+                "sr": sr,
+                **params,
+                "shape": list(f0.shape),
+                "f0": f0.tolist(),
+                "voiced_flag": voiced_flag.astype(bool).tolist(),
+                "voiced_prob": voiced_prob.tolist(),
+                "acceptance": {
+                    "f0_cents_tolerance": 10.0,
+                    "max_voiced_flag_mismatch_ratio": 0.01,
+                },
+            }
+        )
 
     return refs
 
@@ -508,12 +562,12 @@ def generate_hpss_reference():
     duration = 1.0
 
     # Mix: 440Hz tone + impulse train
-    t = np.arange(0, duration, 1.0/sr)
+    t = np.arange(0, duration, 1.0 / sr)
     y_harmonic = np.sin(2 * np.pi * 440 * t).astype(np.float32) * 0.5
     y_percussive = np.zeros_like(y_harmonic)
     for pos in [0.1, 0.3, 0.5, 0.7, 0.9]:
         idx = int(pos * sr)
-        y_percussive[idx:idx+50] = 1.0
+        y_percussive[idx : idx + 50] = 1.0
     y = y_harmonic + y_percussive
 
     S = librosa.stft(y, n_fft=2048, hop_length=512)
@@ -569,13 +623,16 @@ def generate_db_conversion_reference():
             {"power": float(v), "db": float(d)} for v, d in zip(values, p2db_topdb80)
         ],
         "amplitude_to_db_scalar": [
-            {"amplitude": float(v), "db": float(d)} for v, d in zip(amp_values, a2db_default)
+            {"amplitude": float(v), "db": float(d)}
+            for v, d in zip(amp_values, a2db_default)
         ],
         "db_to_power": [
-            {"db": float(v), "power": float(p)} for v, p in zip(db_to_power_vals, p_back)
+            {"db": float(v), "power": float(p)}
+            for v, p in zip(db_to_power_vals, p_back)
         ],
         "db_to_amplitude": [
-            {"db": float(v), "amplitude": float(a)} for v, a in zip(db_to_power_vals, a_back)
+            {"db": float(v), "amplitude": float(a)}
+            for v, a in zip(db_to_power_vals, a_back)
         ],
         "power_to_db_maxref": {
             "shape": list(S_db_maxref.shape),
@@ -605,7 +662,9 @@ def generate_frames_samples_reference():
         "frames_to_samples_with_nfft": [
             {
                 "frames": f,
-                "samples": int(librosa.frames_to_samples(f, hop_length=hop, n_fft=n_fft)),
+                "samples": int(
+                    librosa.frames_to_samples(f, hop_length=hop, n_fft=n_fft)
+                ),
             }
             for f in frames
         ],
@@ -616,7 +675,9 @@ def generate_frames_samples_reference():
         "samples_to_frames_with_nfft": [
             {
                 "samples": s,
-                "frames": int(librosa.samples_to_frames(s, hop_length=hop, n_fft=n_fft)),
+                "frames": int(
+                    librosa.samples_to_frames(s, hop_length=hop, n_fft=n_fft)
+                ),
             }
             for s in samples
         ],
@@ -677,7 +738,9 @@ def generate_silence_reference():
     parts.append(np.zeros(int(0.2 * sr), dtype=np.float32))
     y = np.concatenate(parts)
 
-    trimmed, index = librosa.effects.trim(y, top_db=20, frame_length=2048, hop_length=512)
+    trimmed, index = librosa.effects.trim(
+        y, top_db=20, frame_length=2048, hop_length=512
+    )
     intervals = librosa.effects.split(y, top_db=20, frame_length=2048, hop_length=512)
     return {
         "sr": sr,
@@ -743,6 +806,80 @@ def generate_peak_pick_reference():
     }
 
 
+def generate_peak_pick_plateau_reference():
+    """peak_pick reference over a plateau-heavy envelope with a small wait.
+
+    Exercises the local-max / moving-average window boundaries: flat plateaus and
+    a decaying trailing slope are exactly where an inclusive-vs-exclusive window
+    off-by-one would emit spurious peaks, so this pins the librosa convention.
+    """
+    x = np.array(
+        [
+            0.0,
+            0.1,
+            0.3,
+            0.6,
+            1.0,
+            1.0,
+            1.0,
+            0.9,
+            0.7,
+            0.5,
+            0.4,
+            0.3,
+            0.2,
+            0.2,
+            0.2,
+            0.5,
+            0.8,
+            0.8,
+            0.6,
+            0.3,
+            0.2,
+            0.1,
+            0.05,
+            0.0,
+            0.0,
+            0.4,
+            0.7,
+            0.7,
+            0.7,
+            0.4,
+            0.2,
+            0.1,
+            0.0,
+            0.0,
+            0.6,
+            0.6,
+            0.3,
+            0.1,
+            0.0,
+            0.0,
+        ],
+        dtype=np.float32,
+    )
+    pre_max, post_max, pre_avg, post_avg, delta, wait = 2, 2, 4, 4, 0.05, 2
+    peaks = librosa.util.peak_pick(
+        x,
+        pre_max=pre_max,
+        post_max=post_max,
+        pre_avg=pre_avg,
+        post_avg=post_avg,
+        delta=delta,
+        wait=wait,
+    )
+    return {
+        "input": x.tolist(),
+        "pre_max": pre_max,
+        "post_max": post_max,
+        "pre_avg": pre_avg,
+        "post_avg": post_avg,
+        "delta": delta,
+        "wait": wait,
+        "expected_peaks": [int(p) for p in peaks],
+    }
+
+
 def generate_util_frame_reference():
     """util.frame reference."""
     n = 1024
@@ -750,7 +887,9 @@ def generate_util_frame_reference():
     x = rng.standard_normal(n).astype(np.float32)
     frame_length = 256
     hop_length = 64
-    frames = librosa.util.frame(x, frame_length=frame_length, hop_length=hop_length, axis=0)
+    frames = librosa.util.frame(
+        x, frame_length=frame_length, hop_length=hop_length, axis=0
+    )
     # frames has shape (n_frames, frame_length) with axis=0.
     return {
         "frame_length": frame_length,
@@ -889,8 +1028,14 @@ def generate_pcen_reference():
         y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, power=2.0
     )
     expected = librosa.pcen(
-        S, sr=sr, hop_length=hop_length,
-        time_constant=0.4, gain=0.98, bias=2.0, power=0.5, eps=1e-6
+        S,
+        sr=sr,
+        hop_length=hop_length,
+        time_constant=0.4,
+        gain=0.98,
+        bias=2.0,
+        power=0.5,
+        eps=1e-6,
     )
 
     return {
@@ -915,14 +1060,22 @@ def generate_chroma_cqt_reference():
     sr = 22050
     duration = 1.0
     # C major chord (C4 + E4 + G4)
-    t = np.arange(0, duration, 1.0/sr)
-    y = (np.sin(2*np.pi*261.63*t) + np.sin(2*np.pi*329.63*t)
-         + np.sin(2*np.pi*392.0*t)).astype(np.float32) / 3.0
+    t = np.arange(0, duration, 1.0 / sr)
+    y = (
+        np.sin(2 * np.pi * 261.63 * t)
+        + np.sin(2 * np.pi * 329.63 * t)
+        + np.sin(2 * np.pi * 392.0 * t)
+    ).astype(np.float32) / 3.0
     hop_length = 512
 
     chroma = librosa.feature.chroma_cqt(
-        y=y, sr=sr, hop_length=hop_length, n_chroma=12,
-        fmin=librosa.note_to_hz('C1'), bins_per_octave=12, n_octaves=7
+        y=y,
+        sr=sr,
+        hop_length=hop_length,
+        n_chroma=12,
+        fmin=librosa.note_to_hz("C1"),
+        bins_per_octave=12,
+        n_octaves=7,
     )
     return {
         "signal": "C_major_chord",
@@ -937,15 +1090,23 @@ def generate_chroma_cens_reference():
     """librosa.feature.chroma_cens reference (statistics only)."""
     sr = 22050
     duration = 1.0
-    t = np.arange(0, duration, 1.0/sr)
-    y = (np.sin(2*np.pi*261.63*t) + np.sin(2*np.pi*329.63*t)
-         + np.sin(2*np.pi*392.0*t)).astype(np.float32) / 3.0
+    t = np.arange(0, duration, 1.0 / sr)
+    y = (
+        np.sin(2 * np.pi * 261.63 * t)
+        + np.sin(2 * np.pi * 329.63 * t)
+        + np.sin(2 * np.pi * 392.0 * t)
+    ).astype(np.float32) / 3.0
     hop_length = 512
 
     cens = librosa.feature.chroma_cens(
-        y=y, sr=sr, hop_length=hop_length, n_chroma=12,
-        fmin=librosa.note_to_hz('C1'), bins_per_octave=12, n_octaves=7,
-        win_len_smooth=41
+        y=y,
+        sr=sr,
+        hop_length=hop_length,
+        n_chroma=12,
+        fmin=librosa.note_to_hz("C1"),
+        bins_per_octave=12,
+        n_octaves=7,
+        win_len_smooth=41,
     )
     return {
         "signal": "C_major_chord",
@@ -962,9 +1123,12 @@ def generate_pitch_utilities_reference():
     sr = 22050
     duration = 1.0
     # Mixture of three known pitches: 440, 660, 880 Hz.
-    t = np.arange(0, duration, 1.0/sr)
-    y = (np.sin(2*np.pi*440.0*t) + np.sin(2*np.pi*660.0*t)
-         + np.sin(2*np.pi*880.0*t)).astype(np.float32) / 3.0
+    t = np.arange(0, duration, 1.0 / sr)
+    y = (
+        np.sin(2 * np.pi * 440.0 * t)
+        + np.sin(2 * np.pi * 660.0 * t)
+        + np.sin(2 * np.pi * 880.0 * t)
+    ).astype(np.float32) / 3.0
     n_fft = 2048
     hop_length = 512
 
@@ -1085,9 +1249,7 @@ def generate_inverse_features_reference():
         y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, power=2.0
     )
     try:
-        S_rec = librosa.feature.inverse.mel_to_stft(
-            M, sr=sr, n_fft=n_fft, power=2.0
-        )
+        S_rec = librosa.feature.inverse.mel_to_stft(M, sr=sr, n_fft=n_fft, power=2.0)
         rec_shape = list(S_rec.shape)
         rec_min = float(S_rec.min())
     except Exception:  # pylint: disable=broad-except
@@ -1199,7 +1361,9 @@ def generate_synthesis_reference():
     # values from our own formula sin(2*pi*f*t + phi). To check that, we also
     # emit a librosa-equivalent reference with our convention (phi shifted).
     # For shape reference, use librosa.tone with phi = 0 -> cos(2*pi*f*t).
-    y_tone_librosa = librosa.tone(440.0, sr=sr, duration=duration, phi=0.0).astype(np.float64)
+    y_tone_librosa = librosa.tone(440.0, sr=sr, duration=duration, phi=0.0).astype(
+        np.float64
+    )
 
     # chirp: linear sweep
     y_chirp_lin = librosa.chirp(
@@ -1239,7 +1403,9 @@ def generate_remix_reference():
     # Build a deterministic mixed signal: sum of two tones over 0.2s.
     n = int(0.2 * sr)
     t = np.arange(n) / sr
-    y = (np.sin(2 * np.pi * 220.0 * t) + 0.5 * np.sin(2 * np.pi * 440.0 * t)).astype(np.float32)
+    y = (np.sin(2 * np.pi * 220.0 * t) + 0.5 * np.sin(2 * np.pi * 440.0 * t)).astype(
+        np.float32
+    )
 
     # Intervals (start, end) - end exclusive.
     intervals = [(1000, 2500), (3000, 4200), (200, 800)]
@@ -1264,7 +1430,9 @@ def generate_audio_ops_reference():
     mu = 255
     comp_no_q = librosa.mu_compress(x, mu=mu, quantize=False).tolist()
     comp_q = librosa.mu_compress(x, mu=mu, quantize=True).tolist()
-    expand_q = librosa.mu_expand(np.array(comp_q, dtype=np.float64), mu=mu, quantize=True).tolist()
+    expand_q = librosa.mu_expand(
+        np.array(comp_q, dtype=np.float64), mu=mu, quantize=True
+    ).tolist()
     expand_no_q = librosa.mu_expand(
         np.array(comp_no_q, dtype=np.float64), mu=mu, quantize=False
     ).tolist()
@@ -1332,10 +1500,7 @@ def generate_nnls_reference():
     # Case 1: a small over-determined system where the unconstrained least
     # squares already gives a non-negative solution. NNLS should match LS.
     A1 = np.array(
-        [[1.0, 0.0, 0.0],
-         [0.0, 2.0, 0.0],
-         [0.0, 0.0, 3.0],
-         [0.5, 0.5, 0.5]],
+        [[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0], [0.5, 0.5, 0.5]],
         dtype=np.float32,
     )
     x_true = np.array([[1.0, 2.0], [3.0, 0.0], [0.5, 4.0]], dtype=np.float32)
@@ -1395,7 +1560,7 @@ def generate_harmonic_reference():
         "frequencies": freqs.tolist(),
         "harmonics": harmonics,
         "interp_harmonics": interp.tolist(),  # [n_h x n_bins x n_frames]
-        "salience": salience_out.tolist(),    # [n_bins x n_frames]
+        "salience": salience_out.tolist(),  # [n_bins x n_frames]
     }
 
 
@@ -1405,13 +1570,17 @@ def generate_wavelet_filters_reference():
     freqs = [100.0, 200.0, 440.0, 880.0]
 
     # wavelet_lengths returns (lengths, f_cutoff) since librosa 0.10.
-    out = librosa.filters.wavelet_lengths(freqs=np.asarray(freqs), sr=sr, filter_scale=1.0)
+    out = librosa.filters.wavelet_lengths(
+        freqs=np.asarray(freqs), sr=sr, filter_scale=1.0
+    )
     lengths_raw = out[0] if isinstance(out, tuple) else out
     lengths = [float(v) for v in np.asarray(lengths_raw)]
 
     # Padded kernels: librosa returns [n_filters x n_fft_pow2] with kernels
     # centered inside their slot.
-    out = librosa.filters.wavelet(freqs=np.asarray(freqs), sr=sr, filter_scale=1.0, pad_fft=True)
+    out = librosa.filters.wavelet(
+        freqs=np.asarray(freqs), sr=sr, filter_scale=1.0, pad_fft=True
+    )
     filters = out[0] if isinstance(out, tuple) else out
     return {
         "sr": sr,
@@ -1433,7 +1602,9 @@ def generate_segment_reference():
     # librosa requires k >= 1 for affinity / k-NN modes. Use a small k so the
     # sparsification stays visible while still leaving room for non-zeros.
     k = 3
-    affinity = librosa.segment.cross_similarity(X, X, mode="affinity", metric="cosine", k=k)
+    affinity = librosa.segment.cross_similarity(
+        X, X, mode="affinity", metric="cosine", k=k
+    )
     rec = librosa.segment.recurrence_matrix(
         X, mode="affinity", metric="cosine", width=1, sym=False, k=k
     )
@@ -1462,15 +1633,15 @@ def generate_sequence_reference():
 
     # Viterbi: 3 states, 5 time steps. Emission probabilities favour state 1.
     emit = np.array(
-        [[0.1, 0.1, 0.1, 0.1, 0.1],
-         [0.8, 0.7, 0.6, 0.8, 0.7],
-         [0.1, 0.2, 0.3, 0.1, 0.2]],
+        [
+            [0.1, 0.1, 0.1, 0.1, 0.1],
+            [0.8, 0.7, 0.6, 0.8, 0.7],
+            [0.1, 0.2, 0.3, 0.1, 0.2],
+        ],
         dtype=np.float64,
     )
     trans = np.array(
-        [[0.6, 0.2, 0.2],
-         [0.2, 0.6, 0.2],
-         [0.2, 0.2, 0.6]],
+        [[0.6, 0.2, 0.2], [0.2, 0.6, 0.2], [0.2, 0.2, 0.6]],
         dtype=np.float64,
     )
     states = librosa.sequence.viterbi(emit, trans).tolist()
@@ -1505,14 +1676,23 @@ def generate_decompose_reference():
     # element-wise W, H equality (NMF is identifiable only up to permutation
     # and scaling).
     from sklearn.decomposition import NMF
-    nmf = NMF(n_components=2, init="random", solver="mu", beta_loss="frobenius",
-              random_state=0, max_iter=400)
+
+    nmf = NMF(
+        n_components=2,
+        init="random",
+        solver="mu",
+        beta_loss="frobenius",
+        random_state=0,
+        max_iter=400,
+    )
     W = nmf.fit_transform(S)
     H = nmf.components_
     recon = W @ H
 
     # nn_filter with mean aggregator over k=3 neighbours.
-    filt = librosa.decompose.nn_filter(S, aggregate=np.mean, metric="cosine", width=1, k=3)
+    filt = librosa.decompose.nn_filter(
+        S, aggregate=np.mean, metric="cosine", width=1, k=3
+    )
     return {
         "S": S.tolist(),
         "n_features": n_features,
@@ -1586,6 +1766,7 @@ def main():
         "silence": generate_silence_reference(),
         "tempogram": generate_tempogram_reference(),
         "peak_pick": generate_peak_pick_reference(),
+        "peak_pick_plateau": generate_peak_pick_plateau_reference(),
         "util_frame": generate_util_frame_reference(),
         "padding": generate_padding_reference(),
         "vector_normalize": generate_normalize_reference(),

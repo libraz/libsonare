@@ -18,9 +18,11 @@ namespace sonare {
 /// @param delta Threshold above moving-average baseline
 /// @param wait Minimum number of samples between consecutive peaks
 /// @return Sorted vector of peak indices.
-/// @details Same algorithm as librosa.util.peak_pick. All window radii are
-///          non-negative integers; the comparison windows extend by `pre_*+1`
-///          and `post_*+1` around the candidate index respectively.
+/// @details Same algorithm as librosa.util.peak_pick: a sample `i` is a peak
+///          when `x[i] == max(x[i-pre_max : i+post_max])` and
+///          `x[i] >= mean(x[i-pre_avg : i+post_avg]) + delta`, greedily spaced by
+///          `wait`. The window high ends (`i+post_max` / `i+post_avg`) are
+///          EXCLUSIVE, matching librosa's array slices.
 /// @throw sonare::SonareException if any radius or wait is negative.
 std::vector<int> peak_pick(const float* x, std::size_t n, int pre_max, int post_max, int pre_avg,
                            int post_avg, float delta, int wait);
