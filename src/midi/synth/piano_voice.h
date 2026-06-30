@@ -58,6 +58,13 @@ inline int piano_slab_capacity(double sample_rate) noexcept {
   return kMaxPianoStrings * piano_string_capacity(sample_rate);
 }
 
+/// Physically-graded stiff-string inharmonicity coefficient B for a MIDI
+/// @p note, where partial n lands at f_n = n*f0*sqrt(1 + B*n^2). B rises
+/// roughly threefold per octave (Fletcher/Conklin), from ~2e-5 in the deep
+/// bass through ~7e-4 around A4 to a few percent at the top of the keyboard,
+/// with a small bass floor. Drives the per-note dispersion allpass design.
+float piano_inharmonicity_b(uint8_t note) noexcept;
+
 /// Piano section of a NativeSynthPatch (used when mode == kPiano).
 struct PianoPatchParams {
   /// Coupled unison strings per note (clamped to [1, kMaxPianoStrings]).

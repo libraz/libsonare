@@ -33,6 +33,76 @@ float allpass_phase_delay(float a, float w) noexcept {
   return -phi / std::max(w, 1.0e-6f);
 }
 
+/// Phase delay (samples) of the one-pole loop lowpass y = (1-a)x + a*y^-1 at
+/// normalized frequency @p w.
+float onepole_phase_delay(float a, float w) noexcept {
+  return std::atan2(a * std::sin(w), 1.0f - a * std::cos(w)) / std::max(w, 1.0e-6f);
+}
+
+/// First-order allpass coefficient a (<= 0) for a cascade of @p stages that
+/// disperses the waveguide loop into the stiff-string law f_n =
+/// n*f0*sqrt(1 + B*n^2). The loop resonates where the total round-trip phase
+/// delay equals an integer number of periods, and only the lowpass and the
+/// allpass cascade vary the phase delay with frequency, so a is solved
+/// (bisection) to supply the stiff-string phase-delay differential between
+/// the fundamental and a high reference partial, then clamped so the
+/// per-stage delay still fits the loop budget. Endpoint-matched after Rauhala
+/// & Valimaki (2006); RT-safe (bounded, allocation-free, deterministic).
+float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
+                           float phase_budget) noexcept {
+  if (b_coeff <= 0.0f || stages <= 0) return 0.0f;
+  // Reference partial: high enough for a measurable differential but shrunk
+  // until its stiff-string frequency sits safely below Nyquist (so the
+  // treble, where B is large, still gets dispersion instead of bailing out).
+  const float n_max = 0.8f * kPi / std::max(w0, 1.0e-6f);
+  int n_ref = std::clamp(static_cast<int>(n_max), 2, 12);
+  while (n_ref > 2 && w0 * static_cast<float>(n_ref) *
+                              std::sqrt(1.0f + b_coeff * static_cast<float>(n_ref) *
+                                                   static_cast<float>(n_ref)) >=
+                          0.9f * kPi)
+    --n_ref;
+  const float fr = static_cast<float>(n_ref);
+  const float w1 = w0 * std::sqrt(1.0f + b_coeff);
+  const float wr = w0 * fr * std::sqrt(1.0f + b_coeff * fr * fr);
+  if (wr >= 0.97f * kPi) return 0.0f;
+  const float period = kTwoPi / w0;
+  // Total phase-delay differential the dispersion must realize between the
+  // two partials, net of the (frequency-independent) delay line.
+  const float total_diff =
+      period * (1.0f / std::sqrt(1.0f + b_coeff) - 1.0f / std::sqrt(1.0f + b_coeff * fr * fr));
+  const float lp_diff = onepole_phase_delay(lp_a, w1) - onepole_phase_delay(lp_a, wr);
+  const float need = (total_diff - lp_diff) / static_cast<float>(stages);
+  if (need <= 0.0f) return 0.0f;
+  // p_ap(w1;a) - p_ap(wr;a) increases monotonically as a -> -1.
+  float lo = -0.999f;
+  float hi = 0.0f;
+  for (int it = 0; it < 40; ++it) {
+    const float a = 0.5f * (lo + hi);
+    const float diff = allpass_phase_delay(a, w1) - allpass_phase_delay(a, wr);
+    if (diff > need)
+      lo = a;
+    else
+      hi = a;
+  }
+  float a = 0.5f * (lo + hi);
+  // Clamp so the per-stage phase delay at the fundamental fits the loop
+  // budget (the delay line must keep a few samples).
+  const float max_pap = phase_budget / static_cast<float>(stages);
+  if (max_pap > 1.0f && allpass_phase_delay(a, w1) > max_pap) {
+    float blo = a;
+    float bhi = 0.0f;
+    for (int it = 0; it < 30; ++it) {
+      const float c = 0.5f * (blo + bhi);
+      if (allpass_phase_delay(c, w1) > max_pap)
+        blo = c;
+      else
+        bhi = c;
+    }
+    a = bhi;
+  }
+  return a;
+}
+
 /// Soundboard dominant-mode sketch (Hz / t60 s / weight). Fixed data-free
 /// voicing shared by every piano patch.
 struct SoundboardModeSpec {
@@ -49,6 +119,16 @@ constexpr SoundboardModeSpec kSoundboardModes[4] = {
 
 }  // namespace
 
+float piano_inharmonicity_b(uint8_t note) noexcept {
+  const float n = static_cast<float>(note & 0x7Fu);
+  // ~threefold growth per octave anchored near A4 (note 69), with a deep-bass
+  // floor so the lowest wrapped strings keep a touch of stiffness.
+  constexpr float kBAtA4 = 7.0e-4f;
+  constexpr float kBetaPerSemitone = 0.0915750f;  // ln(3) / 12
+  const float b = kBAtA4 * std::exp(kBetaPerSemitone * (n - 69.0f));
+  return std::max(b, 2.0e-5f);
+}
+
 void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, uint8_t note,
                            uint8_t velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -60,17 +140,16 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // Loop lowpass (frequency-dependent damping).
   const float lp_a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.6f;
   loop_alpha_ = 1.0f - lp_a;
-  const float tau_lp =
-      std::atan2(lp_a * std::sin(w0), 1.0f - lp_a * std::cos(w0)) / std::max(w0, 1.0e-6f);
+  const float tau_lp = onepole_phase_delay(lp_a, w0);
 
-  // Stiffness dispersion: keyboard-graded per-stage allpass delay, clamped
-  // so the loop line keeps at least a few samples.
-  const float key_t = std::clamp((static_cast<float>(note & 0x7Fu) - 21.0f) / 87.0f, 0.0f, 1.0f);
+  // Stiffness dispersion: the per-note inharmonicity coefficient B drives a
+  // first-order allpass cascade that stretches the partials sharp to
+  // f_n = n*f0*sqrt(1 + B*n^2). The patch dispersion knob scales B
+  // (0 = harmonic string).
   const float dispersion = std::clamp(params.dispersion, 0.0f, 1.0f);
-  float tau_d = 1.0f + 3.2f * key_t * dispersion;
-  const float tau_budget = (period - 4.0f - tau_lp) / static_cast<float>(kPianoDispersionStages);
-  tau_d = std::clamp(tau_d, 1.0f, std::max(1.0f, tau_budget));
-  const float ap_a = (1.0f - tau_d) / (1.0f + tau_d);
+  const float b_coeff = piano_inharmonicity_b(note) * dispersion;
+  const float phase_budget = period - 4.0f - tau_lp;
+  const float ap_a = dispersion_allpass_a(b_coeff, w0, lp_a, kPianoDispersionStages, phase_budget);
 
   // Two-stage decay rates (stretched down the keyboard).
   const float stretch = std::clamp(params.decay_stretch, 0.0f, 1.0f);

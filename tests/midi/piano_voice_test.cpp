@@ -156,6 +156,47 @@ TEST_CASE("piano inharmonicity grows up the keyboard", "[midi][synth][piano]") {
   REQUIRE(high > 2.0 * low);
 }
 
+TEST_CASE("the synthesized inharmonicity tracks the physical B(note) curve",
+          "[midi][synth][piano]") {
+  using sonare::midi::synth::piano_inharmonicity_b;
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+
+  // Fit B from the low partials: f_n / (n * f1) = sqrt(1 + B*n^2), so
+  // B = ((f_n / (n*f1))^2 - 1) / n^2, averaged over n = 2..4.
+  auto measured_b = [&](int note) {
+    const double f0 = note_hz(note);
+    const std::vector<float> tone = render_patch(piano, static_cast<uint8_t>(note), 110, 48000);
+    const std::vector<double> power = power_spectrum(tone, 2048);
+    const double f1 = partial_hz(power, f0, 1);
+    REQUIRE(f1 > 0.0);
+    double acc = 0.0;
+    int count = 0;
+    for (int n = 2; n <= 4; ++n) {
+      const double fn = partial_hz(power, f0, n);
+      if (fn <= 0.0) continue;
+      const double ratio = fn / (static_cast<double>(n) * f1);
+      acc += (ratio * ratio - 1.0) / static_cast<double>(n * n);
+      ++count;
+    }
+    REQUIRE(count > 0);
+    return acc / count;
+  };
+
+  // C5: the measured stretch must land in the same order of magnitude as the
+  // intended physical coefficient (endpoint-matched, so not exact).
+  const double target_c5 = piano_inharmonicity_b(72);
+  const double meas_c5 = measured_b(72);
+  INFO("target B(C5)=" << target_c5 << " measured=" << meas_c5);
+  REQUIRE(meas_c5 > 0.3 * target_c5);
+  REQUIRE(meas_c5 < 3.0 * target_c5);
+
+  // The fitted B rises with register, as the curve dictates.
+  const double meas_c4 = measured_b(60);
+  const double meas_c6 = measured_b(84);
+  INFO("measured B: C4=" << meas_c4 << " C5=" << meas_c5 << " C6=" << meas_c6);
+  REQUIRE(meas_c6 > meas_c4);
+}
+
 TEST_CASE("coupled unison strings produce a two-stage decay", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   // 4 seconds of a held C4.
