@@ -15,6 +15,8 @@ constexpr uint64_t kNoiseIndexBase = 1ull << 20;
 /// Wire-rattle draws live above the noise-layer range so the two streams
 /// stay decorrelated.
 constexpr uint64_t kWireIndexBase = 1ull << 24;
+/// Shimmer draws live above the wire-rattle range.
+constexpr uint64_t kShimmerIndexBase = 1ull << 28;
 
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
@@ -106,6 +108,17 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   wire_filter_.prepare(sr);
   wire_filter_.set(params.wire_cutoff_hz, 0.9f);
   wire_filter_.reset();
+
+  // Nonlinear cymbal shimmer: the membrane energy pumps a high shimmer band
+  // through a slow attack follower (the buildup lag).
+  shimmer_ = std::max(0.0f, params.shimmer);
+  shimmer_env_ = 0.0f;
+  shimmer_attack_coeff_ = 1.0f - std::exp(-1.0f / (std::max(1.0f, params.shimmer_attack_ms) *
+                                                   0.001f * static_cast<float>(sr)));
+  shimmer_index_ = 0;
+  shimmer_filter_.prepare(sr);
+  shimmer_filter_.set(params.shimmer_cutoff_hz, 0.7f);
+  shimmer_filter_.reset();
 }
 
 float PercussionVoiceCore::render(float pitch_ratio) noexcept {
@@ -152,6 +165,15 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
           noise_.bipolar_at(kWireIndexBase + wire_index_++) * gate * wire_vel01_ * wire_buzz_;
       mix += wire_filter_.process(n).hp;
     }
+
+    // Nonlinear shimmer: the quadratic membrane energy (tone^2) drives a high
+    // shimmer band through a slow-attack follower, so the wash swells after
+    // the strike and rides the inharmonic ring. One-way, so it stays stable.
+    if (shimmer_ > 0.0f) {
+      shimmer_env_ += (tone * tone - shimmer_env_) * shimmer_attack_coeff_;
+      const float n = noise_.bipolar_at(kShimmerIndexBase + shimmer_index_++);
+      mix += shimmer_filter_.process(n * shimmer_env_ * shimmer_).hp;
+    }
   }
 
   if (noise_level_ > 1.0e-5f) {
@@ -188,6 +210,9 @@ void PercussionVoiceCore::kill() noexcept {
   shell_.reset();
   wire_buzz_ = 0.0f;
   wire_filter_.reset();
+  shimmer_ = 0.0f;
+  shimmer_env_ = 0.0f;
+  shimmer_filter_.reset();
 }
 
 }  // namespace sonare::midi::synth

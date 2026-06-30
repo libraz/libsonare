@@ -129,6 +129,11 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.percussion.wire_threshold = std::clamp(sanitize(p.percussion.wire_threshold, 0.1f), 0.0f, 4.0f);
   p.percussion.wire_cutoff_hz =
       std::clamp(sanitize(p.percussion.wire_cutoff_hz, 4000.0f), 20.0f, 20000.0f);
+  p.percussion.shimmer = std::clamp(sanitize(p.percussion.shimmer, 0.0f), 0.0f, 16.0f);
+  p.percussion.shimmer_attack_ms =
+      std::clamp(sanitize(p.percussion.shimmer_attack_ms, 40.0f), 1.0f, 2000.0f);
+  p.percussion.shimmer_cutoff_hz =
+      std::clamp(sanitize(p.percussion.shimmer_cutoff_hz, 8000.0f), 20.0f, 20000.0f);
   p.piano.strings = std::clamp(p.piano.strings, 1, kMaxPianoStrings);
   p.piano.detune_cents = std::clamp(sanitize(p.piano.detune_cents, 1.6f), 0.0f, 50.0f);
   p.piano.decay_fast_s = std::clamp(sanitize(p.piano.decay_fast_s, 3.0f), 0.05f, 60.0f);

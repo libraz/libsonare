@@ -107,6 +107,19 @@ struct PercussionPatchParams {
   float wire_threshold = 0.1f;
   /// Cutoff of the high-pass through which the rattle is voiced.
   float wire_cutoff_hz = 4000.0f;
+
+  // --- nonlinear shimmer (cymbal/gong) ---
+  /// Weakly-nonlinear energy transfer to a high shimmer band: the membrane
+  /// energy (tone^2, the quadratic nonlinearity) pumps a high-passed wash that
+  /// swells *after* the strike and rings as long as the inharmonic modes
+  /// sound -- the cymbal "shimmer" growth a static modal bank cannot produce.
+  /// One-way (modes -> shimmer, no feedback), so it is unconditionally stable.
+  /// 0 = off.
+  float shimmer = 0.0f;
+  /// Buildup time of the wash (the follower lag that delays the shimmer onset).
+  float shimmer_attack_ms = 40.0f;
+  /// High-pass cutoff of the shimmer band.
+  float shimmer_cutoff_hz = 8000.0f;
 };
 
 /// Per-voice percussion state, embedded in NativeSynthVoice.
@@ -156,6 +169,15 @@ class PercussionVoiceCore {
   float wire_vel01_ = 0.0f;
   uint64_t wire_index_ = 0;
   TptSvf wire_filter_;
+
+  // Nonlinear cymbal shimmer: a high-passed wash whose level follows the
+  // membrane energy (tone^2) through a slow attack, so it swells after the
+  // strike. One-way pump => stable.
+  float shimmer_ = 0.0f;
+  float shimmer_env_ = 0.0f;
+  float shimmer_attack_coeff_ = 0.0f;
+  uint64_t shimmer_index_ = 0;
+  TptSvf shimmer_filter_;
 };
 
 }  // namespace sonare::midi::synth

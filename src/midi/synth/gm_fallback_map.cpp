@@ -531,6 +531,12 @@ DrumPatches build_drum_patches() noexcept {
   d.cymbal.percussion.noise_decay_ms = 900.0f;
   d.cymbal.percussion.noise_cutoff_hz = 5500.0f;
   d.cymbal.percussion.noise_output = SynthFilterOutput::kHighpass;
+  // Nonlinear shimmer: the inharmonic modes pump a high wash that swells after
+  // the crash and rides the long ring -- the cymbal "bloom" a static bank
+  // lacks.
+  d.cymbal.percussion.shimmer = 6.0f;
+  d.cymbal.percussion.shimmer_attack_ms = 60.0f;
+  d.cymbal.percussion.shimmer_cutoff_hz = 9000.0f;
   d.cymbal.gain = 0.5f;
 
   // Everything else (claps, shakers, latin percussion): short noise burst

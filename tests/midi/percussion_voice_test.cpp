@@ -261,3 +261,83 @@ TEST_CASE("the snare wire rattle is velocity-dependent and couples to the membra
     REQUIRE(a[i] == b[i]);
   }
 }
+
+namespace {
+
+NativeSynthPatch cymbal_patch() {
+  NativeSynthPatch p{};
+  p.mode = SynthEngineMode::kPercussion;
+  p.one_shot = true;
+  p.cutoff_hz = 20000.0f;
+  p.amp_env.attack_ms = 0.5f;
+  p.amp_env.decay_ms = 1400.0f;
+  p.amp_env.sustain = 0.0f;
+  p.amp_env.release_ms = 400.0f;
+  p.percussion.num_modes = 4;
+  p.percussion.mode_ratios = {1.0f, 1.34f, 1.72f, 2.15f, 0.0f, 0.0f};
+  p.percussion.base_freq_hz = 3600.0f;
+  p.percussion.mode_decay_s = 1.1f;
+  p.percussion.tone_gain = 0.25f;
+  p.percussion.noise_gain = 0.0f;  // no noise layer: the modes are bit-identical
+                                   // with and without shimmer, so the diff is
+                                   // the pure shimmer wash
+  return p;
+}
+
+double window_energy(const std::vector<float>& buf, size_t from, size_t to) {
+  double acc = 0.0;
+  for (size_t i = from; i < to && i < buf.size(); ++i) acc += static_cast<double>(buf[i]) * buf[i];
+  return acc;
+}
+
+}  // namespace
+
+TEST_CASE("shimmer == 0 reproduces the legacy percussion output bit-for-bit",
+          "[midi][synth][percussion]") {
+  NativeSynthPatch dry = cymbal_patch();  // shimmer defaults to 0
+  NativeSynthPatch explicit_off = cymbal_patch();
+  explicit_off.percussion.shimmer = 0.0f;
+  explicit_off.percussion.shimmer_attack_ms = 20.0f;  // configured but inert
+
+  const std::vector<float> a = render_patch(dry, 49, 110, 4096);
+  const std::vector<float> b = render_patch(explicit_off, 49, 110, 4096);
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i] == b[i]);
+  }
+}
+
+TEST_CASE("the cymbal shimmer swells after the strike and rides the ring",
+          "[midi][synth][percussion]") {
+  NativeSynthPatch dry = cymbal_patch();
+  NativeSynthPatch shimmering = cymbal_patch();
+  shimmering.percussion.shimmer = 6.0f;
+  shimmering.percussion.shimmer_attack_ms = 60.0f;
+  shimmering.percussion.shimmer_cutoff_hz = 9000.0f;
+
+  const std::vector<float> d = render_patch(dry, 49, 110, 8192);
+  const std::vector<float> s = render_patch(shimmering, 49, 110, 8192);
+
+  // The modes are identical with and without shimmer, so the difference is the
+  // pure shimmer wash.
+  std::vector<float> wash(s.size(), 0.0f);
+  for (size_t i = 0; i < s.size(); ++i) wash[i] = s[i] - d[i];
+
+  // Growth: the shimmer builds *after* the strike -- a mid window (60-90 ms)
+  // carries more wash energy than the first 30 ms, unlike a struck-then-decay
+  // source.
+  const double early = window_energy(wash, 0, 1440);
+  const double mid = window_energy(wash, 2880, 4320);
+  REQUIRE(mid > early);
+
+  // The wash is genuinely high-frequency (above the 3600 Hz mode set) and
+  // adds audible energy the dry cymbal lacks.
+  const std::vector<float> wash_mid(wash.begin() + 2880, wash.begin() + 4320);
+  REQUIRE(goertzel(wash_mid, 11000.0) > 3.0 * goertzel(wash_mid, 2000.0));
+  REQUIRE(window_energy(s, 2880, 4320) > 1.5 * window_energy(d, 2880, 4320));
+
+  // One-way pump: the shimmer stays bounded (no nonlinear blow-up).
+  float peak = 0.0f;
+  for (float v : s) peak = std::max(peak, std::fabs(v));
+  REQUIRE(peak < 4.0f);
+}
