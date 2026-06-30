@@ -446,6 +446,15 @@ DrumPatches build_drum_patches() noexcept {
   d.kick.percussion.noise_decay_ms = 20.0f;
   d.kick.percussion.noise_cutoff_hz = 900.0f;
   d.kick.percussion.noise_output = SynthFilterOutput::kLowpass;
+  // Beater lands near the membrane centre: the m == 0 thump dominates and the
+  // single ring mode is held back.
+  d.kick.percussion.strike_r = 0.12f;
+  // A low shell mode extends the boom under the beater thud.
+  d.kick.percussion.shell_mix = 0.18f;
+  d.kick.percussion.shell_num_modes = 1;
+  d.kick.percussion.shell_freq_hz = {80.0f, 0.0f, 0.0f, 0.0f};
+  d.kick.percussion.shell_t60_s = {0.14f, 0.0f, 0.0f, 0.0f};
+  d.kick.percussion.shell_weight = {1.0f, 0.0f, 0.0f, 0.0f};
   d.kick.gain = 1.1f;
 
   // Snare: fixed 185 Hz shell (Rayleigh modes) + the wire crack band.
@@ -461,6 +470,20 @@ DrumPatches build_drum_patches() noexcept {
   d.snare.percussion.noise_decay_ms = 160.0f;
   d.snare.percussion.noise_cutoff_hz = 1800.0f;
   d.snare.percussion.noise_q = 0.9f;
+  // Struck off-centre so the m >= 1 shell modes voice the pitched body under
+  // the wire crack.
+  d.snare.percussion.strike_r = 0.55f;
+  // Woody shell body under the snare crack.
+  d.snare.percussion.shell_mix = 0.2f;
+  d.snare.percussion.shell_num_modes = 2;
+  d.snare.percussion.shell_freq_hz = {330.0f, 480.0f, 0.0f, 0.0f};
+  d.snare.percussion.shell_t60_s = {0.08f, 0.05f, 0.0f, 0.0f};
+  d.snare.percussion.shell_weight = {1.0f, 0.6f, 0.0f, 0.0f};
+  // Wires rattle against the bottom head while the shell rings -- a
+  // velocity-dependent buzz over the wire crack.
+  d.snare.percussion.wire_buzz = 0.9f;
+  d.snare.percussion.wire_threshold = 0.08f;
+  d.snare.percussion.wire_cutoff_hz = 4500.0f;
   d.snare.gain = 0.8f;
 
   // Hi-hats: high-passed noise shimmer, closed short / open ringing.
@@ -485,6 +508,15 @@ DrumPatches build_drum_patches() noexcept {
   d.tom.percussion.noise_gain = 0.25f;
   d.tom.percussion.noise_decay_ms = 30.0f;
   d.tom.percussion.noise_cutoff_hz = 1500.0f;
+  // Off-centre head strike: the full Rayleigh set voices the tom's pitch.
+  d.tom.percussion.strike_r = 0.6f;
+  // Note-tracked shell (0 Hz = track the struck key) plus an upper body mode
+  // so one tom patch voices every tom size.
+  d.tom.percussion.shell_mix = 0.25f;
+  d.tom.percussion.shell_num_modes = 2;
+  d.tom.percussion.shell_freq_hz = {0.0f, 330.0f, 0.0f, 0.0f};
+  d.tom.percussion.shell_t60_s = {0.12f, 0.06f, 0.0f, 0.0f};
+  d.tom.percussion.shell_weight = {1.0f, 0.4f, 0.0f, 0.0f};
   d.tom.gain = 1.0f;
 
   // Cymbals: long high-passed noise + a sparse inharmonic ring-mode bell.

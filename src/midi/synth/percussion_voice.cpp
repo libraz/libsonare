@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/bessel.h"
+
 namespace sonare::midi::synth {
 
 namespace {
@@ -10,6 +12,9 @@ namespace {
 constexpr float kTwoPi = 6.28318530717958647692f;
 /// Noise draws live far above any other per-voice index range.
 constexpr uint64_t kNoiseIndexBase = 1ull << 20;
+/// Wire-rattle draws live above the noise-layer range so the two streams
+/// stay decorrelated.
+constexpr uint64_t kWireIndexBase = 1ull << 24;
 
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
@@ -48,7 +53,17 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
     // Upper membrane modes die faster than the fundamental (1/ratio scaling).
     mode.r = radius_for(sr, std::max(0.005f, params.mode_decay_s) / std::max(1.0f, ratio));
     const float strike = k == 0 ? 1.0f : (0.4f + 0.4f * vel01) / static_cast<float>(k + 1);
-    mode.gain = strike * std::sin(mode.omega);
+    // Strike-point weighting: each membrane mode is excited by the value of
+    // its shape J_m(alpha_mn * r) * cos(m * theta) at the strike. A centre
+    // hit (strike_r == 0) is the legacy uniform excitation.
+    float strike_pos = 1.0f;
+    if (params.strike_r > 0.0f) {
+      const int m = static_cast<int>(params.mode_m[static_cast<size_t>(k)]);
+      const float arg = params.mode_alpha[static_cast<size_t>(k)] * params.strike_r;
+      strike_pos =
+          std::abs(bessel_j(m, arg) * std::cos(static_cast<float>(m) * params.strike_theta));
+    }
+    mode.gain = strike * std::sin(mode.omega) * strike_pos;
   }
   for (int k = num_modes_; k < kMaxPercussionModes; ++k) modes_[static_cast<size_t>(k)] = Mode{};
 
@@ -67,6 +82,30 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   noise_filter_.prepare(sr);
   noise_filter_.set(params.noise_cutoff_hz, std::max(0.5f, params.noise_q));
   noise_filter_.reset();
+
+  // Shell resonance: the summed hit rings through the drum body. A note-tracked
+  // 0 Hz spec is taken to mean "track the struck key" so one tom patch voices
+  // every tom size.
+  const int shell_count = std::clamp(params.shell_num_modes, 0, kMaxShellModes);
+  std::array<BodyResonator::Spec, kMaxShellModes> shell_specs{};
+  for (int k = 0; k < shell_count; ++k) {
+    const float spec_hz = params.shell_freq_hz[static_cast<size_t>(k)];
+    shell_specs[static_cast<size_t>(k)] = {
+        spec_hz > 0.0f ? spec_hz : base_hz,
+        std::max(0.005f, params.shell_t60_s[static_cast<size_t>(k)]),
+        params.shell_weight[static_cast<size_t>(k)]};
+  }
+  shell_.start_specs(shell_specs.data(), shell_count, sr, params.shell_mix);
+
+  // Snare wire rattle: gated noise driven by the membrane crossing the wire
+  // contact threshold. Voiced through a dedicated high-pass.
+  wire_buzz_ = std::max(0.0f, params.wire_buzz);
+  wire_threshold_ = std::max(0.0f, params.wire_threshold);
+  wire_vel01_ = vel01;
+  wire_index_ = 0;
+  wire_filter_.prepare(sr);
+  wire_filter_.set(params.wire_cutoff_hz, 0.9f);
+  wire_filter_.reset();
 }
 
 float PercussionVoiceCore::render(float pitch_ratio) noexcept {
@@ -100,6 +139,19 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
       tone += y;
     }
     mix += tone_gain_ * tone;
+
+    // Snare wire rattle: while the membrane swing exceeds the contact
+    // threshold the wires buzz against the bottom head. The gate scales with
+    // how far the head is over threshold and with strike velocity, so harder
+    // hits rattle louder and (because the membrane stays over threshold
+    // longer) longer.
+    if (wire_buzz_ > 0.0f) {
+      const float contact = std::abs(tone) - wire_threshold_;
+      const float gate = contact > 0.0f ? std::min(contact * 8.0f, 1.0f) : 0.0f;
+      const float n =
+          noise_.bipolar_at(kWireIndexBase + wire_index_++) * gate * wire_vel01_ * wire_buzz_;
+      mix += wire_filter_.process(n).hp;
+    }
   }
 
   if (noise_level_ > 1.0e-5f) {
@@ -119,6 +171,8 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     }
   }
 
+  if (shell_.active()) mix = shell_.process(mix);
+
   return mix;
 }
 
@@ -131,6 +185,9 @@ void PercussionVoiceCore::kill() noexcept {
   num_modes_ = 0;
   noise_level_ = 0.0f;
   excite_ = false;
+  shell_.reset();
+  wire_buzz_ = 0.0f;
+  wire_filter_.reset();
 }
 
 }  // namespace sonare::midi::synth

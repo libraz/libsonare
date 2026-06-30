@@ -32,19 +32,55 @@ enum class BodyType : int {
 
 class BodyResonator {
  public:
-  /// Configures the bank. @p note_hz tracks the played note (kWoodTube);
-  /// @p mix in [0,1] blends the resonated path over the dry voice.
-  void start(BodyType type, double sample_rate, float note_hz, float mix) noexcept {
+  static constexpr int kMaxModes = 4;
+
+  /// One resonant body mode: a low-Q bandpass at @p freq_hz with reverb time
+  /// @p t60_s, mixed in at @p weight.
+  struct Spec {
+    float freq_hz;
+    float t60_s;
+    float weight;
+  };
+
+  /// Configures the bank from an explicit mode list (drum shells and other
+  /// data-free voicings own their specs). @p mix in [0,1] blends the
+  /// resonated path over the dry voice. Up to kMaxModes specs are used.
+  void start_specs(const Spec* specs, int count, double sample_rate, float mix) noexcept {
     const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
     mix_ = std::clamp(mix, 0.0f, 1.0f);
     num_modes_ = 0;
-    if (type == BodyType::kNone || mix_ <= 0.0f) return;
+    if (mix_ <= 0.0f || count <= 0 || specs == nullptr) return;
+    count = std::min(count, kMaxModes);
+    for (int k = 0; k < count; ++k) {
+      const Spec& spec = specs[static_cast<size_t>(k)];
+      if (spec.freq_hz <= 0.0f || spec.freq_hz >= 0.45f * static_cast<float>(sr)) continue;
+      Mode& mode = modes_[static_cast<size_t>(num_modes_)];
+      const float w = 6.28318530718f * spec.freq_hz / static_cast<float>(sr);
+      const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * spec.t60_s));
+      mode.a1 = 2.0f * r * std::cos(w);
+      mode.a2 = -r * r;
+      // Bandpass form (zeros at z = +-1): phase-aligned with the dry path at
+      // resonance, so the mix is a clean magnitude peak rather than a phasey
+      // quadrature sum. Normalized to peak gain = weight.
+      const float re = 1.0f - r * std::cos(2.0f * w);
+      const float im = r * std::sin(2.0f * w);
+      mode.gain = spec.weight * (1.0f - r) * std::sqrt(re * re + im * im) / (2.0f * std::sin(w));
+      mode.y1 = 0.0f;
+      mode.y2 = 0.0f;
+      ++num_modes_;
+    }
+    x1_ = 0.0f;
+    x2_ = 0.0f;
+  }
 
-    struct Spec {
-      float freq_hz;
-      float t60_s;
-      float weight;
-    };
+  /// Configures the bank. @p note_hz tracks the played note (kWoodTube);
+  /// @p mix in [0,1] blends the resonated path over the dry voice.
+  void start(BodyType type, double sample_rate, float note_hz, float mix) noexcept {
+    if (type == BodyType::kNone) {
+      mix_ = std::clamp(mix, 0.0f, 1.0f);
+      num_modes_ = 0;
+      return;
+    }
     std::array<Spec, kMaxModes> specs{};
     int count = 0;
     switch (type) {
@@ -73,26 +109,7 @@ class BodyResonator {
         break;
     }
 
-    for (int k = 0; k < count; ++k) {
-      const Spec& spec = specs[static_cast<size_t>(k)];
-      if (spec.freq_hz <= 0.0f || spec.freq_hz >= 0.45f * static_cast<float>(sr)) continue;
-      Mode& mode = modes_[static_cast<size_t>(num_modes_)];
-      const float w = 6.28318530718f * spec.freq_hz / static_cast<float>(sr);
-      const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * spec.t60_s));
-      mode.a1 = 2.0f * r * std::cos(w);
-      mode.a2 = -r * r;
-      // Bandpass form (zeros at z = +-1): phase-aligned with the dry path at
-      // resonance, so the mix is a clean magnitude peak rather than a phasey
-      // quadrature sum. Normalized to peak gain = weight.
-      const float re = 1.0f - r * std::cos(2.0f * w);
-      const float im = r * std::sin(2.0f * w);
-      mode.gain = spec.weight * (1.0f - r) * std::sqrt(re * re + im * im) / (2.0f * std::sin(w));
-      mode.y1 = 0.0f;
-      mode.y2 = 0.0f;
-      ++num_modes_;
-    }
-    x1_ = 0.0f;
-    x2_ = 0.0f;
+    start_specs(specs.data(), count, sample_rate, mix);
   }
 
   bool active() const noexcept { return num_modes_ > 0; }
@@ -124,7 +141,6 @@ class BodyResonator {
   }
 
  private:
-  static constexpr int kMaxModes = 4;
   struct Mode {
     float a1 = 0.0f;
     float a2 = 0.0f;

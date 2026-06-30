@@ -347,6 +347,7 @@ if(BUILD_ARRANGEMENT)
     midi/fm_voice_test.cpp
     midi/ks_voice_test.cpp
     midi/modal_voice_test.cpp
+    midi/percussion_voice_test.cpp
     midi/piano_voice_test.cpp
     midi/voice_polish_test.cpp
     midi/synth_toolkit_test.cpp

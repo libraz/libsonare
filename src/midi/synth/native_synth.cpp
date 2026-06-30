@@ -114,6 +114,21 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.percussion.noise_cutoff_hz =
       std::clamp(sanitize(p.percussion.noise_cutoff_hz, 2500.0f), 20.0f, 20000.0f);
   p.percussion.noise_q = std::clamp(sanitize(p.percussion.noise_q, 1.0f), 0.5f, 30.0f);
+  p.percussion.shell_mix = std::clamp(sanitize(p.percussion.shell_mix, 0.0f), 0.0f, 1.0f);
+  p.percussion.shell_num_modes = std::clamp(p.percussion.shell_num_modes, 0, kMaxShellModes);
+  for (float& freq : p.percussion.shell_freq_hz) {
+    freq = std::clamp(sanitize(freq, 0.0f), 0.0f, 20000.0f);
+  }
+  for (float& t60 : p.percussion.shell_t60_s) {
+    t60 = std::clamp(sanitize(t60, 0.05f), 0.005f, 5.0f);
+  }
+  for (float& weight : p.percussion.shell_weight) {
+    weight = std::clamp(sanitize(weight, 0.0f), 0.0f, 4.0f);
+  }
+  p.percussion.wire_buzz = std::clamp(sanitize(p.percussion.wire_buzz, 0.0f), 0.0f, 4.0f);
+  p.percussion.wire_threshold = std::clamp(sanitize(p.percussion.wire_threshold, 0.1f), 0.0f, 4.0f);
+  p.percussion.wire_cutoff_hz =
+      std::clamp(sanitize(p.percussion.wire_cutoff_hz, 4000.0f), 20.0f, 20000.0f);
   p.piano.strings = std::clamp(p.piano.strings, 1, kMaxPianoStrings);
   p.piano.detune_cents = std::clamp(sanitize(p.piano.detune_cents, 1.6f), 0.0f, 50.0f);
   p.piano.decay_fast_s = std::clamp(sanitize(p.piano.decay_fast_s, 3.0f), 0.05f, 60.0f);
