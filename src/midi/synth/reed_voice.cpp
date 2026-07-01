@@ -97,6 +97,38 @@ constexpr float kGrowlRateHz = 28.0f;
 // Maximum breath modulation depth at full growl.
 constexpr float kGrowlDepthMax = 0.5f;
 
+// --- 4d growth cone (only when params.conical && params.cone_growth > 0) ---
+// Throat integrator corner as a multiple of the fundamental: the apex's 1/r
+// amplification is a low-frequency term, so the integrator low-passes the bore
+// output just above the fundamental (blooming the fundamental and the lowest
+// couple of partials, note-independently, rather than only the sub-bass of a
+// fixed-corner filter). The pole is < 1 so the integrator is unconditionally
+// bounded (the practical bounded form of the lossless pole-on-circle apex
+// integrator Smith's TIIR filters would otherwise be needed to tame).
+constexpr float kConeThroatMult = 1.6f;
+// Radiation-side throat gain at full growth: how strongly the recovered
+// low-frequency pressure is added back at the output. Output-side (not in the
+// loop), so it colours the radiated tone without touching the resonance — the
+// tuning and stability are unchanged by construction.
+constexpr float kConeGrowthGain = 1.4f;
+
+// --- 4e tonehole scattering (only when params.tonehole > 0) ---
+// Hole position as a fraction of the one-way bore delay (the reed->hole
+// distance), so the reed<->hole round trip resonates the register above the
+// fundamental — the surviving mode when the hole imposes a node there. The
+// value is topology-specific: a cylinder overblows to the TWELFTH (3*f0), a
+// cone to the OCTAVE (2*f0). For a cone, half-way (0.5) is degenerate — the
+// sub-loop coincides with the full-bore mode and the loop either quenches or
+// runs away — so the cone hole sits a quarter of the way down (sub-loop at
+// 2*f0), while the cylinder hole sits half-way.
+constexpr float kToneholeFracCylinder = 0.5f;
+constexpr float kToneholeFracCone = 0.25f;
+// Maximum scattering-reflection strength at a fully open hole (the pressure
+// release is partial — a real hole is a finite, radiating branch, not a perfect
+// short). Kept < 1 so the reed<->hole sub-loop stays bounded alongside the main
+// reed<->bell loop.
+constexpr float kToneholeGainMax = 0.5f;
+
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
 }
@@ -230,6 +262,36 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   if (growl_depth_ > 0.0f) {
     growl_inc_ = kTwoPi * kGrowlRateHz / srf;
   }
+
+  // 4d: growth cone — the truncated-cone throat integrator (conical bores only).
+  // Off (cylinder, or cone_growth 0) -> render skips the throat entirely
+  // (bit-identical). The leaky pole realises the apex 1/r growth in a bounded
+  // form; the tap gain folds the throat's low band back into the injection.
+  throat_gain_ = 0.0f;
+  throat_state_ = 0.0f;
+  if (params.conical) {
+    const float grow = std::clamp(params.cone_growth, 0.0f, 1.0f);
+    if (grow > 0.0f) {
+      throat_gain_ = kConeGrowthGain * grow;
+      const float corner = std::min(kConeThroatMult * f0, 0.45f * srf);
+      throat_pole_ = std::exp(-kTwoPi * corner / srf);
+    }
+  }
+
+  // 4e: tonehole scattering — an inline reflection tapped from the bore at the
+  // reed<->hole round trip. Off (0) -> the tap is skipped (bit-identical). The
+  // hole sits kToneholeFrac of the way down the bore, so its round trip is twice
+  // that; the tap depth is clamped inside the used span.
+  hole_gain_ = 0.0f;
+  hole_delay_samples_ = 0;
+  hole_refl_ = 0.0f;
+  const float hole = std::clamp(params.tonehole, 0.0f, 1.0f);
+  if (hole > 0.0f) {
+    hole_gain_ = kToneholeGainMax * hole;
+    const float frac = params.conical ? kToneholeFracCone : kToneholeFracCylinder;
+    const int round_trip = static_cast<int>(2.0f * frac * bore_period_);
+    hole_delay_samples_ = std::clamp(round_trip, 1, bore_size_ - 1);
+  }
 }
 
 float ReedVoiceCore::render(float pitch_ratio) noexcept {
@@ -276,6 +338,10 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
     reg_lp_state_ += reg_lp_alpha_ * (refl_raw - reg_lp_state_);
     refl_raw -= reg_vent_ * reg_lp_state_;
   }
+  // Tonehole scattering (gated): fold in the reflection scattered off the open
+  // side hole one round trip ago, imposing a pressure node at the hole so the
+  // bore's fundamental gives way to the register above.
+  if (hole_delay_samples_ > 0) refl_raw += hole_refl_;
   const float dc = refl_raw - dc_x1_ + dc_r_ * dc_y1_;
   dc_x1_ = refl_raw;
   dc_y1_ = dc;
@@ -302,6 +368,32 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   bore_out_ = rt::lagrange3_fractional_delay(bore_, static_cast<size_t>(bore_size_), bore_write_,
                                              static_cast<int>(delay * 256.0f), inj);
   ++drive_index_;
+
+  // Tonehole scattering (gated): read the bore (read-only) at the reed<->hole
+  // round trip and store the open hole's inverting partial reflection for the
+  // next sample's loop reflection. bore_write_ now points past the just-written
+  // injection, so the tap sits hole_delay_samples_ behind it.
+  if (hole_delay_samples_ > 0) {
+    const int d = hole_delay_samples_;
+    const size_t idx =
+        (bore_write_ + static_cast<size_t>(bore_size_ - 1 - d)) % static_cast<size_t>(bore_size_);
+    hole_refl_ = -hole_gain_ * bore_[idx];
+  }
+
+  // Growth cone (gated, conical only): the bore delay line carries the
+  // travelling-wave variable u = r*p (which propagates cylindrically); the
+  // radiated pressure of a truncated cone recovers p = u/r, and near the apex
+  // the small radius amplifies the low frequencies — the cone's "growing" apex
+  // term. Realised as a stable leaky one-pole integrator on the bore output
+  // (tuned near the fundamental) added back at radiation: it blooms the
+  // fundamental / low partials the way a saxophone's or oboe's strong low end
+  // does, WITHOUT feeding the loop (so it cannot detune or destabilise the
+  // resonance — the practical bounded form of the apex integrator, in place of
+  // the lossless pole-on-circle case Smith's TIIR filters would bound).
+  if (throat_gain_ > 0.0f) {
+    throat_state_ += (1.0f - throat_pole_) * (bore_out_ - throat_state_);
+    return output_scale_ * (bore_out_ + throat_gain_ * throat_state_);
+  }
   return output_scale_ * bore_out_;
 }
 
@@ -344,6 +436,8 @@ void ReedVoiceCore::kill() noexcept {
   reed_z1_ = 0.0f;
   reed_z2_ = 0.0f;
   reg_lp_state_ = 0.0f;
+  throat_state_ = 0.0f;
+  hole_refl_ = 0.0f;
   releasing_ = true;
 }
 

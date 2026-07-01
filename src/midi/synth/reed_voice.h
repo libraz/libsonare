@@ -159,6 +159,34 @@ struct ReedPatchParams {
   /// with a rough, vocal edge. A deterministic sub-audio LFO on the mouth
   /// pressure. 0 = off -> render is bit-identical (no modulation).
   float growl = 0.0f;
+
+  /// Growth cone in [0,1] (CONICAL bores only): the Phase-1 cone is a
+  /// cylindrical approximation (a bare positive-feedback comb, STK Saxofony
+  /// style) — it gets the full harmonic series but lacks the truncated cone's
+  /// THROAT, so its fundamental is weak and open-pipe-like. A real cone's
+  /// pressure is p = u/r (u = r*p is the travelling wave), so near the truncated
+  /// apex the small radius r amplifies the low end — the "growing" apex term.
+  /// Lossless, that apex reflection is an integrator with a pole on the unit
+  /// circle (the growing exponential Smith's TIIR filters bound); here it is
+  /// realised as the stable leaky one-pole throat integrator (pole < 1 — the
+  /// practical bounded form of the growth term), whose low-band output is fed
+  /// back into the bore so the fundamental and low partials bloom the way a
+  /// saxophone's or oboe's do. Ignored for a cylinder (clarinet). 0 = off ->
+  /// render is bit-identical (the throat integrator is skipped).
+  float cone_growth = 0.0f;
+
+  /// Tonehole / register key in [0,1] (the open-ness of a side hole): where
+  /// register_vent damps the fundamental from OUTSIDE the loop (an output-side
+  /// approximation), a real tonehole is an IN-BORE scattering junction. An open
+  /// hole is a pressure release at a point along the bore, imposing a pressure
+  /// NODE there: modes with an antinode at the hole (the fundamental) are
+  /// reflected/damped while modes with a node there (the register above) survive,
+  /// so the bore itself resonates a register higher (a clarinet's twelfth, a
+  /// cone's octave) — an actual pitch jump, not a spectral tilt. Modelled
+  /// STK-BlowHole style as an inline two-port scattering reflection tapped from
+  /// the bore at the reed<->hole round trip (an open hole = an inverting partial
+  /// reflection). 0 = off -> render is bit-identical (the tonehole is skipped).
+  float tonehole = 0.0f;
 };
 
 /// Per-voice reed-woodwind state, embedded in NativeSynthVoice. The voice's
@@ -297,6 +325,23 @@ class ReedVoiceCore {
   float growl_depth_ = 0.0f;
   float growl_phase_ = 0.0f;
   float growl_inc_ = 0.0f;
+
+  // 4d: growth cone (conical bores only). throat_gain_ == 0 -> skipped
+  // (bit-identical). A leaky one-pole THROAT integrator (the truncated cone's
+  // apex 1/r low-frequency growth, bounded by a pole < 1) whose low-band output
+  // is fed back into the bore injection so the fundamental / low partials bloom.
+  float throat_gain_ = 0.0f;
+  float throat_pole_ = 0.0f;
+  float throat_state_ = 0.0f;
+
+  // 4e: tonehole scattering. hole_gain_ == 0 -> skipped (bit-identical). An
+  // inline two-port scattering junction: the open hole's inverting partial
+  // reflection is tapped from the bore at the reed<->hole round trip and folded
+  // back into the loop reflection, imposing a pressure node at the hole so the
+  // bore resonates a register higher.
+  float hole_gain_ = 0.0f;
+  int hole_delay_samples_ = 0;
+  float hole_refl_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth

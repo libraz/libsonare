@@ -477,8 +477,119 @@ TEST_CASE("growl sidebands the tone and stays stable", "[midi][synth][reed]") {
   REQUIRE(std::sqrt(diff / ref) > 0.05);
 }
 
+TEST_CASE("growth cone blooms the conical fundamental", "[midi][synth][reed]") {
+  // The Phase-1 cone is a bare positive-feedback comb (a cylinder pretending to
+  // be a cone), so its fundamental is weak. The growth cone recovers the
+  // truncated cone's apex 1/r pressure, blooming the fundamental relative to the
+  // upper partials — the way a saxophone's strong low end reads.
+  const double f0 = 146.8324;  // D3
+  NativeSynthPatch plain = reed_base_patch();
+  plain.reed.conical = true;
+  NativeSynthPatch grown = reed_base_patch();
+  grown.reed.conical = true;
+  grown.reed.cone_growth = 1.0f;
+  const std::vector<float> off = render_patch(plain, 50, 110, 24000);
+  const std::vector<float> on = render_patch(grown, 50, 110, 24000);
+  REQUIRE(peak(on) < 4.0f);
+  REQUIRE(std::isfinite(on.back()));
+  REQUIRE(off != on);  // the growth term really changed the tone
+
+  const std::vector<double> ps_off = power_spectrum(off, 8000);
+  const std::vector<double> ps_on = power_spectrum(on, 8000);
+  const double bloom_off = harmonic_power(ps_off, f0, 1) /
+                           (harmonic_power(ps_off, f0, 2) + harmonic_power(ps_off, f0, 3) + 1e-12);
+  const double bloom_on = harmonic_power(ps_on, f0, 1) /
+                          (harmonic_power(ps_on, f0, 2) + harmonic_power(ps_on, f0, 3) + 1e-12);
+  REQUIRE(bloom_on > 1.1 * bloom_off);
+}
+
+TEST_CASE("growth cone is ignored for a cylinder", "[midi][synth][reed]") {
+  // The apex term is a conical geometry; a clarinet's cylindrical bore has no
+  // truncated apex, so cone_growth is a no-op there (bit-identical render).
+  NativeSynthPatch plain = reed_base_patch();
+  plain.reed.conical = false;
+  NativeSynthPatch grown = reed_base_patch();
+  grown.reed.conical = false;
+  grown.reed.cone_growth = 1.0f;
+  REQUIRE(render_patch(plain, 58, 110, 8192) == render_patch(grown, 58, 110, 8192));
+}
+
+TEST_CASE("growth cone stays bounded and in tune", "[midi][synth][reed]") {
+  // Because the apex integrator sits at radiation (not in the resonant loop), a
+  // fully-grown cone cannot detune or destabilise the bore: the tuning is
+  // unchanged and the loop stays bounded across the keyboard.
+  for (const auto& [note, expected] :
+       {std::pair<uint8_t, double>{42, 92.4986}, std::pair<uint8_t, double>{54, 184.9972},
+        std::pair<uint8_t, double>{66, 369.9944}}) {
+    NativeSynthPatch patch = reed_base_patch();
+    patch.reed.conical = true;
+    patch.reed.cone_growth = 1.0f;
+    const std::vector<float> tone = render_patch(patch, note, 110, 48000);
+    REQUIRE(peak(tone) < 4.0f);
+    REQUIRE(std::isfinite(tone.back()));
+    const double estimated = fft_fundamental(tone, 16000, expected);
+    REQUIRE(std::fabs(estimated / expected - 1.0) < 0.02);
+  }
+}
+
+TEST_CASE("tonehole scattering jumps the cylinder to its twelfth", "[midi][synth][reed]") {
+  // Opening a real tonehole is an in-bore scattering junction (unlike the
+  // output-side register_vent): it imposes a pressure node at the hole, so a
+  // clarinet's cylindrical bore stops sounding its fundamental and overblows to
+  // the twelfth (the 3rd harmonic), the register jump a register key produces.
+  const double f0 = 233.0819;  // A#3 (note 58)
+  NativeSynthPatch closed = reed_base_patch();
+  closed.reed.conical = false;
+  NativeSynthPatch open = reed_base_patch();
+  open.reed.conical = false;
+  open.reed.tonehole = 1.0f;
+  const std::vector<float> tc = render_patch(closed, 58, 110, 24000);
+  const std::vector<float> to = render_patch(open, 58, 110, 24000);
+  REQUIRE(peak(to) < 4.0f);
+  REQUIRE(std::isfinite(to.back()));
+  const std::vector<double> psc = power_spectrum(tc, 8000);
+  const std::vector<double> pso = power_spectrum(to, 8000);
+  // Closed: the fundamental outweighs the twelfth. Open: the twelfth takes over.
+  REQUIRE(harmonic_power(psc, f0, 1) > harmonic_power(psc, f0, 3));
+  REQUIRE(harmonic_power(pso, f0, 3) > harmonic_power(pso, f0, 1));
+}
+
+TEST_CASE("tonehole scattering lifts the cone register", "[midi][synth][reed]") {
+  // A cone overblows to the octave, not the twelfth, so its tonehole sits a
+  // quarter of the way down the bore (half-way is degenerate for a cone). The
+  // open hole lifts the upper register — the tone brightens measurably — and
+  // stays bounded (the sub-loop cannot run away).
+  NativeSynthPatch closed = reed_base_patch();
+  closed.reed.conical = true;
+  NativeSynthPatch open = reed_base_patch();
+  open.reed.conical = true;
+  open.reed.tonehole = 1.0f;
+  const std::vector<float> tc = render_patch(closed, 58, 110, 24000);
+  const std::vector<float> to = render_patch(open, 58, 110, 24000);
+  REQUIRE(peak(to) < 4.0f);
+  REQUIRE(std::isfinite(to.back()));
+  REQUIRE(tc != to);
+  REQUIRE(swell_centroid(to, 8000) > 1.2 * swell_centroid(tc, 8000));
+}
+
+TEST_CASE("tonehole scattering stays bounded across the keyboard", "[midi][synth][reed]") {
+  // The reed<->hole sub-loop must stay bounded alongside the main reed<->bell
+  // loop for both topologies, the whole keyboard and the least-damped bore.
+  for (bool conical : {false, true}) {
+    for (uint8_t note : {34, 46, 58, 70, 82}) {
+      NativeSynthPatch patch = reed_base_patch();
+      patch.reed.conical = conical;
+      patch.reed.damping = 0.1f;
+      patch.reed.tonehole = 1.0f;
+      const std::vector<float> tone = render_patch(patch, note, 120, 48000);
+      REQUIRE(peak(tone) < 4.0f);
+      REQUIRE(std::isfinite(tone.back()));
+    }
+  }
+}
+
 TEST_CASE("advanced reed gates compose stably", "[midi][synth][reed]") {
-  // All three gates on together, across both topologies and the keyboard, must
+  // All five gates on together, across both topologies and the keyboard, must
   // stay bounded and finite.
   for (bool conical : {false, true}) {
     for (uint8_t note : {34, 50, 58, 70}) {
@@ -488,6 +599,8 @@ TEST_CASE("advanced reed gates compose stably", "[midi][synth][reed]") {
       patch.reed.reed_resonance = 0.6f;
       patch.reed.register_vent = 0.6f;
       patch.reed.growl = 0.5f;
+      patch.reed.cone_growth = 0.8f;
+      patch.reed.tonehole = 0.7f;
       const std::vector<float> tone = render_patch(patch, note, 110, 24000);
       REQUIRE(peak(tone) < 4.0f);
       REQUIRE(std::isfinite(tone.back()));

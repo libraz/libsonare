@@ -206,6 +206,8 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.reed.reed_resonance = std::clamp(sanitize(p.reed.reed_resonance, 0.5f), 0.0f, 1.0f);
   p.reed.register_vent = std::clamp(sanitize(p.reed.register_vent, 0.0f), 0.0f, 1.0f);
   p.reed.growl = std::clamp(sanitize(p.reed.growl, 0.0f), 0.0f, 1.0f);
+  p.reed.cone_growth = std::clamp(sanitize(p.reed.cone_growth, 0.0f), 0.0f, 1.0f);
+  p.reed.tonehole = std::clamp(sanitize(p.reed.tonehole, 0.0f), 0.0f, 1.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 3) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
