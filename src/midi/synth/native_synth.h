@@ -31,6 +31,7 @@
 #include "midi/synth/additive_voice.h"
 #include "midi/synth/body_resonator.h"
 #include "midi/synth/bowed_string_voice.h"
+#include "midi/synth/brass_voice.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
@@ -60,6 +61,7 @@ enum class SynthEngineMode : int {
   kPipeOrgan = 7,      // sustained waveguide flue pipe (pipe_organ_voice.h)
   kBowedString = 8,    // sustained waveguide bowed string (bowed_string_voice.h)
   kReed = 9,           // sustained waveguide reed woodwind (reed_voice.h)
+  kBrass = 10,         // sustained waveguide brass / lip reed (brass_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -165,6 +167,9 @@ struct NativeSynthPatch {
 
   /// Sustained waveguide reed woodwind (used when mode == kReed).
   ReedPatchParams reed;
+
+  /// Sustained waveguide brass / lip reed (used when mode == kBrass).
+  BrassPatchParams brass;
 };
 
 /// Per-note GS drum overrides applied to a fallback percussion voice at
@@ -215,6 +220,9 @@ struct NativeSynthVoice : VoiceState {
   /// Reed-woodwind core; like KS, the host attach()es its bore span before
   /// start().
   ReedVoiceCore reed;
+  /// Brass / lip-reed core; like KS, the host attach()es its bore span before
+  /// start().
+  BrassVoiceCore brass;
   BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
@@ -325,6 +333,12 @@ class NativeSynth final : public MidiInstrument {
     /// loudness VCA (no reed-specific breath push — that would silence the reed).
     uint8_t reed_breath = 255;
     uint8_t reed_bright = 255;
+    /// Brass / lip-reed continuous controllers (255 = untouched, so the preset's
+    /// own breath / brightness stands until the host sends the CC): CC2 breath
+    /// -> mouth pressure, CC74 -> bell brightness. CC11 expression is the shared
+    /// loudness VCA (no brass-specific breath push — that would silence the lips).
+    uint8_t brass_breath = 255;
+    uint8_t brass_bright = 255;
     ChannelParamState params;
     float bend_range_cents = 200.0f;
     /// Previous note's frequency (glide source; 0 = none yet).
@@ -344,6 +358,9 @@ class NativeSynth final : public MidiInstrument {
   /// Pushes the channel's live reed controllers (CC2 breath, CC74 bell
   /// brightness) to its sounding reed voices.
   void push_reed_control(uint8_t channel) noexcept;
+  /// Pushes the channel's live brass controllers (CC2 breath, CC74 bell
+  /// brightness) to its sounding brass voices.
+  void push_brass_control(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
 
@@ -359,8 +376,9 @@ class NativeSynth final : public MidiInstrument {
   float dc_r_ = 0.999f;
   float bus_drive_gain_ = 0.0f;
   VoicePool<NativeSynthVoice> pool_;
-  /// KS delay slab: one ks_buffer_capacity() span per voice slot, allocated
-  /// in prepare() only when the patch is a Karplus-Strong instrument.
+  /// KS delay slab: one ks_slab_capacity() (two ks_buffer_capacity() spans —
+  /// the primary string plus the second-polarization line) per voice slot,
+  /// allocated in prepare() only when the patch is a Karplus-Strong instrument.
   std::vector<float> ks_buffers_;
   int ks_capacity_ = 0;
   /// Piano delay slab: kMaxPianoStrings string spans per voice slot,
@@ -387,6 +405,11 @@ class NativeSynth final : public MidiInstrument {
   std::vector<float> reed_buffers_;
   int reed_capacity_ = 0;  // bore span
   bool reed_mode_ = false;
+  /// Brass bore slab: one bore span per voice slot, allocated in prepare() only
+  /// when the patch is a brass / lip reed.
+  std::vector<float> brass_buffers_;
+  int brass_capacity_ = 0;  // bore span
+  bool brass_mode_ = false;
   /// Shared organ wind chest (tremulant / wind sag); pipe-organ patches only.
   OrganWindSupply wind_;
   /// Swell box: a bus-level shutter lowpass driven by the expression pedal

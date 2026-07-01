@@ -79,6 +79,8 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.ks.exc_brightness = std::clamp(sanitize(p.ks.exc_brightness, 0.85f), 0.0f, 1.0f);
   p.ks.vel_to_brightness = std::clamp(sanitize(p.ks.vel_to_brightness, 0.6f), 0.0f, 1.0f);
   p.ks.release_damp_s = std::clamp(sanitize(p.ks.release_damp_s, 0.08f), 0.01f, 10.0f);
+  p.ks.slap = std::clamp(sanitize(p.ks.slap, 0.0f), 0.0f, 1.0f);
+  p.ks.polarization = std::clamp(sanitize(p.ks.polarization, 0.0f), 0.0f, 1.0f);
   p.modal.num_modes = std::clamp(p.modal.num_modes, 0, kMaxModalModes);
   for (ModalMode& mode : p.modal.modes) {
     mode.ratio = std::clamp(sanitize(mode.ratio, 1.0f), 0.01f, 64.0f);
@@ -208,6 +210,17 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.reed.growl = std::clamp(sanitize(p.reed.growl, 0.0f), 0.0f, 1.0f);
   p.reed.cone_growth = std::clamp(sanitize(p.reed.cone_growth, 0.0f), 0.0f, 1.0f);
   p.reed.tonehole = std::clamp(sanitize(p.reed.tonehole, 0.0f), 0.0f, 1.0f);
+  p.brass.breath_pressure = std::clamp(sanitize(p.brass.breath_pressure, 0.7f), 0.0f, 1.0f);
+  p.brass.vel_to_breath = std::clamp(sanitize(p.brass.vel_to_breath, 0.6f), 0.0f, 1.0f);
+  p.brass.lip_tension = std::clamp(sanitize(p.brass.lip_tension, 0.5f), 0.0f, 1.0f);
+  p.brass.lip_damping = std::clamp(sanitize(p.brass.lip_damping, 0.5f), 0.0f, 1.0f);
+  p.brass.brightness = std::clamp(sanitize(p.brass.brightness, 0.5f), 0.0f, 1.0f);
+  p.brass.damping = std::clamp(sanitize(p.brass.damping, 0.4f), 0.0f, 1.0f);
+  p.brass.attack_ms = std::clamp(sanitize(p.brass.attack_ms, 25.0f), 1.0f, 2000.0f);
+  p.brass.release_ms = std::clamp(sanitize(p.brass.release_ms, 90.0f), 1.0f, 5000.0f);
+  p.brass.breath_noise = std::clamp(sanitize(p.brass.breath_noise, 0.1f), 0.0f, 1.0f);
+  p.brass.chiff = std::clamp(sanitize(p.brass.chiff, 0.35f), 0.0f, 1.0f);
+  p.brass.chiff_ms = std::clamp(sanitize(p.brass.chiff_ms, 10.0f), 1.0f, 500.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 3) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
@@ -272,6 +285,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   }
   if (p.mode == SynthEngineMode::kReed) {
     reed.start(p.reed, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kBrass) {
+    brass.start(p.brass, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -428,6 +444,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = bowed_string.render(common);
   } else if (patch->mode == SynthEngineMode::kReed) {
     sample = reed.render(common);
+  } else if (patch->mode == SynthEngineMode::kBrass) {
+    sample = brass.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -471,6 +489,7 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kPipeOrgan) pipe_organ.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kBowedString) bowed_string.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kReed) reed.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kBrass) brass.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -485,6 +504,7 @@ void NativeSynthVoice::kill() noexcept {
   pipe_organ.kill();
   bowed_string.kill();
   reed.kill();
+  brass.kill();
   active = false;
   releasing = false;
 }
@@ -518,7 +538,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // attach their span at note-on).
   ks_capacity_ = ks_buffer_capacity(sample_rate_);
   if (config_.patch.mode == SynthEngineMode::kKarplusStrong) {
-    ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_capacity_), 0.0f);
+    ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_slab_capacity(sample_rate_)), 0.0f);
   } else {
     ks_buffers_.clear();
   }
@@ -566,6 +586,15 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
                          0.0f);
   } else {
     reed_buffers_.clear();
+  }
+  // Brass / lip reed: one bore delay span per voice slot (same as the reed).
+  brass_capacity_ = brass_buffer_capacity(sample_rate_);
+  brass_mode_ = config_.patch.mode == SynthEngineMode::kBrass;
+  if (brass_mode_) {
+    brass_buffers_.assign(pool_.size() * static_cast<size_t>(brass_slab_capacity(sample_rate_)),
+                          0.0f);
+  } else {
+    brass_buffers_.clear();
   }
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
@@ -643,6 +672,23 @@ void NativeSynth::push_reed_control(uint8_t channel) noexcept {
   }
 }
 
+void NativeSynth::push_brass_control(uint8_t channel) noexcept {
+  if (!brass_mode_) return;
+  const uint8_t ch = channel & 0x0Fu;
+  const ChannelState& st = channels_[ch];
+  for (NativeSynthVoice& v : pool_) {
+    if (!v.active || v.channel != ch || v.patch == nullptr ||
+        v.patch->mode != SynthEngineMode::kBrass) {
+      continue;
+    }
+    // Breath / brightness override the preset only once the host sends the CC;
+    // loudness is the shared expression VCA, not a brass-specific push.
+    if (st.brass_breath != 255) v.brass.set_breath(static_cast<float>(st.brass_breath) / 127.0f);
+    if (st.brass_bright != 255)
+      v.brass.set_brightness(static_cast<float>(st.brass_bright) / 127.0f);
+  }
+}
+
 void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
@@ -665,7 +711,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
   // KS patches get their delay span before start() (pointer wiring only).
   if (!ks_buffers_.empty()) {
-    voice->ks.attach(ks_buffers_.data() + static_cast<size_t>(voice_index) * ks_capacity_,
+    voice->ks.attach(ks_buffers_.data() + static_cast<size_t>(voice_index) * 2 * ks_capacity_,
                      ks_capacity_);
   }
   if (!piano_buffers_.empty()) {
@@ -686,6 +732,10 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   if (!reed_buffers_.empty()) {
     voice->reed.attach(reed_buffers_.data() + static_cast<size_t>(voice_index) * reed_capacity_,
                        reed_capacity_);
+  }
+  if (!brass_buffers_.empty()) {
+    voice->brass.attach(brass_buffers_.data() + static_cast<size_t>(voice_index) * brass_capacity_,
+                        brass_capacity_);
   }
   // GM kit mode: resolve the struck note through the drum map instead of
   // playing the single configured piece (static patches — safe to keep in the
@@ -725,6 +775,19 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
       voice->reed.set_brightness(static_cast<float>(st.reed_bright) / 127.0f);
     }
     voice->reed.snap_reed_control();
+  }
+  // Seed a brass voice at the channel's current brass controllers (no glide on
+  // the first sample) so a note struck mid-phrase starts at the live breath /
+  // brightness rather than gliding in from the preset.
+  if (patch->mode == SynthEngineMode::kBrass) {
+    const ChannelState& st = channels_[ch];
+    if (st.brass_breath != 255) {
+      voice->brass.set_breath(static_cast<float>(st.brass_breath) / 127.0f);
+    }
+    if (st.brass_bright != 255) {
+      voice->brass.set_brightness(static_cast<float>(st.brass_bright) / 127.0f);
+    }
+    voice->brass.snap_brass_control();
   }
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
@@ -836,6 +899,8 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.bow_position = 255;
   st.reed_breath = 255;
   st.reed_bright = 255;
+  st.brass_breath = 255;
+  st.brass_bright = 255;
   st.params.reset();
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
@@ -843,6 +908,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   refresh_channel_mod(ch);
   push_bow_control(ch);
   push_reed_control(ch);
+  push_brass_control(ch);
 }
 
 void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
@@ -862,22 +928,26 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       refresh_channel_mod(ch);
       break;
     case 2:
-      st.bow_force = value;    // breath -> bowed-string bow force
-      st.reed_breath = value;  // breath -> reed mouth pressure
+      st.bow_force = value;     // breath -> bowed-string bow force
+      st.reed_breath = value;   // breath -> reed mouth pressure
+      st.brass_breath = value;  // breath -> brass mouth pressure
       push_bow_control(ch);
       push_reed_control(ch);
+      push_brass_control(ch);
       break;
     case 11:
       st.expression = value;
       refresh_channel_mod(ch);
-      push_bow_control(ch);  // expression scales bowed-string bow speed (reed
-                             // loudness rides the shared expression VCA)
+      push_bow_control(ch);  // expression scales bowed-string bow speed (reed /
+                             // brass loudness rides the shared expression VCA)
       break;
     case 74:
       st.bow_position = value;  // brightness/SC5 -> bowed-string bow position
       st.reed_bright = value;   // brightness/SC5 -> reed bell brightness
+      st.brass_bright = value;  // brightness/SC5 -> brass bell brightness
       push_bow_control(ch);
       push_reed_control(ch);
+      push_brass_control(ch);
       break;
     case 6:
       if (st.params.selected_rpn(0, 0)) {
