@@ -169,6 +169,17 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
       std::clamp(sanitize(p.pipe_organ.tremulant_depth, 0.0f), 0.0f, 1.0f);
   p.pipe_organ.wind_sag = std::clamp(sanitize(p.pipe_organ.wind_sag, 0.0f), 0.0f, 1.0f);
   p.pipe_organ.swell = std::clamp(sanitize(p.pipe_organ.swell, 0.0f), 0.0f, 1.0f);
+  p.bowed_string.bow_position =
+      std::clamp(sanitize(p.bowed_string.bow_position, 0.13f), 0.02f, 0.5f);
+  p.bowed_string.bow_force = std::clamp(sanitize(p.bowed_string.bow_force, 0.5f), 0.0f, 1.0f);
+  p.bowed_string.bow_speed = std::clamp(sanitize(p.bowed_string.bow_speed, 0.5f), 0.0f, 1.0f);
+  p.bowed_string.vel_to_speed = std::clamp(sanitize(p.bowed_string.vel_to_speed, 0.6f), 0.0f, 1.0f);
+  p.bowed_string.brightness = std::clamp(sanitize(p.bowed_string.brightness, 0.5f), 0.0f, 1.0f);
+  p.bowed_string.damping = std::clamp(sanitize(p.bowed_string.damping, 0.4f), 0.0f, 1.0f);
+  p.bowed_string.attack_ms = std::clamp(sanitize(p.bowed_string.attack_ms, 60.0f), 1.0f, 2000.0f);
+  p.bowed_string.release_ms =
+      std::clamp(sanitize(p.bowed_string.release_ms, 120.0f), 1.0f, 5000.0f);
+  p.bowed_string.rosin = std::clamp(sanitize(p.bowed_string.rosin, 0.0f), 0.0f, 1.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 3) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
@@ -213,6 +224,10 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   }
   if (p.mode == SynthEngineMode::kPipeOrgan) {
     pipe_organ.start(p.pipe_organ, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kBowedString) {
+    bowed_string.start(p.bowed_string, sample_rate, note, velocity,
+                       voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -360,6 +375,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = piano.render(common);
   } else if (patch->mode == SynthEngineMode::kPipeOrgan) {
     sample = pipe_organ.render(common);
+  } else if (patch->mode == SynthEngineMode::kBowedString) {
+    sample = bowed_string.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -401,6 +418,7 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kModal) modal.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kPiano) piano.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kPipeOrgan) pipe_organ.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kBowedString) bowed_string.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -413,6 +431,7 @@ void NativeSynthVoice::kill() noexcept {
   percussion.kill();
   piano.kill();
   pipe_organ.kill();
+  bowed_string.kill();
   active = false;
   releasing = false;
 }
@@ -466,6 +485,16 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     pipe_organ_buffers_.clear();
     swell_depth_ = 0.0f;
   }
+  // Bowed string: one delay slab per voice slot (two delay-line spans, the neck
+  // and bridge). The only allocation site; voices attach their slab at note-on.
+  bowed_string_capacity_ = bowed_string_buffer_capacity(sample_rate_);
+  bowed_string_mode_ = config_.patch.mode == SynthEngineMode::kBowedString;
+  if (bowed_string_mode_) {
+    bowed_string_buffers_.assign(
+        pool_.size() * static_cast<size_t>(bowed_string_slab_capacity(sample_rate_)), 0.0f);
+  } else {
+    bowed_string_buffers_.clear();
+  }
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
   channels_ = {};
@@ -505,6 +534,27 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
 }
 
+void NativeSynth::push_bow_control(uint8_t channel) noexcept {
+  if (!bowed_string_mode_) return;
+  const uint8_t ch = channel & 0x0Fu;
+  const ChannelState& st = channels_[ch];
+  const float speed_scale = static_cast<float>(st.expression) / 127.0f;
+  for (NativeSynthVoice& v : pool_) {
+    if (!v.active || v.channel != ch || v.patch == nullptr ||
+        v.patch->mode != SynthEngineMode::kBowedString) {
+      continue;
+    }
+    // Expression scales the bow speed (identity at CC11 == 127); breath / CC74
+    // override the preset's force / position only once the host sends them.
+    v.bowed_string.set_bow_speed_scale(speed_scale);
+    if (st.bow_force != 255)
+      v.bowed_string.set_bow_force(static_cast<float>(st.bow_force) / 127.0f);
+    if (st.bow_position != 255) {
+      v.bowed_string.set_bow_position(static_cast<float>(st.bow_position) / 127.0f);
+    }
+  }
+}
+
 void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
@@ -526,6 +576,11 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
                                                               kMaxPipeRanks * pipe_organ_capacity_,
                              pipe_organ_capacity_);
   }
+  if (!bowed_string_buffers_.empty()) {
+    voice->bowed_string.attach(bowed_string_buffers_.data() +
+                                   static_cast<size_t>(voice_index) * 2 * bowed_string_capacity_,
+                               bowed_string_capacity_);
+  }
   // GM kit mode: resolve the struck note through the drum map instead of
   // playing the single configured piece (static patches — safe to keep in the
   // voice for its whole life; every kit piece is kPercussion, so the KS/piano
@@ -537,6 +592,20 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   // Portamento: glide from the channel's previous note when enabled.
   const float glide_from = patch->glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;
   voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, channels_[ch].una_corda);
+  // Seed a bowed voice at the channel's current bow controllers (no glide on the
+  // first sample) so a note struck mid-phrase starts at the live bow position /
+  // force / expression rather than gliding in from the preset.
+  if (patch->mode == SynthEngineMode::kBowedString) {
+    const ChannelState& st = channels_[ch];
+    voice->bowed_string.set_bow_speed_scale(static_cast<float>(st.expression) / 127.0f);
+    if (st.bow_force != 255) {
+      voice->bowed_string.set_bow_force(static_cast<float>(st.bow_force) / 127.0f);
+    }
+    if (st.bow_position != 255) {
+      voice->bowed_string.set_bow_position(static_cast<float>(st.bow_position) / 127.0f);
+    }
+    voice->bowed_string.snap_bow_control();
+  }
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
 
@@ -643,11 +712,14 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.mod_wheel = 0;
   st.expression = 127;
   st.pitch_bend = 8192;
+  st.bow_force = 255;
+  st.bow_position = 255;
   st.params.reset();
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
   st.una_corda = false;
   refresh_channel_mod(ch);
+  push_bow_control(ch);
 }
 
 void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
@@ -666,9 +738,18 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       st.pan = value;
       refresh_channel_mod(ch);
       break;
+    case 2:
+      st.bow_force = value;  // breath -> bowed-string bow force
+      push_bow_control(ch);
+      break;
     case 11:
       st.expression = value;
       refresh_channel_mod(ch);
+      push_bow_control(ch);  // expression scales bowed-string bow speed
+      break;
+    case 74:
+      st.bow_position = value;  // brightness/SC5 -> bowed-string bow position
+      push_bow_control(ch);
       break;
     case 6:
       if (st.params.selected_rpn(0, 0)) {

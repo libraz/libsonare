@@ -30,6 +30,7 @@
 #include "midi/instrument.h"
 #include "midi/synth/additive_voice.h"
 #include "midi/synth/body_resonator.h"
+#include "midi/synth/bowed_string_voice.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
@@ -56,6 +57,7 @@ enum class SynthEngineMode : int {
   kPercussion = 5,     // membrane modal + filtered noise (percussion_voice.h)
   kPiano = 6,          // extended waveguide piano (piano_voice.h)
   kPipeOrgan = 7,      // sustained waveguide flue pipe (pipe_organ_voice.h)
+  kBowedString = 8,    // sustained waveguide bowed string (bowed_string_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -155,6 +157,9 @@ struct NativeSynthPatch {
 
   /// Sustained waveguide flue pipe (used when mode == kPipeOrgan).
   PipeOrganPatchParams pipe_organ;
+
+  /// Sustained waveguide bowed string (used when mode == kBowedString).
+  BowedStringPatchParams bowed_string;
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -190,6 +195,9 @@ struct NativeSynthVoice : VoiceState {
   /// Flue-pipe core; like KS, the host attach()es its delay span before
   /// start().
   PipeOrganVoiceCore pipe_organ;
+  /// Bowed-string core; like KS, the host attach()es its delay slab before
+  /// start().
+  BowedStringVoiceCore bowed_string;
   BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
@@ -274,6 +282,11 @@ class NativeSynth final : public MidiInstrument {
     uint8_t pan = 64;           // CC10
     uint8_t mod_wheel = 0;      // CC1
     uint16_t pitch_bend = 8192;
+    /// Bowed-string continuous controllers (255 = untouched, so the preset's
+    /// own bow force / position stands until the host sends the CC): CC2 breath
+    /// -> bow force, CC74 -> bow position. CC11 expression scales bow speed.
+    uint8_t bow_force = 255;
+    uint8_t bow_position = 255;
     ChannelParamState params;
     float bend_range_cents = 200.0f;
     /// Previous note's frequency (glide source; 0 = none yet).
@@ -287,6 +300,9 @@ class NativeSynth final : public MidiInstrument {
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
+  /// Pushes the channel's live bowed-string controllers (CC11 bow speed, CC2
+  /// bow force, CC74 bow position) to its sounding bowed voices.
+  void push_bow_control(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
 
@@ -320,6 +336,11 @@ class NativeSynth final : public MidiInstrument {
   std::vector<float> pipe_organ_buffers_;
   int pipe_organ_capacity_ = 0;  // per-rank span
   bool pipe_organ_mode_ = false;
+  /// Bowed-string delay slab: two delay-line spans (neck + bridge) per voice
+  /// slot, allocated in prepare() only when the patch is a bowed string.
+  std::vector<float> bowed_string_buffers_;
+  int bowed_string_capacity_ = 0;  // per-line span
+  bool bowed_string_mode_ = false;
   /// Shared organ wind chest (tremulant / wind sag); pipe-organ patches only.
   OrganWindSupply wind_;
   /// Swell box: a bus-level shutter lowpass driven by the expression pedal
