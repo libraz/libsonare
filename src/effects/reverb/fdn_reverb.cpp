@@ -98,17 +98,19 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
 }
 
 bool FdnReverb::set_parameter(unsigned int param_id, float value) {
-  // update_absorption() depends on the prepared delay lengths and sample rate.
-  if (!prepared_) return false;
+  // Store the update even before prepare() so a host that configures the effect
+  // ahead of graph preparation does not lose it; update_absorption() (which
+  // depends on the prepared delay lengths and sample rate) is deferred to
+  // prepare() when not yet prepared. Matches the Dattorro/Velvet reverbs.
   switch (param_id) {
     case 0:
       config_.decay = value;
       // Recompute absorption coefficients in place; preserves filter/delay state.
-      update_absorption();
+      if (prepared_) update_absorption();
       return true;
     case 1:
       config_.hf_damping = value;
-      update_absorption();
+      if (prepared_) update_absorption();
       return true;
     case 2:
       config_.dry_wet = value;

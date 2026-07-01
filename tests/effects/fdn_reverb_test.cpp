@@ -72,6 +72,48 @@ TEST_CASE("FdnReverb mono output folds down both taps", "[reverb][fdn]") {
   REQUIRE(diff_from_second_tap > 1e-3);
 }
 
+// A host may configure an effect's parameters before the graph is prepared.
+// FdnReverb must retain those updates (update_absorption(), which needs the
+// prepared delay lengths, is deferred to prepare()) rather than silently
+// rejecting them, matching the Dattorro/Velvet reverbs.
+TEST_CASE("FdnReverb retains parameter updates set before prepare", "[reverb][fdn]") {
+  FdnReverb reverb(FdnReverbConfig{});
+  // Pre-prepare updates are accepted (previously rejected with false).
+  REQUIRE(reverb.set_parameter(0, 1.2f));   // decay
+  REQUIRE(reverb.set_parameter(1, 0.75f));  // hf_damping
+  REQUIRE(reverb.set_parameter(2, 1.0f));   // dry_wet
+  // Unknown parameter ids are still rejected.
+  REQUIRE_FALSE(reverb.set_parameter(99, 0.0f));
+
+  // The stored decay must take effect once prepare() runs: a reverb configured
+  // pre-prepare must produce the same tail as one constructed with that config.
+  constexpr int kN = 4096;
+  reverb.prepare(48000.0, kN);
+  std::vector<float> got = make_impulse(kN);
+  float* got_ch[1] = {got.data()};
+  reverb.process(got_ch, 1, kN);
+
+  FdnReverbConfig config;
+  config.decay = 1.2f;
+  config.hf_damping = 0.75f;
+  config.dry_wet = 1.0f;
+  FdnReverb reference(config);
+  reference.prepare(48000.0, kN);
+  std::vector<float> expected = make_impulse(kN);
+  float* expected_ch[1] = {expected.data()};
+  reference.process(expected_ch, 1, kN);
+
+  double diff = 0.0;
+  double energy = 0.0;
+  for (int i = 0; i < kN; ++i) {
+    diff += std::abs(static_cast<double>(got[static_cast<size_t>(i)]) -
+                     expected[static_cast<size_t>(i)]);
+    energy += static_cast<double>(got[static_cast<size_t>(i)]) * got[static_cast<size_t>(i)];
+  }
+  REQUIRE(energy > 1e-6);
+  REQUIRE_THAT(diff, WithinAbs(0.0, 1e-4));
+}
+
 TEST_CASE("FdnReverb dry_wet=0 preserves dry signal without DC blocking", "[reverb][fdn]") {
   constexpr int kN = 1024;
   FdnReverbConfig config;
