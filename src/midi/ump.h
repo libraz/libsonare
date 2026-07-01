@@ -177,6 +177,18 @@ Ump make_midi2_assignable_controller(uint8_t group, uint8_t channel, uint8_t ban
 /// length for diagnostics only.
 Ump make_sysex_handle(uint8_t group, SysExHandle handle) noexcept;
 
+/// Packetizes a resolved SysEx payload into a sequence of SysEx7 (message type
+/// 0x3, 64-bit) UMP data messages on `group`. A leading 0xF0 / trailing 0xF7
+/// MIDI 1.0 frame is stripped (UMP SysEx7 carries only the inner data). Each UMP
+/// holds up to 6 payload bytes; the status nibble runs Complete for a single
+/// packet, otherwise Start / Continue… / End. Writes up to `cap` UMPs into `out`
+/// and returns the count produced, or 0 if the payload is empty, contains an
+/// 8-bit byte (SysEx7 is 7-bit; use SysEx8), or does not fit in `cap`. RT-safe:
+/// no allocation. This is the inverse of the SysEx7 reader used by the SMF2
+/// importer, and lets a live output backend resolve a SysExHandle to wire bytes.
+size_t sysex7_payload_to_umps(const uint8_t* data, size_t size, uint8_t group, Ump* out,
+                              size_t cap) noexcept;
+
 /// Control-thread payload store for variable-length SysEx / property data.
 /// UMPs carry only a SysExHandle so RT structures stay fixed-size; callers keep
 /// the payload bytes here and pass handles through the MIDI graph.

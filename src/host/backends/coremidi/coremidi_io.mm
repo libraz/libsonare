@@ -151,6 +151,7 @@ struct CoreMidiOutput::Impl {
   MIDIEndpointRef destination = 0;
   FixedMidiOutputSink<kOutputCapacity> queue;
   std::array<midi::MidiEvent, kDrainScratch> scratch{};
+  const midi::SysExStore* sysex_store = nullptr;
 };
 
 CoreMidiOutput::CoreMidiOutput() : impl_(std::make_unique<Impl>()) {}
@@ -187,9 +188,10 @@ size_t CoreMidiOutput::flush_output() noexcept {
   const size_t n = impl_->queue.drain_queued(impl_->scratch.data(), impl_->scratch.size());
   if (n == 0) return 0;
 
-  // Build one MIDIEventList from the drained UMP records. SysEx-handle UMPs are
-  // skipped here: their payload must be resolved off the audio thread against
-  // the runtime's store before sending (see the seam's SysEx contract).
+  // Build one MIDIEventList from the drained UMP records. A SysEx-handle UMP is
+  // resolved against the attached store (control thread) and expanded into
+  // SysEx7 data packets; without a store or for an unknown handle it is skipped
+  // (an unresolvable payload cannot be sent).
   std::array<uint8_t, sizeof(MIDIEventList) + kDrainScratch * sizeof(MIDIEventPacket)> storage{};
   auto* list = reinterpret_cast<MIDIEventList*>(storage.data());
   MIDIEventPacket* packet = MIDIEventListInit(list, kMIDIProtocol_2_0);
@@ -197,12 +199,30 @@ size_t CoreMidiOutput::flush_output() noexcept {
   size_t sent = 0;
   for (size_t i = 0; i < n; ++i) {
     const midi::Ump& ump = impl_->scratch[i].ump;
-    if (ump.sysex_handle != 0 || ump.word_count == 0) continue;
+    if (ump.word_count == 0) continue;
+    if (ump.sysex_handle != 0) {
+      const std::vector<uint8_t>* payload =
+          impl_->sysex_store != nullptr ? impl_->sysex_store->lookup(ump.sysex_handle) : nullptr;
+      if (payload == nullptr) continue;  // unresolvable: no store or unknown handle
+      std::array<midi::Ump, kDrainScratch> packets{};
+      const size_t count = midi::sysex7_payload_to_umps(payload->data(), payload->size(), ump.group,
+                                                        packets.data(), packets.size());
+      for (size_t k = 0; k < count; ++k) {
+        packet = MIDIEventListAdd(list, storage.size(), packet, now, packets[k].word_count,
+                                  packets[k].words);
+      }
+      if (count > 0) ++sent;
+      continue;
+    }
     packet = MIDIEventListAdd(list, storage.size(), packet, now, ump.word_count, ump.words);
     ++sent;
   }
   if (sent > 0) MIDISendEventList(impl_->port, impl_->destination, list);
   return sent;
+}
+
+void CoreMidiOutput::set_sysex_store(const midi::SysExStore* store) noexcept {
+  impl_->sysex_store = store;
 }
 
 bool CoreMidiOutput::send(const midi::MidiEvent& event) noexcept {

@@ -20,6 +20,10 @@
 
 #include "host/midi_io.h"
 
+namespace sonare::midi {
+class SysExStore;
+}  // namespace sonare::midi
+
 namespace sonare::host::backends {
 
 /// Live CoreMIDI input: connects to a source endpoint and pushes incoming UMP
@@ -73,8 +77,15 @@ class CoreMidiOutput final : public MidiOutputSink {
 
   void close() noexcept;
 
+  /// CONTROL thread: attach the payload store used to resolve SysEx-handle UMPs
+  /// to wire bytes during flush_output(). Not owned; must outlive this sink. When
+  /// unset (or a handle is unknown), SysEx events are skipped rather than sent.
+  void set_sysex_store(const midi::SysExStore* store) noexcept;
+
   /// CONTROL / port thread (NOT the audio thread): drain queued events and write
-  /// them to the device via MIDISendEventList. Returns the number flushed.
+  /// them to the device via MIDISendEventList. SysEx-handle UMPs are resolved
+  /// through the attached SysExStore (see set_sysex_store) and expanded into
+  /// SysEx7 packets. Returns the number of source events flushed.
   size_t flush_output() noexcept;
 
   // MidiOutputSink — delegate to the internal fixed queue (RT-safe).

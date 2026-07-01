@@ -1,5 +1,6 @@
 #include "midi/ump.h"
 
+#include <algorithm>
 #include <limits>
 
 namespace sonare::midi {
@@ -252,6 +253,67 @@ Ump make_sysex_handle(uint8_t group, SysExHandle handle) noexcept {
   ump.group = static_cast<uint8_t>(group & 0x0Fu);
   ump.sysex_handle = handle;
   return ump;
+}
+
+size_t sysex7_payload_to_umps(const uint8_t* data, size_t size, uint8_t group, Ump* out,
+                              size_t cap) noexcept {
+  if (data == nullptr || out == nullptr) return 0;
+  // Strip MIDI 1.0 framing: UMP SysEx7 carries the inner data only.
+  size_t begin = 0;
+  size_t end = size;
+  if (begin < end && data[begin] == 0xF0u) ++begin;
+  if (end > begin && data[end - 1] == 0xF7u) --end;
+  const size_t total = end - begin;
+  if (total == 0) return 0;
+
+  // SysEx7 data bytes must be 7-bit; an 8-bit byte requires SysEx8.
+  for (size_t i = begin; i < end; ++i) {
+    if (data[i] > 0x7Fu) return 0;
+  }
+
+  // A payload of N bytes needs ceil(N / 6) packets; bail before writing if the
+  // caller's buffer cannot hold them all (partial SysEx would be malformed).
+  const size_t needed = (total + 5u) / 6u;
+  if (needed > cap) return 0;
+
+  constexpr uint8_t kSysex7Complete = 0x0u;
+  constexpr uint8_t kSysex7Start = 0x1u;
+  constexpr uint8_t kSysex7Continue = 0x2u;
+  constexpr uint8_t kSysex7End = 0x3u;
+
+  const uint32_t group_bits = static_cast<uint32_t>(group & 0x0Fu) << 24u;
+  size_t offset = 0;
+  size_t produced = 0;
+  bool first = true;
+  do {
+    const size_t chunk = std::min<size_t>(6u, total - offset);
+    uint8_t status;
+    if (total <= 6u) {
+      status = kSysex7Complete;
+    } else if (first) {
+      status = kSysex7Start;
+    } else if (offset + chunk >= total) {
+      status = kSysex7End;
+    } else {
+      status = kSysex7Continue;
+    }
+    std::array<uint8_t, 6> bytes{};
+    for (size_t i = 0; i < chunk; ++i) bytes[i] = data[begin + offset + i];
+
+    Ump ump;
+    ump.words[0] = (static_cast<uint32_t>(UmpMessageType::kData64) << kTypeShift) | group_bits |
+                   (static_cast<uint32_t>(status) << 20u) | (static_cast<uint32_t>(chunk) << 16u) |
+                   (static_cast<uint32_t>(bytes[0]) << 8u) | static_cast<uint32_t>(bytes[1]);
+    ump.words[1] = (static_cast<uint32_t>(bytes[2]) << 24u) |
+                   (static_cast<uint32_t>(bytes[3]) << 16u) |
+                   (static_cast<uint32_t>(bytes[4]) << 8u) | static_cast<uint32_t>(bytes[5]);
+    ump.word_count = 2;
+    ump.group = static_cast<uint8_t>(group & 0x0Fu);
+    out[produced++] = ump;
+    offset += chunk;
+    first = false;
+  } while (offset < total);
+  return produced;
 }
 
 SysExHandle SysExStore::allocate_handle() noexcept {

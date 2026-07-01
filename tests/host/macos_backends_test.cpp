@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cmath>
 #include <thread>
+#include <vector>
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
@@ -48,6 +49,26 @@ TEST_CASE("CoreMIDI output queues RT-safe and holds without a device", "[host][c
   REQUIRE(output.queued_count() == 1);  // unflushed events stay queued
 }
 
+TEST_CASE("CoreMIDI output queues a SysEx-handle event against an attached store",
+          "[host][coremidi]") {
+  using sonare::host::backends::CoreMidiOutput;
+  sonare::midi::SysExStore store;
+  const std::vector<uint8_t> payload = {0xF0u, 0x7Eu, 0x7Fu, 0x09u, 0x01u, 0xF7u};
+  const sonare::midi::SysExHandle handle = store.add(payload);
+  REQUIRE(handle != 0);
+
+  CoreMidiOutput output;
+  output.set_sysex_store(&store);  // control-thread wiring; resolved at flush time
+  // A SysEx-handle UMP is RT-safe to enqueue (fixed size); resolution to SysEx7
+  // packets happens in flush_output against the store. Without a device flush is
+  // a no-op, but the handle must still queue rather than being dropped at send.
+  const sonare::midi::Ump sx = sonare::midi::make_sysex_handle(/*group=*/0, handle);
+  REQUIRE(output.send(sonare::midi::MidiEvent{0, sx}));
+  REQUIRE(output.queued_count() == 1);
+  REQUIRE(output.flush_output() == 0);  // no destination connected
+  REQUIRE(output.queued_count() == 1);  // retained for a later flush
+}
+
 TEST_CASE("CoreMIDI live endpoint round-trip", "[host][coremidi][.]") {
   using sonare::host::backends::CoreMidiInput;
   using sonare::host::backends::CoreMidiOutput;
@@ -59,6 +80,16 @@ TEST_CASE("CoreMIDI live endpoint round-trip", "[host][coremidi][.]") {
   CoreMidiOutput output;
   REQUIRE(output.open(0));
   REQUIRE(output.send(sonare::midi::MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 64, 90)}));
+  REQUIRE(output.flush_output() == 1);
+
+  // A SysEx-handle event resolves through the attached store and flushes as one
+  // source event (expanded into SysEx7 packets under the hood) rather than being
+  // silently dropped.
+  sonare::midi::SysExStore store;
+  const std::vector<uint8_t> payload = {0xF0u, 0x7Eu, 0x7Fu, 0x09u, 0x01u, 0xF7u};
+  const sonare::midi::SysExHandle handle = store.add(payload);
+  output.set_sysex_store(&store);
+  REQUIRE(output.send(sonare::midi::MidiEvent{0, sonare::midi::make_sysex_handle(0, handle)}));
   REQUIRE(output.flush_output() == 1);
   output.close();
 }

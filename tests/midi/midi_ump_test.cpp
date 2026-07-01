@@ -3,6 +3,7 @@
 ///        adapter round-trip, and MIDI 1.0 <-> 2.0 conversion with the
 ///        documented lossy velocity/CC scaling pinned to exact values.
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <vector>
@@ -181,6 +182,86 @@ TEST_CASE("SysExStore owns variable-length payloads behind UMP handles", "[midi]
   store.clear();
   REQUIRE(store.size() == 0);
   REQUIRE(store.lookup(second) == nullptr);
+}
+
+namespace {
+// Decode one SysEx7 (MT=0x3) UMP data message back to its payload bytes, the
+// inverse of sysex7_payload_to_umps. Mirrors the SMF2 importer's reader.
+uint8_t sysex7_status(const Ump& u) { return static_cast<uint8_t>((u.words[0] >> 20) & 0x0Fu); }
+void append_sysex7(const Ump& u, std::vector<uint8_t>* out) {
+  const uint8_t num = static_cast<uint8_t>((u.words[0] >> 16) & 0x0Fu);
+  const uint8_t bytes[6] = {static_cast<uint8_t>((u.words[0] >> 8) & 0xFFu),
+                            static_cast<uint8_t>(u.words[0] & 0xFFu),
+                            static_cast<uint8_t>((u.words[1] >> 24) & 0xFFu),
+                            static_cast<uint8_t>((u.words[1] >> 16) & 0xFFu),
+                            static_cast<uint8_t>((u.words[1] >> 8) & 0xFFu),
+                            static_cast<uint8_t>(u.words[1] & 0xFFu)};
+  for (uint8_t i = 0; i < num && i < 6; ++i) out->push_back(bytes[i]);
+}
+}  // namespace
+
+TEST_CASE("SysEx7 payload packetizes into UMP data messages and round-trips", "[midi]") {
+  // Short payload (<= 6 data bytes) => a single Complete packet.
+  {
+    const std::vector<uint8_t> payload = {0x7Eu, 0x7Fu, 0x09u, 0x01u};  // 4 bytes, all 7-bit
+    std::array<Ump, 8> out{};
+    const size_t count = sonare::midi::sysex7_payload_to_umps(payload.data(), payload.size(),
+                                                              /*group=*/5, out.data(), out.size());
+    REQUIRE(count == 1);
+    REQUIRE(out[0].message_type() == UmpMessageType::kData64);
+    REQUIRE(out[0].group == 5);
+    REQUIRE(sysex7_status(out[0]) == 0x0u);  // Complete
+    std::vector<uint8_t> decoded;
+    append_sysex7(out[0], &decoded);
+    REQUIRE(decoded == payload);
+  }
+
+  // Multi-packet payload (13 bytes => 6 + 6 + 1) => Start / Continue / End.
+  {
+    std::vector<uint8_t> payload;
+    for (uint8_t i = 0; i < 13; ++i) payload.push_back(static_cast<uint8_t>(i + 1));  // 7-bit
+    std::array<Ump, 8> out{};
+    const size_t count = sonare::midi::sysex7_payload_to_umps(payload.data(), payload.size(),
+                                                              /*group=*/0, out.data(), out.size());
+    REQUIRE(count == 3);
+    REQUIRE(sysex7_status(out[0]) == 0x1u);  // Start
+    REQUIRE(sysex7_status(out[1]) == 0x2u);  // Continue
+    REQUIRE(sysex7_status(out[2]) == 0x3u);  // End
+    std::vector<uint8_t> decoded;
+    for (size_t k = 0; k < count; ++k) append_sysex7(out[k], &decoded);
+    REQUIRE(decoded == payload);
+  }
+
+  // A leading 0xF0 / trailing 0xF7 frame is stripped before packetizing.
+  {
+    const std::vector<uint8_t> framed = {0xF0u, 0x41u, 0x10u, 0x42u, 0xF7u};
+    const std::vector<uint8_t> inner = {0x41u, 0x10u, 0x42u};
+    std::array<Ump, 8> out{};
+    const size_t count = sonare::midi::sysex7_payload_to_umps(framed.data(), framed.size(),
+                                                              /*group=*/1, out.data(), out.size());
+    REQUIRE(count == 1);
+    std::vector<uint8_t> decoded;
+    append_sysex7(out[0], &decoded);
+    REQUIRE(decoded == inner);
+  }
+}
+
+TEST_CASE("SysEx7 packetizer rejects empty, 8-bit, and over-capacity payloads", "[midi]") {
+  std::array<Ump, 8> out{};
+  // Empty payload (also empty after stripping F0/F7) => 0.
+  REQUIRE(sonare::midi::sysex7_payload_to_umps(nullptr, 0, 0, out.data(), out.size()) == 0);
+  const std::vector<uint8_t> framed_only = {0xF0u, 0xF7u};
+  REQUIRE(sonare::midi::sysex7_payload_to_umps(framed_only.data(), framed_only.size(), 0,
+                                               out.data(), out.size()) == 0);
+  // An 8-bit data byte is not valid SysEx7 (needs SysEx8) => 0.
+  const std::vector<uint8_t> eight_bit = {0x41u, 0x80u, 0x42u};
+  REQUIRE(sonare::midi::sysex7_payload_to_umps(eight_bit.data(), eight_bit.size(), 0, out.data(),
+                                               out.size()) == 0);
+  // Buffer too small for the required packet count => 0 (no partial SysEx).
+  std::vector<uint8_t> big(13, 0x01u);
+  std::array<Ump, 2> tiny{};  // needs 3 packets, only 2 fit
+  REQUIRE(sonare::midi::sysex7_payload_to_umps(big.data(), big.size(), 0, tiny.data(),
+                                               tiny.size()) == 0);
 }
 
 TEST_CASE("MIDI 1.0 byte-stream <-> UMP adapter round-trips channel-voice", "[midi]") {
