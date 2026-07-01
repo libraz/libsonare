@@ -391,6 +391,30 @@ TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
   }
 }
 
+TEST_CASE("SMF export flags a non-power-of-two time-signature denominator as lossy", "[midi]") {
+  // SMF stores the time-signature denominator as an exponent (note value 1/2^dd),
+  // so a non-power-of-two denominator is rounded up on export. That loss must be
+  // counted in skipped_events so callers can detect it.
+  std::vector<sonare::transport::TimeSignatureSegment> ts(1);
+  ts[0].start_ppq = 0.0;
+  ts[0].time_sig.numerator = 5;
+  ts[0].time_sig.denominator = 6;  // not 2^n -> rounded up to 8 lossily
+  ts[0].clocks_per_metronome_click = 24;
+  ts[0].thirty_seconds_per_quarter = 8;
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto lossy = export_smf({}, {}, ts, {}, opts);
+  REQUIRE(lossy.ok());
+  REQUIRE(lossy.skipped_events >= 1);
+
+  // A power-of-two denominator exports without loss.
+  ts[0].time_sig.denominator = 8;
+  const auto clean = export_smf({}, {}, ts, {}, opts);
+  REQUIRE(clean.ok());
+  REQUIRE(clean.skipped_events == 0);
+}
+
 TEST_CASE("SMF import tags text / lyric / cue / marker / key-signature meta with kinds", "[midi]") {
   using sonare::midi::SmfMarkerKind;
   const SmfImportResult r = import_smf(make_meta_classes_smf());

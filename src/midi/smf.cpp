@@ -670,10 +670,15 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                                     static_cast<uint8_t>(us_per_quarter & 0xFFu)};
         put_meta(&body, delta, kMetaSetTempo, payload, 3);
       } else if (item.kind == 1) {
-        // Encode denominator as a power of two.
+        // Encode denominator as a power of two. SMF can only store the
+        // denominator as an exponent (note value 1/2^dd), so a non-power-of-two
+        // request is rounded up lossily; count it so callers can detect the loss.
         uint8_t dd = 0;
         int den = item.denominator > 0 ? item.denominator : 4;
         while ((1 << dd) < den && dd < 7) ++dd;
+        if ((1 << dd) != den) {
+          ++result.skipped_events;
+        }
         const uint8_t payload[4] = {static_cast<uint8_t>(item.numerator), dd,
                                     item.clocks_per_metronome_click,
                                     item.thirty_seconds_per_quarter};
