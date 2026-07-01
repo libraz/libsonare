@@ -51,6 +51,38 @@ constexpr float kEpZssFloor = 0.10f;
 // velocities, the hysteresis loop that warms the memoryless table's "dry" slip.
 constexpr float kEpHystOffset = 0.6f;
 
+// --- sympathetic open-string resonance (only when params.sympathetic > 0) ---
+// Fixed open-string pitches (MIDI notes) the bank resonates at: a fifths-ish
+// spread spanning the violin family's open strings (contrabass E1 .. violin E5),
+// so a bowed note's partials excite whichever "open strings" they align with.
+constexpr int kSympatheticNotes[] = {28, 35, 42, 49, 55, 62, 69, 76};
+// Sympathetic ring time (t60, seconds): open strings ring longer than the
+// piano's damped bank but decay well within a phrase.
+constexpr float kSympatheticRingS = 1.2f;
+// Return level scale: weak coupling so the bank haloes the played note rather
+// than dominating (final mix = this * params.sympathetic).
+constexpr float kSympatheticOutGain = 0.10f;
+
+// --- second (horizontal) polarization (only when params.polarization > 0) ---
+// Detune of the 2nd polarization from the bowed one (cents): the two planes ring
+// at slightly different pitches and beat, the source of the "thickness".
+constexpr float kPolDetuneCents = 7.0f;
+// Loop loss of the 2nd polarization: more damped than the primary (it is not
+// driven directly by the bow), so it colours the attack and body without ringing
+// on forever.
+constexpr float kPolLoss = 0.93f;
+// Reflection-filter openness of the 2nd polarization loop (one-pole pole a).
+constexpr float kPolLpPole = 0.35f;
+// Bow injection into the 2nd polarization (weak — the bow grips the vertical
+// plane; the horizontal plane is dragged along).
+constexpr float kPolDrive = 0.35f;
+// Cross-coupling of the 2nd polarization back into the bowed string velocity,
+// scaled by params.polarization. Kept small so the added feedback path stays
+// bounded (the bow table saturates and pol_loss < 1).
+constexpr float kPolCoupleMax = 0.20f;
+// Direct radiation of the 2nd polarization added to the output.
+constexpr float kPolRadiation = 0.25f;
+
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
 }
@@ -150,6 +182,52 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
     ep_z_ba_ = kEpBreakawayFrac * kEpZMax;
     ep_load_rate_ = ramp_coeff(kEpLoadTimeMs, sr);
   }
+
+  // Sympathetic open-string bank (off by default -> render skips it entirely,
+  // bit-identical). One-way driven by the bridge output, unity-peak normalized.
+  static_assert(sizeof(kSympatheticNotes) / sizeof(kSympatheticNotes[0]) == kSympatheticModes_,
+                "sympathetic note table must match the bank size");
+  const float sympathetic = std::clamp(params.sympathetic, 0.0f, 1.0f);
+  sympathetic_mix_ = sympathetic > 0.0f ? kSympatheticOutGain * sympathetic : 0.0f;
+  if (sympathetic_mix_ > 0.0f) {
+    const float srf = static_cast<float>(sr);
+    const float r = std::exp(-6.907755279f / (srf * kSympatheticRingS));
+    for (int i = 0; i < kSympatheticModes_; ++i) {
+      SympatheticMode& m = sympathetic_[static_cast<size_t>(i)];
+      const float freq = note_to_hz(static_cast<uint8_t>(kSympatheticNotes[i]));
+      m.y1 = 0.0f;
+      m.y2 = 0.0f;
+      if (freq >= 0.45f * srf) {
+        m.a1 = 0.0f;
+        m.a2 = 0.0f;
+        m.gain = 0.0f;
+        continue;
+      }
+      const float w = kTwoPi * freq / srf;
+      m.a1 = 2.0f * r * std::cos(w);
+      m.a2 = -r * r;
+      m.gain = 1.0f - r;  // unity-peak (cancels the high-Q resonant boost)
+    }
+  }
+
+  // Second (horizontal) polarization (off by default -> render skips it,
+  // bit-identical). A detuned string loop sharing the bow; more damped than the
+  // primary and weakly cross-coupled so the added feedback stays bounded.
+  const float polarization = std::clamp(params.polarization, 0.0f, 1.0f);
+  pol_couple_ = polarization > 0.0f ? kPolCoupleMax * polarization : 0.0f;
+  pol_out_ = 0.0f;
+  pol_lp_state_ = 0.0f;
+  pol_write_ = 0;
+  if (pol_couple_ > 0.0f) {
+    pol_period_ = base_period_ * std::exp2(kPolDetuneCents / 1200.0f);
+    pol_lp_alpha_ = 1.0f - kPolLpPole;
+    pol_loss_ = kPolLoss;
+    pol_drive_ = kPolDrive;
+    pol_size_ = neck_size_;  // sized for a full detuned period (same span budget)
+    if (pol_ != nullptr) {
+      for (int i = 0; i < pol_size_; ++i) pol_[static_cast<size_t>(i)] = 0.0f;
+    }
+  }
 }
 
 float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
@@ -178,8 +256,10 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   const float bridge_refl = -loss_gain_ * lp_state_;
   const float nut_refl = -neck_out_;
 
-  // String velocity at the bow point = sum of the incoming velocity waves.
-  const float string_v = bridge_refl + nut_refl;
+  // String velocity at the bow point = sum of the incoming velocity waves, plus
+  // (when gated on) the weakly-coupled horizontal polarization sharing the bow.
+  float string_v = bridge_refl + nut_refl;
+  if (pol_couple_ > 0.0f) string_v += pol_couple_ * pol_out_;
   const float dv = bow_v - string_v;
 
   // Bow friction: the velocity the bow injects equally into both delay lines.
@@ -217,7 +297,35 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
                                      static_cast<int>(bridge_delay * 256.0f), nut_refl + v_inj);
   ++drive_index_;
   // Output is the string velocity at the bridge (what drives the body).
-  return output_scale_ * bridge_out_;
+  float dry = output_scale_ * bridge_out_;
+  // Second (horizontal) polarization: its own lossy, detuned loop driven by the
+  // shared bow injection (and coupled back through string_v above). Gated on.
+  if (pol_couple_ > 0.0f) {
+    pol_lp_state_ += pol_lp_alpha_ * (pol_out_ - pol_lp_state_);
+    const float pol_refl = -pol_loss_ * pol_lp_state_;
+    const float pol_delay =
+        std::clamp(pol_period_ / ratio - comp_, 1.0f, static_cast<float>(pol_size_ - 4));
+    pol_out_ = rt::lagrange3_fractional_delay(pol_, static_cast<size_t>(pol_size_), pol_write_,
+                                              static_cast<int>(pol_delay * 256.0f),
+                                              pol_refl + pol_drive_ * v_inj);
+    dry += output_scale_ * kPolRadiation * pol_out_;
+  }
+  // Sympathetic open-string halo (gated; one-way, so it cannot destabilise the
+  // waveguide loop). Driven by the sounding output level so the halo tracks the
+  // played dynamics.
+  if (sympathetic_mix_ > 0.0f) return dry + sympathetic_mix_ * sympathetic_process(dry);
+  return dry;
+}
+
+float BowedStringVoiceCore::sympathetic_process(float x) noexcept {
+  float sum = 0.0f;
+  for (SympatheticMode& m : sympathetic_) {
+    const float y = m.a1 * m.y1 + m.a2 * m.y2 + m.gain * x;
+    m.y2 = m.y1;
+    m.y1 = y;
+    sum += y;
+  }
+  return sum;
 }
 
 float BowedStringVoiceCore::elasto_plastic_injection(float dv) noexcept {
@@ -276,6 +384,12 @@ void BowedStringVoiceCore::kill() noexcept {
   neck_out_ = 0.0f;
   bridge_out_ = 0.0f;
   bristle_z_ = 0.0f;
+  pol_out_ = 0.0f;
+  pol_lp_state_ = 0.0f;
+  for (SympatheticMode& m : sympathetic_) {
+    m.y1 = 0.0f;
+    m.y2 = 0.0f;
+  }
   releasing_ = true;
 }
 

@@ -578,7 +578,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   }
   if (!bowed_string_buffers_.empty()) {
     voice->bowed_string.attach(bowed_string_buffers_.data() +
-                                   static_cast<size_t>(voice_index) * 2 * bowed_string_capacity_,
+                                   static_cast<size_t>(voice_index) * 3 * bowed_string_capacity_,
                                bowed_string_capacity_);
   }
   // GM kit mode: resolve the struck note through the drum map instead of

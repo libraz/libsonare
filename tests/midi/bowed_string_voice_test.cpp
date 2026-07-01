@@ -495,3 +495,80 @@ TEST_CASE("elasto-plastic friction reshapes the tone but keeps it harmonic",
   const double plastic_c = swell_centroid(plastic_tone, 8000);
   REQUIRE(std::fabs(plastic_c - table_c) > 0.05 * table_c);
 }
+
+TEST_CASE("sympathetic resonance is stable and rings an open-string halo", "[midi][synth][bowed]") {
+  // The gated open-string bank is one-way driven (no loop feedback), so it must
+  // stay bounded across the register and dynamics.
+  for (uint8_t note : {28, 45, 57, 69, 88}) {
+    for (uint8_t velocity : {40, 100, 127}) {
+      NativeSynthPatch patch = bowed_base_patch();
+      patch.bowed_string.sympathetic = 1.0f;
+      const std::vector<float> tone = render_patch(patch, note, velocity, 48000);
+      INFO("note " << int(note) << " vel " << int(velocity));
+      REQUIRE(peak(tone) > 0.005f);
+      REQUIRE(peak(tone) < 4.0f);
+      REQUIRE(std::isfinite(tone.back()));
+    }
+  }
+
+  // A3 (220 Hz): its 2nd partial is 440 Hz = the open A string (note 69) in the
+  // bank, so the sympathetic strings keep ringing after the bow lifts — the tail
+  // well past note-off carries clearly more energy than the dry string alone.
+  NativeSynthPatch dry = bowed_base_patch();
+  NativeSynthPatch symp = bowed_base_patch();
+  symp.bowed_string.sympathetic = 1.0f;
+  const std::vector<float> dry_tone = render_patch(dry, 57, 110, 48000, 24000);
+  const std::vector<float> symp_tone = render_patch(symp, 57, 110, 48000, 24000);
+  REQUIRE(rms(symp_tone, 30000, 40000) > 1.2f * rms(dry_tone, 30000, 40000));
+  REQUIRE(peak(symp_tone) < 4.0f);
+}
+
+TEST_CASE("second polarization is stable and thickens the tone", "[midi][synth][bowed]") {
+  // The weakly-coupled second delay line adds a feedback path; it must stay
+  // bounded and locked in pitch across the register and dynamics.
+  for (uint8_t note : {28, 45, 57, 69, 88}) {
+    for (uint8_t velocity : {40, 100, 127}) {
+      NativeSynthPatch patch = bowed_base_patch();
+      patch.bowed_string.polarization = 1.0f;
+      const std::vector<float> tone = render_patch(patch, note, velocity, 48000);
+      INFO("note " << int(note) << " vel " << int(velocity));
+      REQUIRE(peak(tone) > 0.005f);
+      REQUIRE(peak(tone) < 4.0f);
+      REQUIRE(std::isfinite(tone.back()));
+    }
+  }
+
+  NativeSynthPatch single = bowed_base_patch();
+  NativeSynthPatch doubled = bowed_base_patch();
+  doubled.bowed_string.polarization = 1.0f;
+  const std::vector<float> single_tone = render_patch(single, 57, 110, 24000);
+  const std::vector<float> doubled_tone = render_patch(doubled, 57, 110, 24000);
+
+  // Deterministic and audibly different from the single-polarization string: the
+  // detuned second plane beats against the primary, decorrelating the sustain.
+  REQUIRE(doubled_tone == render_patch(doubled, 57, 110, 24000));
+  double diff = 0.0;
+  double energy = 0.0;
+  for (size_t i = 8000; i < 24000; ++i) {
+    const double d = static_cast<double>(doubled_tone[i]) - single_tone[i];
+    diff += d * d;
+    energy += static_cast<double>(single_tone[i]) * single_tone[i];
+  }
+  REQUIRE(std::sqrt(diff / energy) > 0.15);
+}
+
+TEST_CASE("elasto-plastic, sympathetic and polarization gates compose stably",
+          "[midi][synth][bowed]") {
+  // All three advanced-physics gates on at once must remain bounded and
+  // deterministic (the feedback paths and the resonator bank coexist).
+  NativeSynthPatch patch = bowed_base_patch();
+  patch.bowed_string.elasto_plastic = true;
+  patch.bowed_string.sympathetic = 1.0f;
+  patch.bowed_string.polarization = 1.0f;
+  const std::vector<float> first = render_patch(patch, 57, 110, 48000);
+  const std::vector<float> second = render_patch(patch, 57, 110, 48000);
+  REQUIRE(first == second);
+  REQUIRE(peak(first) > 0.005f);
+  REQUIRE(peak(first) < 4.0f);
+  REQUIRE(std::isfinite(first.back()));
+}

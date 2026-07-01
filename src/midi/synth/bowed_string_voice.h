@@ -75,10 +75,13 @@ inline int bowed_string_buffer_capacity(double sample_rate) noexcept {
   return static_cast<int>(sr / kBowedMinFundamentalHz) + 8;
 }
 
-/// Whole-voice slab capacity (samples) the host must allocate: the neck and
-/// bridge delay-line spans.
+/// Whole-voice slab capacity (samples) the host must allocate: three delay-line
+/// spans — the neck and bridge of the bowed (vertical) polarization, plus the
+/// second (horizontal) polarization line used only when it is gated on. The
+/// third span is always reserved so attach() stays allocation-free regardless of
+/// whether a given note enables the second polarization.
 inline int bowed_string_slab_capacity(double sample_rate) noexcept {
-  return 2 * bowed_string_buffer_capacity(sample_rate);
+  return 3 * bowed_string_buffer_capacity(sample_rate);
 }
 
 /// Bowed-string section of a NativeSynthPatch (used when mode == kBowedString).
@@ -128,6 +131,23 @@ struct BowedStringPatchParams {
   /// sticking hump is before the bristles break away. Higher = a rounder, grippier
   /// stick with a slower, warmer slip; lower = a sharper, edgier release.
   float stribeck = 0.5f;
+
+  /// Sympathetic resonance in [0,1]: the halo of the instrument's OTHER (undamped
+  /// open) strings ringing along with the bowed note. A small fixed bank of
+  /// open-string resonators driven one-way by the bridge output (no feedback into
+  /// the waveguide loop -> unconditionally stable), unity-peak normalized like the
+  /// piano's sympathetic bank so it colours rather than rings away. 0 = off ->
+  /// render is bit-identical (the bank is skipped entirely).
+  float sympathetic = 0.0f;
+
+  /// Second-polarization coupling in [0,1]: a real string vibrates in two
+  /// transverse planes at once (the bowed vertical plane and a weakly-coupled
+  /// horizontal one at a slightly different pitch). A second delay line, detuned
+  /// a few cents and sharing the bow, beats against the primary — the "thickness"
+  /// and the restless attack of a real bowed string. Weakly coupled so the added
+  /// feedback stays bounded. 0 = off -> the second line is skipped entirely
+  /// (bit-identical render).
+  float polarization = 0.0f;
 };
 
 /// Per-voice bowed-string state, embedded in NativeSynthVoice. The voice's
@@ -141,6 +161,7 @@ class BowedStringVoiceCore {
   void attach(float* slab, int per_line_capacity) noexcept {
     neck_ = slab;
     bridge_ = slab != nullptr ? slab + per_line_capacity : nullptr;
+    pol_ = slab != nullptr ? slab + 2 * per_line_capacity : nullptr;
     capacity_ = per_line_capacity;
   }
 
@@ -200,6 +221,25 @@ class BowedStringVoiceCore {
   // injected velocity wave, bounded to |dv| so the junction stays passive. Only
   // called on the gated path (elasto_plastic_).
   float elasto_plastic_injection(float dv) noexcept;
+
+  // One sympathetic-bank sample: drives the open-string resonator bank with the
+  // bridge output @p x and returns their summed ring. Only called on the gated
+  // path (sympathetic_mix_ > 0).
+  float sympathetic_process(float x) noexcept;
+
+  // Sympathetic open-string resonance: a fixed bank of unity-peak biquads, driven
+  // one-way by the bridge output (no loop feedback -> stable). Off unless
+  // params.sympathetic > 0, in which case sympathetic_mix_ is the return level.
+  static constexpr int kSympatheticModes_ = 8;
+  struct SympatheticMode {
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float gain = 0.0f;
+    float y1 = 0.0f;
+    float y2 = 0.0f;
+  };
+  SympatheticMode sympathetic_[kSympatheticModes_];
+  float sympathetic_mix_ = 0.0f;
 
   // Delay slab (host-owned): neck = bow->nut, bridge = bow->bridge.
   float* neck_ = nullptr;
@@ -268,6 +308,20 @@ class BowedStringVoiceCore {
   float ep_load_rate_ = 0.0f;   // per-sample bristle load rate (dt folded in)
   float ep_z_ba_ = 0.0f;        // breakaway deflection (stick below this)
   float ep_z_max_ = 0.0f;       // bristle clamp (divergence guard rail)
+
+  // Second (horizontal) polarization: a detuned string loop sharing the bow.
+  // Off unless params.polarization > 0 (pol_couple_ == 0 -> render skips it,
+  // bit-identical). Its own lossy loop with a weak cross-coupling to the primary.
+  float* pol_ = nullptr;  // 2nd-polarization delay line (host slab, 3rd span)
+  int pol_size_ = 0;
+  size_t pol_write_ = 0;
+  float pol_out_ = 0.0f;
+  float pol_period_ = 0.0f;  // detuned from base_period_
+  float pol_lp_state_ = 0.0f;
+  float pol_lp_alpha_ = 1.0f;
+  float pol_loss_ = 0.95f;
+  float pol_couple_ = 0.0f;  // 0 = off; horizontal -> vertical feed
+  float pol_drive_ = 0.0f;   // bow injection into the 2nd polarization
 };
 
 }  // namespace sonare::midi::synth
