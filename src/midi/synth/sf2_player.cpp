@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
@@ -118,12 +119,16 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   // no-op) rather than failing — the host bypasses + logs at the wiring site.
   for (int part = 0; part < 16; ++part) {
     const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
-    std::unique_ptr<rt::ProcessorBase>& slot = part_processors_[static_cast<size_t>(part)];
-    slot.reset();
+    std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
+        part_chains_[static_cast<size_t>(part)];
+    chain.clear();
     if (insert.type == Sf2InsertType::kProcessor && config_.insert_factory &&
         !insert.insert_name.empty()) {
-      slot = config_.insert_factory(insert.insert_name, insert.insert_params_json);
-      if (slot != nullptr) slot->prepare(sample_rate_, kChunkFrames);
+      auto proc = config_.insert_factory(insert.insert_name, insert.insert_params_json);
+      if (proc != nullptr) {
+        proc->prepare(sample_rate_, kChunkFrames);
+        chain.push_back(std::move(proc));
+      }
     }
   }
 #if defined(SONARE_MIDI_WITH_FX)
@@ -137,8 +142,10 @@ void Sf2Player::reset() {
   pool_.reset();
   fallback_pool_.reset();
   reset_all_state(/*reverb_send_default=*/0);
-  for (auto& proc : part_processors_) {
-    if (proc != nullptr) proc->reset();
+  for (auto& chain : part_chains_) {
+    for (auto& proc : chain) {
+      if (proc != nullptr) proc->reset();
+    }
   }
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->reset();
@@ -204,19 +211,26 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
 void Sf2Player::realize_gs_efx() {
   gs_efx_dirty_ = false;
   if (!prepared_) return;
-  const std::string_view name = efx_.assigned ? gs_efx_insert_name(efx_.type) : std::string_view{};
   for (int part = 0; part < 16; ++part) {
-    std::unique_ptr<rt::ProcessorBase>& slot = part_processors_[static_cast<size_t>(part)];
     // A config kProcessor slot is owned by the caller, not by the EFX unit: only
     // (re)build parts that are EFX-routed, and only clear what the EFX installed.
-    const bool efx_on =
-        efx_part_enabled_[static_cast<size_t>(part)] && !name.empty() && config_.insert_factory;
     if (config_.part_inserts[static_cast<size_t>(part)].type == Sf2InsertType::kProcessor) continue;
-    if (efx_on) {
-      slot = config_.insert_factory(name, gs_efx_insert_params(efx_));
-      if (slot != nullptr) slot->prepare(sample_rate_, kChunkFrames);
-    } else {
-      slot.reset();
+    std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
+        part_chains_[static_cast<size_t>(part)];
+    chain.clear();
+    if (!efx_.assigned || !efx_part_enabled_[static_cast<size_t>(part)] ||
+        !config_.insert_factory) {
+      continue;
+    }
+    // Realise the EFX chain (single-effect = one stage, composite = its block
+    // chain). Stages whose factory build returns null (e.g. an FX stage in a
+    // no-FX build) are skipped, so a partial chain still runs.
+    for (const GsEfxStage& stage : gs_efx_insert_chain(efx_)) {
+      auto proc = config_.insert_factory(stage.name, stage.params_json);
+      if (proc != nullptr) {
+        proc->prepare(sample_rate_, kChunkFrames);
+        chain.push_back(std::move(proc));
+      }
     }
   }
 }
@@ -787,11 +801,14 @@ void Sf2Player::render_chunk(int n) noexcept {
           bus_l[i] = std::tanh(drive * bus_l[i]) * makeup;
           bus_r[i] = std::tanh(drive * bus_r[i]) * makeup;
         }
-      } else if (rt::ProcessorBase* proc = part_processors_[static_cast<size_t>(part)].get()) {
-        // A built insert (config kProcessor slot, or a GS-EFX-installed one)
-        // runs in place on the part's stereo bus. Null slots are inert no-ops.
+      } else {
+        // A built insert chain (config kProcessor slot, or a GS-EFX-installed
+        // one — single-stage or a composite's multi-stage rig) runs in series
+        // in place on the part's stereo bus. An empty chain is an inert no-op.
         float* chans[2] = {bus_l, bus_r};
-        proc->process(chans, 2, n);
+        for (auto& proc : part_chains_[static_cast<size_t>(part)]) {
+          proc->process(chans, 2, n);
+        }
       }
       for (int i = 0; i < n; ++i) {
         mix_l_[static_cast<size_t>(i)] += bus_l[i];

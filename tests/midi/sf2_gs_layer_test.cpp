@@ -25,6 +25,7 @@ using Catch::Approx;
 using sonare::midi::MidiEvent;
 using sonare::midi::synth::apply_gs_efx_sysex;
 using sonare::midi::synth::gs_drum_kit_name;
+using sonare::midi::synth::gs_efx_insert_chain;
 using sonare::midi::synth::gs_efx_insert_name;
 using sonare::midi::synth::gs_efx_insert_params;
 using sonare::midi::synth::GsEfx;
@@ -349,10 +350,10 @@ TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf
 
 TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][sf2][gslayer]") {
   GsEfx od;
-  od.type = 0x0110;  // Overdrive -> amp model, drive rising with EFX PARAMETER 1
-  od.params[0] = 0;
+  od.type = 0x0110;  // Overdrive -> amp model, drive rising with EFX PARAMETER 2
+  od.params[1] = 0;
   const std::string low = gs_efx_insert_params(od);
-  od.params[0] = 127;
+  od.params[1] = 127;
   const std::string high = gs_efx_insert_params(od);
   REQUIRE(low.find("\"drive\"") != std::string::npos);
   REQUIRE(low.find("\"ampModel\":0") != std::string::npos);  // classic-crunch voicing
@@ -360,12 +361,60 @@ TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][s
 
   GsEfx dist;
   dist.type = 0x0111;  // Distortion -> amp model on its high-gain voicing
-  dist.params[0] = 127;
+  dist.params[1] = 127;
   REQUIRE(gs_efx_insert_params(dist).find("\"ampModel\":2") != std::string::npos);
+
+  // Output Level (EFX PARAMETER 20) -> levelDb: an untouched level is unset
+  // (0 -> no levelDb, the insert's 0 dB default) and a below-unity level cuts.
+  GsEfx lvl;
+  lvl.type = 0x0110;
+  lvl.params[1] = 100;
+  lvl.params[19] = 0;
+  REQUIRE(gs_efx_insert_params(lvl).find("levelDb") == std::string::npos);  // unset
+  lvl.params[19] = 64;  // ~half of unity -> a negative levelDb
+  const std::string cut = gs_efx_insert_params(lvl);
+  REQUIRE(cut.find("\"levelDb\":-") != std::string::npos);
+  lvl.params[19] = 127;  // unity -> 0 dB
+  REQUIRE(gs_efx_insert_params(lvl).find("\"levelDb\":0") != std::string::npos);
 
   GsEfx thru;  // unmapped type -> the insert's defaults
   thru.type = 0x0114;
   REQUIRE(gs_efx_insert_params(thru) == "{}");
+}
+
+TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
+          "[midi][sf2][gslayer]") {
+  // A single-effect type yields a one-stage chain.
+  GsEfx od;
+  od.type = 0x0110;  // Overdrive
+  const auto single = gs_efx_insert_chain(od);
+  REQUIRE(single.size() == 1);
+  REQUIRE(single[0].name == "saturation.ampSim");
+
+  // GTR Multi 2 (04 01) yields its Cmp-OD-EQ-CF block chain, in signal order.
+  GsEfx gtr;
+  gtr.type = 0x0401;
+  gtr.params[16] = 52;  // EQ Low Gain -12 dB (0x34, centre 64)
+  gtr.params[17] = 76;  // EQ Hi Gain  +12 dB (0x4C)
+  const auto chain = gs_efx_insert_chain(gtr);
+  REQUIRE(chain.size() == 4);
+  REQUIRE(chain[0].name == "dynamics.compressor");
+  REQUIRE(chain[1].name == "saturation.ampSim");
+  REQUIRE(chain[2].name == "eq.parametric");
+  REQUIRE(chain[3].name == "effects.modulation.chorus");
+  // The EQ block is the composite's true tone control: Low/Hi Gain -> shelves.
+  REQUIRE(chain[2].params_json.find("\"band0.gainDb\":-12") != std::string::npos);
+  REQUIRE(chain[2].params_json.find("\"band1.gainDb\":12") != std::string::npos);
+
+  // An untouched EQ gain is unset -> flat (0 dB), never a -12 dB cut.
+  GsEfx flat;
+  flat.type = 0x0401;
+  REQUIRE(gs_efx_insert_chain(flat)[2].params_json.find("\"band0.gainDb\":0") != std::string::npos);
+
+  // An unmapped type yields an empty chain (bypass).
+  GsEfx unknown;
+  unknown.type = 0x0402;
+  REQUIRE(gs_efx_insert_chain(unknown).empty());
 }
 
 TEST_CASE("parse_gs_sysex recognises the per-part EFX switch", "[midi][sf2][gslayer]") {

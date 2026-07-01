@@ -242,25 +242,86 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
 }
 
 std::string gs_efx_insert_params(const GsEfx& efx) {
-  // EFX PARAMETER 1 (40 03 03) is the drive amount for the Overdrive/Distortion
-  // families; normalise 0..127 to [0, 1].
-  const float drive = static_cast<float>(efx.params[0] & 0x7Fu) / 127.0f;
+  // SC-88Pro Overdrive/Distortion parameter map (owner's manual appendix):
+  // PARAMETER 1 (40 03 03) = OD Sel (Odrv/Dist — redundant here, the EFX type
+  // already selects the family), PARAMETER 2 (40 03 04) = OD Drive (0..127),
+  // PARAMETER 20 (40 03 16) = output Level (0..127). The basic OD/Dist has no
+  // tone/EQ parameters (those live in the combined OD->EQ / GTR-Multi types);
+  // the tone comes from the amp voicing itself.
+  const float drive = static_cast<float>(efx.params[1] & 0x7Fu) / 127.0f;
+  // Output Level -> levelDb. The GS default is unity (127), and an untouched
+  // block reads 0; treat 0 as "unset -> 0 dB" (so a type+drive-only setup is
+  // not silenced) and otherwise map the fraction to dB with a -24 dB floor.
+  const auto level_db = [&]() -> std::string {
+    const unsigned level = efx.params[19] & 0x7Fu;
+    if (level == 0) return "";  // unset -> the insert's default (0 dB)
+    const float db = std::max(-24.0f, 20.0f * std::log10(static_cast<float>(level) / 127.0f));
+    return ",\"levelDb\":" + std::to_string(db);
+  };
   switch (efx.type) {
     case 0x0110: {
       // Overdrive -> the amp model on its classic-crunch voicing (ampModel 0).
       // A light setting already breaks up (0.25 floor), the top reaches full
       // crunch. The amp's cab EQ is left on so the tone is amp-shaped.
       const float amp_drive = std::clamp(0.25f + 0.6f * drive, 0.0f, 1.0f);
-      return "{\"ampModel\":0,\"drive\":" + std::to_string(amp_drive) + "}";
+      return "{\"ampModel\":0,\"drive\":" + std::to_string(amp_drive) + level_db() + "}";
     }
     case 0x0111: {
       // Distortion -> the amp model on its high-gain voicing (ampModel 2), which
       // saturates earlier and harder; a higher drive floor than the overdrive.
       const float amp_drive = std::clamp(0.45f + 0.55f * drive, 0.0f, 1.0f);
-      return "{\"ampModel\":2,\"drive\":" + std::to_string(amp_drive) + "}";
+      return "{\"ampModel\":2,\"drive\":" + std::to_string(amp_drive) + level_db() + "}";
     }
     default:
       return "{}";
+  }
+}
+
+namespace {
+
+/// GS EQ gain byte -> dB. The GS EQ Low/Hi Gain is centred at 64 (0 dB) with a
+/// +-12 dB range (values 0x34..0x4C). An untouched block reads 0, which is
+/// treated as unset -> flat (0 dB), never a -64 -> clamped -12 dB cut.
+float gs_eq_gain_db(uint8_t value) noexcept {
+  const int v = value & 0x7F;
+  if (v == 0) return 0.0f;  // unset -> flat
+  return std::clamp(static_cast<float>(v - 64), -12.0f, 12.0f);
+}
+
+/// eq.parametric JSON: a low shelf (100 Hz) + high shelf (8 kHz) driven by the
+/// GS EQ block's Low/Hi Gain — the composite guitar effects' tone control.
+std::string gs_eq_block_json(float low_db, float high_db) {
+  return "{\"band0.type\":1,\"band0.frequencyHz\":100,\"band0.gainDb\":" + std::to_string(low_db) +
+         ",\"band1.type\":2,\"band1.frequencyHz\":8000,\"band1.gainDb\":" +
+         std::to_string(high_db) + "}";
+}
+
+}  // namespace
+
+std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
+  switch (efx.type) {
+    case 0x0401: {
+      // GTR Multi 2 (SC-88Pro [04 01]): Cmp -> OD -> EQ -> CF. The block
+      // structure is faithful to the hardware. The EQ Low/Hi Gain (EFX
+      // PARAMETER 17/18) is translated to a real shelving EQ — the composite's
+      // true tone control. The compressor and chorus run at their defaults and
+      // the OD uses a musical mid drive, pending confirmed per-block parameter
+      // positions for those blocks (documented approximation).
+      const float low = gs_eq_gain_db(efx.params[16]);   // EQ Low Gain [17]
+      const float high = gs_eq_gain_db(efx.params[17]);  // EQ Hi Gain  [18]
+      std::vector<GsEfxStage> chain;
+      chain.push_back({"dynamics.compressor", "{}"});
+      chain.push_back({"saturation.ampSim", "{\"ampModel\":0,\"drive\":0.6}"});
+      chain.push_back({"eq.parametric", gs_eq_block_json(low, high)});
+      chain.push_back({"effects.modulation.chorus", "{}"});
+      return chain;
+    }
+    default: {
+      // Single-effect types: a one-stage chain from the name/param mapping.
+      const std::string_view name = gs_efx_insert_name(efx.type);
+      if (name.empty()) return {};
+      return {{std::string(name), gs_efx_insert_params(efx)}};
+    }
   }
 }
 

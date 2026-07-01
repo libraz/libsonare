@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "midi/synth/sf2_voice.h"
 
@@ -108,11 +109,34 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept;
 
 /// JSON param object (for `insert_factory` / make_insert) translating the raw
 /// GS EFX parameters of @p efx into the mapped insert's parameters. The
-/// Overdrive/Distortion families translate EFX PARAMETER 1 as the drive amount;
-/// every other type (mapped or not) returns "{}" so the insert plays its own
-/// defaults until a per-type translation lands (a layer-3 refinement — the type
-/// is already honoured, only its parameter voicing is approximate).
+/// Overdrive/Distortion families translate EFX PARAMETER 2 as the drive amount
+/// and PARAMETER 20 as the output level (the SC-88Pro OD/Dist parameter map;
+/// PARAMETER 1 is the OD/Dist selector, redundant with the EFX type). The basic
+/// OD/Dist has no tone/EQ parameters — the tone comes from the amp voicing. Every
+/// other type (mapped or not) returns "{}" so the insert plays its own defaults
+/// until a per-type translation lands (a layer-3 refinement — the type is
+/// already honoured, only its parameter voicing is approximate).
 std::string gs_efx_insert_params(const GsEfx& efx);
+
+/// One stage of a realised EFX chain: an `insert_factory` processor name and
+/// its JSON params.
+struct GsEfxStage {
+  std::string name;         ///< insert-factory processor name.
+  std::string params_json;  ///< JSON params for make_insert ("{}" = defaults).
+};
+
+/// The ordered insert chain that realises @p efx, in signal-flow order. A
+/// single-effect type yields a one-stage chain (the `gs_efx_insert_name` /
+/// `gs_efx_insert_params` mapping); a composite/multi type (e.g. SC-88Pro GTR
+/// Multi = Cmp-OD-EQ-CF) yields its block chain so a whole guitar rig — with a
+/// real tone/EQ stage — realises from one EFX unit. An empty vector means the
+/// type is unmapped (bypass + log). Stages whose factory build returns null
+/// (e.g. an FX-suite stage in a no-FX build) are skipped at realise time, so a
+/// partial chain still runs. The block STRUCTURE of the composite types is
+/// faithful to the hardware; per-block parameter voicing is translated where
+/// the parameter positions are confirmed (the EQ Low/Hi Gain) and left at the
+/// insert defaults otherwise.
+std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx);
 
 // --- NRPN offset scalings (documented approximations, see file header) ---
 

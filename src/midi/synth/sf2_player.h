@@ -259,9 +259,13 @@ class Sf2Player final : public MidiInstrument {
   /// 16 parts x stereo x kChunkFrames; only used when a part insert is set.
   std::vector<float> part_bus_;
   bool any_insert_ = false;
-  /// Per-part kProcessor inserts, built from config_.part_inserts via the
-  /// injected factory in prepare() (control thread). Null slots are inert.
-  std::array<std::unique_ptr<rt::ProcessorBase>, 16> part_processors_{};
+  /// Per-part insert chain, run in series on the part bus. A config kProcessor
+  /// slot is a one-stage chain; a GS EFX unit realises a one-stage chain for a
+  /// single effect or a multi-stage chain for a composite type (e.g. GTR Multi
+  /// = Cmp-OD-EQ-CF). Built by the injected factory on the control thread
+  /// (prepare / realise_gs_efx); an empty chain is inert. Iterating it in
+  /// render is allocation-free.
+  std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, 16> part_chains_{};
 
 #if defined(SONARE_MIDI_WITH_FX)
   std::unique_ptr<GsEffectBus> effects_;

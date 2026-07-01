@@ -312,11 +312,12 @@ TEST_CASE("GS EFX SysEx routes a part through a realised insert", "[midi][sf2][g
     return s1 * s1 + s2 * s2 - coeff * s1 * s2;
   };
   // GS sequence: enable EFX on part 1 (channel 0), select Overdrive (01 10),
-  // set EFX PARAMETER 1 (drive) to max. Checksums per the Roland DT1 rule.
+  // set EFX PARAMETER 2 (OD Drive, 40 03 04) to max. Checksums per the Roland
+  // DT1 rule. (PARAMETER 1 / 40 03 03 is the OD Sel, not the drive.)
   const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
   const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                              0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
-  const uint8_t od_drive[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x03, 0x7F, 0x3B, 0xF7};
+  const uint8_t od_drive[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x04, 0x7F, 0x3A, 0xF7};
 
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
@@ -352,6 +353,44 @@ TEST_CASE("GS EFX SysEx routes a part through a realised insert", "[midi][sf2][g
   off_player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   const StereoRender after = render(off_player, 9600);
   REQUIRE(h3(after.left) < 10.0 * h3(cln.left) + 1e-9);
+}
+
+TEST_CASE("a composite GS EFX type realises a multi-stage chain", "[midi][sf2][gsfx]") {
+  auto h3 = [](const std::vector<float>& buf) {
+    const double w = kTwoPi * 3000.0 / kOutRate;
+    const double coeff = 2.0 * std::cos(w);
+    double s1 = 0.0, s2 = 0.0;
+    for (size_t i = 2400; i < buf.size(); ++i) {
+      const double s0 = static_cast<double>(buf[i]) + coeff * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+  };
+  // Enable EFX on part 1, select GTR Multi 2 (04 01) = Cmp-OD-EQ-CF. The amp,
+  // compressor and EQ stages are always built; the chorus stage is skipped on a
+  // no-FX build, so the chain still colours the part either way.
+  const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const uint8_t gtr_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                              0x03, 0x00, 0x04, 0x01, 0x38, 0xF7};
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player player = make_player(cfg);
+  REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
+  REQUIRE(player.handle_sysex(gtr_type, sizeof(gtr_type)));
+  player.realize_gs_efx();
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender efx = render(player, 9600);
+
+  Sf2Player clean = make_player();
+  clean.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender cln = render(clean, 9600);
+  // The amp stage inside the composite drives the 1 kHz sine into harmonics.
+  REQUIRE(h3(efx.left) > 10.0 * h3(cln.left));
 }
 
 TEST_CASE("a mapped GS EFX modulation type is realised through the factory", "[midi][sf2][gsfx]") {
