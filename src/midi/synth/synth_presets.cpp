@@ -164,7 +164,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // the fanfare colour of the full organ. Voiced under a swell shutter.
     SynthPreset& reed = t[i++];
     reed.name = "church-trumpet";
-    NativeSynthPatch patch = gm_fallback_patch(0, 21);  // the Reed Organ voicing
+    NativeSynthPatch patch = gm_fallback_patch(0, 20);  // the Reed Organ voicing
     patch.pipe_organ.swell = 0.7f;
     reed.config = from_patch(clamp_synth_patch(patch));
   }

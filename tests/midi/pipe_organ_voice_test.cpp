@@ -445,9 +445,11 @@ TEST_CASE("the reed pipe is stable across the keyboard", "[midi][synth][organ]")
 
 TEST_CASE("GM reed organ fallback is a reed pipe", "[midi][synth][organ]") {
   using sonare::midi::synth::gm_fallback_patch;
-  const NativeSynthPatch& reed = gm_fallback_patch(0, 21);  // Reed Organ
+  const NativeSynthPatch& reed = gm_fallback_patch(0, 20);  // Reed Organ (GM 20)
   REQUIRE(reed.mode == SynthEngineMode::kPipeOrgan);
   REQUIRE(reed.pipe_organ.rank_count > 0);
+  // Accordion (GM 21) shares the free-reed voicing until a dedicated model.
+  REQUIRE(gm_fallback_patch(0, 21).mode == SynthEngineMode::kPipeOrgan);
   const std::vector<float> tone = render_patch(reed, 60, 100, 24000);
   REQUIRE(peak(tone) > 0.01f);
   REQUIRE(peak(tone) < 4.0f);

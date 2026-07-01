@@ -110,6 +110,33 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
           ? fallback_pool_.size() * static_cast<size_t>(pipe_organ_slab_capacity(sample_rate_))
           : 0,
       0.0f);
+  // The acoustic waveguide GM families (bowed string / reed / brass / air-jet
+  // flute) each get their per-slot delay slab here, sized by the engine's
+  // *_slab_capacity(); voices attach their span at note-on.
+  fallback_bowed_capacity_ = bowed_string_buffer_capacity(sample_rate_);
+  fallback_bowed_buffers_.assign(
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(bowed_string_slab_capacity(sample_rate_))
+          : 0,
+      0.0f);
+  fallback_reed_capacity_ = reed_buffer_capacity(sample_rate_);
+  fallback_reed_buffers_.assign(
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(reed_slab_capacity(sample_rate_))
+          : 0,
+      0.0f);
+  fallback_brass_capacity_ = brass_buffer_capacity(sample_rate_);
+  fallback_brass_buffers_.assign(
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(brass_slab_capacity(sample_rate_))
+          : 0,
+      0.0f);
+  fallback_flute_capacity_ = flute_buffer_capacity(sample_rate_);
+  fallback_flute_buffers_.assign(
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(flute_slab_capacity(sample_rate_))
+          : 0,
+      0.0f);
   reset_all_state(/*reverb_send_default=*/0);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
@@ -383,6 +410,26 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
         fallback_pipe_organ_buffers_.data() +
             static_cast<size_t>(voice_index) * kMaxPipeRanks * fallback_pipe_organ_capacity_,
         fallback_pipe_organ_capacity_);
+  }
+  if (!fallback_bowed_buffers_.empty()) {
+    voice->bowed_string.attach(fallback_bowed_buffers_.data() +
+                                   static_cast<size_t>(voice_index) * 3 * fallback_bowed_capacity_,
+                               fallback_bowed_capacity_);
+  }
+  if (!fallback_reed_buffers_.empty()) {
+    voice->reed.attach(
+        fallback_reed_buffers_.data() + static_cast<size_t>(voice_index) * fallback_reed_capacity_,
+        fallback_reed_capacity_);
+  }
+  if (!fallback_brass_buffers_.empty()) {
+    voice->brass.attach(fallback_brass_buffers_.data() +
+                            static_cast<size_t>(voice_index) * fallback_brass_capacity_,
+                        fallback_brass_capacity_);
+  }
+  if (!fallback_flute_buffers_.empty()) {
+    voice->flute.attach(fallback_flute_buffers_.data() +
+                            static_cast<size_t>(voice_index) * 2 * fallback_flute_capacity_,
+                        fallback_flute_capacity_);
   }
   // GS drum-kit variation: the drum channel's program picks the kit (Room /
   // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).

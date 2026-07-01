@@ -515,11 +515,16 @@ if(BUILD_FX)
   add_library(sonare_fx STATIC
     effects/common/dc_blocker.cpp
     effects/delay/stereo_delay.cpp
+    effects/modulation/auto_wah.cpp
     effects/modulation/chorus.cpp
     effects/modulation/ensemble.cpp
     effects/modulation/flanger.cpp
     effects/modulation/mod_delay_line.cpp
     effects/modulation/phaser.cpp
+    effects/modulation/pitch_shifter.cpp
+    effects/modulation/ring_modulator.cpp
+    effects/modulation/rotary.cpp
+    effects/modulation/wah.cpp
     effects/reverb/convolution_reverb.cpp
     effects/reverb/dattorro_reverb.cpp
     effects/reverb/fdn_reverb.cpp

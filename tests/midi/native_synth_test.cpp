@@ -18,6 +18,7 @@
 
 #include "core/fft.h"
 #include "midi/midi_event.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/oscillator.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
@@ -343,6 +344,28 @@ TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback
     // Silence the part so the next program starts from a clean pool.
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
   }
+}
+
+TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi][synth]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  // Bowed string family (GM 40-43) now voices the friction waveguide.
+  REQUIRE(gm_fallback_patch(0, 40).mode == SynthEngineMode::kBowedString);  // Violin
+  REQUIRE(gm_fallback_patch(0, 43).mode == SynthEngineMode::kBowedString);  // Contrabass
+  // Brass family (GM 56-60); Brass Section (61) + SynthBrass (62-63) stay FM.
+  REQUIRE(gm_fallback_patch(0, 56).mode == SynthEngineMode::kBrass);  // Trumpet
+  REQUIRE(gm_fallback_patch(0, 60).mode == SynthEngineMode::kBrass);  // French Horn
+  REQUIRE(gm_fallback_patch(0, 62).mode == SynthEngineMode::kFm);     // Synth Brass 1
+  // Reed family (GM 64-71); the clarinet is the only cylinder, the saxes cones.
+  REQUIRE(gm_fallback_patch(0, 64).mode == SynthEngineMode::kReed);  // Soprano Sax
+  REQUIRE(gm_fallback_patch(0, 71).mode == SynthEngineMode::kReed);  // Clarinet
+  REQUIRE_FALSE(gm_fallback_patch(0, 71).reed.conical);              // clarinet = cylinder
+  REQUIRE(gm_fallback_patch(0, 64).reed.conical);                    // soprano sax = cone
+  // Air-jet flute family (GM 72-79).
+  REQUIRE(gm_fallback_patch(0, 72).mode == SynthEngineMode::kFlute);  // Piccolo
+  REQUIRE(gm_fallback_patch(0, 79).mode == SynthEngineMode::kFlute);  // Ocarina
+  // Neighbours that intentionally stay on the signal-model family sketch.
+  REQUIRE(gm_fallback_patch(0, 48).mode == SynthEngineMode::kSubtractive);  // String Ensemble 1
+  REQUIRE(gm_fallback_patch(0, 80).mode == SynthEngineMode::kSubtractive);  // Square Lead
 }
 
 TEST_CASE("Sf2Player without a SoundFont plays the GM drum map via the fallback",

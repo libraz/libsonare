@@ -235,7 +235,39 @@ struct ProgramOverrides {
   NativeSynthPatch bass_pop;         // program 37 (Slap Bass 2, pull/pop)
   NativeSynthPatch harp;             // program 46 (Orchestral Harp)
   NativeSynthPatch church_organ;     // program 19 (Church Organ, flue pipe)
-  NativeSynthPatch reed_organ;       // program 21 (Reed Organ, lingual pipe)
+  NativeSynthPatch reed_organ;       // programs 20-21 (Reed Organ / Accordion, free reed)
+
+  // Physical-model acoustic families (bowed string / reed / brass / air-jet
+  // flute). These mirror the calibration of the like-named entries in the synth
+  // preset catalog. The values are duplicated here rather than pulled from
+  // find_synth_preset() on purpose: build_presets() itself calls
+  // gm_fallback_patch() to voice several of its presets, so having this table
+  // depend on the preset catalog would form a static-initialisation cycle.
+  NativeSynthPatch violin;         // program 40
+  NativeSynthPatch viola;          // program 41
+  NativeSynthPatch cello;          // program 42
+  NativeSynthPatch contrabass;     // program 43
+  NativeSynthPatch trumpet;        // program 56
+  NativeSynthPatch trombone;       // program 57
+  NativeSynthPatch tuba;           // program 58
+  NativeSynthPatch muted_trumpet;  // program 59
+  NativeSynthPatch french_horn;    // program 60
+  NativeSynthPatch soprano_sax;    // program 64
+  NativeSynthPatch alto_sax;       // program 65
+  NativeSynthPatch tenor_sax;      // program 66
+  NativeSynthPatch baritone_sax;   // program 67
+  NativeSynthPatch oboe;           // program 68
+  NativeSynthPatch english_horn;   // program 69
+  NativeSynthPatch bassoon;        // program 70
+  NativeSynthPatch clarinet;       // program 71
+  NativeSynthPatch piccolo;        // program 72
+  NativeSynthPatch concert_flute;  // program 73
+  NativeSynthPatch recorder;       // program 74
+  NativeSynthPatch pan_flute;      // program 75
+  NativeSynthPatch blown_bottle;   // program 76
+  NativeSynthPatch shakuhachi;     // program 77
+  NativeSynthPatch tin_whistle;    // program 78
+  NativeSynthPatch ocarina;        // program 79
 };
 
 ProgramOverrides build_program_overrides() noexcept {
@@ -548,9 +580,10 @@ ProgramOverrides build_program_overrides() noexcept {
   o.church_organ.stereo_spread = 0.2f;
   o.church_organ.gain = 0.7f;
 
-  // Program 21 Reed Organ: a lingual reed stop — the saturating reed valve in
-  // the loop buzzes with a bright, brassy spectrum (harmonium / regal colour).
-  // An 8' reed under a 4' reed octave, both open and very bright.
+  // Reed Organ (GM 20) + Accordion (GM 21): a lingual reed stop — the
+  // saturating reed valve in the loop buzzes with a bright, brassy spectrum
+  // (harmonium / regal colour). An 8' reed under a 4' reed octave, both open and
+  // very bright. Stands in for the free-reed group until a dedicated model.
   o.reed_organ.mode = SynthEngineMode::kPipeOrgan;
   o.reed_organ.amp_env = env(14.0f, 0.0f, 1.0f, 110.0f);
   o.reed_organ.cutoff_hz = 20000.0f;
@@ -563,6 +596,137 @@ ProgramOverrides build_program_overrides() noexcept {
   o.reed_organ.pipe_organ.wind_sag = 0.2f;
   o.reed_organ.stereo_spread = 0.18f;
   o.reed_organ.gain = 0.6f;
+
+  // Bowed string (GM 40-43): one friction-excited waveguide voiced across the
+  // violin family. The engine tunes to the played note, so the members differ
+  // by timbre (larger = darker, slower-speaking, more corpus) — mirrors the
+  // violin/viola/cello/contrabass presets.
+  auto bowed = [](float bow_position, float bow_force, float brightness, float damping,
+                  float attack_ms, float release_ms, float body_mix, float gain) {
+    NativeSynthPatch p{};
+    p.mode = SynthEngineMode::kBowedString;
+    p.amp_env.attack_ms = 20.0f;
+    p.amp_env.sustain = 1.0f;
+    p.amp_env.release_ms = release_ms;
+    p.cutoff_hz = 20000.0f;
+    p.bowed_string.bow_position = bow_position;
+    p.bowed_string.bow_force = bow_force;
+    p.bowed_string.brightness = brightness;
+    p.bowed_string.damping = damping;
+    p.bowed_string.attack_ms = attack_ms;
+    p.bowed_string.release_ms = release_ms;
+    p.bowed_string.rosin = 0.15f;
+    p.body = BodyType::kViolin;
+    p.body_mix = body_mix;
+    p.gain = gain;
+    return p;
+  };
+  o.violin = bowed(0.12f, 0.55f, 0.62f, 0.30f, 45.0f, 110.0f, 0.28f, 0.70f);
+  o.viola = bowed(0.13f, 0.55f, 0.52f, 0.34f, 55.0f, 120.0f, 0.34f, 0.70f);
+  o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.72f);
+  o.contrabass = bowed(0.15f, 0.62f, 0.36f, 0.44f, 90.0f, 160.0f, 0.46f, 0.72f);
+
+  // Reed woodwind (GM 64-71): one single-reed waveguide voiced across the
+  // single- and double-reed winds. The clarinet is the only cylinder
+  // (odd-harmonic); the saxes and double reeds are conical (full series) —
+  // mirrors the reed presets.
+  auto reed = [](bool conical, float reed_stiffness, float reed_opening, float brightness,
+                 float damping, float attack_ms, float release_ms, float breath, float body_mix,
+                 float gain) {
+    NativeSynthPatch p{};
+    p.mode = SynthEngineMode::kReed;
+    p.amp_env.attack_ms = 15.0f;
+    p.amp_env.sustain = 1.0f;
+    p.amp_env.release_ms = release_ms;
+    p.cutoff_hz = 20000.0f;
+    p.reed.conical = conical;
+    p.reed.reed_stiffness = reed_stiffness;
+    p.reed.reed_opening = reed_opening;
+    p.reed.brightness = brightness;
+    p.reed.damping = damping;
+    p.reed.attack_ms = attack_ms;
+    p.reed.release_ms = release_ms;
+    p.reed.breath_pressure = breath;
+    p.body = BodyType::kWoodTube;
+    p.body_mix = body_mix;
+    p.gain = gain;
+    return p;
+  };
+  o.soprano_sax = reed(true, 0.55f, 0.55f, 0.60f, 0.32f, 20.0f, 80.0f, 0.65f, 0.30f, 0.70f);
+  o.alto_sax = reed(true, 0.55f, 0.55f, 0.54f, 0.34f, 22.0f, 90.0f, 0.65f, 0.32f, 0.70f);
+  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.48f, 0.36f, 26.0f, 100.0f, 0.68f, 0.36f, 0.72f);
+  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.40f, 0.40f, 32.0f, 120.0f, 0.70f, 0.40f, 0.72f);
+  o.oboe = reed(true, 0.80f, 0.35f, 0.70f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.68f);
+  o.english_horn = reed(true, 0.70f, 0.40f, 0.60f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.68f);
+  o.bassoon = reed(true, 0.65f, 0.45f, 0.42f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.72f);
+  o.clarinet = reed(false, 0.40f, 0.50f, 0.45f, 0.30f, 25.0f, 90.0f, 0.60f, 0.25f, 0.70f);
+
+  // Brass / lip reed (GM 56-60): one lip-reed waveguide voiced across the
+  // trumpets, horns and low brass. Small-bore bells (trumpet family) get the
+  // radiation formant; large-bore / mellow brass stays on the round linear
+  // tone — mirrors the brass presets. (Brass Section 61 + SynthBrass 62-63
+  // stay FM by design.)
+  auto brass = [](bool conical, float lip_tension, float lip_damping, float brightness,
+                  float damping, float attack_ms, float release_ms, float breath, float bell_mix,
+                  float gain) {
+    NativeSynthPatch p{};
+    p.mode = SynthEngineMode::kBrass;
+    p.amp_env.attack_ms = 12.0f;
+    p.amp_env.sustain = 1.0f;
+    p.amp_env.release_ms = release_ms;
+    p.cutoff_hz = 20000.0f;
+    p.brass.conical = conical;
+    p.brass.lip_tension = lip_tension;
+    p.brass.lip_damping = lip_damping;
+    p.brass.brightness = brightness;
+    p.brass.damping = damping;
+    p.brass.attack_ms = attack_ms;
+    p.brass.release_ms = release_ms;
+    p.brass.breath_pressure = breath;
+    p.brass.vel_to_breath = 0.5f;
+    if (bell_mix > 0.0f) {
+      p.body = BodyType::kBrassBell;
+      p.body_mix = bell_mix;
+    }
+    p.gain = gain;
+    return p;
+  };
+  o.trumpet = brass(false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.50f, 0.70f);
+  o.trombone = brass(false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.72f);
+  o.tuba = brass(true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.74f);
+  o.muted_trumpet = brass(false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.66f);
+  o.french_horn = brass(true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.70f);
+
+  // Air-jet flute (GM 72-79): one edge-tone waveguide voiced across the
+  // open-pipe flutes and their breathier relatives — mirrors the flute presets.
+  auto flute = [](float jet_ratio, float brightness, float damping, float breath_noise, float chiff,
+                  float vibrato_depth, float breath, float gain) {
+    NativeSynthPatch p{};
+    p.mode = SynthEngineMode::kFlute;
+    p.amp_env.attack_ms = 8.0f;
+    p.amp_env.sustain = 1.0f;
+    p.amp_env.release_ms = 120.0f;
+    p.cutoff_hz = 20000.0f;
+    p.flute.jet_ratio = jet_ratio;
+    p.flute.brightness = brightness;
+    p.flute.damping = damping;
+    p.flute.breath_noise = breath_noise;
+    p.flute.chiff = chiff;
+    p.flute.vibrato_depth = vibrato_depth;
+    p.flute.vibrato_rate_hz = 5.0f;
+    p.flute.breath_pressure = breath;
+    p.flute.vel_to_breath = 0.5f;
+    p.gain = gain;
+    return p;
+  };
+  o.piccolo = flute(0.50f, 0.75f, 0.25f, 0.12f, 0.40f, 0.10f, 0.62f, 0.80f);
+  o.concert_flute = flute(0.50f, 0.55f, 0.30f, 0.18f, 0.35f, 0.15f, 0.60f, 0.85f);
+  o.recorder = flute(0.50f, 0.50f, 0.35f, 0.14f, 0.55f, 0.05f, 0.55f, 0.85f);
+  o.pan_flute = flute(0.52f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
+  o.blown_bottle = flute(0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
+  o.shakuhachi = flute(0.52f, 0.48f, 0.35f, 0.55f, 0.30f, 0.20f, 0.58f, 0.85f);
+  o.tin_whistle = flute(0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
+  o.ocarina = flute(0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
 
   o.e_piano = clamp_synth_patch(o.e_piano);
   o.clav = clamp_synth_patch(o.clav);
@@ -584,6 +748,31 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harp = clamp_synth_patch(o.harp);
   o.church_organ = clamp_synth_patch(o.church_organ);
   o.reed_organ = clamp_synth_patch(o.reed_organ);
+  o.violin = clamp_synth_patch(o.violin);
+  o.viola = clamp_synth_patch(o.viola);
+  o.cello = clamp_synth_patch(o.cello);
+  o.contrabass = clamp_synth_patch(o.contrabass);
+  o.trumpet = clamp_synth_patch(o.trumpet);
+  o.trombone = clamp_synth_patch(o.trombone);
+  o.tuba = clamp_synth_patch(o.tuba);
+  o.muted_trumpet = clamp_synth_patch(o.muted_trumpet);
+  o.french_horn = clamp_synth_patch(o.french_horn);
+  o.soprano_sax = clamp_synth_patch(o.soprano_sax);
+  o.alto_sax = clamp_synth_patch(o.alto_sax);
+  o.tenor_sax = clamp_synth_patch(o.tenor_sax);
+  o.baritone_sax = clamp_synth_patch(o.baritone_sax);
+  o.oboe = clamp_synth_patch(o.oboe);
+  o.english_horn = clamp_synth_patch(o.english_horn);
+  o.bassoon = clamp_synth_patch(o.bassoon);
+  o.clarinet = clamp_synth_patch(o.clarinet);
+  o.piccolo = clamp_synth_patch(o.piccolo);
+  o.concert_flute = clamp_synth_patch(o.concert_flute);
+  o.recorder = clamp_synth_patch(o.recorder);
+  o.pan_flute = clamp_synth_patch(o.pan_flute);
+  o.blown_bottle = clamp_synth_patch(o.blown_bottle);
+  o.shakuhachi = clamp_synth_patch(o.shakuhachi);
+  o.tin_whistle = clamp_synth_patch(o.tin_whistle);
+  o.ocarina = clamp_synth_patch(o.ocarina);
   return o;
 }
 
@@ -1016,7 +1205,9 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
       return program_overrides().xylophone;
     case 19:  // Church Organ (flue pipe)
       return program_overrides().church_organ;
-    case 21:  // Reed Organ (lingual pipe)
+    case 20:  // Reed Organ (lingual reed pipe / harmonium)
+    case 21:  // Accordion (free reed — shares the reed-organ voicing until a
+              // dedicated free-reed model lands)
       return program_overrides().reed_organ;
     case 24:  // Acoustic Guitar (nylon)
       return program_overrides().nylon_guitar;
@@ -1043,6 +1234,61 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
       return program_overrides().bass_pop;
     case 46:  // Orchestral Harp
       return program_overrides().harp;
+    // Bowed string family (physical waveguide).
+    case 40:  // Violin
+      return program_overrides().violin;
+    case 41:  // Viola
+      return program_overrides().viola;
+    case 42:  // Cello
+      return program_overrides().cello;
+    case 43:  // Contrabass
+      return program_overrides().contrabass;
+    // Brass family (physical lip reed). Brass Section (61) + SynthBrass (62-63)
+    // stay on the FM family sketch.
+    case 56:  // Trumpet
+      return program_overrides().trumpet;
+    case 57:  // Trombone
+      return program_overrides().trombone;
+    case 58:  // Tuba
+      return program_overrides().tuba;
+    case 59:  // Muted Trumpet
+      return program_overrides().muted_trumpet;
+    case 60:  // French Horn
+      return program_overrides().french_horn;
+    // Reed woodwind family (physical single-reed waveguide).
+    case 64:  // Soprano Sax
+      return program_overrides().soprano_sax;
+    case 65:  // Alto Sax
+      return program_overrides().alto_sax;
+    case 66:  // Tenor Sax
+      return program_overrides().tenor_sax;
+    case 67:  // Baritone Sax
+      return program_overrides().baritone_sax;
+    case 68:  // Oboe
+      return program_overrides().oboe;
+    case 69:  // English Horn
+      return program_overrides().english_horn;
+    case 70:  // Bassoon
+      return program_overrides().bassoon;
+    case 71:  // Clarinet
+      return program_overrides().clarinet;
+    // Air-jet flute family (physical edge-tone waveguide).
+    case 72:  // Piccolo
+      return program_overrides().piccolo;
+    case 73:  // Flute
+      return program_overrides().concert_flute;
+    case 74:  // Recorder
+      return program_overrides().recorder;
+    case 75:  // Pan Flute
+      return program_overrides().pan_flute;
+    case 76:  // Blown Bottle
+      return program_overrides().blown_bottle;
+    case 77:  // Shakuhachi
+      return program_overrides().shakuhachi;
+    case 78:  // Whistle
+      return program_overrides().tin_whistle;
+    case 79:  // Ocarina
+      return program_overrides().ocarina;
     default:
       break;
   }

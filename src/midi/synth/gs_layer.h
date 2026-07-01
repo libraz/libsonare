@@ -112,10 +112,12 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept;
 /// Overdrive/Distortion families translate EFX PARAMETER 2 as the drive amount
 /// and PARAMETER 20 as the output level (the SC-88Pro OD/Dist parameter map;
 /// PARAMETER 1 is the OD/Dist selector, redundant with the EFX type). The basic
-/// OD/Dist has no tone/EQ parameters — the tone comes from the amp voicing. Every
-/// other type (mapped or not) returns "{}" so the insert plays its own defaults
-/// until a per-type translation lands (a layer-3 refinement — the type is
-/// already honoured, only its parameter voicing is approximate).
+/// OD/Dist has no tone/EQ parameters — the tone comes from the amp voicing. The
+/// pitch-shifter families (2-voice / feedback) translate EFX PARAMETER 1 as the
+/// coarse semitone shift and PARAMETER 16 as the dry/effect balance. Every other
+/// type (mapped or not) returns "{}" so the insert plays its own defaults until a
+/// per-type translation lands (a layer-3 refinement — the type is already
+/// honoured, only its parameter voicing is approximate).
 std::string gs_efx_insert_params(const GsEfx& efx);
 
 /// One stage of a realised EFX chain: an `insert_factory` processor name and

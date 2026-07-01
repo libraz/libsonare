@@ -252,6 +252,19 @@ class Sf2Player final : public MidiInstrument {
   /// prepare() when the synth fallback is enabled.
   std::vector<float> fallback_pipe_organ_buffers_;
   int fallback_pipe_organ_capacity_ = 0;
+  /// Physical waveguide delay slabs for the fallback voices — the bowed-string
+  /// (GM 40-43), reed (GM 64-71), brass (GM 56-60) and air-jet flute (GM 72-79)
+  /// families. Each slot gets its engine's *_slab_capacity() span (bowed = 3
+  /// lines, flute = 2, reed/brass = 1); allocated in prepare() when the synth
+  /// fallback is enabled, attached at note-on like the other waveguide voices.
+  std::vector<float> fallback_bowed_buffers_;
+  int fallback_bowed_capacity_ = 0;
+  std::vector<float> fallback_reed_buffers_;
+  int fallback_reed_capacity_ = 0;
+  std::vector<float> fallback_brass_buffers_;
+  int fallback_brass_capacity_ = 0;
+  std::vector<float> fallback_flute_buffers_;
+  int fallback_flute_capacity_ = 0;
 
   // Chunk scratch (prepared on the control thread).
   std::vector<float> mix_l_;

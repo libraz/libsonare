@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -334,18 +335,27 @@ TEST_CASE("apply_gs_efx_sysex captures the EFX block as raw wire", "[midi][sf2][
 
 TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf2][gslayer]") {
   // GS EFX type numbers (SC-88Pro MSB<<8|LSB) -> insert-factory names.
-  REQUIRE(gs_efx_insert_name(0x0100) == "eq.parametric");               // Stereo-EQ
-  REQUIRE(gs_efx_insert_name(0x0110) == "saturation.ampSim");           // Overdrive
-  REQUIRE(gs_efx_insert_name(0x0111) == "saturation.ampSim");           // Distortion
-  REQUIRE(gs_efx_insert_name(0x0120) == "effects.modulation.phaser");   // Phaser
-  REQUIRE(gs_efx_insert_name(0x0123) == "effects.modulation.flanger");  // Stereo Flanger
-  REQUIRE(gs_efx_insert_name(0x0130) == "dynamics.compressor");         // Compressor
-  REQUIRE(gs_efx_insert_name(0x0131) == "dynamics.limiter");            // Limiter
-  REQUIRE(gs_efx_insert_name(0x0140) == "effects.modulation.chorus");   // Hexa Chorus
-  REQUIRE(gs_efx_insert_name(0x0142) == "effects.modulation.chorus");   // Stereo Chorus
-  REQUIRE(gs_efx_insert_name(0x0150) == "effects.delay.stereo");        // Stereo Delay
-  REQUIRE(gs_efx_insert_name(0x0000).empty());                          // Thru
-  REQUIRE(gs_efx_insert_name(0x0160).empty());                          // 2 Pitch Shifter (layer 3)
+  REQUIRE(gs_efx_insert_name(0x0100) == "eq.parametric");                    // Stereo-EQ
+  REQUIRE(gs_efx_insert_name(0x0110) == "saturation.ampSim");                // Overdrive
+  REQUIRE(gs_efx_insert_name(0x0111) == "saturation.ampSim");                // Distortion
+  REQUIRE(gs_efx_insert_name(0x0120) == "effects.modulation.phaser");        // Phaser
+  REQUIRE(gs_efx_insert_name(0x0121) == "effects.modulation.autoWah");       // Auto Wah
+  REQUIRE(gs_efx_insert_name(0x0122) == "effects.modulation.rotary");        // Rotary
+  REQUIRE(gs_efx_insert_name(0x0123) == "effects.modulation.flanger");       // Stereo Flanger
+  REQUIRE(gs_efx_insert_name(0x0124) == "effects.modulation.flanger");       // Step Flanger
+  REQUIRE(gs_efx_insert_name(0x0126) == "stereo.autoPan");                   // Auto Pan
+  REQUIRE(gs_efx_insert_name(0x0130) == "dynamics.compressor");              // Compressor
+  REQUIRE(gs_efx_insert_name(0x0131) == "dynamics.limiter");                 // Limiter
+  REQUIRE(gs_efx_insert_name(0x0140) == "effects.modulation.chorus");        // Hexa Chorus
+  REQUIRE(gs_efx_insert_name(0x0142) == "effects.modulation.chorus");        // Stereo Chorus
+  REQUIRE(gs_efx_insert_name(0x0150) == "effects.delay.stereo");             // Stereo Delay
+  REQUIRE(gs_efx_insert_name(0x0151) == "effects.delay.stereo");             // Modulation Delay
+  REQUIRE(gs_efx_insert_name(0x0160) == "effects.modulation.pitchShifter");  // 2-voice Pitch Shift
+  REQUIRE(gs_efx_insert_name(0x0161) == "effects.modulation.pitchShifter");  // Feedback Pitch Shift
+  REQUIRE(gs_efx_insert_name(0x0000).empty());                               // Thru
+  // Ring Modulator is absent from the SC-88Pro insertion set: no GS type binds
+  // to the ringModulator insert (reachable only via the generic insert API).
+  REQUIRE(gs_efx_insert_name(0x0170).empty());
 }
 
 TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][sf2][gslayer]") {
@@ -382,6 +392,32 @@ TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][s
   REQUIRE(gs_efx_insert_params(thru) == "{}");
 }
 
+TEST_CASE("gs_efx_insert_params translates the pitch shifter coarse and balance",
+          "[midi][sf2][gslayer]") {
+  // Coarse Pitch (EFX PARAMETER 1 = params[0]) is a 64-centred semitone offset.
+  GsEfx up;
+  up.type = 0x0160;   // 2-voice Pitch Shifter
+  up.params[0] = 76;  // 64 + 12 -> +12 semitones (one octave up)
+  REQUIRE(gs_efx_insert_params(up).find("\"semitones\":12") != std::string::npos);
+  up.params[0] = 52;  // 64 - 12 -> -12 semitones
+  REQUIRE(gs_efx_insert_params(up).find("\"semitones\":-12") != std::string::npos);
+
+  // An untouched block reads 0: unset -> 0 st, never a -64 -> clamped -24 st drop.
+  GsEfx untouched;
+  untouched.type = 0x0161;  // Feedback Pitch Shifter shares the translation
+  REQUIRE(gs_efx_insert_params(untouched).find("\"semitones\":0") != std::string::npos);
+  REQUIRE(gs_efx_insert_params(untouched).find("dryWet") == std::string::npos);  // balance unset
+
+  // Effect Balance (PARAMETER 16 = params[15]) -> dry/wet when set.
+  GsEfx mixed;
+  mixed.type = 0x0160;
+  mixed.params[0] = 71;    // +7 semitones
+  mixed.params[15] = 127;  // full effect
+  const std::string json = gs_efx_insert_params(mixed);
+  REQUIRE(json.find("\"semitones\":7") != std::string::npos);
+  REQUIRE(json.find("\"dryWet\":1") != std::string::npos);
+}
+
 TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
           "[midi][sf2][gslayer]") {
   // A single-effect type yields a one-stage chain.
@@ -413,8 +449,44 @@ TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
 
   // An unmapped type yields an empty chain (bypass).
   GsEfx unknown;
-  unknown.type = 0x0402;
+  unknown.type = 0x0500;
   REQUIRE(gs_efx_insert_chain(unknown).empty());
+}
+
+TEST_CASE("gs_efx_insert_chain covers the guitar/bass multi block", "[midi][sf2][gslayer]") {
+  auto names = [](uint16_t type) {
+    GsEfx efx;
+    efx.type = type;
+    std::vector<std::string> out;
+    for (const auto& stage : gs_efx_insert_chain(efx)) out.push_back(stage.name);
+    return out;
+  };
+  // The SC-88Pro MSB-04 guitar/bass multi block, each in its manual signal order
+  // (every block now has a matching insert: Wah / Auto-Wah are realised too).
+  REQUIRE(names(0x0400) ==  // GTR Multi 1: Cmp-OD-CF-Dly
+          std::vector<std::string>{"dynamics.compressor", "saturation.ampSim",
+                                   "effects.modulation.chorus", "effects.delay.stereo"});
+  REQUIRE(names(0x0402) ==  // GTR Multi 3: Wah-OD-CF-Dly
+          std::vector<std::string>{"effects.modulation.wah", "saturation.ampSim",
+                                   "effects.modulation.chorus", "effects.delay.stereo"});
+  REQUIRE(names(0x0403) ==  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD)
+          std::vector<std::string>{"dynamics.compressor", "eq.parametric",
+                                   "effects.modulation.chorus", "effects.delay.stereo"});
+  REQUIRE(names(0x0404) ==  // Clean GTR Multi 2: AW-EQ-CF-Dly
+          std::vector<std::string>{"effects.modulation.autoWah", "eq.parametric",
+                                   "effects.modulation.chorus", "effects.delay.stereo"});
+  REQUIRE(names(0x0405) ==  // Bass Multi: Cmp-OD-EQ-CF
+          std::vector<std::string>{"dynamics.compressor", "saturation.ampSim", "eq.parametric",
+                                   "effects.modulation.chorus"});
+
+  // The bass multi puts its OD block on the bass cab; the guitar ones do not.
+  GsEfx bass;
+  bass.type = 0x0405;
+  const auto bass_chain = gs_efx_insert_chain(bass);
+  REQUIRE(bass_chain[1].params_json.find("\"cabModel\":1") != std::string::npos);
+  GsEfx guitar;
+  guitar.type = 0x0401;
+  REQUIRE(gs_efx_insert_chain(guitar)[1].params_json.find("cabModel") == std::string::npos);
 }
 
 TEST_CASE("parse_gs_sysex recognises the per-part EFX switch", "[midi][sf2][gslayer]") {

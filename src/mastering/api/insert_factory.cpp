@@ -72,10 +72,15 @@
 #include <cmath>
 
 #include "effects/delay/stereo_delay.h"
+#include "effects/modulation/auto_wah.h"
 #include "effects/modulation/chorus.h"
 #include "effects/modulation/ensemble.h"
 #include "effects/modulation/flanger.h"
 #include "effects/modulation/phaser.h"
+#include "effects/modulation/pitch_shifter.h"
+#include "effects/modulation/ring_modulator.h"
+#include "effects/modulation/rotary.h"
+#include "effects/modulation/wah.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
@@ -648,6 +653,47 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     return make<effects::modulation::Phaser>(config);
   }
+  if (name == "effects.modulation.wah") {
+    effects::modulation::WahConfig config;
+    config.rate_hz = f(params, "rateHz", config.rate_hz);
+    config.min_hz = f(params, "minHz", config.min_hz);
+    config.max_hz = f(params, "maxHz", config.max_hz);
+    config.resonance = f(params, "resonance", config.resonance);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::Wah>(config);
+  }
+  if (name == "effects.modulation.autoWah") {
+    effects::modulation::AutoWahConfig config;
+    config.sensitivity = f(params, "sensitivity", config.sensitivity);
+    config.min_hz = f(params, "minHz", config.min_hz);
+    config.max_hz = f(params, "maxHz", config.max_hz);
+    config.resonance = f(params, "resonance", config.resonance);
+    config.attack_ms = f(params, "attackMs", config.attack_ms);
+    config.release_ms = f(params, "releaseMs", config.release_ms);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::AutoWah>(config);
+  }
+  if (name == "effects.modulation.rotary") {
+    effects::modulation::RotaryConfig config;
+    config.rate_hz = f(params, "rateHz", config.rate_hz);
+    config.depth_ms = f(params, "depthMs", config.depth_ms);
+    config.tremolo = f(params, "tremolo", config.tremolo);
+    config.stereo_spread = f(params, "stereoSpread", config.stereo_spread);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::Rotary>(config);
+  }
+  if (name == "effects.modulation.ringModulator") {
+    effects::modulation::RingModulatorConfig config;
+    config.carrier_hz = f(params, "carrierHz", config.carrier_hz);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::RingModulator>(config);
+  }
+  if (name == "effects.modulation.pitchShifter") {
+    effects::modulation::PitchShifterConfig config;
+    config.semitones = f(params, "semitones", config.semitones);
+    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    return make<effects::modulation::PitchShifter>(config);
+  }
   if (name == "effects.delay.stereo") {
     effects::delay::StereoDelayConfig config;
     config.delay_time_l_ms = f(params, "delayTimeLMs", config.delay_time_l_ms);
@@ -803,6 +849,11 @@ std::vector<std::string> insert_factory_names() {
       "effects.modulation.ensemble",
       "effects.modulation.flanger",
       "effects.modulation.phaser",
+      "effects.modulation.wah",
+      "effects.modulation.autoWah",
+      "effects.modulation.rotary",
+      "effects.modulation.ringModulator",
+      "effects.modulation.pitchShifter",
       "effects.delay.stereo",
 #endif
   };

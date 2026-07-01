@@ -162,7 +162,7 @@ TEST_CASE("1:1 operator stacks stay harmonic, bell ratios go inharmonic", "[midi
 }
 
 TEST_CASE("the feedback operator enriches the brass spectrum", "[midi][synth][fm]") {
-  const NativeSynthPatch& brass = gm_fallback_patch(0, 56);  // Trumpet family
+  const NativeSynthPatch& brass = gm_fallback_patch(0, 62);  // Synth Brass (FM brass family)
   REQUIRE(brass.mode == SynthEngineMode::kFm);
   REQUIRE(brass.fm.ops[2].feedback > 0.0f);
 

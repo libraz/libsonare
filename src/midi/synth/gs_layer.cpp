@@ -225,8 +225,15 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
       return "saturation.ampSim";
     case 0x0120:  // Phaser
       return "effects.modulation.phaser";
+    case 0x0121:  // Auto Wah -> the envelope-following resonant bandpass.
+      return "effects.modulation.autoWah";
+    case 0x0122:  // Rotary -> the dual-rotor Leslie model.
+      return "effects.modulation.rotary";
     case 0x0123:  // Stereo Flanger
+    case 0x0124:  // Step Flanger (a flanger variant -> the same insert)
       return "effects.modulation.flanger";
+    case 0x0126:  // Auto Pan
+      return "stereo.autoPan";
     case 0x0130:  // Compressor
       return "dynamics.compressor";
     case 0x0131:  // Limiter
@@ -235,11 +242,42 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
     case 0x0142:  // Stereo Chorus
       return "effects.modulation.chorus";
     case 0x0150:  // Stereo Delay
+    case 0x0151:  // Modulation Delay (delay with LFO -> the stereo delay insert)
       return "effects.delay.stereo";
+    case 0x0160:  // 2-voice Pitch Shifter
+    case 0x0161:  // Feedback Pitch Shifter (the feedback loop is not modelled)
+      return "effects.modulation.pitchShifter";
     default:
+      // Note: the SC-88Pro has no Ring Modulator in its 64-effect insertion set
+      // (it arrived on later Sound Canvas models), so the ringModulator insert
+      // has no GS type to bind to and stays reachable only via the generic API.
       return {};
   }
 }
+
+namespace {
+
+/// Pitch-shifter parameter translation (SC-88Pro 2-voice / feedback pitch
+/// shifter). Coarse Pitch is EFX PARAMETER 1 — a 64-centred semitone offset
+/// over -24..+12 st; an untouched block reads 0, treated as unset -> 0 st so it
+/// never becomes a -64 -> clamped -24 st two-octave drop. Effect Balance
+/// (PARAMETER 16) maps the direct/effect mix to dry/wet, with 0 = unset -> the
+/// insert's wet default. Output Level (PARAMETER 20) has no matching pitch-
+/// shifter parameter, so it is not translated.
+std::string gs_pitch_shift_json(const GsEfx& efx) {
+  const int coarse = efx.params[0] & 0x7F;
+  const float semitones =
+      coarse == 0 ? 0.0f : std::clamp(static_cast<float>(coarse - 64), -24.0f, 12.0f);
+  std::string out = "{\"semitones\":" + std::to_string(semitones);
+  const unsigned balance = efx.params[15] & 0x7Fu;
+  if (balance != 0) {
+    out += ",\"dryWet\":" + std::to_string(static_cast<float>(balance) / 127.0f);
+  }
+  out += "}";
+  return out;
+}
+
+}  // namespace
 
 std::string gs_efx_insert_params(const GsEfx& efx) {
   // SC-88Pro Overdrive/Distortion parameter map (owner's manual appendix):
@@ -272,6 +310,9 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
       const float amp_drive = std::clamp(0.45f + 0.55f * drive, 0.0f, 1.0f);
       return "{\"ampModel\":2,\"drive\":" + std::to_string(amp_drive) + level_db() + "}";
     }
+    case 0x0160:  // 2-voice Pitch Shifter -> Coarse Pitch + Balance translated.
+    case 0x0161:  // Feedback Pitch Shifter (feedback approximated as a plain shift).
+      return gs_pitch_shift_json(efx);
     default:
       return "{}";
   }
@@ -299,23 +340,42 @@ std::string gs_eq_block_json(float low_db, float high_db) {
 }  // namespace
 
 std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
+  // Composite guitar/bass multi effects (SC-88Pro MSB 04): a whole rig realised
+  // as an insert chain in signal order. The block STRUCTURE and the type numbers
+  // are faithful to the manual (GTR Multi 2 = 04 01 and Clean Gt Multi 2 = 04 04
+  // are confirmed hex anchors that bracket the ordered block). The EQ Low/Hi
+  // Gain (EFX PARAMETER 17/18, shared across the multi effects) is translated to
+  // a real shelving EQ — the composite's true tone control. Every block now has
+  // a matching insert (Wah / Auto-Wah realised by the wah / auto-wah inserts);
+  // the compressor, chorus, delay and wah run at their defaults and the OD uses
+  // a musical mid drive, pending confirmed per-block parameter positions
+  // (documented approximation — only the shared EQ has a confirmed layout).
+  const auto comp = [] { return GsEfxStage{"dynamics.compressor", "{}"}; };
+  const auto od = [](bool bass) {
+    return GsEfxStage{"saturation.ampSim", bass ? "{\"ampModel\":0,\"drive\":0.6,\"cabModel\":1}"
+                                                : "{\"ampModel\":0,\"drive\":0.6}"};
+  };
+  const auto eq = [&efx] {
+    return GsEfxStage{"eq.parametric", gs_eq_block_json(gs_eq_gain_db(efx.params[16]),
+                                                        gs_eq_gain_db(efx.params[17]))};
+  };
+  const auto cf = [] { return GsEfxStage{"effects.modulation.chorus", "{}"}; };
+  const auto delay = [] { return GsEfxStage{"effects.delay.stereo", "{}"}; };
+  const auto wah = [] { return GsEfxStage{"effects.modulation.wah", "{}"}; };
+  const auto autowah = [] { return GsEfxStage{"effects.modulation.autoWah", "{}"}; };
   switch (efx.type) {
-    case 0x0401: {
-      // GTR Multi 2 (SC-88Pro [04 01]): Cmp -> OD -> EQ -> CF. The block
-      // structure is faithful to the hardware. The EQ Low/Hi Gain (EFX
-      // PARAMETER 17/18) is translated to a real shelving EQ — the composite's
-      // true tone control. The compressor and chorus run at their defaults and
-      // the OD uses a musical mid drive, pending confirmed per-block parameter
-      // positions for those blocks (documented approximation).
-      const float low = gs_eq_gain_db(efx.params[16]);   // EQ Low Gain [17]
-      const float high = gs_eq_gain_db(efx.params[17]);  // EQ Hi Gain  [18]
-      std::vector<GsEfxStage> chain;
-      chain.push_back({"dynamics.compressor", "{}"});
-      chain.push_back({"saturation.ampSim", "{\"ampModel\":0,\"drive\":0.6}"});
-      chain.push_back({"eq.parametric", gs_eq_block_json(low, high)});
-      chain.push_back({"effects.modulation.chorus", "{}"});
-      return chain;
-    }
+    case 0x0400:  // GTR Multi 1: Cmp-OD-CF-Dly
+      return {comp(), od(false), cf(), delay()};
+    case 0x0401:  // GTR Multi 2: Cmp-OD-EQ-CF
+      return {comp(), od(false), eq(), cf()};
+    case 0x0402:  // GTR Multi 3: Wah-OD-CF-Dly
+      return {wah(), od(false), cf(), delay()};
+    case 0x0403:  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD block)
+      return {comp(), eq(), cf(), delay()};
+    case 0x0404:  // Clean GTR Multi 2: AW-EQ-CF-Dly (Auto-Wah at the front)
+      return {autowah(), eq(), cf(), delay()};
+    case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF (the OD block on the bass cab)
+      return {comp(), od(true), eq(), cf()};
     default: {
       // Single-effect types: a one-stage chain from the name/param mapping.
       const std::string_view name = gs_efx_insert_name(efx.type);
