@@ -71,6 +71,16 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[3].ks.exc_brightness = 0.85f;
   t[3].ks.vel_to_brightness = 0.6f;
   t[3].ks.release_damp_s = 0.08f;
+  // Dedicated plucked-string physics for the steel-string family default (kept
+  // in step with the `steel` program-override base): coupled polarization,
+  // physical pick, steel dispersion, tension bend, sympathetic halo.
+  t[3].ks.polarization = 0.3f;
+  t[3].ks.body_coupling = 0.35f;
+  t[3].ks.pluck_style = 0.5f;
+  t[3].ks.nail = 0.62f;
+  t[3].ks.tension_mod = 0.35f;
+  t[3].ks.dispersion = 0.65f;
+  t[3].ks.sympathetic = true;
   t[3].body = BodyType::kGuitar;
   t[3].body_mix = 0.35f;
   t[3].gain = 0.8f;
@@ -345,16 +355,34 @@ ProgramOverrides build_program_overrides() noexcept {
   steel.ks.exc_brightness = 0.85f;
   steel.ks.vel_to_brightness = 0.6f;
   steel.ks.release_damp_s = 0.08f;
+  // Dedicated plucked-string physics: a coupled second polarization (bridge
+  // double-decay), a physical pick pluck, steel-string dispersion, a tension
+  // attack bend, and the sympathetic open-string halo (the last only rings when
+  // the patch drives a standalone NativeSynth — the per-note GM fallback path
+  // has no shared bank, and the per-voice gates carry the tone there).
+  steel.ks.polarization = 0.3f;
+  steel.ks.body_coupling = 0.35f;
+  steel.ks.pluck_style = 0.5f;
+  steel.ks.nail = 0.62f;  // steel pick / fingernail: bright edge
+  steel.ks.tension_mod = 0.35f;
+  steel.ks.dispersion = 0.65f;  // steel wound-string inharmonicity
+  steel.ks.sympathetic = true;
   steel.body = BodyType::kGuitar;
   steel.body_mix = 0.35f;
   steel.gain = 0.8f;
 
-  // Nylon: soft finger pluck near the middle of the string, dull loop.
+  // Nylon: soft finger pluck near the middle of the string, dull loop. Keeps the
+  // sympathetic halo (classical guitars sing with open-string resonance) but
+  // drops dispersion (nylon plain strings are not audibly inharmonic) and softens
+  // the pluck to the flesh of a fingertip with a lighter tension bend.
   o.nylon_guitar = steel;
   o.nylon_guitar.ks.brightness = 0.42f;
   o.nylon_guitar.ks.exc_brightness = 0.55f;
   o.nylon_guitar.ks.pick_position = 0.27f;
   o.nylon_guitar.ks.decay_s = 2.2f;
+  o.nylon_guitar.ks.dispersion = 0.0f;
+  o.nylon_guitar.ks.nail = 0.28f;  // fingertip flesh, rounder
+  o.nylon_guitar.ks.tension_mod = 0.2f;
   o.nylon_guitar.body_mix = 0.45f;
 
   // Electric (jazz/clean) — the `electric-guitar` preset: bright sustaining
@@ -367,6 +395,15 @@ ProgramOverrides build_program_overrides() noexcept {
   o.electric_guitar.cutoff_hz = 5500.0f;
   o.electric_guitar.body = BodyType::kNone;
   o.electric_guitar.body_mix = 0.0f;
+  // Solid body: no sympathetic halo and a lighter plane coupling; the magnetic
+  // pickup (position comb + field-gradient nonlinearity) near the bridge is the
+  // electric character instead, with only a trace of steel dispersion.
+  o.electric_guitar.ks.sympathetic = false;
+  o.electric_guitar.ks.polarization = 0.15f;
+  o.electric_guitar.ks.body_coupling = 0.2f;
+  o.electric_guitar.ks.dispersion = 0.3f;
+  o.electric_guitar.ks.pickup_pos = 0.14f;  // near the bridge, bright
+  o.electric_guitar.ks.nail = 0.7f;         // pick
   o.electric_guitar.gain = 0.7f;
 
   // Palm mute: same electric string, choked decay.
@@ -480,6 +517,11 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harp.ks.pick_position = 0.3f;
   o.harp.ks.vel_to_brightness = 0.5f;
   o.harp.ks.release_damp_s = 1.0f;
+  // A harp's many open strings ring in sympathy (keep the halo), but the strings
+  // are plucked with the flesh of the finger and are not stiff or tension-bent.
+  o.harp.ks.nail = 0.2f;
+  o.harp.ks.dispersion = 0.0f;
+  o.harp.ks.tension_mod = 0.0f;
   o.harp.body_mix = 0.3f;  // large open soundboard, less boxy than the guitar
 
   // Church organ: a bright open principal flue pipe (method (8)). Sustained

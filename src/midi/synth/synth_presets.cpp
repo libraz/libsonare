@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 53;
+constexpr size_t kPresetCount = 55;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -66,6 +66,11 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
 
   // --- Karplus-Strong ---
   t[i++] = {"pluck", from_patch(gm_fallback_patch(0, 104))};
+  // Classical (nylon) and steel acoustic guitars driven as standalone
+  // instruments engage the shared sympathetic open-string bank (the "sound
+  // halo") that the per-note GM fallback path cannot host.
+  t[i++] = {"classical-guitar", from_patch(gm_fallback_patch(0, 24))};
+  t[i++] = {"steel-guitar", from_patch(gm_fallback_patch(0, 25))};
   t[i++] = {"electric-guitar", from_patch(gm_fallback_patch(0, 26))};
   t[i++] = {"harp", from_patch(gm_fallback_patch(0, 46))};
 

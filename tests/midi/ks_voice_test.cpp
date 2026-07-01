@@ -420,13 +420,49 @@ TEST_CASE("sympathetic bank rings, stays bounded, off by default", "[midi][synth
 
 TEST_CASE("sympathetic bank is off by default and does not perturb plain KS voicings",
           "[midi][synth][ks]") {
-  // Every existing KS preset leaves sympathetic == false, so it must render on
-  // the original path. The steel-guitar fallback is a representative voicing.
-  const NativeSynthPatch& steel = gm_fallback_patch(0, 25);
-  REQUIRE(steel.ks.sympathetic == false);
-  const std::vector<float> a = render_patch(steel, 52, 100, 8192);
-  const std::vector<float> b = render_patch(steel, 52, 100, 8192);
+  // A patch that does not opt into the sympathetic bank renders on the original
+  // path. The base patch and the bass voicings (which keep the halo off) are
+  // representative; they render deterministically without the shared bank.
+  NativeSynthPatch plain = ks_base_patch();
+  REQUIRE(plain.ks.sympathetic == false);
+  REQUIRE(gm_fallback_patch(0, 33).ks.sympathetic == false);  // electric bass, unchanged
+  const std::vector<float> a = render_patch(plain, 52, 100, 8192);
+  const std::vector<float> b = render_patch(plain, 52, 100, 8192);
   REQUIRE(a == b);
+}
+
+TEST_CASE("activated guitar presets engage the dedicated physics and stay bounded",
+          "[midi][synth][ks]") {
+  using sonare::midi::synth::find_synth_preset;
+  // classical-guitar: the sympathetic halo, coupled polarization and physical
+  // finger pluck, but no dispersion (nylon plain strings are not inharmonic).
+  const auto* classical = find_synth_preset("classical-guitar");
+  REQUIRE(classical != nullptr);
+  REQUIRE(classical->config.patch.ks.sympathetic == true);
+  REQUIRE(classical->config.patch.ks.body_coupling > 0.0f);
+  REQUIRE(classical->config.patch.ks.polarization > 0.0f);
+  REQUIRE(classical->config.patch.ks.pluck_style > 0.0f);
+  REQUIRE(classical->config.patch.ks.dispersion == 0.0f);
+  // steel-guitar adds the steel dispersion and keeps the halo; the electric
+  // guitar swaps the halo for the magnetic pickup.
+  const auto* steel = find_synth_preset("steel-guitar");
+  REQUIRE(steel != nullptr);
+  REQUIRE(steel->config.patch.ks.dispersion > 0.0f);
+  REQUIRE(steel->config.patch.ks.sympathetic == true);
+  const auto* electric = find_synth_preset("electric-guitar");
+  REQUIRE(electric != nullptr);
+  REQUIRE(electric->config.patch.ks.pickup_pos > 0.0f);
+  REQUIRE(electric->config.patch.ks.sympathetic == false);
+  // With every plane engaged at once (coupled double-decay + halo + physical
+  // pluck + tension) the standalone instrument stays bounded, audible and in
+  // tune: A4 within ~14 cents.
+  const std::vector<float> tone = render_patch(classical->config.patch, 69, 100, 48000);
+  float peak = 0.0f;
+  for (float s : tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  REQUIRE(peak < 2.0f);
+  const double f0 = estimate_frequency(tone, 8000, 44000, 440.0);
+  REQUIRE(std::fabs(f0 / 440.0 - 1.0) < 0.008);
 }
 
 TEST_CASE("sympathetic halo extends the reported tail", "[midi][synth][ks]") {
