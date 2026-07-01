@@ -18,7 +18,7 @@ constexpr int kPartitionSize = 256;
 constexpr float kT60Drop = 1000.0f;
 // Bound the synthesized IR so prepare() stays cheap and the convolver does not
 // allocate a pathologically long partition chain for absurd decaySec values.
-constexpr float kMaxDecaySeconds = 12.0f;
+constexpr float kMaxDecaySeconds = ConvolutionReverbConfig::kMaxDecaySeconds;
 constexpr float kMaxPreDelaySeconds = 1.0f;
 
 // xorshift32: a tiny deterministic PRNG so the synthesized IR is reproducible

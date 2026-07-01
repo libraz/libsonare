@@ -20,8 +20,14 @@ namespace sonare::effects::reverb {
 /// algorithmic reverbs (effects.reverb.fdn / .velvet). Supplying an explicit IR
 /// via load_ir() overrides this synthesis entirely.
 struct ConvolutionReverbConfig {
+  /// Upper bound on the synthesized IR length so prepare() stays cheap and the
+  /// convolver never allocates an unbounded partition set. Requests above this
+  /// resolve to the ceiling. Shared with the insert factory so an out-of-range
+  /// {decaySec} is clamped at construction rather than silently at prepare().
+  static constexpr float kMaxDecaySeconds = 12.0f;
   /// Approximate RT60 tail length in seconds (matched to FDN/velvet, where
-  /// decaySec maps to the ~T60 reverberation time). Clamped to a sane range.
+  /// decaySec maps to the ~T60 reverberation time). Clamped to
+  /// [0, kMaxDecaySeconds].
   float decay_sec = 1.5f;
   /// Pre-delay before the synthesized tail begins, in milliseconds.
   float pre_delay_ms = 0.0f;

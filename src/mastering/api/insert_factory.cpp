@@ -506,6 +506,11 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     return make<DattorroReverb>(config);
   }
   if (name == "effects.reverb.fdn") {
+    // Construction-time keys only: decaySec (seconds -> decay/10) and hfDamping
+    // are convenience aliases parsed here. The RT-automatable parameter surface
+    // (parameter_descriptors / set_parameter) exposes the unit-normalized keys
+    // decay (0..1.5), damping (0..1) and dryWet instead — a host automating the
+    // tail at audio rate must target those, not decaySec/hfDamping.
     FdnReverbConfig config;
     if (params.find("decaySec") != params.end()) {
       // decaySec is the approximate RT60 tail length in seconds. The FDN's
@@ -548,7 +553,11 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // to effects.reverb.fdn, where decaySec maps directly to ~T60).
     ConvolutionReverbConfig config;
     if (params.find("decaySec") != params.end()) {
-      config.decay_sec = std::max(0.0f, f(params, "decaySec", config.decay_sec));
+      // Clamp to the synthesizer's ceiling at construction so an out-of-range
+      // request like {decaySec:40} resolves to the documented maximum tail
+      // rather than being silently truncated only later in prepare().
+      config.decay_sec = std::clamp(f(params, "decaySec", config.decay_sec), 0.0f,
+                                    ConvolutionReverbConfig::kMaxDecaySeconds);
     }
     config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
