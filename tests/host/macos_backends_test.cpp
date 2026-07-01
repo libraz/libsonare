@@ -123,6 +123,82 @@ TEST_CASE("AU host enumerates and renders a system instrument", "[host][au][.]")
   for (float s : left) REQUIRE(std::isfinite(s));
   REQUIRE(instrument->latency_samples() >= 0);
 }
+
+TEST_CASE("AU host renders mono then stereo through per-call channel negotiation",
+          "[host][au][.]") {
+  // The adapter used to hardcode a 2-channel stream format at prepare(). A host
+  // rendering a single channel then pointed a 1-buffer list at an AU whose format
+  // still claimed two planar buffers. This exercises the new per-call
+  // negotiation: rendering mono re-negotiates the AU to one channel, then
+  // switching to stereo re-negotiates again. Both must stay finite and neither
+  // may crash (an AU produces well-defined finite output only when its format
+  // matches the buffer list the host supplies).
+  using sonare::host::backends::AuInstrumentProvider;
+  const auto instruments = AuInstrumentProvider::enumerate(sonare::host::PluginKind::kInstrument);
+  if (instruments.empty()) {
+    SUCCEED("no Audio Unit instruments installed; skipping mono render");
+    return;
+  }
+  AuInstrumentProvider provider;
+  auto instrument = provider.create_instrument(instruments.front());
+  REQUIRE(instrument != nullptr);
+  instrument->prepare(48000.0, 512);
+  instrument->on_event(0,
+                       sonare::midi::MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+
+  // Render mono (re-negotiates from the stereo default), then switch back to
+  // stereo (re-negotiates again): both must stay finite.
+  std::array<float, 512> mono{};
+  std::array<float*, 1> mono_channels{mono.data()};
+  instrument->process(mono_channels.data(), 1, 512);
+  for (float s : mono) REQUIRE(std::isfinite(s));
+
+  std::array<float, 512> left{};
+  std::array<float, 512> right{};
+  std::array<float*, 2> stereo{left.data(), right.data()};
+  instrument->process(stereo.data(), 2, 512);
+  for (float s : left) REQUIRE(std::isfinite(s));
+  for (float s : right) REQUIRE(std::isfinite(s));
+}
+
+TEST_CASE("AU host parameter enumeration is consistent across the cached instance",
+          "[host][au][.]") {
+  // parameter_count / parameter_descriptor reuse one cached AU instance per
+  // descriptor. Correctness must be identical to instantiating fresh each call:
+  // repeated queries return the same count and per-index descriptors.
+  using sonare::host::backends::AuInstrumentProvider;
+  const auto instruments = AuInstrumentProvider::enumerate(sonare::host::PluginKind::kInstrument);
+  AuInstrumentProvider provider;
+
+  const sonare::host::PluginDescriptor* with_params = nullptr;
+  for (const auto& d : instruments) {
+    if (provider.parameter_count(d) > 0) {
+      with_params = &d;
+      break;
+    }
+  }
+  if (with_params == nullptr) {
+    SUCCEED("no AU instrument with parameters installed; skipping cache-consistency check");
+    return;
+  }
+
+  const size_t count = provider.parameter_count(*with_params);
+  REQUIRE(provider.parameter_count(*with_params) == count);  // stable across calls
+
+  sonare::host::PluginParameterDescriptor first{};
+  REQUIRE(provider.parameter_descriptor(*with_params, 0, &first));
+  sonare::host::PluginParameterDescriptor first_again{};
+  REQUIRE(provider.parameter_descriptor(*with_params, 0, &first_again));
+  REQUIRE(first.id == first_again.id);
+  REQUIRE(first.min_value == first_again.min_value);
+  REQUIRE(first.max_value == first_again.max_value);
+  REQUIRE(first.default_value == first_again.default_value);
+
+  // An out-of-range index must fail cleanly (cache stays valid afterwards).
+  sonare::host::PluginParameterDescriptor oob{};
+  REQUIRE_FALSE(provider.parameter_descriptor(*with_params, count, &oob));
+  REQUIRE(provider.parameter_count(*with_params) == count);
+}
 #endif  // SONARE_HOST_TEST_AU
 
 #if defined(SONARE_HOST_TEST_COREAUDIO)
@@ -172,8 +248,16 @@ TEST_CASE("CoreAudio opens the default output device", "[host][coreaudio][.]") {
   std::this_thread::sleep_for(std::chrono::milliseconds(80));
   device.stop();
   REQUIRE_FALSE(device.is_running());
+
+  // xrun telemetry: a clean run on an idle device must not report a per-callback
+  // false positive (a broken sample-clock check would flag nearly every block).
+  // Allow a small margin for a genuine startup discontinuity on a busy host.
+  const uint32_t xruns = device.xrun_count();
+  const int callbacks = callback.callbacks_.load();
+  REQUIRE(callbacks > 0);
+  REQUIRE(xruns <= static_cast<uint32_t>(callbacks) / 4u + 1u);
+
   device.close();
-  REQUIRE(callback.callbacks_.load() > 0);
   REQUIRE(device.output_latency_samples() >= 0);
 }
 #endif  // SONARE_HOST_TEST_COREAUDIO

@@ -16,6 +16,7 @@
 /// MusicDevice / effect AUs installed on the system.
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "host/plugin_host.h"
@@ -42,6 +43,15 @@ class AuInstrumentProvider final : public InstrumentProvider {
   size_t parameter_count(const PluginDescriptor& descriptor) const noexcept override;
   bool parameter_descriptor(const PluginDescriptor& descriptor, size_t index,
                             PluginParameterDescriptor* out) const noexcept override;
+
+ private:
+  // Single AU instance reused across parameter_count / parameter_descriptor calls
+  // for the same descriptor, so enumerating N parameters instantiates the AU once
+  // instead of N+1 times. Held as void* to keep the SDK's AudioUnit type out of
+  // this public header (invariant 6); disposed in the destructor. Control-thread
+  // only, matching the rest of the provider.
+  mutable void* param_cache_unit_ = nullptr;
+  mutable std::string param_cache_id_;
 };
 
 }  // namespace sonare::host::backends

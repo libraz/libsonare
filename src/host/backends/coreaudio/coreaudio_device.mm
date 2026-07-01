@@ -48,6 +48,11 @@ struct CoreAudioDevice::Impl {
   int reported_output_latency = 0;
   int reported_input_latency = 0;
   int64_t frame_counter = 0;
+  // Device sample time expected at the start of the next render callback (the
+  // previous call's mSampleTime + its frame count). -1 until the first callback.
+  // A callback whose mSampleTime jumps past this expected value means the HAL
+  // skipped samples between cycles, i.e. an output overload / xrun.
+  int64_t expected_next_sample_time = -1;
 
   static OSStatus render_trampoline(void* ref, AudioUnitRenderActionFlags* flags,
                                     const AudioTimeStamp* ts, UInt32 bus, UInt32 frames,
@@ -74,7 +79,16 @@ struct CoreAudioDevice::Impl {
     view.num_frames = clamped;
     view.time.sample_time = frame_counter;
     if (ts != nullptr && (ts->mFlags & kAudioTimeStampSampleTimeValid)) {
-      view.time.sample_time = static_cast<int64_t>(ts->mSampleTime);
+      const int64_t current = static_cast<int64_t>(ts->mSampleTime);
+      view.time.sample_time = current;
+      // A forward discontinuity in the device sample clock between callbacks
+      // means the HAL could not service the previous cycle in time and skipped
+      // samples: count it as an xrun. The first callback (expected == -1) and an
+      // exact/behind timestamp (steady state) never count.
+      if (expected_next_sample_time >= 0 && current > expected_next_sample_time) {
+        xruns.fetch_add(1, std::memory_order_relaxed);
+      }
+      expected_next_sample_time = current + static_cast<int64_t>(frames);
     }
     view.time.stream_time_seconds =
         config.sample_rate > 0.0 ? static_cast<double>(view.time.sample_time) / config.sample_rate
@@ -206,6 +220,8 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
 bool CoreAudioDevice::start() {
   if (impl_->unit == nullptr || impl_->running.load()) return false;
   impl_->frame_counter = 0;
+  impl_->expected_next_sample_time = -1;  // no baseline until the first callback
+  impl_->xruns.store(0, std::memory_order_relaxed);
   if (!ok(AudioOutputUnitStart(impl_->unit))) return false;
   impl_->running.store(true);
   return true;

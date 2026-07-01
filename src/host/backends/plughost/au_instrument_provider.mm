@@ -113,12 +113,13 @@ class AuMidiInstrument final : public midi::MidiInstrument {
   void prepare(double sample_rate, int max_block_size) override {
     sample_rate_ = sample_rate;
     max_block_ = max_block_size;
-    set_planar_float_format(unit_, kAudioUnitScope_Output, sample_rate, 2);
     auto frames = static_cast<UInt32>(max_block_size);
     AudioUnitSetProperty(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
                          &frames, sizeof(frames));
-    AudioUnitInitialize(unit_);
-    latency_ = query_latency_samples(unit_, sample_rate);
+    // The MidiInstrument::prepare seam carries no channel count, so default to
+    // stereo here and let process() re-negotiate the stream format if the host
+    // actually renders a different channel count (mono / surround).
+    configure_output_channels(2);
     position_ = 0;
     event_count_ = 0;
   }
@@ -127,6 +128,11 @@ class AuMidiInstrument final : public midi::MidiInstrument {
     if (unit_ == nullptr || num_channels <= 0) return;
     const int chans = num_channels > static_cast<int>(kMaxChannels) ? static_cast<int>(kMaxChannels)
                                                                     : num_channels;
+    // Match the AU's output stream format to the host's actual channel count. A
+    // format change requires uninitialising the AU, so this only fires when the
+    // channel count differs from the last negotiation (typically just the first
+    // block); steady-state rendering never reconfigures.
+    if (chans != output_channels_) configure_output_channels(chans);
     // Deliver events in non-decreasing intra-block frame order. AUs expect the
     // MusicDeviceMIDIEvent offset to be monotonic within one render cycle, but
     // on_event queues in arrival order, which can interleave across clips routed
@@ -184,10 +190,24 @@ class AuMidiInstrument final : public midi::MidiInstrument {
   }
 
  private:
+  /// (Re)negotiate the AU output stream format for @p chans channels. An AU's
+  /// format is immutable while initialised, so uninitialise first when already
+  /// running; then re-query latency, which can change with the channel count.
+  void configure_output_channels(int chans) {
+    if (initialized_) AudioUnitUninitialize(unit_);
+    set_planar_float_format(unit_, kAudioUnitScope_Output, sample_rate_, chans);
+    AudioUnitInitialize(unit_);
+    initialized_ = true;
+    output_channels_ = chans;
+    latency_ = query_latency_samples(unit_, sample_rate_);
+  }
+
   AudioUnit unit_ = nullptr;
   double sample_rate_ = 48000.0;
   int max_block_ = 512;
   int latency_ = 0;
+  int output_channels_ = 0;
+  bool initialized_ = false;
   int64_t position_ = 0;
   BufferListStorage buffers_{};
   std::array<midi::MidiEvent, kEventQueueDepth> events_{};
@@ -205,19 +225,21 @@ class AuEffectProcessor final : public rt::ProcessorBase {
   }
 
   void prepare(double sample_rate, int max_block_size) override {
-    set_planar_float_format(unit_, kAudioUnitScope_Input, sample_rate, 2);
-    set_planar_float_format(unit_, kAudioUnitScope_Output, sample_rate, 2);
+    sample_rate_ = sample_rate;
     auto frames = static_cast<UInt32>(max_block_size);
     AudioUnitSetProperty(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
                          &frames, sizeof(frames));
     // Supply input via a render callback that copies the host's in-place buffer.
+    // The callback is a property that survives format re-negotiation, so it is
+    // set once here rather than on every configure_channels().
     AURenderCallbackStruct cb{};
     cb.inputProc = &AuEffectProcessor::input_trampoline;
     cb.inputProcRefCon = this;
     AudioUnitSetProperty(unit_, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cb,
                          sizeof(cb));
-    AudioUnitInitialize(unit_);
-    latency_ = query_latency_samples(unit_, sample_rate);
+    // Default to stereo; process() re-negotiates if the host's channel count
+    // differs (the ProcessorBase::prepare seam carries no channel count).
+    configure_channels(2);
     position_ = 0;
   }
 
@@ -225,6 +247,9 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     if (unit_ == nullptr || num_channels <= 0) return;
     const int chans = num_channels > static_cast<int>(kMaxChannels) ? static_cast<int>(kMaxChannels)
                                                                     : num_channels;
+    // Match the AU's input/output format to the host's actual channel count;
+    // only reconfigures when it changes (typically just the first block).
+    if (chans != channels_) configure_channels(chans);
     in_channels_ = channels;
     in_count_ = chans;
     AudioBufferList* list = buffers_.list();
@@ -251,6 +276,19 @@ class AuEffectProcessor final : public rt::ProcessorBase {
   int latency_samples() const noexcept override { return latency_; }
 
  private:
+  /// (Re)negotiate the AU input+output stream format for @p chans channels.
+  /// An AU's format is immutable while initialised, so uninitialise first when
+  /// already running; the render callback set in prepare() persists across this.
+  void configure_channels(int chans) {
+    if (initialized_) AudioUnitUninitialize(unit_);
+    set_planar_float_format(unit_, kAudioUnitScope_Input, sample_rate_, chans);
+    set_planar_float_format(unit_, kAudioUnitScope_Output, sample_rate_, chans);
+    AudioUnitInitialize(unit_);
+    initialized_ = true;
+    channels_ = chans;
+    latency_ = query_latency_samples(unit_, sample_rate_);
+  }
+
   static OSStatus input_trampoline(void* ref, AudioUnitRenderActionFlags* /*flags*/,
                                    const AudioTimeStamp* /*ts*/, UInt32 /*bus*/, UInt32 frames,
                                    AudioBufferList* data) noexcept {
@@ -271,7 +309,10 @@ class AuEffectProcessor final : public rt::ProcessorBase {
   }
 
   AudioUnit unit_ = nullptr;
+  double sample_rate_ = 48000.0;
   int latency_ = 0;
+  int channels_ = 0;
+  bool initialized_ = false;
   int64_t position_ = 0;
   BufferListStorage buffers_{};
   float* const* in_channels_ = nullptr;
@@ -289,6 +330,29 @@ AudioUnit instantiate(const PluginDescriptor& descriptor) {
   return unit;
 }
 
+/// Return an AU instance for `descriptor`, reusing the one cached in
+/// (*cache_unit, *cache_id) when the descriptor matches. A parameter sweep
+/// (parameter_count + parameter_descriptor per index) then instantiates the AU
+/// once rather than once per call. The cache owns the instance; callers must NOT
+/// dispose it. The AU is left uninitialised, which is all the parameter-list /
+/// parameter-info queries require.
+AudioUnit cached_param_unit(void** cache_unit, std::string* cache_id,
+                            const PluginDescriptor& descriptor) {
+  auto current = static_cast<AudioUnit>(*cache_unit);
+  if (current != nullptr && *cache_id == descriptor.id) return current;
+  if (current != nullptr) {
+    AudioComponentInstanceDispose(current);
+    *cache_unit = nullptr;
+    cache_id->clear();
+  }
+  AudioUnit unit = instantiate(descriptor);
+  if (unit != nullptr) {
+    *cache_unit = unit;
+    *cache_id = descriptor.id;
+  }
+  return unit;
+}
+
 }  // namespace
 
 // ===========================================================================
@@ -296,7 +360,13 @@ AudioUnit instantiate(const PluginDescriptor& descriptor) {
 // ===========================================================================
 
 AuInstrumentProvider::AuInstrumentProvider() = default;
-AuInstrumentProvider::~AuInstrumentProvider() = default;
+
+AuInstrumentProvider::~AuInstrumentProvider() {
+  if (param_cache_unit_ != nullptr) {
+    AudioComponentInstanceDispose(static_cast<AudioUnit>(param_cache_unit_));
+    param_cache_unit_ = nullptr;
+  }
+}
 
 std::vector<PluginDescriptor> AuInstrumentProvider::enumerate(PluginKind kind) {
   std::vector<PluginDescriptor> out;
@@ -345,13 +415,12 @@ std::unique_ptr<rt::ProcessorBase> AuInstrumentProvider::create_effect(
 }
 
 size_t AuInstrumentProvider::parameter_count(const PluginDescriptor& descriptor) const noexcept {
-  AudioUnit unit = instantiate(descriptor);
+  AudioUnit unit = cached_param_unit(&param_cache_unit_, &param_cache_id_, descriptor);
   if (unit == nullptr) return 0;
   UInt32 size = 0;
   Boolean writable = false;
   const OSStatus status = AudioUnitGetPropertyInfo(unit, kAudioUnitProperty_ParameterList,
                                                    kAudioUnitScope_Global, 0, &size, &writable);
-  AudioComponentInstanceDispose(unit);
   if (status != noErr || size == 0) return 0;
   return size / sizeof(AudioUnitParameterID);
 }
@@ -359,7 +428,7 @@ size_t AuInstrumentProvider::parameter_count(const PluginDescriptor& descriptor)
 bool AuInstrumentProvider::parameter_descriptor(const PluginDescriptor& descriptor, size_t index,
                                                 PluginParameterDescriptor* out) const noexcept {
   if (out == nullptr) return false;
-  AudioUnit unit = instantiate(descriptor);
+  AudioUnit unit = cached_param_unit(&param_cache_unit_, &param_cache_id_, descriptor);
   if (unit == nullptr) return false;
   UInt32 size = 0;
   Boolean writable = false;
@@ -402,7 +471,6 @@ bool AuInstrumentProvider::parameter_descriptor(const PluginDescriptor& descript
       }
     }
   }
-  AudioComponentInstanceDispose(unit);
   return ok;
 }
 
