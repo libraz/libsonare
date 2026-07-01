@@ -9,6 +9,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+constexpr float kPi = 3.14159265358979323846f;
 constexpr float kTwoPi = 6.28318530717958647692f;
 
 // Bow-velocity calibration: the differential-velocity input the bow table sees
@@ -24,6 +25,31 @@ constexpr float kRosinDepth = 0.15f;
 // position toward their CC targets — fast enough to feel immediate, slow enough
 // to never zipper.
 constexpr float kControlSmoothMs = 8.0f;
+
+// --- elasto-plastic friction calibration (only when params.elasto_plastic) ---
+// All dimensionless in the model's velocity-wave units (bow velocities ~0.03..
+// 0.17); tuned so the bristle loop stays bounded and still locks into Helmholtz.
+// Stribeck velocity (stick-hump half-width) = base + span*stribeck: the relative
+// velocity at which the bristles break away from full grip into slip.
+constexpr float kEpStribeckBase = 0.02f;
+constexpr float kEpStribeckSpan = 0.10f;
+// Bristle deflection clamp (divergence guard rail) and the breakaway fraction of
+// it below which the contact is purely elastic (stuck, no plastic slip yet).
+constexpr float kEpZMax = 0.25f;
+constexpr float kEpBreakawayFrac = 0.15f;
+// Bristle load time (ms): how quickly the stuck bristle charges toward its
+// steady deflection; folded into a per-sample rate against the sample rate. Kept
+// well under a fundamental period so the stick->slip corner stays sharp (a slow
+// bristle over-smooths the tone into a near-sine).
+constexpr float kEpLoadTimeMs = 0.15f;
+// Steady-state bristle floor (fraction of z_max the hump retains in full slip),
+// so the Stribeck curve decays to a small non-zero grip rather than to zero.
+constexpr float kEpZssFloor = 0.10f;
+// Hysteresis bias: how strongly the bristle deflection offsets the (sharp) bow
+// table's operating point. This is the whole elasto-plastic effect — the table
+// stays sharp (Helmholtz preserved) but breaks away and re-grips along different
+// velocities, the hysteresis loop that warms the memoryless table's "dry" slip.
+constexpr float kEpHystOffset = 0.6f;
 
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
@@ -111,6 +137,19 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   release_coeff_ = ramp_coeff(params.release_ms, sr);
 
   rosin_level_ = std::clamp(params.rosin, 0.0f, 1.0f) * kRosinDepth;
+
+  // Elasto-plastic friction (off by default -> render() keeps the static-table
+  // branch bit-identical). Derive the bristle constants from the same force /
+  // damping / stribeck knobs, all in the model's normalised velocity units.
+  elasto_plastic_ = params.elasto_plastic;
+  bristle_z_ = 0.0f;
+  if (elasto_plastic_) {
+    const float stribeck01 = std::clamp(params.stribeck, 0.0f, 1.0f);
+    ep_stribeck_v_ = kEpStribeckBase + kEpStribeckSpan * stribeck01;
+    ep_z_max_ = kEpZMax;
+    ep_z_ba_ = kEpBreakawayFrac * kEpZMax;
+    ep_load_rate_ = ramp_coeff(kEpLoadTimeMs, sr);
+  }
 }
 
 float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
@@ -143,16 +182,24 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   const float string_v = bridge_refl + nut_refl;
   const float dv = bow_v - string_v;
 
-  // Bow table (memoryless friction curve): reflection/absorption coefficient in
-  // [0,1]. exponent -4 == 1/x^4, so no pow() needed. The flat top (small dv) is
-  // the sticking phase; the falling tails are the slipping phase. The injected
-  // velocity dv*coeff scatters equally into both delay lines.
-  const float s = bow_slope_ * dv + bow_offset_;
-  const float base = std::fabs(s) + 0.75f;
-  const float base2 = base * base;
-  float bow_coeff = 1.0f / (base2 * base2);
-  if (bow_coeff > 1.0f) bow_coeff = 1.0f;
-  const float v_inj = dv * bow_coeff;
+  // Bow friction: the velocity the bow injects equally into both delay lines.
+  // Two models — the memoryless static table (default), or the gated
+  // elasto-plastic bristle (Phase 4) that adds stick->slip hysteresis.
+  float v_inj;
+  if (elasto_plastic_) {
+    v_inj = elasto_plastic_injection(dv);
+  } else {
+    // Bow table (memoryless friction curve): reflection/absorption coefficient in
+    // [0,1]. exponent -4 == 1/x^4, so no pow() needed. The flat top (small dv) is
+    // the sticking phase; the falling tails are the slipping phase. The injected
+    // velocity dv*coeff scatters equally into both delay lines.
+    const float s = bow_slope_ * dv + bow_offset_;
+    const float base = std::fabs(s) + 0.75f;
+    const float base2 = base * base;
+    float bow_coeff = 1.0f / (base2 * base2);
+    if (bow_coeff > 1.0f) bow_coeff = 1.0f;
+    v_inj = dv * bow_coeff;
+  }
 
   // Split the (compensated) period between the two lines and read/write them.
   const float eff = std::max(2.0f, base_period_ / ratio - comp_);
@@ -173,6 +220,54 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   return output_scale_ * bridge_out_;
 }
 
+float BowedStringVoiceCore::elasto_plastic_injection(float dv) noexcept {
+  // Single-bristle elasto-plastic friction (Dupont/Avanzini-Serafin-Rocchesso):
+  // the bristle deflection z is the friction memory that makes the stick->slip
+  // transition hysteretic (the string re-grips along a different path than it
+  // released along), warming the memoryless table's "dry" tone.
+  const float v = dv;
+
+  // Stribeck steady bristle: full grip near v=0, decaying to a small floor as the
+  // contact slips. z_ss is signed with the relative velocity.
+  const float ratio = v / ep_stribeck_v_;
+  const float g = std::exp(-ratio * ratio);  // 1 at v=0, ->0 as |v| grows
+  const float z_ss = (kEpZssFloor + (1.0f - kEpZssFloor) * g) * ep_z_max_;
+  const float z_ss_signed = v >= 0.0f ? z_ss : -z_ss;
+
+  // Adhesion (plastic) fraction alpha in [0,1]: 0 while the bristle is below
+  // breakaway (pure elastic stick), rising smoothly to 1 as |z| approaches the
+  // steady deflection (fully plastic slip). Zero whenever z and v disagree in
+  // sign (the bristle is unloading) — that asymmetry IS the hysteresis.
+  float alpha = 0.0f;
+  const float az = std::fabs(bristle_z_);
+  if ((v >= 0.0f) == (bristle_z_ >= 0.0f) && az > ep_z_ba_) {
+    if (az < z_ss) {
+      const float x = (az - ep_z_ba_) / std::max(z_ss - ep_z_ba_, 1.0e-6f);
+      alpha = 0.5f * (1.0f - std::cos(kPi * x));  // smooth 0 -> 1
+    } else {
+      alpha = 1.0f;
+    }
+  }
+
+  // Bristle evolution (forward Euler, load rate folds in dt): dz = rate*v*(1 -
+  // alpha*z/z_ss). In stick alpha=0 so the bristle loads with the bow; in slip
+  // alpha->1 and z saturates toward z_ss (the plastic ceiling).
+  const float dz = ep_load_rate_ * v * (1.0f - alpha * bristle_z_ / z_ss_signed);
+  bristle_z_ = std::clamp(bristle_z_ + dz, -ep_z_max_, ep_z_max_);
+
+  // Feed the SHARP static bow table, but offset its operating point by the
+  // bristle deflection: the table still switches abruptly between stick and slip
+  // (so the Helmholtz sawtooth and its full harmonic series survive), yet the
+  // breakaway and re-grip now happen at different relative velocities — the
+  // elasto-plastic hysteresis loop that warms the "dry" memoryless slip.
+  const float s = bow_slope_ * (dv - kEpHystOffset * bristle_z_) + bow_offset_;
+  const float base = std::fabs(s) + 0.75f;
+  const float base2 = base * base;
+  float bow_coeff = 1.0f / (base2 * base2);
+  if (bow_coeff > 1.0f) bow_coeff = 1.0f;
+  return dv * bow_coeff;
+}
+
 void BowedStringVoiceCore::release() noexcept { releasing_ = true; }
 
 void BowedStringVoiceCore::kill() noexcept {
@@ -180,6 +275,7 @@ void BowedStringVoiceCore::kill() noexcept {
   lp_state_ = 0.0f;
   neck_out_ = 0.0f;
   bridge_out_ = 0.0f;
+  bristle_z_ = 0.0f;
   releasing_ = true;
 }
 

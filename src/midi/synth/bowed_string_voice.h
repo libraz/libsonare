@@ -114,6 +114,20 @@ struct BowedStringPatchParams {
   /// (the grip of rosined hair), 0 = a perfectly smooth bow. Kept small; the
   /// noise is the seeded per-voice stream so bounces stay bit-identical.
   float rosin = 0.0f;
+
+  // --- off-by-default advanced friction (Phase 4; C-ABI non-exposed, gated) ---
+  /// Elasto-plastic bow friction (Dupont 2002; Avanzini, Serafin & Rocchesso
+  /// 2003): replaces the memoryless bow table with a single-bristle friction
+  /// STATE, so the rosin's stick->slip transition carries HYSTERESIS (the string
+  /// re-grips along a different curve than it released along). A memoryless table
+  /// is famously "dry"; the bristle memory is what warms it. OFF by default — the
+  /// render path is then bit-identical to the static table (like the gated
+  /// percussion physics layers), and neither goldens nor parity move.
+  bool elasto_plastic = false;
+  /// Stribeck velocity scale in [0,1] (only when elasto_plastic): how wide the
+  /// sticking hump is before the bristles break away. Higher = a rounder, grippier
+  /// stick with a slower, warmer slip; lower = a sharper, edgier release.
+  float stribeck = 0.5f;
 };
 
 /// Per-voice bowed-string state, embedded in NativeSynthVoice. The voice's
@@ -181,6 +195,12 @@ class BowedStringVoiceCore {
   static constexpr float kBowSlopeMax_ = 5.0f;
   static constexpr float kBowSlopeSpan_ = 4.0f;
 
+  // Elasto-plastic bow injection for the current relative velocity @p dv: evolves
+  // the single bristle state through the Stribeck adhesion map and returns the
+  // injected velocity wave, bounded to |dv| so the junction stays passive. Only
+  // called on the gated path (elasto_plastic_).
+  float elasto_plastic_injection(float dv) noexcept;
+
   // Delay slab (host-owned): neck = bow->nut, bridge = bow->bridge.
   float* neck_ = nullptr;
   float* bridge_ = nullptr;
@@ -236,6 +256,18 @@ class BowedStringVoiceCore {
   float rosin_level_ = 0.0f;
   VoiceRandomSequence noise_;
   uint64_t drive_index_ = 0;
+
+  // Elasto-plastic friction (off unless params.elasto_plastic): a single bristle
+  // deflection z evolved through the Stribeck adhesion map. When off, render()
+  // takes the memoryless static-table branch untouched (bit-identical). All
+  // knobs are dimensionless in the model's velocity-wave units, calibrated so the
+  // loop stays bounded and still locks into Helmholtz motion.
+  bool elasto_plastic_ = false;
+  float bristle_z_ = 0.0f;      // bristle deflection state (the friction memory)
+  float ep_stribeck_v_ = 0.1f;  // Stribeck velocity (stick-hump half-width)
+  float ep_load_rate_ = 0.0f;   // per-sample bristle load rate (dt folded in)
+  float ep_z_ba_ = 0.0f;        // breakaway deflection (stick below this)
+  float ep_z_max_ = 0.0f;       // bristle clamp (divergence guard rail)
 };
 
 }  // namespace sonare::midi::synth

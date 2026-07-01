@@ -433,3 +433,65 @@ TEST_CASE("the violin-family presets are voiced bowed strings", "[midi][synth][b
       swell_centroid(render_patch(find_synth_preset("cello")->config.patch, 57, 100, 24000), 16000);
   REQUIRE(violin > cello);
 }
+
+// --- Phase 4: off-by-default elasto-plastic friction ------------------------
+
+TEST_CASE("elasto-plastic friction is stable and tuned across the keyboard",
+          "[midi][synth][bowed]") {
+  // The gated bristle friction must stay bounded and lock into Helmholtz motion
+  // just like the static table, across the register and dynamics.
+  for (uint8_t note : {28, 45, 57, 69, 88}) {
+    for (uint8_t velocity : {40, 100, 127}) {
+      NativeSynthPatch patch = bowed_base_patch();
+      patch.bowed_string.elasto_plastic = true;
+      const std::vector<float> tone = render_patch(patch, note, velocity, 48000);
+      INFO("note " << int(note) << " vel " << int(velocity));
+      REQUIRE(peak(tone) > 0.005f);
+      REQUIRE(peak(tone) < 4.0f);
+      REQUIRE(std::isfinite(tone.back()));
+    }
+  }
+  // Tuning is unchanged by the friction model (the delay-line lengths set pitch).
+  NativeSynthPatch patch = bowed_base_patch();
+  patch.bowed_string.elasto_plastic = true;
+  for (const auto& [note, expected] :
+       {std::pair<uint8_t, double>{69, 440.0}, std::pair<uint8_t, double>{45, 110.0}}) {
+    const std::vector<float> tone = render_patch(patch, note, 110, 48000);
+    REQUIRE(std::fabs(fft_fundamental(tone, 16000, expected) / expected - 1.0) < 0.02);
+  }
+}
+
+TEST_CASE("elasto-plastic friction renders deterministically", "[midi][synth][bowed]") {
+  NativeSynthPatch patch = bowed_base_patch();
+  patch.bowed_string.elasto_plastic = true;
+  const std::vector<float> first = render_patch(patch, 57, 100, 8192);
+  const std::vector<float> second = render_patch(patch, 57, 100, 8192);
+  REQUIRE(peak(first) > 0.01f);
+  REQUIRE(first == second);
+}
+
+TEST_CASE("elasto-plastic friction reshapes the tone but keeps it harmonic",
+          "[midi][synth][bowed]") {
+  // The bristle memory must actually change the timbre (else it is inert), while
+  // still producing a stable full-harmonic bowed tone at the correct pitch.
+  const double f0 = 220.0;  // A3
+  NativeSynthPatch table = bowed_base_patch();
+  NativeSynthPatch plastic = bowed_base_patch();
+  plastic.bowed_string.elasto_plastic = true;
+
+  const std::vector<float> table_tone = render_patch(table, 57, 110, 24000);
+  const std::vector<float> plastic_tone = render_patch(plastic, 57, 110, 24000);
+
+  // Still a rich Helmholtz spectrum (fundamental + real upper-harmonic energy).
+  const std::vector<double> ps = power_spectrum(plastic_tone, 8000);
+  const double h1 = harmonic_power(ps, f0, 1);
+  REQUIRE(h1 > 0.0);
+  REQUIRE(harmonic_power(ps, f0, 2) > 0.02 * h1);
+  REQUIRE(harmonic_power(ps, f0, 3) > 0.01 * h1);
+
+  // Audibly different from the memoryless table: the steady-state spectral
+  // centroid shifts by a clear margin (the hysteresis reshapes the slip).
+  const double table_c = swell_centroid(table_tone, 8000);
+  const double plastic_c = swell_centroid(plastic_tone, 8000);
+  REQUIRE(std::fabs(plastic_c - table_c) > 0.05 * table_c);
+}
