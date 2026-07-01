@@ -433,6 +433,31 @@ TEST_CASE("the amp voicing presets scale gain from clean to high-gain and defaul
   REQUIRE(default_out == classic_out);
 }
 
+TEST_CASE("the added amp voicings differ in gain and brightness as characterised",
+          "[mastering][saturation][amp]") {
+  using sonare::mastering::saturation::AmpModel;
+  auto out_for = [](AmpModel model, bool cab) {
+    AmpSimConfig config;
+    config.drive = 0.5f;
+    config.cab = cab;
+    config.amp_model = model;
+    AmpSim amp(config);
+    return process_mono(amp, sine(220.0, 0.3f, kNumSamples));
+  };
+  // Cab off (nonlinearity alone): the rectifier is the hottest voicing (it
+  // saturates harder than the modern high-gain), the tweed breaks up earlier
+  // than the clean.
+  REQUIRE(thd(out_for(AmpModel::kFenderClean, false), 220.0) <
+          thd(out_for(AmpModel::kTweed, false), 220.0));
+  REQUIRE(thd(out_for(AmpModel::kModernHiGain, false), 220.0) <
+          thd(out_for(AmpModel::kRectifier, false), 220.0));
+
+  // Cab on so the voicing's tone-stack/pre-emphasis colour shows: the Vox chime
+  // is brighter than the dark tweed (more of its energy sits above 3 kHz).
+  REQUIRE(high_band_fraction(out_for(AmpModel::kVoxChime, true), 3000.0) >
+          high_band_fraction(out_for(AmpModel::kTweed, true), 3000.0));
+}
+
 TEST_CASE("saturation.ampSim selects the amp voicing through the param bag",
           "[mastering][saturation][amp][insert_factory]") {
   using sonare::mastering::saturation::AmpModel;
@@ -444,6 +469,14 @@ TEST_CASE("saturation.ampSim selects the amp voicing through the param bag",
   REQUIRE(hi_amp != nullptr);
   REQUIRE(clean_amp->amp_config().amp_model == AmpModel::kFenderClean);
   REQUIRE(hi_amp->amp_config().amp_model == AmpModel::kModernHiGain);
+
+  // The added voicings parse from their model ids too.
+  auto tweed = make_insert("saturation.ampSim", R"({"ampModel":3})");
+  auto vox = make_insert("saturation.ampSim", R"({"ampModel":4})");
+  auto rect = make_insert("saturation.ampSim", R"({"ampModel":5})");
+  REQUIRE(dynamic_cast<AmpSim*>(tweed.get())->amp_config().amp_model == AmpModel::kTweed);
+  REQUIRE(dynamic_cast<AmpSim*>(vox.get())->amp_config().amp_model == AmpModel::kVoxChime);
+  REQUIRE(dynamic_cast<AmpSim*>(rect.get())->amp_config().amp_model == AmpModel::kRectifier);
 }
 
 TEST_CASE("saturation.ampSim selects the bass cab through the param bag",

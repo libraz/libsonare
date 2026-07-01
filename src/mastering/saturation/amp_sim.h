@@ -63,6 +63,15 @@ enum class AmpModel {
   /// pushed into the clip and a much hotter triode drive (saturates early), with
   /// an upper-mid focus that keeps a high-gain tone articulate.
   kModernHiGain = 2,
+  /// Vintage tweed: a low-wattage American circuit — a warm, dark voice with an
+  /// early, spongy breakup and little bright-cap grit.
+  kTweed = 3,
+  /// British class-A chime: a bright, upper-mid-forward voice that stays fairly
+  /// clean (chimes rather than crunches) with an airy top.
+  kVoxChime = 4,
+  /// Modern rectifier: the hottest voicing — a saturated, thick low end with a
+  /// scooped mid and a darker top (the loose, heavy high-gain voice).
+  kRectifier = 5,
 };
 
 struct AmpSimConfig {

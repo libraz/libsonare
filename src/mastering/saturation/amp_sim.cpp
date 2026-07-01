@@ -34,6 +34,15 @@ constexpr AmpVoicing kAmpFenderClean{650.0f, 1.0f, 4.0f, -16.0f, 36.0f, 100.0f, 
 // Modern high-gain: more pre-emphasis into the clip and a much hotter triode
 // drive (saturates early), with an upper-mid focus that keeps it articulate.
 constexpr AmpVoicing kAmpModernHiGain{900.0f, 3.0f, 9.0f, -4.0f, 52.0f, 110.0f, 650.0f, 3000.0f};
+// Vintage tweed: little bright-cap grit, an early spongy breakup and a warm,
+// dark voice (low top, full low-mid).
+constexpr AmpVoicing kAmpTweed{600.0f, 2.0f, 5.0f, -8.0f, 40.0f, 130.0f, 500.0f, 2600.0f};
+// British class-A chime: a bright, upper-mid-forward voice that stays fairly
+// clean, with an airy top.
+constexpr AmpVoicing kAmpVoxChime{1000.0f, 2.0f, 6.0f, -12.0f, 40.0f, 90.0f, 700.0f, 3400.0f};
+// Modern rectifier: the hottest triode drive, a thick low end, a scooped mid
+// and a darker top.
+constexpr AmpVoicing kAmpRectifier{850.0f, 3.0f, 10.0f, -2.0f, 56.0f, 90.0f, 480.0f, 2800.0f};
 
 AmpVoicing amp_voicing(AmpModel model) noexcept {
   switch (model) {
@@ -41,6 +50,12 @@ AmpVoicing amp_voicing(AmpModel model) noexcept {
       return kAmpFenderClean;
     case AmpModel::kModernHiGain:
       return kAmpModernHiGain;
+    case AmpModel::kTweed:
+      return kAmpTweed;
+    case AmpModel::kVoxChime:
+      return kAmpVoxChime;
+    case AmpModel::kRectifier:
+      return kAmpRectifier;
     default:
       return kAmpClassicCrunch;
   }

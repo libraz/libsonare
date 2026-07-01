@@ -773,6 +773,12 @@ inline saturation::AmpModel amp_model(int value) {
       return saturation::AmpModel::kFenderClean;
     case 2:
       return saturation::AmpModel::kModernHiGain;
+    case 3:
+      return saturation::AmpModel::kTweed;
+    case 4:
+      return saturation::AmpModel::kVoxChime;
+    case 5:
+      return saturation::AmpModel::kRectifier;
     default:
       return saturation::AmpModel::kClassicCrunch;
   }
