@@ -304,6 +304,20 @@ TEST_CASE("LoudnessOptimize caps gain when target would exceed ceiling", "[maste
   REQUIRE(metering::true_peak_db(result.audio, 4) <= -5.99f);
 }
 
+TEST_CASE("LoudnessOptimize returns time-aligned output with zero reported latency",
+          "[mastering][maximizer]") {
+  // The helper pads by the internal true-peak limiter's look-ahead, processes,
+  // and drops the leading delayed samples, so the returned audio is already
+  // time-aligned. It must therefore report zero latency (not the internal
+  // limiter latency, which would make a caller double-compensate an already
+  // aligned buffer).
+  const Audio input = sine_audio(0.05f);
+  const auto result = loudness_optimize(input, {-20.0f, -1.0f, 4});
+
+  REQUIRE(result.audio.size() == input.size());
+  REQUIRE(result.latency_samples == 0);
+}
+
 TEST_CASE("LoudnessOptimize accepts meter-supported true-peak oversample factors",
           "[mastering][maximizer]") {
   const Audio input = sine_audio(0.05f, 48000, 0.1f);

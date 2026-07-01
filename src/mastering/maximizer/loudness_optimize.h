@@ -26,6 +26,8 @@ struct LoudnessOptimizeResult {
   /// Static gain applied before the true-peak limiter. This deliberately does
   /// not include limiter gain reduction.
   float applied_gain_db = 0.0f;
+  /// Always 0: the returned audio is time-aligned because this helper
+  /// compensates the internal true-peak limiter's look-ahead latency itself.
   int latency_samples = 0;
 };
 

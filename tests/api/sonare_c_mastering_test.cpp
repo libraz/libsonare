@@ -119,7 +119,9 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(std::isfinite(result.input_lufs));
     REQUIRE(std::isfinite(result.output_lufs));
     REQUIRE(std::isfinite(result.applied_gain_db));
-    REQUIRE(result.latency_samples > 0);
+    // The offline helper returns time-aligned audio (it compensates the internal
+    // true-peak limiter's look-ahead itself), so it reports zero latency.
+    REQUIRE(result.latency_samples == 0);
     REQUIRE(result.output_lufs > -18.2f);
     REQUIRE(result.output_lufs < -17.8f);
 
