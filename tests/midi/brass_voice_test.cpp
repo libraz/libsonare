@@ -17,6 +17,7 @@
 #include "core/fft.h"
 #include "midi/midi_event.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 
 namespace {
@@ -142,6 +143,17 @@ double harmonic_power(const std::vector<double>& power, double f0, int k) {
     if (b > 0 && b < static_cast<int>(power.size())) acc += power[static_cast<size_t>(b)];
   }
   return acc;
+}
+
+double spectral_centroid(const std::vector<float>& buf, size_t from) {
+  const std::vector<double> ps = power_spectrum(buf, from);
+  double num = 0.0;
+  double den = 0.0;
+  for (size_t b = 1; b < ps.size(); ++b) {
+    num += static_cast<double>(b) * kRate / kFft * ps[b];
+    den += ps[b];
+  }
+  return den > 0.0 ? num / den : 0.0;
 }
 
 /// A filter-bypassed brass test patch (raw bore, no body resonance so the pitch
@@ -307,6 +319,25 @@ TEST_CASE("brass CC74 brightness is wired to the sounding voice", "[midi][synth]
   REQUIRE(dark != bright);  // the control changes the sound
 }
 
+TEST_CASE("brass presets speak and stay bounded", "[midi][synth][brass]") {
+  // Every catalog brass preset must resolve, sound, and stay bounded across the
+  // brass range.
+  for (const char* name : {"trumpet", "trombone", "tuba", "french-horn", "muted-trumpet", "cornet",
+                           "flugelhorn", "euphonium"}) {
+    const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::find_synth_preset(name);
+    REQUIRE(preset != nullptr);
+    REQUIRE(preset->config.patch.mode == SynthEngineMode::kBrass);
+    NativeSynth synth(preset->config);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 53, 100)));
+    const std::vector<float> tone = render_left(synth, 40000);
+    INFO(name);
+    REQUIRE(peak(tone) < 4.0f);
+    REQUIRE(std::isfinite(tone.back()));
+    REQUIRE(rms(tone, 24000, 40000) > 0.002f);  // it actually sounds
+  }
+}
+
 TEST_CASE("brass is stable under a rapid breath sweep", "[midi][synth][brass]") {
   NativeSynthConfig cfg;
   cfg.patch = brass_base_patch();
@@ -322,4 +353,78 @@ TEST_CASE("brass is stable under a rapid breath sweep", "[midi][synth][brass]") 
   }
   REQUIRE(peak(out) < 4.0f);
   REQUIRE(std::isfinite(out.back()));
+}
+
+TEST_CASE("advanced brass gates are off by default (bit-identical)", "[midi][synth][brass]") {
+  // The Phase-4 gates default to 0, so a default patch renders exactly as it did
+  // before they existed (the off-path is skipped entirely).
+  NativeSynthPatch base = brass_base_patch();
+  NativeSynthPatch same = brass_base_patch();
+  same.brass.brassiness = 0.0f;
+  same.brass.mute = 0.0f;
+  same.brass.half_valve = 0.0f;
+  same.brass.dynamic_lip = 0.0f;
+  REQUIRE(render_patch(base, 53, 100, 24000) == render_patch(same, 53, 100, 24000));
+}
+
+TEST_CASE("cuivre brightens the brass tone", "[midi][synth][brass]") {
+  // Turning up brassiness blooms the upper harmonics (the shock), lifting the
+  // spectral centroid, while staying bounded.
+  NativeSynthPatch dark = brass_base_patch();
+  NativeSynthPatch bright = brass_base_patch();
+  bright.brass.brassiness = 1.0f;
+  const std::vector<float> off = render_patch(dark, 53, 110, 40000);
+  const std::vector<float> on = render_patch(bright, 53, 110, 40000);
+  REQUIRE(peak(on) < 4.0f);
+  REQUIRE(std::isfinite(on.back()));
+  REQUIRE(spectral_centroid(on, 24000) > spectral_centroid(off, 24000));
+}
+
+TEST_CASE("mute makes the brass tone nasal", "[midi][synth][brass]") {
+  // A mute reshapes the bell radiation into a bright, nasal honk (a strong upper
+  // formant), lifting the centroid well above the open tone.
+  NativeSynthPatch open = brass_base_patch();
+  NativeSynthPatch muted = brass_base_patch();
+  muted.brass.mute = 1.0f;
+  const std::vector<float> off = render_patch(open, 65, 110, 40000);
+  const std::vector<float> on = render_patch(muted, 65, 110, 40000);
+  REQUIRE(peak(on) < 4.0f);
+  REQUIRE(std::isfinite(on.back()));
+  REQUIRE(spectral_centroid(on, 24000) > 1.2 * spectral_centroid(off, 24000));
+}
+
+TEST_CASE("half-valve and dynamic lip alter the tone but stay bounded", "[midi][synth][brass]") {
+  const NativeSynthPatch base = brass_base_patch();
+  const std::vector<float> plain = render_patch(base, 53, 100, 24000);
+  for (int which = 0; which < 2; ++which) {
+    NativeSynthPatch patch = brass_base_patch();
+    const char* label = which == 0 ? "half_valve" : "dynamic_lip";
+    if (which == 0)
+      patch.brass.half_valve = 1.0f;
+    else
+      patch.brass.dynamic_lip = 1.0f;
+    const std::vector<float> tone = render_patch(patch, 53, 100, 24000);
+    INFO(label);
+    REQUIRE(peak(tone) < 4.0f);
+    REQUIRE(std::isfinite(tone.back()));
+    REQUIRE(tone != plain);  // the gate changes the sound
+  }
+}
+
+TEST_CASE("all advanced brass gates compose stably", "[midi][synth][brass]") {
+  // Every Phase-4 gate at once, across the keyboard and both topologies, must
+  // stay bounded and finite.
+  for (bool conical : {false, true}) {
+    for (uint8_t note : {29, 41, 53, 65, 77, 89}) {
+      NativeSynthPatch patch = brass_base_patch();
+      patch.brass.conical = conical;
+      patch.brass.brassiness = 0.9f;
+      patch.brass.mute = 0.8f;
+      patch.brass.half_valve = 0.7f;
+      patch.brass.dynamic_lip = 0.8f;
+      const std::vector<float> tone = render_patch(patch, note, 120, 48000);
+      REQUIRE(peak(tone) < 4.0f);
+      REQUIRE(std::isfinite(tone.back()));
+    }
+  }
 }

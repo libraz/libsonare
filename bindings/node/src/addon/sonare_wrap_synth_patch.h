@@ -14,7 +14,7 @@ namespace sonare_node {
 
 inline constexpr const char* kSynthEngineModes[] = {
     "default",    "subtractive", "fm",         "karplus-strong", "modal", "additive",
-    "percussion", "piano",       "pipe-organ", "bowed-string",   "reed"};
+    "percussion", "piano",       "pipe-organ", "bowed-string",   "reed",  "brass"};
 inline constexpr const char* kSynthWaveforms[] = {"default", "sine",     "saw",
                                                   "square",  "triangle", "noise"};
 inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "moog-ladder",

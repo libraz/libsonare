@@ -27,7 +27,9 @@
 #include <vector>
 
 #include "mastering/saturation/tube.h"
+#include "rt/adaa.h"
 #include "rt/biquad_design.h"
+#include "rt/nonlinearities.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -45,6 +47,27 @@ struct AmpSimConfig {
   bool cab = true;
   /// Output trim (dB).
   float level_db = 0.0f;
+  /// Power-amp drive in [0, 1] (off-by-default; 0 = the power stage is bypassed
+  /// and the chain is bit-identical to a preamp-only amp). A push-pull class-AB
+  /// power section after the tone stack: a symmetric, gain-compensated soft
+  /// saturation (odd-harmonic grind — even harmonics cancel in push-pull) that
+  /// compresses hard-driven signals, the "cranked amp" feel a preamp alone
+  /// cannot give. Antialiased with ADAA (Macak & Schimmel 2011).
+  float power = 0.0f;
+  /// Power-supply sag in [0,1] (off-by-default; 0 = a stiff supply, bit-identical
+  /// to no sag). Under heavy current draw the rail voltage (B+) droops and
+  /// recovers with the reservoir-cap time constant — so a transient attack
+  /// punches through before the rail sags, then the sustain compresses (the
+  /// "bloom" and touch-sensitivity of a tube amp with a soft supply). Modelled
+  /// as a lagged signal envelope pulling the rail down after the power stage.
+  float sag = 0.0f;
+  /// Output-transformer core saturation in [0,1] (off-by-default; 0 = a linear
+  /// transformer, bit-identical to no saturation). The core magnetises with the
+  /// flux (the integral of the voltage), so it saturates at LOW frequencies —
+  /// a frequency-dependent nonlinearity that thickens and gently compresses the
+  /// bass (the "thump" of a real output transformer, strongest on bass amps).
+  /// Modelled as a soft saturation of the extracted low band only (Macak 2011).
+  float transformer = 0.0f;
 };
 
 class AmpSim : public rt::ProcessorBase {
@@ -62,9 +85,13 @@ class AmpSim : public rt::ProcessorBase {
   //   3 = treble_db
   //   4 = presence_db
   //   5 = level_db
+  //   6 = power (clamped to [0, 1])
+  //   7 = sag (clamped to [0, 1])
+  //   8 = transformer (clamped to [0, 1])
   // `cab` is a discrete topology switch and is not exposed.
   bool set_parameter(unsigned int param_id, float value) override;
-  // Automatable parameters: 0=drive, 1=bassDb, 2=midDb, 3=trebleDb, 4=presenceDb, 5=levelDb.
+  // Automatable parameters: 0=drive, 1=bassDb, 2=midDb, 3=trebleDb, 4=presenceDb,
+  // 5=levelDb, 6=power, 7=sag, 8=transformer.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
@@ -83,6 +110,8 @@ class AmpSim : public rt::ProcessorBase {
     rt::BiquadState presence;  // cab: presence peak
     rt::BiquadState lp1;       // cab: 4th-order roll-off
     rt::BiquadState lp2;
+    float sag_env = 0.0f;  // lagged rail-droop envelope (power-supply sag)
+    float xf_lp = 0.0f;    // transformer low-band extractor (one-pole lowpass)
   };
 
   AmpSimConfig config_{};
@@ -90,9 +119,18 @@ class AmpSim : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   Tube tube_;
   std::vector<ChannelChain> chains_;
+  /// Per-channel push-pull power-amp saturation state (ADAA tanh). Only stepped
+  /// when config_.power > 0, so the preamp-only path stays bit-identical.
+  std::vector<rt::Adaa1<rt::TanhNonlinearity>> power_adaa_;
   // Shared coefficient designs (refreshed by design_chain()).
   rt::BiquadCoeffs pre_c_, bass_c_, mid_c_, treble_c_, hp_c_, bump_c_, presence_c_, lp1_c_, lp2_c_;
   float level_gain_ = 1.0f;
+  /// Power-supply sag envelope smoothing coefficient (per sample; ~40 ms cap
+  /// recovery). Set from the sample rate in design_chain().
+  float sag_alpha_ = 0.0f;
+  /// Transformer low-band lowpass coefficient (per sample; ~120 Hz corner). Set
+  /// from the sample rate in design_chain().
+  float xf_alpha_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::saturation

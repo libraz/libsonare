@@ -40,12 +40,32 @@ AmpSim::AmpSim(AmpSimConfig config)
                        /*bias_v=*/-1.6f, /*harmonic_drive=*/1.0f}) {
   validate_config(config_);
   config_.drive = std::clamp(config_.drive, 0.0f, 1.0f);
+  config_.power = std::clamp(config_.power, 0.0f, 1.0f);
+  config_.sag = std::clamp(config_.sag, 0.0f, 1.0f);
+  config_.transformer = std::clamp(config_.transformer, 0.0f, 1.0f);
 }
+
+namespace {
+/// Push-pull class-AB power stage: a symmetric, gain-compensated soft
+/// saturation. Slope 1 at the origin (quiet passages pass unchanged), hard
+/// signals compress toward the rails and pick up odd harmonics. @p adaa
+/// antialiases the tanh.
+float power_stage(float x, float power, rt::Adaa1<rt::TanhNonlinearity>& adaa) noexcept {
+  // The power amp has gain: the (quiet) preamp output is driven hard into the
+  // tubes. g is large so the stage saturates at the amp's low internal level;
+  // dividing by g keeps unity slope at the origin (quiet passages pass, loud
+  // ones compress toward the rails).
+  const float g = 1.0f + power * 40.0f;
+  return adaa.process(g * x) / g;
+}
+}  // namespace
 
 void AmpSim::validate_config(const AmpSimConfig& config) {
   if (!std::isfinite(config.drive) || !std::isfinite(config.bass_db) ||
       !std::isfinite(config.mid_db) || !std::isfinite(config.treble_db) ||
-      !std::isfinite(config.presence_db) || !std::isfinite(config.level_db)) {
+      !std::isfinite(config.presence_db) || !std::isfinite(config.level_db) ||
+      !std::isfinite(config.power) || !std::isfinite(config.sag) ||
+      !std::isfinite(config.transformer)) {
     throw SonareException(ErrorCode::InvalidParameter, "amp-sim params must be finite");
   }
 }
@@ -57,6 +77,7 @@ void AmpSim::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   tube_.prepare(sample_rate, max_block_size);
   chains_.assign(dynamics::kRealtimePreparedChannels, ChannelChain{});
+  power_adaa_.assign(dynamics::kRealtimePreparedChannels, rt::Adaa1<rt::TanhNonlinearity>{});
   design_chain();
   prepared_ = true;
   reset();
@@ -81,6 +102,15 @@ void AmpSim::design_chain() {
   lp2_c_ = rt::rbj_lowpass(rt::frequency_to_w0(kCabRolloffHz, sample_rate_),
                            rt::butterworth_stage_q(4, 1));
   level_gain_ = sonare::db_to_linear(config_.level_db);
+  // Sag envelope: ~40 ms reservoir-cap time constant.
+  constexpr float kSagTauS = 0.04f;
+  sag_alpha_ = std::clamp(1.0f - std::exp(-1.0f / (kSagTauS * static_cast<float>(sample_rate_))),
+                          0.0f, 1.0f);
+  // Transformer low-band extractor: a ~120 Hz one-pole corner.
+  constexpr float kXfCornerHz = 120.0f;
+  xf_alpha_ = std::clamp(
+      1.0f - std::exp(-2.0f * 3.14159265358979f * kXfCornerHz / static_cast<float>(sample_rate_)),
+      0.0f, 1.0f);
 }
 
 void AmpSim::process(float* const* channels, int num_channels, int num_samples) {
@@ -96,6 +126,7 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
   if (chains_.size() < static_cast<size_t>(num_channels)) {
     // Control-thread growth only, mirroring Tube::ensure_state.
     chains_.assign(static_cast<size_t>(num_channels), ChannelChain{});
+    power_adaa_.assign(static_cast<size_t>(num_channels), rt::Adaa1<rt::TanhNonlinearity>{});
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
@@ -119,6 +150,34 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
       s = process_chain(s, chain.bass, bass_c_);
       s = process_chain(s, chain.mid, mid_c_);
       s = process_chain(s, chain.treble, treble_c_);
+      // Push-pull power amp (after the tone stack, before the cab). Off when
+      // power == 0 -> the ADAA state is untouched and the path is bit-identical.
+      if (config_.power > 0.0f) {
+        s = power_stage(s, config_.power, power_adaa_[static_cast<size_t>(ch)]);
+      }
+      // Power-supply sag: a lagged envelope of the draw pulls the rail down, so
+      // the attack punches through and the sustain compresses. Off -> the
+      // envelope is untouched and the path is bit-identical.
+      if (config_.sag > 0.0f) {
+        chain.sag_env += sag_alpha_ * (std::fabs(s) - chain.sag_env);
+        // The rail droops with the draw. The envelope tracks the amp's low
+        // internal level, so the sensitivity is scaled up to reach a musical
+        // droop by the sustain.
+        const float droop = std::min(0.6f, config_.sag * 12.0f * chain.sag_env);
+        s *= 1.0f - droop;
+      }
+      // Output transformer: the core saturates with the flux, i.e. at low
+      // frequencies. Saturate the extracted low band only and pass the highs
+      // linearly. Off -> the lowpass state is untouched and the path is
+      // bit-identical.
+      if (config_.transformer > 0.0f) {
+        chain.xf_lp += xf_alpha_ * (s - chain.xf_lp);
+        // Drive the extracted low band hard so the core saturates at the amp's
+        // low internal level; the gain-compensated soft clip keeps unity slope.
+        const float g = 1.0f + config_.transformer * 30.0f;
+        const float sat_low = std::tanh(g * chain.xf_lp) / g;
+        s += sat_low - chain.xf_lp;  // replace the low band with its saturated copy
+      }
       if (config_.cab) {
         s = process_chain(s, chain.hp, hp_c_);
         s = process_chain(s, chain.bump, bump_c_);
@@ -134,6 +193,7 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
 void AmpSim::reset() {
   tube_.reset();
   for (ChannelChain& chain : chains_) chain = ChannelChain{};
+  for (auto& adaa : power_adaa_) adaa.reset();
 }
 
 bool AmpSim::set_parameter(unsigned int param_id, float value) {
@@ -158,6 +218,15 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
     case 5:
       config_.level_db = value;
       break;
+    case 6:
+      config_.power = std::clamp(value, 0.0f, 1.0f);
+      break;
+    case 7:
+      config_.sag = std::clamp(value, 0.0f, 1.0f);
+      break;
+    case 8:
+      config_.transformer = std::clamp(value, 0.0f, 1.0f);
+      break;
     default:
       return false;
   }
@@ -166,8 +235,8 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
 }
 
 std::vector<rt::ParamDescriptor> AmpSim::parameter_descriptors() const {
-  return {{"drive", 0},    {"bassDb", 1},     {"midDb", 2},
-          {"trebleDb", 3}, {"presenceDb", 4}, {"levelDb", 5}};
+  return {{"drive", 0},   {"bassDb", 1}, {"midDb", 2}, {"trebleDb", 3},   {"presenceDb", 4},
+          {"levelDb", 5}, {"power", 6},  {"sag", 7},   {"transformer", 8}};
 }
 
 }  // namespace sonare::mastering::saturation

@@ -772,6 +772,9 @@ inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params) {
   config.presence_db = f(params, "presenceDb", config.presence_db);
   config.cab = b(params, "cab", config.cab);
   config.level_db = f(params, "levelDb", config.level_db);
+  config.power = f(params, "power", config.power);
+  config.sag = f(params, "sag", config.sag);
+  config.transformer = f(params, "transformer", config.transformer);
   return config;
 }
 

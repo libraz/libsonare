@@ -141,6 +141,42 @@ struct BrassPatchParams {
   float chiff = 0.35f;
   /// Chiff decay time constant (ms).
   float chiff_ms = 10.0f;
+
+  // --- off-by-default advanced physics (Phase 4; C-ABI non-exposed, gated) ---
+  /// Cuivré / brassiness in [0,1]: the bright, blaring "brassy" edge of a loud
+  /// brass. Physically it is the cumulative NONLINEAR wave steepening as a
+  /// high-amplitude wave travels the bore — the compression phase outruns the
+  /// rarefaction, the wavefront sharpens toward a shock, and the spectrum blooms
+  /// with upper harmonics (Hirschberg 1996, Menguy-Gilbert 2000). The linear
+  /// Phase-1 waveguide is deliberately dark; this adds the amplitude-DEPENDENT
+  /// harmonic bloom so the tone opens up only as it is played louder (pp stays
+  /// round, ff blares), realised as a bounded radiation-side waveshaper driven by
+  /// the signal's own envelope (the practical bounded form of the shock, the same
+  /// output-side strategy the reed's growth cone uses to stay stable). 0 = off ->
+  /// render is bit-identical (the shaper is skipped).
+  float brassiness = 0.0f;
+
+  /// Mute in [0,1]: a straight / cup / harmon mute over the bell reshapes its
+  /// radiation into a nasal, honky timbre with a strong upper formant and a
+  /// scooped low-mid (the muted-trumpet colour). Modelled as a gated output
+  /// formant/notch shaping of the radiated tone. 0 = off -> render is
+  /// bit-identical (the mute filter is skipped).
+  float mute = 0.0f;
+
+  /// Half-valve in [0,1]: pressing a valve half-way (or a slide between
+  /// positions) leaves the air path partly obstructed, so the bore is lossy and
+  /// stuffy and the pitch is unstable — the "half-valve" effect. Modelled as a
+  /// gated extra in-loop loss plus a small detune. 0 = off -> render is
+  /// bit-identical (the half-valve is skipped).
+  float half_valve = 0.0f;
+
+  /// Dynamic (2-DOF) lip in [0,1]: the single lip resonator is a swinging-door
+  /// (outward) valve only; a real lip also vibrates TRANSVERSELY (a second mode),
+  /// and the two couple (Adachi-Sato 1996). This adds a second, higher lip mode
+  /// whose displacement biases the reflection coefficient, giving a livelier
+  /// attack and a fuller buzz. 0 = off -> render is bit-identical (the second
+  /// mode is skipped).
+  float dynamic_lip = 0.0f;
 };
 
 /// Per-voice brass state, embedded in NativeSynthVoice. The voice's amplitude
@@ -267,9 +303,52 @@ class BrassVoiceCore {
   VoiceRandomSequence noise_;
   uint64_t drive_index_ = 0;
 
+  // --- off-by-default advanced physics (Phase 4; skipped entirely when off, so
+  // the render path is bit-identical to the linear model). ---
+
+  // 4a: cuivré. brassiness_ == 0 -> skipped (bit-identical). A radiation-side
+  // level-preserving waveshaper: the bore output is normalised by the note's raw
+  // peak, pushed through a bounded asymmetric tanh (the shock front), and
+  // rescaled — so the peak is kept while the upper harmonics bloom. cuivre_scale_
+  // is the per-note raw peak used to normalise.
+  float brassiness_ = 0.0f;
+  float cuivre_scale_ = 1.0f;
+  float cuivre_inv_scale_ = 1.0f;
+
+  // 4b: mute. mute_ == 0 -> skipped (bit-identical). A radiation-side formant
+  // (peak) + notch pair that reshapes the bell output into the nasal muted colour.
+  float mute_ = 0.0f;
+  float mute_peak_b0_ = 0.0f;
+  float mute_peak_a1_ = 0.0f;
+  float mute_peak_a2_ = 0.0f;
+  float mute_x1_ = 0.0f;
+  float mute_x2_ = 0.0f;
+  float mute_y1_ = 0.0f;
+  float mute_y2_ = 0.0f;
+
+  // 4c: half-valve. half_valve_ == 0 -> skipped (bit-identical). Extra in-loop
+  // loss (a stuffier, more damped bore) plus a small detune of the loop delay.
+  float half_valve_ = 0.0f;
+  float half_valve_loss_ = 1.0f;
+
+  // 4d: dynamic (2-DOF) lip. dyn_lip_ == 0 -> skipped (bit-identical). A second,
+  // higher lip resonance (a bandpass) whose displacement adds to the reflection
+  // coefficient, coupling a transverse mode into the swinging-door valve.
+  float dyn_lip_ = 0.0f;
+  float lip2_b0_ = 0.0f;
+  float lip2_a1_ = 0.0f;
+  float lip2_a2_ = 0.0f;
+  float lip2_x1_ = 0.0f;
+  float lip2_x2_ = 0.0f;
+  float lip2_z1_ = 0.0f;
+  float lip2_z2_ = 0.0f;
+  float lip2_couple_ = 0.0f;
+
   // Lip resonator step: a two-pole (mass-spring) resonator driven by the pressure
   // difference; returns the lip displacement.
   float lip_resonator(float dp) noexcept;
+  // Second lip mode (4d): the transverse resonance, same bandpass form.
+  float lip_resonator2(float dp) noexcept;
 };
 
 }  // namespace sonare::midi::synth

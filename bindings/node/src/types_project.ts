@@ -278,6 +278,7 @@ export const SYNTH_ENGINE_MODES = [
   'pipe-organ',
   'bowed-string',
   'reed',
+  'brass',
 ] as const;
 
 export const SYNTH_OSC_WAVEFORMS = [

@@ -195,3 +195,128 @@ TEST_CASE("saturation.ampSim is reachable through offline named processing",
     REQUIRE(std::isfinite(sample));
   }
 }
+
+TEST_CASE("amp-sim power stage compresses and is off by default", "[mastering][saturation][amp]") {
+  // Cab off, a hot preamp so the power section is driven into saturation.
+  // power == 0 is bit-identical to a preamp-only amp (every other test in this
+  // file runs at the default power of 0).
+  AmpSimConfig base;
+  base.cab = false;
+  base.drive = 0.5f;
+  base.power = 0.0f;
+  AmpSimConfig powered = base;
+  powered.power = 0.8f;
+
+  AmpSim off_amp(base);
+  AmpSim on_amp(powered);
+  const std::vector<float> off_out = process_mono(off_amp, sine(220.0, 0.6f, kNumSamples));
+  const std::vector<float> on_out = process_mono(on_amp, sine(220.0, 0.6f, kNumSamples));
+
+  auto rms_window = [](const std::vector<float>& b, size_t from, size_t to) {
+    double acc = 0.0;
+    size_t n = 0;
+    for (size_t i = from; i < to && i < b.size(); ++i) {
+      acc += static_cast<double>(b[i]) * b[i];
+      ++n;
+    }
+    return n > 0 ? std::sqrt(acc / static_cast<double>(n)) : 0.0;
+  };
+  auto peak = [](const std::vector<float>& buf) {
+    float p = 0.0f;
+    for (float s : buf) {
+      if (std::fabs(s) > p) p = std::fabs(s);
+    }
+    return p;
+  };
+  const size_t n = on_out.size();
+  // The gain-compensated push-pull saturation reshapes the tone and compresses
+  // a hot signal (the RMS drops); it stays finite and non-silent. (RMS is
+  // group-delay invariant, unlike an absolute-peak comparison across the
+  // 0.5-sample ADAA delay.)
+  REQUIRE(on_out != off_out);
+  REQUIRE(rms_window(on_out, n - 8192, n) < rms_window(off_out, n - 8192, n));
+  REQUIRE(std::isfinite(peak(on_out)));
+  REQUIRE(peak(on_out) > 0.0f);
+  REQUIRE(peak(on_out) < 4.0f);
+}
+
+TEST_CASE("amp-sim power-supply sag compresses the sustain and is off by default",
+          "[mastering][saturation][amp]") {
+  // Cab off, moderate drive. A sustained tone lets the rail droop. sag == 0 is
+  // bit-identical to a stiff supply (every other test runs at the default sag).
+  AmpSimConfig base;
+  base.cab = false;
+  base.drive = 0.3f;
+  base.sag = 0.0f;
+  AmpSimConfig sagging = base;
+  sagging.sag = 0.9f;
+
+  AmpSim off_amp(base);
+  AmpSim on_amp(sagging);
+  const std::vector<float> off_out = process_mono(off_amp, sine(220.0, 0.6f, kNumSamples));
+  const std::vector<float> on_out = process_mono(on_amp, sine(220.0, 0.6f, kNumSamples));
+
+  auto rms_window = [](const std::vector<float>& b, size_t from, size_t to) {
+    double acc = 0.0;
+    size_t n = 0;
+    for (size_t i = from; i < to && i < b.size(); ++i) {
+      acc += static_cast<double>(b[i]) * b[i];
+      ++n;
+    }
+    return n > 0 ? std::sqrt(acc / static_cast<double>(n)) : 0.0;
+  };
+  const size_t n = on_out.size();
+  // The rail droops under sustained draw: the settled tail compresses.
+  REQUIRE(on_out != off_out);
+  REQUIRE(rms_window(on_out, n - 4096, n) < rms_window(off_out, n - 4096, n));
+  // Bloom: the tail sags relative to the initial attack more with sag than
+  // without (a stiff supply holds a steady level).
+  const double on_ratio = rms_window(on_out, n - 4096, n) / rms_window(on_out, 0, 2048);
+  const double off_ratio = rms_window(off_out, n - 4096, n) / rms_window(off_out, 0, 2048);
+  REQUIRE(on_ratio < off_ratio);
+  bool all_finite = true;
+  for (float s : on_out) all_finite = all_finite && std::isfinite(s);
+  REQUIRE(all_finite);
+}
+
+TEST_CASE("amp-sim output transformer saturates the low band only and is off by default",
+          "[mastering][saturation][amp]") {
+  // Cab off, clean preamp. transformer == 0 is bit-identical to a linear
+  // transformer (every other test runs at the default of 0).
+  AmpSimConfig base;
+  base.cab = false;
+  base.drive = 0.2f;
+  base.transformer = 0.0f;
+  AmpSimConfig xf = base;
+  xf.transformer = 0.9f;
+
+  auto rel_change = [](const std::vector<float>& a, const std::vector<float>& b) {
+    double num = 0.0;
+    double den = 0.0;
+    for (size_t i = 0; i < a.size() && i < b.size(); ++i) {
+      const double d = static_cast<double>(a[i]) - b[i];
+      num += d * d;
+      den += static_cast<double>(b[i]) * b[i];
+    }
+    return den > 0.0 ? std::sqrt(num / den) : 0.0;
+  };
+
+  // Low tone: the core magnetises with the flux, so the low band is reshaped.
+  AmpSim off_lo(base);
+  AmpSim on_lo(xf);
+  const std::vector<float> lo_off = process_mono(off_lo, sine(60.0, 0.7f, kNumSamples));
+  const std::vector<float> lo_on = process_mono(on_lo, sine(60.0, 0.7f, kNumSamples));
+  REQUIRE(lo_on != lo_off);
+
+  // High tone: above the transformer corner, so it passes almost unchanged —
+  // the defining property is a frequency-dependent nonlinearity (low band only).
+  // The low tone must be reshaped far more than the high tone.
+  AmpSim off_hi(base);
+  AmpSim on_hi(xf);
+  const std::vector<float> hi_off = process_mono(off_hi, sine(3000.0, 0.7f, kNumSamples));
+  const std::vector<float> hi_on = process_mono(on_hi, sine(3000.0, 0.7f, kNumSamples));
+  REQUIRE(rel_change(lo_on, lo_off) > 5.0 * rel_change(hi_on, hi_off));
+  bool all_finite = true;
+  for (float s : lo_on) all_finite = all_finite && std::isfinite(s);
+  REQUIRE(all_finite);
+}

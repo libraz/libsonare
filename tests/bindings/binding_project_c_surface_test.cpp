@@ -130,7 +130,7 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)) ==
         std::vector<std::string>{"default", "subtractive", "fm", "karplus-strong", "modal",
                                  "additive", "percussion", "piano", "pipe-organ", "bowed-string",
-                                 "reed"});
+                                 "reed", "brass"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)) ==
         std::vector<std::string>{"default", "sine", "saw", "square", "triangle", "noise"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)) ==

@@ -21,7 +21,7 @@ namespace sonare_wasm_synth {
 
 inline constexpr const char* kEngineModes[] = {
     "default",    "subtractive", "fm",         "karplus-strong", "modal", "additive",
-    "percussion", "piano",       "pipe-organ", "bowed-string",   "reed"};
+    "percussion", "piano",       "pipe-organ", "bowed-string",   "reed",  "brass"};
 inline constexpr const char* kWaveforms[] = {"default", "sine",     "saw",
                                              "square",  "triangle", "noise"};
 inline constexpr const char* kFilterModels[] = {"default", "svf", "moog-ladder", "diode-ladder",

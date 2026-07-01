@@ -27,6 +27,7 @@ _SYNTH_ENGINE_MODES = {
     "pipe-organ": 8,
     "bowed-string": 9,
     "reed": 10,
+    "brass": 11,
 }
 _SYNTH_OSC_WAVEFORMS = {
     "default": 0,

@@ -90,6 +90,38 @@ constexpr float kPeakBase = 2.33f;
 constexpr float kPeakTilt = 0.93f;
 constexpr float kPeakRefHz = 44.0f;
 
+// --- 4a cuivré (only when params.brassiness > 0) ---
+// Steepening drive and asymmetry: how hard the normalised bore output is pushed
+// through the shock shaper, and how asymmetric the shock front is (the |x| term
+// adds even harmonics so the spectrum is a full shock, not an odd-only clip).
+// tanh normalisation keeps the peak while the curvature blooms the harmonics.
+constexpr float kCuivreDrive = 9.0f;
+constexpr float kCuivreAsym = 0.5f;
+// Max wet mix of the shaped (brassy) signal at full brassiness.
+constexpr float kCuivreMixMax = 0.85f;
+
+// --- 4b mute (only when params.mute > 0) ---
+// Muted upper formant (Hz) and its resonance: the nasal honk of a straight/cup
+// mute. The formant peak is boosted and the direct low-mid scooped.
+constexpr float kMuteFormantHz = 1800.0f;
+constexpr float kMuteFormantR = 0.90f;
+constexpr float kMuteFormantGain = 3.5f;
+constexpr float kMuteScoop = 0.45f;  // how much direct signal the mute removes
+constexpr float kMuteMixMax = 0.9f;
+
+// --- 4c half-valve (only when params.half_valve > 0) ---
+// Extra in-loop loss (a stuffier, more damped bore) and a small loop detune (the
+// unstable, pitch-ambiguous half-valve wobble).
+constexpr float kHalfValveLossMax = 0.05f;
+constexpr float kHalfValveDetune = 0.006f;
+
+// --- 4d dynamic (2-DOF) lip (only when params.dynamic_lip > 0) ---
+// The transverse second lip mode sits above the note; its coupling adds a
+// livelier buzz. Constant-Q like the primary lip.
+constexpr float kLip2Mult = 2.0f;
+constexpr float kLip2Q = 7.0f;
+constexpr float kLip2Couple = 1.5f;
+
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
 }
@@ -201,6 +233,49 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
     }
   }
   drive_index_ = static_cast<uint64_t>(bore_size_);
+
+  // --- off-by-default advanced physics (Phase 4). When off, render() takes the
+  // linear branch untouched (bit-identical). ---
+
+  // 4a: cuivré — a radiation-side level-preserving shock shaper. Off (0) ->
+  // skipped. cuivre_scale_ normalises by the note's raw peak (~peak_est) so the
+  // shaper sees a ~unit signal and the peak survives the reshaping.
+  brassiness_ = std::clamp(params.brassiness, 0.0f, 1.0f);
+  cuivre_scale_ = peak_est;
+  cuivre_inv_scale_ = 1.0f / std::max(0.5f, peak_est);
+
+  // 4b: mute — a radiation-side resonant formant + scoop. Off (0) -> skipped.
+  mute_ = std::clamp(params.mute, 0.0f, 1.0f);
+  mute_x1_ = mute_x2_ = mute_y1_ = mute_y2_ = 0.0f;
+  if (mute_ > 0.0f) {
+    const float fm = std::min(kMuteFormantHz, 0.45f * srf);
+    const float wm = kTwoPi * fm / srf;
+    mute_peak_a1_ = 2.0f * kMuteFormantR * std::cos(wm);
+    mute_peak_a2_ = -kMuteFormantR * kMuteFormantR;
+    mute_peak_b0_ = 1.0f - kMuteFormantR;
+  }
+
+  // 4c: half-valve — extra in-loop loss and a small loop detune. Off (0) ->
+  // skipped (the loss factor stays 1 and the bore period is untouched).
+  half_valve_ = std::clamp(params.half_valve, 0.0f, 1.0f);
+  half_valve_loss_ = 1.0f - kHalfValveLossMax * half_valve_;
+  if (half_valve_ > 0.0f) {
+    bore_period_ *= (1.0f + kHalfValveDetune * half_valve_);
+  }
+
+  // 4d: dynamic (2-DOF) lip — a second, higher lip resonance. Off (0) -> skipped.
+  dyn_lip_ = std::clamp(params.dynamic_lip, 0.0f, 1.0f);
+  lip2_x1_ = lip2_x2_ = lip2_z1_ = lip2_z2_ = 0.0f;
+  if (dyn_lip_ > 0.0f) {
+    const float f2 = std::min(f_lip * kLip2Mult, 0.45f * srf);
+    float r2 = std::exp(-static_cast<float>(M_PI) * (f2 / kLip2Q) / srf);
+    r2 = std::min(r2, 0.99995f);
+    const float w2 = kTwoPi * f2 / srf;
+    lip2_a1_ = 2.0f * r2 * std::cos(w2);
+    lip2_a2_ = -r2 * r2;
+    lip2_b0_ = 1.0f - r2;
+    lip2_couple_ = kLip2Couple * dyn_lip_;
+  }
 }
 
 float BrassVoiceCore::render(float pitch_ratio) noexcept {
@@ -231,7 +306,9 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
   // Bell reflection from the previous bore output: one-pole loss lowpass, the
   // loss gain and the topology sign.
   lp_state_ += lp_alpha_ * (bore_out_ - lp_state_);
-  const float refl = sign_ * loss_gain_ * lp_state_;
+  float refl = sign_ * loss_gain_ * lp_state_;
+  // Half-valve (gated): a stuffier, lossier bore.
+  if (half_valve_ > 0.0f) refl *= half_valve_loss_;
 
   // Lip valve (resonant, outward-striking): the pressure difference across the
   // lips drives the resonant lip, and its displacement modulates a reflection
@@ -244,6 +321,8 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
   const float dp = refl - mouth;
   const float x = lip_resonator(dp);
   float lip_coeff = lip_offset_ - lip_couple_ * x;
+  // Dynamic (2-DOF) lip (gated): the transverse second mode couples in.
+  if (dyn_lip_ > 0.0f) lip_coeff -= lip2_couple_ * lip_resonator2(dp);
   if (lip_coeff < -1.0f) lip_coeff = -1.0f;
   if (lip_coeff > 1.0f) lip_coeff = 1.0f;
   const float inj = mouth + dp * lip_coeff;
@@ -262,7 +341,39 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
                                              static_cast<int>(delay * 256.0f), dc);
   ++drive_index_;
 
-  return output_scale_ * bore_out_;
+  float outp = bore_out_;
+
+  // Cuivré (gated): the amplitude-dependent nonlinear wave steepening. An
+  // envelope follower tracks the local level; the shaper is driven harder as the
+  // note gets louder, blooming the shock's upper harmonics at ff while leaving a
+  // soft note round. Output-side (radiation) so it cannot destabilise the loop —
+  // the practical bounded form of the shock (cf. the reed's growth cone).
+  if (brassiness_ > 0.0f) {
+    const float drive = 1.0f + kCuivreDrive * brassiness_;
+    const float xn = outp * cuivre_inv_scale_;  // normalise to ~[-1,1]
+    // Asymmetric shock: the |x| term steepens the front (even harmonics), tanh
+    // bounds it; dividing by tanh(drive) keeps the full-scale peak so the shaper
+    // brightens without crushing the level.
+    const float xa = xn + kCuivreAsym * xn * std::fabs(xn);
+    const float shaped = std::tanh(drive * xa) / std::tanh(drive) * cuivre_scale_;
+    outp += brassiness_ * kCuivreMixMax * (shaped - outp);
+  }
+
+  // Mute (gated): a resonant upper formant plus a scoop of the direct low-mid,
+  // the nasal honk of a straight/cup mute on the bell.
+  if (mute_ > 0.0f) {
+    const float peak =
+        mute_peak_b0_ * (outp - mute_x2_) + mute_peak_a1_ * mute_y1_ + mute_peak_a2_ * mute_y2_;
+    mute_x2_ = mute_x1_;
+    mute_x1_ = outp;
+    mute_y2_ = mute_y1_;
+    mute_y1_ = peak;
+    const float muted = outp * (1.0f - kMuteScoop) + peak * kMuteFormantGain;
+    const float wet = mute_ * kMuteMixMax;
+    outp += wet * (muted - outp);
+  }
+
+  return output_scale_ * outp;
 }
 
 float BrassVoiceCore::lip_resonator(float dp) noexcept {
@@ -274,6 +385,17 @@ float BrassVoiceCore::lip_resonator(float dp) noexcept {
   lip_x1_ = dp;
   lip_z2_ = lip_z1_;
   lip_z1_ = y;
+  return y;
+}
+
+float BrassVoiceCore::lip_resonator2(float dp) noexcept {
+  // Second (transverse) lip mode, same DC-zeroed bandpass form, tuned above the
+  // note (the 2-DOF lip's higher resonance).
+  const float y = lip2_b0_ * (dp - lip2_x2_) + lip2_a1_ * lip2_z1_ + lip2_a2_ * lip2_z2_;
+  lip2_x2_ = lip2_x1_;
+  lip2_x1_ = dp;
+  lip2_z2_ = lip2_z1_;
+  lip2_z1_ = y;
   return y;
 }
 
@@ -305,6 +427,14 @@ void BrassVoiceCore::kill() noexcept {
   lip_x2_ = 0.0f;
   lip_z1_ = 0.0f;
   lip_z2_ = 0.0f;
+  mute_x1_ = 0.0f;
+  mute_x2_ = 0.0f;
+  mute_y1_ = 0.0f;
+  mute_y2_ = 0.0f;
+  lip2_x1_ = 0.0f;
+  lip2_x2_ = 0.0f;
+  lip2_z1_ = 0.0f;
+  lip2_z2_ = 0.0f;
   releasing_ = true;
 }
 

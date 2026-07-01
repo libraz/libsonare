@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 37;
+constexpr size_t kPresetCount = 45;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -244,6 +244,51 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     reed("oboe", true, 0.80f, 0.35f, 0.70f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.68f);
     reed("english-horn", true, 0.70f, 0.40f, 0.60f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.68f);
     reed("bassoon", true, 0.65f, 0.45f, 0.42f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.72f);
+  }
+
+  // --- brass / lip reed (breath-excited waveguide) ---
+  // The brass family (GM 57-64): one lip-reed core voiced across the trumpets,
+  // horns and low brass. The lip resonance locks to the played note, so the
+  // members differ by timbre: CYLINDRICAL bodies (trumpet / trombone /
+  // muted-trumpet) are brighter and more brilliant; CONICAL bodies (horn / tuba /
+  // cornet / flugelhorn / euphonium) are darker and rounder. lip_damping is the
+  // buzz character (a tight, high-Q lip is bright and brassy; a loose lip is
+  // mellow), brightness is the bell openness, and the breath contour handles the
+  // speech so the amp envelope just holds. (The bright, blaring "cuivré" edge is
+  // a later off-by-default enhancement; these presets are the round linear tone.)
+  {
+    auto brass = [&](const char* name, bool conical, float lip_tension, float lip_damping,
+                     float brightness, float damping, float attack_ms, float release_ms,
+                     float breath, float gain) {
+      SynthPreset& v = t[i++];
+      v.name = name;
+      NativeSynthPatch patch{};
+      patch.mode = SynthEngineMode::kBrass;
+      patch.amp_env.attack_ms = 12.0f;
+      patch.amp_env.sustain = 1.0f;
+      patch.amp_env.release_ms = release_ms;
+      patch.cutoff_hz = 20000.0f;
+      patch.brass.conical = conical;
+      patch.brass.lip_tension = lip_tension;
+      patch.brass.lip_damping = lip_damping;
+      patch.brass.brightness = brightness;
+      patch.brass.damping = damping;
+      patch.brass.attack_ms = attack_ms;
+      patch.brass.release_ms = release_ms;
+      patch.brass.breath_pressure = breath;
+      patch.brass.vel_to_breath = 0.5f;
+      patch.gain = gain;
+      v.config = from_patch(clamp_synth_patch(patch));
+    };
+    //     name             cone  tens   damp   bright damp   atk    rel     breath gain
+    brass("trumpet", false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.70f);
+    brass("trombone", false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.72f);
+    brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.74f);
+    brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.70f);
+    brass("muted-trumpet", false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.66f);
+    brass("cornet", true, 0.52f, 0.45f, 0.55f, 0.30f, 20.0f, 85.0f, 0.84f, 0.70f);
+    brass("flugelhorn", true, 0.48f, 0.62f, 0.40f, 0.34f, 24.0f, 95.0f, 0.84f, 0.70f);
+    brass("euphonium", true, 0.45f, 0.60f, 0.40f, 0.36f, 30.0f, 110.0f, 0.86f, 0.72f);
   }
 
   return t;
