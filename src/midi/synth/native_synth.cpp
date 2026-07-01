@@ -225,7 +225,7 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.brass.mute = std::clamp(sanitize(p.brass.mute, 0.0f), 0.0f, 1.0f);
   p.brass.half_valve = std::clamp(sanitize(p.brass.half_valve, 0.0f), 0.0f, 1.0f);
   p.brass.dynamic_lip = std::clamp(sanitize(p.brass.dynamic_lip, 0.0f), 0.0f, 1.0f);
-  if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 3) p.body = BodyType::kNone;
+  if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 4) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
   return p;

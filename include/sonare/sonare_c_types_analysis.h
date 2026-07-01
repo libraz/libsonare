@@ -322,9 +322,10 @@ typedef enum {
   SONARE_SYNTH_BODY_NONE = 1,
   SONARE_SYNTH_BODY_GUITAR = 2,
   SONARE_SYNTH_BODY_VIOLIN = 3,
-  SONARE_SYNTH_BODY_WOOD_TUBE = 4
+  SONARE_SYNTH_BODY_WOOD_TUBE = 4,
+  SONARE_SYNTH_BODY_BRASS_BELL = 5
 } SonareSynthBodyType;
-#define SONARE_SYNTH_BODY_TYPE_COUNT 5
+#define SONARE_SYNTH_BODY_TYPE_COUNT 6
 
 #define SONARE_SYNTH_MOD_SOURCE_COUNT 9
 #define SONARE_SYNTH_MOD_DESTINATION_COUNT 5
@@ -439,7 +440,7 @@ static_assert(SONARE_SYNTH_FILTER_SALLEN_KEY + 1 == SONARE_SYNTH_FILTER_MODEL_CO
               "SonareSynthFilterModel count changed");
 static_assert(SONARE_SYNTH_FILTER_OUT_HIGHPASS + 1 == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
               "SonareSynthFilterOutput count changed");
-static_assert(SONARE_SYNTH_BODY_WOOD_TUBE + 1 == SONARE_SYNTH_BODY_TYPE_COUNT,
+static_assert(SONARE_SYNTH_BODY_BRASS_BELL + 1 == SONARE_SYNTH_BODY_TYPE_COUNT,
               "SonareSynthBodyType count changed");
 
 static_assert(sizeof(SonareSynthModRouting) == 2u * sizeof(int) + sizeof(float),

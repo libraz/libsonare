@@ -259,7 +259,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   {
     auto brass = [&](const char* name, bool conical, float lip_tension, float lip_damping,
                      float brightness, float damping, float attack_ms, float release_ms,
-                     float breath, float gain) {
+                     float breath, float bell_mix, float gain) {
       SynthPreset& v = t[i++];
       v.name = name;
       NativeSynthPatch patch{};
@@ -277,18 +277,24 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.brass.release_ms = release_ms;
       patch.brass.breath_pressure = breath;
       patch.brass.vel_to_breath = 0.5f;
+      // The bright small-bore bells (trumpet family) get the radiation formant;
+      // large-bore / mellow brass stays on the round linear tone.
+      if (bell_mix > 0.0f) {
+        patch.body = BodyType::kBrassBell;
+        patch.body_mix = bell_mix;
+      }
       patch.gain = gain;
       v.config = from_patch(clamp_synth_patch(patch));
     };
-    //     name             cone  tens   damp   bright damp   atk    rel     breath gain
-    brass("trumpet", false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.70f);
-    brass("trombone", false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.72f);
-    brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.74f);
-    brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.70f);
-    brass("muted-trumpet", false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.66f);
-    brass("cornet", true, 0.52f, 0.45f, 0.55f, 0.30f, 20.0f, 85.0f, 0.84f, 0.70f);
-    brass("flugelhorn", true, 0.48f, 0.62f, 0.40f, 0.34f, 24.0f, 95.0f, 0.84f, 0.70f);
-    brass("euphonium", true, 0.45f, 0.60f, 0.40f, 0.36f, 30.0f, 110.0f, 0.86f, 0.72f);
+    //     name             cone  tens   damp   bright damp   atk    rel     breath bell  gain
+    brass("trumpet", false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.50f, 0.70f);
+    brass("trombone", false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.72f);
+    brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.74f);
+    brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.70f);
+    brass("muted-trumpet", false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.66f);
+    brass("cornet", true, 0.52f, 0.45f, 0.55f, 0.30f, 20.0f, 85.0f, 0.84f, 0.40f, 0.70f);
+    brass("flugelhorn", true, 0.48f, 0.62f, 0.40f, 0.34f, 24.0f, 95.0f, 0.84f, 0.0f, 0.70f);
+    brass("euphonium", true, 0.45f, 0.60f, 0.40f, 0.36f, 30.0f, 110.0f, 0.86f, 0.0f, 0.72f);
   }
 
   return t;

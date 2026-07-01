@@ -393,6 +393,20 @@ TEST_CASE("mute makes the brass tone nasal", "[midi][synth][brass]") {
   REQUIRE(spectral_centroid(on, 24000) > 1.2 * spectral_centroid(off, 24000));
 }
 
+TEST_CASE("brass bell body brightens the tone", "[midi][synth][brass]") {
+  // The kBrassBell radiation formant lifts the ~1.2 kHz region over the round
+  // linear bore, raising the spectral centroid while staying bounded.
+  NativeSynthPatch plain = brass_base_patch();
+  NativeSynthPatch belled = brass_base_patch();
+  belled.body = sonare::midi::synth::BodyType::kBrassBell;
+  belled.body_mix = 0.5f;
+  const std::vector<float> off = render_patch(plain, 65, 110, 40000);
+  const std::vector<float> on = render_patch(belled, 65, 110, 40000);
+  REQUIRE(peak(on) < 4.0f);
+  REQUIRE(std::isfinite(on.back()));
+  REQUIRE(spectral_centroid(on, 24000) > spectral_centroid(off, 24000));
+}
+
 TEST_CASE("half-valve and dynamic lip alter the tone but stay bounded", "[midi][synth][brass]") {
   const NativeSynthPatch base = brass_base_patch();
   const std::vector<float> plain = render_patch(base, 53, 100, 24000);

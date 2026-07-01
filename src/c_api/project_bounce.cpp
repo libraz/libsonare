@@ -716,7 +716,7 @@ const char* sonare_synth_enum_names(int kind) {
   static const std::string kWaveforms = "default\nsine\nsaw\nsquare\ntriangle\nnoise";
   static const std::string kFilterModels = "default\nsvf\nmoog-ladder\ndiode-ladder\nsallen-key";
   static const std::string kFilterOutputs = "default\nlowpass\nbandpass\nhighpass";
-  static const std::string kBodyTypes = "default\nnone\nguitar\nviolin\nwood-tube";
+  static const std::string kBodyTypes = "default\nnone\nguitar\nviolin\nwood-tube\nbrass-bell";
   static const std::string kModSources =
       "none\namp-env\nfilter-env\nlfo1\nlfo2\nvelocity\nkey-track\nmod-wheel\nrandom";
   static const std::string kModDestinations =

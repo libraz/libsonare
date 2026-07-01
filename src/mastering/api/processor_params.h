@@ -763,6 +763,10 @@ inline saturation::MultibandExciterConfig multiband_exciter_config(const ParamMa
   return config;
 }
 
+inline saturation::CabModel cab_model(int value) {
+  return value == 1 ? saturation::CabModel::kBass8x10 : saturation::CabModel::kGuitar4x12;
+}
+
 inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params) {
   saturation::AmpSimConfig config;
   config.drive = f(params, "drive", config.drive);
@@ -771,10 +775,12 @@ inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params) {
   config.treble_db = f(params, "trebleDb", config.treble_db);
   config.presence_db = f(params, "presenceDb", config.presence_db);
   config.cab = b(params, "cab", config.cab);
+  config.cab_model = cab_model(i(params, "cabModel", 0));
   config.level_db = f(params, "levelDb", config.level_db);
   config.power = f(params, "power", config.power);
   config.sag = f(params, "sag", config.sag);
   config.transformer = f(params, "transformer", config.transformer);
+  config.nfb = f(params, "nfb", config.nfb);
   return config;
 }
 

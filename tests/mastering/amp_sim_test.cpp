@@ -320,3 +320,51 @@ TEST_CASE("amp-sim output transformer saturates the low band only and is off by 
   for (float s : lo_on) all_finite = all_finite && std::isfinite(s);
   REQUIRE(all_finite);
 }
+
+TEST_CASE("the bass cab voicing extends lower and darkens the top",
+          "[mastering][saturation][amp]") {
+  using sonare::mastering::saturation::CabModel;
+  auto rms = [](const std::vector<float>& b) {
+    double acc = 0.0;
+    for (float s : b) acc += static_cast<double>(s) * s;
+    return b.empty() ? 0.0 : std::sqrt(acc / static_cast<double>(b.size()));
+  };
+
+  // Low-end extension: a 55 Hz tone sits below the guitar cab's 75 Hz cut but
+  // above the bass cab's 40 Hz cut, so the bass voicing passes far more of it.
+  AmpSimConfig guitar;
+  guitar.drive = 0.2f;
+  guitar.cab_model = CabModel::kGuitar4x12;
+  AmpSimConfig bass = guitar;
+  bass.cab_model = CabModel::kBass8x10;
+  AmpSim guitar_lo(guitar);
+  AmpSim bass_lo(bass);
+  const std::vector<float> g_lo = process_mono(guitar_lo, sine(55.0, 0.5f, kNumSamples));
+  const std::vector<float> b_lo = process_mono(bass_lo, sine(55.0, 0.5f, kNumSamples));
+  REQUIRE(rms(b_lo) > 1.5 * rms(g_lo));
+
+  // Darker top: the bass cab rolls off at 3.5 kHz vs the guitar's 4.8 kHz, so
+  // its share of >5 kHz harmonics is smaller.
+  AmpSimConfig guitar_hd = guitar;
+  guitar_hd.drive = 0.7f;
+  AmpSimConfig bass_hd = bass;
+  bass_hd.drive = 0.7f;
+  AmpSim guitar_hi(guitar_hd);
+  AmpSim bass_hi(bass_hd);
+  const std::vector<float> g_hi = process_mono(guitar_hi, sine(220.0, 0.3f, kNumSamples));
+  const std::vector<float> b_hi = process_mono(bass_hi, sine(220.0, 0.3f, kNumSamples));
+  REQUIRE(high_band_fraction(b_hi, 5000.0) < high_band_fraction(g_hi, 5000.0));
+}
+
+TEST_CASE("saturation.ampSim selects the bass cab through the param bag",
+          "[mastering][saturation][amp][insert_factory]") {
+  using sonare::mastering::saturation::CabModel;
+  auto guitar = make_insert("saturation.ampSim", R"({"cab":true,"cabModel":0})");
+  auto bass = make_insert("saturation.ampSim", R"({"cab":true,"cabModel":1})");
+  auto* guitar_amp = dynamic_cast<AmpSim*>(guitar.get());
+  auto* bass_amp = dynamic_cast<AmpSim*>(bass.get());
+  REQUIRE(guitar_amp != nullptr);
+  REQUIRE(bass_amp != nullptr);
+  REQUIRE(guitar_amp->amp_config().cab_model == CabModel::kGuitar4x12);
+  REQUIRE(bass_amp->amp_config().cab_model == CabModel::kBass8x10);
+}

@@ -12,6 +12,10 @@
 ///   - kWoodTube: the tuned pipe under a marimba/xylophone bar — note-tracked
 ///     (the tube is cut for its bar), one strong fundamental resonance plus a
 ///     faint upper mode.
+///   - kBrassBell: the flaring bell's radiation resonance — a broad "brass
+///     formant" near 1.2 kHz with brilliance modes above it. Fixed by bell
+///     geometry (note-independent), tuned for the trumpet family; larger-bore
+///     brass keeps kNone.
 ///
 /// RT contract: start()/process() are allocation-free; determinism: fixed
 /// tables, no RNG.
@@ -28,6 +32,7 @@ enum class BodyType : int {
   kGuitar = 1,
   kViolin = 2,
   kWoodTube = 3,
+  kBrassBell = 4,
 };
 
 class BodyResonator {
@@ -104,6 +109,15 @@ class BodyResonator {
                   {0.0f, 0.0f, 0.0f},
                   {0.0f, 0.0f, 0.0f}}};
         count = 2;
+        break;
+      case BodyType::kBrassBell:
+        // Broad radiation formants of the bell; short t60 = wide bandwidth so
+        // the mix lifts a region, not a pitch. Note-independent (bell geometry).
+        specs = {{{1200.0f, 0.014f, 1.0f},
+                  {2400.0f, 0.010f, 0.6f},
+                  {3400.0f, 0.008f, 0.4f},
+                  {0.0f, 0.0f, 0.0f}}};
+        count = 3;
         break;
       case BodyType::kNone:
         break;

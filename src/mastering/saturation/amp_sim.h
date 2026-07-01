@@ -34,6 +34,18 @@
 
 namespace sonare::mastering::saturation {
 
+/// Cabinet voicing model. Selects the fixed EQ centres of the cab-EQ stage
+/// (`cab == true`); has no effect when the cab EQ is bypassed.
+enum class CabModel {
+  /// Guitar 4x12, close-mic: 75 Hz cut, 110 Hz body bump, 3.8 kHz presence,
+  /// 4.8 kHz roll-off (the original AmpSim voicing).
+  kGuitar4x12 = 0,
+  /// Bass 8x10 (SVT-style): extends lower (40 Hz cut, 80 Hz body bump), a
+  /// darker, presence-restrained top (2.2 kHz presence, 3.5 kHz roll-off) so a
+  /// bass NativeSynth voice sits in a big-cab response rather than a guitar's.
+  kBass8x10 = 1,
+};
+
 struct AmpSimConfig {
   /// Drive amount in [0, 1] (0 = clean preamp, 1 = saturated lead).
   float drive = 0.5f;
@@ -43,8 +55,12 @@ struct AmpSimConfig {
   float treble_db = 0.0f;
   /// Presence peak gain (dB) on the cab voicing (3.8 kHz).
   float presence_db = 0.0f;
-  /// Cab-EQ enabled (false = direct/DI tone after the tone stack).
+  /// Cab-EQ enabled (false = direct/DI tone after the tone stack, e.g. to feed
+  /// a host convolution cab IR downstream).
   bool cab = true;
+  /// Cab voicing model (only meaningful when `cab == true`). Defaults to the
+  /// guitar 4x12, so an unset field is bit-identical to the original voicing.
+  CabModel cab_model = CabModel::kGuitar4x12;
   /// Output trim (dB).
   float level_db = 0.0f;
   /// Power-amp drive in [0, 1] (off-by-default; 0 = the power stage is bypassed
@@ -68,6 +84,16 @@ struct AmpSimConfig {
   /// bass (the "thump" of a real output transformer, strongest on bass amps).
   /// Modelled as a soft saturation of the extracted low band only (Macak 2011).
   float transformer = 0.0f;
+  /// Global negative feedback (NFB) depth in [0,1] (off-by-default; 0 = an
+  /// open-loop power stage, bit-identical to no NFB). A real power amp feeds a
+  /// portion of its output back to an earlier stage with inverted polarity,
+  /// which tightens and de-distorts the band it covers. The feedback path is a
+  /// wide mid-band filter, so the midrange sees strong feedback (tight, flat)
+  /// while the extremes see little — the top opens up (the "presence" of an NFB
+  /// loop) and the low end blooms (the "resonance"/"depth"). Modelled as a
+  /// one-sample-delay feedback loop around the power stage, so it is only active
+  /// when the power stage is (`power > 0`). (Macak & Schimmel 2011.)
+  float nfb = 0.0f;
 };
 
 class AmpSim : public rt::ProcessorBase {
@@ -88,10 +114,11 @@ class AmpSim : public rt::ProcessorBase {
   //   6 = power (clamped to [0, 1])
   //   7 = sag (clamped to [0, 1])
   //   8 = transformer (clamped to [0, 1])
-  // `cab` is a discrete topology switch and is not exposed.
+  //   9 = nfb (clamped to [0, 1])
+  // `cab`/`cab_model` are discrete topology switches and are not exposed.
   bool set_parameter(unsigned int param_id, float value) override;
   // Automatable parameters: 0=drive, 1=bassDb, 2=midDb, 3=trebleDb, 4=presenceDb,
-  // 5=levelDb, 6=power, 7=sag, 8=transformer.
+  // 5=levelDb, 6=power, 7=sag, 8=transformer, 9=nfb.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
@@ -110,8 +137,10 @@ class AmpSim : public rt::ProcessorBase {
     rt::BiquadState presence;  // cab: presence peak
     rt::BiquadState lp1;       // cab: 4th-order roll-off
     rt::BiquadState lp2;
-    float sag_env = 0.0f;  // lagged rail-droop envelope (power-supply sag)
-    float xf_lp = 0.0f;    // transformer low-band extractor (one-pole lowpass)
+    float sag_env = 0.0f;       // lagged rail-droop envelope (power-supply sag)
+    float xf_lp = 0.0f;         // transformer low-band extractor (one-pole lowpass)
+    rt::BiquadState nfb_shape;  // NFB feedback-path mid-band filter
+    float nfb_fb = 0.0f;        // one-sample-delayed power-stage output (NFB loop)
   };
 
   AmpSimConfig config_{};
@@ -124,6 +153,7 @@ class AmpSim : public rt::ProcessorBase {
   std::vector<rt::Adaa1<rt::TanhNonlinearity>> power_adaa_;
   // Shared coefficient designs (refreshed by design_chain()).
   rt::BiquadCoeffs pre_c_, bass_c_, mid_c_, treble_c_, hp_c_, bump_c_, presence_c_, lp1_c_, lp2_c_;
+  rt::BiquadCoeffs nfb_shape_c_;  // NFB feedback-path mid-band filter
   float level_gain_ = 1.0f;
   /// Power-supply sag envelope smoothing coefficient (per sample; ~40 ms cap
   /// recovery). Set from the sample rate in design_chain().

@@ -20,8 +20,8 @@ inline constexpr const char* kSynthWaveforms[] = {"default", "sine",     "saw",
 inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "moog-ladder",
                                                      "diode-ladder", "sallen-key"};
 inline constexpr const char* kSynthFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
-inline constexpr const char* kSynthBodyTypes[] = {"default", "none", "guitar", "violin",
-                                                  "wood-tube"};
+inline constexpr const char* kSynthBodyTypes[] = {"default", "none",      "guitar",
+                                                  "violin",  "wood-tube", "brass-bell"};
 inline constexpr const char* kSynthModSources[] = {"none",      "amp-env",   "filter-env",
                                                    "lfo1",      "lfo2",      "velocity",
                                                    "key-track", "mod-wheel", "random"};

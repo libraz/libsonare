@@ -71,6 +71,8 @@ static_assert(static_cast<int>(sonare::midi::synth::BodyType::kViolin) + 1 ==
               SONARE_SYNTH_BODY_VIOLIN);
 static_assert(static_cast<int>(sonare::midi::synth::BodyType::kWoodTube) + 1 ==
               SONARE_SYNTH_BODY_WOOD_TUBE);
+static_assert(static_cast<int>(sonare::midi::synth::BodyType::kBrassBell) + 1 ==
+              SONARE_SYNTH_BODY_BRASS_BELL);
 
 static_assert(static_cast<int>(sonare::midi::synth::ModSource::kRandom) + 1 ==
               SONARE_SYNTH_MOD_SOURCE_COUNT);

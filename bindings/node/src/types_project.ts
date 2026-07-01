@@ -300,7 +300,14 @@ export const SYNTH_FILTER_MODELS = [
 
 export const SYNTH_FILTER_OUTPUTS = ['default', 'lowpass', 'bandpass', 'highpass'] as const;
 
-export const SYNTH_BODY_TYPES = ['default', 'none', 'guitar', 'violin', 'wood-tube'] as const;
+export const SYNTH_BODY_TYPES = [
+  'default',
+  'none',
+  'guitar',
+  'violin',
+  'wood-tube',
+  'brass-bell',
+] as const;
 
 export const SYNTH_MOD_SOURCES = [
   'none',

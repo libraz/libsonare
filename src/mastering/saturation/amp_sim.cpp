@@ -17,10 +17,22 @@ constexpr float kPreEmphasisHz = 750.0f;  // bright-cap shelf before the clip
 constexpr float kBassHz = 120.0f;         // tone stack
 constexpr float kMidHz = 550.0f;
 constexpr float kTrebleHz = 3000.0f;
-constexpr float kCabHighpassHz = 75.0f;  // cab voicing
-constexpr float kCabBumpHz = 110.0f;
-constexpr float kPresenceHz = 3800.0f;
-constexpr float kCabRolloffHz = 4800.0f;
+// Cab voicing: fixed EQ centres per cabinet model (see CabModel). The guitar
+// values are the original AmpSim voicing; the bass values model a big 8x10.
+struct CabVoicing {
+  float highpass_hz;  // low cut
+  float bump_hz;      // body bump centre
+  float bump_db;      // body bump gain
+  float presence_hz;  // presence peak centre
+  float rolloff_hz;   // top-end roll-off corner
+};
+
+constexpr CabVoicing kCabGuitar4x12{75.0f, 110.0f, 2.0f, 3800.0f, 4800.0f};
+constexpr CabVoicing kCabBass8x10{40.0f, 80.0f, 3.0f, 2200.0f, 3500.0f};
+
+CabVoicing cab_voicing(CabModel model) noexcept {
+  return model == CabModel::kBass8x10 ? kCabBass8x10 : kCabGuitar4x12;
+}
 
 /// drive [0,1] -> triode drive in dB. The low end stays a clean preamp; the
 /// top lands in saturated-lead territory.
@@ -43,6 +55,7 @@ AmpSim::AmpSim(AmpSimConfig config)
   config_.power = std::clamp(config_.power, 0.0f, 1.0f);
   config_.sag = std::clamp(config_.sag, 0.0f, 1.0f);
   config_.transformer = std::clamp(config_.transformer, 0.0f, 1.0f);
+  config_.nfb = std::clamp(config_.nfb, 0.0f, 1.0f);
 }
 
 namespace {
@@ -65,7 +78,7 @@ void AmpSim::validate_config(const AmpSimConfig& config) {
       !std::isfinite(config.mid_db) || !std::isfinite(config.treble_db) ||
       !std::isfinite(config.presence_db) || !std::isfinite(config.level_db) ||
       !std::isfinite(config.power) || !std::isfinite(config.sag) ||
-      !std::isfinite(config.transformer)) {
+      !std::isfinite(config.transformer) || !std::isfinite(config.nfb)) {
     throw SonareException(ErrorCode::InvalidParameter, "amp-sim params must be finite");
   }
 }
@@ -91,15 +104,16 @@ void AmpSim::design_chain() {
   mid_c_ = rt::rbj_peak(rt::frequency_to_w0(kMidHz, sample_rate_), 0.7f, config_.mid_db);
   treble_c_ =
       rt::rbj_high_shelf(rt::frequency_to_w0(kTrebleHz, sample_rate_), 0.707f, config_.treble_db);
-  hp_c_ = rt::rbj_highpass(rt::frequency_to_w0(kCabHighpassHz, sample_rate_), 0.707f);
-  bump_c_ = rt::rbj_peak(rt::frequency_to_w0(kCabBumpHz, sample_rate_), 1.0f, 2.0f);
+  const CabVoicing cab = cab_voicing(config_.cab_model);
+  hp_c_ = rt::rbj_highpass(rt::frequency_to_w0(cab.highpass_hz, sample_rate_), 0.707f);
+  bump_c_ = rt::rbj_peak(rt::frequency_to_w0(cab.bump_hz, sample_rate_), 1.0f, cab.bump_db);
   presence_c_ =
-      rt::rbj_peak(rt::frequency_to_w0(kPresenceHz, sample_rate_), 1.0f, config_.presence_db);
+      rt::rbj_peak(rt::frequency_to_w0(cab.presence_hz, sample_rate_), 1.0f, config_.presence_db);
   // 4th-order Butterworth roll-off: the steep top-end cut is the single
   // strongest "cabinet" cue.
-  lp1_c_ = rt::rbj_lowpass(rt::frequency_to_w0(kCabRolloffHz, sample_rate_),
+  lp1_c_ = rt::rbj_lowpass(rt::frequency_to_w0(cab.rolloff_hz, sample_rate_),
                            rt::butterworth_stage_q(4, 0));
-  lp2_c_ = rt::rbj_lowpass(rt::frequency_to_w0(kCabRolloffHz, sample_rate_),
+  lp2_c_ = rt::rbj_lowpass(rt::frequency_to_w0(cab.rolloff_hz, sample_rate_),
                            rt::butterworth_stage_q(4, 1));
   level_gain_ = sonare::db_to_linear(config_.level_db);
   // Sag envelope: ~40 ms reservoir-cap time constant.
@@ -111,6 +125,12 @@ void AmpSim::design_chain() {
   xf_alpha_ = std::clamp(
       1.0f - std::exp(-2.0f * 3.14159265358979f * kXfCornerHz / static_cast<float>(sample_rate_)),
       0.0f, 1.0f);
+  // NFB feedback path: a wide mid-band band-pass (0 dB peak), so the midrange is
+  // fed back hard (tight, flat) and the extremes escape the loop (the top and
+  // bottom "open up").
+  constexpr float kNfbCentreHz = 800.0f;
+  constexpr float kNfbQ = 0.5f;
+  nfb_shape_c_ = rt::rbj_bandpass(rt::frequency_to_w0(kNfbCentreHz, sample_rate_), kNfbQ);
 }
 
 void AmpSim::process(float* const* channels, int num_channels, int num_samples) {
@@ -153,7 +173,21 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
       // Push-pull power amp (after the tone stack, before the cab). Off when
       // power == 0 -> the ADAA state is untouched and the path is bit-identical.
       if (config_.power > 0.0f) {
-        s = power_stage(s, config_.power, power_adaa_[static_cast<size_t>(ch)]);
+        if (config_.nfb > 0.0f) {
+          // Global negative feedback around the power stage: a one-sample-delayed
+          // copy of the output, shaped by the mid-band filter, is subtracted from
+          // the input. The mid is fed back hard (tightened); the extremes are not.
+          // beta stays < 1 (with the 0 dB-peak band-pass and the <=1 power-stage
+          // slope) so the loop is contractive and bounded. nfb == 0 skips this
+          // whole branch -> the open-loop path is bit-identical.
+          constexpr float kNfbBeta = 0.7f;
+          const float shaped = process_chain(chain.nfb_fb, chain.nfb_shape, nfb_shape_c_);
+          const float e = s - kNfbBeta * config_.nfb * shaped;
+          s = power_stage(e, config_.power, power_adaa_[static_cast<size_t>(ch)]);
+          chain.nfb_fb = s;
+        } else {
+          s = power_stage(s, config_.power, power_adaa_[static_cast<size_t>(ch)]);
+        }
       }
       // Power-supply sag: a lagged envelope of the draw pulls the rail down, so
       // the attack punches through and the sustain compresses. Off -> the
@@ -227,6 +261,9 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
     case 8:
       config_.transformer = std::clamp(value, 0.0f, 1.0f);
       break;
+    case 9:
+      config_.nfb = std::clamp(value, 0.0f, 1.0f);
+      break;
     default:
       return false;
   }
@@ -235,8 +272,8 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
 }
 
 std::vector<rt::ParamDescriptor> AmpSim::parameter_descriptors() const {
-  return {{"drive", 0},   {"bassDb", 1}, {"midDb", 2}, {"trebleDb", 3},   {"presenceDb", 4},
-          {"levelDb", 5}, {"power", 6},  {"sag", 7},   {"transformer", 8}};
+  return {{"drive", 0},   {"bassDb", 1}, {"midDb", 2}, {"trebleDb", 3},    {"presenceDb", 4},
+          {"levelDb", 5}, {"power", 6},  {"sag", 7},   {"transformer", 8}, {"nfb", 9}};
 }
 
 }  // namespace sonare::mastering::saturation
