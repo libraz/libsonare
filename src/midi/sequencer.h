@@ -191,11 +191,21 @@ class MidiSequencer {
   void clear_pending_for_clip(uint32_t clip_id) noexcept;
   void release_notes_for_clip(uint32_t clip_id, int64_t render_frame,
                               bool clear_pending = true) noexcept;
+  // Release note-offs for every sounding note (and drop pending FX events) whose
+  // source clip is no longer present in `clips` (nullptr = empty set). Called
+  // once when the published clip set changes so a live mute / clip delete that
+  // recompiles and republishes without a clip does not hang its notes.
+  void release_notes_for_absent_clips(const std::vector<MidiClipSchedule>* clips,
+                                      int64_t render_frame) noexcept;
 
   double sample_rate_ = constants::kDefaultDawSampleRate;
   MidiEventSink* sink_ = nullptr;
   mutable rt::RtPublisher<std::vector<MidiClipSchedule>> clips_;
   std::atomic<size_t> clip_count_{0};
+  // Audio-thread-only: the clip snapshot seen by the previous process_block, used
+  // only for identity comparison to detect a republished set (never dereferenced
+  // after the pointer goes stale, so comparing a freed value is safe).
+  const std::vector<MidiClipSchedule>* last_clips_ = nullptr;
 
   // Fixed-capacity active-note table (audio thread only).
   std::array<ActiveNote, kMaxActiveNotes> active_{};

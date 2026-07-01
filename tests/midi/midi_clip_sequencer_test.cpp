@@ -229,6 +229,76 @@ TEST_CASE("MidiClip to_render_events converts PPQ to render frames via the tempo
   REQUIRE(out[1].ump.is_note_off());
 }
 
+TEST_CASE("MidiSequencer releases notes from clips dropped by a republished set", "[midi]") {
+  // A live mute (or clip delete) recompiles the arrangement and republishes the
+  // MIDI clip set WITHOUT the affected clip. Any note still sounding from that
+  // clip must be released so it does not hang -- mirroring the audio path's
+  // "scheduled but silent" model rather than being cut off with no note-off.
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule clip;
+  clip.id = 42;
+  clip.destination_id = 5;
+  clip.start_sample = 0;
+  clip.length_samples = 0;  // open-ended: the note-on has no matching note-off
+  clip.events = {
+      {0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+  };
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  seq.process_block(0, 256);
+  REQUIRE(seq.active_note_count() == 1);
+  const size_t dispatched_before = sink.events.size();
+
+  // Republish WITHOUT the clip (mute / delete) and render the next block.
+  seq.set_midi_clips({});
+  seq.acquire_midi_clips();
+  seq.process_block(256, 256);
+
+  // The hung note was released: a note-off for note 60 on destination 5.
+  REQUIRE(seq.active_note_count() == 0);
+  bool found_off = false;
+  for (size_t i = dispatched_before; i < sink.events.size(); ++i) {
+    const auto& c = sink.events[i];
+    if (c.destination == 5 && c.event.ump.is_note_off() && c.event.ump.note_number() == 60) {
+      found_off = true;
+    }
+  }
+  REQUIRE(found_off);
+}
+
+TEST_CASE("MidiSequencer keeps notes sounding when a republished set still contains the clip",
+          "[midi]") {
+  // Editing an unrelated property republishes the clip set with the same clip
+  // id still present; a note sounding from it must NOT be spuriously released.
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule clip;
+  clip.id = 7;
+  clip.destination_id = 2;
+  clip.length_samples = 0;
+  clip.events = {
+      {0, sonare::midi::make_midi1_note_on(0, 0, 64, 90)},
+  };
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 256);
+  REQUIRE(seq.active_note_count() == 1);
+
+  // Republish the same clip (id unchanged) and render on.
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(256, 256);
+  REQUIRE(seq.active_note_count() == 1);  // still sounding, not released
+}
+
 TEST_CASE("MidiSequencer dispatches in-block events in order and frame", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;

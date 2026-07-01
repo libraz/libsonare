@@ -16,6 +16,7 @@ void MidiSequencer::prepare(double sample_rate) {
 void MidiSequencer::reset() noexcept {
   active_count_ = 0;
   pending_fx_count_ = 0;
+  last_clips_ = nullptr;
   dispatched_event_count_.store(0, std::memory_order_relaxed);
 }
 
@@ -207,6 +208,40 @@ void MidiSequencer::release_notes_for_clip(uint32_t clip_id, int64_t render_fram
   }
 }
 
+void MidiSequencer::release_notes_for_absent_clips(const std::vector<MidiClipSchedule>* clips,
+                                                   int64_t render_frame) noexcept {
+  const auto present = [clips](uint32_t clip_id) noexcept -> bool {
+    if (clips == nullptr) return false;
+    for (const MidiClipSchedule& c : *clips) {
+      if (c.id == clip_id) return true;
+    }
+    return false;
+  };
+  size_t i = 0;
+  while (i < active_count_) {
+    if (!active_[i].from_clip || present(active_[i].clip_id)) {
+      ++i;
+      continue;
+    }
+    const ActiveNote note = active_[i];
+    MidiEvent off;
+    off.render_frame = render_frame;
+    off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
+    active_[i] = active_[active_count_ - 1];
+    --active_count_;
+    dispatch(note.destination_id, off);
+  }
+  size_t p = 0;
+  while (p < pending_fx_count_) {
+    if (!pending_fx_[p].from_clip || present(pending_fx_[p].clip_id)) {
+      ++p;
+      continue;
+    }
+    pending_fx_[p] = pending_fx_[pending_fx_count_ - 1];
+    --pending_fx_count_;
+  }
+}
+
 void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& event,
                                   int64_t block_end_frame, bool from_clip,
                                   uint32_t clip_id) noexcept {
@@ -229,8 +264,18 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
 void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noexcept {
   if (num_frames <= 0) return;
   const int64_t block_end_frame = block_start_frame + num_frames;
-  dispatch_pending(block_start_frame, block_end_frame);
   const std::vector<MidiClipSchedule>* clips = clips_.current();
+  if (clips != last_clips_) {
+    // The published clip set changed (a live mute, clip delete, or edit
+    // recompiled and republished). Release notes still sounding from clips that
+    // are no longer present -- and drop their pending FX events -- so a muted or
+    // deleted MIDI clip does not hang a note. Runs before dispatch_pending so a
+    // removed clip's carried-over events are not fired. Idempotent when nothing
+    // was removed (a republished set with the same clip ids releases nothing).
+    release_notes_for_absent_clips(clips, block_start_frame);
+    last_clips_ = clips;
+  }
+  dispatch_pending(block_start_frame, block_end_frame);
   if (clips == nullptr) return;
 
   for (const MidiClipSchedule& clip : *clips) {
