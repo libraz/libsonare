@@ -334,6 +334,49 @@ TEST_CASE("two-polarization coupling engages, stays bounded, off by default", "[
   REQUIRE(rms(on_tone, 40000, 48000) > 1.0e-4f);
 }
 
+TEST_CASE("bridge coupling engages, stays bounded, off by default", "[midi][synth][ks]") {
+  NativeSynthPatch base = ks_base_patch();
+  base.ks.decay_s = 5.0f;
+  base.ks.brightness = 0.5f;
+  base.gain = 0.8f;
+  base.ks.polarization = 0.6f;  // the second plane is present in every variant
+  NativeSynthPatch coupled = base;
+  coupled.ks.body_coupling = 0.8f;
+  const std::vector<float> off_tone = render_patch(base, 40, 110, 48000);  // body_coupling == 0
+  const std::vector<float> on_tone = render_patch(coupled, 40, 110, 48000);
+  // body_coupling == 0 must leave the summed-polarization path bit-identical.
+  const std::vector<float> off_again = render_patch(base, 40, 110, 48000);
+  REQUIRE(off_tone == off_again);
+  // The bridge trades energy between the planes, so the tone changes, yet the
+  // coupled 2x2 loop stays inside the unit circle (bounded) and keeps ringing.
+  REQUIRE(on_tone != off_tone);
+  float peak = 0.0f;
+  for (float s : on_tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  REQUIRE(peak < 2.0f);
+  REQUIRE(rms(on_tone, 40000, 48000) > 1.0e-4f);
+}
+
+TEST_CASE("bridge coupling stays bounded at the near-degenerate detune across the keyboard",
+          "[midi][synth][ks]") {
+  // Long t60 low notes push both loop gains close to 1; with the ~11-cent detune
+  // the 2x2 system is near-degenerate, the worst case for the eigenvalue bound.
+  NativeSynthPatch p = ks_base_patch();
+  p.ks.decay_s = 8.0f;
+  p.ks.decay_stretch = 0.8f;
+  p.ks.brightness = 0.7f;
+  p.ks.polarization = 0.9f;
+  p.ks.body_coupling = 1.0f;
+  p.gain = 0.9f;
+  for (uint8_t note : {28, 40, 52, 64, 76, 88}) {
+    const std::vector<float> tone = render_patch(p, note, 120, 48000);
+    float peak = 0.0f;
+    for (float s : tone) peak = std::max(peak, std::fabs(s));
+    REQUIRE(peak > 0.01f);
+    REQUIRE(peak < 4.0f);  // eigenvalue-bounded: no runaway even fully coupled
+  }
+}
+
 TEST_CASE("fret-slap engages the displacement limiter and stays off by default",
           "[midi][synth][ks]") {
   NativeSynthPatch base = ks_base_patch();

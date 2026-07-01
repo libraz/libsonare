@@ -94,6 +94,17 @@ struct KsPatchParams {
   /// beats against the primary and adds a two-stage decay — the "thickness" and
   /// slow shimmer of a big low string (Karjalainen, Välimäki & Tolonen 1998).
   float polarization = 0.0f;
+  /// Bridge coupling between the two polarizations in [0,1] (off-by-default;
+  /// 0 = the planes stay independent and their outputs are merely summed, so
+  /// render is bit-identical to plain @ref polarization). With @ref polarization
+  /// active a real bridge is a shared, lossy 2x2 admittance: the vertical and
+  /// horizontal planes trade energy through it, so each plane's envelope becomes
+  /// biexponential (a true double decay) instead of two independent exponentials
+  /// merely added at the output (Woodhouse 2004/2021; Bank & Karjalainen 2010).
+  /// The coupling strength is scaled at start() so the coupled 2x2 loop stays
+  /// inside the unit circle even at the near-degenerate detune (eigenvalue
+  /// bound, not a scalar per-loop bound). No effect unless @ref polarization > 0.
+  float body_coupling = 0.0f;
 };
 
 /// Per-voice plucked-string state, embedded in NativeSynthVoice. The voice's
@@ -161,6 +172,10 @@ class KsVoiceCore {
   float pol_release_gain_ = 0.0f;
   float pol_couple_ = 0.0f;  // 0 = off; horizontal-plane mix into the output
   float pol_exc_ = 0.0f;     // pluck injection into the 2nd polarization
+  // Symmetric bridge admittance between the two planes (0 = off -> the loops
+  // stay independent, bit-identical to plain polarization). Scaled at start()
+  // so the coupled 2x2 loop's eigenvalues stay inside the unit circle.
+  float couple_gain_ = 0.0f;
 
   // Excitation burst (one period of combed, lowpassed seeded noise; the
   // dynamic-level lowpass is two cascaded one-poles).

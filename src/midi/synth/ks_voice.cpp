@@ -110,9 +110,32 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     pol_couple_ = polarization;
     pol_size_ = std::min(capacity_, static_cast<int>(pol_period_ * 1.3f) + 8);
     std::fill(pol_buffer_, pol_buffer_ + static_cast<size_t>(std::max(0, pol_size_)), 0.0f);
+
+    // Bridge coupling (off unless body_coupling > 0). The two loops close a
+    // symmetric 2x2 system [[g1, eps], [eps, g2]] once they exchange energy
+    // through the bridge; its spectral radius is max_eig = mean + sqrt(halfdiff^2
+    // + eps^2), NOT max(g1, g2). Near the degenerate detune (g1 ~= g2) even a
+    // small eps can push a plane over unity, so solve for the largest eps that
+    // keeps max_eig <= kLambdaMax and scale body_coupling within that envelope.
+    const float bc = std::clamp(params.body_coupling, 0.0f, 1.0f);
+    if (bc > 0.0f) {
+      constexpr float kLambdaMax = 0.999f;
+      const float mean = 0.5f * (loop_gain_ + pol_loop_gain_);
+      const float half_diff = 0.5f * (loop_gain_ - pol_loop_gain_);
+      const float room = kLambdaMax - mean;
+      float eps_max = 0.0f;
+      if (room > 0.0f) {
+        const float r2 = room * room - half_diff * half_diff;
+        if (r2 > 0.0f) eps_max = std::sqrt(r2);
+      }
+      couple_gain_ = bc * eps_max;
+    } else {
+      couple_gain_ = 0.0f;
+    }
   } else {
     pol_couple_ = 0.0f;
     pol_loop_gain_ = 0.0f;
+    couple_gain_ = 0.0f;
   }
 }
 
@@ -141,7 +164,11 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
       std::clamp(base_period_ / ratio - loop_comp_, 1.0f, static_cast<float>(size_ - 4));
   const int delay_q8 = static_cast<int>(delay * 256.0f);
 
-  const float fb = loop_gain_ * lp_state_;
+  float fb = loop_gain_ * lp_state_;
+  // Bridge coupling: the horizontal plane feeds a little energy back into the
+  // vertical one (0 unless body_coupling engaged the 2x2 admittance). Gated so
+  // the plain path stays bit-identical when the bridge is off.
+  if (couple_gain_ != 0.0f) fb += couple_gain_ * pol_lp_state_;
   float loop_in = exc + fb;
   if (slap_threshold_ > 0.0f) {
     // Fret contact: the string cannot swing past the fret gap. Over-travel is
@@ -165,7 +192,9 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
     const float pol_delay =
         std::clamp(pol_period_ / ratio - pol_loop_comp_, 1.0f, static_cast<float>(pol_size_ - 4));
     const int pol_delay_q8 = static_cast<int>(pol_delay * 256.0f);
-    const float pol_in = pol_exc_ * exc + pol_loop_gain_ * pol_lp_state_;
+    float pol_in = pol_exc_ * exc + pol_loop_gain_ * pol_lp_state_;
+    // Reciprocal bridge return: the vertical plane feeds the horizontal one.
+    if (couple_gain_ != 0.0f) pol_in += couple_gain_ * lp_state_;
     const float pol_out = rt::lagrange3_fractional_delay(
         pol_buffer_, static_cast<size_t>(pol_size_), pol_write_, pol_delay_q8, pol_in);
     pol_lp_state_ += pol_loop_alpha_ * (pol_out - pol_lp_state_);
