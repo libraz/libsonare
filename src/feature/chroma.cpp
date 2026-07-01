@@ -167,11 +167,12 @@ namespace {
 
 /// @brief Wraps CQT magnitude bins onto @p n_chroma pitch classes.
 /// @details CQT bin 0 corresponds to @p fmin, whose pitch class is generally not C.
-///          The fold `(b % bins_per_octave) * n_chroma / bins_per_octave` assigns the
-///          lowest bin of each octave to class 0, so we add the pitch-class offset of
-///          @p fmin and take a positive modulo to align chroma class 0 with C, matching
-///          librosa.feature.chroma_cqt. @p fmin is expected to already include the tuning
-///          shift (see chroma_cqt / bass_chroma); tuning is therefore not re-applied here.
+///          Each pitch class merges `n_merge = bins_per_octave / n_chroma` CQT bins;
+///          the fold centers that window (shift by `n_merge / 2`) before assigning a
+///          class, then adds the pitch-class offset of @p fmin and takes a positive
+///          modulo to align chroma class 0 with C, matching librosa.feature.chroma_cqt
+///          (librosa.filters.cq_to_chroma). @p fmin is expected to already include the
+///          tuning shift (see chroma_cqt / bass_chroma); tuning is not re-applied here.
 std::vector<float> wrap_cqt_to_chroma(const float* mag, int n_bins, int n_frames,
                                       int bins_per_octave, int n_chroma, float fmin) {
   std::vector<float> chroma(static_cast<size_t>(n_chroma) * n_frames, 0.0f);
@@ -186,9 +187,19 @@ std::vector<float> wrap_cqt_to_chroma(const float* mag, int n_bins, int n_frames
   }
   // librosa.feature.chroma_cqt expects bins_per_octave to be a multiple of n_chroma.
   // Each chroma bin gets the mean of all CQT bins falling onto that pitch class.
+  //
+  // Center each merge window on its target bin, mirroring librosa.filters
+  // .cq_to_chroma's np.roll(-(n_merge // 2)): with n_merge = bins_per_octave /
+  // n_chroma CQT bins per pitch class, the fold must shift by half a window so a
+  // bin sitting at the low edge of a semitone group folds onto the correct class
+  // rather than the one below it. With bins_per_octave == n_chroma (n_merge == 1)
+  // the shift is zero, so the common 12-bin path is unchanged.
+  const int n_merge = bins_per_octave / n_chroma;
+  const int merge_half = n_merge / 2;
   std::vector<int> counts(n_chroma, 0);
   for (int b = 0; b < n_bins; ++b) {
-    int idx = ((b % bins_per_octave) * n_chroma) / bins_per_octave;
+    const int shifted = ((b % bins_per_octave) + merge_half) % bins_per_octave;
+    int idx = (shifted * n_chroma) / bins_per_octave;
     idx = (idx + pitch_class_offset) % n_chroma;
     if (idx < 0) idx += n_chroma;
     counts[idx] += 1;

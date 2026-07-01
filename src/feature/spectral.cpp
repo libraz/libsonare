@@ -260,7 +260,17 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
     // `idx = max(1, rint(quantile * np.sum(current_band)))` is evaluated before
     // `sub_band = sub_band[..., :-1, :]`. So q_count is derived from the full
     // band_indices.size() here, then only min-clamped to the trimmed size below.
-    int q_count = std::max(1, static_cast<int>(std::round(quantile * band_indices.size())));
+    //
+    // librosa evaluates this product in float64 with quantile = 0.02, so an exact
+    // half-integer count (e.g. 0.02 * 75 = 1.5) rounds to the nearest even integer
+    // (2) via numpy.rint. Our quantile arrives as float32 (0.02f = 0.0199999996),
+    // which drags that product a hair below the tie (1.4999997) and would round
+    // the wrong way. Strip the float32 quantization noise off the product before
+    // rounding so half-integer counts match librosa; the snap grid (1e-4) is far
+    // finer than the per-bin quantile step yet far coarser than the float32 error.
+    double q_product = static_cast<double>(quantile) * static_cast<double>(band_indices.size());
+    q_product = std::round(q_product * 1.0e4) / 1.0e4;
+    int q_count = std::max(1, static_cast<int>(std::rint(q_product)));
 
     if (b < n_bands && !band_indices.empty()) {
       band_indices.pop_back();

@@ -1101,6 +1101,47 @@ def generate_chroma_cqt_reference():
     }
 
 
+def generate_chroma_cqt_bpo36_reference():
+    """librosa.feature.chroma_cqt with bins_per_octave=36 (n_merge=3).
+
+    Exercises the half-window centering roll in librosa.filters.cq_to_chroma
+    (np.roll(-(n_merge // 2))). At 3 CQT bins per pitch class an uncentered fold
+    misassigns a third of the bins to a neighbouring class, so this reference is
+    discriminating in a way the bins_per_octave=12 case (n_merge=1) cannot be.
+    """
+    sr = 22050
+    duration = 1.0
+    # C major chord (C4 + E4 + G4)
+    t = np.arange(0, duration, 1.0 / sr)
+    y = (
+        np.sin(2 * np.pi * 261.63 * t)
+        + np.sin(2 * np.pi * 329.63 * t)
+        + np.sin(2 * np.pi * 392.0 * t)
+    ).astype(np.float32) / 3.0
+    hop_length = 512
+
+    chroma = librosa.feature.chroma_cqt(
+        y=y,
+        sr=sr,
+        hop_length=hop_length,
+        n_chroma=12,
+        fmin=librosa.note_to_hz("C1"),
+        bins_per_octave=36,
+        n_octaves=7,
+    )
+    return {
+        "signal": "C_major_chord",
+        "sr": sr,
+        "hop_length": hop_length,
+        "fmin": float(librosa.note_to_hz("C1")),
+        "bins_per_octave": 36,
+        "n_octaves": 7,
+        "n_chroma": 12,
+        "shape": list(chroma.shape),
+        "mean_per_class": chroma.mean(axis=1).tolist(),
+    }
+
+
 def generate_chroma_cens_reference():
     """librosa.feature.chroma_cens reference (statistics only)."""
     sr = 22050
@@ -1790,6 +1831,7 @@ def main():
         "tonnetz": generate_tonnetz_reference(),
         "pcen": generate_pcen_reference(),
         "chroma_cqt": generate_chroma_cqt_reference(),
+        "chroma_cqt_bpo36": generate_chroma_cqt_bpo36_reference(),
         "chroma_cens": generate_chroma_cens_reference(),
         "pitch_utilities": generate_pitch_utilities_reference(),
         "plp": generate_plp_reference(),

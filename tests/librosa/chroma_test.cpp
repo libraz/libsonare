@@ -201,3 +201,53 @@ TEST_CASE("chroma_cqt reference compatibility (default L-inf norm)",
     REQUIRE((max_abs < 1e-6f || std::abs(max_abs - 1.0f) < 1e-4f));
   }
 }
+
+TEST_CASE("chroma_cqt matches librosa with bins_per_octave=36 (centered fold)",
+          "[.][slow][chroma_cqt][reference][librosa-parity]") {
+  // bins_per_octave=36 gives n_merge=3 CQT bins per pitch class, so the
+  // half-window centering roll (librosa.filters.cq_to_chroma's
+  // np.roll(-(n_merge // 2))) is active — unlike the bins_per_octave=12 case
+  // where n_merge=1 makes it a no-op. An uncentered fold leaks a third of each
+  // pitch class's energy onto a neighbouring class, so the off-triad classes
+  // (D#, F#, B) spike far above librosa's near-zero reference.
+  auto json = JsonReader::parse_file("tests/librosa/reference/chroma_cqt_bpo36.json");
+  const auto& data = json["data"];
+
+  const int sr = data["sr"].as_int();
+  const int hop_length = data["hop_length"].as_int();
+  const int bins_per_octave = data["bins_per_octave"].as_int();
+  const int n_octaves = data["n_octaves"].as_int();
+  const size_t n_samples = static_cast<size_t>(sr);  // duration = 1.0 s
+
+  std::vector<float> samples(n_samples);
+  for (size_t i = 0; i < n_samples; ++i) {
+    float t = static_cast<float>(i) / static_cast<float>(sr);
+    samples[i] = (1.0f / 3.0f) * (std::sin(kTwoPi * 261.63f * t) + std::sin(kTwoPi * 329.63f * t) +
+                                  std::sin(kTwoPi * 392.0f * t));
+  }
+  Audio audio = Audio::from_buffer(samples.data(), n_samples, sr);
+
+  ChromaCqtConfig cfg;
+  cfg.cqt.hop_length = hop_length;
+  cfg.cqt.fmin = static_cast<float>(data["fmin"].as_float());  // librosa.note_to_hz('C1')
+  cfg.cqt.bins_per_octave = bins_per_octave;
+  cfg.cqt.n_bins = bins_per_octave * n_octaves;
+  cfg.n_chroma = data["n_chroma"].as_int();
+  Chroma chroma = chroma_cqt(audio, cfg);
+
+  const auto& shape = data["shape"].as_array();
+  REQUIRE(chroma.n_chroma() == shape[0].as_int());
+  REQUIRE(std::abs(chroma.n_frames() - shape[1].as_int()) <= 1);
+
+  // Per-class mean energy must track librosa. The tolerance absorbs the small
+  // CQT float32 divergence between libsonare and librosa (the centered fold lands
+  // within ~0.05 L1 overall) while still rejecting the uncentered fold, whose
+  // off-triad leakage sits ~0.3 above the reference.
+  const auto& ref_mean = data["mean_per_class"].as_array();
+  auto our_mean = chroma.mean_energy();
+  REQUIRE(our_mean.size() == ref_mean.size());
+  for (size_t c = 0; c < ref_mean.size(); ++c) {
+    CAPTURE(c, our_mean[c], ref_mean[c].as_float());
+    REQUIRE(std::abs(our_mean[c] - ref_mean[c].as_float()) < 0.15f);
+  }
+}
