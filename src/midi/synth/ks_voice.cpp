@@ -55,6 +55,11 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   loop_gain_ = loop_gain_for(base_period_, sr, t60);
   release_gain_ = loop_gain_for(base_period_, sr, std::max(0.01f, params.release_damp_s));
 
+  // Fret-slap: a narrower displacement gap for higher intensity. 0 disables the
+  // limiter entirely so the render path stays bit-identical to the plain string.
+  const float slap = std::clamp(params.slap, 0.0f, 1.0f);
+  slap_threshold_ = slap > 0.0f ? 0.55f - 0.35f * slap : 0.0f;
+
   // Excitation: one period of seeded noise through the pick-position comb and
   // the velocity-driven dynamic-level lowpass (hard pluck = bright).
   exc_total_ = std::max(8, static_cast<int>(base_period_));
@@ -79,6 +84,35 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   write_index_ = 0;
   if (buffer_ != nullptr) {
     std::fill(buffer_, buffer_ + static_cast<size_t>(std::max(0, size_)), 0.0f);
+  }
+
+  // Second (horizontal) polarization (off unless params.polarization > 0 ->
+  // render skips it, primary path bit-identical). A second loop detuned a few
+  // cents sharp, more damped and decaying faster than the primary: the two
+  // planes beat and the faster line dies first (two-stage decay).
+  const float polarization = std::clamp(params.polarization, 0.0f, 1.0f);
+  pol_write_ = 0;
+  pol_lp_state_ = 0.0f;
+  if (polarization > 0.0f && pol_buffer_ != nullptr) {
+    constexpr float kPolDetuneCents = 11.0f;
+    pol_period_ = base_period_ / std::exp2(kPolDetuneCents / 1200.0f);
+    // A darker loop filter: the horizontal plane loses its highs faster.
+    const float a2 = std::min(0.97f, a + 0.12f);
+    pol_loop_alpha_ = 1.0f - a2;
+    const float omega2 = kTwoPi / pol_period_;
+    const float tau2 =
+        std::atan2(a2 * std::sin(omega2), 1.0f - a2 * std::cos(omega2)) / std::max(omega2, 1.0e-6f);
+    pol_loop_comp_ = 1.0f + tau2;
+    // Faster decay (a fraction of the primary t60) -> two-stage decay.
+    pol_loop_gain_ = loop_gain_for(pol_period_, sr, 0.55f * t60);
+    pol_release_gain_ = release_gain_;
+    pol_exc_ = 0.6f;  // the pluck grips the vertical plane; the horizontal weakly
+    pol_couple_ = polarization;
+    pol_size_ = std::min(capacity_, static_cast<int>(pol_period_ * 1.3f) + 8);
+    std::fill(pol_buffer_, pol_buffer_ + static_cast<size_t>(std::max(0, pol_size_)), 0.0f);
+  } else {
+    pol_couple_ = 0.0f;
+    pol_loop_gain_ = 0.0f;
   }
 }
 
@@ -108,18 +142,49 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
   const int delay_q8 = static_cast<int>(delay * 256.0f);
 
   const float fb = loop_gain_ * lp_state_;
+  float loop_in = exc + fb;
+  if (slap_threshold_ > 0.0f) {
+    // Fret contact: the string cannot swing past the fret gap. Over-travel is
+    // hard-limited with only a sliver of give, so the clipped tops generate the
+    // odd-harmonic buzz of the slap/pop attack (a memoryless nonlinear limit).
+    constexpr float kReflect = 0.06f;  // near-hard clip at the fret gap
+    const float th = slap_threshold_;
+    if (loop_in > th) {
+      loop_in = th + (loop_in - th) * kReflect;
+    } else if (loop_in < -th) {
+      loop_in = -th + (loop_in + th) * kReflect;
+    }
+  }
   const float out = rt::lagrange3_fractional_delay(buffer_, static_cast<size_t>(size_),
-                                                   write_index_, delay_q8, exc + fb);
+                                                   write_index_, delay_q8, loop_in);
   lp_state_ += loop_alpha_ * (out - lp_state_);
+
+  if (pol_couple_ > 0.0f) {
+    // Horizontal polarization: a detuned loop sharing the pluck; its output
+    // sums into the mix, beating against the primary (two-stage decay).
+    const float pol_delay =
+        std::clamp(pol_period_ / ratio - pol_loop_comp_, 1.0f, static_cast<float>(pol_size_ - 4));
+    const int pol_delay_q8 = static_cast<int>(pol_delay * 256.0f);
+    const float pol_in = pol_exc_ * exc + pol_loop_gain_ * pol_lp_state_;
+    const float pol_out = rt::lagrange3_fractional_delay(
+        pol_buffer_, static_cast<size_t>(pol_size_), pol_write_, pol_delay_q8, pol_in);
+    pol_lp_state_ += pol_loop_alpha_ * (pol_out - pol_lp_state_);
+    return out + pol_couple_ * pol_out;
+  }
   return out;
 }
 
-void KsVoiceCore::release() noexcept { loop_gain_ = std::min(loop_gain_, release_gain_); }
+void KsVoiceCore::release() noexcept {
+  loop_gain_ = std::min(loop_gain_, release_gain_);
+  if (pol_couple_ > 0.0f) pol_loop_gain_ = std::min(pol_loop_gain_, pol_release_gain_);
+}
 
 void KsVoiceCore::kill() noexcept {
   exc_pos_ = exc_total_;
   loop_gain_ = 0.0f;
   lp_state_ = 0.0f;
+  pol_loop_gain_ = 0.0f;
+  pol_lp_state_ = 0.0f;
 }
 
 }  // namespace sonare::midi::synth

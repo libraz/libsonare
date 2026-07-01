@@ -15,6 +15,7 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 
@@ -273,6 +274,100 @@ TEST_CASE("KS audio path is allocation-free", "[midi][synth][ks]") {
     synth.process(chans, 2, 256);
     REQUIRE(guard.count() == 0);
   }
+}
+
+TEST_CASE("bass presets are voiced Karplus-Strong strings", "[midi][synth][ks]") {
+  using sonare::midi::synth::find_synth_preset;
+  // Low E on a 4-string bass (E2 = MIDI 40, 82.41 Hz) exercises the long delay
+  // line: every bass voicing must be a KS string, stay bounded and non-silent.
+  for (const char* name : {"bass-acoustic", "bass-fingered", "bass-picked", "bass-fretless"}) {
+    const auto* preset = find_synth_preset(name);
+    REQUIRE(preset != nullptr);
+    const NativeSynthPatch& patch = preset->config.patch;
+    REQUIRE(patch.mode == SynthEngineMode::kKarplusStrong);
+    const std::vector<float> tone = render_patch(patch, 40, 100, 48000);
+    float peak = 0.0f;
+    for (float s : tone) peak = std::max(peak, std::fabs(s));
+    REQUIRE(peak > 0.01f);
+    REQUIRE(peak < 2.0f);  // bounded, not diverging
+  }
+  // Pitch sanity on the clean electric voicing (no body colouration to bias the
+  // fundamental estimate): E2 within 10 cents.
+  const std::vector<float> fingered =
+      render_patch(find_synth_preset("bass-fingered")->config.patch, 40, 100, 48000);
+  const double estimated = estimate_frequency(fingered, 8000, 44000, 82.4069);
+  REQUIRE(estimated > 0.0);
+  REQUIRE(std::fabs(estimated / 82.4069 - 1.0) < 0.0058);
+}
+
+TEST_CASE("GM bass programs 32-37 resolve to Karplus-Strong strings", "[midi][synth][ks]") {
+  for (uint8_t program : {32, 33, 34, 35, 36, 37}) {
+    REQUIRE(gm_fallback_patch(0, program).mode == SynthEngineMode::kKarplusStrong);
+  }
+  // The slap programs engage the fret-slap limiter; the plucked members do not.
+  REQUIRE(gm_fallback_patch(0, 36).ks.slap > 0.0f);
+  REQUIRE(gm_fallback_patch(0, 33).ks.slap == 0.0f);
+  // The sustained members carry the two-polarization beat; the percussive slap
+  // keeps it off.
+  REQUIRE(gm_fallback_patch(0, 33).ks.polarization > 0.0f);
+  REQUIRE(gm_fallback_patch(0, 36).ks.polarization == 0.0f);
+  // Synth Bass (38-39) keeps the subtractive family voicing by design.
+  REQUIRE(gm_fallback_patch(0, 38).mode == SynthEngineMode::kSubtractive);
+}
+
+TEST_CASE("two-polarization coupling engages, stays bounded, off by default", "[midi][synth][ks]") {
+  NativeSynthPatch base = ks_base_patch();
+  base.ks.decay_s = 5.0f;
+  base.ks.brightness = 0.5f;
+  base.gain = 0.8f;
+  NativeSynthPatch on = base;
+  on.ks.polarization = 0.6f;
+  const std::vector<float> off_tone = render_patch(base, 40, 110, 48000);  // 1 s, pol == 0
+  const std::vector<float> on_tone = render_patch(on, 40, 110, 48000);
+  // The detuned second plane reshapes the tone, yet the added feedback loop
+  // stays bounded and the string is still ringing after one second.
+  REQUIRE(on_tone != off_tone);
+  float peak = 0.0f;
+  for (float s : on_tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  REQUIRE(peak < 2.0f);
+  REQUIRE(rms(on_tone, 40000, 48000) > 1.0e-4f);
+}
+
+TEST_CASE("fret-slap engages the displacement limiter and stays off by default",
+          "[midi][synth][ks]") {
+  NativeSynthPatch base = ks_base_patch();
+  base.ks.brightness = 0.6f;
+  base.ks.pick_position = 0.1f;
+  base.ks.exc_brightness = 0.9f;
+  base.gain = 0.9f;
+  NativeSynthPatch on = base;
+  on.ks.slap = 0.85f;
+  const std::vector<float> off_tone = render_patch(base, 40, 127, 24000);  // slap == 0
+  const std::vector<float> on_tone = render_patch(on, 40, 127, 24000);
+  auto peak_of = [](const std::vector<float>& buf) {
+    float p = 0.0f;
+    for (float s : buf) p = std::max(p, std::fabs(s));
+    return p;
+  };
+  // The fret-contact limiter engages (the tone differs from the plain string)
+  // and clamps the string's over-travel, so the slap voicing peaks below the
+  // unlimited string and stays bounded.
+  REQUIRE(on_tone != off_tone);
+  REQUIRE(peak_of(on_tone) < peak_of(off_tone));
+  REQUIRE(peak_of(on_tone) > 0.01f);
+  REQUIRE(peak_of(on_tone) < 2.0f);
+}
+
+TEST_CASE("picked bass is brighter than fingered", "[midi][synth][ks]") {
+  using sonare::midi::synth::find_synth_preset;
+  // Picking near the bridge with an open excitation lowpass keeps more upper
+  // harmonics than the rounder fingerstyle voicing.
+  const std::vector<float> picked =
+      render_patch(find_synth_preset("bass-picked")->config.patch, 40, 100, 24000);
+  const std::vector<float> fingered =
+      render_patch(find_synth_preset("bass-fingered")->config.patch, 40, 100, 24000);
+  REQUIRE(high_band_fraction(picked, 2048, 800.0) > high_band_fraction(fingered, 2048, 800.0));
 }
 
 TEST_CASE("GM harp fallback is a stretched KS string", "[midi][synth][ks]") {

@@ -217,6 +217,12 @@ struct ProgramOverrides {
   NativeSynthPatch muted_guitar;     // program 28 (palm mute)
   NativeSynthPatch overdriven;       // program 29
   NativeSynthPatch distortion;       // program 30
+  NativeSynthPatch bass_acoustic;    // program 32 (Acoustic Bass)
+  NativeSynthPatch bass_fingered;    // program 33 (Electric Bass, finger)
+  NativeSynthPatch bass_picked;      // program 34 (Electric Bass, pick)
+  NativeSynthPatch bass_fretless;    // program 35 (Fretless Bass)
+  NativeSynthPatch bass_slap;        // program 36 (Slap Bass 1, thumb)
+  NativeSynthPatch bass_pop;         // program 37 (Slap Bass 2, pull/pop)
   NativeSynthPatch harp;             // program 46 (Orchestral Harp)
   NativeSynthPatch church_organ;     // program 19 (Church Organ, flue pipe)
   NativeSynthPatch reed_organ;       // program 21 (Reed Organ, lingual pipe)
@@ -380,6 +386,90 @@ ProgramOverrides build_program_overrides() noexcept {
   o.distortion.cutoff_hz = 3500.0f;
   o.distortion.gain = 0.6f;
 
+  // Electric / acoustic bass (GM 32-35): the KS string voiced for the low
+  // register — long, strongly stretched decays (bass strings ring far longer
+  // than treble) and a pickup-ish lowpass on the electric members. Fingerstyle
+  // plucks nearer the neck (rounder), the pick nearer the bridge (brighter
+  // attack); the acoustic upright keeps a large resonating body. Slap/pop
+  // (36-37) needs the dedicated bass excitation core and stays on the
+  // subtractive family until it lands; synth bass (38-39) is subtractive by
+  // design.
+  NativeSynthPatch bass{};
+  bass.mode = SynthEngineMode::kKarplusStrong;
+  bass.amp_env = env(1.0f, 0.0f, 1.0f, 200.0f);
+  bass.cutoff_hz = 4500.0f;
+  bass.ks.brightness = 0.44f;
+  bass.ks.decay_s = 5.5f;
+  bass.ks.decay_stretch = 0.75f;
+  bass.ks.pick_position = 0.26f;
+  bass.ks.exc_brightness = 0.6f;
+  bass.ks.vel_to_brightness = 0.6f;
+  bass.ks.release_damp_s = 0.08f;
+  // Two-polarization beat: a detuned horizontal plane adds the thickness and
+  // slow shimmer of a big low string (the sustained members carry it; the
+  // percussive slap/pop keep it off).
+  bass.ks.polarization = 0.45f;
+  bass.body = BodyType::kNone;
+  bass.body_mix = 0.0f;
+  bass.gain = 0.82f;
+  o.bass_fingered = bass;
+
+  // Acoustic upright: darker, softer pluck, a large resonating body.
+  o.bass_acoustic = bass;
+  o.bass_acoustic.ks.brightness = 0.34f;
+  o.bass_acoustic.ks.decay_s = 6.0f;
+  o.bass_acoustic.ks.decay_stretch = 0.8f;
+  o.bass_acoustic.ks.pick_position = 0.22f;
+  o.bass_acoustic.ks.exc_brightness = 0.55f;
+  o.bass_acoustic.ks.release_damp_s = 0.1f;
+  o.bass_acoustic.cutoff_hz = 4000.0f;
+  o.bass_acoustic.body = BodyType::kGuitar;
+  o.bass_acoustic.body_mix = 0.45f;
+  o.bass_acoustic.gain = 0.8f;
+
+  // Pick: near-bridge, bright attack, shorter ring.
+  o.bass_picked = bass;
+  o.bass_picked.ks.brightness = 0.58f;
+  o.bass_picked.ks.decay_s = 4.5f;
+  o.bass_picked.ks.decay_stretch = 0.7f;
+  o.bass_picked.ks.pick_position = 0.11f;
+  o.bass_picked.ks.exc_brightness = 0.85f;
+  o.bass_picked.ks.release_damp_s = 0.06f;
+  o.bass_picked.cutoff_hz = 5000.0f;
+  o.bass_picked.gain = 0.8f;
+
+  // Fretless: rounder, darker, longer glide-friendly ring.
+  o.bass_fretless = bass;
+  o.bass_fretless.ks.brightness = 0.4f;
+  o.bass_fretless.ks.decay_s = 6.0f;
+  o.bass_fretless.ks.decay_stretch = 0.78f;
+  o.bass_fretless.ks.pick_position = 0.28f;
+  o.bass_fretless.ks.exc_brightness = 0.55f;
+  o.bass_fretless.ks.release_damp_s = 0.12f;
+  o.bass_fretless.cutoff_hz = 4200.0f;
+  o.bass_fretless.gain = 0.8f;
+
+  // Slap Bass 1 (GM 36, thumb): the hard near-bridge attack of the pick voicing
+  // driven into the fret-slap limiter — the string knocks the frets, so the
+  // over-travel is reflected and buzzes (Rank & Kubin 1997).
+  o.bass_slap = o.bass_picked;
+  o.bass_slap.ks.brightness = 0.62f;
+  o.bass_slap.ks.pick_position = 0.09f;
+  o.bass_slap.ks.exc_brightness = 0.92f;
+  o.bass_slap.ks.decay_s = 3.8f;
+  o.bass_slap.ks.slap = 0.7f;
+  o.bass_slap.ks.polarization = 0.0f;  // percussive: the beat would muddy the pop
+  o.bass_slap.cutoff_hz = 6000.0f;
+
+  // Slap Bass 2 (GM 37, pull/pop): a sharper, brighter pop with a harder fret
+  // slap and a shorter ring.
+  o.bass_pop = o.bass_slap;
+  o.bass_pop.ks.brightness = 0.68f;
+  o.bass_pop.ks.exc_brightness = 0.98f;
+  o.bass_pop.ks.decay_s = 3.2f;
+  o.bass_pop.ks.slap = 0.85f;
+  o.bass_pop.cutoff_hz = 6500.0f;
+
   // Orchestral harp: long stretched decay, strings keep ringing after
   // note-off (no damper grip), mid-string pluck.
   o.harp = steel;
@@ -443,6 +533,12 @@ ProgramOverrides build_program_overrides() noexcept {
   o.muted_guitar = clamp_synth_patch(o.muted_guitar);
   o.overdriven = clamp_synth_patch(o.overdriven);
   o.distortion = clamp_synth_patch(o.distortion);
+  o.bass_acoustic = clamp_synth_patch(o.bass_acoustic);
+  o.bass_fingered = clamp_synth_patch(o.bass_fingered);
+  o.bass_picked = clamp_synth_patch(o.bass_picked);
+  o.bass_fretless = clamp_synth_patch(o.bass_fretless);
+  o.bass_slap = clamp_synth_patch(o.bass_slap);
+  o.bass_pop = clamp_synth_patch(o.bass_pop);
   o.harp = clamp_synth_patch(o.harp);
   o.church_organ = clamp_synth_patch(o.church_organ);
   o.reed_organ = clamp_synth_patch(o.reed_organ);
@@ -891,6 +987,18 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
       return program_overrides().overdriven;
     case 30:  // Distortion Guitar
       return program_overrides().distortion;
+    case 32:  // Acoustic Bass
+      return program_overrides().bass_acoustic;
+    case 33:  // Electric Bass (finger)
+      return program_overrides().bass_fingered;
+    case 34:  // Electric Bass (pick)
+      return program_overrides().bass_picked;
+    case 35:  // Fretless Bass
+      return program_overrides().bass_fretless;
+    case 36:  // Slap Bass 1
+      return program_overrides().bass_slap;
+    case 37:  // Slap Bass 2
+      return program_overrides().bass_pop;
     case 46:  // Orchestral Harp
       return program_overrides().harp;
     default:

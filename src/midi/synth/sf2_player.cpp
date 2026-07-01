@@ -88,8 +88,9 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   // attach their span at note-on).
   fallback_ks_capacity_ = ks_buffer_capacity(sample_rate_);
   fallback_ks_buffers_.assign(
-      config_.synth_fallback ? fallback_pool_.size() * static_cast<size_t>(fallback_ks_capacity_)
-                             : 0,
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(ks_slab_capacity(sample_rate_))
+          : 0,
       0.0f);
   fallback_piano_string_capacity_ = piano_string_capacity(sample_rate_);
   fallback_piano_buffers_.assign(
@@ -299,7 +300,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // KS patches get their delay span before start() (pointer wiring only).
   if (!fallback_ks_buffers_.empty()) {
     voice->ks.attach(
-        fallback_ks_buffers_.data() + static_cast<size_t>(voice_index) * fallback_ks_capacity_,
+        fallback_ks_buffers_.data() + static_cast<size_t>(voice_index) * 2 * fallback_ks_capacity_,
         fallback_ks_capacity_);
   }
   if (!fallback_piano_buffers_.empty()) {

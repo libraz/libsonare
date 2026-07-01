@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 32;
+constexpr size_t kPresetCount = 37;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -45,7 +45,9 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   square.cutoff_hz = 3000.0f;
   t[i++] = {"square-lead", from_patch(clamp_synth_patch(square))};
 
-  NativeSynthPatch sub = gm_fallback_patch(0, 33);
+  // Synth Bass 1 (GM 38) stays subtractive; the plucked GM 32-35 members are
+  // Karplus-Strong now, so the synth sub is voiced off the synth-bass family.
+  NativeSynthPatch sub = gm_fallback_patch(0, 38);
   sub.unison = 1;
   sub.cutoff_hz = 600.0f;
   t[i++] = {"sub-bass", from_patch(clamp_synth_patch(sub))};
@@ -66,6 +68,18 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   t[i++] = {"pluck", from_patch(gm_fallback_patch(0, 104))};
   t[i++] = {"electric-guitar", from_patch(gm_fallback_patch(0, 26))};
   t[i++] = {"harp", from_patch(gm_fallback_patch(0, 46))};
+
+  // --- electric / acoustic bass (plucked-string waveguide) ---
+  // The bass family (GM 32-35): the Karplus-Strong string voiced for the low
+  // register (long, stretched decays; a pickup lowpass on the electric members).
+  // One data table, two address spaces — the voicings live in the GM fallback
+  // map. Slap/pop and the two-polarization beat need the dedicated bass
+  // excitation core and are voiced separately once that lands.
+  t[i++] = {"bass-acoustic", from_patch(gm_fallback_patch(0, 32))};
+  t[i++] = {"bass-fingered", from_patch(gm_fallback_patch(0, 33))};
+  t[i++] = {"bass-picked", from_patch(gm_fallback_patch(0, 34))};
+  t[i++] = {"bass-fretless", from_patch(gm_fallback_patch(0, 35))};
+  t[i++] = {"bass-slap", from_patch(gm_fallback_patch(0, 36))};
 
   // --- modal / additive ---
   t[i++] = {"marimba", from_patch(gm_fallback_patch(0, 12))};

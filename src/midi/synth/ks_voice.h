@@ -44,11 +44,19 @@ namespace sonare::midi::synth {
 /// the buffer (their pitch lands sharp instead of overflowing).
 inline constexpr float kKsMinFundamentalHz = 20.0f;
 
-/// Returns the per-voice delay-buffer capacity (in samples) the host must
-/// allocate for @p sample_rate.
+/// Returns the per-LINE delay-buffer capacity (in samples): one string
+/// polarization span. attach() carves the slab into spans of this size.
 inline int ks_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   return static_cast<int>(sr / kKsMinFundamentalHz) + 8;
+}
+
+/// Returns the per-voice delay-SLAB capacity (in samples) the host must
+/// allocate: two spans (the primary string plus the second-polarization line,
+/// always reserved so attach() stays allocation-free whether or not a note
+/// engages the polarization gate).
+inline int ks_slab_capacity(double sample_rate) noexcept {
+  return 2 * ks_buffer_capacity(sample_rate);
 }
 
 /// KS section of a NativeSynthPatch (used when mode == kKarplusStrong).
@@ -71,6 +79,21 @@ struct KsPatchParams {
   float vel_to_brightness = 0.6f;
   /// Damped t60 in seconds applied at note-off (finger/palm mute).
   float release_damp_s = 0.08f;
+  /// Fret-slap intensity in [0,1] (off-by-default; 0 = no fret contact, render
+  /// bit-identical to the plain string). A hard-driven bass string slaps
+  /// against the frets/fingerboard: displacement past the fret gap is limited
+  /// by a nonlinear reflection, adding the buzzy slap/pop attack (the electric
+  /// bass slap technique — Rank & Kubin 1997). Higher values narrow the gap
+  /// (more contact, more buzz).
+  float slap = 0.0f;
+  /// Second-polarization coupling in [0,1] (off-by-default; 0 = the second line
+  /// is skipped entirely and render is bit-identical to the plain string). A
+  /// real string vibrates in two planes (the plucked/vertical one plus a
+  /// horizontal one at a slightly different pitch that decays faster). A second
+  /// delay line, detuned a few cents and more damped, shares the pluck: it
+  /// beats against the primary and adds a two-stage decay — the "thickness" and
+  /// slow shimmer of a big low string (Karjalainen, Välimäki & Tolonen 1998).
+  float polarization = 0.0f;
 };
 
 /// Per-voice plucked-string state, embedded in NativeSynthVoice. The voice's
@@ -78,11 +101,14 @@ struct KsPatchParams {
 /// returns the raw string sample.
 class KsVoiceCore {
  public:
-  /// CONTROL-thread wiring (or audio-thread pointer assignment before
-  /// start()): hands the core its delay span. The slab outlives the voice.
-  void attach(float* buffer, int capacity) noexcept {
-    buffer_ = buffer;
-    capacity_ = capacity;
+  /// CONTROL-thread wiring (or audio-thread pointer assignment before start()):
+  /// hands the core its delay slab (two spans of @p per_line_capacity — the
+  /// primary string plus the second-polarization line). The slab outlives the
+  /// voice.
+  void attach(float* slab, int per_line_capacity) noexcept {
+    buffer_ = slab;
+    capacity_ = per_line_capacity;
+    pol_buffer_ = slab != nullptr ? slab + per_line_capacity : nullptr;
   }
 
   /// Configures the string for @p note / @p velocity and injects the seeded
@@ -117,6 +143,24 @@ class KsVoiceCore {
   float loop_gain_ = 0.0f;
   /// Per-loop gain for the note-off damped t60 (precomputed at start).
   float release_gain_ = 0.0f;
+  /// Fret-slap displacement limit (0 = off -> render path bit-identical).
+  /// When > 0, loop content past +/- this bound is softly reflected.
+  float slap_threshold_ = 0.0f;
+
+  // Second (horizontal) polarization: a detuned string loop sharing the pluck.
+  // Off unless params.polarization > 0 (pol_couple_ == 0 -> render skips it, so
+  // the primary path is bit-identical). The slab's second span (attach()).
+  float* pol_buffer_ = nullptr;
+  int pol_size_ = 0;
+  size_t pol_write_ = 0;
+  float pol_period_ = 0.0f;  // detuned from base_period_
+  float pol_loop_comp_ = 1.0f;
+  float pol_loop_alpha_ = 1.0f;
+  float pol_lp_state_ = 0.0f;
+  float pol_loop_gain_ = 0.0f;
+  float pol_release_gain_ = 0.0f;
+  float pol_couple_ = 0.0f;  // 0 = off; horizontal-plane mix into the output
+  float pol_exc_ = 0.0f;     // pluck injection into the 2nd polarization
 
   // Excitation burst (one period of combed, lowpassed seeded noise; the
   // dynamic-level lowpass is two cascaded one-poles).
