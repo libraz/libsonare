@@ -4,8 +4,10 @@
 ///        weighting (centre thump vs rim pitch), and backward-compatible
 ///        deterministic rendering at strike_r == 0.
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -340,4 +342,185 @@ TEST_CASE("the cymbal shimmer swells after the strike and rides the ring",
   float peak = 0.0f;
   for (float v : s) peak = std::max(peak, std::fabs(v));
   REQUIRE(peak < 4.0f);
+}
+
+// ---------------------------------------------------------------------------
+// GM/GS drum map: per-note archetypes + exclusive (mute-group) choke.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// A `drum-kit` patch: note-on resolves each struck key through the GM drum map
+/// instead of playing one fixed piece.
+NativeSynthPatch drum_kit_patch() {
+  NativeSynthPatch p{};
+  p.mode = SynthEngineMode::kPercussion;
+  p.one_shot = true;
+  p.percussion.gm_kit = true;
+  p.cutoff_hz = 20000.0f;
+  return p;
+}
+
+/// Renders a gm_kit engine, striking (sample_offset, note) pairs (given in
+/// non-decreasing offset order), and returns the mono (left) output. A non-zero
+/// @p program selects a GS drum kit via a program change before the strikes.
+std::vector<float> render_kit(const std::vector<std::pair<int, uint8_t>>& strikes, int num_samples,
+                              uint8_t program = 0) {
+  NativeSynthConfig cfg;
+  cfg.patch = drum_kit_patch();
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 512);
+  if (program != 0) {
+    synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, program)));
+  }
+  std::vector<float> left(static_cast<size_t>(num_samples), 0.0f);
+  std::vector<float> right(static_cast<size_t>(num_samples), 0.0f);
+  int pos = 0;
+  auto advance = [&](int to) {
+    while (pos < to) {
+      const int seg = std::min(512, to - pos);
+      float* chans[2] = {left.data() + pos, right.data() + pos};
+      synth.process(chans, 2, seg);
+      pos += seg;
+    }
+  };
+  for (const auto& s : strikes) {
+    advance(s.first);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, s.second, 100)));
+  }
+  advance(num_samples);
+  return left;
+}
+
+double window_rms(const std::vector<float>& x, int from, int to) {
+  double acc = 0.0;
+  for (int i = from; i < to; ++i) acc += static_cast<double>(x[i]) * x[i];
+  return std::sqrt(acc / std::max(1, to - from));
+}
+
+}  // namespace
+
+TEST_CASE("every GS drum key resolves to an audible instrument", "[midi][synth][percussion]") {
+  // The per-note map must leave no GM/GS drum key (27..87) silent.
+  for (uint8_t note = 27; note <= 87; ++note) {
+    const std::vector<float> out = render_kit({{0, note}}, 12000);
+    INFO("drum key " << static_cast<int>(note));
+    REQUIRE(window_rms(out, 0, 12000) > 1.0e-4);
+  }
+}
+
+TEST_CASE("GS drum keys differ in sustain by archetype", "[midi][synth][percussion]") {
+  // Distinct archetypes ring for distinct lengths: open triangle sustains for
+  // over a second while its mute twin and the claves die within ~150 ms. This
+  // proves the keys resolve to different voicings, not one shared bucket.
+  const int n = 32000;  // ~0.67 s
+  auto tail = [&](uint8_t note) {
+    return window_rms(render_kit({{0, note}}, n), 20000, 28000);  // ~0.42..0.58 s
+  };
+  const double open_triangle = tail(81);
+  const double mute_triangle = tail(80);
+  const double claves = tail(75);
+  REQUIRE(open_triangle > 1.0e-4);
+  REQUIRE(mute_triangle < open_triangle * 0.1);
+  REQUIRE(claves < open_triangle * 0.1);
+}
+
+TEST_CASE("the cowbell voices its two clangy partials", "[midi][synth][percussion]") {
+  // TR-808-informed cowbell: two tones near 587 Hz and 845 Hz (ratio ~1.44)
+  // dominate over the surrounding spectrum.
+  const std::vector<float> bell = render_kit({{0, 56}}, 8000);
+  const double low = goertzel(bell, 587.0);
+  const double high = goertzel(bell, 845.0);
+  const double off = goertzel(bell, 300.0);
+  REQUIRE(low > 3.0 * off);
+  REQUIRE(high > 1.5 * off);
+}
+
+TEST_CASE("a closed hi-hat chokes the ringing open hi-hat", "[midi][synth][percussion]") {
+  // Exclusive mute group 1: a closed/pedal strike cuts the open hat's tail.
+  const int n = 24000;  // 0.5 s
+  const std::vector<float> open_only = render_kit({{0, 46}}, n);
+  // The closed strike lands early (~63 ms) so its own short burst has decayed
+  // well before the measurement window, isolating the choked open-hat tail.
+  const std::vector<float> choked = render_kit({{0, 46}, {3000, 42}}, n);
+  const double base_tail = window_rms(open_only, 12000, 18000);  // ~0.25..0.375 s
+  const double choked_tail = window_rms(choked, 12000, 18000);
+  REQUIRE(base_tail > 1.0e-3);             // the open hat really is still ringing
+  REQUIRE(choked_tail < base_tail * 0.2);  // the closed strike choked it
+}
+
+TEST_CASE("phisem_beans == 0 reproduces the legacy percussion output bit-for-bit",
+          "[midi][synth][percussion]") {
+  NativeSynthPatch dry = tom_patch();  // phisem_beans defaults to 0
+  NativeSynthPatch explicit_off = tom_patch();
+  explicit_off.percussion.phisem_beans = 0.0f;
+  explicit_off.percussion.phisem_res_hz = 3000.0f;  // configured but bypassed by beans 0
+  explicit_off.percussion.phisem_scrape_hz = 100.0f;
+
+  const std::vector<float> a = render_patch(dry, 50, 100, 4096);
+  const std::vector<float> b = render_patch(explicit_off, 50, 100, 4096);
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i] == b[i]);
+  }
+}
+
+TEST_CASE("the PhISEM shaker is audible, bounded and decays", "[midi][synth][percussion]") {
+  // Maracas: one shake gesture -> a burst of bead collisions that dies out.
+  const int n = 24000;  // 0.5 s
+  const std::vector<float> mar = render_kit({{0, 70}}, n);
+  const double early = window_rms(mar, 0, 4000);
+  const double late = window_rms(mar, 16000, 24000);
+  REQUIRE(early > 1.0e-3);      // the shake sounds
+  REQUIRE(late < 0.3 * early);  // the system energy dies out
+  float peak = 0.0f;
+  for (float v : mar) peak = std::max(peak, std::fabs(v));
+  REQUIRE(peak < 4.0f);  // the statistical sum stays bounded
+}
+
+TEST_CASE("a long guiro scrape sustains past a short one", "[midi][synth][percussion]") {
+  // The scrape ridge train runs as long as the shake energy lasts: the long
+  // guiro (500 ms) is still scraping in a window where the short one (120 ms)
+  // has died.
+  const int n = 32000;  // ~0.67 s
+  const std::vector<float> shortg = render_kit({{0, 73}}, n);
+  const std::vector<float> longg = render_kit({{0, 74}}, n);
+  const double short_tail = window_rms(shortg, 12000, 20000);  // ~0.25..0.42 s
+  const double long_tail = window_rms(longg, 12000, 20000);
+  REQUIRE(long_tail > 2.0 * short_tail);
+}
+
+TEST_CASE("the TR-808 kit gives the kick a long decaying-sine tail", "[midi][synth][percussion]") {
+  // Program 25 = TR-808 kit: the kick becomes a low, long decaying sine.
+  const int n = 24000;  // 0.5 s
+  const std::vector<float> std_kick = render_kit({{0, 36}}, n, 0);
+  const std::vector<float> kick808 = render_kit({{0, 36}}, n, 25);
+  const double std_tail = window_rms(std_kick, 10000, 18000);
+  const double tail808 = window_rms(kick808, 10000, 18000);
+  REQUIRE(tail808 > 3.0 * std_tail);  // the 808 kick still booms where Standard has died
+}
+
+TEST_CASE("the Power kit hits the kick harder than Standard", "[midi][synth][percussion]") {
+  // Program 16 = Power (Rock) kit: bigger, louder shells.
+  const int n = 12000;
+  const std::vector<float> std_kick = render_kit({{0, 36}}, n, 0);
+  const std::vector<float> power = render_kit({{0, 36}}, n, 16);
+  float power_peak = 0.0f;
+  float std_peak = 0.0f;
+  for (float v : power) power_peak = std::max(power_peak, std::fabs(v));
+  for (float v : std_kick) std_peak = std::max(std_peak, std::fabs(v));
+  REQUIRE(power_peak > std_peak);
+}
+
+TEST_CASE("an unknown drum program leaves the Standard kit bit-identical",
+          "[midi][synth][percussion]") {
+  // Program 3 is not a GS kit slot -> Standard; must match the no-program render
+  // sample-for-sample (kit 0 skips the transform entirely).
+  const int n = 8000;
+  const std::vector<float> no_prog = render_kit({{0, 38}}, n, 0);
+  const std::vector<float> prog3 = render_kit({{0, 38}}, n, 3);
+  REQUIRE(no_prog.size() == prog3.size());
+  for (size_t i = 0; i < no_prog.size(); ++i) {
+    REQUIRE(no_prog[i] == prog3[i]);
+  }
 }

@@ -33,6 +33,8 @@ static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kPipeOrgan)
               SONARE_SYNTH_ENGINE_PIPE_ORGAN);
 static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kBowedString) + 1 ==
               SONARE_SYNTH_ENGINE_BOWED_STRING);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kReed) + 1 ==
+              SONARE_SYNTH_ENGINE_REED);
 
 static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSine) + 1 ==
               SONARE_SYNTH_OSC_SINE);

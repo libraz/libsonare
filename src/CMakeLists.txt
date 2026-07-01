@@ -670,6 +670,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/piano_voice.cpp
     midi/synth/pipe_organ_voice.cpp
     midi/synth/bowed_string_voice.cpp
+    midi/synth/reed_voice.cpp
     midi/synth/native_synth.cpp
     midi/synth/gm_fallback_map.cpp
     midi/synth/synth_presets.cpp

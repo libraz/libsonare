@@ -30,6 +30,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "piano",
         "pipe-organ",
         "bowed-string",
+        "reed",
     ),
     "waveforms": ("default", "sine", "saw", "square", "triangle", "noise"),
     "filter_models": ("default", "svf", "moog-ladder", "diode-ladder", "sallen-key"),
@@ -92,6 +93,7 @@ def test_synth_preset_patch_round_trips() -> None:
     # The "va:" routing prefix is accepted.
     assert synth_preset_patch("va:e-piano").engine_mode == "fm"
     assert synth_preset_patch("acoustic-piano").engine_mode == "piano"
+    assert synth_preset_patch("clarinet").engine_mode == "reed"
     with pytest.raises(SonareError):
         synth_preset_patch("no-such-preset")
 

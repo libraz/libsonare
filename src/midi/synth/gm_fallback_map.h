@@ -23,8 +23,22 @@ namespace sonare::midi::synth {
 /// programs resolve through their GM family.
 const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexcept;
 
-/// Fallback patch for a GM drum note (rhythm parts / bank 128).
+/// Fallback patch for a GM drum note (rhythm parts / bank 128). Always the
+/// Standard kit; GS kit variations are applied per voice by apply_gs_drum_kit.
 const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept;
+
+/// GS drum-kit index for a bank-128 program (SC-55/88 numbering, mirrors
+/// gs_drum_kit_name): 0 Standard, 1 Room, 2 Power, 3 Electronic, 4 TR-808,
+/// 5 Jazz, 6 Brush, 7 Orchestra, 8 SFX. Unknown programs map to Standard.
+uint8_t gm_fallback_drum_kit(uint8_t program) noexcept;
+
+/// Applies a GS kit variation to a resolved Standard drum patch's percussion +
+/// amp-envelope params (in place, note-aware — Power lowers the shells, TR-808
+/// sine-ifies them, Brush swishes the snare, etc.) and returns a gain
+/// multiplier. kit 0 (Standard) is a no-op returning 1.0. Applied per voice at
+/// note-on so a single Standard drum table covers every kit (no per-kit table).
+float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t kit,
+                        uint8_t note) noexcept;
 
 /// Longest amp-envelope release across all fallback patches (ms) — players
 /// fold this into their tail accounting when the fallback is enabled.

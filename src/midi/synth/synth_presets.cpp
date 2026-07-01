@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 24;
+constexpr size_t kPresetCount = 32;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -186,6 +186,50 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     bowed("viola", 0.13f, 0.55f, 0.52f, 0.34f, 55.0f, 120.0f, 0.34f, 0.70f);
     bowed("cello", 0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.72f);
     bowed("contrabass", 0.15f, 0.62f, 0.36f, 0.44f, 90.0f, 160.0f, 0.46f, 0.72f);
+  }
+
+  // --- reed woodwind (breath-excited waveguide) ---
+  // The reed family (GM 65-72): one reed core voiced across the single- and
+  // double-reed winds. The engine tunes to the played note, so the members
+  // differ by timbre: the CLARINET is the only cylinder (odd-harmonic, hollow);
+  // the saxes and double reeds are conical (full harmonic series). The bell
+  // brightness is the main timbral axis (bright/nasal oboe -> dark bassoon /
+  // baritone), the shared wood-tube BodyResonator adds the bore/formant colour,
+  // and the breath contour handles the speech so the amp envelope just holds.
+  {
+    auto reed = [&](const char* name, bool conical, float reed_stiffness, float reed_opening,
+                    float brightness, float damping, float attack_ms, float release_ms,
+                    float breath, float body_mix, float gain) {
+      SynthPreset& v = t[i++];
+      v.name = name;
+      NativeSynthPatch patch{};
+      patch.mode = SynthEngineMode::kReed;
+      patch.amp_env.attack_ms = 15.0f;
+      patch.amp_env.sustain = 1.0f;
+      patch.amp_env.release_ms = release_ms;
+      patch.cutoff_hz = 20000.0f;
+      patch.reed.conical = conical;
+      patch.reed.reed_stiffness = reed_stiffness;
+      patch.reed.reed_opening = reed_opening;
+      patch.reed.brightness = brightness;
+      patch.reed.damping = damping;
+      patch.reed.attack_ms = attack_ms;
+      patch.reed.release_ms = release_ms;
+      patch.reed.breath_pressure = breath;
+      patch.body = BodyType::kWoodTube;
+      patch.body_mix = body_mix;
+      patch.gain = gain;
+      v.config = from_patch(clamp_synth_patch(patch));
+    };
+    //    name             cone  stiff  open  bright damp  atk    rel    breath body  gain
+    reed("clarinet", false, 0.40f, 0.50f, 0.45f, 0.30f, 25.0f, 90.0f, 0.60f, 0.25f, 0.70f);
+    reed("soprano-sax", true, 0.55f, 0.55f, 0.60f, 0.32f, 20.0f, 80.0f, 0.65f, 0.30f, 0.70f);
+    reed("alto-sax", true, 0.55f, 0.55f, 0.54f, 0.34f, 22.0f, 90.0f, 0.65f, 0.32f, 0.70f);
+    reed("tenor-sax", true, 0.60f, 0.50f, 0.48f, 0.36f, 26.0f, 100.0f, 0.68f, 0.36f, 0.72f);
+    reed("baritone-sax", true, 0.60f, 0.50f, 0.40f, 0.40f, 32.0f, 120.0f, 0.70f, 0.40f, 0.72f);
+    reed("oboe", true, 0.80f, 0.35f, 0.70f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.68f);
+    reed("english-horn", true, 0.70f, 0.40f, 0.60f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.68f);
+    reed("bassoon", true, 0.65f, 0.45f, 0.42f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.72f);
   }
 
   return t;

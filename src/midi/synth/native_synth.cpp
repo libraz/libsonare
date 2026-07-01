@@ -134,6 +134,18 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
       std::clamp(sanitize(p.percussion.shimmer_attack_ms, 40.0f), 1.0f, 2000.0f);
   p.percussion.shimmer_cutoff_hz =
       std::clamp(sanitize(p.percussion.shimmer_cutoff_hz, 8000.0f), 20.0f, 20000.0f);
+  p.percussion.phisem_beans = std::clamp(sanitize(p.percussion.phisem_beans, 0.0f), 0.0f, 256.0f);
+  p.percussion.phisem_energy_ms =
+      std::clamp(sanitize(p.percussion.phisem_energy_ms, 100.0f), 1.0f, 20000.0f);
+  p.percussion.phisem_sound_ms =
+      std::clamp(sanitize(p.percussion.phisem_sound_ms, 3.0f), 0.2f, 200.0f);
+  p.percussion.phisem_res_hz =
+      std::clamp(sanitize(p.percussion.phisem_res_hz, 0.0f), 0.0f, 20000.0f);
+  p.percussion.phisem_res_q = std::clamp(sanitize(p.percussion.phisem_res_q, 1.0f), 0.5f, 30.0f);
+  p.percussion.phisem_scrape_hz =
+      std::clamp(sanitize(p.percussion.phisem_scrape_hz, 0.0f), 0.0f, 20000.0f);
+  p.percussion.phisem_pitch_glide =
+      std::clamp(sanitize(p.percussion.phisem_pitch_glide, 0.0f), -0.95f, 8.0f);
   p.piano.strings = std::clamp(p.piano.strings, 1, kMaxPianoStrings);
   p.piano.detune_cents = std::clamp(sanitize(p.piano.detune_cents, 1.6f), 0.0f, 50.0f);
   p.piano.decay_fast_s = std::clamp(sanitize(p.piano.decay_fast_s, 3.0f), 0.05f, 60.0f);
@@ -180,6 +192,20 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.bowed_string.release_ms =
       std::clamp(sanitize(p.bowed_string.release_ms, 120.0f), 1.0f, 5000.0f);
   p.bowed_string.rosin = std::clamp(sanitize(p.bowed_string.rosin, 0.0f), 0.0f, 1.0f);
+  p.reed.breath_pressure = std::clamp(sanitize(p.reed.breath_pressure, 0.6f), 0.0f, 1.0f);
+  p.reed.vel_to_breath = std::clamp(sanitize(p.reed.vel_to_breath, 0.6f), 0.0f, 1.0f);
+  p.reed.reed_stiffness = std::clamp(sanitize(p.reed.reed_stiffness, 0.5f), 0.0f, 1.0f);
+  p.reed.reed_opening = std::clamp(sanitize(p.reed.reed_opening, 0.5f), 0.0f, 1.0f);
+  p.reed.brightness = std::clamp(sanitize(p.reed.brightness, 0.5f), 0.0f, 1.0f);
+  p.reed.damping = std::clamp(sanitize(p.reed.damping, 0.4f), 0.0f, 1.0f);
+  p.reed.attack_ms = std::clamp(sanitize(p.reed.attack_ms, 40.0f), 1.0f, 2000.0f);
+  p.reed.release_ms = std::clamp(sanitize(p.reed.release_ms, 80.0f), 1.0f, 5000.0f);
+  p.reed.breath_noise = std::clamp(sanitize(p.reed.breath_noise, 0.12f), 0.0f, 1.0f);
+  p.reed.chiff = std::clamp(sanitize(p.reed.chiff, 0.4f), 0.0f, 1.0f);
+  p.reed.chiff_ms = std::clamp(sanitize(p.reed.chiff_ms, 12.0f), 1.0f, 500.0f);
+  p.reed.reed_resonance = std::clamp(sanitize(p.reed.reed_resonance, 0.5f), 0.0f, 1.0f);
+  p.reed.register_vent = std::clamp(sanitize(p.reed.register_vent, 0.0f), 0.0f, 1.0f);
+  p.reed.growl = std::clamp(sanitize(p.reed.growl, 0.0f), 0.0f, 1.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 3) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
@@ -191,11 +217,22 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
 // ---------------------------------------------------------------------------
 
 void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity,
-                             uint32_t voice_index, float glide_from_hz, bool una_corda) noexcept {
+                             uint32_t voice_index, float glide_from_hz, bool una_corda,
+                             uint8_t drum_kit, DrumVoiceMod drum_mod) noexcept {
   patch = &p;
   key_down = true;
   releasing = false;
   sostenuto = false;
+  // GS per-note drum edits: pitch coarse and absolute pan carry into render;
+  // the TVA level folds into velocity_gain below. Defaults are no-ops.
+  drum_pitch_ratio = drum_mod.pitch_ratio;
+  drum_pan_units = drum_mod.pan_units;
+
+  // A GS kit variation may retune the resolved drum patch's percussion + amp
+  // envelope at note-on and scale its level (Standard patch stays shared; no
+  // per-kit table). kit_gain folds into velocity_gain, amp_cfg into the VCA.
+  DahdsrConfig amp_cfg = p.amp_env;
+  float kit_gain = 1.0f;
 
   VoiceRandomSequence seq;
   seq.reseed(voice_index, note, age);
@@ -216,7 +253,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     additive.start(p.additive, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   if (p.mode == SynthEngineMode::kPercussion) {
-    percussion.start(p.percussion, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+    PercussionPatchParams kit_perc = p.percussion;
+    if (drum_kit != 0) kit_gain = apply_gs_drum_kit(kit_perc, amp_cfg, drum_kit, note);
+    percussion.start(kit_perc, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   if (p.mode == SynthEngineMode::kPiano) {
     piano.start(p.piano, sample_rate, note, velocity, voice_seed(voice_index, note, age),
@@ -228,6 +267,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   if (p.mode == SynthEngineMode::kBowedString) {
     bowed_string.start(p.bowed_string, sample_rate, note, velocity,
                        voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kReed) {
+    reed.start(p.reed, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -247,7 +289,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
                                        voice_seed(voice_index, note, age) ^ (k + 1));
   }
 
-  velocity_gain = sf2_velocity_gain(velocity);
+  velocity_gain = sf2_velocity_gain(velocity) * kit_gain * drum_mod.level_gain;
   static_cutoff_cents =
       p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +
       p.key_track * 100.0f * (static_cast<float>(note & 0x7Fu) - 60.0f);
@@ -264,7 +306,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     drive_makeup = 1.0f;
   }
 
-  amp_env.configure(sample_rate, p.amp_env);
+  amp_env.configure(sample_rate, amp_cfg);
   amp_env.note_on();
   filter_env.configure(sample_rate, p.filter_env);
   filter_env.note_on();
@@ -331,8 +373,11 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     offsets = evaluate_mod_matrix(patch->mod_matrix, values);
   }
 
-  // Refresh the cached stereo pan gains when the effective pan changed.
-  const float pan_units = mod.pan_units + offsets.pan_units + pan_spread_units;
+  // Refresh the cached stereo pan gains when the effective pan changed. A GS
+  // per-note drum pan overrides the channel pan (absolute); otherwise the
+  // channel pan stands.
+  const float base_pan = drum_pan_units < 1.0e8f ? drum_pan_units : mod.pan_units;
+  const float pan_units = base_pan + offsets.pan_units + pan_spread_units;
   if (pan_units != cached_pan_units) {
     cached_pan_units = pan_units;
     const float angle = pan_angle(pan_units);
@@ -359,6 +404,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   // Shared organ wind: the tremulant / wind-sag pitch factor (1.0 for every
   // non-pipe voice, which the host always passes through).
   common *= wind_pitch;
+  // GS per-note drum pitch coarse (1.0 = untouched).
+  common *= drum_pitch_ratio;
 
   float sample = 0.0f;
   if (patch->mode == SynthEngineMode::kFm) {
@@ -377,6 +424,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = pipe_organ.render(common);
   } else if (patch->mode == SynthEngineMode::kBowedString) {
     sample = bowed_string.render(common);
+  } else if (patch->mode == SynthEngineMode::kReed) {
+    sample = reed.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -419,6 +468,7 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kPiano) piano.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kPipeOrgan) pipe_organ.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kBowedString) bowed_string.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kReed) reed.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -432,8 +482,18 @@ void NativeSynthVoice::kill() noexcept {
   piano.kill();
   pipe_organ.kill();
   bowed_string.kill();
+  reed.kill();
   active = false;
   releasing = false;
+}
+
+void NativeSynthVoice::choke() noexcept {
+  // Force the amp envelope into its release stage even for one-shot (drum)
+  // voices, which otherwise ignore note-off. Same-group strikes use this to cut
+  // a ringing voice with a short fade rather than an abrupt kill.
+  key_down = false;
+  releasing = true;
+  amp_env.note_off();
 }
 
 // ---------------------------------------------------------------------------
@@ -495,6 +555,16 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     bowed_string_buffers_.clear();
   }
+  // Reed woodwind: one bore delay span per voice slot. The only allocation site;
+  // voices attach their span at note-on.
+  reed_capacity_ = reed_buffer_capacity(sample_rate_);
+  reed_mode_ = config_.patch.mode == SynthEngineMode::kReed;
+  if (reed_mode_) {
+    reed_buffers_.assign(pool_.size() * static_cast<size_t>(reed_slab_capacity(sample_rate_)),
+                         0.0f);
+  } else {
+    reed_buffers_.clear();
+  }
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
   channels_ = {};
@@ -555,9 +625,39 @@ void NativeSynth::push_bow_control(uint8_t channel) noexcept {
   }
 }
 
+void NativeSynth::push_reed_control(uint8_t channel) noexcept {
+  if (!reed_mode_) return;
+  const uint8_t ch = channel & 0x0Fu;
+  const ChannelState& st = channels_[ch];
+  for (NativeSynthVoice& v : pool_) {
+    if (!v.active || v.channel != ch || v.patch == nullptr ||
+        v.patch->mode != SynthEngineMode::kReed) {
+      continue;
+    }
+    // Breath / brightness override the preset only once the host sends the CC;
+    // loudness is the shared expression VCA, not a reed-specific push.
+    if (st.reed_breath != 255) v.reed.set_breath(static_cast<float>(st.reed_breath) / 127.0f);
+    if (st.reed_bright != 255) v.reed.set_brightness(static_cast<float>(st.reed_bright) / 127.0f);
+  }
+}
+
 void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
+  // GM kit exclusive/mute groups: a new hi-hat / triangle / whistle / surdo
+  // strike chokes the ringing voice in its group before the new one allocates.
+  if (config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit) {
+    const uint8_t excl = gm_fallback_drum_patch(note).percussion.exclusive_class;
+    if (excl != 0) {
+      for (NativeSynthVoice& v : pool_) {
+        if (v.active && v.channel == ch && v.patch != nullptr &&
+            v.patch->mode == SynthEngineMode::kPercussion &&
+            v.patch->percussion.exclusive_class == excl) {
+          v.choke();
+        }
+      }
+    }
+  }
   NativeSynthVoice* voice = pool_.allocate(ch, note);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
@@ -581,17 +681,24 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
                                    static_cast<size_t>(voice_index) * 3 * bowed_string_capacity_,
                                bowed_string_capacity_);
   }
+  if (!reed_buffers_.empty()) {
+    voice->reed.attach(reed_buffers_.data() + static_cast<size_t>(voice_index) * reed_capacity_,
+                       reed_capacity_);
+  }
   // GM kit mode: resolve the struck note through the drum map instead of
   // playing the single configured piece (static patches — safe to keep in the
   // voice for its whole life; every kit piece is kPercussion, so the KS/piano
   // slabs are never needed).
   const NativeSynthPatch* patch = &config_.patch;
+  uint8_t drum_kit = 0;
   if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
     patch = &gm_fallback_drum_patch(note);
+    drum_kit = gm_fallback_drum_kit(channels_[ch].program);
   }
   // Portamento: glide from the channel's previous note when enabled.
   const float glide_from = patch->glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;
-  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, channels_[ch].una_corda);
+  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, channels_[ch].una_corda,
+               drum_kit);
   // Seed a bowed voice at the channel's current bow controllers (no glide on the
   // first sample) so a note struck mid-phrase starts at the live bow position /
   // force / expression rather than gliding in from the preset.
@@ -605,6 +712,17 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
       voice->bowed_string.set_bow_position(static_cast<float>(st.bow_position) / 127.0f);
     }
     voice->bowed_string.snap_bow_control();
+  }
+  // Seed a reed voice at the channel's current reed controllers (no glide on the
+  // first sample) so a note struck mid-phrase starts at the live breath /
+  // brightness rather than gliding in from the preset.
+  if (patch->mode == SynthEngineMode::kReed) {
+    const ChannelState& st = channels_[ch];
+    if (st.reed_breath != 255) voice->reed.set_breath(static_cast<float>(st.reed_breath) / 127.0f);
+    if (st.reed_bright != 255) {
+      voice->reed.set_brightness(static_cast<float>(st.reed_bright) / 127.0f);
+    }
+    voice->reed.snap_reed_control();
   }
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
@@ -714,12 +832,15 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.pitch_bend = 8192;
   st.bow_force = 255;
   st.bow_position = 255;
+  st.reed_breath = 255;
+  st.reed_bright = 255;
   st.params.reset();
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
   st.una_corda = false;
   refresh_channel_mod(ch);
   push_bow_control(ch);
+  push_reed_control(ch);
 }
 
 void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
@@ -739,17 +860,22 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       refresh_channel_mod(ch);
       break;
     case 2:
-      st.bow_force = value;  // breath -> bowed-string bow force
+      st.bow_force = value;    // breath -> bowed-string bow force
+      st.reed_breath = value;  // breath -> reed mouth pressure
       push_bow_control(ch);
+      push_reed_control(ch);
       break;
     case 11:
       st.expression = value;
       refresh_channel_mod(ch);
-      push_bow_control(ch);  // expression scales bowed-string bow speed
+      push_bow_control(ch);  // expression scales bowed-string bow speed (reed
+                             // loudness rides the shared expression VCA)
       break;
     case 74:
       st.bow_position = value;  // brightness/SC5 -> bowed-string bow position
+      st.reed_bright = value;   // brightness/SC5 -> reed bell brightness
       push_bow_control(ch);
+      push_reed_control(ch);
       break;
     case 6:
       if (st.params.selected_rpn(0, 0)) {
@@ -835,6 +961,12 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
                                ? u.data2_7bit()
                                : scale_cc_32_to_7(u.words[1]);
     control_change(u.channel(), u.note_number(), value7);
+  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
+    // GS drum-kit select: in gm_kit mode the drum channel's program picks the
+    // kit variation (Room/Power/808/...). Melodic patches ignore it.
+    channels_[u.channel() & 0x0Fu].program = u.message_type() == UmpMessageType::kMidi2ChannelVoice
+                                                 ? static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu)
+                                                 : u.note_number();
   }
 }
 

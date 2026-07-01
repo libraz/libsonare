@@ -42,6 +42,12 @@ struct PercussionPatchParams {
   /// `drum-kit` preset. The remaining fields are ignored when set.
   bool gm_kit = false;
 
+  /// GM exclusive/mute group (0 = none). Same-group note-ons on the channel
+  /// choke each other: hi-hats (closed/pedal/open), mute/open triangle, the
+  /// two whistles, mute/open surdo. Resolved per note in the GM drum map;
+  /// unused outside kit playback. C-ABI non-exposed like the rest of this POD.
+  uint8_t exclusive_class = 0;
+
   // --- membrane/tone layer ---
   int num_modes = 0;
   /// Mode ratios to the base frequency (circular membrane: 1, 1.59, 2.14,
@@ -120,6 +126,28 @@ struct PercussionPatchParams {
   float shimmer_attack_ms = 40.0f;
   /// High-pass cutoff of the shimmer band.
   float shimmer_cutoff_hz = 8000.0f;
+
+  // --- stochastic particle excitation (PhISEM: shakers / scrapers) ---
+  /// Effective particle (bean) count driving the collision rate. 0 = off (no
+  /// PhISEM layer, bit-identical). Cook's PhISEM statistical model: the sum of
+  /// many exponentially-decaying bead-collision noises collapses to one noise
+  /// source times an energy that each collision bumps. Voices maracas, cabasa,
+  /// shaker, tambourine, guiro (scrape) and cuica (scrape + gliding resonance).
+  float phisem_beans = 0.0f;
+  /// System-energy decay of one shake gesture (ms): how long the burst lasts.
+  float phisem_energy_ms = 100.0f;
+  /// Per-collision sound decay (ms): the grain length of one bead click.
+  float phisem_sound_ms = 3.0f;
+  /// Gourd/shell resonance centre (Hz; 0 = raw particle noise, no resonance).
+  float phisem_res_hz = 0.0f;
+  /// Resonance Q (cabasa weak .. maraca / jingle stronger).
+  float phisem_res_q = 1.0f;
+  /// Scrape ridge rate (Hz; 0 = pure random shaker). >0 makes the collisions
+  /// quasi-periodic — a ratchet/guiro/cuica scrape.
+  float phisem_scrape_hz = 0.0f;
+  /// Resonance pitch glide (cuica): the resonance centre starts at
+  /// res_hz * (1 + glide) and eases to res_hz over the note. 0 = static.
+  float phisem_pitch_glide = 0.0f;
 };
 
 /// Per-voice percussion state, embedded in NativeSynthVoice.
@@ -178,6 +206,27 @@ class PercussionVoiceCore {
   float shimmer_attack_coeff_ = 0.0f;
   uint64_t shimmer_index_ = 0;
   TptSvf shimmer_filter_;
+
+  // Stochastic particle excitation (PhISEM: shakers / scrapers). A single noise
+  // source scaled by an energy that each bead/ridge collision bumps, with the
+  // system energy decaying over the shake, optionally through a gourd/shell
+  // resonance (with a cuica pitch glide).
+  float phisem_beans_ = 0.0f;
+  float phisem_shake_energy_ = 0.0f;
+  float phisem_sys_decay_ = 0.0f;
+  float phisem_sound_level_ = 0.0f;
+  float phisem_sound_decay_ = 0.0f;
+  float phisem_rate_ = 0.0f;  // random collisions per bean per unit energy per sample
+  float phisem_scrape_phase_ = 0.0f;
+  float phisem_scrape_inc_ = 0.0f;
+  float phisem_res_hz_ = 0.0f;
+  float phisem_res_q_ = 1.0f;
+  float phisem_glide_state_ = 0.0f;
+  float phisem_glide_coeff_ = 0.0f;
+  float phisem_sr_ = 48000.0f;
+  uint64_t phisem_prob_index_ = 0;
+  uint64_t phisem_noise_index_ = 0;
+  TptSvf phisem_filter_;
 };
 
 }  // namespace sonare::midi::synth

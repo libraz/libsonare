@@ -136,6 +136,30 @@ float peak(const std::vector<float>& buf) {
   return p;
 }
 
+/// A player with no SoundFont: every note resolves through the synth fallback
+/// floor (the data-free model), where the GS drum kit + NRPN edits live.
+Sf2Player make_fallback_player() {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  Sf2Player player(cfg);
+  player.prepare(kOutRate, 256);  // no set_soundfont -> synth fallback
+  return player;
+}
+
+/// Single-frequency magnitude (Goertzel) of a buffer at @p freq_hz.
+double goertzel(const std::vector<float>& buf, double freq_hz) {
+  const double w = 2.0 * M_PI * freq_hz / kOutRate;
+  const double coeff = 2.0 * std::cos(w);
+  double s_prev = 0.0;
+  double s_prev2 = 0.0;
+  for (float x : buf) {
+    const double s = static_cast<double>(x) + coeff * s_prev - s_prev2;
+    s_prev2 = s_prev;
+    s_prev = s;
+  }
+  return std::sqrt(s_prev * s_prev + s_prev2 * s_prev2 - coeff * s_prev * s_prev2);
+}
+
 float rms(const std::vector<float>& buf, size_t from = 0) {
   double acc = 0.0;
   size_t n = 0;
@@ -400,4 +424,51 @@ TEST_CASE("Sf2Voice wraps sustained loops in constant time", "[midi][sf2]") {
 
   REQUIRE(std::isfinite(sample));
   REQUIRE(voice.pos < 3.0);
+}
+
+TEST_CASE("Sf2Player applies GS per-note drum NRPN to the fallback voice", "[midi][sf2]") {
+  // The GS per-note drum edits (pitch coarse / TVA level / absolute pan) must
+  // reach the data-free model floor, not just SF2 voices. NRPN sequence:
+  // CC99 = param MSB (0x18 pitch / 0x1A level / 0x1C pan), CC98 = drum note,
+  // CC6 = data. Note 56 (cowbell) has clear ~587/845 Hz partials.
+  auto nrpn = [](Sf2Player& p, uint8_t msb, uint8_t note, uint8_t data) {
+    p.on_event(0, event(sonare::midi::make_midi1_control_change(0, 9, 99, msb)));
+    p.on_event(0, event(sonare::midi::make_midi1_control_change(0, 9, 98, note)));
+    p.on_event(0, event(sonare::midi::make_midi1_control_change(0, 9, 6, data)));
+  };
+  auto strike = [](Sf2Player& p, uint8_t note) {
+    p.on_event(0, event(sonare::midi::make_midi1_note_on(0, 9, note, 110)));
+  };
+
+  SECTION("pitch coarse raises the drum an octave") {
+    Sf2Player base = make_fallback_player();
+    strike(base, 56);
+    const StereoRender b = render(base, 8000);
+    Sf2Player up = make_fallback_player();
+    nrpn(up, 0x18, 56, 76);  // +12 semitones (data - 64)
+    strike(up, 56);
+    const StereoRender u = render(up, 8000);
+    REQUIRE(goertzel(b.left, 587.0) > goertzel(b.left, 1174.0));  // baseline centred low
+    REQUIRE(goertzel(u.left, 1174.0) > goertzel(u.left, 587.0));  // shifted up an octave
+  }
+
+  SECTION("TVA level attenuates the drum") {
+    Sf2Player loud = make_fallback_player();
+    strike(loud, 56);
+    const float loud_peak = peak(render(loud, 8000).left);
+    Sf2Player soft = make_fallback_player();
+    nrpn(soft, 0x1A, 56, 64);  // level 64 -> (64/127)^2 ~ 0.25
+    strike(soft, 56);
+    const float soft_peak = peak(render(soft, 8000).left);
+    REQUIRE(soft_peak > 0.0f);
+    REQUIRE(soft_peak < 0.5f * loud_peak);
+  }
+
+  SECTION("absolute pan places the drum hard left") {
+    Sf2Player p = make_fallback_player();
+    nrpn(p, 0x1C, 56, 0);  // pan 0 -> hard left
+    strike(p, 56);
+    const StereoRender out = render(p, 8000);
+    REQUIRE(peak(out.left) > 4.0f * peak(out.right));
+  }
 }

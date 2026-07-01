@@ -17,6 +17,12 @@ constexpr uint64_t kNoiseIndexBase = 1ull << 20;
 constexpr uint64_t kWireIndexBase = 1ull << 24;
 /// Shimmer draws live above the wire-rattle range.
 constexpr uint64_t kShimmerIndexBase = 1ull << 28;
+/// PhISEM collision-probability draws and the particle-noise draws live in two
+/// disjoint ranges above the shimmer range so all streams stay decorrelated.
+constexpr uint64_t kPhisemProbIndexBase = 1ull << 30;
+constexpr uint64_t kPhisemNoiseIndexBase = 1ull << 31;
+/// Random bead collisions per bean per unit shake energy per second.
+constexpr float kPhisemCollisionRate = 100.0f;
 
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
@@ -119,6 +125,40 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   shimmer_filter_.prepare(sr);
   shimmer_filter_.set(params.shimmer_cutoff_hz, 0.7f);
   shimmer_filter_.reset();
+
+  // Stochastic particle excitation (PhISEM). Off when beans == 0 (bit-identical
+  // — no draws, no state advance).
+  phisem_beans_ = std::max(0.0f, params.phisem_beans);
+  phisem_sr_ = static_cast<float>(sr);
+  phisem_prob_index_ = 0;
+  phisem_noise_index_ = 0;
+  phisem_sound_level_ = 0.0f;
+  phisem_scrape_phase_ = 0.0f;
+  phisem_glide_state_ = 0.0f;
+  if (phisem_beans_ > 0.0f) {
+    // A shake gesture: the system energy is set by the strike and dies over
+    // phisem_energy_ms; each collision bumps the sounding energy, which decays
+    // over the short grain time phisem_sound_ms.
+    phisem_shake_energy_ = 0.3f + 0.7f * vel01;
+    phisem_sys_decay_ = std::exp(
+        -1.0f / (std::max(1.0f, params.phisem_energy_ms) * 0.001f * static_cast<float>(sr)));
+    phisem_sound_decay_ = std::exp(
+        -1.0f / (std::max(0.2f, params.phisem_sound_ms) * 0.001f * static_cast<float>(sr)));
+    phisem_rate_ = kPhisemCollisionRate / static_cast<float>(sr);
+    phisem_scrape_inc_ =
+        params.phisem_scrape_hz > 0.0f ? params.phisem_scrape_hz / static_cast<float>(sr) : 0.0f;
+    phisem_res_hz_ = params.phisem_res_hz;
+    phisem_res_q_ = std::max(0.5f, params.phisem_res_q);
+    phisem_glide_state_ = params.phisem_pitch_glide;
+    phisem_glide_coeff_ = std::exp(
+        -1.0f / (std::max(1.0f, params.phisem_energy_ms) * 0.001f * static_cast<float>(sr)));
+    phisem_filter_.prepare(sr);
+    if (phisem_res_hz_ > 0.0f) {
+      const float c = phisem_res_hz_ * (1.0f + phisem_glide_state_);
+      phisem_filter_.set(std::clamp(c, 20.0f, 0.45f * static_cast<float>(sr)), phisem_res_q_);
+    }
+    phisem_filter_.reset();
+  }
 }
 
 float PercussionVoiceCore::render(float pitch_ratio) noexcept {
@@ -193,6 +233,42 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     }
   }
 
+  // Stochastic particle excitation (PhISEM). The shake energy decays over the
+  // gesture; bead/ridge collisions bump the sounding energy that scales a single
+  // noise source, optionally rung through a gourd resonance (cuica glides it).
+  if (phisem_beans_ > 0.0f) {
+    phisem_shake_energy_ *= phisem_sys_decay_;
+    bool collide = false;
+    // Scrape (guiro/cuica): a ridge passes under the scraper each period.
+    if (phisem_scrape_inc_ > 0.0f) {
+      phisem_scrape_phase_ += phisem_scrape_inc_;
+      if (phisem_scrape_phase_ >= 1.0f) {
+        phisem_scrape_phase_ -= 1.0f;
+        collide = true;
+      }
+    }
+    // Random bead collisions on top; the rate falls as the shake dies out.
+    const float p = phisem_beans_ * phisem_shake_energy_ * phisem_rate_;
+    if (noise_.unipolar_at(kPhisemProbIndexBase + phisem_prob_index_++) < p) collide = true;
+    if (collide) {
+      phisem_sound_level_ = std::min(phisem_sound_level_ + phisem_shake_energy_ * 0.6f, 4.0f);
+    }
+    float particle =
+        noise_.bipolar_at(kPhisemNoiseIndexBase + phisem_noise_index_++) * phisem_sound_level_;
+    phisem_sound_level_ *= phisem_sound_decay_;
+    if (phisem_res_hz_ > 0.0f) {
+      // Cuica pitch glide: ease the resonance centre back to res_hz.
+      if (phisem_glide_state_ != 0.0f) {
+        phisem_glide_state_ *= phisem_glide_coeff_;
+        if (std::abs(phisem_glide_state_) < 1.0e-3f) phisem_glide_state_ = 0.0f;
+        const float c = phisem_res_hz_ * (1.0f + phisem_glide_state_);
+        phisem_filter_.set(std::clamp(c, 20.0f, 0.45f * phisem_sr_), phisem_res_q_);
+      }
+      particle = phisem_filter_.process(particle).bp;
+    }
+    mix += particle;
+  }
+
   if (shell_.active()) mix = shell_.process(mix);
 
   return mix;
@@ -213,6 +289,10 @@ void PercussionVoiceCore::kill() noexcept {
   shimmer_ = 0.0f;
   shimmer_env_ = 0.0f;
   shimmer_filter_.reset();
+  phisem_beans_ = 0.0f;
+  phisem_shake_energy_ = 0.0f;
+  phisem_sound_level_ = 0.0f;
+  phisem_filter_.reset();
 }
 
 }  // namespace sonare::midi::synth

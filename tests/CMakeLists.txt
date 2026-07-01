@@ -351,6 +351,7 @@ if(BUILD_ARRANGEMENT)
     midi/piano_voice_test.cpp
     midi/pipe_organ_voice_test.cpp
     midi/bowed_string_voice_test.cpp
+    midi/reed_voice_test.cpp
     midi/voice_polish_test.cpp
     midi/synth_toolkit_test.cpp
     midi/sf2_file_test.cpp

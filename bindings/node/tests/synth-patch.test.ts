@@ -72,6 +72,7 @@ describe('NativeSynth preset catalog', () => {
     // The "va:" routing prefix is accepted.
     expect(synthPresetPatch('va:e-piano').engineMode).toBe('fm');
     expect(synthPresetPatch('acoustic-piano').engineMode).toBe('piano');
+    expect(synthPresetPatch('clarinet').engineMode).toBe('reed');
     expect(() => synthPresetPatch('no-such-preset')).toThrow();
   });
 

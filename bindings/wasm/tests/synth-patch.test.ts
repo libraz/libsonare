@@ -77,6 +77,7 @@ describe('Sonare WASM NativeSynth', () => {
     expect(pad.unison).toBe(7);
     // The "va:" routing prefix is accepted.
     expect(synthPresetPatch('va:e-piano').engineMode).toBe('fm');
+    expect(synthPresetPatch('clarinet').engineMode).toBe('reed');
     expect(() => synthPresetPatch('no-such-preset')).toThrow();
   });
 

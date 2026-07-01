@@ -281,6 +281,18 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   const ChannelState& ch = channels_[channel & 0x0Fu];
   const NativeSynthPatch& patch = ch.drums ? gm_fallback_drum_patch(note)
                                            : gm_fallback_patch(effective_bank(channel), ch.program);
+  // GM kit exclusive/mute groups (hi-hats etc.): choke the ringing group voice
+  // on this channel before allocating the new strike.
+  if (ch.drums && patch.percussion.exclusive_class != 0) {
+    const uint8_t excl = patch.percussion.exclusive_class;
+    for (NativeSynthVoice& v : fallback_pool_) {
+      if (v.active && v.channel == (channel & 0x0Fu) && v.patch != nullptr &&
+          v.patch->mode == SynthEngineMode::kPercussion &&
+          v.patch->percussion.exclusive_class == excl) {
+        v.choke();
+      }
+    }
+  }
   NativeSynthVoice* voice = fallback_pool_.allocate(channel & 0x0Fu, note);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - fallback_pool_.data());
@@ -302,7 +314,27 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
             static_cast<size_t>(voice_index) * kMaxPipeRanks * fallback_pipe_organ_capacity_,
         fallback_pipe_organ_capacity_);
   }
-  voice->start(patch, sample_rate_, velocity, voice_index);
+  // GS drum-kit variation: the drum channel's program picks the kit (Room /
+  // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
+  const uint8_t drum_kit = ch.drums ? gm_fallback_drum_kit(ch.program) : 0;
+  // GS per-note drum NRPN edits (pitch coarse / TVA level / absolute pan),
+  // mirroring apply_gs_drum_params for the model floor (reverb/chorus sends stay
+  // on the SF2 path).
+  DrumVoiceMod drum_mod;
+  if (ch.drums) {
+    const GsDrumNoteParams& gd = drum_params_[channel & 0x0Fu][note & 0x7Fu];
+    if ((gd.flags & GsDrumNoteParams::kPitch) != 0 && gd.pitch_coarse != 0) {
+      drum_mod.pitch_ratio = std::exp2(static_cast<float>(gd.pitch_coarse) / 12.0f);
+    }
+    if ((gd.flags & GsDrumNoteParams::kLevel) != 0) {
+      const float v = static_cast<float>(gd.level & 0x7Fu) / 127.0f;
+      drum_mod.level_gain = v * v;  // same square law as CC7 / velocity
+    }
+    if ((gd.flags & GsDrumNoteParams::kPan) != 0) {
+      drum_mod.pan_units = (static_cast<float>(gd.pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
+    }
+  }
+  voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, false, drum_kit, drum_mod);
 }
 
 void Sf2Player::note_off(uint8_t channel, uint8_t note) noexcept {

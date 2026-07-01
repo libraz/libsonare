@@ -42,6 +42,7 @@
 #include "midi/synth/percussion_voice.h"
 #include "midi/synth/piano_voice.h"
 #include "midi/synth/pipe_organ_voice.h"
+#include "midi/synth/reed_voice.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
 
@@ -58,6 +59,7 @@ enum class SynthEngineMode : int {
   kPiano = 6,          // extended waveguide piano (piano_voice.h)
   kPipeOrgan = 7,      // sustained waveguide flue pipe (pipe_organ_voice.h)
   kBowedString = 8,    // sustained waveguide bowed string (bowed_string_voice.h)
+  kReed = 9,           // sustained waveguide reed woodwind (reed_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -160,6 +162,18 @@ struct NativeSynthPatch {
 
   /// Sustained waveguide bowed string (used when mode == kBowedString).
   BowedStringPatchParams bowed_string;
+
+  /// Sustained waveguide reed woodwind (used when mode == kReed).
+  ReedPatchParams reed;
+};
+
+/// Per-note GS drum overrides applied to a fallback percussion voice at
+/// note-on (NRPN pitch coarse / TVA level / absolute pan). Defaults are no-ops,
+/// so a voice with no per-note edit renders exactly as before.
+struct DrumVoiceMod {
+  float pitch_ratio = 1.0f;  ///< 2^(pitch_coarse / 12)
+  float level_gain = 1.0f;   ///< (level / 127)^2 (same square law as CC7)
+  float pan_units = 1.0e9f;  ///< absolute pan units (1e9 = untouched: keep channel pan)
 };
 
 /// One playing subtractive voice (lives in a VoicePool inside NativeSynth and
@@ -198,6 +212,9 @@ struct NativeSynthVoice : VoiceState {
   /// Bowed-string core; like KS, the host attach()es its delay slab before
   /// start().
   BowedStringVoiceCore bowed_string;
+  /// Reed-woodwind core; like KS, the host attach()es its bore span before
+  /// start().
+  ReedVoiceCore reed;
   BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
@@ -221,14 +238,23 @@ struct NativeSynthVoice : VoiceState {
   float cached_pan_units = 1.0e9f;
   float gain_left = 0.70710678f;
   float gain_right = 0.70710678f;
+  /// GS per-note drum overrides (pitch coarse / absolute pan; level is folded
+  /// into velocity_gain at start). Defaults are no-ops.
+  float drum_pitch_ratio = 1.0f;
+  float drum_pan_units = 1.0e9f;
 
   /// Starts the voice for @p p. note/channel/age must already be set (the
   /// pool fills them in allocate()); @p voice_index seeds the deterministic
   /// per-voice variation. @p p must outlive the voice. @p glide_from_hz != 0
   /// glides the pitch from that frequency (portamento; needs p.glide_ms > 0).
   /// @p una_corda engages the soft-pedal voicing (piano mode only).
+  /// @p drum_kit != 0 applies a GS kit variation (Room/Power/808/...) to the
+  /// resolved drum patch at note-on (percussion mode only; see apply_gs_drum_kit).
+  /// @p drum_mod carries GS per-note drum NRPN edits (pitch coarse / level /
+  /// pan); default is a no-op.
   void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
-             float glide_from_hz = 0.0f, bool una_corda = false) noexcept;
+             float glide_from_hz = 0.0f, bool una_corda = false, uint8_t drum_kit = 0,
+             DrumVoiceMod drum_mod = {}) noexcept;
   /// Renders one mono sample. Deactivates when the amp envelope ends.
   /// @p wind_pitch / @p wind_gain carry the shared organ wind modulation
   /// (tremulant / wind sag); 1.0 leaves the voice unmodulated.
@@ -237,6 +263,11 @@ struct NativeSynthVoice : VoiceState {
   void release() noexcept;
   /// Immediate silence (All Sound Off / steal-kill).
   void kill() noexcept;
+  /// Exclusive-group choke: force the amp envelope into release even for
+  /// one-shot (drum) voices, so a same-group strike (hi-hat / triangle / ...)
+  /// cuts this ringing voice with a short fade instead of an abrupt kill. The
+  /// fade length is the patch's amp release_ms.
+  void choke() noexcept;
 };
 
 struct NativeSynthConfig {
@@ -281,12 +312,19 @@ class NativeSynth final : public MidiInstrument {
     uint8_t expression = 127;   // CC11
     uint8_t pan = 64;           // CC10
     uint8_t mod_wheel = 0;      // CC1
+    uint8_t program = 0;        // last program change (GS drum-kit select in gm_kit mode)
     uint16_t pitch_bend = 8192;
     /// Bowed-string continuous controllers (255 = untouched, so the preset's
     /// own bow force / position stands until the host sends the CC): CC2 breath
     /// -> bow force, CC74 -> bow position. CC11 expression scales bow speed.
     uint8_t bow_force = 255;
     uint8_t bow_position = 255;
+    /// Reed-woodwind continuous controllers (255 = untouched, so the preset's
+    /// own breath / brightness stands until the host sends the CC): CC2 breath
+    /// -> mouth pressure, CC74 -> bell brightness. CC11 expression is the shared
+    /// loudness VCA (no reed-specific breath push — that would silence the reed).
+    uint8_t reed_breath = 255;
+    uint8_t reed_bright = 255;
     ChannelParamState params;
     float bend_range_cents = 200.0f;
     /// Previous note's frequency (glide source; 0 = none yet).
@@ -303,6 +341,9 @@ class NativeSynth final : public MidiInstrument {
   /// Pushes the channel's live bowed-string controllers (CC11 bow speed, CC2
   /// bow force, CC74 bow position) to its sounding bowed voices.
   void push_bow_control(uint8_t channel) noexcept;
+  /// Pushes the channel's live reed controllers (CC2 breath, CC74 bell
+  /// brightness) to its sounding reed voices.
+  void push_reed_control(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
 
@@ -341,6 +382,11 @@ class NativeSynth final : public MidiInstrument {
   std::vector<float> bowed_string_buffers_;
   int bowed_string_capacity_ = 0;  // per-line span
   bool bowed_string_mode_ = false;
+  /// Reed-woodwind bore slab: one bore span per voice slot, allocated in
+  /// prepare() only when the patch is a reed woodwind.
+  std::vector<float> reed_buffers_;
+  int reed_capacity_ = 0;  // bore span
+  bool reed_mode_ = false;
   /// Shared organ wind chest (tremulant / wind sag); pipe-organ patches only.
   OrganWindSupply wind_;
   /// Swell box: a bus-level shutter lowpass driven by the expression pedal

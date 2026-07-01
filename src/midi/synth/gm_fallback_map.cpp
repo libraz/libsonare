@@ -616,6 +616,246 @@ const DrumPatches& drum_patches() noexcept {
   return kTable;
 }
 
+// Per-note GM/GS drum map (keys 27..87): each key is a distinct instrument
+// built from a mechanism archetype (fixed-pitch membrane / struck wood / struck
+// metal / whistle / noise) plus a fixed tuning, on top of the shared kit
+// archetypes above. Unmapped keys fall back to the generic short burst so every
+// drum key stays audible. The stochastic (PhISEM) shakers and scrapers
+// (maracas, cabasa, guiro, cuica, tambourine, vibraslap) are a separate
+// archetype not yet built — they resolve to the generic burst here until it
+// lands.
+std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
+  const DrumPatches& d = drum_patches();
+  std::array<NativeSynthPatch, 128> t{};
+
+  NativeSynthPatch piece{};
+  piece.mode = SynthEngineMode::kPercussion;
+  piece.one_shot = true;
+  piece.cutoff_hz = 20000.0f;
+
+  // Fixed-pitch membrane (conga/bongo/timbale/surdo): unlike the key-tracked
+  // toms, GM pins one head frequency per key.
+  auto make_membrane = [&](float base_hz, float decay_s, float drop, float shell_hz, float gain) {
+    NativeSynthPatch p = piece;
+    p.amp_env = env(0.5f, decay_s * 1000.0f + 120.0f, 0.0f, 40.0f);
+    p.percussion.num_modes = 5;
+    p.percussion.base_freq_hz = base_hz;
+    p.percussion.mode_decay_s = decay_s;
+    p.percussion.pitch_drop = drop;
+    p.percussion.pitch_drop_ms = 30.0f;
+    p.percussion.tone_gain = 0.8f;
+    p.percussion.noise_gain = 0.2f;
+    p.percussion.noise_decay_ms = 18.0f;
+    p.percussion.noise_cutoff_hz = 2000.0f;
+    p.percussion.strike_r = 0.55f;
+    if (shell_hz > 0.0f) {
+      p.percussion.shell_mix = 0.2f;
+      p.percussion.shell_num_modes = 1;
+      p.percussion.shell_freq_hz = {shell_hz, 0.0f, 0.0f, 0.0f};
+      p.percussion.shell_t60_s = {0.06f, 0.0f, 0.0f, 0.0f};
+      p.percussion.shell_weight = {1.0f, 0.0f, 0.0f, 0.0f};
+    }
+    p.gain = gain;
+    return p;
+  };
+
+  // Struck wooden idiophone (claves/woodblock/side stick/clicks): one or two
+  // high-Q wood resonances at a fixed pitch plus a short stick click.
+  auto make_wood = [&](float base_hz, float ratio2, float decay_s, float gain) {
+    NativeSynthPatch p = piece;
+    p.amp_env = env(0.3f, decay_s * 1000.0f + 40.0f, 0.0f, 20.0f);
+    p.percussion.num_modes = ratio2 > 0.0f ? 2 : 1;
+    p.percussion.mode_ratios = {1.0f, ratio2, 0.0f, 0.0f, 0.0f, 0.0f};
+    p.percussion.base_freq_hz = base_hz;
+    p.percussion.mode_decay_s = decay_s;
+    p.percussion.tone_gain = 0.9f;
+    p.percussion.noise_gain = 0.3f;
+    p.percussion.noise_decay_ms = 4.0f;
+    p.percussion.noise_cutoff_hz = base_hz * 2.0f;
+    p.percussion.noise_output = SynthFilterOutput::kBandpass;
+    p.gain = gain;
+    return p;
+  };
+
+  // Struck metal idiophone (cowbell/agogo/triangle/bells): sparse inharmonic
+  // high-Q modes with a longer ring and only a trace of strike noise.
+  auto make_metal = [&](float base_hz, std::array<float, kMaxPercussionModes> ratios, int nmodes,
+                        float decay_s, float gain) {
+    NativeSynthPatch p = piece;
+    p.amp_env = env(0.3f, decay_s * 1000.0f + 60.0f, 0.0f, 30.0f);
+    p.percussion.num_modes = nmodes;
+    p.percussion.mode_ratios = ratios;
+    p.percussion.base_freq_hz = base_hz;
+    p.percussion.mode_decay_s = decay_s;
+    p.percussion.tone_gain = 0.5f;
+    p.percussion.noise_gain = 0.15f;
+    p.percussion.noise_decay_ms = 8.0f;
+    p.percussion.noise_cutoff_hz = base_hz * 3.0f;
+    p.percussion.noise_output = SynthFilterOutput::kBandpass;
+    p.gain = gain;
+    return p;
+  };
+
+  // Whistle (Phase-1 approximation): a strong resonant tone with breath noise.
+  // Superseded by the flue-pipe core once that lands.
+  auto make_whistle = [&](float base_hz, float decay_s, float gain) {
+    NativeSynthPatch p = piece;
+    p.amp_env = env(3.0f, decay_s * 1000.0f + 40.0f, 0.0f, 25.0f);
+    p.percussion.num_modes = 1;
+    p.percussion.mode_ratios = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    p.percussion.base_freq_hz = base_hz;
+    p.percussion.mode_decay_s = decay_s;
+    p.percussion.tone_gain = 0.8f;
+    p.percussion.noise_gain = 0.4f;
+    p.percussion.noise_decay_ms = decay_s * 1000.0f;
+    p.percussion.noise_cutoff_hz = base_hz;
+    p.percussion.noise_q = 4.0f;
+    p.percussion.noise_output = SynthFilterOutput::kBandpass;
+    p.gain = gain;
+    return p;
+  };
+
+  // Shaker (PhISEM): a burst of stochastic bead collisions rung through a gourd
+  // resonance — maracas, cabasa, shaker, tambourine, vibraslap.
+  auto make_shaker = [&](float beans, float energy_ms, float res_hz, float res_q, float gain) {
+    NativeSynthPatch p = piece;
+    p.amp_env = env(0.5f, energy_ms + 200.0f, 0.0f, 40.0f);
+    p.percussion.phisem_beans = beans;
+    p.percussion.phisem_energy_ms = energy_ms;
+    p.percussion.phisem_sound_ms = 3.0f;
+    p.percussion.phisem_res_hz = res_hz;
+    p.percussion.phisem_res_q = res_q;
+    p.gain = gain;
+    return p;
+  };
+
+  // Scraper (PhISEM): quasi-periodic ridge collisions — guiro (ratchet) and
+  // cuica (with a resonance pitch glide).
+  auto make_scrape = [&](float beans, float energy_ms, float scrape_hz, float res_hz, float res_q,
+                         float glide, float gain) {
+    NativeSynthPatch p = piece;
+    p.amp_env = env(0.5f, energy_ms + 200.0f, 0.0f, 40.0f);
+    p.percussion.phisem_beans = beans;
+    p.percussion.phisem_energy_ms = energy_ms;
+    p.percussion.phisem_sound_ms = 4.0f;
+    p.percussion.phisem_scrape_hz = scrape_hz;
+    p.percussion.phisem_res_hz = res_hz;
+    p.percussion.phisem_res_q = res_q;
+    p.percussion.phisem_pitch_glide = glide;
+    p.gain = gain;
+    return p;
+  };
+
+  // Hand clap: a dense band-passed noise burst.
+  NativeSynthPatch clap = piece;
+  clap.amp_env = env(0.5f, 120.0f, 0.0f, 40.0f);
+  clap.percussion.noise_gain = 1.0f;
+  clap.percussion.noise_decay_ms = 90.0f;
+  clap.percussion.noise_cutoff_hz = 1300.0f;
+  clap.percussion.noise_q = 1.2f;
+  clap.percussion.noise_output = SynthFilterOutput::kBandpass;
+  clap.gain = 0.7f;
+
+  // Default every key to the generic short burst (keeps unmapped keys audible;
+  // also the current home of the not-yet-built stochastic shakers/scrapers).
+  for (auto& p : t) p = d.percussion;
+
+  // --- existing kit archetypes (unchanged voicings) ---
+  t[35] = d.kick;
+  t[36] = d.kick;
+  t[38] = d.snare;
+  t[40] = d.snare;
+  t[42] = d.closed_hat;  // closed
+  t[44] = d.closed_hat;  // pedal
+  t[46] = d.open_hat;
+  t[41] = t[43] = t[45] = t[47] = t[48] = t[50] = d.tom;
+  t[49] = t[52] = t[55] = t[57] = d.cymbal;  // crash 1 / china / splash / crash 2
+  t[51] = t[59] = d.cymbal;                  // ride 1 / ride 2
+
+  // Hi-hats share mute group 1; the open hat gets a snappy choke fade (release
+  // is unused by one-shot voices in normal play, so this stays bit-identical
+  // there — it only governs how fast a closed/pedal strike cuts the open hat).
+  t[42].percussion.exclusive_class = 1;
+  t[44].percussion.exclusive_class = 1;
+  t[46].percussion.exclusive_class = 1;
+  t[46].amp_env.release_ms = 40.0f;
+
+  // --- wooden idiophones + clicks ---
+  t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);   // Sticks
+  t[32] = make_wood(1000.0f, 0.0f, 0.02f, 0.5f);   // Square Click
+  t[33] = make_wood(1200.0f, 0.0f, 0.02f, 0.5f);   // Metronome Click
+  t[37] = make_wood(820.0f, 0.0f, 0.05f, 0.7f);    // Side Stick
+  t[75] = make_wood(2500.0f, 0.0f, 0.025f, 0.6f);  // Claves (2500 Hz, ~25 ms)
+  t[76] = make_wood(1200.0f, 0.0f, 0.06f, 0.6f);   // Hi Wood Block
+  t[77] = make_wood(800.0f, 0.0f, 0.07f, 0.6f);    // Low Wood Block
+  t[85] = make_wood(1800.0f, 0.0f, 0.02f, 0.5f);   // Castanets
+
+  // --- metal idiophones + bells ---
+  t[34] =
+      make_metal(1500.0f, {1.0f, 2.8f, 5.4f, 0.0f, 0.0f, 0.0f}, 3, 0.3f, 0.4f);  // Metronome Bell
+  t[53] = make_metal(1200.0f, {1.0f, 1.5f, 2.6f, 0.0f, 0.0f, 0.0f}, 3, 0.6f, 0.4f);  // Ride Bell
+  t[56] = make_metal(587.0f, {1.0f, 1.44f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.25f,
+                     0.5f);  // Cowbell (587/845 Hz)
+  t[67] = make_metal(1200.0f, {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.25f, 0.45f);  // High Agogo
+  t[68] = make_metal(900.0f, {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.30f, 0.45f);   // Low Agogo
+  t[83] =
+      make_metal(2500.0f, {1.0f, 1.7f, 2.4f, 0.0f, 0.0f, 0.0f}, 3, 0.40f, 0.35f);  // Jingle Bell
+  t[84] = make_metal(3000.0f, {1.0f, 1.6f, 2.3f, 3.1f, 0.0f, 0.0f}, 4, 1.50f, 0.30f);  // Belltree
+
+  // Triangle: high inharmonic modes; mute short, open long (mute group 3).
+  const std::array<float, kMaxPercussionModes> triangle_ratios = {1.0f,  2.76f, 5.40f,
+                                                                  8.90f, 0.0f,  0.0f};
+  t[80] = make_metal(5000.0f, triangle_ratios, 4, 0.15f, 0.35f);  // Mute Triangle
+  t[81] = make_metal(5000.0f, triangle_ratios, 4, 1.20f, 0.35f);  // Open Triangle
+  t[80].percussion.exclusive_class = 3;
+  t[81].percussion.exclusive_class = 3;
+
+  // --- fixed-pitch membranes (congas/bongos/timbales/surdo) ---
+  t[60] = make_membrane(260.0f, 0.18f, 0.30f, 0.0f, 0.70f);    // Hi Bongo
+  t[61] = make_membrane(180.0f, 0.20f, 0.30f, 0.0f, 0.70f);    // Low Bongo
+  t[62] = make_membrane(220.0f, 0.08f, 0.20f, 0.0f, 0.70f);    // Mute Hi Conga
+  t[63] = make_membrane(200.0f, 0.25f, 0.30f, 0.0f, 0.70f);    // Open Hi Conga
+  t[64] = make_membrane(130.0f, 0.30f, 0.35f, 0.0f, 0.75f);    // Low Conga
+  t[65] = make_membrane(250.0f, 0.22f, 0.20f, 700.0f, 0.70f);  // High Timbale
+  t[66] = make_membrane(200.0f, 0.26f, 0.20f, 550.0f, 0.70f);  // Low Timbale
+  t[86] = make_membrane(95.0f, 0.12f, 0.40f, 0.0f, 0.80f);     // Mute Surdo
+  t[87] = make_membrane(80.0f, 0.40f, 0.50f, 0.0f, 0.85f);     // Open Surdo
+  t[86].percussion.exclusive_class = 6;
+  t[87].percussion.exclusive_class = 6;
+
+  // --- whistles (mute group 4) + hand clap ---
+  t[71] = make_whistle(1400.0f, 0.12f, 0.5f);  // Short Whistle
+  t[72] = make_whistle(1400.0f, 0.50f, 0.5f);  // Long Whistle
+  t[71].percussion.exclusive_class = 4;
+  t[72].percussion.exclusive_class = 4;
+  t[39] = clap;  // Hand Clap
+
+  // --- PhISEM shakers + scrapers ---
+  t[54] = make_shaker(32.0f, 120.0f, 2500.0f, 2.0f, 0.5f);   // Tambourine
+  t[58] = make_shaker(24.0f, 400.0f, 2500.0f, 3.0f, 0.45f);  // Vibraslap
+  t[69] = make_shaker(24.0f, 90.0f, 4000.0f, 1.0f, 0.5f);    // Cabasa
+  t[70] = make_shaker(20.0f, 90.0f, 3200.0f, 1.5f, 0.5f);    // Maracas
+  t[82] = make_shaker(28.0f, 110.0f, 6000.0f, 1.0f, 0.5f);   // Shaker
+  // Guiro (mute group 5): ratchet ridge train.
+  t[73] = make_scrape(8.0f, 120.0f, 150.0f, 2500.0f, 3.0f, 0.0f, 0.5f);  // Short Guiro
+  t[74] = make_scrape(8.0f, 500.0f, 120.0f, 2500.0f, 3.0f, 0.0f, 0.5f);  // Long Guiro
+  t[73].percussion.exclusive_class = 5;
+  t[74].percussion.exclusive_class = 5;
+  // Cuica (mute group 2): friction drum with a resonance pitch glide.
+  t[78] = make_scrape(6.0f, 120.0f, 40.0f, 400.0f, 3.0f, -0.3f, 0.55f);  // Mute Cuica (down)
+  t[79] = make_scrape(6.0f, 250.0f, 40.0f, 500.0f, 3.0f, 0.5f, 0.55f);   // Open Cuica (up)
+  t[78].percussion.exclusive_class = 2;
+  t[79].percussion.exclusive_class = 2;
+
+  for (auto& p : t) p = clamp_synth_patch(p);
+  return t;
+}
+
+const std::array<NativeSynthPatch, 128>& drum_note_table() noexcept {
+  static const std::array<NativeSynthPatch, 128> kTable = build_drum_note_table();
+  return kTable;
+}
+
 }  // namespace
 
 const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) noexcept {
@@ -660,37 +900,121 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
 }
 
 const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept {
-  const DrumPatches& d = drum_patches();
-  switch (note) {
-    case 35:  // Acoustic Bass Drum
-    case 36:  // Bass Drum 1
-      return d.kick;
-    case 38:  // Acoustic Snare
-    case 40:  // Electric Snare
-      return d.snare;
-    case 42:  // Closed Hi-Hat
-    case 44:  // Pedal Hi-Hat
-      return d.closed_hat;
-    case 46:  // Open Hi-Hat
-      return d.open_hat;
-    case 41:  // Low Floor Tom
-    case 43:  // High Floor Tom
-    case 45:  // Low Tom
-    case 47:  // Low-Mid Tom
-    case 48:  // Hi-Mid Tom
-    case 50:  // High Tom
-      return d.tom;
-    case 49:  // Crash Cymbal 1
-    case 51:  // Ride Cymbal 1
-    case 52:  // Chinese Cymbal
-    case 53:  // Ride Bell
-    case 55:  // Splash Cymbal
-    case 57:  // Crash Cymbal 2
-    case 59:  // Ride Cymbal 2
-      return d.cymbal;
+  return drum_note_table()[note & 0x7Fu];
+}
+
+uint8_t gm_fallback_drum_kit(uint8_t program) noexcept {
+  switch (program & 0x7Fu) {
+    case 8:
+      return 1;  // Room
+    case 16:
+      return 2;  // Power
+    case 24:
+      return 3;  // Electronic
+    case 25:
+      return 4;  // TR-808
+    case 32:
+      return 5;  // Jazz
+    case 40:
+      return 6;  // Brush
+    case 48:
+      return 7;  // Orchestra
+    case 56:
+      return 8;  // SFX
     default:
-      return d.percussion;
+      return 0;  // Standard
   }
+}
+
+float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t kit,
+                        uint8_t note) noexcept {
+  const bool kick = note == 35 || note == 36;
+  const bool snare = note == 38 || note == 40;
+  const bool tom = note == 41 || note == 43 || note == 45 || note == 47 || note == 48 || note == 50;
+  const bool cymbal = note == 49 || note == 51 || note == 52 || note == 53 || note == 55 ||
+                      note == 57 || note == 59;
+  const bool membrane = kick || snare || tom;
+  float gain = 1.0f;
+  switch (kit) {
+    case 1:  // Room: more shell body and a longer, ambient tail.
+      perc.shell_mix = std::min(perc.shell_mix + 0.12f, 1.0f);
+      for (float& t60 : perc.shell_t60_s) t60 *= 1.6f;
+      perc.mode_decay_s *= 1.15f;
+      perc.noise_decay_ms *= 1.25f;
+      amp.decay_ms *= 1.25f;
+      break;
+    case 2:  // Power (Rock): bigger, lower, longer shells.
+      if (membrane) {
+        perc.base_freq_hz *= 0.86f;
+        perc.mode_decay_s *= 1.4f;
+        amp.decay_ms *= 1.4f;
+        gain = 1.2f;
+      }
+      break;
+    case 3:  // Electronic: sine-ify the membranes and dry them out.
+      if (membrane) {
+        if (perc.num_modes > 1) perc.num_modes = 1;
+        perc.base_freq_hz *= 0.92f;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.5f);
+        perc.noise_gain *= 0.5f;
+      }
+      break;
+    case 4:  // TR-808: the iconic decaying-sine recipes.
+      if (kick) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.82f;
+        perc.pitch_drop = 1.0f;
+        perc.pitch_drop_ms = 60.0f;
+        perc.mode_decay_s *= 2.5f;
+        amp.decay_ms *= 2.5f;
+        perc.noise_gain *= 0.3f;
+        gain = 1.2f;
+      } else if (snare) {
+        perc.num_modes = 1;  // single body tone under the noise
+        perc.noise_gain *= 1.2f;
+        perc.mode_decay_s *= 0.8f;
+      } else if (tom) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.9f;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.6f);
+        perc.noise_gain *= 0.4f;
+      } else if (cymbal) {
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.2f, 18000.0f);
+      }
+      break;
+    case 5:  // Jazz: tighter, higher, softer.
+      if (membrane) {
+        perc.base_freq_hz *= 1.06f;
+        perc.mode_decay_s *= 0.8f;
+        amp.decay_ms *= 0.8f;
+        gain = 0.9f;
+      }
+      break;
+    case 6:  // Brush: the snare becomes a sustained swish, not a crack.
+      if (snare) {
+        perc.noise_decay_ms *= 2.5f;
+        amp.decay_ms *= 2.0f;
+        perc.noise_cutoff_hz *= 0.8f;
+        perc.wire_buzz *= 0.4f;
+        gain = 0.85f;
+      } else if (membrane) {
+        gain = 0.9f;
+      }
+      break;
+    case 7:  // Orchestra: concert bass drum / timpani rings, longer cymbals.
+      if (membrane) {
+        perc.mode_decay_s *= 2.0f;
+        amp.decay_ms *= 2.0f;
+      } else if (cymbal) {
+        perc.mode_decay_s *= 1.5f;
+        amp.decay_ms *= 1.5f;
+      }
+      break;
+    case 8:   // SFX: a set of one-shots in real GS — leave the Standard voicing.
+    default:  // Standard.
+      break;
+  }
+  return gain;
 }
 
 float gm_fallback_max_release_ms() noexcept {
@@ -701,14 +1025,16 @@ float gm_fallback_max_release_ms() noexcept {
       // after note-off, so the decay bounds the tail too.
       max_ms = std::max(max_ms, std::max(p.amp_env.release_ms, p.amp_env.decay_ms));
     }
-    const DrumPatches& d = drum_patches();
+    // Per-note drum kit: some GS instruments (open triangle, belltree) ring far
+    // longer than the base kit pieces, so bound the tail over the whole table.
+    for (const NativeSynthPatch& p : drum_note_table()) {
+      max_ms = std::max(max_ms, std::max(p.amp_env.release_ms, p.amp_env.decay_ms));
+    }
     const ProgramOverrides& o = program_overrides();
     for (const NativeSynthPatch* p :
-         {&d.kick,         &d.snare,      &d.closed_hat, &d.open_hat,     &d.tom,
-          &d.cymbal,       &d.percussion, &o.e_piano,    &o.clav,         &o.glockenspiel,
-          &o.vibraphone,   &o.marimba,    &o.xylophone,  &o.nylon_guitar, &o.electric_guitar,
-          &o.muted_guitar, &o.overdriven, &o.distortion, &o.harp,         &o.church_organ,
-          &o.reed_organ}) {
+         {&o.e_piano, &o.clav, &o.glockenspiel, &o.vibraphone, &o.marimba, &o.xylophone,
+          &o.nylon_guitar, &o.electric_guitar, &o.muted_guitar, &o.overdriven, &o.distortion,
+          &o.harp, &o.church_organ, &o.reed_organ}) {
       max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
     }
     return max_ms;
