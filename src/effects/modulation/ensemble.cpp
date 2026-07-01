@@ -128,6 +128,14 @@ bool Ensemble::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+bool Ensemble::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  // Every automatable id performs an in-place scalar/coefficient update; the
+  // delay lines are pre-sized to kMaxCenterDelayMs + kMaxDepthMs at prepare(),
+  // so no id allocates or resets audio state. Unknown ids are rejected by
+  // set_parameter.
+  return param_id <= 6;
+}
+
 std::vector<rt::ParamDescriptor> Ensemble::parameter_descriptors() const {
   return {{"rateSlowHz", 0},    {"rateFastHz", 1}, {"depthSlowMs", 2}, {"depthFastMs", 3},
           {"centerDelayMs", 4}, {"toneHz", 5},     {"dryWet", 6}};

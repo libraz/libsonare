@@ -724,3 +724,32 @@ TEST_CASE("VelvetReverb mono output folds both tap tables instead of clobbering"
   REQUIRE(fold_err < 1e-3);         // Mono is the fold of both tap tables.
   REQUIRE(right_only_diff > 1e-2);  // Not just the (buggy) right tap table.
 }
+
+TEST_CASE("Modulation and delay inserts report their RT-safe parameter contract",
+          "[fx][realtime]") {
+  // Every automatable id on these effects is an in-place scalar/coefficient
+  // update (LFO rates, clamped delay/depth, dry/wet), so the RT-safe query must
+  // return true for each known id and false for an out-of-range id — the same
+  // contract the automation engine relies on before applying from the audio
+  // callback.
+  SECTION("Chorus") {
+    sonare::effects::modulation::Chorus fx;
+    for (unsigned int id = 0; id <= 3; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
+    REQUIRE_FALSE(fx.parameter_is_realtime_safe(4));
+  }
+  SECTION("Flanger") {
+    sonare::effects::modulation::Flanger fx;
+    for (unsigned int id = 0; id <= 4; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
+    REQUIRE_FALSE(fx.parameter_is_realtime_safe(5));
+  }
+  SECTION("Phaser") {
+    sonare::effects::modulation::Phaser fx;
+    for (unsigned int id = 0; id <= 3; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
+    REQUIRE_FALSE(fx.parameter_is_realtime_safe(4));
+  }
+  SECTION("StereoDelay") {
+    sonare::effects::delay::StereoDelay fx;
+    for (unsigned int id = 0; id <= 4; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
+    REQUIRE_FALSE(fx.parameter_is_realtime_safe(5));
+  }
+}

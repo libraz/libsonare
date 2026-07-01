@@ -37,6 +37,7 @@ class StereoDelay : public rt::ProcessorBase {
   //   3 = ping_pong (clamped to [0, 1] in process())
   //   4 = dry_wet (clamped to [0, 1], smoothed in process())
   bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

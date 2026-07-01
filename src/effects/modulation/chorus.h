@@ -33,6 +33,7 @@ class Chorus : public rt::ProcessorBase {
   //   2 = center_delay_ms
   //   3 = dry_wet
   bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

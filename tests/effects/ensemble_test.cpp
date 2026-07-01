@@ -133,6 +133,16 @@ TEST_CASE("ensemble renders deterministically", "[effects][modulation][ensemble]
   REQUIRE(a.right == b.right);
 }
 
+TEST_CASE("Ensemble reports its RT-safe parameter contract",
+          "[effects][modulation][ensemble][realtime]") {
+  // Ids 0..6 are all in-place scalar/coefficient updates (LFO rates, clamped
+  // depth/delay, tone, dry/wet); none allocates or resets audio state, so the
+  // RT-safe query returns true for each and false for an out-of-range id.
+  Ensemble fx;
+  for (unsigned int id = 0; id <= 6; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
+  REQUIRE_FALSE(fx.parameter_is_realtime_safe(7));
+}
+
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("effects.modulation.ensemble builds through the insert factory",
           "[effects][modulation][ensemble][insert_factory]") {

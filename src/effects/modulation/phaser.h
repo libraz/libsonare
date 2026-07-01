@@ -35,6 +35,7 @@ class Phaser : public rt::ProcessorBase {
   // Note: `stages` is not automatable; changing it reallocates the allpass
   // state and requires prepare().
   bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

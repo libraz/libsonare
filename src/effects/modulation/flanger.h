@@ -35,6 +35,7 @@ class Flanger : public rt::ProcessorBase {
   //   3 = feedback (clamped to [-0.95, 0.95] in process())
   //   4 = dry_wet
   bool set_parameter(unsigned int param_id, float value) override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

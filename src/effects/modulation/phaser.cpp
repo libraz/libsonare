@@ -96,6 +96,13 @@ bool Phaser::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+bool Phaser::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  // Every automatable id performs an in-place scalar/coefficient update (LFO
+  // rate, sweep bounds, dry/wet); none allocates or resets audio state. Unknown
+  // ids are rejected by set_parameter.
+  return param_id <= 3;
+}
+
 std::vector<rt::ParamDescriptor> Phaser::parameter_descriptors() const {
   return {{"rateHz", 0}, {"minHz", 1}, {"maxHz", 2}, {"dryWet", 3}};
 }

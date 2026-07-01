@@ -121,6 +121,14 @@ bool StereoDelay::set_parameter(unsigned int param_id, float value) {
   }
 }
 
+bool StereoDelay::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  // Every automatable id performs an in-place scalar update; the delay lines are
+  // sized for up to kMaxDelayMs at prepare() and delay-time automation is
+  // smoothed in process(), so no id allocates or resets audio state. Unknown ids
+  // are rejected by set_parameter.
+  return param_id <= 4;
+}
+
 std::vector<rt::ParamDescriptor> StereoDelay::parameter_descriptors() const {
   return {
       {"delayTimeLMs", 0}, {"delayTimeRMs", 1}, {"feedback", 2}, {"pingPong", 3}, {"dryWet", 4}};
