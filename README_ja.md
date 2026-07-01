@@ -21,6 +21,18 @@ C++ でもブラウザ（WASM + AudioWorklet）でも同一に動作します。
 
 📖 **[ドキュメント](https://libsonare.libraz.net/ja/)** &nbsp;·&nbsp; 🎧 **[ブラウザ完結デモ](https://libsonare.libraz.net/ja/demos)** &nbsp;·&nbsp; **[はじめに](https://libsonare.libraz.net/ja/docs/getting-started)**
 
+## これで何が作れる？
+
+**[sonare studio](https://sonare-studio.libraz.net)** は、libsonare の WASM エンジンだけで
+組み上げたブラウザ完結のフル DAW です。マルチトラックシーケンス、ピアノロール、楽譜浄書、
+ミキサー、マスタリング、WAV/MP3/MIDI/MusicXML 書き出しまで、すべてクライアントサイドで
+動きます。Apache-2.0 のエンジン 1 つが、解析から再生・書き出し可能なアレンジまで、どこまで
+届くかを示すものです。
+
+エンジン全体をエンドツーエンドで叩く**結合検証用のホスト済みライブデモ**であり、製品では
+ありません（ソースは現時点で非公開）。ブラウザで開いて、libsonare で何が動かせるかを
+確かめてください。
+
 ## できること
 
 - **解析（librosa 互換）** — BPM、キー、コード（HMM 平滑化・転回形・キーコンテキスト）、

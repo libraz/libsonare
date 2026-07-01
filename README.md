@@ -21,6 +21,18 @@ No runtime dependencies, no Python at runtime, no GPL/AGPL, no model weights.
 
 📖 **[Documentation](https://libsonare.libraz.net)** &nbsp;·&nbsp; 🎧 **[Browser-local demos](https://libsonare.libraz.net/demos)** &nbsp;·&nbsp; **[Getting started](https://libsonare.libraz.net/docs/getting-started)**
 
+## What can you build with it?
+
+**[sonare studio](https://sonare-studio.libraz.net)** is a full browser-based
+DAW built entirely on the libsonare WASM engine — multi-track sequencing, a
+piano roll, score engraving, a mixer, mastering, and WAV/MP3/MIDI/MusicXML
+export, all running client-side. It shows how far one Apache-2.0 engine reaches,
+from analysis to a playable, exportable arrangement.
+
+It's a hosted live demo that drives the whole engine end-to-end as an
+integration test bed, not a production product (source not public). Try it in
+the browser to see what libsonare can power.
+
 ## What's inside
 
 - **Analysis (librosa-compatible)** — BPM, key, chords (HMM smoothing,
