@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "rt/processor_base.h"
 
@@ -98,6 +99,50 @@ TEST_CASE("TrackMixerRuntime clears lane insert automation slots when lanes chan
 
   REQUIRE(out[0] == Catch::Approx(1.0f).margin(1.0e-6f));
   REQUIRE(out[3] == Catch::Approx(1.0f).margin(1.0e-6f));
+}
+
+TEST_CASE("TrackMixerRuntime ramps fader on an in-place strip update instead of jumping",
+          "[engine][track_mixer]") {
+  // A live track-gain edit republishes the track strip via set_track_strip. When
+  // only smoothable scalars change (here the fader) and the insert topology is
+  // unchanged, the existing strip must be updated in place so its fader smoother
+  // RAMPS from the old value -- rebuilding a fresh strip would settle straight to
+  // the new gain and jump (an audible click).
+  constexpr int kFrames = 256;
+  std::array<float, kFrames> source{};
+  source.fill(1.0f);  // DC so the output equals the applied gain.
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kFrames);
+  player.set_clips({clip_for_track(1, 10, channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  // Establish the strip at a low fader (-40 dB ~= 0.01 linear), settled.
+  sonare::mixing::api::Strip low;
+  low.fader_db = -40.0f;
+  REQUIRE(mixer.set_track_strip(10, low));
+
+  std::array<float, kFrames> out{};
+  float* out_channels[] = {out.data()};
+  REQUIRE(mixer.render_clips(player, out_channels, 1, kFrames, 0));
+  REQUIRE(out[0] == Catch::Approx(0.01f).margin(0.005f));  // sanity: sits at -40 dB
+
+  // Raise the fader to unity with the SAME (empty) insert chain.
+  sonare::mixing::api::Strip high;
+  high.fader_db = 0.0f;
+  REQUIRE(mixer.set_track_strip(10, high));
+
+  std::fill(out.begin(), out.end(), 0.0f);
+  REQUIRE(mixer.render_clips(player, out_channels, 1, kFrames, 0));
+
+  // First sample still near the old ~0.01 (ramping up), NOT jumped to unity.
+  REQUIRE(out[0] < 0.5f);
+  // And it is genuinely rising toward unity across the block.
+  REQUIRE(out[kFrames - 1] > out[0]);
 }
 
 TEST_CASE("TrackMixerRuntime clears bus insert automation slots when bus strip changes",

@@ -230,6 +230,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   struct OwnedStrip {
     uint32_t track_id = 0;
     std::unique_ptr<mixing::ChannelStrip> strip;
+    // Last spec applied via set_track_strip(). Used to detect when only
+    // smoothable scalars changed (identical insert topology) so the strip can be
+    // updated in place -- preserving its smoother state -- instead of rebuilt.
+    // Default-constructed for externally-bound / automation-seeded strips.
+    mixing::api::Strip spec;
   };
 
   struct BusState {

@@ -46,6 +46,48 @@ std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing:
   return strip;
 }
 
+namespace {
+
+// True when two strip specs carry the same insert chain (count + each slot,
+// processor name, and params). Only then can a strip be updated in place; any
+// insert-topology or param change must rebuild the processor chain.
+bool strip_inserts_equal(const mixing::api::Strip& a, const mixing::api::Strip& b) {
+  if (a.inserts.size() != b.inserts.size()) return false;
+  for (size_t i = 0; i < a.inserts.size(); ++i) {
+    if (a.inserts[i].slot != b.inserts[i].slot ||
+        a.inserts[i].processor_name != b.inserts[i].processor_name ||
+        a.inserts[i].params_json != b.inserts[i].params_json) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Apply every smoothable / scalar strip parameter to an already-constructed
+// strip via its setters (mirrors make_channel_strip_from_spec minus the insert
+// chain). The fader/pan/trim setters retarget the strip's existing smoothers, so
+// the change ramps from the current value instead of snapping.
+void apply_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::Strip& spec) {
+  strip.set_fader_db(spec.fader_db);
+  strip.set_pan(spec.pan);
+  strip.set_pan_law(to_pan_law(spec.pan_law));
+  strip.set_input_trim_db(spec.input_trim_db);
+  strip.set_vca_offset_db(spec.vca_offset_db);
+  strip.set_width(spec.width);
+  strip.set_muted(spec.muted);
+  strip.set_soloed(spec.soloed);
+  strip.set_solo_safe(spec.solo_safe);
+  strip.set_pan_mode(to_pan_mode(spec.pan_mode));
+  strip.set_dual_pan(spec.dual_pan_left, spec.dual_pan_right);
+  strip.set_polarity_invert(spec.polarity_invert_left, spec.polarity_invert_right);
+  strip.set_channel_delay_samples(spec.channel_delay_samples);
+  strip.set_surround_pan_params({spec.surround_pan.azimuth, spec.surround_pan.elevation,
+                                 spec.surround_pan.divergence, spec.surround_pan.lfe,
+                                 spec.surround_pan.distance});
+}
+
+}  // namespace
+
 bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   if (!lane_config_valid(lanes)) return false;
   const auto snapshot = std::make_shared<const std::vector<TrackLaneConfig>>(std::move(lanes));
@@ -162,6 +204,25 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
 
 bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::Strip& spec) {
   if (track_id == 0) return false;
+
+  // In-place fast path: when a strip already exists for this track and only its
+  // smoothable scalars changed (identical insert topology), retarget the existing
+  // strip's parameters instead of rebuilding it. A rebuild constructs a fresh
+  // strip whose fader/pan/trim smoothers settle straight to the new value, so a
+  // live gain/pan edit would jump (an audible click); an in-place update keeps
+  // the smoother state so the change ramps. PDC is recomputed in case the channel
+  // delay changed; the strip pointer is unchanged so the lane binding stays valid.
+  for (OwnedStrip& owned : owned_strips_) {
+    if (owned.track_id == track_id && owned.strip && strip_inserts_equal(owned.spec, spec)) {
+      apply_strip_scalars(*owned.strip, spec);
+      owned.spec = spec;
+      if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+        recompute_lane_pdc(*lanes);
+      }
+      return true;
+    }
+  }
+
   std::unique_ptr<mixing::ChannelStrip> strip;
   try {
     strip = make_channel_strip_from_spec(spec);
@@ -177,13 +238,14 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   for (OwnedStrip& owned : owned_strips_) {
     if (owned.track_id == track_id) {
       owned.strip = std::move(strip);
+      owned.spec = spec;
       return bind_track_strip(track_id, raw);
     }
   }
   if (owned_strips_.size() >= kMaxTrackLanes) {
     return false;
   }
-  owned_strips_.push_back(OwnedStrip{track_id, std::move(strip)});
+  owned_strips_.push_back(OwnedStrip{track_id, std::move(strip), spec});
   return bind_track_strip(track_id, raw);
 }
 
@@ -389,7 +451,9 @@ mixing::ChannelStrip* TrackMixerRuntime::ensure_owned_strip_for(uint32_t track_i
     strip->prepare(sample_rate_, max_block_size_);
   }
   mixing::ChannelStrip* raw = strip.get();
-  owned_strips_.push_back(OwnedStrip{track_id, std::move(strip)});
+  // Automation-seeded strip: no spec applied yet, so leave spec default (a later
+  // set_track_strip will see a differing insert topology and rebuild).
+  owned_strips_.push_back(OwnedStrip{track_id, std::move(strip), {}});
   return raw;
 }
 
