@@ -44,6 +44,10 @@ namespace sonare::midi::synth {
 /// the buffer (their pitch lands sharp instead of overflowing).
 inline constexpr float kKsMinFundamentalHz = 20.0f;
 
+/// In-loop allpass stages for steel-string dispersion. Fewer than the piano
+/// (kPianoDispersionStages) — steel-guitar inharmonicity is much weaker.
+inline constexpr int kKsDispersionStages = 2;
+
 /// Returns the per-LINE delay-buffer capacity (in samples): one string
 /// polarization span. attach() carves the slab into spans of this size.
 inline int ks_buffer_capacity(double sample_rate) noexcept {
@@ -105,6 +109,52 @@ struct KsPatchParams {
   /// inside the unit circle even at the near-degenerate detune (eigenvalue
   /// bound, not a scalar per-loop bound). No effect unless @ref polarization > 0.
   float body_coupling = 0.0f;
+  /// Physical-pluck excitation blend in [0,1] (off-by-default; 0 = the textbook
+  /// combed-noise burst, render bit-identical). As it rises the burst crossfades
+  /// toward a deterministic pluck doublet — a raised-cosine up/down lobe standing
+  /// in for the finger's release-velocity pulse (a feedforward reduction of the
+  /// Cuzzucoli-Lombardo player-touch model; the full model is two-way, this
+  /// shapes and injects the burst once). The doublet is zero-mean, so the
+  /// pick-position comb and loop stay well behaved.
+  float pluck_style = 0.0f;
+  /// Pluck edge in [0,1]: fingertip flesh (0, a wide/round lobe, fewer highs) to
+  /// nail or pick (1, a narrow/sharp lobe, more highs — the bright release edge).
+  /// Only affects the pluck doublet, so it is inert unless @ref pluck_style > 0.
+  float nail = 0.0f;
+  /// Enables the instrument-wide sympathetic-string bank (off-by-default; false
+  /// leaves the voice render bit-identical). The played note excites a shared
+  /// bank tuned to the open strings, which rings behind it — the "sound halo" of
+  /// a classical guitar or harp (Karjalainen, Välimäki & Jánosy 1998; Lehtonen
+  /// et al. 2007). This is a host-level (per-instrument) effect, not per-voice:
+  /// NativeSynth reuses the piano sympathetic bank, held open (plucked strings
+  /// have no dampers). Not carried in the per-voice core state.
+  bool sympathetic = false;
+  /// Magnetic-pickup position in [0, 0.5] (off-by-default; 0 = no pickup, render
+  /// bit-identical — the electric-guitar model). A magnetic pickup senses the
+  /// string at a fixed point, not the whole motion: it combs the output with a
+  /// node at that point (a second, output-side comb distinct from the pluck-
+  /// position comb) and its field gradient makes the string-to-voltage transfer
+  /// mildly nonlinear, adding even harmonics (Lindroos, Penttinen & Välimäki
+  /// 2011). Higher = nearer the neck (rounder comb); low = near the bridge
+  /// (brighter). Amp/overdrive is a separate downstream stage, not modeled here.
+  float pickup_pos = 0.0f;
+  /// Stiff-string dispersion in [0,1] (off-by-default; 0 = a harmonic string,
+  /// render bit-identical). Steel strings (acoustic-steel and electric) are
+  /// stiffer than nylon, so their partials stretch sharp to f_n =
+  /// n*f0*sqrt(1 + B*n^2). This scales a steel-string inharmonicity coefficient
+  /// (weaker than a piano) into an in-loop allpass cascade — the same dispersion
+  /// method the piano core uses. Leave 0 for nylon (its plain strings are not
+  /// audibly inharmonic); the "no dispersion" decision must NOT be inherited by
+  /// the steel members, which share this Karplus-Strong core.
+  float dispersion = 0.0f;
+  /// Tension-modulation amount in [0,1] (off-by-default; 0 = a linear string,
+  /// render bit-identical). A hard pluck stretches the string, raising its
+  /// tension and so its pitch, which then relaxes back over the first tens of
+  /// milliseconds — the slight downward glide at the attack of a hard-plucked
+  /// string (a reduced Tolonen/Välimäki nonlinear string). Scaled by velocity;
+  /// the pitch rise is clamped explicitly in cents so a hard attack stacked on
+  /// top of bend/vibrato cannot glitch the delay line.
+  float tension_mod = 0.0f;
 };
 
 /// Per-voice plucked-string state, embedded in NativeSynthVoice. The voice's
@@ -150,6 +200,10 @@ class KsVoiceCore {
   /// One-pole loop lowpass y += alpha * (x - y) and its state.
   float loop_alpha_ = 1.0f;
   float lp_state_ = 0.0f;
+  /// In-loop dispersion allpass cascade (steel-string inharmonicity). disp_a_
+  /// == 0 -> the cascade is skipped, render bit-identical.
+  float disp_a_ = 0.0f;
+  float disp_state_[kKsDispersionStages] = {};
   /// Per-loop amplitude factor for the current t60 target.
   float loop_gain_ = 0.0f;
   /// Per-loop gain for the note-off damped t60 (precomputed at start).
@@ -186,6 +240,26 @@ class KsVoiceCore {
   float exc_alpha_ = 1.0f;
   float exc_lp1_ = 0.0f;
   float exc_lp2_ = 0.0f;
+  // Physical-pluck doublet. pluck_style_ == 0 -> the burst is the plain seeded
+  // noise, bit-identical. pluck_contact_ is the doublet width in samples
+  // (narrow = nail/pick/bright, wide = fingertip/round).
+  float pluck_style_ = 0.0f;
+  int pluck_contact_ = 0;
+
+  // Magnetic pickup (electric). pickup_depth_ == 0 -> no pickup, output
+  // bit-identical. pickup_delay_q8_ is the position tap into the loop line (a
+  // second output-side comb); pickup_mag_ is the field-gradient nonlinearity
+  // amount (even harmonics).
+  float pickup_depth_ = 0.0f;
+  int pickup_delay_q8_ = 0;
+  float pickup_mag_ = 0.0f;
+
+  // Tension modulation. tension_ratio_peak_ == 0 -> no tension, pitch path
+  // bit-identical. It holds the attack-peak pitch factor minus one (a small
+  // positive, cents-clamped); tension_env_ decays it toward the nominal pitch.
+  float tension_ratio_peak_ = 0.0f;
+  float tension_env_ = 0.0f;
+  float tension_decay_coeff_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth

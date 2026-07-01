@@ -767,6 +767,17 @@ inline saturation::CabModel cab_model(int value) {
   return value == 1 ? saturation::CabModel::kBass8x10 : saturation::CabModel::kGuitar4x12;
 }
 
+inline saturation::AmpModel amp_model(int value) {
+  switch (value) {
+    case 1:
+      return saturation::AmpModel::kFenderClean;
+    case 2:
+      return saturation::AmpModel::kModernHiGain;
+    default:
+      return saturation::AmpModel::kClassicCrunch;
+  }
+}
+
 inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params) {
   saturation::AmpSimConfig config;
   config.drive = f(params, "drive", config.drive);
@@ -776,6 +787,7 @@ inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params) {
   config.presence_db = f(params, "presenceDb", config.presence_db);
   config.cab = b(params, "cab", config.cab);
   config.cab_model = cab_model(i(params, "cabModel", 0));
+  config.amp_model = amp_model(i(params, "ampModel", 0));
   config.level_db = f(params, "levelDb", config.level_db);
   config.power = f(params, "power", config.power);
   config.sag = f(params, "sag", config.sag);

@@ -30,7 +30,10 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "midi/instrument.h"
@@ -40,23 +43,31 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
+#include "rt/processor_base.h"
 #if defined(SONARE_MIDI_WITH_FX)
 #include "midi/synth/gs_effects.h"
 #endif
 
 namespace sonare::midi::synth {
 
-/// Per-part insert slot (GS insertion-effect stand-in): a single
-/// gain-compensated drive stage on the part's dry bus.
+/// Per-part insert slot (the GS insertion-effect realiser): either the built-in
+/// gain-compensated drive, or an arbitrary streaming ProcessorBase built by an
+/// injected factory (so the SF2 player realises any insert type without
+/// depending on the mastering/effects factory itself — the host wires it).
 enum class Sf2InsertType : int {
   kNone = 0,
-  kDrive = 1,
+  kDrive = 1,      ///< Built-in gain-compensated tanh drive (`amount`).
+  kProcessor = 2,  ///< An injected ProcessorBase built from `insert_name`.
 };
 
 struct Sf2PartInsert {
   Sf2InsertType type = Sf2InsertType::kNone;
-  /// Drive amount in [0, 1] (0 = clean, 1 = heavy saturation).
+  /// kDrive: drive amount in [0, 1] (0 = clean, 1 = heavy saturation).
   float amount = 0.0f;
+  /// kProcessor: insert-factory processor name (e.g. "saturation.ampSim").
+  std::string insert_name;
+  /// kProcessor: JSON param object for the processor ("" / "{}" = defaults).
+  std::string insert_params_json;
 };
 
 /// GS-style preset lookup on a parsed SoundFont: exact (bank, program) first,
@@ -78,6 +89,14 @@ struct Sf2PlayerConfig {
   bool synth_fallback = true;
   /// Per-part (MIDI channel) insert slot.
   std::array<Sf2PartInsert, 16> part_inserts{};
+  /// Injected insert-factory: builds a streaming ProcessorBase from a name +
+  /// JSON params, for kProcessor slots. Left null (the default) means the
+  /// player has no factory, so kProcessor slots stay silent no-ops — the SF2
+  /// player never depends on the mastering/effects factory itself; the host
+  /// (which does) wires this, typically to mastering::api::make_insert.
+  std::function<std::unique_ptr<rt::ProcessorBase>(std::string_view name,
+                                                   std::string_view json_params)>
+      insert_factory;
 #if defined(SONARE_MIDI_WITH_FX)
   /// System effect units (reverb / chorus / delay send-returns).
   GsEffectsConfig effects;
@@ -121,6 +140,22 @@ class Sf2Player final : public MidiInstrument {
   int active_voice_count() const noexcept {
     return pool_.active_count() + fallback_pool_.active_count();
   }
+
+  /// Captured GS insertion-effect (EFX) unit state (the raw 40 03 xx wire).
+  /// Exposed for the adapter layer that realises it and for diagnostics.
+  const GsEfx& gs_efx() const noexcept { return efx_; }
+
+  /// True when the captured EFX unit or a part's EFX on/off switch changed
+  /// since the last realise_gs_efx(). handle_sysex() (audio-thread safe) only
+  /// stores the wire and raises this flag; the host polls it on the CONTROL
+  /// thread and calls realise_gs_efx() to (re)build the inserts.
+  bool gs_efx_dirty() const noexcept { return gs_efx_dirty_; }
+
+  /// CONTROL thread: (re)build the per-part inserts for the parts whose EFX
+  /// switch is on, from the captured EFX type/params via the injected factory
+  /// (an unmapped type or absent factory leaves the part dry). Allocates; never
+  /// call from the audio thread. Clears gs_efx_dirty().
+  void realize_gs_efx();
 
  private:
   struct ChannelState {
@@ -186,6 +221,16 @@ class Sf2Player final : public MidiInstrument {
 
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
+  /// GS insertion-effect (EFX) unit state, captured from the 40 03 xx SysEx
+  /// block. The single SC-55/88 EFX unit; parsed and stored raw here so an
+  /// adapter layer can realise it. Cleared on GS/GM reset.
+  GsEfx efx_{};
+  /// Per-part EFX on/off switch (GS 40 4x 22): parts routed through the EFX.
+  std::array<bool, 16> efx_part_enabled_{};
+  /// Raised by handle_sysex() when efx_ / efx_part_enabled_ change; cleared by
+  /// realise_gs_efx(). Lets the audio-safe SysEx path defer the allocating
+  /// insert rebuild to the control thread.
+  bool gs_efx_dirty_ = false;
   /// GS drum-kit per-note overrides (NRPN 18/1A/1C/1D/1E), per channel.
   std::array<std::array<GsDrumNoteParams, 128>, 16> drum_params_{};
   VoicePool<Sf2Voice> pool_;
@@ -214,6 +259,9 @@ class Sf2Player final : public MidiInstrument {
   /// 16 parts x stereo x kChunkFrames; only used when a part insert is set.
   std::vector<float> part_bus_;
   bool any_insert_ = false;
+  /// Per-part kProcessor inserts, built from config_.part_inserts via the
+  /// injected factory in prepare() (control thread). Null slots are inert.
+  std::array<std::unique_ptr<rt::ProcessorBase>, 16> part_processors_{};
 
 #if defined(SONARE_MIDI_WITH_FX)
   std::unique_ptr<GsEffectBus> effects_;

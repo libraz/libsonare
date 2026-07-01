@@ -21,8 +21,10 @@
 /// RT contract: everything here is POD + pure functions — usable from the
 /// audio thread without allocation.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "midi/synth/sf2_voice.h"
@@ -66,6 +68,52 @@ struct GsDrumNoteParams {
   bool any() const noexcept { return flags != 0; }
 };
 
+/// GS insertion effect (EFX) state, stored as the RAW GS wire so any adapter
+/// can interpret it without a typed per-effect struct. The SC-55/88 EFX is a
+/// single insertion unit whose type is a 14-bit number (two 7-bit SysEx bytes)
+/// and whose 20 parameters are raw 0..127 bytes; each adapter reads only the
+/// parameters it uses. Keeping the wire raw means a new EFX algorithm is a new
+/// adapter over the same bytes — no parser, struct or ABI change.
+struct GsEfx {
+  /// EFX type number: (MSB << 8) | LSB, matching the two-byte GS notation
+  /// (e.g. 0x0110). 0 = the power-on default (Thru / no insertion effect).
+  uint16_t type = 0;
+  /// EFX PARAMETER 1..20 (GS address 40 03 03..16), raw 0..127.
+  std::array<uint8_t, 20> params{};
+  uint8_t send_reverb = 0;  ///< EFX -> reverb send (40 03 17).
+  uint8_t send_chorus = 0;  ///< EFX -> chorus send (40 03 18).
+  uint8_t send_delay = 0;   ///< EFX -> delay send (40 03 19).
+  /// True once any EFX-block write has arrived (so an all-zero Thru that was
+  /// explicitly set is distinguished from the never-touched power-on state).
+  bool assigned = false;
+
+  bool any() const noexcept { return assigned; }
+};
+
+/// Applies a GS DT1 write to the EFX block (address 40 03 xx) onto @p efx,
+/// handling a run of consecutive data bytes from the start address (a single
+/// parameter write or a full-block dump). Bytes addressing reserved/unknown
+/// offsets are preserved by being ignored, never dropping the message. Accepts
+/// the payload with or without F0/F7 framing. Returns true if the message
+/// addressed the EFX block (even if some bytes were ignored); false otherwise.
+/// Never crashes.
+bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size) noexcept;
+
+/// Insertion-effect adapter name for a GS EFX @p type: the `insert_factory`
+/// processor name an adapter drives, or an empty view for a type this layer
+/// does not yet map (the caller bypasses it and logs — no silent drop). The
+/// mapping is intentionally partial; layer-3 promotion adds entries here (and
+/// the matching DSP) without touching the parser, ABI or bindings.
+std::string_view gs_efx_insert_name(uint16_t type) noexcept;
+
+/// JSON param object (for `insert_factory` / make_insert) translating the raw
+/// GS EFX parameters of @p efx into the mapped insert's parameters. The
+/// Overdrive/Distortion families translate EFX PARAMETER 1 as the drive amount;
+/// every other type (mapped or not) returns "{}" so the insert plays its own
+/// defaults until a per-type translation lands (a layer-3 refinement — the type
+/// is already honoured, only its parameter voicing is approximate).
+std::string gs_efx_insert_params(const GsEfx& efx);
+
 // --- NRPN offset scalings (documented approximations, see file header) ---
 
 /// TVF cutoff: ~150 cents per step (+-9600 over the full range).
@@ -91,9 +139,11 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
 
 enum class GsSysExKind : uint8_t {
   kNone = 0,
-  kGmReset,       ///< GM System On (F0 7E 7F 09 01 F7)
-  kGsReset,       ///< GS Reset (F0 41 dd 42 12 40 00 7F 00 41 F7)
-  kUseForRhythm,  ///< GS part rhythm assignment (40 1x 15 mm)
+  kGmReset,        ///< GM System On (F0 7E 7F 09 01 F7)
+  kGsReset,        ///< GS Reset (F0 41 dd 42 12 40 00 7F 00 41 F7)
+  kUseForRhythm,   ///< GS part rhythm assignment (40 1x 15 mm)
+  kEfxPartSwitch,  ///< GS per-part EFX on/off (40 4x 22 mm): routes the part
+                   ///< through the single insertion effect (value 1 = on).
 };
 
 struct GsSysEx {

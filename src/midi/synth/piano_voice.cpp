@@ -348,6 +348,37 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
   out_gain_ = 0.06f;
 }
 
+void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, int count,
+                                        float ring_t60_s, float out_gain) noexcept {
+  const float sr = sample_rate > 0.0 ? static_cast<float>(sample_rate) : 48000.0f;
+  const int n = std::min(count, kResonanceModes);
+  const float t60 = std::max(0.02f, ring_t60_s);
+  const float r = std::exp(-6.907755279f / (sr * t60));
+  for (int i = 0; i < kResonanceModes; ++i) {
+    Mode& m = modes_[static_cast<size_t>(i)];
+    const float f = (i < n && freqs != nullptr) ? freqs[i] : 0.0f;
+    if (f <= 0.0f || f >= 0.45f * sr) {
+      m = Mode{};
+      continue;
+    }
+    const float w = kTwoPi * f / sr;
+    m.a1 = 2.0f * r * std::cos(w);
+    m.a2 = -r * r;
+    // Unity-peak normalization (the (1-r) factor cancels the high-Q resonant
+    // boost) so the bank is a weak coupling, not a runaway bandpass on the note.
+    m.gain = 1.0f - r;
+    m.y1 = 0.0f;
+    m.y2 = 0.0f;
+  }
+  gate_ = 0.0f;
+  // Held open by the caller (plucked strings have no dampers), so the fall-time
+  // coefficient is only the ~10 ms lift; reuse the piano smoothing constants.
+  gate_open_coeff_ = 1.0f - std::exp(-1.0f / (0.010f * sr));
+  gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
+  ringout_ = std::exp(-6.907755279f / (sr * 0.15f));
+  out_gain_ = std::max(0.0f, out_gain);
+}
+
 void PianoResonanceBank::reset() noexcept {
   for (Mode& m : modes_) {
     m.y1 = 0.0f;

@@ -189,6 +189,16 @@ class PianoResonanceBank {
  public:
   /// Tunes the mode bank for @p sample_rate and clears the state.
   void prepare(double sample_rate) noexcept;
+  /// Tunes the bank from an explicit set of @p count mode frequencies (Hz;
+  /// clamped to kResonanceModes, the surplus zeroed) instead of the built-in
+  /// piano register grid, with a @p ring_t60_s resonator decay and a @p out_gain
+  /// coupling level. Used to share this bank as a plucked-string sympathetic
+  /// resonator (the open guitar/harp strings ringing behind the played note):
+  /// the caller drives process() with damper_open == true (plucked strings have
+  /// no dampers), so the gate simply holds open. The piano prepare(double) path
+  /// is untouched. RT contract identical to prepare().
+  void prepare_custom(double sample_rate, const float* freqs, int count, float ring_t60_s,
+                      float out_gain) noexcept;
   /// Clears the resonator state and the damper gate.
   void reset() noexcept;
   /// Adds the sympathetic resonance for one input sample. @p damper_open

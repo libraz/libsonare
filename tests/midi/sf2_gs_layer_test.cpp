@@ -23,7 +23,11 @@ namespace {
 
 using Catch::Approx;
 using sonare::midi::MidiEvent;
+using sonare::midi::synth::apply_gs_efx_sysex;
 using sonare::midi::synth::gs_drum_kit_name;
+using sonare::midi::synth::gs_efx_insert_name;
+using sonare::midi::synth::gs_efx_insert_params;
+using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::GsSysEx;
 using sonare::midi::synth::GsSysExKind;
 using sonare::midi::synth::parse_gs_sysex;
@@ -278,6 +282,122 @@ TEST_CASE("parse_gs_sysex recognises the GS/GM messages", "[midi][sf2][gslayer]"
   const uint8_t junk[] = {0xF0, 0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7};  // XG reset
   REQUIRE(parse_gs_sysex(junk, sizeof(junk)).kind == GsSysExKind::kNone);
   REQUIRE(parse_gs_sysex(nullptr, 0).kind == GsSysExKind::kNone);
+}
+
+TEST_CASE("apply_gs_efx_sysex captures the EFX block as raw wire", "[midi][sf2][gslayer]") {
+  // EFX TYPE write (40 03 00, two data bytes 01 10 = Overdrive). Checksum over
+  // 40 03 00 01 10 = 84 -> 0x2C.
+  const uint8_t type_write[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                                0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  GsEfx efx;
+  REQUIRE(apply_gs_efx_sysex(efx, type_write, sizeof(type_write)));
+  REQUIRE(efx.type == 0x0110);
+  REQUIRE(efx.assigned);
+  // Unframed payload parses identically (framing is stripped).
+  GsEfx efx_unframed;
+  REQUIRE(apply_gs_efx_sysex(efx_unframed, type_write + 1, sizeof(type_write) - 2));
+  REQUIRE(efx_unframed.type == 0x0110);
+
+  // EFX PARAMETER 1 write (40 03 03, data 0x64 = 100). Checksum 0x56.
+  const uint8_t param_write[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x03, 0x64, 0x56, 0xF7};
+  REQUIRE(apply_gs_efx_sysex(efx, param_write, sizeof(param_write)));
+  REQUIRE(efx.params[0] == 100);
+  REQUIRE(efx.type == 0x0110);  // the earlier type is preserved across writes
+
+  // A full-block run from 0x00: type 01 10, reserved 00, params 1..3 = 10 20 30.
+  // Checksum over 40 03 00 01 10 00 10 20 30 = 180 -> 0x4C.
+  const uint8_t run[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00,
+                         0x01, 0x10, 0x00, 0x10, 0x20, 0x30, 0x4C, 0xF7};
+  GsEfx efx_run;
+  REQUIRE(apply_gs_efx_sysex(efx_run, run, sizeof(run)));
+  REQUIRE(efx_run.type == 0x0110);
+  REQUIRE(efx_run.params[0] == 0x10);
+  REQUIRE(efx_run.params[1] == 0x20);
+  REQUIRE(efx_run.params[2] == 0x30);
+
+  // A non-EFX Roland message (GS reset, address 40 00 7F) is not an EFX write.
+  const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
+  GsEfx untouched;
+  REQUIRE_FALSE(apply_gs_efx_sysex(untouched, gs_reset, sizeof(gs_reset)));
+  REQUIRE_FALSE(untouched.assigned);
+
+  // A bad checksum is rejected and leaves the struct untouched.
+  uint8_t corrupt[sizeof(type_write)];
+  for (size_t i = 0; i < sizeof(type_write); ++i) corrupt[i] = type_write[i];
+  corrupt[10] ^= 0x7F;  // wreck the checksum
+  GsEfx efx_corrupt;
+  REQUIRE_FALSE(apply_gs_efx_sysex(efx_corrupt, corrupt, sizeof(corrupt)));
+  REQUIRE_FALSE(efx_corrupt.assigned);
+  REQUIRE(apply_gs_efx_sysex(untouched, nullptr, 0) == false);
+}
+
+TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf2][gslayer]") {
+  // GS EFX type numbers (SC-88Pro MSB<<8|LSB) -> insert-factory names.
+  REQUIRE(gs_efx_insert_name(0x0100) == "eq.parametric");               // Stereo-EQ
+  REQUIRE(gs_efx_insert_name(0x0110) == "saturation.ampSim");           // Overdrive
+  REQUIRE(gs_efx_insert_name(0x0111) == "saturation.ampSim");           // Distortion
+  REQUIRE(gs_efx_insert_name(0x0120) == "effects.modulation.phaser");   // Phaser
+  REQUIRE(gs_efx_insert_name(0x0123) == "effects.modulation.flanger");  // Stereo Flanger
+  REQUIRE(gs_efx_insert_name(0x0130) == "dynamics.compressor");         // Compressor
+  REQUIRE(gs_efx_insert_name(0x0131) == "dynamics.limiter");            // Limiter
+  REQUIRE(gs_efx_insert_name(0x0140) == "effects.modulation.chorus");   // Hexa Chorus
+  REQUIRE(gs_efx_insert_name(0x0142) == "effects.modulation.chorus");   // Stereo Chorus
+  REQUIRE(gs_efx_insert_name(0x0150) == "effects.delay.stereo");        // Stereo Delay
+  REQUIRE(gs_efx_insert_name(0x0000).empty());                          // Thru
+  REQUIRE(gs_efx_insert_name(0x0160).empty());                          // 2 Pitch Shifter (layer 3)
+}
+
+TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][sf2][gslayer]") {
+  GsEfx od;
+  od.type = 0x0110;  // Overdrive -> amp model, drive rising with EFX PARAMETER 1
+  od.params[0] = 0;
+  const std::string low = gs_efx_insert_params(od);
+  od.params[0] = 127;
+  const std::string high = gs_efx_insert_params(od);
+  REQUIRE(low.find("\"drive\"") != std::string::npos);
+  REQUIRE(low.find("\"ampModel\":0") != std::string::npos);  // classic-crunch voicing
+  REQUIRE(low != high);                                      // more drive -> more drive knob
+
+  GsEfx dist;
+  dist.type = 0x0111;  // Distortion -> amp model on its high-gain voicing
+  dist.params[0] = 127;
+  REQUIRE(gs_efx_insert_params(dist).find("\"ampModel\":2") != std::string::npos);
+
+  GsEfx thru;  // unmapped type -> the insert's defaults
+  thru.type = 0x0114;
+  REQUIRE(gs_efx_insert_params(thru) == "{}");
+}
+
+TEST_CASE("parse_gs_sysex recognises the per-part EFX switch", "[midi][sf2][gslayer]") {
+  // 40 41 22 01 = EFX ON for part 1 (channel index 0); checksum 0x5C.
+  const uint8_t on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const GsSysEx msg = parse_gs_sysex(on, sizeof(on));
+  REQUIRE(msg.kind == GsSysExKind::kEfxPartSwitch);
+  REQUIRE(msg.channel == 0);
+  REQUIRE(msg.value == 1);
+  // 40 40 22 00 = EFX OFF for part 10 (block 0 -> channel 9); checksum 0x5E.
+  const uint8_t off10[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x40, 0x22, 0x00, 0x5E, 0xF7};
+  const GsSysEx off = parse_gs_sysex(off10, sizeof(off10));
+  REQUIRE(off.kind == GsSysExKind::kEfxPartSwitch);
+  REQUIRE(off.channel == 9);
+  REQUIRE(off.value == 0);
+}
+
+TEST_CASE("Sf2Player stores the GS EFX unit and clears it on reset", "[midi][sf2][gslayer]") {
+  Sf2Player player = make_player();
+  REQUIRE_FALSE(player.gs_efx().assigned);
+
+  const uint8_t type_write[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                                0x03, 0x00, 0x01, 0x11, 0x2B, 0xF7};  // Distortion
+  REQUIRE(player.handle_sysex(type_write, sizeof(type_write)));
+  REQUIRE(player.gs_efx().assigned);
+  REQUIRE(player.gs_efx().type == 0x0111);
+
+  const uint8_t gs_reset_bytes[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                                    0x00, 0x7F, 0x00, 0x41, 0xF7};
+  REQUIRE(player.handle_sysex(gs_reset_bytes, sizeof(gs_reset_bytes)));
+  REQUIRE_FALSE(player.gs_efx().assigned);
+  REQUIRE(player.gs_efx().type == 0);
 }
 
 TEST_CASE("use-for-rhythm SysEx turns a melodic channel into drums", "[midi][sf2][gslayer]") {

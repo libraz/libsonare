@@ -9,8 +9,11 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <vector>
 
+#include "mastering/api/insert_factory.h"
 #include "midi/midi_event.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
@@ -247,6 +250,135 @@ TEST_CASE("per-part insert drive saturates only its part", "[midi][sf2][gsfx]") 
   other.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 60, 127)));
   const StereoRender oth = render(other, 9600);
   REQUIRE(h3(oth.left) < 100.0 * h3(cln.left));
+}
+
+TEST_CASE("per-part processor insert runs an injected factory-built effect", "[midi][sf2][gsfx]") {
+  auto h3 = [](const std::vector<float>& buf) {
+    const double w = kTwoPi * 3000.0 / kOutRate;
+    const double coeff = 2.0 * std::cos(w);
+    double s1 = 0.0, s2 = 0.0;
+    for (size_t i = 2400; i < buf.size(); ++i) {
+      const double s0 = static_cast<double>(buf[i]) + coeff * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+  };
+
+  // A kProcessor slot builds a real insert (a driven tube) through the injected
+  // factory and runs it on the part bus: the 1 kHz sine gains odd harmonics.
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
+  cfg.part_inserts[0].insert_name = "saturation.tube";
+  cfg.part_inserts[0].insert_params_json = R"({"driveDb":30})";
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player driven = make_player(cfg);
+  driven.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender drv = render(driven, 9600);
+
+  Sf2Player clean = make_player();
+  clean.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender cln = render(clean, 9600);
+  REQUIRE(h3(drv.left) > 10.0 * h3(cln.left));
+
+  // Without a factory (or an unknown name) the kProcessor slot is an inert
+  // no-op: the part stays clean, no crash.
+  Sf2PlayerConfig no_factory = cfg;
+  no_factory.insert_factory = nullptr;
+  Sf2Player inert = make_player(no_factory);
+  inert.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender ino = render(inert, 9600);
+  REQUIRE(h3(ino.left) < 10.0 * h3(cln.left));
+}
+
+TEST_CASE("GS EFX SysEx routes a part through a realised insert", "[midi][sf2][gsfx]") {
+  auto make_factory = [] {
+    return [](std::string_view name, std::string_view json) {
+      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    };
+  };
+  auto h3 = [](const std::vector<float>& buf) {
+    const double w = kTwoPi * 3000.0 / kOutRate;
+    const double coeff = 2.0 * std::cos(w);
+    double s1 = 0.0, s2 = 0.0;
+    for (size_t i = 2400; i < buf.size(); ++i) {
+      const double s0 = static_cast<double>(buf[i]) + coeff * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+  };
+  // GS sequence: enable EFX on part 1 (channel 0), select Overdrive (01 10),
+  // set EFX PARAMETER 1 (drive) to max. Checksums per the Roland DT1 rule.
+  const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                             0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  const uint8_t od_drive[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x03, 0x7F, 0x3B, 0xF7};
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.insert_factory = make_factory();
+  Sf2Player player = make_player(cfg);
+  REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
+  REQUIRE(player.handle_sysex(od_type, sizeof(od_type)));
+  REQUIRE(player.handle_sysex(od_drive, sizeof(od_drive)));
+  REQUIRE(player.gs_efx_dirty());
+  player.realize_gs_efx();  // control thread: build the insert
+  REQUIRE_FALSE(player.gs_efx_dirty());
+
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender efx = render(player, 9600);
+
+  Sf2Player clean = make_player();
+  clean.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender cln = render(clean, 9600);
+  REQUIRE(h3(efx.left) > 10.0 * h3(cln.left));
+
+  // Turning the part EFX off tears the insert down (fresh player, no ring-over).
+  const uint8_t part_off[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x00, 0x5D, 0xF7};
+  Sf2PlayerConfig cfg_off;
+  cfg_off.gain = 1.0f;
+  cfg_off.insert_factory = make_factory();
+  Sf2Player off_player = make_player(cfg_off);
+  off_player.handle_sysex(part_on, sizeof(part_on));
+  off_player.handle_sysex(od_type, sizeof(od_type));
+  off_player.handle_sysex(od_drive, sizeof(od_drive));
+  off_player.realize_gs_efx();
+  REQUIRE(off_player.handle_sysex(part_off, sizeof(part_off)));
+  off_player.realize_gs_efx();
+  off_player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender after = render(off_player, 9600);
+  REQUIRE(h3(after.left) < 10.0 * h3(cln.left) + 1e-9);
+}
+
+TEST_CASE("a mapped GS EFX modulation type is realised through the factory", "[midi][sf2][gsfx]") {
+  // Skip on builds without the FX suite (effects.* return null there).
+  if (sonare::mastering::api::make_insert("effects.modulation.chorus", "{}") == nullptr) return;
+
+  // Enable EFX on part 1, select Stereo Chorus (01 42).
+  const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const uint8_t chorus[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00, 0x01, 0x42, 0x7A, 0xF7};
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player player = make_player(cfg);
+  REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
+  REQUIRE(player.handle_sysex(chorus, sizeof(chorus)));
+  player.realize_gs_efx();
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender efx = render(player, 9600);
+
+  Sf2Player clean = make_player();
+  clean.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender cln = render(clean, 9600);
+  // The chorus modulates the part, so its output diverges from the dry signal.
+  REQUIRE(efx.left != cln.left);
 }
 
 TEST_CASE("GS effects render bit-identically", "[midi][sf2][gsfx]") {

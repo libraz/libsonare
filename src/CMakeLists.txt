@@ -672,6 +672,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/bowed_string_voice.cpp
     midi/synth/reed_voice.cpp
     midi/synth/brass_voice.cpp
+    midi/synth/flute_voice.cpp
     midi/synth/native_synth.cpp
     midi/synth/gm_fallback_map.cpp
     midi/synth/synth_presets.cpp

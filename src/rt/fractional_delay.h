@@ -73,6 +73,55 @@ inline float lagrange3_fractional_delay(float* buffer, size_t size, size_t& writ
   return c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
 }
 
+/// @brief Read-only 3rd-order Lagrange tap: reads a fractionally delayed sample
+///        WITHOUT writing or advancing the buffer.
+///
+/// Same interpolation and Q8.8 convention as lagrange3_fractional_delay, but a
+/// pure read — for a second tap of a loop that another call already writes and
+/// advances (e.g. a magnetic-pickup position tap of a string delay line). Read
+/// at a delay of at least one sample so the tap never lands on the pending write
+/// position.
+///
+/// @param buffer          Circular delay buffer (must be non-null).
+/// @param size            Buffer length in samples (must be > 0).
+/// @param write_index     Current write position (not modified).
+/// @param delay_samples_q8 Requested delay in Q8.8 samples (negatives clamp to 0).
+/// @return The fractionally delayed output sample.
+inline float lagrange3_read(const float* buffer, size_t size, size_t write_index,
+                            int delay_samples_q8) noexcept {
+  auto sample_at_delay = [&](int delay) {
+    delay = std::max(0, delay);
+    const size_t index = (write_index + size - (static_cast<size_t>(delay) % size)) % size;
+    return buffer[index];
+  };
+  const float delay = static_cast<float>(std::max(0, delay_samples_q8)) / 256.0f;
+  const int base = static_cast<int>(std::floor(delay));
+  const float mu = delay - static_cast<float>(base);
+
+  float y0, y1, y2, y3;
+  float c0, c1, c2, c3;
+  if (base >= 1) {
+    y0 = sample_at_delay(base - 1);
+    y1 = sample_at_delay(base);
+    y2 = sample_at_delay(base + 1);
+    y3 = sample_at_delay(base + 2);
+    c0 = -mu * (mu - 1.0f) * (mu - 2.0f) / 6.0f;
+    c1 = (mu + 1.0f) * (mu - 1.0f) * (mu - 2.0f) / 2.0f;
+    c2 = -(mu + 1.0f) * mu * (mu - 2.0f) / 2.0f;
+    c3 = (mu + 1.0f) * mu * (mu - 1.0f) / 6.0f;
+  } else {
+    y0 = sample_at_delay(0);
+    y1 = sample_at_delay(1);
+    y2 = sample_at_delay(2);
+    y3 = sample_at_delay(3);
+    c0 = -(mu - 1.0f) * (mu - 2.0f) * (mu - 3.0f) / 6.0f;
+    c1 = mu * (mu - 2.0f) * (mu - 3.0f) / 2.0f;
+    c2 = -mu * (mu - 1.0f) * (mu - 3.0f) / 2.0f;
+    c3 = mu * (mu - 1.0f) * (mu - 2.0f) / 6.0f;
+  }
+  return c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
+}
+
 /// @brief Vector convenience overload (the long-standing call form).
 inline float lagrange3_fractional_delay(std::vector<float>& buffer, size_t& write_index,
                                         int delay_samples_q8, float input) noexcept {

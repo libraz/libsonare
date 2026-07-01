@@ -35,6 +35,7 @@
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/envelope.h"
 #include "midi/synth/filter_models.h"
+#include "midi/synth/flute_voice.h"
 #include "midi/synth/fm_voice.h"
 #include "midi/synth/ks_voice.h"
 #include "midi/synth/mod_matrix.h"
@@ -62,6 +63,7 @@ enum class SynthEngineMode : int {
   kBowedString = 8,    // sustained waveguide bowed string (bowed_string_voice.h)
   kReed = 9,           // sustained waveguide reed woodwind (reed_voice.h)
   kBrass = 10,         // sustained waveguide brass / lip reed (brass_voice.h)
+  kFlute = 11,         // sustained waveguide air-jet flute (flute_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -170,6 +172,9 @@ struct NativeSynthPatch {
 
   /// Sustained waveguide brass / lip reed (used when mode == kBrass).
   BrassPatchParams brass;
+
+  /// Sustained waveguide air-jet flute (used when mode == kFlute).
+  FlutePatchParams flute;
 };
 
 /// Per-note GS drum overrides applied to a fallback percussion voice at
@@ -223,6 +228,9 @@ struct NativeSynthVoice : VoiceState {
   /// Brass / lip-reed core; like KS, the host attach()es its bore span before
   /// start().
   BrassVoiceCore brass;
+  /// Air-jet flute core; like KS, the host attach()es its delay slab (bore +
+  /// jet spans) before start().
+  FluteVoiceCore flute;
   BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
@@ -339,6 +347,14 @@ class NativeSynth final : public MidiInstrument {
     /// loudness VCA (no brass-specific breath push — that would silence the lips).
     uint8_t brass_breath = 255;
     uint8_t brass_bright = 255;
+    /// Air-jet flute continuous controllers (255 = untouched, so the preset's
+    /// own breath / brightness stands until the host sends the CC): CC2 breath ->
+    /// mouth pressure, CC74 -> reflection brightness. CC11 expression is the
+    /// shared loudness VCA (no flute-specific breath push — that would silence the
+    /// jet); CC1 vibrato rides the shared mod-wheel LFO like every voice (the
+    /// core's own vibrato is the preset's intrinsic, per-voice vibrato).
+    uint8_t flute_breath = 255;
+    uint8_t flute_bright = 255;
     ChannelParamState params;
     float bend_range_cents = 200.0f;
     /// Previous note's frequency (glide source; 0 = none yet).
@@ -361,6 +377,9 @@ class NativeSynth final : public MidiInstrument {
   /// Pushes the channel's live brass controllers (CC2 breath, CC74 bell
   /// brightness) to its sounding brass voices.
   void push_brass_control(uint8_t channel) noexcept;
+  /// Pushes the channel's live flute controllers (CC2 breath, CC74 reflection
+  /// brightness, CC1 vibrato depth) to its sounding flute voices.
+  void push_flute_control(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
 
@@ -385,11 +404,19 @@ class NativeSynth final : public MidiInstrument {
   /// allocated in prepare() only when the patch is a piano.
   std::vector<float> piano_buffers_;
   int piano_string_capacity_ = 0;
-  /// Shared pedal-gated sympathetic resonance bank (piano patches only).
+  /// Shared sympathetic resonance bank. Piano patches drive it pedal-gated (the
+  /// sustain-pedal sound halo); Karplus-Strong patches that opt in (patch.ks.
+  /// sympathetic) reuse the same bank tuned to the open-string set, held open
+  /// (plucked strings have no dampers). kPiano and kKarplusStrong are mutually
+  /// exclusive modes, so one bank serves both without a second allocation.
   PianoResonanceBank resonance_;
   /// Shared modal soundboard body (piano patches only).
   PianoSoundboard soundboard_;
   bool piano_mode_ = false;
+  /// A Karplus-Strong patch has opted into the shared sympathetic bank
+  /// (patch.ks.sympathetic). false leaves every existing KS voicing on its
+  /// original render path (the resonance branch is skipped entirely).
+  bool sympathetic_active_ = false;
   /// Pipe-organ delay slab: one kMaxPipeRanks-pipe slab per voice slot,
   /// allocated in prepare() only when the patch is a pipe organ.
   std::vector<float> pipe_organ_buffers_;
@@ -410,6 +437,11 @@ class NativeSynth final : public MidiInstrument {
   std::vector<float> brass_buffers_;
   int brass_capacity_ = 0;  // bore span
   bool brass_mode_ = false;
+  /// Flute delay slab: a bore span plus a jet span per voice slot, allocated in
+  /// prepare() only when the patch is an air-jet flute.
+  std::vector<float> flute_buffers_;
+  int flute_capacity_ = 0;  // per-span (bore / jet) capacity
+  bool flute_mode_ = false;
   /// Shared organ wind chest (tremulant / wind sag); pipe-organ patches only.
   OrganWindSupply wind_;
   /// Swell box: a bus-level shutter lowpass driven by the expression pedal

@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 45;
+constexpr size_t kPresetCount = 53;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -295,6 +295,50 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     brass("cornet", true, 0.52f, 0.45f, 0.55f, 0.30f, 20.0f, 85.0f, 0.84f, 0.40f, 0.70f);
     brass("flugelhorn", true, 0.48f, 0.62f, 0.40f, 0.34f, 24.0f, 95.0f, 0.84f, 0.0f, 0.70f);
     brass("euphonium", true, 0.45f, 0.60f, 0.40f, 0.36f, 30.0f, 110.0f, 0.86f, 0.0f, 0.72f);
+  }
+
+  // --- air-jet flute (edge-tone waveguide) ---
+  // The flute family (GM 73-80): one air-jet core voiced across the open-pipe
+  // flutes and their breathier relatives. The jet self-oscillates and locks the
+  // first register; the members differ by jet_ratio (the register colour),
+  // brightness (the open-end reflection openness), damping (a high-damped bore
+  // approximates the non-overblowing Helmholtz voicings — ocarina / blown bottle),
+  // breath_noise (the air texture: shakuhachi / pan flute are breathy, the tin
+  // whistle is pure) and vibrato (a solo flute's own, per-voice). The asymmetric
+  // jet drive voices the octave-rich open-flue-pipe spectrum.
+  {
+    auto flute = [&](const char* name, float jet_ratio, float brightness, float damping,
+                     float breath_noise, float chiff, float vibrato_depth, float breath,
+                     float gain) {
+      SynthPreset& v = t[i++];
+      v.name = name;
+      NativeSynthPatch patch{};
+      patch.mode = SynthEngineMode::kFlute;
+      patch.amp_env.attack_ms = 8.0f;
+      patch.amp_env.sustain = 1.0f;
+      patch.amp_env.release_ms = 120.0f;
+      patch.cutoff_hz = 20000.0f;
+      patch.flute.jet_ratio = jet_ratio;
+      patch.flute.brightness = brightness;
+      patch.flute.damping = damping;
+      patch.flute.breath_noise = breath_noise;
+      patch.flute.chiff = chiff;
+      patch.flute.vibrato_depth = vibrato_depth;
+      patch.flute.vibrato_rate_hz = 5.0f;
+      patch.flute.breath_pressure = breath;
+      patch.flute.vel_to_breath = 0.5f;
+      patch.gain = gain;
+      v.config = from_patch(clamp_synth_patch(patch));
+    };
+    //     name             jetr   bright damp   bnoise chiff  vib    breath gain
+    flute("concert-flute", 0.50f, 0.55f, 0.30f, 0.18f, 0.35f, 0.15f, 0.60f, 0.85f);
+    flute("piccolo", 0.50f, 0.75f, 0.25f, 0.12f, 0.40f, 0.10f, 0.62f, 0.80f);
+    flute("recorder", 0.50f, 0.50f, 0.35f, 0.14f, 0.55f, 0.05f, 0.55f, 0.85f);
+    flute("pan-flute", 0.52f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
+    flute("shakuhachi", 0.52f, 0.48f, 0.35f, 0.55f, 0.30f, 0.20f, 0.58f, 0.85f);
+    flute("tin-whistle", 0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
+    flute("ocarina", 0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
+    flute("blown-bottle", 0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
   }
 
   return t;

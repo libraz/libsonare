@@ -28,6 +28,7 @@ _SYNTH_ENGINE_MODES = {
     "bowed-string": 9,
     "reed": 10,
     "brass": 11,
+    "flute": 12,
 }
 _SYNTH_OSC_WAVEFORMS = {
     "default": 0,

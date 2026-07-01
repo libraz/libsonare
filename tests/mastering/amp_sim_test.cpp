@@ -356,6 +356,96 @@ TEST_CASE("the bass cab voicing extends lower and darkens the top",
   REQUIRE(high_band_fraction(b_hi, 5000.0) < high_band_fraction(g_hi, 5000.0));
 }
 
+TEST_CASE("global NFB tightens the midrange more than the extremes and is off by default",
+          "[mastering][saturation][amp]") {
+  // NFB acts around the power stage, so drive the power section. nfb == 0 is
+  // bit-identical to the open-loop power path (every other test runs nfb == 0).
+  AmpSimConfig base;
+  base.cab = false;
+  base.drive = 0.5f;
+  base.power = 0.8f;
+  base.nfb = 0.0f;
+  AmpSimConfig fed = base;
+  fed.nfb = 0.8f;
+
+  auto rms = [](const std::vector<float>& b) {
+    double acc = 0.0;
+    for (float s : b) acc += static_cast<double>(s) * s;
+    return b.empty() ? 0.0 : std::sqrt(acc / static_cast<double>(b.size()));
+  };
+  auto ratio = [&](double freq_hz) {
+    AmpSim off_amp(base);
+    AmpSim on_amp(fed);
+    const std::vector<float> off = process_mono(off_amp, sine(freq_hz, 0.5f, kNumSamples));
+    const std::vector<float> on = process_mono(on_amp, sine(freq_hz, 0.5f, kNumSamples));
+    return rms(off) > 0.0 ? rms(on) / rms(off) : 1.0;
+  };
+
+  // The mid (in the feedback band) is fed back hard, so it is attenuated more
+  // than a high tone that escapes the loop.
+  const double mid_ratio = ratio(800.0);
+  const double high_ratio = ratio(5000.0);
+  REQUIRE(mid_ratio < 1.0);         // NFB reduces mid gain
+  REQUIRE(mid_ratio < high_ratio);  // the top escapes the loop
+
+  // The loop is contractive: the fed-back output stays finite and bounded.
+  AmpSim on_amp(fed);
+  const std::vector<float> on = process_mono(on_amp, sine(800.0, 0.9f, kNumSamples));
+  float peak = 0.0f;
+  bool all_finite = true;
+  for (float s : on) {
+    all_finite = all_finite && std::isfinite(s);
+    if (std::fabs(s) > peak) peak = std::fabs(s);
+  }
+  REQUIRE(all_finite);
+  REQUIRE(peak < 4.0f);
+}
+
+TEST_CASE("the amp voicing presets scale gain from clean to high-gain and default to classic",
+          "[mastering][saturation][amp]") {
+  using sonare::mastering::saturation::AmpModel;
+  // Cab off so the measurement is the nonlinearity alone; a moderate drive so
+  // the voicing's gain structure (not a clip ceiling) sets the distortion.
+  auto distortion_for = [](AmpModel model) {
+    AmpSimConfig config;
+    config.drive = 0.5f;
+    config.cab = false;
+    config.amp_model = model;
+    AmpSim amp(config);
+    const std::vector<float> out = process_mono(amp, sine(220.0, 0.3f, kNumSamples));
+    return thd(out, 220.0);
+  };
+  // The clean voicing keeps more headroom; the high-gain voicing saturates
+  // earlier and harder — the distortion grows across the three presets.
+  REQUIRE(distortion_for(AmpModel::kFenderClean) < distortion_for(AmpModel::kClassicCrunch));
+  REQUIRE(distortion_for(AmpModel::kClassicCrunch) < distortion_for(AmpModel::kModernHiGain));
+
+  // The classic crunch is the default: an unset amp_model is bit-identical.
+  AmpSimConfig defaulted;
+  defaulted.drive = 0.5f;
+  defaulted.cab = false;
+  AmpSimConfig classic = defaulted;
+  classic.amp_model = AmpModel::kClassicCrunch;
+  AmpSim default_amp(defaulted);
+  AmpSim classic_amp(classic);
+  const std::vector<float> default_out = process_mono(default_amp, sine(220.0, 0.3f, kNumSamples));
+  const std::vector<float> classic_out = process_mono(classic_amp, sine(220.0, 0.3f, kNumSamples));
+  REQUIRE(default_out == classic_out);
+}
+
+TEST_CASE("saturation.ampSim selects the amp voicing through the param bag",
+          "[mastering][saturation][amp][insert_factory]") {
+  using sonare::mastering::saturation::AmpModel;
+  auto clean = make_insert("saturation.ampSim", R"({"ampModel":1})");
+  auto hi = make_insert("saturation.ampSim", R"({"ampModel":2})");
+  auto* clean_amp = dynamic_cast<AmpSim*>(clean.get());
+  auto* hi_amp = dynamic_cast<AmpSim*>(hi.get());
+  REQUIRE(clean_amp != nullptr);
+  REQUIRE(hi_amp != nullptr);
+  REQUIRE(clean_amp->amp_config().amp_model == AmpModel::kFenderClean);
+  REQUIRE(hi_amp->amp_config().amp_model == AmpModel::kModernHiGain);
+}
+
 TEST_CASE("saturation.ampSim selects the bass cab through the param bag",
           "[mastering][saturation][amp][insert_factory]") {
   using sonare::mastering::saturation::CabModel;

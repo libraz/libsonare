@@ -46,6 +46,25 @@ enum class CabModel {
   kBass8x10 = 1,
 };
 
+/// Amp voicing model: the fixed circuit character of the preamp/tone section
+/// (the bright-cap shelf, the triode drive curve and the tone-stack centres).
+/// Selects a whole voicing profile at once; the drive/tone knobs then ride on
+/// top. Independent of `CabModel` (a preset does not force a cabinet).
+enum class AmpModel {
+  /// Classic crunch: the original AmpSim voicing — a mid-forward British-style
+  /// circuit. `amp_model == kClassicCrunch` is bit-identical to the original,
+  /// so an unset field changes nothing.
+  kClassicCrunch = 0,
+  /// American clean: less bright-cap grit and lower gain (more headroom, breaks
+  /// up later), a slightly darker mid and an airier top — the chimey
+  /// clean-to-edge-of-breakup voice.
+  kFenderClean = 1,
+  /// Modern high-gain: a bright, tight cascaded-gain circuit — more pre-emphasis
+  /// pushed into the clip and a much hotter triode drive (saturates early), with
+  /// an upper-mid focus that keeps a high-gain tone articulate.
+  kModernHiGain = 2,
+};
+
 struct AmpSimConfig {
   /// Drive amount in [0, 1] (0 = clean preamp, 1 = saturated lead).
   float drive = 0.5f;
@@ -61,6 +80,9 @@ struct AmpSimConfig {
   /// Cab voicing model (only meaningful when `cab == true`). Defaults to the
   /// guitar 4x12, so an unset field is bit-identical to the original voicing.
   CabModel cab_model = CabModel::kGuitar4x12;
+  /// Amp voicing model (preamp/tone character). Defaults to the classic crunch
+  /// (the original circuit constants), so an unset field is bit-identical.
+  AmpModel amp_model = AmpModel::kClassicCrunch;
   /// Output trim (dB).
   float level_db = 0.0f;
   /// Power-amp drive in [0, 1] (off-by-default; 0 = the power stage is bypassed
@@ -115,7 +137,7 @@ class AmpSim : public rt::ProcessorBase {
   //   7 = sag (clamped to [0, 1])
   //   8 = transformer (clamped to [0, 1])
   //   9 = nfb (clamped to [0, 1])
-  // `cab`/`cab_model` are discrete topology switches and are not exposed.
+  // `cab`/`cab_model`/`amp_model` are discrete topology switches, not exposed.
   bool set_parameter(unsigned int param_id, float value) override;
   // Automatable parameters: 0=drive, 1=bassDb, 2=midDb, 3=trebleDb, 4=presenceDb,
   // 5=levelDb, 6=power, 7=sag, 8=transformer, 9=nfb.

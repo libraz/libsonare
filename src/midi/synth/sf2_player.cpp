@@ -32,6 +32,9 @@ Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
     insert.amount = std::clamp(insert.amount, 0.0f, 1.0f);
     any_insert_ = any_insert_ || insert.type != Sf2InsertType::kNone;
   }
+  // A player with an insert factory is EFX-capable: route every part through
+  // its bus so a GS EFX switch can install an insert on any part at run time.
+  if (config_.insert_factory) any_insert_ = true;
 #if defined(SONARE_MIDI_WITH_FX)
   effects_ = std::make_unique<GsEffectBus>(config_.effects);
 #endif
@@ -110,6 +113,19 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
+  // Build the per-part kProcessor inserts via the injected factory (control
+  // thread). A null factory or unknown name leaves the slot null (an inert
+  // no-op) rather than failing — the host bypasses + logs at the wiring site.
+  for (int part = 0; part < 16; ++part) {
+    const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
+    std::unique_ptr<rt::ProcessorBase>& slot = part_processors_[static_cast<size_t>(part)];
+    slot.reset();
+    if (insert.type == Sf2InsertType::kProcessor && config_.insert_factory &&
+        !insert.insert_name.empty()) {
+      slot = config_.insert_factory(insert.insert_name, insert.insert_params_json);
+      if (slot != nullptr) slot->prepare(sample_rate_, kChunkFrames);
+    }
+  }
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->prepare(sample_rate_);
 #endif
@@ -121,6 +137,9 @@ void Sf2Player::reset() {
   pool_.reset();
   fallback_pool_.reset();
   reset_all_state(/*reverb_send_default=*/0);
+  for (auto& proc : part_processors_) {
+    if (proc != nullptr) proc->reset();
+  }
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->reset();
 #endif
@@ -129,6 +148,11 @@ void Sf2Player::reset() {
 void Sf2Player::reset_all_state(uint8_t reverb_send_default) noexcept {
   channels_ = {};
   drum_params_ = {};
+  // GS/GM reset selects EFX "Thru" and clears the part EFX switches; the
+  // control thread tears the installed inserts down on the next realise.
+  efx_ = {};
+  efx_part_enabled_ = {};
+  gs_efx_dirty_ = true;
   for (uint8_t ch = 0; ch < 16; ++ch) {
     channels_[ch].drums = ch == kDrumChannel;
     channels_[ch].reverb_send = reverb_send_default;
@@ -160,10 +184,41 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
     case GsSysExKind::kUseForRhythm:
       channels_[msg.channel & 0x0Fu].drums = msg.value != 0;
       return true;
+    case GsSysExKind::kEfxPartSwitch:
+      // Route/unroute the part through the EFX; realised on the control thread.
+      efx_part_enabled_[msg.channel & 0x0Fu] = msg.value != 0;
+      gs_efx_dirty_ = true;
+      return true;
     case GsSysExKind::kNone:
       break;
   }
+  // GS insertion-effect (EFX) block writes (address 40 03 xx): capture the raw
+  // wire so the control thread can realise it via realise_gs_efx().
+  if (apply_gs_efx_sysex(efx_, data, size)) {
+    gs_efx_dirty_ = true;
+    return true;
+  }
   return false;
+}
+
+void Sf2Player::realize_gs_efx() {
+  gs_efx_dirty_ = false;
+  if (!prepared_) return;
+  const std::string_view name = efx_.assigned ? gs_efx_insert_name(efx_.type) : std::string_view{};
+  for (int part = 0; part < 16; ++part) {
+    std::unique_ptr<rt::ProcessorBase>& slot = part_processors_[static_cast<size_t>(part)];
+    // A config kProcessor slot is owned by the caller, not by the EFX unit: only
+    // (re)build parts that are EFX-routed, and only clear what the EFX installed.
+    const bool efx_on =
+        efx_part_enabled_[static_cast<size_t>(part)] && !name.empty() && config_.insert_factory;
+    if (config_.part_inserts[static_cast<size_t>(part)].type == Sf2InsertType::kProcessor) continue;
+    if (efx_on) {
+      slot = config_.insert_factory(name, gs_efx_insert_params(efx_));
+      if (slot != nullptr) slot->prepare(sample_rate_, kChunkFrames);
+    } else {
+      slot.reset();
+    }
+  }
 }
 
 void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
@@ -732,6 +787,11 @@ void Sf2Player::render_chunk(int n) noexcept {
           bus_l[i] = std::tanh(drive * bus_l[i]) * makeup;
           bus_r[i] = std::tanh(drive * bus_r[i]) * makeup;
         }
+      } else if (rt::ProcessorBase* proc = part_processors_[static_cast<size_t>(part)].get()) {
+        // A built insert (config kProcessor slot, or a GS-EFX-installed one)
+        // runs in place on the part's stereo bus. Null slots are inert no-ops.
+        float* chans[2] = {bus_l, bus_r};
+        proc->process(chans, 2, n);
       }
       for (int i = 0; i < n; ++i) {
         mix_l_[static_cast<size_t>(i)] += bus_l[i];

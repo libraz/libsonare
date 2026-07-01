@@ -97,6 +97,7 @@ std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& 
           case synth::GsSysExKind::kUseForRhythm:
             state_for(scan.destination_id, msg.channel & 0x0Fu).drums = msg.value != 0;
             break;
+          case synth::GsSysExKind::kEfxPartSwitch:
           case synth::GsSysExKind::kNone:
             break;
         }

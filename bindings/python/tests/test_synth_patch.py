@@ -32,6 +32,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "bowed-string",
         "reed",
         "brass",
+        "flute",
     ),
     "waveforms": ("default", "sine", "saw", "square", "triangle", "noise"),
     "filter_models": ("default", "svf", "moog-ladder", "diode-ladder", "sallen-key"),

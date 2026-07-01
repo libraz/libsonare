@@ -16,6 +16,10 @@ namespace {
 /// Sf2Player so the fallback and SF2 voices respond alike).
 constexpr float kModWheelVibratoCents = 50.0f;
 
+/// Sympathetic-string bank t60 (seconds): how long the plucked-string sound
+/// halo rings. Shared by the bank tuning (prepare_custom) and the tail estimate.
+constexpr float kKsSympatheticRingS = 1.5f;
+
 float pan_angle(float pan_units) noexcept {
   const float pan = std::clamp(pan_units, -500.0f, 500.0f);
   return (pan + 500.0f) / 1000.0f * 1.57079632679f;  // 0..pi/2
@@ -225,6 +229,24 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.brass.mute = std::clamp(sanitize(p.brass.mute, 0.0f), 0.0f, 1.0f);
   p.brass.half_valve = std::clamp(sanitize(p.brass.half_valve, 0.0f), 0.0f, 1.0f);
   p.brass.dynamic_lip = std::clamp(sanitize(p.brass.dynamic_lip, 0.0f), 0.0f, 1.0f);
+  p.flute.breath_pressure = std::clamp(sanitize(p.flute.breath_pressure, 0.55f), 0.0f, 1.0f);
+  p.flute.vel_to_breath = std::clamp(sanitize(p.flute.vel_to_breath, 0.5f), 0.0f, 1.0f);
+  p.flute.jet_ratio = std::clamp(sanitize(p.flute.jet_ratio, 0.5f), 0.1f, 0.9f);
+  p.flute.jet_reflection = std::clamp(sanitize(p.flute.jet_reflection, 0.5f), 0.0f, 1.0f);
+  p.flute.end_reflection = std::clamp(sanitize(p.flute.end_reflection, 0.5f), 0.0f, 1.0f);
+  p.flute.brightness = std::clamp(sanitize(p.flute.brightness, 0.5f), 0.0f, 1.0f);
+  p.flute.damping = std::clamp(sanitize(p.flute.damping, 0.35f), 0.0f, 1.0f);
+  p.flute.attack_ms = std::clamp(sanitize(p.flute.attack_ms, 18.0f), 1.0f, 2000.0f);
+  p.flute.release_ms = std::clamp(sanitize(p.flute.release_ms, 90.0f), 1.0f, 5000.0f);
+  p.flute.breath_noise = std::clamp(sanitize(p.flute.breath_noise, 0.15f), 0.0f, 1.0f);
+  p.flute.chiff = std::clamp(sanitize(p.flute.chiff, 0.4f), 0.0f, 1.0f);
+  p.flute.chiff_ms = std::clamp(sanitize(p.flute.chiff_ms, 12.0f), 1.0f, 500.0f);
+  p.flute.vibrato_rate_hz = std::clamp(sanitize(p.flute.vibrato_rate_hz, 5.0f), 0.1f, 12.0f);
+  p.flute.vibrato_depth = std::clamp(sanitize(p.flute.vibrato_depth, 0.0f), 0.0f, 1.0f);
+  p.flute.overblow = std::clamp(sanitize(p.flute.overblow, 0.0f), 0.0f, 1.0f);
+  p.flute.jet_turbulence = std::clamp(sanitize(p.flute.jet_turbulence, 0.0f), 0.0f, 1.0f);
+  p.flute.edge_hysteresis = std::clamp(sanitize(p.flute.edge_hysteresis, 0.0f), 0.0f, 1.0f);
+  p.flute.vortex = std::clamp(sanitize(p.flute.vortex, 0.0f), 0.0f, 1.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 4) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
@@ -292,6 +314,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   }
   if (p.mode == SynthEngineMode::kBrass) {
     brass.start(p.brass, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kFlute) {
+    flute.start(p.flute, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -450,6 +475,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = reed.render(common);
   } else if (patch->mode == SynthEngineMode::kBrass) {
     sample = brass.render(common);
+  } else if (patch->mode == SynthEngineMode::kFlute) {
+    sample = flute.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -494,6 +521,7 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kBowedString) bowed_string.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kReed) reed.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kBrass) brass.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kFlute) flute.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -509,6 +537,7 @@ void NativeSynthVoice::kill() noexcept {
   bowed_string.kill();
   reed.kill();
   brass.kill();
+  flute.kill();
   active = false;
   releasing = false;
 }
@@ -541,8 +570,27 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // KS strings need a per-voice delay slab (the only allocation site; voices
   // attach their span at note-on).
   ks_capacity_ = ks_buffer_capacity(sample_rate_);
+  sympathetic_active_ = false;
   if (config_.patch.mode == SynthEngineMode::kKarplusStrong) {
     ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_slab_capacity(sample_rate_)), 0.0f);
+    // Sympathetic-string "sound halo": a shared bank tuned to the standard-
+    // tuning open strings (E2 A2 D3 G3 B3 E4) plus their low harmonics — the
+    // undamped strings ringing behind the played note. Plucked strings have no
+    // dampers, so the bank is held open (process() passes damper_open == true).
+    if (config_.patch.ks.sympathetic) {
+      constexpr uint8_t kOpenStrings[6] = {40, 45, 50, 55, 59, 64};
+      float freqs[16];
+      int n = 0;
+      for (uint8_t note : kOpenStrings) freqs[n++] = synth_note_to_hz(static_cast<float>(note));
+      for (uint8_t note : kOpenStrings)
+        freqs[n++] = 2.0f * synth_note_to_hz(static_cast<float>(note));
+      for (int i = 0; i < 4; ++i)
+        freqs[n++] = 3.0f * synth_note_to_hz(static_cast<float>(kOpenStrings[i]));
+      // Open guitar/harp strings ring for seconds; a ~1.5 s bank t60 keeps the
+      // halo audible without a runaway tail, at a weak coupling level.
+      resonance_.prepare_custom(sample_rate_, freqs, n, kKsSympatheticRingS, /*out_gain=*/0.05f);
+      sympathetic_active_ = true;
+    }
   } else {
     ks_buffers_.clear();
   }
@@ -600,6 +648,15 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     brass_buffers_.clear();
   }
+  // Air-jet flute: a bore span plus a jet span per voice slot.
+  flute_capacity_ = flute_buffer_capacity(sample_rate_);
+  flute_mode_ = config_.patch.mode == SynthEngineMode::kFlute;
+  if (flute_mode_) {
+    flute_buffers_.assign(pool_.size() * static_cast<size_t>(flute_slab_capacity(sample_rate_)),
+                          0.0f);
+  } else {
+    flute_buffers_.clear();
+  }
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
   channels_ = {};
@@ -608,6 +665,11 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
       config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit;
   tail_samples_ = DahdsrEnvelope::release_tail_samples(
       sample_rate_, gm_kit ? gm_fallback_max_release_ms() : config_.patch.amp_env.release_ms);
+  if (sympathetic_active_) {
+    // The shared sympathetic bank keeps ringing after the last voice releases;
+    // fold its halo t60 into the tail so a bounce does not clip the sound halo.
+    tail_samples_ += static_cast<int64_t>(sample_rate_ * kKsSympatheticRingS);
+  }
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
   dc_r_ = 1.0f - static_cast<float>(2.0 * 3.14159265358979 * 8.0 / sample_rate_);
   dc_x1_ = {};
@@ -693,6 +755,24 @@ void NativeSynth::push_brass_control(uint8_t channel) noexcept {
   }
 }
 
+void NativeSynth::push_flute_control(uint8_t channel) noexcept {
+  if (!flute_mode_) return;
+  const uint8_t ch = channel & 0x0Fu;
+  const ChannelState& st = channels_[ch];
+  for (NativeSynthVoice& v : pool_) {
+    if (!v.active || v.channel != ch || v.patch == nullptr ||
+        v.patch->mode != SynthEngineMode::kFlute) {
+      continue;
+    }
+    // Breath / brightness override the preset only once the host sends the CC;
+    // loudness is the shared expression VCA, not a flute-specific push, and CC1
+    // vibrato rides the shared mod-wheel LFO.
+    if (st.flute_breath != 255) v.flute.set_breath(static_cast<float>(st.flute_breath) / 127.0f);
+    if (st.flute_bright != 255)
+      v.flute.set_brightness(static_cast<float>(st.flute_bright) / 127.0f);
+  }
+}
+
 void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
@@ -740,6 +820,11 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   if (!brass_buffers_.empty()) {
     voice->brass.attach(brass_buffers_.data() + static_cast<size_t>(voice_index) * brass_capacity_,
                         brass_capacity_);
+  }
+  if (!flute_buffers_.empty()) {
+    voice->flute.attach(
+        flute_buffers_.data() + static_cast<size_t>(voice_index) * 2 * flute_capacity_,
+        flute_capacity_);
   }
   // GM kit mode: resolve the struck note through the drum map instead of
   // playing the single configured piece (static patches — safe to keep in the
@@ -792,6 +877,19 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
       voice->brass.set_brightness(static_cast<float>(st.brass_bright) / 127.0f);
     }
     voice->brass.snap_brass_control();
+  }
+  // Seed a flute voice at the channel's current flute controllers (no glide on
+  // the first sample) so a note struck mid-phrase starts at the live breath /
+  // brightness rather than gliding in from the preset.
+  if (patch->mode == SynthEngineMode::kFlute) {
+    const ChannelState& st = channels_[ch];
+    if (st.flute_breath != 255) {
+      voice->flute.set_breath(static_cast<float>(st.flute_breath) / 127.0f);
+    }
+    if (st.flute_bright != 255) {
+      voice->flute.set_brightness(static_cast<float>(st.flute_bright) / 127.0f);
+    }
+    voice->flute.snap_flute_control();
   }
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
@@ -905,6 +1003,8 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.reed_bright = 255;
   st.brass_breath = 255;
   st.brass_bright = 255;
+  st.flute_breath = 255;
+  st.flute_bright = 255;
   st.params.reset();
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
@@ -913,6 +1013,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   push_bow_control(ch);
   push_reed_control(ch);
   push_brass_control(ch);
+  push_flute_control(ch);
 }
 
 void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
@@ -935,9 +1036,11 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       st.bow_force = value;     // breath -> bowed-string bow force
       st.reed_breath = value;   // breath -> reed mouth pressure
       st.brass_breath = value;  // breath -> brass mouth pressure
+      st.flute_breath = value;  // breath -> flute mouth pressure
       push_bow_control(ch);
       push_reed_control(ch);
       push_brass_control(ch);
+      push_flute_control(ch);
       break;
     case 11:
       st.expression = value;
@@ -949,9 +1052,11 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       st.bow_position = value;  // brightness/SC5 -> bowed-string bow position
       st.reed_bright = value;   // brightness/SC5 -> reed bell brightness
       st.brass_bright = value;  // brightness/SC5 -> brass bell brightness
+      st.flute_bright = value;  // brightness/SC5 -> flute reflection brightness
       push_bow_control(ch);
       push_reed_control(ch);
       push_brass_control(ch);
+      push_flute_control(ch);
       break;
     case 6:
       if (st.params.selected_rpn(0, 0)) {
@@ -1119,6 +1224,14 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
       const float symp = resonance_.process(dry_mono, damper_open);
       mix_l += body + symp;
       mix_r += body + symp;
+    } else if (sympathetic_active_) {
+      // Plucked-string sound halo: the open strings ring behind the note. Held
+      // open (no dampers). Skipped entirely for KS patches that did not opt in,
+      // so every existing KS voicing renders bit-identically.
+      const float dry_mono = 0.5f * (mix_l + mix_r);
+      const float symp = resonance_.process(dry_mono, /*damper_open=*/true);
+      mix_l += symp;
+      mix_r += symp;
     }
     // Gentle gain-neutral bus saturation (glue), then the DC blocker — the
     // physical-model voices can carry a small DC component.

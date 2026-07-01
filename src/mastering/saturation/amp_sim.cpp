@@ -12,11 +12,40 @@ namespace sonare::mastering::saturation {
 
 namespace {
 
-// Voicing centres (Hz). Fixed circuit positions, not user parameters.
-constexpr float kPreEmphasisHz = 750.0f;  // bright-cap shelf before the clip
-constexpr float kBassHz = 120.0f;         // tone stack
-constexpr float kMidHz = 550.0f;
-constexpr float kTrebleHz = 3000.0f;
+// Amp voicing: the fixed preamp/tone circuit positions per AmpModel. Not user
+// parameters — the drive/tone knobs ride on top of the selected profile.
+struct AmpVoicing {
+  float pre_emphasis_hz;  // bright-cap shelf centre before the clip
+  float pre_db_base;      // pre-emphasis shelf gain (dB) at drive 0
+  float pre_db_drive;     // added shelf gain (dB) per unit drive
+  float drive_db_base;    // triode drive (dB) at drive 0
+  float drive_db_range;   // added triode drive (dB) per unit drive
+  float bass_hz;          // tone stack low shelf
+  float mid_hz;           // tone stack mid peak
+  float treble_hz;        // tone stack high shelf
+};
+
+// Classic crunch (default): the original AmpSim voicing. amp_model 0 selects it,
+// so an unset field is bit-identical to the original.
+constexpr AmpVoicing kAmpClassicCrunch{750.0f, 2.0f, 6.0f, -10.0f, 44.0f, 120.0f, 550.0f, 3000.0f};
+// American clean: less bright-cap grit and lower gain (breaks up later), a
+// darker mid and an airier top.
+constexpr AmpVoicing kAmpFenderClean{650.0f, 1.0f, 4.0f, -16.0f, 36.0f, 100.0f, 500.0f, 3200.0f};
+// Modern high-gain: more pre-emphasis into the clip and a much hotter triode
+// drive (saturates early), with an upper-mid focus that keeps it articulate.
+constexpr AmpVoicing kAmpModernHiGain{900.0f, 3.0f, 9.0f, -4.0f, 52.0f, 110.0f, 650.0f, 3000.0f};
+
+AmpVoicing amp_voicing(AmpModel model) noexcept {
+  switch (model) {
+    case AmpModel::kFenderClean:
+      return kAmpFenderClean;
+    case AmpModel::kModernHiGain:
+      return kAmpModernHiGain;
+    default:
+      return kAmpClassicCrunch;
+  }
+}
+
 // Cab voicing: fixed EQ centres per cabinet model (see CabModel). The guitar
 // values are the original AmpSim voicing; the bass values model a big 8x10.
 struct CabVoicing {
@@ -34,9 +63,12 @@ CabVoicing cab_voicing(CabModel model) noexcept {
   return model == CabModel::kBass8x10 ? kCabBass8x10 : kCabGuitar4x12;
 }
 
-/// drive [0,1] -> triode drive in dB. The low end stays a clean preamp; the
-/// top lands in saturated-lead territory.
-float drive_to_db(float drive) noexcept { return -10.0f + 44.0f * drive; }
+/// drive [0,1] -> triode drive in dB for a voicing. The low end stays a clean
+/// preamp; the top lands in saturated-lead territory. The hotter the voicing,
+/// the earlier and harder it saturates.
+float drive_to_db(float drive, const AmpVoicing& v) noexcept {
+  return v.drive_db_base + v.drive_db_range * drive;
+}
 
 float process_chain(float x, rt::BiquadState& state, const rt::BiquadCoeffs& coeffs) noexcept {
   state.c = coeffs;
@@ -47,9 +79,10 @@ float process_chain(float x, rt::BiquadState& state, const rt::BiquadCoeffs& coe
 
 AmpSim::AmpSim(AmpSimConfig config)
     : config_(config),
-      tube_(TubeConfig{drive_to_db(std::clamp(config.drive, 0.0f, 1.0f)),
-                       /*bias=*/0.15f, /*mix=*/1.0f, /*oversample_factor=*/4,
-                       /*bias_v=*/-1.6f, /*harmonic_drive=*/1.0f}) {
+      tube_(TubeConfig{
+          drive_to_db(std::clamp(config.drive, 0.0f, 1.0f), amp_voicing(config.amp_model)),
+          /*bias=*/0.15f, /*mix=*/1.0f, /*oversample_factor=*/4,
+          /*bias_v=*/-1.6f, /*harmonic_drive=*/1.0f}) {
   validate_config(config_);
   config_.drive = std::clamp(config_.drive, 0.0f, 1.0f);
   config_.power = std::clamp(config_.power, 0.0f, 1.0f);
@@ -97,13 +130,15 @@ void AmpSim::prepare(double sample_rate, int max_block_size) {
 }
 
 void AmpSim::design_chain() {
+  const AmpVoicing v = amp_voicing(config_.amp_model);
   // Pre-emphasis: more drive pushes more top end into the clip stage.
-  const float pre_db = 2.0f + 6.0f * config_.drive;
-  pre_c_ = rt::rbj_high_shelf(rt::frequency_to_w0(kPreEmphasisHz, sample_rate_), 0.707f, pre_db);
-  bass_c_ = rt::rbj_low_shelf(rt::frequency_to_w0(kBassHz, sample_rate_), 0.707f, config_.bass_db);
-  mid_c_ = rt::rbj_peak(rt::frequency_to_w0(kMidHz, sample_rate_), 0.7f, config_.mid_db);
+  const float pre_db = v.pre_db_base + v.pre_db_drive * config_.drive;
+  pre_c_ = rt::rbj_high_shelf(rt::frequency_to_w0(v.pre_emphasis_hz, sample_rate_), 0.707f, pre_db);
+  bass_c_ =
+      rt::rbj_low_shelf(rt::frequency_to_w0(v.bass_hz, sample_rate_), 0.707f, config_.bass_db);
+  mid_c_ = rt::rbj_peak(rt::frequency_to_w0(v.mid_hz, sample_rate_), 0.7f, config_.mid_db);
   treble_c_ =
-      rt::rbj_high_shelf(rt::frequency_to_w0(kTrebleHz, sample_rate_), 0.707f, config_.treble_db);
+      rt::rbj_high_shelf(rt::frequency_to_w0(v.treble_hz, sample_rate_), 0.707f, config_.treble_db);
   const CabVoicing cab = cab_voicing(config_.cab_model);
   hp_c_ = rt::rbj_highpass(rt::frequency_to_w0(cab.highpass_hz, sample_rate_), 0.707f);
   bump_c_ = rt::rbj_peak(rt::frequency_to_w0(cab.bump_hz, sample_rate_), 1.0f, cab.bump_db);
@@ -235,7 +270,7 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.drive = std::clamp(value, 0.0f, 1.0f);
-      tube_.set_parameter(0, drive_to_db(config_.drive));
+      tube_.set_parameter(0, drive_to_db(config_.drive, amp_voicing(config_.amp_model)));
       break;
     case 1:
       config_.bass_db = value;

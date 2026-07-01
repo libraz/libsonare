@@ -37,6 +37,8 @@ static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kReed) + 1 
               SONARE_SYNTH_ENGINE_REED);
 static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kBrass) + 1 ==
               SONARE_SYNTH_ENGINE_BRASS);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kFlute) + 1 ==
+              SONARE_SYNTH_ENGINE_FLUTE);
 
 static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSine) + 1 ==
               SONARE_SYNTH_OSC_SINE);

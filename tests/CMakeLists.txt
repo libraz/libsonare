@@ -353,6 +353,7 @@ if(BUILD_ARRANGEMENT)
     midi/bowed_string_voice_test.cpp
     midi/reed_voice_test.cpp
     midi/brass_voice_test.cpp
+    midi/flute_voice_test.cpp
     midi/voice_polish_test.cpp
     midi/synth_toolkit_test.cpp
     midi/sf2_file_test.cpp

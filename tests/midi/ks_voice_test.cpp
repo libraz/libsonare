@@ -158,6 +158,23 @@ double high_band_fraction(const std::vector<float>& buf, size_t from, double fre
   return total > 0.0 ? high / total : 0.0;
 }
 
+/// Interpolated frequency (Hz) of the strongest spectral bin within
+/// +-search_hz of target_hz (parabolic peak interpolation).
+double peak_freq_near(const std::vector<double>& power, double target_hz, double search_hz) {
+  const int lo = std::max(1, static_cast<int>(std::lround((target_hz - search_hz) / kRate * kFft)));
+  const int hi = std::min(static_cast<int>(power.size()) - 2,
+                          static_cast<int>(std::lround((target_hz + search_hz) / kRate * kFft)));
+  int best = lo;
+  for (int b = lo; b <= hi; ++b)
+    if (power[static_cast<size_t>(b)] > power[static_cast<size_t>(best)]) best = b;
+  const double ym1 = power[static_cast<size_t>(best - 1)];
+  const double y0 = power[static_cast<size_t>(best)];
+  const double yp1 = power[static_cast<size_t>(best + 1)];
+  const double denom = ym1 - 2.0 * y0 + yp1;
+  const double delta = denom != 0.0 ? 0.5 * (ym1 - yp1) / denom : 0.0;
+  return (static_cast<double>(best) + delta) * kRate / kFft;
+}
+
 /// A bright filter-bypassed KS test patch.
 NativeSynthPatch ks_base_patch() {
   NativeSynthPatch p;
@@ -375,6 +392,195 @@ TEST_CASE("bridge coupling stays bounded at the near-degenerate detune across th
     REQUIRE(peak > 0.01f);
     REQUIRE(peak < 4.0f);  // eigenvalue-bounded: no runaway even fully coupled
   }
+}
+
+TEST_CASE("sympathetic bank rings, stays bounded, off by default", "[midi][synth][ks]") {
+  NativeSynthPatch dry = ks_base_patch();
+  dry.ks.decay_s = 3.0f;
+  dry.gain = 0.7f;
+  NativeSynthPatch halo = dry;
+  halo.ks.sympathetic = true;
+  // E4 (MIDI 64) is a standard-tuning open string, so the note's partials line
+  // up with the shared bank modes and drive the sound halo.
+  const std::vector<float> dry_tone = render_patch(dry, 64, 110, 48000);
+  const std::vector<float> halo_tone = render_patch(halo, 64, 110, 48000);
+  const std::vector<float> halo_again = render_patch(halo, 64, 110, 48000);
+  // The halo reshapes the tone deterministically and adds ringing energy, yet
+  // the shared bank is a weak, unity-peak-normalized coupling so it stays bounded.
+  REQUIRE(halo_tone != dry_tone);
+  REQUIRE(halo_tone == halo_again);
+  float peak = 0.0f;
+  for (float s : halo_tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  REQUIRE(peak < 2.0f);
+  // The sympathetic strings ring behind the note: total energy with the halo on
+  // exceeds the plain string alone.
+  REQUIRE(rms(halo_tone, 0, 48000) > rms(dry_tone, 0, 48000));
+}
+
+TEST_CASE("sympathetic bank is off by default and does not perturb plain KS voicings",
+          "[midi][synth][ks]") {
+  // Every existing KS preset leaves sympathetic == false, so it must render on
+  // the original path. The steel-guitar fallback is a representative voicing.
+  const NativeSynthPatch& steel = gm_fallback_patch(0, 25);
+  REQUIRE(steel.ks.sympathetic == false);
+  const std::vector<float> a = render_patch(steel, 52, 100, 8192);
+  const std::vector<float> b = render_patch(steel, 52, 100, 8192);
+  REQUIRE(a == b);
+}
+
+TEST_CASE("sympathetic halo extends the reported tail", "[midi][synth][ks]") {
+  NativeSynthConfig dry_cfg;
+  dry_cfg.patch = ks_base_patch();
+  NativeSynth dry(dry_cfg);
+  dry.prepare(kRate, 256);
+
+  NativeSynthConfig halo_cfg;
+  halo_cfg.patch = ks_base_patch();
+  halo_cfg.patch.ks.sympathetic = true;
+  NativeSynth halo(halo_cfg);
+  halo.prepare(kRate, 256);
+
+  // The ringing bank must lengthen tail_samples() so a bounce keeps the halo.
+  REQUIRE(halo.tail_samples() > dry.tail_samples());
+}
+
+TEST_CASE("physical pluck reshapes the attack and stays off by default", "[midi][synth][ks]") {
+  NativeSynthPatch noise = ks_base_patch();
+  noise.ks.brightness = 0.6f;
+  noise.ks.exc_brightness = 0.85f;
+  noise.gain = 0.8f;
+  NativeSynthPatch pluck = noise;
+  pluck.ks.pluck_style = 1.0f;
+  pluck.ks.nail = 0.5f;
+  const std::vector<float> noise_tone = render_patch(noise, 52, 110, 24000);  // pluck_style == 0
+  const std::vector<float> pluck_tone = render_patch(pluck, 52, 110, 24000);
+  const std::vector<float> pluck_again = render_patch(pluck, 52, 110, 24000);
+  // The deterministic pluck doublet replaces the noisy attack, deterministically,
+  // yet the string stays bounded and rings.
+  REQUIRE(pluck_tone != noise_tone);
+  REQUIRE(pluck_tone == pluck_again);
+  float peak = 0.0f;
+  for (float s : pluck_tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  REQUIRE(peak < 2.0f);
+}
+
+TEST_CASE("nail/pick pluck is brighter than a fingertip", "[midi][synth][ks]") {
+  // Same physical pluck, opposite edge: the nail/pick releases through a narrow,
+  // bright lobe; the fingertip through a wide, round one. Measured over the
+  // attack, the nail keeps more high-frequency energy.
+  NativeSynthPatch flesh = ks_base_patch();
+  flesh.ks.brightness = 0.7f;
+  flesh.ks.exc_brightness = 0.9f;
+  flesh.ks.pluck_style = 1.0f;
+  flesh.ks.nail = 0.0f;  // fingertip: wide/round lobe
+  NativeSynthPatch nail = flesh;
+  nail.ks.nail = 1.0f;  // nail/pick: narrow/bright lobe
+  const std::vector<float> flesh_tone = render_patch(flesh, 52, 110, 24000);
+  const std::vector<float> nail_tone = render_patch(nail, 52, 110, 24000);
+  REQUIRE(high_band_fraction(nail_tone, 1024, 1500.0) >
+          high_band_fraction(flesh_tone, 1024, 1500.0));
+}
+
+TEST_CASE("magnetic pickup colours the output and stays off by default", "[midi][synth][ks]") {
+  NativeSynthPatch clean = ks_base_patch();
+  clean.ks.brightness = 0.7f;
+  clean.ks.decay_s = 4.0f;
+  clean.gain = 0.7f;
+  NativeSynthPatch pickup = clean;
+  pickup.ks.pickup_pos = 0.15f;
+  const std::vector<float> off_tone = render_patch(clean, 45, 110, 24000);  // pickup_pos == 0
+  const std::vector<float> on_tone = render_patch(pickup, 45, 110, 24000);
+  const std::vector<float> on_again = render_patch(pickup, 45, 110, 24000);
+  // The pickup combs and shapes the output deterministically, staying bounded.
+  REQUIRE(on_tone != off_tone);
+  REQUIRE(on_tone == on_again);
+  float peak = 0.0f;
+  for (float s : on_tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  REQUIRE(peak < 2.0f);
+}
+
+TEST_CASE("pickup position places a comb node on the matching harmonic", "[midi][synth][ks]") {
+  // A pickup at 1/4 of the string senses a node of the 4th harmonic, so the
+  // output comb notches it. Measured against the (boosted) 2nd harmonic, the
+  // 4th collapses relative to the plain string.
+  NativeSynthPatch plain = ks_base_patch();
+  plain.ks.brightness = 0.85f;
+  plain.ks.pick_position = 0.12f;  // keep every harmonic present to be notched
+  NativeSynthPatch pickup = plain;
+  pickup.ks.pickup_pos = 0.25f;
+  const double f0 = 110.0;  // A2
+  const std::vector<float> plain_tone = render_patch(plain, 45, 110, 24000);
+  const std::vector<float> pickup_tone = render_patch(pickup, 45, 110, 24000);
+  const std::vector<double> plain_power = power_spectrum(plain_tone, 2048);
+  const std::vector<double> pickup_power = power_spectrum(pickup_tone, 2048);
+  const double plain_h4 = harmonic_power(plain_power, f0, 4) / harmonic_power(plain_power, f0, 2);
+  const double pickup_h4 =
+      harmonic_power(pickup_power, f0, 4) / harmonic_power(pickup_power, f0, 2);
+  REQUIRE(pickup_h4 < 0.25 * plain_h4);
+}
+
+TEST_CASE("steel dispersion stretches the partials and stays off by default", "[midi][synth][ks]") {
+  NativeSynthPatch nylon = ks_base_patch();
+  nylon.ks.brightness = 0.85f;
+  nylon.ks.pick_position = 0.1f;  // keep the upper partials strong
+  nylon.gain = 0.7f;
+  NativeSynthPatch steel = nylon;
+  steel.ks.dispersion = 1.0f;
+  const std::vector<float> nylon_tone = render_patch(nylon, 69, 110, 48000);  // A4, dispersion == 0
+  const std::vector<float> steel_tone = render_patch(steel, 69, 110, 48000);
+  const std::vector<float> steel_again = render_patch(steel, 69, 110, 48000);
+  // Dispersion reshapes the tone deterministically and stays bounded.
+  REQUIRE(steel_tone != nylon_tone);
+  REQUIRE(steel_tone == steel_again);
+  float peak = 0.0f;
+  for (float s : steel_tone) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  REQUIRE(peak < 2.0f);
+  // The fundamental tuning is preserved (the allpass phase delay is compensated
+  // in the loop length): A4 within ~10 cents.
+  const double f0 = estimate_frequency(steel_tone, 8000, 44000, 440.0);
+  REQUIRE(std::fabs(f0 / 440.0 - 1.0) < 0.006);
+  // A high partial is stretched sharp: the 14th partial sits above 14*f0, and
+  // above where the harmonic (nylon) string places it.
+  const std::vector<double> nylon_power = power_spectrum(nylon_tone, 2048);
+  const std::vector<double> steel_power = power_spectrum(steel_tone, 2048);
+  const double nylon_p14 = peak_freq_near(nylon_power, 14.0 * 440.0, 90.0);
+  const double steel_p14 = peak_freq_near(steel_power, 14.0 * 440.0, 90.0);
+  REQUIRE(steel_p14 > 14.0 * 440.0);
+  REQUIRE(steel_p14 > nylon_p14 + 10.0);
+}
+
+TEST_CASE("tension modulation bends the attack sharp then relaxes, off by default",
+          "[midi][synth][ks]") {
+  NativeSynthPatch linear = ks_base_patch();
+  linear.ks.brightness = 0.7f;
+  linear.ks.decay_s = 4.0f;
+  linear.gain = 0.7f;
+  NativeSynthPatch tension = linear;
+  tension.ks.tension_mod = 1.0f;
+  const std::vector<float> flat = render_patch(linear, 45, 127, 48000);  // A2, tension == 0
+  const std::vector<float> bent = render_patch(tension, 45, 127, 48000);
+  const std::vector<float> bent_again = render_patch(tension, 45, 127, 48000);
+  // The attack starts sharp and relaxes, so the tone differs deterministically
+  // and stays bounded.
+  REQUIRE(bent != flat);
+  REQUIRE(bent == bent_again);
+  float peak = 0.0f;
+  for (float s : bent) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak > 0.01f);
+  REQUIRE(peak < 2.0f);
+  // Past the excitation burst the pitch sits sharp of A2 and glides down; by the
+  // steady state it has relaxed back to the note. The rise stays bounded by the
+  // explicit cents clamp so the attack never glitches.
+  const double early = estimate_frequency(bent, 800, 3000, 110.0);
+  const double late = estimate_frequency(bent, 30000, 46000, 110.0);
+  REQUIRE(early > 110.0);                         // starts sharp
+  REQUIRE(early > late * 1.004);                  // an audible downward glide
+  REQUIRE(early < 110.0 * 1.06);                  // bounded by the explicit cents clamp
+  REQUIRE(std::fabs(late / 110.0 - 1.0) < 0.01);  // relaxes to the note
 }
 
 TEST_CASE("fret-slap engages the displacement limiter and stays off by default",
