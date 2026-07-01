@@ -15,6 +15,7 @@
 #include "core/fft.h"
 #include "midi/midi_event.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 
@@ -394,4 +395,41 @@ TEST_CASE("bowed string audio path is allocation-free", "[midi][synth][bowed]") 
     synth.process(chans, 2, 256);
     REQUIRE(guard.count() == 0);
   }
+}
+
+TEST_CASE("the violin-family presets are voiced bowed strings", "[midi][synth][bowed]") {
+  using sonare::midi::synth::BodyType;
+  using sonare::midi::synth::find_synth_preset;
+
+  // Each member (GM 40-43) is the bowed-string engine coloured by the shared
+  // violin corpus, and speaks a sustained note in its natural register.
+  struct Member {
+    const char* name;
+    uint8_t note;
+  };
+  for (const Member member :
+       {Member{"violin", 76}, Member{"viola", 64}, Member{"cello", 45}, Member{"contrabass", 33}}) {
+    INFO(member.name);
+    const auto* preset = find_synth_preset(member.name);
+    REQUIRE(preset != nullptr);
+    const NativeSynthPatch& patch = preset->config.patch;
+    REQUIRE(patch.mode == SynthEngineMode::kBowedString);
+    REQUIRE(patch.body == BodyType::kViolin);
+    REQUIRE(patch.body_mix > 0.0f);
+
+    const std::vector<float> tone = render_patch(patch, member.note, 100, 24000);
+    for (float s : tone) REQUIRE(std::isfinite(s));
+    // Speaks promptly and holds under the sustaining bow.
+    REQUIRE(rms(tone, 4000, 8000) > 1e-3f);
+    REQUIRE(rms(tone, 18000, 22000) > 0.5f * rms(tone, 4000, 8000));
+    REQUIRE(peak(tone) < 4.0f);  // the bow table keeps the loop bounded
+  }
+
+  // The catalog darkens from violin to contrabass (larger body, less bright
+  // bow): the spectral centroid falls across the family at a common pitch.
+  const double violin = swell_centroid(
+      render_patch(find_synth_preset("violin")->config.patch, 57, 100, 24000), 16000);
+  const double cello =
+      swell_centroid(render_patch(find_synth_preset("cello")->config.patch, 57, 100, 24000), 16000);
+  REQUIRE(violin > cello);
 }

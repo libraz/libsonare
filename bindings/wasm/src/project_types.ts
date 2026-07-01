@@ -143,6 +143,7 @@ export const SYNTH_ENGINE_MODES = [
   'percussion',
   'piano',
   'pipe-organ',
+  'bowed-string',
 ] as const;
 export const SYNTH_OSC_WAVEFORMS = [
   'default',

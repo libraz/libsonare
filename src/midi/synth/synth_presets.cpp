@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 20;
+constexpr size_t kPresetCount = 24;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -148,6 +148,44 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     NativeSynthPatch patch = gm_fallback_patch(0, 21);  // the Reed Organ voicing
     patch.pipe_organ.swell = 0.7f;
     reed.config = from_patch(clamp_synth_patch(patch));
+  }
+
+  // --- bowed string (friction-excited waveguide) ---
+  // The violin family (GM 40-43): one bowed-string core voiced across four
+  // instrument sizes. The engine tunes to the played note, so the members differ
+  // by timbre rather than range — the larger the instrument, the darker and
+  // slower-speaking the string and the more the corpus (the shared violin
+  // BodyResonator) colours it. All bow near the natural playing point with a
+  // touch of rosin grip; the bow contour handles the swell, so the amp envelope
+  // just opens and holds.
+  {
+    auto bowed = [&](const char* name, float bow_position, float bow_force, float brightness,
+                     float damping, float attack_ms, float release_ms, float body_mix, float gain) {
+      SynthPreset& v = t[i++];
+      v.name = name;
+      NativeSynthPatch patch{};
+      patch.mode = SynthEngineMode::kBowedString;
+      patch.amp_env.attack_ms = 20.0f;
+      patch.amp_env.sustain = 1.0f;
+      patch.amp_env.release_ms = release_ms;
+      patch.cutoff_hz = 20000.0f;
+      patch.bowed_string.bow_position = bow_position;
+      patch.bowed_string.bow_force = bow_force;
+      patch.bowed_string.brightness = brightness;
+      patch.bowed_string.damping = damping;
+      patch.bowed_string.attack_ms = attack_ms;
+      patch.bowed_string.release_ms = release_ms;
+      patch.bowed_string.rosin = 0.15f;
+      patch.body = BodyType::kViolin;
+      patch.body_mix = body_mix;
+      patch.gain = gain;
+      v.config = from_patch(clamp_synth_patch(patch));
+    };
+    //     name          bow_pos force bright  damp  atk    rel   body  gain
+    bowed("violin", 0.12f, 0.55f, 0.62f, 0.30f, 45.0f, 110.0f, 0.28f, 0.70f);
+    bowed("viola", 0.13f, 0.55f, 0.52f, 0.34f, 55.0f, 120.0f, 0.34f, 0.70f);
+    bowed("cello", 0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.72f);
+    bowed("contrabass", 0.15f, 0.62f, 0.36f, 0.44f, 90.0f, 160.0f, 0.46f, 0.72f);
   }
 
   return t;

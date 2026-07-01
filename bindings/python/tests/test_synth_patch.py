@@ -29,6 +29,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "percussion",
         "piano",
         "pipe-organ",
+        "bowed-string",
     ),
     "waveforms": ("default", "sine", "saw", "square", "triangle", "noise"),
     "filter_models": ("default", "svf", "moog-ladder", "diode-ladder", "sallen-key"),

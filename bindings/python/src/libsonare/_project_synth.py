@@ -25,6 +25,7 @@ _SYNTH_ENGINE_MODES = {
     "percussion": 6,
     "piano": 7,
     "pipe-organ": 8,
+    "bowed-string": 9,
 }
 _SYNTH_OSC_WAVEFORMS = {
     "default": 0,
