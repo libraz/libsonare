@@ -1,0 +1,9 @@
+[
+  {
+    "file": "src/midi/synth/brass_voice.cpp",
+    "pattern": "kLipCouple = ([0-9.]+)f",
+    "min": 2.0,
+    "max": 8.0,
+    "scale": "linear"
+  }
+]

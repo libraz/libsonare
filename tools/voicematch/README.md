@@ -60,6 +60,44 @@ Deltas are model − oracle. Interpretation caveats:
 - MuseScore General quality varies per program; for a suspect program, cross-check with another SoundFont (`--sf2`) before trusting a delta.
 - Harmonic deltas are h1-normalized on both sides, so they are immune to level differences but *not* to which harmonic dominates — check `harmonics_db` absolutes in `report.json` when a delta looks extreme.
 
+## Automatic fitting (`autofit.py`)
+
+`autofit.py` closes the tuning loop mechanically: it perturbs one or more numeric calibration literals in the C++ voice sources, rebuilds the shared library, re-renders the model, and minimises the model-vs-oracle timbre mismatch with a pure-Python coordinate descent (golden-section per knob; no scipy).
+
+```sh
+rye run --pyproject bindings/python/pyproject.toml \
+    python tools/voicematch/autofit.py \
+        --spec tools/voicematch/specs/example.json \
+        --program 56 --pattern sustain --notes 48,60,72 --max-evals 30
+```
+
+The knobs are described by a spec JSON — an array of entries, each locating one literal:
+
+```json
+[
+  {
+    "file": "src/midi/synth/brass_voice.cpp",
+    "pattern": "kLipCouple = ([0-9.]+)f",
+    "min": 2.0, "max": 8.0, "scale": "linear"
+  }
+]
+```
+
+- `pattern` is a Python regex with **exactly one capturing group** selecting the numeric literal (the surrounding text, including any `f` suffix, is untouched). It must match the file exactly once — zero or multiple matches abort before anything is written.
+- `scale` is `linear` or `log` (log optimises in log-space; needs `min > 0`).
+
+**Loss** (mean over the analyzed notes, from the same fields `report.json` carries):
+
+- harmonic profile — L1 distance of the h1-normalized `harmonics_db` over the first `--n-harm` (default 10) harmonics, the most directly actionable timbre signal;
+- intonation — absolute f0 cents difference from the oracle;
+- noise floor — TNR shortfall, penalised **only when the model is noisier** than the oracle (a model cleaner than the sampled oracle, which carries natural vibrato/breath, is not penalised).
+
+`centroid_hz` is deliberately **excluded** — it depends on the probe note set (register weighting) and has been an unreliable signal in this harness. Term weights are tunable via `--w-harm` / `--w-cents` / `--w-tnr`.
+
+**Build isolation** — a dedicated build dir (`--build-dir`, default `build-autofit`) is configured once with `-DBUILD_SHARED=ON` and rebuilt (`--target sonare_shared`) per evaluation. Each model render runs in a fresh subprocess with `SONARE_LIB_PATH` pointed at that dir's dylib, so every evaluation loads the just-built code (a dylib already mapped into the process would otherwise stay stale across rebuilds). `build-python-shared` is refused as a build dir.
+
+**Safety** — the pristine text of every target file is snapshotted at startup and restored in a `finally` block, so an exception or Ctrl-C never leaves the tree perturbed. On a normal run the best values are then written back and a unified diff plus the loss trajectory are printed; `--dry-run` restores pristine, skips the write, and reports the diff it would have applied.
+
 ## Route B: plugin-hosted oracle (optional, not wired)
 
 `probe_grand.py` is a standalone go/no-go probe for hosting real VST3 instruments (Steinberg The Grand 3 / HALion 7 on this machine) headlessly via DawDreamer as a higher-quality oracle. It needs `pip install dawdreamer` in some environment and a real-time warm-up sleep for disk-streaming instruments. If route B is adopted, implement it behind the same interface as `render_oracle_fluidsynth` (SMF bytes in, `(frames, 2)` float32 out).
@@ -67,6 +105,8 @@ Deltas are model − oracle. Interpretation caveats:
 ## Files
 
 - `voicematch.py` — CLI driver (`compare`)
+- `autofit.py` — automatic calibration-constant fitter (perturb → rebuild → render → minimise)
+- `specs/` — knob spec JSONs for `autofit.py` (`example.json` is a runnable single-knob template)
 - `patterns.py` — note patterns + per-GM-program register table
 - `render_model.py` / `render_oracle.py` — the two renderers
 - `metrics.py` — per-note analysis and deltas
