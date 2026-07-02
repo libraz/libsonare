@@ -27,8 +27,8 @@ inline constexpr const char* kWaveforms[] = {"default", "sine",     "saw",
 inline constexpr const char* kFilterModels[] = {"default", "svf", "moog-ladder", "diode-ladder",
                                                 "sallen-key"};
 inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
-inline constexpr const char* kBodyTypes[] = {"default", "none",      "guitar",
-                                             "violin",  "wood-tube", "brass-bell"};
+inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar", "violin",
+                                             "wood-tube", "brass-bell", "vocal"};
 inline constexpr const char* kModSources[] = {"none",      "amp-env",   "filter-env",
                                               "lfo1",      "lfo2",      "velocity",
                                               "key-track", "mod-wheel", "random"};

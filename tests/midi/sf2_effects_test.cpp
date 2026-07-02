@@ -162,6 +162,8 @@ TEST_CASE("GS delay send produces an echo at the delay time", "[midi][sf2][gsfx]
   auto echo_peak = [](uint8_t cc94) {
     Sf2Player player = make_player();
     player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 1)));
+    // Kill the default room so the echo window holds only the delay return.
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 91, 0)));
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 94, cc94)));
     player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
     const StereoRender out = render(player, 20000);

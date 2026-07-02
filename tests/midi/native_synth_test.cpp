@@ -348,6 +348,10 @@ TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback
 
 TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi][synth]") {
   using sonare::midi::synth::gm_fallback_patch;
+  // Harpsichord (GM 6) voices the plucked-string waveguide; the clavinet (7)
+  // stays FM (struck string + pickup, no dedicated model yet).
+  REQUIRE(gm_fallback_patch(0, 6).mode == SynthEngineMode::kKarplusStrong);  // Harpsichord
+  REQUIRE(gm_fallback_patch(0, 7).mode == SynthEngineMode::kFm);             // Clavi
   // Bowed string family (GM 40-43) now voices the friction waveguide.
   REQUIRE(gm_fallback_patch(0, 40).mode == SynthEngineMode::kBowedString);  // Violin
   REQUIRE(gm_fallback_patch(0, 43).mode == SynthEngineMode::kBowedString);  // Contrabass
@@ -366,6 +370,31 @@ TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi]
   // Neighbours that intentionally stay on the signal-model family sketch.
   REQUIRE(gm_fallback_patch(0, 48).mode == SynthEngineMode::kSubtractive);  // String Ensemble 1
   REQUIRE(gm_fallback_patch(0, 80).mode == SynthEngineMode::kSubtractive);  // Square Lead
+}
+
+TEST_CASE("harpsichord GS/GM2 banks select registration variations", "[midi][synth]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  // Bank 0 (capital tone): the plain 8', no 4' companion and no key-off noise —
+  // must stay identical to the Phase-1 voice.
+  const auto& base = gm_fallback_patch(0, 6);
+  REQUIRE(base.mode == SynthEngineMode::kKarplusStrong);
+  REQUIRE(base.ks.octave_mix == 0.0f);
+  REQUIRE(base.ks.keyoff_noise == 0.0f);
+  // Bank 1 — octave mix: the 4' companion string engages, nothing else changes.
+  const auto& octave = gm_fallback_patch(1, 6);
+  REQUIRE(octave.ks.octave_mix > 0.0f);
+  REQUIRE(octave.ks.keyoff_noise == 0.0f);
+  // Bank 2 — wide: stereo spread widens, no 4'.
+  const auto& wide = gm_fallback_patch(2, 6);
+  REQUIRE(wide.stereo_spread > 0.0f);
+  REQUIRE(wide.ks.octave_mix == 0.0f);
+  // Bank 3 — with key off: the damper thump engages, no 4'.
+  const auto& keyoff = gm_fallback_patch(3, 6);
+  REQUIRE(keyoff.ks.keyoff_noise > 0.0f);
+  REQUIRE(keyoff.ks.octave_mix == 0.0f);
+  // Unknown variation banks fall back to the bank-0 capital tone.
+  REQUIRE(gm_fallback_patch(9, 6).ks.octave_mix == 0.0f);
+  REQUIRE(gm_fallback_patch(9, 6).ks.keyoff_noise == 0.0f);
 }
 
 TEST_CASE("Sf2Player without a SoundFont plays the GM drum map via the fallback",

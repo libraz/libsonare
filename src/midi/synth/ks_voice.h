@@ -56,11 +56,12 @@ inline int ks_buffer_capacity(double sample_rate) noexcept {
 }
 
 /// Returns the per-voice delay-SLAB capacity (in samples) the host must
-/// allocate: two spans (the primary string plus the second-polarization line,
-/// always reserved so attach() stays allocation-free whether or not a note
-/// engages the polarization gate).
+/// allocate: three spans (the primary string, the second-polarization line,
+/// and the octave-up 4' companion line), all reserved so attach() stays
+/// allocation-free whether or not a note engages the polarization / octave
+/// gates.
 inline int ks_slab_capacity(double sample_rate) noexcept {
-  return 2 * ks_buffer_capacity(sample_rate);
+  return 3 * ks_buffer_capacity(sample_rate);
 }
 
 /// KS section of a NativeSynthPatch (used when mode == kKarplusStrong).
@@ -155,6 +156,19 @@ struct KsPatchParams {
   /// the pitch rise is clamped explicitly in cents so a hard attack stacked on
   /// top of bend/vibrato cannot glitch the delay line.
   float tension_mod = 0.0f;
+  /// Octave-up 4' companion string in [0,1] (off-by-default; 0 = the third line
+  /// is skipped entirely and render is bit-identical). A harpsichord's 4'
+  /// register is a physically separate choir of strings tuned an octave up,
+  /// plucked by their own jacks on the same key. A third delay line at half the
+  /// period, sharing the pluck and summed into the output, reinforces the octave
+  /// like a real coupled 4' register. The blend is the mix level of the 4' line.
+  float octave_mix = 0.0f;
+  /// Key-off / damper noise in [0,1] (off-by-default; 0 = no burst, render
+  /// bit-identical). When a harpsichord key is released the jack falls and the
+  /// felt damper drops onto the string, a soft mechanical "thunk"/chiff. A short
+  /// lowpassed noise burst is added to the output at note-off, scaled by this
+  /// amount (the GS "with key off" harpsichord variation).
+  float keyoff_noise = 0.0f;
 };
 
 /// Per-voice plucked-string state, embedded in NativeSynthVoice. The voice's
@@ -163,13 +177,14 @@ struct KsPatchParams {
 class KsVoiceCore {
  public:
   /// CONTROL-thread wiring (or audio-thread pointer assignment before start()):
-  /// hands the core its delay slab (two spans of @p per_line_capacity — the
-  /// primary string plus the second-polarization line). The slab outlives the
-  /// voice.
+  /// hands the core its delay slab (three spans of @p per_line_capacity — the
+  /// primary string, the second-polarization line, and the octave-up 4'
+  /// companion line). The slab outlives the voice.
   void attach(float* slab, int per_line_capacity) noexcept {
     buffer_ = slab;
     capacity_ = per_line_capacity;
     pol_buffer_ = slab != nullptr ? slab + per_line_capacity : nullptr;
+    oct_buffer_ = slab != nullptr ? slab + 2 * per_line_capacity : nullptr;
   }
 
   /// Configures the string for @p note / @p velocity and injects the seeded
@@ -260,6 +275,33 @@ class KsVoiceCore {
   float tension_ratio_peak_ = 0.0f;
   float tension_env_ = 0.0f;
   float tension_decay_coeff_ = 0.0f;
+
+  // Octave-up 4' companion line (the harpsichord 4' register). Off unless
+  // params.octave_mix > 0 (oct_couple_ == 0 -> render skips it, bit-identical).
+  // A third loop at half the primary period, sharing the pluck; the slab's third
+  // span (attach()).
+  float* oct_buffer_ = nullptr;
+  int oct_size_ = 0;
+  size_t oct_write_ = 0;
+  float oct_period_ = 0.0f;  // half of base_period_ (an octave up)
+  float oct_loop_comp_ = 1.0f;
+  float oct_loop_alpha_ = 1.0f;
+  float oct_lp_state_ = 0.0f;
+  float oct_loop_gain_ = 0.0f;
+  float oct_release_gain_ = 0.0f;
+  float oct_couple_ = 0.0f;  // 0 = off; 4' line mix into the output
+  float oct_exc_ = 0.0f;     // pluck injection into the 4' line
+
+  // Key-off / damper noise burst. keyoff_amount_ == 0 -> never triggered, output
+  // bit-identical. release() arms it (keyoff_pos_ = 0); render() adds a short
+  // lowpassed, decaying noise burst for keyoff_len_ samples.
+  float keyoff_amount_ = 0.0f;
+  int keyoff_pos_ = 0;
+  int keyoff_len_ = 0;
+  float keyoff_lp_ = 0.0f;
+  float keyoff_alpha_ = 1.0f;
+  float keyoff_decay_ = 0.0f;
+  float keyoff_env_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth

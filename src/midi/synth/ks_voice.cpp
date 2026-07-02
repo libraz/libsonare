@@ -31,6 +31,12 @@ float ks_steel_inharmonicity_b(uint8_t note) noexcept {
 /// KS noise draws live far above the voice-level draw indices (detune/phase/
 /// drift use 0..~103 on the same per-voice seed).
 constexpr uint64_t kNoiseIndexBase = 1ull << 16;
+/// Key-off damper-noise draws sit well above the excitation burst so the two
+/// seeded streams never overlap.
+constexpr uint64_t kKeyoffNoiseIndexBase = 1ull << 20;
+/// Key-off damper thump: burst length and lowpass corner (a soft felt "thunk").
+constexpr float kKsKeyoffMs = 18.0f;
+constexpr float kKsKeyoffCutoffHz = 2200.0f;
 
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
@@ -223,6 +229,47 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     pol_loop_gain_ = 0.0f;
     couple_gain_ = 0.0f;
   }
+
+  // Octave-up 4' companion line (the harpsichord 4' register). Off unless
+  // params.octave_mix > 0 -> render skips it, primary path bit-identical. A
+  // third loop at exactly half the primary period (an octave up), plucked by
+  // the same key but its own jack: it shares the excitation and sums into the
+  // output, reinforcing the octave like a real coupled 4' choir.
+  const float octave_mix = std::clamp(params.octave_mix, 0.0f, 1.0f);
+  oct_write_ = 0;
+  oct_lp_state_ = 0.0f;
+  if (octave_mix > 0.0f && oct_buffer_ != nullptr) {
+    oct_period_ = 0.5f * base_period_;
+    // Same loop brightness as the primary; recompute the phase-delay
+    // compensation at the octave-up fundamental so the 4' pitch is accurate.
+    oct_loop_alpha_ = loop_alpha_;
+    const float omega_o = kTwoPi / oct_period_;
+    const float tau_o = std::atan2(a * std::sin(omega_o), 1.0f - a * std::cos(omega_o)) /
+                        std::max(omega_o, 1.0e-6f);
+    oct_loop_comp_ = 1.0f + tau_o;
+    oct_loop_gain_ = loop_gain_for(oct_period_, sr, t60);
+    oct_release_gain_ = loop_gain_for(oct_period_, sr, std::max(0.01f, params.release_damp_s));
+    oct_exc_ = 0.7f;  // the 4' jack grips its string a touch less than the 8'
+    oct_couple_ = octave_mix;
+    oct_size_ = std::min(capacity_, static_cast<int>(oct_period_ * 1.3f) + 8);
+    std::fill(oct_buffer_, oct_buffer_ + static_cast<size_t>(std::max(0, oct_size_)), 0.0f);
+  } else {
+    oct_couple_ = 0.0f;
+    oct_loop_gain_ = 0.0f;
+    oct_size_ = 0;
+  }
+
+  // Key-off / damper noise. 0 disables it (release() never arms the burst, output
+  // bit-identical). Precompute the burst length and its lowpass corner; the burst
+  // itself is triggered at note-off.
+  keyoff_amount_ = std::clamp(params.keyoff_noise, 0.0f, 1.0f);
+  keyoff_len_ = std::max(1, static_cast<int>(kKsKeyoffMs * 0.001f * static_cast<float>(sr)));
+  keyoff_pos_ = keyoff_len_;  // inactive until release()
+  keyoff_lp_ = 0.0f;
+  keyoff_env_ = 0.0f;
+  keyoff_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * kKsKeyoffCutoffHz / static_cast<float>(sr)),
+                             0.01f, 1.0f);
+  keyoff_decay_ = std::exp(-4.0f / static_cast<float>(keyoff_len_));  // ~-35 dB over the burst
 }
 
 float KsVoiceCore::render(float pitch_ratio) noexcept {
@@ -331,6 +378,29 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
     result = out;
   }
 
+  if (oct_couple_ > 0.0f) {
+    // Octave-up 4' companion: a half-period loop sharing the pluck; its output
+    // sums into the mix, reinforcing the octave (the coupled 4' register).
+    const float oct_delay =
+        std::clamp(oct_period_ / ratio - oct_loop_comp_, 1.0f, static_cast<float>(oct_size_ - 4));
+    const int oct_delay_q8 = static_cast<int>(oct_delay * 256.0f);
+    const float oct_in = oct_exc_ * exc + oct_loop_gain_ * oct_lp_state_;
+    const float oct_out = rt::lagrange3_fractional_delay(
+        oct_buffer_, static_cast<size_t>(oct_size_), oct_write_, oct_delay_q8, oct_in);
+    oct_lp_state_ += oct_loop_alpha_ * (oct_out - oct_lp_state_);
+    result += oct_couple_ * oct_out;
+  }
+
+  if (keyoff_pos_ < keyoff_len_) {
+    // Key-off damper thump: a short lowpassed, decaying noise burst armed at
+    // note-off (skipped entirely when keyoff_amount_ == 0 -> bit-identical).
+    const float nz = noise_.bipolar_at(kKeyoffNoiseIndexBase + static_cast<uint64_t>(keyoff_pos_));
+    keyoff_lp_ += keyoff_alpha_ * (nz - keyoff_lp_);
+    result += keyoff_amount_ * keyoff_env_ * keyoff_lp_;
+    keyoff_env_ *= keyoff_decay_;
+    ++keyoff_pos_;
+  }
+
   if (pickup_depth_ != 0.0f) {
     // Magnetic pickup: the output-side position comb notches the harmonics with
     // a node at the pickup point, then the field-gradient nonlinearity adds the
@@ -346,6 +416,13 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
 void KsVoiceCore::release() noexcept {
   loop_gain_ = std::min(loop_gain_, release_gain_);
   if (pol_couple_ > 0.0f) pol_loop_gain_ = std::min(pol_loop_gain_, pol_release_gain_);
+  if (oct_couple_ > 0.0f) oct_loop_gain_ = std::min(oct_loop_gain_, oct_release_gain_);
+  // Arm the key-off damper thump (no-op when the burst is disabled).
+  if (keyoff_amount_ > 0.0f) {
+    keyoff_pos_ = 0;
+    keyoff_lp_ = 0.0f;
+    keyoff_env_ = 1.0f;
+  }
 }
 
 void KsVoiceCore::kill() noexcept {
@@ -354,6 +431,9 @@ void KsVoiceCore::kill() noexcept {
   lp_state_ = 0.0f;
   pol_loop_gain_ = 0.0f;
   pol_lp_state_ = 0.0f;
+  oct_loop_gain_ = 0.0f;
+  oct_lp_state_ = 0.0f;
+  keyoff_pos_ = keyoff_len_;
 }
 
 }  // namespace sonare::midi::synth

@@ -28,8 +28,15 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   // hammer, coupled unison strings, soundboard bank); the e-piano / clavi
   // programs override to FM.
   t[0].mode = SynthEngineMode::kPiano;
-  t[0].amp_env = env(0.5f, 0.0f, 1.0f, 220.0f);
+  t[0].amp_env = env(0.5f, 0.0f, 1.0f, 600.0f);
   t[0].cutoff_hz = 20000.0f;
+  // A harder, shorter hammer contact keeps the upper partials a concert grand
+  // actually has; the longer damp lets the damper fall be heard as a ring-down
+  // rather than a gate.
+  t[0].piano.brightness = 0.95f;
+  t[0].piano.hammer_contact_ms = 0.8f;
+  t[0].piano.release_damp_s = 0.6f;
+  t[0].stereo_spread = 0.3f;
   t[0].gain = 0.8f;
 
   // 8-15 chromatic percussion: FM bell (inharmonic 3.5 ratio, long
@@ -83,7 +90,7 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[3].ks.sympathetic = true;
   t[3].body = BodyType::kGuitar;
   t[3].body_mix = 0.35f;
-  t[3].gain = 0.8f;
+  t[3].gain = 1.5f;
 
   // 32-39 bass: single dark saw through the transistor ladder, punchy
   // filter envelope and a touch of drive.
@@ -106,16 +113,19 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[5].cutoff_hz = 4000.0f;
   t[5].key_track = 0.3f;
   t[5].lfo_to_pitch_cents = 5.0f;
-  t[5].stereo_spread = 0.3f;
+  t[5].stereo_spread = 0.45f;
 
-  // 48-55 ensemble / choir: wide slow supersaw pad.
+  // 48-55 ensemble / choir: wide slow supersaw pad with a gentle section
+  // vibrato (a whole section never sits dead still).
   t[6].waveform = VaWaveform::kSaw;
   t[6].unison = 5;
   t[6].detune_cents = 14.0f;
   t[6].drift_cents = 4.0f;
   t[6].amp_env = env(200.0f, 400.0f, 0.8f, 500.0f);
   t[6].cutoff_hz = 3200.0f;
-  t[6].stereo_spread = 0.35f;
+  t[6].lfo_rate_hz = 4.6f;
+  t[6].lfo_to_pitch_cents = 4.0f;
+  t[6].stereo_spread = 0.6f;
 
   // 56-63 brass: 3-op FM stack with a feedback operator (the DX brass
   // recipe), index swelling in through the modulator envelope.
@@ -126,13 +136,18 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[7].fm.ops[0].level = 1.0f;
   t[7].fm.ops[0].env = env(40.0f, 200.0f, 0.85f, 200.0f);
   t[7].fm.ops[1].ratio = 1.0f;
-  t[7].fm.ops[1].level = 1.6f;
+  t[7].fm.ops[1].level = 2.2f;
   t[7].fm.ops[1].env = env(80.0f, 300.0f, 0.7f, 200.0f);  // brightness swell
   t[7].fm.ops[1].vel_to_level = 0.5f;
   t[7].fm.ops[2].ratio = 1.0f;
   t[7].fm.ops[2].level = 0.8f;
-  t[7].fm.ops[2].feedback = 1.2f;  // feedback op: saw-like brass spectrum
+  t[7].fm.ops[2].feedback = 1.7f;  // feedback op: saw-like brass spectrum
   t[7].fm.ops[2].env = env(80.0f, 400.0f, 0.6f, 200.0f);
+  // Section, not soloist: players never sit at exactly one pitch or one seat.
+  t[7].drift_cents = 3.0f;
+  t[7].lfo_rate_hz = 5.0f;
+  t[7].lfo_to_pitch_cents = 4.0f;
+  t[7].stereo_spread = 0.4f;
 
   // 64-71 reed: hollow square, light vibrato.
   t[8].waveform = VaWaveform::kSquare;
@@ -167,7 +182,7 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[11].drift_cents = 5.0f;
   t[11].amp_env = env(400.0f, 600.0f, 0.8f, 800.0f);
   t[11].cutoff_hz = 2800.0f;
-  t[11].stereo_spread = 0.4f;
+  t[11].stereo_spread = 0.6f;
 
   // 96-103 synth FX: drifting detuned triangles.
   t[12].waveform = VaWaveform::kTriangle;
@@ -212,30 +227,40 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   return t;
 }
 
-/// Program-level overrides inside a family: the electric pianos and
-/// clavi/harpsichord are FM instruments (method (2)), and the guitar family
-/// + orchestral harp voice their Karplus-Strong variants (method (3)).
+/// Program-level overrides inside a family: the electric pianos and the
+/// clavinet are FM instruments (method (2)), and the guitar family, orchestral
+/// harp, and harpsichord voice their Karplus-Strong variants (method (3)).
 struct ProgramOverrides {
-  NativeSynthPatch e_piano;          // programs 4-5 (Electric Piano 1/2)
-  NativeSynthPatch clav;             // programs 6-7 (Harpsichord / Clavi)
-  NativeSynthPatch glockenspiel;     // program 9 (uniform-bar modal)
-  NativeSynthPatch vibraphone;       // program 11 (tuned-bar modal, long)
-  NativeSynthPatch marimba;          // program 12 (tuned-bar modal, woody)
-  NativeSynthPatch xylophone;        // program 13 (quint-tuned modal, dry)
-  NativeSynthPatch nylon_guitar;     // program 24
-  NativeSynthPatch electric_guitar;  // programs 26-27 (jazz / clean)
-  NativeSynthPatch muted_guitar;     // program 28 (palm mute)
-  NativeSynthPatch overdriven;       // program 29
-  NativeSynthPatch distortion;       // program 30
-  NativeSynthPatch bass_acoustic;    // program 32 (Acoustic Bass)
-  NativeSynthPatch bass_fingered;    // program 33 (Electric Bass, finger)
-  NativeSynthPatch bass_picked;      // program 34 (Electric Bass, pick)
-  NativeSynthPatch bass_fretless;    // program 35 (Fretless Bass)
-  NativeSynthPatch bass_slap;        // program 36 (Slap Bass 1, thumb)
-  NativeSynthPatch bass_pop;         // program 37 (Slap Bass 2, pull/pop)
-  NativeSynthPatch harp;             // program 46 (Orchestral Harp)
-  NativeSynthPatch church_organ;     // program 19 (Church Organ, flue pipe)
-  NativeSynthPatch reed_organ;       // programs 20-21 (Reed Organ / Accordion, free reed)
+  NativeSynthPatch e_piano;             // programs 4-5 (Electric Piano 1/2)
+  NativeSynthPatch harpsichord;         // program 6 bank 0 (Harpsichord 8', KS)
+  NativeSynthPatch harpsichord_octave;  // program 6 bank 1 (octave mix, 8'+4')
+  NativeSynthPatch harpsichord_wide;    // program 6 bank 2 (wide)
+  NativeSynthPatch harpsichord_keyoff;  // program 6 bank 3 (with key off)
+  NativeSynthPatch clav;                // program 7 (Clavi, FM)
+  NativeSynthPatch glockenspiel;        // program 9 (uniform-bar modal)
+  NativeSynthPatch vibraphone;          // program 11 (tuned-bar modal, long)
+  NativeSynthPatch marimba;             // program 12 (tuned-bar modal, woody)
+  NativeSynthPatch xylophone;           // program 13 (quint-tuned modal, dry)
+  NativeSynthPatch nylon_guitar;        // program 24
+  NativeSynthPatch electric_guitar;     // programs 26-27 (jazz / clean)
+  NativeSynthPatch muted_guitar;        // program 28 (palm mute)
+  NativeSynthPatch overdriven;          // program 29
+  NativeSynthPatch distortion;          // program 30
+  NativeSynthPatch bass_acoustic;       // program 32 (Acoustic Bass)
+  NativeSynthPatch bass_fingered;       // program 33 (Electric Bass, finger)
+  NativeSynthPatch bass_picked;         // program 34 (Electric Bass, pick)
+  NativeSynthPatch bass_fretless;       // program 35 (Fretless Bass)
+  NativeSynthPatch bass_slap;           // program 36 (Slap Bass 1, thumb)
+  NativeSynthPatch bass_pop;            // program 37 (Slap Bass 2, pull/pop)
+  NativeSynthPatch harp;                // program 46 (Orchestral Harp)
+  NativeSynthPatch church_organ;        // program 19 (Church Organ, flue pipe)
+  NativeSynthPatch reed_organ;          // programs 20-21 (Reed Organ / Accordion, free reed)
+  NativeSynthPatch tremolo_strings;     // program 44 (measured-bow amp tremolo)
+  NativeSynthPatch pizzicato;           // program 45 (Pizzicato Strings, KS + corpus)
+  NativeSynthPatch timpani;             // program 47 (kettledrum membrane)
+  NativeSynthPatch choir_aahs;          // program 52 (open-vowel vocal body)
+  NativeSynthPatch voice_oohs;          // program 53 (darker closed vowel)
+  NativeSynthPatch synth_voice;         // program 54 (brighter synthetic vowel)
 
   // Physical-model acoustic families (bowed string / reed / brass / air-jet
   // flute). These mirror the calibration of the like-named entries in the synth
@@ -345,8 +370,11 @@ ProgramOverrides build_program_overrides() noexcept {
   vb.modal.modes[2] = {10.0f, 0.25f, 0.3f};
   vb.modal.decay_s = 5.0f;
   vb.modal.decay_stretch = 0.4f;
-  vb.modal.strike_brightness = 0.6f;
+  vb.modal.strike_brightness = 0.75f;
   vb.amp_env.release_ms = 700.0f;
+  // The motor-driven rotating vanes: the defining vibraphone tremolo.
+  vb.lfo2_rate_hz = 4.5f;
+  vb.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.35f};
 
   NativeSynthPatch& mr = o.marimba;
   mr = bar;
@@ -401,21 +429,21 @@ ProgramOverrides build_program_overrides() noexcept {
   steel.ks.sympathetic = true;
   steel.body = BodyType::kGuitar;
   steel.body_mix = 0.35f;
-  steel.gain = 0.8f;
+  steel.gain = 1.5f;
 
   // Nylon: soft finger pluck near the middle of the string, dull loop. Keeps the
   // sympathetic halo (classical guitars sing with open-string resonance) but
   // drops dispersion (nylon plain strings are not audibly inharmonic) and softens
   // the pluck to the flesh of a fingertip with a lighter tension bend.
   o.nylon_guitar = steel;
-  o.nylon_guitar.ks.brightness = 0.42f;
-  o.nylon_guitar.ks.exc_brightness = 0.55f;
+  o.nylon_guitar.ks.brightness = 0.72f;
+  o.nylon_guitar.ks.exc_brightness = 0.75f;
   o.nylon_guitar.ks.pick_position = 0.27f;
-  o.nylon_guitar.ks.decay_s = 2.2f;
+  o.nylon_guitar.ks.decay_s = 3.0f;
   o.nylon_guitar.ks.dispersion = 0.0f;
   o.nylon_guitar.ks.nail = 0.28f;  // fingertip flesh, rounder
   o.nylon_guitar.ks.tension_mod = 0.2f;
-  o.nylon_guitar.body_mix = 0.45f;
+  o.nylon_guitar.body_mix = 0.3f;
 
   // Electric (jazz/clean) — the `electric-guitar` preset: bright sustaining
   // loop, near-bridge pick, a pickup-ish lowpass instead of the open string.
@@ -424,7 +452,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.electric_guitar.ks.decay_s = 4.5f;
   o.electric_guitar.ks.pick_position = 0.12f;
   o.electric_guitar.ks.exc_brightness = 0.9f;
-  o.electric_guitar.cutoff_hz = 5500.0f;
+  o.electric_guitar.cutoff_hz = 7000.0f;
   o.electric_guitar.body = BodyType::kNone;
   o.electric_guitar.body_mix = 0.0f;
   // Solid body: no sympathetic halo and a lighter plane coupling; the magnetic
@@ -436,7 +464,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.electric_guitar.ks.dispersion = 0.3f;
   o.electric_guitar.ks.pickup_pos = 0.14f;  // near the bridge, bright
   o.electric_guitar.ks.nail = 0.7f;         // pick
-  o.electric_guitar.gain = 0.7f;
+  o.electric_guitar.gain = 1.3f;
 
   // Palm mute: same electric string, choked decay.
   o.muted_guitar = o.electric_guitar;
@@ -453,7 +481,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.distortion = o.electric_guitar;
   o.distortion.drive = 0.8f;
   o.distortion.cutoff_hz = 3500.0f;
-  o.distortion.gain = 0.6f;
+  o.distortion.gain = 1.0f;
 
   // Electric / acoustic bass (GM 32-35): the KS string voiced for the low
   // register — long, strongly stretched decays (bass strings ring far longer
@@ -466,21 +494,21 @@ ProgramOverrides build_program_overrides() noexcept {
   NativeSynthPatch bass{};
   bass.mode = SynthEngineMode::kKarplusStrong;
   bass.amp_env = env(1.0f, 0.0f, 1.0f, 200.0f);
-  bass.cutoff_hz = 4500.0f;
+  bass.cutoff_hz = 3500.0f;
   bass.ks.brightness = 0.44f;
   bass.ks.decay_s = 5.5f;
   bass.ks.decay_stretch = 0.75f;
   bass.ks.pick_position = 0.26f;
-  bass.ks.exc_brightness = 0.6f;
+  bass.ks.exc_brightness = 0.5f;
   bass.ks.vel_to_brightness = 0.6f;
   bass.ks.release_damp_s = 0.08f;
   // Two-polarization beat: a detuned horizontal plane adds the thickness and
   // slow shimmer of a big low string (the sustained members carry it; the
   // percussive slap/pop keep it off).
-  bass.ks.polarization = 0.45f;
+  bass.ks.polarization = 0.2f;
   bass.body = BodyType::kNone;
   bass.body_mix = 0.0f;
-  bass.gain = 0.82f;
+  bass.gain = 1.2f;
   o.bass_fingered = bass;
 
   // Acoustic upright: darker, softer pluck, a large resonating body.
@@ -494,7 +522,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.bass_acoustic.cutoff_hz = 4000.0f;
   o.bass_acoustic.body = BodyType::kGuitar;
   o.bass_acoustic.body_mix = 0.45f;
-  o.bass_acoustic.gain = 0.8f;
+  o.bass_acoustic.gain = 1.2f;
 
   // Pick: near-bridge, bright attack, shorter ring.
   o.bass_picked = bass;
@@ -505,7 +533,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.bass_picked.ks.exc_brightness = 0.85f;
   o.bass_picked.ks.release_damp_s = 0.06f;
   o.bass_picked.cutoff_hz = 5000.0f;
-  o.bass_picked.gain = 0.8f;
+  o.bass_picked.gain = 1.2f;
 
   // Fretless: rounder, darker, longer glide-friendly ring.
   o.bass_fretless = bass;
@@ -516,7 +544,7 @@ ProgramOverrides build_program_overrides() noexcept {
   o.bass_fretless.ks.exc_brightness = 0.55f;
   o.bass_fretless.ks.release_damp_s = 0.12f;
   o.bass_fretless.cutoff_hz = 4200.0f;
-  o.bass_fretless.gain = 0.8f;
+  o.bass_fretless.gain = 1.2f;
 
   // Slap Bass 1 (GM 36, thumb): the hard near-bridge attack of the pick voicing
   // driven into the fret-slap limiter — the string knocks the frets, so the
@@ -556,9 +584,51 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harp.ks.tension_mod = 0.0f;
   o.harp.body_mix = 0.3f;  // large open soundboard, less boxy than the guitar
 
-  // Church organ: a bright open principal flue pipe (method (8)). Sustained
-  // waveguide, prompt chiff speech, no decay while keyed; the amp envelope
-  // just gates the wind on and off.
+  // Harpsichord (GM 6): a plucked string like the guitars, but a keyboard
+  // instrument voiced by a hard quill/Delrin plectrum near the nut. The defining
+  // trait is near velocity-insensitivity (only 3-6 dB across the range), so the
+  // velocity->brightness coupling is nearly disabled. The pluck is a sharp
+  // deterministic doublet (not a noisy strum), the near-nut pick position combs
+  // in bright nasal upper harmonics, and the thin brass/iron strings are barely
+  // inharmonic (no steel dispersion, no tension bend). The 8' unison choir beats
+  // via the second polarization; the undamped 4'-top / behind-bridge strings ring
+  // as the sympathetic halo (inherited from steel; sings in the standalone path).
+  o.harpsichord = steel;
+  o.harpsichord.amp_env.release_ms = 180.0f;
+  o.harpsichord.ks.brightness = 0.72f;
+  o.harpsichord.ks.decay_s = 2.4f;  // thin light strings ring shorter than a guitar
+  o.harpsichord.ks.decay_stretch = 0.55f;
+  o.harpsichord.ks.pick_position = 0.12f;      // near-nut pluck, high combed harmonics
+  o.harpsichord.ks.exc_brightness = 0.92f;     // hard plectrum, sharp attack
+  o.harpsichord.ks.vel_to_brightness = 0.12f;  // near velocity-insensitive
+  o.harpsichord.ks.release_damp_s = 0.05f;     // fast felt damper on note-off
+  o.harpsichord.ks.polarization = 0.28f;       // 8' unison beat
+  o.harpsichord.ks.body_coupling = 0.3f;
+  o.harpsichord.ks.pluck_style = 0.7f;  // deterministic quill doublet
+  o.harpsichord.ks.nail = 0.85f;        // hard sharp plectrum edge
+  o.harpsichord.ks.dispersion = 0.1f;   // low inharmonicity (thin brass/iron)
+  o.harpsichord.ks.tension_mod = 0.0f;  // constant plucking force, no bend
+  o.harpsichord.body_mix = 0.3f;
+
+  // GS/GM2 harpsichord registration variations (program 6, bank select). Names
+  // follow the GM2 melodic variation table (program_map.cpp): bank 1 octave mix,
+  // bank 2 wide, bank 3 with key off. Each derives from the bank-0 8' voice.
+  // Bank 1 — octave mix: engage the 4' companion string (the coupled 8'+4'
+  // register), the brightest, fullest harpsichord colour.
+  o.harpsichord_octave = o.harpsichord;
+  o.harpsichord_octave.ks.octave_mix = 0.6f;
+  // Bank 2 — wide: two 8' choirs spread across the stereo field with a touch
+  // more unison beat, no 4'.
+  o.harpsichord_wide = o.harpsichord;
+  o.harpsichord_wide.stereo_spread = 0.5f;
+  o.harpsichord_wide.ks.polarization = 0.4f;
+  // Bank 3 — with key off: the jack-drop / felt-damper thump on note release.
+  o.harpsichord_keyoff = o.harpsichord;
+  o.harpsichord_keyoff.ks.keyoff_noise = 0.5f;
+
+  // Church organ: a principal chorus of self-oscillating jet flue pipes. Each
+  // rank locks its pitch and holds a solid, endless tone while keyed (no decay,
+  // no breath-noise wander); the amp envelope just gates the wind on and off.
   o.church_organ.mode = SynthEngineMode::kPipeOrgan;
   o.church_organ.amp_env = env(8.0f, 0.0f, 1.0f, 90.0f);
   o.church_organ.cutoff_hz = 20000.0f;
@@ -578,12 +648,13 @@ ProgramOverrides build_program_overrides() noexcept {
   // A touch of wind sag so a full chord breathes; tremulant off by default.
   o.church_organ.pipe_organ.wind_sag = 0.25f;
   o.church_organ.stereo_spread = 0.2f;
-  o.church_organ.gain = 0.7f;
+  o.church_organ.gain = 0.45f;
 
-  // Reed Organ (GM 20) + Accordion (GM 21): a lingual reed stop — the
-  // saturating reed valve in the loop buzzes with a bright, brassy spectrum
-  // (harmonium / regal colour). An 8' reed under a 4' reed octave, both open and
-  // very bright. Stands in for the free-reed group until a dedicated model.
+  // Reed Organ (GM 20) + Accordion (GM 21): a lingual reed stop — the jet is
+  // driven hard and asymmetrically so the pipe buzzes with a bright, brassy
+  // spectrum (harmonium / regal colour). An 8' reed under a 4' reed octave, both
+  // open and very bright. Stands in for the free-reed group until a dedicated
+  // model.
   o.reed_organ.mode = SynthEngineMode::kPipeOrgan;
   o.reed_organ.amp_env = env(14.0f, 0.0f, 1.0f, 110.0f);
   o.reed_organ.cutoff_hz = 20000.0f;
@@ -595,7 +666,93 @@ ProgramOverrides build_program_overrides() noexcept {
   o.reed_organ.pipe_organ.ranks[1] = {2.0f, false, 0.82f, 0.55f, 0.7f, 0.3f};              // 4'
   o.reed_organ.pipe_organ.wind_sag = 0.2f;
   o.reed_organ.stereo_spread = 0.18f;
-  o.reed_organ.gain = 0.6f;
+  o.reed_organ.gain = 0.42f;
+
+  // Tremolo Strings (GM 44): the string-section pad under a measured-bow
+  // amplitude tremolo (LFO2 -> amp) — the section shudders rather than
+  // re-attacking per stroke.
+  NativeSynthPatch& trem = o.tremolo_strings;
+  trem.waveform = VaWaveform::kSaw;
+  trem.unison = 4;
+  trem.detune_cents = 12.0f;
+  trem.drift_cents = 4.0f;
+  trem.amp_env = env(60.0f, 300.0f, 0.85f, 300.0f);
+  trem.cutoff_hz = 3800.0f;
+  trem.key_track = 0.3f;
+  trem.lfo2_rate_hz = 9.0f;
+  trem.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.45f};
+  trem.stereo_spread = 0.5f;
+
+  // Pizzicato Strings (GM 45): a plucked violin-family string — short KS ring
+  // into the violin corpus, mid-string finger pluck.
+  NativeSynthPatch& pz = o.pizzicato;
+  pz.mode = SynthEngineMode::kKarplusStrong;
+  pz.amp_env = env(1.0f, 0.0f, 1.0f, 200.0f);
+  pz.cutoff_hz = 20000.0f;
+  pz.ks.brightness = 0.48f;
+  pz.ks.decay_s = 0.7f;
+  pz.ks.decay_stretch = 0.55f;
+  pz.ks.pick_position = 0.33f;
+  pz.ks.exc_brightness = 0.6f;
+  pz.ks.vel_to_brightness = 0.5f;
+  pz.ks.release_damp_s = 0.06f;
+  pz.ks.nail = 0.3f;  // finger flesh
+  pz.ks.pluck_style = 0.4f;
+  pz.body = BodyType::kViolin;
+  pz.body_mix = 0.4f;
+  pz.stereo_spread = 0.3f;
+  pz.gain = 1.3f;
+
+  // Timpani (GM 47): a note-tracked kettledrum — full membrane mode set, long
+  // pitched ring under a soft mallet thud, no snare/noise wash.
+  NativeSynthPatch& tp = o.timpani;
+  tp.mode = SynthEngineMode::kPercussion;
+  tp.amp_env = env(0.5f, 1800.0f, 0.0f, 500.0f);
+  tp.cutoff_hz = 20000.0f;
+  tp.percussion.num_modes = 5;
+  tp.percussion.mode_decay_s = 1.1f;
+  tp.percussion.tone_gain = 1.0f;
+  tp.percussion.pitch_drop = 0.15f;
+  tp.percussion.pitch_drop_ms = 40.0f;
+  tp.percussion.noise_gain = 0.25f;
+  tp.percussion.noise_decay_ms = 25.0f;
+  tp.percussion.noise_cutoff_hz = 600.0f;
+  tp.percussion.noise_output = SynthFilterOutput::kLowpass;
+  // Struck the timpani way: about a quarter in from the rim, so the pitched
+  // ring modes dominate over the centre thump.
+  tp.percussion.strike_r = 0.6f;
+  tp.stereo_spread = 0.15f;
+  tp.gain = 1.2f;
+
+  // Choir Aahs (GM 52): detuned voices through the open-vowel tract formants
+  // — the vocal body is what separates "aah" from a string pad.
+  NativeSynthPatch& ch = o.choir_aahs;
+  ch.waveform = VaWaveform::kSaw;
+  ch.unison = 4;
+  ch.detune_cents = 9.0f;
+  ch.drift_cents = 4.0f;
+  ch.amp_env = env(260.0f, 400.0f, 0.85f, 550.0f);
+  ch.cutoff_hz = 2400.0f;
+  ch.lfo_rate_hz = 4.6f;
+  ch.lfo_to_pitch_cents = 5.0f;
+  ch.body = BodyType::kVocal;
+  ch.body_mix = 0.55f;
+  ch.stereo_spread = 0.6f;
+  ch.gain = 0.6f;
+
+  // Voice Oohs (GM 53): the same choir with a nearly closed mouth — darker
+  // low-pass, more tract, less shimmer.
+  o.voice_oohs = ch;
+  o.voice_oohs.cutoff_hz = 1300.0f;
+  o.voice_oohs.detune_cents = 7.0f;
+  o.voice_oohs.body_mix = 0.6f;
+  o.voice_oohs.gain = 0.65f;
+
+  // Synth Voice (GM 54): brighter, steadier synthetic vowel.
+  o.synth_voice = ch;
+  o.synth_voice.cutoff_hz = 3200.0f;
+  o.synth_voice.amp_env = env(120.0f, 300.0f, 0.9f, 400.0f);
+  o.synth_voice.drift_cents = 2.0f;
 
   // Bowed string (GM 40-43): one friction-excited waveguide voiced across the
   // violin family. The engine tunes to the played note, so the members differ
@@ -615,16 +772,34 @@ ProgramOverrides build_program_overrides() noexcept {
     p.bowed_string.damping = damping;
     p.bowed_string.attack_ms = attack_ms;
     p.bowed_string.release_ms = release_ms;
-    p.bowed_string.rosin = 0.15f;
+    p.bowed_string.rosin = 0.1f;
+    // Bowed-string physics gates: bristle memory warms the static friction
+    // table, the detuned second plane thickens the sustain, and the open
+    // strings halo the bridge output.
+    p.bowed_string.elasto_plastic = true;
+    p.bowed_string.stribeck = 0.7f;
+    p.bowed_string.polarization = 0.15f;
+    p.bowed_string.sympathetic = 0.08f;
+    p.drift_cents = 2.0f;
+    p.stereo_spread = 0.1f;
     p.body = BodyType::kViolin;
     p.body_mix = body_mix;
     p.gain = gain;
     return p;
   };
-  o.violin = bowed(0.12f, 0.55f, 0.62f, 0.30f, 45.0f, 110.0f, 0.28f, 0.70f);
-  o.viola = bowed(0.13f, 0.55f, 0.52f, 0.34f, 55.0f, 120.0f, 0.34f, 0.70f);
-  o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.72f);
-  o.contrabass = bowed(0.15f, 0.62f, 0.36f, 0.44f, 90.0f, 160.0f, 0.46f, 0.72f);
+  o.violin = bowed(0.12f, 0.55f, 0.47f, 0.32f, 45.0f, 110.0f, 0.28f, 0.3f);
+  o.violin.cutoff_hz = 6000.0f;
+  o.violin.lfo_rate_hz = 5.3f;
+  o.violin.lfo_to_pitch_cents = 9.0f;
+  o.viola = bowed(0.13f, 0.55f, 0.42f, 0.34f, 55.0f, 120.0f, 0.34f, 0.3f);
+  o.viola.lfo_rate_hz = 5.1f;
+  o.viola.lfo_to_pitch_cents = 8.0f;
+  o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.28f);
+  o.cello.lfo_rate_hz = 4.8f;
+  o.cello.lfo_to_pitch_cents = 7.0f;
+  o.contrabass = bowed(0.15f, 0.62f, 0.36f, 0.44f, 90.0f, 160.0f, 0.46f, 0.32f);
+  o.contrabass.lfo_rate_hz = 4.4f;
+  o.contrabass.lfo_to_pitch_cents = 5.0f;
 
   // Reed woodwind (GM 64-71): one single-reed waveguide voiced across the
   // single- and double-reed winds. The clarinet is the only cylinder
@@ -647,19 +822,61 @@ ProgramOverrides build_program_overrides() noexcept {
     p.reed.attack_ms = attack_ms;
     p.reed.release_ms = release_ms;
     p.reed.breath_pressure = breath;
+    // Reed physics gates: the conical throat bloom restores the fundamental
+    // the pure cone loses (inert on the cylindrical clarinet). The dynamic
+    // mass-spring reed stays off — its formant bias overshoots the GM
+    // reference timbre by >1 kHz.
+    p.reed.cone_growth = conical ? 0.15f : 0.0f;
+    p.drift_cents = 1.5f;
+    p.stereo_spread = 0.08f;
     p.body = BodyType::kWoodTube;
     p.body_mix = body_mix;
     p.gain = gain;
     return p;
   };
-  o.soprano_sax = reed(true, 0.55f, 0.55f, 0.60f, 0.32f, 20.0f, 80.0f, 0.65f, 0.30f, 0.70f);
-  o.alto_sax = reed(true, 0.55f, 0.55f, 0.54f, 0.34f, 22.0f, 90.0f, 0.65f, 0.32f, 0.70f);
-  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.48f, 0.36f, 26.0f, 100.0f, 0.68f, 0.36f, 0.72f);
-  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.40f, 0.40f, 32.0f, 120.0f, 0.70f, 0.40f, 0.72f);
-  o.oboe = reed(true, 0.80f, 0.35f, 0.70f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.68f);
-  o.english_horn = reed(true, 0.70f, 0.40f, 0.60f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.68f);
-  o.bassoon = reed(true, 0.65f, 0.45f, 0.42f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.72f);
-  o.clarinet = reed(false, 0.40f, 0.50f, 0.45f, 0.30f, 25.0f, 90.0f, 0.60f, 0.25f, 0.70f);
+  o.soprano_sax = reed(true, 0.55f, 0.55f, 0.64f, 0.32f, 16.0f, 80.0f, 0.78f, 0.30f, 0.55f);
+  o.soprano_sax.cutoff_hz = 5200.0f;
+  o.soprano_sax.lfo_rate_hz = 5.4f;
+  o.soprano_sax.lfo_to_pitch_cents = 6.0f;
+  o.soprano_sax.reed.growl = 0.15f;
+  o.soprano_sax.reed.chiff = 0.55f;
+  o.alto_sax = reed(true, 0.55f, 0.55f, 0.62f, 0.34f, 16.0f, 90.0f, 0.78f, 0.32f, 0.55f);
+  o.alto_sax.cutoff_hz = 4500.0f;
+  o.alto_sax.lfo_rate_hz = 5.2f;
+  o.alto_sax.lfo_to_pitch_cents = 6.0f;
+  o.alto_sax.reed.growl = 0.15f;
+  o.alto_sax.reed.chiff = 0.6f;
+  o.alto_sax.reed.reed_opening = 0.62f;
+  o.alto_sax.reed.breath_noise = 0.3f;
+  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 0.58f);
+  o.tenor_sax.cutoff_hz = 4000.0f;
+  o.tenor_sax.lfo_rate_hz = 5.0f;
+  o.tenor_sax.lfo_to_pitch_cents = 5.0f;
+  o.tenor_sax.reed.growl = 0.18f;
+  o.tenor_sax.reed.chiff = 0.6f;
+  o.tenor_sax.reed.breath_noise = 0.3f;
+  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.58f);
+  o.baritone_sax.cutoff_hz = 3800.0f;
+  o.baritone_sax.lfo_rate_hz = 4.8f;
+  o.baritone_sax.lfo_to_pitch_cents = 4.0f;
+  o.baritone_sax.reed.growl = 0.18f;
+  o.baritone_sax.reed.chiff = 0.6f;
+  o.oboe = reed(true, 0.80f, 0.35f, 0.74f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.6f);
+  o.oboe.cutoff_hz = 5200.0f;
+  o.oboe.lfo_rate_hz = 5.5f;
+  o.oboe.lfo_to_pitch_cents = 5.0f;
+  o.english_horn = reed(true, 0.70f, 0.40f, 0.64f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.6f);
+  o.english_horn.cutoff_hz = 4600.0f;
+  o.english_horn.lfo_rate_hz = 5.2f;
+  o.english_horn.lfo_to_pitch_cents = 5.0f;
+  o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.62f);
+  o.bassoon.cutoff_hz = 3800.0f;
+  o.bassoon.lfo_rate_hz = 4.8f;
+  o.bassoon.lfo_to_pitch_cents = 4.0f;
+  o.clarinet = reed(false, 0.40f, 0.50f, 0.54f, 0.30f, 25.0f, 90.0f, 0.72f, 0.25f, 0.6f);
+  o.clarinet.cutoff_hz = 4800.0f;
+  o.clarinet.lfo_rate_hz = 5.0f;
+  o.clarinet.lfo_to_pitch_cents = 2.5f;
 
   // Brass / lip reed (GM 56-60): one lip-reed waveguide voiced across the
   // trumpets, horns and low brass. Small-bore bells (trumpet family) get the
@@ -684,6 +901,12 @@ ProgramOverrides build_program_overrides() noexcept {
     p.brass.release_ms = release_ms;
     p.brass.breath_pressure = breath;
     p.brass.vel_to_breath = 0.5f;
+    // Brass physics gates: the linear waveguide is deliberately dark — the
+    // cuivré shock shaper is what manufactures the bright blare of real
+    // brass; the 2-DOF lip livens the attack buzz.
+    p.brass.dynamic_lip = 0.25f;
+    p.drift_cents = 1.5f;
+    p.stereo_spread = 0.08f;
     if (bell_mix > 0.0f) {
       p.body = BodyType::kBrassBell;
       p.body_mix = bell_mix;
@@ -691,11 +914,31 @@ ProgramOverrides build_program_overrides() noexcept {
     p.gain = gain;
     return p;
   };
-  o.trumpet = brass(false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.50f, 0.70f);
-  o.trombone = brass(false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.72f);
-  o.tuba = brass(true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.74f);
-  o.muted_trumpet = brass(false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.66f);
-  o.french_horn = brass(true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.70f);
+  o.trumpet = brass(false, 0.55f, 0.30f, 0.75f, 0.28f, 12.0f, 80.0f, 0.88f, 0.50f, 0.90f);
+  o.trumpet.cutoff_hz = 6500.0f;
+  o.trumpet.brass.brassiness = 0.55f;
+  o.trumpet.lfo_rate_hz = 5.5f;
+  o.trumpet.lfo_to_pitch_cents = 4.0f;
+  o.trombone = brass(false, 0.48f, 0.45f, 0.7f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.92f);
+  o.trombone.cutoff_hz = 3800.0f;
+  o.trombone.brass.brassiness = 0.5f;
+  o.trombone.lfo_rate_hz = 5.0f;
+  o.trombone.lfo_to_pitch_cents = 3.0f;
+  o.tuba = brass(true, 0.42f, 0.70f, 0.38f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.92f);
+  o.tuba.cutoff_hz = 3200.0f;
+  o.tuba.brass.brassiness = 0.25f;
+  o.tuba.lfo_to_pitch_cents = 1.5f;
+  // The muted trumpet plays through the real mute model instead of the old
+  // dimmed-brightness fake.
+  o.muted_trumpet = brass(false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.82f);
+  o.muted_trumpet.brass.brassiness = 0.4f;
+  o.muted_trumpet.brass.mute = 0.65f;
+  o.muted_trumpet.lfo_rate_hz = 5.5f;
+  o.muted_trumpet.lfo_to_pitch_cents = 4.0f;
+  o.french_horn = brass(true, 0.50f, 0.55f, 0.48f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.88f);
+  o.french_horn.cutoff_hz = 3600.0f;
+  o.french_horn.brass.brassiness = 0.3f;
+  o.french_horn.lfo_to_pitch_cents = 1.5f;
 
   // Air-jet flute (GM 72-79): one edge-tone waveguide voiced across the
   // open-pipe flutes and their breathier relatives — mirrors the flute presets.
@@ -716,19 +959,42 @@ ProgramOverrides build_program_overrides() noexcept {
     p.flute.vibrato_rate_hz = 5.0f;
     p.flute.breath_pressure = breath;
     p.flute.vel_to_breath = 0.5f;
+    // Flute physics gates: turbulence lets the breath grow and brighten with
+    // flow instead of sitting at a fixed hiss.
+    p.flute.jet_turbulence = 0.3f;
+    p.drift_cents = 1.5f;
+    p.stereo_spread = 0.08f;
     p.gain = gain;
     return p;
   };
-  o.piccolo = flute(0.50f, 0.75f, 0.25f, 0.12f, 0.40f, 0.10f, 0.62f, 0.80f);
-  o.concert_flute = flute(0.50f, 0.55f, 0.30f, 0.18f, 0.35f, 0.15f, 0.60f, 0.85f);
+  o.piccolo = flute(0.50f, 0.75f, 0.25f, 0.18f, 0.40f, 0.10f, 0.62f, 0.95f);
+  o.piccolo.amp_env.attack_ms = 40.0f;
+  o.piccolo.flute.overblow = 0.3f;
+  o.concert_flute = flute(0.50f, 0.55f, 0.30f, 0.35f, 0.2f, 0.15f, 0.60f, 0.85f);
+  o.concert_flute.cutoff_hz = 5000.0f;
+  o.concert_flute.amp_env.attack_ms = 90.0f;
+  o.concert_flute.flute.overblow = 0.35f;
   o.recorder = flute(0.50f, 0.50f, 0.35f, 0.14f, 0.55f, 0.05f, 0.55f, 0.85f);
+  o.recorder.body = BodyType::kWoodTube;
+  o.recorder.body_mix = 0.15f;
   o.pan_flute = flute(0.52f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
+  o.pan_flute.flute.vortex = 0.35f;
+  o.pan_flute.body = BodyType::kWoodTube;
+  o.pan_flute.body_mix = 0.15f;
   o.blown_bottle = flute(0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
   o.shakuhachi = flute(0.52f, 0.48f, 0.35f, 0.55f, 0.30f, 0.20f, 0.58f, 0.85f);
+  o.shakuhachi.flute.vortex = 0.5f;
+  o.shakuhachi.body = BodyType::kWoodTube;
+  o.shakuhachi.body_mix = 0.2f;
   o.tin_whistle = flute(0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
+  o.tin_whistle.flute.overblow = 0.25f;
   o.ocarina = flute(0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
 
   o.e_piano = clamp_synth_patch(o.e_piano);
+  o.harpsichord = clamp_synth_patch(o.harpsichord);
+  o.harpsichord_octave = clamp_synth_patch(o.harpsichord_octave);
+  o.harpsichord_wide = clamp_synth_patch(o.harpsichord_wide);
+  o.harpsichord_keyoff = clamp_synth_patch(o.harpsichord_keyoff);
   o.clav = clamp_synth_patch(o.clav);
   o.glockenspiel = clamp_synth_patch(o.glockenspiel);
   o.vibraphone = clamp_synth_patch(o.vibraphone);
@@ -748,6 +1014,12 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harp = clamp_synth_patch(o.harp);
   o.church_organ = clamp_synth_patch(o.church_organ);
   o.reed_organ = clamp_synth_patch(o.reed_organ);
+  o.tremolo_strings = clamp_synth_patch(o.tremolo_strings);
+  o.pizzicato = clamp_synth_patch(o.pizzicato);
+  o.timpani = clamp_synth_patch(o.timpani);
+  o.choir_aahs = clamp_synth_patch(o.choir_aahs);
+  o.voice_oohs = clamp_synth_patch(o.voice_oohs);
+  o.synth_voice = clamp_synth_patch(o.synth_voice);
   o.violin = clamp_synth_patch(o.violin);
   o.viola = clamp_synth_patch(o.viola);
   o.cello = clamp_synth_patch(o.cello);
@@ -1185,15 +1457,29 @@ const std::array<NativeSynthPatch, 128>& drum_note_table() noexcept {
 
 }  // namespace
 
-const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) noexcept {
+const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexcept {
   // GS variation banks fall back to their capital tone's family (same rule as
-  // resolve_gs_preset: the variation differs in character, not family).
+  // resolve_gs_preset: the variation differs in character, not family). The
+  // harpsichord is the exception: its GS/GM2 banks select genuine registrations
+  // (octave mix / wide / with key off), so program 6 consults the bank.
   switch (program & 0x7Fu) {
     case 4:  // Electric Piano 1
     case 5:  // Electric Piano 2
       return program_overrides().e_piano;
-    case 6:  // Harpsichord
-    case 7:  // Clavi
+    case 6: {  // Harpsichord (plucked string, KS physical) + registration banks
+      const ProgramOverrides& o = program_overrides();
+      switch (bank) {
+        case 1:  // Harpsichord (octave mix) — 8'+4'
+          return o.harpsichord_octave;
+        case 2:  // Harpsichord (wide)
+          return o.harpsichord_wide;
+        case 3:  // Harpsichord (with key off)
+          return o.harpsichord_keyoff;
+        default:  // bank 0 or unknown variation: the plain 8'
+          return o.harpsichord;
+      }
+    }
+    case 7:  // Clavi (struck string + pickup — FM stand-in for now)
       return program_overrides().clav;
     case 9:  // Glockenspiel
       return program_overrides().glockenspiel;
@@ -1232,8 +1518,20 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
       return program_overrides().bass_slap;
     case 37:  // Slap Bass 2
       return program_overrides().bass_pop;
+    case 44:  // Tremolo Strings
+      return program_overrides().tremolo_strings;
+    case 45:  // Pizzicato Strings
+      return program_overrides().pizzicato;
     case 46:  // Orchestral Harp
       return program_overrides().harp;
+    case 47:  // Timpani
+      return program_overrides().timpani;
+    case 52:  // Choir Aahs
+      return program_overrides().choir_aahs;
+    case 53:  // Voice Oohs
+      return program_overrides().voice_oohs;
+    case 54:  // Synth Voice
+      return program_overrides().synth_voice;
     // Bowed string family (physical waveguide).
     case 40:  // Violin
       return program_overrides().violin;
@@ -1297,6 +1595,61 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t /*bank*/, uint8_t program) no
 
 const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept {
   return drum_note_table()[note & 0x7Fu];
+}
+
+GmFallbackSends gm_fallback_sends(uint16_t bank, uint8_t program) noexcept {
+  if (bank == 128) return {0.6f, 0.6f};  // drums: tighter than the melodics
+  switch (program & 0x7Fu) {
+    case 19:  // Church Organ lives in a cathedral, not a booth
+      return {2.2f, 1.0f};
+    case 46:  // Orchestral Harp: concert-hall halo
+      return {1.6f, 1.0f};
+    case 48:  // String Ensembles: hall + section shimmer
+    case 49:
+    case 50:
+    case 51:
+      return {1.6f, 3.0f};
+    case 52:  // Choir Aahs / Voice Oohs / Synth Voice
+    case 53:
+    case 54:
+      return {1.8f, 3.5f};
+    default:
+      break;
+  }
+  switch ((program & 0x7Fu) >> 3) {
+    case 0:
+      return {1.0f, 1.0f};  // pianos: lid-open room
+    case 1:
+      return {1.3f, 1.0f};  // chromatic percussion rings in air
+    case 2:
+      return {1.1f, 1.5f};  // organs
+    case 3:
+      return {0.8f, 1.5f};  // guitars
+    case 4:
+      return {0.4f, 0.6f};  // basses stay tight
+    case 5:
+      return {1.2f, 1.0f};  // solo strings
+    case 6:
+      return {1.6f, 3.0f};  // ensembles (non-override programs)
+    case 7:
+      return {1.0f, 1.2f};  // brass
+    case 8:
+      return {0.9f, 1.0f};  // reeds
+    case 9:
+      return {1.1f, 1.0f};  // flutes
+    case 10:
+      return {0.7f, 1.5f};  // synth leads
+    case 11:
+      return {1.7f, 3.0f};  // synth pads bathe in the wash
+    case 12:
+      return {1.5f, 2.5f};  // synth FX
+    case 13:
+      return {0.9f, 1.0f};  // ethnic plucked
+    case 14:
+      return {1.2f, 1.0f};  // percussive
+    default:
+      return {1.4f, 1.0f};  // SFX
+  }
 }
 
 uint8_t gm_fallback_drum_kit(uint8_t program) noexcept {

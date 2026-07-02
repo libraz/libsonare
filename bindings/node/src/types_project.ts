@@ -308,6 +308,7 @@ export const SYNTH_BODY_TYPES = [
   'violin',
   'wood-tube',
   'brass-bell',
+  'vocal',
 ] as const;
 
 export const SYNTH_MOD_SOURCES = [

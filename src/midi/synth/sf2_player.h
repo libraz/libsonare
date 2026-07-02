@@ -193,7 +193,7 @@ class Sf2Player final : public MidiInstrument {
   /// Routes a data-entry value (CC6 MSB) to the active GS NRPN.
   void apply_nrpn(uint8_t channel, uint8_t value) noexcept;
   /// Shared GM/GS power-on state (programs, drums on 10, edits cleared).
-  void reset_all_state(uint8_t reverb_send_default) noexcept;
+  void reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept;
   /// Recompute the cached Sf2ChannelMod for @p channel after a CC/bend change.
   void refresh_channel_mod(uint8_t channel) noexcept;
   /// Effective SF2 bank for a channel (drum channel -> 128).
@@ -237,9 +237,9 @@ class Sf2Player final : public MidiInstrument {
   /// Synth-fallback voices (programs no SoundFont preset covers).
   VoicePool<NativeSynthVoice> fallback_pool_;
   /// KS delay slab for the fallback voices (plucked GM programs), one
-  /// ks_slab_capacity() (two ks_buffer_capacity() spans — the primary string
-  /// plus the second-polarization line) per slot; allocated in prepare() when
-  /// the synth fallback is enabled.
+  /// ks_slab_capacity() (three ks_buffer_capacity() spans — the primary string,
+  /// the second-polarization line, and the octave-up 4' companion line) per
+  /// slot; allocated in prepare() when the synth fallback is enabled.
   std::vector<float> fallback_ks_buffers_;
   int fallback_ks_capacity_ = 0;
   /// Piano delay slab for the fallback voices (the acoustic-piano GM

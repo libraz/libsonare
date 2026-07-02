@@ -58,6 +58,7 @@ _SYNTH_BODY_TYPES = {
     "violin": 3,
     "wood-tube": 4,
     "brass-bell": 5,
+    "vocal": 6,
 }
 _SYNTH_MOD_SOURCES = {
     "none": 0,

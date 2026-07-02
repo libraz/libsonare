@@ -291,6 +291,8 @@ TEST_CASE("Sf2 CC7/CC11 scale loudness with the square-law curve", "[midi][sf2][
 
 TEST_CASE("Sf2 CC10 pans playing voices", "[midi][sf2][fidelity]") {
   Sf2Player player = make_player(make_fidelity_fixture());
+  // Kill the default room: its stereo return would bleed into the muted leg.
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 91, 0)));
   player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 10, 127)));
   player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   std::vector<float> left(24000, 0.0f), right(24000, 0.0f);

@@ -395,9 +395,10 @@ class NativeSynth final : public MidiInstrument {
   float dc_r_ = 0.999f;
   float bus_drive_gain_ = 0.0f;
   VoicePool<NativeSynthVoice> pool_;
-  /// KS delay slab: one ks_slab_capacity() (two ks_buffer_capacity() spans —
-  /// the primary string plus the second-polarization line) per voice slot,
-  /// allocated in prepare() only when the patch is a Karplus-Strong instrument.
+  /// KS delay slab: one ks_slab_capacity() (three ks_buffer_capacity() spans —
+  /// the primary string, the second-polarization line, and the octave-up 4'
+  /// companion line) per voice slot, allocated in prepare() only when the patch
+  /// is a Karplus-Strong instrument.
   std::vector<float> ks_buffers_;
   int ks_capacity_ = 0;
   /// Piano delay slab: kMaxPianoStrings string spans per voice slot,

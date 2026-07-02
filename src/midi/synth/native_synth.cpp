@@ -604,9 +604,9 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     piano_buffers_.clear();
   }
-  // Pipe organ: one delay slab per voice slot (kMaxPipeRanks pipe spans, so a
-  // registration's ranks all have their own waveguide). The only allocation
-  // site; voices attach their slab at note-on.
+  // Pipe organ: one delay slab per voice slot (kMaxPipeRanks bore+jet span pairs,
+  // so a registration's ranks all have their own self-oscillating jet pipe). The
+  // only allocation site; voices attach their slab at note-on.
   pipe_organ_capacity_ = pipe_organ_buffer_capacity(sample_rate_);
   pipe_organ_mode_ = config_.patch.mode == SynthEngineMode::kPipeOrgan;
   if (pipe_organ_mode_) {
@@ -795,7 +795,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
   // KS patches get their delay span before start() (pointer wiring only).
   if (!ks_buffers_.empty()) {
-    voice->ks.attach(ks_buffers_.data() + static_cast<size_t>(voice_index) * 2 * ks_capacity_,
+    voice->ks.attach(ks_buffers_.data() + static_cast<size_t>(voice_index) * 3 * ks_capacity_,
                      ks_capacity_);
   }
   if (!piano_buffers_.empty()) {
@@ -804,7 +804,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
                         piano_string_capacity_);
   }
   if (!pipe_organ_buffers_.empty()) {
-    voice->pipe_organ.attach(pipe_organ_buffers_.data() + static_cast<size_t>(voice_index) *
+    voice->pipe_organ.attach(pipe_organ_buffers_.data() + static_cast<size_t>(voice_index) * 2 *
                                                               kMaxPipeRanks * pipe_organ_capacity_,
                              pipe_organ_capacity_);
   }
@@ -1179,7 +1179,7 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
     uint8_t closed = 127;
     for (const ChannelState& ch : channels_) closed = std::min(closed, ch.expression);
     const float shut = (1.0f - static_cast<float>(closed) / 127.0f) * swell_depth_;
-    const float fc = std::exp(std::log(20000.0f) + shut * (std::log(500.0f) - std::log(20000.0f)));
+    const float fc = std::exp(std::log(20000.0f) + shut * (std::log(300.0f) - std::log(20000.0f)));
     if (fc < 19000.0f) {
       swell_active = true;
       swell_coeff_ = std::clamp(

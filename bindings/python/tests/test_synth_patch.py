@@ -37,7 +37,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
     "waveforms": ("default", "sine", "saw", "square", "triangle", "noise"),
     "filter_models": ("default", "svf", "moog-ladder", "diode-ladder", "sallen-key"),
     "filter_outputs": ("default", "lowpass", "bandpass", "highpass"),
-    "body_types": ("default", "none", "guitar", "violin", "wood-tube", "brass-bell"),
+    "body_types": ("default", "none", "guitar", "violin", "wood-tube", "brass-bell", "vocal"),
     "mod_sources": (
         "none",
         "amp-env",

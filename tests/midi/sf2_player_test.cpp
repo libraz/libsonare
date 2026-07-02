@@ -110,6 +110,12 @@ Sf2Player make_player(std::shared_ptr<Sf2File> sf2, int polyphony = 48) {
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
   cfg.polyphony = polyphony;
+  // These cases assert voice routing invariants (exact silence after tails,
+  // hard-pan isolation) that the always-on default room would smear; the GS
+  // effect bus has its own coverage in sf2_effects_test.cpp.
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
   Sf2Player player(cfg);
   player.set_soundfont(std::move(sf2));
   player.prepare(kOutRate, 256);

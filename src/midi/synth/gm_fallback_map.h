@@ -40,6 +40,21 @@ uint8_t gm_fallback_drum_kit(uint8_t program) noexcept;
 float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t kit,
                         uint8_t note) noexcept;
 
+/// Per-program ambience weighting for fallback voices: multipliers on the
+/// channel's CC91/CC93-derived sends (clamped to 1 after scaling). SF2 zones
+/// carry their own send generators, so this weighting exists only for the
+/// data-free fallback path — a cathedral organ carries more room than a
+/// close-miked bass at the same controller value. CC 0 stays fully dry.
+struct GmFallbackSends {
+  float reverb_scale = 1.0f;
+  float chorus_scale = 1.0f;
+};
+
+/// Ambience weighting for a melodic (bank, program); bank 128 resolves the
+/// drum weighting. Never fails — unknown programs resolve through their
+/// GM family.
+GmFallbackSends gm_fallback_sends(uint16_t bank, uint8_t program) noexcept;
+
 /// Longest amp-envelope release across all fallback patches (ms) — players
 /// fold this into their tail accounting when the fallback is enabled.
 float gm_fallback_max_release_ms() noexcept;

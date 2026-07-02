@@ -1,8 +1,8 @@
 /// @file pipe_organ_voice_test.cpp
-/// @brief Sustained flue-pipe waveguide (midi/synth/pipe_organ_voice):
-///        fundamental tuning, the open vs stopped harmonic signature (all
-///        harmonics vs odd only), prompt + sustained speech, note-off damping,
-///        unconditional stability and deterministic rendering.
+/// @brief Self-oscillating jet flue-pipe voice (midi/synth/pipe_organ_voice):
+///        fundamental tuning, the open (octave-rich) vs stopped (hollow,
+///        fundamental-dominant) voicing, prompt + solid sustained speech,
+///        note-off damping, unconditional stability and deterministic rendering.
 
 #include "midi/synth/pipe_organ_voice.h"
 
@@ -162,9 +162,8 @@ TEST_CASE("pipe organ is unconditionally stable", "[midi][synth][organ]") {
 }
 
 TEST_CASE("pipe organ tuning is accurate (open pipe)", "[midi][synth][organ]") {
-  // A noise-driven flue pipe has a slightly broadened/breathy partial, so the
-  // tolerance is wider than a struck-string voice (~25 cents) — the resonance
-  // is read from the spectral peak, not the breathy zero crossings.
+  // The self-oscillating jet locks a solid partial; a modest tolerance (~25
+  // cents) covers the residual across the compass, read from the spectral peak.
   NativeSynthPatch patch = organ_base_patch();
   patch.pipe_organ.stopped = false;
   for (const auto& [note, expected] :
@@ -177,8 +176,8 @@ TEST_CASE("pipe organ tuning is accurate (open pipe)", "[midi][synth][organ]") {
 }
 
 TEST_CASE("stopped pipe shares the open pipe's fundamental", "[midi][synth][organ]") {
-  // A stopped pipe is a half-length negative comb: same sounding fundamental,
-  // odd harmonics only.
+  // A stopped rank is voiced hollow off the same open jet loop, so it sounds at
+  // the same fundamental (the footage sets the pitch, not the topology).
   NativeSynthPatch patch = organ_base_patch();
   patch.pipe_organ.stopped = true;
   const std::vector<float> tone = render_patch(patch, 57, 110, 48000);  // A3 = 220 Hz
@@ -186,10 +185,11 @@ TEST_CASE("stopped pipe shares the open pipe's fundamental", "[midi][synth][orga
   REQUIRE(std::fabs(estimated / 220.0 - 1.0) < 0.015);
 }
 
-TEST_CASE("stopped pipe suppresses even harmonics", "[midi][synth][organ]") {
-  // Open pipe = full harmonic series; stopped pipe = odd harmonics only. The
-  // second harmonic relative to the fundamental must collapse when stopped,
-  // while the third harmonic stays present.
+TEST_CASE("stopped pipe is voiced hollow", "[midi][synth][organ]") {
+  // Open pipe = octave-rich full harmonic series; stopped (gedackt) pipe = a
+  // hollow, fundamental-dominant tone with the octave pump muted and the
+  // reflection darkened. The stopped octave (2nd harmonic) collapses relative to
+  // the open pipe's, and the stopped upperwork as a whole is far weaker.
   const double f0 = 220.0;
   NativeSynthPatch open = organ_base_patch();
   open.pipe_organ.stopped = false;
@@ -201,16 +201,22 @@ TEST_CASE("stopped pipe suppresses even harmonics", "[midi][synth][organ]") {
   const std::vector<double> open_power = power_spectrum(open_tone, 4096);
   const std::vector<double> stopped_power = power_spectrum(stopped_tone, 4096);
 
-  const double open_h2 = harmonic_power(open_power, f0, 2) / harmonic_power(open_power, f0, 1);
-  const double stopped_h2 =
-      harmonic_power(stopped_power, f0, 2) / harmonic_power(stopped_power, f0, 1);
-  const double stopped_h3 =
-      harmonic_power(stopped_power, f0, 3) / harmonic_power(stopped_power, f0, 1);
+  const double open_h1 = harmonic_power(open_power, f0, 1);
+  const double stopped_h1 = harmonic_power(stopped_power, f0, 1);
+  const double open_h2 = harmonic_power(open_power, f0, 2) / open_h1;
+  const double stopped_h2 = harmonic_power(stopped_power, f0, 2) / stopped_h1;
+  const double open_upper = (harmonic_power(open_power, f0, 2) + harmonic_power(open_power, f0, 3) +
+                             harmonic_power(open_power, f0, 4)) /
+                            open_h1;
+  const double stopped_upper =
+      (harmonic_power(stopped_power, f0, 2) + harmonic_power(stopped_power, f0, 3) +
+       harmonic_power(stopped_power, f0, 4)) /
+      stopped_h1;
 
-  // The stopped even harmonic is far weaker than the open one, and the stopped
-  // odd (third) harmonic survives.
+  // The stopped octave is far weaker than the open one, and the stopped pipe is
+  // far more fundamental-dominant (hollow) overall.
   REQUIRE(open_h2 > 8.0 * stopped_h2);
-  REQUIRE(stopped_h3 > 4.0 * stopped_h2);
+  REQUIRE(stopped_upper < 0.6 * open_upper);
 }
 
 TEST_CASE("pipe organ speaks promptly and sustains", "[midi][synth][organ]") {
@@ -404,9 +410,10 @@ double harmonic_to_noise(const std::vector<float>& buf, size_t from, double f0) 
 }
 
 TEST_CASE("a reed pipe locks into a periodic tone", "[midi][synth][organ]") {
-  // The saturating reed valve drives the loop into a self-sustaining limit
-  // cycle, so a reed stop is far more periodic (a higher harmonic-to-noise
-  // ratio) than the airy, breath-driven flue pipe — and stays bounded.
+  // A reed stop drives the jet harder and more asymmetrically than a flue pipe,
+  // but like the flue it self-oscillates into a solid, highly periodic limit
+  // cycle (a high harmonic-to-noise ratio) rather than an airy breath-driven
+  // tone — and stays bounded. Its spectrum differs from the flue's.
   const double f0 = 220.0;  // A3
   NativeSynthPatch flue = organ_base_patch();
   flue.pipe_organ.reed = 0.0f;
@@ -418,7 +425,14 @@ TEST_CASE("a reed pipe locks into a periodic tone", "[midi][synth][organ]") {
   REQUIRE(peak(reed_tone) > 0.01f);
   REQUIRE(peak(reed_tone) < 4.0f);
   REQUIRE(std::isfinite(reed_tone.back()));
-  REQUIRE(harmonic_to_noise(reed_tone, 8000, f0) > 2.0 * harmonic_to_noise(flue_tone, 8000, f0));
+  // The self-oscillating reed is a clean periodic tone, not a noisy one.
+  REQUIRE(harmonic_to_noise(reed_tone, 8000, f0) > 20.0);
+  // Its voicing differs audibly from the flue (a different harmonic balance).
+  const std::vector<double> flue_p = power_spectrum(flue_tone, 4096);
+  const std::vector<double> reed_p = power_spectrum(reed_tone, 4096);
+  const double flue_h2 = harmonic_power(flue_p, f0, 2) / harmonic_power(flue_p, f0, 1);
+  const double reed_h2 = harmonic_power(reed_p, f0, 2) / harmonic_power(reed_p, f0, 1);
+  REQUIRE(std::fabs(reed_h2 - flue_h2) > 0.01);
 }
 
 TEST_CASE("a reed pipe stays in tune", "[midi][synth][organ]") {
@@ -485,8 +499,10 @@ TEST_CASE("the swell box darkens the organ as the pedal closes", "[midi][synth][
   const std::vector<float> open = play(127);  // shutter fully open
   const std::vector<float> shut = play(8);    // shutter nearly closed
   // The closed shutter is a lowpass: a markedly lower spectral centroid (the
-  // level cut is the expression's job and is not what this asserts).
-  REQUIRE(swell_centroid(shut, 8000) < 0.6 * swell_centroid(open, 8000));
+  // level cut is the expression's job and is not what this asserts). The
+  // self-oscillating pipes are fundamental-dominant, so the centroid floor sits
+  // near the played pitch; the shutter still cuts the upperwork clearly.
+  REQUIRE(swell_centroid(shut, 8000) < 0.75 * swell_centroid(open, 8000));
 }
 
 // --- Phase 4: mouth/radiation correction + room coupling ---

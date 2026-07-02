@@ -16,6 +16,8 @@
 ///     formant" near 1.2 kHz with brilliance modes above it. Fixed by bell
 ///     geometry (note-independent), tuned for the trumpet family; larger-bore
 ///     brass keeps kNone.
+///   - kVocal: an open-vowel vocal tract ("aah") — F1..F4 of a mixed choir
+///     (~700/1080/2650/3500 Hz), note-independent like a real tract.
 ///
 /// RT contract: start()/process() are allocation-free; determinism: fixed
 /// tables, no RNG.
@@ -33,6 +35,7 @@ enum class BodyType : int {
   kViolin = 2,
   kWoodTube = 3,
   kBrassBell = 4,
+  kVocal = 5,
 };
 
 class BodyResonator {
@@ -118,6 +121,15 @@ class BodyResonator {
                   {3400.0f, 0.008f, 0.4f},
                   {0.0f, 0.0f, 0.0f}}};
         count = 3;
+        break;
+      case BodyType::kVocal:
+        // Open-vowel tract formants of a mixed choir "aah". F1/F2 carry the
+        // vowel; F3/F4 the presence. Bandwidths widen up the series.
+        specs = {{{700.0f, 0.030f, 1.0f},
+                  {1080.0f, 0.024f, 0.7f},
+                  {2650.0f, 0.014f, 0.45f},
+                  {3500.0f, 0.010f, 0.3f}}};
+        count = 4;
         break;
       case BodyType::kNone:
         break;

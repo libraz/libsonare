@@ -120,6 +120,10 @@ __pycache__/
 .venv/
 uv.lock
 
+# Voice-match harness artifacts (downloaded soundfonts, rendered outputs)
+tools/voicematch/assets/
+tools/voicematch/out/
+
 # Local agent notes
 AGENT.md
 

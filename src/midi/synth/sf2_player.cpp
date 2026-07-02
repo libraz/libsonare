@@ -20,8 +20,11 @@ constexpr uint8_t kGm2PercussionBankMsb = 0x78;
 
 /// Default modulator: full CC1 adds 50 cents of vibrato LFO pitch depth.
 constexpr float kModWheelVibratoCents = 50.0f;
-/// Default modulator: full CC91/CC93 contributes 200/1000 send level.
-constexpr float kCcSendDepth = 0.2f;
+/// CC91/CC93 send depth at full controller. The SF2 default modulator says
+/// 200/1000, but that leaves the GS power-on default (CC91 = 40) inaudible;
+/// Roland hardware maps the same controller to a clearly audible room, so
+/// the depth follows the musical calibration rather than the paper spec.
+constexpr float kCcSendDepth = 0.35f;
 
 }  // namespace
 
@@ -137,7 +140,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
           ? fallback_pool_.size() * static_cast<size_t>(flute_slab_capacity(sample_rate_))
           : 0,
       0.0f);
-  reset_all_state(/*reverb_send_default=*/0);
+  // Power-on matches GS defaults (reverb send 40): a bare SMF that never
+  // sends a reset SysEx should still land in the default room, as on
+  // hardware, instead of rendering bone dry.
+  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
@@ -168,7 +174,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
 void Sf2Player::reset() {
   pool_.reset();
   fallback_pool_.reset();
-  reset_all_state(/*reverb_send_default=*/0);
+  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
   for (auto& chain : part_chains_) {
     for (auto& proc : chain) {
       if (proc != nullptr) proc->reset();
@@ -179,7 +185,7 @@ void Sf2Player::reset() {
 #endif
 }
 
-void Sf2Player::reset_all_state(uint8_t reverb_send_default) noexcept {
+void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept {
   channels_ = {};
   drum_params_ = {};
   // GS/GM reset selects EFX "Thru" and clears the part EFX switches; the
@@ -190,6 +196,7 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default) noexcept {
   for (uint8_t ch = 0; ch < 16; ++ch) {
     channels_[ch].drums = ch == kDrumChannel;
     channels_[ch].reverb_send = reverb_send_default;
+    channels_[ch].chorus_send = chorus_send_default;
     refresh_channel_mod(ch);
   }
 }
@@ -197,13 +204,15 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default) noexcept {
 void Sf2Player::gs_reset() noexcept {
   for (uint8_t ch = 0; ch < 16; ++ch) all_sound_off(ch);
   // GS power-on: reverb send 40 (Roland default), everything else cleared.
-  reset_all_state(/*reverb_send_default=*/40);
+  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
 }
 
 void Sf2Player::gm_reset() noexcept {
   for (uint8_t ch = 0; ch < 16; ++ch) all_sound_off(ch);
-  // GM Level 1 mandates no effects: sends stay at zero.
-  reset_all_state(/*reverb_send_default=*/0);
+  // GM Level 1 specifies no effect controls, but real GM devices (SC-55 in
+  // GM mode) keep their power-on reverb level; match that rather than the
+  // paper reading so plain GM files keep the default room.
+  reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
 }
 
 bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
@@ -273,6 +282,12 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
   mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;
   mod.delay_send = kCcSendDepth * static_cast<float>(st.delay_send) / 127.0f;
+  // Fallback voices have no zone send generators; weight the channel sends
+  // by the program's ambience profile for that path only. Multiplicative, so
+  // CC 0 stays fully dry and the controllers keep their meaning.
+  const GmFallbackSends sends = gm_fallback_sends(effective_bank(ch), st.program);
+  mod.fallback_reverb_send = std::min(1.0f, mod.reverb_send * sends.reverb_scale);
+  mod.fallback_chorus_send = std::min(1.0f, mod.chorus_send * sends.chorus_scale);
 }
 
 uint16_t Sf2Player::effective_bank(uint8_t channel) const noexcept {
@@ -396,7 +411,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   // KS patches get their delay span before start() (pointer wiring only).
   if (!fallback_ks_buffers_.empty()) {
     voice->ks.attach(
-        fallback_ks_buffers_.data() + static_cast<size_t>(voice_index) * 2 * fallback_ks_capacity_,
+        fallback_ks_buffers_.data() + static_cast<size_t>(voice_index) * 3 * fallback_ks_capacity_,
         fallback_ks_capacity_);
   }
   if (!fallback_piano_buffers_.empty()) {
@@ -717,6 +732,9 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     } else {
       channels_[ch].program = u.note_number();
     }
+    // The fallback ambience floor is program-keyed; keep the mod snapshot
+    // in step with the new program.
+    refresh_channel_mod(ch);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
     const uint8_t ch = u.channel() & 0x0Fu;
     if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
@@ -816,13 +834,13 @@ void Sf2Player::render_chunk(int n) noexcept {
       }
 #if defined(SONARE_MIDI_WITH_FX)
       if (rev_l != nullptr) {
-        if (mod.reverb_send > 0.0f) {
-          rev_l[i] += l * mod.reverb_send;
-          rev_r[i] += r * mod.reverb_send;
+        if (mod.fallback_reverb_send > 0.0f) {
+          rev_l[i] += l * mod.fallback_reverb_send;
+          rev_r[i] += r * mod.fallback_reverb_send;
         }
-        if (mod.chorus_send > 0.0f) {
-          cho_l[i] += l * mod.chorus_send;
-          cho_r[i] += r * mod.chorus_send;
+        if (mod.fallback_chorus_send > 0.0f) {
+          cho_l[i] += l * mod.fallback_chorus_send;
+          cho_r[i] += r * mod.fallback_chorus_send;
         }
         if (mod.delay_send > 0.0f) {
           dly_l[i] += l * mod.delay_send;

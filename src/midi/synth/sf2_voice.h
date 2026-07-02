@@ -82,6 +82,11 @@ struct Sf2ChannelMod {
   float chorus_send = 0.0f;
   /// CC94 -> GS delay send (channel-level only; SF2 has no delay generator).
   float delay_send = 0.0f;
+  /// Effect sends for synth-fallback voices: the CC send plus the program's
+  /// baked-in ambience floor (gm_fallback_sends). SF2 zones carry their own
+  /// send generators, so the floor applies to the fallback path only.
+  float fallback_reverb_send = 0.0f;
+  float fallback_chorus_send = 0.0f;
 };
 
 /// SF2 triangle LFO: starts at zero after its delay, rises positive first.

@@ -1,0 +1,85 @@
+"""Minimal type-0 Standard MIDI File writer for the voice-match harness.
+
+Only what the harness needs: one channel, an optional program change, and a
+list of timed note on/off events. Both the reference renderer (fluidsynth) and
+the model renderer are driven from the same note list, so the .mid this writes
+is the single source of truth for the reference side.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+TPQ = 480          # ticks per quarter note
+TEMPO_US = 500000  # microseconds per quarter (120 BPM)
+TICKS_PER_SEC = TPQ * 1_000_000 // TEMPO_US  # 960 at 120 BPM
+
+
+@dataclass(frozen=True)
+class Note:
+    """A single timed note: MIDI number, velocity, onset and duration (seconds)."""
+
+    note: int
+    velocity: int
+    start: float
+    dur: float
+
+
+def _vlq(value: int) -> bytes:
+    """Encode an unsigned int as a MIDI variable-length quantity."""
+    if value < 0:
+        raise ValueError("VLQ cannot encode a negative value")
+    out = bytearray([value & 0x7F])
+    value >>= 7
+    while value:
+        out.insert(0, (value & 0x7F) | 0x80)
+        value >>= 7
+    return bytes(out)
+
+
+def _sec_to_ticks(sec: float) -> int:
+    return int(round(sec * TICKS_PER_SEC))
+
+
+def write_smf(
+    notes: list[Note], *, program: int = 0, channel: int = 0, end_pad: float = 0.0, dry: bool = True
+) -> bytes:
+    """Serialize `notes` to a type-0 SMF byte string.
+
+    A tempo meta-event and (unless `program` is negative) a program change are
+    emitted first so a GM reference synth selects the intended instrument.
+    `end_pad` delays the end-of-track marker past the last event, which keeps a
+    fast-render reference synth (fluidsynth -F) running long enough to capture
+    the release tail. `dry` (default) zeroes the effect sends (CC91/93/94) at
+    tick 0: the model side powers on with GS-style default reverb, which would
+    otherwise contaminate release/TNR metrics against the dry oracle.
+    """
+    # (absolute_tick, status, data1, data2) event tuples, then delta-encoded.
+    events: list[tuple[int, int, int, int]] = []
+    for n in notes:
+        on = _sec_to_ticks(n.start)
+        off = _sec_to_ticks(n.start + n.dur)
+        events.append((on, 0x90 | channel, n.note, n.velocity))
+        events.append((off, 0x80 | channel, n.note, 0))
+    # Stable sort by tick keeps note-off before a same-tick note-on of the next
+    # event only if ordered; ties are fine for distinct notes here.
+    events.sort(key=lambda e: e[0])
+
+    track = bytearray()
+    # Tempo meta-event at tick 0.
+    track += _vlq(0) + bytes([0xFF, 0x51, 0x03]) + TEMPO_US.to_bytes(3, "big")
+    if program >= 0:
+        track += _vlq(0) + bytes([0xC0 | channel, program & 0x7F])
+    if dry:
+        for cc in (91, 93, 94):
+            track += _vlq(0) + bytes([0xB0 | channel, cc, 0])
+
+    prev = 0
+    for tick, status, d1, d2 in events:
+        track += _vlq(tick - prev) + bytes([status, d1, d2])
+        prev = tick
+    track += _vlq(_sec_to_ticks(max(0.0, end_pad))) + bytes([0xFF, 0x2F, 0x00])  # end of track
+
+    header = b"MThd" + (6).to_bytes(4, "big") + (0).to_bytes(2, "big") + (1).to_bytes(2, "big") + TPQ.to_bytes(2, "big")
+    track_chunk = b"MTrk" + len(track).to_bytes(4, "big") + bytes(track)
+    return header + track_chunk
