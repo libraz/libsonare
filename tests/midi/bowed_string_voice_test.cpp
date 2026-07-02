@@ -557,6 +557,48 @@ TEST_CASE("second polarization is stable and thickens the tone", "[midi][synth][
   REQUIRE(std::sqrt(diff / energy) > 0.15);
 }
 
+TEST_CASE("elasto-plastic stays harmonic in the low register with polarization",
+          "[midi][synth][bowed]") {
+  // The violin's open-G register (~196 Hz) with the bristle friction AND the
+  // detuned second polarization both on is where a naive coupling tips the loop
+  // into double-slip (period doubling): a strong subharmonic at f0/2 and
+  // broadband bow noise. The bristle memory integrates the string's own relative
+  // velocity, excluding the polarization beat, so the low note stays
+  // harmonic-dominated rather than dropping an octave.
+  NativeSynthPatch patch = bowed_base_patch();
+  patch.bowed_string.bow_force = 0.55f;
+  patch.bowed_string.brightness = 0.47f;
+  patch.bowed_string.damping = 0.32f;
+  patch.bowed_string.elasto_plastic = true;
+  patch.bowed_string.stribeck = 0.7f;
+  patch.bowed_string.polarization = 0.15f;
+  patch.bowed_string.sympathetic = 0.08f;
+  patch.bowed_string.rosin = 0.1f;
+  // The double-slip is driven by the pitch modulation of the played preset, so
+  // reproduce the violin's onset vibrato and drift that perturb the loop.
+  patch.lfo_rate_hz = 5.3f;
+  patch.lfo_to_pitch_cents = 9.0f;
+  patch.drift_cents = 2.0f;
+
+  const uint8_t note = 55;                                                        // G3
+  const double f0 = 440.0 * std::pow(2.0, (static_cast<int>(note) - 69) / 12.0);  // ~196 Hz
+  const std::vector<float> tone = render_patch(patch, note, 100, 48000);
+  REQUIRE(peak(tone) > 0.005f);
+  REQUIRE(peak(tone) < 4.0f);
+  REQUIRE(std::isfinite(tone.back()));
+
+  const std::vector<double> ps = power_spectrum(tone, 24000);
+  const double h1 = harmonic_power(ps, f0, 1);
+  REQUIRE(h1 > 0.0);
+  // The fundamental dominates its half-octave subharmonic: the loop locks into
+  // single-slip Helmholtz motion, not period-doubled double-slip (which would
+  // pump a strong f0/2 component).
+  REQUIRE(harmonic_power(ps, 0.5 * f0, 1) < 1.0e-4 * h1);
+  // Still a rich full-harmonic bowed tone at the correct pitch.
+  REQUIRE(harmonic_power(ps, f0, 2) > 0.02 * h1);
+  REQUIRE(harmonic_power(ps, f0, 3) > 0.01 * h1);
+}
+
 TEST_CASE("elasto-plastic, sympathetic and polarization gates compose stably",
           "[midi][synth][bowed]") {
   // All three advanced-physics gates on at once must remain bounded and

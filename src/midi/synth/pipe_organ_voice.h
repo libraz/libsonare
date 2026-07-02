@@ -152,6 +152,15 @@ struct PipeOrganPatchParams {
   /// only when rank_count == 0). See PipeOrganRank::radiation.
   float radiation = 0.0f;
 
+  /// Treble regulation (rank-level keytrack) in [0,1]. Real voicing regulates
+  /// the upperwork (mutations / mixtures) progressively softer toward the treble
+  /// so the plenum does not turn shrill in the high compass. As the played note
+  /// rises above the reference (C4), each rank's mix level rolls off, more
+  /// steeply the higher its footage: the 8' and the flue/sub ranks
+  /// (footage <= 1) are untouched, only the upperwork thins. 0 disables it
+  /// (every rank keeps its full level — a bit-identical bypass).
+  float keytrack = 0.0f;
+
   /// Registration: number of ranks that sound together (0 = a single implicit
   /// 8' rank built from {stopped, brightness}; >0 uses ranks[0..rank_count)).
   int rank_count = 0;

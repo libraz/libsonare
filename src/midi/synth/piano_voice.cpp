@@ -13,6 +13,19 @@ namespace {
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kTwoPi = 6.28318530717958647692f;
 
+/// Mezzo-forte reference velocity (0..1) the felt-hammer laws are anchored at.
+constexpr float kHammerMfVel = 0.6f;
+/// Additional contact-time velocity exponent per unit hammer_dynamics: hard
+/// strikes shorten the felt contact further than the intrinsic Hertz law.
+constexpr float kHammerDynContactExp = 0.4f;
+/// Additional felt-stiffness cutoff octaves per unit velocity above mf, per
+/// unit hammer_dynamics: a compressed felt patch passes more of the pulse top.
+constexpr float kHammerDynBrightOct = 1.5f;
+/// Under the soft pedal the action rides a softer, less-grooved felt patch that
+/// compresses far less under a hard blow, so the velocity dynamics is scaled
+/// down there (this also preserves the una-corda high-frequency softening).
+constexpr float kUnaCordaDynScale = 0.4f;
+
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
 }
@@ -238,8 +251,15 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   const float p = std::clamp(params.hammer_exponent, 1.5f, 4.0f);
   const float time_exp = -(p - 1.0f) / (p + 1.0f);
   const float amp_exp = 2.0f * p / (p + 1.0f);
+  // Extra felt-compression dynamics (off by default): a velocity shaping added
+  // to the intrinsic Hertz law, pivoted at the mezzo-forte reference so the
+  // nominal voicing is untouched while the pp<->ff spread widens. The softer
+  // una-corda felt compresses less, so its dynamics is scaled down.
+  const float dyn =
+      std::clamp(params.hammer_dynamics, 0.0f, 1.0f) * (una_corda ? kUnaCordaDynScale : 1.0f);
+  const float contact_exp = time_exp - kHammerDynContactExp * dyn;
   const float contact_ms = std::clamp(params.hammer_contact_ms, 0.2f, 10.0f) *
-                           std::pow(vel01 / 0.6f, time_exp) *
+                           std::pow(vel01 / kHammerMfVel, contact_exp) *
                            std::exp2(-(static_cast<float>(note & 0x7Fu) - 69.0f) / 36.0f);
   contact_samples_ =
       std::clamp(static_cast<int>(contact_ms * 0.001f * static_cast<float>(sr)), 8, 2048);
@@ -250,7 +270,9 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   exc_pos_ = 0;
   // Felt stiffening: compressed felt (hard strike) passes far more of the
   // pulse's top end — a velocity-driven one-pole on the injected force.
-  const float exc_cutoff = 800.0f * std::exp2(3.0f * vel01) * (una_corda ? 0.4f : 1.0f);
+  const float exc_cutoff = 800.0f * std::exp2(3.0f * vel01) *
+                           std::exp2(kHammerDynBrightOct * dyn * (vel01 - kHammerMfVel)) *
+                           (una_corda ? 0.4f : 1.0f);
   exc_alpha_ = std::clamp(1.0f - std::exp(-6.28318530718f * exc_cutoff / static_cast<float>(sr)),
                           0.01f, 1.0f);
   exc_lp_ = 0.0f;

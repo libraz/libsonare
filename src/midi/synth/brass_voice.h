@@ -71,6 +71,8 @@
 #include <cstdint>
 
 #include "midi/synth/voice_random.h"
+#include "rt/adaa.h"
+#include "rt/nonlinearities.h"
 
 namespace sonare::midi::synth {
 
@@ -150,11 +152,23 @@ struct BrassPatchParams {
   /// with upper harmonics (Hirschberg 1996, Menguy-Gilbert 2000). The linear
   /// Phase-1 waveguide is deliberately dark; this adds the amplitude-DEPENDENT
   /// harmonic bloom so the tone opens up only as it is played louder (pp stays
-  /// round, ff blares), realised as a bounded radiation-side waveshaper driven by
-  /// the signal's own envelope (the practical bounded form of the shock, the same
-  /// output-side strategy the reed's growth cone uses to stay stable). 0 = off ->
-  /// render is bit-identical (the shaper is skipped).
+  /// round, ff blares), realised as a bounded radiation-side waveshaper (the
+  /// practical bounded form of the shock, the same output-side strategy the reed's
+  /// growth cone uses to stay stable). The shaper is antialiased with first-order
+  /// antiderivative antialiasing (ADAA), so the bloomed upper harmonics do not
+  /// fold back as aliasing in the high register. The steepening depth follows the
+  /// played dynamic when @c cuivre_dynamics is on. 0 = off -> render is
+  /// bit-identical (the shaper is skipped).
   float brassiness = 0.0f;
+
+  /// Cuivré dynamics in [0,1]: how strongly the played dynamic (note-on velocity,
+  /// baked into the breath level, plus the live CC2 breath) scales the effective
+  /// @c brassiness, so the shock blooms with loudness — pp stays round, ff blares
+  /// (the amplitude-dependent brightening a real brass has, over and above the
+  /// amp VCA). The signal's own level cannot drive this (the self-limiting loop
+  /// does not track dynamics), so the played breath is the source. 0 = off ->
+  /// @c brassiness is static and the render is bit-identical.
+  float cuivre_dynamics = 0.0f;
 
   /// Mute in [0,1]: a straight / cup / harmon mute over the bell reshapes its
   /// radiation into a nasal, honky timbre with a strong upper formant and a
@@ -317,6 +331,23 @@ class BrassVoiceCore {
   // Per-note shock drive: the nominal drive scaled by the low-register frequency
   // compensation, so the shaper saturates in the low range as it does up top.
   float cuivre_drive_ = 0.0f;
+  // Reciprocal of tanh(cuivre_drive_): the level-preserving rescale that keeps the
+  // shaped signal's peak (precomputed for the static, dynamics-off path).
+  float cuivre_inv_tanh_ = 1.0f;
+  // Low-register drive compensation squared, retained so the effective drive can
+  // be recomputed per sample when the dynamics gate scales the brassiness.
+  float cuivre_fc_sq_ = 1.0f;
+  // Cuivré dynamics gate: 0 -> the drive/mix are static (bit-identical); > 0 ->
+  // the played dynamic scales the effective brassiness so the shock blooms with
+  // loudness. The dynamic source is the note-on velocity (the amp VCA carries the
+  // loudness, so the self-limiting mouth pressure cannot; velocity is the played
+  // dynamic), with a live CC2 breath swell above the seated level adding on top.
+  float cuivre_dynamics_ = 0.0f;
+  float cuivre_vel_ = 0.0f;
+  float cuivre_seat_ = 0.0f;
+  // First-order ADAA on the tanh shock front: antialiases the bloomed upper
+  // harmonics so they do not fold back in the high register.
+  rt::Adaa1<rt::TanhNonlinearity> cuivre_adaa_{};
 
   // 4b: mute. mute_ == 0 -> skipped (bit-identical). A radiation-side formant
   // (peak) + notch pair that reshapes the bell output into the nasal muted colour.

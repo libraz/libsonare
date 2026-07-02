@@ -90,6 +90,14 @@ constexpr float kPeakBase = 2.33f;
 constexpr float kPeakTilt = 0.93f;
 constexpr float kPeakRefHz = 44.0f;
 
+// Cuivré dynamics (only when params.cuivre_dynamics > 0): the shock steepening
+// tracks the played dynamic. The mouth pressure is normalised over the buzzing
+// band and SQUARED — a shock forms superlinearly with blowing pressure, so a
+// soft note stays round and the brassy bloom concentrates near ff. The gain lets
+// a hard note push the effective brassiness above its nominal value (a real ff
+// brass blares well past its mezzo colour).
+constexpr float kCuivreDynGain = 1.8f;
+
 // --- 4a cuivré (only when params.brassiness > 0) ---
 // Steepening drive and asymmetry: how hard the normalised bore output is pushed
 // through the shock shaper, and how asymmetric the shock front is (the |x| term
@@ -249,10 +257,16 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // skipped. cuivre_scale_ normalises by the note's raw peak (~peak_est) so the
   // shaper sees a ~unit signal and the peak survives the reshaping.
   brassiness_ = std::clamp(params.brassiness, 0.0f, 1.0f);
+  cuivre_dynamics_ = std::clamp(params.cuivre_dynamics, 0.0f, 1.0f);
+  cuivre_vel_ = vel01;
+  cuivre_seat_ = level;
   cuivre_scale_ = peak_est;
   cuivre_inv_scale_ = 1.0f / std::max(0.5f, peak_est);
   const float cuivre_fc = std::clamp(kCuivreDriveRefHz / f0, 1.0f, kCuivreDriveRatioMax);
-  cuivre_drive_ = (1.0f + kCuivreDrive * brassiness_) * cuivre_fc * cuivre_fc;
+  cuivre_fc_sq_ = cuivre_fc * cuivre_fc;
+  cuivre_drive_ = (1.0f + kCuivreDrive * brassiness_) * cuivre_fc_sq_;
+  cuivre_inv_tanh_ = 1.0f / std::tanh(cuivre_drive_);
+  cuivre_adaa_.reset(0.0f);
 
   // 4b: mute — a radiation-side resonant formant + scoop. Off (0) -> skipped.
   mute_ = std::clamp(params.mute, 0.0f, 1.0f);
@@ -353,20 +367,42 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
 
   float outp = bore_out_;
 
-  // Cuivré (gated): the amplitude-dependent nonlinear wave steepening. An
-  // envelope follower tracks the local level; the shaper is driven harder as the
-  // note gets louder, blooming the shock's upper harmonics at ff while leaving a
-  // soft note round. Output-side (radiation) so it cannot destabilise the loop —
-  // the practical bounded form of the shock (cf. the reed's growth cone).
+  // Cuivré (gated): the amplitude-dependent nonlinear wave steepening. The shaper
+  // reshapes the normalised bore output through an asymmetric tanh shock front,
+  // blooming the upper harmonics. Output-side (radiation) so it cannot
+  // destabilise the loop — the practical bounded form of the shock (cf. the reed's
+  // growth cone). The tanh is antialiased with first-order ADAA so the bloomed
+  // upper harmonics do not fold back in the high register.
   if (brassiness_ > 0.0f) {
-    const float drive = cuivre_drive_;
+    float b_eff = brassiness_;
+    float drive = cuivre_drive_;
+    float inv_tanh = cuivre_inv_tanh_;
+    if (cuivre_dynamics_ > 0.0f) {
+      // Dynamic brassiness: the played dynamic scales the effective steepening.
+      // The base is the note-on velocity (the amp VCA carries the loudness, so
+      // the self-limiting mouth pressure cannot be the source); the breath
+      // contour ramps it in over the attack, and a live CC2 swell above the
+      // seated breath level adds on top. Squaring it makes the shock form
+      // superlinearly with the dynamic, so a soft note stays round and the brassy
+      // bloom concentrates near ff.
+      const float live =
+          std::clamp((breath_target_ * breath_level_ - kBreathBase) / kBreathSpan, 0.0f, 1.0f);
+      const float dyn =
+          std::clamp(cuivre_vel_ * breath_level_ + std::max(0.0f, live - cuivre_seat_), 0.0f, 1.0f);
+      const float shaped_dyn = dyn * dyn;
+      b_eff = std::clamp(brassiness_ * ((1.0f - cuivre_dynamics_) +
+                                        cuivre_dynamics_ * kCuivreDynGain * shaped_dyn),
+                         0.0f, 1.0f);
+      drive = (1.0f + kCuivreDrive * b_eff) * cuivre_fc_sq_;
+      inv_tanh = 1.0f / std::tanh(drive);
+    }
     const float xn = outp * cuivre_inv_scale_;  // normalise to ~[-1,1]
     // Asymmetric shock: the |x| term steepens the front (even harmonics), tanh
-    // bounds it; dividing by tanh(drive) keeps the full-scale peak so the shaper
-    // brightens without crushing the level.
+    // bounds it; rescaling by 1/tanh(drive) keeps the full-scale peak so the
+    // shaper brightens without crushing the level.
     const float xa = xn + kCuivreAsym * xn * std::fabs(xn);
-    const float shaped = std::tanh(drive * xa) / std::tanh(drive) * cuivre_scale_;
-    outp += brassiness_ * kCuivreMixMax * (shaped - outp);
+    const float shaped = cuivre_adaa_.process(drive * xa) * inv_tanh * cuivre_scale_;
+    outp += b_eff * kCuivreMixMax * (shaped - outp);
   }
 
   // Mute (gated): a resonant upper formant plus a scoop of the direct low-mid,

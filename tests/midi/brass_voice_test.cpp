@@ -380,6 +380,37 @@ TEST_CASE("cuivre brightens the brass tone", "[midi][synth][brass]") {
   REQUIRE(spectral_centroid(on, 24000) > spectral_centroid(off, 24000));
 }
 
+TEST_CASE("cuivre dynamics gate is off by default (bit-identical)", "[midi][synth][brass]") {
+  // With brassiness on, leaving cuivre_dynamics at its default (0) selects the
+  // static shock shaper, so the render is bit-identical to an explicit 0.
+  NativeSynthPatch base = brass_base_patch();
+  base.brass.brassiness = 0.8f;
+  NativeSynthPatch same = base;
+  same.brass.cuivre_dynamics = 0.0f;
+  REQUIRE(render_patch(base, 53, 100, 24000) == render_patch(same, 53, 100, 24000));
+}
+
+TEST_CASE("cuivre dynamics brightens ff over pp", "[midi][synth][brass]") {
+  // With the dynamics gate on, a hard (ff) note blooms the shock more than a soft
+  // (pp) note, so the ff/pp spectral-centroid contrast is wider than the static
+  // shaper's (which brightens both dynamics equally). Centroid is gain-invariant,
+  // so this measures spectral shape, not the amp VCA level.
+  NativeSynthPatch stat = brass_base_patch();
+  stat.brass.brassiness = 0.8f;
+  stat.brass.vel_to_breath = 0.7f;
+  NativeSynthPatch dyn = stat;
+  dyn.brass.cuivre_dynamics = 1.0f;
+
+  const int n = 40000;
+  const double c_stat_pp = spectral_centroid(render_patch(stat, 53, 30, n), 24000);
+  const double c_stat_ff = spectral_centroid(render_patch(stat, 53, 120, n), 24000);
+  const double c_dyn_pp = spectral_centroid(render_patch(dyn, 53, 30, n), 24000);
+  const double c_dyn_ff = spectral_centroid(render_patch(dyn, 53, 120, n), 24000);
+
+  REQUIRE(c_dyn_ff > c_dyn_pp);                          // ff is brighter than pp
+  REQUIRE(c_dyn_ff / c_dyn_pp > c_stat_ff / c_stat_pp);  // the gate widens the contrast
+}
+
 TEST_CASE("mute makes the brass tone nasal", "[midi][synth][brass]") {
   // A mute reshapes the bell radiation into a bright, nasal honk (a strong upper
   // formant), lifting the centroid well above the open tone.

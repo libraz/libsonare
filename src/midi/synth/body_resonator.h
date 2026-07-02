@@ -6,9 +6,12 @@
 ///        low-Q two-pole resonators approximating an instrument body's
 ///        dominant modes, mixed over the dry voice.
 ///
-/// Three data-free voicings:
+/// Data-free voicings:
 ///   - kGuitar: dreadnought-ish air + plate modes (~100/200/400/550 Hz).
-///   - kViolin: A0 air + T1 plate region (~275/450/560/700 Hz).
+///   - kViolin: a measured violin-corpus modal bank — the A0 Helmholtz air
+///     mode, the CBR / B1-/B1+ signature corpus modes, a mid-range wood-mode
+///     cluster, and the broad 2-3 kHz "bridge hill" (Dünnwald, Jansson,
+///     Bissinger, Gough). Shared across the whole bowed family.
 ///   - kWoodTube: the tuned pipe under a marimba/xylophone bar — note-tracked
 ///     (the tube is cut for its bar), one strong fundamental resonance plus a
 ///     faint upper mode.
@@ -40,13 +43,25 @@ enum class BodyType : int {
 
 class BodyResonator {
  public:
-  static constexpr int kMaxModes = 4;
+  // Modal banks (kViolin) span the corpus signature modes, a mid wood-mode
+  // cluster, and the bridge hill; a physical instrument body has more than a
+  // handful of dominant modes, so the shared cap has to accommodate them.
+  static constexpr int kMaxModes = 16;
 
   /// One resonant body mode: a low-Q bandpass at @p freq_hz with reverb time
   /// @p t60_s, mixed in at @p weight.
   struct Spec {
     float freq_hz;
     float t60_s;
+    float weight;
+  };
+
+  /// A body mode as reported in the instrument-acoustics literature: centre
+  /// frequency, quality factor Q, and relative amplitude. Converted to a Spec
+  /// (t60) at note-on so the fixed tables read like the source measurements.
+  struct ModeQ {
+    float freq_hz;
+    float q;
     float weight;
   };
 
@@ -100,11 +115,7 @@ class BodyResonator {
         count = 4;
         break;
       case BodyType::kViolin:
-        specs = {{{275.0f, 0.08f, 1.0f},
-                  {450.0f, 0.07f, 0.8f},
-                  {560.0f, 0.06f, 0.6f},
-                  {700.0f, 0.05f, 0.4f}}};
-        count = 4;
+        count = fill_from_modal(specs, kViolinBank, kViolinLevel);
         break;
       case BodyType::kWoodTube:
         specs = {{{std::max(20.0f, note_hz), 0.08f, 1.2f},
@@ -167,6 +178,53 @@ class BodyResonator {
   }
 
  private:
+  // t60 (s) of a two-pole resonator of quality factor q at frequency f:
+  // Q = f / BW and BW ≈ ln(1000) / (pi * t60), so t60 = (ln(1000)/pi) * q / f.
+  static constexpr float kT60SecPerQHz = 2.19848f;  // ln(1000) / pi
+
+  static float q_to_t60(float freq_hz, float q) noexcept { return kT60SecPerQHz * q / freq_hz; }
+
+  /// Expands a literature modal table (freq/Q/weight) into resonator Specs,
+  /// scaling every weight by @p level so the bank's broadband contribution
+  /// stays matched to the earlier hand-placed voicing (the per-preset body_mix
+  /// was calibrated against it). Returns the number of Specs written.
+  template <size_t N>
+  static int fill_from_modal(std::array<Spec, kMaxModes>& out, const std::array<ModeQ, N>& bank,
+                             float level) noexcept {
+    const int count = static_cast<int>(std::min<size_t>(N, kMaxModes));
+    for (int k = 0; k < count; ++k) {
+      const ModeQ& m = bank[static_cast<size_t>(k)];
+      out[static_cast<size_t>(k)] = {m.freq_hz, q_to_t60(m.freq_hz, m.q), m.weight * level};
+    }
+    return count;
+  }
+
+  // Violin corpus, from measured mobility/radiativity surveys (Dünnwald,
+  // Jansson, Bissinger, Gough). A0 is the Helmholtz air resonance; CBR the
+  // centre-bout rhomboid; B1-/B1+ the two main corpus bending modes (B1+ the
+  // strongest radiator). 700 Hz-2 kHz is the wood-mode cluster; the broad,
+  // low-Q pair near 2.4/2.7 kHz is the "bridge hill" that gives the violin its
+  // carrying brilliance; above ~3 kHz the corpus rolls off.
+  static constexpr std::array<ModeQ, 14> kViolinBank = {{
+      {275.0f, 24.0f, 0.90f},   // A0 (air / Helmholtz)
+      {405.0f, 20.0f, 0.50f},   // CBR
+      {460.0f, 22.0f, 0.85f},   // B1-
+      {550.0f, 22.0f, 1.00f},   // B1+
+      {700.0f, 15.0f, 0.55f},   // wood-mode cluster
+      {870.0f, 14.0f, 0.45f},   //
+      {1100.0f, 13.0f, 0.50f},  //
+      {1350.0f, 12.0f, 0.40f},  //
+      {1600.0f, 12.0f, 0.45f},  //
+      {1950.0f, 11.0f, 0.40f},  //
+      {2350.0f, 6.0f, 0.75f},   // bridge hill (broad)
+      {2750.0f, 6.0f, 0.55f},   //
+      {3400.0f, 8.0f, 0.28f},   // high rolloff
+      {4200.0f, 8.0f, 0.16f},   //
+  }};
+  // Broadband normalization holding the richer bank within ~1 dB of the old
+  // 4-mode voicing at the same body_mix, so calibrated presets need no change.
+  static constexpr float kViolinLevel = 0.42f;
+
   struct Mode {
     float a1 = 0.0f;
     float a2 = 0.0f;

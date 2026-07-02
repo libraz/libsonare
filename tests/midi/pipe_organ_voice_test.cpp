@@ -541,6 +541,64 @@ TEST_CASE("radiation off renders bit-identically to the bare pipe", "[midi][synt
   REQUIRE(peak(a) > 0.01f);
 }
 
+// --- rank-level keytrack (treble regulation) ---
+
+TEST_CASE("rank keytrack thins the treble upperwork", "[midi][synth][organ]") {
+  // A high-footage upperwork rank (2', footage 4) speaks well up in the treble.
+  // Above the C4 reference, keytrack rolls that rank off, so a high note carries
+  // less upper-harmonic energy; the 8' foundation (footage 1) is untouched. The
+  // loop stays bounded.
+  const double f0 = 523.251;  // C5, played note 72
+  NativeSynthPatch base = organ_base_patch();
+  base.pipe_organ.rank_count = 2;
+  base.pipe_organ.ranks[0] = {1.0f, false, 0.6f, 1.0f};  // 8' foundation
+  base.pipe_organ.ranks[1] = {4.0f, false, 0.7f, 1.0f};  // 2' upperwork
+
+  NativeSynthPatch off = base;
+  off.pipe_organ.keytrack = 0.0f;
+  NativeSynthPatch on = base;
+  on.pipe_organ.keytrack = 1.0f;
+
+  const std::vector<float> off_tone = render_patch(off, 72, 110, 24000);
+  const std::vector<float> on_tone = render_patch(on, 72, 110, 24000);
+  REQUIRE(peak(on_tone) > 0.01f);
+  REQUIRE(peak(on_tone) < 4.0f);
+  REQUIRE(std::isfinite(on_tone.back()));
+
+  const std::vector<double> off_p = power_spectrum(off_tone, 4096);
+  const std::vector<double> on_p = power_spectrum(on_tone, 4096);
+  // Upperwork energy (the 2' fundamental at h4 and its partials above),
+  // normalized to h1 so it is immune to the overall level change.
+  const auto upper = [&](const std::vector<double>& p) {
+    double acc = 0.0;
+    for (int k = 4; k <= 10; ++k) acc += harmonic_power(p, f0, k);
+    return acc / harmonic_power(p, f0, 1);
+  };
+  REQUIRE(upper(on_p) < 0.6 * upper(off_p));
+}
+
+TEST_CASE("rank keytrack spares the bass compass and is a no-op off", "[midi][synth][organ]") {
+  // keytrack acts only above the C4 reference and only when > 0: at or below C4
+  // it changes nothing (the note sits at the reference), and keytrack == 0 gates
+  // the whole roll-off out, so every existing render is reproduced bit for bit.
+  NativeSynthPatch base = organ_base_patch();
+  base.pipe_organ.rank_count = 2;
+  base.pipe_organ.ranks[0] = {1.0f, false, 0.6f, 1.0f};
+  base.pipe_organ.ranks[1] = {4.0f, false, 0.7f, 1.0f};
+
+  NativeSynthPatch off = base;
+  off.pipe_organ.keytrack = 0.0f;
+  NativeSynthPatch on = base;
+  on.pipe_organ.keytrack = 1.0f;
+
+  // Below the reference (C3): keytrack must not perturb the render at all.
+  REQUIRE(render_patch(off, 48, 110, 8192) == render_patch(on, 48, 110, 8192));
+  // Exactly at the reference (C4): still untouched.
+  REQUIRE(render_patch(off, 60, 110, 8192) == render_patch(on, 60, 110, 8192));
+  // Above the reference (C5), keytrack == 0 renders deterministically (bypass).
+  REQUIRE(render_patch(off, 72, 110, 8192) == render_patch(off, 72, 110, 8192));
+}
+
 TEST_CASE("the pipe organ is a clean reverb source (dc-free, sustained)", "[midi][synth][organ]") {
   // A church organ is almost always heard through a long room reverb. For the
   // acoustic tail to develop cleanly the source must carry no DC offset (the

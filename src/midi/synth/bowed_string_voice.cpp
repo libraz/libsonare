@@ -258,7 +258,8 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
 
   // String velocity at the bow point = sum of the incoming velocity waves, plus
   // (when gated on) the weakly-coupled horizontal polarization sharing the bow.
-  float string_v = bridge_refl + nut_refl;
+  const float string_primary = bridge_refl + nut_refl;
+  float string_v = string_primary;
   if (pol_couple_ > 0.0f) string_v += pol_couple_ * pol_out_;
   const float dv = bow_v - string_v;
 
@@ -267,7 +268,13 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   // elasto-plastic bristle (Phase 4) that adds stick->slip hysteresis.
   float v_inj;
   if (elasto_plastic_) {
-    v_inj = elasto_plastic_injection(dv);
+    // The bristle memory integrates the string's OWN relative velocity, excluding
+    // the weak second-polarization coupling: feeding the detuned polarization beat
+    // into the hysteresis state lets it re-trigger the slip a second time per
+    // period in the low register (double-slip). The polarization still shares the
+    // bow injection and radiates, so its acoustic "thickness" is unchanged.
+    const float dv_ep = pol_couple_ > 0.0f ? bow_v - string_primary : dv;
+    v_inj = elasto_plastic_injection(dv_ep);
   } else {
     // Bow table (memoryless friction curve): reflection/absorption coefficient in
     // [0,1]. exponent -4 == 1/x^4, so no pow() needed. The flat top (small dv) is

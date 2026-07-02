@@ -28,14 +28,18 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   // hammer, coupled unison strings, soundboard bank); the e-piano / clavi
   // programs override to FM.
   t[0].mode = SynthEngineMode::kPiano;
-  t[0].amp_env = env(0.5f, 0.0f, 1.0f, 600.0f);
+  t[0].amp_env = env(0.5f, 0.0f, 1.0f, 800.0f);
   t[0].cutoff_hz = 20000.0f;
   // A harder, shorter hammer contact keeps the upper partials a concert grand
   // actually has; the longer damp lets the damper fall be heard as a ring-down
-  // rather than a gate.
+  // rather than a gate. Velocity felt compression widens the pp<->ff spread so
+  // soft strikes stay mellow and hard strikes brighten the way felt does. The
+  // amp release sets the treble ring-down (the top strings, whose light dampers
+  // barely load the string, are amp-release limited rather than damper limited).
   t[0].piano.brightness = 0.95f;
   t[0].piano.hammer_contact_ms = 0.8f;
-  t[0].piano.release_damp_s = 1.0f;
+  t[0].piano.hammer_dynamics = 0.5f;
+  t[0].piano.release_damp_s = 0.85f;
   t[0].stereo_spread = 0.3f;
   t[0].gain = 0.8f;
 
@@ -647,6 +651,10 @@ ProgramOverrides build_program_overrides() noexcept {
   o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.7f, 0.26f, 0.0f, 0.4f};   // 2-2/3' quint
   o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.72f, 0.5f, 0.0f, 0.45f};  // 2' super-octave
   o.church_organ.pipe_organ.ranks[5] = {5.0f, false, 0.6f, 0.07f, 0.0f, 0.45f};  // 1-3/5' tierce
+  // Treble regulation: thin the upperwork (4'/quint/2'/tierce) toward the treble
+  // so the plenum does not turn shrill above C4, while the bass and mid compass
+  // keep the full chorus.
+  o.church_organ.pipe_organ.keytrack = 0.5f;
   // A touch of wind sag so a full chord breathes; tremulant off by default.
   o.church_organ.pipe_organ.wind_sag = 0.25f;
   o.church_organ.stereo_spread = 0.2f;
@@ -793,12 +801,6 @@ ProgramOverrides build_program_overrides() noexcept {
   o.violin.cutoff_hz = 6000.0f;
   o.violin.lfo_rate_hz = 5.3f;
   o.violin.lfo_to_pitch_cents = 9.0f;
-  // The violin's open-G register (near the model's lowest bowed fundamental)
-  // exposes double-slip chaos in the elasto-plastic bristle model: its fixed
-  // (pitch-independent) load time constant is a much larger fraction of the
-  // period at low f0, so the hysteresis loop misfires into broadband noise.
-  // The static bow table (used by the rest of the family) stays clean there.
-  o.violin.bowed_string.elasto_plastic = false;
   o.viola = bowed(0.13f, 0.55f, 0.42f, 0.34f, 55.0f, 120.0f, 0.34f, 0.3f);
   o.viola.lfo_rate_hz = 5.1f;
   o.viola.lfo_to_pitch_cents = 8.0f;
@@ -925,27 +927,32 @@ ProgramOverrides build_program_overrides() noexcept {
   o.trumpet = brass(false, 0.55f, 0.30f, 0.75f, 0.28f, 12.0f, 80.0f, 0.88f, 0.50f, 0.90f);
   o.trumpet.cutoff_hz = 6500.0f;
   o.trumpet.brass.brassiness = 0.55f;
+  o.trumpet.brass.cuivre_dynamics = 0.7f;
   o.trumpet.lfo_rate_hz = 5.5f;
   o.trumpet.lfo_to_pitch_cents = 4.0f;
   o.trombone = brass(false, 0.48f, 0.45f, 0.85f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.92f);
   o.trombone.cutoff_hz = 3800.0f;
   o.trombone.brass.brassiness = 0.85f;
+  o.trombone.brass.cuivre_dynamics = 0.7f;
   o.trombone.lfo_rate_hz = 5.0f;
   o.trombone.lfo_to_pitch_cents = 3.0f;
   o.tuba = brass(true, 0.42f, 0.70f, 0.38f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.92f);
   o.tuba.cutoff_hz = 3200.0f;
   o.tuba.brass.brassiness = 0.25f;
+  o.tuba.brass.cuivre_dynamics = 0.5f;
   o.tuba.lfo_to_pitch_cents = 1.5f;
   // The muted trumpet plays through the real mute model instead of the old
   // dimmed-brightness fake.
   o.muted_trumpet = brass(false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.82f);
   o.muted_trumpet.brass.brassiness = 0.4f;
+  o.muted_trumpet.brass.cuivre_dynamics = 0.5f;
   o.muted_trumpet.brass.mute = 0.65f;
   o.muted_trumpet.lfo_rate_hz = 5.5f;
   o.muted_trumpet.lfo_to_pitch_cents = 4.0f;
   o.french_horn = brass(true, 0.50f, 0.55f, 0.48f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.88f);
   o.french_horn.cutoff_hz = 3600.0f;
   o.french_horn.brass.brassiness = 0.3f;
+  o.french_horn.brass.cuivre_dynamics = 0.6f;
   o.french_horn.lfo_to_pitch_cents = 1.5f;
 
   // Air-jet flute (GM 72-79): one edge-tone waveguide voiced across the

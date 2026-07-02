@@ -130,6 +130,31 @@ TEST_CASE("the guitar body adds its low modes deterministically", "[midi][synth]
   REQUIRE(body_tone == render_note(body, 69, 16384));
 }
 
+TEST_CASE("the violin body lifts its corpus signature modes", "[midi][synth][body]") {
+  NativeSynthPatch dry = noise_patch();
+  NativeSynthPatch body = dry;
+  body.body = BodyType::kViolin;
+  body.body_mix = 0.6f;
+
+  const std::vector<float> dry_tone = render_note(dry, 69, 16384);
+  const std::vector<float> body_tone = render_note(body, 69, 16384);
+  // The A0 Helmholtz air mode (~275 Hz) and the B1+ main corpus mode (~550 Hz)
+  // each rise out of the flat noise floor at their measured frequencies.
+  REQUIRE(band_fraction(body_tone, 8192, 275.0, 25.0) >
+          1.05 * band_fraction(dry_tone, 8192, 275.0, 25.0));
+  REQUIRE(band_fraction(body_tone, 8192, 550.0, 25.0) >
+          1.15 * band_fraction(dry_tone, 8192, 550.0, 25.0));
+  // The broad 2-3 kHz bridge hill is the strongest lift.
+  REQUIRE(band_fraction(body_tone, 8192, 2500.0, 350.0) >
+          1.25 * band_fraction(dry_tone, 8192, 2500.0, 350.0));
+  // Selectivity: a between-modes valley (~650 Hz) stays essentially flat, so
+  // the boosts above are resonant peaks, not a broadband gain.
+  REQUIRE(band_fraction(body_tone, 8192, 650.0, 25.0) <
+          1.12 * band_fraction(dry_tone, 8192, 650.0, 25.0));
+  // Seeded noise + fixed resonator tables: bit-identical renders.
+  REQUIRE(body_tone == render_note(body, 69, 16384));
+}
+
 TEST_CASE("the wood-tube body tracks the played note", "[midi][synth][body]") {
   NativeSynthPatch dry = noise_patch();
   NativeSynthPatch tube = dry;

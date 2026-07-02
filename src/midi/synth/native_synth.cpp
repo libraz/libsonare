@@ -162,6 +162,7 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.piano.strike_position = std::clamp(sanitize(p.piano.strike_position, 0.12f), 0.0f, 0.5f);
   p.piano.hammer_exponent = std::clamp(sanitize(p.piano.hammer_exponent, 2.5f), 1.5f, 4.0f);
   p.piano.hammer_contact_ms = std::clamp(sanitize(p.piano.hammer_contact_ms, 1.2f), 0.2f, 10.0f);
+  p.piano.hammer_dynamics = std::clamp(sanitize(p.piano.hammer_dynamics, 0.0f), 0.0f, 1.0f);
   p.piano.soundboard = std::clamp(sanitize(p.piano.soundboard, 0.25f), 0.0f, 1.0f);
   p.piano.release_damp_s = std::clamp(sanitize(p.piano.release_damp_s, 0.1f), 0.01f, 10.0f);
   p.pipe_organ.brightness = std::clamp(sanitize(p.pipe_organ.brightness, 0.5f), 0.0f, 1.0f);
@@ -226,6 +227,7 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.brass.chiff = std::clamp(sanitize(p.brass.chiff, 0.35f), 0.0f, 1.0f);
   p.brass.chiff_ms = std::clamp(sanitize(p.brass.chiff_ms, 10.0f), 1.0f, 500.0f);
   p.brass.brassiness = std::clamp(sanitize(p.brass.brassiness, 0.0f), 0.0f, 1.0f);
+  p.brass.cuivre_dynamics = std::clamp(sanitize(p.brass.cuivre_dynamics, 0.0f), 0.0f, 1.0f);
   p.brass.mute = std::clamp(sanitize(p.brass.mute, 0.0f), 0.0f, 1.0f);
   p.brass.half_valve = std::clamp(sanitize(p.brass.half_valve, 0.0f), 0.0f, 1.0f);
   p.brass.dynamic_lip = std::clamp(sanitize(p.brass.dynamic_lip, 0.0f), 0.0f, 1.0f);

@@ -64,6 +64,15 @@ constexpr float kReedDrive = 0.5f;
 constexpr float kRadiationCornerHz = 800.0f;
 constexpr float kRadiationLift = 2.5f;
 
+// Treble regulation (rank-level keytrack). The upperwork rolls off as the played
+// note rises above the reference, more steeply the higher the rank's footage:
+// gain = 1 / (1 + slope * keytrack * octaves_above * footage_octaves), a smooth
+// reciprocal thinning that never inverts sign or unbounds. The reference note is
+// C4, so the bass and mid compass (footage <= 1 or notes at/below C4) are
+// untouched; only high notes drawing high-footage ranks thin.
+constexpr float kKeytrackRefNote = 60.0f;
+constexpr float kKeytrackSlope = 1.0f;
+
 // Chiff onset burst depth.
 constexpr float kChiffGain = 0.5f;
 // Bore pre-fill: a low-level seed so the jet has an f0 component to lock onto.
@@ -140,6 +149,11 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   const float norm = 1.0f / std::sqrt(std::max(1.0e-6f, power));
 
   const float base_f0 = note_to_hz(note);
+  // Treble regulation: octaves the played note sits above the reference (0 at or
+  // below C4). Combined per rank with the rank's footage below.
+  const float keytrack = std::clamp(params.keytrack, 0.0f, 1.0f);
+  const float octaves_above =
+      std::max(0.0f, (static_cast<float>(note & 0x7Fu) - kKeytrackRefNote) * (1.0f / 12.0f));
   const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
   // Mouth pressure: the patch breath sets the dynamic, velocity opens it a touch.
   const float level =
@@ -168,6 +182,15 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     const bool stopped = ranks[r].stopped;
     const float footage = ranks[r].footage_mult > 0.01f ? ranks[r].footage_mult : 1.0f;
     const float f0 = base_f0 * footage;
+
+    // Treble regulation: thin the upperwork (footage > 1) toward the treble. The
+    // 8' and sub ranks (footage <= 1 -> footage_octaves 0) and the whole bass/mid
+    // compass (octaves_above 0) keep their full level; keytrack == 0 is a
+    // bit-identical bypass.
+    if (keytrack > 0.0f) {
+      const float footage_octaves = std::max(0.0f, std::log2(std::max(0.01f, footage)));
+      pipe.mix /= 1.0f + kKeytrackSlope * keytrack * octaves_above * footage_octaves;
+    }
     const float period = srf / std::max(1.0f, f0);
     // Every rank is a positive-feedback open jet pipe (it locks its fundamental
     // and tunes cleanly across the whole 16'-down compass, where the alternative

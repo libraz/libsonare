@@ -283,6 +283,42 @@ TEST_CASE("the felt hammer maps velocity to brightness", "[midi][synth][piano]")
   REQUIRE(forte_overtones > 1.8 * soft_overtones);
 }
 
+TEST_CASE("the velocity felt-dynamics gate is off by default and widens the pp<->ff spread",
+          "[midi][synth][piano]") {
+  // Share of strike energy above the fundamental (higher = brighter).
+  auto overtone_fraction = [](const std::vector<float>& tone) {
+    const std::vector<double> power = power_spectrum(tone, 0);
+    const int split = static_cast<int>(std::lround(392.0 / kRate * kFft));  // 1.5 * C4
+    double low = 0.0;
+    double high = 0.0;
+    for (int b = 1; b < static_cast<int>(power.size()); ++b) {
+      (b >= split ? high : low) += power[static_cast<size_t>(b)];
+    }
+    const double total = low + high;
+    return total > 0.0 ? high / total : 0.0;
+  };
+
+  NativeSynthPatch off = gm_fallback_patch(0, 0);
+  off.piano.hammer_dynamics = 0.0f;  // gate off: intrinsic Hertz scaling only
+  // The off path renders deterministically (no gate-induced perturbation).
+  REQUIRE(render_patch(off, 60, 100, 4096) == render_patch(off, 60, 100, 4096));
+
+  NativeSynthPatch on = off;
+  on.piano.hammer_dynamics = 0.6f;
+  // The parameter is live: turning the gate on changes the rendered timbre.
+  REQUIRE(render_patch(on, 60, 100, 4096) != render_patch(off, 60, 100, 4096));
+
+  // The forte-vs-piano brightness ratio is larger with the gate on than off:
+  // the extra felt compression widens the dynamic timbre spread.
+  auto forte_over_piano = [&](const NativeSynthPatch& p) {
+    const double forte = overtone_fraction(render_patch(p, 60, 120, 4096));
+    const double soft = overtone_fraction(render_patch(p, 60, 35, 4096));
+    REQUIRE(soft > 0.0);
+    return forte / soft;
+  };
+  REQUIRE(forte_over_piano(on) > forte_over_piano(off));
+}
+
 TEST_CASE("the soft pedal voices una corda darker and quieter", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   // Same note and velocity, soft pedal (CC67) engaged vs not. The split is

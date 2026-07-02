@@ -105,6 +105,12 @@ struct PianoPatchParams {
   float hammer_exponent = 2.5f;
   /// Hammer-felt contact time at A4 / mezzo-forte (ms).
   float hammer_contact_ms = 1.2f;
+  /// Extra velocity-dependent felt compression in [0,1] (0 = off, bit-identical
+  /// to the intrinsic Hertz-contact scaling). Above the intrinsic law, hard
+  /// strikes shorten the felt contact and pass more high partials further, so
+  /// the pp<->ff timbre spread widens; the shaping pivots at the mezzo-forte
+  /// reference so the nominal voicing is preserved.
+  float hammer_dynamics = 0.0f;
   /// Soundboard resonator mix in [0,1].
   float soundboard = 0.25f;
   /// Damped t60 in seconds applied at note-off (the damper falling back).
