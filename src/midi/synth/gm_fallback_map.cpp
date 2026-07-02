@@ -634,29 +634,33 @@ ProgramOverrides build_program_overrides() noexcept {
   // rank locks its pitch and holds a solid, endless tone while keyed (no decay,
   // no breath-noise wander); the amp envelope just gates the wind on and off.
   o.church_organ.mode = SynthEngineMode::kPipeOrgan;
-  o.church_organ.amp_env = env(55.0f, 0.0f, 1.0f, 300.0f);
+  o.church_organ.amp_env = env(120.0f, 0.0f, 1.0f, 380.0f);
   o.church_organ.cutoff_hz = 20000.0f;
   o.church_organ.pipe_organ.tone_decay_s = 8.0f;
   o.church_organ.pipe_organ.breath = 0.26f;
   o.church_organ.pipe_organ.chiff = 0.38f;
-  o.church_organ.pipe_organ.release_damp_s = 0.55f;
+  o.church_organ.pipe_organ.release_damp_s = 0.75f;
   // GM Church Organ: a principal chorus (plenum) — 16' stopped sub for gravity
   // under an 8'+4'+2-2/3'+2' open principal chorus, the upperwork brighter.
   // The upperwork (smaller pipes) radiates more brightly into the room than the
   // wide bass ranks: radiation rises rank by rank, the 16' bourdon staying dark.
   o.church_organ.pipe_organ.rank_count = 6;
-  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.4f, 0.7f, 0.0f, 0.0f};  // 16'
-  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.68f, 1.0f, 0.0f, 0.2f};   // 8' principal
-  o.church_organ.pipe_organ.ranks[2] = {2.0f, false, 0.72f, 0.92f, 0.0f, 0.3f};  // 4' octave
-  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.7f, 0.26f, 0.0f, 0.4f};   // 2-2/3' quint
-  o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.72f, 0.5f, 0.0f, 0.45f};  // 2' super-octave
-  o.church_organ.pipe_organ.ranks[5] = {5.0f, false, 0.6f, 0.07f, 0.0f, 0.45f};  // 1-3/5' tierce
+  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.4f, 0.16f, 0.0f, 0.0f};  // 16'
+  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.74f, 1.0f, 0.0f, 0.2f};    // 8' principal
+  o.church_organ.pipe_organ.ranks[2] = {2.0f, false, 0.76f, 1.01f, 0.0f, 0.3f};   // 4' octave
+  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.7f, 0.31f, 0.0f, 0.4f};    // 2-2/3' quint
+  o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.72f, 0.43f, 0.0f, 0.45f};  // 2' super-octave
+  o.church_organ.pipe_organ.ranks[5] = {5.0f, false, 0.6f, 0.04f, 0.0f, 0.45f};   // 1-3/5' tierce
   // Treble regulation: thin the upperwork (4'/quint/2'/tierce) toward the treble
   // so the plenum does not turn shrill above C4, while the bass and mid compass
   // keep the full chorus.
   o.church_organ.pipe_organ.keytrack = 0.5f;
-  // A touch of wind sag so a full chord breathes; tremulant off by default.
+  // A touch of wind sag so a full chord breathes, and a gentle tremulant — the
+  // slow pressure undulation that keeps a sustained chord alive rather than
+  // frozen (heard as faint sidebands around every partial).
   o.church_organ.pipe_organ.wind_sag = 0.25f;
+  o.church_organ.pipe_organ.tremulant_rate_hz = 4.8f;
+  o.church_organ.pipe_organ.tremulant_depth = 0.18f;
   o.church_organ.stereo_spread = 0.2f;
   o.church_organ.gain = 0.45f;
 

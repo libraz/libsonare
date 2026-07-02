@@ -1,0 +1,37 @@
+[
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "ranks\\[0\\] = \\{0.5f, /\\*stopped=\\*/true, [0-9.]+f, ([0-9.]+)f",
+    "min": 0.02, "max": 0.5, "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "ranks\\[2\\] = \\{2.0f, false, [0-9.]+f, ([0-9.]+)f",
+    "min": 0.4, "max": 1.2, "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "ranks\\[3\\] = \\{3.0f, false, [0-9.]+f, ([0-9.]+)f",
+    "min": 0.05, "max": 0.6, "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "ranks\\[4\\] = \\{4.0f, false, [0-9.]+f, ([0-9.]+)f",
+    "min": 0.1, "max": 0.8, "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "ranks\\[5\\] = \\{5.0f, false, [0-9.]+f, ([0-9.]+)f",
+    "min": 0.0, "max": 0.15, "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "ranks\\[1\\] = \\{1.0f, false, ([0-9.]+)f",
+    "min": 0.5, "max": 0.9, "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "ranks\\[2\\] = \\{2.0f, false, ([0-9.]+)f",
+    "min": 0.5, "max": 0.9, "scale": "linear"
+  }
+]

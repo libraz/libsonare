@@ -494,15 +494,17 @@ TEST_CASE("the swell box darkens the organ as the pedal closes", "[midi][synth][
     synth.on_event(0,
                    event(sonare::midi::make_midi1_control_change(0, 0, 11, expression)));  // CC11
     synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
-    return render_left(synth, 24000);
+    return render_left(synth, 48000);
   };
   const std::vector<float> open = play(127);  // shutter fully open
   const std::vector<float> shut = play(8);    // shutter nearly closed
   // The closed shutter is a lowpass: a markedly lower spectral centroid (the
   // level cut is the expression's job and is not what this asserts). The
   // self-oscillating pipes are fundamental-dominant, so the centroid floor sits
-  // near the played pitch; the shutter still cuts the upperwork clearly.
-  REQUIRE(swell_centroid(shut, 8000) < 0.75 * swell_centroid(open, 8000));
+  // near the played pitch; the shutter still cuts the upperwork clearly. The
+  // window skips the first half second so the ranks' speech swell has settled
+  // and the settled plenum is what is measured.
+  REQUIRE(swell_centroid(shut, 24000) < 0.75 * swell_centroid(open, 24000));
 }
 
 // --- Phase 4: mouth/radiation correction + room coupling ---

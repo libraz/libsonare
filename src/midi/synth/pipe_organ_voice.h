@@ -33,9 +33,10 @@
 ///      ~0.5) selects the register the jet drives, so the pipe locks its pitch
 ///      and speaks a solid periodic tone rather than a resonator merely coloured
 ///      by breath noise.
-///   3. PROMPT SPEECH: the bore is pre-filled with a low-level seeded burst at
-///      note-on so the jet has an f0 seed to lock onto immediately rather than
-///      swelling in over the resonator's ring time.
+///   3. SPEECH: the bore is pre-filled with a low-level f0 sine seed at note-on
+///      so the jet locks immediately, and each rank's radiated level then
+///      blooms in over ~20 of its own fundamental periods — the upperwork
+///      speaks promptly, the big bass pipes swell in behind it.
 ///   4. CHIFF: the brief, brighter onset transient before the pitch settles
 ///      (the pipe "speaking"), a short decaying noise burst.
 ///   5. REGISTRATION: several ranks at different footages (16'/8'/4'/2-2/3'/2'/…)
@@ -52,9 +53,9 @@
 /// (OrganWindSupply) folded into the per-sample pitch/level.
 ///
 /// RT contract: attach()/start()/render() are allocation-free (start zeroes /
-/// fills the attached spans). Determinism: the breath and chiff noise are the
-/// counter-based (voice_index, note, age) stream with a per-rank offset, so
-/// identical event streams render bit-identically.
+/// fills the attached spans). Determinism: the chiff noise is the counter-based
+/// (voice_index, note, age) stream with a per-rank offset, so identical event
+/// streams render bit-identically.
 
 #include <array>
 #include <cstddef>
@@ -257,6 +258,10 @@ class PipeOrganVoiceCore {
     float even_hp_alpha = 0.0f;
     /// Steady mouth pressure and its note-on/off contour.
     float breath = 0.0f;
+    /// Per-rank speech swell (post-loop): ramps 0 -> 1 over ~20 fundamental
+    /// periods, so bass pipes bloom in after the prompt upperwork.
+    float wind = 0.0f;
+    float speak_coeff = 0.0f;
     /// Chiff onset burst (one-pole decay).
     float chiff_level = 0.0f;
     float chiff_coeff = 0.0f;

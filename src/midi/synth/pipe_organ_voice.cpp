@@ -75,8 +75,18 @@ constexpr float kKeytrackSlope = 1.0f;
 
 // Chiff onset burst depth.
 constexpr float kChiffGain = 0.5f;
-// Bore pre-fill: a low-level seed so the jet has an f0 component to lock onto.
+// Bore pre-fill: a low-level f0 sine seed so the jet locks promptly. A noise
+// pre-fill would circulate for seconds through the near-lossless bore
+// (loss_gain ~0.995) and put an audible hiss under the whole sustain.
 constexpr float kBorePrefill = 0.05f;
+
+// Speech swell: a pipe settles its speech over ~this many fundamental periods,
+// so the upperwork enters promptly and the big bass pipes bloom in after it
+// (the plenum builds the way a real chorus speaks). Post-loop level swell —
+// the jet loop itself locks immediately off the pre-fill seed.
+constexpr float kSpeakPeriods = 30.0f;
+constexpr float kSpeakMinMs = 30.0f;
+constexpr float kSpeakMaxMs = 700.0f;
 
 // Output trim: the driven jet loop settles with a raw bore peak that falls with
 // pitch, so the per-pipe output is frequency-compensated toward a flat target
@@ -87,8 +97,7 @@ constexpr float kPeakTilt = -0.65f;
 constexpr float kPeakRefHz = 261.63f;
 
 // Determinism: chiff draw base; a per-rank offset in the high bits separates the
-// ranks (kRankNoiseShift), and the pre-fill uses a separate base.
-constexpr uint64_t kFillIndexBase = 1ull << 16;
+// ranks (kRankNoiseShift).
 constexpr uint64_t kChiffIndexBase = 1ull << 24;
 constexpr uint64_t kRankNoiseShift = 48;
 
@@ -281,13 +290,21 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     pipe.bore_write = 0;
     pipe.jet_write = 0;
 
-    // Pre-fill the bore with a low-level seed so the jet locks promptly; the jet
-    // span starts silent.
+    // Speech swell: this rank blooms in over ~kSpeakPeriods of its own
+    // fundamental (bass pipes slower than the upperwork).
+    const float period_ms = 1000.0f * period / srf;
+    pipe.speak_coeff =
+        ramp_coeff(std::clamp(kSpeakPeriods * period_ms, kSpeakMinMs, kSpeakMaxMs), sr);
+    pipe.wind = 0.0f;
+
+    // Pre-fill the bore with a low-level f0 sine seed so the jet locks promptly
+    // (noise here would hiss under the whole sustain); the jet span starts
+    // silent.
     if (pipe.bore != nullptr) {
       const float pf = kBorePrefill * mouth;
+      const float w = kTwoPi / std::max(2.0f, pipe.bore_period);
       for (int i = 0; i < span; ++i) {
-        pipe.bore[static_cast<size_t>(i)] =
-            pf * noise_.bipolar_at(kFillIndexBase + pipe.noise_offset + static_cast<uint64_t>(i));
+        pipe.bore[static_cast<size_t>(i)] = pf * std::sin(w * static_cast<float>(i));
       }
     }
     if (pipe.jet != nullptr) {
@@ -312,6 +329,9 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
     if (pipe.bore == nullptr || pipe.jet == nullptr || pipe.bore_size < 8) continue;
 
     const float breath = pipe.breath * breath_level_;
+
+    // Per-rank speech swell (post-loop level ramp toward 1).
+    pipe.wind += pipe.speak_coeff * (1.0f - pipe.wind);
 
     // Open/stopped-end reflection from the previous bore output: one-pole loss
     // lowpass, sign-selected feedback (+ open / - stopped).
@@ -367,7 +387,9 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
       pipe.chiff_level *= pipe.chiff_coeff;
     }
 
-    mix += pipe.mix * (pipe.output_scale * radiated + chiff);
+    // The chiff stays prompt (the spit of the pipe starting to speak) while the
+    // pitched tone blooms in behind it.
+    mix += pipe.mix * (pipe.wind * pipe.output_scale * radiated + chiff);
   }
   ++drive_index_;
   return mix;
