@@ -97,6 +97,14 @@ constexpr float kPeakRefHz = 44.0f;
 // tanh normalisation keeps the peak while the curvature blooms the harmonics.
 constexpr float kCuivreDrive = 9.0f;
 constexpr float kCuivreAsym = 0.5f;
+// Low-register drive compensation: the linear bore grows more sinusoidal toward
+// low f0 (its positive-feedback comb carries fewer partials there), so at a fixed
+// drive the shock shaper barely saturates and the brass formant never blooms in
+// the low register. The drive is boosted below the reference by (ref/f0)^2 (the
+// ratio capped so the boost saturates), leaving the calibrated mid/high brass
+// untouched (the factor is 1 at and above the reference).
+constexpr float kCuivreDriveRefHz = 175.0f;
+constexpr float kCuivreDriveRatioMax = 2.3f;
 // Max wet mix of the shaped (brassy) signal at full brassiness.
 constexpr float kCuivreMixMax = 0.85f;
 
@@ -243,6 +251,8 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   brassiness_ = std::clamp(params.brassiness, 0.0f, 1.0f);
   cuivre_scale_ = peak_est;
   cuivre_inv_scale_ = 1.0f / std::max(0.5f, peak_est);
+  const float cuivre_fc = std::clamp(kCuivreDriveRefHz / f0, 1.0f, kCuivreDriveRatioMax);
+  cuivre_drive_ = (1.0f + kCuivreDrive * brassiness_) * cuivre_fc * cuivre_fc;
 
   // 4b: mute — a radiation-side resonant formant + scoop. Off (0) -> skipped.
   mute_ = std::clamp(params.mute, 0.0f, 1.0f);
@@ -349,7 +359,7 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
   // soft note round. Output-side (radiation) so it cannot destabilise the loop —
   // the practical bounded form of the shock (cf. the reed's growth cone).
   if (brassiness_ > 0.0f) {
-    const float drive = 1.0f + kCuivreDrive * brassiness_;
+    const float drive = cuivre_drive_;
     const float xn = outp * cuivre_inv_scale_;  // normalise to ~[-1,1]
     // Asymmetric shock: the |x| term steepens the front (even harmonics), tanh
     // bounds it; dividing by tanh(drive) keeps the full-scale peak so the shaper

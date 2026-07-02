@@ -314,6 +314,9 @@ class BrassVoiceCore {
   float brassiness_ = 0.0f;
   float cuivre_scale_ = 1.0f;
   float cuivre_inv_scale_ = 1.0f;
+  // Per-note shock drive: the nominal drive scaled by the low-register frequency
+  // compensation, so the shaper saturates in the low range as it does up top.
+  float cuivre_drive_ = 0.0f;
 
   // 4b: mute. mute_ == 0 -> skipped (bit-identical). A radiation-side formant
   // (peak) + notch pair that reshapes the bell output into the nasal muted colour.

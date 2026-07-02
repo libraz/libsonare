@@ -35,7 +35,7 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   // rather than a gate.
   t[0].piano.brightness = 0.95f;
   t[0].piano.hammer_contact_ms = 0.8f;
-  t[0].piano.release_damp_s = 0.6f;
+  t[0].piano.release_damp_s = 1.0f;
   t[0].stereo_spread = 0.3f;
   t[0].gain = 0.8f;
 
@@ -136,12 +136,12 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[7].fm.ops[0].level = 1.0f;
   t[7].fm.ops[0].env = env(40.0f, 200.0f, 0.85f, 200.0f);
   t[7].fm.ops[1].ratio = 1.0f;
-  t[7].fm.ops[1].level = 2.2f;
+  t[7].fm.ops[1].level = 3.2f;
   t[7].fm.ops[1].env = env(80.0f, 300.0f, 0.7f, 200.0f);  // brightness swell
   t[7].fm.ops[1].vel_to_level = 0.5f;
   t[7].fm.ops[2].ratio = 1.0f;
-  t[7].fm.ops[2].level = 0.8f;
-  t[7].fm.ops[2].feedback = 1.7f;  // feedback op: saw-like brass spectrum
+  t[7].fm.ops[2].level = 2.0f;
+  t[7].fm.ops[2].feedback = 2.4f;  // feedback op: saw-like brass spectrum
   t[7].fm.ops[2].env = env(80.0f, 400.0f, 0.6f, 200.0f);
   // Section, not soloist: players never sit at exactly one pitch or one seat.
   t[7].drift_cents = 3.0f;
@@ -630,21 +630,23 @@ ProgramOverrides build_program_overrides() noexcept {
   // rank locks its pitch and holds a solid, endless tone while keyed (no decay,
   // no breath-noise wander); the amp envelope just gates the wind on and off.
   o.church_organ.mode = SynthEngineMode::kPipeOrgan;
-  o.church_organ.amp_env = env(8.0f, 0.0f, 1.0f, 90.0f);
+  o.church_organ.amp_env = env(55.0f, 0.0f, 1.0f, 300.0f);
   o.church_organ.cutoff_hz = 20000.0f;
   o.church_organ.pipe_organ.tone_decay_s = 8.0f;
-  o.church_organ.pipe_organ.breath = 0.3f;
-  o.church_organ.pipe_organ.chiff = 0.45f;
+  o.church_organ.pipe_organ.breath = 0.26f;
+  o.church_organ.pipe_organ.chiff = 0.38f;
+  o.church_organ.pipe_organ.release_damp_s = 0.55f;
   // GM Church Organ: a principal chorus (plenum) — 16' stopped sub for gravity
   // under an 8'+4'+2-2/3'+2' open principal chorus, the upperwork brighter.
   // The upperwork (smaller pipes) radiates more brightly into the room than the
   // wide bass ranks: radiation rises rank by rank, the 16' bourdon staying dark.
-  o.church_organ.pipe_organ.rank_count = 5;
-  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.34f, 0.7f, 0.0f, 0.0f};  // 16'
-  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.6f, 1.0f, 0.0f, 0.2f};    // 8' principal
-  o.church_organ.pipe_organ.ranks[2] = {2.0f, false, 0.66f, 0.85f, 0.0f, 0.3f};  // 4' octave
-  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.72f, 0.5f, 0.0f, 0.4f};   // 2-2/3' quint
-  o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.78f, 0.6f, 0.0f, 0.5f};   // 2' super-octave
+  o.church_organ.pipe_organ.rank_count = 6;
+  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.4f, 0.7f, 0.0f, 0.0f};  // 16'
+  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.68f, 1.0f, 0.0f, 0.2f};   // 8' principal
+  o.church_organ.pipe_organ.ranks[2] = {2.0f, false, 0.72f, 0.92f, 0.0f, 0.3f};  // 4' octave
+  o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.7f, 0.26f, 0.0f, 0.4f};   // 2-2/3' quint
+  o.church_organ.pipe_organ.ranks[4] = {4.0f, false, 0.72f, 0.5f, 0.0f, 0.45f};  // 2' super-octave
+  o.church_organ.pipe_organ.ranks[5] = {5.0f, false, 0.6f, 0.07f, 0.0f, 0.45f};  // 1-3/5' tierce
   // A touch of wind sag so a full chord breathes; tremulant off by default.
   o.church_organ.pipe_organ.wind_sag = 0.25f;
   o.church_organ.stereo_spread = 0.2f;
@@ -791,6 +793,12 @@ ProgramOverrides build_program_overrides() noexcept {
   o.violin.cutoff_hz = 6000.0f;
   o.violin.lfo_rate_hz = 5.3f;
   o.violin.lfo_to_pitch_cents = 9.0f;
+  // The violin's open-G register (near the model's lowest bowed fundamental)
+  // exposes double-slip chaos in the elasto-plastic bristle model: its fixed
+  // (pitch-independent) load time constant is a much larger fraction of the
+  // period at low f0, so the hysteresis loop misfires into broadband noise.
+  // The static bow table (used by the rest of the family) stays clean there.
+  o.violin.bowed_string.elasto_plastic = false;
   o.viola = bowed(0.13f, 0.55f, 0.42f, 0.34f, 55.0f, 120.0f, 0.34f, 0.3f);
   o.viola.lfo_rate_hz = 5.1f;
   o.viola.lfo_to_pitch_cents = 8.0f;
@@ -919,9 +927,9 @@ ProgramOverrides build_program_overrides() noexcept {
   o.trumpet.brass.brassiness = 0.55f;
   o.trumpet.lfo_rate_hz = 5.5f;
   o.trumpet.lfo_to_pitch_cents = 4.0f;
-  o.trombone = brass(false, 0.48f, 0.45f, 0.7f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.92f);
+  o.trombone = brass(false, 0.48f, 0.45f, 0.85f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.92f);
   o.trombone.cutoff_hz = 3800.0f;
-  o.trombone.brass.brassiness = 0.5f;
+  o.trombone.brass.brassiness = 0.85f;
   o.trombone.lfo_rate_hz = 5.0f;
   o.trombone.lfo_to_pitch_cents = 3.0f;
   o.tuba = brass(true, 0.42f, 0.70f, 0.38f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.92f);

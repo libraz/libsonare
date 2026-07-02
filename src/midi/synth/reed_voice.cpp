@@ -60,10 +60,25 @@ constexpr float kBreathNoiseDepth = 0.08f;
 constexpr float kChiffDepth = 0.5f;
 constexpr float kBorePrefill = 0.02f;
 
-// In-loop DC-blocker corner (~10 Hz): the conical (positive-feedback) comb has a
+// In-loop sub-fundamental highpass: the conical (positive-feedback) comb has a
 // DC mode that does not radiate, and the breath DC drives the reed, so the loop
-// must shed the accumulated offset without touching the tone.
-constexpr float kDcCornerHz = 10.0f;
+// must shed the accumulated offset. A fixed ~10 Hz corner leaves the whole
+// sub-fundamental region (tens of Hz) barely damped, and at high pitch — where
+// the loop is short and the fundamental sits far above the corner — the rectified
+// reed drive excites a slow relaxation limit cycle down there, swamping the tone
+// with a sub-audio rumble. The corner therefore tracks the pitch (a fraction of
+// f0): it stays far enough below the fundamental to leave the tone's phase / tune
+// essentially untouched, while rising with the note so nothing below the
+// fundamental can resonate. A floor keeps the lowest reeds' fundamental clear of
+// the corner.
+constexpr float kHpCornerFracF0 = 0.06f;
+constexpr float kHpCornerFloorHz = 10.0f;
+// Fraction of the highpass phase lead folded into the loop-delay compensation.
+// The resonance shift a filter causes follows its GROUP delay at the fundamental,
+// which for this pole placement is roughly this fraction of the phase delay used
+// to estimate it, so compensating that fraction re-centres the tuning (the full
+// phase delay over-corrects into flatness).
+constexpr float kHpCompScale = 0.5f;
 
 // Output trim: the raw bore pressure sits near unity already (the reed table is
 // bounded to [-1,1]), so only a gentle scale brings a forte note into the other
@@ -189,16 +204,30 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   loss_gain_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
                           kLossFloor, kLossCeil);
 
-  // In-loop DC blocker pole.
-  dc_r_ = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / sr);
+  // In-loop sub-fundamental highpass pole. Only the CONE (positive-feedback comb)
+  // has a resonant sub-fundamental (DC) mode that the rectified reed drive can
+  // excite into a rumble; its corner therefore tracks the pitch so nothing below
+  // the fundamental resonates. The CYLINDER (negative feedback) is anti-resonant
+  // at DC and never rumbles, so it keeps the low fixed corner (a raised corner
+  // there would only detune it).
+  const float hp_corner =
+      params.conical ? std::max(kHpCornerFloorHz, kHpCornerFracF0 * f0) : kHpCornerFloorHz;
+  dc_r_ = 1.0f - static_cast<float>(kTwoPi * hp_corner / sr);
 
   // Tuning compensation: one feedback register (bore_out_ is consumed one sample
-  // after it is produced) plus the bell lowpass's phase delay at the resonant
-  // frequency. Subtract from the loop delay.
+  // after it is produced), the bell lowpass's phase delay, and — for the cone's
+  // pitch-tracking highpass — its phase LEAD at the resonant frequency (which
+  // would otherwise sharpen the note). The lowpass lag lengthens the effective
+  // loop and the highpass lead shortens it, so they enter comp with opposite
+  // signs. Subtract comp from the loop delay.
   const float omega = kTwoPi / std::max(1.0f, bore_period_);
   const float tau_lp =
       std::atan2(a * std::sin(omega), 1.0f - a * std::cos(omega)) / std::max(omega, 1.0e-6f);
-  comp_ = 1.0f + tau_lp;
+  const float sw = std::sin(omega);
+  const float cw = std::cos(omega);
+  const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
+  const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
+  comp_ = 1.0f + tau_lp - kHpCompScale * tau_hp;
 
   // Circular span sized for the whole loop period plus bend-down headroom and the
   // interpolator stencil margin.

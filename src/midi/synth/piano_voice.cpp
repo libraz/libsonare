@@ -206,7 +206,31 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   }
   for (int i = num_strings_; i < kMaxPianoStrings; ++i) strings_[static_cast<size_t>(i)] = String{};
   bridge_ = 0.0f;
-  release_gain_ = loop_gain_for(period, sr, std::max(0.01f, params.release_damp_s));
+  // Damper keytrack: real piano dampers use progressively lighter felt
+  // toward the treble (vanishing entirely near the top of the keyboard, no
+  // damper at all above roughly F#6) and slightly heavier felt on the
+  // wound bass strings, so the post-release-off ring time scales with
+  // register instead of staying uniform. Flat across the tenor/alto anchor
+  // (C3-C4) where the felt geometry sits closest to nominal, then widens
+  // smoothly (zero slope at the anchor edges, so no audible register step)
+  // into the bass and, more strongly, into the treble.
+  constexpr float kAnchorLowNote = 48.0f;   // C3
+  constexpr float kAnchorHighNote = 60.0f;  // C4
+  constexpr float kBassSpan = 20.0f;
+  constexpr float kTrebleSpan = 10.0f;
+  constexpr float kBassGain = 0.4f;
+  constexpr float kTrebleGain = 2.6f;
+  const float note_f = static_cast<float>(note & 0x7Fu);
+  float damper_keytrack = 1.0f;
+  if (note_f < kAnchorLowNote) {
+    const float x = std::clamp((kAnchorLowNote - note_f) / kBassSpan, 0.0f, 1.0f);
+    damper_keytrack += kBassGain * x * x * (3.0f - 2.0f * x);
+  } else if (note_f > kAnchorHighNote) {
+    const float x = std::clamp((note_f - kAnchorHighNote) / kTrebleSpan, 0.0f, 1.0f);
+    damper_keytrack += kTrebleGain * x * x * (3.0f - 2.0f * x);
+  }
+  release_gain_ =
+      loop_gain_for(period, sr, std::max(0.01f, params.release_damp_s * damper_keytrack));
 
   // Felt-hammer pulse: Hertz-contact scaling of contact time and force with
   // velocity (p = hammer_exponent), shorter contact up the keyboard.
