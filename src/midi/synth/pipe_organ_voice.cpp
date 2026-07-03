@@ -48,7 +48,7 @@ constexpr float kDcCornerHz = 10.0f;
 // Even-harmonic pump: the asymmetric offset jet voices the octave the way an
 // open flue pipe's spectrum is octave-rich. A stopped rank keeps only a trace
 // (the gedackt is fundamental-dominant, nearly free of the octave).
-constexpr float kEvenPumpGain = 0.6f;
+constexpr float kEvenPumpGain = 0.62f;
 constexpr float kEvenPumpStopped = 0.08f;
 constexpr float kEvenPumpDcHz = 30.0f;
 
@@ -75,6 +75,13 @@ constexpr float kKeytrackSlope = 1.0f;
 
 // Chiff onset burst depth.
 constexpr float kChiffGain = 0.5f;
+// Chiff band: one-pole corner at this multiple of the KEY's f0 (the edge
+// tone's transient overblow sits around the note's low speaking partials),
+// capped absolutely — keying it on each rank's own f0 leaves the treble
+// upperwork's chiff nearly white (a 6-8 kHz corner filters nothing audible)
+// and the summed burst reads as a broadband crack on every high note.
+constexpr float kChiffCornerMult = 3.0f;
+constexpr float kChiffCornerMaxHz = 3000.0f;
 // Bore pre-fill: a low-level f0 sine seed so the jet locks promptly. A noise
 // pre-fill would circulate for seconds through the near-lossless bore
 // (loss_gain ~0.995) and put an audible hiss under the whole sustain.
@@ -85,8 +92,17 @@ constexpr float kBorePrefill = 0.05f;
 // (the plenum builds the way a real chorus speaks). Post-loop level swell —
 // the jet loop itself locks immediately off the pre-fill seed.
 constexpr float kSpeakPeriods = 30.0f;
-constexpr float kSpeakMinMs = 30.0f;
+// Treble floor: 30 periods of a high note is only tens of ms, and a full
+// plenum slamming in that fast reads as a crack on every onset (a small flue
+// pipe still needs its mouth vortex to establish); keep even the top of the
+// compass blooming over ~90 ms.
+constexpr float kSpeakMinMs = 90.0f;
 constexpr float kSpeakMaxMs = 700.0f;
+// Floor the upperwork's speak time at this fraction of the KEY's own swell so
+// the mutations never run far ahead of the principal: fully prompt upperwork
+// leaves the first ~100 ms top-heavy (h2-h4 up to ~16 dB over a still-silent
+// fundamental), which reads as a harsh crack on every onset.
+constexpr float kSpeakUpperworkFloor = 0.6f;
 
 // Output trim: the driven jet loop settles with a raw bore peak that falls with
 // pitch, so the per-pipe output is frequency-compensated toward a flat target
@@ -96,13 +112,59 @@ constexpr float kPeakBase = 4.0f;
 constexpr float kPeakTilt = -0.65f;
 constexpr float kPeakRefHz = 261.63f;
 
-// Determinism: chiff draw base; a per-rank offset in the high bits separates the
-// ranks (kRankNoiseShift).
+// Per-pipe tuning error (cents, peak): every (rank, note) pair is its own
+// physical pipe, hand-tuned within a few cents of true. The slow inter-rank
+// beating this creates IS the living chorus of a real plenum — ranks locked to
+// exact harmonic ratios fuse into one static, synthetic-sounding tone. The
+// span tapers above kDetuneTaperRefHz: a constant cents error makes the beat
+// rate grow with frequency, and the treble partials' 6-8 Hz near-total AM
+// reads as the note crackling — real tuners also land the small pipes much
+// closer to true because their beats are the most audible.
+constexpr float kPipeDetuneCents = 4.0f;
+constexpr float kDetuneTaperRefHz = 261.63f;
+
+// Jet turbulence: the air jet is turbulent, so the labium hisses continuously
+// under the pitched tone (the organ's "wind"). Injected into the jet drive
+// through a one-pole lowpass at kTurbCornerMult * f0 — the turbulence lives
+// around the pipe's speaking partials; raw white noise there reads as a
+// synthetic top-octave hiss instead of wind. The corner is capped absolutely:
+// a treble mutation rank's 4*f0 lands above 10 kHz where the "wind" is just
+// white crackle.
+constexpr float kJetTurbulence = 0.035f;
+constexpr float kTurbCornerMult = 4.0f;
+constexpr float kTurbCornerMaxHz = 3000.0f;
+
+// Post-loop tone corner as a multiple of the pipe's sounding f0 (two cascaded
+// one-poles). An individual flue pipe is fairly pure above its first several
+// partials — the jet cubic's odd-harmonic tail (h7/h9/h11) is a model artifact
+// a real pipe does not radiate; the plenum's top octaves are the UPPERWORK
+// ranks' job. Outside the loop, so tuning and speech are untouched. The rank's
+// radiation opens this corner (a pipe that radiates HF efficiently is heard
+// less pure in the room), on top of the radiation shelf.
+constexpr float kToneCornerMult = 7.3f;
+constexpr float kRadToneSpan = 1.0f;
+// Treble taper of the tone corner (per octave above C4).
+constexpr float kToneTrebleTaper = 0.35f;
+
+// Determinism: chiff / turbulence draw bases; a per-rank offset in the high
+// bits separates the ranks (kRankNoiseShift).
 constexpr uint64_t kChiffIndexBase = 1ull << 24;
+constexpr uint64_t kTurbIndexBase = 1ull << 32;
 constexpr uint64_t kRankNoiseShift = 48;
 
 float note_to_hz(uint8_t note) noexcept {
   return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
+}
+
+/// Deterministic per-pipe tuning error in [-1, 1]: keyed on (note, rank) only,
+/// so the same pipe is always tuned the same way across voices and renders —
+/// the instrument's tuning, not a per-note random.
+float pipe_tuning_error(uint8_t note, int rank) noexcept {
+  uint32_t h = static_cast<uint32_t>(note) * 2654435761u + static_cast<uint32_t>(rank) * 40503u;
+  h ^= h >> 15;
+  h *= 2246822519u;
+  h ^= h >> 13;
+  return static_cast<float>(h & 0xFFFFFFu) * (2.0f / 16777215.0f) - 1.0f;
 }
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
@@ -209,7 +271,12 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     // tone is fundamental-dominant with very little upperwork — the covered,
     // flute-like colour of a stopped pipe, without the odd-only comb's tuning
     // instability.
-    pipe.bore_period = period * kPitchCorrectOpen;
+    // Per-pipe tuning error: a few cents, fixed per (rank, note) — the slow
+    // inter-rank beating of a real chorus.
+    const float detune_span =
+        kPipeDetuneCents / (1.0f + std::max(0.0f, std::log2(f0 / kDetuneTaperRefHz)));
+    const float detune = std::exp2(detune_span * pipe_tuning_error(note, r) * (1.0f / 1200.0f));
+    pipe.bore_period = period * kPitchCorrectOpen / detune;
     pipe.sign = 1.0f;
     pipe.jet_ratio = kJetRatioOpen;
 
@@ -265,10 +332,19 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
 
     pipe.breath = mouth;
 
-    // Chiff onset burst (post-loop bright noise).
+    // Chiff onset burst (post-loop): noise band-limited around the pipe's
+    // speaking partials — the spit of the edge tone finding its pitch. Raw
+    // white noise here reads as a broadband crack on every onset.
     pipe.chiff_level = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffGain;
     pipe.chiff_coeff = std::exp(
         -1.0f / std::max(1.0f, static_cast<float>(std::max(0.5f, params.chiff_ms) * 0.001 * sr)));
+    const float chiff_corner = std::min(kChiffCornerMult * base_f0, kChiffCornerMaxHz);
+    pipe.chiff_lp_alpha = std::clamp(1.0f - std::exp(-kTwoPi * chiff_corner / srf), 0.01f, 1.0f);
+    pipe.chiff_lp_state = 0.0f;
+    // Keep the burst's energy roughly constant as the band narrows (one-pole
+    // filtered unit noise has RMS ~ sqrt(alpha / (2 - alpha))): the low pipes'
+    // chiff is a low "houff", not a vanishing one.
+    pipe.chiff_level *= std::sqrt((2.0f - pipe.chiff_lp_alpha) / pipe.chiff_lp_alpha);
 
     // Mouth/radiation high-shelf (post-loop, outside the loop).
     const float radiation = std::clamp(ranks[r].radiation, 0.0f, 1.0f);
@@ -290,21 +366,45 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     pipe.bore_write = 0;
     pipe.jet_write = 0;
 
+    // Jet turbulence band: the wind hiss lives around this pipe's speaking
+    // partials.
+    const float turb_corner = std::min(kTurbCornerMult * f0, kTurbCornerMaxHz);
+    pipe.turb_alpha = std::clamp(1.0f - std::exp(-kTwoPi * turb_corner / srf), 0.01f, 1.0f);
+    pipe.turb_state = 0.0f;
+
+    // Post-loop tone filter: this pipe radiates a fairly pure tone; the top
+    // octaves are the upperwork's job. Radiation opens the corner; the corner
+    // closes toward the treble (small pipes are the purest, and their excess
+    // upper partials are what beat audibly fast between detuned ranks).
+    const float tone_mult = kToneCornerMult / (1.0f + kToneTrebleTaper * octaves_above);
+    pipe.tone_alpha = std::clamp(
+        1.0f - std::exp(-kTwoPi * tone_mult * (1.0f + kRadToneSpan * radiation) * f0 / srf), 0.01f,
+        1.0f);
+    pipe.tone_s1 = 0.0f;
+    pipe.tone_s2 = 0.0f;
+
     // Speech swell: this rank blooms in over ~kSpeakPeriods of its own
-    // fundamental (bass pipes slower than the upperwork).
+    // fundamental (bass pipes slower than the upperwork), floored at a fraction
+    // of the key's swell so the upperwork stays ahead without swamping it.
     const float period_ms = 1000.0f * period / srf;
-    pipe.speak_coeff =
-        ramp_coeff(std::clamp(kSpeakPeriods * period_ms, kSpeakMinMs, kSpeakMaxMs), sr);
+    const float note_speak_ms =
+        std::clamp(kSpeakPeriods * 1000.0f / std::max(1.0f, base_f0), kSpeakMinMs, kSpeakMaxMs);
+    const float speak_ms = std::max(std::clamp(kSpeakPeriods * period_ms, kSpeakMinMs, kSpeakMaxMs),
+                                    kSpeakUpperworkFloor * note_speak_ms);
+    pipe.speak_coeff = ramp_coeff(speak_ms, sr);
     pipe.wind = 0.0f;
 
     // Pre-fill the bore with a low-level f0 sine seed so the jet locks promptly
     // (noise here would hiss under the whole sustain); the jet span starts
-    // silent.
+    // silent. Each pipe seeds at its own fixed phase: seeding every rank at
+    // phase zero starts all the detuned partials fully aligned, and their
+    // first coherent swell-and-collapse reads as a crack on the onset.
     if (pipe.bore != nullptr) {
       const float pf = kBorePrefill * mouth;
       const float w = kTwoPi / std::max(2.0f, pipe.bore_period);
+      const float phase = 3.14159265f * pipe_tuning_error(note, r + 8);
       for (int i = 0; i < span; ++i) {
-        pipe.bore[static_cast<size_t>(i)] = pf * std::sin(w * static_cast<float>(i));
+        pipe.bore[static_cast<size_t>(i)] = pf * std::sin(w * static_cast<float>(i) + phase);
       }
     }
     if (pipe.jet != nullptr) {
@@ -339,8 +439,14 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
     const float temp = pipe.sign * pipe.loss_gain * pipe.lp_state;
 
     // Jet drive: the pressure difference across the flue convects (jet delay)
-    // and deflects across the labium (the cubic jet table).
-    const float pd = breath - pipe.jet_reflection * temp;
+    // and deflects across the labium (the cubic jet table). The jet is
+    // turbulent — a continuous low-level hiss rides on the drive and is combed
+    // by the loop toward the pipe's own resonances (the organ's wind).
+    pipe.turb_state +=
+        pipe.turb_alpha *
+        (noise_.bipolar_at(kTurbIndexBase + pipe.noise_offset + drive_index_) - pipe.turb_state);
+    const float pd =
+        breath - pipe.jet_reflection * temp + kJetTurbulence * breath * pipe.turb_state;
     const float bore_delay = std::clamp(pipe.bore_period / ratio - pipe.comp, 1.0f,
                                         static_cast<float>(pipe.bore_size - 4));
     const float jet_delay =
@@ -371,25 +477,39 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
                                                    pipe.bore_write,
                                                    static_cast<int>(bore_delay * 256.0f), into);
 
-    // Mouth/radiation high-shelf (post-loop): lift the partials the pipe
-    // radiates more efficiently into the room. rad_gain == 0 is a true bypass.
+    // Mouth/radiation high-shelf (lifting what the pipe radiates efficiently
+    // into the room; rad_gain == 0 is a true bypass), then the post-loop tone
+    // filter — the pipe's own radiated purity caps the shelf's reach so the
+    // lift lives in the pipe's speaking band, not the top octaves.
     float radiated = pipe.bore_out;
     if (pipe.rad_gain > 0.0f) {
-      pipe.rad_state += pipe.rad_alpha * (pipe.bore_out - pipe.rad_state);
-      radiated = pipe.bore_out + pipe.rad_gain * (pipe.bore_out - pipe.rad_state);
+      pipe.rad_state += pipe.rad_alpha * (radiated - pipe.rad_state);
+      radiated += pipe.rad_gain * (radiated - pipe.rad_state);
     }
+    pipe.tone_s1 += pipe.tone_alpha * (radiated - pipe.tone_s1);
+    pipe.tone_s2 += pipe.tone_alpha * (pipe.tone_s1 - pipe.tone_s2);
+    radiated = pipe.tone_s2;
 
-    // Chiff: a decaying bright onset burst on top of the pitched tone.
+    // Chiff: a decaying onset burst on top of the pitched tone, kept inside
+    // the pipe's own speaking band.
     float chiff = 0.0f;
     if (pipe.chiff_level > 1.0e-5f) {
-      chiff = pipe.chiff_level * breath_level_ *
-              noise_.bipolar_at(kChiffIndexBase + pipe.noise_offset + drive_index_);
+      pipe.chiff_lp_state +=
+          pipe.chiff_lp_alpha *
+          (noise_.bipolar_at(kChiffIndexBase + pipe.noise_offset + drive_index_) -
+           pipe.chiff_lp_state);
+      chiff = pipe.chiff_level * breath_level_ * pipe.chiff_lp_state;
       pipe.chiff_level *= pipe.chiff_coeff;
     }
 
     // The chiff stays prompt (the spit of the pipe starting to speak) while the
-    // pitched tone blooms in behind it.
-    mix += pipe.mix * (pipe.wind * pipe.output_scale * radiated + chiff);
+    // pitched tone blooms in behind it. The swell is squared: a raw one-pole
+    // front-loads its rise (63% in a third of its time), and that steep early
+    // amplitude edge splatters transient sidebands across the whole spectrum —
+    // the wideband crack visible at every treble onset. Squaring makes the
+    // rise S-shaped (soft start, same settling time).
+    const float swell = pipe.wind * pipe.wind;
+    mix += pipe.mix * (swell * pipe.output_scale * radiated + chiff);
   }
   ++drive_index_;
   return mix;

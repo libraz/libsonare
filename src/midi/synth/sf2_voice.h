@@ -195,6 +195,9 @@ struct Sf2Voice : VoiceState {
   Sf2Lfo vib_lfo;
   TptSvf filter;
   bool key_down = false;
+  /// Captured by the sostenuto pedal (CC66 down while the key was held): the
+  /// note keeps ringing after note-off until the pedal lifts.
+  bool sostenuto = false;
   // Cached stereo gains for (zone pan + channel pan); recomputed on change.
   float cached_pan_units = 1.0e9f;
   float gain_left = 0.70710678f;

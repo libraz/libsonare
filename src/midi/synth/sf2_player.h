@@ -163,6 +163,11 @@ class Sf2Player final : public MidiInstrument {
     uint8_t bank_msb = 0;  // CC0; GS variation bank select
     uint8_t bank_lsb = 0;  // CC32
     bool sustain = false;
+    /// Raw CC64 value for half-pedal: a partially raised damper (1..126) rests
+    /// on the strings of the piano fallback voices instead of freeing them.
+    uint8_t sustain_level = 0;
+    bool sostenuto_down = false;  // CC66 pedal state (edge-triggered capture)
+    bool una_corda = false;       // CC67; softens piano fallback voices at start
     // Default-modulator controller state.
     uint8_t volume = 100;      // CC7
     uint8_t expression = 127;  // CC11
@@ -186,7 +191,14 @@ class Sf2Player final : public MidiInstrument {
   void fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
   void note_off(uint8_t channel, uint8_t note) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
+  /// CC64 with half-pedal semantics: 0 releases held notes, 127 holds them
+  /// freely, 1..126 rests the partially raised damper on ringing piano
+  /// fallback voices (piano.damp).
+  void sustain_cc(uint8_t channel, uint8_t value) noexcept;
   void sustain_pedal(uint8_t channel, bool down) noexcept;
+  /// CC66: captures the keys held at the down edge; they ring past note-off
+  /// until the pedal lifts.
+  void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
@@ -265,6 +277,34 @@ class Sf2Player final : public MidiInstrument {
   int fallback_brass_capacity_ = 0;
   std::vector<float> fallback_flute_buffers_;
   int fallback_flute_capacity_ = 0;
+  /// Shared organ wind (tremulant / wind sag) for the fallback voices, one
+  /// chest per part: the NativeSynth host feeds its voices from a wind supply,
+  /// and the fallback path must do the same or the pipe-organ patches' trem /
+  /// sag parameters are silently ignored. Prepared lazily at the first organ
+  /// note-on of a part (re-prepared only when the patch parameters change, so
+  /// the LFO phase stays continuous across notes).
+  struct FallbackWindParams {
+    float rate = -1.0f;
+    float depth = -1.0f;
+    float sag = -1.0f;
+  };
+  std::array<OrganWindSupply, 16> fallback_wind_;
+  std::array<FallbackWindParams, 16> fallback_wind_params_{};
+  /// Shared body resonators for the fallback voices, one per part — the same
+  /// bus-level components the NativeSynth host folds in: the piano's modal
+  /// soundboard + pedal-gated sympathetic string bank, and the plucked-string
+  /// open-string halo (ks.sympathetic patches). Driven by the part's summed
+  /// fallback dry signal; kept processing for a ring-out window after the last
+  /// voice dies so the resonator tail is not truncated.
+  enum class FallbackBodyKind : uint8_t { kNone, kPiano, kGuitarHalo };
+  struct FallbackBodyState {
+    FallbackBodyKind kind = FallbackBodyKind::kNone;
+    float soundboard_mix = -1.0f;
+    int64_t ringout = 0;
+  };
+  std::array<PianoSoundboard, 16> fallback_board_;
+  std::array<PianoResonanceBank, 16> fallback_reso_;
+  std::array<FallbackBodyState, 16> fallback_body_{};
 
   // Chunk scratch (prepared on the control thread).
   std::vector<float> mix_l_;

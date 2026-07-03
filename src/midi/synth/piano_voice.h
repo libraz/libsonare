@@ -45,6 +45,12 @@
 namespace sonare::midi::synth {
 
 inline constexpr int kMaxPianoStrings = 3;
+/// Share of the raw string signal a piano host keeps in the mix. The rest of
+/// the note reaches the listener through PianoSoundboard::process(), whose
+/// phase-diffusing radiation path breaks the waveform's periodicity — heard
+/// directly, a phase-coherent string loop reads as a literally vibrating
+/// string (a guitar), not as an instrument radiating through a board.
+inline constexpr float kPianoDirectGain = 0.3f;
 inline constexpr int kPianoDispersionStages = 4;
 /// Lowest fundamental the piano string loops are sized for (A0 = 27.5 Hz).
 inline constexpr float kPianoMinFundamentalHz = 26.0f;
@@ -99,7 +105,7 @@ struct PianoPatchParams {
   /// stretch (0 = harmonic string).
   float dispersion = 1.0f;
   /// Hammer strike point as a fraction of the string period in [0, 0.5].
-  float strike_position = 0.12f;
+  float strike_position = 0.085f;
   /// Felt compression exponent p in F = K*y^p (sets the velocity scaling
   /// laws of contact time and force).
   float hammer_exponent = 2.5f;
@@ -148,17 +154,16 @@ class PianoVoiceCore {
     float* buffer = nullptr;
     int size = 0;
     size_t write_index = 0;
-    float base_period = 0.0f;  // ideal loop period / detune included
-    float comp = 1.0f;         // loop delay not in the line (fb + lp + allpass)
+    float base_period = 0.0f;     // ideal loop period / detune included
+    float comp = 1.0f;            // loop delay not in the line (fb + lp + allpass)
+    float strike_weight = 1.0f;   // uneven hammer energy across the unison
+    float radiate_weight = 1.0f;  // uneven bridge coupling across the unison
     float lp_state = 0.0f;
     std::array<float, kPianoDispersionStages> ap_state{};
     float ap_a = 0.0f;  // shared first-order allpass coefficient
     float g_slow = 0.0f;
     float g_fast = 0.0f;
   };
-
-  /// Analytic raised-cosine hammer force at sample @p n (0 outside contact).
-  float hammer_force(int64_t n) const noexcept;
 
   float* slab_ = nullptr;
   int string_capacity_ = 0;
@@ -170,14 +175,82 @@ class PianoVoiceCore {
   /// Damper radius cap installed by release().
   float release_gain_ = 0.0f;
 
-  // Hammer pulse (analytic; combed by the strike position, then the
-  // velocity-driven felt-stiffness lowpass).
-  int64_t exc_pos_ = 0;
-  int contact_samples_ = 0;
-  int comb_delay_ = 0;
+  /// Ring capacity for the strike-position comb on the hammer force (covers
+  /// a 0.5 * period tap up to ~32 Hz at 96 kHz; longer taps clamp).
+  static constexpr int kHammerCombCapacity = 2048;
+
+  // Dynamic felt hammer: a mass with a nonlinear spring (F = k * x^p, with a
+  // hysteretic loss term) integrated per sample against the string's motion
+  // at the strike point. Contact time, its velocity/register dependence and
+  // the bass re-contact chatter all emerge from the interaction instead of
+  // being prescribed as a pulse shape.
   float hammer_amp_ = 0.0f;
+  bool ham_on_ = false;
+  int ham_ttl_ = 0;
+  float ham_y_ = 0.0f;
+  float ham_v_ = 0.0f;
+  float ham_k_ = 0.0f;
+  float ham_p_ = 2.5f;
+  float ham_mu_ = 0.0f;
+  float ham_force_norm_ = 0.0f;
+  float ham_exit_ = -1.0f;
+  float ys_ = 0.0f;
+  float ys_adm_ = 0.0f;
+  float last_force_ = 0.0f;
+  int comb_delay_ = 0;
+  int comb_idx_ = 0;
+  int comb_tail_ = 0;
+  std::array<float, kHammerCombCapacity> comb_hist_{};
+  // Strike-position comb history for the injected scrub noise (same delay,
+  // separate units/lifetime from the force comb).
+  std::array<float, kHammerCombCapacity> noise_hist_{};
+  float knock_gain_ = 0.6f;
+  float knock_lp_ = 0.0f;
+  float knock_lp2_ = 0.0f;
+  float knock_lp3_ = 0.0f;
+  float knock_lp3_a_ = 0.0f;
+  float knock_lp_a_ = 0.0f;
+  float bloom_ = 1.0f;
+  float bloom_a_ = 1.0f;
   float exc_alpha_ = 1.0f;
   float exc_lp_ = 0.0f;
+  float exc_lp2_ = 0.0f;
+
+  // Soundboard radiation highpass (biquad, b2 == b0).
+  float hp_b0_ = 1.0f;
+  float hp_b1_ = 0.0f;
+  float hp_a1_ = 0.0f;
+  float hp_a2_ = 0.0f;
+  float hp_x1_ = 0.0f;
+  float hp_x2_ = 0.0f;
+  float hp_y1_ = 0.0f;
+  float hp_y2_ = 0.0f;
+
+  // Bridge-hill radiation emphasis (peaking biquad).
+  float bh_b0_ = 1.0f;
+  float bh_b1_ = 0.0f;
+  float bh_b2_ = 0.0f;
+  float bh_a1_ = 0.0f;
+  float bh_a2_ = 0.0f;
+  float bh_x1_ = 0.0f;
+  float bh_x2_ = 0.0f;
+  float bh_y1_ = 0.0f;
+  float bh_y2_ = 0.0f;
+
+  // Felt impact noise (broadband thump radiated with the knock at strike).
+  int64_t noise_pos_ = 0;
+  int noise_samples_ = 0;
+  float noise_env_ = 0.0f;
+  float noise_decay_ = 0.0f;
+  float noise_alpha_ = 1.0f;
+  float noise_inject_ = 0.0f;
+  float noise_lp_ = 0.0f;
+  float noise_lp2_ = 0.0f;
+  float noise_lp3_ = 0.0f;
+  float noise_alpha3_ = 1.0f;
+  float noise_low_ = 0.0f;
+  float noise_hp_a_ = 0.0f;
+  uint32_t noise_rng_ = 1u;
 };
 
 /// Pedal-gated sympathetic resonance: a small shared bank of string-mode
@@ -205,6 +278,12 @@ class PianoResonanceBank {
   /// is untouched. RT contract identical to prepare().
   void prepare_custom(double sample_rate, const float* freqs, int count, float ring_t60_s,
                       float out_gain) noexcept;
+  /// prepare_custom() preset for the plucked-string "sound halo": the bank is
+  /// tuned to the standard-tuning open guitar strings (E2 A2 D3 G3 B3 E4) plus
+  /// their low harmonics, ringing ~1.5 s at a weak coupling. Shared by every
+  /// host that voices a ks.sympathetic patch so the tuning table lives in one
+  /// place.
+  void prepare_guitar_sympathetic(double sample_rate) noexcept;
   /// Clears the resonator state and the damper gate.
   void reset() noexcept;
   /// Adds the sympathetic resonance for one input sample. @p damper_open
@@ -249,12 +328,16 @@ class PianoSoundboard {
   void prepare(double sample_rate, float mix) noexcept;
   /// Clears the resonator state.
   void reset() noexcept;
-  /// Adds the soundboard colour for one summed input sample; returns the
-  /// (mix-scaled) board contribution to fold back into the output.
+  /// Radiates one summed input sample: returns the phase-diffused complement
+  /// of the host's direct share plus the (mix-scaled) modal colour.
   float process(float in) noexcept;
+  /// The phase-diffused sample computed by the last process() call. Feed
+  /// resonance banks from this (not the raw dry) so their returns share the
+  /// radiated path's phase field instead of partially cancelling it.
+  float last_diffused() const noexcept { return in1_; }
 
  private:
-  static constexpr int kSoundboardModes = 28;
+  static constexpr int kSoundboardModes = 40;
   struct Mode {
     float a1 = 0.0f;
     float a2 = 0.0f;
@@ -263,7 +346,25 @@ class PianoSoundboard {
     float y2 = 0.0f;
   };
   std::array<Mode, kSoundboardModes> modes_{};
+  // Schroeder allpass diffusers (fixed capacity, no allocation: the lazy
+  // fallback prepare runs on the audio thread; prepare() sets the active
+  // lengths, clamped to the capacity at very high sample rates).
+  static constexpr size_t kDiffuserCapacity = 2048;
+  std::array<float, kDiffuserCapacity> diff_buf_[2]{};
+  size_t diff_len_[2] = {0, 0};
+  size_t diff_idx_[2] = {0, 0};
+  float in1_ = 0.0f;
+  float in2_ = 0.0f;
   float out_gain_ = 0.0f;
+  // Sustain-air texture state (level-tracked bandpassed noise).
+  float air_env_ = 0.0f;
+  float air_lp_ = 0.0f;
+  float air_hp_ = 0.0f;
+  float air_attack_ = 0.0f;
+  float air_release_ = 0.0f;
+  float air_lp_a_ = 0.0f;
+  float air_hp_a_ = 0.0f;
+  uint32_t air_rng_ = 0x9E3779B9u;
 };
 
 }  // namespace sonare::midi::synth

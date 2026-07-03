@@ -43,6 +43,10 @@
 ///      sound on one key, each an independent jet pipe. A principal chorus
 ///      (8'+4'+2') and a mixture (several high ranks in one stop) fall out of
 ///      summing decorrelated pipes, the way a real organ builds its plenum.
+///   6. LIVING CHORUS: each (rank, note) pipe carries its own fixed few-cent
+///      tuning error (the instrument's hand tuning), so the ranks beat slowly
+///      against each other instead of fusing into one static tone, and the
+///      turbulent jet hisses continuously under the pitched tone (the wind).
 ///
 /// The delay buffers are NOT owned by the core: the host instrument allocates
 /// one slab per voice slot in prepare() (the only allocation site) sized for
@@ -262,9 +266,24 @@ class PipeOrganVoiceCore {
     /// periods, so bass pipes bloom in after the prompt upperwork.
     float wind = 0.0f;
     float speak_coeff = 0.0f;
-    /// Chiff onset burst (one-pole decay).
+    /// Jet turbulence lowpass (keeps the wind hiss around the speaking
+    /// partials) — one-pole coefficient and state.
+    float turb_alpha = 1.0f;
+    float turb_state = 0.0f;
+    /// Post-loop tone filter (two cascaded one-poles at a multiple of this
+    /// pipe's f0): an individual flue pipe radiates a fairly pure tone — the
+    /// plenum's brilliance comes from the upperwork ranks, not from each
+    /// pipe's own distortion tail. Outside the loop: no pitch/speech impact.
+    float tone_alpha = 1.0f;
+    float tone_s1 = 0.0f;
+    float tone_s2 = 0.0f;
+    /// Chiff onset burst (one-pole decay). The noise is band-limited around
+    /// this pipe's speaking partials — a real chiff is the edge tone briefly
+    /// overblowing, not a broadband click.
     float chiff_level = 0.0f;
     float chiff_coeff = 0.0f;
+    float chiff_lp_alpha = 1.0f;
+    float chiff_lp_state = 0.0f;
     /// Mouth/radiation high-shelf (post-loop, outside the feedback path).
     float rad_gain = 0.0f;
     float rad_alpha = 0.0f;

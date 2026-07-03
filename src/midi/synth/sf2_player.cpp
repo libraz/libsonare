@@ -79,6 +79,9 @@ void Sf2Player::recompute_tail() noexcept {
   if (config_.synth_fallback) {
     tail_samples_ = std::max(tail_samples_, DahdsrEnvelope::release_tail_samples(
                                                 sample_rate_, gm_fallback_max_release_ms()));
+    // The shared body resonators (piano soundboard / sympathetic banks) ring
+    // past the last voice; bound their tail like the NativeSynth host does.
+    tail_samples_ += static_cast<int64_t>(2.0 * sample_rate_);
   }
 #if defined(SONARE_MIDI_WITH_FX)
   // The note tail rings first, the effect tail decays after it.
@@ -198,6 +201,13 @@ void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send
     channels_[ch].reverb_send = reverb_send_default;
     channels_[ch].chorus_send = chorus_send_default;
     refresh_channel_mod(ch);
+  }
+  for (int part = 0; part < 16; ++part) {
+    fallback_wind_[static_cast<size_t>(part)].reset();
+    fallback_wind_params_[static_cast<size_t>(part)] = {};
+    fallback_board_[static_cast<size_t>(part)].reset();
+    fallback_reso_[static_cast<size_t>(part)].reset();
+    fallback_body_[static_cast<size_t>(part)] = {};
   }
 }
 
@@ -466,37 +476,140 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
       drum_mod.pan_units = (static_cast<float>(gd.pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
     }
   }
-  voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, false, drum_kit, drum_mod);
+  voice->start(patch, sample_rate_, velocity, voice_index, 0.0f, ch.una_corda, drum_kit, drum_mod);
+
+  // Pipe-organ patches share a per-part wind chest (tremulant / wind sag).
+  // Re-prepare only when the parameters change so the tremulant phase stays
+  // continuous across notes.
+  const uint8_t part = channel & 0x0Fu;
+  if (patch.mode == SynthEngineMode::kPipeOrgan) {
+    FallbackWindParams& wp = fallback_wind_params_[part];
+    const float rate = patch.pipe_organ.tremulant_rate_hz;
+    const float depth = patch.pipe_organ.tremulant_depth;
+    const float sag = patch.pipe_organ.wind_sag;
+    if (wp.rate != rate || wp.depth != depth || wp.sag != sag) {
+      wp = {rate, depth, sag};
+      fallback_wind_[part].prepare(sample_rate_, rate, depth, sag);
+    }
+  }
+
+  // Bus-level body resonators (the components the NativeSynth host folds in):
+  // the piano's modal soundboard + pedal-gated sympathetic bank, and the
+  // plucked-string open-string halo. Re-prepared only when the part's patch
+  // kind or soundboard mix changes.
+  FallbackBodyState& body = fallback_body_[part];
+  if (patch.mode == SynthEngineMode::kPiano) {
+    if (body.kind != FallbackBodyKind::kPiano || body.soundboard_mix != patch.piano.soundboard) {
+      body.kind = FallbackBodyKind::kPiano;
+      body.soundboard_mix = patch.piano.soundboard;
+      fallback_board_[part].prepare(sample_rate_, patch.piano.soundboard);
+      fallback_reso_[part].prepare(sample_rate_);
+    }
+  } else if (patch.mode == SynthEngineMode::kKarplusStrong && patch.ks.sympathetic) {
+    if (body.kind != FallbackBodyKind::kGuitarHalo) {
+      body.kind = FallbackBodyKind::kGuitarHalo;
+      body.soundboard_mix = -1.0f;
+      fallback_reso_[part].prepare_guitar_sympathetic(sample_rate_);
+    }
+  } else if (body.kind != FallbackBodyKind::kNone && !ch.drums) {
+    // The part moved to a program with no body resonator.
+    body.kind = FallbackBodyKind::kNone;
+    body.soundboard_mix = -1.0f;
+    body.ringout = 0;
+  }
 }
 
 void Sf2Player::note_off(uint8_t channel, uint8_t note) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
+  const ChannelState& st = channels_[ch];
   for (Sf2Voice& v : pool_) {
     if (v.active && v.note == note && v.channel == ch && v.key_down) {
       v.key_down = false;
-      if (!channels_[ch].sustain) v.release();
+      // A sostenuto capture holds the note regardless of the sustain pedal.
+      if (v.sostenuto) continue;
+      if (!st.sustain) v.release();
     }
   }
   for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.note == note && v.channel == ch && v.key_down) {
       v.key_down = false;
-      if (!channels_[ch].sustain) v.release();
+      if (v.sostenuto) continue;
+      if (!st.sustain) {
+        v.release();
+      } else if (st.sustain_level < 127 && v.patch != nullptr &&
+                 v.patch->mode == SynthEngineMode::kPiano) {
+        // Half-pedal: the partially raised damper rests on the string.
+        v.piano.damp(static_cast<float>(127 - st.sustain_level) / 63.0f);
+      }
     }
   }
 }
 
 void Sf2Player::sustain_pedal(uint8_t channel, bool down) noexcept {
+  sustain_cc(channel, down ? 127 : 0);
+}
+
+void Sf2Player::sustain_cc(uint8_t channel, uint8_t value) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
-  if (channels_[ch].sustain == down) return;
-  channels_[ch].sustain = down;
-  if (down) return;
+  ChannelState& st = channels_[ch];
+  const bool was_down = st.sustain;
+  st.sustain_level = value;
+  st.sustain = value >= 64;
+  if (st.sustain) {
+    // Half-pedal: a partially raised damper still rests on the piano strings,
+    // so held-but-released fallback notes are damped rather than ringing
+    // freely. Key-down and sostenuto-captured notes keep their dampers off.
+    if (value < 127) {
+      const float strength = static_cast<float>(127 - value) / 63.0f;
+      for (NativeSynthVoice& v : fallback_pool_) {
+        if (v.active && v.channel == ch && !v.key_down && !v.sostenuto && v.patch != nullptr &&
+            v.patch->mode == SynthEngineMode::kPiano) {
+          v.piano.damp(strength);
+        }
+      }
+    }
+    return;
+  }
+  if (!was_down) return;
+  // Pedal up: the dampers fall on every held-but-released note. A
+  // sostenuto-captured note stays held even when the sustain pedal lifts.
   for (Sf2Voice& v : pool_) {
-    if (v.active && v.channel == ch && !v.key_down && !v.releasing) v.release();
+    if (v.active && v.channel == ch && !v.key_down && !v.releasing && !v.sostenuto) v.release();
   }
   for (NativeSynthVoice& v : fallback_pool_) {
-    if (v.active && v.channel == ch && !v.key_down && !v.releasing) v.release();
+    if (v.active && v.channel == ch && !v.key_down && !v.releasing && !v.sostenuto) v.release();
+  }
+}
+
+void Sf2Player::sostenuto_pedal(uint8_t channel, bool down) noexcept {
+  if (!prepared_) return;
+  const uint8_t ch = channel & 0x0Fu;
+  ChannelState& st = channels_[ch];
+  if (st.sostenuto_down == down) return;
+  st.sostenuto_down = down;
+  if (down) {
+    // Capture exactly the keys held at the down edge.
+    for (Sf2Voice& v : pool_) {
+      if (v.active && v.channel == ch && v.key_down) v.sostenuto = true;
+    }
+    for (NativeSynthVoice& v : fallback_pool_) {
+      if (v.active && v.channel == ch && v.key_down) v.sostenuto = true;
+    }
+    return;
+  }
+  for (Sf2Voice& v : pool_) {
+    if (v.active && v.channel == ch && v.sostenuto) {
+      v.sostenuto = false;
+      if (!v.key_down && !v.releasing && !st.sustain) v.release();
+    }
+  }
+  for (NativeSynthVoice& v : fallback_pool_) {
+    if (v.active && v.channel == ch && v.sostenuto) {
+      v.sostenuto = false;
+      if (!v.key_down && !v.releasing && !st.sustain) v.release();
+    }
   }
 }
 
@@ -607,7 +720,9 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   st.expression = 127;
   st.pitch_bend = 8192;
   st.params.reset();
-  sustain_pedal(ch, false);
+  sustain_cc(ch, 0);
+  sostenuto_pedal(ch, false);
+  st.una_corda = false;
   refresh_channel_mod(ch);
 }
 
@@ -677,7 +792,16 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
       st.params.select_rpn_msb(value);
       break;
     case 64:
-      sustain_pedal(ch, value >= 64);
+      sustain_cc(ch, value);
+      break;
+    case 66:
+      sostenuto_pedal(ch, value >= 64);
+      break;
+    case 67:
+      // Una corda: shifts the piano fallback action for notes STARTED while
+      // down (the hammer strikes fewer strings); sample-playback voices keep
+      // their recorded voicing.
+      st.una_corda = value >= 64;
       break;
     case 120:
       all_sound_off(ch);
@@ -780,7 +904,45 @@ void Sf2Player::render_chunk(int n) noexcept {
   }
 #endif
 
+  // Organ wind demand per part (sounding pipe-organ fallback voices): the
+  // shared wind chest advances once per sample per part, not per voice.
+  int organ_demand[16] = {0};
+  bool any_wind = false;
+  bool body_has_voice[16] = {false};
+  for (const NativeSynthVoice& v : fallback_pool_) {
+    if (!v.active || v.patch == nullptr) continue;
+    const uint8_t part = v.channel & 0x0Fu;
+    if (v.patch->mode == SynthEngineMode::kPipeOrgan) {
+      ++organ_demand[part];
+      any_wind = any_wind || fallback_wind_[part].active();
+    }
+    if (fallback_body_[part].kind != FallbackBodyKind::kNone) body_has_voice[part] = true;
+  }
+  // Body resonators keep ringing for a bounded tail after the last voice dies
+  // (the bank's own decay), then stop costing anything.
+  bool body_active[16] = {false};
+  bool any_body = false;
+  for (int part = 0; part < 16; ++part) {
+    FallbackBodyState& body = fallback_body_[static_cast<size_t>(part)];
+    if (body.kind == FallbackBodyKind::kNone) continue;
+    if (body_has_voice[part]) {
+      body.ringout = static_cast<int64_t>(2.0 * sample_rate_);
+    } else if (body.ringout > 0) {
+      body.ringout = std::max<int64_t>(0, body.ringout - n);
+    }
+    body_active[part] = body_has_voice[part] || body.ringout > 0;
+    any_body = any_body || body_active[part];
+  }
+
   for (int i = 0; i < n; ++i) {
+    OrganWindSupply::State wind_state[16];
+    if (any_wind) {
+      for (int part = 0; part < 16; ++part) {
+        if (organ_demand[part] > 0 && fallback_wind_[static_cast<size_t>(part)].active()) {
+          wind_state[part] = fallback_wind_[static_cast<size_t>(part)].process(organ_demand[part]);
+        }
+      }
+    }
     for (Sf2Voice& v : pool_) {
       if (!v.active) continue;
       const uint8_t part = v.channel & 0x0Fu;
@@ -817,13 +979,22 @@ void Sf2Player::render_chunk(int n) noexcept {
     }
     // Synth-fallback voices: same bus routing, channel-level (CC) sends only
     // (no zone send generators).
+    float body_dry[16] = {0.0f};
     for (NativeSynthVoice& v : fallback_pool_) {
       if (!v.active) continue;
       const uint8_t part = v.channel & 0x0Fu;
       const Sf2ChannelMod& mod = channel_mods_[part];
-      const float s = v.render(mod);
-      const float l = s * v.gain_left;
-      const float r = s * v.gain_right;
+      const OrganWindSupply::State& wind = wind_state[part];
+      const float s = v.render(mod, wind.pitch_ratio, wind.gain);
+      float l = s * v.gain_left;
+      float r = s * v.gain_right;
+      if (body_active[part]) body_dry[part] += 0.5f * (l + r);
+      // Piano radiates mostly through the board (the body block below); only
+      // the direct share of the raw string waveform stays in the voice path.
+      if (fallback_body_[part].kind == FallbackBodyKind::kPiano) {
+        l *= kPianoDirectGain;
+        r *= kPianoDirectGain;
+      }
       if (any_insert_) {
         float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
         bus[i] += l;
@@ -848,6 +1019,48 @@ void Sf2Player::render_chunk(int n) noexcept {
         }
       }
 #endif
+    }
+    // Shared body resonators, fed by the part's summed fallback dry signal and
+    // folded back centre-panned (the same bus-level coupling the NativeSynth
+    // host applies): the piano's soundboard + pedal-gated sympathetic bank,
+    // the plucked halo held open (no dampers).
+    if (any_body) {
+      for (int part = 0; part < 16; ++part) {
+        if (!body_active[part]) continue;
+        const FallbackBodyState& body = fallback_body_[static_cast<size_t>(part)];
+        const float dry = body_dry[part];
+        float add = 0.0f;
+        if (body.kind == FallbackBodyKind::kPiano) {
+          PianoSoundboard& board = fallback_board_[static_cast<size_t>(part)];
+          add = board.process(dry) +
+                fallback_reso_[static_cast<size_t>(part)].process(
+                    board.last_diffused(), channels_[static_cast<size_t>(part)].sustain);
+        } else {
+          add = fallback_reso_[static_cast<size_t>(part)].process(dry, /*damper_open=*/true);
+        }
+        if (add == 0.0f) continue;
+        if (any_insert_) {
+          float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
+          bus[i] += add;
+          bus[kChunkFrames + i] += add;
+        } else {
+          mix_l_[static_cast<size_t>(i)] += add;
+          mix_r_[static_cast<size_t>(i)] += add;
+        }
+#if defined(SONARE_MIDI_WITH_FX)
+        if (rev_l != nullptr) {
+          const Sf2ChannelMod& mod = channel_mods_[part];
+          if (mod.fallback_reverb_send > 0.0f) {
+            rev_l[i] += add * mod.fallback_reverb_send;
+            rev_r[i] += add * mod.fallback_reverb_send;
+          }
+          if (mod.fallback_chorus_send > 0.0f) {
+            cho_l[i] += add * mod.fallback_chorus_send;
+            cho_r[i] += add * mod.fallback_chorus_send;
+          }
+        }
+#endif
+      }
     }
   }
 

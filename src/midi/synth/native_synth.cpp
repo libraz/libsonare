@@ -580,17 +580,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     // undamped strings ringing behind the played note. Plucked strings have no
     // dampers, so the bank is held open (process() passes damper_open == true).
     if (config_.patch.ks.sympathetic) {
-      constexpr uint8_t kOpenStrings[6] = {40, 45, 50, 55, 59, 64};
-      float freqs[16];
-      int n = 0;
-      for (uint8_t note : kOpenStrings) freqs[n++] = synth_note_to_hz(static_cast<float>(note));
-      for (uint8_t note : kOpenStrings)
-        freqs[n++] = 2.0f * synth_note_to_hz(static_cast<float>(note));
-      for (int i = 0; i < 4; ++i)
-        freqs[n++] = 3.0f * synth_note_to_hz(static_cast<float>(kOpenStrings[i]));
-      // Open guitar/harp strings ring for seconds; a ~1.5 s bank t60 keeps the
-      // halo audible without a runaway tail, at a weak coupling level.
-      resonance_.prepare_custom(sample_rate_, freqs, n, kKsSympatheticRingS, /*out_gain=*/0.05f);
+      resonance_.prepare_guitar_sympathetic(sample_rate_);
       sympathetic_active_ = true;
     }
   } else {
@@ -1221,11 +1211,14 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
     // Shared modal soundboard plus pedal-gated sympathetic resonance, both
     // driven by the summed dry mix and folded back into both legs (centre).
     if (piano_mode_) {
+      // Radiation split: the board returns the phase-diffused complement of
+      // the direct share (plus the modal colour), so most of the note reaches
+      // the mix through the board rather than as the raw string waveform.
       const float dry_mono = 0.5f * (mix_l + mix_r);
       const float body = soundboard_.process(dry_mono);
-      const float symp = resonance_.process(dry_mono, damper_open);
-      mix_l += body + symp;
-      mix_r += body + symp;
+      const float symp = resonance_.process(soundboard_.last_diffused(), damper_open);
+      mix_l = kPianoDirectGain * mix_l + body + symp;
+      mix_r = kPianoDirectGain * mix_r + body + symp;
     } else if (sympathetic_active_) {
       // Plucked-string sound halo: the open strings ring behind the note. Held
       // open (no dampers). Skipped entirely for KS patches that did not opt in,
