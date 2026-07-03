@@ -33,5 +33,15 @@
     "file": "src/midi/synth/gm_fallback_map.cpp",
     "pattern": "ranks\\[2\\] = \\{2.0f, false, ([0-9.]+)f",
     "min": 0.5, "max": 0.9, "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/pipe_organ_voice.cpp",
+    "pattern": "kToneCornerMult = ([0-9.]+)f",
+    "min": 3.5, "max": 14.0, "scale": "log"
+  },
+  {
+    "file": "src/midi/synth/pipe_organ_voice.cpp",
+    "pattern": "kEvenPumpGain = ([0-9.]+)f",
+    "min": 0.25, "max": 0.85, "scale": "linear"
   }
 ]

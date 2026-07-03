@@ -1,0 +1,93 @@
+[
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kHammerWidthHarmonics = ([0-9.]+)f",
+    "min": 2.5,
+    "max": 9.0,
+    "scale": "log"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kWidthBassOct = ([0-9.]+)f",
+    "min": 0.1,
+    "max": 1.2,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kStrikeNoiseInject = ([0-9.]+)f",
+    "min": 0.2,
+    "max": 0.8,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kStrikeNoiseCutoffScale = ([0-9.]+)f",
+    "min": 0.4,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kInjectTrebleTaperOct = ([0-9.]+)f",
+    "min": 0.6,
+    "max": 1.8,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kNoiseTrebleTaperOct = ([0-9.]+)f",
+    "min": 0.8,
+    "max": 2.0,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kBloomTauMsC4 = ([0-9.]+)f",
+    "min": 2.0,
+    "max": 12.0,
+    "scale": "log"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kKnockGain = ([0-9.]+)f",
+    "min": 0.8,
+    "max": 3.0,
+    "scale": "log"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kContactPeriodsAtC4 = ([0-9.]+)f",
+    "min": 0.25,
+    "max": 0.7,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kContactPeriodsPerOct = ([0-9.]+)f",
+    "min": 0.3,
+    "max": 0.9,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kStringYield = ([0-9.]+)f",
+    "min": 0.1,
+    "max": 1.5,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "ham_mu_ = ([0-9.]+)f",
+    "min": 0.05,
+    "max": 0.6,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "t\\[0\\].piano.brightness = ([0-9.]+)f",
+    "min": 0.7,
+    "max": 1.0,
+    "scale": "linear"
+  }
+]

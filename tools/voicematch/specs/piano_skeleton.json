@@ -1,0 +1,72 @@
+[
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kWidthBassOct = (-?[0-9.]+)f",
+    "min": -3.5,
+    "max": 1.2,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kStrikePosBassOct = ([0-9.]+)f",
+    "min": 0.0,
+    "max": 0.9,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kStrikeNoiseInject = ([0-9.]+)f",
+    "min": 0.05,
+    "max": 0.9,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kInjectBassBoostOct = ([0-9.]+)f",
+    "min": 0.0,
+    "max": 2.0,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kInjectTrebleTaperOct = ([0-9.]+)f",
+    "min": 0.3,
+    "max": 1.8,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kNoiseTrebleTaperOct = ([0-9.]+)f",
+    "min": 0.4,
+    "max": 2.2,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kStrikeNoiseCutoffScale = ([0-9.]+)f",
+    "min": 0.3,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kBridgeHillHz = ([0-9.]+)f",
+    "min": 900.0,
+    "max": 2600.0,
+    "scale": "log"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kBridgeHillGainDb = ([0-9.]+)f",
+    "min": 0.0,
+    "max": 14.0,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kBridgeHillQ = ([0-9.]+)f",
+    "min": 0.5,
+    "max": 3.0,
+    "scale": "linear"
+  }
+]

@@ -68,6 +68,85 @@ from smf import write_smf
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SR = 48000
+SKELETON_MAX_S = 2.0  # analysis window per note (matches the sustain pattern)
+
+
+def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
+    """Per-harmonic envelope skeleton of one note.
+
+    Separates the two things the time-averaged spectrum conflates:
+      - init_db: per-harmonic level extrapolated to the onset (dB rel h1) —
+        the EXCITATION spectrum evidence;
+      - early_db_s / late_db_s: per-harmonic decay slopes (0.08-0.40 s and
+        0.8-1.8 s linear fits) — the LOOP decay evidence.
+    Harmonics above Nyquist are None.
+    """
+    f0_nominal = 440.0 * 2.0 ** ((note.note - 69) / 12.0)
+    start = int(note.start * sr)
+    seg = np.asarray(
+        mono[start : start + int(min(note.dur, SKELETON_MAX_S) * sr)], dtype=np.float64
+    )
+    win_n = int(0.05 * sr)
+    hop = int(0.01 * sr)
+    if len(seg) < win_n + hop:
+        return {"init_db": [None] * n_harm, "early_db_s": [None] * n_harm,
+                "late_db_s": [None] * n_harm}
+
+    # Refine each partial's frequency (inharmonicity-aware) with a zoomed DFT
+    # over the early sustain.
+    ref = seg[int(0.05 * sr) : int(0.55 * sr)]
+    ref_w = ref * np.hanning(len(ref))
+    t_ref = np.arange(len(ref)) / sr
+    freqs: list[float | None] = []
+    for h in range(1, n_harm + 1):
+        guess = f0_nominal * h
+        if guess > sr / 2 - 500.0:
+            freqs.append(None)
+            continue
+        cand = np.linspace(guess * 0.985, guess * 1.015, 41)
+        amps = np.abs(np.exp(-2j * np.pi * np.outer(cand, t_ref)) @ ref_w)
+        freqs.append(float(cand[int(np.argmax(amps))]))
+
+    n_frames = (len(seg) - win_n) // hop
+    frames = np.lib.stride_tricks.sliding_window_view(seg, win_n)[:: hop][:n_frames]
+    frames = frames * np.hanning(win_n)
+    t_win = np.arange(win_n) / sr
+    active = [f for f in freqs if f is not None]
+    basis = np.exp(-2j * np.pi * np.outer(t_win, np.array(active)))
+    env = np.abs(frames @ basis)  # (n_frames, n_active)
+    env_db = 20.0 * np.log10(env + 1e-12)
+    t_frame = (np.arange(n_frames) * hop + win_n / 2) / sr
+
+    def fit(lo: float, hi: float, col: np.ndarray) -> tuple[float, float] | None:
+        mask = (t_frame >= lo) & (t_frame <= hi)
+        if mask.sum() < 4:
+            return None
+        m, b = np.polyfit(t_frame[mask], col[mask], 1)
+        return float(m), float(b)
+
+    init_db: list[float | None] = []
+    early: list[float | None] = []
+    late: list[float | None] = []
+    col_i = 0
+    for f in freqs:
+        if f is None:
+            init_db.append(None)
+            early.append(None)
+            late.append(None)
+            continue
+        col = env_db[:, col_i]
+        col_i += 1
+        fe = fit(0.08, 0.40, col)
+        fl = fit(0.80, 1.80, col)
+        init_db.append(fe[1] if fe else None)
+        early.append(fe[0] if fe else None)
+        late.append(fl[0] if fl else None)
+    if init_db[0] is None:
+        return {"init_db": [None] * n_harm, "early_db_s": [None] * n_harm,
+                "late_db_s": [None] * n_harm}
+    ref_db = init_db[0]
+    init_db = [None if v is None else v - ref_db for v in init_db]
+    return {"init_db": init_db, "early_db_s": early, "late_db_s": late}
 
 # The spectral centroid is deliberately excluded from the loss: it depends on
 # the probe note set (register weighting) and has been an unreliable, noisy
@@ -257,10 +336,12 @@ def oracle_rows(program: int, pattern_name: str, notes_csv: str, sf2: str) -> li
         smf_bytes, total, SR, soundfont=Path(sf2) if sf2 else None,
     )
     mono = normalize_rms(to_mono(audio))
-    return [
-        analyze_note(mono, SR, note, note.start + note.dur + pattern.tail).to_dict()
-        for note in analysis_notes
-    ]
+    rows = []
+    for note in analysis_notes:
+        row = analyze_note(mono, SR, note, note.start + note.dur + pattern.tail).to_dict()
+        row["skeleton"] = skeleton_note(mono, SR, note)
+        rows.append(row)
+    return rows
 
 
 def _score(program: int, pattern_name: str, notes_csv: str):
@@ -279,6 +360,9 @@ def compute_loss(
     w_harm: float,
     w_cents: float,
     w_tnr: float,
+    w_env: float = 0.0,
+    w_init: float = 0.0,
+    w_slope: float = 0.0,
 ) -> float:
     """Mean per-note weighted mismatch between the model and the oracle.
 
@@ -288,7 +372,15 @@ def compute_loss(
       - intonation: absolute f0 cents difference from the oracle;
       - noise floor: TNR shortfall, penalised only when the model is noisier
         than the oracle (a model cleaner than the oracle is not penalised, since
-        the sampled oracle carries natural vibrato/breath noise).
+        the sampled oracle carries natural vibrato/breath noise);
+      - temporal envelope (w_env > 0): sustain-slope (dB/s), release (per
+        100 ms) and attack (per 10 ms) differences — the double-decay /
+        ring-down signature a purely spectral match is blind to;
+      - skeleton (w_init / w_slope > 0): per-harmonic ONSET ladder and decay
+        slopes from `skeleton_note`, which separate the excitation spectrum
+        from the loop decay (the time-averaged harmonic term conflates them).
+        Per-bin deltas are capped (12 dB / 30 dB/s) so single-sample oracle
+        quirks cannot dominate the objective.
     The spectral centroid is intentionally not part of the loss.
     """
     if not model_rows or len(model_rows) != len(oracle_rows_):
@@ -302,7 +394,24 @@ def compute_loss(
         cents = abs(m["f0_cents_err"] - o["f0_cents_err"])
         tnr_delta = m["tnr_db"] - o["tnr_db"]  # model - oracle
         tnr_pen = max(0.0, -tnr_delta)  # only when the model is noisier
-        note_loss = w_harm * harm_l1 + w_cents * cents + w_tnr * tnr_pen
+        env_pen = 0.0
+        if w_env > 0.0:
+            env_pen += abs(m["sustain_slope_db_s"] - o["sustain_slope_db_s"])
+            env_pen += abs(m["release_ms"] - o["release_ms"]) / 100.0
+            env_pen += abs(m["attack_ms"] - o["attack_ms"]) / 10.0
+        init_pen = 0.0
+        slope_pen = 0.0
+        if (w_init > 0.0 or w_slope > 0.0) and "skeleton" in m and "skeleton" in o:
+            sm, so = m["skeleton"], o["skeleton"]
+            for a, b in zip(sm["init_db"], so["init_db"]):
+                if a is not None and b is not None:
+                    init_pen += min(abs(a - b), 12.0)
+            for key in ("early_db_s", "late_db_s"):
+                for a, b in zip(sm[key][:6], so[key][:6]):
+                    if a is not None and b is not None:
+                        slope_pen += min(abs(a - b), 30.0) / 10.0
+        note_loss = (w_harm * harm_l1 + w_cents * cents + w_tnr * tnr_pen + w_env * env_pen
+                     + w_init * init_pen + w_slope * slope_pen)
         if not math.isfinite(note_loss):
             return math.inf
         total += note_loss
@@ -371,6 +480,7 @@ class Evaluator:
             model_rows, self.oracle,
             n_harm=self.args.n_harm,
             w_harm=self.args.w_harm, w_cents=self.args.w_cents, w_tnr=self.args.w_tnr,
+            w_env=self.args.w_env, w_init=self.args.w_init, w_slope=self.args.w_slope,
         )
         self.cache[key] = loss
         if loss < self.best_loss:
@@ -476,10 +586,11 @@ def render_metrics_main(argv: list[str]) -> int:
     smf_bytes = write_smf(pattern.notes, program=a.program, end_pad=pattern.tail)
     audio = render_model(smf_bytes, total, SR)
     mono = normalize_rms(to_mono(np.asarray(audio, dtype=np.float32)))
-    rows = [
-        analyze_note(mono, SR, note, note.start + note.dur + pattern.tail).to_dict()
-        for note in analysis_notes
-    ]
+    rows = []
+    for note in analysis_notes:
+        row = analyze_note(mono, SR, note, note.start + note.dur + pattern.tail).to_dict()
+        row["skeleton"] = skeleton_note(mono, SR, note)
+        rows.append(row)
     print(json.dumps(rows))
     return 0
 
@@ -586,6 +697,12 @@ def main() -> int:
                         help="weight on the intonation (cents) term")
     parser.add_argument("--w-tnr", type=float, default=1.0, dest="w_tnr",
                         help="weight on the noise-floor (TNR shortfall) term")
+    parser.add_argument("--w-env", type=float, default=0.0, dest="w_env",
+                        help="weight on the temporal-envelope term (sustain slope / release / attack)")
+    parser.add_argument("--w-init", type=float, default=0.0, dest="w_init",
+                        help="weight on the per-harmonic ONSET-ladder term (excitation evidence)")
+    parser.add_argument("--w-slope", type=float, default=0.0, dest="w_slope",
+                        help="weight on the per-harmonic decay-slope term (loop evidence)")
     parser.add_argument("--build-dir", default="build-autofit", dest="build_dir",
                         help="isolated build dir (default: build-autofit)")
     parser.add_argument("--jobs", type=int, default=8, help="parallel build jobs")

@@ -1,0 +1,37 @@
+[
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kTrebleDecayOct = ([0-9.]+)f",
+    "min": 0.5,
+    "max": 3.0,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_voice.cpp",
+    "pattern": "kTwoStageWidthOct = ([0-9.]+)f",
+    "min": 0.3,
+    "max": 1.5,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "t\\[0\\].piano.decay_fast_s = ([0-9.]+)f",
+    "min": 0.5,
+    "max": 2.5,
+    "scale": "log"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "t\\[0\\].piano.detune_cents = ([0-9.]+)f",
+    "min": 0.8,
+    "max": 1.6,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/gm_fallback_map.cpp",
+    "pattern": "t\\[0\\].piano.release_damp_s = ([0-9.]+)f",
+    "min": 0.4,
+    "max": 1.5,
+    "scale": "log"
+  }
+]
