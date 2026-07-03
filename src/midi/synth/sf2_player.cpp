@@ -431,9 +431,12 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
                         fallback_piano_string_capacity_);
   }
   if (!fallback_pipe_organ_buffers_.empty()) {
+    // Each rank holds TWO spans (bore + jet), so the per-voice stride is
+    // 2 * kMaxPipeRanks spans; without the 2, adjacent voices' slabs overlap
+    // and simultaneous (legato) organ voices corrupt each other's bores.
     voice->pipe_organ.attach(
         fallback_pipe_organ_buffers_.data() +
-            static_cast<size_t>(voice_index) * kMaxPipeRanks * fallback_pipe_organ_capacity_,
+            static_cast<size_t>(voice_index) * 2 * kMaxPipeRanks * fallback_pipe_organ_capacity_,
         fallback_pipe_organ_capacity_);
   }
   if (!fallback_bowed_buffers_.empty()) {

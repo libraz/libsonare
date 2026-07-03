@@ -72,6 +72,10 @@ constexpr float kRadiationLift = 2.5f;
 // untouched; only high notes drawing high-footage ranks thin.
 constexpr float kKeytrackRefNote = 60.0f;
 constexpr float kKeytrackSlope = 1.0f;
+// Bass-side regulation of the high mutations (footage > 4): a tierce that is
+// welcome colour at the top of the compass reads as a wrong-note honk one
+// octave down. Scaled by the same keytrack knob (0 = bit-identical bypass).
+constexpr float kTierceBassSlope = 6.0f;
 
 // Chiff onset burst depth.
 constexpr float kChiffGain = 0.5f;
@@ -82,34 +86,52 @@ constexpr float kChiffGain = 0.5f;
 // and the summed burst reads as a broadband crack on every high note.
 constexpr float kChiffCornerMult = 3.0f;
 constexpr float kChiffCornerMaxHz = 3000.0f;
-// Bore pre-fill: a low-level f0 sine seed so the jet locks promptly. A noise
-// pre-fill would circulate for seconds through the near-lossless bore
-// (loss_gain ~0.995) and put an audible hiss under the whole sustain.
-constexpr float kBorePrefill = 0.05f;
+// Bore pre-fill: an f0 sine seed so the jet locks promptly. A noise pre-fill
+// would circulate for seconds through the near-lossless bore (loss_gain ~0.995)
+// and put an audible hiss under the whole sustain. The seed is hot enough that
+// the bass pipes' oscillation grows from near the bore pitch instead of
+// wandering sharp for ~10 periods while building from nothing (audible as a
+// wheeze under a low onset); the output swell keeps the seed itself silent.
+constexpr float kBorePrefill = 0.3f;
 
 // Speech swell: a pipe settles its speech over ~this many fundamental periods,
 // so the upperwork enters promptly and the big bass pipes bloom in after it
 // (the plenum builds the way a real chorus speaks). Post-loop level swell —
 // the jet loop itself locks immediately off the pre-fill seed.
-constexpr float kSpeakPeriods = 30.0f;
+constexpr float kSpeakPeriods = 40.0f;
+// Bass speech scaling: a big pipe needs MORE periods to speak, not just longer
+// ones (its mouth vortex and column both establish slowly), so the period
+// count grows per octave the pipe's own pitch sits below the reference. This
+// is the cathedral bloom — the upperwork sparkles at once while the
+// fundamental fills in over hundreds of ms underneath it.
+constexpr float kSpeakBassPerOct = 1.0f;
+constexpr float kSpeakRefHz = 261.63f;
+// Foot-pressure rise: the wind at the pipe foot builds with the same speech
+// swell instead of stepping to full on the first sample. A full-pressure jet
+// blowing into a still-quiet bore favours a detuned oscillation branch for
+// tens of periods (heard as a wheeze under the onset); easing the pressure in
+// keeps the growth on the bore's own pitch. The floor keeps the jet inside its
+// self-oscillating band from the first sample so speech is not delayed.
+constexpr float kFootPressureFloor = 0.55f;
 // Treble floor: 30 periods of a high note is only tens of ms, and a full
 // plenum slamming in that fast reads as a crack on every onset (a small flue
 // pipe still needs its mouth vortex to establish); keep even the top of the
-// compass blooming over ~90 ms.
-constexpr float kSpeakMinMs = 90.0f;
-constexpr float kSpeakMaxMs = 700.0f;
+// compass blooming over ~160 ms.
+constexpr float kSpeakMinMs = 160.0f;
+constexpr float kSpeakMaxMs = 1300.0f;
 // Floor the upperwork's speak time at this fraction of the KEY's own swell so
-// the mutations never run far ahead of the principal: fully prompt upperwork
-// leaves the first ~100 ms top-heavy (h2-h4 up to ~16 dB over a still-silent
-// fundamental), which reads as a harsh crack on every onset.
-constexpr float kSpeakUpperworkFloor = 0.6f;
+// the mutations never land as a bare click before the principal: the S-shaped
+// (squared) swell keeps even a prompt entry soft, and the upperwork RUNNING
+// AHEAD of the slow fundamental is the real plenum's speech order, so the
+// floor is loose.
+constexpr float kSpeakUpperworkFloor = 0.25f;
 
 // Output trim: the driven jet loop settles with a raw bore peak that falls with
 // pitch, so the per-pipe output is frequency-compensated toward a flat target
 // peak before the chorus sum. peak_raw ~= kPeakBase + kPeakTilt*log2(f0/kPeakRefHz).
 constexpr float kOutputTargetPeak = 0.32f;
 constexpr float kPeakBase = 4.0f;
-constexpr float kPeakTilt = -0.65f;
+constexpr float kPeakTilt = -0.05f;
 constexpr float kPeakRefHz = 261.63f;
 
 // Per-pipe tuning error (cents, peak): every (rank, note) pair is its own
@@ -225,6 +247,8 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   const float keytrack = std::clamp(params.keytrack, 0.0f, 1.0f);
   const float octaves_above =
       std::max(0.0f, (static_cast<float>(note & 0x7Fu) - kKeytrackRefNote) * (1.0f / 12.0f));
+  const float octaves_below =
+      std::max(0.0f, (kKeytrackRefNote - static_cast<float>(note & 0x7Fu)) * (1.0f / 12.0f));
   const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
   // Mouth pressure: the patch breath sets the dynamic, velocity opens it a touch.
   const float level =
@@ -261,6 +285,13 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     if (keytrack > 0.0f) {
       const float footage_octaves = std::max(0.0f, std::log2(std::max(0.01f, footage)));
       pipe.mix /= 1.0f + kKeytrackSlope * keytrack * octaves_above * footage_octaves;
+      // Bass regulation: ranks above the 2' (footage > 4, i.e. tierce and higher
+      // mutations) are treble colour — in the bass compass their 5th-and-up
+      // partials read as a wrong-note honk over the plenum, so voicers draw
+      // them out of the low octaves.
+      if (footage > 4.01f) {
+        pipe.mix /= 1.0f + kTierceBassSlope * keytrack * octaves_below;
+      }
     }
     const float period = srf / std::max(1.0f, f0);
     // Every rank is a positive-feedback open jet pipe (it locks its fundamental
@@ -383,13 +414,22 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     pipe.tone_s1 = 0.0f;
     pipe.tone_s2 = 0.0f;
 
-    // Speech swell: this rank blooms in over ~kSpeakPeriods of its own
-    // fundamental (bass pipes slower than the upperwork), floored at a fraction
-    // of the key's swell so the upperwork stays ahead without swamping it.
+    // Speech swell: this rank blooms in over its own speak time — the period
+    // count itself grows toward the bass (kSpeakBassPerOct), so the treble
+    // upperwork enters almost at once while the 8' fundamental fills in over
+    // hundreds of ms and the 16' arrives last. Floored at a fraction of the
+    // key's swell so the mutations never land as a bare click.
     const float period_ms = 1000.0f * period / srf;
+    const float rank_periods =
+        kSpeakPeriods *
+        (1.0f + kSpeakBassPerOct * std::max(0.0f, std::log2(kSpeakRefHz / std::max(1.0f, f0))));
+    const float note_periods =
+        kSpeakPeriods *
+        (1.0f +
+         kSpeakBassPerOct * std::max(0.0f, std::log2(kSpeakRefHz / std::max(1.0f, base_f0))));
     const float note_speak_ms =
-        std::clamp(kSpeakPeriods * 1000.0f / std::max(1.0f, base_f0), kSpeakMinMs, kSpeakMaxMs);
-    const float speak_ms = std::max(std::clamp(kSpeakPeriods * period_ms, kSpeakMinMs, kSpeakMaxMs),
+        std::clamp(note_periods * 1000.0f / std::max(1.0f, base_f0), kSpeakMinMs, kSpeakMaxMs);
+    const float speak_ms = std::max(std::clamp(rank_periods * period_ms, kSpeakMinMs, kSpeakMaxMs),
                                     kSpeakUpperworkFloor * note_speak_ms);
     pipe.speak_coeff = ramp_coeff(speak_ms, sr);
     pipe.wind = 0.0f;
@@ -428,10 +468,11 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
     Rank& pipe = ranks_[static_cast<size_t>(r)];
     if (pipe.bore == nullptr || pipe.jet == nullptr || pipe.bore_size < 8) continue;
 
-    const float breath = pipe.breath * breath_level_;
-
     // Per-rank speech swell (post-loop level ramp toward 1).
     pipe.wind += pipe.speak_coeff * (1.0f - pipe.wind);
+
+    const float breath = pipe.breath * breath_level_ *
+                         (kFootPressureFloor + (1.0f - kFootPressureFloor) * pipe.wind);
 
     // Open/stopped-end reflection from the previous bore output: one-pole loss
     // lowpass, sign-selected feedback (+ open / - stopped).
@@ -465,10 +506,15 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
 
     // Even-harmonic pump (open pipe): a half-wave rectified bore feedback carries
     // a 2f0 component; strip its DC and inject the octave the open flue voices.
+    // Gated by the squared speech swell: while the pipe is still finding its
+    // pitch the rectified feedback path sustains its own inharmonic mode ~1
+    // semitone sharp of the bore for tens of periods (an audible wheeze on
+    // every low/mid onset), so the octave voicing only comes up once the pipe
+    // speaks — which is also when a real flue's octave colour establishes.
     if (pipe.even_gain > 0.0f) {
       const float rect = temp > 0.0f ? temp : 0.0f;
       pipe.even_state += pipe.even_hp_alpha * (rect - pipe.even_state);
-      float pump = pipe.even_gain * (rect - pipe.even_state);
+      float pump = pipe.even_gain * pipe.wind * pipe.wind * (rect - pipe.even_state);
       pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
       into += pump;
     }
