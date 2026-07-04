@@ -365,6 +365,31 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #endif
       break;
     }
+    case rt::CommandType::kMidiSysExImmediate: {
+#if defined(SONARE_WITH_ARRANGEMENT)
+      // Resolve the scalar slot reference (arg.i = (generation << 32) | index)
+      // filled by push_midi_sysex. The command queue's acquire on pop already
+      // published the slot bytes; the generation guard drops a slot the control
+      // thread has since recycled (burst deeper than the ring), so a torn
+      // payload never reaches the instrument. The slot bytes stay valid for the
+      // synchronous dispatch below (the instrument consumes them inline).
+      const uint64_t packed = static_cast<uint64_t>(command.arg.i);
+      const uint32_t slot_index = static_cast<uint32_t>(packed & 0xFFFFFFFFu);
+      const uint32_t generation = static_cast<uint32_t>(packed >> 32);
+      if (slot_index < sysex_payload_slots_.size()) {
+        SysExPayloadSlot& slot = sysex_payload_slots_[slot_index];
+        if (slot.generation.load(std::memory_order_relaxed) == generation && slot.size > 0) {
+          // The UMP carries only a SysEx marker (non-channel-voice message type);
+          // the resolved payload view drives the instrument's SysEx handler, the
+          // same shape the offline clip path dispatches.
+          const midi::Ump ump = midi::make_sysex_handle(0, /*handle=*/0);
+          midi_sequencer_.inject_event(command.target_id, command.sample_time, ump,
+                                       slot.bytes.data(), slot.size);
+        }
+      }
+#endif
+      break;
+    }
     case rt::CommandType::kSetTempoMap:
     case rt::CommandType::kSetLoop:
     case rt::CommandType::kSwapGraph:

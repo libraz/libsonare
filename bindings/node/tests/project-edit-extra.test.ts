@@ -434,6 +434,15 @@ describe('RealtimeEngine MIDI / parameter bindings', () => {
     engine.destroy();
   });
 
+  it('pushMidiSysex does not throw on a prepared engine', () => {
+    const engine = preparedEngine();
+    // GM System On (0xF0 0x7E 0x7F 0x09 0x01 0xF7).
+    const gmSystemOn = new Uint8Array([0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7]);
+    expect(() => engine.pushMidiSysex(0, gmSystemOn)).not.toThrow();
+    expect(() => engine.pushMidiSysex(0, gmSystemOn, -1)).not.toThrow();
+    engine.destroy();
+  });
+
   it('clearParameters lets a duplicate id be re-registered', () => {
     const engine = preparedEngine();
     const info = {

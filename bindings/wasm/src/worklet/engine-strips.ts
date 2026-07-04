@@ -298,6 +298,17 @@ export function clearMidiFx(ctx: EngineStripContext, trackId: string | number): 
   ctx.postInstrumentSync({ type: 'syncClearMidiFx', destinationId });
 }
 
+export function pushMidiSysex(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  data: Uint8Array,
+  renderFrame: number,
+): void {
+  const destinationId = ctx.resolveTargetId(trackId);
+  ctx.offlineEngine.pushMidiSysex(destinationId, data, renderFrame);
+  ctx.postSync({ type: 'syncMidiSysex', destinationId, data, renderFrame });
+}
+
 export function pushMidiPanic(ctx: EngineStripContext, renderFrame: number): void {
   ctx.offlineEngine.pushMidiPanic(renderFrame);
   ctx.postSync({ type: 'syncMidiPanic', renderFrame });

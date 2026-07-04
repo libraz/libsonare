@@ -172,6 +172,18 @@ class RealtimeEngine : private ClipPageRequestSink {
     midi_input_destination_id_.store(destination_id, std::memory_order_relaxed);
     midi_input_source_.store(source, std::memory_order_release);
   }
+  // Control-thread: enqueue a live MIDI SysEx message for `destination_id`. The
+  // bytes are copied into a bounded, allocation-free payload store slot and a
+  // kMidiSysExImmediate command carrying only a scalar slot reference is pushed,
+  // so no pointer crosses the SharedArrayBuffer-shared command queue. The audio
+  // thread resolves the slot, dispatches a MidiEvent viewing the slot bytes
+  // (consumed synchronously by the destination instrument inside apply_command),
+  // and never allocates. `data`/`size` are the full SysEx frame (leading 0xF0 /
+  // trailing 0xF7 included, as the GS layer expects). Returns false when the
+  // arguments are invalid, the payload exceeds kMaxSysExPayloadBytes, or the
+  // command queue is full. render_frame < 0 fires at the block head.
+  bool push_midi_sysex(uint32_t destination_id, const uint8_t* data, size_t size,
+                       int64_t render_frame) noexcept;
   bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
                     float max_value) noexcept {
     if (parameter_target_reserved(param_id)) return false;
@@ -594,6 +606,25 @@ class RealtimeEngine : private ClipPageRequestSink {
   static constexpr size_t kMaxLiveMidiInputEvents = 256;
   std::array<midi::MidiEvent, kMaxLiveMidiInputEvents> live_midi_input_events_{};
   size_t live_midi_input_count_ = 0;
+  // Bounded SysEx payload store for live (queued) SysEx commands. The control
+  // thread (push_midi_sysex) copies bytes into a round-robin slot and enqueues a
+  // kMidiSysExImmediate command carrying the slot index + generation; the audio
+  // thread reads the slot, dispatches a MidiEvent viewing the slot bytes, and
+  // never allocates. The command queue's release/acquire ordering publishes the
+  // slot bytes to the audio thread; the atomic per-slot generation lets the
+  // audio thread drop a command whose slot the control thread has already
+  // recycled (a burst deeper than kSysExPayloadSlots before the audio thread
+  // drains it), so a torn payload is never fed to an instrument. SysEx is a
+  // sparse control-rate message, so the ring depth is ample in practice.
+  static constexpr size_t kMaxSysExPayloadBytes = 512;
+  static constexpr size_t kSysExPayloadSlots = 64;
+  struct SysExPayloadSlot {
+    std::array<uint8_t, kMaxSysExPayloadBytes> bytes{};
+    uint32_t size = 0;
+    std::atomic<uint32_t> generation{0};
+  };
+  std::array<SysExPayloadSlot, kSysExPayloadSlots> sysex_payload_slots_{};
+  uint32_t sysex_payload_cursor_ = 0;  // control-thread only
   // Per-destination host-instrument rack (default empty / opt-in). It is the
   // sequencer's dispatch sink (so routed MIDI reaches the instrument bound to
   // each clip's destination) and the engine sums every bound instrument's audio

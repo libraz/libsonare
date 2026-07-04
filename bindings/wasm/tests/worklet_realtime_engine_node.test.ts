@@ -296,6 +296,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.pushMidiNoteOn(3, 0, 0, 64, 100);
         engine.pushMidiNoteOff(3, 0, 0, 64, 0);
         engine.pushMidiCc(3, 0, 0, 74, 100);
+        engine.pushMidiSysex(3, new Uint8Array([0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7]));
         engine.pushMidiPanic();
         const clipId = engine.addClip(
           3,

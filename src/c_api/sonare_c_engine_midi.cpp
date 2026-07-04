@@ -502,6 +502,25 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
 #endif
 }
 
+SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                          const uint8_t* data, size_t size, int64_t render_frame) {
+  if (!engine || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  // Copies the bytes into the engine's bounded SysEx store and enqueues a
+  // scalar-only kMidiSysExImmediate command. An oversized payload or a full
+  // command queue is reported distinctly so a host can tell a rejected message
+  // (too large) from transient back-pressure (queue full).
+  if (!engine->engine.push_midi_sysex(destination_id, data, size, render_frame)) {
+    return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+  return SONARE_OK;
+#endif
+}
+
 SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* engine,
                                                         uint32_t destination_id, int external) {
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;

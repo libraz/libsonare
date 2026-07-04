@@ -101,6 +101,21 @@ enum class CommandType : uint16_t {
   // Same as kSetTrackInsertParam but targets the master strip (no lane field):
   //   target_id   = (insert_index << 8) | param_id.
   kSetMasterInsertParam,
+  // Immediate (live) MIDI SysEx routed to a destination instrument. SysEx is
+  // variable-length, which a fixed POD Command cannot carry inline, so the
+  // control thread copies the bytes into the engine's bounded SysEx payload
+  // store (see RealtimeEngine::push_midi_sysex) and enqueues this command with a
+  // scalar slot reference -- no pointer crosses the queue, so the record stays
+  // WASM SharedArrayBuffer-safe. Field encoding:
+  //   target_id   = MIDI destination id.
+  //   sample_time = render frame to fire at (<0 / past => block head).
+  //   arg.i       = packed slot reference: bits[0..31]=slot index,
+  //                 bits[32..63]=slot generation (validated on apply to drop a
+  //                 slot the control thread already recycled). The slot records
+  //                 the payload length. New value; appended at the enum end to
+  //                 keep kEngineAbiVersion and the SharedArrayBuffer command
+  //                 record layout stable.
+  kMidiSysExImmediate,
 };
 
 union CommandArg {

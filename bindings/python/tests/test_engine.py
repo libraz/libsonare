@@ -996,6 +996,18 @@ def test_engine_push_immediate_notes_do_not_raise() -> None:
         engine.push_midi_note_off(0, 0, 0, 60, 0)
 
 
+def test_engine_push_midi_sysex_accepts_frame_and_rejects_oversized() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
+        # GM system-on universal SysEx (0xF0 ... 0xF7).
+        engine.push_midi_sysex(0, b"\xf0\x7e\x7f\x09\x01\xf7")
+        engine.process([[0.0] * 128, [0.0] * 128])
+        with pytest.raises(SonareError):
+            engine.push_midi_sysex(0, b"\xf0" + b"\x00" * 1022 + b"\xf7")
+        with pytest.raises(ValueError):
+            engine.push_midi_sysex(0, b"")
+
+
 def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
     def midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
         return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1

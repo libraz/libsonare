@@ -110,6 +110,15 @@ class MidiSequencer {
   /// that synthesize a UMP outside the compiled clip set. RT-safe, no alloc.
   void inject_event(uint32_t destination_id, int64_t render_frame, const Ump& ump) noexcept;
 
+  /// AUDIO thread: dispatch a single host-injected (live) SysEx event to a
+  /// destination at `render_frame`. `sysex_payload`/`sysex_payload_size` view
+  /// control-thread-owned bytes that must outlive the dispatch (the engine's
+  /// bounded SysEx payload store keeps them valid until the instrument consumes
+  /// them synchronously). Routed through the same process_event path as clip
+  /// SysEx, so a destination MIDI-FX chain sees it too. RT-safe, no alloc.
+  void inject_event(uint32_t destination_id, int64_t render_frame, const Ump& ump,
+                    const uint8_t* sysex_payload, size_t sysex_payload_size) noexcept;
+
   /// Number of clips currently scheduled (lock-free poll for the host thread).
   size_t clip_count() const noexcept { return clip_count_.load(std::memory_order_relaxed); }
   /// Number of notes currently sounding (audio-thread state; read for tests).

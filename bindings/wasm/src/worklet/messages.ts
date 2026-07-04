@@ -400,6 +400,13 @@ export interface SonareEngineSyncMidiCcMessage {
   renderFrame: number;
 }
 
+export interface SonareEngineSyncMidiSysexMessage {
+  type: 'syncMidiSysex';
+  destinationId: number;
+  data: Uint8Array;
+  renderFrame: number;
+}
+
 export interface SonareEngineSyncMidiPanicMessage {
   type: 'syncMidiPanic';
   renderFrame: number;
@@ -452,6 +459,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMidiFxMessage
   | SonareEngineSyncMidiNoteMessage
   | SonareEngineSyncMidiCcMessage
+  | SonareEngineSyncMidiSysexMessage
   | SonareEngineSyncMidiPanicMessage
   | SonareEngineSyncMidiDestinationExternalMessage
   | SonareEngineSyncExternalMidiClockMessage;

@@ -51,6 +51,36 @@ class _EngineMidiMixin:
             )
         )
 
+    def push_midi_sysex(
+        self,
+        destination_id: int,
+        data: bytes | bytearray | memoryview,
+        render_frame: int = -1,
+    ) -> None:
+        """Queue an immediate (live) MIDI SysEx message to a MIDI destination.
+
+        ``data`` is the full SysEx frame including the leading ``0xF0`` and
+        trailing ``0xF7`` (1..512 bytes). ``render_frame`` is the render-frame
+        time to apply, or ``-1`` for immediate. Raises :class:`SonareError`
+        if the payload exceeds the accepted size.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_sysex"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        buf = bytes(data)
+        if not buf:
+            raise ValueError("SysEx data must not be empty")
+        c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
+        _check(
+            lib.sonare_engine_push_midi_sysex(
+                self._require_handle(),
+                int(destination_id),
+                c_data,
+                ctypes.c_size_t(len(buf)),
+                int(render_frame),
+            )
+        )
+
     def push_midi_panic(self, render_frame: int = -1) -> None:
         """Queue a MIDI panic (all-notes-off) releasing every sounding note.
 

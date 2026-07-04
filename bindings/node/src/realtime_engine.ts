@@ -775,6 +775,16 @@ export class RealtimeEngine {
   }
 
   /**
+   * Queue an immediate (live) MIDI SysEx message to a MIDI destination. `data`
+   * is the full SysEx frame including the leading 0xF0 and trailing 0xF7, and
+   * must be 1..512 bytes. `renderFrame` is the render-frame time to apply, or
+   * -1 for immediate.
+   */
+  pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame = -1): void {
+    this.native.pushMidiSysex(destinationId, data, renderFrame);
+  }
+
+  /**
    * Routes a MIDI destination (a track lane) to the external-MIDI output queue
    * instead of the internal instrument rack, so the track drives an external
    * device. Its sequenced events are buffered for {@link drainExternalMidi}.

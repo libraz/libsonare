@@ -65,6 +65,7 @@ export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMe
     value.type === 'syncMidiNoteOn' ||
     value.type === 'syncMidiNoteOff' ||
     value.type === 'syncMidiCc' ||
+    value.type === 'syncMidiSysex' ||
     value.type === 'syncMidiPanic' ||
     value.type === 'syncMidiDestinationExternal' ||
     value.type === 'syncExternalMidiClock'

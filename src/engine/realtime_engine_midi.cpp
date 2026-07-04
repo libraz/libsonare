@@ -1,3 +1,4 @@
+#include <cstring>
 #include <utility>
 #include <vector>
 
@@ -8,6 +9,30 @@ namespace sonare::engine {
 
 void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
   midi_sequencer_.set_midi_clips(std::move(clips));
+}
+
+bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* data, size_t size,
+                                     int64_t render_frame) noexcept {
+  // CONTROL thread. Copy the SysEx bytes into the next round-robin store slot,
+  // bump its generation, then enqueue a scalar-only command referencing the
+  // slot. push_command's release publishes the freshly written slot bytes and
+  // generation to the audio thread; apply_command validates the generation
+  // before viewing the bytes (see kMidiSysExImmediate).
+  if (data == nullptr || size == 0 || size > kMaxSysExPayloadBytes) return false;
+  const uint32_t slot_index = sysex_payload_cursor_ % kSysExPayloadSlots;
+  sysex_payload_cursor_++;
+  SysExPayloadSlot& slot = sysex_payload_slots_[slot_index];
+  std::memcpy(slot.bytes.data(), data, size);
+  slot.size = static_cast<uint32_t>(size);
+  const uint32_t generation = slot.generation.load(std::memory_order_relaxed) + 1u;
+  slot.generation.store(generation, std::memory_order_relaxed);
+  rt::Command command{};
+  command.type = rt::CommandType::kMidiSysExImmediate;
+  command.target_id = destination_id;
+  command.sample_time = render_frame;
+  command.arg.i =
+      static_cast<int64_t>((static_cast<uint64_t>(generation) << 32) | uint64_t{slot_index});
+  return push_command(command);
 }
 
 bool RealtimeEngine::set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept {

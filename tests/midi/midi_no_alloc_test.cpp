@@ -119,3 +119,24 @@ TEST_CASE("MidiSequencer live MIDI FX path performs no heap allocation after pre
   REQUIRE(seq.active_note_count() == 0);
   REQUIRE(seq.midi_fx_pending_overflow_count() == 0);
 }
+
+TEST_CASE("MidiSequencer live SysEx inject path performs no heap allocation after prepare",
+          "[midi][rt]") {
+  MidiSequencer seq;
+  CounterSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  // The bytes are viewed, not owned, by the injected event -- mirroring the
+  // engine's SysEx payload store. The audio-path inject_event must not allocate.
+  const std::vector<uint8_t> payload = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00, 0x00, 0xF7};
+  const sonare::midi::Ump marker = sonare::midi::make_sysex_handle(0, /*handle=*/0);
+
+  AllocationGuard guard;
+  for (int i = 0; i < 8; ++i) {
+    seq.inject_event(5, static_cast<int64_t>(i) * 64, marker, payload.data(), payload.size());
+  }
+
+  REQUIRE(guard.count() == 0);
+  REQUIRE(sink.count == 8);
+}

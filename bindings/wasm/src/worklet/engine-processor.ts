@@ -397,6 +397,9 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.renderFrame,
         );
         break;
+      case 'syncMidiSysex':
+        this.engine.pushMidiSysex(message.destinationId, message.data, message.renderFrame);
+        break;
       case 'syncMidiPanic':
         this.engine.pushMidiPanic(message.renderFrame);
         break;

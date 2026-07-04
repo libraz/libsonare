@@ -551,6 +551,21 @@ SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t de
 /// @brief Queues a MIDI panic (all-notes-off) releasing every sounding note.
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
 SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t render_frame);
+/// @brief Queues an immediate (live) MIDI SysEx message to a MIDI destination.
+/// @details The bytes are copied into a bounded, allocation-free engine store and
+///          a scalar-only command referencing the store slot is enqueued (no
+///          pointer crosses the realtime queue, keeping it WASM
+///          SharedArrayBuffer-safe). The audio thread dispatches the SysEx to the
+///          destination instrument at @p render_frame, where a SoundFont/GS
+///          instrument feeds it to the GS layer (GS Reset / GM System On /
+///          insertion-effect config). @p data is the full SysEx frame including
+///          the leading 0xF0 and trailing 0xF7.
+/// @param destination_id MIDI destination id (clip/instrument destination).
+/// @param data SysEx bytes (0xF0..0xF7 frame). Must be non-NULL.
+/// @param size Byte count; must be 1..512.
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                          const uint8_t* data, size_t size, int64_t render_frame);
 /// @brief Marks a MIDI destination for external routing (or clears it).
 /// @details A destination marked external bypasses the internal instrument rack:
 ///   its sequenced events are buffered in the engine's external-MIDI output queue

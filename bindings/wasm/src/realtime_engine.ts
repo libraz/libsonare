@@ -423,6 +423,16 @@ export class RealtimeEngine {
   }
 
   /**
+   * Queue an immediate (live) MIDI SysEx frame to a MIDI destination. `data` is
+   * the full message including the leading 0xF0 and trailing 0xF7 (1..512
+   * bytes). `renderFrame` is the frame to fire at, or -1 for immediate. Mirrors
+   * the Node/Python/C-ABI `pushMidiSysex`.
+   */
+  pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame = -1): void {
+    this.native.pushMidiSysex(destinationId, data, renderFrame);
+  }
+
+  /**
    * Queue a MIDI panic (all-notes-off) releasing every sounding note at
    * `renderFrame` (-1 = immediate). Mirrors the C-ABI `pushMidiPanic`.
    */

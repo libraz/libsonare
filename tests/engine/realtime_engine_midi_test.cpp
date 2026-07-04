@@ -77,6 +77,22 @@ class ControllerRecordingInstrument final : public MidiInstrument {
   bool pitch_bend_seen_ = false;
 };
 
+// Records the exact SysEx payloads it receives, so a test can assert that a live
+// (queued) SysEx pushed via RealtimeEngine::push_midi_sysex reaches the addressed
+// destination instrument byte-for-byte.
+class SysExRecordingInstrument final : public MidiInstrument {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override { payloads_.clear(); }
+  void on_event(uint32_t, const MidiEvent& event) noexcept override {
+    if (event.sysex_payload != nullptr && event.sysex_payload_size > 0) {
+      payloads_.emplace_back(event.sysex_payload, event.sysex_payload + event.sysex_payload_size);
+    }
+  }
+  std::vector<std::vector<uint8_t>> payloads_;
+};
+
 class SyncByteSink final : public RealtimeEngine::MidiSyncSink {
  public:
   struct Event {
@@ -319,6 +335,50 @@ TEST_CASE("RealtimeEngine routes live MIDI input to the configured destination",
   REQUIRE(default_instrument.note_on_count_ == 0);
   REQUIRE(routed_instrument.note_on_count_ == 1);
   REQUIRE(block_peak(left) == Catch::Approx(0.5f));
+}
+
+TEST_CASE("RealtimeEngine delivers a live SysEx to the addressed destination", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  SysExRecordingInstrument target;
+  SysExRecordingInstrument other;
+  REQUIRE(engine.set_midi_instrument(3, &target));
+  REQUIRE(engine.set_midi_instrument(5, &other));
+
+  // A "GM System On" universal SysEx frame (0xF0..0xF7). The transport treats the
+  // bytes as opaque; the instrument records exactly what it receives.
+  const std::vector<uint8_t> sysex = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  REQUIRE(engine.push_midi_sysex(3, sysex.data(), sysex.size(), /*render_frame=*/-1));
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+
+  REQUIRE(target.payloads_.size() == 1);
+  REQUIRE(target.payloads_[0] == sysex);
+  REQUIRE(other.payloads_.empty());
+}
+
+TEST_CASE("RealtimeEngine rejects an invalid live SysEx payload", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  SysExRecordingInstrument target;
+  REQUIRE(engine.set_midi_instrument(0, &target));
+
+  // A payload larger than the bounded store is rejected outright (nothing queued).
+  std::vector<uint8_t> oversized(1024, 0x00);
+  oversized.front() = 0xF0;
+  oversized.back() = 0xF7;
+  REQUIRE_FALSE(engine.push_midi_sysex(0, oversized.data(), oversized.size(), -1));
+  // A null / zero-length payload is rejected too.
+  REQUIRE_FALSE(engine.push_midi_sysex(0, nullptr, 0, -1));
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+  REQUIRE(target.payloads_.empty());
 }
 
 #if defined(SONARE_WITH_MIXING)

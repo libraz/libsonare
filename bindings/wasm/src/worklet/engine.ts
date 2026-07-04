@@ -623,6 +623,10 @@ export class SonareEngine {
     strips.pushMidiCc(this.stripContext, trackId, group, channel, controller, value, renderFrame);
   }
 
+  pushMidiSysex(trackId: string | number, data: Uint8Array, renderFrame = -1): void {
+    strips.pushMidiSysex(this.stripContext, trackId, data, renderFrame);
+  }
+
   pushMidiPanic(renderFrame = -1): void {
     this.offlineEngine.pushMidiPanic(renderFrame);
     this.postSync({ type: 'syncMidiPanic', renderFrame });

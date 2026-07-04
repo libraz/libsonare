@@ -647,6 +647,19 @@ void RealtimeEngineWasm::pushMidiCc(uint32_t destination_id, int group, int chan
   }
 }
 
+// Queues an immediate (live) MIDI SysEx frame to a MIDI destination. @p data is
+// the full message including the leading 0xF0 and trailing 0xF7 (1..512 bytes);
+// its bytes are copied out of the Uint8Array before the call returns. Reaches
+// the registered host instrument at @p render_frame (-1 = immediate). Mirrors
+// the C ABI sonare_engine_push_midi_sysex.
+void RealtimeEngineWasm::pushMidiSysex(uint32_t destination_id, val data, int64_t render_frame) {
+  std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  if (!engine_.push_midi_sysex(destination_id, bytes.data(), bytes.size(), render_frame)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "failed to queue MIDI SysEx command");
+  }
+}
+
 // Queues a MIDI panic (all-notes-off) releasing every sounding note at
 // @p render_frame (-1 = immediate). Mirrors the C ABI
 // sonare_engine_push_midi_panic.
@@ -738,6 +751,7 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("pushMidiNoteOn", &RealtimeEngineWasm::pushMidiNoteOn)
       .function("pushMidiNoteOff", &RealtimeEngineWasm::pushMidiNoteOff)
       .function("pushMidiCc", &RealtimeEngineWasm::pushMidiCc)
+      .function("pushMidiSysex", &RealtimeEngineWasm::pushMidiSysex)
       .function("pushMidiPanic", &RealtimeEngineWasm::pushMidiPanic)
       .function("setMidiDestinationExternal", &RealtimeEngineWasm::setMidiDestinationExternal)
       .function("setExternalMidiClockEnabled", &RealtimeEngineWasm::setExternalMidiClockEnabled)

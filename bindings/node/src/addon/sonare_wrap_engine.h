@@ -115,6 +115,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value PushMidiNoteOff(const Napi::CallbackInfo& info);
   Napi::Value PushMidiCc(const Napi::CallbackInfo& info);
   Napi::Value PushMidiPanic(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiSysex(const Napi::CallbackInfo& info);
   Napi::Value SetMidiDestinationExternal(const Napi::CallbackInfo& info);
   Napi::Value SetExternalMidiClockEnabled(const Napi::CallbackInfo& info);
   Napi::Value ExternalMidiDroppedCount(const Napi::CallbackInfo& info);

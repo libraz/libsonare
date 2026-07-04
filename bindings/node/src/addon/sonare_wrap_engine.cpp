@@ -228,6 +228,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::PushMidiNoteOff>("pushMidiNoteOff"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiCc>("pushMidiCc"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiPanic>("pushMidiPanic"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiSysex>("pushMidiSysex"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiDestinationExternal>(
               "setMidiDestinationExternal"),
           InstanceMethod<&RealtimeEngineWrap::SetExternalMidiClockEnabled>(
@@ -855,6 +856,29 @@ Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::PushMidiPanic(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ThrowIfError(env, sonare_engine_push_midi_panic(engine_, OptionalInt64(info, 0, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint8_t* bytes = nullptr;
+  size_t len = 0;
+  if (info.Length() > 1 && info[1].IsBuffer()) {
+    Napi::Buffer<uint8_t> buf = info[1].As<Napi::Buffer<uint8_t>>();
+    bytes = buf.Data();
+    len = buf.Length();
+  } else if (info.Length() > 1 && sonare_node::IsUint8Array(info[1])) {
+    Napi::Uint8Array arr = info[1].As<Napi::Uint8Array>();
+    bytes = arr.Data();
+    len = arr.ByteLength();
+  } else {
+    Napi::TypeError::New(env, "pushMidiSysex expects a Buffer or Uint8Array")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_push_midi_sysex(engine_, destination_id, bytes, len,
+                                                  OptionalInt64(info, 2, -1)));
   return env.Undefined();
 }
 

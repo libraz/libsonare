@@ -136,6 +136,7 @@ class RealtimeEngineWasm {
                        int64_t render_frame);
   void pushMidiCc(uint32_t destination_id, int group, int channel, int controller, int value,
                   int64_t render_frame);
+  void pushMidiSysex(uint32_t destination_id, emscripten::val data, int64_t render_frame);
   void pushMidiPanic(int64_t render_frame);
 
   // ---- Mixer: tracks, buses, strips (realtime_engine_mixer.cpp) --------

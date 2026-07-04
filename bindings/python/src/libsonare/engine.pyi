@@ -202,6 +202,12 @@ class RealtimeEngine:
         value: int,
         render_frame: int = -1,
     ) -> None: ...
+    def push_midi_sysex(
+        self,
+        destination_id: int,
+        data: bytes | bytearray | memoryview,
+        render_frame: int = -1,
+    ) -> None: ...
     def push_midi_panic(self, render_frame: int = -1) -> None: ...
     def set_builtin_instrument(
         self, config: BuiltinSynthConfig | None = None, destination_id: int = 0

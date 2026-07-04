@@ -430,6 +430,16 @@ void MidiSequencer::inject_event(uint32_t destination_id, int64_t render_frame,
   process_event(destination_id, event, render_frame + 1, /*from_clip=*/false, 0);
 }
 
+void MidiSequencer::inject_event(uint32_t destination_id, int64_t render_frame, const Ump& ump,
+                                 const uint8_t* sysex_payload, size_t sysex_payload_size) noexcept {
+  MidiEvent event;
+  event.render_frame = render_frame;
+  event.ump = ump;
+  event.sysex_payload = sysex_payload;
+  event.sysex_payload_size = sysex_payload_size;
+  process_event(destination_id, event, render_frame + 1, /*from_clip=*/false, 0);
+}
+
 void MidiSequencer::collect_boundaries(int64_t block_start_frame, int num_frames,
                                        BoundaryOffsets* out) const noexcept {
   if (out == nullptr) return;

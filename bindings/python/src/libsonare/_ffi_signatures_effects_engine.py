@@ -785,6 +785,15 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint8,
             ctypes.c_int64,
         ]
+    if hasattr(lib, "sonare_engine_push_midi_sysex"):
+        lib.sonare_engine_push_midi_sysex.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_sysex.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_size_t,
+            ctypes.c_int64,
+        ]
     if hasattr(lib, "sonare_engine_push_midi_panic"):
         lib.sonare_engine_push_midi_panic.restype = ctypes.c_int32
         lib.sonare_engine_push_midi_panic.argtypes = [
