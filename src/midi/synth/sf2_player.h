@@ -97,6 +97,13 @@ struct Sf2PlayerConfig {
   std::function<std::unique_ptr<rt::ProcessorBase>(std::string_view name,
                                                    std::string_view json_params)>
       insert_factory;
+  /// Offline / single-threaded hosts only: when set, process() realises any
+  /// pending GS EFX change (a factory build, i.e. an allocation) inline at the
+  /// top of the block, so an EFX SysEx that arrives mid-render takes effect
+  /// without a separate control-thread pump. MUST stay false on the audio
+  /// thread — realise_gs_efx() allocates. The live engine leaves it false and
+  /// pumps EFX from the control thread instead.
+  bool realize_efx_inline = false;
 #if defined(SONARE_MIDI_WITH_FX)
   /// System effect units (reverb / chorus / delay send-returns).
   GsEffectsConfig effects;
@@ -311,7 +318,18 @@ class Sf2Player final : public MidiInstrument {
   std::vector<float> mix_r_;
   /// 16 parts x stereo x kChunkFrames; only used when a part insert is set.
   std::vector<float> part_bus_;
+  /// True once the player is EFX-capable (a config insert exists or a factory is
+  /// injected), so the per-part bus buffer is allocated. This only governs
+  /// allocation — the actual per-part routing is decided by `part_bussed_`, so
+  /// an EFX-capable player with no active insert still mixes bit-identically to
+  /// a plain one (the summation order is unchanged until an insert is live).
   bool any_insert_ = false;
+  /// Per-part routing gate: a part is summed through its insert bus only when it
+  /// carries a static config insert or a realised GS EFX chain. Parts without
+  /// one add straight to the dry mix, so injecting a factory (for run-time EFX)
+  /// does not perturb an otherwise dry bounce.
+  std::array<bool, 16> part_bussed_{};
+  bool any_bussed_ = false;
   /// Per-part insert chain, run in series on the part bus. A config kProcessor
   /// slot is a one-stage chain; a GS EFX unit realises a one-stage chain for a
   /// single effect or a multi-stage chain for a composite type (e.g. GTR Multi

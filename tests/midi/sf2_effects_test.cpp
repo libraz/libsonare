@@ -422,6 +422,73 @@ TEST_CASE("a mapped GS EFX modulation type is realised through the factory", "[m
   REQUIRE(efx.left != cln.left);
 }
 
+TEST_CASE("an EFX-capable player with no active insert renders bit-identically",
+          "[midi][sf2][gsfx]") {
+  // Injecting an insert factory must not perturb an otherwise dry render: a part
+  // is only summed through its insert bus once an EFX (or a static insert) is
+  // live, so the dry mix's summation order is unchanged. This guards the
+  // offline bounce, which always injects a factory.
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player capable = make_player(cfg);
+  capable.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  const StereoRender with_factory = render(capable, 9600);
+
+  Sf2PlayerConfig plain_cfg;  // no factory injected, same gain as the capable one
+  plain_cfg.gain = 1.0f;
+  Sf2Player plain = make_player(plain_cfg);
+  plain.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  const StereoRender without = render(plain, 9600);
+
+  REQUIRE(with_factory.left == without.left);
+  REQUIRE(with_factory.right == without.right);
+}
+
+TEST_CASE("the offline realize_efx_inline path installs EFX without a manual pump",
+          "[midi][sf2][gsfx]") {
+  auto h3 = [](const std::vector<float>& buf) {
+    const double w = kTwoPi * 3000.0 / kOutRate;
+    const double coeff = 2.0 * std::cos(w);
+    double s1 = 0.0, s2 = 0.0;
+    for (size_t i = 2400; i < buf.size(); ++i) {
+      const double s0 = static_cast<double>(buf[i]) + coeff * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+  };
+  // Same OD-on-part-1 sequence as the manual-pump test, but the offline host
+  // never calls realize_gs_efx(): process() must realise the pending change
+  // inline (this is how the single-threaded bounce applies a mid-render EFX).
+  const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                             0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  const uint8_t od_drive[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x04, 0x7F, 0x3A, 0xF7};
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.realize_efx_inline = true;
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player player = make_player(cfg);
+  REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
+  REQUIRE(player.handle_sysex(od_type, sizeof(od_type)));
+  REQUIRE(player.handle_sysex(od_drive, sizeof(od_drive)));
+  REQUIRE(player.gs_efx_dirty());  // not realised yet — no manual pump
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender efx = render(player, 9600);
+  REQUIRE_FALSE(player.gs_efx_dirty());  // process() realised it inline
+
+  Sf2Player clean = make_player();
+  clean.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender cln = render(clean, 9600);
+  REQUIRE(h3(efx.left) > 10.0 * h3(cln.left));
+}
+
 TEST_CASE("GS effects render bit-identically", "[midi][sf2][gsfx]") {
   auto run = [] {
     Sf2Player player = make_player();

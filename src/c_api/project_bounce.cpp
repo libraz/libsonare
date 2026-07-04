@@ -7,6 +7,7 @@
 #include <set>
 
 #include "c_api/synth_patch_common.h"
+#include "mastering/api/insert_factory.h"
 #include "midi/builtin_synth.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/synth/synth_presets.h"
@@ -619,6 +620,16 @@ sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
   sonare::midi::synth::Sf2PlayerConfig cfg;
   if (c.gain > 0.0f) cfg.gain = c.gain;
   if (c.polyphony > 0) cfg.polyphony = c.polyphony;
+  // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
+  // mastering factory itself, so the host injects it. An EFX SysEx on the
+  // compiled timeline then installs its inserts and rings through the per-part
+  // bus. The bounce is single-threaded and offline, so pending EFX changes are
+  // realised inline in process() (the allocation is safe off the audio thread).
+  cfg.insert_factory = [](std::string_view name,
+                          std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  cfg.realize_efx_inline = true;
   return cfg;
 }
 

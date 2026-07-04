@@ -32,12 +32,18 @@ Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
   if (!(config_.gain > 0.0f) || !std::isfinite(config_.gain)) config_.gain = 0.5f;
   config_.gain = std::min(config_.gain, 4.0f);
   config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices) : 48;
-  for (Sf2PartInsert& insert : config_.part_inserts) {
+  for (int part = 0; part < 16; ++part) {
+    Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
     insert.amount = std::clamp(insert.amount, 0.0f, 1.0f);
-    any_insert_ = any_insert_ || insert.type != Sf2InsertType::kNone;
+    const bool has_static = insert.type != Sf2InsertType::kNone;
+    any_insert_ = any_insert_ || has_static;
+    part_bussed_[static_cast<size_t>(part)] = has_static;
+    any_bussed_ = any_bussed_ || has_static;
   }
-  // A player with an insert factory is EFX-capable: route every part through
-  // its bus so a GS EFX switch can install an insert on any part at run time.
+  // A player with an insert factory is EFX-capable: allocate the per-part bus so
+  // a GS EFX switch can install an insert on any part at run time. Parts are not
+  // bussed until an EFX is actually realised (see part_bussed_), so a dry bounce
+  // stays bit-identical to one built without a factory.
   if (config_.insert_factory) any_insert_ = true;
 #if defined(SONARE_MIDI_WITH_FX)
   effects_ = std::make_unique<GsEffectBus>(config_.effects);
@@ -257,27 +263,36 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
 void Sf2Player::realize_gs_efx() {
   gs_efx_dirty_ = false;
   if (!prepared_) return;
+  any_bussed_ = false;
   for (int part = 0; part < 16; ++part) {
+    const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
+    const bool static_insert = insert.type != Sf2InsertType::kNone;
     // A config kProcessor slot is owned by the caller, not by the EFX unit: only
     // (re)build parts that are EFX-routed, and only clear what the EFX installed.
-    if (config_.part_inserts[static_cast<size_t>(part)].type == Sf2InsertType::kProcessor) continue;
+    if (insert.type == Sf2InsertType::kProcessor) {
+      part_bussed_[static_cast<size_t>(part)] = true;
+      any_bussed_ = true;
+      continue;
+    }
     std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
         part_chains_[static_cast<size_t>(part)];
     chain.clear();
-    if (!efx_.assigned || !efx_part_enabled_[static_cast<size_t>(part)] ||
-        !config_.insert_factory) {
-      continue;
-    }
-    // Realise the EFX chain (single-effect = one stage, composite = its block
-    // chain). Stages whose factory build returns null (e.g. an FX stage in a
-    // no-FX build) are skipped, so a partial chain still runs.
-    for (const GsEfxStage& stage : gs_efx_insert_chain(efx_)) {
-      auto proc = config_.insert_factory(stage.name, stage.params_json);
-      if (proc != nullptr) {
-        proc->prepare(sample_rate_, kChunkFrames);
-        chain.push_back(std::move(proc));
+    if (efx_.assigned && efx_part_enabled_[static_cast<size_t>(part)] && config_.insert_factory) {
+      // Realise the EFX chain (single-effect = one stage, composite = its block
+      // chain). Stages whose factory build returns null (e.g. an FX stage in a
+      // no-FX build) are skipped, so a partial chain still runs.
+      for (const GsEfxStage& stage : gs_efx_insert_chain(efx_)) {
+        auto proc = config_.insert_factory(stage.name, stage.params_json);
+        if (proc != nullptr) {
+          proc->prepare(sample_rate_, kChunkFrames);
+          chain.push_back(std::move(proc));
+        }
       }
     }
+    // Buss the part only when it carries a static insert (kDrive) or a live EFX
+    // chain, so unaffected parts keep adding straight to the dry mix.
+    part_bussed_[static_cast<size_t>(part)] = static_insert || !chain.empty();
+    any_bussed_ = any_bussed_ || part_bussed_[static_cast<size_t>(part)];
   }
 }
 
@@ -885,7 +900,7 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
 void Sf2Player::render_chunk(int n) noexcept {
   std::memset(mix_l_.data(), 0, sizeof(float) * static_cast<size_t>(n));
   std::memset(mix_r_.data(), 0, sizeof(float) * static_cast<size_t>(n));
-  if (any_insert_ && !part_bus_.empty()) {
+  if (any_bussed_ && !part_bus_.empty()) {
     std::memset(part_bus_.data(), 0, sizeof(float) * part_bus_.size());
   }
 
@@ -953,7 +968,7 @@ void Sf2Player::render_chunk(int n) noexcept {
       const float s = v.render(mod);
       const float l = s * v.gain_left;
       const float r = s * v.gain_right;
-      if (any_insert_) {
+      if (part_bussed_[part]) {
         float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
         bus[i] += l;
         bus[kChunkFrames + i] += r;
@@ -998,7 +1013,7 @@ void Sf2Player::render_chunk(int n) noexcept {
         l *= kPianoDirectGain;
         r *= kPianoDirectGain;
       }
-      if (any_insert_) {
+      if (part_bussed_[part]) {
         float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
         bus[i] += l;
         bus[kChunkFrames + i] += r;
@@ -1042,7 +1057,7 @@ void Sf2Player::render_chunk(int n) noexcept {
           add = fallback_reso_[static_cast<size_t>(part)].process(dry, /*damper_open=*/true);
         }
         if (add == 0.0f) continue;
-        if (any_insert_) {
+        if (part_bussed_[part]) {
           float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
           bus[i] += add;
           bus[kChunkFrames + i] += add;
@@ -1068,8 +1083,9 @@ void Sf2Player::render_chunk(int n) noexcept {
   }
 
   // Per-part insert processing, then sum the parts into the dry mix.
-  if (any_insert_) {
+  if (any_bussed_) {
     for (int part = 0; part < 16; ++part) {
+      if (!part_bussed_[static_cast<size_t>(part)]) continue;
       float* bus_l = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
       float* bus_r = bus_l + kChunkFrames;
       const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
@@ -1105,6 +1121,11 @@ void Sf2Player::render_chunk(int n) noexcept {
 
 void Sf2Player::process(float* const* channels, int num_channels, int num_samples) {
   if (!prepared_ || channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
+  // Offline hosts realise a pending EFX change inline (an EFX SysEx dispatched
+  // for this block installs its inserts before the block renders). This
+  // allocates, so it is gated to single-threaded/offline use; the live engine
+  // pumps realise_gs_efx() from the control thread instead.
+  if (config_.realize_efx_inline && gs_efx_dirty_) realize_gs_efx();
   if (mix_l_.size() < static_cast<size_t>(kChunkFrames)) return;
   float* left = channels[0];
   float* right = num_channels > 1 ? channels[1] : nullptr;
