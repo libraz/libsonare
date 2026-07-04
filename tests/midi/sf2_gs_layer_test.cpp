@@ -349,6 +349,7 @@ TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf
   REQUIRE(gs_efx_insert_name(0x0130) == "dynamics.compressor");              // Compressor
   REQUIRE(gs_efx_insert_name(0x0131) == "dynamics.limiter");                 // Limiter
   REQUIRE(gs_efx_insert_name(0x0140) == "effects.modulation.ensemble");      // Hexa Chorus
+  REQUIRE(gs_efx_insert_name(0x0141) == "effects.modulation.chorus");        // Tremolo Chorus
   REQUIRE(gs_efx_insert_name(0x0142) == "effects.modulation.chorus");        // Stereo Chorus
   REQUIRE(gs_efx_insert_name(0x0143) == "effects.modulation.chorus");        // Space-D
   REQUIRE(gs_efx_insert_name(0x0144) == "effects.modulation.chorus");        // 3D Chorus
@@ -361,10 +362,15 @@ TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf
   REQUIRE(gs_efx_insert_name(0x0157) == "effects.delay.stereo");             // 3D Delay
   REQUIRE(gs_efx_insert_name(0x0160) == "effects.modulation.pitchShifter");  // 2-voice Pitch Shift
   REQUIRE(gs_efx_insert_name(0x0161) == "effects.modulation.pitchShifter");  // Feedback Pitch Shift
+  REQUIRE(gs_efx_insert_name(0x0172) == "saturation.bitcrusher");            // Lo-Fi 1
+  REQUIRE(gs_efx_insert_name(0x0173) == "saturation.bitcrusher");            // Lo-Fi 2
   REQUIRE(gs_efx_insert_name(0x0000).empty());                               // Thru
-  // Ring Modulator is absent from the SC-88Pro insertion set: no GS type binds
-  // to the ringModulator insert (reachable only via the generic insert API).
+  // Types with no faithful stock insert stay unmapped: 3D Auto (0x0170, a
+  // binaural panner) and Tremolo (0x0125, an amplitude LFO). The SC-88Pro has
+  // no standalone Ring Modulator type — that DSP is reachable only bundled in
+  // Keyboard Multi (0x0500), realised there as a chain stage.
   REQUIRE(gs_efx_insert_name(0x0170).empty());
+  REQUIRE(gs_efx_insert_name(0x0125).empty());
 }
 
 TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][sf2][gslayer]") {
@@ -456,9 +462,11 @@ TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
   flat.type = 0x0401;
   REQUIRE(gs_efx_insert_chain(flat)[2].params_json.find("\"band0.gainDb\":0") != std::string::npos);
 
-  // An unmapped type yields an empty chain (bypass).
+  // A type with no faithful mapping yields an empty chain (bypass). The
+  // parallel-2 composites (MSB 11) are intentionally left unmapped: they mix two
+  // effects in parallel, which the series insert chain cannot express faithfully.
   GsEfx unknown;
-  unknown.type = 0x0500;
+  unknown.type = 0x1100;  // Cho/Delay (parallel) -> unmapped
   REQUIRE(gs_efx_insert_chain(unknown).empty());
 }
 
@@ -496,6 +504,53 @@ TEST_CASE("gs_efx_insert_chain covers the guitar/bass multi block", "[midi][sf2]
   GsEfx guitar;
   guitar.type = 0x0401;
   REQUIRE(gs_efx_insert_chain(guitar)[1].params_json.find("cabModel") == std::string::npos);
+}
+
+TEST_CASE("gs_efx_insert_chain expands the series-2 and multi composites", "[midi][sf2][gslayer]") {
+  auto names = [](uint16_t type) {
+    GsEfx efx;
+    efx.type = type;
+    std::vector<std::string> out;
+    for (const auto& stage : gs_efx_insert_chain(efx)) out.push_back(stage.name);
+    return out;
+  };
+  // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
+  REQUIRE(names(0x0200) ==  // OD -> Chorus
+          std::vector<std::string>{"saturation.ampSim", "effects.modulation.chorus"});
+  REQUIRE(names(0x0202) ==  // OD -> Delay
+          std::vector<std::string>{"saturation.ampSim", "effects.delay.stereo"});
+  REQUIRE(names(0x0206) ==  // EH -> Chorus
+          std::vector<std::string>{"spectral.presenceEnhancer", "effects.modulation.chorus"});
+  REQUIRE(names(0x0209) ==  // Cho -> Delay
+          std::vector<std::string>{"effects.modulation.chorus", "effects.delay.stereo"});
+  REQUIRE(names(0x020B) ==  // Cho -> Flanger
+          std::vector<std::string>{"effects.modulation.chorus", "effects.modulation.flanger"});
+  // The distortion series-2 blocks use the high-gain amp voicing.
+  GsEfx ds;
+  ds.type = 0x0204;  // DS -> Flanger
+  const auto ds_chain = gs_efx_insert_chain(ds);
+  REQUIRE(ds_chain[0].name == "saturation.ampSim");
+  REQUIRE(ds_chain[0].params_json.find("\"ampModel\":2") != std::string::npos);
+  REQUIRE(ds_chain[1].name == "effects.modulation.flanger");
+
+  // Rotary Multi: OD -> 3-band EQ -> Rotary, reachable via both type numbers the
+  // manual prints for it (chapter-4 body 03 00 and appendix table 02 0C).
+  const std::vector<std::string> rotary_multi{"saturation.ampSim", "eq.parametric",
+                                              "effects.modulation.rotary"};
+  REQUIRE(names(0x0300) == rotary_multi);
+  REQUIRE(names(0x020C) == rotary_multi);
+
+  // Rhodes Multi (04 06): Enhancer -> Phaser -> Chorus -> Tremolo/Pan.
+  REQUIRE(names(0x0406) == std::vector<std::string>{"spectral.presenceEnhancer",
+                                                    "effects.modulation.phaser",
+                                                    "effects.modulation.chorus", "stereo.autoPan"});
+
+  // Keyboard Multi (05 00): Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.
+  // This is the only GS type that binds the ring-modulator insert.
+  REQUIRE(names(0x0500) ==
+          std::vector<std::string>{"effects.modulation.ringModulator", "eq.parametric",
+                                   "effects.modulation.pitchShifter", "effects.modulation.phaser",
+                                   "effects.delay.stereo"});
 }
 
 TEST_CASE("parse_gs_sysex recognises the per-part EFX switch", "[midi][sf2][gslayer]") {

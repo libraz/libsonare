@@ -244,6 +244,7 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
       return "dynamics.limiter";
     case 0x0140:  // Hexa Chorus -> the six-voice ensemble (its richer voicing).
       return "effects.modulation.ensemble";
+    case 0x0141:  // Tremolo Chorus -> the stereo chorus (its tremolo layer is deferred).
     case 0x0142:  // Stereo Chorus
     case 0x0143:  // Space-D (an unmodulated stereo chorus)
     case 0x0144:  // 3D Chorus (the widened chorus, without the binaural stage)
@@ -261,10 +262,16 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
     case 0x0160:  // 2-voice Pitch Shifter
     case 0x0161:  // Feedback Pitch Shifter (the feedback loop is not modelled)
       return "effects.modulation.pitchShifter";
+    case 0x0172:  // Lo-Fi 1
+    case 0x0173:  // Lo-Fi 2 -> the bit-depth / sample-rate reducer.
+      return "saturation.bitcrusher";
     default:
-      // Note: the SC-88Pro has no Ring Modulator in its 64-effect insertion set
-      // (it arrived on later Sound Canvas models), so the ringModulator insert
-      // has no GS type to bind to and stays reachable only via the generic API.
+      // Types with no faithful stock insert stay unmapped (bypass): Humanizer
+      // (0x0103, a vowel-formant filter), Tremolo (0x0125, an amplitude LFO) and
+      // 3D Auto / 3D Manual (0x0170/0x0171, binaural panners). The SC-88Pro has
+      // no standalone Ring Modulator type; that DSP appears only bundled inside
+      // Keyboard Multi (0x0500), where gs_efx_insert_chain realises it via the
+      // ringModulator insert.
       return {};
   }
 }
@@ -377,7 +384,50 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
   const auto delay = [] { return GsEfxStage{"effects.delay.stereo", "{}"}; };
   const auto wah = [] { return GsEfxStage{"effects.modulation.wah", "{}"}; };
   const auto autowah = [] { return GsEfxStage{"effects.modulation.autoWah", "{}"}; };
+  // Series-2 / multi building blocks. Sub-block parameters stay at their insert
+  // defaults for now (the mapping is the coverage deliverable; per-block param
+  // translation is follow-up work); only the shared guitar-multi EQ, above,
+  // reads a confirmed layout.
+  const auto ds = [] { return GsEfxStage{"saturation.ampSim", "{\"ampModel\":2,\"drive\":0.7}"}; };
+  const auto eh = [] { return GsEfxStage{"spectral.presenceEnhancer", "{}"}; };
+  const auto fl = [] { return GsEfxStage{"effects.modulation.flanger", "{}"}; };
+  const auto rot = [] { return GsEfxStage{"effects.modulation.rotary", "{}"}; };
+  const auto ph = [] { return GsEfxStage{"effects.modulation.phaser", "{}"}; };
+  const auto pan = [] { return GsEfxStage{"stereo.autoPan", "{}"}; };
+  const auto rm = [] { return GsEfxStage{"effects.modulation.ringModulator", "{}"}; };
+  const auto ps = [] { return GsEfxStage{"effects.modulation.pitchShifter", "{}"}; };
+  const auto eq3 = [] { return GsEfxStage{"eq.parametric", "{}"}; };
   switch (efx.type) {
+    // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
+    case 0x0200:  // OD -> Chorus
+      return {od(false), cf()};
+    case 0x0201:  // OD -> Flanger
+      return {od(false), fl()};
+    case 0x0202:  // OD -> Delay
+      return {od(false), delay()};
+    case 0x0203:  // DS -> Chorus
+      return {ds(), cf()};
+    case 0x0204:  // DS -> Flanger
+      return {ds(), fl()};
+    case 0x0205:  // DS -> Delay
+      return {ds(), delay()};
+    case 0x0206:  // EH -> Chorus
+      return {eh(), cf()};
+    case 0x0207:  // EH -> Flanger
+      return {eh(), fl()};
+    case 0x0208:  // EH -> Delay
+      return {eh(), delay()};
+    case 0x0209:  // Cho -> Delay
+      return {cf(), delay()};
+    case 0x020A:  // FL -> Delay
+      return {fl(), delay()};
+    case 0x020B:  // Cho -> Flanger
+      return {cf(), fl()};
+    // Rotary Multi: OD -> 3-band EQ -> Rotary. The manual prints two type numbers
+    // for it (chapter-4 body 03 00 vs appendix table 02 0C); accept both.
+    case 0x020C:
+    case 0x0300:
+      return {od(false), eq3(), rot()};
     case 0x0400:  // GTR Multi 1: Cmp-OD-CF-Dly
       return {comp(), od(false), cf(), delay()};
     case 0x0401:  // GTR Multi 2: Cmp-OD-EQ-CF
@@ -390,6 +440,11 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
       return {autowah(), eq(), cf(), delay()};
     case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF (the OD block on the bass cab)
       return {comp(), od(true), eq(), cf()};
+    case 0x0406:  // Rhodes Multi: Enhancer -> Phaser -> Chorus -> Tremolo/Pan
+      return {eh(), ph(), cf(), pan()};
+    case 0x0500:  // Keyboard Multi: Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.
+                  // The only GS type that binds the ring-modulator insert.
+      return {rm(), eq3(), ps(), ph(), delay()};
     default: {
       // Single-effect types: a one-stage chain from the name/param mapping.
       const std::string_view name = gs_efx_insert_name(efx.type);
