@@ -336,6 +336,8 @@ TEST_CASE("apply_gs_efx_sysex captures the EFX block as raw wire", "[midi][sf2][
 TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf2][gslayer]") {
   // GS EFX type numbers (SC-88Pro MSB<<8|LSB) -> insert-factory names.
   REQUIRE(gs_efx_insert_name(0x0100) == "eq.parametric");                    // Stereo-EQ
+  REQUIRE(gs_efx_insert_name(0x0101) == "eq.graphic");                       // Spectrum
+  REQUIRE(gs_efx_insert_name(0x0102) == "spectral.presenceEnhancer");        // Enhancer
   REQUIRE(gs_efx_insert_name(0x0110) == "saturation.ampSim");                // Overdrive
   REQUIRE(gs_efx_insert_name(0x0111) == "saturation.ampSim");                // Distortion
   REQUIRE(gs_efx_insert_name(0x0120) == "effects.modulation.phaser");        // Phaser
@@ -346,10 +348,17 @@ TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf
   REQUIRE(gs_efx_insert_name(0x0126) == "stereo.autoPan");                   // Auto Pan
   REQUIRE(gs_efx_insert_name(0x0130) == "dynamics.compressor");              // Compressor
   REQUIRE(gs_efx_insert_name(0x0131) == "dynamics.limiter");                 // Limiter
-  REQUIRE(gs_efx_insert_name(0x0140) == "effects.modulation.chorus");        // Hexa Chorus
+  REQUIRE(gs_efx_insert_name(0x0140) == "effects.modulation.ensemble");      // Hexa Chorus
   REQUIRE(gs_efx_insert_name(0x0142) == "effects.modulation.chorus");        // Stereo Chorus
+  REQUIRE(gs_efx_insert_name(0x0143) == "effects.modulation.chorus");        // Space-D
+  REQUIRE(gs_efx_insert_name(0x0144) == "effects.modulation.chorus");        // 3D Chorus
   REQUIRE(gs_efx_insert_name(0x0150) == "effects.delay.stereo");             // Stereo Delay
   REQUIRE(gs_efx_insert_name(0x0151) == "effects.delay.stereo");             // Modulation Delay
+  REQUIRE(gs_efx_insert_name(0x0152) == "effects.delay.stereo");             // 3-tap Delay
+  REQUIRE(gs_efx_insert_name(0x0154) == "effects.delay.stereo");             // Time Control Delay
+  REQUIRE(gs_efx_insert_name(0x0155) == "effects.reverb.dattorro");          // Reverb
+  REQUIRE(gs_efx_insert_name(0x0156) == "effects.reverb.dattorro");          // Gate Reverb
+  REQUIRE(gs_efx_insert_name(0x0157) == "effects.delay.stereo");             // 3D Delay
   REQUIRE(gs_efx_insert_name(0x0160) == "effects.modulation.pitchShifter");  // 2-voice Pitch Shift
   REQUIRE(gs_efx_insert_name(0x0161) == "effects.modulation.pitchShifter");  // Feedback Pitch Shift
   REQUIRE(gs_efx_insert_name(0x0000).empty());                               // Thru

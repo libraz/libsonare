@@ -220,6 +220,10 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
   switch (type) {
     case 0x0100:  // Stereo-EQ
       return "eq.parametric";
+    case 0x0101:  // Spectrum -> the multi-band graphic EQ.
+      return "eq.graphic";
+    case 0x0102:  // Enhancer -> the high-overtone presence enhancer.
+      return "spectral.presenceEnhancer";
     case 0x0110:  // Overdrive -> the full guitar amp model (crunch voicing).
     case 0x0111:  // Distortion -> the amp model on its high-gain voicing.
       return "saturation.ampSim";
@@ -238,12 +242,22 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
       return "dynamics.compressor";
     case 0x0131:  // Limiter
       return "dynamics.limiter";
-    case 0x0140:  // Hexa Chorus
+    case 0x0140:  // Hexa Chorus -> the six-voice ensemble (its richer voicing).
+      return "effects.modulation.ensemble";
     case 0x0142:  // Stereo Chorus
+    case 0x0143:  // Space-D (an unmodulated stereo chorus)
+    case 0x0144:  // 3D Chorus (the widened chorus, without the binaural stage)
       return "effects.modulation.chorus";
     case 0x0150:  // Stereo Delay
     case 0x0151:  // Modulation Delay (delay with LFO -> the stereo delay insert)
+    case 0x0152:  // 3-tap Delay
+    case 0x0153:  // 4-tap Delay
+    case 0x0154:  // Time Control Delay (all multi-tap variants -> the stereo delay)
+    case 0x0157:  // 3D Delay (without the binaural stage -> the stereo delay)
       return "effects.delay.stereo";
+    case 0x0155:  // Reverb (per-part insertion reverb)
+    case 0x0156:  // Gate Reverb (approximated by the plate reverb; no gate stage yet)
+      return "effects.reverb.dattorro";
     case 0x0160:  // 2-voice Pitch Shifter
     case 0x0161:  // Feedback Pitch Shifter (the feedback loop is not modelled)
       return "effects.modulation.pitchShifter";
