@@ -102,8 +102,8 @@ MIRRORS: tuple[tuple[str, str, str], ...] = (
         r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)",
         "project",
     ),
-    ("bindings/node/src/types.ts", r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)", "project"),
-    ("bindings/wasm/src/project.ts", r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)", "project"),
+    ("bindings/node/src/types_project.ts", r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)", "project"),
+    ("bindings/wasm/src/project_types.ts", r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)", "project"),
     # Engine ABI.
     (
         "bindings/python/src/libsonare/engine.py",
