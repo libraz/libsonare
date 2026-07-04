@@ -297,6 +297,21 @@ describe('SonareRealtimeEngineNode', () => {
         engine.pushMidiNoteOff(3, 0, 0, 64, 0);
         engine.pushMidiCc(3, 0, 0, 74, 100);
         engine.pushMidiSysex(3, new Uint8Array([0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7]));
+        // Live GS insertion-effect (EFX) SysEx: select EFX TYPE = Overdrive
+        // (MSB 0x01, LSB 0x10) on the SF2 instrument. This drives the control-
+        // thread realize path (on_control_sysex -> insert factory) that
+        // setSf2Instrument now wires; the injected factory must build the chain
+        // without throwing. GS DT1: F0 41 10 42 12 <addr> <data> <checksum> F7.
+        engine.pushMidiSysex(
+          3,
+          // addr 40 03 00 = EFX TYPE MSB = 0x01, checksum 0x3c
+          new Uint8Array([0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00, 0x01, 0x3c, 0xf7]),
+        );
+        engine.pushMidiSysex(
+          3,
+          // addr 40 03 01 = EFX TYPE LSB = 0x10, checksum 0x2c
+          new Uint8Array([0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x01, 0x10, 0x2c, 0xf7]),
+        );
         engine.pushMidiPanic();
         const clipId = engine.addClip(
           3,

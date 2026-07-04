@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include "c_api/synth_patch_common.h"
+#include "mastering/api/insert_factory.h"
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
 #include "util/json.h"
@@ -339,6 +340,14 @@ void RealtimeEngineWasm::setSf2Instrument(uint32_t destination_id, val config) {
     const int polyphony = intProperty(config, "polyphony", 0);
     if (polyphony > 0) cfg.polyphony = polyphony;
   }
+  // Inject the mastering insert factory so live GS insertion effects (EFX)
+  // realise their processing chain on the control thread (mirrors the C-ABI
+  // path). realize_efx_inline stays false (the live default) so the swap is
+  // wait-free via the RtPublisher snapshot; without a factory the chain could
+  // not be built and live EFX would be silent.
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
   auto player = std::make_unique<sonare::midi::synth::Sf2Player>(cfg);
   player->set_soundfont(soundfont_);
   bindInstrument(destination_id, std::move(player));
