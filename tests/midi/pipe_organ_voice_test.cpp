@@ -258,6 +258,39 @@ TEST_CASE("GM church organ fallback is a flue pipe", "[midi][synth][organ]") {
   REQUIRE(std::fabs(estimated / 261.6256 - 1.0) < 0.015);
 }
 
+TEST_CASE("GM harmonica and bandoneon fall back to the free-reed pipe", "[midi][synth][organ]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  // Harmonica (22) and Bandoneon (23) voice the lingual free-reed core rather
+  // than the drawbar organ family sketch.
+  for (const uint8_t program : {uint8_t{22}, uint8_t{23}}) {
+    const NativeSynthPatch& patch = gm_fallback_patch(0, program);
+    REQUIRE(patch.mode == SynthEngineMode::kPipeOrgan);
+    REQUIRE(patch.pipe_organ.ranks[0].reed > 0.0f);  // a reed (not flue) stop
+    const std::vector<float> tone = render_patch(patch, 60, 100, 24000);
+    REQUIRE(peak(tone) > 0.01f);
+    const double estimated = fft_fundamental(tone, 8000, 261.6256);
+    REQUIRE(std::fabs(estimated / 261.6256 - 1.0) < 0.02);
+  }
+  // The bandoneon's musette voicing detunes a second unison rank for beating.
+  const NativeSynthPatch& bandoneon = gm_fallback_patch(0, 23);
+  REQUIRE(bandoneon.pipe_organ.rank_count >= 3);
+  REQUIRE(bandoneon.pipe_organ.ranks[1].footage_mult > 1.0f);
+  REQUIRE(bandoneon.pipe_organ.ranks[1].footage_mult < 1.03f);
+}
+
+TEST_CASE("GM orchestra hit is a fast-attack stab", "[midi][synth][organ]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  const NativeSynthPatch& hit = gm_fallback_patch(0, 55);
+  // A stab, not the ensemble family's slow pad: a fast amplitude attack.
+  REQUIRE(hit.amp_env.attack_ms < 10.0f);
+  const std::vector<float> tone = render_patch(hit, 60, 110, 24000);
+  REQUIRE(peak(tone) > 0.01f);
+  // The attack transient dominates: the onset is far louder than the tail.
+  const float onset = peak(std::vector<float>(tone.begin(), tone.begin() + 2400));
+  const float tail = peak(std::vector<float>(tone.begin() + 16000, tone.end()));
+  REQUIRE(onset > 3.0f * tail);
+}
+
 TEST_CASE("church organ presets select the pipe organ", "[midi][synth][organ]") {
   using sonare::midi::synth::find_synth_preset;
   for (const char* name : {"church-organ", "church-flute", "church-bourdon", "church-trumpet"}) {

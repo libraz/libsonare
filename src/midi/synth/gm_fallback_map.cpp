@@ -270,6 +270,9 @@ struct ProgramOverrides {
   NativeSynthPatch harp;                // program 46 (Orchestral Harp)
   NativeSynthPatch church_organ;        // program 19 (Church Organ, flue pipe)
   NativeSynthPatch reed_organ;          // programs 20-21 (Reed Organ / Accordion, free reed)
+  NativeSynthPatch harmonica;           // program 22 (free reed, bright hand vibrato)
+  NativeSynthPatch bandoneon;           // program 23 (musette-detuned free reed)
+  NativeSynthPatch orchestra_hit;       // program 55 (bright detuned-saw stab)
   NativeSynthPatch tremolo_strings;     // program 44 (measured-bow amp tremolo)
   NativeSynthPatch pizzicato;           // program 45 (Pizzicato Strings, KS + corpus)
   NativeSynthPatch timpani;             // program 47 (kettledrum membrane)
@@ -780,6 +783,53 @@ ProgramOverrides build_program_overrides() noexcept {
   o.reed_organ.pipe_organ.wind_sag = 0.2f;
   o.reed_organ.stereo_spread = 0.18f;
   o.reed_organ.gain = 0.42f;
+
+  // Harmonica (GM 22): a small, bright free reed. Same lingual-reed core as the
+  // reed organ but voiced smaller and brighter, with a quick response and a
+  // gentle hand-vibrato tremolo (the player's cupping hands modulate the tone).
+  o.harmonica = o.reed_organ;
+  o.harmonica.amp_env = env(20.0f, 0.0f, 1.0f, 90.0f);
+  o.harmonica.pipe_organ.breath = 0.4f;
+  o.harmonica.pipe_organ.chiff = 0.45f;  // breathy attack
+  o.harmonica.pipe_organ.rank_count = 2;
+  o.harmonica.pipe_organ.ranks[0] = {1.0f, false, 0.9f, 1.0f, 0.9f, 0.35f};  // 8' bright reed
+  o.harmonica.pipe_organ.ranks[1] = {2.0f, false, 0.9f, 0.4f, 0.85f, 0.4f};  // 4' sparkle
+  o.harmonica.lfo_rate_hz = 5.6f;
+  o.harmonica.lfo_to_pitch_cents = 8.0f;
+  o.harmonica.stereo_spread = 0.12f;
+  o.harmonica.gain = 0.44f;
+
+  // Bandoneon (GM 23): the tango free-reed. The defining trait is the musette
+  // voicing — two near-unison reeds a few cents apart beat against each other,
+  // so a second 8' rank is detuned slightly (footage 1.008) to produce the
+  // characteristic wet shimmer.
+  o.bandoneon = o.reed_organ;
+  o.bandoneon.amp_env = env(24.0f, 0.0f, 1.0f, 120.0f);
+  o.bandoneon.pipe_organ.breath = 0.32f;
+  o.bandoneon.pipe_organ.chiff = 0.28f;
+  o.bandoneon.pipe_organ.rank_count = 3;
+  o.bandoneon.pipe_organ.ranks[0] = {1.0f, false, 0.78f, 1.0f, 0.82f, 0.25f};    // 8'
+  o.bandoneon.pipe_organ.ranks[1] = {1.008f, false, 0.78f, 0.9f, 0.82f, 0.25f};  // 8' musette beat
+  o.bandoneon.pipe_organ.ranks[2] = {2.0f, false, 0.8f, 0.5f, 0.75f, 0.3f};      // 4'
+  o.bandoneon.stereo_spread = 0.22f;
+  o.bandoneon.gain = 0.42f;
+
+  // Orchestra Hit (GM 55): a sharp tutti stab. The ensemble family's slow pad
+  // is the wrong envelope, so this overrides to a bright detuned-saw chord with
+  // a fast attack and a snappy filter decay — a synthetic stab, not a section.
+  NativeSynthPatch& oh = o.orchestra_hit;
+  oh.waveform = VaWaveform::kSaw;
+  oh.unison = 5;
+  oh.detune_cents = 16.0f;
+  oh.drift_cents = 3.0f;
+  oh.amp_env = env(2.0f, 320.0f, 0.0f, 180.0f);
+  oh.cutoff_hz = 5200.0f;
+  oh.filter_env = env(1.0f, 220.0f, 0.0f, 180.0f);
+  oh.env_to_cutoff_cents = 2400.0f;
+  oh.key_track = 0.4f;
+  oh.vel_to_cutoff_cents = 1500.0f;
+  oh.stereo_spread = 0.5f;
+  oh.gain = 0.7f;
 
   // Tremolo Strings (GM 44): the string-section pad under a measured-bow
   // amplitude tremolo (LFO2 -> amp) — the section shudders rather than
@@ -1293,6 +1343,9 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harp = clamp_synth_patch(o.harp);
   o.church_organ = clamp_synth_patch(o.church_organ);
   o.reed_organ = clamp_synth_patch(o.reed_organ);
+  o.harmonica = clamp_synth_patch(o.harmonica);
+  o.bandoneon = clamp_synth_patch(o.bandoneon);
+  o.orchestra_hit = clamp_synth_patch(o.orchestra_hit);
   o.tremolo_strings = clamp_synth_patch(o.tremolo_strings);
   o.pizzicato = clamp_synth_patch(o.pizzicato);
   o.timpani = clamp_synth_patch(o.timpani);
@@ -1790,6 +1843,10 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexce
     case 21:  // Accordion (free reed — shares the reed-organ voicing until a
               // dedicated free-reed model lands)
       return program_overrides().reed_organ;
+    case 22:  // Harmonica (small bright free reed)
+      return program_overrides().harmonica;
+    case 23:  // Bandoneon (musette-detuned free reed)
+      return program_overrides().bandoneon;
     case 24:  // Acoustic Guitar (nylon)
       return program_overrides().nylon_guitar;
     case 26:  // Electric Guitar (jazz)
@@ -1827,6 +1884,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexce
       return program_overrides().voice_oohs;
     case 54:  // Synth Voice
       return program_overrides().synth_voice;
+    case 55:  // Orchestra Hit (bright detuned-saw stab)
+      return program_overrides().orchestra_hit;
     // Bowed string family (physical waveguide).
     case 40:  // Violin
       return program_overrides().violin;
@@ -2093,9 +2152,12 @@ float gm_fallback_max_release_ms() noexcept {
     }
     const ProgramOverrides& o = program_overrides();
     for (const NativeSynthPatch* p :
-         {&o.e_piano, &o.clav, &o.celesta, &o.glockenspiel, &o.music_box, &o.vibraphone, &o.marimba,
-          &o.xylophone, &o.tubular_bells, &o.dulcimer, &o.nylon_guitar, &o.electric_guitar,
-          &o.muted_guitar, &o.overdriven, &o.distortion, &o.harp, &o.church_organ, &o.reed_organ}) {
+         {&o.e_piano,       &o.clav,       &o.celesta,      &o.glockenspiel,
+          &o.music_box,     &o.vibraphone, &o.marimba,      &o.xylophone,
+          &o.tubular_bells, &o.dulcimer,   &o.nylon_guitar, &o.electric_guitar,
+          &o.muted_guitar,  &o.overdriven, &o.distortion,   &o.harp,
+          &o.church_organ,  &o.reed_organ, &o.harmonica,    &o.bandoneon,
+          &o.orchestra_hit}) {
       max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
     }
     return max_ms;
