@@ -26,6 +26,14 @@ bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* dat
   slot.size = static_cast<uint32_t>(size);
   const uint32_t generation = slot.generation.load(std::memory_order_relaxed) + 1u;
   slot.generation.store(generation, std::memory_order_relaxed);
+  // Realise any control-thread-built effect of this SysEx (e.g. a GS insertion
+  // effect) off the audio thread now, on this control thread; the audio thread
+  // swaps the rebuilt chains in wait-free at its next block. The audio-visible
+  // channel/EFX state is still delivered by the queued command below. Instruments
+  // that do not realise control-thread state (default MidiInstrument) no-op here.
+  if (midi::MidiInstrument* instrument = instrument_rack_.get(destination_id)) {
+    instrument->on_control_sysex(data, size);
+  }
   rt::Command command{};
   command.type = rt::CommandType::kMidiSysExImmediate;
   command.target_id = destination_id;

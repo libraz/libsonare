@@ -44,11 +44,28 @@
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/voice_pool.h"
 #include "rt/processor_base.h"
+#include "rt/rt_publisher.h"
 #if defined(SONARE_MIDI_WITH_FX)
 #include "midi/synth/gs_effects.h"
 #endif
 
 namespace sonare::midi::synth {
+
+/// A realised per-part insert routing, handed to the audio thread as one
+/// immutable-lifetime snapshot. `chains[part]` is the series of inserts run on
+/// that part's stereo bus (a config kProcessor slot, or a GS-EFX-installed
+/// single/composite chain); `part_bussed[part]` selects whether the part sums
+/// through its bus (and thus its chain) or straight to the dry mix; `any_bussed`
+/// short-circuits the whole bus stage when no part is routed. Built entirely on
+/// the CONTROL thread and published through rt::RtPublisher, so the audio thread
+/// only reads it (running the processors — which is legal through the const
+/// snapshot, since a `const unique_ptr` still exposes a non-const pointee) and
+/// never allocates, frees, or races the builder.
+struct Sf2RealizedEfx {
+  std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, 16> chains{};
+  std::array<bool, 16> part_bussed{};
+  bool any_bussed = false;
+};
 
 /// Per-part insert slot (the GS insertion-effect realiser): either the built-in
 /// gain-compensated drive, or an arbitrary streaming ProcessorBase built by an
@@ -161,8 +178,18 @@ class Sf2Player final : public MidiInstrument {
   /// CONTROL thread: (re)build the per-part inserts for the parts whose EFX
   /// switch is on, from the captured EFX type/params via the injected factory
   /// (an unmapped type or absent factory leaves the part dry). Allocates; never
-  /// call from the audio thread. Clears gs_efx_dirty().
+  /// call from the audio thread. Clears gs_efx_dirty(). Builds a fresh
+  /// Sf2RealizedEfx and publishes it; the audio thread swaps it in wait-free at
+  /// the next block.
   void realize_gs_efx();
+
+  /// CONTROL thread: parse a GS SysEx for its insertion-effect content, update
+  /// the control-owned EFX mirror, and republish the realised inserts so a live
+  /// engine can hear a GS EFX change without stopping. Only EFX-affecting
+  /// messages (40 03 xx / part switch / GS-GM reset) do anything here; the
+  /// audio-visible channel/EFX state is still delivered separately via
+  /// on_event(). No-op until prepared. Overrides MidiInstrument::on_control_sysex.
+  void on_control_sysex(const uint8_t* data, size_t size) noexcept override;
 
  private:
   struct ChannelState {
@@ -324,19 +351,28 @@ class Sf2Player final : public MidiInstrument {
   /// an EFX-capable player with no active insert still mixes bit-identically to
   /// a plain one (the summation order is unchanged until an insert is live).
   bool any_insert_ = false;
-  /// Per-part routing gate: a part is summed through its insert bus only when it
-  /// carries a static config insert or a realised GS EFX chain. Parts without
-  /// one add straight to the dry mix, so injecting a factory (for run-time EFX)
-  /// does not perturb an otherwise dry bounce.
-  std::array<bool, 16> part_bussed_{};
-  bool any_bussed_ = false;
-  /// Per-part insert chain, run in series on the part bus. A config kProcessor
-  /// slot is a one-stage chain; a GS EFX unit realises a one-stage chain for a
-  /// single effect or a multi-stage chain for a composite type (e.g. GTR Multi
-  /// = Cmp-OD-EQ-CF). Built by the injected factory on the control thread
-  /// (prepare / realise_gs_efx); an empty chain is inert. Iterating it in
-  /// render is allocation-free.
-  std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, 16> part_chains_{};
+  /// Realised per-part routing (part_bussed / any_bussed / insert chains), built
+  /// on the control thread and published to the audio thread through a wait-free
+  /// RtPublisher. A part is bussed through its insert chain only when it carries
+  /// a static config insert or a realised GS EFX chain; parts without one add
+  /// straight to the dry mix, so injecting a factory (for run-time EFX) does not
+  /// perturb an otherwise dry bounce. The audio thread acquire()s the newest
+  /// snapshot at block start and reads it for the whole block; the control thread
+  /// owns every snapshot's lifetime (build + free), so render allocates nothing.
+  /// Held by unique_ptr because RtPublisher is non-movable (its rings pin their
+  /// address) while Sf2Player stays movable — moving transfers the pointer, not
+  /// the publisher, so the audio thread's held snapshot is never disturbed.
+  std::unique_ptr<rt::RtPublisher<Sf2RealizedEfx>> efx_pub_ =
+      std::make_unique<rt::RtPublisher<Sf2RealizedEfx>>();
+
+  /// CONTROL thread: build a fresh realised-EFX snapshot from the current EFX
+  /// mirror (efx_ / efx_part_enabled_) and the config static inserts, via the
+  /// injected factory. Allocates.
+  std::shared_ptr<Sf2RealizedEfx> build_realized_efx() const;
+  /// CONTROL thread: apply the insertion-effect content of a GS SysEx to the EFX
+  /// mirror (efx_ / efx_part_enabled_), returning true when it changed. Touches
+  /// only the realise mirror, never audio-side channel state.
+  bool apply_efx_sysex(const uint8_t* data, size_t size) noexcept;
 
 #if defined(SONARE_MIDI_WITH_FX)
   std::unique_ptr<GsEffectBus> effects_;

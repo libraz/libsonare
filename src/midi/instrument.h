@@ -57,6 +57,16 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   /// loop region). Must be allocation-free and lock-free. Default: ignored
   /// (a free-running instrument needs no transport).
   virtual void set_transport(const transport::TransportState& state) noexcept { (void)state; }
+
+  /// CONTROL thread: apply a SysEx whose realised effect (e.g. a GS insertion-
+  /// effect chain) must be built off the audio thread and handed over wait-free,
+  /// so a live engine can hear it without stopping. Default: no-op — the
+  /// audio-visible channel/EFX state is still delivered separately via on_event.
+  /// Instruments that realise control-thread state (Sf2Player) override this.
+  virtual void on_control_sysex(const uint8_t* data, size_t size) noexcept {
+    (void)data;
+    (void)size;
+  }
 };
 
 }  // namespace sonare::midi

@@ -5,12 +5,14 @@
 ///        tail_samples(), per-part insert drive, deterministic effects and a
 ///        no-alloc audio path with effects engaged.
 
+#include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
@@ -325,12 +327,10 @@ TEST_CASE("GS EFX SysEx routes a part through a realised insert", "[midi][sf2][g
   cfg.gain = 1.0f;
   cfg.insert_factory = make_factory();
   Sf2Player player = make_player(cfg);
-  REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
-  REQUIRE(player.handle_sysex(od_type, sizeof(od_type)));
-  REQUIRE(player.handle_sysex(od_drive, sizeof(od_drive)));
-  REQUIRE(player.gs_efx_dirty());
-  player.realize_gs_efx();  // control thread: build the insert
-  REQUIRE_FALSE(player.gs_efx_dirty());
+  // Live control-thread path: parse + realise + publish the inserts wait-free.
+  player.on_control_sysex(part_on, sizeof(part_on));
+  player.on_control_sysex(od_type, sizeof(od_type));
+  player.on_control_sysex(od_drive, sizeof(od_drive));
 
   player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   const StereoRender efx = render(player, 9600);
@@ -346,12 +346,10 @@ TEST_CASE("GS EFX SysEx routes a part through a realised insert", "[midi][sf2][g
   cfg_off.gain = 1.0f;
   cfg_off.insert_factory = make_factory();
   Sf2Player off_player = make_player(cfg_off);
-  off_player.handle_sysex(part_on, sizeof(part_on));
-  off_player.handle_sysex(od_type, sizeof(od_type));
-  off_player.handle_sysex(od_drive, sizeof(od_drive));
-  off_player.realize_gs_efx();
-  REQUIRE(off_player.handle_sysex(part_off, sizeof(part_off)));
-  off_player.realize_gs_efx();
+  off_player.on_control_sysex(part_on, sizeof(part_on));
+  off_player.on_control_sysex(od_type, sizeof(od_type));
+  off_player.on_control_sysex(od_drive, sizeof(od_drive));
+  off_player.on_control_sysex(part_off, sizeof(part_off));
   off_player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   const StereoRender after = render(off_player, 9600);
   REQUIRE(h3(after.left) < 10.0 * h3(cln.left) + 1e-9);
@@ -382,9 +380,8 @@ TEST_CASE("a composite GS EFX type realises a multi-stage chain", "[midi][sf2][g
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
   };
   Sf2Player player = make_player(cfg);
-  REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
-  REQUIRE(player.handle_sysex(gtr_type, sizeof(gtr_type)));
-  player.realize_gs_efx();
+  player.on_control_sysex(part_on, sizeof(part_on));
+  player.on_control_sysex(gtr_type, sizeof(gtr_type));
   player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   const StereoRender efx = render(player, 9600);
 
@@ -409,9 +406,8 @@ TEST_CASE("a mapped GS EFX modulation type is realised through the factory", "[m
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
   };
   Sf2Player player = make_player(cfg);
-  REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
-  REQUIRE(player.handle_sysex(chorus, sizeof(chorus)));
-  player.realize_gs_efx();
+  player.on_control_sysex(part_on, sizeof(part_on));
+  player.on_control_sysex(chorus, sizeof(chorus));
   player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   const StereoRender efx = render(player, 9600);
 
@@ -525,4 +521,77 @@ TEST_CASE("GS effect bus audio path performs no heap allocation", "[midi][sf2][g
   player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 123, 0)));
   player.process(chans, 2, 512);
   REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("a live GS EFX swap keeps the audio path allocation-free", "[midi][sf2][gsfx][rt]") {
+  // Enable EFX on part 1 (channel 0) and select Overdrive (01 10); Roland DT1
+  // checksums. The control thread builds + publishes; the audio thread swaps.
+  const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                             0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  // Live-capable (realize_efx_inline stays false): the control thread realises.
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player player = make_player(cfg);
+  std::vector<float> left(512, 0.0f), right(512, 0.0f);
+  float* chans[2] = {left.data(), right.data()};
+
+  // Control thread installs the EFX (allocates a chain, publishes a snapshot).
+  player.on_control_sysex(part_on, sizeof(part_on));
+  player.on_control_sysex(od_type, sizeof(od_type));
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  player.process(chans, 2, 512);  // warm-up: adopt the published chain
+  // A second control-thread publish leaves a pending swap for the next block.
+  player.on_control_sysex(od_type, sizeof(od_type));
+
+  AllocationGuard guard;
+  // The audio thread adopts the pending snapshot (wait-free swap) and runs the
+  // installed inserts: no allocation and no free on the render path.
+  player.process(chans, 2, 512);
+  player.process(chans, 2, 512);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("concurrent live GS EFX realises and audio render stay safe",
+          "[midi][sf2][gsfx][rt][.][slow]") {
+  // Stress the wait-free chain swap under real thread contention: one control
+  // thread hammers EFX realises (build + publish + free of retired snapshots)
+  // while the audio thread renders (acquire + swap + run). Catches gross
+  // corruption on any build; run under ThreadSanitizer it validates the swap has
+  // no data race. RtPublisher's single-consumer contract holds — only the audio
+  // thread calls process()/acquire(), only the control thread publishes.
+  const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                             0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  const uint8_t chorus[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00, 0x01, 0x42, 0x7A, 0xF7};
+  const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  Sf2Player player = make_player(cfg);
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+
+  std::atomic<bool> stop{false};
+  std::thread control([&] {
+    for (int i = 0; i < 1000 && !stop.load(std::memory_order_relaxed); ++i) {
+      player.on_control_sysex(part_on, sizeof(part_on));
+      player.on_control_sysex((i & 1) ? od_type : chorus,
+                              (i & 1) ? sizeof(od_type) : sizeof(chorus));
+      if (i % 9 == 0) player.on_control_sysex(gs_reset, sizeof(gs_reset));
+    }
+  });
+
+  std::vector<float> left(512, 0.0f), right(512, 0.0f);
+  float* chans[2] = {left.data(), right.data()};
+  for (int b = 0; b < 1000; ++b) player.process(chans, 2, 512);
+  stop.store(true, std::memory_order_relaxed);
+  control.join();
+  SUCCEED();  // reached without a crash / sanitizer diagnostic
 }

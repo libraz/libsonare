@@ -13,6 +13,7 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
 #include "c_api/synth_patch_common.h"
+#include "mastering/api/insert_factory.h"
 #include "midi/builtin_synth.h"
 #include "midi/midi_clip.h"
 #include "midi/midi_fx.h"
@@ -212,6 +213,13 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
   sonare::midi::synth::Sf2PlayerConfig cfg;
   if (config->gain > 0.0f) cfg.gain = config->gain;
   if (config->polyphony > 0) cfg.polyphony = config->polyphony;
+  // Make the live player EFX-capable: a GS insertion-effect SysEx pushed via
+  // sonare_engine_push_midi_sysex is realised on the control thread and swapped
+  // in wait-free (realize_efx_inline stays false, the live default). An unknown
+  // name or an FX-less build yields a null insert that is bypassed.
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
   auto player = std::make_unique<sonare::midi::synth::Sf2Player>(cfg);
   player->set_soundfont(engine->soundfont);
   return bind_engine_instrument(engine, destination_id, std::move(player));

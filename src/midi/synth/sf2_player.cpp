@@ -35,10 +35,7 @@ Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
   for (int part = 0; part < 16; ++part) {
     Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
     insert.amount = std::clamp(insert.amount, 0.0f, 1.0f);
-    const bool has_static = insert.type != Sf2InsertType::kNone;
-    any_insert_ = any_insert_ || has_static;
-    part_bussed_[static_cast<size_t>(part)] = has_static;
-    any_bussed_ = any_bussed_ || has_static;
+    any_insert_ = any_insert_ || insert.type != Sf2InsertType::kNone;
   }
   // A player with an insert factory is EFX-capable: allocate the per-part bus so
   // a GS EFX switch can install an insert on any part at run time. Parts are not
@@ -156,38 +153,28 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
-  // Build the per-part kProcessor inserts via the injected factory (control
-  // thread). A null factory or unknown name leaves the slot null (an inert
-  // no-op) rather than failing — the host bypasses + logs at the wiring site.
-  for (int part = 0; part < 16; ++part) {
-    const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
-    std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
-        part_chains_[static_cast<size_t>(part)];
-    chain.clear();
-    if (insert.type == Sf2InsertType::kProcessor && config_.insert_factory &&
-        !insert.insert_name.empty()) {
-      auto proc = config_.insert_factory(insert.insert_name, insert.insert_params_json);
-      if (proc != nullptr) {
-        proc->prepare(sample_rate_, kChunkFrames);
-        chain.push_back(std::move(proc));
-      }
-    }
-  }
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->prepare(sample_rate_);
 #endif
   recompute_tail();
   prepared_ = true;
+  // Publish the initial realised-EFX snapshot (the config static inserts; no GS
+  // EFX assigned yet), so the audio thread routes bussed parts from the first
+  // block. build_realized_efx() builds the kProcessor inserts via the factory.
+  efx_pub_->publish(build_realized_efx());
+  gs_efx_dirty_ = false;
 }
 
 void Sf2Player::reset() {
   pool_.reset();
   fallback_pool_.reset();
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
-  for (auto& chain : part_chains_) {
-    for (auto& proc : chain) {
-      if (proc != nullptr) proc->reset();
-    }
+  // Republish a fresh realised-EFX snapshot: rebuilding the inserts gives them
+  // clean DSP state (the discontinuity's equivalent of resetting them), and the
+  // old snapshot is retired/freed by the control thread, never the audio thread.
+  if (prepared_) {
+    efx_pub_->publish(build_realized_efx());
+    gs_efx_dirty_ = false;
   }
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->reset();
@@ -197,11 +184,16 @@ void Sf2Player::reset() {
 void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept {
   channels_ = {};
   drum_params_ = {};
-  // GS/GM reset selects EFX "Thru" and clears the part EFX switches; the
-  // control thread tears the installed inserts down on the next realise.
-  efx_ = {};
-  efx_part_enabled_ = {};
-  gs_efx_dirty_ = true;
+  // GS/GM reset selects EFX "Thru" and clears the part EFX switches. The EFX
+  // mirror is owned by whichever thread realises it: offline (inline) clears it
+  // here on the render thread; live leaves it to the control thread's
+  // on_control_sysex (which parses the same reset and republishes empty), so the
+  // audio thread never writes the mirror the builder reads.
+  if (config_.realize_efx_inline) {
+    efx_ = {};
+    efx_part_enabled_ = {};
+    gs_efx_dirty_ = true;
+  }
   for (uint8_t ch = 0; ch < 16; ++ch) {
     channels_[ch].drums = ch == kDrumChannel;
     channels_[ch].reverb_send = reverb_send_default;
@@ -244,39 +236,48 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
       channels_[msg.channel & 0x0Fu].drums = msg.value != 0;
       return true;
     case GsSysExKind::kEfxPartSwitch:
-      // Route/unroute the part through the EFX; realised on the control thread.
-      efx_part_enabled_[msg.channel & 0x0Fu] = msg.value != 0;
-      gs_efx_dirty_ = true;
+      // Route/unroute the part through the EFX. Offline (inline) updates the
+      // mirror here on the render thread; live leaves the mirror to the control
+      // thread's on_control_sysex (which realises + swaps the chains wait-free).
+      if (config_.realize_efx_inline) {
+        efx_part_enabled_[msg.channel & 0x0Fu] = msg.value != 0;
+        gs_efx_dirty_ = true;
+      }
       return true;
     case GsSysExKind::kNone:
       break;
   }
-  // GS insertion-effect (EFX) block writes (address 40 03 xx): capture the raw
-  // wire so the control thread can realise it via realise_gs_efx().
-  if (apply_gs_efx_sysex(efx_, data, size)) {
+  // GS insertion-effect (EFX) block writes (address 40 03 xx). Offline captures
+  // the raw wire into the mirror so process() can realise it inline; live routes
+  // realisation through the control thread (on_control_sysex), so the audio
+  // thread must not touch the mirror the builder reads.
+  if (config_.realize_efx_inline && apply_gs_efx_sysex(efx_, data, size)) {
     gs_efx_dirty_ = true;
     return true;
   }
   return false;
 }
 
-void Sf2Player::realize_gs_efx() {
-  gs_efx_dirty_ = false;
-  if (!prepared_) return;
-  any_bussed_ = false;
+std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
+  auto out = std::make_shared<Sf2RealizedEfx>();
   for (int part = 0; part < 16; ++part) {
     const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
     const bool static_insert = insert.type != Sf2InsertType::kNone;
-    // A config kProcessor slot is owned by the caller, not by the EFX unit: only
-    // (re)build parts that are EFX-routed, and only clear what the EFX installed.
+    std::vector<std::unique_ptr<rt::ProcessorBase>>& chain = out->chains[static_cast<size_t>(part)];
+    // A config kProcessor slot is a caller-owned static insert built once from
+    // its name; it always busses the part regardless of the EFX unit.
     if (insert.type == Sf2InsertType::kProcessor) {
-      part_bussed_[static_cast<size_t>(part)] = true;
-      any_bussed_ = true;
+      if (config_.insert_factory && !insert.insert_name.empty()) {
+        auto proc = config_.insert_factory(insert.insert_name, insert.insert_params_json);
+        if (proc != nullptr) {
+          proc->prepare(sample_rate_, kChunkFrames);
+          chain.push_back(std::move(proc));
+        }
+      }
+      out->part_bussed[static_cast<size_t>(part)] = true;
+      out->any_bussed = true;
       continue;
     }
-    std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
-        part_chains_[static_cast<size_t>(part)];
-    chain.clear();
     if (efx_.assigned && efx_part_enabled_[static_cast<size_t>(part)] && config_.insert_factory) {
       // Realise the EFX chain (single-effect = one stage, composite = its block
       // chain). Stages whose factory build returns null (e.g. an FX stage in a
@@ -291,8 +292,41 @@ void Sf2Player::realize_gs_efx() {
     }
     // Buss the part only when it carries a static insert (kDrive) or a live EFX
     // chain, so unaffected parts keep adding straight to the dry mix.
-    part_bussed_[static_cast<size_t>(part)] = static_insert || !chain.empty();
-    any_bussed_ = any_bussed_ || part_bussed_[static_cast<size_t>(part)];
+    out->part_bussed[static_cast<size_t>(part)] = static_insert || !chain.empty();
+    out->any_bussed = out->any_bussed || out->part_bussed[static_cast<size_t>(part)];
+  }
+  return out;
+}
+
+void Sf2Player::realize_gs_efx() {
+  gs_efx_dirty_ = false;
+  if (!prepared_) return;
+  efx_pub_->publish(build_realized_efx());
+}
+
+bool Sf2Player::apply_efx_sysex(const uint8_t* data, size_t size) noexcept {
+  const GsSysEx msg = parse_gs_sysex(data, size);
+  switch (msg.kind) {
+    case GsSysExKind::kGmReset:
+    case GsSysExKind::kGsReset:
+      // A GS/GM reset clears the EFX unit and the part switches (Thru).
+      efx_ = {};
+      efx_part_enabled_ = {};
+      return true;
+    case GsSysExKind::kEfxPartSwitch:
+      efx_part_enabled_[msg.channel & 0x0Fu] = msg.value != 0;
+      return true;
+    case GsSysExKind::kUseForRhythm:
+    case GsSysExKind::kNone:
+      break;
+  }
+  return apply_gs_efx_sysex(efx_, data, size);
+}
+
+void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
+  if (!prepared_ || data == nullptr || size == 0) return;
+  if (apply_efx_sysex(data, size)) {
+    realize_gs_efx();
   }
 }
 
@@ -900,7 +934,14 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
 void Sf2Player::render_chunk(int n) noexcept {
   std::memset(mix_l_.data(), 0, sizeof(float) * static_cast<size_t>(n));
   std::memset(mix_r_.data(), 0, sizeof(float) * static_cast<size_t>(n));
-  if (any_bussed_ && !part_bus_.empty()) {
+  // Read the realised-EFX routing for this block from the snapshot the control
+  // thread published (adopted in process() via acquire()). A null snapshot (none
+  // published yet) or an all-dry one routes everything straight to the dry mix.
+  const Sf2RealizedEfx* efx = efx_pub_->current();
+  static constexpr std::array<bool, 16> kNoBus{};
+  const std::array<bool, 16>& part_bussed = efx != nullptr ? efx->part_bussed : kNoBus;
+  const bool any_bussed = efx != nullptr && efx->any_bussed;
+  if (any_bussed && !part_bus_.empty()) {
     std::memset(part_bus_.data(), 0, sizeof(float) * part_bus_.size());
   }
 
@@ -968,7 +1009,7 @@ void Sf2Player::render_chunk(int n) noexcept {
       const float s = v.render(mod);
       const float l = s * v.gain_left;
       const float r = s * v.gain_right;
-      if (part_bussed_[part]) {
+      if (part_bussed[part]) {
         float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
         bus[i] += l;
         bus[kChunkFrames + i] += r;
@@ -1013,7 +1054,7 @@ void Sf2Player::render_chunk(int n) noexcept {
         l *= kPianoDirectGain;
         r *= kPianoDirectGain;
       }
-      if (part_bussed_[part]) {
+      if (part_bussed[part]) {
         float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
         bus[i] += l;
         bus[kChunkFrames + i] += r;
@@ -1057,7 +1098,7 @@ void Sf2Player::render_chunk(int n) noexcept {
           add = fallback_reso_[static_cast<size_t>(part)].process(dry, /*damper_open=*/true);
         }
         if (add == 0.0f) continue;
-        if (part_bussed_[part]) {
+        if (part_bussed[part]) {
           float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
           bus[i] += add;
           bus[kChunkFrames + i] += add;
@@ -1083,9 +1124,9 @@ void Sf2Player::render_chunk(int n) noexcept {
   }
 
   // Per-part insert processing, then sum the parts into the dry mix.
-  if (any_bussed_) {
+  if (any_bussed) {
     for (int part = 0; part < 16; ++part) {
-      if (!part_bussed_[static_cast<size_t>(part)]) continue;
+      if (!part_bussed[static_cast<size_t>(part)]) continue;
       float* bus_l = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
       float* bus_r = bus_l + kChunkFrames;
       const Sf2PartInsert& insert = config_.part_inserts[static_cast<size_t>(part)];
@@ -1103,7 +1144,7 @@ void Sf2Player::render_chunk(int n) noexcept {
         // one — single-stage or a composite's multi-stage rig) runs in series
         // in place on the part's stereo bus. An empty chain is an inert no-op.
         float* chans[2] = {bus_l, bus_r};
-        for (auto& proc : part_chains_[static_cast<size_t>(part)]) {
+        for (auto& proc : efx->chains[static_cast<size_t>(part)]) {
           proc->process(chans, 2, n);
         }
       }
@@ -1124,8 +1165,12 @@ void Sf2Player::process(float* const* channels, int num_channels, int num_sample
   // Offline hosts realise a pending EFX change inline (an EFX SysEx dispatched
   // for this block installs its inserts before the block renders). This
   // allocates, so it is gated to single-threaded/offline use; the live engine
-  // pumps realise_gs_efx() from the control thread instead.
+  // realises on the control thread via on_control_sysex instead.
   if (config_.realize_efx_inline && gs_efx_dirty_) realize_gs_efx();
+  // Adopt the newest realised-EFX snapshot for this block (wait-free, no alloc).
+  // Offline this picks up the inline publish just above; live it picks up the
+  // control thread's on_control_sysex publish.
+  efx_pub_->acquire();
   if (mix_l_.size() < static_cast<size_t>(kChunkFrames)) return;
   float* left = channels[0];
   float* right = num_channels > 1 ? channels[1] : nullptr;

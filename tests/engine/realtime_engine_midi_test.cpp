@@ -17,6 +17,7 @@
 #include "midi/instrument.h"
 #include "midi/midi_clip.h"
 #include "midi/midi_event.h"
+#include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "rt/command.h"
 
@@ -358,6 +359,32 @@ TEST_CASE("RealtimeEngine delivers a live SysEx to the addressed destination", "
   REQUIRE(target.payloads_.size() == 1);
   REQUIRE(target.payloads_[0] == sysex);
   REQUIRE(other.payloads_.empty());
+}
+
+TEST_CASE("RealtimeEngine realises a live GS EFX SysEx on the control thread", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  sonare::midi::synth::Sf2Player player;
+  player.prepare(48000.0, 64);
+  REQUIRE(engine.set_midi_instrument(2, &player));
+  REQUIRE_FALSE(player.gs_efx().assigned);
+
+  // Select Overdrive (01 10) on the single EFX unit (Roland DT1, address 40 03 00).
+  const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                             0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  REQUIRE(engine.push_midi_sysex(2, od_type, sizeof(od_type), /*render_frame=*/-1));
+
+  // push_midi_sysex runs the instrument's control-thread realise inline (before
+  // it even enqueues the audio-thread event), so the EFX mirror is already live.
+  REQUIRE(player.gs_efx().assigned);
+  REQUIRE(player.gs_efx().type == 0x0110);
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+
+  engine.set_midi_instrument(2, nullptr);
 }
 
 TEST_CASE("RealtimeEngine rejects an invalid live SysEx payload", "[engine][midi]") {

@@ -519,13 +519,15 @@ TEST_CASE("Sf2Player stores the GS EFX unit and clears it on reset", "[midi][sf2
 
   const uint8_t type_write[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                 0x03, 0x00, 0x01, 0x11, 0x2B, 0xF7};  // Distortion
-  REQUIRE(player.handle_sysex(type_write, sizeof(type_write)));
+  // The control-thread SysEx path owns the EFX mirror (gs_efx()) for a live
+  // player; it parses the unit write and republishes the realised inserts.
+  player.on_control_sysex(type_write, sizeof(type_write));
   REQUIRE(player.gs_efx().assigned);
   REQUIRE(player.gs_efx().type == 0x0111);
 
   const uint8_t gs_reset_bytes[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                     0x00, 0x7F, 0x00, 0x41, 0xF7};
-  REQUIRE(player.handle_sysex(gs_reset_bytes, sizeof(gs_reset_bytes)));
+  player.on_control_sysex(gs_reset_bytes, sizeof(gs_reset_bytes));
   REQUIRE_FALSE(player.gs_efx().assigned);
   REQUIRE(player.gs_efx().type == 0);
 }
