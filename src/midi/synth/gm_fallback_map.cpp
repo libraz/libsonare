@@ -47,7 +47,11 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[0].gain = 0.8f;
 
   // 8-15 chromatic percussion: FM bell (inharmonic 3.5 ratio, long
-  // key-rate-scaled decay).
+  // key-rate-scaled decay). Every program in this family (8 celesta, 9
+  // glockenspiel, 10 music box, 11 vibraphone, 12 marimba, 13 xylophone, 14
+  // tubular bells, 15 dulcimer) now resolves to a dedicated modal/KS override,
+  // so this entry is retained only to hold the family index (t[2] is the organ
+  // family) — no program falls through to it.
   t[1].mode = SynthEngineMode::kFm;
   t[1].amp_env = env(1.0f, 2500.0f, 0.0f, 600.0f);
   t[1].fm.algorithm = FmAlgorithm::kStack2;
@@ -244,10 +248,14 @@ struct ProgramOverrides {
   NativeSynthPatch harpsichord_wide;    // program 6 bank 2 (wide)
   NativeSynthPatch harpsichord_keyoff;  // program 6 bank 3 (with key off)
   NativeSynthPatch clav;                // program 7 (Clavi, FM)
+  NativeSynthPatch celesta;             // program 8 (soft mallet bar, modal)
   NativeSynthPatch glockenspiel;        // program 9 (uniform-bar modal)
+  NativeSynthPatch music_box;           // program 10 (metallic comb tine, modal)
   NativeSynthPatch vibraphone;          // program 11 (tuned-bar modal, long)
   NativeSynthPatch marimba;             // program 12 (tuned-bar modal, woody)
   NativeSynthPatch xylophone;           // program 13 (quint-tuned modal, dry)
+  NativeSynthPatch tubular_bells;       // program 14 (long-ringing bell, modal)
+  NativeSynthPatch dulcimer;            // program 15 (hammered string, KS)
   NativeSynthPatch nylon_guitar;        // program 24
   NativeSynthPatch electric_guitar;     // programs 26-27 (jazz / clean)
   NativeSynthPatch muted_guitar;        // program 28 (palm mute)
@@ -268,6 +276,14 @@ struct ProgramOverrides {
   NativeSynthPatch choir_aahs;          // program 52 (open-vowel vocal body)
   NativeSynthPatch voice_oohs;          // program 53 (darker closed vowel)
   NativeSynthPatch synth_voice;         // program 54 (brighter synthetic vowel)
+  NativeSynthPatch tinkle_bell;         // program 112 (high metal chime, percussion)
+  NativeSynthPatch agogo;               // program 113 (two-tone metal bell)
+  NativeSynthPatch steel_drums;         // program 114 (tuned steel pan)
+  NativeSynthPatch woodblock;           // program 115 (struck wood block)
+  NativeSynthPatch taiko;               // program 116 (large struck membrane)
+  NativeSynthPatch melodic_tom;         // program 117 (pitched tom membrane)
+  NativeSynthPatch synth_drum;          // program 118 (synthetic decaying-sine tom)
+  NativeSynthPatch reverse_cymbal;      // program 119 (noise-swell approximation)
 
   // Physical-model acoustic families (bowed string / reed / brass / air-jet
   // flute). These mirror the calibration of the like-named entries in the synth
@@ -408,6 +424,86 @@ ProgramOverrides build_program_overrides() noexcept {
   xy.amp_env.release_ms = 200.0f;
   xy.body = BodyType::kWoodTube;
   xy.body_mix = 0.3f;
+
+  // Celesta (GM 8): a soft felt-hammered steel bar over a wooden resonator —
+  // the glockenspiel's uniform-bar ratios but rung shorter and softer, with a
+  // touch of the resonator box.
+  NativeSynthPatch& ce = o.celesta;
+  ce = bar;
+  ce.modal.num_modes = 4;
+  ce.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  ce.modal.modes[1] = {2.756f, 0.55f, 0.6f};
+  ce.modal.modes[2] = {5.404f, 0.28f, 0.4f};
+  ce.modal.modes[3] = {8.933f, 0.14f, 0.3f};
+  ce.modal.decay_s = 1.5f;
+  ce.modal.decay_stretch = 0.35f;
+  ce.modal.strike_brightness = 0.6f;
+  ce.amp_env.release_ms = 500.0f;
+  ce.body = BodyType::kWoodTube;
+  ce.body_mix = 0.2f;
+  ce.gain = 0.6f;
+
+  // Music Box (GM 10): a plucked steel comb tooth — a stiff cantilever bar
+  // (clamped-free 1 : 6.27 : 17.5 inharmonic series) with the tine "shimmer".
+  // detune_cents is inert on a modal voice (the unison oscillators only run in
+  // the subtractive engine), so the twin-tooth beat is voiced by duplicating a
+  // few modes a handful of cents apart (mode pairs a few 1/1000 apart beat).
+  NativeSynthPatch& mb = o.music_box;
+  mb = bar;
+  mb.modal.num_modes = 5;
+  mb.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  mb.modal.modes[1] = {1.004f, 0.85f, 1.0f};  // twin tooth, ~7 cents -> beat
+  mb.modal.modes[2] = {6.267f, 0.45f, 0.7f};
+  mb.modal.modes[3] = {6.29f, 0.38f, 0.7f};  // second twin
+  mb.modal.modes[4] = {17.5f, 0.16f, 0.45f};
+  mb.modal.decay_s = 1.5f;
+  mb.modal.decay_stretch = 0.3f;
+  mb.modal.strike_brightness = 0.8f;
+  mb.amp_env.release_ms = 700.0f;
+  mb.gain = 0.55f;
+
+  // Tubular Bells (GM 14): a long-ringing struck bell. The perceived "strike
+  // pitch" is a missing fundamental an octave below the hum, approximated by a
+  // sub-unity hum mode. A struck bell keeps ringing after the mallet leaves the
+  // key, so the note-off damp is loosened (a long release_damp_s) and the amp
+  // release is long — a glockenspiel's short damper would choke the bell.
+  NativeSynthPatch& tb = o.tubular_bells;
+  tb = bar;
+  tb.modal.num_modes = 5;
+  tb.modal.modes[0] = {0.5f, 0.4f, 1.2f};  // hum (missing-fundamental strike pitch)
+  tb.modal.modes[1] = {1.0f, 1.0f, 1.0f};
+  tb.modal.modes[2] = {2.76f, 0.7f, 0.9f};
+  tb.modal.modes[3] = {5.4f, 0.4f, 0.7f};
+  tb.modal.modes[4] = {8.9f, 0.25f, 0.5f};
+  tb.modal.decay_s = 9.0f;
+  tb.modal.decay_stretch = 0.5f;
+  tb.modal.strike_brightness = 0.7f;
+  tb.modal.release_damp_s = 8.0f;  // the bell rings on after note-off
+  tb.amp_env.sustain = 1.0f;
+  tb.amp_env.release_ms = 6000.0f;
+  tb.gain = 0.6f;
+
+  // Dulcimer (GM 15): a hammered string — physically a struck (not plucked)
+  // steel string, so the Karplus-Strong core with a hard hammer excitation,
+  // paired-string beat and a medium ring fits better than a modal bar.
+  NativeSynthPatch& du = o.dulcimer;
+  du.mode = SynthEngineMode::kKarplusStrong;
+  du.amp_env = env(1.0f, 0.0f, 1.0f, 250.0f);
+  du.cutoff_hz = 20000.0f;
+  du.ks.brightness = 0.7f;
+  du.ks.decay_s = 2.0f;
+  du.ks.decay_stretch = 0.5f;
+  du.ks.pick_position = 0.2f;
+  du.ks.exc_brightness = 0.85f;
+  du.ks.vel_to_brightness = 0.6f;
+  du.ks.release_damp_s = 0.08f;
+  du.ks.nail = 0.7f;          // hard hammer edge
+  du.ks.pluck_style = 0.6f;   // deterministic struck excitation
+  du.ks.dispersion = 0.3f;    // steel stiffness
+  du.ks.polarization = 0.3f;  // course of two/three strings beat
+  du.body = BodyType::kGuitar;
+  du.body_mix = 0.3f;
+  du.gain = 1.3f;
 
   // KS guitar variants: all share the family-3 steel string and differ in
   // pick position / loop brightness / decay (the Jaffe-Smith knobs).
@@ -771,6 +867,163 @@ ProgramOverrides build_program_overrides() noexcept {
   o.synth_voice.amp_env = env(120.0f, 300.0f, 0.9f, 400.0f);
   o.synth_voice.drift_cents = 2.0f;
 
+  // Pitched percussion (GM 112-119): the membrane / struck-idiophone cores
+  // voiced as melodic programs. Unlike the kit drum map these track the played
+  // key (base_freq_hz = 0), are NOT one-shot (so note-off can cut a held note),
+  // and pin a fixed noise-band cutoff (the drum lambdas derive it from the base
+  // frequency, which is 0 here). A zero-sustain decay envelope gives the strike
+  // shape without swallowing note-off, exactly like the timpani override.
+
+  // Tinkle Bell (GM 112): a high glassy chime — sparse inharmonic metal modes.
+  NativeSynthPatch& tk = o.tinkle_bell;
+  tk.mode = SynthEngineMode::kPercussion;
+  tk.amp_env = env(0.5f, 500.0f, 0.0f, 300.0f);
+  tk.cutoff_hz = 20000.0f;
+  tk.percussion.num_modes = 3;
+  tk.percussion.mode_ratios = {1.0f, 1.7f, 2.4f, 0.0f, 0.0f, 0.0f};
+  tk.percussion.base_freq_hz = 0.0f;
+  tk.percussion.mode_decay_s = 0.4f;
+  tk.percussion.tone_gain = 0.6f;
+  tk.percussion.noise_gain = 0.12f;
+  tk.percussion.noise_decay_ms = 8.0f;
+  tk.percussion.noise_cutoff_hz = 6000.0f;
+  tk.percussion.noise_output = SynthFilterOutput::kBandpass;
+  tk.gain = 0.6f;
+
+  // Agogo (GM 113): a two-tone metal bell.
+  NativeSynthPatch& ag = o.agogo;
+  ag = tk;
+  ag.percussion.num_modes = 2;
+  ag.percussion.mode_ratios = {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f};
+  ag.percussion.mode_decay_s = 0.28f;
+  ag.percussion.noise_cutoff_hz = 3600.0f;
+  ag.gain = 0.55f;
+
+  // Steel Drums (GM 114): a tuned steel pan — near-harmonic modes with a small
+  // strike pitch drop for the "pan" attack, rung a little longer and pushed
+  // forward as a melodic lead.
+  NativeSynthPatch& sd = o.steel_drums;
+  sd.mode = SynthEngineMode::kPercussion;
+  sd.amp_env = env(0.5f, 900.0f, 0.0f, 350.0f);
+  sd.cutoff_hz = 20000.0f;
+  sd.percussion.num_modes = 4;
+  sd.percussion.mode_ratios = {1.0f, 2.0f, 3.0f, 4.0f, 0.0f, 0.0f};
+  sd.percussion.base_freq_hz = 0.0f;
+  sd.percussion.mode_decay_s = 0.9f;
+  sd.percussion.tone_gain = 0.7f;
+  sd.percussion.pitch_drop = 0.05f;
+  sd.percussion.pitch_drop_ms = 30.0f;
+  sd.percussion.noise_gain = 0.15f;
+  sd.percussion.noise_decay_ms = 10.0f;
+  sd.percussion.noise_cutoff_hz = 4000.0f;
+  sd.percussion.noise_output = SynthFilterOutput::kBandpass;
+  sd.gain = 0.7f;
+
+  // Woodblock (GM 115): a single high-Q wood resonance with a short stick click.
+  NativeSynthPatch& wb = o.woodblock;
+  wb.mode = SynthEngineMode::kPercussion;
+  wb.amp_env = env(0.3f, 100.0f, 0.0f, 40.0f);
+  wb.cutoff_hz = 20000.0f;
+  wb.percussion.num_modes = 1;
+  wb.percussion.mode_ratios = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  wb.percussion.base_freq_hz = 0.0f;
+  wb.percussion.mode_decay_s = 0.06f;
+  wb.percussion.tone_gain = 0.9f;
+  wb.percussion.noise_gain = 0.3f;
+  wb.percussion.noise_decay_ms = 4.0f;
+  wb.percussion.noise_cutoff_hz = 2400.0f;
+  wb.percussion.noise_output = SynthFilterOutput::kBandpass;
+  wb.gain = 0.6f;
+
+  // Taiko (GM 116): a large struck membrane — the full Rayleigh mode set, a
+  // strong strike pitch drop and a low shell boom.
+  NativeSynthPatch& ti = o.taiko;
+  ti.mode = SynthEngineMode::kPercussion;
+  ti.amp_env = env(0.5f, 700.0f, 0.0f, 200.0f);
+  ti.cutoff_hz = 20000.0f;
+  ti.percussion.num_modes = 5;
+  ti.percussion.base_freq_hz = 0.0f;
+  ti.percussion.mode_decay_s = 0.5f;
+  ti.percussion.tone_gain = 0.9f;
+  ti.percussion.pitch_drop = 0.5f;
+  ti.percussion.pitch_drop_ms = 45.0f;
+  ti.percussion.noise_gain = 0.2f;
+  ti.percussion.noise_decay_ms = 20.0f;
+  ti.percussion.noise_cutoff_hz = 1200.0f;
+  ti.percussion.noise_output = SynthFilterOutput::kLowpass;
+  ti.percussion.strike_r = 0.4f;
+  ti.percussion.shell_mix = 0.2f;
+  ti.percussion.shell_num_modes = 1;
+  ti.percussion.shell_freq_hz = {90.0f, 0.0f, 0.0f, 0.0f};
+  ti.percussion.shell_t60_s = {0.14f, 0.0f, 0.0f, 0.0f};
+  ti.percussion.shell_weight = {1.0f, 0.0f, 0.0f, 0.0f};
+  ti.gain = 1.1f;
+
+  // Melodic Tom (GM 117): a pitched tom — note-tracked membrane with a pitch
+  // drop and a shell body, one patch for every tom size.
+  NativeSynthPatch& mt = o.melodic_tom;
+  mt.mode = SynthEngineMode::kPercussion;
+  mt.amp_env = env(0.5f, 500.0f, 0.0f, 150.0f);
+  mt.cutoff_hz = 20000.0f;
+  mt.percussion.num_modes = 5;
+  mt.percussion.base_freq_hz = 0.0f;
+  mt.percussion.mode_decay_s = 0.3f;
+  mt.percussion.tone_gain = 0.9f;
+  mt.percussion.pitch_drop = 0.6f;
+  mt.percussion.pitch_drop_ms = 55.0f;
+  mt.percussion.noise_gain = 0.25f;
+  mt.percussion.noise_decay_ms = 30.0f;
+  mt.percussion.noise_cutoff_hz = 1500.0f;
+  mt.percussion.noise_output = SynthFilterOutput::kLowpass;
+  mt.percussion.strike_r = 0.6f;
+  mt.percussion.shell_mix = 0.25f;
+  mt.percussion.shell_num_modes = 2;
+  mt.percussion.shell_freq_hz = {0.0f, 330.0f, 0.0f, 0.0f};
+  mt.percussion.shell_t60_s = {0.12f, 0.06f, 0.0f, 0.0f};
+  mt.percussion.shell_weight = {1.0f, 0.4f, 0.0f, 0.0f};
+  mt.gain = 1.0f;
+
+  // Synth Drum (GM 118): a synthetic decaying-sine tom (the TR-808 recipe) —
+  // one membrane mode, a strong pitch drop, little noise.
+  NativeSynthPatch& sy = o.synth_drum;
+  sy.mode = SynthEngineMode::kPercussion;
+  sy.amp_env = env(0.5f, 500.0f, 0.0f, 150.0f);
+  sy.cutoff_hz = 20000.0f;
+  sy.percussion.num_modes = 1;
+  sy.percussion.mode_ratios = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  sy.percussion.base_freq_hz = 0.0f;
+  sy.percussion.mode_decay_s = 0.4f;
+  sy.percussion.tone_gain = 1.0f;
+  sy.percussion.pitch_drop = 1.0f;
+  sy.percussion.pitch_drop_ms = 60.0f;
+  sy.percussion.noise_gain = 0.1f;
+  sy.percussion.noise_decay_ms = 20.0f;
+  sy.percussion.noise_cutoff_hz = 1500.0f;
+  sy.percussion.noise_output = SynthFilterOutput::kLowpass;
+  sy.gain = 1.0f;
+
+  // Reverse Cymbal (GM 119): the core has no reverse playback, so the swell is
+  // approximated with a long attack (the wash rises over the held note) into a
+  // short release (it cuts at the top on note-off). The noise band must decay
+  // slower than the attack rises or the wash dies before it peaks.
+  NativeSynthPatch& rc = o.reverse_cymbal;
+  rc.mode = SynthEngineMode::kPercussion;
+  rc.amp_env = env(1400.0f, 0.0f, 1.0f, 60.0f);  // long swell, short cut
+  rc.cutoff_hz = 20000.0f;
+  rc.percussion.num_modes = 4;
+  rc.percussion.mode_ratios = {1.0f, 1.34f, 1.72f, 2.15f, 0.0f, 0.0f};
+  rc.percussion.base_freq_hz = 3600.0f;  // unpitched crash body
+  rc.percussion.mode_decay_s = 1.4f;
+  rc.percussion.tone_gain = 0.2f;
+  rc.percussion.noise_gain = 0.9f;
+  rc.percussion.noise_decay_ms = 2000.0f;  // outlasts the attack swell
+  rc.percussion.noise_cutoff_hz = 5500.0f;
+  rc.percussion.noise_output = SynthFilterOutput::kHighpass;
+  rc.percussion.shimmer = 6.0f;
+  rc.percussion.shimmer_attack_ms = 400.0f;
+  rc.percussion.shimmer_cutoff_hz = 9000.0f;
+  rc.gain = 0.5f;
+
   // Bowed string (GM 40-43): one friction-excited waveguide voiced across the
   // violin family. The engine tunes to the played note, so the members differ
   // by timbre (larger = darker, slower-speaking, more corpus) — mirrors the
@@ -1018,10 +1271,14 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harpsichord_wide = clamp_synth_patch(o.harpsichord_wide);
   o.harpsichord_keyoff = clamp_synth_patch(o.harpsichord_keyoff);
   o.clav = clamp_synth_patch(o.clav);
+  o.celesta = clamp_synth_patch(o.celesta);
   o.glockenspiel = clamp_synth_patch(o.glockenspiel);
+  o.music_box = clamp_synth_patch(o.music_box);
   o.vibraphone = clamp_synth_patch(o.vibraphone);
   o.marimba = clamp_synth_patch(o.marimba);
   o.xylophone = clamp_synth_patch(o.xylophone);
+  o.tubular_bells = clamp_synth_patch(o.tubular_bells);
+  o.dulcimer = clamp_synth_patch(o.dulcimer);
   o.nylon_guitar = clamp_synth_patch(o.nylon_guitar);
   o.electric_guitar = clamp_synth_patch(o.electric_guitar);
   o.muted_guitar = clamp_synth_patch(o.muted_guitar);
@@ -1042,6 +1299,14 @@ ProgramOverrides build_program_overrides() noexcept {
   o.choir_aahs = clamp_synth_patch(o.choir_aahs);
   o.voice_oohs = clamp_synth_patch(o.voice_oohs);
   o.synth_voice = clamp_synth_patch(o.synth_voice);
+  o.tinkle_bell = clamp_synth_patch(o.tinkle_bell);
+  o.agogo = clamp_synth_patch(o.agogo);
+  o.steel_drums = clamp_synth_patch(o.steel_drums);
+  o.woodblock = clamp_synth_patch(o.woodblock);
+  o.taiko = clamp_synth_patch(o.taiko);
+  o.melodic_tom = clamp_synth_patch(o.melodic_tom);
+  o.synth_drum = clamp_synth_patch(o.synth_drum);
+  o.reverse_cymbal = clamp_synth_patch(o.reverse_cymbal);
   o.violin = clamp_synth_patch(o.violin);
   o.viola = clamp_synth_patch(o.viola);
   o.cello = clamp_synth_patch(o.cello);
@@ -1503,14 +1768,22 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexce
     }
     case 7:  // Clavi (struck string + pickup — FM stand-in for now)
       return program_overrides().clav;
+    case 8:  // Celesta (soft mallet bar, modal)
+      return program_overrides().celesta;
     case 9:  // Glockenspiel
       return program_overrides().glockenspiel;
+    case 10:  // Music Box (metallic comb tine, modal)
+      return program_overrides().music_box;
     case 11:  // Vibraphone
       return program_overrides().vibraphone;
     case 12:  // Marimba
       return program_overrides().marimba;
     case 13:  // Xylophone
       return program_overrides().xylophone;
+    case 14:  // Tubular Bells (long-ringing bell, modal)
+      return program_overrides().tubular_bells;
+    case 15:  // Dulcimer (hammered string, KS)
+      return program_overrides().dulcimer;
     case 19:  // Church Organ (flue pipe)
       return program_overrides().church_organ;
     case 20:  // Reed Organ (lingual reed pipe / harmonium)
@@ -1609,6 +1882,23 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexce
       return program_overrides().tin_whistle;
     case 79:  // Ocarina
       return program_overrides().ocarina;
+    // Pitched percussion family (membrane / struck-idiophone cores, key-tracked).
+    case 112:  // Tinkle Bell
+      return program_overrides().tinkle_bell;
+    case 113:  // Agogo
+      return program_overrides().agogo;
+    case 114:  // Steel Drums
+      return program_overrides().steel_drums;
+    case 115:  // Woodblock
+      return program_overrides().woodblock;
+    case 116:  // Taiko Drum
+      return program_overrides().taiko;
+    case 117:  // Melodic Tom
+      return program_overrides().melodic_tom;
+    case 118:  // Synth Drum
+      return program_overrides().synth_drum;
+    case 119:  // Reverse Cymbal
+      return program_overrides().reverse_cymbal;
     default:
       break;
   }
@@ -1803,9 +2093,9 @@ float gm_fallback_max_release_ms() noexcept {
     }
     const ProgramOverrides& o = program_overrides();
     for (const NativeSynthPatch* p :
-         {&o.e_piano, &o.clav, &o.glockenspiel, &o.vibraphone, &o.marimba, &o.xylophone,
-          &o.nylon_guitar, &o.electric_guitar, &o.muted_guitar, &o.overdriven, &o.distortion,
-          &o.harp, &o.church_organ, &o.reed_organ}) {
+         {&o.e_piano, &o.clav, &o.celesta, &o.glockenspiel, &o.music_box, &o.vibraphone, &o.marimba,
+          &o.xylophone, &o.tubular_bells, &o.dulcimer, &o.nylon_guitar, &o.electric_guitar,
+          &o.muted_guitar, &o.overdriven, &o.distortion, &o.harp, &o.church_organ, &o.reed_organ}) {
       max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
     }
     return max_ms;

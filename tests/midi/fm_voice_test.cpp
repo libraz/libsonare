@@ -152,11 +152,18 @@ TEST_CASE("1:1 operator stacks stay harmonic, bell ratios go inharmonic", "[midi
   const std::vector<float> tone = render_patch(harmonic, 69, 127, 24000);
   REQUIRE(inharmonicity(tone, 12000, 440.0) < 0.02);
 
-  // Inharmonic: the FM bell family patch (3.5 ratio sidebands). Celesta is
-  // the chromatic-percussion family default (the mallet programs override to
-  // the modal bank).
-  const NativeSynthPatch& bell = gm_fallback_patch(0, 8);  // Celesta
-  REQUIRE(bell.mode == SynthEngineMode::kFm);
+  // Inharmonic: an FM bell (3.5 ratio sidebands). The chromatic-percussion
+  // programs voice the dedicated modal/KS cores now, so this exercises the FM
+  // bell recipe directly rather than through a GM program.
+  NativeSynthPatch bell = fm_base_patch();
+  bell.amp_env = {0.0f, 1.0f, 0.0f, 2500.0f, 0.0f, 600.0f};
+  bell.fm.algorithm = FmAlgorithm::kStack2;
+  bell.fm.ops[0].ratio = 1.0f;
+  bell.fm.ops[0].level = 1.0f;
+  bell.fm.ops[0].env = {0.0f, 1.0f, 0.0f, 2500.0f, 0.0f, 600.0f};
+  bell.fm.ops[1].ratio = 3.5f;  // inharmonic bell partials
+  bell.fm.ops[1].level = 3.0f;
+  bell.fm.ops[1].env = {0.0f, 1.0f, 0.0f, 900.0f, 0.0f, 400.0f};
   const std::vector<float> ring = render_patch(bell, 69, 127, 24000);
   REQUIRE(inharmonicity(ring, 4096, 440.0) > 0.3);
 }

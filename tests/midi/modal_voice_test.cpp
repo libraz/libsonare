@@ -296,3 +296,74 @@ TEST_CASE("GM drum strikes are one-shot and deterministic", "[midi][synth][percu
     REQUIRE(rms(choked, 0, 4096) > 0.8f * rms(first, 0, 4096));
   }
 }
+
+TEST_CASE("the promoted chromatic-percussion programs voice their physical cores",
+          "[midi][synth][modal]") {
+  // Celesta (8), Music Box (10), Tubular Bells (14) resolve to the modal bank;
+  // Dulcimer (15) is a hammered (Karplus-Strong) string.
+  REQUIRE(gm_fallback_patch(0, 8).mode == SynthEngineMode::kModal);
+  REQUIRE(gm_fallback_patch(0, 10).mode == SynthEngineMode::kModal);
+  REQUIRE(gm_fallback_patch(0, 14).mode == SynthEngineMode::kModal);
+  REQUIRE(gm_fallback_patch(0, 15).mode == SynthEngineMode::kKarplusStrong);
+
+  // Each lands its fundamental on the played key and rings audibly.
+  for (const uint8_t program : {uint8_t{8}, uint8_t{10}, uint8_t{14}, uint8_t{15}}) {
+    const NativeSynthPatch& patch = gm_fallback_patch(0, program);
+    const std::vector<float> tone = render_patch(patch, 69, 110, 24000);
+    float peak = 0.0f;
+    for (float s : tone) peak = std::max(peak, std::fabs(s));
+    REQUIRE(peak > 0.01f);
+    const std::vector<double> power = power_spectrum(tone, 1024);
+    const double f0 = refine_peak_hz(power, 440.0);
+    REQUIRE(f0 > 0.0);
+    REQUIRE(std::fabs(f0 / 440.0 - 1.0) < 0.03);
+    // Deterministic bounce.
+    REQUIRE(render_patch(patch, 69, 110, 8192) == render_patch(patch, 69, 110, 8192));
+  }
+}
+
+TEST_CASE("tubular bells ring on after note-off", "[midi][synth][modal]") {
+  const NativeSynthPatch& bells = gm_fallback_patch(0, 14);
+  NativeSynthConfig cfg;
+  cfg.patch = bells;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 110)));
+  std::vector<float> head(6000, 0.0f);
+  std::vector<float> head_r(6000, 0.0f);
+  float* chans[2] = {head.data(), head_r.data()};
+  synth.process(chans, 2, 6000);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 69, 0)));
+  // A struck bell keeps sounding well after the key is lifted (a glockenspiel's
+  // short damper would kill it within ~0.1 s).
+  const std::vector<float> tail = render_left(synth, 48000);
+  REQUIRE(rms(tail, 24000, 48000) > 0.05f * rms(head, 0, 6000));
+}
+
+TEST_CASE("the promoted pitched-percussion programs track the key and honour note-off",
+          "[midi][synth][percussion]") {
+  // Tinkle Bell (112) .. Reverse Cymbal (119) all voice the percussion core as
+  // melodic programs — key-tracked (except the unpitched reverse cymbal), never
+  // one-shot.
+  for (uint8_t program = 112; program <= 119; ++program) {
+    const NativeSynthPatch& patch = gm_fallback_patch(0, program);
+    REQUIRE(patch.mode == SynthEngineMode::kPercussion);
+    REQUIRE_FALSE(patch.one_shot);
+    const std::vector<float> tone = render_patch(patch, 69, 110, 24000);
+    float peak = 0.0f;
+    for (float s : tone) peak = std::max(peak, std::fabs(s));
+    REQUIRE(peak > 0.01f);
+    REQUIRE(render_patch(patch, 69, 110, 8192) == render_patch(patch, 69, 110, 8192));
+  }
+
+  // Steel Drums (114) is a melodic lead: its tone tracks the struck key.
+  const NativeSynthPatch& steel = gm_fallback_patch(0, 114);
+  const std::vector<float> low = render_patch(steel, 57, 110, 24000);   // A3 = 220 Hz
+  const std::vector<float> high = render_patch(steel, 69, 110, 24000);  // A4 = 440 Hz
+  const double low_f0 = refine_peak_hz(power_spectrum(low, 512), 220.0);
+  const double high_f0 = refine_peak_hz(power_spectrum(high, 512), 440.0);
+  REQUIRE(low_f0 > 0.0);
+  REQUIRE(high_f0 > 0.0);
+  REQUIRE(std::fabs(low_f0 / 220.0 - 1.0) < 0.05);
+  REQUIRE(std::fabs(high_f0 / 440.0 - 1.0) < 0.05);
+}
