@@ -11,7 +11,10 @@ it is the very first thing to fail when the package surface regresses.
 
 from __future__ import annotations
 
+import ast
 import inspect
+import re
+from pathlib import Path
 
 
 def test_import_libsonare() -> None:
@@ -55,3 +58,39 @@ def test_realtime_voice_changer_symbols_in_all() -> None:
     }
     missing = expected - set(libsonare.__all__)
     assert not missing, f"libsonare.__all__ is missing: {sorted(missing)}"
+
+
+def test_public_api_stub_reexports_all() -> None:
+    """Every name in ``__all__`` must be re-exported by ``__init__.pyi``.
+
+    ``py.typed`` ships the stub, so under PEP 561 ``__init__.pyi`` shadows the
+    runtime package for type checkers. A name present in ``__all__`` but absent
+    from the stub as an explicit ``X as X`` re-export (or a direct annotation
+    such as ``__version__: str``) is seen as non-exported, so consumers get a
+    spurious "no attribute" from mypy/pyright. This guard makes that drift a red
+    test instead of a silent typing regression.
+    """
+    pkg = Path(__file__).resolve().parent.parent / "src" / "libsonare"
+    init_py = pkg / "__init__.py"
+    init_pyi = pkg / "__init__.pyi"
+
+    all_names: list[str] = []
+    for node in ast.walk(ast.parse(init_py.read_text())):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets
+        ):
+            all_names = [e.value for e in node.value.elts if isinstance(e, ast.Constant)]
+
+    assert all_names, "__all__ could not be parsed from __init__.py"
+
+    stub = init_pyi.read_text()
+    missing = [
+        name
+        for name in all_names
+        if not re.search(rf"\b{re.escape(name)} as {re.escape(name)}\b", stub)
+        and not re.search(rf"^{re.escape(name)}\s*:", stub, re.MULTILINE)
+    ]
+    assert not missing, (
+        "__init__.pyi does not re-export these public names (add "
+        f"`from .<module> import X as X`): {sorted(missing)}"
+    )
