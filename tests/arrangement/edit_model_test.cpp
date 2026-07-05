@@ -172,11 +172,15 @@ TEST_CASE("Clip PPQ range validation", "[arrangement]") {
     CHECK(p.add_clip(c) == 0);
   }
 
-  SECTION("looping requires positive loop length") {
+  SECTION("looping accepts zero (whole-clip) and positive loop length but rejects negatives") {
     EditClip c = base();
     c.loop_mode = LoopMode::kLoop;
-    c.loop_length_ppq = 0.0;
+    c.loop_length_ppq = -1.0;
     CHECK(p.add_clip(c) == 0);
+    c.loop_length_ppq = 0.0;  // 0 = loop the entire clip
+    CHECK(p.add_clip(c) != 0);
+    // Place the positive-length clip past the first so the overlap policy allows it.
+    c.start_ppq = 480.0;
     c.loop_length_ppq = 240.0;
     CHECK(p.add_clip(c) != 0);
   }

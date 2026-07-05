@@ -538,8 +538,9 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
       loop_mode > SONARE_LOOP_MODE_LOOP) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const bool looping = loop_mode == SONARE_LOOP_MODE_LOOP;
-  if (looping ? !finite_positive(loop_length_ppq) : !finite_non_negative(loop_length_ppq)) {
+  // Under LOOP, a length of 0 means "loop the entire clip" (resolved from the
+  // clip's own duration at compile time); any other mode also permits 0.
+  if (!finite_non_negative(loop_length_ppq)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (!finite_non_negative(loop_crossfade_ppq)) {

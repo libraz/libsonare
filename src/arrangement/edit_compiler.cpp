@@ -246,14 +246,22 @@ bool validate_tempo(const Project& project, CompileResult* result) {
   return true;
 }
 
+// Effective loop length in PPQ for a looped clip. A stored length of 0 means
+// "loop the entire clip", resolved here from the clip's own timeline duration.
+// Only meaningful when clip.loop_mode == LoopMode::kLoop.
+double effective_loop_length_ppq(const EditClip& clip) noexcept {
+  return clip.loop_length_ppq > 0.0 ? clip.loop_length_ppq : clip.length_ppq;
+}
+
 void append_midi_render_events(const midi::MidiClip& midi_clip, const EditClip& clip,
                                const transport::TempoMap& tempo_map,
                                std::vector<midi::MidiEvent>* out) {
   if (out == nullptr) return;
   const double clip_end_ppq = clip.end_ppq();
-  if (clip.loop_mode == LoopMode::kLoop && clip.loop_length_ppq > 0.0) {
+  if (clip.loop_mode == LoopMode::kLoop) {
+    const double loop_len = effective_loop_length_ppq(clip);
     for (const midi::MidiClipEvent& ev : midi_clip.events()) {
-      if (ev.ppq < 0.0 || ev.ppq >= clip.loop_length_ppq) continue;
+      if (ev.ppq < 0.0 || ev.ppq >= loop_len) continue;
       const double event_ppq = clip.start_ppq + ev.ppq;
       if (event_ppq >= clip_end_ppq) continue;
       midi::MidiEvent rendered;
@@ -631,11 +639,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       const bool is_whole_clip = part.start_ppq == 0.0 && part.end_ppq == clip.length_ppq;
       const bool loop = is_whole_clip && clip.loop_mode == LoopMode::kLoop;
       const int64_t loop_length_samples =
-          loop && clip.loop_length_ppq > 0.0
-              ? std::max<int64_t>(
-                    0,
-                    tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_length_ppq) - start_sample)
-              : 0;
+          loop ? std::max<int64_t>(
+                     0, tempo_map.ppq_to_sample(clip.start_ppq + effective_loop_length_ppq(clip)) -
+                            start_sample)
+               : 0;
       // Loop-seam crossfade length, converted from PPQ the same way as the loop
       // length. The engine clamps it to the available pre-roll and half the loop.
       const int64_t loop_crossfade_samples =
@@ -757,9 +764,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.end_ppq()) - sched.start_sample);
     sched.loop_mode = clip.loop_mode == LoopMode::kLoop ? midi::MidiLoopMode::kLoop
                                                         : midi::MidiLoopMode::kOneShot;
-    if (sched.loop_mode == midi::MidiLoopMode::kLoop && clip.loop_length_ppq > 0.0) {
+    if (sched.loop_mode == midi::MidiLoopMode::kLoop) {
       sched.loop_length_samples = std::max<int64_t>(
-          0, tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_length_ppq) - sched.start_sample);
+          0, tempo_map.ppq_to_sample(clip.start_ppq + effective_loop_length_ppq(clip)) -
+                 sched.start_sample);
     }
     append_midi_render_events(midi_clip, clip, tempo_map, &sched.events);
     first_midi_clip_id = timeline.midi_clips.empty() ? sched.id : first_midi_clip_id;

@@ -313,8 +313,10 @@ bool SetClipLoop::apply(Project& project, MidiContentStore& /*store*/) {
   if (c == nullptr) {
     return false;
   }
+  // Under LOOP, loop_length_ppq_ of 0 means "loop the entire clip"; reject only
+  // negatives/NaN (and a comp lane that splits the clip, which loops cannot mix).
   if (mode_ == LoopMode::kLoop &&
-      (!(loop_length_ppq_ > 0.0) ||
+      (!(loop_length_ppq_ >= 0.0) ||
        detail::comp_segments_split_clip(c->comp_segments, c->length_ppq))) {
     return false;
   }

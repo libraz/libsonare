@@ -28,7 +28,8 @@ inline bool clip_can_be_inserted(const Project& project, const EditClip& clip,
   if (!(clip.length_ppq > 0.0) || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0) {
     return false;
   }
-  if (clip.loop_mode == LoopMode::kLoop && !(clip.loop_length_ppq > 0.0)) return false;
+  // Under LOOP, 0 is valid and means "loop the entire clip"; reject negatives/NaN.
+  if (clip.loop_mode == LoopMode::kLoop && !(clip.loop_length_ppq >= 0.0)) return false;
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
       project.clip_overlaps(clip.track_id, clip.start_ppq, clip.length_ppq, ignore_clip_id)) {
     return false;

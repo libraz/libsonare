@@ -150,7 +150,9 @@ struct EditClip {
   ClipFade fade_out;
 
   LoopMode loop_mode = LoopMode::kOff;
-  /// Loop length in PPQ. Used only when loop_mode == kLoop; must be > 0 then.
+  /// Loop length in PPQ. Used only when loop_mode == kLoop, where it must be
+  /// >= 0; 0 means "loop the entire clip" (the effective length is resolved from
+  /// the clip's own duration at compile time).
   double loop_length_ppq = 0.0;
   /// Optional equal-power crossfade length at the loop seam, in PPQ. 0 (default)
   /// keeps the hard loop wrap. Applied only when loop_mode == kLoop; the engine

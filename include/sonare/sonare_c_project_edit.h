@@ -408,7 +408,9 @@ SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_i
 /// @brief Sets a clip's loop mode + loop length (PPQ) via an undoable edit
 ///        command. @p loop_mode is a @ref SonareProjectLoopMode ordinal. When
 ///        @p loop_mode is SONARE_LOOP_MODE_LOOP, @p loop_length_ppq must be
-///        finite and > 0; otherwise it must be finite and >= 0.
+///        finite and >= 0, where 0 means "loop the entire clip" (the effective
+///        loop length is resolved from the clip's own duration). Otherwise it
+///        must be finite and >= 0.
 /// @param loop_crossfade_ppq Optional equal-power crossfade length at the loop
 ///        seam, in PPQ (must be finite and >= 0; 0 = hard loop). Applied only
 ///        when looping; the engine clamps it to the clip's available pre-roll

@@ -196,8 +196,15 @@ TEST_CASE("C-ABI set_clip_loop applies and undo restores", "[project][c-abi-edit
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
 
-  // Invalid: looping with non-positive length, bad mode, bad clip, negative crossfade.
+  // Looping with length 0 means "loop the entire clip"; it is accepted and
+  // round-trips through undo.
   REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, 0.0, 0.0) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+
+  // Invalid: negative loop length, bad mode, bad clip, negative crossfade.
+  REQUIRE(sonare_project_set_clip_loop(project, fx.clip, SONARE_LOOP_MODE_LOOP, -1.0, 0.0) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_set_clip_loop(project, fx.clip, 7, 2.0, 0.0) ==
           SONARE_ERROR_INVALID_PARAMETER);

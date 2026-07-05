@@ -580,6 +580,28 @@ TEST_CASE("compiler passes audio loop length to ClipSchedule", "[arrangement]") 
   REQUIRE(r.timeline->audio_clips.front().loop_length_samples == 12000);
 }
 
+TEST_CASE("compiler loops the whole clip when loop length is zero", "[arrangement]") {
+  Fixture f = make_fixture();
+
+  // A stored loop length of 0 under LOOP is accepted (the command must not
+  // reject it) and means "loop the entire clip".
+  arr::SetClipLoop set_loop(f.clip_id, arr::LoopMode::kLoop, 0.0);
+  REQUIRE(set_loop.apply(f.project, f.midi));
+
+  const arr::EditClip* clip = f.project.find_clip(f.clip_id);
+  REQUIRE(clip != nullptr);
+  REQUIRE(clip->loop_length_ppq == 0.0);
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->audio_clips.size() == 1);
+  REQUIRE(r.timeline->audio_clips.front().loop);
+  // The fixture clip spans 2.0 quarter notes; at 120 BPM / 48 kHz that resolves
+  // to the clip's full 48000-sample duration, unlike an explicit 0.5 -> 12000.
+  REQUIRE(r.timeline->audio_clips.front().loop_length_samples == 48000);
+}
+
 TEST_CASE("compiler expands audio comp segments into take-specific schedules", "[arrangement]") {
   Fixture f = make_fixture();
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);

@@ -88,8 +88,9 @@ ClipId Project::add_clip(EditClip clip) {
   if (!(clip.length_ppq > 0.0) || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0) {
     return 0;
   }
-  // Loop policy validation.
-  if (clip.loop_mode == LoopMode::kLoop && !(clip.loop_length_ppq > 0.0)) {
+  // Loop policy validation. Under LOOP, 0 is allowed and means "loop the entire
+  // clip"; only negatives and NaN are rejected.
+  if (clip.loop_mode == LoopMode::kLoop && !(clip.loop_length_ppq >= 0.0)) {
     return 0;
   }
   // Overlap policy.
