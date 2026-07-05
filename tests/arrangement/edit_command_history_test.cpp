@@ -339,9 +339,39 @@ TEST_CASE("Track command round-trips", "[arrangement]") {
                      std::make_unique<SetTrackRoute>(f.audio_track, "strip-A", "bus-1"));
   }
   SECTION("SetTrackKind") {
+    // Round-trip on an empty track: a kind change is only accepted when it does
+    // not orphan existing clips, so the populated fixture tracks cannot flip.
+    Track empty;
+    empty.kind = Track::Kind::kAudio;
+    const TrackId empty_track = f.project.add_track(empty);
     check_round_trip(f.project, store,
-                     std::make_unique<SetTrackKind>(f.audio_track, Track::Kind::kAux));
+                     std::make_unique<SetTrackKind>(empty_track, Track::Kind::kAux));
   }
+}
+
+TEST_CASE("SetTrackKind rejects a kind change that would orphan existing clips", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+
+  // The audio track holds an audio clip; flipping it to MIDI would orphan that
+  // clip (audio source is incompatible with a MIDI track), so the edit must be
+  // rejected and the kind left unchanged.
+  REQUIRE(f.project.find_track(f.audio_track)->kind == Track::Kind::kAudio);
+  CHECK_FALSE(SetTrackKind(f.audio_track, Track::Kind::kMidi).apply(f.project, store));
+  CHECK(f.project.find_track(f.audio_track)->kind == Track::Kind::kAudio);
+
+  // Aux accepts no clip source kinds, so it is rejected on a populated track too.
+  CHECK_FALSE(SetTrackKind(f.audio_track, Track::Kind::kAux).apply(f.project, store));
+  CHECK(f.project.find_track(f.audio_track)->kind == Track::Kind::kAudio);
+
+  // An empty track (no clips) can still change kind freely.
+  Track empty;
+  empty.kind = Track::Kind::kAudio;
+  const TrackId empty_track = f.project.add_track(empty);
+  CHECK(SetTrackKind(empty_track, Track::Kind::kMidi).apply(f.project, store));
+  CHECK(f.project.find_track(empty_track)->kind == Track::Kind::kMidi);
+  CHECK(SetTrackKind(empty_track, Track::Kind::kAux).apply(f.project, store));
+  CHECK(f.project.find_track(empty_track)->kind == Track::Kind::kAux);
 }
 
 TEST_CASE("RemoveTrack removes owned clips and restores MIDI content on undo", "[arrangement]") {

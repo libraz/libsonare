@@ -121,6 +121,23 @@ bool SetTrackKind::apply(Project& project, MidiContentStore& /*store*/) {
   if (t == nullptr) {
     return false;
   }
+  // Reject a kind change that would orphan existing clips: flipping a track that
+  // still holds clips to an incompatible kind makes every later bounce/playback
+  // suppress the whole project timeline (the compile-time gate rejects the entire
+  // project, not just the offending clips). Verify each clip's source is
+  // compatible with the target kind before committing.
+  if (t->kind != kind_) {
+    for (const EditClip& clip : project.clips()) {
+      if (clip.track_id != id_) {
+        continue;
+      }
+      const ClipSource* source = project.find_source(clip.source_id);
+      if (source == nullptr ||
+          !detail::track_kind_accepts_source_kind(kind_, source_kind(*source))) {
+        return false;
+      }
+    }
+  }
   t->kind = kind_;
   return true;
 }

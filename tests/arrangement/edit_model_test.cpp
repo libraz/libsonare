@@ -4,6 +4,7 @@
 #include "arrangement/edit_model.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 #include <set>
 
 #include "arrangement/edit_source.h"
@@ -69,6 +70,44 @@ TEST_CASE("Project stores first-class warp maps by stable id", "[arrangement]") 
   CHECK(removed.second);
   CHECK(removed.first.name == "edited");
   CHECK_FALSE(p.has_warp_map(5));
+}
+
+TEST_CASE("Project rejects malformed warp-map anchors", "[arrangement]") {
+  Project p;
+
+  // A valid strictly-increasing, finite, non-negative anchor set is accepted.
+  WarpMapRef valid;
+  valid.id = 1;
+  valid.anchors = {{0.0, 0.0}, {48000.0, 44100.0}};
+  CHECK(p.set_warp_map(valid));
+
+  // A negative offset in either axis is rejected.
+  WarpMapRef negative;
+  negative.id = 2;
+  negative.anchors = {{-1.0, 0.0}, {48000.0, 44100.0}};
+  CHECK_FALSE(p.set_warp_map(negative));
+
+  // A non-finite offset (NaN) is rejected.
+  WarpMapRef nan_anchor;
+  nan_anchor.id = 3;
+  nan_anchor.anchors = {{0.0, 0.0}, {std::numeric_limits<double>::quiet_NaN(), 44100.0}};
+  CHECK_FALSE(p.set_warp_map(nan_anchor));
+
+  // A non-monotonic set (warp_sample decreases) is rejected.
+  WarpMapRef non_monotonic;
+  non_monotonic.id = 4;
+  non_monotonic.anchors = {{0.0, 0.0}, {48000.0, 44100.0}, {20000.0, 90000.0}};
+  CHECK_FALSE(p.set_warp_map(non_monotonic));
+
+  // An equal (non-strict) pair is rejected in both axes.
+  WarpMapRef non_strict;
+  non_strict.id = 5;
+  non_strict.anchors = {{0.0, 0.0}, {0.0, 44100.0}};
+  CHECK_FALSE(p.set_warp_map(non_strict));
+
+  // Only the first valid map was installed.
+  CHECK(p.warp_maps().size() == 1);
+  CHECK(p.has_warp_map(1));
 }
 
 TEST_CASE("Ids are unique and monotonic across tracks, clips, sources", "[arrangement]") {

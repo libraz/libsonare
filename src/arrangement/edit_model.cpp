@@ -3,6 +3,7 @@
 
 #include "arrangement/edit_model.h"
 
+#include <cmath>
 #include <utility>
 
 namespace sonare::arrangement {
@@ -156,6 +157,24 @@ WarpMapRef* Project::find_warp_map_mutable(WarpRefId id) noexcept {
 bool Project::set_warp_map(WarpMapRef map) {
   if (map.id == 0) {
     return false;
+  }
+  // Anchors must define a well-formed forward mapping: each offset finite and
+  // non-negative, and strictly increasing in both the warp and source axes. This
+  // is the interpolation contract the C ABI enforces at its boundary; applying it
+  // in the setter means every insertion path (edit commands and JSON project
+  // load) shares it, so a hand-authored or corrupt project file can no longer
+  // install a warp map that plays back mistimed or garbled.
+  const WarpAnchorRef* prev = nullptr;
+  for (const WarpAnchorRef& a : map.anchors) {
+    if (!(std::isfinite(a.warp_sample) && a.warp_sample >= 0.0) ||
+        !(std::isfinite(a.source_sample) && a.source_sample >= 0.0)) {
+      return false;
+    }
+    if (prev != nullptr &&
+        !(a.warp_sample > prev->warp_sample && a.source_sample > prev->source_sample)) {
+      return false;
+    }
+    prev = &a;
   }
   if (WarpMapRef* existing = find_warp_map_mutable(map.id)) {
     *existing = std::move(map);

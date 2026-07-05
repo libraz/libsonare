@@ -37,15 +37,20 @@ inline bool clip_can_be_inserted(const Project& project, const EditClip& clip,
   return true;
 }
 
+// Whether a track of @p track_kind can hold a clip whose source is @p kind.
+// An aux track holds no clips, so it accepts neither source kind.
+inline bool track_kind_accepts_source_kind(Track::Kind track_kind, SourceKind kind) {
+  if (track_kind == Track::Kind::kAudio) return kind == SourceKind::kAudio;
+  if (track_kind == Track::Kind::kMidi) return kind == SourceKind::kMidi;
+  return false;
+}
+
 inline bool source_matches_track_kind(const Project& project, TrackId track_id,
                                       SourceId source_id) {
   const Track* track = project.find_track(track_id);
   const ClipSource* source = project.find_source(source_id);
   if (track == nullptr || source == nullptr) return false;
-  const SourceKind kind = source_kind(*source);
-  if (track->kind == Track::Kind::kAudio) return kind == SourceKind::kAudio;
-  if (track->kind == Track::Kind::kMidi) return kind == SourceKind::kMidi;
-  return false;
+  return track_kind_accepts_source_kind(track->kind, source_kind(*source));
 }
 
 inline bool take_id_exists(const std::vector<ClipTake>& takes, TakeId id) {
