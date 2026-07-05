@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ._project import AssistSidecar as AssistSidecar
 from ._project import BuiltinSynthConfig as BuiltinSynthConfig
 from ._project import ExternalInstrument as ExternalInstrument
 from ._project import MidiCcBinding as MidiCcBinding
@@ -145,6 +146,7 @@ from .analyzer import (
 from .analyzer import (
     fix_length as fix_length,
 )
+from .analyzer import fourier_tempogram as fourier_tempogram
 from .analyzer import (
     frame_signal as frame_signal,
 )
@@ -178,6 +180,7 @@ from .analyzer import (
 from .analyzer import (
     hz_to_note as hz_to_note,
 )
+from .analyzer import lufs as lufs
 from .analyzer import (
     lufs_interleaved as lufs_interleaved,
 )
@@ -202,6 +205,9 @@ from .analyzer import (
 from .analyzer import (
     mastering_chain_stereo as mastering_chain_stereo,
 )
+from .analyzer import mastering_dynamics_compressor as mastering_dynamics_compressor
+from .analyzer import mastering_dynamics_gate as mastering_dynamics_gate
+from .analyzer import mastering_dynamics_transient_shaper as mastering_dynamics_transient_shaper
 from .analyzer import (
     mastering_insert_names as mastering_insert_names,
 )
@@ -271,15 +277,23 @@ from .analyzer import (
 from .analyzer import (
     mel_spectrogram as mel_spectrogram,
 )
+from .analyzer import mel_to_audio as mel_to_audio
 from .analyzer import (
     mel_to_hz as mel_to_hz,
 )
+from .analyzer import mel_to_stft as mel_to_stft
+from .analyzer import metering_crest_factor_db as metering_crest_factor_db
+from .analyzer import metering_dc_offset as metering_dc_offset
+from .analyzer import metering_detect_clipping as metering_detect_clipping
+from .analyzer import metering_dynamic_range as metering_dynamic_range
+from .analyzer import metering_peak_db as metering_peak_db
 from .analyzer import (
     metering_phase_scope as metering_phase_scope,
 )
 from .analyzer import (
     metering_phase_scope_decimated as metering_phase_scope_decimated,
 )
+from .analyzer import metering_rms_db as metering_rms_db
 from .analyzer import (
     metering_spectrum as metering_spectrum,
 )
@@ -292,6 +306,7 @@ from .analyzer import (
 from .analyzer import (
     metering_stereo_width as metering_stereo_width,
 )
+from .analyzer import metering_true_peak_db as metering_true_peak_db
 from .analyzer import (
     metering_vectorscope as metering_vectorscope,
 )
@@ -301,6 +316,8 @@ from .analyzer import (
 from .analyzer import (
     mfcc as mfcc,
 )
+from .analyzer import mfcc_to_audio as mfcc_to_audio
+from .analyzer import mfcc_to_mel as mfcc_to_mel
 from .analyzer import (
     midi_to_hz as midi_to_hz,
 )
@@ -313,9 +330,11 @@ from .analyzer import (
 from .analyzer import (
     mixing_scene_preset_names as mixing_scene_preset_names,
 )
+from .analyzer import momentary_lufs as momentary_lufs
 from .analyzer import (
     nn_filter as nn_filter,
 )
+from .analyzer import nnls_chroma as nnls_chroma
 from .analyzer import (
     normalize as normalize,
 )
@@ -325,6 +344,7 @@ from .analyzer import (
 from .analyzer import (
     note_to_hz as note_to_hz,
 )
+from .analyzer import onset_envelope as onset_envelope
 from .analyzer import (
     onset_strength_multi as onset_strength_multi,
 )
@@ -406,6 +426,10 @@ from .analyzer import (
 from .analyzer import (
     samples_to_frames as samples_to_frames,
 )
+from .analyzer import scale_correction_semitones as scale_correction_semitones
+from .analyzer import scale_pitch_class_enabled as scale_pitch_class_enabled
+from .analyzer import scale_quantize_midi as scale_quantize_midi
+from .analyzer import short_term_lufs as short_term_lufs
 from .analyzer import (
     spectral_bandwidth as spectral_bandwidth,
 )
@@ -439,6 +463,7 @@ from .analyzer import (
 from .analyzer import (
     tempogram as tempogram,
 )
+from .analyzer import tempogram_ratio as tempogram_ratio
 from .analyzer import (
     time_stretch as time_stretch,
 )
@@ -537,9 +562,13 @@ from .types import (
 from .types import (
     ChromaResult as ChromaResult,
 )
+from .types import ClipPageRequest as ClipPageRequest
+from .types import ClippingRegion as ClippingRegion
+from .types import ClippingReport as ClippingReport
 from .types import (
     CqtResult as CqtResult,
 )
+from .types import DynamicRangeReport as DynamicRangeReport
 from .types import (
     DynamicsResult as DynamicsResult,
 )
@@ -612,6 +641,7 @@ from .types import (
 from .types import (
     HpssResult as HpssResult,
 )
+from .types import InverseResult as InverseResult
 from .types import (
     Key as Key,
 )
@@ -621,6 +651,7 @@ from .types import (
 from .types import (
     KeyProfile as KeyProfile,
 )
+from .types import LufsResult as LufsResult
 from .types import (
     MarkerKind as MarkerKind,
 )
@@ -666,6 +697,7 @@ from .types import (
 from .types import (
     Mode as Mode,
 )
+from .types import PanLaw as PanLaw
 from .types import (
     ParameterInfo as ParameterInfo,
 )
