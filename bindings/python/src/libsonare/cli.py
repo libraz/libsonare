@@ -72,7 +72,14 @@ def _exit_code_for(exc: BaseException) -> int:
 
 
 def _load_audio(path: str) -> tuple[list[float], int]:
-    """Load audio from file via the Audio class."""
+    """Load audio from file via the Audio class.
+
+    ``Audio.from_file`` always returns a mono signal: stereo (and higher
+    channel-count) inputs are downmixed to a single channel on load. Callers
+    that render stereo output (for example ``mix``) therefore start from a mono
+    source and duplicate it across channels rather than preserving the original
+    channels.
+    """
     from .audio import Audio
 
     with Audio.from_file(path) as audio:
@@ -84,8 +91,8 @@ def _resample_linear(samples: list[float], source_rate: int, target_rate: int) -
     if source_rate <= 0 or target_rate <= 0:
         raise ValueError("sample rates must be positive")
     if source_rate == target_rate:
-        return samples
-    if not samples:
+        return list(samples)
+    if len(samples) == 0:
         return []
 
     output_count = max(1, int(round(len(samples) * target_rate / source_rate)))
@@ -106,18 +113,27 @@ def _resample_linear(samples: list[float], source_rate: int, target_rate: int) -
     return output
 
 
+def _pcm16(sample: float) -> bytes:
+    """Clamp a float to ``[-1.0, 1.0]`` and pack it as little-endian 16-bit PCM.
+
+    Shared by every WAV writer so the clamp-and-scale contract stays identical.
+    """
+    import struct
+
+    clamped = -1.0 if sample < -1.0 else (1.0 if sample > 1.0 else sample)
+    return struct.pack("<h", int(round(clamped * 32767.0)))
+
+
 def _write_wav(path: str, samples: list[float], sample_rate: int) -> None:
     """Write mono 16-bit PCM WAV using only the Python standard library.
 
     Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767.
     """
-    import struct
     import wave
 
     frames = bytearray()
     for s in samples:
-        clamped = -1.0 if s < -1.0 else (1.0 if s > 1.0 else s)
-        frames += struct.pack("<h", int(round(clamped * 32767.0)))
+        frames += _pcm16(s)
     with wave.open(path, "wb") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)
@@ -130,15 +146,13 @@ def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_r
 
     Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767.
     """
-    import struct
     import wave
 
     frames = bytearray()
     count = min(len(left), len(right))
     for i in range(count):
         for s in (left[i], right[i]):
-            clamped = -1.0 if s < -1.0 else (1.0 if s > 1.0 else s)
-            frames += struct.pack("<h", int(round(clamped * 32767.0)))
+            frames += _pcm16(s)
     with wave.open(path, "wb") as wav:
         wav.setnchannels(2)
         wav.setsampwidth(2)
@@ -148,7 +162,6 @@ def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_r
 
 def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
     """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
-    import struct
     import wave
 
     rows = getattr(audio, "tolist", lambda: audio)()
@@ -168,8 +181,7 @@ def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tup
     for row in normalized:
         for ch in range(channels):
             sample = row[ch] if ch < len(row) else 0.0
-            clamped = -1.0 if sample < -1.0 else (1.0 if sample > 1.0 else sample)
-            pcm += struct.pack("<h", int(round(clamped * 32767.0)))
+            pcm += _pcm16(sample)
 
     with wave.open(path, "wb") as wav:
         wav.setnchannels(channels)
@@ -888,6 +900,129 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pitch_shift(args: argparse.Namespace) -> int:
+    from . import pitch_shift
+
+    samples, sr = _load_audio(args.file)
+    result = pitch_shift(samples, sample_rate=sr, semitones=args.semitones)
+
+    if args.output:
+        _write_wav(args.output, result, sr)
+
+    if args.json:
+        payload: dict[str, object] = {
+            "length": len(result),
+            "sample_rate": sr,
+            "semitones": args.semitones,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Pitch shift ({args.semitones:+.2f} semitones): {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_time_stretch(args: argparse.Namespace) -> int:
+    from . import time_stretch
+
+    samples, sr = _load_audio(args.file)
+    result = time_stretch(samples, sample_rate=sr, rate=args.rate)
+
+    if args.output:
+        _write_wav(args.output, result, sr)
+
+    if args.json:
+        payload: dict[str, object] = {
+            "length": len(result),
+            "sample_rate": sr,
+            "rate": args.rate,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Time stretch (rate {args.rate:.4f}): {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_normalize(args: argparse.Namespace) -> int:
+    from . import normalize
+
+    samples, sr = _load_audio(args.file)
+    result = normalize(samples, sample_rate=sr, target_db=args.target_db)
+
+    if args.output:
+        _write_wav(args.output, result, sr)
+
+    if args.json:
+        payload: dict[str, object] = {
+            "length": len(result),
+            "sample_rate": sr,
+            "target_db": args.target_db,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Normalize (target {args.target_db:.2f} dB): {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_trim_silence(args: argparse.Namespace) -> int:
+    from . import trim
+
+    samples, sr = _load_audio(args.file)
+    result = trim(samples, sample_rate=sr, threshold_db=args.threshold_db)
+
+    if args.output:
+        _write_wav(args.output, result, sr)
+
+    if args.json:
+        payload: dict[str, object] = {
+            "length": len(result),
+            "sample_rate": sr,
+            "threshold_db": args.threshold_db,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Trim silence (threshold {args.threshold_db:.1f} dB): {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def cmd_resample(args: argparse.Namespace) -> int:
+    samples, sr = _load_audio(args.file)
+    result = _resample_linear(samples, sr, args.target_rate)
+
+    if args.output:
+        _write_wav(args.output, result, args.target_rate)
+
+    if args.json:
+        payload: dict[str, object] = {
+            "length": len(result),
+            "source_rate": sr,
+            "sample_rate": args.target_rate,
+        }
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  Resample ({sr} -> {args.target_rate} Hz): {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
 def cmd_voice_change(args: argparse.Namespace) -> int:
     from . import realtime_voice_changer_preset_json, voice_change, voice_change_realtime
 
@@ -1048,8 +1183,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
     from . import synthesize_rir
 
     if not args.output:
-        print("Error: synthesize-rir requires --output", file=sys.stderr)
-        return 1
+        raise ValueError("synthesize-rir requires --output")
     result = synthesize_rir(
         args.length,
         args.width,
@@ -1077,8 +1211,7 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
     from . import room_morph
 
     if not args.output:
-        print("Error: room-morph requires --output", file=sys.stderr)
-        return 1
+        raise ValueError("room-morph requires --output")
     samples, sr = _load_audio(args.file)
     result = room_morph(
         samples,
@@ -1929,12 +2062,17 @@ def cmd_mix(args: argparse.Namespace) -> int:
         out_right: list[float] = []
         if args.input:
             # Process each input WAV as one strip (mono inputs are duplicated to
-            # both channels). All inputs must share a length.
+            # both channels). Inputs that were captured at a different sample
+            # rate are resampled to the mixer rate so a 44.1 kHz stem is not
+            # played back fast at the 48 kHz default. All inputs must share a
+            # length after resampling.
             left_channels: list[list[float]] = []
             right_channels: list[list[float]] = []
             length: int | None = None
             for path in args.input:
-                samples, _sr = _load_audio(path)
+                samples, in_sr = _load_audio(path)
+                if in_sr != args.sample_rate:
+                    samples = _resample_linear(samples, in_sr, args.sample_rate)
                 if length is None:
                     length = len(samples)
                 elif len(samples) != length:
@@ -2078,6 +2216,39 @@ def main() -> None:
     )
     note_stretch_p.add_argument(
         "--ratio", type=float, default=1.0, help="Stretch factor for the region (>1 lengthens)"
+    )
+    # Effect commands that map directly to the Python effects API. The C++ CLI
+    # still exposes some low-level converters and section/melody analyses that
+    # are not mirrored here; this set covers the common offline edits.
+    pitch_shift_p = sub.add_parser(
+        "pitch-shift", parents=[common], help="Shift pitch by a number of semitones"
+    )
+    pitch_shift_p.add_argument(
+        "--semitones", type=float, default=0.0, help="Semitones to shift (positive = up)"
+    )
+    time_stretch_p = sub.add_parser(
+        "time-stretch", parents=[common], help="Time-stretch without changing pitch"
+    )
+    time_stretch_p.add_argument(
+        "--rate", type=float, default=1.0, help="Stretch factor (>1 speeds up, <1 slows down)"
+    )
+    normalize_p = sub.add_parser(
+        "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
+    )
+    normalize_p.add_argument(
+        "--target-db", type=float, default=0.0, help="Target peak level in dB (default: 0.0)"
+    )
+    trim_silence_p = sub.add_parser(
+        "trim-silence", parents=[common], help="Trim leading/trailing silence"
+    )
+    trim_silence_p.add_argument(
+        "--threshold-db", type=float, default=-60.0, help="Silence threshold in dB (default: -60)"
+    )
+    resample_p = sub.add_parser(
+        "resample", parents=[common], help="Resample audio to a target sample rate"
+    )
+    resample_p.add_argument(
+        "--target-rate", type=int, required=True, help="Target sample rate in Hz"
     )
     voice_change_p = sub.add_parser(
         "voice-change", parents=[common], help="Apply a voice-change effect"
@@ -2373,6 +2544,11 @@ def main() -> None:
         "mix",
         parents=[common],
         help="Load a mixer scene (JSON file or preset) and optionally render inputs",
+        description=(
+            "Input WAVs are loaded as mono (stereo files are downmixed) and each "
+            "mono input is duplicated across both output channels. Inputs at a "
+            "different sample rate are resampled to --sample-rate before mixing."
+        ),
     )
     mix_group = mix_p.add_mutually_exclusive_group(required=True)
     mix_group.add_argument("--scene", default="", help="Path to a scene JSON file")
@@ -2382,7 +2558,10 @@ def main() -> None:
         action="append",
         default=[],
         metavar="WAV",
-        help="Per-strip input WAV (repeat once per strip); requires --output to render",
+        help=(
+            "Per-strip input WAV (repeat once per strip); loaded as mono and "
+            "resampled to --sample-rate; requires --output to render"
+        ),
     )
     mix_p.add_argument(
         "--sample-rate", type=int, default=48000, help="Mixer sample rate (default: 48000)"
@@ -2408,6 +2587,11 @@ def main() -> None:
         "hpss",
         "pitch-correct",
         "note-stretch",
+        "pitch-shift",
+        "time-stretch",
+        "normalize",
+        "trim-silence",
+        "resample",
         "voice-change",
         "acoustic",
         "estimate-room",
@@ -2457,6 +2641,11 @@ def main() -> None:
         "hpss": cmd_hpss,
         "pitch-correct": cmd_pitch_correct,
         "note-stretch": cmd_note_stretch,
+        "pitch-shift": cmd_pitch_shift,
+        "time-stretch": cmd_time_stretch,
+        "normalize": cmd_normalize,
+        "trim-silence": cmd_trim_silence,
+        "resample": cmd_resample,
         "voice-change": cmd_voice_change,
         "voice-presets": cmd_voice_presets,
         "voice-preset": cmd_voice_preset,
