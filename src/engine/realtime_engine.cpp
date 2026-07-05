@@ -209,10 +209,11 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // Punch in/out transitions must split sub-blocks at the exact sample so the
   // capture sink starts/stops on a sub-block boundary rather than at block
   // granularity. Register each punch edge that falls inside this block.
-  if (capture_sink_.armed() && capture_sink_.punch_enabled()) {
+  const CaptureSink::PunchState punch = capture_sink_.punch_state_rt();
+  if (punch.armed && punch.punch_enabled) {
     CaptureBoundaryList capture_boundaries;
-    collect_capture_boundaries(state.sample_position, frames, capture_sink_.punch_start_sample(),
-                               capture_sink_.punch_end_sample(), &capture_boundaries);
+    collect_capture_boundaries(state.sample_position, frames, punch.punch_start_sample,
+                               punch.punch_end_sample, &capture_boundaries);
     for (size_t i = 0; i < capture_boundaries.size; ++i) {
       boundary_splitter_.add_marker(capture_boundaries.offsets[i]);
     }
@@ -606,7 +607,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     const float* const* capture_channels =
         capture_input ? reinterpret_cast<const float* const*>(input_capture_channels_.data())
                       : reinterpret_cast<const float* const*>(sub_channels.data());
-    if (!capture_sink_.punch_enabled() || transport_.playing()) {
+    if (!capture_sink_.punch_state_rt().punch_enabled || transport_.playing()) {
       capture_sink_.process(capture_channels, channels, num_frames, transport_.sample_position());
     }
   }

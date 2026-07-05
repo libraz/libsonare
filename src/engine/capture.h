@@ -63,6 +63,21 @@ class CaptureSink {
   int64_t punch_start_sample() const noexcept { return snapshot().punch_start_sample; }
   int64_t punch_end_sample() const noexcept { return snapshot().punch_end_sample; }
 
+  /// AUDIO thread: whole arm/punch state read through the non-spinning seqlock
+  /// path. RT-safe (no spin, no alloc). Prefer this on the audio thread over the
+  /// individual armed()/punch_*() getters above, which spin (@c load()) and are
+  /// control-thread helpers.
+  struct PunchState {
+    bool armed = false;
+    bool punch_enabled = false;
+    int64_t punch_start_sample = 0;
+    int64_t punch_end_sample = 0;
+  };
+  PunchState punch_state_rt() const noexcept {
+    const Control c = snapshot_rt();
+    return {c.armed, c.punch_enabled, c.punch_start_sample, c.punch_end_sample};
+  }
+
  private:
   // Trivially-copyable snapshot of the control-thread state, published across
   // the thread boundary via a seqlock. Kept POD so SeqlockCell can hand it to a
