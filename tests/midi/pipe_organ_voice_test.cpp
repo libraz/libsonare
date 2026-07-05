@@ -258,24 +258,21 @@ TEST_CASE("GM church organ fallback is a flue pipe", "[midi][synth][organ]") {
   REQUIRE(std::fabs(estimated / 261.6256 - 1.0) < 0.015);
 }
 
-TEST_CASE("GM harmonica and bandoneon fall back to the free-reed pipe", "[midi][synth][organ]") {
+TEST_CASE("GM harmonica and bandoneon voice the free-reed core", "[midi][synth][organ]") {
   using sonare::midi::synth::gm_fallback_patch;
-  // Harmonica (22) and Bandoneon (23) voice the lingual free-reed core rather
-  // than the drawbar organ family sketch.
+  // Harmonica (22) and Bandoneon (23) voice the lingual free-reed core.
   for (const uint8_t program : {uint8_t{22}, uint8_t{23}}) {
     const NativeSynthPatch& patch = gm_fallback_patch(0, program);
-    REQUIRE(patch.mode == SynthEngineMode::kPipeOrgan);
-    REQUIRE(patch.pipe_organ.ranks[0].reed > 0.0f);  // a reed (not flue) stop
+    REQUIRE(patch.mode == SynthEngineMode::kFreeReed);
+    REQUIRE(patch.free_reed.reed_stiffness > 0.0f);
     const std::vector<float> tone = render_patch(patch, 60, 100, 24000);
     REQUIRE(peak(tone) > 0.01f);
     const double estimated = fft_fundamental(tone, 8000, 261.6256);
     REQUIRE(std::fabs(estimated / 261.6256 - 1.0) < 0.02);
   }
-  // The bandoneon's musette voicing detunes a second unison rank for beating.
+  // The bandoneon's musette voicing detunes its twin reeds for a beating chorus.
   const NativeSynthPatch& bandoneon = gm_fallback_patch(0, 23);
-  REQUIRE(bandoneon.pipe_organ.rank_count >= 3);
-  REQUIRE(bandoneon.pipe_organ.ranks[1].footage_mult > 1.0f);
-  REQUIRE(bandoneon.pipe_organ.ranks[1].footage_mult < 1.03f);
+  REQUIRE(bandoneon.free_reed.detune > 0.0f);
 }
 
 TEST_CASE("GM orchestra hit is a fast-attack stab", "[midi][synth][organ]") {
@@ -501,13 +498,13 @@ TEST_CASE("the reed pipe is stable across the keyboard", "[midi][synth][organ]")
   }
 }
 
-TEST_CASE("GM reed organ fallback is a reed pipe", "[midi][synth][organ]") {
+TEST_CASE("GM reed organ fallback voices the free-reed core", "[midi][synth][organ]") {
   using sonare::midi::synth::gm_fallback_patch;
   const NativeSynthPatch& reed = gm_fallback_patch(0, 20);  // Reed Organ (GM 20)
-  REQUIRE(reed.mode == SynthEngineMode::kPipeOrgan);
-  REQUIRE(reed.pipe_organ.rank_count > 0);
-  // Accordion (GM 21) shares the free-reed voicing until a dedicated model.
-  REQUIRE(gm_fallback_patch(0, 21).mode == SynthEngineMode::kPipeOrgan);
+  REQUIRE(reed.mode == SynthEngineMode::kFreeReed);
+  REQUIRE(reed.free_reed.reed_stiffness > 0.0f);
+  // Accordion (GM 21) shares the free-reed core.
+  REQUIRE(gm_fallback_patch(0, 21).mode == SynthEngineMode::kFreeReed);
   const std::vector<float> tone = render_patch(reed, 60, 100, 24000);
   REQUIRE(peak(tone) > 0.01f);
   REQUIRE(peak(tone) < 4.0f);

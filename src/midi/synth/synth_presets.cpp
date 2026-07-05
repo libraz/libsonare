@@ -164,8 +164,25 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // the fanfare colour of the full organ. Voiced under a swell shutter.
     SynthPreset& reed = t[i++];
     reed.name = "church-trumpet";
-    NativeSynthPatch patch = gm_fallback_patch(0, 20);  // the Reed Organ voicing
-    patch.pipe_organ.swell = 0.7f;
+    // A lingual reed stop voiced directly on the pipe-organ waveguide (an 8'
+    // reed under a 4'): the saturating reed valve buzzes into a bright,
+    // self-oscillating tone. Not the GM Reed Organ, which is a free-reed core.
+    NativeSynthPatch patch{};
+    patch.mode = SynthEngineMode::kPipeOrgan;
+    patch.amp_env.attack_ms = 14.0f;
+    patch.amp_env.sustain = 1.0f;
+    patch.amp_env.release_ms = 110.0f;
+    patch.cutoff_hz = 20000.0f;
+    patch.pipe_organ.tone_decay_s = 6.0f;
+    patch.pipe_organ.breath = 0.35f;
+    patch.pipe_organ.chiff = 0.3f;
+    patch.pipe_organ.rank_count = 2;
+    patch.pipe_organ.ranks[0] = {1.0f, /*stopped=*/false, 0.8f, 1.0f, 0.85f, 0.25f};  // 8'
+    patch.pipe_organ.ranks[1] = {2.0f, false, 0.82f, 0.55f, 0.7f, 0.3f};              // 4'
+    patch.pipe_organ.wind_sag = 0.2f;
+    patch.pipe_organ.swell = 0.7f;  // Voiced under a swell shutter.
+    patch.stereo_spread = 0.18f;
+    patch.gain = 0.42f;
     reed.config = from_patch(clamp_synth_patch(patch));
   }
 
