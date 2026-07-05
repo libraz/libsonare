@@ -249,21 +249,20 @@ TEST_CASE("spectral_flatness squares magnitude like librosa", "[spectral]") {
   REQUIRE_THAT(flatness[0], WithinAbs(0.1980198f, 1e-6f));
 }
 
-TEST_CASE("spectral_flatness silent frame returns zero", "[spectral][edge]") {
-  // A fully-silent (all-zero) frame is tonally undefined; librosa returns 0
-  // flatness for it rather than the maximally-flat 1.0 the floored
-  // geometric/arithmetic ratio would otherwise produce.
+TEST_CASE("spectral_flatness silent frame is maximally flat like librosa", "[spectral][edge]") {
+  // A fully-silent (all-zero) frame floors to amin across every bin, so its
+  // geometric/arithmetic ratio is 1.0. librosa.feature.spectral_flatness does
+  // not special-case silence, so we report the same maximally-flat 1.0.
   std::vector<float> silent(8, 0.0f);
   std::vector<float> silent_flatness = spectral_flatness(silent.data(), 8, 1);
   REQUIRE(silent_flatness.size() == 1);
-  REQUIRE_THAT(silent_flatness[0], WithinAbs(0.0f, 1e-12f));
+  REQUIRE_THAT(silent_flatness[0], WithinAbs(1.0f, 1e-6f));
 
-  // A broadband (flat, nonzero) frame should yield a clearly higher value.
+  // A broadband (flat, nonzero) frame is likewise maximally flat.
   std::vector<float> broadband(8, 1.0f);
   std::vector<float> broadband_flatness = spectral_flatness(broadband.data(), 8, 1);
   REQUIRE(broadband_flatness.size() == 1);
-  REQUIRE(broadband_flatness[0] > silent_flatness[0]);
-  REQUIRE(broadband_flatness[0] > 0.5f);
+  REQUIRE_THAT(broadband_flatness[0], WithinAbs(1.0f, 1e-6f));
 }
 
 TEST_CASE("spectral_flatness validates dimensions", "[spectral][edge]") {

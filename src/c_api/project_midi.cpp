@@ -115,7 +115,7 @@ sonare::midi::Ump ump_from_pod(const SonareMidiEventPod& pod) noexcept {
   sonare::midi::Ump out{};
   out.words[0] = pod.data0;
   out.words[1] = pod.data1;
-  out.word_count = pod.data1 != 0 ? 2 : 1;
+  out.word_count = ump_word_count_from_word0(pod.data0);
   out.group = static_cast<uint8_t>((pod.data0 >> 24u) & 0x0Fu);
   return out;
 }
@@ -360,7 +360,7 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
     event.render_frame = static_cast<int64_t>(i);
     event.ump.words[0] = events[i].data0;
     event.ump.words[1] = events[i].data1;
-    event.ump.word_count = events[i].data1 != 0 ? 2 : 1;
+    event.ump.word_count = ump_word_count_from_word0(events[i].data0);
     input.push_back(event);
     ppq_by_index.push_back(events[i].ppq);
   }

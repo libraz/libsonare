@@ -181,14 +181,11 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
       magnitude, n_bins, n_frames);
 
-  // Raw power per bin and its per-frame maximum (before the amin floor). A frame
-  // whose entire spectrum sits at/below the floor is silent; librosa returns 0
-  // flatness for such frames rather than the maximally-flat 1.0 the floored
-  // geometric/arithmetic ratio would otherwise produce.
-  Eigen::ArrayXXf raw_power = mag_map.array().square();
-  Eigen::ArrayXf frame_max = raw_power.colwise().maxCoeff().transpose();
-
-  Eigen::ArrayXXf power = raw_power.max(kAmin);
+  // Floor the power at kAmin (librosa's amin) before the geometric/arithmetic
+  // means. A fully-silent frame then floors to kAmin across every bin, so its
+  // ratio is 1.0 (maximally flat) — matching librosa.feature.spectral_flatness,
+  // which likewise applies the amin floor and does not special-case silence.
+  Eigen::ArrayXXf power = mag_map.array().square().max(kAmin);
   Eigen::ArrayXf sum_log = power.log().colwise().sum().transpose();
   Eigen::ArrayXf sum_linear = power.colwise().sum().transpose();
 
@@ -199,9 +196,7 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
   Eigen::ArrayXf geometric_mean = (sum_log / n_bins_f).exp();
   Eigen::ArrayXf arithmetic_mean = sum_linear / n_bins_f;
 
-  // Silent frames (max power <= floor) report 0; others use the geo/arith ratio.
-  result_map =
-      (frame_max > kAmin).select(geometric_mean / arithmetic_mean, Eigen::ArrayXf::Zero(n_frames));
+  result_map = geometric_mean / arithmetic_mean;
 
   return flatness;
 }
