@@ -34,21 +34,21 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
   const PanMode mode = pan_mode_.load(std::memory_order_relaxed);
 
   if (num_channels == 1) {
-    // A mono channel has no L/R to spread, so we apply the panner's energy
-    // contribution as a single gain. Advance each smoother exactly once per
-    // sample to stay in sync with the stereo path. The RMS combination
-    // sqrt(l^2 + r^2) is normalized by its value at center so a centered signal
-    // stays at unity under EVERY pan law (not just the constant-power default),
-    // matching the stereo balance path which likewise keeps a centered signal at
-    // unity. center_ref is 1.0 for the constant-power default, so that path is
-    // unchanged.
-    const PanGains center = compute_pan_gains(0.0f, pan_law_.load(std::memory_order_relaxed));
-    const float center_ref = std::sqrt(center.left * center.left + center.right * center.right);
-    const float inv_center = center_ref > 0.0f ? 1.0f / center_ref : 0.0f;
+    // A mono channel has no L/R stereo image to balance, so — unlike the stereo
+    // Balance path below, which normalizes the near channel to unity for every
+    // law — the mono path applies the pan law's literal combined energy as a
+    // single gain: sqrt(l^2 + r^2). By design this keeps a centered signal at
+    // unity for the constant-power default law (l == r == 1/sqrt(2) -> 1.0) and
+    // otherwise follows the law's raw energy, so a centered mono strip and a
+    // centered stereo strip agree only under the constant-power default. That
+    // difference is intentional: a mono strip conveys the pan law's energy
+    // directly rather than re-balancing a stereo image it does not have.
+    // Advance each smoother exactly once per sample to stay in sync with the
+    // stereo path.
     for (int i = 0; i < num_samples; ++i) {
       const float l = left_.process();
       const float r = right_.process();
-      channels[0][i] *= std::sqrt(l * l + r * r) * inv_center;
+      channels[0][i] *= std::sqrt(l * l + r * r);
     }
     return;
   }

@@ -27,31 +27,40 @@ TEST_CASE("Panner supports selectable pan laws", "[mixing]") {
   REQUIRE_THAT(linear.right, WithinAbs(1.0f, 0.0001f));
 }
 
-TEST_CASE("Panner keeps a centered mono signal at unity under every pan law", "[mixing]") {
-  // A centered signal must have the same level whether the strip is mono or
-  // stereo. The stereo balance path already holds center at unity for any law;
-  // the mono path normalizes its RMS gain by its center value so it matches.
-  for (auto law : {sonare::mixing::PanLaw::Const3dB, sonare::mixing::PanLaw::Const4p5dB,
-                   sonare::mixing::PanLaw::Const6dB, sonare::mixing::PanLaw::Linear0dB}) {
+TEST_CASE("Panner mono center follows the pan law's raw energy by design", "[mixing]") {
+  // A mono strip has no stereo image to balance, so it applies the pan law's
+  // literal combined energy sqrt(l^2 + r^2) at center. A stereo strip's Balance
+  // path instead normalizes the near channel to unity for every law. The two
+  // therefore agree at center only under the constant-power default; the
+  // difference under the other laws is intentional and this test locks it in.
+  struct Case {
+    sonare::mixing::PanLaw law;
+    float expected_mono_center;
+  };
+  const Case cases[] = {
+      {sonare::mixing::PanLaw::Const3dB, 1.0f},              // l == r == 1/sqrt(2) -> 1.0
+      {sonare::mixing::PanLaw::Const6dB, std::sqrt(0.5f)},   // l == r == 0.5      -> sqrt(0.5)
+      {sonare::mixing::PanLaw::Linear0dB, std::sqrt(2.0f)},  // l == r == 1.0     -> sqrt(2)
+  };
+  for (const auto& c : cases) {
     std::array<float, 2> mono{1.0f, 1.0f};
     float* mono_ch[] = {mono.data()};
     sonare::mixing::PannerProcessor mono_panner(
-        {0.0f, law, 0.0f, sonare::mixing::PanMode::Balance});
+        {0.0f, c.law, 0.0f, sonare::mixing::PanMode::Balance});
     mono_panner.prepare(48000.0, 1);
     mono_panner.process(mono_ch, 1, 2);
-    REQUIRE_THAT(mono[0], WithinAbs(1.0f, 0.0001f));
+    REQUIRE_THAT(mono[0], WithinAbs(c.expected_mono_center, 0.0001f));
 
-    // The stereo balance path holds a centered signal at unity too, so the two
-    // strip topologies agree at center.
+    // The stereo balance path keeps a centered signal at unity for every law.
     std::array<float, 2> left{1.0f, 1.0f};
     std::array<float, 2> right{1.0f, 1.0f};
     float* stereo_ch[] = {left.data(), right.data()};
     sonare::mixing::PannerProcessor stereo_panner(
-        {0.0f, law, 0.0f, sonare::mixing::PanMode::Balance});
+        {0.0f, c.law, 0.0f, sonare::mixing::PanMode::Balance});
     stereo_panner.prepare(48000.0, 2);
     stereo_panner.process(stereo_ch, 2, 2);
-    REQUIRE_THAT(left[0], WithinAbs(mono[0], 0.0001f));
-    REQUIRE_THAT(right[0], WithinAbs(mono[0], 0.0001f));
+    REQUIRE_THAT(left[0], WithinAbs(1.0f, 0.0001f));
+    REQUIRE_THAT(right[0], WithinAbs(1.0f, 0.0001f));
   }
 }
 
