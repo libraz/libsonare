@@ -79,6 +79,7 @@ wasm = [
   "bind_microphone_input",           # Browser getUserMedia -> AudioWorkletNode glue; platform-only realtime input helper
   "create_opfs_clip_page_provider",  # Browser OPFS Worker -> paged clip provider glue; platform-only long-clip helper
   "create_opfs_clip_page_worker",    # Browser OPFS Worker constructor for paged clip supply; platform-only helper
+  "attach_opfs_clip_stream",         # One-call OPFS streaming-clip wiring over create_opfs_clip_page_provider; platform-only helper
 ]
 
 python = [
