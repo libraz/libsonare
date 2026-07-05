@@ -146,6 +146,12 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
           ? fallback_pool_.size() * static_cast<size_t>(flute_slab_capacity(sample_rate_))
           : 0,
       0.0f);
+  fallback_plucked_string_capacity_ = plucked_string_buffer_capacity(sample_rate_);
+  fallback_plucked_string_buffers_.assign(
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(plucked_string_slab_capacity(sample_rate_))
+          : 0,
+      0.0f);
   // Power-on matches GS defaults (reverb send 40): a bare SMF that never
   // sends a reset SysEx should still land in the default room, as on
   // hardware, instead of rendering bone dry.
@@ -507,6 +513,12 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
     voice->flute.attach(fallback_flute_buffers_.data() +
                             static_cast<size_t>(voice_index) * 2 * fallback_flute_capacity_,
                         fallback_flute_capacity_);
+  }
+  if (!fallback_plucked_string_buffers_.empty()) {
+    voice->plucked_string.attach(
+        fallback_plucked_string_buffers_.data() +
+            static_cast<size_t>(voice_index) * fallback_plucked_string_capacity_,
+        fallback_plucked_string_capacity_);
   }
   // GS drum-kit variation: the drum channel's program picks the kit (Room /
   // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).

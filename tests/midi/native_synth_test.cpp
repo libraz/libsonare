@@ -367,6 +367,19 @@ TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi]
   // Air-jet flute family (GM 72-79).
   REQUIRE(gm_fallback_patch(0, 72).mode == SynthEngineMode::kFlute);  // Piccolo
   REQUIRE(gm_fallback_patch(0, 79).mode == SynthEngineMode::kFlute);  // Ocarina
+  // Free-reed family (GM 20-23): reed organ / accordion / harmonica / bandoneon.
+  REQUIRE(gm_fallback_patch(0, 20).mode == SynthEngineMode::kFreeReed);  // Reed Organ
+  REQUIRE(gm_fallback_patch(0, 21).mode == SynthEngineMode::kFreeReed);  // Accordion
+  REQUIRE(gm_fallback_patch(0, 22).mode == SynthEngineMode::kFreeReed);  // Harmonica
+  REQUIRE(gm_fallback_patch(0, 23).mode == SynthEngineMode::kFreeReed);  // Bandoneon
+  // Vocal family (GM 52-54): choir / voice as a glottal-source formant voice.
+  REQUIRE(gm_fallback_patch(0, 52).mode == SynthEngineMode::kVocal);  // Choir Aahs
+  REQUIRE(gm_fallback_patch(0, 53).mode == SynthEngineMode::kVocal);  // Voice Oohs
+  REQUIRE(gm_fallback_patch(0, 54).mode == SynthEngineMode::kVocal);  // Synth Voice
+  // Buzzing-bridge plucked family (GM 104/106/107): sitar / shamisen / koto.
+  REQUIRE(gm_fallback_patch(0, 104).mode == SynthEngineMode::kPluckedString);  // Sitar
+  REQUIRE(gm_fallback_patch(0, 106).mode == SynthEngineMode::kPluckedString);  // Shamisen
+  REQUIRE(gm_fallback_patch(0, 107).mode == SynthEngineMode::kPluckedString);  // Koto
   // Neighbours that intentionally stay on the signal-model family sketch.
   REQUIRE(gm_fallback_patch(0, 48).mode == SynthEngineMode::kSubtractive);  // String Ensemble 1
   REQUIRE(gm_fallback_patch(0, 80).mode == SynthEngineMode::kSubtractive);  // Square Lead

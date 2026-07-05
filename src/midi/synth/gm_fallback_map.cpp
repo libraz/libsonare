@@ -268,6 +268,9 @@ struct ProgramOverrides {
   NativeSynthPatch bass_slap;           // program 36 (Slap Bass 1, thumb)
   NativeSynthPatch bass_pop;            // program 37 (Slap Bass 2, pull/pop)
   NativeSynthPatch harp;                // program 46 (Orchestral Harp)
+  NativeSynthPatch sitar;               // program 104 (buzzing jawari bridge)
+  NativeSynthPatch shamisen;            // program 106 (sawari buzzing bridge)
+  NativeSynthPatch koto;                // program 107 (bridge-buzz plucked)
   NativeSynthPatch church_organ;        // program 19 (Church Organ, flue pipe)
   NativeSynthPatch reed_organ;          // programs 20-21 (Reed Organ / Accordion, free reed)
   NativeSynthPatch harmonica;           // program 22 (free reed, bright hand vibrato)
@@ -523,9 +526,10 @@ ProgramOverrides build_program_overrides() noexcept {
   steel.ks.release_damp_s = 0.08f;
   // Dedicated plucked-string physics: a coupled second polarization (bridge
   // double-decay), a physical pick pluck, steel-string dispersion, a tension
-  // attack bend, and the sympathetic open-string halo (the last only rings when
-  // the patch drives a standalone NativeSynth — the per-note GM fallback path
-  // has no shared bank, and the per-voice gates carry the tone there).
+  // attack bend, and the sympathetic open-string halo. The halo rings in both
+  // hosts: the standalone NativeSynth's own resonator bank, and the GM fallback
+  // path where Sf2Player drives a per-part shared sympathetic bank fed by the
+  // summed dry signal and folded back centre-panned (see Sf2Player::process).
   steel.ks.polarization = 0.3f;
   steel.ks.body_coupling = 0.35f;
   steel.ks.pluck_style = 0.5f;
@@ -690,6 +694,38 @@ ProgramOverrides build_program_overrides() noexcept {
   o.harp.ks.tension_mod = 0.0f;
   o.harp.body_mix = 0.3f;  // large open soundboard, less boxy than the guitar
 
+  // Sitar (GM 104): a plucked string over the curved jawari bridge — the
+  // grazing bridge contact keeps spraying energy into the upper partials, so
+  // the note shimmers and buzzes for its whole long ring.
+  NativeSynthPatch& si = o.sitar;
+  si.mode = SynthEngineMode::kPluckedString;
+  si.amp_env = env(0.0f, 0.0f, 1.0f, 200.0f);
+  si.cutoff_hz = 20000.0f;
+  si.plucked_string.buzz = 0.55f;
+  si.plucked_string.brightness = 0.85f;
+  si.plucked_string.decay_s = 3.5f;
+  si.plucked_string.pick_position = 0.20f;
+  si.gain = 0.8f;
+
+  // Shamisen (GM 106): the sawari — only a slight graze against the bare wood
+  // at the nut — gives a drier, harder buzz than the sitar, over a shorter
+  // ring and a hard bachi strike.
+  o.shamisen = o.sitar;
+  o.shamisen.plucked_string.buzz = 0.5f;
+  o.shamisen.plucked_string.brightness = 0.8f;
+  o.shamisen.plucked_string.decay_s = 2.0f;
+  o.shamisen.plucked_string.pick_position = 0.24f;
+  o.shamisen.gain = 0.8f;
+
+  // Koto (GM 107): long zither strings over movable bridges — mostly a clean
+  // plucked ring with just a whisper of bridge buzz.
+  o.koto = o.sitar;
+  o.koto.plucked_string.buzz = 0.3f;
+  o.koto.plucked_string.brightness = 0.8f;
+  o.koto.plucked_string.decay_s = 3.0f;
+  o.koto.plucked_string.pick_position = 0.22f;
+  o.koto.gain = 0.85f;
+
   // Harpsichord (GM 6): a plucked string like the guitars, but a keyboard
   // instrument voiced by a hard quill/Delrin plectrum near the nut. The defining
   // trait is near velocity-insensitivity (only 3-6 dB across the range), so the
@@ -766,53 +802,47 @@ ProgramOverrides build_program_overrides() noexcept {
   o.church_organ.stereo_spread = 0.55f;
   o.church_organ.gain = 0.45f;
 
-  // Reed Organ (GM 20) + Accordion (GM 21): a lingual reed stop — the jet is
-  // driven hard and asymmetrically so the pipe buzzes with a bright, brassy
-  // spectrum (harmonium / regal colour). An 8' reed under a 4' reed octave, both
-  // open and very bright. Stands in for the free-reed group until a dedicated
-  // model.
-  o.reed_organ.mode = SynthEngineMode::kPipeOrgan;
-  o.reed_organ.amp_env = env(14.0f, 0.0f, 1.0f, 110.0f);
+  // Reed Organ (GM 20) + Accordion (GM 21): a true free reed — the metal
+  // tongue swings through its slot under steady bellows pressure. Harmonium
+  // colour: a mellow plate, soft tongues, and a slow bellows take-up with just
+  // a hint of wet-tuned beating.
+  o.reed_organ.mode = SynthEngineMode::kFreeReed;
+  o.reed_organ.amp_env = env(30.0f, 0.0f, 1.0f, 120.0f);
   o.reed_organ.cutoff_hz = 20000.0f;
-  o.reed_organ.pipe_organ.tone_decay_s = 6.0f;
-  o.reed_organ.pipe_organ.breath = 0.35f;
-  o.reed_organ.pipe_organ.chiff = 0.3f;
-  o.reed_organ.pipe_organ.rank_count = 2;
-  o.reed_organ.pipe_organ.ranks[0] = {1.0f, /*stopped=*/false, 0.8f, 1.0f, 0.85f, 0.25f};  // 8'
-  o.reed_organ.pipe_organ.ranks[1] = {2.0f, false, 0.82f, 0.55f, 0.7f, 0.3f};              // 4'
-  o.reed_organ.pipe_organ.wind_sag = 0.2f;
+  o.reed_organ.free_reed.brightness = 0.50f;
+  o.reed_organ.free_reed.reed_stiffness = 0.40f;
+  o.reed_organ.free_reed.detune = 0.12f;
+  o.reed_organ.free_reed.breath_pressure = 0.7f;
+  o.reed_organ.free_reed.attack_ms = 30.0f;
+  o.reed_organ.free_reed.release_ms = 120.0f;
   o.reed_organ.stereo_spread = 0.18f;
   o.reed_organ.gain = 0.42f;
 
-  // Harmonica (GM 22): a small, bright free reed. Same lingual-reed core as the
-  // reed organ but voiced smaller and brighter, with a quick response and a
-  // gentle hand-vibrato tremolo (the player's cupping hands modulate the tone).
+  // Harmonica (GM 22): a small, bright free reed right at the mouth — stiff
+  // little tongues speak fast with a buzzy edge, and the player's cupping
+  // hands add a gentle vibrato.
   o.harmonica = o.reed_organ;
-  o.harmonica.amp_env = env(20.0f, 0.0f, 1.0f, 90.0f);
-  o.harmonica.pipe_organ.breath = 0.4f;
-  o.harmonica.pipe_organ.chiff = 0.45f;  // breathy attack
-  o.harmonica.pipe_organ.rank_count = 2;
-  o.harmonica.pipe_organ.ranks[0] = {1.0f, false, 0.9f, 1.0f, 0.9f, 0.35f};  // 8' bright reed
-  o.harmonica.pipe_organ.ranks[1] = {2.0f, false, 0.9f, 0.4f, 0.85f, 0.4f};  // 4' sparkle
+  o.harmonica.amp_env = env(12.0f, 0.0f, 1.0f, 90.0f);
+  o.harmonica.free_reed.brightness = 0.78f;
+  o.harmonica.free_reed.reed_stiffness = 0.65f;
+  o.harmonica.free_reed.detune = 0.15f;
+  o.harmonica.free_reed.attack_ms = 12.0f;
+  o.harmonica.free_reed.release_ms = 90.0f;
   o.harmonica.lfo_rate_hz = 5.6f;
   o.harmonica.lfo_to_pitch_cents = 8.0f;
   o.harmonica.stereo_spread = 0.12f;
   o.harmonica.gain = 0.44f;
 
-  // Bandoneon (GM 23): the tango free-reed. The defining trait is the musette
-  // voicing — two near-unison reeds a few cents apart beat against each other,
-  // so a second 8' rank is detuned slightly (footage 1.008) to produce the
-  // characteristic wet shimmer.
+  // Bandoneon (GM 23): the tango free reed. The defining trait is the musette
+  // voicing — two near-unison tongues a few cents apart beat against each
+  // other, producing the characteristic wet shimmer.
   o.bandoneon = o.reed_organ;
   o.bandoneon.amp_env = env(24.0f, 0.0f, 1.0f, 120.0f);
-  o.bandoneon.pipe_organ.breath = 0.32f;
-  o.bandoneon.pipe_organ.chiff = 0.28f;
-  o.bandoneon.pipe_organ.rank_count = 3;
-  o.bandoneon.pipe_organ.ranks[0] = {1.0f, false, 0.78f, 1.0f, 0.82f, 0.25f};    // 8'
-  o.bandoneon.pipe_organ.ranks[1] = {1.008f, false, 0.78f, 0.9f, 0.82f, 0.25f};  // 8' musette beat
-  o.bandoneon.pipe_organ.ranks[2] = {2.0f, false, 0.8f, 0.5f, 0.75f, 0.3f};      // 4'
+  o.bandoneon.free_reed.brightness = 0.55f;
+  o.bandoneon.free_reed.reed_stiffness = 0.45f;
+  o.bandoneon.free_reed.detune = 0.30f;
   o.bandoneon.stereo_spread = 0.22f;
-  o.bandoneon.gain = 0.42f;
+  o.bandoneon.gain = 0.44f;
 
   // Orchestra Hit (GM 55): a sharp tutti stab. The ensemble family's slow pad
   // is the wrong envelope, so this overrides to a bright detuned-saw chord with
@@ -887,35 +917,39 @@ ProgramOverrides build_program_overrides() noexcept {
   tp.stereo_spread = 0.15f;
   tp.gain = 1.2f;
 
-  // Choir Aahs (GM 52): detuned voices through the open-vowel tract formants
-  // — the vocal body is what separates "aah" from a string pad.
+  // Choir Aahs (GM 52): a glottal source sung through the open /a/ formant
+  // bank — the vowel tract is what separates "aah" from a string pad. The
+  // section swells in slowly with a singer's own vibrato.
   NativeSynthPatch& ch = o.choir_aahs;
-  ch.waveform = VaWaveform::kSaw;
-  ch.unison = 4;
-  ch.detune_cents = 9.0f;
-  ch.drift_cents = 4.0f;
-  ch.amp_env = env(260.0f, 400.0f, 0.85f, 550.0f);
-  ch.cutoff_hz = 2400.0f;
-  ch.lfo_rate_hz = 4.6f;
-  ch.lfo_to_pitch_cents = 5.0f;
-  ch.body = BodyType::kVocal;
-  ch.body_mix = 0.55f;
+  ch.mode = SynthEngineMode::kVocal;
+  ch.amp_env = env(200.0f, 400.0f, 0.9f, 400.0f);
+  ch.cutoff_hz = 20000.0f;
+  ch.vocal.vowel = 0;  // /a/
+  ch.vocal.brightness = 0.55f;
+  ch.vocal.vibrato_depth = 0.30f;
+  ch.vocal.breath_noise = 0.12f;
+  ch.vocal.attack_ms = 200.0f;
+  ch.vocal.release_ms = 400.0f;
   ch.stereo_spread = 0.6f;
   ch.gain = 0.6f;
 
-  // Voice Oohs (GM 53): the same choir with a nearly closed mouth — darker
-  // low-pass, more tract, less shimmer.
+  // Voice Oohs (GM 53): the same voice with a nearly closed mouth — the /u/
+  // vowel, darker and more covered.
   o.voice_oohs = ch;
-  o.voice_oohs.cutoff_hz = 1300.0f;
-  o.voice_oohs.detune_cents = 7.0f;
-  o.voice_oohs.body_mix = 0.6f;
+  o.voice_oohs.vocal.vowel = 4;  // /u/
+  o.voice_oohs.vocal.brightness = 0.42f;
+  o.voice_oohs.vocal.vibrato_depth = 0.25f;
   o.voice_oohs.gain = 0.65f;
 
-  // Synth Voice (GM 54): brighter, steadier synthetic vowel.
+  // Synth Voice (GM 54): a brighter, steadier synthetic vowel — the forward
+  // /i/ with a quicker swell and less vibrato wobble.
   o.synth_voice = ch;
-  o.synth_voice.cutoff_hz = 3200.0f;
-  o.synth_voice.amp_env = env(120.0f, 300.0f, 0.9f, 400.0f);
-  o.synth_voice.drift_cents = 2.0f;
+  o.synth_voice.vocal.vowel = 2;  // /i/
+  o.synth_voice.vocal.brightness = 0.62f;
+  o.synth_voice.vocal.vibrato_depth = 0.15f;
+  o.synth_voice.vocal.attack_ms = 120.0f;
+  o.synth_voice.vocal.release_ms = 300.0f;
+  o.synth_voice.amp_env = env(120.0f, 300.0f, 0.9f, 300.0f);
 
   // Pitched percussion (GM 112-119): the membrane / struck-idiophone cores
   // voiced as melodic programs. Unlike the kit drum map these track the played
@@ -1341,6 +1375,9 @@ ProgramOverrides build_program_overrides() noexcept {
   o.bass_slap = clamp_synth_patch(o.bass_slap);
   o.bass_pop = clamp_synth_patch(o.bass_pop);
   o.harp = clamp_synth_patch(o.harp);
+  o.sitar = clamp_synth_patch(o.sitar);
+  o.shamisen = clamp_synth_patch(o.shamisen);
+  o.koto = clamp_synth_patch(o.koto);
   o.church_organ = clamp_synth_patch(o.church_organ);
   o.reed_organ = clamp_synth_patch(o.reed_organ);
   o.harmonica = clamp_synth_patch(o.harmonica);
@@ -1839,9 +1876,8 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexce
       return program_overrides().dulcimer;
     case 19:  // Church Organ (flue pipe)
       return program_overrides().church_organ;
-    case 20:  // Reed Organ (lingual reed pipe / harmonium)
-    case 21:  // Accordion (free reed — shares the reed-organ voicing until a
-              // dedicated free-reed model lands)
+    case 20:  // Reed Organ (harmonium free reed)
+    case 21:  // Accordion (shares the reed-organ free-reed voicing)
       return program_overrides().reed_organ;
     case 22:  // Harmonica (small bright free reed)
       return program_overrides().harmonica;
@@ -1941,6 +1977,13 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexce
       return program_overrides().tin_whistle;
     case 79:  // Ocarina
       return program_overrides().ocarina;
+    // Buzzing-bridge plucked strings (physical waveguide).
+    case 104:  // Sitar
+      return program_overrides().sitar;
+    case 106:  // Shamisen
+      return program_overrides().shamisen;
+    case 107:  // Koto
+      return program_overrides().koto;
     // Pitched percussion family (membrane / struck-idiophone cores, key-tracked).
     case 112:  // Tinkle Bell
       return program_overrides().tinkle_bell;
