@@ -505,9 +505,10 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   // stereoOnly is surfaced independently of kind: eq.midSide is realtime-insertable
   // yet has no mono implementation, so it is realtime + stereoOnly. It is also an
   // inherently-stereo processor, so its channelPolicy is "stereoPairOnly".
-  REQUIRE(json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
-                    "\"stereoOnly\":true,\"channelPolicy\":\"stereoPairOnly\"}") !=
-          std::string::npos);
+  REQUIRE(
+      json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
+                "\"stereoOnly\":true,\"latencySamples\":0,\"channelPolicy\":\"stereoPairOnly\"}") !=
+      std::string::npos);
 
   // Realtime-only ids that are absent from processor_names() are still reported.
   if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {

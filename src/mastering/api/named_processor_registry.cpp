@@ -1,9 +1,11 @@
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "rt/processor_base.h"
 
 namespace sonare::mastering::api {
 
@@ -170,6 +172,33 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept {
   return "multichannel";
 }
 
+namespace {
+
+// Representative configuration for probing realtime-insert latency. Config-
+// dependent processors (linear-phase EQ FFT length, lookahead limiters/
+// maximizers) derive their reported latency at prepare() time from the block
+// size and sample rate, so the catalog value reflects this default
+// configuration and is representative rather than exact for a differently
+// configured insert; the host treats it as a fallback estimate.
+constexpr double kCatalogProbeSampleRate = 48000.0;
+constexpr int kCatalogProbeBlockSize = 512;
+
+// Latency an insertable processor reports for its default configuration, or 0
+// for an id with no realtime insert or that fails to build/prepare.
+int insert_latency_samples(const std::string& id) {
+  try {
+    std::unique_ptr<sonare::rt::ProcessorBase> processor = make_insert(id, "{}");
+    if (processor == nullptr) return 0;
+    processor->prepare(kCatalogProbeSampleRate, kCatalogProbeBlockSize);
+    const int latency = processor->latency_samples();
+    return latency > 0 ? latency : 0;
+  } catch (...) {
+    return 0;
+  }
+}
+
+}  // namespace
+
 std::string processor_catalog_json() {
   const std::set<std::string> insert_set = [] {
     const auto names = insert_factory_names();
@@ -207,6 +236,8 @@ std::string processor_catalog_json() {
     out += realtime_insertable ? "true" : "false";
     out += ",\"stereoOnly\":";
     out += stereo_set.count(id) != 0 ? "true" : "false";
+    out += ",\"latencySamples\":";
+    out += std::to_string(realtime_insertable ? insert_latency_samples(id) : 0);
     out += ",\"channelPolicy\":\"";
     out += channel_policy_to_string(channel_policy(id));
     out += '"';

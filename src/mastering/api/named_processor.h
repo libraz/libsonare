@@ -76,11 +76,15 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // (insert_factory_names), and the pair registry (pair_processor_names) into a
 // single JSON array. Each entry is
 //   {"id":string,"kind":"realtime"|"offline"|"pair",
-//    "realtimeInsertable":bool,"stereoOnly":bool,"channelPolicy":string}
+//    "realtimeInsertable":bool,"stereoOnly":bool,"latencySamples":int,
+//    "channelPolicy":string}
 // where kind is pair > realtime > offline by precedence, realtimeInsertable is
 // membership in insert_factory_names(), stereoOnly is membership in
-// stereo_processor_names(), and channelPolicy is channel_policy(id) as a wire
-// string (how the mixer wraps a >2ch bus insert). The id universe is the union
+// stereo_processor_names(), latencySamples is the realtime insert's reported
+// processing latency for its default configuration (0 for offline ids and for
+// config-dependent processors this is representative, not exact), and
+// channelPolicy is channel_policy(id) as a wire string (how the mixer wraps a
+// >2ch bus insert). The id universe is the union
 // of the three lists, so
 // realtime-only ids (e.g. effects.reverb.room) and pair ids that are absent from
 // processor_names() are still reported. Ids are emitted in sorted order.
