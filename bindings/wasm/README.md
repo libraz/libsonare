@@ -7,13 +7,14 @@
 [![License](https://img.shields.io/github/license/libraz/libsonare)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-A dependency-free audio DSP toolkit for browser and Node.js via WebAssembly —
-librosa-compatible analysis plus broadcast-grade mastering, mixing, and editing.
-The same C++ processors run client-side in the browser: 66 named mastering DSP
-processors implemented against published references (ITU-R BS.1770-4 true-peak
-limiting, Linkwitz-Riley crossovers, Vicanek matched-Z biquads, ADAA-antialiased
-saturation), with analysis defaults matching librosa — Apache-2.0, no Python,
-no model weights.
+**Turn audio into data and back — entirely in the browser.** Analyze songs
+(BPM, key, chords, loudness), master and mix to broadcast loudness, and render
+MIDI through built-in instruments, all client-side via WebAssembly — the same
+C++ engine that runs natively, with zero dependencies and no Python or model
+weights. 66 named mastering DSP processors implemented against published
+references (ITU-R BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers,
+Vicanek matched-Z biquads, ADAA-antialiased saturation); analysis defaults match
+librosa where the two overlap.
 
 > **Audio input:** This package expects already-decoded `Float32Array` mono
 > samples (it does not bundle a file decoder). Use the Web Audio API in the
@@ -124,7 +125,8 @@ import { init, analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare'
 
 await init();
 
-const blind = detectAcoustic(samples, sampleRate, 6, 24, 30.0, 10.0);
+// Blind estimation from ordinary audio; tuning options (nOctaveBands, …) are optional.
+const blind = detectAcoustic(samples, sampleRate);
 const room = analyzeImpulseResponse(irSamples, sampleRate);
 console.log(blind.rt60, room.c50);
 ```
@@ -245,16 +247,15 @@ import { init, masteringChain, masteringChainStereo } from '@libraz/libsonare';
 
 await init();
 
+// Config is a tree of processor sections; set only what you want to change.
 const mastered = masteringChain(samples, sampleRate, {
-  eq: { tiltDb: 1.0 },
   dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
-  saturation: { tape: { driveDb: 1.0, saturation: 0.2 } },
-  loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
+  loudness: { targetLufs: -14, ceilingDb: -1 },
 });
 
 const stereo = masteringChainStereo(left, right, sampleRate, {
-  stereo: { imager: { width: 1.1 }, monoMaker: { amount: 0.2 } },
-  loudness: { targetLufs: -14, ceilingDb: -1, truePeakOversample: 4 },
+  stereo: { imager: { width: 1.1 } },
+  loudness: { targetLufs: -14, ceilingDb: -1 },
 });
 ```
 
@@ -787,7 +788,7 @@ try {
 - **Pitch**: YIN, pYIN algorithms with optional `fillNa`
 - **Decomposition & loudness**: NMF decomposition, nearest-neighbour filtering, multichannel LUFS, EBU R128 LRA
 - **Streaming**: Real-time analysis with progressive estimates; streaming mastering chain, equalizer, and retune
-- **Instruments**: built-in synth, patch-driven NativeSynth, SoundFont (SF2) player — bound to `Project` bounces or the `RealtimeEngine`
+- **Instruments**: built-in synth, patch-driven NativeSynth (12 synthesis engines, incl. physically-modeled piano/strings/winds — being tuned over time), SoundFont (SF2) player — bound to `Project` bounces or the `RealtimeEngine`
 - **Real-time**: `RealtimeEngine` transport/MIDI/render, `RealtimeVoiceChanger`, AudioWorklet bridge
 - **Room acoustics**: blind RT60/EDT, impulse-response clarity metrics, RIR synthesis, room estimation, room morphing
 - **Headless DAW**: `Project` arrangement model — audio/MIDI tracks & clips, undo/redo, MIDI sequencing, clip warp, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`

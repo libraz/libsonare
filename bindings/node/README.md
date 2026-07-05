@@ -8,12 +8,13 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
-A dependency-free audio DSP toolkit for Node.js — librosa-compatible analysis
-plus broadcast-grade mastering, mixing, and editing — exposed as a native N-API
-addon built on the libsonare C++ core. Mastering ships 66 named DSP processors
-implemented against published references (ITU-R BS.1770-4 true-peak limiting,
-Linkwitz-Riley crossovers, Vicanek matched-Z biquads, ADAA-antialiased
-saturation), all under Apache-2.0 with no model weights.
+**Turn audio into data and back, natively in Node.js.** Analyze songs (BPM, key,
+chords, loudness), master and mix to broadcast loudness, and render MIDI through
+built-in instruments — a native N-API addon on the libsonare C++ core. Mastering
+ships 66 named DSP processors implemented against published references (ITU-R
+BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers, Vicanek matched-Z
+biquads, ADAA-antialiased saturation); analysis defaults match librosa where the
+two overlap. Apache-2.0, no model weights.
 
 Unlike the WebAssembly package (`@libraz/libsonare`), this binding can decode
 audio files directly from disk or memory (WAV / MP3 out of the box, plus
@@ -147,12 +148,8 @@ metrics because they are not reliable without an impulse response.
 import { Audio, analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare-native';
 
 const audio = Audio.fromFile('recording.wav');
-const blind = audio.detectAcoustic({
-  nOctaveBands: 6,
-  nThirdOctaveSubbands: 24,
-  minDecayDb: 30.0,
-  noiseFloorMarginDb: 10.0,
-});
+// Blind estimation from ordinary audio; tuning options (nOctaveBands, …) are optional.
+const blind = audio.detectAcoustic();
 console.log(blind.rt60, blind.edt, blind.isBlind);
 
 const ir = Audio.fromFile('room_ir.wav');
@@ -281,19 +278,15 @@ is invoked after each stage (progress in `[0, 1]`).
 ```typescript
 import { masteringChain, masteringChainStereo } from '@libraz/libsonare-native';
 
+// Config is a tree of processor sections; set only what you want to change.
 const mastered = masteringChain(samples, sampleRate, {
-  'eq.tilt.tiltDb': 0.5,
-  'dynamics.compressor.thresholdDb': -24,
-  'dynamics.compressor.ratio': 1.5,
-  'dynamics.transientShaper.attackGainDb': 2.0,
-  'repair.declick.enabled': true,
-  'loudness.targetLufs': -14,
-  'loudness.ceilingDb': -1,
+  dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
+  loudness: { targetLufs: -14, ceilingDb: -1 },
 });
 
 const stereo = masteringChainStereo(left, right, sampleRate, {
-  'stereo.imager.width': 1.1,
-  'loudness.targetLufs': -14,
+  stereo: { imager: { width: 1.1 } },
+  loudness: { targetLufs: -14 },
 }, (progress, stage) => {
   console.log(`[${(progress * 100).toFixed(0)}%] ${stage}`);
 });
@@ -310,13 +303,13 @@ a preset and lets you override any individual parameter with the same flat
 dot-notation keys as `masteringChain`.
 
 ```typescript
-import { masterAudio, masteringPresetNames } from '@libraz/libsonare-native';
+import { masterAudio, masteringPresetNames, Audio } from '@libraz/libsonare-native';
 
 masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
 
 const result = masterAudio(samples, sampleRate, 'aiMusic', {
-  'loudness.targetLufs': -13,
-  'dynamics.multibandComp.enabled': true,
+  loudness: { targetLufs: -13 },
+  dynamics: { multibandComp: { enabled: true } },
 });
 
 // Audio class shortcut
@@ -441,6 +434,11 @@ oscillator synth (`bounceWithBuiltinInstrument(s)`), the patch-driven
 NativeSynth (`bounceWithSynthInstrument(s)`), or a loaded SoundFont 2 player
 (`bounceWithSf2Instrument(s)`). `synthPresetNames()` lists NativeSynth presets
 and `synthPresetPatch(name)` returns one as a tweakable `SynthPatch`.
+
+The NativeSynth spans 12 synthesis engines — subtractive, FM, additive, plus
+physically-modeled piano, bowed strings, reeds, brass, flute, pipe organ, and
+percussion. The physical-model voices are usable today and being refined over
+time as tuning continues.
 
 ```typescript
 import { Project, synthPresetNames, synthPresetPatch } from '@libraz/libsonare-native';

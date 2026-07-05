@@ -9,15 +9,18 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/libsonare)
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net/ja/)
 
-**解析からアレンジまで。依存ライブラリ不要のオーディオエンジンです。**
-librosa 互換の解析、放送品質のマスタリング／ミキシング、内蔵インストゥルメント、
-リアルタイムのヘッドレス DAW ランタイムを、C++・Python・Node.js・ブラウザに、
-Apache-2.0 ひとつで提供します。
+**libsonare は、音を「データ」に、データを「音」に変換します。** 曲を読み込んで
+BPM・キー・コード・構成を取り出し、放送品質のラウドネスへ整え、MIDI を内蔵
+インストゥルメントで鳴らし、その上に DAW まで組めます——C++・Python・Node.js・
+ブラウザで同じエンジンが動き、ランタイム依存ゼロ、実行時 Python 不要、GPL/AGPL も
+モデル重みもありません。
 
-ネイティブと WebAssembly を単一の C++ コードベースで動かします。楽曲を解析し、
-マスタリングし、再生し、MIDI を内蔵インストゥルメントで鳴らす——その同じ DSP が、
-C++ でもブラウザ（WASM + AudioWorklet）でも同一に動作します。ランタイム依存ゼロ、
-実行時 Python 不要、GPL/AGPL なし、モデル重みなし。
+**こんなときに使えます**
+
+- **音声を解析する** — BPM・キー・コード・セクション・ラウドネスを、重い Python/ML スタックなしで。
+- **狙った基準へ整える** — 放送品質のラウドネス／トゥルーピーク制御を、プロセス内でもブラウザ内でも。
+- **MIDI を音にする** — 内蔵インストゥルメントが全 128 GM プログラム＋ドラムをカバー、SoundFont 不要。
+- **1 つのエンジンで届ける** — 同じ C++ DSP がネイティブでもブラウザ（WASM + AudioWorklet）でも、同一の結果で動く。
 
 📖 **[ドキュメント](https://libsonare.libraz.net/ja/)** &nbsp;·&nbsp; 🎧 **[ブラウザ完結デモ](https://libsonare.libraz.net/ja/demos)** &nbsp;·&nbsp; **[はじめに](https://libsonare.libraz.net/ja/docs/getting-started)**
 
@@ -35,11 +38,11 @@ C++ でもブラウザ（WASM + AudioWorklet）でも同一に動作します。
 
 ## できること
 
-- **解析（librosa 互換）** — BPM、キー、コード（HMM 平滑化・転回形・キーコンテキスト）、
+- **解析** — BPM、キー、コード（HMM 平滑化・転回形・キーコンテキスト）、
   ビート／ダウンビート、拍子、セクション、音色、ダイナミクス、ピッチ（YIN／pYIN）、
   テンポグラム／PLP、NNLS クロマ、EBU R128 ラウドネス、音響特性（ブラインドまたは実測 IR
-  からの RT60／EDT／C50／C80／D50）。デフォルト値は librosa に揃え、CI で librosa の
-  リファレンス値と照合しています。
+  からの RT60／EDT／C50／C80／D50）。librosa と重なる範囲ではデフォルト値を揃え、CI で
+  librosa のリファレンス値と照合しているため、結果をそのまま移行できます。
 - **マスタリング** — 76 個の名前付き DSP プロセッサ（EQ、ダイナミクス、マルチバンド、
   ステレオ、サチュレーション、リペア、マキシマイザー、リファレンスマッチング）。
   ITU-R BS.1770-4 のラウドネス／トゥルーピーク制限、Linkwitz-Riley クロスオーバー、
@@ -55,11 +58,13 @@ C++ でもブラウザ（WASM + AudioWorklet）でも同一に動作します。
 - **ルームアコースティクス** — シューボックス形状からルームインパルスレスポンスを合成、
   録音から等価なルームをブラインド推定、録音の残響を目標ルームへモーフィング。
   依存なし・決定論的です。
-- **内蔵インストゥルメント** — パッチ駆動の NativeSynth（7 種のシンセシスエンジン、
-  モジュレーションマトリクス、名前付きプリセット）と、全 128 プログラム＋ドラムを
-  データ不要でカバーする GM フォールバックにより、MIDI が無音になりません。ホスト供給の
-  SoundFont を読み込めば GS 互換の 16 パート SF2 プレーヤーが引き継ぎ、未カバーの
-  プログラムはシンセにフォールバックします。
+- **内蔵インストゥルメント** — パッチ駆動の NativeSynth（12 種のシンセシスエンジン。
+  減算・FM・加算に加え、物理モデリングによるピアノ・擦弦・リード・金管・フルート・
+  パイプオルガン・打楽器）、モジュレーションマトリクス、名前付きプリセットを備え、
+  全 128 プログラム＋ドラムをデータ不要でカバーする GM フォールバックにより、MIDI が
+  無音になりません。ホスト供給の SoundFont を読み込めば GS 互換の 16 パート SF2
+  プレーヤーが引き継ぎ、未カバーのプログラムはシンセにフォールバックします。物理モデル
+  ボイスは現状でも実用できますが、音色は今後も時間をかけて調整を続けていく予定です。
 - **ヘッドレス DAW ランタイム** — オーディオ＆MIDI のトラック／クリップでプロジェクトを構築
   （split／trim／move、undo／redo つき）。テイクとコンプレーン、クリップ別ワープ、
   MIDI 1.0／2.0 シーケンス、SMF・MIDI 2.0 Clip File の入出力、決定論的でバイト安定な JSON、
@@ -88,6 +93,10 @@ FFmpeg を自動検出します）。ネイティブビルドや FFmpeg まわ�
 
 以下は代表的な機能だけを示したものです。ランタイムごとの完全な API は
 ドキュメントサイトにあります。
+
+> **どのランタイムを選ぶ？ ファイル読み込みは効く？** WASM は `Float32Array` を渡す方式、
+> Python と Node ネイティブアドオンはファイルを直接読み込めます。→
+> [利用環境を選ぶ](https://libsonare.libraz.net/ja/docs/getting-started#利用環境を選ぶ)
 
 ### JavaScript / TypeScript (WASM)
 
@@ -141,6 +150,29 @@ std::cout << "BPM: " << result.bpm
 ```
 
 → [C++ API](https://libsonare.libraz.net/ja/docs/cpp-api)
+
+### インストゥルメント & MIDI
+
+MIDI アレンジを内蔵インストゥルメントで音にします——SoundFont は不要です。
+`Project` を組み、ノートを置き、NativeSynth プリセット経由でバウンスします。
+
+```python
+import libsonare
+
+with libsonare.Project() as project:
+    project.set_sample_rate(48000)
+    _, clip_id = project.add_midi_clip(0.0, 4.0)             # 開始・長さ（四分音符）
+    project.set_midi_events(clip_id, [
+        libsonare.Project.midi_note_on(0.0, 0, 0, 60, 100),  # ppq, group, channel, note, velocity
+        libsonare.Project.midi_note_off(2.0, 0, 0, 60),
+    ])
+    audio = project.bounce_with_synth_instrument("e-piano", num_channels=2)  # → float32 音声
+```
+
+同じ `Project` ／バウンス API はどのランタイムでも使えます。ホスト供給の
+SoundFont を読み込めば、GS 互換の SF2 プレーヤー経由でも鳴らせます。
+
+→ [Python API](https://libsonare.libraz.net/ja/docs/python-api) · [ドキュメント](https://libsonare.libraz.net/ja/)
 
 ## 対応フォーマット
 

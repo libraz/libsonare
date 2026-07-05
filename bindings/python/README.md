@@ -4,15 +4,15 @@
 [![npm](https://img.shields.io/npm/v/@libraz/libsonare)](https://www.npmjs.com/package/@libraz/libsonare)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 
-A C++-core audio DSP toolkit for Python — librosa-compatible analysis plus
-broadcast-grade mastering, mixing, editing, synthesis, and a real-time engine.
+**Turn audio into data and back, from Python.** Analyze songs (BPM, key, chords,
+loudness), master and mix to broadcast loudness, and render MIDI through built-in
+instruments — a fast C++ core with NumPy as its only dependency.
 
-Built on a C++ core with NumPy as the only Python dependency. Analysis defaults
-match librosa (validated against generated librosa reference values in CI), and
-mastering ships 66 named DSP processors implemented against published
-references (ITU-R BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers,
-Vicanek matched-Z biquads, ADAA-antialiased saturation) — Apache-2.0, no model
-weights.
+Mastering ships 66 named DSP processors implemented against published references
+(ITU-R BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers, Vicanek matched-Z
+biquads, ADAA-antialiased saturation); analysis defaults match librosa where the
+two overlap (validated against generated librosa reference values in CI).
+Apache-2.0, no model weights.
 
 ## Installation
 
@@ -59,12 +59,8 @@ clarity metrics because they are not reliable without an impulse response.
 import libsonare
 
 audio = libsonare.Audio.from_file("recording.wav")
-blind = audio.detect_acoustic(
-    n_octave_bands=6,
-    n_third_octave_subbands=24,
-    min_decay_db=30.0,
-    noise_floor_margin_db=10.0,
-)
+# Blind estimation from ordinary audio; tuning options (n_octave_bands, …) are optional.
+blind = audio.detect_acoustic()
 print(blind.rt60, blind.edt, blind.is_blind)
 
 ir = libsonare.Audio.from_file("room_ir.wav")
@@ -258,7 +254,8 @@ stereo_result = libsonare.mastering_chain_stereo(
 ```
 
 `MasteringChainResult` exposes the rendered samples plus loudness telemetry
-(`input_lufs`, `output_lufs`, `applied_gain_db`, `latency_samples`).
+(`input_lufs`, `output_lufs`, `applied_gain_db`) and the per-stage names
+(`stages`).
 
 ### Mastering presets
 
@@ -307,7 +304,7 @@ offline = libsonare.mix_stereo(
 
 mixer = libsonare.Mixer.from_scene_json(scene_json, sample_rate=sr, block_size=512)
 try:
-    block_l, block_r = mixer.process_stereo(
+    block_l, block_r, _sr = mixer.process_stereo(
         [vocal_block_l, return_block_l],
         [vocal_block_r, return_block_r],
     )
@@ -517,8 +514,7 @@ with libsonare.StreamingMasteringChain({
     "dynamics.transientShaper.attackGainDb": 1.5,
 }) as chain:
     chain.prepare(sample_rate=48000, max_block_size=512, num_channels=1)
-    print(chain.stage_names())
-    print(f"latency = {chain.latency_samples()} samples")
+    print(f"latency = {chain.latency_samples} samples")
 
     out_block = chain.process_mono([0.0] * 512)
     # Stereo:
@@ -685,7 +681,7 @@ sonare midi-render --in project.json -o out.wav --synth saw-lead
 - **Decomposition & loudness**: NMF decomposition, nearest-neighbour filtering, multichannel LUFS, EBU R128 LRA
 - **Mastering & metering**: 66 named processors, preset chains (`master_audio`), dynamics / repair specialist functions, and a `metering_*` / `waveform_peaks` family
 - **Mixing**: scene-driven `Mixer`, `mix_stereo`, built-in scene presets
-- **Instruments & synthesis**: NativeSynth (`SynthPatch` / presets), built-in oscillator, SoundFont (SF2) playback, host-instrument bounce
+- **Instruments & synthesis**: NativeSynth (`SynthPatch` / presets — 12 synthesis engines incl. physically-modeled piano/strings/winds, being tuned over time), built-in oscillator, SoundFont (SF2) playback, host-instrument bounce
 - **Real-time**: `RealtimeEngine` (transport / clips / MIDI / capture), `RealtimeVoiceChanger`, `StreamAnalyzer`
 - **Room acoustics**: blind RT60 / EDT, `estimate_room`, `synthesize_rir`, `room_morph`
 - **Conversions**: Hz / mel / MIDI / note, frames / time
