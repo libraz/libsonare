@@ -51,6 +51,9 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
   const float base = config_.depth_ms;
   const float swing = config_.depth_ms;
   const float ms_to_samp = 0.001f * static_cast<float>(sample_rate_);
+  // Stereo-pair processor: the horn/drum rotor state exists for two planes only,
+  // so planes beyond the pair pass through dry (see the registry's
+  // stereoPairOnly classification).
   const int active = std::min(num_channels, 2);
   for (int i = 0; i < num_samples; ++i) {
     for (int ch = 0; ch < active; ++ch) {

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -142,6 +143,19 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
       left[i] = dry * in_l + wet * 0.5f * (wet_l + wet_r);
     }
   }
+}
+
+int VelvetReverb::tail_samples() const noexcept {
+  // The velvet-noise taps span one effective T60 (the same rt60 the tap tables
+  // are built for in prepare()), so the tail decays over that window.
+  const float rt60 =
+      std::max(0.05f, config_.reverb_time_s * (0.5f + std::clamp(config_.decay, 0.0f, 1.0f)));
+  const double samples = static_cast<double>(rt60) * sample_rate_;
+  if (samples <= 0.0) return 0;
+  if (samples >= static_cast<double>(std::numeric_limits<int>::max())) {
+    return std::numeric_limits<int>::max();
+  }
+  return static_cast<int>(std::ceil(samples));
 }
 
 bool VelvetReverb::set_parameter(unsigned int param_id, float value) {

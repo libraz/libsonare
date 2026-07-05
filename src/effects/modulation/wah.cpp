@@ -31,6 +31,9 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
   const float lo = std::min(config_.min_hz, config_.max_hz);
   const float hi = std::max(config_.min_hz, config_.max_hz);
   const float q = std::max(0.5f, config_.resonance);
+  // Stereo-pair processor: one bandpass filter per plane is allocated for two
+  // planes only, so planes beyond the pair pass through dry (see the registry's
+  // stereoPairOnly classification).
   const int active = std::min(num_channels, static_cast<int>(filters_.size()));
   for (int i = 0; i < num_samples; ++i) {
     // LFO in [-1, 1] -> a [0, 1] sweep position -> centre frequency.

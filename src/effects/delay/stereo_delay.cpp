@@ -1,6 +1,8 @@
 #include "effects/delay/stereo_delay.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 #include "rt/scoped_no_denormals.h"
 
@@ -79,6 +81,26 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
       left[i] = dry * in_l + wet * 0.5f * (delayed_l + delayed_r);
     }
   }
+}
+
+int StereoDelay::tail_samples() const noexcept {
+  // After the input goes silent the last echo keeps circulating, losing the
+  // feedback gain on every pass through the (longer of the two) delay lines.
+  // The tail is the number of passes needed to decay 60 dB times that length.
+  const float delay_ms = std::max(config_.delay_time_l_ms, config_.delay_time_r_ms);
+  const float delay_samples =
+      std::clamp(delay_ms, 0.0f, kMaxDelayMs) * 0.001f * static_cast<float>(sample_rate_);
+  const float fb = std::clamp(config_.feedback, 0.0f, 0.95f);
+  double passes = 1.0;
+  if (fb > 0.0f) {
+    passes = std::max(1.0, std::log(1000.0) / -std::log(static_cast<double>(fb)));
+  }
+  const double samples = static_cast<double>(delay_samples) * passes;
+  if (samples <= 0.0) return 0;
+  if (samples >= static_cast<double>(std::numeric_limits<int>::max())) {
+    return std::numeric_limits<int>::max();
+  }
+  return static_cast<int>(std::ceil(samples));
 }
 
 void StereoDelay::reset() {

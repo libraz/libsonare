@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -95,6 +96,19 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
       left[i] = dry * in_l + wet * 0.5f * (out_l + out_r);
     }
   }
+}
+
+int FdnReverb::tail_samples() const noexcept {
+  // The low-frequency band has the longest T60 in the network (the HF band is
+  // shortened by hf_damping, see update_absorption()), so t60_lf bounds the
+  // audible tail. Mirror the T60 mapping used there.
+  const float t60_lf = std::max(0.01f, std::clamp(config_.decay, 0.0f, 1.5f) * 10.0f);
+  const double samples = static_cast<double>(t60_lf) * sample_rate_;
+  if (samples <= 0.0) return 0;
+  if (samples >= static_cast<double>(std::numeric_limits<int>::max())) {
+    return std::numeric_limits<int>::max();
+  }
+  return static_cast<int>(std::ceil(samples));
 }
 
 bool FdnReverb::set_parameter(unsigned int param_id, float value) {

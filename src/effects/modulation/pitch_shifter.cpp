@@ -60,6 +60,9 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   // The read position drifts relative to the write head at (1 - ratio) samples
   // per sample; wrapping it in [0, window) is what repitches the grain.
   const float step = 1.0f - ratio;
+  // Stereo-pair processor: grain buffers exist for two planes only, so planes
+  // beyond the pair pass through dry (see the registry's stereoPairOnly
+  // classification).
   const int active = std::min(num_channels, 2);
   for (int i = 0; i < num_samples; ++i) {
     // Advance the shared grain phase and derive the two tap positions/gains.

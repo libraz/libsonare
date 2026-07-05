@@ -528,7 +528,7 @@ TEST_CASE(
   // The inherently-stereo set: stereo-image processors, eq.midSide,
   // multiband.imager, and every reverb/modulation/delay effect operate on the
   // front L/R pair and pass surround planes through dry.
-  const std::array<const char*, 20> spo = {"stereo.imager",
+  const std::array<const char*, 24> spo = {"stereo.imager",
                                            "stereo.monoMaker",
                                            "stereo.stereoBalance",
                                            "stereo.haasEnhancer",
@@ -547,6 +547,10 @@ TEST_CASE(
                                            "effects.modulation.ensemble",
                                            "effects.modulation.flanger",
                                            "effects.modulation.phaser",
+                                           "effects.modulation.wah",
+                                           "effects.modulation.autoWah",
+                                           "effects.modulation.rotary",
+                                           "effects.modulation.pitchShifter",
                                            "effects.delay.stereo"};
   for (const char* id : spo) {
     REQUIRE(channel_policy(id) == ChannelPolicy::StereoPairOnly);

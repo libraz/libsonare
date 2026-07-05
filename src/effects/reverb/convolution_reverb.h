@@ -66,8 +66,14 @@ class ConvolutionReverb : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   /// Latency equals the partitioned-convolution block size: input is buffered
-  /// until a full partition is available before being processed.
-  int latency_samples() const noexcept override { return partition_size_; }
+  /// until a full partition is available before being processed. An empty IR
+  /// makes process() a true passthrough (no buffering), so it reports no latency.
+  int latency_samples() const noexcept override {
+    return (ir_.empty() || partition_size_ <= 0) ? 0 : partition_size_;
+  }
+  /// After the input goes silent the convolver keeps emitting the impulse
+  /// response, so the decay tail equals the loaded/synthesized IR length.
+  int tail_samples() const noexcept override { return static_cast<int>(ir_.size()); }
   int ir_size() const noexcept { return static_cast<int>(ir_.size()); }
 
  protected:

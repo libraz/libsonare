@@ -152,6 +152,14 @@ ChannelPolicy channel_policy(const std::string& id) {
       "effects.modulation.ensemble",
       "effects.modulation.flanger",
       "effects.modulation.phaser",
+      // Wah / auto-wah run one bandpass per plane but allocate only a stereo
+      // pair; rotary and the pitch shifter cap their inner loop at two planes.
+      // All four therefore process planes 0/1 and pass any surround plane through
+      // dry, so classify them stereo-pair-only rather than multichannel.
+      "effects.modulation.wah",
+      "effects.modulation.autoWah",
+      "effects.modulation.rotary",
+      "effects.modulation.pitchShifter",
       "effects.delay.stereo",
   };
   return kStereoPairOnly.count(id) != 0 ? ChannelPolicy::StereoPairOnly

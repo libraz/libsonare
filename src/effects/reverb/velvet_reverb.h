@@ -27,6 +27,7 @@ class VelvetReverb : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
 
   // Shape parameters (index order matches sibling reverbs):
   //   0 = decay
