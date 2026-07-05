@@ -29,6 +29,9 @@ _SYNTH_ENGINE_MODES = {
     "reed": 10,
     "brass": 11,
     "flute": 12,
+    "plucked-string": 13,
+    "vocal": 14,
+    "free-reed": 15,
 }
 _SYNTH_OSC_WAVEFORMS = {
     "default": 0,
