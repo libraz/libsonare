@@ -221,6 +221,7 @@ val js_mastering_stereo_analysis_names() {
 
 val js_mastering_process(std::string processor_name, val samples, int sample_rate, val params) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   auto result = mastering::api::apply_named_processor(
       processor_name, data.data(), data.size(), sample_rate, masteringParamsFromObject(params));
   val out = val::object();
@@ -237,6 +238,12 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
                                 int sample_rate, val params) {
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
+  if (left.size() != right.size()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
+  }
+  validate_offline_audio_input(left.data(), left.size(), sample_rate);
+  validate_offline_audio_input(right.data(), right.size(), sample_rate);
   auto result = mastering::api::apply_named_processor_stereo(processor_name, left.data(),
                                                              right.data(), left.size(), sample_rate,
                                                              masteringParamsFromObject(params));
@@ -256,6 +263,8 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
   std::vector<float> source = float32ArrayToVector(source_samples);
   std::vector<float> reference = float32ArrayToVector(reference_samples);
   // source and reference may have independent lengths.
+  validate_offline_audio_input(source.data(), source.size(), sample_rate);
+  validate_offline_audio_input(reference.data(), reference.size(), sample_rate);
   auto result = mastering::api::apply_named_pair_processor(
       processor_name, source.data(), reference.data(), source.size(), reference.size(), sample_rate,
       masteringParamsFromObject(params));
@@ -274,6 +283,8 @@ std::string js_mastering_pair_analyze(std::string analysis_name, val source_samp
   std::vector<float> source = float32ArrayToVector(source_samples);
   std::vector<float> reference = float32ArrayToVector(reference_samples);
   // source and reference may have independent lengths.
+  validate_offline_audio_input(source.data(), source.size(), sample_rate);
+  validate_offline_audio_input(reference.data(), reference.size(), sample_rate);
   return mastering::api::analyze_named_pair(analysis_name, source.data(), reference.data(),
                                             source.size(), reference.size(), sample_rate,
                                             masteringParamsFromObject(params));
@@ -283,12 +294,19 @@ std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samp
                                         val right_samples, int sample_rate, val params) {
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
+  if (left.size() != right.size()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "stereo channel lengths must match");
+  }
+  validate_offline_audio_input(left.data(), left.size(), sample_rate);
+  validate_offline_audio_input(right.data(), right.size(), sample_rate);
   return mastering::api::analyze_named_stereo(analysis_name, left.data(), right.data(), left.size(),
                                               sample_rate, masteringParamsFromObject(params));
 }
 
 std::string js_mastering_assistant_suggest(val samples, int sample_rate, val params_obj) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
   const mastering::assistant::AssistantConfig config =
       mastering::assistant::assistant_config_from_params(params.data(), params.size());
@@ -299,6 +317,7 @@ std::string js_mastering_assistant_suggest(val samples, int sample_rate, val par
 
 std::string js_mastering_audio_profile(val samples, int sample_rate, val params_obj) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
   const mastering::assistant::AudioProfileConfig config =
       mastering::assistant::audio_profile_config_from_params(params.data(), params.size());
