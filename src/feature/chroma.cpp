@@ -232,29 +232,31 @@ float apply_tuning_to_fmin(float fmin, float tuning, int bins_per_octave) {
 }
 
 /// @brief Applies a centered Hann smoothing kernel of length @p win along axis=time.
+///
+/// Matches librosa.feature.chroma_cens's smoothing: a SYMMETRIC Hann window
+/// (get_window(..., fftbins=False)) normalized to unit sum, convolved with the
+/// signal at mode='same' — i.e. zero-padded at the boundaries (out-of-range
+/// samples contribute nothing), not reflected. Callers pass win_len_smooth + 2
+/// (the symmetric Hann's endpoints are zero, so this yields win_len_smooth
+/// effective taps, as librosa intends).
 std::vector<float> smooth_rows_hann(const std::vector<float>& m, int rows, int cols, int win) {
   if (win <= 1 || cols == 0) return m;
-  // Shared periodic Hann (sym=False), matching scipy/librosa get_window(fftbins=True),
-  // then normalize by its sum so the kernel is a moving weighted average.
-  std::vector<float> kernel = create_window(WindowType::Hann, win, /*periodic=*/true);
+  std::vector<float> kernel = create_window(WindowType::Hann, win, /*periodic=*/false);
   double sum = 0.0;
   for (int i = 0; i < win; ++i) sum += kernel[i];
   if (sum > 0.0) {
     for (int i = 0; i < win; ++i) kernel[i] /= static_cast<float>(sum);
   }
   std::vector<float> out(static_cast<size_t>(rows) * cols, 0.0f);
-  int half = win / 2;
+  // scipy.signal.convolve(..., mode='same') aligns the kernel so its (win-1)/2
+  // offset lands on the current sample; out-of-range taps are treated as zero.
+  const int half = (win - 1) / 2;
   for (int r = 0; r < rows; ++r) {
     for (int t = 0; t < cols; ++t) {
       float acc = 0.0f;
       for (int k = 0; k < win; ++k) {
-        int src = t + k - half;
-        if (src < 0)
-          src = -src;
-        else if (src >= cols)
-          src = 2 * cols - src - 2;
-        if (src < 0) src = 0;
-        if (src >= cols) src = cols - 1;
+        const int src = t + k - half;
+        if (src < 0 || src >= cols) continue;  // zero-pad, not reflect
         acc += kernel[k] * m[r * cols + src];
       }
       out[r * cols + t] = acc;
@@ -368,9 +370,11 @@ Chroma chroma_cens(const Audio& audio, const ChromaCensConfig& config) {
     data[i] = q;
   }
 
-  // Step 4: Hann smoothing across time, then final L2 normalize.
+  // Step 4: Hann smoothing across time, then final L2 normalize. librosa builds
+  // the smoothing window as get_window('hann', win_len_smooth + 2, fftbins=False)
+  // — the symmetric Hann's zero endpoints leave win_len_smooth effective taps.
   if (config.win_len_smooth > 1) {
-    data = smooth_rows_hann(data, n_chroma, n_frames, config.win_len_smooth);
+    data = smooth_rows_hann(data, n_chroma, n_frames, config.win_len_smooth + 2);
   }
   if (n_frames > 0) {
     data = normalize_matrix(data.data(), n_chroma, n_frames, /*axis=*/0, NormType::L2);

@@ -251,3 +251,51 @@ TEST_CASE("chroma_cqt matches librosa with bins_per_octave=36 (centered fold)",
     REQUIRE(std::abs(our_mean[c] - ref_mean[c].as_float()) < 0.15f);
   }
 }
+
+TEST_CASE("chroma_cens reference compatibility",
+          "[.][slow][chroma_cqt][reference][librosa-parity]") {
+  // librosa.feature.chroma_cens smooths the quantized chromagram with a
+  // SYMMETRIC Hann window of length win_len_smooth + 2 (get_window(fftbins=False))
+  // convolved at mode='same' (zero-padded edges). The per-class means below
+  // reject the previous periodic-window / reflected-edge implementation, whose
+  // off-triad classes drifted away from librosa's near-zero reference.
+  auto json = JsonReader::parse_file("tests/librosa/reference/chroma_cens.json");
+  const auto& data = json["data"];
+
+  const int sr = data["sr"].as_int();
+  const int hop_length = data["hop_length"].as_int();
+  const int win_len_smooth = data["win_len_smooth"].as_int();
+  const size_t n_samples = static_cast<size_t>(sr);  // duration = 1.0 s
+
+  // Reference signal: C major chord (C4 + E4 + G4), matches the generator.
+  std::vector<float> samples(n_samples);
+  for (size_t i = 0; i < n_samples; ++i) {
+    float t = static_cast<float>(i) / static_cast<float>(sr);
+    samples[i] = (1.0f / 3.0f) * (std::sin(kTwoPi * 261.63f * t) + std::sin(kTwoPi * 329.63f * t) +
+                                  std::sin(kTwoPi * 392.0f * t));
+  }
+  Audio audio = Audio::from_buffer(samples.data(), n_samples, sr);
+
+  ChromaCensConfig cfg;
+  cfg.base.cqt.hop_length = hop_length;
+  cfg.base.cqt.fmin = 32.703f;  // librosa.note_to_hz('C1')
+  cfg.base.cqt.bins_per_octave = 12;
+  cfg.base.cqt.n_bins = 12 * 7;  // n_octaves = 7
+  cfg.base.n_chroma = 12;
+  cfg.win_len_smooth = win_len_smooth;
+  Chroma chroma = chroma_cens(audio, cfg);
+
+  const auto& shape = data["shape"].as_array();
+  REQUIRE(chroma.n_chroma() == shape[0].as_int());
+  REQUIRE(std::abs(chroma.n_frames() - shape[1].as_int()) <= 1);
+
+  // Per-class means track librosa within the CQT float32 tolerance. The triad
+  // classes (C, E, G) dominate and the off-triad classes stay near zero.
+  const auto& ref_mean = data["mean_per_class"].as_array();
+  auto our_mean = chroma.mean_energy();
+  REQUIRE(our_mean.size() == ref_mean.size());
+  for (size_t c = 0; c < ref_mean.size(); ++c) {
+    CAPTURE(c, our_mean[c], ref_mean[c].as_float());
+    REQUIRE(std::abs(our_mean[c] - ref_mean[c].as_float()) < 0.1f);
+  }
+}
