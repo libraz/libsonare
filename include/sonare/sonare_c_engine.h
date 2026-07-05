@@ -182,6 +182,14 @@ SonareError sonare_engine_set_master_strip_eq_band_json(SonareRealtimeEngine* en
 SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine* engine,
                                                            unsigned int insert_index, int bypassed,
                                                            int reset_on_bypass);
+/// @brief Toggles bypass for a bus strip insert by insert index.
+/// @details @p bus_id must already exist via sonare_engine_set_track_buses and
+///   carry a strip configured by sonare_engine_set_bus_strip_json. Control-thread
+///   mutation; do not call concurrently with @ref sonare_engine_process. Returns
+///   SONARE_ERROR_INVALID_PARAMETER if the bus or insert is unknown.
+SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareRealtimeEngine* engine,
+                                                        uint32_t bus_id, unsigned int insert_index,
+                                                        int bypassed, int reset_on_bypass);
 /// @brief Realtime change of one track-strip insert parameter, addressed by the
 ///        processor's JSON-key parameter name.
 /// @details @p param_name is a key returned by @ref sonare_mastering_insert_param_info

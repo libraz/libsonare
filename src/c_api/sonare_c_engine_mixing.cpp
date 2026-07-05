@@ -242,6 +242,26 @@ SonareError sonare_engine_set_master_strip_insert_bypassed(SonareRealtimeEngine*
 #endif
 }
 
+SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareRealtimeEngine* engine,
+                                                        uint32_t bus_id, unsigned int insert_index,
+                                                        int bypassed, int reset_on_bypass) {
+  if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)bus_id;
+  (void)insert_index;
+  (void)bypassed;
+  (void)reset_on_bypass;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return engine->engine.set_bus_insert_bypassed(bus_id, insert_index, bypassed != 0,
+                                                reset_on_bypass != 0)
+             ? SONARE_OK
+             : SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
                                                                uint32_t track_id,
                                                                unsigned int insert_index,

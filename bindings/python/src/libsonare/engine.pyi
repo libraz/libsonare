@@ -141,6 +141,9 @@ class RealtimeEngine:
     def set_bus_strip_insert_param_by_name(
         self, bus_id: int, insert_index: int, param_name: str, value: float
     ) -> None: ...
+    def set_bus_strip_insert_bypassed(
+        self, bus_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
+    ) -> None: ...
     def resolve_track_insert_automation_id(
         self, track_id: int, insert_index: int, param_name: str
     ) -> int: ...

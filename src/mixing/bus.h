@@ -49,6 +49,11 @@ class BusProcessor : public rt::ProcessorBase {
   // Mirrors ChannelStrip::apply_insert_parameter.
   bool apply_insert_parameter(unsigned int insert_index, unsigned int param_id,
                               float value) noexcept;
+  // Toggles bypass for the insert at @p insert_index. When @p reset_on_bypass is
+  // true the processor is reset as it is bypassed. Returns false for an
+  // out-of-range insert. Mirrors ChannelStrip::set_insert_bypassed.
+  bool set_insert_bypassed(unsigned int insert_index, bool bypassed,
+                           bool reset_on_bypass = false) noexcept;
   // Resolves a processor JSON-key parameter name to its integer param_id for the
   // insert at @p insert_index, or -1 if unknown. Control-thread API: reads the
   // processor's static descriptor table, touching no mutable audio state. Mirrors

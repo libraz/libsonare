@@ -875,6 +875,12 @@ export interface WasmRealtimeEngine {
     paramName: string,
     value: number,
   ) => void;
+  setBusStripInsertBypassed: (
+    busId: number,
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass: boolean,
+  ) => void;
   resolveTrackInsertAutomationId: (
     trackId: number,
     insertIndex: number,

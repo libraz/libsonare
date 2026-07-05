@@ -228,6 +228,22 @@ void RealtimeEngineWasm::setMasterStripInsertBypassed(unsigned int insert_index,
 #endif
 }
 
+void RealtimeEngineWasm::setBusStripInsertBypassed(uint32_t bus_id, unsigned int insert_index,
+                                                   bool bypassed, bool reset_on_bypass) {
+#if defined(SONARE_WITH_MIXING)
+  if (!engine_.set_bus_insert_bypassed(bus_id, insert_index, bypassed, reset_on_bypass)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "invalid bus strip insert bypass target");
+  }
+#else
+  (void)bus_id;
+  (void)insert_index;
+  (void)bypassed;
+  (void)reset_on_bypass;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidState, "mixing support is not enabled");
+#endif
+}
+
 void RealtimeEngineWasm::setTrackStripInsertParamByName(uint32_t track_id,
                                                         unsigned int insert_index,
                                                         const std::string& param_name,
@@ -409,6 +425,7 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
       .function("setMasterStripInsertParamByName",
                 &RealtimeEngineWasm::setMasterStripInsertParamByName)
       .function("setBusStripInsertParamByName", &RealtimeEngineWasm::setBusStripInsertParamByName)
+      .function("setBusStripInsertBypassed", &RealtimeEngineWasm::setBusStripInsertBypassed)
       .function("resolveTrackInsertAutomationId",
                 &RealtimeEngineWasm::resolveTrackInsertAutomationId)
       .function("resolveMasterInsertAutomationId",

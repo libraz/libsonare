@@ -524,6 +524,15 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_char_p,
             ctypes.c_float,
         ]
+    if hasattr(lib, "sonare_engine_set_bus_strip_insert_bypassed"):
+        lib.sonare_engine_set_bus_strip_insert_bypassed.restype = ctypes.c_int32
+        lib.sonare_engine_set_bus_strip_insert_bypassed.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
     if hasattr(lib, "sonare_engine_resolve_track_insert_automation_id"):
         lib.sonare_engine_resolve_track_insert_automation_id.restype = ctypes.c_int32
         lib.sonare_engine_resolve_track_insert_automation_id.argtypes = [

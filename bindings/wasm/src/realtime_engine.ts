@@ -727,6 +727,16 @@ export class RealtimeEngine {
     this.native.setBusStripInsertParamByName(busId, insertIndex, paramName, value);
   }
 
+  /** Bus-strip counterpart of {@link setTrackStripInsertBypassed}. */
+  setBusStripInsertBypassed(
+    busId: number,
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    this.native.setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass);
+  }
+
   /**
    * Resolves a track-lane insert parameter (by its JSON-key name) to the
    * reserved automation id usable with `setAutomationLane` / `setParameter`.

@@ -705,6 +705,26 @@ TEST_CASE("TrackMixerRuntime applies scene EQ insert for a track lane", "[engine
   REQUIRE(std::abs(rms(bypassed_out) - rms(flat_out)) < 0.001);
 }
 
+TEST_CASE("TrackMixerRuntime toggles a bus insert bypass", "[engine][track_mixer]") {
+  constexpr int kBlock = 64;
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  bus.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "eq.parametric", "{}"});
+  REQUIRE(mixer.set_bus_strip(1, bus));
+
+  // Unknown bus, out-of-range insert, and unset bus id all fail; the resolved
+  // bus insert toggles successfully with and without reset-on-bypass.
+  REQUIRE_FALSE(mixer.set_bus_insert_bypassed(2, 0, true));
+  REQUIRE_FALSE(mixer.set_bus_insert_bypassed(1, 7, true));
+  REQUIRE_FALSE(mixer.set_bus_insert_bypassed(0, 0, true));
+  REQUIRE(mixer.set_bus_insert_bypassed(1, 0, true, true));
+  REQUIRE(mixer.set_bus_insert_bypassed(1, 0, false));
+}
+
 TEST_CASE("TrackMixerRuntime applies embedded EQ band changes", "[engine][track_mixer]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 4;

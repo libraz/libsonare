@@ -417,6 +417,18 @@ Napi::Value RealtimeEngineWrap::SetBusStripInsertParamByName(const Napi::Callbac
   return env.Undefined();
 }
 
+Napi::Value RealtimeEngineWrap::SetBusStripInsertBypassed(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t bus_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const unsigned int insert_index =
+      info.Length() > 1 ? info[1].As<Napi::Number>().Uint32Value() : 0;
+  const bool bypassed = info.Length() > 2 && info[2].As<Napi::Boolean>().Value();
+  const bool reset_on_bypass = info.Length() > 3 && info[3].As<Napi::Boolean>().Value();
+  ThrowIfError(env, sonare_engine_set_bus_strip_insert_bypassed(
+                        engine_, bus_id, insert_index, bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
+  return env.Undefined();
+}
+
 Napi::Value RealtimeEngineWrap::ResolveTrackInsertAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t track_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;

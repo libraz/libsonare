@@ -157,6 +157,8 @@ class RealtimeEngineWasm {
                                        float value);
   void setBusStripInsertParamByName(uint32_t bus_id, unsigned int insert_index,
                                     const std::string& param_name, float value);
+  void setBusStripInsertBypassed(uint32_t bus_id, unsigned int insert_index, bool bypassed,
+                                 bool reset_on_bypass);
   double resolveTrackInsertAutomationId(uint32_t track_id, unsigned int insert_index,
                                         const std::string& param_name);
   double resolveMasterInsertAutomationId(unsigned int insert_index, const std::string& param_name);

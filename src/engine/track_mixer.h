@@ -96,6 +96,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
   bool set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
                                  bool reset_on_bypass = false) noexcept;
+  // Toggles bypass for a bus insert. Control-thread only (not safe concurrently
+  // with process()). Resolves the bus by id like resolve_bus_insert_param, then
+  // applies the bypass like set_track_insert_bypassed. Returns false if the bus
+  // or insert is unknown.
+  bool set_bus_insert_bypassed(uint32_t bus_id, unsigned int insert_index, bool bypassed,
+                               bool reset_on_bypass = false) noexcept;
   // Control-thread resolution for a realtime insert-parameter change: maps a
   // track id + JSON-key parameter name to the strip's lane index and integer
   // param_id. Reads the lane snapshot and the processor's static descriptor

@@ -769,6 +769,24 @@ class RealtimeEngine(_EngineMidiMixin):
             )
         )
 
+    def set_bus_strip_insert_bypassed(
+        self, bus_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
+    ) -> None:
+        """Toggle bypass for a bus-strip insert.
+
+        Bus-strip counterpart of :meth:`set_track_strip_insert_bypassed`;
+        ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
+        """
+        _check(
+            _get_lib().sonare_engine_set_bus_strip_insert_bypassed(
+                self._require_handle(),
+                int(bus_id),
+                int(insert_index),
+                1 if bypassed else 0,
+                1 if reset_on_bypass else 0,
+            )
+        )
+
     def resolve_track_insert_automation_id(
         self, track_id: int, insert_index: int, param_name: str
     ) -> int:

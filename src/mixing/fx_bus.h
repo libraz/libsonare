@@ -36,6 +36,11 @@ class FxBus : public rt::ProcessorBase {
                                   const std::string& key) const noexcept {
     return bus_.insert_parameter_id_for_key(insert_index, key);
   }
+  /// Toggles bypass for an insert; forwards to BusProcessor.
+  bool set_insert_bypassed(unsigned int insert_index, bool bypassed,
+                           bool reset_on_bypass = false) noexcept {
+    return bus_.set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
+  }
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);
   void clear_insert_sidechains() noexcept;

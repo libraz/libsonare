@@ -111,6 +111,12 @@ bool RealtimeEngine::set_master_insert_bypassed(unsigned int insert_index, bool 
          owned_master_strip_->set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
 }
 
+bool RealtimeEngine::set_bus_insert_bypassed(uint32_t bus_id, unsigned int insert_index,
+                                             bool bypassed, bool reset_on_bypass) noexcept {
+  return track_mixer_runtime_.set_bus_insert_bypassed(bus_id, insert_index, bypassed,
+                                                      reset_on_bypass);
+}
+
 bool RealtimeEngine::set_track_insert_param(uint32_t track_id, unsigned int insert_index,
                                             const std::string& key, float value) noexcept {
   size_t lane_index = 0;

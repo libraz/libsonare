@@ -61,6 +61,16 @@ bool TrackMixerRuntime::set_track_insert_bypassed(uint32_t track_id, unsigned in
   return false;
 }
 
+bool TrackMixerRuntime::set_bus_insert_bypassed(uint32_t bus_id, unsigned int insert_index,
+                                                bool bypassed, bool reset_on_bypass) noexcept {
+  if (bus_id == 0) return false;
+  for (size_t i = 0; i < bus_configs_.size() && i < bus_states_.size(); ++i) {
+    if (bus_states_[i].bus_id != bus_id || bus_states_[i].bus == nullptr) continue;
+    return bus_states_[i].bus->set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
+  }
+  return false;
+}
+
 bool TrackMixerRuntime::resolve_track_insert_param(uint32_t track_id, unsigned int insert_index,
                                                    const std::string& key, size_t* out_lane_index,
                                                    unsigned int* out_param_id) noexcept {

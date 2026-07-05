@@ -342,6 +342,8 @@ class RealtimeEngine : private ClipPageRequestSink {
                                  bool reset_on_bypass = false) noexcept;
   bool set_master_insert_bypassed(unsigned int insert_index, bool bypassed,
                                   bool reset_on_bypass = false) noexcept;
+  bool set_bus_insert_bypassed(uint32_t bus_id, unsigned int insert_index, bool bypassed,
+                               bool reset_on_bypass = false) noexcept;
   // Realtime change of one channel-strip insert parameter, addressed by the
   // processor's JSON-key parameter name (the same key used in scene JSON). The
   // name is resolved to the integer param_id on the control thread, then applied

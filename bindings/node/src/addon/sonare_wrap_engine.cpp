@@ -162,6 +162,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
               "setMasterStripInsertParamByName"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripInsertParamByName>(
               "setBusStripInsertParamByName"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusStripInsertBypassed>(
+              "setBusStripInsertBypassed"),
           InstanceMethod<&RealtimeEngineWrap::ResolveTrackInsertAutomationId>(
               "resolveTrackInsertAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::ResolveMasterInsertAutomationId>(
