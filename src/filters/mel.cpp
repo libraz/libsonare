@@ -72,11 +72,17 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
   SONARE_CHECK(config.n_mels > 0, ErrorCode::InvalidParameter);
 
   int n_bins = n_fft / 2 + 1;
-  float fmax = config.fmax > 0 ? config.fmax : static_cast<float>(sr) / 2.0f;
+  const float nyquist = static_cast<float>(sr) / 2.0f;
+  float fmax = config.fmax > 0 ? config.fmax : nyquist;
+  // librosa allows fmax above Nyquist (it only warns); clamp to Nyquist rather
+  // than hard-erroring so a request for the full band does not fail. Bins above
+  // Nyquist do not exist, so Nyquist is the meaningful ceiling.
+  if (fmax > nyquist) {
+    fmax = nyquist;
+  }
   float fmin = config.fmin;
 
   SONARE_CHECK(fmax > fmin, ErrorCode::InvalidParameter);
-  SONARE_CHECK(fmax <= static_cast<float>(sr) / 2.0f, ErrorCode::InvalidParameter);
 
   /// Get Mel frequency points
   std::vector<float> mel_freqs = mel_frequencies(config.n_mels, fmin, fmax, config.htk);

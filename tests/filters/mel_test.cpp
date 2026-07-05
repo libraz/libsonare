@@ -8,6 +8,8 @@
 #include <cmath>
 #include <numeric>
 
+#include "util/exception.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -93,6 +95,35 @@ TEST_CASE("create_mel_filterbank triangular", "[mel]") {
     }
     REQUIRE(max_val > 0.0f);
   }
+}
+
+TEST_CASE("create_mel_filterbank clamps fmax above Nyquist", "[mel]") {
+  int sr = 22050;
+  int n_fft = 2048;
+  int n_bins = n_fft / 2 + 1;
+
+  // fmax = sr is above Nyquist (sr/2). librosa only warns; the builder clamps to
+  // Nyquist instead of throwing, so a request for the full band succeeds.
+  MelFilterConfig above;
+  above.n_mels = 40;
+  above.fmax = static_cast<float>(sr);
+
+  std::vector<float> fb_above;
+  REQUIRE_NOTHROW(fb_above = create_mel_filterbank(sr, n_fft, above));
+  REQUIRE(fb_above.size() == static_cast<size_t>(above.n_mels * n_bins));
+
+  // The clamped request is equivalent to explicitly asking for Nyquist.
+  MelFilterConfig nyquist = above;
+  nyquist.fmax = static_cast<float>(sr) / 2.0f;
+  std::vector<float> fb_nyquist = create_mel_filterbank(sr, n_fft, nyquist);
+  REQUIRE(fb_above == fb_nyquist);
+
+  // fmax <= fmin after clamping still throws (degenerate band).
+  MelFilterConfig degenerate;
+  degenerate.n_mels = 40;
+  degenerate.fmin = static_cast<float>(sr);  // >= Nyquist ceiling after clamp
+  degenerate.fmax = static_cast<float>(sr) * 2.0f;
+  REQUIRE_THROWS_AS(create_mel_filterbank(sr, n_fft, degenerate), sonare::SonareException);
 }
 
 TEST_CASE("create_mel_filterbank Slaney normalization", "[mel]") {
