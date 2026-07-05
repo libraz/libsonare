@@ -164,10 +164,23 @@ bool CcMap::observe_for_learn(const Ump& ump, CcBinding* out_binding) {
                             : static_cast<uint8_t>(ump.words[0] & 0x7Fu);
   const uint8_t channel = ump.channel();
 
+  // Multi-message controllers (14-bit CC pairs, RPN, NRPN) are assembled from a
+  // sequence of distinct CC numbers: a 14-bit pair sends its MSB on a CC < 32
+  // then its LSB on CC+32, and RPN/NRPN send selector CCs (98-101) followed by
+  // data-entry (6/38). The activity threshold below re-baselines whenever the
+  // observed CC changes, so applied to those assembly messages it would reset on
+  // every step and never let such a controller bind — leaving only standalone
+  // 7-bit CCs learnable with a threshold. Assembly / selector messages only
+  // accumulate state (they return false below), so they bypass the gate; the
+  // gate then guards the terminal commit of a standalone 7-bit controller.
+  const bool is_assembly_cc = cc == kDataEntryMsb || cc == kDataEntryLsb || cc == kNrpnLsb ||
+                              cc == kNrpnMsb || cc == kRpnLsb || cc == kRpnMsb || cc < 32 ||
+                              pending_cc_msb_valid_;
+
   // Activity threshold: a controller must MOVE by at least learn_min_movement_
   // (7-bit units) from its first observed value before any learn logic runs, so
   // idle / noise traffic does not bind. A threshold of 0 disables the gate.
-  if (learn_min_movement_ > 0) {
+  if (learn_min_movement_ > 0 && !is_assembly_cc) {
     if (!learn_baseline_valid_ || learn_baseline_cc_ != cc || learn_baseline_channel_ != channel) {
       learn_baseline_valid_ = true;
       learn_baseline_cc_ = cc;

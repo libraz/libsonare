@@ -113,7 +113,10 @@ class CcMap {
   /// (cc_number, channel) while armed — so idle / noise traffic (a controller
   /// sitting still, or jittering by less than the threshold) does not trigger a
   /// spurious learn. The threshold is compared in 7-bit units for both MIDI 1.0
-  /// (native 7-bit) and MIDI 2.0 (down-scaled) control-change values.
+  /// (native 7-bit) and MIDI 2.0 (down-scaled) control-change values. It applies
+  /// only to standalone 7-bit controllers; multi-message controllers (14-bit CC
+  /// pairs, RPN, NRPN) are assembled from a sequence of distinct CC numbers and
+  /// so bypass the per-CC movement gate.
   void begin_learn(uint32_t param_id, float min_value = 0.0f, float max_value = 1.0f,
                    uint8_t min_movement = 0) noexcept;
   /// Disarm a pending learn without binding.

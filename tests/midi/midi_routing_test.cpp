@@ -267,6 +267,67 @@ TEST_CASE("CcMap MIDI learn assembles RPN and NRPN selectors", "[midi]") {
   }
 }
 
+TEST_CASE("CcMap MIDI learn honors the movement gate for standalone CCs", "[midi]") {
+  CcMap map;
+  const uint8_t min_movement = 8;
+  map.begin_learn(70, 0.0f, 1.0f, min_movement);
+
+  CcBinding learned;
+  // First value establishes the baseline; a sub-threshold move does not bind.
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 74, 64), &learned));
+  REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 5, 74, 68), &learned));
+  REQUIRE(map.is_learning());
+  // A move past the threshold binds.
+  REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 5, 74, 100), &learned));
+  REQUIRE(learned.cc_number == 74);
+  REQUIRE(learned.channel == 5);
+  REQUIRE(learned.param_id == 70);
+}
+
+TEST_CASE("CcMap MIDI learn assembles multi-message controllers past the movement gate", "[midi]") {
+  const uint8_t min_movement = 16;
+
+  SECTION("14-bit CC pair") {
+    CcMap map;
+    map.begin_learn(88, -1.0f, 1.0f, min_movement);
+    CcBinding learned;
+    // The MSB/LSB arrive on distinct CC numbers; the movement gate must not
+    // re-baseline and swallow them.
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 2, 1, 64), &learned));
+    REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 2, 33, 12), &learned));
+    REQUIRE(learned.kind == sonare::midi::CcBindingKind::kControlChange14);
+    REQUIRE(learned.cc_number == 1);
+    REQUIRE(learned.cc_lsb_number == 33);
+    REQUIRE(learned.param_id == 88);
+  }
+
+  SECTION("RPN") {
+    CcMap map;
+    map.begin_learn(90, 0.0f, 1.0f, min_movement);
+    CcBinding learned;
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 3, 101, 0), &learned));
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 3, 100, 1), &learned));
+    REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 3, 6, 64), &learned));
+    REQUIRE(learned.kind == sonare::midi::CcBindingKind::kRpn);
+    REQUIRE(learned.selector_msb == 0);
+    REQUIRE(learned.selector_lsb == 1);
+    REQUIRE(learned.param_id == 90);
+  }
+
+  SECTION("NRPN") {
+    CcMap map;
+    map.begin_learn(91, 0.0f, 1.0f, min_movement);
+    CcBinding learned;
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 4, 99, 12), &learned));
+    REQUIRE_FALSE(map.observe_for_learn(make_midi1_control_change(0, 4, 98, 34), &learned));
+    REQUIRE(map.observe_for_learn(make_midi1_control_change(0, 4, 38, 5), &learned));
+    REQUIRE(learned.kind == sonare::midi::CcBindingKind::kNrpn);
+    REQUIRE(learned.selector_msb == 12);
+    REQUIRE(learned.selector_lsb == 34);
+    REQUIRE(learned.param_id == 91);
+  }
+}
+
 TEST_CASE("CcMap observe_live_cc decodes 14-bit CC at full resolution", "[midi]") {
   CcMap map;
   CcBinding b;
