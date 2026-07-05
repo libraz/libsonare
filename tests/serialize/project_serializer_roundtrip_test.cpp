@@ -196,6 +196,12 @@ Fixture make_fixture() {
   scene.strips.push_back(s);
   mixing::api::Bus master("bus.main", "master");
   master.layout = ChannelLayout::FivePointOne;  // surround bus layout must persist
+  // Bus output trim / width / polarity persistence (regression guard: these once
+  // round-tripped to their defaults because the project serializer's bus walker
+  // dropped them, so a reloaded project rendered differently from the saved one).
+  master.input_trim_db = -2.5f;
+  master.width = 0.75f;
+  master.polarity_invert_left = true;
   mixing::api::Insert master_insert;
   master_insert.slot = mixing::api::InsertSlot::PostFader;
   master_insert.processor_name = "sonare.compressor";
@@ -204,6 +210,8 @@ Fixture make_fixture() {
   master.inserts.push_back(master_insert);
   scene.buses.push_back(master);
   mixing::api::Bus fx("bus.fx", "aux");
+  fx.width = 1.5f;
+  fx.polarity_invert_right = true;
   scene.buses.push_back(fx);
 
   // Two assist sidecars: one JSON-ish text payload, one true binary payload
@@ -328,7 +336,9 @@ bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
 
 bool eq(const mixing::api::Bus& a, const mixing::api::Bus& b) {
   if (a.id != b.id || a.role != b.role || a.layout != b.layout ||
-      a.inserts.size() != b.inserts.size()) {
+      a.input_trim_db != b.input_trim_db || a.width != b.width ||
+      a.polarity_invert_left != b.polarity_invert_left ||
+      a.polarity_invert_right != b.polarity_invert_right || a.inserts.size() != b.inserts.size()) {
     return false;
   }
   for (size_t i = 0; i < a.inserts.size(); ++i) {

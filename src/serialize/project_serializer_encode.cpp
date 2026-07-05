@@ -376,6 +376,21 @@ Value scene_to_value(const mixing::api::Scene& scene) {
     if (b.layout != ChannelLayout::Stereo) {
       bo["layout"] = channel_layout_to_string(b.layout);
     }
+    // Trim / width / polarity are omitted at their defaults so an unmodified bus
+    // serializes byte-identically to before these fields were persisted (mirrors
+    // scene_json.cpp).
+    if (b.input_trim_db != 0.0f) {
+      bo["inputTrimDb"] = b.input_trim_db;
+    }
+    if (b.width != 1.0f) {
+      bo["width"] = b.width;
+    }
+    if (b.polarity_invert_left) {
+      bo["polarityInvertLeft"] = b.polarity_invert_left;
+    }
+    if (b.polarity_invert_right) {
+      bo["polarityInvertRight"] = b.polarity_invert_right;
+    }
     Array inserts;
     for (const auto& ins : b.inserts) inserts.push_back(insert_to_json(ins));
     bo["inserts"] = std::move(inserts);

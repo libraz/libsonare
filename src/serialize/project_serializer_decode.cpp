@@ -322,6 +322,11 @@ mixing::api::Scene scene_from_value(const Value& v) {
         ChannelLayout parsed = ChannelLayout::Stereo;
         if (channel_layout_from_string(layout, parsed)) b.layout = parsed;
       }
+      b.input_trim_db = static_cast<float>(num_or_any(bv, "inputTrimDb", "input_trim_db", 0.0));
+      b.width = static_cast<float>(num_or(bv, "width", 1.0));
+      b.polarity_invert_left = bool_or_any(bv, "polarityInvertLeft", "polarity_invert_left", false);
+      b.polarity_invert_right =
+          bool_or_any(bv, "polarityInvertRight", "polarity_invert_right", false);
       if (const auto* iarr = array_at(bv, "inserts")) {
         for (const auto& iv : *iarr) {
           if (iv.is_object()) b.inserts.push_back(insert_from_json(iv));
