@@ -663,8 +663,16 @@ void RealtimeEngineWasm::pushMidiCc(uint32_t destination_id, int group, int chan
 // the C ABI sonare_engine_push_midi_sysex.
 void RealtimeEngineWasm::pushMidiSysex(uint32_t destination_id, val data, int64_t render_frame) {
   std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  // Distinguish the two rejection classes the C ABI reports (it bypasses the
+  // C-ABI translation unit here, so the mapping is reproduced): a malformed
+  // request (empty frame) is InvalidParameter, while an oversized payload or a
+  // full command queue is OutOfMemory (transient back-pressure vs bad input).
+  if (bytes.empty()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "pushMidiSysex: data must be a non-empty SysEx frame");
+  }
   if (!engine_.push_midi_sysex(destination_id, bytes.data(), bytes.size(), render_frame)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   "failed to queue MIDI SysEx command");
   }
 }
