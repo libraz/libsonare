@@ -13,6 +13,7 @@
 namespace sonare::metering {
 
 using sonare::constants::kEpsilon;
+using sonare::constants::kFloorDb;
 
 namespace {
 
@@ -27,21 +28,25 @@ float frame_rms_db(const float* data, size_t start, size_t end) {
 }  // namespace
 
 float peak_db(const Audio& audio) {
-  if (audio.empty()) return -std::numeric_limits<float>::infinity();
+  // Silence/empty reports the shared finite dB floor (kFloorDb, -120 dB) rather
+  // than -inf, matching the true-peak / spectrum / dynamic-range meters. A finite
+  // floor is JSON-safe (-inf serializes to null and silently drops the field).
+  if (audio.empty()) return kFloorDb;
 
   const float* data = audio.data();
   const float peak = peak_abs(data, audio.size());
 
-  if (peak < kEpsilon) return -std::numeric_limits<float>::infinity();
+  if (peak < kEpsilon) return kFloorDb;
   return linear_to_db(peak);
 }
 
 float rms_db(const Audio& audio) {
-  if (audio.empty()) return -std::numeric_limits<float>::infinity();
+  // Silence/empty reports kFloorDb (see peak_db) instead of a JSON-unsafe -inf.
+  if (audio.empty()) return kFloorDb;
 
   const float* data = audio.data();
   const float audio_rms = rms(data, audio.size());
-  if (audio_rms < kEpsilon) return -std::numeric_limits<float>::infinity();
+  if (audio_rms < kEpsilon) return kFloorDb;
   return linear_to_db(audio_rms);
 }
 

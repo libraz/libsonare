@@ -117,12 +117,15 @@ TEST_CASE("meter dc offset", "[meter]") {
   REQUIRE_THAT(metering::dc_offset(audio), WithinAbs(0.25f, 0.001f));
 }
 
-TEST_CASE("meter silence returns non-finite peak and rms", "[meter]") {
+TEST_CASE("meter silence reports the finite dB floor for peak and rms", "[meter]") {
   const std::vector<float> samples(16, 0.0f);
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
 
-  REQUIRE(!std::isfinite(metering::peak_db(audio)));
-  REQUIRE(!std::isfinite(metering::rms_db(audio)));
+  // Silence reports the shared finite floor (kFloorDb), not -inf: the true-peak /
+  // spectrum / dynamic-range meters already do, and -inf serializes to null in
+  // JSON (silently dropping the field).
+  REQUIRE(metering::peak_db(audio) == constants::kFloorDb);
+  REQUIRE(metering::rms_db(audio) == constants::kFloorDb);
   // Crest factor of silence is undefined; reported as a usable 0 dB, not +inf.
   REQUIRE_THAT(metering::crest_factor_db(audio), WithinAbs(0.0f, 0.0f));
 }
