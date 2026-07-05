@@ -249,6 +249,34 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.flute.jet_turbulence = std::clamp(sanitize(p.flute.jet_turbulence, 0.0f), 0.0f, 1.0f);
   p.flute.edge_hysteresis = std::clamp(sanitize(p.flute.edge_hysteresis, 0.0f), 0.0f, 1.0f);
   p.flute.vortex = std::clamp(sanitize(p.flute.vortex, 0.0f), 0.0f, 1.0f);
+  p.plucked_string.brightness = std::clamp(sanitize(p.plucked_string.brightness, 0.7f), 0.0f, 1.0f);
+  p.plucked_string.decay_s = std::clamp(sanitize(p.plucked_string.decay_s, 4.0f), 0.05f, 60.0f);
+  p.plucked_string.decay_stretch =
+      std::clamp(sanitize(p.plucked_string.decay_stretch, 0.5f), 0.0f, 1.0f);
+  p.plucked_string.pick_position =
+      std::clamp(sanitize(p.plucked_string.pick_position, 0.2f), 0.0f, 0.5f);
+  p.plucked_string.exc_brightness =
+      std::clamp(sanitize(p.plucked_string.exc_brightness, 0.85f), 0.0f, 1.0f);
+  p.plucked_string.vel_to_brightness =
+      std::clamp(sanitize(p.plucked_string.vel_to_brightness, 0.6f), 0.0f, 1.0f);
+  p.plucked_string.release_damp_s =
+      std::clamp(sanitize(p.plucked_string.release_damp_s, 0.12f), 0.01f, 10.0f);
+  p.plucked_string.buzz = std::clamp(sanitize(p.plucked_string.buzz, 0.0f), 0.0f, 1.0f);
+  p.vocal.vowel = std::clamp(p.vocal.vowel, 0, kVocalFormants - 1);
+  p.vocal.brightness = std::clamp(sanitize(p.vocal.brightness, 0.5f), 0.0f, 1.0f);
+  p.vocal.breath_noise = std::clamp(sanitize(p.vocal.breath_noise, 0.1f), 0.0f, 1.0f);
+  p.vocal.vibrato_rate_hz = std::clamp(sanitize(p.vocal.vibrato_rate_hz, 5.5f), 0.1f, 12.0f);
+  p.vocal.vibrato_depth = std::clamp(sanitize(p.vocal.vibrato_depth, 0.3f), 0.0f, 1.0f);
+  p.vocal.attack_ms = std::clamp(sanitize(p.vocal.attack_ms, 30.0f), 1.0f, 2000.0f);
+  p.vocal.release_ms = std::clamp(sanitize(p.vocal.release_ms, 120.0f), 1.0f, 5000.0f);
+  p.free_reed.brightness = std::clamp(sanitize(p.free_reed.brightness, 0.6f), 0.0f, 1.0f);
+  p.free_reed.reed_stiffness = std::clamp(sanitize(p.free_reed.reed_stiffness, 0.5f), 0.0f, 1.0f);
+  p.free_reed.breath_pressure = std::clamp(sanitize(p.free_reed.breath_pressure, 0.7f), 0.0f, 1.0f);
+  p.free_reed.vel_to_breath = std::clamp(sanitize(p.free_reed.vel_to_breath, 0.5f), 0.0f, 1.0f);
+  p.free_reed.detune = std::clamp(sanitize(p.free_reed.detune, 0.3f), 0.0f, 1.0f);
+  p.free_reed.attack_ms = std::clamp(sanitize(p.free_reed.attack_ms, 20.0f), 1.0f, 2000.0f);
+  p.free_reed.release_ms = std::clamp(sanitize(p.free_reed.release_ms, 80.0f), 1.0f, 5000.0f);
+  p.free_reed.breath_noise = std::clamp(sanitize(p.free_reed.breath_noise, 0.08f), 0.0f, 1.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 4) p.body = BodyType::kNone;
   p.body_mix = std::clamp(sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);
@@ -319,6 +347,16 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   }
   if (p.mode == SynthEngineMode::kFlute) {
     flute.start(p.flute, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kPluckedString) {
+    plucked_string.start(p.plucked_string, sample_rate, note, velocity,
+                         voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kVocal) {
+    vocal.start(p.vocal, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kFreeReed) {
+    free_reed.start(p.free_reed, sample_rate, note, velocity, voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -479,6 +517,12 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = brass.render(common);
   } else if (patch->mode == SynthEngineMode::kFlute) {
     sample = flute.render(common);
+  } else if (patch->mode == SynthEngineMode::kPluckedString) {
+    sample = plucked_string.render(common);
+  } else if (patch->mode == SynthEngineMode::kVocal) {
+    sample = vocal.render(common);
+  } else if (patch->mode == SynthEngineMode::kFreeReed) {
+    sample = free_reed.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -524,6 +568,9 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kReed) reed.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kBrass) brass.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kFlute) flute.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kPluckedString) plucked_string.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kVocal) vocal.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kFreeReed) free_reed.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -540,6 +587,9 @@ void NativeSynthVoice::kill() noexcept {
   reed.kill();
   brass.kill();
   flute.kill();
+  plucked_string.kill();
+  vocal.kill();
+  free_reed.kill();
   active = false;
   releasing = false;
 }
@@ -648,6 +698,16 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
                           0.0f);
   } else {
     flute_buffers_.clear();
+  }
+  // Plucked string: one string delay span per voice slot. The only allocation
+  // site; voices attach their span at note-on.
+  plucked_string_capacity_ = plucked_string_buffer_capacity(sample_rate_);
+  plucked_string_mode_ = config_.patch.mode == SynthEngineMode::kPluckedString;
+  if (plucked_string_mode_) {
+    plucked_string_buffers_.assign(
+        pool_.size() * static_cast<size_t>(plucked_string_slab_capacity(sample_rate_)), 0.0f);
+  } else {
+    plucked_string_buffers_.clear();
   }
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
@@ -817,6 +877,11 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
     voice->flute.attach(
         flute_buffers_.data() + static_cast<size_t>(voice_index) * 2 * flute_capacity_,
         flute_capacity_);
+  }
+  if (!plucked_string_buffers_.empty()) {
+    voice->plucked_string.attach(plucked_string_buffers_.data() +
+                                     static_cast<size_t>(voice_index) * plucked_string_capacity_,
+                                 plucked_string_capacity_);
   }
   // GM kit mode: resolve the struck note through the drum map instead of
   // playing the single configured piece (static patches — safe to keep in the

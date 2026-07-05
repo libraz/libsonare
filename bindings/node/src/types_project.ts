@@ -280,6 +280,9 @@ export const SYNTH_ENGINE_MODES = [
   'reed',
   'brass',
   'flute',
+  'plucked-string',
+  'vocal',
+  'free-reed',
 ] as const;
 
 export const SYNTH_OSC_WAVEFORMS = [

@@ -37,6 +37,7 @@
 #include "midi/synth/filter_models.h"
 #include "midi/synth/flute_voice.h"
 #include "midi/synth/fm_voice.h"
+#include "midi/synth/free_reed_voice.h"
 #include "midi/synth/ks_voice.h"
 #include "midi/synth/mod_matrix.h"
 #include "midi/synth/modal_voice.h"
@@ -44,8 +45,10 @@
 #include "midi/synth/percussion_voice.h"
 #include "midi/synth/piano_voice.h"
 #include "midi/synth/pipe_organ_voice.h"
+#include "midi/synth/plucked_string_voice.h"
 #include "midi/synth/reed_voice.h"
 #include "midi/synth/sf2_voice.h"
+#include "midi/synth/vocal_voice.h"
 #include "midi/synth/voice_pool.h"
 
 namespace sonare::midi::synth {
@@ -53,17 +56,20 @@ namespace sonare::midi::synth {
 /// Synthesis method tag. Every mode is implemented.
 enum class SynthEngineMode : int {
   kSubtractive = 0,
-  kFm = 1,             // operator-stack FM (fm_voice.h)
-  kKarplusStrong = 2,  // plucked-string waveguide (ks_voice.h)
-  kModal = 3,          // resonator-bank mallets/bells (modal_voice.h)
-  kAdditive = 4,       // drawbar organ (additive_voice.h)
-  kPercussion = 5,     // membrane modal + filtered noise (percussion_voice.h)
-  kPiano = 6,          // extended waveguide piano (piano_voice.h)
-  kPipeOrgan = 7,      // sustained waveguide flue pipe (pipe_organ_voice.h)
-  kBowedString = 8,    // sustained waveguide bowed string (bowed_string_voice.h)
-  kReed = 9,           // sustained waveguide reed woodwind (reed_voice.h)
-  kBrass = 10,         // sustained waveguide brass / lip reed (brass_voice.h)
-  kFlute = 11,         // sustained waveguide air-jet flute (flute_voice.h)
+  kFm = 1,              // operator-stack FM (fm_voice.h)
+  kKarplusStrong = 2,   // plucked-string waveguide (ks_voice.h)
+  kModal = 3,           // resonator-bank mallets/bells (modal_voice.h)
+  kAdditive = 4,        // drawbar organ (additive_voice.h)
+  kPercussion = 5,      // membrane modal + filtered noise (percussion_voice.h)
+  kPiano = 6,           // extended waveguide piano (piano_voice.h)
+  kPipeOrgan = 7,       // sustained waveguide flue pipe (pipe_organ_voice.h)
+  kBowedString = 8,     // sustained waveguide bowed string (bowed_string_voice.h)
+  kReed = 9,            // sustained waveguide reed woodwind (reed_voice.h)
+  kBrass = 10,          // sustained waveguide brass / lip reed (brass_voice.h)
+  kFlute = 11,          // sustained waveguide air-jet flute (flute_voice.h)
+  kPluckedString = 12,  // buzzing-bridge plucked string (plucked_string_voice.h)
+  kVocal = 13,          // source-filter glottal + formant voice (vocal_voice.h)
+  kFreeReed = 14,       // driven free-reed accordion / harmonica (free_reed_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -175,6 +181,15 @@ struct NativeSynthPatch {
 
   /// Sustained waveguide air-jet flute (used when mode == kFlute).
   FlutePatchParams flute;
+
+  /// Buzzing-bridge plucked string (used when mode == kPluckedString).
+  PluckedStringPatchParams plucked_string;
+
+  /// Source-filter glottal + formant voice (used when mode == kVocal).
+  VocalPatchParams vocal;
+
+  /// Driven free-reed accordion / harmonica (used when mode == kFreeReed).
+  FreeReedPatchParams free_reed;
 };
 
 /// Per-note GS drum overrides applied to a fallback percussion voice at
@@ -231,6 +246,13 @@ struct NativeSynthVoice : VoiceState {
   /// Air-jet flute core; like KS, the host attach()es its delay slab (bore +
   /// jet spans) before start().
   FluteVoiceCore flute;
+  /// Buzzing-bridge plucked-string core; like KS, the host attach()es its delay
+  /// span before start().
+  PluckedStringVoiceCore plucked_string;
+  /// Source-filter vocal core (no host slab; the formant bank is feed-forward).
+  VocalVoiceCore vocal;
+  /// Free-reed core (no host slab; the driven tongue oscillator is feed-forward).
+  FreeReedVoiceCore free_reed;
   BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
@@ -443,6 +465,11 @@ class NativeSynth final : public MidiInstrument {
   std::vector<float> flute_buffers_;
   int flute_capacity_ = 0;  // per-span (bore / jet) capacity
   bool flute_mode_ = false;
+  /// Plucked-string delay slab: one string span per voice slot, allocated in
+  /// prepare() only when the patch is a plucked string.
+  std::vector<float> plucked_string_buffers_;
+  int plucked_string_capacity_ = 0;  // per-span capacity
+  bool plucked_string_mode_ = false;
   /// Shared organ wind chest (tremulant / wind sag); pipe-organ patches only.
   OrganWindSupply wind_;
   /// Swell box: a bus-level shutter lowpass driven by the expression pedal

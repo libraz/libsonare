@@ -39,6 +39,12 @@ static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kBrass) + 1
               SONARE_SYNTH_ENGINE_BRASS);
 static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kFlute) + 1 ==
               SONARE_SYNTH_ENGINE_FLUTE);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kPluckedString) + 1 ==
+              SONARE_SYNTH_ENGINE_PLUCKED_STRING);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kVocal) + 1 ==
+              SONARE_SYNTH_ENGINE_VOCAL);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kFreeReed) + 1 ==
+              SONARE_SYNTH_ENGINE_FREE_REED);
 
 static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSine) + 1 ==
               SONARE_SYNTH_OSC_SINE);

@@ -10,7 +10,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 55;
+constexpr size_t kPresetCount = 66;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -344,6 +344,89 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     flute("tin-whistle", 0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
     flute("ocarina", 0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
     flute("blown-bottle", 0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
+  }
+
+  // --- buzzing-bridge plucked string ---
+  // The harp / koto / sitar family: one plucked-string core voiced from a clean
+  // termination (harp / koto, buzz == 0) to the shimmering distributed bridge
+  // contact of a sitar / tanpura (buzz > 0).
+  {
+    auto plucked = [&](const char* name, float buzz, float brightness, float decay_s,
+                       float pick_position, float gain) {
+      SynthPreset& v = t[i++];
+      v.name = name;
+      NativeSynthPatch patch{};
+      patch.mode = SynthEngineMode::kPluckedString;
+      patch.amp_env.attack_ms = 0.0f;
+      patch.amp_env.sustain = 1.0f;
+      patch.amp_env.release_ms = 200.0f;
+      patch.cutoff_hz = 20000.0f;
+      patch.plucked_string.buzz = buzz;
+      patch.plucked_string.brightness = brightness;
+      patch.plucked_string.decay_s = decay_s;
+      patch.plucked_string.pick_position = pick_position;
+      patch.gain = gain;
+      v.config = from_patch(clamp_synth_patch(patch));
+    };
+    //       name        buzz   bright decay  pickpos gain
+    plucked("harp", 0.0f, 0.70f, 4.5f, 0.16f, 0.85f);
+    plucked("koto", 0.0f, 0.80f, 3.0f, 0.22f, 0.85f);
+    plucked("sitar", 0.55f, 0.85f, 3.5f, 0.20f, 0.80f);
+    plucked("tanpura", 0.70f, 0.78f, 5.0f, 0.12f, 0.80f);
+  }
+
+  // --- source-filter vocal (glottal + formant) ---
+  // The choir / voice family (GM 53-55): a glottal pulse driving a formant bank
+  // selected by the vowel (0 = /a/, 1 = /e/, 2 = /i/, 3 = /o/, 4 = /u/).
+  {
+    auto vocal = [&](const char* name, int vowel, float brightness, float vibrato_depth,
+                     float breath_noise, float gain) {
+      SynthPreset& v = t[i++];
+      v.name = name;
+      NativeSynthPatch patch{};
+      patch.mode = SynthEngineMode::kVocal;
+      patch.amp_env.attack_ms = 20.0f;
+      patch.amp_env.sustain = 1.0f;
+      patch.amp_env.release_ms = 150.0f;
+      patch.cutoff_hz = 20000.0f;
+      patch.vocal.vowel = vowel;
+      patch.vocal.brightness = brightness;
+      patch.vocal.vibrato_depth = vibrato_depth;
+      patch.vocal.breath_noise = breath_noise;
+      patch.gain = gain;
+      v.config = from_patch(clamp_synth_patch(patch));
+    };
+    //     name          vowel bright vib    breath gain
+    vocal("choir-aah", 0, 0.55f, 0.30f, 0.12f, 0.80f);
+    vocal("choir-ooh", 4, 0.45f, 0.25f, 0.10f, 0.80f);
+    vocal("voice-eeh", 2, 0.60f, 0.35f, 0.14f, 0.80f);
+  }
+
+  // --- free reed (accordion / harmonica) ---
+  // The free-reed family (GM 22-24): a driven tongue oscillator with an
+  // asymmetric buzz and a musette detune (two tongues per note).
+  {
+    auto free_reed = [&](const char* name, float brightness, float reed_stiffness, float detune,
+                         float gain) {
+      SynthPreset& v = t[i++];
+      v.name = name;
+      NativeSynthPatch patch{};
+      patch.mode = SynthEngineMode::kFreeReed;
+      patch.amp_env.attack_ms = 12.0f;
+      patch.amp_env.sustain = 1.0f;
+      patch.amp_env.release_ms = 100.0f;
+      patch.cutoff_hz = 20000.0f;
+      patch.free_reed.brightness = brightness;
+      patch.free_reed.reed_stiffness = reed_stiffness;
+      patch.free_reed.detune = detune;
+      patch.gain = gain;
+      v.config = from_patch(clamp_synth_patch(patch));
+    };
+    //         name          bright stiff  detune gain
+    free_reed("accordion", 0.60f, 0.50f, 0.35f, 0.80f);
+    free_reed("harmonica", 0.75f, 0.65f, 0.15f, 0.78f);
+    free_reed("bandoneon", 0.55f, 0.45f, 0.30f, 0.80f);
+    free_reed("reed-organ", 0.50f, 0.40f, 0.10f, 0.82f);
   }
 
   return t;

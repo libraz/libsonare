@@ -723,7 +723,7 @@ const char* sonare_synth_enum_names(int kind) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   static const std::string kEngineModes =
       "default\nsubtractive\nfm\nkarplus-strong\nmodal\nadditive\npercussion\npiano\npipe-organ\n"
-      "bowed-string\nreed\nbrass\nflute";
+      "bowed-string\nreed\nbrass\nflute\nplucked-string\nvocal\nfree-reed";
   static const std::string kWaveforms = "default\nsine\nsaw\nsquare\ntriangle\nnoise";
   static const std::string kFilterModels = "default\nsvf\nmoog-ladder\ndiode-ladder\nsallen-key";
   static const std::string kFilterOutputs = "default\nlowpass\nbandpass\nhighpass";
