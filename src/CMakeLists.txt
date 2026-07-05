@@ -681,6 +681,9 @@ if(BUILD_ARRANGEMENT)
     midi/synth/plucked_string_voice.cpp
     midi/synth/vocal_voice.cpp
     midi/synth/free_reed_voice.cpp
+    midi/synth/native_synth_patch.cpp
+    midi/synth/native_synth_voice.cpp
+    midi/synth/native_synth_live_control.cpp
     midi/synth/native_synth.cpp
     midi/synth/gm_fallback_map.cpp
     midi/synth/synth_presets.cpp
