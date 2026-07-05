@@ -247,6 +247,21 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
   if (num_samples == 0) {
     return;
   }
+  // Reject non-finite input before touching any processor so a stray NaN/Inf
+  // cannot permanently pollute the filter state (recoverable only via reset()).
+  // The C ABI performs this guard too; lifting it into the core keeps the
+  // surfaces that bypass the C-ABI translation unit (Node N-API, WASM embind)
+  // from silently accepting input every other surface rejects.
+  for (int ch = 0; ch < num_channels; ++ch) {
+    const float* buffer = channels[ch];
+    for (int i = 0; i < num_samples; ++i) {
+      if (!std::isfinite(buffer[i])) {
+        throw SonareException(
+            ErrorCode::InvalidParameter,
+            "StreamingMasteringChain::process_block requires finite input samples");
+      }
+    }
+  }
   for (auto& proc : impl_->processors) {
     proc->process(channels, num_channels, num_samples);
   }

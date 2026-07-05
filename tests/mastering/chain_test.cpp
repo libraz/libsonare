@@ -427,6 +427,36 @@ TEST_CASE("StreamingMasteringChain rejects bad num_channels", "[mastering][chain
   REQUIRE_THROWS_AS(chain.prepare(44100.0, 512, 3), sonare::SonareException);
 }
 
+TEST_CASE("StreamingMasteringChain rejects non-finite input before touching processors",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  config.eq.tilt.tilt_db = 1.0f;
+  StreamingMasteringChain chain(std::move(config));
+  chain.prepare(44100.0, 512, 1);
+
+  // A block carrying a NaN is rejected without running any processor, so the
+  // filter state is preserved and a subsequent finite block still processes.
+  std::vector<float> bad(512, 0.1f);
+  bad[128] = std::numeric_limits<float>::quiet_NaN();
+  float* bad_channels[] = {bad.data()};
+  REQUIRE_THROWS_AS(chain.process_block(bad_channels, 1, 512), sonare::SonareException);
+
+  // An Inf is likewise rejected.
+  std::vector<float> inf_block(512, 0.1f);
+  inf_block[0] = std::numeric_limits<float>::infinity();
+  float* inf_channels[] = {inf_block.data()};
+  REQUIRE_THROWS_AS(chain.process_block(inf_channels, 1, 512), sonare::SonareException);
+
+  // A fully finite block processes normally after the rejections.
+  std::vector<float> good(512, 0.1f);
+  float* good_channels[] = {good.data()};
+  REQUIRE_NOTHROW(chain.process_block(good_channels, 1, 512));
+
+  // A zero-length block returns early without scanning (and without throwing).
+  REQUIRE_NOTHROW(chain.process_block(good_channels, 1, 0));
+}
+
 TEST_CASE("StreamingMasteringChain rejects oversized block", "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.eq.tilt.enabled = true;
