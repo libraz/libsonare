@@ -1,5 +1,74 @@
 # Changelog
 
+## v1.5.0 (2026-07-06)
+
+### Physically-modeled instrument voices
+
+The built-in synthesizer gained a family of physical-modeling engines that replace the previous subtractive/FM sketches for many General MIDI programs. Each is exposed through `SonareSynthEngineMode` and wired across the Node, Python, WASM and C-ABI surfaces in lockstep:
+
+- A sustained digital-waveguide flue **pipe organ** (`SONARE_SYNTH_ENGINE_PIPE_ORGAN`) with multi-rank stop registration under a single key, lingual reed pipes, a self-oscillating cubic jet, a shared wind chest (tremulant / wind sag) and mouth-radiation brightening; GM Church Organ voices on it.
+- A **bowed-string** engine (`SONARE_SYNTH_ENGINE_BOWED_STRING`) modeling Helmholtz stick-slip friction, with violin / viola / cello / contrabass presets, live bow control (CC11 expression, CC2 breath, CC74 brightness), a fourteen-mode measured violin body resonator, and off-by-default elasto-plastic bow friction, sympathetic resonance and a second vibration plane.
+- A **reed woodwind** engine (`SONARE_SYNTH_ENGINE_REED`) with cylindrical/conical bore selection, clarinet / saxophone / oboe / english-horn / bassoon presets, and off-by-default cone-growth and tonehole-scattering registers (a cylinder overblows to its twelfth, a cone to its octave).
+- A lip-reed **brass** engine (`SONARE_SYNTH_ENGINE_BRASS`) with a fixed-formant `SONARE_SYNTH_BODY_BRASS_BELL` radiation body, eight brass presets, live breath/brightness control, and off-by-default cuivré, mute, half-valve and two-mode lip gates.
+- An air-jet **flute** engine (`SONARE_SYNTH_ENGINE_FLUTE`) with concert-flute through piccolo / recorder / shakuhachi / ocarina presets and live breath/brightness control.
+
+The synthesizer also gained three further engines — **plucked-string** (`SONARE_SYNTH_ENGINE_PLUCKED_STRING`, 13) for the buzzing-bridge harp/koto/sitar family, **vocal** (`SONARE_SYNTH_ENGINE_VOCAL`, 14) for a source-filter choir/voice with selectable vowels through a new `SONARE_SYNTH_BODY_VOCAL` body, and **free-reed** (`SONARE_SYNTH_ENGINE_FREE_REED`, 15) for the accordion/harmonica/bandoneon/reed-organ family. Each has named presets, is routed as a GM fallback voice (GM 20-23 free-reed, 52-54 vocal, 104/106/107 plucked) and is exposed on all four surfaces. These ship with an initial voicing that will be refined in a later release.
+
+- The **piano** voice gained per-note stiff-string dispersion derived from its inharmonicity coefficient, register-graded unison string counts, a Railsback stretch-tuning curve, a shared instrument-wide modal soundboard, pedal-gated sympathetic resonance, velocity-dependent hammer dynamics, and a full three-pedal set — continuous half-pedal sustain (CC64), sostenuto (CC66) and una corda (CC67).
+- The **percussion** voice gained strike-point weighting, shell resonance, snare-wire rattle, nonlinear cymbal shimmer and stochastic-particle (shaker/scraper) excitation, and every GM/GS drum key 27-87 now resolves to a distinct membrane / wood / metal / whistle archetype with kit-variation selection and mute-group choking.
+- Many GM programs now route to these physical cores instead of the FM/subtractive fallback — the plucked-string, guitar and bass families (Karplus-Strong with bridge coupling, steel dispersion, a physical pluck and a shared sympathetic-string bank), bowed strings, brass, reed woodwinds, flutes, and chromatic/pitched percussion — with per-program ambience sends and per-voice pitch drift and stereo spread. The SF2-less GS fallback path shares the same body, wind-chest and pedal components so those patches sound consistent there.
+
+### GS insertion effects and live SysEx
+
+- General MIDI / GS insertion effects are now realised as real insert chains. The type-to-insert map covers single, composite and multi-effect types — graphic and shelving EQ, enhancer, the chorus family (hexa / space-D / 3D), the delays, plate and gate reverb, overdrive/distortion, rotary, pitch shifter, lo-fi and the guitar/keyboard multi-effect chains — expanding composite types into their manual signal-order stages with parameter translation from the effect data. Types with no faithful stock insert stay bypassed.
+- Live MIDI SysEx delivery landed: `sonare_engine_push_midi_sysex` (`pushMidiSysex` / `push_midi_sysex`) queues a variable-length SysEx frame to a bound instrument while playing, wired across Node, Python and WASM. A pushed GS insertion-effect SysEx installs and swaps its insert chain wait-free on the audio thread, so insertion effects are audible live as well as through the offline bounce.
+
+### Amp-sim and modulation inserts
+
+- The mastering amp-sim insert gained selectable amp voicings (classic-crunch / fender-clean / modern-hi-gain plus tweed / Vox-chime / rectifier), guitar 4x12 and bass 8x10 cabinet models, a push-pull power-amp stage with supply sag and output-transformer saturation, and a global negative-feedback path — each off by default, bit-identical when disabled, and exposed as automatable insert parameters.
+- Added modulation insert effects — wah, auto-wah, rotary, ring modulator and pitch shifter — which report realtime-safe parameter updates and back the corresponding GS insertion-effect types.
+- The mastering processor catalog now reports a per-insert `latencySamples`, probed at a representative 48 kHz / 512-sample configuration (offline and non-insertable processors report 0).
+
+### Constant-Q chroma and MFCC liftering
+
+- Added the constant-Q chromagram `sonare_chroma_cqt` (mirroring `sonare_chroma_cens`) so `chroma_cqt` is callable on the Node, Python, WASM and C-ABI surfaces.
+- `sonare_mfcc_ex` gained a trailing cepstral `lifter` coefficient (default 0, the library default), reachable on all four surfaces; the inverse path assumes an unliftered input.
+
+### Surround metering and bus mixing
+
+- `SonareMixMeterSnapshot` now carries per-plane peak / RMS / true-peak arrays plus a channel count for up to eight surround planes, so 5.1 / 7.1 center, LFE and surround meters reach the host; indices 0/1 still mirror the existing stereo fields. Fanned out through the Node, Python and WASM marshalers and type stubs.
+- A bus can shape its summed output with an input trim, stereo width and per-channel polarity invert, and `sonare_engine_set_bus_strip_insert_bypassed` bypasses a bus-strip insert. Both are wired across every surface, and the three bus-shaping fields round-trip through project and scene JSON.
+
+### Insert-parameter and external-MIDI automation
+
+- Track, master and bus strip inserts can be automated in realtime: `sonare_engine_resolve_track_insert_automation_id` / `_resolve_master_insert_automation_id` / `_resolve_bus_insert_automation_id` resolve a strip/insert/parameter triple to a reserved automation id drivable through the existing automation lanes, `sonare_engine_set_bus_strip_insert_param_by_name` sets a bus insert parameter by name, and `sonare_engine_set_param_smoothing_ms` tunes the engine-wide glide time (previously fixed at 20 ms). Exposed on Node, Python and WASM.
+- An external-MIDI output queue routes a track to external gear: `sonare_engine_set_midi_destination_external`, `_set_external_midi_clock_enabled`, `_external_midi_dropped_count` and `_drain_external_midi` — draining `SonareExternalMidiEvent` records with shared MIDI-2-to-MIDI-1 lowering — are available on every surface, with a full destination table reporting overflow instead of silently rerouting to the internal rack.
+
+### Scale-aware pitch correction
+
+- Added `sonare_pitch_correct_timevarying` and a `SonarePitchCorrectionConfig` POD that generalize the fixed-MIDI corrector: a caller-supplied F0 contour can snap to a musical scale with tunable retune strength, correction clamp, glide and vibrato threshold. Wired across Node and WASM (a `PitchCorrectOptions` bag) and Python (keyword args). The Python CLI also gained pitch-shift, time-stretch, normalize, trim-silence and resample subcommands.
+
+### Bounded-memory clip streaming
+
+- Added `ClipPageStreamer` and the one-call `attachOpfsClipStream`, a sliding-window manager that keeps OPFS-paged clips fed within a bounded window around the playback frontier (prefetch ahead, evict behind), so a long multitrack arrangement never holds its full PCM in WASM memory. The AudioWorklet now runs the single full-featured embind engine.
+
+### Native host backends (macOS)
+
+- The experimental macOS host backends gained CoreAudio xrun telemetry (`xrun_count()`), per-render Audio Unit output channel renegotiation with cached AU instances for parameter enumeration, and CoreMIDI SysEx output that expands a resolved SysEx payload into SysEx7 UMP packets at flush. These stay macOS-only, source-build opt-in and add no C-ABI surface.
+- The unused multichannel audio-loading path (`load_audio_multichannel` / `AudioLoadResultMC`), added in v1.4.0 but never wired to a caller or a published surface, was removed.
+
+### Bug fixes
+
+- librosa feature parity: `chroma_cens` uses librosa's symmetric-Hann smoothing window and zero-padded edges; the STFT chroma filterbank is a direct port of the librosa chroma filter; `chroma_cqt` centers its CQT-bin-to-pitch-class fold at coarse resolutions; `spectral_flatness` reports the maximally-flat value on a silent frame; spectral-contrast quantile rounding matches the librosa float64 result; mel `fmax` is clamped to Nyquist instead of erroring; and the `peak_pick` local-max/average windows follow librosa's exclusive slice bounds.
+- Metering: silent peak/RMS report the finite dB floor instead of `-inf`, so the level fields stay JSON-safe.
+- Realtime engine: clips dropped by a live mute or delete release their hung notes; the capture punch state is read without spinning on the audio thread; MIDI-learn assembles 14-bit / RPN / NRPN controllers under a movement gate; live track-pan automation honors the strip's pan law; external-MIDI records carry the monotonic device render frame and drain uniformly across surfaces without loss; insert-automation slot-table overflow is surfaced on telemetry; track strips update in place to avoid fader/pan clicks; the stereo-width and bus input-trim smoothers settle for a deterministic offline pre-roll; and cached filterbanks are pinned behind shared handles to prevent a concurrent-eviction use-after-free.
+- Mastering & effects: the reverb and stereo-delay processors report their decay tails so an offline bounce no longer truncates them; reverb parameter updates set before `prepare()` are retained; convolution-reverb decay is clamped to its ceiling at construction; loudness-optimize reports zero (already-aligned) latency; the saturation and spectral inserts preallocate per-channel state so a live insert never allocates on the audio thread; and the core and WASM mastering chains reject empty, non-finite or non-positive-rate input.
+- Mixing: a centered mono strip stays at unity under every pan law.
+- MIDI & SMF: lossy (non-power-of-two) time-signature denominators are flagged on SMF export; a non-zero first tempo/time-signature segment survives an SMF2 round-trip; and UMP word counts derive from the message type.
+- Arrangement & serialization: track-kind changes that would orphan a track's clips and non-finite, negative or non-monotonic warp-map anchors are rejected in the core; bus trim / width / polarity persist across project save/load; and pitch-correction MIDI range is validated on every surface.
+- Synth: the church-trumpet preset builds its reed stop on the pipe-organ waveguide again after GM Reed Organ moved to the free-reed core.
+- Bindings & CLI: the WASM SysEx push distinguishes `InvalidParameter` and `OutOfMemory` rejection classes; the Python package type stub re-exports its documented public names; the Python mix command resamples each input to the mixer rate; and the WASM module builds before the JS bundle so a plain build is never a step behind.
+
 ## v1.4.1 (2026-06-28)
 
 ### Looping, mastering & long-form analysis
