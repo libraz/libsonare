@@ -82,7 +82,12 @@ std::vector<double> power_spectrum(const std::vector<float>& buf, size_t from) {
   std::vector<float> windowed(kFft);
   for (int i = 0; i < kFft; ++i) {
     const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / (kFft - 1));
-    windowed[static_cast<size_t>(i)] = buf[from + static_cast<size_t>(i)] * static_cast<float>(w);
+    // Zero-pad past the end of the buffer: the Hann taper is ~0 at the window
+    // edges, so a partial final window contributes negligibly and never reads
+    // out of bounds when `from + kFft` exceeds the rendered length.
+    const size_t idx = from + static_cast<size_t>(i);
+    const float sample = idx < buf.size() ? buf[idx] : 0.0f;
+    windowed[static_cast<size_t>(i)] = sample * static_cast<float>(w);
   }
   sonare::FFT fft(kFft);
   std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
