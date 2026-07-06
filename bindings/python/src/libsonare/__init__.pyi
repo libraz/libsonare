@@ -82,6 +82,8 @@ from .analyzer import (
 )
 from .analyzer import (
     chroma_cens as chroma_cens,
+)
+from .analyzer import (
     chroma_cqt as chroma_cqt,
 )
 from .analyzer import (
