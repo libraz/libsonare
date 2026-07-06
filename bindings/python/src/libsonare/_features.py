@@ -215,6 +215,7 @@ def mfcc(
     fmin: float = 0.0,
     fmax: float = 0.0,
     htk: bool = False,
+    lifter: float = 0.0,
 ) -> MfccResult:
     """Compute Mel-frequency cepstral coefficients.
 
@@ -228,6 +229,7 @@ def mfcc(
         fmin: Minimum Mel frequency in Hz (default 0.0 = librosa default).
         fmax: Maximum Mel frequency in Hz (default 0.0 = sample_rate / 2).
         htk: Use the HTK Mel formula instead of Slaney (default False).
+        lifter: Cepstral liftering coefficient (default 0.0 = no liftering).
 
     Returns:
         MfccResult with coefficient matrix.
@@ -246,6 +248,7 @@ def mfcc(
         ctypes.c_float(fmin),
         ctypes.c_float(fmax),
         ctypes.c_int(1 if htk else 0),
+        ctypes.c_float(lifter),
         ctypes.byref(out),
     )
     _check(rc)

@@ -1628,6 +1628,7 @@ export interface SonareModule {
     fmin: number,
     fmax: number,
     htk: boolean,
+    lifter: number,
   ) => WasmMfccResult;
 
   // Features - Inverse reconstruction

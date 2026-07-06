@@ -162,12 +162,19 @@ TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[
   SECTION("sonare_mfcc_ex accepts the range and a null out is rejected") {
     SonareMfccResult mfcc = {};
     REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 100.0f,
-                           8000.0f, 0, &mfcc) == SONARE_OK);
+                           8000.0f, 0, 0.0f, &mfcc) == SONARE_OK);
     REQUIRE(mfcc.coefficients != nullptr);
     REQUIRE(mfcc.n_mfcc == 13);
     sonare_free_mfcc_result(&mfcc);
 
+    // A non-zero lifter is accepted and changes the coefficients.
+    SonareMfccResult liftered = {};
+    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 100.0f,
+                           8000.0f, 0, 22.0f, &liftered) == SONARE_OK);
+    REQUIRE(liftered.coefficients != nullptr);
+    sonare_free_mfcc_result(&liftered);
+
     REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 0.0f, 0.0f,
-                           0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+                           0, 0.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }

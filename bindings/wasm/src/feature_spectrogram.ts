@@ -258,6 +258,7 @@ export function melSpectrogram(
  * @param fmin - Minimum Mel frequency in Hz (default: 0 = librosa default)
  * @param fmax - Maximum Mel frequency in Hz (default: 0 = sampleRate / 2)
  * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
+ * @param lifter - Cepstral liftering coefficient (default: 0 = no liftering)
  * @returns MFCC result
  */
 export function mfcc(
@@ -270,12 +271,24 @@ export function mfcc(
   fmin = 0,
   fmax = 0,
   htk = false,
+  lifter = 0,
   options: GuardedOptions = {},
 ): MfccResult {
   validateSpectrogramSamples('mfcc', samples, sampleRate, options);
   validatePositiveIntegers('mfcc', { nFft, hopLength, nMels, nMfcc });
   validateMelFrequencyRange('mfcc', fmin, fmax, sampleRate);
-  return requireModule().mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
+  return requireModule().mfcc(
+    samples,
+    sampleRate,
+    nFft,
+    hopLength,
+    nMels,
+    nMfcc,
+    fmin,
+    fmax,
+    htk,
+    lifter,
+  );
 }
 
 // ============================================================================

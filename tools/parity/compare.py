@@ -571,8 +571,10 @@ _BUFFER_COMPANION_NAMES = {"length", "size", "len"}
 # the base C order as a prefix and the known tail after it.
 #   detect_chords  -> base + the SonareChordDetectionOptions fields used by
 #                     sonare_detect_chords_ex.
-#   mel_spectrogram / mfcc -> base + the explicit Mel range (fmin/fmax/htk) used
-#                     by sonare_mel_spectrogram_ex / sonare_mfcc_ex.
+#   mel_spectrogram -> base + the explicit Mel range (fmin/fmax/htk) used by
+#                     sonare_mel_spectrogram_ex.
+#   mfcc -> base + the explicit Mel range (fmin/fmax/htk) and cepstral lifter
+#                     used by sonare_mfcc_ex.
 #   decompose -> base + the NMF initialiser (init) used by
 #                     sonare_decompose_with_init.
 _EXTENDED_FIELD_TAILS = {
@@ -586,7 +588,7 @@ _EXTENDED_FIELD_TAILS = {
         "chroma_method",
     ),
     "mel_spectrogram": ("fmin", "fmax", "htk"),
-    "mfcc": ("fmin", "fmax", "htk"),
+    "mfcc": ("fmin", "fmax", "htk", "lifter"),
     "decompose": ("init",),
 }
 

@@ -135,7 +135,7 @@ val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, 
 }
 
 val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels, int n_mfcc,
-            float fmin, float fmax, bool htk) {
+            float fmin, float fmax, bool htk, float lifter) {
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
@@ -149,7 +149,7 @@ val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
   config.htk = htk;
 
   MelSpectrogram mel = MelSpectrogram::compute(audio, config);
-  std::vector<float> mfcc = mel.mfcc(n_mfcc);
+  std::vector<float> mfcc = mel.mfcc(n_mfcc, lifter);
 
   val out = val::object();
   out.set("nMfcc", n_mfcc);

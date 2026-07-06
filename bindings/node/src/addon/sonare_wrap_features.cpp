@@ -178,6 +178,8 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   float fmax =
       info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
   bool htk = info.Length() >= 9 && info[8].IsBoolean() && info[8].As<Napi::Boolean>().Value();
+  float lifter =
+      info.Length() >= 10 && info[9].IsNumber() ? info[9].As<Napi::Number>().FloatValue() : 0.0f;
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::MelConfig config;
@@ -189,7 +191,7 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   config.htk = htk;
 
   sonare::MelSpectrogram mel = sonare::MelSpectrogram::compute(audio, config);
-  std::vector<float> mfcc_coeffs = mel.mfcc(n_mfcc);
+  std::vector<float> mfcc_coeffs = mel.mfcc(n_mfcc, lifter);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("nMfcc", Napi::Number::New(env, n_mfcc));

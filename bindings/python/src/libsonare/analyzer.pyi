@@ -866,6 +866,7 @@ def mfcc(
     fmin: float = 0.0,
     fmax: float = 0.0,
     htk: bool = False,
+    lifter: float = 0.0,
 ) -> MfccResult: ...
 def chroma(
     samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512

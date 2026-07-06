@@ -63,8 +63,9 @@ export function mfcc(
   fmin = 0,
   fmax = 0,
   htk = false,
+  lifter = 0,
 ): MfccResult {
-  return addon.mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
+  return addon.mfcc(samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk, lifter);
 }
 
 /**

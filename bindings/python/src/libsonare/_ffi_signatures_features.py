@@ -77,7 +77,7 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareMfccResult),
     ]
 
-    # sonare_mfcc_ex (explicit Mel range: fmin/fmax/htk)
+    # sonare_mfcc_ex (explicit Mel range: fmin/fmax/htk + cepstral lifter)
     lib.sonare_mfcc_ex.restype = ctypes.c_int32
     lib.sonare_mfcc_ex.argtypes = [
         ctypes.POINTER(ctypes.c_float),
@@ -90,6 +90,7 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_float,
         ctypes.c_float,
         ctypes.c_int,
+        ctypes.c_float,
         ctypes.POINTER(SonareMfccResult),
     ]
 

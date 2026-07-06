@@ -140,9 +140,13 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
                                       int n_fft, int hop_length, int n_mels, float fmin, float fmax,
                                       int htk, SonareMelResult* out);
 /// @brief MFCC with an explicit Mel range (see sonare_mel_spectrogram_ex).
+/// @param lifter Cepstral liftering coefficient (0.0 = no liftering, the librosa
+///   default). NOTE: the inverse entry points (sonare_mfcc_to_mel /
+///   sonare_mfcc_to_audio) do not undo liftering, so inverse reconstruction of a
+///   liftered MFCC is only exact for lifter == 0.
 SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate, int n_fft,
                            int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
-                           SonareMfccResult* out);
+                           float lifter, SonareMfccResult* out);
 
 // ============================================================================
 // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)

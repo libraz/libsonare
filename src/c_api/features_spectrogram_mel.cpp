@@ -108,7 +108,7 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
 
 SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate, int n_fft,
                            int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
-                           SonareMfccResult* out) {
+                           float lifter, SonareMfccResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->coefficients = nullptr;
@@ -122,7 +122,7 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
     if (fmax > 0.0f) config.fmax = fmax;
     config.htk = htk != 0;
     MelSpectrogram mel = MelSpectrogram::compute(audio, config);
-    std::vector<float> mfcc_data = mel.mfcc(n_mfcc);
+    std::vector<float> mfcc_data = mel.mfcc(n_mfcc, lifter);
 
     out->n_mfcc = n_mfcc;
     out->n_frames = mel.n_frames();
@@ -136,5 +136,5 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
 SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
                         int hop_length, int n_mels, int n_mfcc, SonareMfccResult* out) {
   return sonare_mfcc_ex(samples, length, sample_rate, n_fft, hop_length, n_mels, n_mfcc, 0.0f, 0.0f,
-                        0, out);
+                        0, 0.0f, out);
 }
