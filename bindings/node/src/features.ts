@@ -94,6 +94,15 @@ export function chromaCens(
   return addon.chromaCens(samples, sampleRate, hopLength, nChroma);
 }
 
+export function chromaCqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  nChroma = 12,
+): ChromaResult {
+  return addon.chromaCqt(samples, sampleRate, hopLength, nChroma);
+}
+
 export function bassChroma(
   samples: Float32Array,
   sampleRate = 22050,

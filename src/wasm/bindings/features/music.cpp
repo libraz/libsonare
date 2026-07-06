@@ -72,6 +72,17 @@ val js_chroma_cens(val samples, int sample_rate, int hop_length, int n_chroma) {
   return chromaToVal(chroma_cens(audio, config));
 }
 
+val js_chroma_cqt(val samples, int sample_rate, int hop_length, int n_chroma) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+
+  ChromaCqtConfig config;
+  config.cqt.hop_length = hop_length;
+  config.n_chroma = n_chroma;
+  return chromaToVal(chroma_cqt(audio, config));
+}
+
 val js_bass_chroma(val samples, int sample_rate, int hop_length, int n_chroma) {
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
@@ -272,6 +283,7 @@ val js_vqt(val samples, int sample_rate, int hop_length, float fmin, int n_bins,
 void registerFeatureMusicBindings() {
   function("chroma", &js_chroma);
   function("chromaCens", &js_chroma_cens);
+  function("chromaCqt", &js_chroma_cqt);
   function("bassChroma", &js_bass_chroma);
   function("nnlsChroma", &js_nnls_chroma);
   function("cqt", &js_cqt);

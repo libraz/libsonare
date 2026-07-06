@@ -116,6 +116,16 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareChromaResult),
     ]
 
+    lib.sonare_chroma_cqt.restype = ctypes.c_int32
+    lib.sonare_chroma_cqt.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChromaResult),
+    ]
+
     lib.sonare_bass_chroma.restype = ctypes.c_int32
     lib.sonare_bass_chroma.argtypes = [
         ctypes.POINTER(ctypes.c_float),

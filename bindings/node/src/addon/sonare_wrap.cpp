@@ -314,6 +314,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   // Features - Chroma
   exports.Set("chroma", Napi::Function::New(env, &SonareWrap::ChromaFn, "chroma"));
   exports.Set("chromaCens", Napi::Function::New(env, &SonareWrap::ChromaCens, "chromaCens"));
+  exports.Set("chromaCqt", Napi::Function::New(env, &SonareWrap::ChromaCqt, "chromaCqt"));
   exports.Set("bassChroma", Napi::Function::New(env, &SonareWrap::BassChroma, "bassChroma"));
 
   // Features - Constant-Q / Variable-Q transforms

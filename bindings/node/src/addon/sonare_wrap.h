@@ -166,6 +166,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   // Features - Chroma
   static Napi::Value ChromaFn(const Napi::CallbackInfo& info);
   static Napi::Value ChromaCens(const Napi::CallbackInfo& info);
+  static Napi::Value ChromaCqt(const Napi::CallbackInfo& info);
   static Napi::Value BassChroma(const Napi::CallbackInfo& info);
 
   // Features - Constant-Q / Variable-Q transforms

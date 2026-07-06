@@ -123,6 +123,7 @@ export {
   bassChroma,
   chroma,
   chromaCens,
+  chromaCqt,
   cqt,
   cyclicTempogram,
   dbToAmplitude,

@@ -161,6 +161,27 @@ export function chromaCens(
 }
 
 /**
+ * Compute a constant-Q chromagram (librosa.feature.chroma_cqt).
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param hopLength - Hop length (default: 512)
+ * @param nChroma - Number of chroma bins (default: 12)
+ * @returns Chroma result
+ */
+export function chromaCqt(
+  samples: Float32Array,
+  sampleRate = 22050,
+  hopLength = 512,
+  nChroma = 12,
+  options: GuardedOptions = {},
+): ChromaResult {
+  validateSpectrogramSamples('chromaCqt', samples, sampleRate, options);
+  validatePositiveIntegers('chromaCqt', { hopLength, nChroma });
+  return requireModule().chromaCqt(samples, sampleRate, hopLength, nChroma);
+}
+
+/**
  * Compute low-frequency bass chroma.
  *
  * @param samples - Audio samples (mono, float32)

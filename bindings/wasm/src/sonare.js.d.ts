@@ -1853,6 +1853,12 @@ export interface SonareModule {
     hopLength: number,
     nChroma: number,
   ) => WasmChromaResult;
+  chromaCqt: (
+    samples: Float32Array,
+    sampleRate: number,
+    hopLength: number,
+    nChroma: number,
+  ) => WasmChromaResult;
   bassChroma: (
     samples: Float32Array,
     sampleRate: number,

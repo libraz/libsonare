@@ -72,6 +72,7 @@ export {
   bassChroma,
   chroma,
   chromaCens,
+  chromaCqt,
   melSpectrogram,
   melToAudio,
   melToStft,

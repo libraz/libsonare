@@ -873,6 +873,9 @@ def chroma(
 def chroma_cens(
     samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
 ) -> ChromaResult: ...
+def chroma_cqt(
+    samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
+) -> ChromaResult: ...
 def bass_chroma(
     samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
 ) -> ChromaResult: ...

@@ -314,6 +314,12 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
                           int hop_length, SonareChromaResult* out);
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out);
+/// @brief Constant-Q chromagram (librosa.feature.chroma_cqt).
+/// @details Fixed tuning of 0 (concert A440); no auto-tuning estimation, matching
+///   the other chroma entry points. Use @ref sonare_estimate_tuning separately if
+///   a non-A440 reference matters.
+SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                              int n_chroma, SonareChromaResult* out);
 SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out);
 

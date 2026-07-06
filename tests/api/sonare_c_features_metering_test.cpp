@@ -91,6 +91,13 @@ TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
   sonare_free_chroma_result(&result);
   REQUIRE(result.features == nullptr);
 
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 512, 12, &result) == SONARE_OK);
+  REQUIRE(result.n_chroma == 12);
+  REQUIRE(result.n_frames > 0);
+  REQUIRE(result.features != nullptr);
+  REQUIRE(result.mean_energy != nullptr);
+  sonare_free_chroma_result(&result);
+
   REQUIRE(sonare_bass_chroma(samples.data(), samples.size(), 22050, 512, 12, &result) == SONARE_OK);
   REQUIRE(result.n_chroma == 12);
   REQUIRE(result.n_frames > 0);
@@ -98,6 +105,8 @@ TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
   sonare_free_chroma_result(&result);
 
   REQUIRE(sonare_chroma_cens(samples.data(), samples.size(), 22050, 0, 12, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_chroma_cqt(samples.data(), samples.size(), 22050, 0, 12, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
 }
 

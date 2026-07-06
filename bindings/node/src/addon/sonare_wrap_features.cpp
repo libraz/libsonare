@@ -305,6 +305,10 @@ Napi::Value SonareWrap::ChromaCens(const Napi::CallbackInfo& info) {
   return ChromaVariant(info, sonare_chroma_cens);
 }
 
+Napi::Value SonareWrap::ChromaCqt(const Napi::CallbackInfo& info) {
+  return ChromaVariant(info, sonare_chroma_cqt);
+}
+
 Napi::Value SonareWrap::BassChroma(const Napi::CallbackInfo& info) {
   return ChromaVariant(info, sonare_bass_chroma);
 }

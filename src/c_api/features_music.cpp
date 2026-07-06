@@ -116,6 +116,22 @@ SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_r
   });
 }
 
+SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
+                              int n_chroma, SonareChromaResult* out) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  *out = {};
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    ChromaCqtConfig config;
+    config.cqt.hop_length = hop_length;
+    config.n_chroma = n_chroma;
+    Chroma chroma = chroma_cqt(audio, config);
+    return fill_chroma_result(chroma, out);
+  });
+}
+
 SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out) {
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;

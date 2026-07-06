@@ -357,6 +357,16 @@ def chroma_cens(
     return _chroma_variant("sonare_chroma_cens", samples, sample_rate, hop_length, n_chroma)
 
 
+def chroma_cqt(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    n_chroma: int = 12,
+) -> ChromaResult:
+    """Compute a constant-Q chromagram (librosa.feature.chroma_cqt)."""
+    return _chroma_variant("sonare_chroma_cqt", samples, sample_rate, hop_length, n_chroma)
+
+
 def bass_chroma(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
