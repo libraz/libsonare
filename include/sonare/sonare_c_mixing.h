@@ -41,6 +41,9 @@ typedef enum {
 
 typedef enum { SONARE_METER_TAP_PRE_FADER = 0, SONARE_METER_TAP_POST_FADER = 1 } SonareMeterTap;
 
+/* Maximum number of surround planes a meter snapshot can report (7.1). */
+#define SONARE_MAX_METER_CHANNELS 8
+
 typedef struct {
   float peak_db_l;
   float peak_db_r;
@@ -59,6 +62,14 @@ typedef struct {
   float true_peak_db_r;
   float max_true_peak_db;
   uint64_t seq;
+  /* Per-plane surround meters (5.1/7.1). Indices [0, channel_count) carry valid
+     values; index 0 and 1 mirror the _l and _r stereo fields above.
+     channel_count is 0 for a snapshot taken before the meter has seen audio,
+     else 1..8. */
+  float peak_db[SONARE_MAX_METER_CHANNELS];
+  float rms_db[SONARE_MAX_METER_CHANNELS];
+  float true_peak_db[SONARE_MAX_METER_CHANNELS];
+  int channel_count;
 } SonareMixMeterSnapshot;
 
 typedef struct {

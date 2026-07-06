@@ -938,6 +938,12 @@ class MixMeterSnapshot:
     true_peak_db_r: float
     max_true_peak_db: float
     seq: int
+    # Per-plane surround meters (5.1/7.1). Each tuple holds channel_count values;
+    # indices 0/1 mirror the *_l/*_r stereo fields above.
+    channel_count: int = 0
+    peak_db: tuple[float, ...] = ()
+    rms_db: tuple[float, ...] = ()
+    true_peak_db: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

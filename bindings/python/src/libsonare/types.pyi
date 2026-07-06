@@ -704,6 +704,10 @@ class MixMeterSnapshot:
     true_peak_db_r: float
     max_true_peak_db: float
     seq: int
+    channel_count: int
+    peak_db: tuple[float, ...]
+    rms_db: tuple[float, ...]
+    true_peak_db: tuple[float, ...]
     def __init__(
         self,
         peak_db_l: float,
@@ -723,6 +727,10 @@ class MixMeterSnapshot:
         true_peak_db_r: float,
         max_true_peak_db: float,
         seq: int,
+        channel_count: int = ...,
+        peak_db: tuple[float, ...] = ...,
+        rms_db: tuple[float, ...] = ...,
+        true_peak_db: tuple[float, ...] = ...,
     ) -> None: ...
 
 class GoniometerPoint:

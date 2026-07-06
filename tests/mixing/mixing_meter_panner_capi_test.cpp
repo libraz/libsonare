@@ -221,6 +221,16 @@ TEST_CASE("Mixing C API processes stereo strips and exposes meters", "[mixing][c
   REQUIRE(snapshot.seq > 0);
   REQUIRE(snapshot.likely_mono_compatible == 1);
 
+  // Per-plane meters expose the surround planes; a stereo strip reports two
+  // planes whose [0]/[1] mirror the *_l/*_r stereo convenience fields.
+  REQUIRE(snapshot.channel_count == 2);
+  REQUIRE(snapshot.peak_db[0] == snapshot.peak_db_l);
+  REQUIRE(snapshot.peak_db[1] == snapshot.peak_db_r);
+  REQUIRE(snapshot.rms_db[0] == snapshot.rms_db_l);
+  REQUIRE(snapshot.rms_db[1] == snapshot.rms_db_r);
+  REQUIRE(snapshot.true_peak_db[0] == snapshot.true_peak_db_l);
+  REQUIRE(snapshot.true_peak_db[1] == snapshot.true_peak_db_r);
+
   sonare_mixer_destroy(mixer);
 }
 

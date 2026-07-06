@@ -48,6 +48,11 @@ class SonareMixMeterSnapshot(ctypes.Structure):
         ("true_peak_db_r", ctypes.c_float),
         ("max_true_peak_db", ctypes.c_float),
         ("seq", ctypes.c_uint64),
+        # Per-plane surround meters (7.1); indices [0, channel_count) are valid.
+        ("peak_db", ctypes.c_float * 8),
+        ("rms_db", ctypes.c_float * 8),
+        ("true_peak_db", ctypes.c_float * 8),
+        ("channel_count", ctypes.c_int),
     ]
 
 

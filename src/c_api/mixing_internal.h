@@ -174,6 +174,12 @@ inline void copy_meter_snapshot(const sonare::mixing::MeterSnapshot& snapshot,
   out->true_peak_db_r = snapshot.true_peak_db[1];
   out->max_true_peak_db = snapshot.max_true_peak_db;
   out->seq = snapshot.seq;
+  for (int ch = 0; ch < SONARE_MAX_METER_CHANNELS; ++ch) {
+    out->peak_db[ch] = snapshot.peak_db[ch];
+    out->rms_db[ch] = snapshot.rms_db[ch];
+    out->true_peak_db[ch] = snapshot.true_peak_db[ch];
+  }
+  out->channel_count = snapshot.channel_count;
 }
 
 void apply_solo_mutes(SonareMixer* mixer);

@@ -510,6 +510,10 @@ export interface WasmMixMeterSnapshot {
   truePeakDbR: number;
   maxTruePeakDb: number;
   seq: number;
+  channelCount: number;
+  peakDb: number[];
+  rmsDb: number[];
+  truePeakDb: number[];
 }
 
 export interface WasmMixResult {

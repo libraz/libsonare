@@ -142,6 +142,22 @@ void MixerWasm::checkStripError(SonareError err, const char* what) {
   }
 }
 
+void setPerPlaneMeters(val& out, const float* peak_db, const float* rms_db,
+                       const float* true_peak_db, int channel_count) {
+  out.set("channelCount", channel_count);
+  val peak = val::array();
+  val rms = val::array();
+  val true_peak = val::array();
+  for (int ch = 0; ch < channel_count; ++ch) {
+    peak.call<void>("push", peak_db[ch]);
+    rms.call<void>("push", rms_db[ch]);
+    true_peak.call<void>("push", true_peak_db[ch]);
+  }
+  out.set("peakDb", peak);
+  out.set("rmsDb", rms);
+  out.set("truePeakDb", true_peak);
+}
+
 val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
   val out = val::object();
   out.set("peakDbL", snapshot.peak_db_l);
@@ -161,6 +177,8 @@ val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
   out.set("truePeakDbR", snapshot.true_peak_db_r);
   out.set("maxTruePeakDb", snapshot.max_true_peak_db);
   out.set("seq", static_cast<double>(snapshot.seq));
+  setPerPlaneMeters(out, snapshot.peak_db, snapshot.rms_db, snapshot.true_peak_db,
+                    snapshot.channel_count);
   return out;
 }
 
@@ -228,6 +246,8 @@ val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
   out.set("truePeakDbR", snapshot.true_peak_db[1]);
   out.set("maxTruePeakDb", snapshot.max_true_peak_db);
   out.set("seq", static_cast<double>(snapshot.seq));
+  setPerPlaneMeters(out, snapshot.peak_db.data(), snapshot.rms_db.data(),
+                    snapshot.true_peak_db.data(), snapshot.channel_count);
   return out;
 }
 
@@ -281,6 +301,8 @@ val mixMeterSnapshotToValFree(const SonareMixMeterSnapshot& snapshot) {
   out.set("truePeakDbR", snapshot.true_peak_db_r);
   out.set("maxTruePeakDb", snapshot.max_true_peak_db);
   out.set("seq", static_cast<double>(snapshot.seq));
+  setPerPlaneMeters(out, snapshot.peak_db, snapshot.rms_db, snapshot.true_peak_db,
+                    snapshot.channel_count);
   return out;
 }
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

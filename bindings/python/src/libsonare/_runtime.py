@@ -303,6 +303,10 @@ def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
         true_peak_db_r=float(snapshot.true_peak_db_r),
         max_true_peak_db=float(snapshot.max_true_peak_db),
         seq=int(snapshot.seq),
+        channel_count=int(snapshot.channel_count),
+        peak_db=tuple(float(snapshot.peak_db[i]) for i in range(snapshot.channel_count)),
+        rms_db=tuple(float(snapshot.rms_db[i]) for i in range(snapshot.channel_count)),
+        true_peak_db=tuple(float(snapshot.true_peak_db[i]) for i in range(snapshot.channel_count)),
     )
 
 

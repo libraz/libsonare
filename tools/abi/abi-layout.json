@@ -3127,9 +3127,33 @@
         "name": "seq",
         "offset": 64,
         "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "peak_db",
+        "offset": 72,
+        "size": 32
+      },
+      {
+        "kind": "aggregate",
+        "name": "rms_db",
+        "offset": 104,
+        "size": 32
+      },
+      {
+        "kind": "aggregate",
+        "name": "true_peak_db",
+        "offset": 136,
+        "size": 32
+      },
+      {
+        "kind": "signed",
+        "name": "channel_count",
+        "offset": 168,
+        "size": 4
       }
     ],
-    "size": 72
+    "size": 176
   },
   "SonareNotePairValidation": {
     "align": 4,

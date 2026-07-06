@@ -45,6 +45,14 @@ export interface MixMeterSnapshot {
   truePeakDbR: number;
   maxTruePeakDb: number;
   seq: number;
+  /** Number of valid surround planes (5.1/7.1); 0 before the meter sees audio. */
+  channelCount: number;
+  /** Per-plane peak dB, length channelCount; [0]/[1] mirror peakDbL/peakDbR. */
+  peakDb: number[];
+  /** Per-plane RMS dB, length channelCount; [0]/[1] mirror rmsDbL/rmsDbR. */
+  rmsDb: number[];
+  /** Per-plane true-peak dB, length channelCount; [0]/[1] mirror truePeakDbL/R. */
+  truePeakDb: number[];
 }
 
 export interface MixResult {
