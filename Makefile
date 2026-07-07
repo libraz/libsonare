@@ -53,7 +53,9 @@ test-librosa-live: build
 	$(RYE) run --pyproject tests/librosa/pyproject.toml python tests/librosa/run_live_reference_check.py --build-dir $(BUILD_DIR)
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf build build-*/ cmake-build-*/ build-*.log
+	rm -rf bindings/node/build
+	rm -rf bindings/wasm/build-wasm bindings/wasm/build-wasm-bench
 
 rebuild: clean build
 
