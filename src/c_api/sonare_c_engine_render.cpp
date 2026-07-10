@@ -83,6 +83,12 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
   if (!engine || !out || num_channels <= 0 || total_frames < 0 || block_size <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // render_offline on a never-prepared engine renders nothing and cannot even
+  // signal through telemetry (the ring is unreserved until prepare()). Report it
+  // synchronously so the caller does not mistake a silent buffer for a render.
+  if (engine->engine.max_block_size() <= 0) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
   SONARE_C_TRY
   engine->engine.render_offline(out, num_channels, total_frames, block_size);
   return SONARE_OK;
@@ -125,6 +131,12 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   if (sonare::channel_count(sonare::layout_from_channel_count(options->num_channels)) !=
       options->num_channels) {
     return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // A never-prepared engine renders only silence and cannot report through the
+  // (unreserved) telemetry ring, so fail closed instead of returning a bounce
+  // result the caller would read as a valid silent render.
+  if (engine->engine.max_block_size() <= 0) {
+    return SONARE_ERROR_INVALID_STATE;
   }
   SONARE_C_TRY
   std::vector<std::vector<float>> channels(
@@ -195,6 +207,11 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
       options->num_channels <= 0 || !std::isfinite(options->start_ppq) ||
       options->start_ppq < 0.0 || !(std::isfinite(options->gain) && options->gain >= 0.0f)) {
     return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Freezing a never-prepared engine would capture pure silence with no error
+  // channel (telemetry is unreserved before prepare()); fail closed instead.
+  if (engine->engine.max_block_size() <= 0) {
+    return SONARE_ERROR_INVALID_STATE;
   }
   SONARE_C_TRY
   *out = {};

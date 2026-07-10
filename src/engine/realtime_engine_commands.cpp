@@ -549,6 +549,16 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
 }
 
 void RealtimeEngine::enqueue_telemetry(Telemetry telemetry) noexcept {
+  // The telemetry ring is only reserved by prepare(); before that (e.g. a
+  // process()/render_offline call on a never-prepared engine, which emits a
+  // kNotPrepared record) the queue has capacity 0. Pushing to it would trip the
+  // SpscQueue push-before-reserve assert in debug builds and be a silent no-op
+  // in release. Skip the enqueue for the unreserved queue: the not-prepared and
+  // over-block diagnostics are only reachable before any consumer exists, and
+  // the C-ABI/offline entry points report not-prepared synchronously instead.
+  if (telemetry_.capacity() == 0) {
+    return;
+  }
   if (telemetry_overflow_count_ > 0 && (telemetry.type != TelemetryType::kError ||
                                         telemetry.error == TelemetryErrorCode::kClipPageUnderrun)) {
     Telemetry overflow{};

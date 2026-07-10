@@ -178,6 +178,50 @@ TEST_CASE("sonare_engine_bounce_offline validates the channel count against a la
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api][engine]") {
+  // A freshly created engine has never been prepared: max_block_size_ is 0, so
+  // render_offline renders nothing and its only diagnostic path (a kNotPrepared
+  // telemetry record) targets an unreserved SPSC ring. The offline entry points
+  // must report this synchronously as INVALID_STATE instead of handing back a
+  // silent buffer (and, in debug builds, without tripping the push-before-reserve
+  // assert inside the telemetry ring).
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+
+  constexpr int64_t kFrames = 128;
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  std::array<float*, 2> channels{left.data(), right.data()};
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) ==
+          SONARE_ERROR_INVALID_STATE);
+
+  SonareEngineBounceOptions bounce{};
+  REQUIRE(sonare_engine_bounce_options_default(&bounce) == SONARE_OK);
+  bounce.total_frames = kFrames;
+  SonareEngineBounceResult bounce_result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &bounce, &bounce_result) ==
+          SONARE_ERROR_INVALID_STATE);
+  REQUIRE(bounce_result.interleaved == nullptr);
+  REQUIRE(bounce_result.sample_count == 0u);
+  sonare_free_bounce_result(&bounce_result);
+
+  SonareEngineFreezeOptions freeze{};
+  freeze.total_frames = kFrames;
+  freeze.block_size = 128;
+  freeze.num_channels = 2;
+  freeze.gain = 1.0f;
+  SonareEngineFreezeResult freeze_result{};
+  REQUIRE(sonare_engine_freeze_offline(engine, &freeze, &freeze_result) ==
+          SONARE_ERROR_INVALID_STATE);
+
+  // After prepare() the telemetry ring is reserved and the same render succeeds.
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 master end-to-end",
           "[c_api][engine][surround]") {

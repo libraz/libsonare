@@ -247,6 +247,12 @@ val RealtimeEngineWasm::processWithMonitor(val channels_val) {
 }
 
 val RealtimeEngineWasm::renderOffline(val channels_val, int block_size) {
+  // Mirror the C-ABI oracle (sonare_engine_render_offline): a never-prepared
+  // engine renders nothing and cannot signal through telemetry, so fail closed
+  // instead of handing back a silent buffer that reads as a completed render.
+  if (engine_.max_block_size() <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
+  }
   ChannelBlock block = readChannels(channels_val);
   engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
                          block.frames, block_size);
@@ -274,6 +280,12 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   if (sonare::channel_count(sonare::layout_from_channel_count(num_channels)) != num_channels) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "unsupported bounce channel count");
+  }
+  // Mirror the C-ABI oracle (sonare_engine_bounce_offline): a never-prepared
+  // engine renders silence with no telemetry channel, so fail closed rather than
+  // return a bounce result the caller would read as a valid silent render.
+  if (engine_.max_block_size() <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
 
   std::vector<std::vector<float>> channels(static_cast<size_t>(num_channels),
@@ -339,6 +351,11 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   const int num_channels = intProperty(options_val, "numChannels", 2);
   if (total_frames <= 0 || block_size <= 0 || num_channels <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid freeze options");
+  }
+  // Mirror the C-ABI oracle (sonare_engine_freeze_offline): freezing a
+  // never-prepared engine would capture pure silence with no error channel.
+  if (engine_.max_block_size() <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
 
   std::vector<std::vector<float>> frozen(static_cast<size_t>(num_channels),
