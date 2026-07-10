@@ -31,6 +31,14 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
     }
     if (hasProperty(options, "numChannels")) {
       opts.num_channels = options["numChannels"].as<int>();
+      // The project bounce only produces a mono downmix or the stereo pair;
+      // wider counts would surface a generic InvalidState from the C ABI later.
+      // Reject them here so WASM matches the C-ABI oracle up front. A
+      // non-positive count defers to the C-ABI default (stereo).
+      if (opts.num_channels > 2) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "unsupported bounce channel count");
+      }
     }
     if (hasProperty(options, "sampleRate")) {
       opts.sample_rate = options["sampleRate"].as<int>();

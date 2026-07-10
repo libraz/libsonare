@@ -477,6 +477,11 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   const int block_size = opts.block_size > 0 ? opts.block_size : 128;
   const int num_channels = opts.num_channels > 0 ? opts.num_channels : 2;
   if (block_size <= 0 || num_channels <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // The project bounce sums to a stereo master and only writes a mono downmix or
+  // the stereo pair; any wider count would leave the extra planes silent. Reject
+  // unsupported widths up front, matching engine-bounce (which rejects channel
+  // counts that do not map to a speaker layout) instead of emitting dead planes.
+  if (num_channels != 1 && num_channels != 2) return SONARE_ERROR_INVALID_PARAMETER;
   const double project_sr = project->history.project().sample_rate();
   const double sample_rate =
       opts.sample_rate > 0 ? static_cast<double>(opts.sample_rate) : project_sr;
@@ -545,6 +550,19 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     }
 #endif
   }
+#if defined(SONARE_WITH_MIXING)
+  // When the caller fixes the window with an explicit total_frames, feed the
+  // per-track stems through the mixer across the whole window rather than
+  // stopping at the arrangement's musical end. The drain-tail shortcut (zero
+  // input past mixer_input_frames) is only valid for the auto-length branch
+  // above, where everything past the arrangement plus the instrument release
+  // tail is guaranteed silent; for an explicit length it would replace a real
+  // instrument/stem tail with the mixer's decaying silence. bounce_through_mixer
+  // clamps this to the render window, so this only ever lifts the input span.
+  if (opts.total_frames > 0) {
+    mixer_input_frames = std::max(mixer_input_frames, frames);
+  }
+#endif
   if (frames < 0 ||
       static_cast<uint64_t>(frames) >
           std::numeric_limits<size_t>::max() / static_cast<uint64_t>(num_channels) ||
