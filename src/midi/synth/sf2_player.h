@@ -29,6 +29,8 @@
 /// are bit-identical for identical event streams within one build.
 
 #include <array>
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -372,9 +374,75 @@ class Sf2Player final : public MidiInstrument {
   /// injected factory. Allocates.
   std::shared_ptr<Sf2RealizedEfx> build_realized_efx() const;
   /// CONTROL thread: apply the insertion-effect content of a GS SysEx to the EFX
-  /// mirror (efx_ / efx_part_enabled_), returning true when it changed. Touches
-  /// only the realise mirror, never audio-side channel state.
+  /// mirror (efx_ / efx_part_enabled_). Returns true when a full chain rebuild is
+  /// required (type change, reset, part switch, or a parameter that cannot be
+  /// applied in place), false when the message was handled without a rebuild
+  /// (parameter-only edit resolved into the EFX parameter queue, or not an EFX
+  /// message). Touches only the realise mirror and the parameter queue, never
+  /// audio-side channel state.
   bool apply_efx_sysex(const uint8_t* data, size_t size) noexcept;
+
+  /// A pending GS EFX parameter update handed from the control thread to the
+  /// audio thread: apply set_parameter(@c param_id, @c value) to stage
+  /// @c stage_index of part @c part's realised insert chain.
+  struct EfxParamUpdate {
+    uint8_t part = 0;
+    uint8_t stage_index = 0;
+    uint32_t param_id = 0;
+    float value = 0.0f;
+  };
+
+  /// Wait-free single-producer (control thread) / single-consumer (audio thread)
+  /// ring of pending EFX parameter updates. A parameter-only GS EFX edit is
+  /// resolved to updates on the control thread and applied on the audio thread
+  /// (serialized with process()), so a live insert processor is never mutated
+  /// across threads and its DSP state (reverb/delay tails) is never rebuilt away.
+  /// Held by unique_ptr so Sf2Player stays movable (std::atomic is not movable).
+  class EfxParamQueue {
+   public:
+    /// Capacity (power of two). GS EFX parameter edits are sparse; when the ring
+    /// is full a push is dropped, which is harmless because the next rebuild
+    /// bakes the current parameter values in from the EFX mirror.
+    static constexpr size_t kCapacity = 128;
+    static_assert((kCapacity & (kCapacity - 1)) == 0, "kCapacity must be a power of two");
+
+    /// CONTROL thread. Returns false when the ring is full (the update is
+    /// dropped).
+    bool push(const EfxParamUpdate& update) noexcept {
+      const size_t head = head_.load(std::memory_order_relaxed);
+      const size_t tail = tail_.load(std::memory_order_acquire);
+      if (head - tail >= kCapacity) return false;
+      slots_[head & (kCapacity - 1)] = update;
+      head_.store(head + 1, std::memory_order_release);
+      return true;
+    }
+
+    /// AUDIO thread. Returns false when the ring is empty.
+    bool pop(EfxParamUpdate& out) noexcept {
+      const size_t tail = tail_.load(std::memory_order_relaxed);
+      const size_t head = head_.load(std::memory_order_acquire);
+      if (head == tail) return false;
+      out = slots_[tail & (kCapacity - 1)];
+      tail_.store(tail + 1, std::memory_order_release);
+      return true;
+    }
+
+   private:
+    std::array<EfxParamUpdate, kCapacity> slots_{};
+    alignas(64) std::atomic<size_t> head_{0};  // control thread (producer)
+    alignas(64) std::atomic<size_t> tail_{0};  // audio thread (consumer)
+  };
+  std::unique_ptr<EfxParamQueue> efx_param_queue_ = std::make_unique<EfxParamQueue>();
+
+  /// CONTROL thread: resolve a parameter-only GS EFX edit against the live
+  /// published chain (reading only the const parameter-descriptor bridge) and
+  /// enqueue the resulting set_parameter tuples for the audio thread. Returns
+  /// true when a full rebuild is required instead (no live chain, no automatable
+  /// parameter matched, or a parameter that is not realtime-safe).
+  bool enqueue_efx_param_updates();
+  /// AUDIO thread: apply every pending EFX parameter update to the current
+  /// published chain, serialized with process(). RT-safe (no alloc, no lock).
+  void drain_efx_param_updates() noexcept;
 
 #if defined(SONARE_MIDI_WITH_FX)
   std::unique_ptr<GsEffectBus> effects_;

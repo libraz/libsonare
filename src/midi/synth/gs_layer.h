@@ -98,7 +98,14 @@ struct GsEfx {
 /// the payload with or without F0/F7 framing. Returns true if the message
 /// addressed the EFX block (even if some bytes were ignored); false otherwise.
 /// Never crashes.
-bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size) noexcept;
+///
+/// @param out_type_changed  Optional out-flag: set to true when the write
+///   changed the EFX TYPE (address 40 03 00/01), false when it touched only
+///   parameter/send bytes. A parameter/send-only change lets the caller update
+///   the already-built insert processors in place (preserving their DSP state)
+///   instead of rebuilding the whole chain, while a type change restructures it.
+bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
+                        bool* out_type_changed = nullptr) noexcept;
 
 /// Insertion-effect adapter name for a GS EFX @p type: the `insert_factory`
 /// processor name an adapter drives, or an empty view for a type this layer

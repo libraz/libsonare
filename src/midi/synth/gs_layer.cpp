@@ -153,7 +153,9 @@ GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
   return out;
 }
 
-bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size) noexcept {
+bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
+                        bool* out_type_changed) noexcept {
+  if (out_type_changed != nullptr) *out_type_changed = false;
   if (data == nullptr || size < 4) return false;
   // Strip optional F0 ... F7 framing.
   if (data[0] == 0xF0) {
@@ -167,6 +169,7 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size) noexcept {
   if (!valid_roland_dt1_checksum(data, size)) return false;
 
   const uint8_t start_lo = data[6];
+  const uint16_t old_type = efx.type;
   uint8_t type_msb = static_cast<uint8_t>(efx.type >> 8);
   uint8_t type_lsb = static_cast<uint8_t>(efx.type & 0x7Fu);
   bool touched = false;
@@ -209,6 +212,10 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size) noexcept {
     efx.type = static_cast<uint16_t>((static_cast<uint16_t>(type_msb) << 8) | type_lsb);
     efx.assigned = true;
   }
+  // A type change restructures the insert chain (the caller rebuilds); a write
+  // that leaves the type value untouched is a parameter/send-only edit the
+  // caller can apply to the live processors in place.
+  if (out_type_changed != nullptr) *out_type_changed = touched && efx.type != old_type;
   return true;
 }
 

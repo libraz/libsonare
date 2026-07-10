@@ -2,8 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
@@ -264,6 +268,42 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   return false;
 }
 
+namespace {
+
+/// Reads the numeric value for @p key out of a flat JSON object string
+/// (`{"key":number,...}`). The realised EFX stage params are always flat
+/// key -> number objects, so a full JSON parser is unnecessary here. Returns
+/// false (leaving @p out untouched) when the key is absent or has no number.
+bool json_find_number(std::string_view json, std::string_view key, float& out) {
+  std::string needle;
+  needle.reserve(key.size() + 2);
+  needle.push_back('"');
+  needle.append(key.data(), key.size());
+  needle.push_back('"');
+  const size_t kpos = json.find(needle);
+  if (kpos == std::string_view::npos) return false;
+  size_t p = kpos + needle.size();
+  while (p < json.size() && (json[p] == ' ' || json[p] == ':')) ++p;
+  const size_t start = p;
+  while (p < json.size()) {
+    const char c = json[p];
+    if ((c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.' || c == 'e' || c == 'E') {
+      ++p;
+    } else {
+      break;
+    }
+  }
+  if (p == start) return false;
+  const std::string token(json.substr(start, p - start));
+  char* end = nullptr;
+  const double v = std::strtod(token.c_str(), &end);
+  if (end == token.c_str()) return false;
+  out = static_cast<float>(v);
+  return true;
+}
+
+}  // namespace
+
 std::shared_ptr<Sf2RealizedEfx> Sf2Player::build_realized_efx() const {
   auto out = std::make_shared<Sf2RealizedEfx>();
   for (int part = 0; part < 16; ++part) {
@@ -311,22 +351,107 @@ void Sf2Player::realize_gs_efx() {
 }
 
 bool Sf2Player::apply_efx_sysex(const uint8_t* data, size_t size) noexcept {
+  // Returns true when a full chain rebuild + republish is required, false when
+  // the message was handled without one (applied in place, or not an EFX
+  // message). The caller (on_control_sysex) only realises on a true return.
   const GsSysEx msg = parse_gs_sysex(data, size);
   switch (msg.kind) {
     case GsSysExKind::kGmReset:
     case GsSysExKind::kGsReset:
-      // A GS/GM reset clears the EFX unit and the part switches (Thru).
+      // A GS/GM reset clears the EFX unit and the part switches (Thru): the
+      // routing structure changes, so a full rebuild is required.
       efx_ = {};
       efx_part_enabled_ = {};
       return true;
     case GsSysExKind::kEfxPartSwitch:
+      // Routing a part in/out of the EFX changes the active-part set: rebuild.
       efx_part_enabled_[msg.channel & 0x0Fu] = msg.value != 0;
       return true;
     case GsSysExKind::kUseForRhythm:
     case GsSysExKind::kNone:
       break;
   }
-  return apply_gs_efx_sysex(efx_, data, size);
+  // EFX-block write (40 03 xx). A TYPE change restructures the insert chain and
+  // needs a rebuild; a parameter/send-only edit is applied to the already-built
+  // processors WITHOUT rebuilding, so their DSP state (reverb/delay tails)
+  // survives (no click/tail dropout). The parameter values are resolved to
+  // {part, stage, param_id, value} tuples on THIS (control) thread and handed to
+  // the audio thread through a wait-free SPSC queue; the audio thread applies
+  // set_parameter serialized with process() (never a cross-thread mutation of a
+  // live processor). If nothing maps to an automatable parameter, or a parameter
+  // is not realtime-safe, fall back to a full rebuild.
+  bool type_changed = false;
+  if (!apply_gs_efx_sysex(efx_, data, size, &type_changed)) return false;
+  if (type_changed) return true;
+  return enqueue_efx_param_updates();
+}
+
+bool Sf2Player::enqueue_efx_param_updates() {
+  // CONTROL thread. Reads the last-published routing (control_current) purely to
+  // discover each built stage processor's JSON-key -> param-id bridge
+  // (parameter_descriptors() is const and safe to read concurrently with the
+  // audio thread); it never mutates a processor here. Only GS-EFX-realised parts
+  // (config insert kNone, bussed solely because a GS EFX chain was built) share
+  // the single EFX unit's parameters; static config-insert parts are left alone.
+  const Sf2RealizedEfx* snapshot = efx_pub_->control_current().get();
+  if (snapshot == nullptr) return true;  // nothing built yet -> rebuild
+  const std::vector<GsEfxStage> stages = gs_efx_insert_chain(efx_);
+  if (stages.empty()) return true;  // Thru / unmapped -> no chain, rebuild
+  size_t enqueued = 0;
+  for (int part = 0; part < 16; ++part) {
+    if (config_.part_inserts[static_cast<size_t>(part)].type != Sf2InsertType::kNone) continue;
+    if (!snapshot->part_bussed[static_cast<size_t>(part)]) continue;
+    const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain =
+        snapshot->chains[static_cast<size_t>(part)];
+    // The published chain skips stages the factory could not build, so it is a
+    // prefix of the stage list; align positionally over the built stages.
+    const size_t count = std::min(chain.size(), stages.size());
+    for (size_t s = 0; s < count; ++s) {
+      const rt::ProcessorBase* proc = chain[s].get();
+      if (proc == nullptr) continue;
+      for (const rt::ParamDescriptor& d : proc->parameter_descriptors()) {
+        float value = 0.0f;
+        if (!json_find_number(stages[s].params_json, d.key, value)) continue;
+        // A parameter that is not realtime-safe would allocate/rebuild in
+        // set_parameter, which is illegal on the audio thread -> rebuild instead.
+        if (!proc->parameter_is_realtime_safe(d.id)) return true;
+        EfxParamUpdate update;
+        update.part = static_cast<uint8_t>(part);
+        update.stage_index = static_cast<uint8_t>(s);
+        update.param_id = d.id;
+        update.value = value;
+        if (efx_param_queue_->push(update)) ++enqueued;
+      }
+    }
+  }
+  // Nothing matched an automatable parameter -> rebuild so the edit is not lost.
+  return enqueued == 0;
+}
+
+void Sf2Player::drain_efx_param_updates() noexcept {
+  // AUDIO thread, at block start after acquire(): apply every pending parameter
+  // update to the current published chain. set_parameter runs here, serialized
+  // with process() on this same thread — the contract it honours — so there is
+  // no cross-thread race and no rebuild (the chain objects, and thus their
+  // reverb/delay tails, are preserved). Tuples whose indices no longer fit the
+  // current chain (a rebuild republished a different shape) are dropped: a
+  // rebuild already bakes the new parameter values in, so nothing is lost.
+  const Sf2RealizedEfx* snapshot = efx_pub_->current();
+  EfxParamUpdate update;
+  while (efx_param_queue_->pop(update)) {
+    if (snapshot == nullptr || update.part >= 16) continue;
+    const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain = snapshot->chains[update.part];
+    if (update.stage_index >= chain.size()) continue;
+    rt::ProcessorBase* proc = chain[update.stage_index].get();
+    if (proc == nullptr) continue;
+    // Only touch parameters the processor declares realtime-safe. This read is on
+    // the audio thread, serialized with set_parameter below, so it is race-free
+    // here; it also guarantees we never take a non-noexcept rebuild/validate path
+    // (this function is noexcept) and skips a stale tuple that, after a type-change
+    // rebuild, would land on a different processor's non-realtime-safe parameter.
+    if (!proc->parameter_is_realtime_safe(update.param_id)) continue;
+    proc->set_parameter(update.param_id, update.value);  // scalar set; bool ignored
+  }
 }
 
 void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
@@ -958,6 +1083,26 @@ void Sf2Player::render_chunk(int n) noexcept {
   }
 
 #if defined(SONARE_MIDI_WITH_FX)
+  // GS EFX -> system FX send routing. A part bussed through the single GS
+  // insertion effect (config insert kNone, so it is bussed only because a GS EFX
+  // chain was realised) feeds the system reverb/chorus/delay from its
+  // POST-effect bus, scaled by the EFX unit's own send amounts (GS 40 03
+  // 17/18/19). Its pre-effect CC91/93/94 send is suppressed below so the wet
+  // tail follows the processed signal without double-sending. Parts with a
+  // static config insert keep the CC-driven pre-insert send unchanged.
+  std::array<bool, 16> efx_routed{};
+  for (int part = 0; part < 16; ++part) {
+    efx_routed[static_cast<size_t>(part)] =
+        part_bussed[static_cast<size_t>(part)] &&
+        config_.part_inserts[static_cast<size_t>(part)].type == Sf2InsertType::kNone;
+  }
+  // Normalised EFX send amounts (raw 0..127 -> the CC send-depth scale). Read
+  // from the EFX mirror: offline it is render-thread-owned; in the live engine
+  // it is updated on the control thread, but a single-byte read cannot tear and
+  // a superseded value simply settles on the next block, so no lock is needed.
+  const float efx_send_reverb = kCcSendDepth * static_cast<float>(efx_.send_reverb) / 127.0f;
+  const float efx_send_chorus = kCcSendDepth * static_cast<float>(efx_.send_chorus) / 127.0f;
+  const float efx_send_delay = kCcSendDepth * static_cast<float>(efx_.send_delay) / 127.0f;
   float* rev_l = nullptr;
   float* rev_r = nullptr;
   float* cho_l = nullptr;
@@ -1030,7 +1175,8 @@ void Sf2Player::render_chunk(int n) noexcept {
         mix_r_[static_cast<size_t>(i)] += r;
       }
 #if defined(SONARE_MIDI_WITH_FX)
-      if (rev_l != nullptr) {
+      // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
+      if (rev_l != nullptr && !efx_routed[part]) {
         const float rs = std::min(1.0f, v.params.reverb_send + mod.reverb_send);
         if (rs > 0.0f) {
           rev_l[i] += l * rs;
@@ -1075,7 +1221,8 @@ void Sf2Player::render_chunk(int n) noexcept {
         mix_r_[static_cast<size_t>(i)] += r;
       }
 #if defined(SONARE_MIDI_WITH_FX)
-      if (rev_l != nullptr) {
+      // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
+      if (rev_l != nullptr && !efx_routed[part]) {
         if (mod.fallback_reverb_send > 0.0f) {
           rev_l[i] += l * mod.fallback_reverb_send;
           rev_r[i] += r * mod.fallback_reverb_send;
@@ -1119,7 +1266,8 @@ void Sf2Player::render_chunk(int n) noexcept {
           mix_r_[static_cast<size_t>(i)] += add;
         }
 #if defined(SONARE_MIDI_WITH_FX)
-        if (rev_l != nullptr) {
+        // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
+        if (rev_l != nullptr && !efx_routed[part]) {
           const Sf2ChannelMod& mod = channel_mods_[part];
           if (mod.fallback_reverb_send > 0.0f) {
             rev_l[i] += add * mod.fallback_reverb_send;
@@ -1160,6 +1308,28 @@ void Sf2Player::render_chunk(int n) noexcept {
           proc->process(chans, 2, n);
         }
       }
+#if defined(SONARE_MIDI_WITH_FX)
+      // GS EFX -> system FX: feed the POST-effect bus into reverb/chorus/delay by
+      // the EFX unit's send amounts (the pre-effect CC send was suppressed for
+      // these parts), so an insertion-effect part's wet tail is generated from
+      // the processed signal rather than the clean input.
+      if (rev_l != nullptr && efx_routed[static_cast<size_t>(part)]) {
+        for (int i = 0; i < n; ++i) {
+          if (efx_send_reverb > 0.0f) {
+            rev_l[i] += bus_l[i] * efx_send_reverb;
+            rev_r[i] += bus_r[i] * efx_send_reverb;
+          }
+          if (efx_send_chorus > 0.0f) {
+            cho_l[i] += bus_l[i] * efx_send_chorus;
+            cho_r[i] += bus_r[i] * efx_send_chorus;
+          }
+          if (efx_send_delay > 0.0f) {
+            dly_l[i] += bus_l[i] * efx_send_delay;
+            dly_r[i] += bus_r[i] * efx_send_delay;
+          }
+        }
+      }
+#endif
       for (int i = 0; i < n; ++i) {
         mix_l_[static_cast<size_t>(i)] += bus_l[i];
         mix_r_[static_cast<size_t>(i)] += bus_r[i];
@@ -1183,6 +1353,10 @@ void Sf2Player::process(float* const* channels, int num_channels, int num_sample
   // Offline this picks up the inline publish just above; live it picks up the
   // control thread's on_control_sysex publish.
   efx_pub_->acquire();
+  // Apply any pending GS EFX parameter automation to the adopted chain, on this
+  // (audio) thread, before rendering — the sanctioned resolve-on-control /
+  // apply-on-audio path. A no-op cost (two atomic loads) when the queue is empty.
+  drain_efx_param_updates();
   if (mix_l_.size() < static_cast<size_t>(kChunkFrames)) return;
   float* left = channels[0];
   float* right = num_channels > 1 ? channels[1] : nullptr;
