@@ -157,6 +157,102 @@ def test_synthesize_rir_missing_output_uses_error_exit_code() -> None:
     assert "requires --output" in result.stderr
 
 
+def test_chords_json_reports_c_bass_not_root(monkeypatch, capsys) -> None:
+    """A slash chord with C in the bass emits bass=0/C, not the root."""
+    import types as _types
+
+    import libsonare
+    from libsonare import cli
+    from libsonare.types import PitchClass
+
+    # F/C: root F (5), bass C (0). PitchClass.C == 0 is falsy, so a naive
+    # ``chord.bass or chord.root`` would incorrectly report the root (5).
+    fake_chord = _types.SimpleNamespace(
+        name="F/C",
+        root=PitchClass.F,
+        quality="maj",
+        bass=PitchClass.C,
+        start=0.0,
+        end=1.0,
+        confidence=0.9,
+    )
+    fake_result = _types.SimpleNamespace(chords=[fake_chord])
+
+    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0] * 1024, 22050))
+    monkeypatch.setattr(libsonare, "detect_chords", lambda *a, **k: fake_result)
+
+    args = argparse.Namespace(
+        file="unused.wav",
+        min_duration=0.0,
+        smoothing_window=0,
+        threshold=0.0,
+        triads_only=False,
+        n_fft=2048,
+        hop_length=512,
+        no_beat_sync=True,
+        use_hmm=False,
+        hmm_beam_width=0,
+        key_context=False,
+        key_root="C",
+        key_mode="major",
+        detect_inversions=True,
+        nnls=False,
+        json=True,
+    )
+    assert cli.cmd_chords(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+    chord = payload["chords"][0]
+    assert chord["root"] == PitchClass.F.value
+    assert chord["bass"] == PitchClass.C.value == 0
+
+
+def test_synthesize_rir_invalid_geometry_maps_invalid_parameter(monkeypatch) -> None:
+    """Invalid room geometry returns EXIT_INVALID_PARAMETER, not a bare 1."""
+    import types as _types
+
+    import libsonare
+    from libsonare import cli
+    from libsonare.cli import EXIT_INVALID_PARAMETER
+
+    monkeypatch.setattr(
+        libsonare,
+        "synthesize_rir",
+        lambda *a, **k: _types.SimpleNamespace(has_error=True, rir=[], sample_rate=48000),
+    )
+    args = argparse.Namespace(
+        output="out.wav",
+        length=7.0,
+        width=5.0,
+        height=3.0,
+        source_x=1.0,
+        source_y=1.0,
+        source_z=1.2,
+        listener_x=5.0,
+        listener_y=4.0,
+        listener_z=1.7,
+        absorption=0.2,
+        sample_rate=48000,
+        ism_order=3,
+        seed=1,
+        max_seconds=0.0,
+        json=False,
+    )
+    assert cli.cmd_synthesize_rir(args) == EXIT_INVALID_PARAMETER
+    assert EXIT_INVALID_PARAMETER != 1
+
+
+def test_synthesize_rir_invalid_geometry_exit_code_end_to_end() -> None:
+    """The invalid-geometry failure maps through main() to EXIT_INVALID_PARAMETER."""
+    from libsonare.cli import EXIT_INVALID_PARAMETER
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = os.path.join(tmpdir, "rir.wav")
+        # A source far outside a 7x5x3 m room forces an invalid-geometry result.
+        result = _run_cli(["synthesize-rir", "--output", out_path, "--source-x", "999"])
+        assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
+        assert "invalid room geometry" in result.stderr
+
+
 def test_pcm16_clamps_and_stays_byte_identical() -> None:
     """The shared PCM helper preserves the clamp-and-scale contract (L-17)."""
     from libsonare import cli

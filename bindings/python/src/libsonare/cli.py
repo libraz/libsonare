@@ -622,7 +622,9 @@ def cmd_chords(args: argparse.Namespace) -> int:
                             "name": chord.name,
                             "root": chord.root.value,
                             "quality": chord.quality,
-                            "bass": (chord.bass or chord.root).value,
+                            # PitchClass.C == 0 is falsy, so a plain ``or`` would
+                            # drop a C bass note back to the root. Guard on None.
+                            "bass": (chord.root if chord.bass is None else chord.bass).value,
                             "start": round(chord.start, 6),
                             "end": round(chord.end, 6),
                             "confidence": round(chord.confidence, 4),
@@ -1198,7 +1200,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
     )
     if result.has_error:
         print("Error: invalid room geometry (source/listener outside the room)", file=sys.stderr)
-        return 1
+        return EXIT_INVALID_PARAMETER
     _write_wav(args.output, result.rir, result.sample_rate)
     if args.json:
         print(json.dumps({"output": args.output, "samples": len(result.rir)}))
