@@ -237,6 +237,11 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   mixing::ChannelStrip* raw = strip.get();
   for (OwnedStrip& owned : owned_strips_) {
     if (owned.track_id == track_id) {
+      // Control-thread-only, not concurrent with process() (see RealtimeEngine's
+      // thread-safety contract). This std::move destroys the previously bound
+      // strip immediately -- there is no deferred reclaim -- before rebinding the
+      // raw pointer the audio thread reads, so a concurrent render would use
+      // freed memory.
       owned.strip = std::move(strip);
       owned.spec = spec;
       return bind_track_strip(track_id, raw);

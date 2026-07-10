@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -13,19 +14,31 @@ void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
 
 bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* data, size_t size,
                                      int64_t render_frame) noexcept {
-  // CONTROL thread. Copy the SysEx bytes into the next round-robin store slot,
-  // bump its generation, then enqueue a scalar-only command referencing the
-  // slot. push_command's release publishes the freshly written slot bytes and
-  // generation to the audio thread; apply_command validates the generation
-  // before viewing the bytes (see kMidiSysExImmediate).
+  // CONTROL thread. Copy the SysEx bytes into the next round-robin store slot as
+  // a seqlock writer, then enqueue a scalar-only command referencing the slot.
+  // The slot generation is a per-slot even/odd sequence: an ODD value marks a
+  // write in progress and an EVEN value marks a completed (published) payload.
+  // The control thread is the sole writer of a slot's generation, so reading its
+  // own last (even) value with relaxed order is safe. The audio-thread reader
+  // (apply_command, kMidiSysExImmediate) brackets its payload copy with two
+  // acquire loads of the generation and accepts only a stable even value that
+  // matches the command's generation, so a slot recycled mid-read (torn payload)
+  // or actively being rewritten (odd) is dropped.
   if (data == nullptr || size == 0 || size > kMaxSysExPayloadBytes) return false;
   const uint32_t slot_index = sysex_payload_cursor_ % kSysExPayloadSlots;
   sysex_payload_cursor_++;
   SysExPayloadSlot& slot = sysex_payload_slots_[slot_index];
+  const uint32_t base = slot.generation.load(std::memory_order_relaxed);  // last even (this thread)
+  const uint32_t generation = base + 2u;                                  // even: published value
+  slot.generation.store(base + 1u, std::memory_order_relaxed);            // odd: write in progress
+  // Order the in-progress mark before the payload writes so a reader can never
+  // observe fresh payload bytes still tagged with the previous (even) generation.
+  std::atomic_thread_fence(std::memory_order_release);
   std::memcpy(slot.bytes.data(), data, size);
   slot.size = static_cast<uint32_t>(size);
-  const uint32_t generation = slot.generation.load(std::memory_order_relaxed) + 1u;
-  slot.generation.store(generation, std::memory_order_relaxed);
+  // Release-store the even (done) generation; it publishes the payload writes to
+  // the audio thread's acquire load.
+  slot.generation.store(generation, std::memory_order_release);
   // Realise any control-thread-built effect of this SysEx (e.g. a GS insertion
   // effect) off the audio thread now, on this control thread; the audio thread
   // swaps the rebuilt chains in wait-free at its next block. The audio-visible

@@ -60,10 +60,20 @@ graph::Graph* GraphRuntime::swap(graph::Graph* graph, const char* input_node_id,
 
 void GraphRuntime::process(float* const* io, int num_channels, int offset,
                            int num_frames) noexcept {
-  // Audio thread: adopt the latest published binding once. current() then keeps
-  // the graph alive for the entire render below, so there is no per-block
-  // refcount churn, no lock, and no free on this thread.
-  binding_.acquire();
+  // Audio thread: this runs once per sub-block. Adopt the latest published
+  // binding exactly ONCE per block, at the block's first sub-block (offset 0),
+  // then freeze it for the remaining sub-blocks by reading current(). This
+  // matches the block-freeze invariant the clip / automation / MIDI-clip
+  // snapshots use (all acquired once at block start): a control-thread publish
+  // can never swap the graph mid-block. current() keeps the graph alive for the
+  // whole block, so there is no per-block refcount churn, no lock, and no free
+  // on this thread. The `!current()` clause adopts the first-ever published
+  // binding when the initial sub-block is not at offset 0 (a standalone caller
+  // that renders a mid-block segment before any block head), so nothing is
+  // silently rendered from an unadopted (null) binding.
+  if (offset == 0 || binding_.current() == nullptr) {
+    binding_.acquire();
+  }
   const Binding* binding = binding_.current();
   if (!binding || !binding->graph || !binding->input || !binding->output || !io ||
       num_channels <= 0 || num_frames <= 0 || offset < 0) {

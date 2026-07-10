@@ -83,9 +83,19 @@ enum class CaptureSource {
 ///   @c prepare, @c render_offline (offline use), @c set_tempo,
 ///   @c set_tempo_segments, @c set_time_signature,
 ///   @c set_time_signature_segments, @c set_markers, @c set_clips,
-///   @c bind_mixing_strip, @c add_monitor_strip, @c remove_monitor_strip,
-///   @c swap_graph, @c bind_graph_parameter. These must be called from the
-///   thread that owns engine lifecycle; do not call from the audio callback.
+///   @c bind_mixing_strip, @c set_master_strip, @c set_track_strip,
+///   @c set_bus_strip, @c bind_track_strip, @c add_monitor_strip,
+///   @c remove_monitor_strip, @c swap_graph, @c bind_graph_parameter. These must
+///   be called from the thread that owns engine lifecycle, between blocks; do
+///   NOT call them from the audio callback AND do NOT call them concurrently with
+///   @c process / @c process_with_monitor / @c render_offline. The strip binders
+///   (@c set_master_strip, @c set_track_strip, @c set_bus_strip) in particular
+///   rebind a raw ChannelStrip pointer the audio thread dereferences and destroy
+///   the previously bound strip immediately (no deferred reclaim), so a
+///   concurrent render would dereference freed memory. Unlike the graph / clip /
+///   automation swaps (which publish through an @c rt::RtPublisher and reclaim
+///   the old snapshot off the audio thread), strip binding is not on a deferred
+///   reclaim path and relies on this not-concurrent-with-process contract.
 /// Cross-thread state changes that must reach the audio thread (e.g. tempo,
 /// parameter automation) flow through @c push_command and the SPSC command
 /// queue, drained inside @c process at sub-block boundaries.
@@ -611,13 +621,17 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Bounded SysEx payload store for live (queued) SysEx commands. The control
   // thread (push_midi_sysex) copies bytes into a round-robin slot and enqueues a
   // kMidiSysExImmediate command carrying the slot index + generation; the audio
-  // thread reads the slot, dispatches a MidiEvent viewing the slot bytes, and
-  // never allocates. The command queue's release/acquire ordering publishes the
-  // slot bytes to the audio thread; the atomic per-slot generation lets the
-  // audio thread drop a command whose slot the control thread has already
-  // recycled (a burst deeper than kSysExPayloadSlots before the audio thread
-  // drains it), so a torn payload is never fed to an instrument. SysEx is a
-  // sparse control-rate message, so the ring depth is ample in practice.
+  // thread reads the slot, dispatches a MidiEvent from a torn-free local copy of
+  // the slot bytes, and never allocates. Each slot is published as a seqlock: the
+  // per-slot atomic generation is an even/odd sequence where an ODD value marks a
+  // write in progress and an EVEN value a completed payload. The writer marks the
+  // slot odd, writes the bytes, then release-stores the even (done) generation;
+  // the audio thread brackets its payload copy with two acquire loads of the
+  // generation and accepts only a stable even value matching the command's
+  // generation. This drops a slot the control thread recycled or is actively
+  // rewriting mid-read (a burst deeper than kSysExPayloadSlots before the audio
+  // thread drains it), so a torn payload is never fed to an instrument. SysEx is
+  // a sparse control-rate message, so the ring depth is ample in practice.
   static constexpr size_t kMaxSysExPayloadBytes = 512;
   static constexpr size_t kSysExPayloadSlots = 64;
   struct SysExPayloadSlot {

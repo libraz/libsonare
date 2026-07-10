@@ -3,6 +3,11 @@
 namespace sonare::engine {
 
 bool MixingRuntime::bind(mixing::ChannelStrip* strip) noexcept {
+  // strip_ is a plain raw pointer the audio thread reads in process_at(); it is
+  // not published through a deferred-reclaim RtPublisher. bind() must therefore
+  // run on the control thread and not concurrently with process() (see
+  // RealtimeEngine's thread-safety contract), since the caller destroys the
+  // previously bound strip right after rebinding.
   strip_ = strip;
   return strip_ != nullptr;
 }

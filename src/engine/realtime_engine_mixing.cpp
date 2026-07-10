@@ -50,6 +50,11 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
     return false;
   }
   if (!strip) return false;
+  // Control-thread-only, not concurrent with process() (see RealtimeEngine's
+  // thread-safety contract). This std::move destroys the previously bound master
+  // strip immediately -- there is no deferred reclaim -- and rebinds the raw
+  // pointer the audio thread reads, so a concurrent render would use freed
+  // memory. The caller must quiesce process() around this call.
   clear_master_insert_automations();
   owned_master_strip_ = std::move(strip);
   const bool bound = bind_mixing_strip(owned_master_strip_.get());

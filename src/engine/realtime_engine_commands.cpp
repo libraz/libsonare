@@ -1,5 +1,8 @@
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cmath>
+#include <cstring>
 #include <memory>
 #include <utility>
 
@@ -368,23 +371,37 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
     case rt::CommandType::kMidiSysExImmediate: {
 #if defined(SONARE_WITH_ARRANGEMENT)
       // Resolve the scalar slot reference (arg.i = (generation << 32) | index)
-      // filled by push_midi_sysex. The command queue's acquire on pop already
-      // published the slot bytes; the generation guard drops a slot the control
-      // thread has since recycled (burst deeper than the ring), so a torn
-      // payload never reaches the instrument. The slot bytes stay valid for the
-      // synchronous dispatch below (the instrument consumes them inline).
+      // filled by push_midi_sysex. The slot is published as a seqlock: read the
+      // generation (acquire), copy the payload into a fixed local buffer, then
+      // re-read the generation (acquire) and accept the copy only if both reads
+      // observe the same even (write-complete) value that matches the command's
+      // generation. This drops a slot the control thread recycled mid-read (torn
+      // payload) or is actively rewriting (odd generation). The size read inside
+      // the bracket is clamped before the copy so a torn oversize value can never
+      // read past the fixed slot buffer even on the rejected path.
       const uint64_t packed = static_cast<uint64_t>(command.arg.i);
       const uint32_t slot_index = static_cast<uint32_t>(packed & 0xFFFFFFFFu);
       const uint32_t generation = static_cast<uint32_t>(packed >> 32);
       if (slot_index < sysex_payload_slots_.size()) {
         SysExPayloadSlot& slot = sysex_payload_slots_[slot_index];
-        if (slot.generation.load(std::memory_order_relaxed) == generation && slot.size > 0) {
+        const uint32_t seq_before = slot.generation.load(std::memory_order_acquire);
+        uint32_t payload_size = slot.size;
+        if (payload_size > kMaxSysExPayloadBytes) payload_size = kMaxSysExPayloadBytes;
+        std::array<uint8_t, kMaxSysExPayloadBytes> payload;
+        std::memcpy(payload.data(), slot.bytes.data(), payload_size);
+        // Order the payload copy before the second generation read so a mid-copy
+        // rewrite is always observed as a generation mismatch below.
+        std::atomic_thread_fence(std::memory_order_acquire);
+        const uint32_t seq_after = slot.generation.load(std::memory_order_relaxed);
+        if (seq_before == seq_after && (seq_before & 1u) == 0u && seq_before == generation &&
+            payload_size > 0) {
           // The UMP carries only a SysEx marker (non-channel-voice message type);
-          // the resolved payload view drives the instrument's SysEx handler, the
-          // same shape the offline clip path dispatches.
+          // the torn-free local payload copy drives the instrument's SysEx
+          // handler, the same shape the offline clip path dispatches. The local
+          // buffer stays in scope for the synchronous dispatch below.
           const midi::Ump ump = midi::make_sysex_handle(0, /*handle=*/0);
-          midi_sequencer_.inject_event(command.target_id, command.sample_time, ump,
-                                       slot.bytes.data(), slot.size);
+          midi_sequencer_.inject_event(command.target_id, command.sample_time, ump, payload.data(),
+                                       payload_size);
         }
       }
 #endif
