@@ -109,6 +109,13 @@ enum class MidiLoopMode : uint8_t {
 /// the RtPublisher path (like engine::ClipSchedule). Events are already in
 /// absolute render frames (PPQ->frame baked by the compiler). The RT sequencer
 /// scans `events` for the current block and dispatches them.
+///
+/// No per-track gain/pan fields: a MIDI clip carries UMP events, not a sample
+/// level, so a source track's continuous gain/pan are applied downstream at the
+/// track's channel strip (SONARE_WITH_MIXING), not represented here. Builds
+/// without the mixing runtime honor only the track's mute/solo silence gate for
+/// MIDI (the compiler drops the clip entirely when the track is silenced);
+/// continuous gain and pan for MIDI require SONARE_WITH_MIXING.
 struct MidiClipSchedule {
   /// Stable clip id (mirrors the EditClip id).
   uint32_t id = 0;

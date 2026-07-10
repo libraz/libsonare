@@ -296,6 +296,12 @@ bool SetClipFade::apply(Project& project, MidiContentStore& /*store*/) {
   }
   c->fade_in = fade_in_;
   c->fade_out = fade_out_;
+  // Clamp each fade to the clip length so the compiled schedule cannot place the
+  // fade-out start before the clip start (an oversized fade would otherwise
+  // attenuate the whole clip). A negative stored length is treated as no fade.
+  const double max_fade_ppq = std::max(0.0, c->length_ppq);
+  c->fade_in.length_ppq = std::clamp(c->fade_in.length_ppq, 0.0, max_fade_ppq);
+  c->fade_out.length_ppq = std::clamp(c->fade_out.length_ppq, 0.0, max_fade_ppq);
   return true;
 }
 

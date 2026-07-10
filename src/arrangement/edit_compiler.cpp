@@ -625,11 +625,16 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       const int64_t source_samples =
           num_channels > 0 ? static_cast<int64_t>(storage->channels[0].size()) : 0;
 
+      // Clamp each fade length to the clip's own duration so an oversized fade
+      // cannot push the fade-out start before the clip start (which would
+      // attenuate the whole clip). A negative stored length is treated as no fade.
+      const double fade_in_ppq = std::clamp(clip.fade_in.length_ppq, 0.0, clip.length_ppq);
+      const double fade_out_ppq = std::clamp(clip.fade_out.length_ppq, 0.0, clip.length_ppq);
       const int64_t fade_in_samples = std::max<int64_t>(
-          0, tempo_map.ppq_to_sample(clip.start_ppq + clip.fade_in.length_ppq) - clip_start_sample);
-      const int64_t fade_out_samples = std::max<int64_t>(
-          0, tempo_map.ppq_to_sample(clip.end_ppq()) -
-                 tempo_map.ppq_to_sample(clip.end_ppq() - clip.fade_out.length_ppq));
+          0, tempo_map.ppq_to_sample(clip.start_ppq + fade_in_ppq) - clip_start_sample);
+      const int64_t fade_out_samples =
+          std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.end_ppq()) -
+                                   tempo_map.ppq_to_sample(clip.end_ppq() - fade_out_ppq));
 
       engine::ClipAudioBuffer buffer;
       buffer.channels = storage->channel_ptrs.data();
@@ -719,7 +724,16 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                "MIDI clip has non-positive length or negative start/offset PPQ");
       continue;
     }
-    // A muted (or non-soloed-while-soloing) track emits no notes.
+    // A muted (or non-soloed-while-soloing) track emits no notes. Only the
+    // silence gate is honored here: a MIDI clip carries UMP events, not a sample
+    // level, so a track's continuous gain/pan cannot be baked into the schedule.
+    // In mixing builds those controls take effect at the track's channel strip
+    // (see the mixer-scene pass above), which applies them uniformly to the
+    // instrument's rendered audio. Without SONARE_WITH_MIXING there is no per
+    // -track output stage, and folding gain into note velocity would be lossy and
+    // wrong (velocity selects sample layers / brightness, not linear level, and
+    // cannot express gain > 1), so non-mixer MIDI honors mute/solo only —
+    // continuous gain and pan require SONARE_WITH_MIXING.
     if (effective_track_gain(project.find_track(clip.track_id), any_solo) <= 0.0f) {
       continue;
     }

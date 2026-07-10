@@ -246,16 +246,21 @@ float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position) noexcept
   const int64_t fade_length = clip.fade_reference_length_samples > 0
                                   ? clip.fade_reference_length_samples
                                   : clip.length_samples;
-  if (clip.fade_in_samples > 0 && fade_position < clip.fade_in_samples) {
-    const float fraction =
-        static_cast<float>(fade_position) / static_cast<float>(clip.fade_in_samples);
+  // Clamp each fade to the clip's own length. An oversized fade-out would
+  // otherwise drive the fade-out start (fade_length - fade_out_samples) negative,
+  // so every sample falls inside the fade ramp and the whole clip attenuates.
+  const int64_t fade_in_samples = std::min(std::max<int64_t>(0, clip.fade_in_samples), fade_length);
+  const int64_t fade_out_samples =
+      std::min(std::max<int64_t>(0, clip.fade_out_samples), fade_length);
+  if (fade_in_samples > 0 && fade_position < fade_in_samples) {
+    const float fraction = static_cast<float>(fade_position) / static_cast<float>(fade_in_samples);
     gain *= curve_gain(fraction, clip.fade_in_curve);
   }
-  if (clip.fade_out_samples > 0) {
-    const int64_t fade_start = fade_length - clip.fade_out_samples;
+  if (fade_out_samples > 0) {
+    const int64_t fade_start = fade_length - fade_out_samples;
     if (fade_position >= fade_start) {
       const float fraction = static_cast<float>(std::max<int64_t>(0, fade_length - fade_position)) /
-                             static_cast<float>(clip.fade_out_samples);
+                             static_cast<float>(fade_out_samples);
       gain *= curve_gain(fraction, clip.fade_out_curve);
     }
   }
