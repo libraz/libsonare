@@ -35,6 +35,12 @@ namespace sonare::midi::synth {
 /// envelope; unused formants have zero gain.
 inline constexpr int kVocalFormants = 5;
 
+/// Number of selectable vowels (/a/ /e/ /i/ /o/ /u/) — the first dimension of
+/// the vowel formant table and the range of the vowel selector. Distinct from
+/// kVocalFormants (the per-vowel formant count): the two happen to share the
+/// value 5 but index independent dimensions.
+inline constexpr int kVocalVowels = 5;
+
 /// Source-filter vocal section of a NativeSynthPatch (used when mode == kVocal).
 struct VocalPatchParams {
   /// Vowel selector: 0 = /a/ (ah), 1 = /e/ (eh), 2 = /i/ (ee), 3 = /o/ (oh),

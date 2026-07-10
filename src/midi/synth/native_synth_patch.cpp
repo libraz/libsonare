@@ -244,7 +244,7 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.plucked_string.release_damp_s =
       std::clamp(sanitize(p.plucked_string.release_damp_s, 0.12f), 0.01f, 10.0f);
   p.plucked_string.buzz = std::clamp(sanitize(p.plucked_string.buzz, 0.0f), 0.0f, 1.0f);
-  p.vocal.vowel = std::clamp(p.vocal.vowel, 0, kVocalFormants - 1);
+  p.vocal.vowel = std::clamp(p.vocal.vowel, 0, kVocalVowels - 1);
   p.vocal.brightness = std::clamp(sanitize(p.vocal.brightness, 0.5f), 0.0f, 1.0f);
   p.vocal.breath_noise = std::clamp(sanitize(p.vocal.breath_noise, 0.1f), 0.0f, 1.0f);
   p.vocal.vibrato_rate_hz = std::clamp(sanitize(p.vocal.vibrato_rate_hz, 5.5f), 0.1f, 12.0f);

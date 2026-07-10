@@ -4,10 +4,13 @@
 #include <cmath>
 
 #include "rt/fractional_delay.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
 namespace {
+
+using sonare::constants::kPi;
 
 constexpr float kTwoPi = 6.28318530717958647692f;
 
@@ -194,7 +197,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   const float tension = std::clamp(params.lip_tension, 0.0f, 1.0f);
   const float f_lip = std::min(f0 * (1.0f + kLipTuneSpan * (tension - 0.5f)), 0.45f * srf);
   const float q = kLipQMin + kLipQSpan * (1.0f - damp);
-  float lip_r = std::exp(-static_cast<float>(M_PI) * (f_lip / q) / srf);
+  float lip_r = std::exp(-kPi * (f_lip / q) / srf);
   lip_r = std::min(lip_r, 0.99995f);
   const float w = kTwoPi * f_lip / srf;
   lip_a1_ = 2.0f * lip_r * std::cos(w);
@@ -292,7 +295,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   lip2_x1_ = lip2_x2_ = lip2_z1_ = lip2_z2_ = 0.0f;
   if (dyn_lip_ > 0.0f) {
     const float f2 = std::min(f_lip * kLip2Mult, 0.45f * srf);
-    float r2 = std::exp(-static_cast<float>(M_PI) * (f2 / kLip2Q) / srf);
+    float r2 = std::exp(-kPi * (f2 / kLip2Q) / srf);
     r2 = std::min(r2, 0.99995f);
     const float w2 = kTwoPi * f2 / srf;
     lip2_a1_ = 2.0f * r2 * std::cos(w2);

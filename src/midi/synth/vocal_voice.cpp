@@ -20,7 +20,7 @@ struct VowelFormant {
 // (0 = /a/, 1 = /e/, 2 = /i/, 3 = /o/, 4 = /u/). Frequencies / relative levels /
 // bandwidths follow the classic sung-bass measurements used by the Csound
 // FOF vowel corpus.
-constexpr VowelFormant kVowelTable[5][kVocalFormants] = {
+constexpr VowelFormant kVowelTable[kVocalVowels][kVocalFormants] = {
     // /a/
     {{600.0f, 0.0f, 60.0f},
      {1040.0f, -7.0f, 70.0f},
@@ -116,7 +116,7 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   // form_a1_/form_a2_ hold the NEGATED normalized denominator so render() only
   // accumulates. All poles lie strictly inside the unit circle (alpha > 0), so
   // the bank is unconditionally stable.
-  const int vowel = (params.vowel >= 0 && params.vowel < 5) ? params.vowel : 0;
+  const int vowel = (params.vowel >= 0 && params.vowel < kVocalVowels) ? params.vowel : 0;
   num_formants_ = kVocalFormants;
   for (int i = 0; i < kVocalFormants; ++i) {
     const VowelFormant& fm = kVowelTable[vowel][i];
