@@ -45,7 +45,7 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   rt::ScopedNoDenormals no_denormals;
   const float target_wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float target_feedback = std::clamp(config_.feedback, 0.0f, 0.95f);
-  const float ping_pong = std::clamp(config_.ping_pong, 0.0f, 1.0f);
+  const float target_ping_pong = std::clamp(config_.ping_pong, 0.0f, 1.0f);
   const std::array<float, 2> target_delay_samples{
       config_delay_samples(config_.delay_time_l_ms, sample_rate_),
       config_delay_samples(config_.delay_time_r_ms, sample_rate_)};
@@ -61,8 +61,10 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
     delay_samples_[1] += (target_delay_samples[1] - delay_samples_[1]) * smoothing_coeff;
     smoothed_feedback_ += (target_feedback - smoothed_feedback_) * smoothing_coeff;
     smoothed_dry_wet_ += (target_wet - smoothed_dry_wet_) * smoothing_coeff;
+    smoothed_ping_pong_ += (target_ping_pong - smoothed_ping_pong_) * smoothing_coeff;
     const float wet = smoothed_dry_wet_;
     const float dry = 1.0f - wet;
+    const float ping_pong = smoothed_ping_pong_;
     const float in_l = left[i];
     const float in_r = right[i];
     const float feed_l = in_l + smoothed_feedback_ * ((1.0f - ping_pong) * feedback_state_[0] +
@@ -112,6 +114,7 @@ void StereoDelay::reset() {
   feedback_state_ = {0.0f, 0.0f};
   smoothed_feedback_ = std::clamp(config_.feedback, 0.0f, 0.95f);
   smoothed_dry_wet_ = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  smoothed_ping_pong_ = std::clamp(config_.ping_pong, 0.0f, 1.0f);
 }
 
 void StereoDelay::set_config(const StereoDelayConfig& config) noexcept {
@@ -132,7 +135,8 @@ bool StereoDelay::set_parameter(unsigned int param_id, float value) {
       config_.feedback = std::clamp(value, 0.0f, 0.95f);
       return true;
     case 3:
-      // process() clamps ping_pong to [0, 1]; store the raw target.
+      // process() clamps ping_pong to [0, 1] and smooths it; store the raw
+      // target.
       config_.ping_pong = value;
       return true;
     case 4:

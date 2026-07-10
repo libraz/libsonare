@@ -35,7 +35,7 @@ class StereoDelay : public rt::ProcessorBase {
   //   0 = delay_time_l_ms
   //   1 = delay_time_r_ms
   //   2 = feedback (clamped to [0, 0.95], smoothed in process())
-  //   3 = ping_pong (clamped to [0, 1] in process())
+  //   3 = ping_pong (clamped to [0, 1], smoothed in process())
   //   4 = dry_wet (clamped to [0, 1], smoothed in process())
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
@@ -49,6 +49,7 @@ class StereoDelay : public rt::ProcessorBase {
   std::array<float, 2> feedback_state_{{0.0f, 0.0f}};
   float smoothed_feedback_ = 0.0f;
   float smoothed_dry_wet_ = 0.5f;
+  float smoothed_ping_pong_ = 0.0f;
 };
 
 }  // namespace sonare::effects::delay
