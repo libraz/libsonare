@@ -146,6 +146,12 @@ void put_tag(std::vector<uint8_t>* out, const uint8_t (&tag)[4]) {
 }
 
 void put_vlq(std::vector<uint8_t>* out, uint32_t value) {
+  // An SMF variable-length quantity is at most 4 bytes (28 significant bits), so
+  // clamp to the largest representable value. A 5th byte would carry a
+  // continuation bit the reader rejects, making the stream unreadable to this
+  // library and to spec-compliant DAWs.
+  constexpr uint32_t kMaxVlq = 0x0FFFFFFFu;
+  if (value > kMaxVlq) value = kMaxVlq;
   // Encode 7 bits/byte, big-endian, continuation bit on all but the last.
   std::array<uint8_t, 5> buf{};
   int n = 0;
@@ -212,21 +218,46 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   bool saw_end_of_track = false;
   std::vector<uint8_t> pending_sysex;
   double pending_sysex_ppq = 0.0;
+  bool pending_sysex_active = false;
+
+  // Bytes remaining before the declared track boundary. Every per-event read is
+  // bounded by this so a corrupt in-track event length can never consume the
+  // following track's bytes (which would corrupt it and fail the whole import);
+  // on any overrun the track parse stops and the reader resynchronizes to
+  // end_pos below, skipping / repairing just this track.
+  const auto track_remaining = [&]() -> size_t {
+    return reader->pos() < end_pos ? end_pos - reader->pos() : 0;
+  };
+  // Discards an unterminated split SysEx when a non-continuation event arrives,
+  // so a later F7 packet cannot concatenate onto stale bytes.
+  const auto discard_pending_sysex = [&]() {
+    if (pending_sysex_active) {
+      pending_sysex.clear();
+      pending_sysex_active = false;
+      ++(*skipped);
+    }
+  };
 
   while (reader->pos() < end_pos && !reader->overflow()) {
     const uint32_t delta = reader->vlq();
     if (reader->overflow()) return false;
+    if (reader->pos() > end_pos) break;  // A VLQ delta ran past the track end.
     tick += delta;
     const double ppq = smf_ticks_to_ppq(tick, ppqn);
 
+    if (track_remaining() == 0) break;  // No room for a status byte.
     uint8_t status = reader->u8();
     if (reader->overflow()) return false;
 
     if (status == kMetaPrefix) {
       running_status = 0;
+      discard_pending_sysex();
+      if (track_remaining() < 1) break;  // No room for the meta type byte.
       const uint8_t meta_type = reader->u8();
       const uint32_t meta_len = reader->vlq();
       if (reader->overflow()) return false;
+      // Reject a meta payload whose declared length overruns the track boundary.
+      if (reader->pos() > end_pos || meta_len > track_remaining()) break;
       const uint8_t* payload = reader->take(meta_len);
       if (payload == nullptr) return false;
 
@@ -321,15 +352,21 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       running_status = 0;
       const uint32_t sysex_len = reader->vlq();
       if (reader->overflow()) return false;
+      // Reject a SysEx payload whose declared length overruns the track boundary.
+      if (reader->pos() > end_pos || sysex_len > track_remaining()) break;
       const uint8_t* payload = reader->take(sysex_len);
       if (payload == nullptr) return false;
 
       bool complete = false;
       if (status == kSysExStart) {
+        // A new SysEx dump. Discard any still-pending split dump rather than
+        // letting this one concatenate onto its unterminated bytes.
+        if (pending_sysex_active) ++(*skipped);
         pending_sysex.assign(payload, payload + sysex_len);
         pending_sysex_ppq = ppq;
         complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
-      } else if (!pending_sysex.empty()) {
+      } else if (pending_sysex_active) {
+        // Continuation packet of an active split dump.
         pending_sysex.insert(pending_sysex.end(), payload, payload + sysex_len);
         complete = !pending_sysex.empty() && pending_sysex.back() == 0xF7u;
       } else {
@@ -341,8 +378,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       }
 
       if (!complete) {
+        pending_sysex_active = true;
         continue;
       }
+      pending_sysex_active = false;
 
       const SysExHandle handle =
           sysex_store != nullptr ? sysex_store->add(pending_sysex) : SysExHandle{0};
@@ -362,18 +401,23 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     if ((status & 0xF0u) == 0xF0u) {
       const int system_data = system_common_data_count(status);
       if (system_data > 0) {
+        if (static_cast<size_t>(system_data) > track_remaining()) break;
         if (reader->take(static_cast<size_t>(system_data)) == nullptr) return false;
         running_status = 0;
+        discard_pending_sysex();
       } else if (system_data == 0) {
         running_status = 0;
+        discard_pending_sysex();
       } else if (!is_system_realtime(status)) {
         running_status = 0;
+        discard_pending_sysex();
       }
       ++(*skipped);
       continue;
     }
 
     // Channel-voice (possibly running status).
+    discard_pending_sysex();
     uint8_t first_data = 0;
     bool have_first_data = false;
     if (status & 0x80u) {
@@ -403,6 +447,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       raw[raw_len++] = first_data;
       --remaining_data;
     }
+    if (static_cast<size_t>(remaining_data) > track_remaining()) break;
     for (int i = 0; i < remaining_data; ++i) {
       raw[raw_len++] = reader->u8();
     }

@@ -113,6 +113,11 @@ struct Smf2ExportOptions {
   const SysExStore* sysex_store = nullptr;
   /// Optional clip / track name written as a Flex Data metadata message.
   std::string name;
+  /// Optional clip length in PPQ (quarter notes). When greater than the last
+  /// event position, the End-of-Clip marker is placed here instead of at the
+  /// final event, so trailing silence and sustained tails survive the round
+  /// trip. 0 (default) keeps End-of-Clip at the final event tick.
+  double length_ppq = 0.0;
 };
 
 /// Result of exporting a clip to a MIDI Clip File byte buffer.

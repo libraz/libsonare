@@ -559,10 +559,14 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
   std::map<uint32_t, sonare::midi::SysExHandle> exported_sysex_handles;
   sonare::midi::MidiClip merged;
   std::string name;
+  double clip_end_ppq = 0.0;
   const arr::MidiContentStore& midi_content = project->history.midi_content();
   for (const arr::EditClip& clip : model.clips()) {
     const arr::ClipSource* source = model.find_source(clip.source_id);
     if (source == nullptr || arr::source_kind(*source) != arr::SourceKind::kMidi) continue;
+    // Track the arrangement extent so trailing silence / sustained tails beyond
+    // the last event still land inside the exported clip length.
+    clip_end_ppq = std::max(clip_end_ppq, clip.end_ppq());
     const auto it = midi_content.events.find(clip.id);
     if (it == midi_content.events.end()) continue;
     sonare::midi::MidiClip piece = make_smf_clip_from_events(clip, it->second, midi_content,
@@ -578,6 +582,7 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
   sonare::midi::Smf2ExportOptions options;
   options.sysex_store = &sysex_store;
   options.name = name;
+  options.length_ppq = clip_end_ppq;
   sonare::midi::Smf2ExportResult result =
       sonare::midi::export_clip_file(merged, tempo, sigs, options);
   if (!result.ok()) return SONARE_ERROR_INVALID_STATE;

@@ -758,8 +758,12 @@ Smf2ExportResult export_clip_file(
     max_tick = std::max(max_tick, item.tick);
   }
 
-  // End of clip at the final event tick.
-  put_dcs(&out, &last_tick, max_tick);
+  // End of clip at the clip's declared length or the final event, whichever is
+  // later, so trailing silence and sustained tails are not shortened on the
+  // round trip.
+  const uint64_t length_tick = ppq_to_tick(options.length_ppq, dctpq);
+  const uint64_t end_tick = std::max(max_tick, length_tick);
+  put_dcs(&out, &last_tick, end_tick);
   put_stream(&out, kStreamEndOfClip);
 
   return result;
