@@ -9,7 +9,17 @@ namespace sonare::acoustic {
 namespace {
 constexpr float kInf = std::numeric_limits<float>::infinity();
 
+// Upper bound on a single shoebox dimension (metres). Generous for any real room
+// yet small enough that the pairwise wall areas (<= 1e8 m^2), the volume
+// (<= 1e12 m^3) and their sums stay far inside the finite float range, so no
+// downstream area/volume product can overflow to infinity and poison the
+// synthesized RIR with NaN.
+constexpr float kMaxRoomDimension = 1.0e4f;
+
 bool finite_positive(float v) noexcept { return std::isfinite(v) && v > 0.0f; }
+
+// A dimension that is finite, positive and within the overflow-safe bound.
+bool finite_bounded(float v) noexcept { return finite_positive(v) && v <= kMaxRoomDimension; }
 
 // Slab test: ray (o + t*d, t>=0) vs AABB. Returns the entry/exit parameters.
 bool ray_aabb(const Aabb& box, const Vec3& o, const Vec3& d, float& t_enter,
@@ -92,8 +102,13 @@ float shoebox_mean_scattering(const ShoeboxRoom& room) noexcept {
     weighted += wall_area[w] * mean;
     total_area += wall_area[w];
   }
-  if (total_area <= 0.0f) return 0.0f;
-  return std::clamp(weighted / total_area, 0.0f, 1.0f);
+  // A non-finite area (dimensions large enough to overflow the products) would
+  // otherwise yield Inf/Inf = NaN, which std::clamp passes straight through and
+  // the synthesizer propagates into the RIR. Report no scattering instead.
+  if (total_area <= 0.0f || !std::isfinite(total_area) || !std::isfinite(weighted)) return 0.0f;
+  const float mean = weighted / total_area;
+  if (!std::isfinite(mean)) return 0.0f;
+  return std::clamp(mean, 0.0f, 1.0f);
 }
 
 Plane wall_plane(const ShoeboxRoom& room, ShoeboxWall wall) noexcept {
@@ -322,11 +337,11 @@ bool point_inside_mesh(const std::vector<Triangle>& faces, const Vec3& p) noexce
 
 std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceListener& placement) {
   std::vector<Diagnostic> diags;
-  const bool dims_ok = finite_positive(room.dims.length) && finite_positive(room.dims.width) &&
-                       finite_positive(room.dims.height);
+  const bool dims_ok = finite_bounded(room.dims.length) && finite_bounded(room.dims.width) &&
+                       finite_bounded(room.dims.height);
   if (!dims_ok) {
     diags.push_back({Diagnostic::Severity::Error, "acoustic.invalid_dimensions",
-                     "shoebox dimensions must be finite and positive"});
+                     "shoebox dimensions must be finite, positive and within bounds"});
     return diags;  // further placement checks are meaningless
   }
   if (!point_inside_shoebox(room, placement.source)) {

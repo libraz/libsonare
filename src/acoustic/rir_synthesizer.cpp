@@ -35,14 +35,14 @@ constexpr float kScatterLateBoost = 0.5f;
 // length estimate overflow) when a near-rigid room yields an unbounded RT60.
 constexpr double kLateTailCeiling = static_cast<double>(kMaxAutoSamples);
 
-// RMS over the half-open sample range [lo, hi), clamped to the buffer. Delegates
-// to the shared sonare::rms primitive over the clamped sub-range.
-float rms_range(const std::vector<float>& x, int lo, int hi) noexcept {
-  const int n = static_cast<int>(x.size());
+// RMS over the half-open sample range [lo, hi), clamped to [0, n). Delegates to
+// the shared sonare::rms primitive over the clamped sub-range. Takes a raw
+// pointer + length so it reads the synthesized buffers in place (no copy).
+float rms_range(const float* x, int n, int lo, int hi) noexcept {
   lo = std::max(0, lo);
   hi = std::min(n, hi);
   if (hi <= lo) return 0.0f;
-  return sonare::rms(x.data() + lo, static_cast<size_t>(hi - lo));
+  return sonare::rms(x + lo, static_cast<size_t>(hi - lo));
 }
 
 }  // namespace
@@ -94,8 +94,12 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   }
   const Audio late_audio = synthesize_late_tail(rt, sample_rate, late_cfg);
 
-  const std::vector<float> early(early_audio.begin(), early_audio.end());
-  const std::vector<float> late(late_audio.begin(), late_audio.end());
+  // Read the synthesized buffers in place: a full std::vector copy of each would
+  // transiently double the (already large) RIR working set for no benefit.
+  const float* early = early_audio.data();
+  const float* late = late_audio.data();
+  const int early_n = static_cast<int>(early_audio.size());
+  const int late_n = static_cast<int>(late_audio.size());
 
   // Mean wall scattering (rough surfaces) biases the early/late split: rougher
   // walls diffuse specular energy into the diffuse late field both *sooner* (an
@@ -138,9 +142,10 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // tail in small rooms.
   const int level_half = std::max(half_xfade, static_cast<int>(std::lround(0.005f * sr)));
   const int early_lo = std::max(t_mix - level_half, direct_sample + 1);
-  const float early_ref = rms_range(early, early_lo, t_mix + level_half + 1);
-  const int late_center = late.empty() ? 0 : std::min(t_mix, static_cast<int>(late.size()) - 1);
-  const float late_ref = rms_range(late, late_center - level_half, late_center + level_half + 1);
+  const float early_ref = rms_range(early, early_n, early_lo, t_mix + level_half + 1);
+  const int late_center = late_n == 0 ? 0 : std::min(t_mix, late_n - 1);
+  const float late_ref =
+      rms_range(late, late_n, late_center - level_half, late_center + level_half + 1);
   float scale = 1.0f;
   if (late_ref > 1e-9f) {
     if (early_ref > 1e-9f) {
@@ -159,7 +164,7 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // mixing time, keeping the early/late balance monotonic in mean_scattering.
   scale *= 1.0f + kScatterLateBoost * mean_scattering;
 
-  int length = std::max(static_cast<int>(early.size()), static_cast<int>(late.size()));
+  int length = std::max(early_n, late_n);
   if (cap > 0) {
     if (natural_len > cap) {
       result.diagnostics.push_back({Diagnostic::Severity::Warning, "acoustic.rir_length_clamped",
@@ -169,15 +174,18 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   }
   if (length < 1) length = 1;
 
-  // A fully-rigid room (every band RT60 == 0) yields no late tail. Crossfading
-  // such a buffer would ramp x toward 1 past t1 and silence the early
-  // reflections, leaving an abruptly truncated RIR. Fall back to early-only (no
-  // crossfade) and note it, so the geometric energy is preserved.
-  const bool no_late_tail = late.empty();
+  // Two cases yield no usable late tail across the crossover: a fully-rigid room
+  // (every band RT60 == 0, so the tail is empty), and a highly-absorptive room
+  // whose short tail ends before the early/late crossover (late_n < t1).
+  // Crossfading either would ramp x toward 1 past t1 where the tail is zero,
+  // silencing the early reflections and leaving an abruptly faded RIR. Fall back
+  // to early-only (no crossfade) and note it, so the geometric energy is
+  // preserved.
+  const bool no_late_tail = late_n == 0 || late_n < t_mix + half_xfade;
   if (no_late_tail) {
     result.diagnostics.push_back(
         {Diagnostic::Severity::Warning, "acoustic.no_late_tail",
-         "room is effectively rigid (RT60 ~ 0); RIR is early reflections only"});
+         "no usable late-reverberation tail at the mixing time; RIR is early reflections only"});
   }
 
   // Equal-power crossfade (decorrelated early vs. noise late => energy-preserving):
@@ -187,13 +195,12 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const int t1 = std::max(t0 + 1, t_mix + half_xfade);
   std::vector<float> rir(static_cast<size_t>(length), 0.0f);
   for (int i = 0; i < length; ++i) {
-    const float e = i < static_cast<int>(early.size()) ? early[static_cast<size_t>(i)] : 0.0f;
+    const float e = i < early_n ? early[static_cast<size_t>(i)] : 0.0f;
     if (no_late_tail) {
       rir[static_cast<size_t>(i)] = e;  // early-only: never fade toward silence
       continue;
     }
-    const float l =
-        (i < static_cast<int>(late.size()) ? late[static_cast<size_t>(i)] : 0.0f) * scale;
+    const float l = (i < late_n ? late[static_cast<size_t>(i)] : 0.0f) * scale;
     float x;
     if (i <= t0) {
       x = 0.0f;

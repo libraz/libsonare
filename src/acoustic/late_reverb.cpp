@@ -20,6 +20,12 @@ using sonare::constants::kTwoPiD;
 // -60 dB of energy: env(RT60) = 10^-3 in amplitude, i.e. exp(-ln(1000) * t/RT60).
 constexpr double kLn1000 = 6.90775527898213705;
 
+// Upper bound (seconds) on the reverberation time used to size the auto tail. No
+// real room sustains longer; clamping here keeps a near-rigid room's effectively
+// unbounded RT60 from driving a multi-gigabyte tail allocation (a hard,
+// uncatchable abort under the WASM allocator).
+constexpr float kMaxRt60Seconds = 60.0f;
+
 // Octave-band centres matching the analyzer's split (kDefaultOctaveBands = 6:
 // 125 .. 4000 Hz); higher band counts continue up by octaves.
 float octave_center_hz(int band) noexcept {
@@ -157,6 +163,9 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
   if (longest <= 0.0f) {
     return Audio::from_vector(std::vector<float>{}, sample_rate);
   }
+  // Clamp the tail-sizing RT60 so a near-rigid room cannot request an enormous
+  // buffer. The per-band decay envelopes below still use the raw RT60 values.
+  longest = std::min(longest, kMaxRt60Seconds);
 
   const float headroom = std::max(0.0f, config.headroom);
   // Compute in double and clamp to the safety ceiling so an unbounded RT60 (a
