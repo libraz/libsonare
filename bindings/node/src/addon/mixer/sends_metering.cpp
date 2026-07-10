@@ -28,8 +28,11 @@ Napi::Object MeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& 
   out.Set("seq", Napi::Number::New(env, static_cast<double>(snapshot.seq)));
 
   // Per-plane surround meters: expose [0, channelCount) as arrays alongside the
-  // stereo convenience fields above.
-  const int channel_count = snapshot.channel_count;
+  // stereo convenience fields above. Clamp to the array capacity so a
+  // future/out-of-range channel_count can never index past the fixed buffers.
+  int channel_count = snapshot.channel_count;
+  if (channel_count < 0) channel_count = 0;
+  if (channel_count > SONARE_MAX_METER_CHANNELS) channel_count = SONARE_MAX_METER_CHANNELS;
   out.Set("channelCount", Napi::Number::New(env, channel_count));
   Napi::Array peak_db = Napi::Array::New(env, channel_count);
   Napi::Array rms_db = Napi::Array::New(env, channel_count);

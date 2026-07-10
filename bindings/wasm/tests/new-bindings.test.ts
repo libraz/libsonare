@@ -187,30 +187,30 @@ describe('newly exposed WASM functions', () => {
       return;
     }
     const expectedFields = [
-      'input_gain_db',
-      'output_gain_db',
-      'wet_mix',
-      'retune_semitones',
-      'retune_mix',
-      'retune_grain_size',
-      'formant_factor',
-      'eq_highpass_hz',
-      'gate_threshold_db',
-      'compressor_threshold_db',
-      'deesser_frequency_hz',
-      'reverb_mix',
-      'reverb_seed',
-      'limiter_ceiling_db',
-      'limiter_release_ms',
+      'inputGainDb',
+      'outputGainDb',
+      'wetMix',
+      'retuneSemitones',
+      'retuneMix',
+      'retuneGrainSize',
+      'formantFactor',
+      'eqHighpassHz',
+      'gateThresholdDb',
+      'compressorThresholdDb',
+      'deesserFrequencyHz',
+      'reverbMix',
+      'reverbSeed',
+      'limiterCeilingDb',
+      'limiterReleaseMs',
     ] as const;
     for (const field of expectedFields) {
       expect(cfg).toHaveProperty(field);
       expect(Number.isFinite(cfg[field])).toBe(true);
     }
     // ISP true-peak limiter fields are now part of the POD surface.
-    expect(cfg).toHaveProperty('limiter_enable_isp_limiter');
-    expect(cfg).toHaveProperty('limiter_isp_ceiling_dbtp');
-    expect(Number.isFinite(cfg.limiter_isp_ceiling_dbtp)).toBe(true);
+    expect(cfg).toHaveProperty('limiterEnableIspLimiter');
+    expect(cfg).toHaveProperty('limiterIspCeilingDbtp');
+    expect(Number.isFinite(cfg.limiterIspCeilingDbtp)).toBe(true);
   });
 
   it('phaseVocoder time-scales the signal', () => {

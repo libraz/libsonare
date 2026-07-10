@@ -26,45 +26,45 @@ export interface WasmKeyCandidateResult {
   correlation: number;
 }
 
-// Flat POD mirror of SonareRealtimeVoiceChangerConfig. Field names match the
-// C ABI / Python POD exactly (snake_case).
+// Flat POD mirror of SonareRealtimeVoiceChangerConfig. Keys are camelCase to
+// match the Node addon getter (the underlying C ABI / Python POD is snake_case).
 export interface WasmRealtimeVoiceChangerPodConfig {
-  input_gain_db: number;
-  output_gain_db: number;
-  wet_mix: number;
-  retune_semitones: number;
-  retune_mix: number;
-  retune_grain_size: number;
-  formant_factor: number;
-  formant_amount: number;
-  formant_body: number;
-  formant_brightness: number;
-  formant_nasal: number;
-  eq_highpass_hz: number;
-  eq_body_db: number;
-  eq_presence_db: number;
-  eq_air_db: number;
-  gate_threshold_db: number;
-  gate_attack_ms: number;
-  gate_release_ms: number;
-  gate_range_db: number;
-  compressor_threshold_db: number;
-  compressor_ratio: number;
-  compressor_attack_ms: number;
-  compressor_release_ms: number;
-  compressor_makeup_gain_db: number;
-  deesser_frequency_hz: number;
-  deesser_threshold_db: number;
-  deesser_ratio: number;
-  deesser_range_db: number;
-  reverb_mix: number;
-  reverb_time_ms: number;
-  reverb_damping: number;
-  reverb_seed: number;
-  limiter_ceiling_db: number;
-  limiter_release_ms: number;
-  limiter_enable_isp_limiter: boolean;
-  limiter_isp_ceiling_dbtp: number;
+  inputGainDb: number;
+  outputGainDb: number;
+  wetMix: number;
+  retuneSemitones: number;
+  retuneMix: number;
+  retuneGrainSize: number;
+  formantFactor: number;
+  formantAmount: number;
+  formantBody: number;
+  formantBrightness: number;
+  formantNasal: number;
+  eqHighpassHz: number;
+  eqBodyDb: number;
+  eqPresenceDb: number;
+  eqAirDb: number;
+  gateThresholdDb: number;
+  gateAttackMs: number;
+  gateReleaseMs: number;
+  gateRangeDb: number;
+  compressorThresholdDb: number;
+  compressorRatio: number;
+  compressorAttackMs: number;
+  compressorReleaseMs: number;
+  compressorMakeupGainDb: number;
+  deesserFrequencyHz: number;
+  deesserThresholdDb: number;
+  deesserRatio: number;
+  deesserRangeDb: number;
+  reverbMix: number;
+  reverbTimeMs: number;
+  reverbDamping: number;
+  reverbSeed: number;
+  limiterCeilingDb: number;
+  limiterReleaseMs: number;
+  limiterEnableIspLimiter: boolean;
+  limiterIspCeilingDbtp: number;
 }
 
 export interface WasmBeatResult {

@@ -259,8 +259,12 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   const int num_channels = intProperty(options_val, "numChannels", 2);
   const int source_sample_rate = intProperty(options_val, "sourceSampleRate", 48000);
   const int target_sample_rate = intProperty(options_val, "targetSampleRate", 48000);
+  // Read ditherBits up front so a negative value is rejected exactly as the
+  // C-ABI oracle does (sonare_engine_bounce_offline: dither_bits < 0 ->
+  // SONARE_ERROR_INVALID_PARAMETER) instead of being silently clamped to 16.
+  const int dither_bits = intProperty(options_val, "ditherBits", 16);
   if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 || source_sample_rate <= 0 ||
-      target_sample_rate <= 0) {
+      target_sample_rate <= 0 || dither_bits < 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bounce options");
   }
   // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
@@ -306,7 +310,9 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   if (dither != 0) {
     mastering::final::DitherConfig config{};
     config.type = ditherTypeFromInt(dither);
-    config.target_bits = intProperty(options_val, "ditherBits", 16);
+    // A negative ditherBits was already rejected above; 0 is not an error for
+    // the oracle, so keep the "0 -> library default (16)" promotion here.
+    config.target_bits = dither_bits;
     if (config.target_bits <= 0) config.target_bits = 16;
     // Match the C API: seed == 0 means "keep the library default seed".
     const auto requested_seed = static_cast<uint32_t>(intProperty(options_val, "ditherSeed", 0));

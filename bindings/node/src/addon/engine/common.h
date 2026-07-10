@@ -163,13 +163,23 @@ inline Napi::Object ScopeTelemetryToObject(Napi::Env env,
   out.Set("renderFrame", Napi::Number::New(env, static_cast<double>(record.render_frame)));
   out.Set("seq", Napi::Number::New(env, static_cast<double>(record.seq)));
   out.Set("droppedRecords", Napi::Number::New(env, record.dropped_records));
-  Napi::Array bands = Napi::Array::New(env, record.band_count);
-  for (uint32_t i = 0; i < record.band_count; ++i) {
+  // Clamp the counts to the fixed-array capacities so an out-of-range
+  // band_count/point_count can never index past bands[]/points[].
+  uint32_t band_count = record.band_count;
+  if (band_count > static_cast<uint32_t>(SONARE_SCOPE_MAX_BANDS)) {
+    band_count = static_cast<uint32_t>(SONARE_SCOPE_MAX_BANDS);
+  }
+  Napi::Array bands = Napi::Array::New(env, band_count);
+  for (uint32_t i = 0; i < band_count; ++i) {
     bands.Set(i, Napi::Number::New(env, record.bands[i]));
   }
   out.Set("bands", bands);
-  Napi::Array points = Napi::Array::New(env, record.point_count);
-  for (uint32_t i = 0; i < record.point_count; ++i) {
+  uint32_t point_count = record.point_count;
+  if (point_count > static_cast<uint32_t>(SONARE_SCOPE_MAX_POINTS)) {
+    point_count = static_cast<uint32_t>(SONARE_SCOPE_MAX_POINTS);
+  }
+  Napi::Array points = Napi::Array::New(env, point_count);
+  for (uint32_t i = 0; i < point_count; ++i) {
     Napi::Object point = Napi::Object::New(env);
     point.Set("left", Napi::Number::New(env, record.points[i * 2]));
     point.Set("right", Napi::Number::New(env, record.points[i * 2 + 1]));
