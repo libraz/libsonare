@@ -11,6 +11,7 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(sonare_tests
   test_main.cpp
   util/math_utils_test.cpp
+  util/numeric_overflow_guard_test.cpp
   util/lru_cache_test.cpp
   util/json_test.cpp
   util/frame_test.cpp
@@ -99,6 +100,7 @@ add_executable(sonare_tests
   engine/boundary_splitter_test.cpp
   engine/capture_test.cpp
   engine/clip_player_test.cpp
+  engine/clip_fade_bounds_test.cpp
   engine/metronome_test.cpp
   engine/realtime_engine_test.cpp
   engine/realtime_engine_concurrency_test.cpp
@@ -196,6 +198,7 @@ if(BUILD_MASTERING)
     mastering/maximizer_test.cpp
     mastering/multiband_test.cpp
     mastering/param_wiring_test.cpp
+    mastering/config_zero_init_test.cpp
     mastering/repair_test.cpp
     mastering/saturation_test.cpp
     mastering/set_parameter_test.cpp
@@ -259,6 +262,7 @@ endif()
 if(BUILD_GRAPH)
   target_sources(sonare_tests PRIVATE
     engine/graph_runtime_test.cpp
+    engine/sysex_seqlock_test.cpp
     graph/graph_test.cpp
   )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_GRAPH=1)
@@ -266,6 +270,7 @@ endif()
 
 if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/creative_fx_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/stereo_delay_smoothing_test.cpp)
   target_sources(sonare_tests PRIVATE effects/ensemble_test.cpp)
   target_sources(sonare_tests PRIVATE effects/fdn_reverb_test.cpp)
   target_sources(sonare_tests PRIVATE effects/reverb_tail_test.cpp)
@@ -284,6 +289,7 @@ if(BUILD_ACOUSTIC_SIM)
     acoustic/image_source_test.cpp
     acoustic/late_reverb_test.cpp
     acoustic/rir_synthesizer_test.cpp
+    acoustic/rir_robustness_test.cpp
     acoustic/room_estimator_test.cpp
   )
   if(BUILD_FX)
@@ -364,10 +370,12 @@ if(BUILD_ARRANGEMENT)
     midi/sf2_fidelity_test.cpp
     midi/sf2_effects_test.cpp
     midi/sf2_gs_layer_test.cpp
+    midi/gs_efx_send_routing_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
     midi/smf_roundtrip_test.cpp
     midi/smf2_roundtrip_test.cpp
+    midi/smf_parser_robustness_test.cpp
     midi/midi_fx_test.cpp
     midi/program_map_test.cpp
     midi/midi_routing_test.cpp
@@ -381,6 +389,7 @@ if(BUILD_ARRANGEMENT)
     engine/realtime_engine_midi_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
+    bindings/project_bounce_tail_channel_test.cpp
     bindings/binding_project_editing_test.cpp
     bindings/binding_project_midi_test.cpp
     bindings/binding_project_soundfont_test.cpp
