@@ -143,8 +143,12 @@ float percentile(const float* data, size_t size, float p);
 /// @return Smallest power of 2 >= n (returns 1 if n <= 0)
 inline int next_power_of_2(int n) {
   if (n <= 0) return 1;
+  // Largest power of two representable in a signed 32-bit int; doubling past
+  // this overflows to a negative value and the loop would spin forever, so
+  // saturate here. Mirrors the size_t overload's kMaxPow2 cap.
+  constexpr int kMaxPow2 = 1 << 30;
   int power = 1;
-  while (power < n) {
+  while (power < n && power < kMaxPow2) {
     power *= 2;
   }
   return power;

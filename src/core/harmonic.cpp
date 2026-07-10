@@ -90,7 +90,7 @@ std::vector<float> salience(const float* S, int n_bins, int n_frames,
         const float target = harmonics[h] * freqs[k];
         acc += w * interp_at(S, n_bins, n_frames, freqs, target, t, fill_value);
       }
-      out[k * n_frames + t] = acc * inv_sum;
+      out[static_cast<size_t>(k) * n_frames + t] = acc * inv_sum;
     }
   }
   return out;
@@ -121,7 +121,8 @@ std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,
     for (int t = 0; t < n_frames; ++t) {
       float f = f0[t];
       if (!std::isfinite(f) || f <= 0.0f) continue;
-      out[h * n_frames + t] = interp_at(S, n_bins, n_frames, freqs, mult * f, t, 0.0f);
+      out[static_cast<size_t>(h) * n_frames + t] =
+          interp_at(S, n_bins, n_frames, freqs, mult * f, t, 0.0f);
     }
   }
   return out;

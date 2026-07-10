@@ -70,7 +70,7 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
   std::vector<float> out(static_cast<size_t>(n_bins) * n_frames);
   for (int t = 0; t < n_frames; ++t) {
     for (int k = 0; k < n_bins; ++k) {
-      float s = S[k * n_frames + t];
+      float s = S[static_cast<size_t>(k) * n_frames + t];
       // Direct-Form II Transposed AR(1) step (matches scipy.signal.lfilter).
       float y = b * s + d[k];
       d[k] = (1.0f - b) * y;
@@ -80,7 +80,7 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
       float compressed = config.power == 0.0f ? std::log1p(s * smooth)
                                               : std::pow(s * smooth + config.bias, config.power) -
                                                     std::pow(config.bias, config.power);
-      out[k * n_frames + t] = compressed;
+      out[static_cast<size_t>(k) * n_frames + t] = compressed;
     }
   }
   return out;

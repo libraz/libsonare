@@ -84,12 +84,25 @@ Audio Audio::slice(float start_time, float end_time) const {
     return Audio();
   }
 
-  size_t start_sample = static_cast<size_t>(std::max(0.0f, start_time) * sample_rate_);
+  // Convert a time in seconds to a sample index in double, reject non-finite,
+  // and clamp to [0, length_] before casting to size_t: a non-finite or
+  // out-of-range float would otherwise make the float->size_t cast undefined.
+  // slice_samples re-clamps, but the cast itself must be well-defined. Mirrors
+  // the double-promote-then-clamp guard used in convert.cpp.
+  const auto time_to_sample = [this](float time) -> size_t {
+    const double s = static_cast<double>(time) * static_cast<double>(sample_rate_);
+    if (!std::isfinite(s) || s <= 0.0) {
+      return 0;
+    }
+    return static_cast<size_t>(std::min(s, static_cast<double>(length_)));
+  };
+
+  size_t start_sample = time_to_sample(std::max(0.0f, start_time));
   size_t end_sample;
   if (end_time < 0.0f) {
     end_sample = length_;
   } else {
-    end_sample = static_cast<size_t>(end_time * sample_rate_);
+    end_sample = time_to_sample(end_time);
   }
 
   return slice_samples(start_sample, end_sample);
