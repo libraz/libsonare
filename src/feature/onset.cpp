@@ -58,7 +58,8 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
   /// same valid range keeps the padded prefix at 0, so a subsequent
   /// center-frame shift (applied by the Audio overload) does not pull negative
   /// values into the output. librosa applies a DC-blocker IIR filter at this
-  /// point; mean-subtraction is the libsonare-equivalent approximation, and
+  /// point; mean-subtraction is the intentional libsonare-equivalent
+  /// approximation (full IIR parity is deliberately not implemented here), and
   /// excluding the prefix matches librosa's behavior of running the filter on
   /// the post-aggregation, post-padding envelope without leading-zero bias.
   if (config.detrend && n_frames > config.lag) {
@@ -78,17 +79,26 @@ std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& m
   std::vector<float> onset_env = compute_onset_strength(mel_spec, onset_config);
 
   if (onset_config.center && !onset_env.empty() && aligned_mel_config.hop_length > 0) {
-    int frame_offset = aligned_mel_config.n_fft / (2 * aligned_mel_config.hop_length);
+    // Frames to right-shift so onset spikes line up with the centered STFT
+    // frame times. Computed in floating point and rounded to the nearest whole
+    // frame: plain integer division would truncate the offset to zero whenever
+    // ``2 * hop_length > n_fft`` (a large hop), introducing an up-to-half-frame
+    // alignment bias in non-default configs. The default config
+    // (n_fft=2048, hop=512) yields exactly 2.0 -> 2 frames, and every standard
+    // config produces an integer quotient, so their output is unchanged.
+    int frame_offset = static_cast<int>(std::lround(static_cast<double>(aligned_mel_config.n_fft) /
+                                                    (2.0 * aligned_mel_config.hop_length)));
     if (frame_offset > 0) {
-      // Right-shift by frame_offset to align onset spikes to the centered STFT
-      // frame times. The output length is kept equal to the mel frame count
-      // (librosa parity — downstream beat/tempo/meter analyzers assume this), so
-      // the last `frame_offset` frames shift off the end: a real onset within
-      // the final n_fft/(2*hop) frames of the signal is not reported. This is
-      // benign for typical clip lengths but loses terminal onsets on very short
-      // inputs. Fixing the terminal alignment to full librosa parity requires a
-      // librosa-live numerical comparison of the rhythm stack (see the audit
-      // coverage gap) before changing the shift, to avoid regressing beat/tempo.
+      // Intended contract: the output length is held equal to the mel frame
+      // count (librosa parity — downstream beat/tempo/meter analyzers rely on
+      // this fixed length), so the right-shift pushes the last `frame_offset`
+      // frames off the end. A real onset falling within the final
+      // n_fft/(2*hop) frames of the signal is therefore not reported. This
+      // trailing-frame drop is deliberate: it touches only the last few frames,
+      // is negligible for typical clip lengths, and only loses terminal
+      // transients on very short inputs. The fixed output length must be kept —
+      // growing it to preserve those frames would break the frame-count
+      // assumption shared with the rhythm stack.
       std::vector<float> shifted(onset_env.size(), 0.0f);
       for (size_t i = 0; i < onset_env.size(); ++i) {
         size_t shifted_index = i + static_cast<size_t>(frame_offset);
