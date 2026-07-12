@@ -64,6 +64,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "util/base64.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -100,49 +101,6 @@ using detail::crossover_config;
 using detail::f;
 using detail::limiter_config;
 using detail::ParamMap;
-
-uint8_t base64_value(char c) {
-  if (c >= 'A' && c <= 'Z') return static_cast<uint8_t>(c - 'A');
-  if (c >= 'a' && c <= 'z') return static_cast<uint8_t>(c - 'a' + 26);
-  if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0' + 52);
-  if (c == '+') return 62;
-  if (c == '/') return 63;
-  return 0xFF;
-}
-
-bool base64_decode(const std::string& text, std::vector<uint8_t>* out) {
-  out->clear();
-  if (text.size() % 4 != 0) return false;
-  out->reserve((text.size() / 4) * 3);
-  for (size_t i = 0; i < text.size(); i += 4) {
-    const char c0 = text[i];
-    const char c1 = text[i + 1];
-    const char c2 = text[i + 2];
-    const char c3 = text[i + 3];
-    const uint8_t v0 = base64_value(c0);
-    const uint8_t v1 = base64_value(c1);
-    if (v0 == 0xFF || v1 == 0xFF) return false;
-    const bool pad2 = c2 == '=';
-    const bool pad3 = c3 == '=';
-    if ((pad2 || pad3) && i + 4 != text.size()) return false;
-    if (pad2 && !pad3) return false;
-    uint32_t triple = (static_cast<uint32_t>(v0) << 18) | (static_cast<uint32_t>(v1) << 12);
-    out->push_back(static_cast<uint8_t>((triple >> 16) & 0xFF));
-    if (!pad2) {
-      const uint8_t v2 = base64_value(c2);
-      if (v2 == 0xFF) return false;
-      triple |= static_cast<uint32_t>(v2) << 6;
-      out->push_back(static_cast<uint8_t>((triple >> 8) & 0xFF));
-      if (!pad3) {
-        const uint8_t v3 = base64_value(c3);
-        if (v3 == 0xFF) return false;
-        triple |= static_cast<uint32_t>(v3);
-        out->push_back(static_cast<uint8_t>(triple & 0xFF));
-      }
-    }
-  }
-  return true;
-}
 
 std::vector<float> parse_ir_f32_base64_json(const std::string& json_params) {
   if (json_params.empty()) return {};

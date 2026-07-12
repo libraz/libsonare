@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "metering/bs1770_weighting.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -13,25 +14,6 @@ using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 
 namespace {
-constexpr double kBs1770SurroundWeight = 1.4125375446227544;
-
-double bs1770_channel_weight(int channel, int channels) noexcept {
-  switch (channels) {
-    case 4:
-      return (channel == 2 || channel == 3) ? kBs1770SurroundWeight : 1.0;
-    case 5:
-      return (channel == 3 || channel == 4) ? kBs1770SurroundWeight : 1.0;
-    case 6:
-      if (channel == 3) return 0.0;
-      return (channel == 4 || channel == 5) ? kBs1770SurroundWeight : 1.0;
-    case 8:
-      if (channel == 3) return 0.0;
-      return channel >= 4 ? kBs1770SurroundWeight : 1.0;
-    default:
-      return 1.0;
-  }
-}
-
 // Map a requested true-peak oversample factor to one the realtime polyphase
 // TruePeakFilter implements (2, 4, 8). The offline metering::true_peak path
 // additionally supports 16x, but the RT filter has no 16x design, so 16 is
@@ -262,7 +244,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       for (int ch = 0; ch < lufs_channels; ++ch) {
         if (channels[ch] == nullptr) continue;
         const double y = filter_sample(ch, static_cast<double>(channels[ch][i]));
-        combined += bs1770_channel_weight(ch, lufs_channels) * y * y;
+        combined += metering::bs1770_channel_weight(ch, lufs_channels) * y * y;
       }
 
       // Slide both running sums over the single ring; subtract the value leaving each window.
