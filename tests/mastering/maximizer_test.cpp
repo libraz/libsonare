@@ -189,6 +189,58 @@ TEST_CASE("TruePeakLimiter keeps mono channel state across stereo alternation",
   REQUIRE(second_left[0] <= 0.502f);
 }
 
+TEST_CASE("TruePeakLimiter release time constant is independent of oversample factor",
+          "[mastering][maximizer]") {
+  // Regression: the gain-smoother loop advances once per OVERSAMPLED sample, so
+  // its release time constant must be converted to a one-pole coefficient at the
+  // oversampled rate (base rate * oversample factor). Computing it at the base
+  // rate made the release run `oversample_factor` times too fast, so the
+  // recovery slope in BASE samples depended on the oversample factor (e.g. the
+  // factor-8 limiter released ~4x faster than the factor-2 limiter). With the
+  // fix the base-sample recovery is essentially factor-independent.
+  const int sample_rate = 48000;
+  const float ceiling_db = -6.0f;
+  const float release_ms = 50.0f;
+
+  auto recovery_samples = [&](int factor) {
+    TruePeakLimiter limiter({ceiling_db, 0.0f, release_ms, factor});
+    limiter.prepare(static_cast<double>(sample_rate), 1);
+    // Drive the gain hard down with a short loud burst, one base sample per
+    // block so last_gain_reduction_db() tracks the base-rate gain envelope.
+    for (int i = 0; i < 8; ++i) {
+      float sample = 4.0f;
+      float* channel[] = {&sample};
+      limiter.process(channel, 1, 1);
+    }
+    const float start_gr = limiter.last_gain_reduction_db();
+    REQUIRE(start_gr < -3.0f);
+    // Feed a long sub-ceiling tail one base sample at a time and count the base
+    // samples until the gain reduction recovers halfway (in dB) back toward 0.
+    const float half = start_gr * 0.5f;
+    int crossing = -1;
+    for (int i = 0; i < sample_rate; ++i) {
+      float sample = 0.1f;
+      float* channel[] = {&sample};
+      limiter.process(channel, 1, 1);
+      if (limiter.last_gain_reduction_db() >= half) {
+        crossing = i;
+        break;
+      }
+    }
+    REQUIRE(crossing > 0);
+    return crossing;
+  };
+
+  const int r2 = recovery_samples(2);
+  const int r4 = recovery_samples(4);
+  const int r8 = recovery_samples(8);
+  const int lo = std::min({r2, r4, r8});
+  const int hi = std::max({r2, r4, r8});
+  // A one-pole release half-life is amplitude-independent, so with the fix the
+  // three factors recover in an essentially identical number of base samples.
+  REQUIRE(static_cast<float>(hi) <= 1.2f * static_cast<float>(lo));
+}
+
 TEST_CASE("SoftKneeMax softens drive and respects ceiling", "[mastering][maximizer]") {
   SoftKneeMax maximizer({6.0f, -3.0f, 6.0f, 0.0f});
   maximizer.prepare(48000.0, 512);

@@ -84,6 +84,13 @@ class TruePeakLimiter : public rt::ProcessorBase {
   static void validate_config(const TruePeakLimiterConfig& config);
   void prepare_buffers(int num_channels);
   void update_time_constants();
+  /// @brief Sample rate the gain-smoother loop actually advances at.
+  /// @details The fast/slow attack, release and crest envelopes are updated once
+  ///          per OVERSAMPLED sample, so their millisecond time constants must be
+  ///          converted to one-pole coefficients at the oversampled rate
+  ///          (base rate * oversample factor). Converting at the base rate makes
+  ///          every envelope run a factor of `oversample_factor` too fast.
+  double smoother_sample_rate() const noexcept;
   float adaptive_release_coeff(float linked_peak);
   void process_polyphase(float* const* channels, int num_channels, int num_samples);
   void process_polyphase_detect_only(float* const* channels, int num_channels, int num_samples);

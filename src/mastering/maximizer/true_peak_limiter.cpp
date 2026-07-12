@@ -304,7 +304,7 @@ void TruePeakLimiter::set_release_ms_in_place(float release_ms) noexcept {
   // forward to the inner brickwall limiter's in-place setter. No publish, no
   // allocation. set_config / the published snapshot are left untouched.
   config_.release_ms = std::max(0.0f, release_ms);
-  release_coeff_ = time_to_coefficient(sample_rate_, config_.release_ms);
+  release_coeff_ = time_to_coefficient(smoother_sample_rate(), config_.release_ms);
   limiter_.set_release_ms_in_place(config_.release_ms);
 }
 
@@ -402,11 +402,22 @@ void TruePeakLimiter::prepare_buffers(int num_channels) {
   reset();
 }
 
+double TruePeakLimiter::smoother_sample_rate() const noexcept {
+  return sample_rate_ * std::max(1, config_.oversample_factor);
+}
+
 void TruePeakLimiter::update_time_constants() {
+  // The fast/slow attack smoothers are deliberately near-instant peak clamps and
+  // stay at the base rate: a shorter effective attack only tightens limiting. The
+  // release and crest-detector time constants, however, control the audible
+  // release envelope and MUST be converted at the rate the smoother loop actually
+  // advances at (the oversampled rate), or a nominal 50 ms release runs a factor
+  // of oversample_factor too fast (pumping/distortion).
+  const double release_rate = smoother_sample_rate();
   fast_attack_coeff_ = time_to_coefficient(sample_rate_, kFastAttackMs);
   slow_attack_coeff_ = time_to_coefficient(sample_rate_, kSlowAttackMs);
-  release_coeff_ = time_to_coefficient(sample_rate_, config_.release_ms);
-  crest_coeff_ = time_to_coefficient(sample_rate_, 200.0f);
+  release_coeff_ = time_to_coefficient(release_rate, config_.release_ms);
+  crest_coeff_ = time_to_coefficient(release_rate, 200.0f);
 }
 
 float TruePeakLimiter::adaptive_release_coeff(float linked_peak) {
@@ -426,7 +437,7 @@ float TruePeakLimiter::adaptive_release_coeff(float linked_peak) {
   const float transient =
       std::clamp((crest - kCrestTransientOffset) / kCrestTransientRange, 0.0f, 1.0f);
   const float release_scale = 1.0f - kMaxReleaseShorten * transient;
-  return time_to_coefficient(sample_rate_, config_.release_ms * release_scale);
+  return time_to_coefficient(smoother_sample_rate(), config_.release_ms * release_scale);
 }
 
 }  // namespace sonare::mastering::maximizer
