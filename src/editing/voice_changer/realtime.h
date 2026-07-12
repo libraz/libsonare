@@ -167,15 +167,21 @@ class RealtimeVoiceChanger {
   ///          silent no-op rather than throwing. Caller-owned buffers are left
   ///          untouched in that case.
   void process_block(float* const* channels, int num_channels, int num_samples) noexcept;
-  /// @brief Reports the dominant processing latency in samples.
-  /// @details Equal to the retune grain size, which dominates the chain
-  ///          (typically 256-1024 samples). Other stages (formant LP, EQ
-  ///          biquads, reverb predelay) add <= 8 samples combined, and the
-  ///          optional ISP limiter adds another 6 samples (the BS.1770-style
-  ///          4x upsampler's group delay) when enabled — both are well under
-  ///          the retune grain and DAW hosts typically tolerate the
-  ///          difference without explicit compensation. Returns 0 before
-  ///          prepare() has been called.
+  /// @brief Reports the effective processing latency in samples.
+  /// @details The output mixes a zero-latency dry path with the wet path, which
+  ///          is delayed by the retune grain size (typically 256-1024 samples,
+  ///          the dominant term). Because the dry contribution has no delay, the
+  ///          reported latency is the amplitude-weighted mean of the two paths —
+  ///          @c round(wet_mix * grain) — so it scales with @ref
+  ///          RealtimeVoiceChangerConfig::wet_mix rather than staying fixed:
+  ///          full at wet_mix == 1, zero at wet_mix == 0 (pure passthrough).
+  ///          When the ISP limiter is enabled and wet_mix > 0 it runs on the
+  ///          mixed output, adding its fixed 6-sample group delay (the
+  ///          BS.1770-style 4x upsampler) to the whole signal. Other stages
+  ///          (formant LP, EQ biquads, reverb predelay) add <= 8 samples
+  ///          combined and are intentionally omitted so the result stays a
+  ///          stable, host-compensable integer. Returns 0 before prepare() has
+  ///          been called.
   int latency_samples() const noexcept;
 
  private:

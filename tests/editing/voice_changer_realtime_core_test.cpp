@@ -347,6 +347,50 @@ TEST_CASE("RealtimeVoiceChanger set_config keeps buffer footprint across grain s
   }
 }
 
+TEST_CASE("RealtimeVoiceChanger reported latency tracks wet_mix and the ISP limiter",
+          "[voice_changer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int max_block = 128;
+  RealtimeVoiceChanger changer;
+  changer.prepare(sample_rate, max_block, 1);
+
+  // Fully wet with the ISP limiter on reports the full grain delay plus the ISP
+  // group delay applied to the mixed output.
+  RealtimeVoiceChangerConfig full = changer.config();
+  full.wet_mix = 1.0f;
+  full.limiter.enable_isp_limiter = true;
+  changer.set_config(full);
+  const int wet_with_isp = changer.latency_samples();
+  REQUIRE(wet_with_isp > 0);
+
+  // Disabling the ISP limiter drops only its fixed group delay; the grain delay
+  // (still fully wet) is unchanged.
+  RealtimeVoiceChangerConfig no_isp = full;
+  no_isp.limiter.enable_isp_limiter = false;
+  changer.set_config(no_isp);
+  const int grain = changer.latency_samples();
+  REQUIRE(grain > 0);
+  const int isp_latency = wet_with_isp - grain;
+  REQUIRE(isp_latency > 0);
+
+  // Pure dry is an untouched passthrough: zero effective latency, and because
+  // the ISP limiter is skipped when wet_mix == 0 its delay is not reported.
+  RealtimeVoiceChangerConfig dry = full;
+  dry.wet_mix = 0.0f;
+  changer.set_config(dry);
+  REQUIRE(changer.latency_samples() == 0);
+
+  // Halfway the dry (0) and wet (grain) paths average to ~half the grain, plus
+  // the ISP delay because wet_mix > 0.
+  RealtimeVoiceChangerConfig half = full;
+  half.wet_mix = 0.5f;
+  changer.set_config(half);
+  const int expected_half = static_cast<int>(std::lround(0.5f * static_cast<float>(grain)));
+  REQUIRE(changer.latency_samples() == expected_half + isp_latency);
+  REQUIRE(changer.latency_samples() < wet_with_isp);
+  REQUIRE(changer.latency_samples() > isp_latency);
+}
+
 TEST_CASE("RealtimeVoiceChanger deesser reduction gain is smooth", "[voice_changer][deesser]") {
   constexpr int sample_rate = 48000;
   constexpr int block = 128;

@@ -199,10 +199,23 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
 
 int RealtimeVoiceChanger::latency_samples() const noexcept {
   if (channels_.empty()) return 0;
-  // Retune grain dominates; biquad / formant group delays (<= 8 samples
-  // combined) are intentionally not added so this stays a stable,
-  // host-compensable integer. See header for details.
-  return channels_[0].retune.grain_size();
+  // The output mixes a zero-latency dry path with the retune-grain-delayed wet
+  // path: out = dry * (1 - wet_mix) + wet * wet_mix. The dry contribution has no
+  // delay, the wet contribution carries the full retune grain, so the effective
+  // delay a latency-compensating host should align to is the amplitude-weighted
+  // mean of the two — it scales with wet_mix rather than being a fixed grain.
+  // Biquad / formant group delays (<= 8 samples combined) are intentionally not
+  // added so this stays a stable, host-compensable integer. See header.
+  const float wet_mix = std::clamp(config_.wet_mix, 0.0f, 1.0f);
+  const int grain = channels_[0].retune.grain_size();
+  int latency = static_cast<int>(std::lround(wet_mix * static_cast<float>(grain)));
+  // The optional inter-sample-peak limiter runs on the already-mixed output and
+  // only when wet_mix > 0 (see process_block), so it delays the whole signal —
+  // both dry and wet contributions — by its fixed FIR group delay.
+  if (config_.limiter.enable_isp_limiter && wet_mix > 0.0f) {
+    latency += channels_[0].isp_limiter.latency_samples();
+  }
+  return latency;
 }
 
 }  // namespace sonare::editing::voice_changer
