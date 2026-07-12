@@ -39,21 +39,29 @@ bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* dat
   // Release-store the even (done) generation; it publishes the payload writes to
   // the audio thread's acquire load.
   slot.generation.store(generation, std::memory_order_release);
-  // Realise any control-thread-built effect of this SysEx (e.g. a GS insertion
-  // effect) off the audio thread now, on this control thread; the audio thread
-  // swaps the rebuilt chains in wait-free at its next block. The audio-visible
-  // channel/EFX state is still delivered by the queued command below. Instruments
-  // that do not realise control-thread state (default MidiInstrument) no-op here.
-  if (midi::MidiInstrument* instrument = instrument_rack_.get(destination_id)) {
-    instrument->on_control_sysex(data, size);
-  }
+  // Enqueue the audio-visible command FIRST. The control-thread realise below
+  // must not run unless the audio thread will actually adopt the matching
+  // channel/EFX state, or a full queue would leave a half-applied SysEx: the new
+  // effect chain adopted while the queued channel state never arrives, diverging
+  // from an offline bounce. On overflow the staged payload slot is simply left
+  // unreferenced (recycled by a later writer) and nothing is realised.
   rt::Command command{};
   command.type = rt::CommandType::kMidiSysExImmediate;
   command.target_id = destination_id;
   command.sample_time = render_frame;
   command.arg.i =
       static_cast<int64_t>((static_cast<uint64_t>(generation) << 32) | uint64_t{slot_index});
-  return push_command(command);
+  if (!push_command(command)) return false;
+  // The command is queued: realise any control-thread-built effect of this SysEx
+  // (e.g. a GS insertion effect) off the audio thread now, on this control
+  // thread; the audio thread swaps the rebuilt chains in wait-free at its next
+  // block (a one-block lag relative to the queued state is acceptable).
+  // Instruments that do not realise control-thread state (default MidiInstrument)
+  // no-op here.
+  if (midi::MidiInstrument* instrument = instrument_rack_.get(destination_id)) {
+    instrument->on_control_sysex(data, size);
+  }
+  return true;
 }
 
 bool RealtimeEngine::set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept {
