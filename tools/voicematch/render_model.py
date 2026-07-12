@@ -10,11 +10,15 @@ harness always tests the working tree's freshly built library.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
+
+from _repo import REPO_ROOT  # noqa: E402
+
 DEFAULT_DYLIB = REPO_ROOT / "build-python-shared" / "lib" / "libsonare.dylib"
 
 

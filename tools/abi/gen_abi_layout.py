@@ -49,7 +49,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _repo import INCLUDE_DIR, REPO_ROOT  # noqa: E402
+
 PY_SRC = REPO_ROOT / "bindings" / "python" / "src"
 DEFAULT_OUTPUT = REPO_ROOT / "tools" / "abi" / "abi-layout.json"
 
@@ -181,7 +184,7 @@ def build_and_run(probe_src: str, cxx: str) -> dict:
             cxx,
             "-std=c++17",
             "-I",
-            str(REPO_ROOT / "include"),
+            str(INCLUDE_DIR),
             "-I",
             str(REPO_ROOT / "src"),
             str(src_path),

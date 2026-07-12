@@ -32,6 +32,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ._tokens import split_top_level_commas, strip_c_comments
+
 # A field initializer ``<...> <name> = <rhs>;`` where rhs has no brace (so
 # aggregate / braced initializers are excluded) and no embedded ';'.
 _FIELD_RE = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*([^;{}]+?)\s*;")
@@ -149,29 +151,6 @@ def extract_struct_defaults(
     return out
 
 
-def _strip_comments(text: str) -> str:
-    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.DOTALL)
-    return re.sub(r"//[^\n]*", " ", text)
-
-
-def _split_top_commas(args: str) -> list[str]:
-    """Split a C++ arg list on top-level commas (parens / brackets / angles)."""
-    parts, depth, cur = [], 0, []
-    for ch in args:
-        if ch in "([{<":
-            depth += 1
-        elif ch in ")]}>":
-            depth -= 1
-        if ch == "," and depth == 0:
-            parts.append("".join(cur))
-            cur = []
-        else:
-            cur.append(ch)
-    if cur:
-        parts.append("".join(cur))
-    return [p.strip() for p in parts if p.strip()]
-
-
 def _signature_arglists(text: str, func_name: str) -> list[str]:
     """Every balanced arg list of a DECLARATION/DEFINITION of ``func_name``.
 
@@ -216,11 +195,11 @@ def extract_func_defaults(
     constants = constants or {}
     if not header_path.exists():
         return {}
-    text = _strip_comments(header_path.read_text(encoding="utf-8"))
+    text = strip_c_comments(header_path.read_text(encoding="utf-8"))
     out: dict[str, str] = {}
     conflict: set[str] = set()
     for args in _signature_arglists(text, func_name):
-        for part in _split_top_commas(args):
+        for part in split_top_level_commas(args):
             lhs, eq, rhs = part.partition("=")
             if not eq:
                 continue

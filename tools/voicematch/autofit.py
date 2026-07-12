@@ -58,15 +58,16 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _repo import REPO_ROOT  # noqa: E402
 from metrics import analyze_note, normalize_rms, to_mono
 from patterns import build_pattern, pattern_length
 from render_model import render_model
 from render_oracle import render_oracle_fluidsynth
 from smf import write_smf
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SR = 48000
 SKELETON_MAX_S = 2.0  # analysis window per note (matches the sustain pattern)
 

@@ -31,7 +31,9 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _repo import REPO_ROOT, public_header  # noqa: E402
 
 
 def _read(rel: str) -> str:
@@ -50,22 +52,22 @@ def _find_int(text: str, pattern: str, source: str) -> int:
 def c_source_of_truth() -> dict[str, int]:
     """The authoritative per-subsystem versions and the packed aggregate."""
     feature = _find_int(
-        _read("include/sonare/sonare_c_types.h"),
+        public_header("sonare_c_types.h").read_text(),
         r"#define\s+SONARE_FEATURE_ABI_VERSION\s+(\w+)",
         "sonare_c_types.h",
     )
     project = _find_int(
-        _read("include/sonare/sonare_c_project.h"),
+        public_header("sonare_c_project.h").read_text(),
         r"#define\s+SONARE_PROJECT_ABI_VERSION\s+(\w+)",
         "sonare_c_project.h",
     )
     voice_changer = _find_int(
-        _read("include/sonare/sonare_c_effects.h"),
+        public_header("sonare_c_effects.h").read_text(),
         r"#define\s+SONARE_VOICE_CHANGER_ABI_VERSION\s+(\w+)",
         "sonare_c_effects.h",
     )
     acoustic = _find_int(
-        _read("include/sonare/sonare_c_acoustic.h"),
+        public_header("sonare_c_acoustic.h").read_text(),
         r"#define\s+SONARE_ACOUSTIC_ABI_VERSION\s+(\w+)",
         "sonare_c_acoustic.h",
     )

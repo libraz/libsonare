@@ -41,6 +41,8 @@ from pathlib import Path
 from model import Extraction, FunctionSig, Param
 from normalize import canonical_key, normalize_default, normalize_param_name
 
+from ._tokens import split_top_level_commas
+
 # Trailing-bag / callback artifacts the facades fold away. Audio-INPUT roles
 # (samples/sample_rate/...) are intentionally NOT here: they are handled by the
 # central leading-input-group normalization and the input-naming check so the
@@ -97,25 +99,6 @@ def _balanced_arglist(text: str, open_paren_idx: int) -> tuple[str, int] | None:
                 return text[open_paren_idx + 1 : i], i + 1
         i += 1
     return None
-
-
-def _split_ts_args(inner: str) -> list[str]:
-    parts = []
-    depth = 0
-    cur = []
-    for ch in inner:
-        if ch in "([{<":
-            depth += 1
-        elif ch in ")]}>":
-            depth -= 1
-        if ch == "," and depth == 0:
-            parts.append("".join(cur))
-            cur = []
-        else:
-            cur.append(ch)
-    if cur:
-        parts.append("".join(cur))
-    return [p.strip() for p in parts if p.strip()]
 
 
 def _parse_ts_param(decl: str, enum_types: dict[str, tuple[str, ...]]) -> Param:
@@ -196,7 +179,9 @@ def _parse_text(
             continue
         inner, _ = bal
         try:
-            params = [_parse_ts_param(p, enum_types) for p in _split_ts_args(inner)]
+            params = [
+                _parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)
+            ]
         except Exception:  # noqa: BLE001
             ex.unparsed += 1
             ex.unparsed_notes.append(
@@ -254,7 +239,9 @@ def _parse_text(
             if "{" not in tail:
                 continue
             try:
-                params = [_parse_ts_param(p, enum_types) for p in _split_ts_args(inner)]
+                params = [
+                _parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)
+            ]
             except Exception:  # noqa: BLE001
                 continue
             key = canonical_key(name, surface)

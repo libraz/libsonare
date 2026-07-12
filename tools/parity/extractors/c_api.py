@@ -17,6 +17,8 @@ from pathlib import Path
 from model import Extraction, FunctionSig, Param
 from normalize import canonical_key
 
+from ._tokens import split_top_level_commas, strip_c_comments
+
 # Return types we accept as the start of a real declaration.
 _RETURN_TYPES = (
     "SonareError",
@@ -60,33 +62,14 @@ _PLUMBING_NAMES = {
 }
 
 
-def _strip_comments(text: str) -> str:
-    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.DOTALL)
-    text = re.sub(r"//[^\n]*", " ", text)
-    return text
-
-
 def _split_args(args: str) -> list[str]:
     """Split a C arg list on top-level commas (no nested templates here)."""
     args = args.strip()
     if not args or args == "void":
         return []
-    parts = []
-    depth = 0
-    cur = []
-    for ch in args:
-        if ch in "([<":
-            depth += 1
-        elif ch in ")]>":
-            depth -= 1
-        if ch == "," and depth == 0:
-            parts.append("".join(cur))
-            cur = []
-        else:
-            cur.append(ch)
-    if cur:
-        parts.append("".join(cur))
-    return [p.strip() for p in parts if p.strip()]
+    # C declarations here never nest braces; keep the historical narrower
+    # ``([<`` / ``)]>`` bracket set so behavior is byte-for-byte unchanged.
+    return split_top_level_commas(args, "([<", ")]>")
 
 
 def _parse_param(decl: str) -> Param:
@@ -178,7 +161,7 @@ def extract(root: Path) -> Extraction:
             continue
         raw = path.read_text(encoding="utf-8")
         # Map char offset -> line number for diagnostics.
-        text = _strip_comments(raw)
+        text = strip_c_comments(raw)
         for m in _DECL_RE.finditer(text):
             name = m.group("name")
             key = canonical_key(name, "c")

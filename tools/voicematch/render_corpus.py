@@ -26,15 +26,17 @@ import argparse
 import json
 import subprocess
 import sys
-import wave
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bindings" / "python" / "src"))
 
+from render_model import ensure_lib_path  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
+from wavio import write_wav  # noqa: E402
+
+ensure_lib_path()
 
 import libsonare  # noqa: E402
 
@@ -201,15 +203,6 @@ def metrics(audio: np.ndarray, sr: int) -> dict:
 # ---------------------------------------------------------------------------
 # Render
 # ---------------------------------------------------------------------------
-
-
-def write_wav(path: Path, audio: np.ndarray, sr: int) -> None:
-    pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2")
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(pcm.shape[1])
-        w.setsampwidth(2)
-        w.setframerate(sr)
-        w.writeframes(pcm.tobytes())
 
 
 def render_model(smf_bytes: bytes, seconds: float) -> np.ndarray:
