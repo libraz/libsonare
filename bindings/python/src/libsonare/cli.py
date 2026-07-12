@@ -27,6 +27,13 @@ MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "l
 # scripts can distinguish usage / missing-file / decode / processing errors.
 # argparse keeps its native exit 2 for usage errors. Set SONARE_LEGACY_EXIT=1 to
 # fold every failure back to 1 for scripts that hardcode the old contract.
+#
+# NOTE: for an undecodable input, whether the CLI reports 5 (INVALID_FORMAT)
+# or 6 (DECODE_FAILED) depends on whether the native library was built with
+# FFmpeg support, not on the input itself. A build without FFmpeg reports 5
+# for input that an FFmpeg build reports as 6. Scripts should treat {5, 6}
+# as a single "bad/undecodable input" category rather than branching on one
+# specific code.
 EXIT_SUCCESS = 0
 EXIT_USAGE = 2
 EXIT_INVALID_PARAMETER = 3
