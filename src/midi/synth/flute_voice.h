@@ -30,11 +30,11 @@
 ///      reflection it forms the oscillator; the clamp bounds the limit cycle.
 ///   2. BORE: an open-open pipe as a travelling-wave delay line with a one-pole
 ///      loss lowpass (the frequency-dependent radiation loss at the two open
-///      ends) and an in-loop DC blocker. The open end reflects with a PRESSURE
-///      INVERSION (a pressure node), so the returning wave is negated before it
-///      drives the jet and re-enters the bore — this inverting reflection over
-///      the (STK) 1.5-period loop is what tunes the pipe to the full harmonic
-///      series and lets the jet lock the fundamental.
+///      ends) and an in-loop DC blocker. Each open end reflects with a PRESSURE
+///      INVERSION (a pressure node); the two inversions over a round trip cancel,
+///      so the bore is a POSITIVE-feedback comb of one full period — the full
+///      harmonic series an open flue pipe radiates, on which the jet locks the
+///      fundamental.
 ///   3. BREATH + JET NOISE: a steady mouth pressure (the blowing) with a
 ///      multiplicative turbulence noise (the breathy air texture a flute has and
 ///      an additive/FM flute lacks) and a bright onset chiff (the pipe
@@ -73,8 +73,8 @@ inline constexpr float kFluteMinFundamentalHz = 40.0f;
 /// the lowest fundamental plus bend-down headroom.
 inline constexpr float kFluteBoreLengthPeriods = 1.0f;
 
-/// Per-span buffer capacity (samples) for @p sample_rate: 1.5 periods at the
-/// lowest fundamental (bend-down headroom folded in). The jet span reuses the
+/// Per-span buffer capacity (samples) for @p sample_rate: one loop period at the
+/// lowest fundamental (the 40 Hz floor folds in the bend-down headroom). The jet span reuses the
 /// same size (its delay is jet_ratio * bore, always shorter).
 inline int flute_buffer_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -225,7 +225,7 @@ class FluteVoiceCore {
   // Last bore delay-line output (the pressure returning to the mouth next sample).
   float bore_out_ = 0.0f;
 
-  // Tuning: the bore loop period (samples, ~1.5 fundamental periods), the delay
+  // Tuning: the bore loop period (samples, ~one fundamental period), the delay
   // not carried in the line (feedback register + loop-filter phase), and the jet
   // delay as a fraction of the bore LINE delay (jet_delay = jet_ratio * (period -
   // comp), the STK jet-convection length).
