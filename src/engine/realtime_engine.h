@@ -387,8 +387,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool set_master_eq_band(size_t band_index, const mastering::eq::EqBand& band) noexcept;
   // Granular realtime panner/channel-delay updates for a track lane strip.
   // Control-thread only. pan/pan-law/pan-mode/dual-pan are glitch-free atomic
-  // writes; channel delay adjusts strip latency and refreshes PDC + reported
-  // graph latency. Each returns false if the track has no bound lane strip.
+  // writes resolved read-only on the control thread, so they are safe during
+  // playback; channel delay adjusts strip latency and refreshes PDC + reported
+  // graph latency (structural -- not concurrent with process()). Each returns
+  // false if the track has no bound lane strip.
   bool set_track_pan(uint32_t track_id, float pan) noexcept;
   bool set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept;
   bool set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept;

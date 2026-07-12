@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cmath>
-#include <iterator>
 
 #include "engine/track_mixer.h"
 
@@ -50,15 +49,12 @@ bool TrackMixerRuntime::set_lane_solo_mute(size_t lane_index, bool solo, bool mu
 bool TrackMixerRuntime::set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index,
                                                   bool bypassed, bool reset_on_bypass) noexcept {
   if (track_id == 0) return false;
-  acquire_lanes();
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
-    prepare_lanes_from_snapshot(*lanes);
-  }
-  for (LaneState& lane : lane_states_) {
-    if (lane.track_id != track_id || lane.strip == nullptr) continue;
-    return lane.strip->set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
-  }
-  return false;
+  // Resolve the strip from the control-thread binding table: never acquire the
+  // lane snapshot (that is the audio thread's single-consumer side) and never
+  // touch lane_states_ (rewritten by the audio thread every block).
+  mixing::ChannelStrip* strip = bound_strip_for(track_id);
+  if (strip == nullptr) return false;
+  return strip->set_insert_bypassed(insert_index, bypassed, reset_on_bypass);
 }
 
 bool TrackMixerRuntime::set_bus_insert_bypassed(uint32_t bus_id, unsigned int insert_index,
@@ -75,14 +71,19 @@ bool TrackMixerRuntime::resolve_track_insert_param(uint32_t track_id, unsigned i
                                                    const std::string& key, size_t* out_lane_index,
                                                    unsigned int* out_param_id) noexcept {
   if (track_id == 0 || out_lane_index == nullptr || out_param_id == nullptr) return false;
-  acquire_lanes();
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
-    prepare_lanes_from_snapshot(*lanes);
-  }
-  for (size_t i = 0; i < lane_states_.size(); ++i) {
-    LaneState& lane = lane_states_[i];
-    if (lane.track_id != track_id || lane.strip == nullptr) continue;
-    const int id = lane.strip->insert_parameter_id_for_key(insert_index, key);
+  // Read-only resolution, safe during playback: the lane index is the track's
+  // position in the control-side snapshot (prepare_lanes_from_snapshot arranges
+  // lane_states_[i] for lanes[i], so the index the audio thread applies against
+  // matches), and the strip comes from the control-thread binding table.
+  // insert_parameter_id_for_key reads the processor's static descriptor table
+  // only. No acquire_lanes(), no lane_states_ access.
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes == nullptr) return false;
+  for (size_t i = 0; i < lanes->size(); ++i) {
+    if ((*lanes)[i].track_id != track_id) continue;
+    mixing::ChannelStrip* strip = bound_strip_for(track_id);
+    if (strip == nullptr) return false;
+    const int id = strip->insert_parameter_id_for_key(insert_index, key);
     if (id < 0) return false;
     *out_lane_index = i;
     *out_param_id = static_cast<unsigned int>(id);
@@ -224,37 +225,27 @@ void TrackMixerRuntime::clear_insert_automations() noexcept {
 bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
                                           const sonare::mastering::eq::EqBand& band) noexcept {
   if (track_id == 0) return false;
-  acquire_lanes();
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
-    prepare_lanes_from_snapshot(*lanes);
+  mixing::ChannelStrip* strip = bound_strip_for(track_id);
+  if (strip == nullptr) return false;
+  try {
+    strip->set_eq_band(band_index, band);
+  } catch (...) {
+    return false;
   }
-  for (LaneState& lane : lane_states_) {
-    if (lane.track_id != track_id || lane.strip == nullptr) continue;
-    try {
-      lane.strip->set_eq_band(band_index, band);
-      if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
-        recompute_lane_pdc(*lanes);
-      }
-      return true;
-    } catch (...) {
-      return false;
-    }
+  // An EQ band change can shift the strip's latency, so refresh the PDC
+  // alignment. recompute_lane_pdc reads the lane strips' latency through
+  // lane_states_, which is why this setter keeps the control-thread contract
+  // (not concurrent with process()); the strip resolution above is read-only
+  // regardless.
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
+    recompute_lane_pdc(*lanes);
   }
-  return false;
+  return true;
 }
 
 mixing::ChannelStrip* TrackMixerRuntime::lane_strip_for_track(uint32_t track_id) noexcept {
   if (track_id == 0) return nullptr;
-  acquire_lanes();
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
-    prepare_lanes_from_snapshot(*lanes);
-  }
-  for (LaneState& lane : lane_states_) {
-    if (lane.track_id == track_id && lane.strip != nullptr) {
-      return lane.strip;
-    }
-  }
-  return nullptr;
+  return bound_strip_for(track_id);
 }
 
 bool TrackMixerRuntime::set_track_pan(uint32_t track_id, float pan) noexcept {
@@ -298,8 +289,11 @@ bool TrackMixerRuntime::set_track_channel_delay_samples(uint32_t track_id,
   } catch (...) {
     return false;
   }
-  // Channel delay contributes to strip latency, so refresh PDC alignment.
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+  // Channel delay contributes to strip latency, so refresh PDC alignment. Use
+  // the control-side snapshot: this is a control-thread structural change (not
+  // concurrent with process()), and lanes_.current() belongs to the audio
+  // thread.
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
     recompute_lane_pdc(*lanes);
   }
   return true;

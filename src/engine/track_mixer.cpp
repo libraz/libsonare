@@ -167,6 +167,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
     const size_t lane_index = static_cast<size_t>(&lane - lane_states_.data());
     clear_insert_automation_for_lane(lane_index);
     lane.strip = strip;
+    record_track_strip_binding(track_id, strip);
     if (strip && max_block_size_ > 0) {
       strip->prepare(sample_rate_, max_block_size_);
     }
@@ -186,6 +187,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
     clear_insert_automation_for_lane(lane_index);
     lane.track_id = track_id;
     lane.strip = strip;
+    record_track_strip_binding(track_id, strip);
     if (strip && max_block_size_ > 0) {
       strip->prepare(sample_rate_, max_block_size_);
     }
@@ -443,6 +445,26 @@ mixing::ChannelStrip* TrackMixerRuntime::owned_strip_for(uint32_t track_id) noex
   return nullptr;
 }
 
+mixing::ChannelStrip* TrackMixerRuntime::bound_strip_for(uint32_t track_id) const noexcept {
+  for (const TrackStripBinding& binding : track_strip_bindings_) {
+    if (binding.track_id == track_id) {
+      return binding.strip;
+    }
+  }
+  return nullptr;
+}
+
+void TrackMixerRuntime::record_track_strip_binding(uint32_t track_id, mixing::ChannelStrip* strip) {
+  if (track_id == 0) return;
+  for (TrackStripBinding& binding : track_strip_bindings_) {
+    if (binding.track_id == track_id) {
+      binding.strip = strip;
+      return;
+    }
+  }
+  track_strip_bindings_.push_back(TrackStripBinding{track_id, strip});
+}
+
 mixing::ChannelStrip* TrackMixerRuntime::ensure_owned_strip_for(uint32_t track_id) {
   if (mixing::ChannelStrip* strip = owned_strip_for(track_id)) {
     return strip;
@@ -555,6 +577,11 @@ void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>&
     if (!strip && !config.sends.empty()) {
       strip = ensure_owned_strip_for(config.track_id);
       lane_states_[lane_index].strip = strip;
+      if (strip != nullptr) {
+        // Send-seeded strips bypass bind_track_strip, so mirror them into the
+        // control-thread binding table here.
+        record_track_strip_binding(config.track_id, strip);
+      }
     }
     if (!strip) continue;
 

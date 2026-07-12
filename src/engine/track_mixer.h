@@ -104,10 +104,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                                bool reset_on_bypass = false) noexcept;
   // Control-thread resolution for a realtime insert-parameter change: maps a
   // track id + JSON-key parameter name to the strip's lane index and integer
-  // param_id. Reads the lane snapshot and the processor's static descriptor
-  // table only (no audio-state mutation). Returns false if the track, insert, or
-  // key is unknown. The engine enqueues the resolved ids and applies them on the
-  // audio thread via apply_lane_insert_parameter().
+  // param_id. Read-only: the lane index comes from the control-side lane
+  // snapshot and the strip from the control-thread binding table, so it never
+  // calls acquire_lanes() (the audio thread's single-consumer side) and never
+  // touches lane_states_ -- safe to call while process() renders. The track must
+  // be present in the currently published lane config. Returns false if the
+  // track, insert, or key is unknown. The engine enqueues the resolved ids and
+  // applies them on the audio thread via apply_lane_insert_parameter().
   bool resolve_track_insert_param(uint32_t track_id, unsigned int insert_index,
                                   const std::string& key, size_t* out_lane_index,
                                   unsigned int* out_param_id) noexcept;
@@ -149,13 +152,14 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void clear_insert_automations() noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const sonare::mastering::eq::EqBand& band) noexcept;
-  // Granular realtime panner/channel-delay updates for a track lane strip.
-  // Control-thread only (run while process() is not concurrent, the same
-  // contract as set_track_insert_bypassed / set_track_eq_band). pan/pan-law/
-  // pan-mode/dual-pan write atomics and are glitch-free; channel delay
+  // Granular realtime panner/channel-delay updates for a track lane strip. The
+  // strip is resolved read-only from the control-thread binding table, and the
+  // pan/pan-law/pan-mode/dual-pan setters write strip atomics, so those four are
+  // glitch-free and safe to call while process() renders. Channel delay
   // reallocates the alignment delay line (like a PDC recompute) and so adjusts
-  // strip latency — callers should treat it as a structural change. Each returns
-  // false if the track id has no bound lane strip.
+  // strip latency — callers should treat it as a structural change (not
+  // concurrent with process()). Each returns false if the track id has no bound
+  // lane strip.
   bool set_track_pan(uint32_t track_id, float pan) noexcept;
   bool set_track_pan_law(uint32_t track_id, mixing::PanLaw law) noexcept;
   bool set_track_pan_mode(uint32_t track_id, mixing::PanMode mode) noexcept;
@@ -259,6 +263,21 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     std::unique_ptr<mixing::FxBus> bus;
   };
 
+  // Control-thread mirror of one lane strip binding, keyed by track id. Covers
+  // every path that sets a lane's strip pointer: bind_track_strip (external or
+  // owned strips), set_track_strip (via bind_track_strip), and the send-seeded
+  // strips created by configure_lane_sends. The control-thread resolution paths
+  // (lane_strip_for_track, resolve_track_insert_param, set_track_insert_bypassed,
+  // set_track_eq_band) read this table instead of lane_states_ -- which the audio
+  // thread rewrites every block -- and never call acquire_lanes(), whose
+  // single-consumer side belongs to the audio thread. Entries survive lane
+  // republishes (like sidechain bindings) and are only touched on the control
+  // thread.
+  struct TrackStripBinding {
+    uint32_t track_id = 0;
+    mixing::ChannelStrip* strip = nullptr;
+  };
+
   struct SidechainBinding {
     uint32_t track_id = 0;
     unsigned int insert_index = 0;
@@ -298,6 +317,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool bus_config_valid(const std::vector<TrackBusConfig>& buses) const noexcept;
   mixing::ChannelStrip* owned_strip_for(uint32_t track_id) noexcept;
   mixing::ChannelStrip* ensure_owned_strip_for(uint32_t track_id);
+  // Looks a track's strip up in the control-thread binding table. Returns the
+  // recorded pointer (nullptr for an explicit unbind) or nullptr when the track
+  // was never bound. Control-thread only; never reads audio-thread state.
+  mixing::ChannelStrip* bound_strip_for(uint32_t track_id) const noexcept;
+  // Records (or updates) a track's strip in the binding table. May allocate;
+  // control-thread only.
+  void record_track_strip_binding(uint32_t track_id, mixing::ChannelStrip* strip);
   BusState* bus_state_for(uint32_t bus_id) noexcept;
   const BusState* bus_state_for(uint32_t bus_id) const noexcept;
   float* lane_channel(size_t lane_index, int channel) noexcept;
@@ -321,8 +347,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void deliver_lane_sidechains(size_t lane_index, int num_channels, int num_samples) noexcept;
   void snapshot_sidechain_key(size_t lane_index, int num_channels, int num_samples) noexcept;
   int lane_index_for_track(uint32_t track_id) const noexcept;
-  // Resolves a track id to its bound lane strip, refreshing the lane snapshot
-  // first. Returns nullptr if the track has no active lane strip.
+  // Resolves a track id to its bound lane strip via the control-thread binding
+  // table (never lane_states_ or acquire_lanes(), both owned by the audio thread
+  // while rendering). Returns nullptr if the track has no bound lane strip.
   mixing::ChannelStrip* lane_strip_for_track(uint32_t track_id) noexcept;
   float* key_channel(size_t lane_index, int channel) noexcept;
   void mix_lane_sends(size_t lane_index, int num_channels, int num_samples,
@@ -369,6 +396,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<InsertAutoSlot, kMaxInsertAutomations> insert_auto_slots_{};
   uint32_t insert_automation_overflow_count_ = 0;
   std::vector<OwnedStrip> owned_strips_;
+  std::vector<TrackStripBinding> track_strip_bindings_;
   mutable rt::RtPublisher<std::vector<TrackLaneConfig>> lanes_;
   // The lane snapshot whose arrangement lane_states_ currently reflects. Set by
   // prepare_lanes_from_snapshot; the hot control-thread automation commands

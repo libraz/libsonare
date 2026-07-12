@@ -231,6 +231,7 @@ if(BUILD_MIXING)
     engine/mixing_runtime_test.cpp
     engine/monitor_runtime_test.cpp
     engine/track_mixer_test.cpp
+    engine/track_mixer_concurrency_test.cpp
     mixing/downmix_test.cpp
     mixing/golden_hash_test.cpp
     mixing/insert_automation_c_api_test.cpp
