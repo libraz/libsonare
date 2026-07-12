@@ -76,8 +76,19 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // and report when max_seconds actually truncates the natural tail. The natural
   // tail length mirrors synthesize_late_tail's default headroom (2x the longest
   // RT60); if that grows past the cap, we clamp and emit a Warning.
+  //
+  // synthesize_late_tail excludes bands at/above Nyquist from both its length
+  // estimate and its synthesis (a band never rendered cannot drive a real
+  // clamp). Mirror that same octave_center_hz(b) * sqrt(2) >= nyquist exclusion
+  // here so a low-absorption above-Nyquist band cannot make `longest` -- and the
+  // rir_length_clamped diagnostic below -- report a clamp that never happened.
+  const float nyquist = sr * 0.5f;
   float longest = 0.0f;
-  for (float t : rt.rt60_bands) longest = std::max(longest, t);
+  for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
+    const float center = 125.0f * std::pow(2.0f, static_cast<float>(b));  // octave_center_hz
+    if (center * sonare::constants::kSqrt2 >= nyquist) continue;
+    longest = std::max(longest, rt.rt60_bands[b]);
+  }
   // Mirror synthesize_late_tail's ceiling so the estimate cannot overflow int or
   // claim a clamp that the late tail's own cap (not max_seconds) actually made.
   const double natural_tail_d =

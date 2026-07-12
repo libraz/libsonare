@@ -7,6 +7,7 @@
 #include <limits>
 #include <vector>
 
+#include "acoustic/late_reverb.h"
 #include "acoustic/material.h"
 #include "acoustic/room_model.h"
 #include "util/constants.h"
@@ -389,4 +390,22 @@ TEST_CASE("shoebox image order is clamped to the safe maximum", "[acoustic][imag
   int max_order = 0;
   for (const auto& im : absurd) max_order = std::max(max_order, im.order);
   REQUIRE(max_order == kMaxImageSourceOrder);
+}
+
+TEST_CASE("early IR auto length is capped at kMaxAutoSamples", "[acoustic][image_source]") {
+  // No explicit max_samples and a pathologically far image: the auto-sized
+  // length must not scale unboundedly with the delay. It mirrors
+  // synthesize_late_tail's kMaxAutoSamples ceiling so a hostile/typo'd huge
+  // room (large dimensions and/or a high reflection order feeding a distant
+  // image) cannot request a runaway allocation.
+  ImageSource far;
+  far.order = 0;
+  far.position = {1.0e9f, 0.0f, 0.0f};
+  far.distance = 1.0e9f;
+  far.reflection = {1.0f};
+
+  const Audio ir = synthesize_early_ir({far}, 48000);
+  REQUIRE(ir.size() > 0);
+  REQUIRE(static_cast<int>(ir.size()) <= kMaxAutoSamples);
+  for (size_t i = 0; i < ir.size(); ++i) REQUIRE(std::isfinite(ir.data()[i]));
 }

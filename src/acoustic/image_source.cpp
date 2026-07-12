@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 
+#include "acoustic/late_reverb.h"
 #include "util/constants.h"
 
 namespace sonare::acoustic {
@@ -259,8 +260,19 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
   for (const auto& im : images) {
     if (im.distance > 1e-6f) max_delay = std::max(max_delay, im.distance / c * sr);
   }
-  int length = config.max_samples > 0 ? config.max_samples
-                                      : static_cast<int>(std::ceil(max_delay)) + half + 2;
+  int length;
+  if (config.max_samples > 0) {
+    length = config.max_samples;
+  } else {
+    // Clamp the auto-sized length to the same ceiling synthesize_late_tail uses
+    // (kMaxAutoSamples): without an explicit max_samples (and no max_seconds cap
+    // at the synthesize_rir level), a pathological room -- huge dimensions
+    // and/or a high reflection order -- would otherwise size one unbounded
+    // allocation, a WASM OOM risk. Computed in double so the sum cannot
+    // overflow int before the clamp is applied.
+    const double raw = std::ceil(static_cast<double>(max_delay)) + static_cast<double>(half) + 2.0;
+    length = static_cast<int>(std::min(raw, static_cast<double>(kMaxAutoSamples)));
+  }
   if (length < 1) length = 1;
   std::vector<float> ir(static_cast<size_t>(length), 0.0f);
 

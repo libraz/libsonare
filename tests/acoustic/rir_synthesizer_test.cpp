@@ -89,6 +89,33 @@ TEST_CASE("synthesize_rir clamps length to max_seconds with a diagnostic", "[aco
   REQUIRE_FALSE(has_code(full.diagnostics, "acoustic.rir_length_clamped"));
 }
 
+TEST_CASE("rir_length_clamped is not raised by an above-Nyquist band's huge RT60",
+          "[acoustic][rir]") {
+  const int sr = 8000;  // nyquist = 4000 Hz
+  // A 6-band material (nominal 125/250/500/1k/2k/4k Hz): the sub-Nyquist bands
+  // (up to 2k) get ordinary absorption -> a short, finite RT60. The 4k band
+  // sits at/above Nyquist (4000 * sqrt(2) >= 4000) and is never synthesized by
+  // the late tail, so its near-zero absorption -> enormous RT60 must not be
+  // read into the length-clamp estimate.
+  ShoeboxRoom room;
+  room.dims = {8.0f, 6.0f, 3.5f};
+  Material m;
+  m.absorption = {0.3f, 0.3f, 0.3f, 0.3f, 0.3f, 0.0001f};
+  m.scattering = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  for (Material& w : room.walls) w = m;
+  const SourceListener pl{{2.0f, 1.5f, 1.5f}, {6.0f, 4.5f, 1.8f}};
+
+  // Comfortably above the sub-Nyquist natural tail length, but far below what
+  // the (buggy) unfiltered longest-band RT60 would have demanded.
+  RirSynthConfig cfg;
+  cfg.ism_order = 3;
+  cfg.max_seconds = 1.0f;
+  const RirSynthResult res = synthesize_rir(room, pl, sr, cfg);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  REQUIRE_FALSE(has_code(res.diagnostics, "acoustic.rir_length_clamped"));
+  REQUIRE(res.rir.size() > 0);
+}
+
 TEST_CASE("synthesized RIR renders the direct sound at full level", "[acoustic][rir]") {
   const int sr = 48000;
   const ShoeboxRoom room = uniform_room(8.0f, 6.0f, 3.5f, 0.12f);
