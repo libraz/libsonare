@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "mastering/multiband/crossover.h"
@@ -967,6 +968,32 @@ TEST_CASE("MultibandImager validates configuration", "[mastering][multiband]") {
 
   config.bands = {{1.0f, true}, {1.0f, true, 1.1f}};
   REQUIRE_THROWS(MultibandImager(config));
+}
+
+TEST_CASE("MultibandImager publishes band-prefixed descriptors for every band",
+          "[mastering][multiband]") {
+  MultibandImagerConfig config;
+  config.crossover = {{1000.0f, 4000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
+  config.bands.resize(3);
+  MultibandImager imager(config);
+
+  const auto descriptors = imager.parameter_descriptors();
+  // Two automatable parameters (width, decorrelationAmount) per band, for all
+  // three configured bands, not just band 0.
+  REQUIRE(descriptors.size() == config.bands.size() * MultibandImager::kBandStride);
+
+  for (unsigned int band = 0; band < config.bands.size(); ++band) {
+    const std::string prefix = "band" + std::to_string(band) + ".";
+    const auto& width = descriptors[band * MultibandImager::kBandStride + 0];
+    const auto& decorrelation = descriptors[band * MultibandImager::kBandStride + 1];
+    REQUIRE(width.key == prefix + "width");
+    REQUIRE(decorrelation.key == prefix + "decorrelationAmount");
+    // Descriptor ids must match the block layout set_parameter accepts.
+    REQUIRE(width.id == band * MultibandImager::kBandStride + 0);
+    REQUIRE(decorrelation.id == band * MultibandImager::kBandStride + 1);
+    REQUIRE(imager.set_parameter(width.id, 1.5f));
+    REQUIRE(imager.set_parameter(decorrelation.id, 0.5f));
+  }
 }
 
 TEST_CASE("Crossover validates FIR linear-phase kernel size", "[mastering][multiband]") {

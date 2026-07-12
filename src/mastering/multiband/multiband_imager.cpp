@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <utility>
 
 #include "rt/scoped_no_denormals.h"
@@ -188,7 +189,19 @@ bool MultibandImager::set_parameter(unsigned int param_id, float value) {
 }
 
 std::vector<rt::ParamDescriptor> MultibandImager::parameter_descriptors() const {
-  return {{"width", 0}, {"decorrelationAmount", 1}};
+  // Mirrors set_parameter exactly: id = band * kBandStride + band_param, valid
+  // for every band that exists (band < config_.bands.size()) and band_param in
+  // [0, kBandStride). Keys use the construction-time band{i}.<field> convention.
+  static constexpr const char* kBandParamKeys[kBandStride] = {"width", "decorrelationAmount"};
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(config_.bands.size() * kBandStride);
+  for (unsigned int band = 0; band < config_.bands.size(); ++band) {
+    const std::string prefix = "band" + std::to_string(band) + ".";
+    for (unsigned int band_param = 0; band_param < kBandStride; ++band_param) {
+      descriptors.push_back({prefix + kBandParamKeys[band_param], band * kBandStride + band_param});
+    }
+  }
+  return descriptors;
 }
 
 void MultibandImager::validate_config(const MultibandImagerConfig& config) {
