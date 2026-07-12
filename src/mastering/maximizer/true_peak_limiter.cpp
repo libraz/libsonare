@@ -5,6 +5,7 @@
 #include <limits>
 #include <vector>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/sliding_max.h"
 #include "util/db.h"
@@ -19,7 +20,6 @@ namespace {
 // sustained material. The per-sample gain is the minimum of the two.
 constexpr float kFastAttackMs = 0.1f;
 constexpr float kSlowAttackMs = 1.0f;
-constexpr int kDefaultPreparedChannels = 2;
 
 float sanitize_sample(float sample, float ceiling) {
   if (std::isnan(sample)) return 0.0f;
@@ -52,16 +52,20 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
       static_cast<size_t>(std::max(1, lookahead_samples_ + 1) * true_peak_filter_.factor()));
   const size_t max_oversampled_samples = static_cast<size_t>(std::max(0, max_block_size_)) *
                                          static_cast<size_t>(true_peak_filter_.factor());
-  input_ptrs_.assign(kDefaultPreparedChannels, nullptr);
-  oversampled_ptrs_.assign(kDefaultPreparedChannels, nullptr);
-  oversampled_buffers_.assign(kDefaultPreparedChannels,
+  // Preallocate every per-channel working buffer up to kRealtimePreparedChannels
+  // so process() never resizes on the audio thread (matches Limiter /
+  // BrickwallLimiter); a block wider than that throws instead, in
+  // prepare_buffers().
+  input_ptrs_.assign(dynamics::kRealtimePreparedChannels, nullptr);
+  oversampled_ptrs_.assign(dynamics::kRealtimePreparedChannels, nullptr);
+  oversampled_buffers_.assign(dynamics::kRealtimePreparedChannels,
                               std::vector<float>(max_oversampled_samples, 0.0f));
-  limited_oversampled_buffers_.assign(kDefaultPreparedChannels,
+  limited_oversampled_buffers_.assign(dynamics::kRealtimePreparedChannels,
                                       std::vector<float>(max_oversampled_samples, 0.0f));
-  true_peak_scratch_.assign(kDefaultPreparedChannels, {});
+  true_peak_scratch_.assign(dynamics::kRealtimePreparedChannels, {});
   const size_t true_peak_history_size =
       static_cast<size_t>(std::max(0, true_peak_filter_.latency_samples() * 2));
-  true_peak_history_.assign(kDefaultPreparedChannels,
+  true_peak_history_.assign(dynamics::kRealtimePreparedChannels,
                             std::vector<float>(true_peak_history_size, 0.0f));
   for (auto& scratch : true_peak_scratch_) {
     scratch.assign(true_peak_history_size + static_cast<size_t>(std::max(0, max_block_size_)),
@@ -70,13 +74,19 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
   linked_abs_.assign(max_oversampled_samples, 0.0f);
   input_rate_gain_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 1.0f);
   downsampled_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
-  // Drop the per-channel delay lines before re-creating them: prepare_buffers
-  // is grow-only (it is also the RT channel-growth path), so a re-prepare with
-  // a different lookahead / oversample factor would otherwise keep the old
-  // delay-line lengths and misalign the gain envelope against the signal.
-  lookahead_.clear();
-  oversampled_lookahead_.clear();
-  prepare_buffers(kDefaultPreparedChannels);
+  // Rebuild the per-channel delay lines from scratch (assign() replaces the
+  // prior contents outright): a re-prepare with a different lookahead /
+  // oversample factor must not keep stale delay-line lengths, which would
+  // misalign the gain envelope against the signal.
+  lookahead_.assign(dynamics::kRealtimePreparedChannels, {});
+  for (auto& buffer : lookahead_) {
+    buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
+  }
+  oversampled_lookahead_.assign(dynamics::kRealtimePreparedChannels, {});
+  for (auto& buffer : oversampled_lookahead_) {
+    buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0) *
+                                       std::max(true_peak_filter_.factor(), 1)));
+  }
   prepared_ = true;
   reset();
 }
@@ -110,7 +120,7 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
   }
 
   const int factor = true_peak_filter_.factor();
-  const size_t oversampled_samples = static_cast<size_t>(num_samples * factor);
+  const size_t oversampled_samples = static_cast<size_t>(num_samples) * static_cast<size_t>(factor);
   for (int ch = 0; ch < num_channels; ++ch) {
     input_ptrs_[static_cast<size_t>(ch)] = channels[ch];
     std::fill_n(oversampled_buffers_[static_cast<size_t>(ch)].begin(),
@@ -182,7 +192,7 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
 void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int num_channels,
                                                     int num_samples) {
   const int factor = true_peak_filter_.factor();
-  const size_t oversampled_samples = static_cast<size_t>(num_samples * factor);
+  const size_t oversampled_samples = static_cast<size_t>(num_samples) * static_cast<size_t>(factor);
   for (int ch = 0; ch < num_channels; ++ch) {
     input_ptrs_[static_cast<size_t>(ch)] = channels[ch];
     std::fill_n(oversampled_buffers_[static_cast<size_t>(ch)].begin(),
@@ -359,47 +369,14 @@ int TruePeakLimiter::latency_samples() const noexcept {
 }
 
 void TruePeakLimiter::prepare_buffers(int num_channels) {
-  const size_t requested_channels = static_cast<size_t>(num_channels);
-  if (lookahead_.size() >= requested_channels &&
-      oversampled_lookahead_.size() >= requested_channels)
+  // Every per-channel buffer/state is preallocated to kRealtimePreparedChannels
+  // in prepare(). Never resize on the audio thread; reject blocks wider than
+  // the prepared state (matches Limiter::prepare_buffers).
+  if (static_cast<size_t>(num_channels) <= dynamics::kRealtimePreparedChannels) {
     return;
-  const size_t old_size = lookahead_.size();
-  const size_t new_size = requested_channels;
-  lookahead_.resize(new_size);
-  oversampled_lookahead_.resize(new_size);
-  for (size_t ch = old_size; ch < new_size; ++ch) {
-    auto& buffer = lookahead_[ch];
-    buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0)));
   }
-  for (size_t ch = old_size; ch < new_size; ++ch) {
-    auto& buffer = oversampled_lookahead_[ch];
-    buffer.prepare(static_cast<size_t>(std::max(lookahead_samples_, 0) *
-                                       std::max(true_peak_filter_.factor(), 1)));
-  }
-  if (input_ptrs_.size() < new_size) input_ptrs_.resize(new_size, nullptr);
-  if (oversampled_ptrs_.size() < new_size) oversampled_ptrs_.resize(new_size, nullptr);
-  const int factor = std::max(true_peak_filter_.factor(), 1);
-  const size_t max_oversampled_samples =
-      static_cast<size_t>(std::max(0, max_block_size_)) * static_cast<size_t>(factor);
-  if (oversampled_buffers_.size() < new_size) {
-    oversampled_buffers_.resize(new_size, std::vector<float>(max_oversampled_samples, 0.0f));
-  }
-  if (limited_oversampled_buffers_.size() < new_size) {
-    limited_oversampled_buffers_.resize(new_size,
-                                        std::vector<float>(max_oversampled_samples, 0.0f));
-  }
-  const size_t true_peak_history_size =
-      static_cast<size_t>(std::max(0, true_peak_filter_.latency_samples() * 2));
-  if (true_peak_history_.size() < new_size) {
-    true_peak_history_.resize(new_size, std::vector<float>(true_peak_history_size, 0.0f));
-  }
-  if (true_peak_scratch_.size() < new_size) {
-    true_peak_scratch_.resize(
-        new_size,
-        std::vector<float>(
-            true_peak_history_size + static_cast<size_t>(std::max(0, max_block_size_)), 0.0f));
-  }
-  reset();
+  throw SonareException(ErrorCode::InvalidParameter,
+                        "num_channels exceeds prepared TruePeakLimiter state");
 }
 
 double TruePeakLimiter::smoother_sample_rate() const noexcept {
