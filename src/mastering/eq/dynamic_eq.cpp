@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/dynamic_detector.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -326,16 +327,7 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
 }
 
 float DynamicEq::detector_db(const float* const* channels, int num_channels, int num_samples) {
-  double sum = 0.0;
-  for (int ch = 0; ch < num_channels; ++ch) {
-    for (int i = 0; i < num_samples; ++i) {
-      const double sample = channels[ch][i];
-      sum += sample * sample;
-    }
-  }
-
-  const double count = static_cast<double>(num_channels) * static_cast<double>(num_samples);
-  return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
+  return broadband_detector_db(channels, num_channels, num_samples);
 }
 
 void DynamicEq::ensure_detector(size_t index, int num_channels) {
@@ -482,12 +474,7 @@ float DynamicEq::dynamic_gain_delta(const DynamicEqBand& band, float detector_db
   if (!band.enabled || detector_db <= band.threshold_db || band.range_db == 0.0f) {
     return 0.0f;
   }
-
-  const float over_db = detector_db - band.threshold_db;
-  const float compressed_db = over_db * (1.0f - 1.0f / band.ratio);
-  const float range = std::abs(band.range_db);
-  const float amount = std::min(range, compressed_db);
-  return band.range_db < 0.0f ? -amount : amount;
+  return dynamic_compression_delta(detector_db, band.threshold_db, band.ratio, band.range_db);
 }
 
 void DynamicEq::rebuild(int /*num_samples*/) {

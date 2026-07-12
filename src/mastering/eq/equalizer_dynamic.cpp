@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/eq/dynamic_detector.h"
 #include "mastering/eq/equalizer.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
@@ -14,15 +15,7 @@ using sonare::constants::kFloorDb;
 
 float EqualizerProcessor::detector_db(const float* const* channels, int num_channels,
                                       int num_samples) {
-  double sum = 0.0;
-  for (int ch = 0; ch < num_channels; ++ch) {
-    for (int i = 0; i < num_samples; ++i) {
-      const double sample = channels[ch][i];
-      sum += sample * sample;
-    }
-  }
-  const double count = static_cast<double>(num_channels) * static_cast<double>(num_samples);
-  return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
+  return broadband_detector_db(channels, num_channels, num_samples);
 }
 
 float EqualizerProcessor::band_detector_db(size_t band_index, const float* const* channels,
@@ -136,12 +129,7 @@ float EqualizerProcessor::dynamic_gain_delta(const EqBand& band, float detector_
       band.dyn.range_db == 0.0f) {
     return 0.0f;
   }
-
-  const float over_db = detector_db - threshold_db;
-  const float compressed_db = over_db * (1.0f - 1.0f / band.dyn.ratio);
-  const float range = std::abs(band.dyn.range_db);
-  const float amount = std::min(range, compressed_db);
-  return band.dyn.range_db < 0.0f ? -amount : amount;
+  return dynamic_compression_delta(detector_db, threshold_db, band.dyn.ratio, band.dyn.range_db);
 }
 
 void EqualizerProcessor::update_dynamic_state(const float* const* channels, int num_channels,
