@@ -292,6 +292,30 @@ def test_synthesize_rir_invalid_geometry_exit_code_end_to_end() -> None:
         assert "invalid room geometry" in result.stderr
 
 
+def _run_cli_env(args: list[str], extra_env: dict[str, str]) -> subprocess.CompletedProcess:
+    src_dir = str(Path(__file__).parent.parent / "src")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
+    env.update(extra_env)
+    return subprocess.run(
+        [sys.executable, "-m", "libsonare.cli", *args],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_synthesize_rir_invalid_geometry_honors_legacy_exit_code() -> None:
+    """SONARE_LEGACY_EXIT=1 folds the granular invalid-geometry code down to 1."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = os.path.join(tmpdir, "rir.wav")
+        result = _run_cli_env(
+            ["synthesize-rir", "--output", out_path, "--source-x", "999"],
+            {"SONARE_LEGACY_EXIT": "1"},
+        )
+        assert result.returncode == 1, result.stderr
+
+
 def test_pcm16_clamps_and_stays_byte_identical() -> None:
     """The shared PCM helper preserves the clamp-and-scale contract (L-17)."""
     from libsonare import cli

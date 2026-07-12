@@ -1190,7 +1190,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
     )
     if result.has_error:
         print("Error: invalid room geometry (source/listener outside the room)", file=sys.stderr)
-        return EXIT_INVALID_PARAMETER
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
     _write_wav(args.output, result.rir, result.sample_rate)
     if args.json:
         print(json.dumps({"output": args.output, "samples": len(result.rir)}))
