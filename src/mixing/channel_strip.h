@@ -15,6 +15,7 @@
 #include "mixing/automation_lane.h"
 #include "mixing/gain.h"
 #include "mixing/goniometer_buffer.h"
+#include "mixing/insert_chain.h"
 #include "mixing/meter.h"
 #include "mixing/panner.h"
 #include "mixing/send.h"
@@ -278,13 +279,6 @@ class ChannelStrip : public rt::ProcessorBase {
                             const std::vector<uint8_t>& stereo_pair_only, float* const* channels,
                             int num_channels, int num_samples, size_t first_insert_index,
                             int sidechain_offset);
-
-  struct InsertSidechain {
-    std::array<const float*, kMaxStackChannels> channels{};
-    int num_channels = 0;
-    int num_samples = 0;
-    bool managed = false;
-  };
 
   GainProcessor input_trim_;
   AlignmentDelay alignment_delay_;

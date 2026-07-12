@@ -43,29 +43,12 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
   // silence, which causes 10-100x CPU spikes on x86 without DAZ/FTZ. Mirror the
   // mastering processors and voice changer guard at the process-block boundary.
   rt::ScopedNoDenormals no_denormals;
-  for (size_t index = 0; index < inserts_.size(); ++index) {
-    const InsertSidechain* key =
-        index < insert_sidechains_.size() ? &insert_sidechains_[index] : nullptr;
-    if (key != nullptr && key->num_channels > 0 && key->num_samples > 0) {
-      // Clip the key length to whatever is available rather than discarding a
-      // short block; dropping the key would make a sidechain compressor lose
-      // its detector input for the block and click. Mirrors ChannelStrip.
-      inserts_[index]->set_sidechain(key->channels.data(), key->num_channels,
-                                     std::min(key->num_samples, num_samples));
-    } else if (key != nullptr && key->managed) {
-      inserts_[index]->clear_sidechain();
-    } else {
-      // Leave directly configured processor sidechains intact.
-    }
-    if (inserts_[index]->bypassed()) {
-      continue;
-    }
-    // StereoPairOnly inserts see only the front L/R pair on a surround bus; the
-    // surround planes pass through dry. Inert at num_channels <= 2.
-    const bool spo = index < insert_spo_.size() && insert_spo_[index] != 0;
-    const int insert_channels = (spo && num_channels > 2) ? 2 : num_channels;
-    inserts_[index]->process(channels, insert_channels, num_samples);
-  }
+  // Single-segment chain: no first-insert offset, no sidechain shift. The bus
+  // forwards the full sidechain width (up to kMaxSidechainChannels).
+  std::array<const float*, kMaxSidechainChannels> shifted{};
+  run_insert_chain(inserts_, insert_spo_, insert_sidechains_, channels, num_channels, num_samples,
+                   /*first_insert_index=*/0, /*sidechain_offset=*/0, shifted.data(),
+                   kMaxSidechainChannels);
   meter_.process(channels, num_channels, num_samples);
 }
 

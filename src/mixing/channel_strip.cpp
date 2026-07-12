@@ -472,37 +472,12 @@ void ChannelStrip::process_insert_chain(std::vector<std::unique_ptr<rt::Processo
                                         const std::vector<uint8_t>& stereo_pair_only,
                                         float* const* channels, int num_channels, int num_samples,
                                         size_t first_insert_index, int sidechain_offset) {
+  // A strip insert sees only the front L/R pair, so it forwards at most
+  // kPreparedChannels sidechain rows (the surround planes pass through dry).
   std::array<const float*, kPreparedChannels> shifted_sidechain{};
-  for (size_t local = 0; local < inserts.size(); ++local) {
-    const size_t index = first_insert_index + local;
-    const InsertSidechain* key =
-        index < insert_sidechains_.size() ? &insert_sidechains_[index] : nullptr;
-    if (key != nullptr && key->num_channels > 0 && key->num_samples > sidechain_offset) {
-      const int rows = std::min<int>(key->num_channels, kPreparedChannels);
-      const int remaining = key->num_samples - sidechain_offset;
-      for (int ch = 0; ch < rows; ++ch) {
-        shifted_sidechain[static_cast<size_t>(ch)] =
-            key->channels[ch] == nullptr ? nullptr : key->channels[ch] + sidechain_offset;
-      }
-      inserts[local]->set_sidechain(shifted_sidechain.data(), rows,
-                                    std::min(num_samples, remaining));
-    } else if (key != nullptr && key->managed) {
-      inserts[local]->clear_sidechain();
-    } else {
-      // Leave directly configured processor sidechains intact. Graph-managed
-      // keys are marked through set_insert_sidechain().
-    }
-    if (inserts[local]->bypassed()) {
-      continue;
-    }
-    // StereoPairOnly inserts see only the front L/R pair on a surround buffer:
-    // the surround planes (2..N-1) pass through dry, and an insert that throws
-    // on a non-stereo width (eq.midSide) gets the 2-plane view it requires. At
-    // num_channels <= 2 this is the legacy full-buffer call, byte-identical.
-    const bool spo = local < stereo_pair_only.size() && stereo_pair_only[local] != 0;
-    const int insert_channels = (spo && num_channels > 2) ? 2 : num_channels;
-    inserts[local]->process(channels, insert_channels, num_samples);
-  }
+  run_insert_chain(inserts, stereo_pair_only, insert_sidechains_, channels, num_channels,
+                   num_samples, first_insert_index, sidechain_offset, shifted_sidechain.data(),
+                   kPreparedChannels);
 }
 
 void ChannelStrip::reset() {

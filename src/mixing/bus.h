@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "mixing/insert_chain.h"
 #include "mixing/meter.h"
 #include "rt/processor_base.h"
 
@@ -76,15 +77,6 @@ class BusProcessor : public rt::ProcessorBase {
   static constexpr size_t kMaxInserts = 64;
 
  private:
-  static constexpr int kMaxSidechainChannels = 8;
-
-  struct InsertSidechain {
-    std::array<const float*, kMaxSidechainChannels> channels{};
-    int num_channels = 0;
-    int num_samples = 0;
-    bool managed = false;
-  };
-
   BusRole role_ = BusRole::Subgroup;
   int max_inputs_ = 0;
   std::vector<std::unique_ptr<rt::ProcessorBase>> inserts_;
