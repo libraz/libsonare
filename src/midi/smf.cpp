@@ -117,6 +117,12 @@ class Reader {
     return p[0] == tag[0] && p[1] == tag[1] && p[2] == tag[2] && p[3] == tag[3];
   }
 
+  /// Sets the read position directly, clamped to the buffer size. Used to
+  /// resynchronize to a track chunk boundary after a trailing VLQ read
+  /// crossed past it (the VLQ decoder only checks the overall buffer bound,
+  /// not the current track's declared end).
+  void seek(size_t pos) noexcept { pos_ = pos <= size_ ? pos : size_; }
+
  private:
   const uint8_t* data_ = nullptr;
   size_t size_ = 0;
@@ -475,8 +481,16 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     track->length_ppq = smf_ticks_to_ppq(tick, ppqn);
   }
   // Resynchronize to the declared chunk end (skips any trailing bytes after an
-  // explicit end-of-track meta, or unconsumed padding).
-  if (reader->pos() < end_pos) {
+  // explicit end-of-track meta, or unconsumed padding). A malformed track's
+  // trailing VLQ (delta time, meta length, or SysEx length) can run past
+  // end_pos before the per-read overrun check catches it, since the VLQ
+  // decoder is only bounded by the overall buffer, not the current track's
+  // declared end; rewind to end_pos in that case so parsing resumes cleanly
+  // at the next track's chunk header instead of desyncing into its bytes. A
+  // well-formed file never triggers either branch below at a non-zero delta.
+  if (reader->pos() > end_pos) {
+    reader->seek(end_pos);
+  } else if (reader->pos() < end_pos) {
     if (reader->take(end_pos - reader->pos()) == nullptr) return false;
   }
   return true;

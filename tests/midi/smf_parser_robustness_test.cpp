@@ -137,6 +137,73 @@ TEST_CASE("SMF import bounds a corrupt in-track meta length and keeps later trac
   REQUIRE(found_62);
 }
 
+// A track whose trailing delta-time VLQ starts inside the declared MTrk
+// length but decodes past it (the VLQ continuation bit chases into the next
+// chunk's bytes) still resynchronizes at the correct next-track boundary,
+// recovering both the corrupt track's valid prefix and the following track,
+// instead of desyncing and failing the whole import.
+TEST_CASE("SMF import resyncs after a trailing VLQ overruns a non-final track boundary", "[midi]") {
+  // Track 0: a valid note-on/note-off pair, then a single trailing byte with
+  // the VLQ continuation bit set (0x81) as the last byte before the declared
+  // track boundary. Decoding that delta consumes one more byte past the
+  // boundary (the first byte of track 1's "MTrk" tag) before the per-read
+  // overrun check catches it.
+  std::vector<uint8_t> track0;
+  track0.push_back(0x00);
+  track0.push_back(0x90);
+  track0.push_back(0x3C);  // note 60
+  track0.push_back(0x64);
+  track0.push_back(0x00);
+  track0.push_back(0x80);
+  track0.push_back(0x3C);  // note 60 off
+  track0.push_back(0x00);
+  track0.push_back(0x81);  // dangling VLQ continuation byte, no terminator in track0
+
+  // Track 1: a clean note (note 62) that must survive the corrupt track 0.
+  std::vector<uint8_t> track1;
+  track1.push_back(0x00);
+  track1.push_back(0x90);
+  track1.push_back(0x3E);  // note 62
+  track1.push_back(0x64);
+  track1.push_back(0x83);
+  track1.push_back(0x60);  // delta 480
+  track1.push_back(0x80);
+  track1.push_back(0x3E);
+  track1.push_back(0x00);
+  track1.push_back(0x00);
+  track1.push_back(0xFF);
+  track1.push_back(0x2F);
+  track1.push_back(0x00);
+
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 1);  // format 1
+  push_u16(&smf, 2);  // two tracks
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(track0.size()));
+  smf.insert(smf.end(), track0.begin(), track0.end());
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(track1.size()));
+  smf.insert(smf.end(), track1.begin(), track1.end());
+
+  const SmfImportResult r = import_smf(smf);
+  REQUIRE(r.ok());
+  REQUIRE(r.clips.size() == 2);
+
+  bool found_60 = false;
+  bool found_62 = false;
+  for (const auto& clip : r.clips) {
+    for (const auto& e : clip.events()) {
+      if (e.ump.note_number() == 60) found_60 = true;
+      if (e.ump.note_number() == 62) found_62 = true;
+    }
+  }
+  REQUIRE(found_60);
+  REQUIRE(found_62);
+}
+
 // A delta beyond the 4-byte VLQ range is clamped on export so it stays readable
 // (the reader rejects a 5-byte VLQ).
 TEST_CASE("SMF export clamps a delta beyond the 4-byte VLQ range so it re-imports", "[midi]") {
