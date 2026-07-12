@@ -170,7 +170,11 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
     cfg.seed = static_cast<unsigned>(seed_in);
   cfg.max_seconds = node_float_option(opts, "maxSeconds", cfg.max_seconds);
   cfg.mixing_time_ms = node_float_option(opts, "mixingTimeMs", cfg.mixing_time_ms);
-  cfg.crossfade_ms = node_float_option(opts, "crossfadeMs", cfg.crossfade_ms);
+  // crossfadeMs == 0 keeps the RirSynthConfig default (5 ms), matching the C ABI's
+  // "crossfade_ms == 0 means keep the library default"; a literal zero crossfade
+  // shifts the splice by ~1 sample and clicks, so only a positive override applies.
+  if (const float crossfade_ms = node_float_option(opts, "crossfadeMs", 0.0f); crossfade_ms > 0.0f)
+    cfg.crossfade_ms = crossfade_ms;
 
   const auto result = sonare::acoustic::synthesize_rir(
       RoomFromOptions(opts, 0.2f), PlacementFromOptions(opts), sample_rate, cfg);
@@ -279,7 +283,11 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
                        ? sonare::acoustic::ReverbModel::Eyring
                        : sonare::acoustic::ReverbModel::Sabine;
   cfg.mixing_time_ms = node_float_option(opts, "mixingTimeMs", cfg.mixing_time_ms);
-  cfg.crossfade_ms = node_float_option(opts, "crossfadeMs", cfg.crossfade_ms);
+  // crossfadeMs == 0 keeps the RoomMorphConfig default (5 ms), matching the C ABI's
+  // "crossfade_ms == 0 means keep the library default"; a literal zero crossfade
+  // shifts the splice by ~1 sample and clicks, so only a positive override applies.
+  if (const float crossfade_ms = node_float_option(opts, "crossfadeMs", 0.0f); crossfade_ms > 0.0f)
+    cfg.crossfade_ms = crossfade_ms;
 
   const sonare::Audio result = sonare::effects::acoustic::room_morph(audio, cfg);
   std::vector<float> out = AudioToVector(result);

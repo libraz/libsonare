@@ -41,6 +41,29 @@ describe('geometric room acoustics', () => {
     expect(Array.from(zero.rir)).not.toEqual(Array.from(two.rir));
   });
 
+  it('treats crossfadeMs 0 as the library default (5 ms) for the RIR splice', () => {
+    // crossfadeMs:0 documents "use the default" — it must keep the RirSynthConfig
+    // default (5 ms), matching the C ABI/WASM/Python guard, not force a literal
+    // zero-width crossfade (which shifts the splice ~1 sample and clicks).
+    const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.2, maxSeconds: 0.3 };
+    const omitted = synthesizeRir(base);
+    const zero = synthesizeRir({ ...base, crossfadeMs: 0 });
+    const wide = synthesizeRir({ ...base, crossfadeMs: 40 });
+    expect(Array.from(zero.rir)).toEqual(Array.from(omitted.rir));
+    expect(Array.from(zero.rir)).not.toEqual(Array.from(wide.rir));
+  });
+
+  it('treats crossfadeMs 0 as the library default (5 ms) for room morph', () => {
+    const samples = new Float32Array(4000);
+    samples[0] = 1.0;
+    const base = { lengthM: 12, widthM: 9, heightM: 5, absorption: 0.08, wet: 0.7 };
+    const omitted = roomMorph(samples, 48000, base);
+    const zero = roomMorph(samples, 48000, { ...base, crossfadeMs: 0 });
+    const wide = roomMorph(samples, 48000, { ...base, crossfadeMs: 40 });
+    expect(Array.from(zero)).toEqual(Array.from(omitted));
+    expect(Array.from(zero)).not.toEqual(Array.from(wide));
+  });
+
   it('morphs toward a target room and is deterministic', () => {
     const samples = new Float32Array(4000);
     samples[0] = 1.0;
