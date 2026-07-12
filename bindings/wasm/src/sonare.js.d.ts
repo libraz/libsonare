@@ -1156,6 +1156,7 @@ export interface SonareModule {
   detectKeyCandidates: (samples: Float32Array, sampleRate: number) => WasmKeyCandidateResult[];
   hasFfmpegSupport: () => boolean;
   version: () => string;
+  abiVersion: () => number;
   engineAbiVersion: () => number;
   voiceChangerAbiVersion: () => number;
   voiceCharacterPresetId: (preset: number) => string | null;
@@ -1948,6 +1949,7 @@ export interface SonareModule {
     winLength: number,
     sampleRate: number,
     hopLength: number,
+    factors?: Float32Array | number[],
   ) => Float32Array;
   lufs: (samples: Float32Array, sampleRate: number) => WasmLufsResult;
   momentaryLufs: (samples: Float32Array, sampleRate: number) => Float32Array;

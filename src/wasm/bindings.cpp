@@ -5,6 +5,11 @@
 
 #include "bindings/common/common.h"
 
+// Pulled in for the compile-time SONARE_ABI_VERSION macro only. The macro packs
+// the per-subsystem ABI versions into one 32-bit value with no link dependency
+// on the C-ABI translation unit (which is not linked into WASM).
+#include <sonare/sonare_c.h>
+
 using namespace emscripten;
 using namespace sonare;
 
@@ -73,6 +78,12 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   info.set("message", message);
   return info;
 }
+
+// Aggregate C-ABI version: the per-subsystem ABI macros folded into one 32-bit
+// value, matching the Node addon (sonare_abi_version) and Python. Computed from
+// the compile-time SONARE_ABI_VERSION macro so it stays correct without linking
+// the C-ABI translation unit.
+uint32_t js_abi_version() { return SONARE_ABI_VERSION; }
 
 uint32_t js_engine_abi_version() { return sonare::rt::kEngineAbiVersion; }
 
@@ -226,6 +237,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
 
   function("version", &js_version);
   function("sonareExceptionInfo", &js_sonare_exception_info);
+  function("abiVersion", &js_abi_version);
   function("engineAbiVersion", &js_engine_abi_version);
   function("voiceChangerAbiVersion", &js_voice_changer_abi_version);
   function("voiceCharacterPresetId", &js_voice_character_preset_id);

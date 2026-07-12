@@ -255,9 +255,20 @@ val js_fourier_tempogram(val onset_envelope, int sample_rate, int hop_length, in
   return out;
 }
 
-val js_tempogram_ratio(val tempogram_data, int win_length, int sample_rate, int hop_length) {
+val js_tempogram_ratio(val tempogram_data, int win_length, int sample_rate, int hop_length,
+                       val factors) {
   std::vector<float> data = float32ArrayToVector(tempogram_data);
-  return vectorToFloat32Array(tempogram_ratio(data, win_length, sample_rate, hop_length));
+  // An undefined/null/empty factors argument falls back to the library default
+  // {0.5, 1, 2, 3, 4}, matching the C and Node behaviour.
+  if (factors.isUndefined() || factors.isNull()) {
+    return vectorToFloat32Array(tempogram_ratio(data, win_length, sample_rate, hop_length));
+  }
+  std::vector<float> factor_values = float32ArrayToVector(factors);
+  if (factor_values.empty()) {
+    return vectorToFloat32Array(tempogram_ratio(data, win_length, sample_rate, hop_length));
+  }
+  return vectorToFloat32Array(
+      tempogram_ratio(data, win_length, sample_rate, hop_length, factor_values));
 }
 
 void registerFeatureCoreBindings() {

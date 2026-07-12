@@ -366,19 +366,22 @@ export function fourierTempogram(
  * @param winLength - Window length in frames (default: 384)
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param hopLength - Hop length (default: 512)
- * @returns Tempogram ratio features
+ * @param factors - Lag ratios to evaluate. When omitted or empty, the library
+ *   default {0.5, 1, 2, 3, 4} is used.
+ * @returns Tempogram ratio features (one value per factor)
  */
 export function tempogramRatio(
   tempogramData: Float32Array,
   winLength = 384,
   sampleRate = 22050,
   hopLength = 512,
+  factors?: Float32Array | number[],
   options: GuardedOptions = {},
 ): Float32Array {
   assertSampleRate('tempogramRatio', sampleRate);
   assertSamples('tempogramRatio', tempogramData, options.validate !== false, 'tempogramData');
   validatePositiveIntegers('tempogramRatio', { winLength, hopLength });
-  return requireModule().tempogramRatio(tempogramData, winLength, sampleRate, hopLength);
+  return requireModule().tempogramRatio(tempogramData, winLength, sampleRate, hopLength, factors);
 }
 
 /**

@@ -123,6 +123,19 @@ describe('v1.2 feature additions (WASM)', () => {
       }
     });
 
+    it('tempogram ratio honors custom factors instead of silently defaulting', () => {
+      const env = onsetEnvelope(signal, SR);
+      const tg = tempogram(env, SR);
+      const factors = new Float32Array([1, 2, 3]);
+      const ratios = tempogramRatio(tg.data, tg.winLength, SR, 512, factors);
+      // One value per requested factor — proves the argument reaches the core
+      // instead of being dropped (which would yield the 5-value default).
+      expect(ratios.length).toBe(3);
+      expect(allFinite(ratios)).toBe(true);
+      const defaults = tempogramRatio(tg.data, tg.winLength, SR);
+      expect(defaults.length).toBe(5);
+    });
+
     it('plp returns a pulse curve aligned to the envelope', () => {
       const env = onsetEnvelope(signal, SR);
       const pulse = plp(env, SR);

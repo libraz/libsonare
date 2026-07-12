@@ -561,6 +561,18 @@ export function version(): string {
   return module.version();
 }
 
+/**
+ * Aggregate native ABI version: the per-subsystem ABI macros folded into one
+ * 32-bit value. It bumps whenever any flat C POD layout changes, so callers can
+ * detect an incompatible prebuilt binary. Matches the Node/Python `abiVersion()`.
+ */
+export function abiVersion(): number {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.abiVersion();
+}
+
 export function engineAbiVersion(): number {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');

@@ -252,9 +252,6 @@ wasm = [
   "analyze_json",
   "analyze_json_with_progress",
   "analyze_melody_ex",
-  # Aggregate ABI-version accessor: exposed on Node/Python; the WASM module
-  # reports versions through its own module metadata.
-  "abi_version",
   # --- Internal default-struct seeders (see node note above) ---
   "engine_bounce_options_default",
   "stream_analyzer_config_default",

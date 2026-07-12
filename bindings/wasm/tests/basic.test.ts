@@ -14,6 +14,7 @@ import {
   detectKey,
   ErrorCode,
   EXPECTED_ENGINE_ABI_VERSION,
+  abiVersion,
   engineAbiVersion,
   engineCapabilities,
   fixFrames,
@@ -89,6 +90,10 @@ describe('Sonare WASM Module', () => {
 
     it('should return engine ABI version', () => {
       expect(engineAbiVersion()).toBeGreaterThan(0);
+    });
+
+    it('should return the aggregate ABI version', () => {
+      expect(abiVersion()).toBeGreaterThan(0);
     });
 
     it('reports realtime engine capabilities and ABI compatibility', () => {
