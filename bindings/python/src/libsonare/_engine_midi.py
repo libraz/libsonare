@@ -239,6 +239,24 @@ class _EngineMidiMixin:
         _check(lib.sonare_engine_midi_cc_binding_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
+    def set_midi_fx(self, destination_id: int, config_json: str) -> None:
+        """Install/replace a live non-destructive MIDI-FX insert for ``destination_id``.
+
+        ``config_json`` accepts the same fields as the offline MIDI-FX bake, but
+        scheduled/live MIDI events are transformed at dispatch time and clip
+        contents are left unmodified.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_midi_fx"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_set_midi_fx(
+                self._require_handle(),
+                int(destination_id),
+                config_json.encode("utf-8"),
+            )
+        )
+
     def clear_midi_fx(self, destination_id: int = 0) -> None:
         """Clear the live MIDI-FX insert for ``destination_id`` (default 0)."""
         lib = _get_lib()

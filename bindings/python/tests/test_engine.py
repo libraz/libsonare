@@ -978,6 +978,14 @@ def test_engine_midi_cc_bindings() -> None:
         assert engine.midi_cc_binding_count() == 0
 
 
+def test_engine_set_and_clear_midi_fx_round_trips() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_midi_fx(0, '{"transpose_semitones":12}')
+        engine.clear_midi_fx(0)
+        with pytest.raises(SonareError):
+            engine.set_midi_fx(0, "{bad json")
+
+
 def test_engine_live_midi_input_source_queue() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
