@@ -22,7 +22,7 @@ constexpr uint32_t kEngineParamLaneBusBase = 0xFEu;
 
 #if defined(SONARE_WITH_MIXING)
 void RealtimeEngine::set_mixing_enabled(bool enabled) noexcept {
-  mixing_enabled_ = enabled;
+  mixing_enabled_.store(enabled, std::memory_order_relaxed);
   update_reported_graph_latency();
 }
 

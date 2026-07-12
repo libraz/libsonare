@@ -68,11 +68,16 @@ enum class CaptureSource {
 ///   @c pop_clip_page_request, @c pop_meter_telemetry, @c set_loop (publishes
 ///   the loop region through a seqlock so the audio thread reads a torn-free
 ///   {start, end, enabled} snapshot),
-///   @c set_capture_*, @c reset_capture,
 ///   @c marker_by_index/id, @c seek_marker, @c set_loop_from_markers,
-///   @c set_mixing_enabled, @c set_monitoring_enabled,
+///   @c set_mixing_enabled, @c set_monitoring_enabled (atomic flags),
 ///   @c set_param_smoothing_ms, @c set_graph_latency_samples_q8,
 ///   @c transport, @c automation accessors, all @c *_count noexcept getters.
+/// - **Control-thread seqlock publishers (single writer):** @c set_capture_*
+///   and @c reset_capture publish the arm/punch capture state through a seqlock
+///   (see @ref sonare::engine::CaptureSink). They are noexcept and
+///   allocation-free and may run concurrently with @c process (the audio thread
+///   is the torn-free seqlock reader), but they are the sole writer and must be
+///   issued from the control thread only — never from the audio thread.
 /// - **Control-thread-preferred (lock-free but NOT torn-read-safe):**
 ///   @c set_metronome_config replaces the metronome config with a plain
 ///   non-atomic struct copy that the audio thread reads field-by-field. It is
@@ -334,7 +339,7 @@ class RealtimeEngine : private ClipPageRequestSink {
 #if defined(SONARE_WITH_MIXING)
   bool bind_mixing_strip(mixing::ChannelStrip* strip);
   void set_mixing_enabled(bool enabled) noexcept;
-  bool mixing_enabled() const noexcept { return mixing_enabled_; }
+  bool mixing_enabled() const noexcept { return mixing_enabled_.load(std::memory_order_relaxed); }
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }
   bool set_master_strip(const mixing::api::Strip& strip);
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
@@ -403,8 +408,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool remove_monitor_strip(mixing::ChannelStrip* strip) noexcept {
     return monitor_runtime_.remove_strip(strip);
   }
-  void set_monitoring_enabled(bool enabled) noexcept { monitoring_enabled_ = enabled; }
-  bool monitoring_enabled() const noexcept { return monitoring_enabled_; }
+  void set_monitoring_enabled(bool enabled) noexcept {
+    monitoring_enabled_.store(enabled, std::memory_order_relaxed);
+  }
+  bool monitoring_enabled() const noexcept {
+    return monitoring_enabled_.load(std::memory_order_relaxed);
+  }
   MonitorRuntime& monitor() noexcept { return monitor_runtime_; }
 #endif
 
@@ -743,8 +752,13 @@ class RealtimeEngine : private ClipPageRequestSink {
   std::vector<float> monitor_bus_storage_{};
   std::array<float*, kMaxAudioChannels> monitor_bus_channels_{};
 
-  bool mixing_enabled_ = false;
-  bool monitoring_enabled_ = false;
+  // Toggled from the control thread (@c set_mixing_enabled /
+  // @c set_monitoring_enabled) and read on the audio thread in process(). Atomic
+  // with relaxed ordering: only the flag itself crosses the boundary, so a
+  // single aligned load/store per access is sufficient (no companion state to
+  // publish).
+  std::atomic<bool> mixing_enabled_{false};
+  std::atomic<bool> monitoring_enabled_{false};
 #endif
   std::atomic<float> param_smoothing_ms_{20.0f};
   float applied_param_smoothing_ms_ = 20.0f;  // audio thread only

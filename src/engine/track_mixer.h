@@ -390,7 +390,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<BusState, kMaxBusLanes> bus_states_{};
   std::vector<TrackBusConfig> bus_configs_;
   std::array<SidechainBinding, kMaxSidechainBindings> sidechain_bindings_{};
-  size_t sidechain_binding_count_ = 0;
+  // Written by the control thread in set_lane_sidechain(), read on the audio
+  // thread in deliver_lane_sidechains()/snapshot_sidechain_key(). Acquire/release
+  // so the count is published only after the binding it indexes is fully
+  // written, and an audio-thread reader that observes the new count also sees
+  // that binding. The binding structs themselves are small PODs; a torn read of
+  // one field only mis-routes a single block and self-heals next block.
+  std::atomic<size_t> sidechain_binding_count_{0};
   // Fixed-capacity insert-automation slot table (lane + bus). Prepared once in
   // prepare(); claimed/advanced on the audio thread with no allocation.
   std::array<InsertAutoSlot, kMaxInsertAutomations> insert_auto_slots_{};

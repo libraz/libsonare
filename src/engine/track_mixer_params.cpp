@@ -316,7 +316,10 @@ bool TrackMixerRuntime::set_bus_gain_db_by_index(size_t bus_index, float gain_db
 bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
                                            uint32_t source_track_id) noexcept {
   if (track_id == 0) return false;
-  for (size_t i = 0; i < sidechain_binding_count_; ++i) {
+  // Control-thread single writer: work against a local count, then publish the
+  // new value with release only after the binding array is settled.
+  const size_t count = sidechain_binding_count_.load(std::memory_order_relaxed);
+  for (size_t i = 0; i < count; ++i) {
     SidechainBinding& binding = sidechain_bindings_[i];
     if (binding.track_id != track_id || binding.insert_index != insert_index) continue;
     if (source_track_id == 0) {
@@ -326,17 +329,18 @@ bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int inser
       if (lane_index >= 0 && lane_states_[static_cast<size_t>(lane_index)].strip) {
         lane_states_[static_cast<size_t>(lane_index)].strip->clear_insert_sidechains();
       }
-      sidechain_bindings_[i] = sidechain_bindings_[sidechain_binding_count_ - 1];
-      sidechain_bindings_[--sidechain_binding_count_] = SidechainBinding{};
+      sidechain_bindings_[i] = sidechain_bindings_[count - 1];
+      sidechain_bindings_[count - 1] = SidechainBinding{};
+      sidechain_binding_count_.store(count - 1, std::memory_order_release);
     } else {
       binding.source_track_id = source_track_id;
     }
     return true;
   }
   if (source_track_id == 0) return true;
-  if (sidechain_binding_count_ >= kMaxSidechainBindings) return false;
-  sidechain_bindings_[sidechain_binding_count_++] =
-      SidechainBinding{track_id, insert_index, source_track_id};
+  if (count >= kMaxSidechainBindings) return false;
+  sidechain_bindings_[count] = SidechainBinding{track_id, insert_index, source_track_id};
+  sidechain_binding_count_.store(count + 1, std::memory_order_release);
   return true;
 }
 
@@ -350,11 +354,12 @@ int TrackMixerRuntime::lane_index_for_track(uint32_t track_id) const noexcept {
 
 void TrackMixerRuntime::deliver_lane_sidechains(size_t lane_index, int num_channels,
                                                 int num_samples) noexcept {
-  if (sidechain_binding_count_ == 0) return;
+  const size_t count = sidechain_binding_count_.load(std::memory_order_acquire);
+  if (count == 0) return;
   LaneState& lane = lane_states_[lane_index];
   if (!lane.strip || lane.track_id == 0) return;
   std::array<const float*, kMaxLaneChannels> key{};
-  for (size_t i = 0; i < sidechain_binding_count_; ++i) {
+  for (size_t i = 0; i < count; ++i) {
     const SidechainBinding& binding = sidechain_bindings_[i];
     if (binding.track_id != lane.track_id) continue;
     const int source_index = lane_index_for_track(binding.source_track_id);
@@ -372,11 +377,12 @@ void TrackMixerRuntime::deliver_lane_sidechains(size_t lane_index, int num_chann
 
 void TrackMixerRuntime::snapshot_sidechain_key(size_t lane_index, int num_channels,
                                                int num_samples) noexcept {
-  if (sidechain_binding_count_ == 0) return;
+  const size_t count = sidechain_binding_count_.load(std::memory_order_acquire);
+  if (count == 0) return;
   const uint32_t track_id = lane_states_[lane_index].track_id;
   if (track_id == 0) return;
   bool is_source = false;
-  for (size_t i = 0; i < sidechain_binding_count_; ++i) {
+  for (size_t i = 0; i < count; ++i) {
     if (sidechain_bindings_[i].source_track_id == track_id) {
       is_source = true;
       break;

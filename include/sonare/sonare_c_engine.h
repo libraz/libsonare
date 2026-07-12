@@ -135,7 +135,8 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
 /// @details Sidechain for ducking/sidechainRouter inserts: the source lane's
 ///   most recent post-strip buffer feeds the insert's key input every block
 ///   (same-block when the source renders earlier, previous block otherwise).
-///   @p source_track_id 0 removes the binding. Control-thread only.
+///   @p source_track_id 0 removes the binding. Control-thread only; must not
+///   be called concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
                                              unsigned int insert_index, uint32_t source_track_id);
 
@@ -444,7 +445,8 @@ typedef struct {
 /// @brief Binds/replaces a built-in synth on a realtime MIDI destination.
 /// @details Control-thread API. The engine owns the synth instance. Live MIDI
 ///          note/CC commands and scheduled MIDI clips routed to @p destination_id
-///          render through this instrument.
+///          render through this instrument. This is a control-thread structural
+///          mutation; do not call concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
                                                  uint32_t destination_id,
                                                  const SonareEngineBuiltinSynthConfig* config);
@@ -457,7 +459,9 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 ///        invalid struct_version or unknown preset name fails with
 ///        SONARE_ERROR_INVALID_PARAMETER. Control-thread API; the engine owns
 ///        the synth. Live MIDI input and scheduled MIDI clips routed to
-///        @p destination_id render through it.
+///        @p destination_id render through it. This is a control-thread
+///        structural mutation; do not call concurrently with
+///        @ref sonare_engine_process.
 SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
                                                uint32_t destination_id,
                                                const SonareSynthPatch* patch);
@@ -488,11 +492,14 @@ typedef struct {
 ///        (`sonare_engine_push_midi_input_*` / `sonare_engine_push_midi_note_*`)
 ///        and scheduled MIDI clips routed to @p destination_id render through
 ///        the player (16 MIDI channels, channel 10 drums, GS NRPN part edits,
-///        GS/GM SysEx resets).
+///        GS/GM SysEx resets). This is a control-thread structural mutation;
+///        do not call concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint32_t destination_id,
                                              const SonareEngineSf2InstrumentConfig* config);
 
 /// @brief Clears any realtime instrument bound to @p destination_id.
+/// @details This is a control-thread structural mutation; do not call
+///          concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id);
 SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, size_t* out_count);

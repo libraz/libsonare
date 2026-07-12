@@ -14,10 +14,15 @@
 ///    audio thread (same contract as RealtimeEngine::set_clips and friends).
 ///  - AUDIO thread: on_event() routes a dispatched event to its destination's
 ///    instrument; for_each() fans the render/transport loop across bound
-///    instruments. Both are allocation-free, lock-free and I/O-free.
+///    instruments. Both are allocation-free, lock-free and I/O-free. Each
+///    slot's instrument pointer is a std::atomic so a slot swap/clear racing
+///    the documented single-writer contract can never expose a torn/half
+///    written pointer to a concurrent reader, and on_event() null-checks the
+///    loaded pointer before dereferencing it.
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
@@ -44,9 +49,14 @@ class InstrumentRack final : public midi::MidiEventSink {
     for (auto& slot : slots_) {
       if (slot.active && slot.destination_id == destination_id) {
         if (instrument == nullptr) {
-          slot = Slot{};
+          // Clear the pointer before retiring the slot so a concurrent on_event()
+          // that still observes active/destination_id sees a null (guarded) rather
+          // than a stale instrument pointer.
+          slot.instrument.store(nullptr, std::memory_order_release);
+          slot.active = false;
+          slot.destination_id = 0;
         } else {
-          slot.instrument = instrument;
+          slot.instrument.store(instrument, std::memory_order_release);
         }
         return true;
       }
@@ -54,7 +64,12 @@ class InstrumentRack final : public midi::MidiEventSink {
     if (instrument == nullptr) return true;  // clearing an absent binding: no-op
     for (auto& slot : slots_) {
       if (!slot.active) {
-        slot = Slot{true, destination_id, instrument};
+        // Publish destination_id and the instrument pointer before marking the
+        // slot active, so on_event() never matches a destination whose
+        // instrument pointer has not been published yet.
+        slot.destination_id = destination_id;
+        slot.instrument.store(instrument, std::memory_order_release);
+        slot.active = true;
         return true;
       }
     }
@@ -64,18 +79,26 @@ class InstrumentRack final : public midi::MidiEventSink {
   /// Instrument bound to `destination_id`, or nullptr if none.
   midi::MidiInstrument* get(uint32_t destination_id) const noexcept {
     for (const auto& slot : slots_) {
-      if (slot.active && slot.destination_id == destination_id) return slot.instrument;
+      if (slot.active && slot.destination_id == destination_id) {
+        return slot.instrument.load(std::memory_order_acquire);
+      }
     }
     return nullptr;
   }
 
   /// AUDIO thread: route one dispatched event to its destination's instrument.
   /// Events for an unbound destination are discarded (no audible output), so an
-  /// empty rack behaves exactly like a null sink.
+  /// empty rack behaves exactly like a null sink. Loads the slot's instrument
+  /// pointer through the atomic (acquire) and null-guards it before
+  /// dereferencing, so a slot mid-swap/clear on the control thread is dropped
+  /// instead of dereferenced.
   void on_event(uint32_t destination_id, const midi::MidiEvent& event) noexcept override {
     for (auto& slot : slots_) {
       if (slot.active && slot.destination_id == destination_id) {
-        slot.instrument->on_event(destination_id, event);
+        midi::MidiInstrument* instrument = slot.instrument.load(std::memory_order_acquire);
+        if (instrument != nullptr) {
+          instrument->on_event(destination_id, event);
+        }
         return;
       }
     }
@@ -103,7 +126,10 @@ class InstrumentRack final : public midi::MidiEventSink {
   int max_latency_samples() const noexcept {
     int max = 0;
     for (const auto& slot : slots_) {
-      if (slot.active) max = std::max(max, slot.instrument->latency_samples());
+      if (!slot.active) continue;
+      if (midi::MidiInstrument* instrument = slot.instrument.load(std::memory_order_acquire)) {
+        max = std::max(max, instrument->latency_samples());
+      }
     }
     return max;
   }
@@ -113,7 +139,10 @@ class InstrumentRack final : public midi::MidiEventSink {
   int max_latency_samples_q8() const noexcept {
     int max = 0;
     for (const auto& slot : slots_) {
-      if (slot.active) max = std::max(max, slot.instrument->latency_samples_q8());
+      if (!slot.active) continue;
+      if (midi::MidiInstrument* instrument = slot.instrument.load(std::memory_order_acquire)) {
+        max = std::max(max, instrument->latency_samples_q8());
+      }
     }
     return max;
   }
@@ -123,7 +152,10 @@ class InstrumentRack final : public midi::MidiEventSink {
   template <typename Fn>
   void for_each(Fn&& fn) const {
     for (const auto& slot : slots_) {
-      if (slot.active) fn(slot.destination_id, slot.instrument);
+      if (!slot.active) continue;
+      if (midi::MidiInstrument* instrument = slot.instrument.load(std::memory_order_acquire)) {
+        fn(slot.destination_id, instrument);
+      }
     }
   }
 
@@ -131,7 +163,10 @@ class InstrumentRack final : public midi::MidiEventSink {
   struct Slot {
     bool active = false;
     uint32_t destination_id = 0;
-    midi::MidiInstrument* instrument = nullptr;
+    // Atomic so a concurrent on_event() (audio thread) reading a slot mid
+    // swap/clear (control thread) never observes a torn pointer; loads/stores
+    // use acquire/release so the published value is the whole pointer.
+    std::atomic<midi::MidiInstrument*> instrument{nullptr};
   };
   std::array<Slot, kMaxInstruments> slots_{};
 };

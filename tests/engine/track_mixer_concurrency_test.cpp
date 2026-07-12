@@ -131,6 +131,69 @@ TEST_CASE("TrackMixerRuntime pan and insert-param resolution run concurrently wi
   REQUIRE_FALSE(control_failed.load());
 }
 
+// set_lane_sidechain (control thread) publishes the binding count through an
+// atomic release store only after the binding it indexes is written, and the
+// audio thread's deliver_lane_sidechains()/snapshot_sidechain_key() read the
+// count with an acquire load. Toggling a binding on/off while the render thread
+// spins must stay data-race-free (ThreadSanitizer) and never observe a count
+// that outruns its binding.
+TEST_CASE("TrackMixerRuntime sidechain binding toggles run concurrently with rendering",
+          "[engine][track_mixer][concurrency]") {
+  constexpr int kBlock = 128;
+  constexpr int kControlIterations = 4000;
+  constexpr int kMaxBlocks = 400000;
+
+  std::array<float, kBlock> source{};
+  source.fill(0.5f);
+  const float* clip_channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, clip_channels, 1, kBlock)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  // Lane 10 hosts the keyed insert; lane 20 is the sidechain source.
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  sonare::mixing::ChannelStrip strip10;
+  strip10.add_pre_insert(std::make_unique<AutomatableGainProcessor>());
+  REQUIRE(mixer.bind_track_strip(10, &strip10));
+  sonare::mixing::ChannelStrip strip20;
+  strip20.add_pre_insert(std::make_unique<AutomatableGainProcessor>());
+  REQUIRE(mixer.bind_track_strip(20, &strip20));
+
+  std::atomic<bool> control_done{false};
+  std::atomic<bool> bad_output{false};
+
+  std::thread audio([&] {
+    std::array<float, kBlock> out_l{};
+    std::array<float, kBlock> out_r{};
+    float* out[] = {out_l.data(), out_r.data()};
+    int blocks = 0;
+    while (!control_done.load(std::memory_order_acquire) && blocks < kMaxBlocks) {
+      out_l.fill(0.0f);
+      out_r.fill(0.0f);
+      if (!mixer.render_clips(player, out, 2, kBlock, 0) || !all_finite(out_l.data(), kBlock) ||
+          !all_finite(out_r.data(), kBlock)) {
+        bad_output.store(true, std::memory_order_relaxed);
+        break;
+      }
+      ++blocks;
+    }
+  });
+
+  for (int i = 0; i < kControlIterations; ++i) {
+    // Add then drop the binding; the atomic count crosses 0<->1 every pass.
+    mixer.set_lane_sidechain(10, 0, 20);
+    mixer.set_lane_sidechain(10, 0, 0);
+  }
+  control_done.store(true, std::memory_order_release);
+  audio.join();
+
+  REQUIRE_FALSE(bad_output.load());
+}
+
 // Locks in the read-only control-thread resolution semantics: strips resolve
 // through the control-thread binding table (external binds, owned strips, and
 // send-seeded strips alike), an explicit nullptr unbind hides the strip, the

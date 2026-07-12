@@ -559,14 +559,14 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #if defined(SONARE_WITH_MIXING)
     // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs
     // sample-accurately at the sub-block's timeline position when enabled.
-    if (mixing_enabled_) {
+    if (mixing_enabled_.load(std::memory_order_relaxed)) {
       mixing_runtime_.process_at(sub_channels.data(), channels, num_frames,
                                  transport_.sample_position());
     }
     // Solo/mute + PFL/AFL monitoring stage for any registered strips. Existing
     // process() callers keep foldback compatibility; process_with_monitor()
     // receives the cue bus separately without contaminating the main output.
-    if (monitoring_enabled_) {
+    if (monitoring_enabled_.load(std::memory_order_relaxed)) {
       for (int ch = 0; ch < channels; ++ch) {
         std::fill(monitor_bus_channels_[static_cast<size_t>(ch)],
                   monitor_bus_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);

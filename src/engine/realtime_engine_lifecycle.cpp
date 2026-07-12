@@ -264,7 +264,7 @@ void RealtimeEngine::update_reported_graph_latency() noexcept {
 #endif
 #if defined(SONARE_WITH_MIXING)
   latency_q8 += track_mixer_runtime_.latency_samples_q8();
-  if (mixing_enabled_) {
+  if (mixing_enabled_.load(std::memory_order_relaxed)) {
     latency_q8 += mixing_runtime_.latency_samples_q8();
   }
 #endif
