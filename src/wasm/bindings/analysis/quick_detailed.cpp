@@ -14,8 +14,7 @@
 
 val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, float start_bpm,
                    int n_fft, int hop_length, int max_candidates) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   // Mirror the flat C ABI config contract (sonare_analyze_bpm): reject inverted
   // BPM ranges and non-positive sizing instead of letting the analyzer silently
   // clamp them, so WASM rejects identically to the C ABI / Node.
@@ -25,7 +24,6 @@ val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, f
                           "analyzeBpm: require bpmMin > 0, bpmMax > bpmMin, nFft > 0, "
                           "hopLength > 0, maxCandidates >= 0");
   }
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   BpmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
@@ -59,15 +57,13 @@ val js_analyze_bpm(val samples, int sample_rate, float bpm_min, float bpm_max, f
 
 val js_analyze_rhythm(val samples, int sample_rate, float bpm_min, float bpm_max, float start_bpm,
                       int n_fft, int hop_length) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   // Mirror the flat C ABI config contract (sonare_analyze_rhythm).
   if (bpm_min <= 0.0f || bpm_max <= bpm_min || n_fft <= 0 || hop_length <= 0) {
     throw SonareException(
         ErrorCode::InvalidParameter,
         "analyzeRhythm: require bpmMin > 0, bpmMax > bpmMin, nFft > 0, hopLength > 0");
   }
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   RhythmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
@@ -97,8 +93,7 @@ val js_analyze_rhythm(val samples, int sample_rate, float bpm_min, float bpm_max
 
 val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_length,
                         float compression_threshold) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   // Mirror the flat C ABI config contract (sonare_analyze_dynamics): reject a
   // non-positive window or hop and a negative threshold instead of clamping.
   if (window_sec <= 0.0f || hop_length <= 0 || compression_threshold < 0.0f) {
@@ -106,7 +101,6 @@ val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_
         ErrorCode::InvalidParameter,
         "analyzeDynamics: require windowSec > 0, hopLength > 0, compressionThreshold >= 0");
   }
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   DynamicsConfig config;
   config.window_sec = window_sec;
   config.hop_length = hop_length;
@@ -130,15 +124,13 @@ val js_analyze_dynamics(val samples, int sample_rate, float window_sec, int hop_
 
 val js_analyze_timbre(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
                       int n_mfcc, float window_sec) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   // Mirror the flat C ABI config contract (sonare_analyze_timbre).
   if (n_fft <= 0 || hop_length <= 0 || n_mels <= 0 || n_mfcc <= 0 || window_sec <= 0.0f) {
     throw SonareException(
         ErrorCode::InvalidParameter,
         "analyzeTimbre: require nFft > 0, hopLength > 0, nMels > 0, nMfcc > 0, windowSec > 0");
   }
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   TimbreConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;

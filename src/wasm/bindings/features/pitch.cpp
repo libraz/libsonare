@@ -11,9 +11,7 @@
 
 val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length, float fmin,
                  float fmax, float threshold, bool fill_na) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   PitchConfig config;
   config.frame_length = frame_length;
@@ -49,9 +47,7 @@ val js_pitch_yin(val samples, int sample_rate, int frame_length, int hop_length,
 
 val js_pitch_pyin(val samples, int sample_rate, int frame_length, int hop_length, float fmin,
                   float fmax, float threshold, bool fill_na) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   PitchConfig config;
   config.frame_length = frame_length;
@@ -91,9 +87,7 @@ float js_pitch_tuning(val frequencies, float resolution, int bins_per_octave) {
 // sonare_estimate_tuning / librosa.estimate_tuning.
 float js_estimate_tuning(val samples, int sample_rate, int n_fft, int hop_length, float resolution,
                          int bins_per_octave) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 

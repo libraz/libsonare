@@ -10,9 +10,7 @@
 // ============================================================================
 
 val js_mastering_repair_declick(val samples, int sample_rate, val options) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DeclickConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("threshold")) {
@@ -76,9 +74,7 @@ mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(
 }  // namespace
 
 val js_mastering_repair_denoise_classical(val samples, int sample_rate, val options) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DenoiseClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("mode")) {
@@ -123,9 +119,7 @@ val js_mastering_repair_denoise_classical(val samples, int sample_rate, val opti
 }
 
 val js_mastering_repair_declip(val samples, int sample_rate, val options) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DeclipConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("clipThreshold")) {
@@ -171,9 +165,7 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(
 }  // namespace
 
 val js_mastering_repair_decrackle(val samples, int sample_rate, val options) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DecrackleConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("threshold")) cfg.threshold = options["threshold"].as<float>();
@@ -188,9 +180,7 @@ val js_mastering_repair_decrackle(val samples, int sample_rate, val options) {
 }
 
 val js_mastering_repair_dehum(val samples, int sample_rate, val options) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DehumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("fundamentalHz")) {
@@ -214,9 +204,7 @@ val js_mastering_repair_dehum(val samples, int sample_rate, val options) {
 }
 
 val js_mastering_repair_dereverb_classical(val samples, int sample_rate, val options) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DereverbClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("threshold")) cfg.threshold = options["threshold"].as<float>();
@@ -262,9 +250,7 @@ val js_mastering_repair_dereverb_classical(val samples, int sample_rate, val opt
 }
 
 val js_mastering_repair_trim_silence(val samples, int sample_rate, val options) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::TrimSilenceConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
     if (options.hasOwnProperty("threshold")) cfg.threshold = options["threshold"].as<float>();

@@ -10,9 +10,7 @@
 // ============================================================================
 
 val js_spectral_centroid(val samples, int sample_rate, int n_fft, int hop_length) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -25,9 +23,7 @@ val js_spectral_centroid(val samples, int sample_rate, int n_fft, int hop_length
 }
 
 val js_spectral_bandwidth(val samples, int sample_rate, int n_fft, int hop_length) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -41,9 +37,7 @@ val js_spectral_bandwidth(val samples, int sample_rate, int n_fft, int hop_lengt
 
 val js_spectral_rolloff(val samples, int sample_rate, int n_fft, int hop_length,
                         float roll_percent) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -56,9 +50,7 @@ val js_spectral_rolloff(val samples, int sample_rate, int n_fft, int hop_length,
 }
 
 val js_spectral_flatness(val samples, int sample_rate, int n_fft, int hop_length) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -71,17 +63,13 @@ val js_spectral_flatness(val samples, int sample_rate, int n_fft, int hop_length
 }
 
 val js_zero_crossing_rate(val samples, int sample_rate, int frame_length, int hop_length) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   std::vector<float> zcr = zero_crossing_rate(audio, frame_length, hop_length);
   return vectorToFloat32Array(zcr);
 }
 
 val js_rms_energy(val samples, int sample_rate, int frame_length, int hop_length) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   std::vector<float> rms = rms_energy(audio, frame_length, hop_length);
   return vectorToFloat32Array(rms);
 }
@@ -92,9 +80,7 @@ val js_rms_energy(val samples, int sample_rate, int frame_length, int hop_length
 // extra row holding the residual band.
 val js_spectral_contrast(val samples, int sample_rate, int n_fft, int hop_length, int n_bands,
                          float fmin, float quantile) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -118,9 +104,7 @@ val js_spectral_contrast(val samples, int sample_rate, int n_fft, int hop_length
 // matrix [(order + 1) x n_frames] as { data, rows, cols } (coefficients ordered
 // high-to-low).
 val js_poly_features(val samples, int sample_rate, int n_fft, int hop_length, int order) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;

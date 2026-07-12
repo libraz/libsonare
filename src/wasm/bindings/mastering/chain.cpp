@@ -7,9 +7,7 @@
 
 val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_db,
                  int true_peak_oversample, float release_ms, bool apply_gain_at_input_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs = target_lufs;

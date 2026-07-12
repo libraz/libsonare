@@ -15,9 +15,7 @@
 
 // HPSS - Harmonic/Percussive Source Separation
 val js_hpss(val samples, int sample_rate, int kernel_harmonic, int kernel_percussive) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   HpssConfig config;
   config.kernel_size_harmonic = kernel_harmonic;
@@ -44,9 +42,7 @@ val js_hpss(val samples, int sample_rate, int kernel_harmonic, int kernel_percus
 
 // Get harmonic component only
 val js_harmonic(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   Audio result = harmonic(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
@@ -54,9 +50,7 @@ val js_harmonic(val samples, int sample_rate) {
 
 // Get percussive component only
 val js_percussive(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   Audio result = percussive(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
@@ -64,9 +58,7 @@ val js_percussive(val samples, int sample_rate) {
 
 // Time stretch
 val js_time_stretch(val samples, int sample_rate, float rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   Audio result = time_stretch(audio, rate);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
@@ -74,9 +66,7 @@ val js_time_stretch(val samples, int sample_rate, float rate) {
 
 // Pitch shift
 val js_pitch_shift(val samples, int sample_rate, float semitones) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   Audio result = pitch_shift(audio, semitones);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
@@ -90,9 +80,7 @@ val js_pitch_correct_to_midi(val samples, int sample_rate, float current_midi, f
     throw SonareException(ErrorCode::InvalidParameter,
                           "currentMidi must be finite and in [0, 127]");
   }
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   editing::pitch_editor::PitchCorrector corrector;
   editing::pitch_editor::F0Track track;
   track.sample_rate = sample_rate;
@@ -213,9 +201,7 @@ val js_pitch_correct_timevarying(val samples, int sample_rate, val f0_hz, int ho
 
 val js_note_stretch(val samples, int sample_rate, int onset_sample, int offset_sample,
                     float stretch_ratio) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   editing::pitch_editor::NoteRegion region;
   region.onset_sample = onset_sample;
   region.offset_sample = offset_sample;
@@ -226,9 +212,7 @@ val js_note_stretch(val samples, int sample_rate, int onset_sample, int offset_s
 }
 
 val js_voice_change(val samples, int sample_rate, float pitch_semitones, float formant_factor) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
@@ -346,9 +330,7 @@ val js_remix(val samples, val intervals, int sample_rate, bool align_zeros) {
 // sampleRate } where all three buffers share the same length and sample rate.
 val js_hpss_with_residual(val samples, int sample_rate, int kernel_harmonic,
                           int kernel_percussive) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   HpssConfig config;
   config.kernel_size_harmonic = kernel_harmonic;
@@ -382,9 +364,7 @@ val js_phase_vocoder(val samples, int sample_rate, float rate, int n_fft, int ho
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "phaseVocoder: rate must be finite and within (0, 100]");
   }
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig stft_config;
   stft_config.n_fft = n_fft;
@@ -403,9 +383,7 @@ val js_phase_vocoder(val samples, int sample_rate, float rate, int n_fft, int ho
 
 // Normalize
 val js_normalize(val samples, int sample_rate, float target_db) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   Audio result = normalize(audio, target_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
@@ -413,9 +391,7 @@ val js_normalize(val samples, int sample_rate, float target_db) {
 
 // Trim silence
 val js_trim(val samples, int sample_rate, float threshold_db) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   Audio result = trim_absolute(audio, threshold_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
@@ -459,9 +435,7 @@ WindowType parseSpectralEditWindow(val window) {
 // optional config bag { nFft, hopLength, window, healRadiusFrames }. Returns the
 // edited audio (same length/sample rate as the input) as a Float32Array.
 val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   SpectralEditConfig config;
   if (!options.isUndefined() && !options.isNull()) {
@@ -497,7 +471,7 @@ val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
       // facade, sonare_wrap_effects.cpp). The core defaults end_sample to 0,
       // which would otherwise make an omitted endSample a silent no-op here while
       // Node processes the full region.
-      region.end_sample = static_cast<int64_t>(data.size());
+      region.end_sample = static_cast<int64_t>(audio.size());
       // Sample positions arrive as plain JS numbers; read as double and cast to
       // int64 (mirrors project.cpp's totalFrames) so callers need not pass BigInt.
       if (op.hasOwnProperty("startSample")) {

@@ -57,9 +57,7 @@ void validate_matrix(const char* fn_name, const std::vector<float>& data, int ro
 // ============================================================================
 
 val js_stft(val samples, int sample_rate, int n_fft, int hop_length) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -80,9 +78,7 @@ val js_stft(val samples, int sample_rate, int n_fft, int hop_length) {
 }
 
 val js_stft_db(val samples, int sample_rate, int n_fft, int hop_length) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
   config.n_fft = n_fft;
@@ -104,9 +100,7 @@ val js_stft_db(val samples, int sample_rate, int n_fft, int hop_length) {
 
 val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
                        float fmin, float fmax, bool htk) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -136,9 +130,7 @@ val js_mel_spectrogram(val samples, int sample_rate, int n_fft, int hop_length, 
 
 val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels, int n_mfcc,
             float fmin, float fmax, bool htk, float lifter) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   MelConfig config;
   config.n_fft = n_fft;

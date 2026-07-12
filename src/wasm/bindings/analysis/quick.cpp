@@ -329,9 +329,7 @@ val js_detect_chords(val samples, int sample_rate, float min_duration, float smo
     validateKey(key_root, key_mode);
   }
 
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   ChordConfig config;
   config.min_duration = min_duration;
@@ -366,9 +364,7 @@ val js_chord_functional_analysis(val samples, int key_root, int key_mode, int sa
   validateChromaMethod(chroma_method);
   validateKey(key_root, key_mode);
 
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
 
   ChordConfig config;
   config.min_duration = min_duration;
@@ -456,9 +452,7 @@ val acousticParametersToVal(const AcousticParameters& params) {
 }
 
 val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
   return acousticParametersToVal(analyze_impulse_response(audio, config));
@@ -467,9 +461,7 @@ val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands
 val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
                        int n_third_octave_subbands, float min_decay_db,
                        float noise_floor_margin_db) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
   config.n_octave_bands = n_octave_bands;
@@ -699,10 +691,7 @@ val js_room_morph(val samples, int sample_rate, val opts) {
 
 // Analyze with progress callback
 val js_analyze_with_progress(val samples, int sample_rate, val progress_callback) {
-  std::vector<float> data = float32ArrayToVector(samples);
-
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   MusicAnalyzer analyzer(audio);
 
   // Set progress callback if provided
