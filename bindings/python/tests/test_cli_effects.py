@@ -138,6 +138,45 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch) -> None:
     assert captured["left_len"] == 480
 
 
+def test_resample_uses_native_antialiased_resampler(monkeypatch) -> None:
+    """cmd_resample routes through the native resampler, not linear interpolation."""
+    from libsonare import cli
+
+    samples = _generate_sine(440, 44100, 0.02)
+    monkeypatch.setattr(cli, "_load_audio", lambda path: (samples, 44100))
+
+    args = argparse.Namespace(
+        file="tone.wav",
+        target_rate=48000,
+        output="",
+        json=True,
+    )
+
+    native = cli._resample(samples, 44100, 48000)
+    linear = cli._resample_linear(samples, 44100, 48000)
+    # The C-ABI r8brain resampler is anti-aliased, so it diverges from the
+    # linear-interpolation fallback that used to back this subcommand.
+    assert native != pytest.approx(linear)
+    assert len(native) == round(len(samples) * 48000 / 44100)
+    assert cli.cmd_resample(args) == 0
+
+
+def test_resample_falls_back_to_linear_without_native_lib(monkeypatch) -> None:
+    """When the native library cannot load, cmd_resample degrades to linear."""
+    import libsonare
+    from libsonare import cli
+
+    samples = _generate_sine(440, 44100, 0.02)
+
+    def _raise_os_error(*_args, **_kwargs):
+        raise OSError("libsonare shared library not found")
+
+    monkeypatch.setattr(libsonare, "resample", _raise_os_error)
+
+    result = cli._resample(samples, 44100, 48000)
+    assert result == cli._resample_linear(samples, 44100, 48000)
+
+
 def test_rir_and_morph_missing_output_raise_value_error() -> None:
     """Missing --output raises ValueError so the exit code is EXIT_ERROR (L-15)."""
     from libsonare import cli

@@ -86,8 +86,36 @@ def _load_audio(path: str) -> tuple[list[float], int]:
         return audio.data, audio.sample_rate
 
 
+def _resample(samples: list[float], source_rate: int, target_rate: int) -> list[float]:
+    """Resample mono samples with the native anti-aliased resampler.
+
+    Routes through the C-ABI ``resample`` (r8brain) so the CLI matches the C++
+    CLI and ``Audio.resample()`` numerically. Falls back to linear interpolation
+    only when the native shared library cannot be loaded, keeping the CLI usable
+    in a library-less environment.
+    """
+    if source_rate <= 0 or target_rate <= 0:
+        raise ValueError("sample rates must be positive")
+    if source_rate == target_rate:
+        return list(samples)
+    if len(samples) == 0:
+        return []
+
+    from . import resample as _native_resample
+
+    try:
+        return _native_resample(list(samples), src_sr=source_rate, target_sr=target_rate)
+    except OSError:
+        # Shared library missing/unloadable: degrade to linear interpolation.
+        return _resample_linear(samples, source_rate, target_rate)
+
+
 def _resample_linear(samples: list[float], source_rate: int, target_rate: int) -> list[float]:
-    """Resample mono samples with linear interpolation."""
+    """Resample mono samples with linear interpolation.
+
+    Fallback path used only when the native resampler cannot be loaded;
+    ``_resample`` is the normal entry point.
+    """
     if source_rate <= 0 or target_rate <= 0:
         raise ValueError("sample rates must be positive")
     if source_rate == target_rate:
@@ -971,7 +999,7 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
 
 def cmd_resample(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
-    result = _resample_linear(samples, sr, args.target_rate)
+    result = _resample(samples, sr, args.target_rate)
 
     if args.output:
         _write_wav(args.output, result, args.target_rate)
@@ -1636,7 +1664,7 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
     source, sr = _load_audio(args.file)
     reference, ref_sr = _load_audio(args.reference)
     if ref_sr != sr:
-        reference = _resample_linear(reference, ref_sr, sr)
+        reference = _resample(reference, ref_sr, sr)
     result_json = mastering_pair_analyze(args.analysis, source, reference, sample_rate=sr)
     # The library returns a JSON string regardless of --json; print it as-is.
     print(result_json)
@@ -2029,7 +2057,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
             for path in args.input:
                 samples, in_sr = _load_audio(path)
                 if in_sr != args.sample_rate:
-                    samples = _resample_linear(samples, in_sr, args.sample_rate)
+                    samples = _resample(samples, in_sr, args.sample_rate)
                 if length is None:
                     length = len(samples)
                 elif len(samples) != length:

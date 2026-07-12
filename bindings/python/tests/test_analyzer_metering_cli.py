@@ -266,13 +266,15 @@ def test_mastering_pair_analyze_cli_resamples_reference_rate(monkeypatch, capsys
     import libsonare
     from libsonare import cli
 
+    source_samples = _generate_sine(440, 48000, 0.01)
+    reference_samples = _generate_sine(440, 44100, 0.01)
     calls: dict[str, object] = {}
 
     def fake_load_audio(path: str) -> tuple[list[float], int]:
         if path == "master.wav":
-            return [0.0, 1.0, 0.0, -1.0], 4
+            return source_samples, 48000
         if path == "reference.wav":
-            return [0.0, 1.0], 2
+            return reference_samples, 44100
         raise AssertionError(path)
 
     def fake_mastering_pair_analyze(
@@ -299,9 +301,15 @@ def test_mastering_pair_analyze_cli_resamples_reference_rate(monkeypatch, capsys
     assert cli.cmd_mastering_pair_analyze(args) == 0
 
     assert calls["analysis"] == "match.referenceLoudness"
-    assert calls["source"] == [0.0, 1.0, 0.0, -1.0]
-    assert calls["reference"] == pytest.approx([0.0, 0.5, 1.0, 1.0])
-    assert calls["sample_rate"] == 4
+    assert calls["source"] == source_samples
+    assert calls["sample_rate"] == 48000
+    # The reference is resampled 44.1 -> 48 kHz through the native resampler,
+    # which differs numerically from the linear-interpolation fallback.
+    reference = calls["reference"]
+    expected_len = round(len(reference_samples) * 48000 / 44100)
+    assert len(reference) == expected_len
+    linear = cli._resample_linear(reference_samples, 44100, 48000)
+    assert reference != pytest.approx(linear)
     assert capsys.readouterr().out.strip() == '{"ok":true}'
 
 
