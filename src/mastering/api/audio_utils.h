@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <type_traits>
 #include <vector>
 
@@ -108,6 +109,27 @@ inline float loudness_gain_db_with_ceiling(const std::vector<float>& left,
       sonare::mastering::common::measure_true_peak_dbtp(left_audio, true_peak_oversample),
       sonare::mastering::common::measure_true_peak_dbtp(right_audio, true_peak_oversample));
   return loudness_gain_db_with_ceiling(current_lufs, target_lufs, ceiling_db, peak_db);
+}
+
+// Applies an in-place per-buffer repair: builds an Audio view of @p data, runs
+// @p repair, and writes the (possibly resized) result back. Type-erased through
+// std::function on purpose — the repair chain has ~10 call sites, and a template
+// would emit one copy of this body per distinct lambda, bloating the binary.
+inline void apply_repair_in_place(std::vector<float>& data, int sample_rate,
+                                  const std::function<Audio(const Audio&)>& repair) {
+  Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio repaired = repair(input);
+  data.assign(repaired.data(), repaired.data() + repaired.size());
+}
+
+// Runs @p repair independently on each channel in place (left, then right). The
+// channels are separate buffers and the repair transforms are pure, so this is
+// equivalent to repairing both in either interleaving.
+inline void apply_independent_repair(std::vector<float>& left, std::vector<float>& right,
+                                     int sample_rate,
+                                     const std::function<Audio(const Audio&)>& repair) {
+  apply_repair_in_place(left, sample_rate, repair);
+  apply_repair_in_place(right, sample_rate, repair);
 }
 
 template <typename RepairFn>

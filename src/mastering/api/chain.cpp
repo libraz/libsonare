@@ -124,49 +124,49 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
 
   // 1. repair.declick
   if (config_.repair.declick.enabled) {
-    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    Audio repaired = mastering::repair::declick(input, config_.repair.declick.config);
-    data.assign(repaired.data(), repaired.data() + repaired.size());
+    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
+      return mastering::repair::declick(in, config_.repair.declick.config);
+    });
     report("repair.declick");
   }
 
   // 2. repair.declip
   if (config_.repair.declip.enabled) {
-    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    Audio repaired = mastering::repair::declip(input, config_.repair.declip.config);
-    data.assign(repaired.data(), repaired.data() + repaired.size());
+    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
+      return mastering::repair::declip(in, config_.repair.declip.config);
+    });
     report("repair.declip");
   }
 
   // 3. repair.decrackle
   if (config_.repair.decrackle.enabled) {
-    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    Audio repaired = mastering::repair::decrackle(input, config_.repair.decrackle.config);
-    data.assign(repaired.data(), repaired.data() + repaired.size());
+    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
+      return mastering::repair::decrackle(in, config_.repair.decrackle.config);
+    });
     report("repair.decrackle");
   }
 
   // 4. repair.dehum
   if (config_.repair.dehum.enabled) {
-    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    Audio repaired = mastering::repair::dehum(input, config_.repair.dehum.config);
-    data.assign(repaired.data(), repaired.data() + repaired.size());
+    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
+      return mastering::repair::dehum(in, config_.repair.dehum.config);
+    });
     report("repair.dehum");
   }
 
   // 5. repair.dereverb
   if (config_.repair.dereverb.enabled) {
-    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    Audio repaired = mastering::repair::dereverb_classical(input, config_.repair.dereverb.config);
-    data.assign(repaired.data(), repaired.data() + repaired.size());
+    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
+      return mastering::repair::dereverb_classical(in, config_.repair.dereverb.config);
+    });
     report("repair.dereverb");
   }
 
   // 6. repair.denoise
   if (config_.repair.denoise.enabled) {
-    Audio input = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    Audio repaired = mastering::repair::denoise_classical(input, config_.repair.denoise.config);
-    data.assign(repaired.data(), repaired.data() + repaired.size());
+    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
+      return mastering::repair::denoise_classical(in, config_.repair.denoise.config);
+    });
     report("repair.denoise");
   }
 
@@ -304,46 +304,33 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
 
   // 1. repair.declick (per-channel)
   if (config_.repair.declick.enabled) {
-    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    Audio left_repaired = mastering::repair::declick(left_audio, config_.repair.declick.config);
-    Audio right_repaired = mastering::repair::declick(right_audio, config_.repair.declick.config);
-    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
-    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
+      return mastering::repair::declick(in, config_.repair.declick.config);
+    });
     report("repair.declick");
   }
 
   // 2. repair.declip (per-channel)
   if (config_.repair.declip.enabled) {
-    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    Audio left_repaired = mastering::repair::declip(left_audio, config_.repair.declip.config);
-    Audio right_repaired = mastering::repair::declip(right_audio, config_.repair.declip.config);
-    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
-    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
+      return mastering::repair::declip(in, config_.repair.declip.config);
+    });
     report("repair.declip");
   }
 
   // 3. repair.decrackle (per-channel)
   if (config_.repair.decrackle.enabled) {
-    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    Audio left_repaired = mastering::repair::decrackle(left_audio, config_.repair.decrackle.config);
-    Audio right_repaired =
-        mastering::repair::decrackle(right_audio, config_.repair.decrackle.config);
-    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
-    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
+      return mastering::repair::decrackle(in, config_.repair.decrackle.config);
+    });
     report("repair.decrackle");
   }
 
   // 4. repair.dehum (per-channel)
   if (config_.repair.dehum.enabled) {
-    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    Audio left_repaired = mastering::repair::dehum(left_audio, config_.repair.dehum.config);
-    Audio right_repaired = mastering::repair::dehum(right_audio, config_.repair.dehum.config);
-    left.assign(left_repaired.data(), left_repaired.data() + left_repaired.size());
-    right.assign(right_repaired.data(), right_repaired.data() + right_repaired.size());
+    detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
+      return mastering::repair::dehum(in, config_.repair.dehum.config);
+    });
     report("repair.dehum");
   }
 
