@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ._runtime import _get_lib
+from ._runtime import _synth_enum_value as _synth_enum_value
 
 # NativeSynth patch enum names (mirror the SonareSynth* enums in
 # sonare_c_types.h; 0 / "default" keeps the base patch's value).
@@ -114,15 +115,6 @@ def synth_enum_tables() -> dict[str, tuple[str, ...]]:
             continue
         out[key] = tuple(name for name in raw.decode("utf-8").split("\n") if name)
     return out
-
-
-def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
-    if isinstance(value, int):
-        return value
-    key = value.lower()
-    if key not in names:
-        raise ValueError(f"unknown {what}: {value!r} (expected one of {sorted(names)})")
-    return names[key]
 
 
 def _synth_enum_name(value: int, names: Mapping[str, int]) -> str | int:

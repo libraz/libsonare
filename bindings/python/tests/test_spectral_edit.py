@@ -14,16 +14,11 @@ from numpy.typing import NDArray
 
 import libsonare
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, sine
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
 SR = 22050
-
-
-def _sine(freq: float, duration_sec: float, amp: float = 0.4) -> NDArray[np.float32]:
-    n = int(SR * duration_sec)
-    return (amp * np.sin(2.0 * np.pi * freq * np.arange(n) / SR)).astype(np.float32)
 
 
 def _band_energy(samples: NDArray[np.float32], low_hz: float, high_hz: float) -> float:
@@ -34,7 +29,7 @@ def _band_energy(samples: NDArray[np.float32], low_hz: float, high_hz: float) ->
 
 
 def test_identity_transform_preserves_length_and_signal() -> None:
-    x = _sine(440.0, 0.5)
+    x = sine(440.0, 0.5, amp=0.4)
     out = np.asarray(libsonare.spectral_edit(x, SR, []), dtype=np.float32)
     assert len(out) == len(x)
     assert np.all(np.isfinite(out))
@@ -47,7 +42,7 @@ def test_identity_transform_preserves_length_and_signal() -> None:
 
 
 def test_attenuate_band_lowers_that_band() -> None:
-    x = _sine(1000.0, 0.5) + _sine(5000.0, 0.5)
+    x = sine(1000.0, 0.5, amp=0.4) + sine(5000.0, 0.5, amp=0.4)
     op = libsonare.SpectralRegionOp(
         start_sample=0,
         end_sample=len(x),
@@ -70,7 +65,7 @@ def test_attenuate_band_lowers_that_band() -> None:
 
 
 def test_mute_mode_zeros_a_band() -> None:
-    x = _sine(1000.0, 0.5) + _sine(5000.0, 0.5)
+    x = sine(1000.0, 0.5, amp=0.4) + sine(5000.0, 0.5, amp=0.4)
     op = libsonare.SpectralRegionOp(0, len(x), 4000.0, 6000.0, mode="mute")
     out = np.asarray(libsonare.spectral_edit(x, SR, [op]), dtype=np.float32)
     high_before = _band_energy(x, 4000.0, 6000.0)
@@ -82,7 +77,7 @@ def test_omitted_end_sample_spans_whole_signal() -> None:
     # An omitted end_sample (the -1 sentinel) must edit the whole signal, like
     # the Node/WASM facades whose endSample defaults to the signal length. A
     # region with start_sample=0 and no end_sample should mute the whole band.
-    x = _sine(1000.0, 0.5) + _sine(5000.0, 0.5)
+    x = sine(1000.0, 0.5, amp=0.4) + sine(5000.0, 0.5, amp=0.4)
     op = libsonare.SpectralRegionOp(start_sample=0, low_hz=4000.0, high_hz=6000.0, mode="mute")
     out = np.asarray(libsonare.spectral_edit(x, SR, [op]), dtype=np.float32)
     assert len(out) == len(x)
@@ -94,7 +89,7 @@ def test_omitted_end_sample_spans_whole_signal() -> None:
 def test_heal_radius_frames_zero_uses_core_default() -> None:
     # heal_radius_frames=0 must succeed (the C-ABI oracle remaps 0 -> default 2),
     # matching the Node path; only negative values are rejected.
-    x = _sine(440.0, 0.5)
+    x = sine(440.0, 0.5, amp=0.4)
     out = np.asarray(libsonare.spectral_edit(x, SR, [], heal_radius_frames=0), dtype=np.float32)
     assert len(out) == len(x)
     assert np.all(np.isfinite(out))
@@ -103,7 +98,7 @@ def test_heal_radius_frames_zero_uses_core_default() -> None:
 
 
 def test_invalid_parameters_raise() -> None:
-    x = _sine(440.0, 0.25)
+    x = sine(440.0, 0.25, amp=0.4)
     with pytest.raises((ValueError, Exception)):
         libsonare.spectral_edit(x, SR, [], n_fft=2000)  # not a power of two
     with pytest.raises((ValueError, Exception)):

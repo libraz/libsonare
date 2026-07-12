@@ -13,6 +13,7 @@
 #include "feature/spectral.h"
 #include "features/common.h"
 #include "sonare_wrap.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/constants.h"
 
@@ -22,8 +23,7 @@ using namespace sonare_node::features;
 Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -31,12 +31,9 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
@@ -61,8 +58,7 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -70,12 +66,9 @@ Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
@@ -100,8 +93,7 @@ Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -109,19 +101,13 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
-  int n_mels =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 128;
-  float fmin =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 0.0f;
-  float fmax =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
-  bool htk = info.Length() >= 8 && info[7].IsBoolean() && info[7].As<Napi::Boolean>().Value();
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
+  int n_mels = node_arg_int(info, 4, 128);
+  float fmin = node_arg_float(info, 5, 0.0f);
+  float fmax = node_arg_float(info, 6, 0.0f);
+  bool htk = node_arg_bool(info, 7, false);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::MelConfig config;
@@ -154,8 +140,7 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -163,23 +148,15 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
-  int n_mels =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 128;
-  int n_mfcc =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 20;
-  float fmin =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
-  float fmax =
-      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
-  bool htk = info.Length() >= 9 && info[8].IsBoolean() && info[8].As<Napi::Boolean>().Value();
-  float lifter =
-      info.Length() >= 10 && info[9].IsNumber() ? info[9].As<Napi::Number>().FloatValue() : 0.0f;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
+  int n_mels = node_arg_int(info, 4, 128);
+  int n_mfcc = node_arg_int(info, 5, 20);
+  float fmin = node_arg_float(info, 6, 0.0f);
+  float fmax = node_arg_float(info, 7, 0.0f);
+  bool htk = node_arg_bool(info, 8, false);
+  float lifter = node_arg_float(info, 9, 0.0f);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::MelConfig config;
@@ -209,8 +186,7 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -218,12 +194,9 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::ChromaConfig config;
@@ -260,17 +233,13 @@ using ChromaFn = SonareError (*)(const float*, size_t, int, int, int, SonareChro
 
 Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
   auto typed = info[0].As<Napi::Float32Array>();
-  const int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  const int hop_length =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
-  const int n_chroma =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 12;
+  const int sr = node_arg_int(info, 1, 22050);
+  const int hop_length = node_arg_int(info, 2, 512);
+  const int n_chroma = node_arg_int(info, 3, 12);
 
   SonareChromaResult result{};
   const SonareError err =
@@ -322,8 +291,7 @@ Napi::Value SonareWrap::BassChroma(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SpectralCentroid(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -331,12 +299,9 @@ Napi::Value SonareWrap::SpectralCentroid(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
@@ -353,8 +318,7 @@ Napi::Value SonareWrap::SpectralCentroid(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -362,12 +326,9 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
@@ -384,8 +345,7 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -393,14 +353,10 @@ Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
-  float roll_percent =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 0.85f;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
+  float roll_percent = node_arg_float(info, 4, 0.85f);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
@@ -417,8 +373,7 @@ Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -426,12 +381,9 @@ Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int n_fft = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
@@ -448,8 +400,7 @@ Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::ZeroCrossingRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -457,12 +408,9 @@ Napi::Value SonareWrap::ZeroCrossingRate(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int frame_length =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int frame_length = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   std::vector<float> zcr = sonare::zero_crossing_rate(audio, frame_length, hop_length);
@@ -474,8 +422,7 @@ Napi::Value SonareWrap::ZeroCrossingRate(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -483,12 +430,9 @@ Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int frame_length =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
+  int sr = node_arg_int(info, 1, 22050);
+  int frame_length = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   std::vector<float> rms = sonare::rms_energy(audio, frame_length, hop_length);
@@ -504,8 +448,7 @@ Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -513,20 +456,13 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int frame_length =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
-  float fmin =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 65.0f;
-  float fmax =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 2093.0f;
-  float threshold =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.3f;
-  bool fill_na =
-      info.Length() >= 8 && info[7].IsBoolean() ? info[7].As<Napi::Boolean>().Value() : false;
+  int sr = node_arg_int(info, 1, 22050);
+  int frame_length = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
+  float fmin = node_arg_float(info, 4, 65.0f);
+  float fmax = node_arg_float(info, 5, 2093.0f);
+  float threshold = node_arg_float(info, 6, 0.3f);
+  bool fill_na = node_arg_bool(info, 7, false);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::PitchConfig config;
@@ -562,8 +498,7 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
   }
 
@@ -571,20 +506,13 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int sr =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
-  int frame_length =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 512;
-  float fmin =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 65.0f;
-  float fmax =
-      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().FloatValue() : 2093.0f;
-  float threshold =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.3f;
-  bool fill_na =
-      info.Length() >= 8 && info[7].IsBoolean() ? info[7].As<Napi::Boolean>().Value() : false;
+  int sr = node_arg_int(info, 1, 22050);
+  int frame_length = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
+  float fmin = node_arg_float(info, 4, 65.0f);
+  float fmax = node_arg_float(info, 5, 2093.0f);
+  float threshold = node_arg_float(info, 6, 0.3f);
+  bool fill_na = node_arg_bool(info, 7, false);
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::PitchConfig config;
@@ -747,10 +675,8 @@ Napi::Value SonareWrap::FramesToSamples(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int frames = info[0].As<Napi::Number>().Int32Value();
-  int hop =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 512;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 0;
+  int hop = node_arg_int(info, 1, 512);
+  int n_fft = node_arg_int(info, 2, 0);
   return Napi::Number::New(env, sonare_frames_to_samples(frames, hop, n_fft));
 }
 
@@ -761,26 +687,20 @@ Napi::Value SonareWrap::SamplesToFrames(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int samples = info[0].As<Napi::Number>().Int32Value();
-  int hop =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 512;
-  int n_fft =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 0;
+  int hop = node_arg_int(info, 1, 512);
+  int n_fft = node_arg_int(info, 2, 0);
   return Napi::Number::New(env, sonare_samples_to_frames(samples, hop, n_fft));
 }
 
 Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float ref =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 1.0f;
-  float amin = info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue()
-                                                        : sonare::constants::kEpsilon;
-  float top_db =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 80.0f;
+  float ref = node_arg_float(info, 1, 1.0f);
+  float amin = node_arg_float(info, 2, sonare::constants::kEpsilon);
+  float top_db = node_arg_float(info, 3, 80.0f);
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -791,17 +711,13 @@ Napi::Value SonareWrap::PowerToDb(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float ref =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 1.0f;
-  float amin =
-      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 1e-5f;
-  float top_db =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 80.0f;
+  float ref = node_arg_float(info, 1, 1.0f);
+  float amin = node_arg_float(info, 2, 1e-5f);
+  float top_db = node_arg_float(info, 3, 80.0f);
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
@@ -812,13 +728,11 @@ Napi::Value SonareWrap::AmplitudeToDb(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::DbToPower(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float ref =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 1.0f;
+  float ref = node_arg_float(info, 1, 1.0f);
   float* out = nullptr;
   size_t count = 0;
   SonareError err = sonare_db_to_power(arr.Data(), arr.ElementLength(), ref, &out, &count);
@@ -828,13 +742,11 @@ Napi::Value SonareWrap::DbToPower(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::DbToAmplitude(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float ref =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 1.0f;
+  float ref = node_arg_float(info, 1, 1.0f);
   float* out = nullptr;
   size_t count = 0;
   SonareError err = sonare_db_to_amplitude(arr.Data(), arr.ElementLength(), ref, &out, &count);
@@ -844,13 +756,11 @@ Napi::Value SonareWrap::DbToAmplitude(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float coef =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 0.97f;
+  float coef = node_arg_float(info, 1, 0.97f);
   bool use_zi = info.Length() >= 3 && info[2].IsNumber();
   float zi = use_zi ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
   float* out = nullptr;
@@ -863,13 +773,11 @@ Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::Deemphasis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
-    Napi::TypeError::New(env, "Expected Float32Array").ThrowAsJavaScriptException();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array")) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
-  float coef =
-      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().FloatValue() : 0.97f;
+  float coef = node_arg_float(info, 1, 0.97f);
   bool use_zi = info.Length() >= 3 && info[2].IsNumber();
   float zi = use_zi ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
   float* out = nullptr;

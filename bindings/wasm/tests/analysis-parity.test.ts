@@ -22,16 +22,12 @@ import {
   PitchClass,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
+import { sine as genSine } from './_helpers';
 
 const SR = 22050;
 
 function makeSine(durationSec: number, freqHz: number): Float32Array {
-  const n = Math.floor(SR * durationSec);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    out[i] = 0.25 * Math.sin((2 * Math.PI * freqHz * i) / SR);
-  }
-  return out;
+  return genSine(freqHz, durationSec, { amp: 0.25, sampleRate: SR });
 }
 
 function collectSchemaPaths(value: unknown, prefix = '', out = new Set<string>()): Set<string> {

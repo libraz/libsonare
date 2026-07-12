@@ -11,6 +11,8 @@ from ._runtime import (
     _float_array_result,
     _get_lib,
     _int_array_result,
+    _out_float_array,
+    _out_int_array,
     _to_c_float_array,
     _to_c_int_array,
 )
@@ -170,27 +172,22 @@ def trim_silence(
     """Trim leading/trailing silence and return (audio, start_sample, end_sample)."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
     start = ctypes.c_int()
     end = ctypes.c_int()
-    rc = lib.sonare_trim_silence(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_float(top_db),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-        ctypes.byref(start),
-        ctypes.byref(end),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_trim_silence(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_float(top_db),
+            ctypes.c_int(frame_length),
+            ctypes.c_int(hop_length),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(start),
+            ctypes.byref(end),
+        )
+        _check(rc)
         return (_float_array_result(out, out_length.value), int(start.value), int(end.value))
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def split_silence(
@@ -202,24 +199,19 @@ def split_silence(
     """Return non-silent intervals as (start_sample, end_sample)."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_int)()
-    out_count = ctypes.c_size_t()
-    rc = lib.sonare_split_silence(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_float(top_db),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
-        ctypes.byref(out),
-        ctypes.byref(out_count),
-    )
-    _check(rc)
-    try:
+    with _out_int_array(lib) as (out, out_count):
+        rc = lib.sonare_split_silence(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_float(top_db),
+            ctypes.c_int(frame_length),
+            ctypes.c_int(hop_length),
+            ctypes.byref(out),
+            ctypes.byref(out_count),
+        )
+        _check(rc)
         flat = _int_array_result(out, out_count.value)
         return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
-    finally:
-        if out and out_count.value > 0:
-            lib.sonare_free_ints(out)
 
 
 def frame_signal(
@@ -230,24 +222,19 @@ def frame_signal(
     """Slice a signal into frames. Returns (n_frames, row-major frames)."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
     n_frames = ctypes.c_int()
-    rc = lib.sonare_frame_signal(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(frame_length),
-        ctypes.c_int(hop_length),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-        ctypes.byref(n_frames),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_frame_signal(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(frame_length),
+            ctypes.c_int(hop_length),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(n_frames),
+        )
+        _check(rc)
         return (int(n_frames.value), _float_array_result(out, out_length.value))
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def pad_center(
@@ -281,23 +268,18 @@ def fix_frames(
     """Adjust frame indices to fit within bounds."""
     lib = _get_lib()
     c_array, length = _to_c_int_array(frames)
-    out = ctypes.POINTER(ctypes.c_int)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_fix_frames(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(x_min),
-        ctypes.c_int(x_max),
-        ctypes.c_int(1 if pad else 0),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    try:
+    with _out_int_array(lib) as (out, out_length):
+        rc = lib.sonare_fix_frames(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(x_min),
+            ctypes.c_int(x_max),
+            ctypes.c_int(1 if pad else 0),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
         return _int_array_result(out, out_length.value)
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_ints(out)
 
 
 def peak_pick(
@@ -312,26 +294,21 @@ def peak_pick(
     """Pick peaks using librosa.util.peak_pick-compatible parameters."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(values)
-    out = ctypes.POINTER(ctypes.c_int)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_peak_pick(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(pre_max),
-        ctypes.c_int(post_max),
-        ctypes.c_int(pre_avg),
-        ctypes.c_int(post_avg),
-        ctypes.c_float(delta),
-        ctypes.c_int(wait),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    try:
+    with _out_int_array(lib) as (out, out_length):
+        rc = lib.sonare_peak_pick(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(pre_max),
+            ctypes.c_int(post_max),
+            ctypes.c_int(pre_avg),
+            ctypes.c_int(post_avg),
+            ctypes.c_float(delta),
+            ctypes.c_int(wait),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
         return _int_array_result(out, out_length.value)
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_ints(out)
 
 
 def vector_normalize(
@@ -365,28 +342,23 @@ def pcen(
     c_array, length = _to_c_float_array(values)
     if length != n_bins * n_frames:
         raise ValueError("values length must equal n_bins * n_frames")
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_pcen(
-        c_array,
-        ctypes.c_int(n_bins),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
-        ctypes.c_float(time_constant),
-        ctypes.c_float(gain),
-        ctypes.c_float(bias),
-        ctypes.c_float(power),
-        ctypes.c_float(eps),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_pcen(
+            c_array,
+            ctypes.c_int(n_bins),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(hop_length),
+            ctypes.c_float(time_constant),
+            ctypes.c_float(gain),
+            ctypes.c_float(bias),
+            ctypes.c_float(power),
+            ctypes.c_float(eps),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
         return _float_array_result(out, out_length.value)
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: int) -> list[float]:
@@ -395,21 +367,16 @@ def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: 
     c_array, length = _to_c_float_array(chromagram)
     if length != n_chroma * n_frames:
         raise ValueError("chromagram length must equal n_chroma * n_frames")
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_tonnetz(
-        c_array,
-        ctypes.c_int(n_chroma),
-        ctypes.c_int(n_frames),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_tonnetz(
+            c_array,
+            ctypes.c_int(n_chroma),
+            ctypes.c_int(n_frames),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
         return _float_array_result(out, out_length.value)
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def tempogram(
@@ -427,28 +394,23 @@ def tempogram(
         raise ValueError("mode must be 'autocorrelation' or 'cosine'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
     n_frames = ctypes.c_int()
-    rc = lib.sonare_tempogram_with_mode(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(win_length),
-        ctypes.c_int(1 if center else 0),
-        ctypes.c_int(1 if norm else 0),
-        ctypes.c_int(mode_id),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-        ctypes.byref(n_frames),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_tempogram_with_mode(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(hop_length),
+            ctypes.c_int(win_length),
+            ctypes.c_int(1 if center else 0),
+            ctypes.c_int(1 if norm else 0),
+            ctypes.c_int(mode_id),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(n_frames),
+        )
+        _check(rc)
         return (int(n_frames.value), _float_array_result(out, out_length.value))
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def cyclic_tempogram(
@@ -462,27 +424,22 @@ def cyclic_tempogram(
     """Compute cyclic tempogram. Returns (n_frames, row-major matrix)."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
     n_frames = ctypes.c_int()
-    rc = lib.sonare_cyclic_tempogram(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(win_length),
-        ctypes.c_float(bpm_min),
-        ctypes.c_int(n_bins),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-        ctypes.byref(n_frames),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_cyclic_tempogram(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(hop_length),
+            ctypes.c_int(win_length),
+            ctypes.c_float(bpm_min),
+            ctypes.c_int(n_bins),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(n_frames),
+        )
+        _check(rc)
         return (int(n_frames.value), _float_array_result(out, out_length.value))
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def plp(
@@ -537,27 +494,22 @@ def onset_strength_multi(
     """Compute multi-band onset strength. Returns (n_frames, [n_bands x n_frames])."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
     n_frames = ctypes.c_int()
-    rc = lib.sonare_onset_strength_multi(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_fft),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(n_mels),
-        ctypes.c_int(n_bands),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-        ctypes.byref(n_frames),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_onset_strength_multi(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_fft),
+            ctypes.c_int(hop_length),
+            ctypes.c_int(n_mels),
+            ctypes.c_int(n_bands),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(n_frames),
+        )
+        _check(rc)
         return (int(n_frames.value), _float_array_result(out, out_length.value))
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def fourier_tempogram(
@@ -575,27 +527,22 @@ def fourier_tempogram(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
     n_frames = ctypes.c_int()
-    rc = lib.sonare_fourier_tempogram(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(hop_length),
-        ctypes.c_int(win_length),
-        ctypes.c_int(1 if center else 0),
-        ctypes.c_int(1 if norm else 0),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-        ctypes.byref(n_frames),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_fourier_tempogram(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(hop_length),
+            ctypes.c_int(win_length),
+            ctypes.c_int(1 if center else 0),
+            ctypes.c_int(1 if norm else 0),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(n_frames),
+        )
+        _check(rc)
         return (int(n_frames.value), _float_array_result(out, out_length.value))
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def tempogram_ratio(
@@ -633,23 +580,18 @@ def nnls_chroma(
     """Compute NNLS chroma. Returns (n_frames, row-major 12 x n_frames matrix)."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
     n_frames = ctypes.c_int()
-    rc = lib.sonare_nnls_chroma(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-        ctypes.byref(n_frames),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_nnls_chroma(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+            ctypes.byref(n_frames),
+        )
+        _check(rc)
         return (int(n_frames.value), _float_array_result(out, out_length.value))
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 def resample(
@@ -669,19 +611,14 @@ def resample(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = lib.sonare_resample(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(src_sr),
-        ctypes.c_int(target_sr),
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_resample(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(src_sr),
+            ctypes.c_int(target_sr),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
         return _float_array_result(out, out_length.value)
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)

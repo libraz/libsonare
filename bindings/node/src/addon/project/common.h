@@ -15,12 +15,6 @@ namespace sonare_node::project {
 // expects (or arrangement support was compiled out -> runtime version 0).
 constexpr uint32_t kExpectedProjectAbiVersion = SONARE_PROJECT_ABI_VERSION;
 
-inline void ThrowIfError(Napi::Env env, SonareError err) {
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err);
-  }
-}
-
 inline double NumberArg(const Napi::CallbackInfo& info, size_t index, double fallback) {
   if (info.Length() <= index || info[index].IsUndefined()) {
     return fallback;
@@ -43,5 +37,6 @@ using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
+using sonare_node::ThrowIfError;
 
 }  // namespace sonare_node::project

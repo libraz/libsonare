@@ -87,10 +87,7 @@ void MixerWasm::setDualPan(unsigned int strip_index, float left_pan, float right
 // centered point-source default.
 void MixerWasm::setSurroundPan(unsigned int strip_index, val pan) {
   const auto field = [&](const char* key, float fallback) {
-    val value = pan[key];
-    return (!value.isUndefined() && !value.isNull() && value.typeOf().as<std::string>() == "number")
-               ? value.as<float>()
-               : fallback;
+    return optionalNumber(pan[key]).value_or(fallback);
   };
   SonareSurroundPan sp{};
   sp.azimuth = field("azimuth", 0.0f);

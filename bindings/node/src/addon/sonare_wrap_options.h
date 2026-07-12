@@ -3,9 +3,43 @@
 
 #include <napi.h>
 
+#include <cstddef>
 #include <cstdint>
 
 namespace sonare_node {
+
+// Canonical positional-argument readers, shared by every addon TU. Semantics
+// match the recurring inline sites: a missing OR present-but-non-number
+// argument at @p index falls back to @p fallback (a type-checked fallback, not
+// a presence-only check). Preserve the int/float/double distinction per call
+// site (Int32Value vs FloatValue vs DoubleValue).
+
+/// @brief Read an int positional argument, falling back if absent or non-number.
+inline int node_arg_int(const Napi::CallbackInfo& info, size_t index, int fallback) {
+  return index < info.Length() && info[index].IsNumber()
+             ? info[index].As<Napi::Number>().Int32Value()
+             : fallback;
+}
+
+/// @brief Read a float positional argument, falling back if absent or non-number.
+inline float node_arg_float(const Napi::CallbackInfo& info, size_t index, float fallback) {
+  return index < info.Length() && info[index].IsNumber()
+             ? info[index].As<Napi::Number>().FloatValue()
+             : fallback;
+}
+
+/// @brief Read a double positional argument, falling back if absent or non-number.
+inline double node_arg_double(const Napi::CallbackInfo& info, size_t index, double fallback) {
+  return index < info.Length() && info[index].IsNumber()
+             ? info[index].As<Napi::Number>().DoubleValue()
+             : fallback;
+}
+
+/// @brief Read a bool positional argument, falling back if absent or non-boolean.
+inline bool node_arg_bool(const Napi::CallbackInfo& info, size_t index, bool fallback) {
+  return index < info.Length() && info[index].IsBoolean() ? info[index].As<Napi::Boolean>().Value()
+                                                          : fallback;
+}
 
 // Two helper families with deliberately different lenience, shared by every
 // addon TU (do not re-declare per-file copies):

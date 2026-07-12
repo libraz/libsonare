@@ -191,19 +191,59 @@ def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tup
     return frames, channels
 
 
-def _array_stats(vals: list[float]) -> dict[str, float | int]:
+def _emit_effect_result(
+    args: argparse.Namespace,
+    result: list[float],
+    sr: int,
+    *,
+    extra: dict[str, object] | None = None,
+    label: str,
+) -> int:
+    """Write the optional output WAV and print an offline-effect result.
+
+    Shared by the offline-effect subcommands whose result is a mono buffer plus
+    an optional ``extra`` payload block. The JSON payload keeps the key order
+    ``length, sample_rate, <extra...>, output`` and the human-readable form
+    prints ``<label>: <n> samples`` followed by an optional ``Wrote:`` line,
+    matching each command's historical output exactly.
+    """
+    if args.output:
+        _write_wav(args.output, result, sr)
+
+    if args.json:
+        payload: dict[str, object] = {"length": len(result), "sample_rate": sr}
+        if extra:
+            payload.update(extra)
+        if args.output:
+            payload["output"] = args.output
+        print(json.dumps(payload))
+    else:
+        print(f"  {label}: {len(result)} samples")
+        if args.output:
+            print(f"    Wrote: {args.output}")
+    return 0
+
+
+def _array_stats(
+    vals: list[float], *, digits: int = 6, with_count: bool = True
+) -> dict[str, float | int]:
     """Summary statistics for a numeric array (avoids dumping huge arrays)."""
     import statistics
 
     if not vals:
-        return {"count": 0, "mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
-    return {
-        "count": len(vals),
-        "mean": round(statistics.mean(vals), 6),
-        "std": round(statistics.stdev(vals), 6) if len(vals) > 1 else 0.0,
-        "min": round(min(vals), 6),
-        "max": round(max(vals), 6),
+        stats: dict[str, float | int] = {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
+        if with_count:
+            return {"count": 0, **stats}
+        return stats
+    stats = {
+        "mean": round(statistics.mean(vals), digits),
+        "std": round(statistics.stdev(vals), digits) if len(vals) > 1 else 0.0,
+        "min": round(min(vals), digits),
+        "max": round(max(vals), digits),
     }
+    if with_count:
+        return {"count": len(vals), **stats}
+    return stats
 
 
 def _parse_kv_params(value: str) -> dict[str, float]:
@@ -745,8 +785,6 @@ def cmd_chroma(args: argparse.Namespace) -> int:
 
 
 def cmd_spectral(args: argparse.Namespace) -> int:
-    import statistics
-
     from . import (
         rms_energy,
         spectral_bandwidth,
@@ -760,15 +798,8 @@ def cmd_spectral(args: argparse.Namespace) -> int:
     nf = args.n_fft
     hl = args.hop_length
 
-    def _stats(vals: list[float]) -> dict[str, float]:
-        if not vals:
-            return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
-        return {
-            "mean": round(statistics.mean(vals), 4),
-            "std": round(statistics.stdev(vals), 4) if len(vals) > 1 else 0.0,
-            "min": round(min(vals), 4),
-            "max": round(max(vals), 4),
-        }
+    def _stats(vals: list[float]) -> dict[str, float | int]:
+        return _array_stats(vals, digits=4, with_count=False)
 
     features = {
         "centroid": _stats(spectral_centroid(samples, sr, nf, hl)),
@@ -860,19 +891,7 @@ def cmd_pitch_correct(args: argparse.Namespace) -> int:
         target_midi=args.target_midi,
     )
 
-    if args.output:
-        _write_wav(args.output, result, sr)
-
-    if args.json:
-        payload: dict[str, object] = {"length": len(result), "sample_rate": sr}
-        if args.output:
-            payload["output"] = args.output
-        print(json.dumps(payload))
-    else:
-        print(f"  Pitch correct: {len(result)} samples")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
+    return _emit_effect_result(args, result, sr, label="Pitch correct")
 
 
 def cmd_note_stretch(args: argparse.Namespace) -> int:
@@ -887,19 +906,7 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
         stretch_ratio=args.ratio,
     )
 
-    if args.output:
-        _write_wav(args.output, result, sr)
-
-    if args.json:
-        payload: dict[str, object] = {"length": len(result), "sample_rate": sr}
-        if args.output:
-            payload["output"] = args.output
-        print(json.dumps(payload))
-    else:
-        print(f"  Note stretch: {len(result)} samples")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
+    return _emit_effect_result(args, result, sr, label="Note stretch")
 
 
 def cmd_pitch_shift(args: argparse.Namespace) -> int:
@@ -908,23 +915,13 @@ def cmd_pitch_shift(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     result = pitch_shift(samples, sample_rate=sr, semitones=args.semitones)
 
-    if args.output:
-        _write_wav(args.output, result, sr)
-
-    if args.json:
-        payload: dict[str, object] = {
-            "length": len(result),
-            "sample_rate": sr,
-            "semitones": args.semitones,
-        }
-        if args.output:
-            payload["output"] = args.output
-        print(json.dumps(payload))
-    else:
-        print(f"  Pitch shift ({args.semitones:+.2f} semitones): {len(result)} samples")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
+    return _emit_effect_result(
+        args,
+        result,
+        sr,
+        extra={"semitones": args.semitones},
+        label=f"Pitch shift ({args.semitones:+.2f} semitones)",
+    )
 
 
 def cmd_time_stretch(args: argparse.Namespace) -> int:
@@ -933,23 +930,13 @@ def cmd_time_stretch(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     result = time_stretch(samples, sample_rate=sr, rate=args.rate)
 
-    if args.output:
-        _write_wav(args.output, result, sr)
-
-    if args.json:
-        payload: dict[str, object] = {
-            "length": len(result),
-            "sample_rate": sr,
-            "rate": args.rate,
-        }
-        if args.output:
-            payload["output"] = args.output
-        print(json.dumps(payload))
-    else:
-        print(f"  Time stretch (rate {args.rate:.4f}): {len(result)} samples")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
+    return _emit_effect_result(
+        args,
+        result,
+        sr,
+        extra={"rate": args.rate},
+        label=f"Time stretch (rate {args.rate:.4f})",
+    )
 
 
 def cmd_normalize(args: argparse.Namespace) -> int:
@@ -958,23 +945,13 @@ def cmd_normalize(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     result = normalize(samples, sample_rate=sr, target_db=args.target_db)
 
-    if args.output:
-        _write_wav(args.output, result, sr)
-
-    if args.json:
-        payload: dict[str, object] = {
-            "length": len(result),
-            "sample_rate": sr,
-            "target_db": args.target_db,
-        }
-        if args.output:
-            payload["output"] = args.output
-        print(json.dumps(payload))
-    else:
-        print(f"  Normalize (target {args.target_db:.2f} dB): {len(result)} samples")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
+    return _emit_effect_result(
+        args,
+        result,
+        sr,
+        extra={"target_db": args.target_db},
+        label=f"Normalize (target {args.target_db:.2f} dB)",
+    )
 
 
 def cmd_trim_silence(args: argparse.Namespace) -> int:
@@ -983,23 +960,13 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     result = trim(samples, sample_rate=sr, threshold_db=args.threshold_db)
 
-    if args.output:
-        _write_wav(args.output, result, sr)
-
-    if args.json:
-        payload: dict[str, object] = {
-            "length": len(result),
-            "sample_rate": sr,
-            "threshold_db": args.threshold_db,
-        }
-        if args.output:
-            payload["output"] = args.output
-        print(json.dumps(payload))
-    else:
-        print(f"  Trim silence (threshold {args.threshold_db:.1f} dB): {len(result)} samples")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
+    return _emit_effect_result(
+        args,
+        result,
+        sr,
+        extra={"threshold_db": args.threshold_db},
+        label=f"Trim silence (threshold {args.threshold_db:.1f} dB)",
+    )
 
 
 def cmd_resample(args: argparse.Namespace) -> int:
@@ -1055,19 +1022,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             formant_factor=args.formant_factor,
         )
 
-    if args.output:
-        _write_wav(args.output, result, sr)
-
-    if args.json:
-        payload: dict[str, object] = {"length": len(result), "sample_rate": sr}
-        if args.output:
-            payload["output"] = args.output
-        print(json.dumps(payload))
-    else:
-        print(f"  Voice change: {len(result)} samples")
-        if args.output:
-            print(f"    Wrote: {args.output}")
-    return 0
+    return _emit_effect_result(args, result, sr, label="Voice change")
 
 
 def cmd_voice_presets(args: argparse.Namespace) -> int:

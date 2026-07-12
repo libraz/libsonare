@@ -12,16 +12,12 @@ import {
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
 } from '../src/index';
+import { sine as sineWave } from './_helpers';
 
 const SR = 44100;
 
 function sine(freq: number, dur = 1.0, amp = 0.8): Float32Array {
-  const n = Math.floor(SR * dur);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
-  }
-  return out;
+  return sineWave(freq, dur, { sampleRate: SR, amp });
 }
 
 function peak(arr: Float32Array): number {

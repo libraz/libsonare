@@ -28,43 +28,15 @@ inline Napi::Int32Array IntResult(Napi::Env env, int* data, size_t count) {
 }
 
 inline Napi::Value CheckCResult(Napi::Env env, SonareError err) {
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err);
-  }
+  sonare_node::ThrowIfError(env, err);
   return env.Undefined();
 }
 
-inline std::vector<int> IntVectorFromValue(const Napi::Value& value) {
-  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array) {
-    auto arr = value.As<Napi::Int32Array>();
-    return std::vector<int>(arr.Data(), arr.Data() + arr.ElementLength());
-  }
-  if (value.IsArray()) {
-    auto arr = value.As<Napi::Array>();
-    std::vector<int> out(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
-      out[i] = arr.Get(i).As<Napi::Number>().Int32Value();
-    }
-    return out;
-  }
-  throw Napi::TypeError::New(value.Env(), "Expected Int32Array or number[]");
-}
-
-inline std::vector<float> FloatVectorFromValue(const Napi::Value& value) {
-  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
-    auto arr = value.As<Napi::Float32Array>();
-    return std::vector<float>(arr.Data(), arr.Data() + arr.ElementLength());
-  }
-  if (value.IsArray()) {
-    auto arr = value.As<Napi::Array>();
-    std::vector<float> out(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
-      out[i] = arr.Get(i).As<Napi::Number>().FloatValue();
-    }
-    return out;
-  }
-  throw Napi::TypeError::New(value.Env(), "Expected Float32Array or number[]");
-}
+// IntVectorFromValue / FloatVectorFromValue come from sonare_wrap_utils.h
+// (namespace sonare_node); the features TUs `using namespace sonare_node`, so
+// the unqualified names still resolve.
+using sonare_node::FloatVectorFromValue;
+using sonare_node::IntVectorFromValue;
 
 inline int TempogramModeFromValue(const Napi::Value& value) {
   if (value.IsUndefined() || value.IsNull()) return SONARE_TEMPOGRAM_AUTOCORRELATION;

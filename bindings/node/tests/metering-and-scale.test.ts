@@ -22,17 +22,13 @@ import {
   waveformPeakPyramid,
   waveformPeaks,
 } from '../src/index';
+import { sine as sineWave } from './_helpers';
 
 const SR = 22050;
 const C_MAJOR_MASK = 0b101010110101;
 
 function sine(freq: number, durationSec: number): Float32Array {
-  const n = Math.floor(SR * durationSec);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    out[i] = 0.5 * Math.sin((2 * Math.PI * freq * i) / SR);
-  }
-  return out;
+  return sineWave(freq, durationSec, { sampleRate: SR, amp: 0.5 });
 }
 
 describe('Offline metering wrappers', () => {

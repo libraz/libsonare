@@ -88,7 +88,9 @@ from ._runtime import (
     _curve_value,
     _from_c_float_array,
     _get_lib,
+    _resolve_enum,
     _to_c_float_array,
+    _warp_mode_value,
 )
 from .types import ProjectMarker
 
@@ -158,21 +160,11 @@ _LOOP_MODE_NAMES = {
 
 
 def _fade_curve_value(curve: str | int) -> int:
-    if isinstance(curve, int):
-        return curve
-    key = curve.lower()
-    if key not in _FADE_CURVE_NAMES:
-        raise ValueError(f"unknown fade curve: {curve}")
-    return _FADE_CURVE_NAMES[key]
+    return _resolve_enum(curve, _FADE_CURVE_NAMES, "fade curve")
 
 
 def _loop_mode_value(mode: str | int) -> int:
-    if isinstance(mode, int):
-        return mode
-    key = mode.lower()
-    if key not in _LOOP_MODE_NAMES:
-        raise ValueError(f"unknown loop mode: {mode}")
-    return _LOOP_MODE_NAMES[key]
+    return _resolve_enum(mode, _LOOP_MODE_NAMES, "loop mode")
 
 
 def _automation_lane_desc(
@@ -419,12 +411,7 @@ def _marker_name_bytes(name: str | None) -> bytes:
 
 
 def _synth_waveform_value(waveform: str | int) -> int:
-    if isinstance(waveform, int):
-        return waveform
-    key = waveform.lower()
-    if key not in _SYNTH_WAVEFORM_NAMES:
-        raise ValueError(f"unknown synth waveform: {waveform}")
-    return _SYNTH_WAVEFORM_NAMES[key]
+    return _resolve_enum(waveform, _SYNTH_WAVEFORM_NAMES, "synth waveform")
 
 
 @dataclass(frozen=True)
@@ -787,25 +774,7 @@ def _check_project_abi(lib: Any) -> None:
 
 
 def _track_kind_value(kind: str | int) -> int:
-    if isinstance(kind, int):
-        return kind
-    key = kind.lower()
-    if key not in _TRACK_KIND_NAMES:
-        raise ValueError(f"unknown track kind: {kind}")
-    return _TRACK_KIND_NAMES[key]
-
-
-def _warp_mode_value(mode: str | int) -> int:
-    if isinstance(mode, int):
-        return mode
-    key = mode.lower()
-    if key == "off":
-        return 0
-    if key == "repitch":
-        return 1
-    if key == "tempo-sync":
-        return 2
-    raise ValueError(f"unknown warp mode: {mode}")
+    return _resolve_enum(kind, _TRACK_KIND_NAMES, "track kind")
 
 
 def _midi_event_tuple(name: str, *args: float | int) -> tuple[float, int, int]:

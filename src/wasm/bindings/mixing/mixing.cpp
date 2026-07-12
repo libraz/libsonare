@@ -310,12 +310,8 @@ val mixMeterSnapshotToValFree(const SonareMixMeterSnapshot& snapshot) {
 }  // namespace
 
 val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val options) {
-  const int count = left_channels["length"].as<int>();
-  if (count <= 0 || right_channels["length"].as<int>() != count) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "leftChannels and rightChannels must have the same non-zero length");
-  }
+  const int count =
+      requireMatchedLength(left_channels, right_channels, "leftChannels and rightChannels");
 
   std::vector<std::vector<float>> left_inputs;
   std::vector<std::vector<float>> right_inputs;
@@ -365,28 +361,20 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
       }
       strips.push_back(strip);
 
-      val inputTrim = optionAt(options, "inputTrimDb", index);
-      if (!inputTrim.isUndefined() && !inputTrim.isNull() &&
-          inputTrim.typeOf().as<std::string>() == "number") {
-        sonare_strip_set_input_trim_db(strip, inputTrim.as<float>());
+      if (auto v = optionalNumber(optionAt(options, "inputTrimDb", index))) {
+        sonare_strip_set_input_trim_db(strip, *v);
       }
-      val fader = optionAt(options, "faderDb", index);
-      if (!fader.isUndefined() && !fader.isNull() && fader.typeOf().as<std::string>() == "number") {
-        sonare_strip_set_fader_db(strip, fader.as<float>());
+      if (auto v = optionalNumber(optionAt(options, "faderDb", index))) {
+        sonare_strip_set_fader_db(strip, *v);
       }
-      val pan = optionAt(options, "pan", index);
-      if (!pan.isUndefined() && !pan.isNull() && pan.typeOf().as<std::string>() == "number") {
-        sonare_strip_set_pan(strip, pan.as<float>(),
-                             panModeOrdinalFromVal(optionAt(options, "panMode", index)));
+      if (auto v = optionalNumber(optionAt(options, "pan", index))) {
+        sonare_strip_set_pan(strip, *v, panModeOrdinalFromVal(optionAt(options, "panMode", index)));
       }
-      val width = optionAt(options, "width", index);
-      if (!width.isUndefined() && !width.isNull() && width.typeOf().as<std::string>() == "number") {
-        sonare_strip_set_width(strip, width.as<float>());
+      if (auto v = optionalNumber(optionAt(options, "width", index))) {
+        sonare_strip_set_width(strip, *v);
       }
-      val muted = optionAt(options, "muted", index);
-      if (!muted.isUndefined() && !muted.isNull() &&
-          muted.typeOf().as<std::string>() == "boolean") {
-        sonare_strip_set_muted(strip, muted.as<bool>() ? 1 : 0);
+      if (auto v = optionalBool(optionAt(options, "muted", index))) {
+        sonare_strip_set_muted(strip, *v ? 1 : 0);
       }
 
       left_ptrs[static_cast<size_t>(index)] = left_inputs[static_cast<size_t>(index)].data();
@@ -424,27 +412,21 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
     mixing::ChannelStrip strip;
     strip.prepare(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
 
-    val inputTrim = optionAt(options, "inputTrimDb", index);
-    if (!inputTrim.isUndefined() && !inputTrim.isNull() &&
-        inputTrim.typeOf().as<std::string>() == "number") {
-      strip.set_input_trim_db(inputTrim.as<float>());
+    if (auto v = optionalNumber(optionAt(options, "inputTrimDb", index))) {
+      strip.set_input_trim_db(*v);
     }
-    val fader = optionAt(options, "faderDb", index);
-    if (!fader.isUndefined() && !fader.isNull() && fader.typeOf().as<std::string>() == "number") {
-      strip.set_fader_db(fader.as<float>());
+    if (auto v = optionalNumber(optionAt(options, "faderDb", index))) {
+      strip.set_fader_db(*v);
     }
-    val pan = optionAt(options, "pan", index);
-    if (!pan.isUndefined() && !pan.isNull() && pan.typeOf().as<std::string>() == "number") {
+    if (auto v = optionalNumber(optionAt(options, "pan", index))) {
       strip.set_pan_mode(panModeFromVal(optionAt(options, "panMode", index)));
-      strip.set_pan(pan.as<float>());
+      strip.set_pan(*v);
     }
-    val width = optionAt(options, "width", index);
-    if (!width.isUndefined() && !width.isNull() && width.typeOf().as<std::string>() == "number") {
-      strip.set_width(width.as<float>());
+    if (auto v = optionalNumber(optionAt(options, "width", index))) {
+      strip.set_width(*v);
     }
-    val muted = optionAt(options, "muted", index);
-    if (!muted.isUndefined() && !muted.isNull() && muted.typeOf().as<std::string>() == "boolean") {
-      strip.set_muted(muted.as<bool>());
+    if (auto v = optionalBool(optionAt(options, "muted", index))) {
+      strip.set_muted(*v);
     }
 
     float* channels[] = {left_inputs[static_cast<size_t>(index)].data(),

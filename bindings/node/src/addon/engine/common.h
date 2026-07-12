@@ -13,12 +13,6 @@ namespace sonare_node::engine {
 
 constexpr uint32_t kExpectedEngineAbiVersion = 3;
 
-inline void ThrowIfError(Napi::Env env, SonareError err) {
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err);
-  }
-}
-
 inline int64_t OptionalInt64(const Napi::CallbackInfo& info, size_t index, int64_t fallback) {
   if (info.Length() <= index || info[index].IsUndefined()) {
     return fallback;
@@ -254,5 +248,6 @@ using sonare_node::BoolProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
+using sonare_node::ThrowIfError;
 
 }  // namespace sonare_node::engine

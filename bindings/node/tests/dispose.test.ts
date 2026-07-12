@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Audio, Project } from '../src/index.js';
+import { sine as sineWave } from './_helpers.js';
 
 function sine(freq: number, sr: number, seconds: number): Float32Array {
-  const n = Math.floor(sr * seconds);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    out[i] = 0.5 * Math.sin((2 * Math.PI * freq * i) / sr);
-  }
-  return out;
+  return sineWave(freq, seconds, { sampleRate: sr, amp: 0.5 });
 }
 
 describe('Symbol.dispose / using', () => {

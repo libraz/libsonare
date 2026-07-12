@@ -58,22 +58,6 @@ Napi::Value EffectsCheckCResult(Napi::Env env, SonareError err) {
   return env.Undefined();
 }
 
-std::vector<int> EffectsIntVectorFromValue(const Napi::Value& value) {
-  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array) {
-    auto arr = value.As<Napi::Int32Array>();
-    return std::vector<int>(arr.Data(), arr.Data() + arr.ElementLength());
-  }
-  if (value.IsArray()) {
-    auto arr = value.As<Napi::Array>();
-    std::vector<int> out(arr.Length());
-    for (uint32_t i = 0; i < arr.Length(); ++i) {
-      out[i] = arr.Get(i).As<Napi::Number>().Int32Value();
-    }
-    return out;
-  }
-  throw Napi::TypeError::New(value.Env(), "Expected Int32Array or number[]");
-}
-
 }  // namespace
 
 Napi::Value SonareWrap::VoiceCharacterPresetId(const Napi::CallbackInfo& info) {
@@ -228,7 +212,7 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
-  std::vector<int> intervals = EffectsIntVectorFromValue(info[1]);
+  std::vector<int> intervals = IntVectorFromValue(info[1]);
   if (intervals.size() % 2 != 0) {
     Napi::TypeError::New(env, "remix intervals must be (start, end) pairs")
         .ThrowAsJavaScriptException();

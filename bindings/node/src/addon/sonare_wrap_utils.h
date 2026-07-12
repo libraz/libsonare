@@ -39,6 +39,62 @@ bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
 bool IsInt32Array(const Napi::Value& value);
 
+/// @brief Throw a JS SonareError when @p err is not SONARE_OK; no-op otherwise.
+///        Shared wrapper for the recurring
+///        `if (err != SONARE_OK) ThrowSonareError(env, err);` guard.
+inline void ThrowIfError(Napi::Env env, SonareError err) {
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+  }
+}
+
+/// @brief Throw a JS TypeError with @p message and return false when
+///        info[index] is not a Float32Array; otherwise return true. The caller
+///        passes its own detail message so existing error strings are preserved.
+inline bool RequireFloat32Array(const Napi::CallbackInfo& info, size_t index, const char* message) {
+  if (!IsFloat32Array(info[index])) {
+    Napi::TypeError::New(info.Env(), message).ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
+}
+
+/// @brief Coerce a JS value into a std::vector<int>, accepting an Int32Array or
+///        a plain number[]. Throws a JS TypeError otherwise.
+inline std::vector<int> IntVectorFromValue(const Napi::Value& value) {
+  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array) {
+    auto arr = value.As<Napi::Int32Array>();
+    return std::vector<int>(arr.Data(), arr.Data() + arr.ElementLength());
+  }
+  if (value.IsArray()) {
+    auto arr = value.As<Napi::Array>();
+    std::vector<int> out(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+      out[i] = arr.Get(i).As<Napi::Number>().Int32Value();
+    }
+    return out;
+  }
+  throw Napi::TypeError::New(value.Env(), "Expected Int32Array or number[]");
+}
+
+/// @brief Coerce a JS value into a std::vector<float>, accepting a Float32Array
+///        or a plain number[]. Throws a JS TypeError otherwise.
+inline std::vector<float> FloatVectorFromValue(const Napi::Value& value) {
+  if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array) {
+    auto arr = value.As<Napi::Float32Array>();
+    return std::vector<float>(arr.Data(), arr.Data() + arr.ElementLength());
+  }
+  if (value.IsArray()) {
+    auto arr = value.As<Napi::Array>();
+    std::vector<float> out(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+      out[i] = arr.Get(i).As<Napi::Number>().FloatValue();
+    }
+    return out;
+  }
+  throw Napi::TypeError::New(value.Env(), "Expected Float32Array or number[]");
+}
+
 /// @brief Validate that a flat row-major matrix's declared dims match its
 ///        backing typed-array length.
 ///

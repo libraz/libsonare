@@ -28,6 +28,7 @@ from ._runtime import (
     _get_lib,
     _mode_values,
     _optional_float_array_result,
+    _out_float_array,
     _profile_value,
     _to_c_float_array,
     _to_c_int_array,
@@ -226,22 +227,17 @@ def detect_beats(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out_times = ctypes.POINTER(ctypes.c_float)()
-    out_count = ctypes.c_size_t()
-    rc = lib.sonare_detect_beats(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.byref(out_times),
-        ctypes.byref(out_count),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out_times, out_count):
+        rc = lib.sonare_detect_beats(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.byref(out_times),
+            ctypes.byref(out_count),
+        )
+        _check(rc)
         count = out_count.value
         return [float(out_times[i]) for i in range(count)]
-    finally:
-        if out_times and out_count.value > 0:
-            lib.sonare_free_floats(out_times)
 
 
 def detect_downbeats(
@@ -251,22 +247,17 @@ def detect_downbeats(
     """Detect downbeat positions in audio samples."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out_times = ctypes.POINTER(ctypes.c_float)()
-    out_count = ctypes.c_size_t()
-    rc = lib.sonare_detect_downbeats(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.byref(out_times),
-        ctypes.byref(out_count),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out_times, out_count):
+        rc = lib.sonare_detect_downbeats(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.byref(out_times),
+            ctypes.byref(out_count),
+        )
+        _check(rc)
         count = out_count.value
         return [float(out_times[i]) for i in range(count)]
-    finally:
-        if out_times and out_count.value > 0:
-            lib.sonare_free_floats(out_times)
 
 
 def detect_onsets(
@@ -287,22 +278,17 @@ def detect_onsets(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out_times = ctypes.POINTER(ctypes.c_float)()
-    out_count = ctypes.c_size_t()
-    rc = lib.sonare_detect_onsets(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.byref(out_times),
-        ctypes.byref(out_count),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out_times, out_count):
+        rc = lib.sonare_detect_onsets(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.byref(out_times),
+            ctypes.byref(out_count),
+        )
+        _check(rc)
         count = out_count.value
         return [float(out_times[i]) for i in range(count)]
-    finally:
-        if out_times and out_count.value > 0:
-            lib.sonare_free_floats(out_times)
 
 
 # camelCase → snake_case quality name table (mirrors detect_chords).

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
-from collections.abc import Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, cast
 
 import numpy as np
@@ -202,86 +203,141 @@ def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[cty
     return c_array, length
 
 
-def _pan_mode_value(value: str | int) -> int:
+_PAN_MODE_NAMES = {
+    "balance": PAN_MODE_BALANCE,
+    "stereo-pan": PAN_MODE_STEREO_PAN,
+    "stereopan": PAN_MODE_STEREO_PAN,
+    "pan": PAN_MODE_STEREO_PAN,
+    "dual-pan": PAN_MODE_DUAL_PAN,
+    "dualpan": PAN_MODE_DUAL_PAN,
+}
+
+
+def _enum_error(
+    value: object, names: Mapping[str, int], what: str, verb: str, expected: bool
+) -> str:
+    if expected:
+        return f"{verb} {what}: {value!r} (expected one of {sorted(names)})"
+    return f"{verb} {what}: {value}"
+
+
+def _resolve_enum(
+    value: object,
+    names: Mapping[str, int],
+    what: str,
+    *,
+    enum_cls: type | None = None,
+    dash: bool = False,
+    reject_bool: bool = False,
+    verb: str = "unknown",
+    expected: bool = False,
+) -> int:
+    """Resolve a string / int / enum ``value`` to its C enum ordinal.
+
+    ``names`` maps accepted lowercase spellings (with underscores folded to
+    dashes when ``dash`` is set) to ordinals. Integers pass through unchanged;
+    an ``enum_cls`` instance is coerced with ``int()``. Unknown inputs raise
+    ``ValueError`` built from ``verb`` / ``what`` (and, when ``expected`` is
+    set, the sorted accepted names).
+    """
+    if enum_cls is not None and isinstance(value, enum_cls):
+        return int(value)
     if isinstance(value, int):
+        if reject_bool and isinstance(value, bool):
+            raise ValueError(_enum_error(value, names, what, verb, expected))
         return value
-    key = value.replace("_", "-").lower()
-    if key == "balance":
-        return PAN_MODE_BALANCE
-    if key in ("stereo-pan", "stereopan", "pan"):
-        return PAN_MODE_STEREO_PAN
-    if key in ("dual-pan", "dualpan"):
-        return PAN_MODE_DUAL_PAN
-    raise ValueError(f"unknown pan mode: {value}")
+    if not isinstance(value, str):
+        raise ValueError(_enum_error(value, names, what, verb, expected))
+    key = value.replace("_", "-").lower() if dash else value.lower()
+    if key not in names:
+        raise ValueError(_enum_error(value, names, what, verb, expected))
+    return names[key]
+
+
+def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
+    """Resolve a NativeSynth patch enum spelling to its C ordinal."""
+    return _resolve_enum(value, names, what, expected=True)
+
+
+def _pan_mode_value(value: str | int) -> int:
+    return _resolve_enum(value, _PAN_MODE_NAMES, "pan mode", dash=True)
+
+
+_AUTOMATION_CURVE_NAMES = {
+    "linear": int(AutomationCurve.LINEAR),
+    "lin": int(AutomationCurve.LINEAR),
+    "exponential": int(AutomationCurve.EXPONENTIAL),
+    "exp": int(AutomationCurve.EXPONENTIAL),
+    "hold": int(AutomationCurve.HOLD),
+    "step": int(AutomationCurve.HOLD),
+    "s-curve": int(AutomationCurve.S_CURVE),
+    "s_curve": int(AutomationCurve.S_CURVE),
+    "scurve": int(AutomationCurve.S_CURVE),
+    "smooth": int(AutomationCurve.S_CURVE),
+}
 
 
 def _curve_value(value: AutomationCurve | str | int) -> int:
     """Resolve an automation curve to its C enum value."""
-    if isinstance(value, AutomationCurve):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    key = value.lower()
-    if key in ("linear", "lin"):
-        return int(AutomationCurve.LINEAR)
-    if key in ("exponential", "exp"):
-        return int(AutomationCurve.EXPONENTIAL)
-    if key in ("hold", "step"):
-        return int(AutomationCurve.HOLD)
-    if key in ("s-curve", "s_curve", "scurve", "smooth"):
-        return int(AutomationCurve.S_CURVE)
-    raise ValueError(f"unknown automation curve: {value}")
+    return _resolve_enum(
+        value, _AUTOMATION_CURVE_NAMES, "automation curve", enum_cls=AutomationCurve
+    )
+
+
+_PAN_LAW_NAMES = {
+    "const-3db": int(PanLaw.CONST_3DB),
+    "-3db": int(PanLaw.CONST_3DB),
+    "const-4.5db": int(PanLaw.CONST_4_5DB),
+    "-4.5db": int(PanLaw.CONST_4_5DB),
+    "const-6db": int(PanLaw.CONST_6DB),
+    "-6db": int(PanLaw.CONST_6DB),
+    "linear": int(PanLaw.LINEAR_0DB),
+    "linear-0db": int(PanLaw.LINEAR_0DB),
+    "0db": int(PanLaw.LINEAR_0DB),
+}
 
 
 def _pan_law_value(value: PanLaw | str | int) -> int:
     """Resolve a pan law to its C enum value (0=-3dB, 1=-4.5dB, 2=-6dB, 3=linear)."""
-    if isinstance(value, PanLaw):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    key = value.replace("_", "-").lower()
-    mapping = {
-        "const-3db": PanLaw.CONST_3DB,
-        "-3db": PanLaw.CONST_3DB,
-        "const-4.5db": PanLaw.CONST_4_5DB,
-        "-4.5db": PanLaw.CONST_4_5DB,
-        "const-6db": PanLaw.CONST_6DB,
-        "-6db": PanLaw.CONST_6DB,
-        "linear": PanLaw.LINEAR_0DB,
-        "linear-0db": PanLaw.LINEAR_0DB,
-        "0db": PanLaw.LINEAR_0DB,
-    }
-    if key not in mapping:
-        raise ValueError(f"unknown pan law: {value}")
-    return int(mapping[key])
+    return _resolve_enum(value, _PAN_LAW_NAMES, "pan law", enum_cls=PanLaw, dash=True)
+
+
+_METER_TAP_NAMES = {
+    "pre-fader": int(MeterTap.PRE_FADER),
+    "pre": int(MeterTap.PRE_FADER),
+    "prefader": int(MeterTap.PRE_FADER),
+    "post-fader": int(MeterTap.POST_FADER),
+    "post": int(MeterTap.POST_FADER),
+    "postfader": int(MeterTap.POST_FADER),
+}
 
 
 def _meter_tap_value(value: MeterTap | str | int) -> int:
     """Resolve a meter tap point to its C enum value (0 pre-fader, 1 post-fader)."""
-    if isinstance(value, MeterTap):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    key = value.replace("_", "-").lower()
-    if key in ("pre-fader", "pre", "prefader"):
-        return int(MeterTap.PRE_FADER)
-    if key in ("post-fader", "post", "postfader"):
-        return int(MeterTap.POST_FADER)
-    raise ValueError(f"unknown meter tap: {value}")
+    return _resolve_enum(value, _METER_TAP_NAMES, "meter tap", enum_cls=MeterTap, dash=True)
+
+
+_SEND_TIMING_NAMES = {
+    "pre-fader": int(SendTiming.PRE_FADER),
+    "pre": int(SendTiming.PRE_FADER),
+    "prefader": int(SendTiming.PRE_FADER),
+    "post-fader": int(SendTiming.POST_FADER),
+    "post": int(SendTiming.POST_FADER),
+    "postfader": int(SendTiming.POST_FADER),
+}
 
 
 def _send_timing_value(value: SendTiming | str | int) -> int:
     """Resolve a send timing to its C enum value (0 post-fader, 1 pre-fader)."""
-    if isinstance(value, SendTiming):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    key = value.replace("_", "-").lower()
-    if key in ("pre-fader", "pre", "prefader"):
-        return int(SendTiming.PRE_FADER)
-    if key in ("post-fader", "post", "postfader"):
-        return int(SendTiming.POST_FADER)
-    raise ValueError(f"unknown send timing: {value}")
+    return _resolve_enum(value, _SEND_TIMING_NAMES, "send timing", enum_cls=SendTiming, dash=True)
+
+
+_WARP_MODE_NAMES = {"off": 0, "repitch": 1, "tempo-sync": 2}
+
+
+def _warp_mode_value(mode: str | int) -> int:
+    """Resolve a warp mode to its C enum value (0 off, 1 repitch, 2 tempo-sync)."""
+    return _resolve_enum(mode, _WARP_MODE_NAMES, "warp mode", reject_bool=True)
 
 
 def _mix_meter_from_c(snapshot: SonareMixMeterSnapshot) -> MixMeterSnapshot:
@@ -328,55 +384,52 @@ def _mode_values(modes: Sequence[Mode | str] | str | None) -> list[int]:
                 int(Mode.LOCRIAN),
             ]
         modes = [modes]
-    names = {
-        "major": Mode.MAJOR,
-        "maj": Mode.MAJOR,
-        "minor": Mode.MINOR,
-        "min": Mode.MINOR,
-        "m": Mode.MINOR,
-        "dorian": Mode.DORIAN,
-        "phrygian": Mode.PHRYGIAN,
-        "lydian": Mode.LYDIAN,
-        "mixolydian": Mode.MIXOLYDIAN,
-        "locrian": Mode.LOCRIAN,
-    }
     out: list[int] = []
     for mode in modes:
         if isinstance(mode, str):
-            key = mode.lower()
-            if key not in names:
-                raise ValueError(f"invalid mode: {mode}")
-            out.append(int(names[key]))
+            out.append(_resolve_enum(mode, _MODE_NAMES, "mode", verb="invalid"))
         else:
             out.append(int(Mode(mode)))
     return out
 
 
+_MODE_NAMES = {
+    "major": int(Mode.MAJOR),
+    "maj": int(Mode.MAJOR),
+    "minor": int(Mode.MINOR),
+    "min": int(Mode.MINOR),
+    "m": int(Mode.MINOR),
+    "dorian": int(Mode.DORIAN),
+    "phrygian": int(Mode.PHRYGIAN),
+    "lydian": int(Mode.LYDIAN),
+    "mixolydian": int(Mode.MIXOLYDIAN),
+    "locrian": int(Mode.LOCRIAN),
+}
+
+_KEY_PROFILE_NAMES = {
+    "ks": int(KeyProfile.KRUMHANSL_SCHMUCKLER),
+    "krumhansl": int(KeyProfile.KRUMHANSL_SCHMUCKLER),
+    "krumhansl-schmuckler": int(KeyProfile.KRUMHANSL_SCHMUCKLER),
+    "temperley": int(KeyProfile.TEMPERLEY),
+    "shaath": int(KeyProfile.SHAATH),
+    "keyfinder": int(KeyProfile.SHAATH),
+    "faraldo-edmt": int(KeyProfile.FARALDO_EDMT),
+    "edmt": int(KeyProfile.FARALDO_EDMT),
+    "faraldo-edma": int(KeyProfile.FARALDO_EDMA),
+    "edma": int(KeyProfile.FARALDO_EDMA),
+    "faraldo-edmm": int(KeyProfile.FARALDO_EDMM),
+    "edmm": int(KeyProfile.FARALDO_EDMM),
+    "bellman-budge": int(KeyProfile.BELLMAN_BUDGE),
+    "bellman": int(KeyProfile.BELLMAN_BUDGE),
+}
+
+
 def _profile_value(profile: KeyProfile | str | None) -> int:
     if profile is None:
         return int(KeyProfile.KRUMHANSL_SCHMUCKLER)
-    if isinstance(profile, str):
-        names = {
-            "ks": KeyProfile.KRUMHANSL_SCHMUCKLER,
-            "krumhansl": KeyProfile.KRUMHANSL_SCHMUCKLER,
-            "krumhansl-schmuckler": KeyProfile.KRUMHANSL_SCHMUCKLER,
-            "temperley": KeyProfile.TEMPERLEY,
-            "shaath": KeyProfile.SHAATH,
-            "keyfinder": KeyProfile.SHAATH,
-            "faraldo-edmt": KeyProfile.FARALDO_EDMT,
-            "edmt": KeyProfile.FARALDO_EDMT,
-            "faraldo-edma": KeyProfile.FARALDO_EDMA,
-            "edma": KeyProfile.FARALDO_EDMA,
-            "faraldo-edmm": KeyProfile.FARALDO_EDMM,
-            "edmm": KeyProfile.FARALDO_EDMM,
-            "bellman-budge": KeyProfile.BELLMAN_BUDGE,
-            "bellman": KeyProfile.BELLMAN_BUDGE,
-        }
-        key = profile.lower()
-        if key not in names:
-            raise ValueError(f"invalid key profile: {profile}")
-        return int(names[key])
-    return int(KeyProfile(profile))
+    if not isinstance(profile, str):
+        return int(KeyProfile(profile))
+    return _resolve_enum(profile, _KEY_PROFILE_NAMES, "key profile", verb="invalid")
 
 
 def _float_array_result(out: object, count: int) -> list[float]:
@@ -397,26 +450,58 @@ def _int_array_result(out: object, count: int) -> list[int]:
     return cast(list[int], _from_c_int_array(out, count).tolist())
 
 
+@contextlib.contextmanager
+def _out_float_array(
+    lib: ctypes.CDLL,
+) -> Iterator[tuple[ctypes._Pointer, ctypes.c_size_t]]:
+    """Manage a C ``float*`` out-parameter, freeing it on exit.
+
+    Yields ``(out, out_length)`` to pass by reference into a C call. The heap
+    buffer is released with ``sonare_free_floats`` on both the success and the
+    exception paths, guarded on a non-null pointer and a positive length.
+    """
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    try:
+        yield out, out_length
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_floats(out)
+
+
+@contextlib.contextmanager
+def _out_int_array(
+    lib: ctypes.CDLL,
+) -> Iterator[tuple[ctypes._Pointer, ctypes.c_size_t]]:
+    """Manage a C ``int*`` out-parameter, freeing it on exit.
+
+    Integer sibling of :func:`_out_float_array`; releases with
+    ``sonare_free_ints``.
+    """
+    out = ctypes.POINTER(ctypes.c_int)()
+    out_length = ctypes.c_size_t()
+    try:
+        yield out, out_length
+    finally:
+        if out and out_length.value > 0:
+            lib.sonare_free_ints(out)
+
+
 def _call_float_transform(
     fn_name: str, values: Sequence[float] | list[float] | np.ndarray, *args: object
 ) -> list[float]:
     lib = _get_lib()
     c_array, length = _to_c_float_array(values)
-    out = ctypes.POINTER(ctypes.c_float)()
-    out_length = ctypes.c_size_t()
-    rc = getattr(lib, fn_name)(
-        c_array,
-        ctypes.c_size_t(length),
-        *args,
-        ctypes.byref(out),
-        ctypes.byref(out_length),
-    )
-    _check(rc)
-    try:
+    with _out_float_array(lib) as (out, out_length):
+        rc = getattr(lib, fn_name)(
+            c_array,
+            ctypes.c_size_t(length),
+            *args,
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
         return _float_array_result(out, out_length.value)
-    finally:
-        if out and out_length.value > 0:
-            lib.sonare_free_floats(out)
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]

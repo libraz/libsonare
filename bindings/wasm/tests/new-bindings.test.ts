@@ -27,16 +27,12 @@ import {
   voiceCharacterPresetId,
   zeroCrossings,
 } from '../src/index';
+import { sine as genSine } from './_helpers';
 
 const SR = 22050;
 
 function makeSine(durationSec: number, freqHz: number): Float32Array {
-  const n = Math.floor(SR * durationSec);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    out[i] = 0.5 * Math.sin((2 * Math.PI * freqHz * i) / SR);
-  }
-  return out;
+  return genSine(freqHz, durationSec, { amp: 0.5, sampleRate: SR });
 }
 
 /** Single-frequency power estimate (Goertzel), used to probe a tone's energy. */

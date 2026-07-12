@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -153,6 +154,19 @@ float floatProperty(val object, const char* key, float default_value);
 int intProperty(val object, const char* key, int default_value);
 bool boolProperty(val object, const char* key, bool default_value);
 std::string stringProperty(val object, const char* key, const std::string& default_value);
+/// @brief Type-checked optional reader: returns the numeric value only when @p v
+/// is present (not undefined/null) and is a JS number, otherwise std::nullopt.
+/// Unlike floatProperty (presence-checked with fallback), a present-but-wrong-type
+/// value yields nullopt so the caller skips the assignment instead of coercing.
+std::optional<float> optionalNumber(const val& v);
+/// @brief Boolean sibling of optionalNumber: returns the value only when @p v is
+/// present and a JS boolean, otherwise std::nullopt.
+std::optional<bool> optionalBool(const val& v);
+/// @brief Reads the JS `.length` of @p a and @p b and requires they match and are
+/// non-zero, mirroring the interleaved channel-array guard. @p subject names the
+/// arrays in the error message (e.g. "leftChannels and rightChannels"). Returns
+/// the common length. @throws SonareException(InvalidParameter) on mismatch.
+int requireMatchedLength(const val& a, const val& b, const char* subject);
 std::vector<mastering::api::Param> masteringParamsFromObject(val object);
 mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config);
 

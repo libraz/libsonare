@@ -170,4 +170,27 @@ std::string stringProperty(val object, const char* key, const std::string& defau
   return value.isUndefined() ? default_value : value.as<std::string>();
 }
 
+std::optional<float> optionalNumber(const val& v) {
+  if (v.isUndefined() || v.isNull() || v.typeOf().as<std::string>() != "number") {
+    return std::nullopt;
+  }
+  return v.as<float>();
+}
+
+std::optional<bool> optionalBool(const val& v) {
+  if (v.isUndefined() || v.isNull() || v.typeOf().as<std::string>() != "boolean") {
+    return std::nullopt;
+  }
+  return v.as<bool>();
+}
+
+int requireMatchedLength(const val& a, const val& b, const char* subject) {
+  const int n = a["length"].as<int>();
+  if (n <= 0 || b["length"].as<int>() != n) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " must have the same non-zero length");
+  }
+  return n;
+}
+
 #endif  // __EMSCRIPTEN__

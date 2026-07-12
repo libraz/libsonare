@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ._ffi import SONARE_OK, load_library
-from ._runtime import SonareError, _to_c_float_array
+from ._runtime import SonareError, _out_float_array, _to_c_float_array
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
@@ -369,31 +369,21 @@ class Audio:
 
     def detect_beats(self) -> list[float]:
         """Detect beat times in seconds."""
-        out_times = ctypes.POINTER(ctypes.c_float)()
-        out_count = ctypes.c_size_t()
-        rc = self._lib.sonare_audio_detect_beats(
-            self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
-        )
-        _check(rc)
-        try:
+        with _out_float_array(self._lib) as (out_times, out_count):
+            rc = self._lib.sonare_audio_detect_beats(
+                self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+            )
+            _check(rc)
             return [float(out_times[i]) for i in range(out_count.value)]
-        finally:
-            if out_times and out_count.value > 0:
-                self._lib.sonare_free_floats(out_times)
 
     def detect_downbeats(self) -> list[float]:
         """Detect downbeat times in seconds."""
-        out_times = ctypes.POINTER(ctypes.c_float)()
-        out_count = ctypes.c_size_t()
-        rc = self._lib.sonare_audio_detect_downbeats(
-            self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
-        )
-        _check(rc)
-        try:
+        with _out_float_array(self._lib) as (out_times, out_count):
+            rc = self._lib.sonare_audio_detect_downbeats(
+                self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+            )
+            _check(rc)
             return [float(out_times[i]) for i in range(out_count.value)]
-        finally:
-            if out_times and out_count.value > 0:
-                self._lib.sonare_free_floats(out_times)
 
     def detect_onsets(self) -> list[float]:
         """Detect onset times in seconds."""

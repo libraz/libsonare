@@ -8,15 +8,11 @@
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
 val MixerWasm::processStereo(val left_channels, val right_channels) {
-  const int count = left_channels["length"].as<int>();
   // Reject empty input to match the free js_mix_stereo contract: a zero-strip
   // call would derive a zero-length block and produce an empty master, which
   // is never a useful result. (There is no master-only path here.)
-  if (count <= 0 || right_channels["length"].as<int>() != count) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "leftChannels and rightChannels must have the same non-zero length");
-  }
+  const int count =
+      requireMatchedLength(left_channels, right_channels, "leftChannels and rightChannels");
 
   std::vector<std::vector<float>> left_inputs;
   std::vector<std::vector<float>> right_inputs;
@@ -80,11 +76,7 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
                                   "input channel count must match the mixer's strip count");
   }
 
-  const int length_i = out_left["length"].as<int>();
-  if (length_i <= 0 || out_right["length"].as<int>() != length_i) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "output channels must have the same non-zero length");
-  }
+  const int length_i = requireMatchedLength(out_left, out_right, "output channels");
   const size_t length = static_cast<size_t>(length_i);
   if (length > static_cast<size_t>(block_size_)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

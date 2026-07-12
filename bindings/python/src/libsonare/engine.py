@@ -78,6 +78,7 @@ from ._runtime import (
     _pan_law_value,
     _pan_mode_value,
     _send_timing_value,
+    _warp_mode_value,
 )
 
 # Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
@@ -1569,23 +1570,6 @@ def _clips_to_c(
         channel_ptrs,
         warp_arrays,
     )
-
-
-def _warp_mode_value(mode: str | int) -> int:
-    if isinstance(mode, bool):
-        raise ValueError(f"unknown warp mode: {mode}")
-    if isinstance(mode, int):
-        return mode
-    if not isinstance(mode, str):
-        raise ValueError(f"unknown warp mode: {mode}")
-    key = mode.lower()
-    if key == "off":
-        return 0
-    if key == "repitch":
-        return 1
-    if key == "tempo-sync":
-        return 2
-    raise ValueError(f"unknown warp mode: {mode}")
 
 
 def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
