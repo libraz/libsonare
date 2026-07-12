@@ -9,9 +9,12 @@
 #include "engine/track_mixer_internal.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "util/constants.h"
 #include "util/db.h"
 
 namespace sonare::engine {
+
+using sonare::constants::kFloorDb;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec) {
   auto strip = std::make_unique<mixing::ChannelStrip>(
@@ -407,7 +410,7 @@ bool TrackMixerRuntime::lane_config_valid(
     if (lanes[i].sends.size() > mixing::ChannelStrip::kMaxSends) return false;
     for (size_t send_index = 0; send_index < lanes[i].sends.size(); ++send_index) {
       const TrackLaneConfig::Send& send = lanes[i].sends[send_index];
-      if (send.bus_id == 0 || !std::isfinite(send.level_db) || send.level_db < -120.0f ||
+      if (send.bus_id == 0 || !std::isfinite(send.level_db) || send.level_db < kFloorDb ||
           send.level_db > 24.0f || bus_state_for(send.bus_id) == nullptr) {
         return false;
       }
@@ -425,7 +428,7 @@ bool TrackMixerRuntime::lane_config_valid(
 bool TrackMixerRuntime::bus_config_valid(const std::vector<TrackBusConfig>& buses) const noexcept {
   if (buses.size() > kMaxBusLanes) return false;
   for (size_t i = 0; i < buses.size(); ++i) {
-    if (buses[i].bus_id == 0 || !std::isfinite(buses[i].gain_db) || buses[i].gain_db < -120.0f ||
+    if (buses[i].bus_id == 0 || !std::isfinite(buses[i].gain_db) || buses[i].gain_db < kFloorDb ||
         buses[i].gain_db > 24.0f) {
       return false;
     }
@@ -591,7 +594,7 @@ void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>&
         throw std::invalid_argument("track send references an unknown bus");
       }
       strip->add_send(
-          mixing::SendConfig{send.enabled ? send.level_db : -120.0f, send.timing, 5.0f});
+          mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f});
     }
   }
 }

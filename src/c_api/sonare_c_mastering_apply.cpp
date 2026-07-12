@@ -123,13 +123,7 @@ const char* sonare_mastering_processor_names(void) {
   static thread_local std::string names;
   static thread_local bool built = false;
   if (!built) {
-    std::ostringstream stream;
-    auto processors = sonare::mastering::api::processor_names();
-    for (size_t index = 0; index < processors.size(); ++index) {
-      if (index > 0) stream << '\n';
-      stream << processors[index];
-    }
-    names = stream.str();
+    join_names(sonare::mastering::api::processor_names(), names);
     built = true;
   }
   return names.c_str();

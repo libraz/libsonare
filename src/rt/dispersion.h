@@ -16,10 +16,9 @@
 #include <algorithm>
 #include <cmath>
 
-namespace sonare::rt {
+#include "util/constants.h"
 
-inline constexpr float kDispPi = 3.14159265358979323846f;
-inline constexpr float kDispTwoPi = 6.28318530717958647692f;
+namespace sonare::rt {
 
 /// Exact phase delay (samples) of the first-order allpass
 /// H(z) = (a + z^-1)/(1 + a z^-1) at normalized frequency @p w.
@@ -51,18 +50,18 @@ inline float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stage
   // Reference partial: high enough for a measurable differential but shrunk
   // until its stiff-string frequency sits safely below Nyquist (so the
   // treble, where B is large, still gets dispersion instead of bailing out).
-  const float n_max = 0.8f * kDispPi / std::max(w0, 1.0e-6f);
+  const float n_max = 0.8f * sonare::constants::kPi / std::max(w0, 1.0e-6f);
   int n_ref = std::clamp(static_cast<int>(n_max), 2, 12);
   while (n_ref > 2 && w0 * static_cast<float>(n_ref) *
                               std::sqrt(1.0f + b_coeff * static_cast<float>(n_ref) *
                                                    static_cast<float>(n_ref)) >=
-                          0.9f * kDispPi)
+                          0.9f * sonare::constants::kPi)
     --n_ref;
   const float fr = static_cast<float>(n_ref);
   const float w1 = w0 * std::sqrt(1.0f + b_coeff);
   const float wr = w0 * fr * std::sqrt(1.0f + b_coeff * fr * fr);
-  if (wr >= 0.97f * kDispPi) return 0.0f;
-  const float period = kDispTwoPi / w0;
+  if (wr >= 0.97f * sonare::constants::kPi) return 0.0f;
+  const float period = sonare::constants::kTwoPi / w0;
   // Total phase-delay differential the dispersion must realize between the
   // two partials, net of the (frequency-independent) delay line.
   const float total_diff =

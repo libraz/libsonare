@@ -2,8 +2,11 @@
 #include <cmath>
 
 #include "engine/track_mixer.h"
+#include "util/constants.h"
 
 namespace sonare::engine {
+
+using sonare::constants::kFloorDb;
 
 bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param_id,
                                            float value) noexcept {
@@ -19,7 +22,7 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
   switch (param_id) {
     case kFaderDb:
       if (!std::isfinite(value)) return false;
-      lane.fader_db.set_target(std::clamp(value, -120.0f, 24.0f));
+      lane.fader_db.set_target(std::clamp(value, kFloorDb, 24.0f));
       return true;
     case kPan:
       if (!std::isfinite(value)) return false;
@@ -303,13 +306,13 @@ bool TrackMixerRuntime::set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept
   if (!std::isfinite(gain_db)) return false;
   BusState* state = bus_state_for(bus_id);
   if (!state) return false;
-  state->gain_db.set_target(std::clamp(gain_db, -120.0f, 24.0f));
+  state->gain_db.set_target(std::clamp(gain_db, kFloorDb, 24.0f));
   return true;
 }
 
 bool TrackMixerRuntime::set_bus_gain_db_by_index(size_t bus_index, float gain_db) noexcept {
   if (!std::isfinite(gain_db) || bus_index >= bus_configs_.size()) return false;
-  bus_states_[bus_index].gain_db.set_target(std::clamp(gain_db, -120.0f, 24.0f));
+  bus_states_[bus_index].gain_db.set_target(std::clamp(gain_db, kFloorDb, 24.0f));
   return true;
 }
 
