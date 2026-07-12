@@ -468,6 +468,18 @@ TEST_CASE("pitch_tuning returns the librosa bin left edge", "[pitch]") {
   REQUIRE_THAT(in_tune, WithinAbs(0.0f, 1e-4f));
 }
 
+TEST_CASE("pitch_tuning uses ceil() for the histogram bin count like librosa", "[pitch]") {
+  // librosa derives the bin count as np.ceil(1.0 / resolution), not round().
+  // resolution=0.03 -> 1/0.03 = 33.33..., so librosa uses 34 bins while a
+  // round()-based implementation would use 33. The frequency below has a
+  // residual chosen so the two bin counts land on different histogram bins,
+  // producing left-edge answers ~0.027 apart (34-bin: -0.3824, 33-bin:
+  // -0.4091), well outside this test's tolerance for the wrong bin count.
+  const float freq = sonare::constants::kA4Hz * std::pow(2.0f, -0.3822f / 12.0f);
+  const float tuning = pitch_tuning({freq}, 0.03f, 12);
+  REQUIRE_THAT(tuning, WithinAbs(-0.3824f, 0.01f));
+}
+
 TEST_CASE("estimate_tuning uses a global magnitude median", "[pitch]") {
   // Build an uneven-energy signal: a loud in-tune A4 segment followed by a quiet
   // detuned segment. librosa thresholds piptrack peaks against ONE global median

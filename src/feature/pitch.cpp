@@ -684,7 +684,9 @@ float pitch_tuning(const std::vector<float>& frequencies, float resolution, int 
   if (residuals.empty()) return 0.0f;
 
   // Histogram with resolution bin width spanning (-0.5, 0.5].
-  int n_bins = static_cast<int>(std::round(1.0f / resolution));
+  // librosa uses ceil() (np.ceil(1.0 / resolution)) so non-default resolutions
+  // that don't divide 1.0 evenly (e.g. 0.03 -> 34, not round(33.33) == 33) match.
+  int n_bins = static_cast<int>(std::ceil(1.0f / resolution));
   if (n_bins <= 0) n_bins = 1;
   std::vector<int> hist(n_bins, 0);
   for (float v : residuals) {
