@@ -886,6 +886,19 @@ void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& e
   //    the caller turns each MixerStripBinding into a live mixing::ChannelStrip
   //    and calls bind_mixing_strip itself, because the compiler must not own RT
   //    objects.
+  //
+  //    Reachability constraint: this helper does NOT wire timeline.mixer.bindings
+  //    into the engine, so the live path never groups tracks onto a shared scene
+  //    strip. A scene strip referenced by several tracks (N tracks -> 1 strip) is
+  //    summed THEN processed once through that strip's inserts ("sum-then-process")
+  //    only in the offline channel-strip bounce (c_api/project_bounce.cpp
+  //    bounce_through_mixer, which renders one summed stem per strip). The live
+  //    TrackMixerRuntime is strictly one track <-> one lane <-> one strip
+  //    (set_track_lanes rejects duplicate track ids), so it has no shared-strip
+  //    grouping and a naive per-track wiring would be "process-then-sum" -- which
+  //    diverges from the bounce whenever the strip holds a nonlinear insert (see
+  //    the mixing_channel_strip_test case pinning sum!=process order). Any future
+  //    live wiring of shared strips must preserve the summed-input grouping.
 }
 
 }  // namespace sonare::arrangement

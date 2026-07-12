@@ -131,6 +131,12 @@ struct GraphRequest {
 /// into a live mixing::ChannelStrip and calls RealtimeEngine::bind_mixing_strip
 /// (under SONARE_WITH_MIXING). The compiler cannot own RT ChannelStrip objects,
 /// so it only emits the binding intent as value data.
+///
+/// Several bindings may share one strip_id (N tracks -> 1 scene strip). That
+/// shared strip is realized -- its inputs summed then processed once through the
+/// strip inserts -- only by the offline channel-strip bounce; apply_to_engine
+/// does not wire these bindings, and the live TrackMixerRuntime is strictly one
+/// track per strip. See apply_to_engine's reachability note.
 struct MixerStripBinding {
   TrackId track_id = 0;
   std::string strip_id;  // mixing::api::Strip::id

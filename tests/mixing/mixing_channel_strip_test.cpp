@@ -1,9 +1,37 @@
 /// @file mixing_channel_strip_test.cpp
 /// @brief Mixing channel strip tests.
 
+#include <algorithm>
+
 #include "mastering/api/insert_factory.h"
 #include "mixing_test_helpers.h"
 #include "util/exception.h"
+
+namespace {
+
+// Symmetric hard clipper at +/-kLimit: a pure memoryless nonlinearity, so
+// clip(a + b) != clip(a) + clip(b) once |a + b| crosses the limit. Deterministic
+// (no smoothing/state), which lets a test pin the summing-order semantics of a
+// shared mixer strip exactly.
+class HardClipProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit HardClipProcessor(float limit) : limit_(limit) {}
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] == nullptr) continue;
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] = std::clamp(channels[ch][i], -limit_, limit_);
+      }
+    }
+  }
+  void reset() override {}
+
+ private:
+  float limit_ = 1.0f;
+};
+
+}  // namespace
 
 TEST_CASE("BusProcessor sums multiple stereo inputs", "[mixing]") {
   std::array<float, 4> in1_l{1.0f, 2.0f, 3.0f, 4.0f};
@@ -597,6 +625,62 @@ TEST_CASE("ChannelStrip reuses mastering compressor as a post-fader insert", "[m
   REQUIRE(rms_tail(left, 4096) < 0.25f);
   REQUIRE(compressor_ptr->last_gain_reduction_db() < -10.0f);
   REQUIRE(strip.meter_snapshot().gain_reduction_db < -10.0f);
+}
+
+TEST_CASE("Shared mixer strip sum-then-process diverges from per-track process-then-sum",
+          "[mixing]") {
+  // A scene strip referenced by several tracks (N tracks -> 1 strip) sums its
+  // sources THEN runs the strip inserts once. The offline channel-strip bounce
+  // realizes exactly this ("sum-then-process", c_api/project_bounce.cpp
+  // bounce_through_mixer). The live TrackMixerRuntime is strictly one track per
+  // strip (set_track_lanes rejects duplicate track ids), so it cannot express a
+  // shared strip; a naive per-track wiring would instead run each track through
+  // its own copy of the insert and sum after ("process-then-sum"). This test
+  // pins that the two orders genuinely differ when the strip holds a nonlinear
+  // insert, so the divergence is not a rounding artifact -- it is the reason a
+  // shared-strip project mix is currently reproducible only offline.
+  constexpr int kN = 8;
+  constexpr float kA = 0.4f;  // track A DC level
+  constexpr float kB = 0.4f;  // track B DC level (kA + kB = 0.8 > limit)
+  constexpr float kLimit = 0.5f;
+
+  // sum-then-process: sum the two track stems, run ONE shared strip.
+  std::array<float, kN> summed_l{};
+  std::array<float, kN> summed_r{};
+  summed_l.fill(kA + kB);
+  summed_r.fill(kA + kB);
+  float* summed[] = {summed_l.data(), summed_r.data()};
+  sonare::mixing::ChannelStrip shared(
+      {0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});  // unity fader, center pan
+  shared.add_pre_insert(std::make_unique<HardClipProcessor>(kLimit));
+  shared.prepare(48000.0, kN);
+  shared.process(summed, 2, kN);
+
+  // process-then-sum: each track through its own copy of the strip, summed after.
+  auto run_single = [&](float level) {
+    std::array<float, kN> l{};
+    std::array<float, kN> r{};
+    l.fill(level);
+    r.fill(level);
+    float* ch[] = {l.data(), r.data()};
+    sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+    strip.add_pre_insert(std::make_unique<HardClipProcessor>(kLimit));
+    strip.prepare(48000.0, kN);
+    strip.process(ch, 2, kN);
+    return l;  // both channels identical for center-pan DC
+  };
+  const std::array<float, kN> track_a = run_single(kA);
+  const std::array<float, kN> track_b = run_single(kB);
+
+  for (int i = 0; i < kN; ++i) {
+    // Shared strip clips the 0.8 sum down to the 0.5 limit.
+    REQUIRE_THAT(summed_l[static_cast<size_t>(i)], WithinAbs(kLimit, 0.0001f));
+    // Per-track: neither 0.4 stem clips, so their sum stays at 0.8.
+    const float per_track_sum = track_a[static_cast<size_t>(i)] + track_b[static_cast<size_t>(i)];
+    REQUIRE_THAT(per_track_sum, WithinAbs(kA + kB, 0.0001f));
+    // The two grouping orders differ by a full 0.3 here -- not a rounding gap.
+    REQUIRE(std::abs(per_track_sum - summed_l[static_cast<size_t>(i)]) > 0.25f);
+  }
 }
 
 TEST_CASE("ChannelStrip accepts mastering SidechainRouter insert with external key", "[mixing]") {
