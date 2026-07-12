@@ -211,14 +211,34 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
                   time_step);
         }
       }
+      /// Re-lock every bin (including peaks) into the reference-domain accumulator so
+      /// that a bin transitioning from non-peak to peak in a later frame resumes its
+      /// synthesis phase from the coherent locked value rather than a stale one. This
+      /// mirrors the mono StreamingPhaseVocoder / phase_vocoder_phaselocked() carry
+      /// (see effects/phase_vocoder.cpp), which is what keeps the multichannel tail from
+      /// diverging from the mono path when the spectral peak set moves.
+      for (int k = 0; k < n_bins; ++k) {
+        const int k_p = nearest_peak[static_cast<size_t>(k)];
+        const double synth_phase =
+            k == k_p ? phase_acc[static_cast<size_t>(k_p)]
+                     : phase_acc[static_cast<size_t>(k_p)] +
+                           static_cast<double>(ref_phase[static_cast<size_t>(k)]) -
+                           static_cast<double>(ref_phase[static_cast<size_t>(k_p)]);
+        phase_acc[static_cast<size_t>(k)] = wrap_phase(synth_phase);
+      }
     }
 
     const size_t start = static_cast<size_t>(t_out) * static_cast<size_t>(hop);
     for (int ch = 0; ch < channels; ++ch) {
       for (int k = 0; k < n_bins; ++k) {
-        const int peak_bin = nearest_peak[static_cast<size_t>(k)];
-        const double rotation = phase_acc[static_cast<size_t>(peak_bin)] -
-                                static_cast<double>(ref_phase[static_cast<size_t>(peak_bin)]);
+        /// Every bin carries the reference-domain rotation (accumulated synthesis phase
+        /// minus reference analysis phase). Applying the same rotation to each channel's
+        /// own analysis phase preserves the inter-channel phase relationship exactly,
+        /// giving all channels a coherent time-stretch. For a single reference channel
+        /// this reduces to the mono synthesis phase, so identical channels bake
+        /// bit-identically to the mono path.
+        const double rotation = phase_acc[static_cast<size_t>(k)] -
+                                static_cast<double>(ref_phase[static_cast<size_t>(k)]);
         const float synth_phase = static_cast<float>(wrap_phase(
             static_cast<double>(channel_phase[static_cast<size_t>(ch)][static_cast<size_t>(k)]) +
             rotation));

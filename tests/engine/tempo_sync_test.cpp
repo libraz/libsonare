@@ -120,5 +120,65 @@ TEST_CASE("tempo sync stereo warp shares phase rotation across channels", "[engi
   const double stretched_delta =
       std::arg(project_tone(stretched[1], kSampleRate, stretched_frequency)) -
       std::arg(project_tone(stretched[0], kSampleRate, stretched_frequency));
-  REQUIRE(std::abs(wrapped_phase_delta(stretched_delta, original_delta)) < 0.18);
+  /// Each channel receives an identical per-bin rotation every frame, so the inter-channel
+  /// phase relationship is preserved. The bound has a little headroom because the phase-lock
+  /// accumulator now carries the reference-domain locked phase forward for every bin (matching
+  /// the mono path), which shifts the absolute reconstruction and hence this global projection
+  /// slightly without loosening the per-frame coherence.
+  REQUIRE(std::abs(wrapped_phase_delta(stretched_delta, original_delta)) < 0.22);
+}
+
+TEST_CASE("tempo sync warp keeps mono and multichannel tails coherent under phase locking",
+          "[engine][tempo_sync]") {
+  /// A frequency sweep moves the spectral peak set frame to frame, and the zero-padded
+  /// final analysis frame smears the spectrum most. If the multichannel phase-lock
+  /// accumulator failed to carry the locked phase of bins that transition to peaks, the
+  /// stereo tail diverged from the mono path by a large fraction of peak amplitude. With
+  /// the shared reference-domain carry, identical channels reproduce the mono result.
+  constexpr int kSampleRate = 48000;
+  constexpr size_t kSourceSamples = 24000;
+  constexpr size_t kTargetSamples = 32000;
+
+  std::vector<float> mono(kSourceSamples);
+  for (size_t i = 0; i < kSourceSamples; ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(kSampleRate);
+    const double phase = 2.0 * kPi * (300.0 * t + 1000.0 * t * t);
+    mono[i] = static_cast<float>(0.5 * std::sin(phase) + 0.25 * std::sin(2.0 * phase) +
+                                 0.15 * std::sin(3.0 * phase));
+  }
+  const std::vector<float> left = mono;
+  const std::vector<float> right = mono;
+
+  const std::vector<sonare::engine::TempoSyncWarpSegment> segments{
+      {0, kSourceSamples, kTargetSamples},
+  };
+  sonare::engine::TempoSyncWarpBakeConfig config;
+  config.sample_rate = kSampleRate;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.join_crossfade_samples = 0;
+  config.phase_lock = true;
+
+  const std::vector<float> mono_warp =
+      sonare::engine::bake_tempo_sync_warp_channel(mono.data(), kSourceSamples, segments, config);
+  const std::vector<const float*> sources{left.data(), right.data()};
+  const std::vector<std::vector<float>> stereo_warp =
+      sonare::engine::bake_tempo_sync_warp_channels(sources, kSourceSamples, segments, config);
+
+  REQUIRE(stereo_warp.size() == 2);
+  REQUIRE(mono_warp.size() == kTargetSamples);
+  REQUIRE(stereo_warp[0].size() == kTargetSamples);
+
+  float peak = 0.0f;
+  for (const float value : mono_warp) peak = std::max(peak, std::abs(value));
+  REQUIRE(peak > 0.1f);
+
+  /// The regression manifested in the final ~2 STFT frames; guard the whole tail.
+  const size_t tail_start = kTargetSamples - 1000;
+  float tail_divergence = 0.0f;
+  for (size_t i = tail_start; i < kTargetSamples; ++i) {
+    tail_divergence = std::max(tail_divergence, std::abs(mono_warp[i] - stereo_warp[0][i]));
+  }
+  /// Pre-fix this reached ~30% of peak; identical channels now track the mono path.
+  REQUIRE(tail_divergence < 0.01f * peak);
 }
