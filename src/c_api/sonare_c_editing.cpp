@@ -156,12 +156,7 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
     out->low_percentile_db = result.low_percentile_db;
     out->high_percentile_db = result.high_percentile_db;
     out->window_count = result.window_rms_db.size();
-    if (!result.window_rms_db.empty()) {
-      std::unique_ptr<float[]> tmp(new float[result.window_rms_db.size()]);
-      std::memcpy(tmp.get(), result.window_rms_db.data(),
-                  result.window_rms_db.size() * sizeof(float));
-      out->window_rms_db = release_array(tmp);
-    }
+    out->window_rms_db = copy_vector(result.window_rms_db);
     return SONARE_OK;
   });
 }
@@ -341,19 +336,10 @@ SonareError fill_spectrum_result(const metering::SpectrumResult& result,
   out->sample_rate = result.sample_rate;
   out->bin_count = result.frequencies.size();
   if (out->bin_count == 0) return SONARE_OK;
-  const size_t bytes = out->bin_count * sizeof(float);
-  std::unique_ptr<float[]> freq(new float[out->bin_count]);
-  std::unique_ptr<float[]> mag(new float[out->bin_count]);
-  std::unique_ptr<float[]> pwr(new float[out->bin_count]);
-  std::unique_ptr<float[]> db(new float[out->bin_count]);
-  std::memcpy(freq.get(), result.frequencies.data(), bytes);
-  std::memcpy(mag.get(), result.magnitude.data(), bytes);
-  std::memcpy(pwr.get(), result.power.data(), bytes);
-  std::memcpy(db.get(), result.db.data(), bytes);
-  out->frequencies = release_array(freq);
-  out->magnitude = release_array(mag);
-  out->power = release_array(pwr);
-  out->db = release_array(db);
+  out->frequencies = copy_vector(result.frequencies);
+  out->magnitude = copy_vector(result.magnitude);
+  out->power = copy_vector(result.power);
+  out->db = copy_vector(result.db);
   return SONARE_OK;
 }
 
@@ -425,12 +411,8 @@ SonareError fill_waveform_peaks_result(const metering::WaveformPeaksResult& resu
   out->samples_per_bucket = result.samples_per_bucket;
   const size_t total = static_cast<size_t>(result.channels) * result.bucket_count;
   if (total == 0) return SONARE_OK;
-  std::unique_ptr<float[]> min_values(new float[total]);
-  std::unique_ptr<float[]> max_values(new float[total]);
-  std::memcpy(min_values.get(), result.min.data(), total * sizeof(float));
-  std::memcpy(max_values.get(), result.max.data(), total * sizeof(float));
-  out->min = release_array(min_values);
-  out->max = release_array(max_values);
+  out->min = copy_vector(result.min);
+  out->max = copy_vector(result.max);
   return SONARE_OK;
 }
 

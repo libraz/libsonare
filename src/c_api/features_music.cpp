@@ -43,12 +43,7 @@ SonareError sonare_onset_strength(const float* samples, size_t length, int sr, i
     mel_config.n_mels = n_mels;
     std::vector<float> env = compute_onset_strength(audio, mel_config, OnsetConfig());
 
-    *out_length = env.size();
-    if (env.empty()) return SONARE_OK;
-    std::unique_ptr<float[]> data(new float[env.size()]);
-    std::memcpy(data.get(), env.data(), env.size() * sizeof(float));
-    *out = release_array(data);
-    return SONARE_OK;
+    return copy_vector(env, out, out_length);
   });
 }
 
@@ -71,12 +66,7 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
     std::vector<float> env = onset_strength_multi(mel, n_bands, OnsetConfig());
 
     *out_n_frames = mel.n_frames();
-    *out_length = env.size();
-    if (env.empty()) return SONARE_OK;
-    std::unique_ptr<float[]> data(new float[env.size()]);
-    std::memcpy(data.get(), env.data(), env.size() * sizeof(float));
-    *out = release_array(data);
-    return SONARE_OK;
+    return copy_vector(env, out, out_length);
   });
 }
 

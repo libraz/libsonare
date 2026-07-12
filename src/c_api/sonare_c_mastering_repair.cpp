@@ -175,10 +175,7 @@ SonareError sonare_mastering_repair_declick(const float* samples, size_t length,
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result = sonare::mastering::repair::declick(audio, to_cpp_declick_config(config));
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
+    return copy_audio_result(result, out, out_length);
   });
 }
 
@@ -196,10 +193,7 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result =
         sonare::mastering::repair::denoise_classical(audio, to_cpp_denoise_config(config));
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
+    return copy_audio_result(result, out, out_length);
   });
 }
 
@@ -211,10 +205,7 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result = sonare::mastering::repair::declip(audio, to_cpp_declip_config(config));
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
+    return copy_audio_result(result, out, out_length);
   });
 }
 
@@ -226,10 +217,7 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result = sonare::mastering::repair::decrackle(audio, to_cpp_decrackle_config(config));
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
+    return copy_audio_result(result, out, out_length);
   });
 }
 
@@ -241,10 +229,7 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result = sonare::mastering::repair::dehum(audio, to_cpp_dehum_config(config));
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
+    return copy_audio_result(result, out, out_length);
   });
 }
 
@@ -264,10 +249,7 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result =
         sonare::mastering::repair::dereverb_classical(audio, to_cpp_dereverb_config(config));
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
+    return copy_audio_result(result, out, out_length);
   });
 }
 
@@ -281,9 +263,6 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     Audio result =
         sonare::mastering::repair::trim_silence(audio, to_cpp_trim_silence_config(config));
-    *out_length = result.size();
-    *out = new float[result.size()];
-    std::memcpy(*out, result.data(), result.size() * sizeof(float));
-    return SONARE_OK;
+    return copy_audio_result(result, out, out_length);
   });
 }

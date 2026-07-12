@@ -74,8 +74,7 @@ SonareStreamPatternScore* copy_pattern_scores(const std::vector<std::pair<std::s
   if (v.empty()) return nullptr;
   std::unique_ptr<SonareStreamPatternScore[]> buf(new SonareStreamPatternScore[v.size()]);
   for (size_t i = 0; i < v.size(); ++i) {
-    std::strncpy(buf[i].name, v[i].first.c_str(), sizeof(buf[i].name) - 1);
-    buf[i].name[sizeof(buf[i].name) - 1] = '\0';
+    copy_text(buf[i].name, sizeof(buf[i].name), v[i].first.c_str());
     buf[i].score = v[i].second;
   }
   return release_array(buf);
@@ -353,9 +352,8 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   out->pattern_length = s.estimate.pattern_length;
   out->voted_pattern_count = s.estimate.voted_pattern.size();
   out->voted_pattern = copy_bar_chords(s.estimate.voted_pattern);
-  std::strncpy(out->detected_pattern_name, s.estimate.detected_pattern_name.c_str(),
-               sizeof(out->detected_pattern_name) - 1);
-  out->detected_pattern_name[sizeof(out->detected_pattern_name) - 1] = '\0';
+  copy_text(out->detected_pattern_name, sizeof(out->detected_pattern_name),
+            s.estimate.detected_pattern_name.c_str());
   out->detected_pattern_score = s.estimate.detected_pattern_score;
   out->all_pattern_scores_count = s.estimate.all_pattern_scores.size();
   out->all_pattern_scores = copy_pattern_scores(s.estimate.all_pattern_scores);

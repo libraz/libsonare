@@ -11,6 +11,7 @@
 
 #include "automation/parameter.h"
 #include "engine/realtime_engine.h"
+#include "sonare_c_internal.h"
 
 namespace sonare_c_engine_detail {
 
@@ -136,12 +137,10 @@ inline sonare::automation::CurveType curve_from_int(int curve) {
 
 inline int curve_to_int(sonare::automation::CurveType curve) { return static_cast<int>(curve); }
 
-inline void copy_text(char* dest, size_t capacity, const char* src) {
-  if (!dest || capacity == 0) return;
-  const char* text = src ? src : "";
-  std::strncpy(dest, text, capacity - 1);
-  dest[capacity - 1] = '\0';
-}
+// Fixed-field C-string copy shared across the C API. The canonical definition
+// lives in sonare_c_internal.h; re-export it here so engine TUs keep using the
+// unqualified sonare_c_engine_detail::copy_text spelling.
+using sonare_c_detail::copy_text;
 
 inline std::string fixed_text(const char* src, size_t capacity) {
   const char* end = std::find(src, src + capacity, '\0');

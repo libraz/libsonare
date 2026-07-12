@@ -18,22 +18,12 @@ SonareError fill_inverse_result(const std::vector<float>& data, int rows, int n_
   *out = {};
   out->rows = rows;
   out->n_frames = n_frames;
-  if (!data.empty()) {
-    std::unique_ptr<float[]> buf(new float[data.size()]);
-    std::memcpy(buf.get(), data.data(), data.size() * sizeof(float));
-    out->data = release_array(buf);
-  }
+  out->data = copy_vector(data);
   return SONARE_OK;
 }
 
 SonareError fill_audio_samples(const Audio& audio, float** out, size_t* out_length) {
-  *out = nullptr;
-  *out_length = audio.size();
-  if (audio.size() == 0) return SONARE_OK;
-  std::unique_ptr<float[]> buf(new float[audio.size()]);
-  std::memcpy(buf.get(), audio.data(), audio.size() * sizeof(float));
-  *out = release_array(buf);
-  return SONARE_OK;
+  return copy_audio_result(audio, out, out_length);
 }
 
 SonareError fill_pitch_result(const PitchResult& result, SonarePitchResult* out) {

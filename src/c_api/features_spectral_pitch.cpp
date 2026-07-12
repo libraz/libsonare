@@ -301,8 +301,7 @@ float sonare_midi_to_hz(float midi) { return midi_to_hz(midi); }
 const char* sonare_hz_to_note(float hz) {
   static thread_local char buf[16];
   std::string note = hz_to_note(hz);
-  std::strncpy(buf, note.c_str(), sizeof(buf) - 1);
-  buf[sizeof(buf) - 1] = '\0';
+  copy_text(buf, sizeof(buf), note.c_str());
   return buf;
 }
 

@@ -113,16 +113,9 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
   DecomposeResult result =
       decompose(s, n_features, n_frames, n_components, n_iter, "mu", beta, init_str);
 
-  std::unique_ptr<float[]> w(new float[result.W.size()]);
-  std::memcpy(w.get(), result.W.data(), result.W.size() * sizeof(float));
-  std::unique_ptr<float[]> h(new float[result.H.size()]);
-  std::memcpy(h.get(), result.H.data(), result.H.size() * sizeof(float));
-
-  *out_w_length = result.W.size();
-  *out_h_length = result.H.size();
-  *out_w = release_array(w);
-  *out_h = release_array(h);
-  return SONARE_OK;
+  SonareError werr = copy_vector(result.W, out_w, out_w_length);
+  if (werr != SONARE_OK) return werr;
+  return copy_vector(result.H, out_h, out_h_length);
   SONARE_C_CATCH
 }
 
@@ -150,11 +143,7 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
   std::string agg = aggregate ? aggregate : "mean";
   std::vector<float> result = nn_filter(s, n_features, n_frames, agg, k, width);
 
-  std::unique_ptr<float[]> data(new float[result.size()]);
-  std::memcpy(data.get(), result.data(), result.size() * sizeof(float));
-  *out_length = result.size();
-  *out = release_array(data);
-  return SONARE_OK;
+  return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
 
@@ -173,11 +162,7 @@ SonareError sonare_remix(const float* samples, size_t length, int sample_rate, c
     }
     std::vector<float> result = remix(audio.data(), audio.size(), pairs, align_zeros != 0);
 
-    std::unique_ptr<float[]> data(new float[result.size()]);
-    std::memcpy(data.get(), result.data(), result.size() * sizeof(float));
-    *out_length = result.size();
-    *out = release_array(data);
-    return SONARE_OK;
+    return copy_vector(result, out, out_length);
   });
 }
 
@@ -238,11 +223,7 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
     int expected_length = static_cast<int>(std::ceil(static_cast<float>(audio.size()) / rate));
     Audio result = stretched.to_audio(expected_length);
 
-    std::unique_ptr<float[]> data(new float[result.size()]);
-    std::memcpy(data.get(), result.data(), result.size() * sizeof(float));
-    *out_length = result.size();
-    *out = release_array(data);
-    return SONARE_OK;
+    return copy_audio_result(result, out, out_length);
   });
 }
 

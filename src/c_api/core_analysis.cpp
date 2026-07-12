@@ -41,19 +41,11 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
 
     const std::vector<float>& autocorr = analyzer.autocorrelation();
     out->autocorrelation_count = autocorr.size();
-    if (!autocorr.empty()) {
-      std::unique_ptr<float[]> data(new float[autocorr.size()]);
-      std::memcpy(data.get(), autocorr.data(), autocorr.size() * sizeof(float));
-      out->autocorrelation = release_array(data);
-    }
+    out->autocorrelation = copy_vector(autocorr);
 
     const std::vector<float>& tempogram = analyzer.tempogram();
     out->tempogram_count = tempogram.size();
-    if (!tempogram.empty()) {
-      std::unique_ptr<float[]> data(new float[tempogram.size()]);
-      std::memcpy(data.get(), tempogram.data(), tempogram.size() * sizeof(float));
-      out->tempogram = release_array(data);
-    }
+    out->tempogram = copy_vector(tempogram);
     return SONARE_OK;
   });
 }
@@ -137,11 +129,7 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
 
     const std::vector<float>& intervals = analyzer.beat_intervals();
     out->beat_interval_count = intervals.size();
-    if (!intervals.empty()) {
-      std::unique_ptr<float[]> data(new float[intervals.size()]);
-      std::memcpy(data.get(), intervals.data(), intervals.size() * sizeof(float));
-      out->beat_intervals = release_array(data);
-    }
+    out->beat_intervals = copy_vector(intervals);
     return SONARE_OK;
   });
 }
@@ -223,27 +211,15 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
 
     const std::vector<float>& centroid = analyzer.spectral_centroid();
     out->spectral_centroid_count = centroid.size();
-    if (!centroid.empty()) {
-      std::unique_ptr<float[]> data(new float[centroid.size()]);
-      std::memcpy(data.get(), centroid.data(), centroid.size() * sizeof(float));
-      out->spectral_centroid = release_array(data);
-    }
+    out->spectral_centroid = copy_vector(centroid);
 
     const std::vector<float>& flatness = analyzer.spectral_flatness();
     out->spectral_flatness_count = flatness.size();
-    if (!flatness.empty()) {
-      std::unique_ptr<float[]> data(new float[flatness.size()]);
-      std::memcpy(data.get(), flatness.data(), flatness.size() * sizeof(float));
-      out->spectral_flatness = release_array(data);
-    }
+    out->spectral_flatness = copy_vector(flatness);
 
     const std::vector<float>& rolloff = analyzer.spectral_rolloff();
     out->spectral_rolloff_count = rolloff.size();
-    if (!rolloff.empty()) {
-      std::unique_ptr<float[]> data(new float[rolloff.size()]);
-      std::memcpy(data.get(), rolloff.data(), rolloff.size() * sizeof(float));
-      out->spectral_rolloff = release_array(data);
-    }
+    out->spectral_rolloff = copy_vector(rolloff);
 
     const std::vector<Timbre>& over_time = analyzer.timbre_over_time();
     out->timbre_over_time_count = over_time.size();

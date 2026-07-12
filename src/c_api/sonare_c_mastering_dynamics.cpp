@@ -109,10 +109,7 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
   std::vector<float> buffer(samples, samples + length);
   sonare::mastering::dynamics::Compressor processor(to_cpp_compressor_config(config));
   run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
-  *out_length = buffer.size();
-  *out = new float[buffer.size()];
-  std::memcpy(*out, buffer.data(), buffer.size() * sizeof(float));
-  return SONARE_OK;
+  return copy_vector(buffer, out, out_length);
   SONARE_C_CATCH
 }
 
@@ -129,10 +126,7 @@ SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, 
   std::vector<float> buffer(samples, samples + length);
   sonare::mastering::dynamics::Gate processor(to_cpp_gate_config(config));
   run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
-  *out_length = buffer.size();
-  *out = new float[buffer.size()];
-  std::memcpy(*out, buffer.data(), buffer.size() * sizeof(float));
-  return SONARE_OK;
+  return copy_vector(buffer, out, out_length);
   SONARE_C_CATCH
 }
 
@@ -151,9 +145,6 @@ SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, siz
   std::vector<float> buffer(samples, samples + length);
   sonare::mastering::dynamics::TransientShaper processor(to_cpp_transient_shaper_config(config));
   run_processor_offline(processor, buffer, sample_rate, out_latency_samples);
-  *out_length = buffer.size();
-  *out = new float[buffer.size()];
-  std::memcpy(*out, buffer.data(), buffer.size() * sizeof(float));
-  return SONARE_OK;
+  return copy_vector(buffer, out, out_length);
   SONARE_C_CATCH
 }

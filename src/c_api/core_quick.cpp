@@ -151,14 +151,7 @@ SonareError sonare_detect_beats(const float* samples, size_t length, int sample_
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(), audio.sample_rate());
-    *out_count = beats.size();
-    if (beats.empty()) {
-      *out_times = nullptr;
-    } else {
-      *out_times = new float[beats.size()];
-      std::memcpy(*out_times, beats.data(), beats.size() * sizeof(float));
-    }
-    return SONARE_OK;
+    return copy_vector(beats, out_times, out_count);
   });
 }
 
@@ -169,14 +162,7 @@ SonareError sonare_detect_downbeats(const float* samples, size_t length, int sam
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> downbeats =
         quick::detect_downbeats(audio.data(), audio.size(), audio.sample_rate());
-    *out_count = downbeats.size();
-    if (downbeats.empty()) {
-      *out_times = nullptr;
-    } else {
-      *out_times = new float[downbeats.size()];
-      std::memcpy(*out_times, downbeats.data(), downbeats.size() * sizeof(float));
-    }
-    return SONARE_OK;
+    return copy_vector(downbeats, out_times, out_count);
   });
 }
 
@@ -187,14 +173,7 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<float> onsets =
         quick::detect_onsets(audio.data(), audio.size(), audio.sample_rate());
-    *out_count = onsets.size();
-    if (onsets.empty()) {
-      *out_times = nullptr;
-    } else {
-      *out_times = new float[onsets.size()];
-      std::memcpy(*out_times, onsets.data(), onsets.size() * sizeof(float));
-    }
-    return SONARE_OK;
+    return copy_vector(onsets, out_times, out_count);
   });
 }
 

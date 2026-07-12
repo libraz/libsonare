@@ -62,6 +62,11 @@ constexpr int kMinSampleRate = sonare::kMinAudioSampleRate;
 constexpr int kMaxSampleRate = sonare::kMaxAudioSampleRate;
 constexpr size_t kMaxBufferSize = sonare::kMaxAudioBufferSize;
 
+// Single source of truth for the message recorded when a caught exception is not
+// a std::exception subtype. Shared by SONARE_C_CATCH, SONARE_C_CATCH_RETURN, and
+// the run_*_offline helpers so the wording never drifts between them.
+constexpr const char* kUnknownExceptionMessage = "Unknown C++ exception (non-std::exception type)";
+
 std::string& last_error_storage();
 void set_last_error(const char* msg);
 /// @brief Clears the thread-local detailed-error message.
@@ -168,6 +173,18 @@ inline char* copy_string(const std::string& value) {
   return out.release();
 }
 
+/// @brief Copies @p src into the fixed-capacity @p dest buffer, always
+///        NUL-terminating (truncating if @p src does not fit). A null @p src is
+///        treated as the empty string; a null @p dest or zero @p capacity is a
+///        no-op. Canonical owner of the fixed-field C-string copy shared by the
+///        C API translation units.
+inline void copy_text(char* dest, size_t capacity, const char* src) {
+  if (!dest || capacity == 0) return;
+  const char* text = src ? src : "";
+  std::strncpy(dest, text, capacity - 1);
+  dest[capacity - 1] = '\0';
+}
+
 /// @brief Copies an Audio result into a freshly heap-allocated float array
 ///        owned by the caller (freed via sonare_free_floats). Shared by the
 ///        offline Audio -> Audio wrappers (pitch editor / voice changer TUs).
@@ -244,7 +261,7 @@ SonareError run_mono_offline(const float* samples, size_t length, int sample_rat
     set_last_error(e.what());
     return SONARE_ERROR_UNKNOWN;
   } catch (...) {
-    set_last_error("Unknown C++ exception (non-std::exception type)");
+    set_last_error(kUnknownExceptionMessage);
     return SONARE_ERROR_UNKNOWN;
   }
 }
@@ -283,7 +300,7 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
     set_last_error(e.what());
     return SONARE_ERROR_UNKNOWN;
   } catch (...) {
-    set_last_error("Unknown C++ exception (non-std::exception type)");
+    set_last_error(kUnknownExceptionMessage);
     return SONARE_ERROR_UNKNOWN;
   }
 }
@@ -309,29 +326,45 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
 #define SONARE_C_TRY                   \
   sonare_c_detail::clear_last_error(); \
   try {
-#define SONARE_C_CATCH                                                                  \
-  }                                                                                     \
-  catch (const sonare::SonareException& e) {                                            \
-    sonare_c_detail::set_last_error(e.what());                                          \
-    return sonare_c_detail::map_sonare_exception(e);                                    \
-  }                                                                                     \
-  catch (const std::bad_alloc& e) {                                                     \
-    sonare_c_detail::set_last_error(e.what());                                          \
-    return SONARE_ERROR_OUT_OF_MEMORY;                                                  \
-  }                                                                                     \
-  catch (const std::invalid_argument& e) {                                              \
-    sonare_c_detail::set_last_error(e.what());                                          \
-    return SONARE_ERROR_INVALID_PARAMETER;                                              \
-  }                                                                                     \
-  catch (const std::logic_error& e) {                                                   \
-    sonare_c_detail::set_last_error(e.what());                                          \
-    return SONARE_ERROR_INVALID_STATE;                                                  \
-  }                                                                                     \
-  catch (const std::exception& e) {                                                     \
-    sonare_c_detail::set_last_error(e.what());                                          \
-    return SONARE_ERROR_UNKNOWN;                                                        \
-  }                                                                                     \
-  catch (...) {                                                                         \
-    sonare_c_detail::set_last_error("Unknown C++ exception (non-std::exception type)"); \
-    return SONARE_ERROR_UNKNOWN;                                                        \
+#define SONARE_C_CATCH                                                          \
+  }                                                                             \
+  catch (const sonare::SonareException& e) {                                    \
+    sonare_c_detail::set_last_error(e.what());                                  \
+    return sonare_c_detail::map_sonare_exception(e);                            \
+  }                                                                             \
+  catch (const std::bad_alloc& e) {                                             \
+    sonare_c_detail::set_last_error(e.what());                                  \
+    return SONARE_ERROR_OUT_OF_MEMORY;                                          \
+  }                                                                             \
+  catch (const std::invalid_argument& e) {                                      \
+    sonare_c_detail::set_last_error(e.what());                                  \
+    return SONARE_ERROR_INVALID_PARAMETER;                                      \
+  }                                                                             \
+  catch (const std::logic_error& e) {                                           \
+    sonare_c_detail::set_last_error(e.what());                                  \
+    return SONARE_ERROR_INVALID_STATE;                                          \
+  }                                                                             \
+  catch (const std::exception& e) {                                             \
+    sonare_c_detail::set_last_error(e.what());                                  \
+    return SONARE_ERROR_UNKNOWN;                                                \
+  }                                                                             \
+  catch (...) {                                                                 \
+    sonare_c_detail::set_last_error(sonare_c_detail::kUnknownExceptionMessage); \
+    return SONARE_ERROR_UNKNOWN;                                                \
+  }
+
+// Catch companion for pointer-/value-returning C-ABI entry points (e.g. the
+// *_create / *_add_* handles) that cannot map to a SonareError. Mirrors the tail
+// arms of SONARE_C_CATCH but returns @p retval on every caught exception, always
+// recording a detailed message. Like SONARE_C_CATCH the leading brace closes the
+// preceding try block.
+#define SONARE_C_CATCH_RETURN(retval)                                           \
+  }                                                                             \
+  catch (const std::exception& e) {                                             \
+    sonare_c_detail::set_last_error(e.what());                                  \
+    return (retval);                                                            \
+  }                                                                             \
+  catch (...) {                                                                 \
+    sonare_c_detail::set_last_error(sonare_c_detail::kUnknownExceptionMessage); \
+    return (retval);                                                            \
   }

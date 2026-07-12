@@ -103,10 +103,7 @@ sonare::acoustic::ShoeboxRoom make_room(float length, float width, float height,
 // Heap-copies a float vector into a caller-owned array (NULL when empty).
 float* copy_bands(const std::vector<float>& values, size_t* count) {
   *count = values.size();
-  if (values.empty()) return nullptr;
-  float* out = new float[values.size()];
-  std::memcpy(out, values.data(), values.size() * sizeof(float));
-  return out;
+  return sonare_c_detail::copy_vector(values);
 }
 #endif
 

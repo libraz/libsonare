@@ -30,8 +30,7 @@ struct ScanChannelState {
 /// Copies a preset name into the fixed manifest field (truncating, always
 /// NUL-terminated).
 void copy_preset_name(char (&dest)[64], const std::string& name) {
-  std::strncpy(dest, name.c_str(), sizeof(dest) - 1);
-  dest[sizeof(dest) - 1] = '\0';
+  sonare_c_detail::copy_text(dest, sizeof(dest), name.c_str());
 }
 
 uint16_t effective_scan_bank(const ScanChannelState& state) noexcept {

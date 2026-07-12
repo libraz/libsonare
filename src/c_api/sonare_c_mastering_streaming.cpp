@@ -120,77 +120,71 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     auto* handle = new SonareStreamingMasteringChain;
     handle->chain = std::move(chain);
     return handle;
-  } catch (const std::exception& e) {
-    sonare_c_detail::set_last_error(e.what());
-    return nullptr;
-  } catch (...) {
-    sonare_c_detail::set_last_error("Unknown C++ exception (non-std::exception type)");
-    return nullptr;
+    SONARE_C_CATCH_RETURN(nullptr)
   }
-}
 
-SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
-    const SonareMasteringParam* params, size_t param_count) {
-  return sonare_streaming_mastering_chain_create_ex(params, param_count,
-                                                    std::numeric_limits<float>::quiet_NaN(),
-                                                    std::numeric_limits<float>::quiet_NaN());
-}
-
-SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
-                                                     int sample_rate, int max_block_size,
-                                                     int num_channels) {
-  if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
-  if (sample_rate <= 0 || max_block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  SONARE_C_TRY
-  handle->chain->prepare(static_cast<double>(sample_rate), max_block_size, num_channels);
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
-
-SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain* handle,
-                                                          float* samples, size_t num_samples) {
-  if (!handle || !handle->chain || (!samples && num_samples > 0)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
+      const SonareMasteringParam* params, size_t param_count) {
+    return sonare_streaming_mastering_chain_create_ex(params, param_count,
+                                                      std::numeric_limits<float>::quiet_NaN(),
+                                                      std::numeric_limits<float>::quiet_NaN());
   }
-  if (num_samples == 0) return SONARE_OK;
-  if (!all_finite(samples, num_samples)) return SONARE_ERROR_INVALID_PARAMETER;
-  SONARE_C_TRY
-  float* channels[] = {samples};
-  handle->chain->process_block(channels, 1, static_cast<int>(num_samples));
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
 
-SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
-                                                            float* left, float* right,
-                                                            size_t num_samples) {
-  if (!handle || !handle->chain || (!left && num_samples > 0) || (!right && num_samples > 0)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain * handle,
+                                                       int sample_rate, int max_block_size,
+                                                       int num_channels) {
+    if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+    if (sample_rate <= 0 || max_block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+    SONARE_C_TRY
+    handle->chain->prepare(static_cast<double>(sample_rate), max_block_size, num_channels);
+    return SONARE_OK;
+    SONARE_C_CATCH
   }
-  if (num_samples == 0) return SONARE_OK;
-  if (!all_finite(left, num_samples) || !all_finite(right, num_samples)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+
+  SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain * handle,
+                                                            float* samples, size_t num_samples) {
+    if (!handle || !handle->chain || (!samples && num_samples > 0)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (num_samples == 0) return SONARE_OK;
+    if (!all_finite(samples, num_samples)) return SONARE_ERROR_INVALID_PARAMETER;
+    SONARE_C_TRY
+    float* channels[] = {samples};
+    handle->chain->process_block(channels, 1, static_cast<int>(num_samples));
+    return SONARE_OK;
+    SONARE_C_CATCH
   }
-  SONARE_C_TRY
-  float* channels[] = {left, right};
-  handle->chain->process_block(channels, 2, static_cast<int>(num_samples));
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
 
-SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle) {
-  if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
-  SONARE_C_TRY
-  handle->chain->reset();
-  return SONARE_OK;
-  SONARE_C_CATCH
-}
+  SonareError sonare_streaming_mastering_chain_process_stereo(
+      SonareStreamingMasteringChain * handle, float* left, float* right, size_t num_samples) {
+    if (!handle || !handle->chain || (!left && num_samples > 0) || (!right && num_samples > 0)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (num_samples == 0) return SONARE_OK;
+    if (!all_finite(left, num_samples) || !all_finite(right, num_samples)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    SONARE_C_TRY
+    float* channels[] = {left, right};
+    handle->chain->process_block(channels, 2, static_cast<int>(num_samples));
+    return SONARE_OK;
+    SONARE_C_CATCH
+  }
 
-int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle) {
-  if (!handle || !handle->chain) return 0;
-  return handle->chain->latency_samples();
-}
+  SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain * handle) {
+    if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+    SONARE_C_TRY
+    handle->chain->reset();
+    return SONARE_OK;
+    SONARE_C_CATCH
+  }
 
-void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle) {
-  delete handle;
-}
+  int sonare_streaming_mastering_chain_latency_samples(
+      const SonareStreamingMasteringChain* handle) {
+    if (!handle || !handle->chain) return 0;
+    return handle->chain->latency_samples();
+  }
+
+  void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain * handle) {
+    delete handle;
+  }

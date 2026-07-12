@@ -18,6 +18,25 @@
 using namespace sonare;
 using namespace sonare_c_detail;
 
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+/// Parses a mixing scene from a JSON string, recording the parse-failure message
+/// and mapping a failure to SONARE_ERROR_INVALID_FORMAT. Shared by the
+/// strip-setter entry points that accept a scene JSON payload.
+SonareError parse_scene_json(const char* json, mixing::api::Scene* out) {
+  try {
+    *out = mixing::api::scene_from_json(json);
+  } catch (const std::exception& e) {
+    set_last_error(e.what());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+  return SONARE_OK;
+}
+
+}  // namespace
+#endif
+
 SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
                                           const SonareEngineTrackLane* lanes, size_t lane_count) {
   if (!engine || (lane_count > 0 && !lanes)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -101,12 +120,8 @@ SonareError sonare_engine_set_bus_strip_json(SonareRealtimeEngine* engine, uint3
 #else
   SONARE_C_TRY
   mixing::api::Scene scene;
-  try {
-    scene = mixing::api::scene_from_json(scene_json);
-  } catch (const std::exception& e) {
-    set_last_error(e.what());
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
+  SonareError perr = parse_scene_json(scene_json, &scene);
+  if (perr != SONARE_OK) return perr;
   if (scene.buses.empty()) return SONARE_ERROR_INVALID_PARAMETER;
   return engine->engine.set_bus_strip(bus_id, scene.buses.front()) ? SONARE_OK
                                                                    : SONARE_ERROR_INVALID_PARAMETER;
@@ -124,12 +139,8 @@ SonareError sonare_engine_set_track_strip_json(SonareRealtimeEngine* engine, uin
 #else
   SONARE_C_TRY
   mixing::api::Scene scene;
-  try {
-    scene = mixing::api::scene_from_json(scene_json);
-  } catch (const std::exception& e) {
-    set_last_error(e.what());
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
+  SonareError perr = parse_scene_json(scene_json, &scene);
+  if (perr != SONARE_OK) return perr;
   if (scene.strips.empty()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -191,12 +202,8 @@ SonareError sonare_engine_set_master_strip_json(SonareRealtimeEngine* engine,
 #else
   SONARE_C_TRY
   mixing::api::Scene scene;
-  try {
-    scene = mixing::api::scene_from_json(scene_json);
-  } catch (const std::exception& e) {
-    set_last_error(e.what());
-    return SONARE_ERROR_INVALID_FORMAT;
-  }
+  SonareError perr = parse_scene_json(scene_json, &scene);
+  if (perr != SONARE_OK) return perr;
   if (scene.strips.empty()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }

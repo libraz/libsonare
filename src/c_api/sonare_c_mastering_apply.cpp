@@ -40,10 +40,7 @@ SonareError sonare_mastering_process(const float* samples, size_t length, int sa
     out->applied_gain_db = result.applied_gain_db;
     out->latency_samples = result.latency_samples;
 
-    std::unique_ptr<float[]> processed(new float[out->length]);
-    std::memcpy(processed.get(), result.audio.data(), out->length * sizeof(float));
-    out->samples = release_array(processed);
-    return SONARE_OK;
+    return copy_audio_result(result.audio, &out->samples, &out->length);
   });
 }
 

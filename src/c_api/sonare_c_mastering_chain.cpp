@@ -39,11 +39,7 @@ SonareError sonare_mastering_chain(const float* samples, size_t length, int samp
   out->output_lufs = result.output_lufs;
   out->applied_gain_db = result.applied_gain_db;
 
-  if (out->length > 0) {
-    std::unique_ptr<float[]> processed(new float[out->length]);
-    std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
-    out->samples = release_array(processed);
-  }
+  out->samples = copy_vector(result.samples);
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
   return SONARE_OK;
@@ -84,14 +80,8 @@ SonareError sonare_mastering_chain_stereo(const float* left, const float* right,
   out->output_lufs = result.output_lufs;
   out->applied_gain_db = result.applied_gain_db;
 
-  if (out->length > 0) {
-    std::unique_ptr<float[]> left_out(new float[out->length]);
-    std::unique_ptr<float[]> right_out(new float[out->length]);
-    std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-    std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-    out->left = release_array(left_out);
-    out->right = release_array(right_out);
-  }
+  out->left = copy_vector(result.left);
+  out->right = copy_vector(result.right);
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
   return SONARE_OK;
@@ -136,11 +126,7 @@ SonareError sonare_mastering_chain_with_progress(const float* samples, size_t le
   out->output_lufs = result.output_lufs;
   out->applied_gain_db = result.applied_gain_db;
 
-  if (out->length > 0) {
-    std::unique_ptr<float[]> processed(new float[out->length]);
-    std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
-    out->samples = release_array(processed);
-  }
+  out->samples = copy_vector(result.samples);
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
   return SONARE_OK;
@@ -191,14 +177,8 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
   out->output_lufs = result.output_lufs;
   out->applied_gain_db = result.applied_gain_db;
 
-  if (out->length > 0) {
-    std::unique_ptr<float[]> left_out(new float[out->length]);
-    std::unique_ptr<float[]> right_out(new float[out->length]);
-    std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
-    std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
-    out->left = release_array(left_out);
-    out->right = release_array(right_out);
-  }
+  out->left = copy_vector(result.left);
+  out->right = copy_vector(result.right);
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
   return SONARE_OK;
