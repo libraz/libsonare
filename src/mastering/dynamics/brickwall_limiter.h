@@ -8,6 +8,7 @@
 
 #include "mastering/dynamics/limiter.h"
 #include "rt/processor_base.h"
+#include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
 
 namespace sonare::mastering::dynamics {
@@ -18,7 +19,11 @@ struct BrickwallLimiterConfig {
   float release_ms = 50.0f;
 };
 
-class BrickwallLimiter : public rt::ProcessorBase {
+class BrickwallLimiter : public rt::ProcessorBase,
+                         public rt::RtConfigLifecycle<BrickwallLimiter, BrickwallLimiterConfig> {
+  using ConfigBase = rt::RtConfigLifecycle<BrickwallLimiter, BrickwallLimiterConfig>;
+  friend ConfigBase;
+
  public:
   explicit BrickwallLimiter(BrickwallLimiterConfig config = {});
 
@@ -53,13 +58,9 @@ class BrickwallLimiter : public rt::ProcessorBase {
   ///          control-thread @c config_ mirror or the published snapshot. Uses
   ///          the same release-coefficient math as @ref set_release_ms.
   void set_release_ms_in_place(float release_ms) noexcept;
-  /// @brief Returns the most recently published configuration as observed by
-  ///        the configuration thread.
-  /// @details NOT realtime-safe and NOT safe to call concurrently with
-  ///          @ref set_config (the returned reference may be invalidated by a
-  ///          subsequent publish). Intended for UI sync / round-trip tests on
-  ///          the configuration thread.
-  const BrickwallLimiterConfig& config() const { return config_; }
+  // config() is provided by RtConfigLifecycle; set_config() is overridden below
+  // because a lookahead_ms change must resize buffers (not RT-safe) instead of
+  // going through the lock-free publisher.
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
   int hard_clip_count() const noexcept { return hard_clip_count_; }
   int latency_samples() const noexcept override { return limiter_.latency_samples(); }
@@ -90,32 +91,7 @@ class BrickwallLimiter : public rt::ProcessorBase {
   ///          changed @c lookahead_ms is handled by the control-thread
   ///          @ref set_config branch that re-runs @ref prepare.
   void update_coefficients(const BrickwallLimiterConfig& config);
-  /// @brief Audio-thread hand-off: adopts any pending snapshot and, if a new
-  ///        one was adopted, recomputes derived coefficients. Returns a
-  ///        pointer to the configuration the block should use; falls back to
-  ///        the control-thread @c config_ mirror only when no snapshot has been
-  ///        published yet (unreachable after prepare() runs because prepare()
-  ///        always publishes an initial snapshot).
-  const BrickwallLimiterConfig* adopt_snapshot_for_block() noexcept;
 
-  BrickwallLimiterConfig config_{};
-  /// @brief Lock-free single-producer (config thread) / single-consumer (audio
-  ///        thread) snapshot publisher. Held by @c unique_ptr so
-  ///        BrickwallLimiter itself remains move-constructible (RtPublisher
-  ///        deletes its copy and move operations to keep the SPSC ring indices
-  ///        position-stable); the indirection is touched once per block from
-  ///        the audio thread and never per-sample.
-  std::unique_ptr<rt::RtPublisher<BrickwallLimiterConfig>> config_publisher_;
-  /// @brief Tracks which snapshot pointer the audio thread last applied to
-  ///        derived coefficients. When @c config_publisher_.current() differs
-  ///        from this, the audio thread re-runs @ref update_coefficients
-  ///        before processing.
-  const BrickwallLimiterConfig* applied_snapshot_ = nullptr;
-  /// @brief The audio thread's live working configuration. Seeded from the
-  ///        adopted snapshot on each set_config change and mutated in place by
-  ///        @ref set_parameter (RT-safe automation, no publish). The hard-clip
-  ///        stage reads active_.ceiling_db, not the snapshot.
-  BrickwallLimiterConfig active_{};
   Limiter limiter_;
   bool prepared_ = false;
   double sample_rate_ = 48000.0;

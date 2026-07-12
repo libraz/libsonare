@@ -17,17 +17,9 @@ constexpr float kEnvelopeFloor = 1.0e-6f;
 
 }  // namespace
 
-TransientShaper::TransientShaper(TransientShaperConfig config)
-    : config_(config),
-      config_publisher_(std::make_unique<rt::RtPublisher<TransientShaperConfig>>()) {
-  validate_config(config_);
-  active_ = config_;
-  // Seed the publisher so a downstream audio thread that starts before
-  // prepare() sees a defined snapshot. prepare() will publish again with
-  // post-prepare derived state already applied so the first audio block does
-  // not redundantly recompute coefficients.
-  config_publisher_->publish(std::make_shared<const TransientShaperConfig>(config_));
-}
+// The configuration lifecycle (validate + seed active_ + publish the initial
+// snapshot) is handled by RtConfigLifecycle's constructor.
+TransientShaper::TransientShaper(TransientShaperConfig config) : ConfigBase(std::move(config)) {}
 
 void TransientShaper::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
@@ -54,32 +46,7 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
   // recomputation when current() == applied_snapshot_.
-  auto fresh = std::make_shared<const TransientShaperConfig>(config_);
-  applied_snapshot_ = fresh.get();
-  config_publisher_->publish(std::move(fresh));
-  config_publisher_->acquire();
-}
-
-const TransientShaperConfig* TransientShaper::adopt_snapshot_for_block() noexcept {
-  // Audio-thread entry. acquire() drains the publish ring to the newest
-  // snapshot and retires superseded ones via the wait-free retire ring (no
-  // alloc, no free, no lock on this thread). If a new snapshot was adopted,
-  // re-derive the scalar coefficients — those writes target members the per-
-  // sample loop reads, but the loop has not started yet for this block, so no
-  // race.
-  config_publisher_->acquire();
-  const TransientShaperConfig* current = config_publisher_->current();
-  if (current && current != applied_snapshot_) {
-    // A newly published snapshot (set_config) supersedes any in-place
-    // set_parameter automation: copy it into the working config and re-derive.
-    active_ = *current;
-    update_coefficients(active_);
-    applied_snapshot_ = current;
-  }
-  // The per-sample loop always reads the working config (active_), seeded in the
-  // constructor and refreshed above; set_parameter mutates it in place without
-  // publishing, so no allocation occurs on the audio thread.
-  return &active_;
+  republish_after_prepare();
 }
 
 void TransientShaper::process(float* const* channels, int num_channels, int num_samples) {
@@ -148,17 +115,6 @@ void TransientShaper::reset() {
   for (auto& delay : lookahead_) std::fill(delay.begin(), delay.end(), 0.0f);
   std::fill(lookahead_index_.begin(), lookahead_index_.end(), 0);
   last_gain_db_ = 0.0f;
-}
-
-void TransientShaper::set_config(const TransientShaperConfig& config) {
-  // Control-thread side: validate before publishing so any throw leaves both
-  // the control-thread mirror (config_) and the audio-thread snapshot
-  // unchanged. The audio thread sees the new snapshot only after publish()
-  // succeeds; validation never runs partway through a config_ write that the
-  // audio thread could observe.
-  validate_config(config);
-  config_ = config;
-  config_publisher_->publish(std::make_shared<const TransientShaperConfig>(config_));
 }
 
 bool TransientShaper::set_parameter(unsigned int param_id, float value) {

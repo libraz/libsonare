@@ -22,17 +22,9 @@ float sanitize_sample(float sample, float ceiling) {
 
 }  // namespace
 
-BrickwallLimiter::BrickwallLimiter(BrickwallLimiterConfig config)
-    : config_(config),
-      config_publisher_(std::make_unique<rt::RtPublisher<BrickwallLimiterConfig>>()) {
-  validate_config(config_);
-  active_ = config_;
-  // Seed the publisher so a downstream audio thread that starts before
-  // prepare() sees a defined snapshot. prepare() will publish again with
-  // post-prepare derived state already applied so the first audio block does
-  // not redundantly recompute coefficients.
-  config_publisher_->publish(std::make_shared<const BrickwallLimiterConfig>(config_));
-}
+// The configuration lifecycle (validate + seed active_ + publish the initial
+// snapshot) is handled by RtConfigLifecycle's constructor.
+BrickwallLimiter::BrickwallLimiter(BrickwallLimiterConfig config) : ConfigBase(std::move(config)) {}
 
 void BrickwallLimiter::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
@@ -58,33 +50,7 @@ void BrickwallLimiter::prepare(double sample_rate, int max_block_size) {
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
   // recomputation when current() == applied_snapshot_.
-  auto fresh = std::make_shared<const BrickwallLimiterConfig>(config_);
-  applied_snapshot_ = fresh.get();
-  config_publisher_->publish(std::move(fresh));
-  config_publisher_->acquire();
-}
-
-const BrickwallLimiterConfig* BrickwallLimiter::adopt_snapshot_for_block() noexcept {
-  // Audio-thread entry. acquire() drains the publish ring to the newest
-  // snapshot and retires superseded ones via the wait-free retire ring (no
-  // alloc, no free, no lock on this thread). If a new snapshot was adopted,
-  // re-derive the scalar coefficients — those writes target the inner
-  // limiter's threshold/release in place (no resize), so the per-sample loop
-  // sees a consistent configuration for the block.
-  config_publisher_->acquire();
-  const BrickwallLimiterConfig* current = config_publisher_->current();
-  if (current && current != applied_snapshot_) {
-    // A new set_config snapshot supersedes any in-place automation: copy it into
-    // the live working config and re-derive (forward ceiling/release to the
-    // inner limiter in place).
-    active_ = *current;
-    update_coefficients(active_);
-    applied_snapshot_ = current;
-  }
-  // The hard-clip stage always reads the live working config (active_), which
-  // set_parameter mutates in place without publishing. active_ is seeded in the
-  // constructor and prepare(), so it is defined even before the first snapshot.
-  return &active_;
+  republish_after_prepare();
 }
 
 void BrickwallLimiter::process(float* const* channels, int num_channels, int num_samples) {
@@ -160,7 +126,7 @@ void BrickwallLimiter::set_config(const BrickwallLimiterConfig& config) {
   }
   // RT-safe path: ceiling/release updates propagate through the publisher and
   // are applied on the audio thread via adopt_snapshot_for_block().
-  config_publisher_->publish(std::make_shared<const BrickwallLimiterConfig>(config_));
+  publish_current_config();
 }
 
 void BrickwallLimiter::set_release_ms(float release_ms) {
