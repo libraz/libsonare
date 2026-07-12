@@ -33,6 +33,7 @@
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
 #include "mastering/repair/declip.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -232,6 +233,26 @@ TEST_CASE("final.outputChain decorrelates stereo channels", "[mastering][final][
     if (result.left[i] != result.right[i]) channels_differ = true;
   }
   REQUIRE(channels_differ);
+}
+
+TEST_CASE("final.dither rejects an out-of-range dither type", "[mastering][final][param_wiring]") {
+  // final::DitherType has 4 members (None, Rpdf, Tpdf, NoiseShaped). Before the
+  // fix an out-of-range int silently fell through the DSP's if-chain tail and
+  // ran as NoiseShaped instead of raising InvalidParameter.
+  const std::vector<float> silence(256, 0.0f);
+  REQUIRE_THROWS_AS(
+      sonare::mastering::api::apply_named_processor("final.dither", silence.data(), silence.size(),
+                                                    48000, {{"type", 4.0}, {"targetBits", 16.0}}),
+      sonare::SonareException);
+}
+
+TEST_CASE("final.outputChain rejects an out-of-range dither type",
+          "[mastering][final][param_wiring]") {
+  const std::vector<float> silence(256, 0.0f);
+  REQUIRE_THROWS_AS(sonare::mastering::api::apply_named_processor(
+                        "final.outputChain", silence.data(), silence.size(), 48000,
+                        {{"ditherType", 4.0}, {"targetBits", 8.0}, {"clamp", 1.0}}),
+                    sonare::SonareException);
 }
 
 // --- M6: custom crossover band count --------------------------------------

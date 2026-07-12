@@ -397,7 +397,7 @@ void configure_processor(const std::string& name, const ParamMap& params,
     samples.assign(out.data(), out.data() + out.size());
   } else if (name == "final.dither") {
     final::DitherConfig config;
-    config.type = static_cast<final::DitherType>(i(params, "type", 2));
+    config.type = checked_enum<final::DitherType>(i(params, "type", 2), 4, "dither type");
     config.target_bits = i(params, "targetBits", config.target_bits);
     config.seed = static_cast<uint32_t>(i(params, "seed", config.seed));
     // Decorrelate the dither noise across stereo channels (no-op for the left
@@ -409,7 +409,8 @@ void configure_processor(const std::string& name, const ParamMap& params,
   } else if (name == "final.outputChain") {
     final::DitherConfig dither_config;
     dither_config.target_bits = i(params, "targetBits", dither_config.target_bits);
-    dither_config.type = static_cast<final::DitherType>(i(params, "ditherType", 2));
+    dither_config.type =
+        checked_enum<final::DitherType>(i(params, "ditherType", 2), 4, "dither type");
     // Decorrelate the dither noise across stereo channels (no-op for the left
     // channel, channel_index 0). output_chain() applies the default DitherConfig
     // seed to both channels, so replicate its dither + bit-depth steps here with
