@@ -396,18 +396,65 @@ TEST_CASE("MonoCompatCheck detects anti-phase stereo risk", "[mastering][stereo]
 }
 
 TEST_CASE("MonoCompatCheck reports log-band phase correlation", "[mastering][stereo]") {
-  auto left = generate_sine_samples(1000.0f, 48000, 48000, 0.5f);
+  // The band-projected analysis picks up energy at the band's own log-center
+  // frequency (sqrt(low_hz * high_hz)), not just anywhere inside [low_hz,
+  // high_hz), so the probe tone is placed exactly there for a strong readout.
+  constexpr float kLowHz = 700.0f;
+  constexpr float kHighHz = 1400.0f;
+  const float band_center_hz = std::sqrt(kLowHz * kHighHz);
+  auto left = generate_sine_samples(band_center_hz, 48000, 48000, 0.5f);
   auto right = left;
   for (auto& sample : right) {
     sample = -sample;
   }
 
   const auto bands = mono_compat_check_log_bands(left.data(), right.data(), left.size(), 48000.0, 1,
-                                                 700.0f, 1400.0f);
+                                                 kLowHz, kHighHz);
 
   REQUIRE(bands.size() == 1);
   REQUIRE(bands[0].correlation < -0.99f);
   REQUIRE(bands[0].side_rms > 0.3f);
+}
+
+TEST_CASE("MonoCompatCheck log bands have frequency-dependent side energy", "[mastering][stereo]") {
+  // A side component confined to a single low band must not smear into a flat,
+  // broadband side_rms profile across every band (M-3 regression guard).
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 12000;  // 0.25 s
+  constexpr float kSideFreqHz = 350.0f;
+  auto side = generate_sine_samples(kSideFreqHz, kSampleRate, kSamples, 0.5f);
+  std::vector<float> left(side.size());
+  std::vector<float> right(side.size());
+  for (size_t i = 0; i < side.size(); ++i) {
+    left[i] = side[i];
+    right[i] = -side[i];
+  }
+
+  const auto bands = mono_compat_check_log_bands(
+      left.data(), right.data(), left.size(), static_cast<double>(kSampleRate), 1, 250.0f, 8000.0f);
+  REQUIRE(bands.size() > 1);
+
+  const auto low_band =
+      std::find_if(bands.begin(), bands.end(), [](const MonoCompatBandResult& band) {
+        return kSideFreqHz >= band.low_hz && kSideFreqHz < band.high_hz;
+      });
+  REQUIRE(low_band != bands.end());
+  const auto& high_band = bands.back();
+
+  // The band containing the side tone must report far more side energy than
+  // the highest band, which contains none of it.
+  REQUIRE(low_band->side_rms > high_band.side_rms * 3.0f);
+
+  // A flat per-band profile (every side_rms equal to the broadband value) is
+  // exactly the bug this test guards against.
+  bool all_equal = true;
+  for (const auto& band : bands) {
+    if (std::abs(band.side_rms - bands.front().side_rms) > 1.0e-6f) {
+      all_equal = false;
+      break;
+    }
+  }
+  REQUIRE(!all_equal);
 }
 
 TEST_CASE("MonoCompatCheck validates buffers", "[mastering][stereo]") {
