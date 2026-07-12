@@ -3,14 +3,17 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
 #include "rt/dispersion.h"
 #include "rt/fractional_delay.h"
+#include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 /// Tension modulation: the attack pitch rise at full velocity / full knob
 /// (cents), the explicit safety clamp on that rise, and its relaxation time.
@@ -38,10 +41,6 @@ constexpr uint64_t kKeyoffNoiseIndexBase = 1ull << 20;
 constexpr float kKsKeyoffMs = 18.0f;
 constexpr float kKsKeyoffCutoffHz = 2200.0f;
 
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
-
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
   const float loops_to_t60 =
@@ -68,8 +67,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   // fundamental (not just its DC group delay) plus the one-sample feedback
   // path, so the sounding pitch matches the note to a few cents.
   const float omega = kTwoPi / base_period_;
-  const float tau_lp =
-      std::atan2(a * std::sin(omega), 1.0f - a * std::cos(omega)) / std::max(omega, 1.0e-6f);
+  const float tau_lp = onepole_group_delay_samples(a, omega);
   loop_comp_ = 1.0f + tau_lp;
 
   // Stiff-string dispersion (steel strings). 0 disables the allpass cascade so

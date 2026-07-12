@@ -3,11 +3,15 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
+#include "util/constants.h"
+#include "util/dsp_primitives.h"
+
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 /// Operator wiring per FmAlgorithm: mod_mask[i] = bitmask of operators that
 /// phase-modulate operator i; carrier_mask = operators summed to the output.
@@ -24,8 +28,6 @@ constexpr FmAlgorithmSpec kFmAlgorithms[] = {
     {{0x06, 0x00, 0x00, 0x00}, 0x01},  // kBright3: (1 + 2) -> op0
     {{0x00, 0x00, 0x00, 0x00}, 0x03},  // kAdd2:    op0 + op1 carriers
 };
-
-float note_to_hz(float note) noexcept { return 440.0f * std::exp2((note - 69.0f) / 12.0f); }
 
 }  // namespace
 
@@ -55,7 +57,7 @@ void FmVoiceCore::start(const FmPatchParams& params, double sample_rate, uint8_t
     op.prev1 = 0.0f;
     op.prev2 = 0.0f;
     const float ratio = std::clamp(p.ratio, 0.0f, 64.0f);
-    const float detune = std::exp2(std::clamp(p.detune_cents, -1200.0f, 1200.0f) / 1200.0f);
+    const float detune = cents_to_ratio(std::clamp(p.detune_cents, -1200.0f, 1200.0f));
     op.base_inc = static_cast<float>(static_cast<double>(base_hz) * ratio * detune / sr);
     // Velocity -> level (modulation index for modulators = brightness).
     const float vel_amount = std::clamp(p.vel_to_level, 0.0f, 1.0f);

@@ -3,11 +3,15 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
+#include "util/constants.h"
+#include "util/dsp_primitives.h"
+
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 // Musette detune span (cents) between the two tongues: detune 0 collapses to a
 // single tongue (the second oscillator is skipped entirely, bit-identical); the
@@ -42,10 +46,6 @@ constexpr float kBreathNoiseDepth = 0.12f;
 constexpr float kOutputMin = 0.3f;
 constexpr float kOutputSpan = 0.5f;
 
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
-
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
@@ -77,7 +77,7 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   phase_a_ = 0.0f;
   if (dual_) {
     const float cents = kDetuneMinCents + kDetuneSpanCents * detune;
-    inc_b_ = inc_a_ * std::exp2(cents / 1200.0f);
+    inc_b_ = inc_a_ * cents_to_ratio(cents);
     // Decorrelate the pair's start (a real accordion's tongues never speak in
     // phase); seeded, so the offset is deterministic per voice.
     phase_b_ = noise_.unipolar_at(0);

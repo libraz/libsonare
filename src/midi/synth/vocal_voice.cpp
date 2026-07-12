@@ -3,11 +3,14 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
+#include "util/constants.h"
+
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 /// One vowel formant: centre frequency, level relative to F1, and bandwidth.
 struct VowelFormant {
@@ -79,10 +82,6 @@ constexpr float kVibratoMaxFrac = 0.03f;
 // into the other engines' [0.3, 0.8] range; a pianissimo strike keeps a body.
 constexpr float kOutputScale = 2.0f;
 constexpr float kVelFloor = 0.4f;
-
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {

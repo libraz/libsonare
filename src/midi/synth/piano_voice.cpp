@@ -3,15 +3,18 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
 #include "midi/synth/voice_random.h"
 #include "rt/fractional_delay.h"
+#include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kPi = 3.14159265358979323846f;
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kPi;
+using sonare::constants::kTwoPi;
 
 /// Mezzo-forte reference velocity (0..1) the felt-hammer laws are anchored at.
 constexpr float kHammerMfVel = 0.6f;
@@ -195,10 +198,6 @@ constexpr float kBridgeHillHz = 1485.15f;
 constexpr float kBridgeHillGainDb = 9.91486f;
 constexpr float kBridgeHillQ = 2.40983f;
 
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
-
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
   const float loops_to_t60 =
@@ -217,9 +216,7 @@ float allpass_phase_delay(float a, float w) noexcept {
 
 /// Phase delay (samples) of the one-pole loop lowpass y = (1-a)x + a*y^-1 at
 /// normalized frequency @p w.
-float onepole_phase_delay(float a, float w) noexcept {
-  return std::atan2(a * std::sin(w), 1.0f - a * std::cos(w)) / std::max(w, 1.0e-6f);
-}
+float onepole_phase_delay(float a, float w) noexcept { return onepole_group_delay_samples(a, w); }
 
 /// First-order allpass coefficient a (<= 0) for a cascade of @p stages that
 /// disperses the waveguide loop into the stiff-string law f_n =

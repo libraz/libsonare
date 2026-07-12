@@ -3,16 +3,17 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
 using sonare::constants::kPi;
-
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 // Mouth-pressure scale: the player's lung pressure enters the mouthpiece. The
 // lips buzz only above a threshold loop gain, and mouth * lip_couple is the
@@ -141,10 +142,6 @@ constexpr float kLip2Mult = 2.0f;
 constexpr float kLip2Q = 7.0f;
 constexpr float kLip2Couple = 1.5f;
 
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
-
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
@@ -222,8 +219,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // after it is produced) plus the bell lowpass's phase delay at the resonant
   // frequency. Subtract from the loop delay.
   const float omega = kTwoPi / std::max(1.0f, bore_period_);
-  const float tau_lp =
-      std::atan2(a * std::sin(omega), 1.0f - a * std::cos(omega)) / std::max(omega, 1.0e-6f);
+  const float tau_lp = onepole_group_delay_samples(a, omega);
   comp_ = 1.0f + tau_lp;
 
   // Circular span sized for the whole loop period plus bend-down headroom and the

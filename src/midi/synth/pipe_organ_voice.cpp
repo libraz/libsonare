@@ -3,13 +3,16 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
 #include "rt/fractional_delay.h"
+#include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 // Mouth-pressure calibration (shared with the flute jet). The exposed band lands
 // the jet in its self-oscillating region — the knobs colour the tone, they do
@@ -173,10 +176,6 @@ constexpr float kToneTrebleTaper = 0.35f;
 constexpr uint64_t kChiffIndexBase = 1ull << 24;
 constexpr uint64_t kTurbIndexBase = 1ull << 32;
 constexpr uint64_t kRankNoiseShift = 48;
-
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
 
 /// Deterministic per-pipe tuning error in [-1, 1]: keyed on (note, rank) only,
 /// so the same pipe is always tuned the same way across voices and renders —
@@ -354,8 +353,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     // blocker's phase LEAD (which shortens the effective loop and sounds a low
     // pedal note sharp if left uncompensated — H_dc = (1 - z^-1)/(1 - r z^-1)).
     const float omega = kTwoPi * f0 / srf;
-    const float tau_lp =
-        std::atan2(a * std::sin(omega), 1.0f - a * std::cos(omega)) / std::max(omega, 1.0e-6f);
+    const float tau_lp = onepole_group_delay_samples(a, omega);
     const float phase_dc = std::atan2(std::sin(omega), 1.0f - std::cos(omega)) -
                            std::atan2(dc_r * std::sin(omega), 1.0f - dc_r * std::cos(omega));
     const float tau_dc = phase_dc / std::max(omega, 1.0e-6f);

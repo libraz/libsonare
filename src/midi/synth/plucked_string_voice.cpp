@@ -3,13 +3,16 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
 #include "rt/fractional_delay.h"
+#include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 /// Excitation noise draws live far above the voice-level draw indices
 /// (detune/phase/drift use 0..~103 on the same per-voice seed).
@@ -23,10 +26,6 @@ constexpr float kBuzzSpanBase = 0.35f;
 /// Output trim bringing the raw string loop up to a musical voice level (a
 /// forte pluck lands roughly in [0.3, 0.8] peak).
 constexpr float kPluckedOutputScale = 0.85f;
-
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
 
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
@@ -54,8 +53,7 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
   // fundamental (not just its DC group delay) plus the one-sample feedback
   // path, so the sounding pitch matches the note to a few cents.
   const float omega = kTwoPi / base_period_;
-  const float tau_lp =
-      std::atan2(a * std::sin(omega), 1.0f - a * std::cos(omega)) / std::max(omega, 1.0e-6f);
+  const float tau_lp = onepole_group_delay_samples(a, omega);
   loop_comp_ = 1.0f + tau_lp;
 
   // Decay: t60 stretched per octave below A4 (low strings ring longer).

@@ -4,12 +4,13 @@
 #include <cmath>
 
 #include "midi/synth/voice_random.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 /// 2-sample polynomial band-limited step residual at the phase discontinuity.
 /// @p t is the phase in [0,1), @p dt the per-sample phase increment.

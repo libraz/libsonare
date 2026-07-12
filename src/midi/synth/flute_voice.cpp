@@ -3,13 +3,16 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
 #include "rt/fractional_delay.h"
+#include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 // Mouth-pressure calibration. The exposed breath range lands the jet in its
 // oscillating band — the knobs colour the tone, they do not gate it on and off.
@@ -76,10 +79,6 @@ constexpr float kOutputTargetPeak = 0.5f;
 constexpr float kPeakBase = 4.0f;
 constexpr float kPeakTilt = -0.65f;    // the driven peak falls with pitch (rich bass)
 constexpr float kPeakRefHz = 261.63f;  // middle C, the flute's home register
-
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
@@ -172,8 +171,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // Tuning compensation: one feedback register (bore_out_ is consumed one sample
   // after it is produced) plus the reflection lowpass's phase delay at f0.
   const float omega = kTwoPi * f0 / srf;
-  const float tau_lp =
-      std::atan2(a * std::sin(omega), 1.0f - a * std::cos(omega)) / std::max(omega, 1.0e-6f);
+  const float tau_lp = onepole_group_delay_samples(a, omega);
   comp_ = 1.0f + tau_lp;
 
   // Circular spans sized for the whole loop period plus bend-down headroom and

@@ -4,12 +4,15 @@
 #include <cmath>
 
 #include "midi/synth/bessel.h"
+#include "midi/synth/pitch.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kPi;
+using sonare::constants::kTwoPi;
 /// Noise draws live far above any other per-voice index range.
 constexpr uint64_t kNoiseIndexBase = 1ull << 20;
 /// Wire-rattle draws live above the noise-layer range so the two streams
@@ -23,10 +26,6 @@ constexpr uint64_t kPhisemProbIndexBase = 1ull << 30;
 constexpr uint64_t kPhisemNoiseIndexBase = 1ull << 31;
 /// Random bead collisions per bean per unit shake energy per second.
 constexpr float kPhisemCollisionRate = 100.0f;
-
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
 
 float radius_for(double sample_rate, float t60_s) noexcept {
   return std::exp(-6.907755279f / (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
@@ -176,7 +175,7 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
       for (int k = 0; k < num_modes_; ++k) {
         Mode& mode = modes_[static_cast<size_t>(k)];
         if (mode.gain == 0.0f && mode.r == 0.0f) continue;
-        const float w = std::min(mode.omega * ratio, 0.95f * 3.14159265359f);
+        const float w = std::min(mode.omega * ratio, 0.95f * kPi);
         mode.a1 = 2.0f * mode.r * std::cos(w);
         mode.a2 = -mode.r * mode.r;
       }

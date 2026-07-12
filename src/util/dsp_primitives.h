@@ -49,6 +49,25 @@ inline float time_to_attack_release_rate_f(double sample_rate, float time_ms) no
   return static_cast<float>(1.0 - std::exp(-1.0 / samples));
 }
 
+/// @brief Convert a pitch interval in cents to a linear frequency ratio.
+/// @details Returns `2^(cents / 1200)` via `std::exp2`, matching the physical-model
+///   synth voices' historical arithmetic bit-for-bit (float throughout). Callers
+///   that need a `double` result or that fold the divide into `* (1 / 1200)` keep
+///   their own expression, since the rounding differs.
+inline float cents_to_ratio(float cents) noexcept {
+  return std::exp2(cents / constants::kCentsPerOctave);
+}
+
+/// @brief Phase delay, in samples, of a one-pole filter `y[n] = x[n] + a*y[n-1]`
+///   evaluated at angular frequency `omega`.
+/// @details Returns `atan2(a*sin(w), 1 - a*cos(w)) / max(w, 1e-6)`. Used to
+///   compensate the tuning-filter loop delay of the waveguide/comb voices;
+///   matches their inlined arithmetic bit-for-bit (float throughout). The
+///   denominator is floored at `1e-6` so a zero frequency does not divide by zero.
+inline float onepole_group_delay_samples(float a, float omega) noexcept {
+  return std::atan2(a * std::sin(omega), 1.0f - a * std::cos(omega)) / std::max(omega, 1.0e-6f);
+}
+
 /// @brief Root mean square of a contiguous sample buffer.
 inline float rms(const float* data, size_t n) noexcept {
   if (data == nullptr || n == 0) {

@@ -3,17 +3,16 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
 #include "midi/synth/voice_random.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
-
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
+using sonare::constants::kPi;
+using sonare::constants::kTwoPi;
 
 /// Per-sample decay radius reaching -60 dB after @p t60_s.
 float radius_for(double sample_rate, float t60_s) noexcept {
@@ -74,7 +73,7 @@ void ModalVoiceCore::refresh_coefficients(float pitch_ratio) noexcept {
   for (int k = 0; k < num_modes_; ++k) {
     Mode& mode = modes_[static_cast<size_t>(k)];
     if (mode.gain == 0.0f && mode.r == 0.0f) continue;
-    const float w = std::min(mode.omega * pitch_ratio, 0.95f * 3.14159265359f);
+    const float w = std::min(mode.omega * pitch_ratio, 0.95f * kPi);
     mode.a1 = 2.0f * mode.r * std::cos(w);
     mode.a2 = -mode.r * mode.r;
   }

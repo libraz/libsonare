@@ -3,19 +3,18 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
+#include "util/constants.h"
+
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kTwoPi;
 
 /// Hammond drawbar pitches as ratios to the played note.
 constexpr std::array<float, kAdditivePartials> kDrawbarRatios = {0.5f, 1.5f, 1.0f, 2.0f, 3.0f,
                                                                  4.0f, 5.0f, 6.0f, 8.0f};
-
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
 
 /// Drawbar stop digit (0-8) -> linear gain (~3 dB per stop, 0 = off).
 float drawbar_gain(float level) noexcept {

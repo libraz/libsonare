@@ -3,14 +3,17 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/pitch.h"
 #include "rt/fractional_delay.h"
+#include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
-constexpr float kPi = 3.14159265358979323846f;
-constexpr float kTwoPi = 6.28318530717958647692f;
+using sonare::constants::kPi;
+using sonare::constants::kTwoPi;
 
 // Bow-velocity calibration: the differential-velocity input the bow table sees
 // is a small quantity (a real bow moves the contact point at ~0.05-0.2 in the
@@ -83,10 +86,6 @@ constexpr float kPolCoupleMax = 0.20f;
 // Direct radiation of the 2nd polarization added to the output.
 constexpr float kPolRadiation = 0.25f;
 
-float note_to_hz(uint8_t note) noexcept {
-  return 440.0f * std::exp2((static_cast<float>(note & 0x7Fu) - 69.0f) / 12.0f);
-}
-
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
@@ -143,8 +142,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   // in the lines) plus the bridge lowpass's exact phase delay at the
   // fundamental. Subtract them from the period before splitting.
   const float omega = kTwoPi / std::max(1.0f, base_period_);
-  const float tau_lp =
-      std::atan2(a * std::sin(omega), 1.0f - a * std::cos(omega)) / std::max(omega, 1.0e-6f);
+  const float tau_lp = onepole_group_delay_samples(a, omega);
   comp_ = 2.0f + tau_lp;
 
   // Circular spans: each line is sized for the WHOLE period (plus bend-down
