@@ -9,6 +9,7 @@
 #include "feature/spectral.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -273,12 +274,7 @@ std::vector<SectionAnalyzer::SectionDescriptor> SectionAnalyzer::build_descripto
       for (float& value : desc.chroma) value /= static_cast<float>(c_count);
     }
     // L2-normalize the mean chroma vector so cosine similarity is just a dot product.
-    float norm = 0.0f;
-    for (float value : desc.chroma) norm += value * value;
-    norm = std::sqrt(norm);
-    if (norm > kEpsilon) {
-      for (float& value : desc.chroma) value /= norm;
-    }
+    normalize_l2(desc.chroma.data(), desc.chroma.size());
 
     // Vocal likelihood: fraction of energy in the vocal band weighted by tonality.
     const int sp_start =

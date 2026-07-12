@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "util/db.h"
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -17,9 +18,7 @@ namespace {
 float resolve_ref(const float* S, std::size_t n, float ref) {
   if (ref > 0.0f) return ref;
   // Use max(|S|) as reference (librosa: ref=np.max behavior).
-  float m = 0.0f;
-  for (std::size_t i = 0; i < n; ++i) m = std::max(m, std::abs(S[i]));
-  return m;
+  return peak_abs(S, n);
 }
 
 }  // namespace

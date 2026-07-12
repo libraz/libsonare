@@ -5,6 +5,7 @@
 #include <numeric>
 
 #include "util/constants.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -226,37 +227,7 @@ float profile_correlation(const std::array<float, 12>& chroma,
 }
 
 float profile_correlation(const float* chroma, const std::array<float, 12>& profile) {
-  // Compute means
-  float chroma_mean = 0.0f;
-  float profile_mean = 0.0f;
-  for (int i = 0; i < 12; ++i) {
-    chroma_mean += chroma[i];
-    profile_mean += profile[i];
-  }
-  chroma_mean /= constants::kSemitonesPerOctave;
-  profile_mean /= constants::kSemitonesPerOctave;
-
-  // Compute Pearson correlation
-  float numerator = 0.0f;
-  float chroma_var = 0.0f;
-  float profile_var = 0.0f;
-
-  for (int i = 0; i < 12; ++i) {
-    float chroma_diff = chroma[i] - chroma_mean;
-    float profile_diff = profile[i] - profile_mean;
-
-    numerator += chroma_diff * profile_diff;
-    chroma_var += chroma_diff * chroma_diff;
-    profile_var += profile_diff * profile_diff;
-  }
-
-  float denominator = std::sqrt(chroma_var * profile_var);
-
-  if (denominator < constants::kEpsilon) {
-    return 0.0f;
-  }
-
-  return numerator / denominator;
+  return pearson_correlation(chroma, profile.data(), profile.size());
 }
 
 MajorMinorKeyMatch find_best_major_minor_key(const std::array<float, 12>& chroma,

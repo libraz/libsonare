@@ -98,8 +98,7 @@ std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, si
                           "unnormalized_autocorrelation: input too large");
   }
 
-  size_t fft_size = 1;
-  while (fft_size < 2 * n - 1) fft_size *= 2;
+  const size_t fft_size = next_power_of_2(2 * n - 1);
 
   std::vector<float> padded(fft_size, 0.0f);
   std::copy(input, input + n, padded.begin());
@@ -162,11 +161,7 @@ void compute_autocorrelation(const float* input, int n, int max_lag, float* outp
   }
 
   // Compute mean
-  float mean_val = 0.0f;
-  for (int i = 0; i < n; ++i) {
-    mean_val += input[i];
-  }
-  mean_val /= static_cast<float>(n);
+  const float mean_val = mean(input, static_cast<size_t>(n));
 
   // Compute variance
   float var = 0.0f;

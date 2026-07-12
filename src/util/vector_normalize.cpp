@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "util/constants.h"
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -18,11 +19,8 @@ namespace {
 float compute_norm(const float* x, std::size_t n, NormType type) {
   if (n == 0) return 0.0f;
   switch (type) {
-    case NormType::Inf: {
-      float m = 0.0f;
-      for (std::size_t i = 0; i < n; ++i) m = std::max(m, std::abs(x[i]));
-      return m;
-    }
+    case NormType::Inf:
+      return peak_abs(x, n);
     case NormType::L1: {
       float s = 0.0f;
       for (std::size_t i = 0; i < n; ++i) s += std::abs(x[i]);
