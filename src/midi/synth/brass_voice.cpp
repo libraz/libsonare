@@ -53,9 +53,11 @@ constexpr float kLipQSpan = 22.0f;
 // embouchure centre). Small — a few percent.
 constexpr float kLipTuneSpan = 0.04f;  // f_lip = f0 * (1 + span*(tension - 0.5))
 // Pitch correction: an outward-striking lip oscillates just ABOVE its resonance
-// (Fletcher 1979), so the played note lands ~0.8% sharp of the bore/lip lock;
-// the loop delay is lengthened to bring it back onto pitch.
-constexpr float kPitchCorrect = 1.0075f;
+// (Fletcher 1979), so the played note lands a touch sharp of the bore/lip lock;
+// the loop delay is lengthened to bring it back onto pitch. Co-calibrated with
+// the DC-blocker phase compensation below so the sounding pitch stays within a
+// few cents across the whole keyboard (probe-measured).
+constexpr float kPitchCorrect = 1.0063f;
 
 // Bell reflection loss from damping: < 1 so the loop is stable (the breath
 // replenishes it). Low damping = a purer, more sustained bore.
@@ -80,10 +82,20 @@ constexpr float kBreathNoiseDepth = 0.08f;
 constexpr float kChiffDepth = 0.5f;
 constexpr float kBorePrefill = 0.03f;
 
-// In-loop DC-blocker corner (~10 Hz): the positive-feedback comb has a DC mode
-// that does not radiate and the breath DC drives the lips, so the injection is
-// DC-blocked before entering the bore.
-constexpr float kDcCornerHz = 10.0f;
+// In-loop DC blocker: the positive-feedback comb has a sub-fundamental (DC) mode
+// the rectified lip drive can excite, so the injection is DC-blocked before it
+// enters the bore. A fixed low corner leaves a frequency-dependent phase LEAD
+// that sharpens the low range (a quarter-tone at the tuba pedal), so the corner
+// tracks the pitch (floored) to keep the lead a bounded fraction of the period,
+// and the residual lead is folded into the loop compensation — the same
+// pitch-tracked highpass the reed cone (a full-period positive-feedback comb of
+// the same topology) uses.
+constexpr float kDcCornerFracF0 = 0.06f;
+constexpr float kDcCornerFloorHz = 10.0f;
+// Fraction of the analytic highpass phase lead folded into comp: the nonlinear
+// lip oscillation sits between the linear loop resonance and the free lip, so
+// only part of the lead detunes the sounding pitch (probe-calibrated).
+constexpr float kDcCompScale = 0.5f;
 
 // Output trim: the driven loop settles with a raw bore peak that grows with the
 // note (~2.3 at the bottom of the range to ~7 at the top), so the output scale is
@@ -212,15 +224,23 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   loss_gain_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
                           kLossFloor, kLossCeil);
 
-  // In-loop DC blocker pole.
-  dc_r_ = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / sr);
+  // In-loop DC blocker pole: the corner tracks f0 (floored) so its phase lead is
+  // a bounded fraction of the period at every note.
+  const float hp_corner = std::max(kDcCornerFloorHz, kDcCornerFracF0 * f0);
+  dc_r_ = 1.0f - static_cast<float>(kTwoPi * hp_corner / sr);
 
   // Tuning compensation: one feedback register (bore_out_ is consumed one sample
-  // after it is produced) plus the bell lowpass's phase delay at the resonant
-  // frequency. Subtract from the loop delay.
+  // after it is produced), the bell lowpass's phase delay (a lag that lengthens
+  // the loop), and the DC blocker's phase LEAD at the fundamental (which shortens
+  // it and would otherwise sharpen the low range). The lag and lead enter comp
+  // with opposite signs.
   const float omega = kTwoPi / std::max(1.0f, bore_period_);
   const float tau_lp = onepole_group_delay_samples(a, omega);
-  comp_ = 1.0f + tau_lp;
+  const float sw = std::sin(omega);
+  const float cw = std::cos(omega);
+  const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
+  const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
+  comp_ = 1.0f + tau_lp - kDcCompScale * tau_hp;
 
   // Circular span sized for the whole loop period plus bend-down headroom and the
   // interpolator stencil margin.
