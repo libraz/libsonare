@@ -4,8 +4,11 @@
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
+
+using constants::kTwoPi;
 
 namespace {
 constexpr float kMaxDepthMs = 10.0f;
@@ -62,8 +65,7 @@ void Ensemble::process(float* const* channels, int num_channels, int num_samples
   const float dry = 1.0f - wet;
   const float ms_to_samples = 0.001f * static_cast<float>(sample_rate_);
   const float tone_alpha = std::clamp(
-      1.0f - std::exp(-6.28318530718f * config_.tone_hz / static_cast<float>(sample_rate_)), 0.01f,
-      1.0f);
+      1.0f - std::exp(-kTwoPi * config_.tone_hz / static_cast<float>(sample_rate_)), 0.01f, 1.0f);
 
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];

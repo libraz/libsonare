@@ -13,6 +13,7 @@
 namespace sonare::mastering::spectral {
 namespace {
 
+using sonare::constants::kInvSqrt2D;
 using sonare::constants::kPiD;
 
 AirBand::Biquad make_highpass(double frequency_hz, double sample_rate, double q) {
@@ -34,7 +35,7 @@ void assign_biquad(AirBand::Biquad& b, const rt::BiquadCoeffsD& coeffs) {
 AirBand::Biquad make_high_shelf(double frequency_hz, double sample_rate, float gain_db) {
   AirBand::Biquad b;
   const double frequency = std::clamp(frequency_hz, 20.0, sample_rate * 0.49);
-  assign_biquad(b, rt::rbj_high_shelf_d(frequency, sample_rate, gain_db, 1.0 / std::sqrt(2.0)));
+  assign_biquad(b, rt::rbj_high_shelf_d(frequency, sample_rate, gain_db, kInvSqrt2D));
   return b;
 }
 
@@ -70,8 +71,7 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
   // sample (the envelope-driven gain still tracks per sample, but without trig).
   const double shelf_frequency =
       std::clamp(config_.shelf_frequency_hz, 20.0f, static_cast<float>(sample_rate_ * 0.49));
-  const auto shelf_design =
-      rt::rbj_high_shelf_design_d(shelf_frequency, sample_rate_, 1.0 / std::sqrt(2.0));
+  const auto shelf_design = rt::rbj_high_shelf_design_d(shelf_frequency, sample_rate_, kInvSqrt2D);
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");

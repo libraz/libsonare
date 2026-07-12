@@ -5,10 +5,14 @@
 
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::saturation {
+
+using constants::kButterworthQ;
+using constants::kTwoPi;
 
 namespace {
 
@@ -148,14 +152,15 @@ void AmpSim::design_chain() {
   const AmpVoicing v = amp_voicing(config_.amp_model);
   // Pre-emphasis: more drive pushes more top end into the clip stage.
   const float pre_db = v.pre_db_base + v.pre_db_drive * config_.drive;
-  pre_c_ = rt::rbj_high_shelf(rt::frequency_to_w0(v.pre_emphasis_hz, sample_rate_), 0.707f, pre_db);
-  bass_c_ =
-      rt::rbj_low_shelf(rt::frequency_to_w0(v.bass_hz, sample_rate_), 0.707f, config_.bass_db);
+  pre_c_ = rt::rbj_high_shelf(rt::frequency_to_w0(v.pre_emphasis_hz, sample_rate_), kButterworthQ,
+                              pre_db);
+  bass_c_ = rt::rbj_low_shelf(rt::frequency_to_w0(v.bass_hz, sample_rate_), kButterworthQ,
+                              config_.bass_db);
   mid_c_ = rt::rbj_peak(rt::frequency_to_w0(v.mid_hz, sample_rate_), 0.7f, config_.mid_db);
-  treble_c_ =
-      rt::rbj_high_shelf(rt::frequency_to_w0(v.treble_hz, sample_rate_), 0.707f, config_.treble_db);
+  treble_c_ = rt::rbj_high_shelf(rt::frequency_to_w0(v.treble_hz, sample_rate_), kButterworthQ,
+                                 config_.treble_db);
   const CabVoicing cab = cab_voicing(config_.cab_model);
-  hp_c_ = rt::rbj_highpass(rt::frequency_to_w0(cab.highpass_hz, sample_rate_), 0.707f);
+  hp_c_ = rt::rbj_highpass(rt::frequency_to_w0(cab.highpass_hz, sample_rate_), kButterworthQ);
   bump_c_ = rt::rbj_peak(rt::frequency_to_w0(cab.bump_hz, sample_rate_), 1.0f, cab.bump_db);
   presence_c_ =
       rt::rbj_peak(rt::frequency_to_w0(cab.presence_hz, sample_rate_), 1.0f, config_.presence_db);
@@ -172,9 +177,8 @@ void AmpSim::design_chain() {
                           0.0f, 1.0f);
   // Transformer low-band extractor: a ~120 Hz one-pole corner.
   constexpr float kXfCornerHz = 120.0f;
-  xf_alpha_ = std::clamp(
-      1.0f - std::exp(-2.0f * 3.14159265358979f * kXfCornerHz / static_cast<float>(sample_rate_)),
-      0.0f, 1.0f);
+  xf_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * kXfCornerHz / static_cast<float>(sample_rate_)),
+                         0.0f, 1.0f);
   // NFB feedback path: a wide mid-band band-pass (0 dB peak), so the midrange is
   // fed back hard (tight, flat) and the extremes escape the loop (the top and
   // bottom "open up").

@@ -164,7 +164,7 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   options.target_sample_rate = IntProperty(obj, "targetSampleRate", 48000);
   options.source_sample_rate = IntProperty(obj, "sourceSampleRate", 48000);
   options.normalize_lufs = BoolProperty(obj, "normalizeLufs", false) ? 1 : 0;
-  options.target_lufs = FloatProperty(obj, "targetLufs", -14.0f);
+  options.target_lufs = FloatProperty(obj, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
   options.dither = IntProperty(obj, "dither", 0);
   options.dither_bits = IntProperty(obj, "ditherBits", 16);
   options.dither_seed = static_cast<uint32_t>(Int64Property(obj, "ditherSeed", 0));

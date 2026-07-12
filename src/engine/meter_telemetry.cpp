@@ -3,9 +3,12 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
 #include "util/math_utils.h"
 
 namespace sonare::engine {
+
+using constants::kFloorDb;
 
 void MeterTelemetryTap::prepare(double sample_rate, int max_block_size, uint32_t target_id,
                                 size_t telemetry_capacity, const mixing::MeterConfig& config) {
@@ -72,8 +75,8 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
   for (int ch = 0; ch < meters; ++ch) {
     const size_t c = static_cast<size_t>(ch);
     const float rms = std::sqrt(sum_sq[c] / static_cast<double>(num_frames));
-    record.peak_db[c] = peak[c] > 0.0f ? 20.0f * std::log10(peak[c]) : -120.0f;
-    record.rms_db[c] = rms > 0.0f ? 20.0f * std::log10(rms) : -120.0f;
+    record.peak_db[c] = peak[c] > 0.0f ? 20.0f * std::log10(peak[c]) : kFloorDb;
+    record.rms_db[c] = rms > 0.0f ? 20.0f * std::log10(rms) : kFloorDb;
   }
   if (num_channels >= 2 && channels[0] && channels[1]) {
     double cross = 0.0;

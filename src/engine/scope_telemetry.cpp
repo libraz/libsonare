@@ -4,9 +4,12 @@
 #include <cmath>
 
 #include "core/window.h"
+#include "util/constants.h"
 #include "util/math_utils.h"
 
 namespace sonare::engine {
+
+using constants::kFloorDb;
 
 void ScopeTelemetryTap::prepare(double sample_rate, int max_block_size, size_t telemetry_capacity,
                                 int n_fft, uint32_t band_count) {
@@ -111,7 +114,7 @@ void ScopeTelemetryTap::process(float* const* channels, int num_channels, int nu
     }
     const double mean_power = count > 0 ? power / static_cast<double>(count) : 0.0;
     record.bands[band] =
-        mean_power > 0.0 ? static_cast<float>(10.0 * std::log10(mean_power)) : -120.0f;
+        mean_power > 0.0 ? static_cast<float>(10.0 * std::log10(mean_power)) : kFloorDb;
   }
 
   // Capture this target's decimated goniometer points for the vectorscope. Push
