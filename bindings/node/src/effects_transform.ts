@@ -26,7 +26,15 @@ export function percussive(samples: Float32Array, sampleRate = 22050): Float32Ar
   return addon.percussive(samples, sampleRate);
 }
 
-export function timeStretch(samples: Float32Array, rate: number, sampleRate = 22050): Float32Array {
+/**
+ * Time-stretch audio without changing pitch.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param rate - Time stretch rate (0.5 = double duration, 2.0 = half duration)
+ * @returns Time-stretched audio
+ */
+export function timeStretch(samples: Float32Array, sampleRate: number, rate: number): Float32Array {
   if (typeof rate !== 'number' || !Number.isFinite(rate)) {
     throw new TypeError('timeStretch: rate must be a finite number');
   }
@@ -58,10 +66,18 @@ export function spectralEdit(
   return addon.spectralEdit(samples, sampleRate, ops, options);
 }
 
+/**
+ * Pitch-shift audio without changing duration.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param semitones - Pitch shift in semitones (+12 = one octave up, -12 = one octave down)
+ * @returns Pitch-shifted audio
+ */
 export function pitchShift(
   samples: Float32Array,
+  sampleRate: number,
   semitones: number,
-  sampleRate = 22050,
 ): Float32Array {
   if (typeof semitones !== 'number' || !Number.isFinite(semitones)) {
     throw new TypeError('pitchShift: semitones must be a finite number');

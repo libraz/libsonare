@@ -76,14 +76,14 @@ describe('effects', () => {
   });
 
   it('timeStretch changes length', () => {
-    const fast = timeStretch(tone, 2.0, SR);
+    const fast = timeStretch(tone, SR, 2.0);
     expect(fast.length).toBeLessThan(tone.length);
-    const slow = timeStretch(tone, 0.5, SR);
+    const slow = timeStretch(tone, SR, 0.5);
     expect(slow.length).toBeGreaterThan(tone.length);
   });
 
   it('pitchShift returns Float32Array', () => {
-    const result = pitchShift(tone, 2, SR);
+    const result = pitchShift(tone, SR, 2);
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
   });

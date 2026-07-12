@@ -301,7 +301,7 @@ describe('standalone functions', () => {
   });
 
   it('converts invalid native arguments into JS exceptions', () => {
-    expect(() => timeStretch(new Float32Array(SR), 2.0, -1)).toThrow(/Invalid parameter/);
+    expect(() => timeStretch(new Float32Array(SR), -1, 2.0)).toThrow(/Invalid parameter/);
   });
 
   it('exposes compatibility numeric and signal utilities', () => {
