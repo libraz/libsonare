@@ -554,19 +554,19 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
       kHammerWidthHarmonics * std::exp2(kWidthBassOct * std::max(0.0f, -octaves_from_c4) +
                                         kWidthTrebleOct * std::max(0.0f, octaves_from_c4));
   const float width_cutoff = std::min(exc_cutoff, width_harm * f0 * dyn_bright);
-  exc_alpha_ = std::clamp(1.0f - std::exp(-6.28318530718f * width_cutoff / static_cast<float>(sr)),
-                          0.01f, 1.0f);
+  exc_alpha_ =
+      std::clamp(1.0f - std::exp(-kTwoPi * width_cutoff / static_cast<float>(sr)), 0.01f, 1.0f);
   // The noise cutoff keytracks DOWN into the bass: the bass hammer is a
   // massive deep-felt head whose scrub spectrum is far darker than the small
   // hard treble hammer's — without this the bass attack carries the same
   // 2 kHz-wide burst as the treble and reads as a jack click.
   const float noise_cutoff = kStrikeNoiseCutoffScale * exc_cutoff *
                              std::exp2(-kNoiseCutoffBassOct * std::max(0.0f, -octaves_from_c4));
-  noise_alpha_ = std::clamp(
-      1.0f - std::exp(-6.28318530718f * noise_cutoff / static_cast<float>(sr)), 0.01f, 1.0f);
+  noise_alpha_ =
+      std::clamp(1.0f - std::exp(-kTwoPi * noise_cutoff / static_cast<float>(sr)), 0.01f, 1.0f);
   noise_alpha3_ = std::clamp(
-      1.0f - std::exp(-6.28318530718f * kNoiseSteepRatio * noise_cutoff / static_cast<float>(sr)),
-      0.01f, 1.0f);
+      1.0f - std::exp(-kTwoPi * kNoiseSteepRatio * noise_cutoff / static_cast<float>(sr)), 0.01f,
+      1.0f);
   exc_lp_ = 0.0f;
   exc_lp2_ = 0.0f;
 

@@ -12,6 +12,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
 // Mouth-pressure calibration (shared with the flute jet). The exposed band lands
@@ -440,7 +441,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     if (pipe.bore != nullptr) {
       const float pf = kBorePrefill * mouth;
       const float w = kTwoPi / std::max(2.0f, pipe.bore_period);
-      const float phase = 3.14159265f * pipe_tuning_error(note, r + 8);
+      const float phase = kPi * pipe_tuning_error(note, r + 8);
       for (int i = 0; i < span; ++i) {
         pipe.bore[static_cast<size_t>(i)] = pf * std::sin(w * static_cast<float>(i) + phase);
       }

@@ -29,6 +29,8 @@
 #include <array>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare::midi::synth {
 
 /// Body voicing selector (patch field; kNone = bypass).
@@ -78,7 +80,7 @@ class BodyResonator {
       const Spec& spec = specs[static_cast<size_t>(k)];
       if (spec.freq_hz <= 0.0f || spec.freq_hz >= 0.45f * static_cast<float>(sr)) continue;
       Mode& mode = modes_[static_cast<size_t>(num_modes_)];
-      const float w = 6.28318530718f * spec.freq_hz / static_cast<float>(sr);
+      const float w = sonare::constants::kTwoPi * spec.freq_hz / static_cast<float>(sr);
       const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * spec.t60_s));
       mode.a1 = 2.0f * r * std::cos(w);
       mode.a2 = -r * r;

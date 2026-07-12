@@ -112,8 +112,8 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   // Exponential brightness -> cutoff map (300 Hz .. ~12 kHz) through two
   // cascaded one-poles, so the velocity swing is clearly audible.
   const float exc_cutoff = 300.0f * std::exp2(5.3f * bright);
-  exc_alpha_ = std::clamp(1.0f - std::exp(-6.28318530718f * exc_cutoff / static_cast<float>(sr)),
-                          0.01f, 1.0f);
+  exc_alpha_ =
+      std::clamp(1.0f - std::exp(-kTwoPi * exc_cutoff / static_cast<float>(sr)), 0.01f, 1.0f);
   exc_lp1_ = 0.0f;
   exc_lp2_ = 0.0f;
 
