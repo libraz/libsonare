@@ -4,6 +4,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
@@ -183,6 +184,17 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
       const SonareStreamingMasteringChain* handle) {
     if (!handle || !handle->chain) return 0;
     return handle->chain->latency_samples();
+  }
+
+  const char* sonare_streaming_mastering_chain_stage_names(
+      const SonareStreamingMasteringChain* handle) {
+    // Depends on the handle (and its prepare state), so it cannot use a
+    // program-lifetime cache: recompute into a thread-local each call (valid
+    // until the next call on the same thread, like sonare_mastering_insert_param_names).
+    static thread_local std::string names;
+    names.clear();
+    if (!handle || !handle->chain) return names.c_str();
+    return join_names(handle->chain->stage_names(), names);
   }
 
   void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain * handle) {

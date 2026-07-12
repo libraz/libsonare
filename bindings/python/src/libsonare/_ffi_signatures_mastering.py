@@ -222,6 +222,9 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
             lib.sonare_streaming_mastering_chain_reset.argtypes = [ctypes.c_void_p]
             lib.sonare_streaming_mastering_chain_latency_samples.restype = ctypes.c_int
             lib.sonare_streaming_mastering_chain_latency_samples.argtypes = [ctypes.c_void_p]
+            if hasattr(lib, "sonare_streaming_mastering_chain_stage_names"):
+                lib.sonare_streaming_mastering_chain_stage_names.restype = ctypes.c_char_p
+                lib.sonare_streaming_mastering_chain_stage_names.argtypes = [ctypes.c_void_p]
             lib.sonare_streaming_mastering_chain_destroy.restype = None
             lib.sonare_streaming_mastering_chain_destroy.argtypes = [ctypes.c_void_p]
         if hasattr(lib, "sonare_eq_create"):

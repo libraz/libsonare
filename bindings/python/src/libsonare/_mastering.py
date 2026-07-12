@@ -788,6 +788,21 @@ class StreamingMasteringChain:
             return 0
         return int(self._lib.sonare_streaming_mastering_chain_latency_samples(self._handle))
 
+    def stage_names(self) -> list[str]:
+        """Return the realized stage names in processing order.
+
+        Reflects which stages the config actually enables (e.g. ``eq.tilt``,
+        ``dynamics.compressor``, ``maximizer.truePeakLimiter``). Stage selection
+        happens in :meth:`prepare` — stereo-only stages depend on the channel
+        count — so this returns an empty list until :meth:`prepare` is called.
+        """
+        if self._handle is None or not self._handle:
+            return []
+        if not hasattr(self._lib, "sonare_streaming_mastering_chain_stage_names"):
+            return []
+        raw = self._lib.sonare_streaming_mastering_chain_stage_names(self._handle)
+        return raw.decode("utf-8").splitlines() if raw else []
+
     def close(self) -> None:
         """Release the underlying C handle. Safe to call multiple times."""
         if self._handle is not None and self._handle:

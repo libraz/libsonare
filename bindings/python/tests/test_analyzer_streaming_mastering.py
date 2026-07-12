@@ -44,6 +44,21 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     chain.reset()
 
 
+def test_streaming_mastering_chain_reports_stage_names() -> None:
+    """stage_names() exposes the realized stages after prepare()."""
+    from libsonare import StreamingMasteringChain
+
+    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 1.0})
+    # No stages are realized until prepare() runs.
+    assert chain.stage_names() == []
+    chain.prepare(sample_rate=44100, max_block_size=512, num_channels=1)
+    names = chain.stage_names()
+    assert isinstance(names, list)
+    assert all(isinstance(name, str) for name in names)
+    assert any("eq.tilt" in name for name in names)
+    chain.close()
+
+
 def test_streaming_equalizer_processes_blocks_and_exposes_spectrum() -> None:
     """StreamingEqualizer exposes the native SonareEq handle to Python."""
     from libsonare import StreamingEqualizer

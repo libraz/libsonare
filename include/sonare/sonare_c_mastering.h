@@ -401,6 +401,17 @@ SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain
 /// @brief Returns total latency in samples (0 if not prepared).
 int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle);
 
+/// @brief Returns the realized stage names in processing order, separated by
+///        '\n' (empty string when @p handle is NULL or the chain has not been
+///        prepared yet — stage selection happens in
+///        @ref sonare_streaming_mastering_chain_prepare, since stereo-only
+///        stages depend on the channel count).
+/// @details For tools/UIs that want to introspect which stages a config
+///   actually realizes. The returned pointer is thread-local valid only until
+///   the next API call on the same thread; the caller must NOT free it.
+const char* sonare_streaming_mastering_chain_stage_names(
+    const SonareStreamingMasteringChain* handle);
+
 /// @brief Destroy and free the handle.
 void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle);
 
