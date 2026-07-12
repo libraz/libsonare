@@ -552,7 +552,7 @@ try {
 }
 
 // Whole-buffer convenience wrapper (constructs/prepares/disposes internally).
-const processed = voiceChangeRealtime(samples, { preset: 'deep-narrator', sampleRate: 48000 });
+const processed = voiceChangeRealtime(samples, 48000, 'deep-narrator');
 ```
 
 For a simple offline pitch + formant shift without the full chain, use

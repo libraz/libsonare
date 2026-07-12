@@ -40,9 +40,6 @@ export function voiceChange(
 
 /** Options for the offline {@link voiceChangeRealtime} convenience wrapper. */
 export interface VoiceChangeRealtimeOptions extends ValidateOptions {
-  sampleRate?: number;
-  /** Voice-changer preset id or full config object. */
-  preset?: RealtimeVoiceChangerConfigInput;
   /** Channel count (1 = mono, 2 = interleaved stereo). */
   channels?: 1 | 2;
   /** Block size for the internal render loop (default 512). */
@@ -90,10 +87,16 @@ function latencyCompensatedVoiceChange(
  * and Node `voiceChangeRealtime` convenience wrappers. For mono, `samples` is a
  * plain mono buffer; for stereo, `samples` is interleaved (L0,R0,L1,R1,...).
  *
+ * @param samples - Audio samples (mono, or interleaved stereo when channels=2)
+ * @param sampleRate - Sample rate in Hz (default 48000, matching Python/Node)
+ * @param preset - Voice-changer preset id or full config object
+ * @param options - Channel count and block size ({@link VoiceChangeRealtimeOptions})
  * @returns The processed buffer (same layout/length as the input).
  */
 export function voiceChangeRealtime(
   samples: Float32Array,
+  sampleRate = 48000,
+  preset: RealtimeVoiceChangerConfigInput = 'neutral-monitor',
   options: VoiceChangeRealtimeOptions = {},
 ): Float32Array {
   assertSamples('voiceChangeRealtime', samples, options.validate !== false);
@@ -104,11 +107,8 @@ export function voiceChangeRealtime(
   if (channels === 2 && samples.length % 2 !== 0) {
     throw new Error('voiceChangeRealtime: stereo input length must be a multiple of 2.');
   }
-  // 48000 matches the Python voice_change_realtime and Node voiceChangeRealtime
-  // convenience wrappers (and the RealtimeVoiceChanger default).
-  const sampleRate = options.sampleRate ?? 48000;
   const blockSize = Math.max(1, Math.floor(options.blockSize ?? 512));
-  const changer = new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
+  const changer = new RealtimeVoiceChanger(preset);
   try {
     changer.prepare(sampleRate, blockSize, channels);
     return latencyCompensatedVoiceChange(changer, samples, channels, blockSize);

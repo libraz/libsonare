@@ -98,9 +98,9 @@ describe('empty-sample guards (WASM)', () => {
     );
   });
   it('voiceChangeRealtime rejects invalid stereo length', () => {
-    expect(() => voiceChangeRealtime(new Float32Array(3), { channels: 2 })).toThrow(
-      /multiple of 2/,
-    );
+    expect(() =>
+      voiceChangeRealtime(new Float32Array(3), 48000, 'neutral-monitor', { channels: 2 }),
+    ).toThrow(/multiple of 2/);
   });
 });
 
