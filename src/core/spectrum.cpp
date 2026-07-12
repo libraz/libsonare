@@ -36,6 +36,83 @@ std::vector<float> pad_center(const float* data, size_t size, int pad_length, Pa
   return reflect_center_pad(data, size, static_cast<int>(pad));
 }
 
+/// @brief Computes the STFT of @p signal with an arbitrary precomputed window.
+/// @details Single source of truth for the framing/windowing/FFT loop shared by
+///          Spectrogram::compute and the reassignment path. Centers the signal
+///          when requested, reports the frame count through @p out_n_frames, and
+///          drives @p progress_callback (if set). Element counts are computed in
+///          size_t and range-checked so long inputs cannot overflow an int index.
+std::vector<std::complex<float>> stft_with_window(
+    const float* signal, size_t signal_length, const std::vector<float>& padded_window, int n_fft,
+    int hop_length, bool center, PadMode pad_mode, int* out_n_frames,
+    SpectrogramProgressCallback progress_callback = nullptr) {
+  std::vector<float> padded_signal;
+  if (center) {
+    int pad_length = n_fft / 2;
+    padded_signal = pad_center(signal, signal_length, pad_length, pad_mode);
+    signal = padded_signal.data();
+    signal_length = padded_signal.size();
+  }
+
+  int n_frames = 1;
+  if (signal_length >= static_cast<size_t>(n_fft)) {
+    const size_t frames =
+        1 + (signal_length - static_cast<size_t>(n_fft)) / static_cast<size_t>(hop_length);
+    SONARE_CHECK(frames <= static_cast<size_t>(std::numeric_limits<int>::max()),
+                 ErrorCode::InvalidParameter);
+    n_frames = static_cast<int>(frames);
+  }
+
+  const int n_bins = n_fft / 2 + 1;
+  // Compute the element count in size_t so the n_bins*n_frames multiply (and the
+  // column-major index below) cannot overflow int for long inputs.
+  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
+  SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
+               ErrorCode::InvalidParameter);
+  std::vector<std::complex<float>> spectrum(total);
+
+  FFT fft(n_fft);
+  std::vector<float> frame(n_fft);
+  std::vector<std::complex<float>> frame_spectrum(n_bins);
+
+  // Progress reporting interval (every 5% or at least every 100 frames).
+  const int progress_interval = std::max(1, std::min(n_frames / 20, 100));
+
+  for (int t = 0; t < n_frames; ++t) {
+    const size_t start = static_cast<size_t>(t) * static_cast<size_t>(hop_length);
+
+    const size_t remaining = start < signal_length ? signal_length - start : 0;
+    const int valid_samples = static_cast<int>(std::min(static_cast<size_t>(n_fft), remaining));
+
+    if (valid_samples >= n_fft) {
+      for (int i = 0; i < n_fft; ++i) {
+        frame[i] = signal[start + static_cast<size_t>(i)] * padded_window[i];
+      }
+    } else if (valid_samples > 0) {
+      for (int i = 0; i < valid_samples; ++i) {
+        frame[i] = signal[start + static_cast<size_t>(i)] * padded_window[i];
+      }
+      std::fill(frame.begin() + valid_samples, frame.end(), 0.0f);
+    } else {
+      std::fill(frame.begin(), frame.end(), 0.0f);
+    }
+
+    fft.forward(frame.data(), frame_spectrum.data());
+
+    for (int f = 0; f < n_bins; ++f) {
+      spectrum[static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t)] =
+          frame_spectrum[f];
+    }
+
+    if (progress_callback && (t % progress_interval == 0 || t == n_frames - 1)) {
+      progress_callback(static_cast<float>(t + 1) / static_cast<float>(n_frames));
+    }
+  }
+
+  *out_n_frames = n_frames;
+  return spectrum;
+}
+
 }  // namespace
 
 Spectrogram::Spectrogram()
@@ -85,87 +162,12 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   int win_offset = (n_fft - win_length) / 2;
   std::copy(window.begin(), window.end(), padded_window.begin() + win_offset);
 
-  /// Prepare input signal
-  const float* signal = audio.data();
-  size_t signal_length = audio.size();
-
-  std::vector<float> padded_signal;
-  if (config.center) {
-    int pad_length = n_fft / 2;
-    padded_signal = pad_center(signal, signal_length, pad_length, config.pad_mode);
-    signal = padded_signal.data();
-    signal_length = padded_signal.size();
-  }
-
-  /// Calculate number of frames
-  int n_frames = 1;
-  if (signal_length >= static_cast<size_t>(n_fft)) {
-    const size_t frames =
-        1 + (signal_length - static_cast<size_t>(n_fft)) / static_cast<size_t>(hop_length);
-    SONARE_CHECK(frames <= static_cast<size_t>(std::numeric_limits<int>::max()),
-                 ErrorCode::InvalidParameter);
-    n_frames = static_cast<int>(frames);
-  }
-
+  /// Run the shared framing/FFT loop (handles centering, frame count, progress).
+  int n_frames = 0;
+  std::vector<std::complex<float>> spectrum =
+      stft_with_window(audio.data(), audio.size(), padded_window, n_fft, hop_length, config.center,
+                       config.pad_mode, &n_frames, progress_callback);
   int n_bins = n_fft / 2 + 1;
-
-  /// Allocate output. Compute the element count in size_t so the n_bins*n_frames
-  /// multiply (and the column-major index below) cannot overflow int for long
-  /// inputs; reject sizes that would not fit a vector index.
-  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
-  SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
-               ErrorCode::InvalidParameter);
-  std::vector<std::complex<float>> spectrum(total);
-
-  /// Create FFT processor
-  FFT fft(n_fft);
-
-  /// Temporary buffer for windowed frame
-  std::vector<float> frame(n_fft);
-  std::vector<std::complex<float>> frame_spectrum(n_bins);
-
-  /// Progress reporting interval (every 5% or at least every 100 frames)
-  int progress_interval = std::max(1, std::min(n_frames / 20, 100));
-
-  /// Process each frame
-  for (int t = 0; t < n_frames; ++t) {
-    const size_t start = static_cast<size_t>(t) * static_cast<size_t>(hop_length);
-
-    /// Extract and window frame - optimized by moving boundary check outside loop
-    const size_t remaining = start < signal_length ? signal_length - start : 0;
-    const int valid_samples = static_cast<int>(std::min(static_cast<size_t>(n_fft), remaining));
-
-    if (valid_samples >= n_fft) {
-      // Fast path: no boundary handling needed (most common case)
-      for (int i = 0; i < n_fft; ++i) {
-        frame[i] = signal[start + static_cast<size_t>(i)] * padded_window[i];
-      }
-    } else if (valid_samples > 0) {
-      // Copy valid samples with windowing
-      for (int i = 0; i < valid_samples; ++i) {
-        frame[i] = signal[start + static_cast<size_t>(i)] * padded_window[i];
-      }
-      // Zero-fill remainder
-      std::fill(frame.begin() + valid_samples, frame.end(), 0.0f);
-    } else {
-      // All zeros (shouldn't happen with proper padding)
-      std::fill(frame.begin(), frame.end(), 0.0f);
-    }
-
-    // Compute FFT
-    fft.forward(frame.data(), frame_spectrum.data());
-
-    // Store in output (column-major: [n_bins x n_frames])
-    for (int f = 0; f < n_bins; ++f) {
-      spectrum[static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t)] =
-          frame_spectrum[f];
-    }
-
-    // Report progress
-    if (progress_callback && (t % progress_interval == 0 || t == n_frames - 1)) {
-      progress_callback(static_cast<float>(t + 1) / n_frames);
-    }
-  }
 
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, audio.sample_rate(),
                      win_length, config.center);
@@ -477,51 +479,6 @@ MagPhase magphase(const Spectrogram& spec, float power) {
       static_cast<std::size_t>(spec.n_bins()) * static_cast<std::size_t>(spec.n_frames());
   return magphase(spec.complex_data(), n, power);
 }
-
-namespace {
-
-/// @brief Computes STFT of @p signal with an arbitrary precomputed window.
-std::vector<std::complex<float>> stft_with_window(const float* signal, size_t signal_length,
-                                                  const std::vector<float>& padded_window,
-                                                  int n_fft, int hop_length, bool center,
-                                                  PadMode pad_mode, int* out_n_frames) {
-  std::vector<float> padded_signal;
-  if (center) {
-    int pad_length = n_fft / 2;
-    padded_signal = pad_center(signal, signal_length, pad_length, pad_mode);
-    signal = padded_signal.data();
-    signal_length = padded_signal.size();
-  }
-  int n_frames = 1;
-  if (signal_length >= static_cast<size_t>(n_fft)) {
-    n_frames = 1 + static_cast<int>((signal_length - n_fft) / hop_length);
-  }
-  const int n_bins = n_fft / 2 + 1;
-  std::vector<std::complex<float>> spectrum(static_cast<size_t>(n_bins) * n_frames);
-  FFT fft(n_fft);
-  std::vector<float> frame(n_fft);
-  std::vector<std::complex<float>> frame_spectrum(n_bins);
-  for (int t = 0; t < n_frames; ++t) {
-    int start = t * hop_length;
-    int valid = std::min(n_fft, static_cast<int>(signal_length) - start);
-    if (valid >= n_fft) {
-      for (int i = 0; i < n_fft; ++i) frame[i] = signal[start + i] * padded_window[i];
-    } else if (valid > 0) {
-      for (int i = 0; i < valid; ++i) frame[i] = signal[start + i] * padded_window[i];
-      std::fill(frame.begin() + valid, frame.end(), 0.0f);
-    } else {
-      std::fill(frame.begin(), frame.end(), 0.0f);
-    }
-    fft.forward(frame.data(), frame_spectrum.data());
-    for (int f = 0; f < n_bins; ++f) {
-      spectrum[static_cast<size_t>(f) * n_frames + t] = frame_spectrum[f];
-    }
-  }
-  *out_n_frames = n_frames;
-  return spectrum;
-}
-
-}  // namespace
 
 namespace {
 
