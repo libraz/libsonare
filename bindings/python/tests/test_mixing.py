@@ -252,6 +252,9 @@ def test_tail_samples_and_drain_tail_stereo(mixer) -> None:
     tail = mixer.tail_samples()
     assert isinstance(tail, int)
     assert tail >= 0
+    latency = mixer.latency_samples()
+    assert isinstance(latency, int)
+    assert latency >= 0
     result = mixer.drain_tail_stereo(128)
     assert len(result.left) == 128
     assert len(result.right) == 128

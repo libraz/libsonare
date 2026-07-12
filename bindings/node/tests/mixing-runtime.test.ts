@@ -299,6 +299,13 @@ describe('Mixer argument validation', () => {
     expect(tail).toBeGreaterThanOrEqual(0);
   });
 
+  it('reports a numeric latency', () => {
+    mixer.compile();
+    const latency = mixer.latencySamples();
+    expect(typeof latency).toBe('number');
+    expect(latency).toBeGreaterThanOrEqual(0);
+  });
+
   it('drains a stereo tail block of the requested length', () => {
     mixer.compile();
     const result = mixer.drainTailStereo(BLOCK_SIZE);

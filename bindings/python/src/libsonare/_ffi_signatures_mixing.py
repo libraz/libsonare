@@ -199,6 +199,12 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_void_p,
                 ctypes.POINTER(ctypes.c_int),
             ]
+        if hasattr(lib, "sonare_mixer_latency_samples"):
+            lib.sonare_mixer_latency_samples.restype = ctypes.c_int32
+            lib.sonare_mixer_latency_samples.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_int),
+            ]
         if hasattr(lib, "sonare_mixer_drain_tail_stereo"):
             lib.sonare_mixer_drain_tail_stereo.restype = ctypes.c_int32
             lib.sonare_mixer_drain_tail_stereo.argtypes = [

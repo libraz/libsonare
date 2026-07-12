@@ -133,6 +133,11 @@ export class Mixer {
     return this.native.tailSamples();
   }
 
+  /** Reported latency (samples) of the compiled graph, for aligning dry/wet material. */
+  latencySamples(): number {
+    return this.native.latencySamples();
+  }
+
   /**
    * Process a zero-input block to drain delayed / tail audio after the host has
    * stopped feeding strip inputs. `numSamples` must not exceed the configured

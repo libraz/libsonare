@@ -159,6 +159,18 @@ describe('Mixer tail draining (WASM)', () => {
     }
   });
 
+  it('reports latencySamples as a number', () => {
+    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
+    try {
+      mixer.compile();
+      const latency = mixer.latencySamples();
+      expect(typeof latency).toBe('number');
+      expect(latency).toBeGreaterThanOrEqual(0);
+    } finally {
+      mixer.delete();
+    }
+  });
+
   it('drainTailStereo returns stereo buffers of the requested length', () => {
     const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
     try {

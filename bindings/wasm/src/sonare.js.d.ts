@@ -2236,6 +2236,7 @@ export interface WasmMixer {
   vcaGroupCount: () => number;
   toSceneJson: () => string;
   tailSamples: () => number;
+  latencySamples: () => number;
   drainTailStereo: (numSamples: number) => {
     left: Float32Array;
     right: Float32Array;

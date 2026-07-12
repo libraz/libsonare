@@ -18,6 +18,7 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::ProcessStereo>("processStereo"),
           InstanceMethod<&MixerWrap::DrainTailStereo>("drainTailStereo"),
           InstanceMethod<&MixerWrap::TailSamples>("tailSamples"),
+          InstanceMethod<&MixerWrap::LatencySamples>("latencySamples"),
           InstanceMethod<&MixerWrap::StripCount>("stripCount"),
           InstanceMethod<&MixerWrap::SceneWarnings>("sceneWarnings"),
           InstanceMethod<&MixerWrap::ScheduleInsertAutomation>("scheduleInsertAutomation"),
@@ -201,6 +202,21 @@ Napi::Value MixerWrap::TailSamples(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, tail);
+}
+
+Napi::Value MixerWrap::LatencySamples(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  int latency = 0;
+  SonareError err = sonare_mixer_latency_samples(mixer_, &latency);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "failed to query mixer latency: ");
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, latency);
 }
 
 Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {

@@ -165,6 +165,19 @@ int MixerWasm::tailSamples() {
   return out;
 }
 
+// Reports the compiled mixer graph's latency in samples. Lazily compiles if the
+// topology is dirty.
+int MixerWasm::latencySamples() {
+  int out = 0;
+  SonareError err = sonare_mixer_latency_samples(mixer_, &out);
+  if (err != SONARE_OK) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidState,
+        std::string("failed to read mixer latency samples: ") + sonare_error_message(err));
+  }
+  return out;
+}
+
 // Drains delayed/tail audio by processing a zero-input block of num_samples
 // frames. Returns { left, right, sampleRate } mirroring processStereo.
 val MixerWasm::drainTailStereo(size_t num_samples) {
@@ -193,6 +206,7 @@ void registerMixerProcessing(class_<MixerWasm>& cls) {
       .function("outputRightView", &MixerWasm::outputRightView)
       .function("processPreparedStereo", &MixerWasm::processPreparedStereo)
       .function("tailSamples", &MixerWasm::tailSamples)
+      .function("latencySamples", &MixerWasm::latencySamples)
       .function("drainTailStereo", &MixerWasm::drainTailStereo);
 }
 

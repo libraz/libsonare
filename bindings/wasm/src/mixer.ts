@@ -523,6 +523,14 @@ export class Mixer {
   }
 
   /**
+   * Reported latency (samples) of the compiled mixer graph, for aligning
+   * dry/wet material. Lazily compiles the routing graph if the topology is dirty.
+   */
+  latencySamples(): number {
+    return this.mixer.latencySamples();
+  }
+
+  /**
    * Drain delayed / tail audio by processing a zero-input block of `numSamples`
    * frames after the host stops feeding strip inputs. Returns the mixed stereo
    * master (`left`, `right`, `sampleRate`).
