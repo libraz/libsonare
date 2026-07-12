@@ -4,6 +4,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  abiVersion,
   amplitudeToDb,
   analyze,
   dbToAmplitude,
@@ -14,7 +15,6 @@ import {
   detectKey,
   ErrorCode,
   EXPECTED_ENGINE_ABI_VERSION,
-  abiVersion,
   engineAbiVersion,
   engineCapabilities,
   fixFrames,
