@@ -15,29 +15,19 @@
 #include <cmath>
 #include <vector>
 
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 
 #ifdef SONARE_WITH_MASTERING
-namespace {
-
-std::vector<float> make_sine(float freq, int sample_rate, float duration) {
-  const size_t n_samples = static_cast<size_t>(static_cast<float>(sample_rate) * duration);
-  std::vector<float> samples(n_samples);
-  for (size_t i = 0; i < n_samples; ++i) {
-    samples[i] = 0.2f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq *
-                                 static_cast<float>(i) / static_cast<float>(sample_rate));
-  }
-  return samples;
-}
-
-}  // namespace
+namespace {}  // namespace
 
 // NOTE: sonare_mastering_process runs the full maximizer (LUFS measurement plus
 // an oversampling true-peak limiter). It is kept short (0.25 s mono) so this
 // stays a default-tier test rather than a slow one.
 TEST_CASE("zero-init mastering config uses default true_peak_oversample", "[c_api][mastering]") {
   const int sample_rate = 22050;
-  auto samples = make_sine(440.0f, sample_rate, 0.25f);
+  auto samples = sonare::test::generate_sine_samples(
+      440.0f, sample_rate, static_cast<int>(static_cast<float>(sample_rate) * 0.25f), 0.2f);
 
   // A doc-compliant zero-init caller that only sets the two real-valued fields;
   // true_peak_oversample (and release_ms / apply_gain_at_input_rate) stay 0.

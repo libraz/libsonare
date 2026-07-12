@@ -1,3 +1,5 @@
+#include "support/golden_hash.h"
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -45,19 +47,6 @@ std::vector<float> make_signal(const std::string& name) {
   return samples;
 }
 
-uint64_t hash_samples(const std::vector<float>& samples) {
-  uint64_t hash = 1469598103934665603ull;
-  for (float sample : samples) {
-    const int32_t q =
-        static_cast<int32_t>(std::lrint(std::clamp(sample, -2.0f, 2.0f) * 1000000.0f));
-    for (int byte = 0; byte < 4; ++byte) {
-      hash ^= static_cast<uint8_t>((static_cast<uint32_t>(q) >> (byte * 8)) & 0xffu);
-      hash *= 1099511628211ull;
-    }
-  }
-  return hash;
-}
-
 std::string hex64(uint64_t value) {
   std::ostringstream out;
   out << std::hex;
@@ -94,7 +83,7 @@ std::vector<std::tuple<std::string, std::string, std::string>> compute_rows() {
       const auto samples = make_signal(signal);
       const auto result = api::master_audio_mono(api::preset_from_string(preset_name),
                                                  samples.data(), samples.size(), kSampleRate);
-      rows.emplace_back(preset_name, signal, hex64(hash_samples(result.samples)));
+      rows.emplace_back(preset_name, signal, hex64(sonare::test::fnv1a_quantized(result.samples)));
     }
   }
   return rows;

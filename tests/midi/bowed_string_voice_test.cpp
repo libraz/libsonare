@@ -18,6 +18,7 @@
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/audio_fixtures.h"
 
 namespace {
 
@@ -27,7 +28,8 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
 
-constexpr double kRate = 48000.0;
+using sonare::test::kFft;
+using sonare::test::kRate;
 
 MidiEvent event(const sonare::midi::Ump& ump) {
   MidiEvent e;
@@ -77,25 +79,7 @@ float peak(const std::vector<float>& buf) {
   return p;
 }
 
-constexpr int kFft = 8192;
-std::vector<double> power_spectrum(const std::vector<float>& buf, size_t from) {
-  std::vector<float> windowed(kFft);
-  for (int i = 0; i < kFft; ++i) {
-    const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / (kFft - 1));
-    // Zero-pad past the end of the buffer: the Hann taper is ~0 at the window
-    // edges, so a partial final window contributes negligibly and never reads
-    // out of bounds when `from + kFft` exceeds the rendered length.
-    const size_t idx = from + static_cast<size_t>(i);
-    const float sample = idx < buf.size() ? buf[idx] : 0.0f;
-    windowed[static_cast<size_t>(i)] = sample * static_cast<float>(w);
-  }
-  sonare::FFT fft(kFft);
-  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
-  fft.forward(windowed.data(), spectrum.data());
-  std::vector<double> power(spectrum.size());
-  for (size_t i = 0; i < spectrum.size(); ++i) power[i] = std::norm(spectrum[i]);
-  return power;
-}
+using sonare::test::power_spectrum;
 
 double fft_fundamental(const std::vector<float>& buf, size_t from, double f0_hint) {
   const std::vector<double> ps = power_spectrum(buf, from);

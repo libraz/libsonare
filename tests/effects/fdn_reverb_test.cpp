@@ -8,21 +8,14 @@
 #include <cmath>
 #include <vector>
 
+#include "support/audio_fixtures.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using sonare::effects::reverb::FdnReverb;
 using sonare::effects::reverb::FdnReverbConfig;
 
-namespace {
-
-/// @brief Builds a short impulse buffer (unit sample at index 0).
-std::vector<float> make_impulse(int n) {
-  std::vector<float> buf(static_cast<size_t>(n), 0.0f);
-  if (n > 0) buf[0] = 1.0f;
-  return buf;
-}
-
-}  // namespace
+namespace {}  // namespace
 
 // Regression for the mono output clobber bug: when num_channels == 1 the right
 // channel aliases the left buffer, so writing both taps to the same address used
@@ -37,7 +30,7 @@ TEST_CASE("FdnReverb mono output folds down both taps", "[reverb][fdn]") {
   // Mono run.
   FdnReverb mono(config);
   mono.prepare(48000.0, kN);
-  std::vector<float> mono_buf = make_impulse(kN);
+  std::vector<float> mono_buf = sonare::test::generate_impulse(kN);
   float* mono_ch[1] = {mono_buf.data()};
   mono.process(mono_ch, 1, kN);
 
@@ -45,8 +38,8 @@ TEST_CASE("FdnReverb mono output folds down both taps", "[reverb][fdn]") {
   // driven by 0.5 * (in_l + in_r) == in, so its state matches the mono run.
   FdnReverb stereo(config);
   stereo.prepare(48000.0, kN);
-  std::vector<float> left = make_impulse(kN);
-  std::vector<float> right = make_impulse(kN);
+  std::vector<float> left = sonare::test::generate_impulse(kN);
+  std::vector<float> right = sonare::test::generate_impulse(kN);
   float* stereo_ch[2] = {left.data(), right.data()};
   stereo.process(stereo_ch, 2, kN);
 
@@ -89,7 +82,7 @@ TEST_CASE("FdnReverb retains parameter updates set before prepare", "[reverb][fd
   // pre-prepare must produce the same tail as one constructed with that config.
   constexpr int kN = 4096;
   reverb.prepare(48000.0, kN);
-  std::vector<float> got = make_impulse(kN);
+  std::vector<float> got = sonare::test::generate_impulse(kN);
   float* got_ch[1] = {got.data()};
   reverb.process(got_ch, 1, kN);
 
@@ -99,7 +92,7 @@ TEST_CASE("FdnReverb retains parameter updates set before prepare", "[reverb][fd
   config.dry_wet = 1.0f;
   FdnReverb reference(config);
   reference.prepare(48000.0, kN);
-  std::vector<float> expected = make_impulse(kN);
+  std::vector<float> expected = sonare::test::generate_impulse(kN);
   float* expected_ch[1] = {expected.data()};
   reference.process(expected_ch, 1, kN);
 

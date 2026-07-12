@@ -15,6 +15,7 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
+#include "support/audio_fixtures.h"
 
 namespace {
 
@@ -65,17 +66,7 @@ float rms(const std::vector<float>& buf, size_t from, size_t to) {
 /// fine partial-frequency reads the inharmonicity checks need).
 constexpr int kFft = 32768;
 std::vector<double> power_spectrum(const std::vector<float>& buf, size_t from) {
-  std::vector<float> windowed(kFft, 0.0f);
-  for (int i = 0; i < kFft && from + static_cast<size_t>(i) < buf.size(); ++i) {
-    const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / (kFft - 1));
-    windowed[static_cast<size_t>(i)] = buf[from + static_cast<size_t>(i)] * static_cast<float>(w);
-  }
-  sonare::FFT fft(kFft);
-  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
-  fft.forward(windowed.data(), spectrum.data());
-  std::vector<double> power(spectrum.size());
-  for (size_t i = 0; i < spectrum.size(); ++i) power[i] = std::norm(spectrum[i]);
-  return power;
+  return sonare::test::power_spectrum(buf, from, kFft);
 }
 
 /// Strongest spectral peak within [freq_lo, freq_hi], refined parabolically.

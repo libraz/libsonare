@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "support/audio_fixtures.h"
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/api/insert_factory.h"
 #endif
@@ -21,8 +22,8 @@ namespace {
 using sonare::effects::modulation::Ensemble;
 using sonare::effects::modulation::EnsembleConfig;
 
-constexpr double kRate = 48000.0;
-constexpr int kFft = 8192;
+using sonare::test::kFft;
+using sonare::test::kRate;
 constexpr int kNumSamples = 48000;
 
 std::vector<float> sine(double freq_hz, float amplitude, int num_samples) {
@@ -68,19 +69,12 @@ float rms(const std::vector<float>& buf, size_t from, size_t to) {
 
 /// Fraction of spectral power above @p freq_hz (Hann window at @p from).
 double high_band_fraction(const std::vector<float>& buf, size_t from, double freq_hz) {
-  std::vector<float> windowed(kFft);
-  for (int i = 0; i < kFft; ++i) {
-    const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / (kFft - 1));
-    windowed[static_cast<size_t>(i)] = buf[from + static_cast<size_t>(i)] * static_cast<float>(w);
-  }
-  sonare::FFT fft(kFft);
-  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
-  fft.forward(windowed.data(), spectrum.data());
+  const std::vector<double> power = sonare::test::power_spectrum(buf, from);
   const int split = static_cast<int>(std::lround(freq_hz / kRate * kFft));
   double low = 0.0;
   double high = 0.0;
-  for (int b = 1; b < static_cast<int>(spectrum.size()); ++b) {
-    (b >= split ? high : low) += std::norm(spectrum[static_cast<size_t>(b)]);
+  for (int b = 1; b < static_cast<int>(power.size()); ++b) {
+    (b >= split ? high : low) += power[static_cast<size_t>(b)];
   }
   const double total = low + high;
   return total > 0.0 ? high / total : 0.0;

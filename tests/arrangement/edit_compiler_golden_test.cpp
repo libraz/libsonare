@@ -16,10 +16,9 @@
 #include "engine/realtime_engine.h"
 #include "midi/ump.h"
 #include "rt/command.h"
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/db.h"
-
-using sonare::constants::kTwoPi;
 
 namespace {
 
@@ -40,16 +39,6 @@ uint64_t hash_samples(const float* samples, size_t count) {
     }
   }
   return hash;
-}
-
-// Deterministic mono sine source (no clock / random).
-std::vector<float> make_sine(double sr, double freq, int frames, float amp) {
-  std::vector<float> out(static_cast<size_t>(frames), 0.0f);
-  for (int i = 0; i < frames; ++i) {
-    const double t = static_cast<double>(i) / sr;
-    out[static_cast<size_t>(i)] = amp * static_cast<float>(std::sin(kTwoPi * freq * t));
-  }
-  return out;
 }
 
 // Builds a 1-track / 1-clip project at 48 kHz, 120 BPM, with a 48000-sample
@@ -89,8 +78,10 @@ Fixture make_fixture(int source_frames = 48000, double source_sr = kProjectSr) {
   // Register decoded samples (stereo: 220 Hz / 330 Hz).
   arr::AudioSourceSamples samples;
   samples.sample_rate = source_sr;
-  samples.channels.push_back(make_sine(source_sr, 220.0, source_frames, 0.25f));
-  samples.channels.push_back(make_sine(source_sr, 330.0, source_frames, 0.18f));
+  samples.channels.push_back(sonare::test::generate_sine_samples(
+      220.0f, static_cast<int>(source_sr), source_frames, 0.25f));
+  samples.channels.push_back(sonare::test::generate_sine_samples(
+      330.0f, static_cast<int>(source_sr), source_frames, 0.18f));
   f.audio.sources.emplace(f.source_id, std::move(samples));
   return f;
 }
@@ -348,7 +339,8 @@ TEST_CASE("invalid project: overlapping clips under kDisallow returns an error",
   arr::AudioContentStore audio;
   arr::AudioSourceSamples samples;
   samples.sample_rate = kProjectSr;
-  samples.channels.push_back(make_sine(kProjectSr, 220.0, 48000, 0.25f));
+  samples.channels.push_back(
+      sonare::test::generate_sine_samples(220.0f, static_cast<int>(kProjectSr), 48000, 0.25f));
   audio.sources.emplace(sid, std::move(samples));
 
   // Now switch policy back to kDisallow so compile enforces it.

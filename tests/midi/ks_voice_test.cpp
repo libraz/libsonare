@@ -18,6 +18,7 @@
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/audio_fixtures.h"
 
 namespace {
 
@@ -28,7 +29,8 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
 
-constexpr double kRate = 48000.0;
+using sonare::test::kFft;
+using sonare::test::kRate;
 
 MidiEvent event(const sonare::midi::Ump& ump) {
   MidiEvent e;
@@ -119,21 +121,7 @@ double estimate_frequency(const std::vector<float>& buf, size_t from, size_t to,
   return static_cast<double>(cycles) * kRate / (last - first);
 }
 
-/// Hann-windowed power spectrum of buf[from, from+kFft).
-constexpr int kFft = 8192;
-std::vector<double> power_spectrum(const std::vector<float>& buf, size_t from) {
-  std::vector<float> windowed(kFft);
-  for (int i = 0; i < kFft; ++i) {
-    const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / (kFft - 1));
-    windowed[static_cast<size_t>(i)] = buf[from + static_cast<size_t>(i)] * static_cast<float>(w);
-  }
-  sonare::FFT fft(kFft);
-  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
-  fft.forward(windowed.data(), spectrum.data());
-  std::vector<double> power(spectrum.size());
-  for (size_t i = 0; i < spectrum.size(); ++i) power[i] = std::norm(spectrum[i]);
-  return power;
-}
+using sonare::test::power_spectrum;
 
 /// Power of harmonic k (+-2 bins around k*f0).
 double harmonic_power(const std::vector<double>& power, double f0, int k) {

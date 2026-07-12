@@ -14,6 +14,7 @@
 #include <tuple>
 #include <vector>
 
+#include "support/golden_hash.h"
 #include "util/constants.h"
 
 using sonare::constants::kPi;
@@ -52,19 +53,6 @@ std::pair<std::vector<float>, std::vector<float>> make_clip(const std::string& n
     }
   }
   return {left, right};
-}
-
-uint64_t hash_samples(const float* samples, size_t count) {
-  uint64_t hash = 1469598103934665603ull;
-  for (size_t i = 0; i < count; ++i) {
-    const int32_t q =
-        static_cast<int32_t>(std::lrint(std::clamp(samples[i], -2.0f, 2.0f) * 1000000.0f));
-    for (int byte = 0; byte < 4; ++byte) {
-      hash ^= static_cast<uint8_t>((static_cast<uint32_t>(q) >> (byte * 8)) & 0xffu);
-      hash *= 1099511628211ull;
-    }
-  }
-  return hash;
 }
 
 std::string hex64(uint64_t value) {
@@ -127,7 +115,8 @@ std::tuple<std::string, int64_t, int, int, float> run_bounce(const std::string& 
   } else {
     REQUIRE(std::isfinite(result.integrated_lufs));
   }
-  const std::string hash = hex64(hash_samples(result.interleaved, result.sample_count));
+  const std::string hash =
+      hex64(sonare::test::fnv1a_quantized(result.interleaved, result.sample_count));
   const int64_t frames = result.frames;
   const int channels = result.num_channels;
   const int sample_rate = result.sample_rate;

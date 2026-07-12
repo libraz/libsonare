@@ -15,6 +15,7 @@
 #include "effects/modulation/ring_modulator.h"
 #include "effects/modulation/rotary.h"
 #include "effects/modulation/wah.h"
+#include "support/audio_fixtures.h"
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/api/insert_factory.h"
 #endif
@@ -23,8 +24,8 @@ namespace {
 
 using namespace sonare::effects::modulation;
 
-constexpr double kRate = 48000.0;
-constexpr int kFft = 8192;
+using sonare::test::kFft;
+using sonare::test::kRate;
 constexpr int kNumSamples = 24000;
 
 std::vector<float> sine(double freq_hz, float amp, int n) {
@@ -57,19 +58,7 @@ bool all_finite(const std::vector<float>& buf) {
   return true;
 }
 
-std::vector<float> spectrum_mag(const std::vector<float>& buf, size_t from) {
-  std::vector<float> windowed(kFft);
-  for (int i = 0; i < kFft; ++i) {
-    const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / (kFft - 1));
-    windowed[static_cast<size_t>(i)] = buf[from + static_cast<size_t>(i)] * static_cast<float>(w);
-  }
-  sonare::FFT fft(kFft);
-  std::vector<std::complex<float>> spec(static_cast<size_t>(fft.n_bins()));
-  fft.forward(windowed.data(), spec.data());
-  std::vector<float> mag(spec.size());
-  for (size_t b = 0; b < spec.size(); ++b) mag[b] = std::abs(spec[b]);
-  return mag;
-}
+using sonare::test::spectrum_mag;
 
 int bin_of(double freq_hz) { return static_cast<int>(std::lround(freq_hz / kRate * kFft)); }
 

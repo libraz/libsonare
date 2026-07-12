@@ -1,3 +1,5 @@
+#include "support/golden_hash.h"
+
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
@@ -56,23 +58,6 @@ std::pair<std::vector<float>, std::vector<float>> make_signal(const std::string&
   return {left, right};
 }
 
-uint64_t hash_stereo(const std::vector<float>& left, const std::vector<float>& right) {
-  uint64_t hash = 1469598103934665603ull;
-  auto add_sample = [&](float sample) {
-    const int32_t q =
-        static_cast<int32_t>(std::lrint(std::clamp(sample, -2.0f, 2.0f) * 1000000.0f));
-    for (int byte = 0; byte < 4; ++byte) {
-      hash ^= static_cast<uint8_t>((static_cast<uint32_t>(q) >> (byte * 8)) & 0xffu);
-      hash *= 1099511628211ull;
-    }
-  };
-  for (size_t i = 0; i < left.size(); ++i) {
-    add_sample(left[i]);
-    add_sample(right[i]);
-  }
-  return hash;
-}
-
 std::string hex64(uint64_t value) {
   std::ostringstream out;
   out << std::hex;
@@ -104,7 +89,8 @@ std::vector<std::tuple<std::string, std::string, std::string>> compute_rows() {
       strip.set_width(scenario.width);
       float* channels[] = {left.data(), right.data()};
       strip.process(channels, 2, kSamples);
-      rows.emplace_back(scenario.name, signal_name, hex64(hash_stereo(left, right)));
+      rows.emplace_back(scenario.name, signal_name,
+                        hex64(sonare::test::fnv1a_quantized_stereo(left, right)));
     }
   }
   return rows;

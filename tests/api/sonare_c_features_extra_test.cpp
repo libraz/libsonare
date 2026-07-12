@@ -10,22 +10,12 @@
 #include <cstdint>
 #include <vector>
 
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 
 namespace {
 
 constexpr int kSampleRate = 22050;
-
-// Generates a mono sine wave.
-std::vector<float> make_sine(float freq, int sample_rate, float duration) {
-  size_t n_samples = static_cast<size_t>(sample_rate * duration);
-  std::vector<float> samples(n_samples);
-  for (size_t i = 0; i < n_samples; ++i) {
-    samples[i] = std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq *
-                          static_cast<float>(i) / static_cast<float>(sample_rate));
-  }
-  return samples;
-}
 
 // Returns a non-null sentinel so we can assert the wrapper clears outputs.
 float* non_null_floats() { return reinterpret_cast<float*>(static_cast<std::uintptr_t>(0x1)); }
@@ -34,7 +24,8 @@ int* non_null_ints() { return reinterpret_cast<int*>(static_cast<std::uintptr_t>
 }  // namespace
 
 TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {
-  auto samples = make_sine(440.0f, kSampleRate, 1.0f);
+  auto samples = sonare::test::generate_sine_samples(
+      440.0f, kSampleRate, static_cast<int>(static_cast<float>(kSampleRate) * 1.0f), 1.0f);
 
   SECTION("returns [(n_bands + 1) x n_frames] matrix") {
     const int n_bands = 6;
@@ -90,7 +81,8 @@ TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {
 }
 
 TEST_CASE("sonare_poly_features", "[c_api][features]") {
-  auto samples = make_sine(440.0f, kSampleRate, 1.0f);
+  auto samples = sonare::test::generate_sine_samples(
+      440.0f, kSampleRate, static_cast<int>(static_cast<float>(kSampleRate) * 1.0f), 1.0f);
 
   SECTION("returns [(order + 1) x n_frames] matrix") {
     const int order = 2;
@@ -192,7 +184,8 @@ TEST_CASE("sonare_rms_energy follows empty-output C ABI contract", "[c_api][feat
   }
 
   SECTION("invalid params clear outputs") {
-    auto samples = make_sine(440.0f, kSampleRate, 0.1f);
+    auto samples = sonare::test::generate_sine_samples(
+        440.0f, kSampleRate, static_cast<int>(static_cast<float>(kSampleRate) * 0.1f), 1.0f);
     float* out = non_null_floats();
     size_t count = 7;
     REQUIRE(sonare_rms_energy(nullptr, samples.size(), kSampleRate, 2048, 512, &out, &count) ==
@@ -233,7 +226,8 @@ TEST_CASE("sonare_pitch_tuning", "[c_api][features]") {
 }
 
 TEST_CASE("sonare_estimate_tuning", "[c_api][features]") {
-  auto samples = make_sine(440.0f, kSampleRate, 1.0f);
+  auto samples = sonare::test::generate_sine_samples(
+      440.0f, kSampleRate, static_cast<int>(static_cast<float>(kSampleRate) * 1.0f), 1.0f);
 
   SECTION("returns a finite tuning offset") {
     float tuning = -1.0f;
@@ -314,7 +308,8 @@ TEST_CASE("sonare_pitch_pyin fill_na", "[c_api][features]") {
 }
 
 TEST_CASE("sonare_analyze_timbre exposes timbre_over_time", "[c_api][features]") {
-  auto samples = make_sine(440.0f, kSampleRate, 2.0f);
+  auto samples = sonare::test::generate_sine_samples(
+      440.0f, kSampleRate, static_cast<int>(static_cast<float>(kSampleRate) * 2.0f), 1.0f);
 
   SonareTimbreResult result{};
   REQUIRE(sonare_analyze_timbre(samples.data(), samples.size(), kSampleRate, 2048, 512, 128, 13,
