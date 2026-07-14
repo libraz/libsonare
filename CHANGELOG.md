@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.5.1 (2026-07-14)
+
+This is a stabilization release for the v1.5.0 instrument and engine work: it hardens input validation across every surface, tightens realtime-thread safety, and fixes a set of mastering, warp and MIDI-import edge cases. A few small additive surfaces round out cross-binding parity.
+
+### Input validation and resource bounds
+
+- Every C-ABI entry point now clears the thread-local error before it runs and rejects non-finite, out-of-range or oversized numeric and resource inputs instead of proceeding on bad data, with the DSP, serialize, mastering and metering paths validated through shared finite/range and clip-page bounds helpers.
+- The JS facades (Node and WASM) were aligned with the Python surface on argument validation, object-key handling and index bounds, so an invalid call fails the same way on every binding rather than reaching the core.
+- Paged-clip provider dimensions are bounded across the C ABI and WASM, power-of-two / slice / indexing math guards against numeric overflow, room sizes that would overflow are rejected while early-reflection energy is preserved, the early-reflection IR length is capped, the final dither type enum is range-checked, and clip fades are clamped to the clip length.
+- Project deserialization and the serializer validate their numeric and resource inputs, and the Project facade exposes its clip count.
+
+### Realtime-safety hardening
+
+- Live graph and MIDI configuration changes are now adopted through RT-safe immutable snapshots, and realtime instrument rebind and mixing toggles are hardened against audio-thread races.
+- Control-thread mixer parameter resolution no longer races the audio-lane state, live SysEx payload slots are published as a seqlock, and a live GS insertion-effect SysEx is realized only after its command has enqueued.
+- Offline render of a never-prepared engine now fails closed instead of touching unreserved telemetry state.
+
+### Mastering, warp and DSP fixes
+
+- The true-peak limiter preallocates its per-channel state, widens its oversample counts and scales its release to the oversampled rate; the mono-compatibility check band-projects the side signal in its log-band comparison; and the MultibandImager enumerates a descriptor for every band.
+- The multichannel phase-vocoder re-locks its bins so the stretched tail matches the mono result, the stereo-delay ping-pong coefficient is smoothed, the onset frame offset is corrected at large hop sizes, and the pitch-tuning histogram bin count uses `ceil`.
+- The voice changer reports its realtime latency as the wet-mix-weighted delay, the stem bounce keeps its tails and rejects unsupported channel counts, and the brass low-register tuning is corrected for the in-loop DC blocker.
+
+### MIDI import resilience
+
+- The SMF parser resynchronizes after a variable-length quantity overruns a non-final track, and a single corrupt SMF track no longer fails the whole import.
+
+### Cross-surface consistency and new exposure
+
+- `voiceChangeRealtime` (WASM) is positional like the Node and Python surfaces, `timeStretch` / `pitchShift` argument order (Node) matches the C ABI, `crossfadeMs` 0 (Node) is treated as the default, and the WASM surface threads the `tempogramRatio` factors through and exposes the aggregate `abiVersion`.
+- The streaming analyzer bounds its unread output with drop-oldest backpressure via a new `maxUnreadFrames` limit, the mixer `latencySamples` value is wired to every binding, the streaming mastering chain stage names are exposed through the C ABI, and Python gains `RealtimeEngine.set_midi_fx` to match the other surfaces.
+- The Python CLI uses the anti-aliased resampler, reports a C bass note correctly, and maps RIR geometry and the `synthesize-rir` legacy override to the right exit codes.
+
 ## v1.5.0 (2026-07-06)
 
 ### Physically-modeled instrument voices
