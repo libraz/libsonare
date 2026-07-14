@@ -47,8 +47,12 @@ export interface ClipPageStreamerOptions {
 interface SourceState {
   source: ClipPageStreamSource;
   lastPage: number;
-  /** Page indices currently supplied to the provider (the resident set). */
-  resident: Set<number>;
+  /** Playback-window generation; advanced on reset or backward discontinuity. */
+  generation: number;
+  /** Most recently serviced playback frontier, or null before the first miss. */
+  lastFrontier: number | null;
+  /** Resident page -> generation, so in-flight stale fetches cannot alias. */
+  resident: Map<number, number>;
 }
 
 /**
@@ -92,16 +96,38 @@ export class ClipPageStreamer {
       throw new Error('pageFrames and numSamples must be positive');
     }
     const lastPage = Math.ceil(source.numSamples / source.pageFrames) - 1;
+    const previous = this.sources.get(source.clipId);
+    if (previous) {
+      this.resetState(previous);
+    }
     this.sources.set(source.clipId, {
       source,
       lastPage,
-      resident: new Set(initialResidentPages),
+      generation: 0,
+      lastFrontier: null,
+      resident: new Map(Array.from(initialResidentPages, (page) => [page, 0])),
     });
   }
 
   /** Stop tracking a clip. Does not close its binding (the caller owns that). */
   removeSource(clipId: number): void {
+    const state = this.sources.get(clipId);
+    if (state) {
+      this.resetState(state);
+    }
     this.sources.delete(clipId);
+  }
+
+  /**
+   * Explicitly start a new playback generation after a host seek/loop. Resident
+   * pages are evicted and any older in-flight fetch is cleared when it settles.
+   * The next miss establishes the new bounded window.
+   */
+  resetSource(clipId: number): void {
+    const state = this.sources.get(clipId);
+    if (state) {
+      this.resetState(state);
+    }
   }
 
   /**
@@ -113,9 +139,10 @@ export class ClipPageStreamer {
     if (this.closed) {
       return;
     }
-    // Collapse this round's misses to the furthest-advanced frontier per clip:
-    // multiple channels of one clip miss the same page, and a run of misses
-    // walks forward, so only the latest position needs servicing.
+    // Collapse this round's misses to the latest observed frontier per clip.
+    // Queue order reflects playback order, so a backward seek/loop request that
+    // follows a stale high-page miss must win even though its page index is
+    // smaller. Multiple channel misses still collapse to one service window.
     const frontiers = new Map<number, number>();
     for (let drained = 0; drained < this.maxRequestsPerPump; ++drained) {
       const request = this.engine.popClipPageRequest();
@@ -127,10 +154,7 @@ export class ClipPageStreamer {
         continue;
       }
       const page = Math.floor(request.sample / state.source.pageFrames);
-      const previous = frontiers.get(request.clipId);
-      if (previous === undefined || page > previous) {
-        frontiers.set(request.clipId, page);
-      }
+      frontiers.set(request.clipId, page);
     }
 
     const fetches: Promise<unknown>[] = [];
@@ -151,18 +175,27 @@ export class ClipPageStreamer {
     }
     this.closed = true;
     for (const state of this.sources.values()) {
+      this.resetState(state);
       state.source.binding.close();
     }
     this.sources.clear();
   }
 
   private serviceFrontier(state: SourceState, frontier: number): Promise<unknown>[] {
+    // A lower frontier after a previously serviced high page is a seek/loop
+    // discontinuity. Advance generation before scheduling its new window so an
+    // older asynchronous fetch can never become resident in the new window.
+    if (state.lastFrontier !== null && frontier < state.lastFrontier) {
+      this.resetState(state);
+    }
+    state.lastFrontier = frontier;
+    const generation = state.generation;
     const low = Math.max(0, frontier - this.retainBehindPages);
     const high = Math.min(state.lastPage, frontier + this.readAheadPages);
 
     // Evict pages outside the window first so a burst of fetches never exceeds
     // the bound by transiently holding old pages alongside new ones.
-    for (const page of state.resident) {
+    for (const page of state.resident.keys()) {
       if (page < low || page > high) {
         state.source.binding.provider.clear(page);
         state.resident.delete(page);
@@ -171,29 +204,44 @@ export class ClipPageStreamer {
 
     const fetches: Promise<unknown>[] = [];
     for (let page = low; page <= high; ++page) {
-      if (state.resident.has(page)) {
+      if (state.resident.get(page) === generation) {
         continue;
       }
       // Mark resident eagerly so the same page is not fetched twice across
       // overlapping windows; drop it again if the fetch reports a miss.
-      state.resident.add(page);
+      state.resident.set(page, generation);
       const pageIndex = page;
       fetches.push(
         state.source.binding.supplyPage(pageIndex).then(
           (ok) => {
-            if (!ok) {
+            if (state.generation !== generation) {
+              // The fetch crossed a seek/reset boundary. supplyPage may have
+              // installed it after resetState's clear pass, so clear it again.
+              state.source.binding.provider.clear(pageIndex);
+            } else if (!ok && state.resident.get(pageIndex) === generation) {
               state.resident.delete(pageIndex);
             }
             return ok;
           },
           (error) => {
-            state.resident.delete(pageIndex);
+            if (state.resident.get(pageIndex) === generation) {
+              state.resident.delete(pageIndex);
+            }
             throw error;
           },
         ),
       );
     }
     return fetches;
+  }
+
+  private resetState(state: SourceState): void {
+    state.generation += 1;
+    state.lastFrontier = null;
+    for (const page of state.resident.keys()) {
+      state.source.binding.provider.clear(page);
+    }
+    state.resident.clear();
   }
 }
 

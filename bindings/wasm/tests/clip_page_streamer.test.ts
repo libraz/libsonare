@@ -77,7 +77,7 @@ describe('ClipPageStreamer', () => {
     expect([...binding.supplied].sort((a, b) => a - b)).toEqual([0, 1, 9, 10, 11]);
   });
 
-  it('collapses a run of misses across channels to the furthest frontier', async () => {
+  it('collapses a forward run of misses across channels to the latest frontier', async () => {
     const engine = fakeEngine([
       { clipId: 1, channel: 0, sample: 4 },
       { clipId: 1, channel: 1, sample: 4 },
@@ -91,6 +91,80 @@ describe('ClipPageStreamer', () => {
 
     // Furthest sample 8 -> page 2; zero-width window supplies only page 2 once.
     expect(binding.supplied).toEqual([2]);
+  });
+
+  it('services a backward seek that follows a stale high-page miss in the same pump', async () => {
+    const engine = fakeEngine([
+      { clipId: 1, channel: 0, sample: 400 }, // stale page 100
+      { clipId: 1, channel: 0, sample: 0 }, // seek/loop page 0 is newer
+    ]);
+    const binding = fakeBinding();
+    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
+
+    await streamer.pump();
+
+    expect(binding.supplied).toEqual([0]);
+  });
+
+  it('advances generation and resets resident pages on a backward seek', async () => {
+    const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 400 }]);
+    const binding = fakeBinding();
+    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
+
+    await streamer.pump();
+    engine.enqueue({ clipId: 1, channel: 0, sample: 0 });
+    await streamer.pump();
+
+    expect(binding.supplied).toEqual([100, 0]);
+    expect(binding.cleared).toContain(100);
+  });
+
+  it('explicit reset refetches pages in a new playback generation', async () => {
+    const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 0 }]);
+    const binding = fakeBinding();
+    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
+
+    await streamer.pump();
+    streamer.resetSource(1);
+    engine.enqueue({ clipId: 1, channel: 0, sample: 0 });
+    await streamer.pump();
+
+    expect(binding.supplied).toEqual([0, 0]);
+    expect(binding.cleared).toContain(0);
+  });
+
+  it('clears a stale fetch that settles after a generation reset', async () => {
+    const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 40 }]);
+    const supplied: number[] = [];
+    const cleared: number[] = [];
+    let resolveFetch: ((ok: boolean) => void) | undefined;
+    const binding = {
+      provider: { clear: (page: number) => cleared.push(page) },
+      supplyPage: (page: number) => {
+        supplied.push(page);
+        return new Promise<boolean>((resolve) => {
+          resolveFetch = resolve;
+        });
+      },
+      close: () => undefined,
+    };
+    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
+
+    const pumping = streamer.pump();
+    await Promise.resolve();
+    streamer.resetSource(1);
+    expect(resolveFetch).toBeDefined();
+    resolveFetch?.(true);
+    await pumping;
+
+    expect(supplied).toEqual([10]);
+    // Once during reset for the eager resident marker and once after the stale
+    // supply settles, in case it installed the page after that first clear.
+    expect(cleared.filter((page) => page === 10)).toHaveLength(2);
   });
 
   it('honors pages already resident before registration', async () => {

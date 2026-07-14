@@ -3,8 +3,11 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <array>
 #include <atomic>
+#include <thread>
 
+#include "engine/clip_page_limits.h"
 #include "engine/tempo_sync.h"
 #include "realtime_engine_wasm.h"
 
@@ -14,7 +17,10 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
       : channels_(channels),
         samples_(samples),
         page_frames_(page_frames),
-        pages_(static_cast<size_t>((samples + page_frames - 1) / page_frames)) {}
+        pages_(static_cast<size_t>(1 + (samples - 1) / page_frames)),
+        page_ptrs_(pages_.size()) {
+    for (auto& page_ptr : page_ptrs_) page_ptr.store(nullptr, std::memory_order_relaxed);
+  }
 
   int num_channels() const noexcept override { return channels_; }
   int64_t num_samples() const noexcept override { return samples_; }
@@ -27,11 +33,15 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
     const int64_t page_index = sample / page_frames_;
     const int64_t offset = sample % page_frames_;
     if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) return false;
-    auto page = std::atomic_load_explicit(&pages_[static_cast<size_t>(page_index)],
-                                          std::memory_order_acquire);
-    if (!page || offset >= page->frames) return false;
-    *out = page->channels[static_cast<size_t>(channel)][static_cast<size_t>(offset)];
-    return true;
+    const uint32_t epoch = beginRead();
+    const Page* page = page_ptrs_[static_cast<size_t>(page_index)].load(std::memory_order_acquire);
+    bool found = false;
+    if (page && offset >= 0 && offset < page->frames) {
+      *out = page->channels[static_cast<size_t>(channel)][static_cast<size_t>(offset)];
+      found = true;
+    }
+    endRead(epoch);
+    return found;
   }
 
   void supply(int64_t page_index, val channels_val) {
@@ -43,7 +53,7 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "clip page channel count mismatch");
     }
-    auto page = std::make_shared<Page>();
+    auto page = std::make_unique<Page>();
     page->channels.reserve(static_cast<size_t>(channels_));
     for (int ch = 0; ch < channel_count; ++ch) {
       std::vector<float> channel = float32ArrayToVector(channels_val[ch]);
@@ -61,18 +71,20 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
       }
       page->channels.push_back(std::move(channel));
     }
-    std::atomic_store_explicit(&pages_[static_cast<size_t>(page_index)],
-                               std::shared_ptr<const Page>(std::move(page)),
-                               std::memory_order_release);
+    const size_t index = static_cast<size_t>(page_index);
+    std::unique_ptr<Page> retired = std::move(pages_[index]);
+    pages_[index] = std::move(page);
+    page_ptrs_[index].store(pages_[index].get(), std::memory_order_release);
+    reclaimAfterEpoch(std::move(retired));
   }
 
   void clear(int64_t page_index) {
     if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid page index");
     }
-    std::shared_ptr<const Page> empty;
-    std::atomic_store_explicit(&pages_[static_cast<size_t>(page_index)], empty,
-                               std::memory_order_release);
+    const size_t index = static_cast<size_t>(page_index);
+    page_ptrs_[index].store(nullptr, std::memory_order_release);
+    reclaimAfterEpoch(std::move(pages_[index]));
   }
 
  private:
@@ -81,10 +93,34 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
     std::vector<std::vector<float>> channels;
   };
 
+  uint32_t beginRead() const noexcept {
+    for (;;) {
+      const uint32_t epoch = reader_epoch_.load(std::memory_order_acquire) & 1u;
+      readers_[epoch].fetch_add(1, std::memory_order_acq_rel);
+      if ((reader_epoch_.load(std::memory_order_acquire) & 1u) == epoch) return epoch;
+      readers_[epoch].fetch_sub(1, std::memory_order_release);
+    }
+  }
+
+  void endRead(uint32_t epoch) const noexcept {
+    readers_[epoch & 1u].fetch_sub(1, std::memory_order_release);
+  }
+
+  void reclaimAfterEpoch(std::unique_ptr<Page> retired) noexcept {
+    if (!retired) return;
+    const uint32_t old_epoch = reader_epoch_.fetch_xor(1u, std::memory_order_acq_rel) & 1u;
+    while (readers_[old_epoch].load(std::memory_order_acquire) != 0) {
+      std::this_thread::yield();
+    }
+  }
+
   int channels_ = 0;
   int64_t samples_ = 0;
   int64_t page_frames_ = 0;
-  mutable std::vector<std::shared_ptr<const Page>> pages_;
+  std::vector<std::unique_ptr<Page>> pages_;
+  mutable std::vector<std::atomic<const Page*>> page_ptrs_;
+  mutable std::array<std::atomic<uint32_t>, 2> readers_{};
+  mutable std::atomic<uint32_t> reader_epoch_{0};
 };
 
 namespace {
@@ -313,7 +349,7 @@ int RealtimeEngineWasm::clipCount() const { return static_cast<int>(engine_.clip
 
 int RealtimeEngineWasm::createClipPageProvider(int num_channels, int64_t num_samples,
                                                int64_t page_frames) {
-  if (num_channels <= 0 || num_samples <= 0 || page_frames <= 0) {
+  if (!sonare::engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "clip page provider dimensions must be positive");
   }

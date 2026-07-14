@@ -64,6 +64,7 @@ bool tempo_sync_segments_for_clip(const SonareEngineClip& clip,
 
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || (clip_count > 0 && !clips)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   std::vector<std::shared_ptr<engine::ClipAudioStorage>> clip_storage;
@@ -190,6 +191,7 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
 }
 
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = engine->engine.clip_count();
   return SONARE_OK;
@@ -198,7 +200,9 @@ SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_c
 SonareError sonare_clip_page_provider_create(int num_channels, int64_t num_samples,
                                              int64_t page_frames,
                                              SonareClipPageProvider** out_provider) {
-  if (!out_provider || num_channels <= 0 || num_samples <= 0 || page_frames <= 0) {
+  SONARE_C_API_ENTRY;
+  if (!out_provider ||
+      !engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -214,6 +218,7 @@ void sonare_clip_page_provider_destroy(SonareClipPageProvider* provider) { delet
 SonareError sonare_clip_page_provider_supply(SonareClipPageProvider* provider, int64_t page_index,
                                              const float* const* channels, int num_channels,
                                              int64_t frames) {
+  SONARE_C_API_ENTRY;
   SONARE_C_TRY
   if (!provider || !provider->provider ||
       !provider->provider->supply(page_index, channels, num_channels, frames)) {
@@ -224,6 +229,7 @@ SonareError sonare_clip_page_provider_supply(SonareClipPageProvider* provider, i
 }
 
 SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, int64_t page_index) {
+  SONARE_C_API_ENTRY;
   SONARE_C_TRY
   if (!provider || !provider->provider || !provider->provider->clear(page_index)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -235,6 +241,7 @@ SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, in
 SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
                                                 SonareClipPageRequest* out_request,
                                                 int* out_has_request) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_request || !out_has_request) return SONARE_ERROR_INVALID_PARAMETER;
   engine::ClipPageRequest request{};
   if (engine->engine.pop_clip_page_request(request)) {

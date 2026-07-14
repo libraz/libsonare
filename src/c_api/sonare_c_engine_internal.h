@@ -3,13 +3,16 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "automation/parameter.h"
+#include "engine/clip_page_limits.h"
 #include "engine/realtime_engine.h"
 #include "sonare_c_internal.h"
 
@@ -27,7 +30,7 @@ class CClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
       : channels_(channels),
         samples_(samples),
         page_frames_(page_frames),
-        pages_(static_cast<size_t>((samples + page_frames - 1) / page_frames)),
+        pages_(static_cast<size_t>(1 + (samples - 1) / page_frames)),
         page_ptrs_(pages_.size()) {
     for (auto& page_ptr : page_ptrs_) {
       page_ptr.store(nullptr, std::memory_order_relaxed);
@@ -46,13 +49,16 @@ class CClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
     const int64_t page_index = sample / page_frames_;
     const int64_t offset = sample % page_frames_;
     if (page_index < 0 || page_index >= page_count()) return false;
+    const uint32_t epoch = begin_read();
     const Page* page = page_ptrs_[static_cast<size_t>(page_index)].load(std::memory_order_acquire);
-    if (!page || channel >= static_cast<int>(page->channels.size()) || offset < 0 ||
-        offset >= page->frames) {
-      return false;
+    bool found = false;
+    if (page && channel < static_cast<int>(page->channels.size()) && offset >= 0 &&
+        offset < page->frames) {
+      *out = page->channels[static_cast<size_t>(channel)][static_cast<size_t>(offset)];
+      found = true;
     }
-    *out = page->channels[static_cast<size_t>(channel)][static_cast<size_t>(offset)];
-    return true;
+    end_read(epoch);
+    return found;
   }
 
   bool supply(int64_t page_index, const float* const* channels, int channel_count, int64_t frames) {
@@ -64,7 +70,7 @@ class CClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
     if (page_start >= samples_) return false;
     const int64_t max_frames = std::min<int64_t>(page_frames_, samples_ - page_start);
     if (frames != max_frames) return false;
-    auto page = std::make_shared<Page>();
+    auto page = std::make_unique<Page>();
     page->frames = frames;
     page->channels.reserve(static_cast<size_t>(channels_));
     for (int ch = 0; ch < channels_; ++ch) {
@@ -72,9 +78,10 @@ class CClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
       page->channels.emplace_back(channels[ch], channels[ch] + frames);
     }
     const size_t index = static_cast<size_t>(page_index);
-    retire_page(std::move(pages_[index]));
+    std::unique_ptr<Page> retired = std::move(pages_[index]);
     pages_[index] = std::move(page);
     page_ptrs_[index].store(pages_[index].get(), std::memory_order_release);
+    reclaim_after_epoch(std::move(retired));
     return true;
   }
 
@@ -82,9 +89,11 @@ class CClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
     if (page_index < 0 || page_index >= page_count()) return false;
     const size_t index = static_cast<size_t>(page_index);
     page_ptrs_[index].store(nullptr, std::memory_order_release);
-    retire_page(std::move(pages_[index]));
+    reclaim_after_epoch(std::move(pages_[index]));
     return true;
   }
+
+  size_t retired_page_count_for_test() const noexcept { return 0; }
 
  private:
   struct Page {
@@ -92,18 +101,35 @@ class CClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
     std::vector<std::vector<float>> channels;
   };
 
-  void retire_page(std::shared_ptr<const Page> page) {
-    if (page) {
-      retired_pages_.push_back(std::move(page));
+  uint32_t begin_read() const noexcept {
+    for (;;) {
+      const uint32_t epoch = reader_epoch_.load(std::memory_order_acquire) & 1u;
+      readers_[epoch].fetch_add(1, std::memory_order_acq_rel);
+      if ((reader_epoch_.load(std::memory_order_acquire) & 1u) == epoch) return epoch;
+      readers_[epoch].fetch_sub(1, std::memory_order_release);
     }
+  }
+
+  void end_read(uint32_t epoch) const noexcept {
+    readers_[epoch & 1u].fetch_sub(1, std::memory_order_release);
+  }
+
+  void reclaim_after_epoch(std::unique_ptr<Page> retired) noexcept {
+    if (!retired) return;
+    const uint32_t old_epoch = reader_epoch_.fetch_xor(1u, std::memory_order_acq_rel) & 1u;
+    while (readers_[old_epoch].load(std::memory_order_acquire) != 0) {
+      std::this_thread::yield();
+    }
+    retired.reset();
   }
 
   int channels_ = 0;
   int64_t samples_ = 0;
   int64_t page_frames_ = 0;
-  std::vector<std::shared_ptr<const Page>> pages_;
+  std::vector<std::unique_ptr<Page>> pages_;
   mutable std::vector<std::atomic<const Page*>> page_ptrs_;
-  std::vector<std::shared_ptr<const Page>> retired_pages_;
+  mutable std::array<std::atomic<uint32_t>, 2> readers_{};
+  mutable std::atomic<uint32_t> reader_epoch_{0};
 };
 
 // Pin the automation curve ordinal mapping used by

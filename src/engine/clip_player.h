@@ -32,6 +32,9 @@ enum class FadeCurve {
 };
 
 struct ClipAudioBuffer {
+  /// Non-owning deinterleaved channel pointers. Every channel MUST contain at
+  /// least num_samples frames; the arrangement compiler enforces equal channel
+  /// lengths before constructing this RT shape.
   const float* const* channels = nullptr;
   int num_channels = 0;
   int64_t num_samples = 0;

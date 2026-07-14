@@ -39,6 +39,7 @@ std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphN
 
 SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
                                              const SonareEngineCaptureBuffer* buffer) {
+  SONARE_C_API_ENTRY;
   if (!engine || !buffer || !buffer->channels || buffer->num_channels <= 0 ||
       buffer->capacity_frames <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -52,6 +53,7 @@ SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
 }
 
 SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.set_capture_armed(armed != 0);
   return SONARE_OK;
@@ -59,6 +61,7 @@ SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed) {
 
 SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_t start_sample,
                                             int64_t end_sample, int enabled) {
+  SONARE_C_API_ENTRY;
   if (!engine || start_sample < 0 || end_sample < start_sample) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -68,6 +71,7 @@ SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_
 
 SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
                                              SonareEngineCaptureSource source) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   switch (source) {
     case SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT:
@@ -83,18 +87,21 @@ SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_set_record_offset_samples(SonareRealtimeEngine* engine,
                                                     int64_t offset_samples) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.set_record_offset_samples(offset_samples);
   return SONARE_OK;
 }
 
 SonareError sonare_engine_set_input_monitor(SonareRealtimeEngine* engine, int enabled, float gain) {
+  SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(gain)) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.set_input_monitor(enabled != 0, gain);
   return SONARE_OK;
 }
 
 SonareError sonare_engine_reset_capture(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.reset_capture();
   return SONARE_OK;
@@ -102,6 +109,7 @@ SonareError sonare_engine_reset_capture(SonareRealtimeEngine* engine) {
 
 SonareError sonare_engine_capture_status(SonareRealtimeEngine* engine,
                                          SonareEngineCaptureStatus* out) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   out->captured_frames = engine->engine.captured_frames();
   out->overflow_count = engine->engine.capture_overflow_count();
@@ -116,6 +124,7 @@ SonareError sonare_engine_capture_status(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
                                     const SonareEngineGraphSpec* spec) {
+  SONARE_C_API_ENTRY;
   if (!engine || !spec || !spec->nodes || spec->node_count == 0 || spec->num_channels <= 0 ||
       (spec->connection_count > 0 && !spec->connections) ||
       (spec->parameter_binding_count > 0 && !spec->parameter_bindings)) {
@@ -154,16 +163,16 @@ SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
   graph->prepare(state.sample_rate, engine->engine.max_block_size());
   const std::string input_node = fixed_text(spec->input_node, sizeof(spec->input_node));
   const std::string output_node = fixed_text(spec->output_node, sizeof(spec->output_node));
-  if (!engine->engine.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(),
-                                 spec->num_channels)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  std::vector<engine::GraphRuntime::ParameterBinding> parameter_bindings;
+  parameter_bindings.reserve(spec->parameter_binding_count);
   for (size_t i = 0; i < spec->parameter_binding_count; ++i) {
     const SonareEngineGraphParameterBinding& binding = spec->parameter_bindings[i];
-    const std::string node_id = fixed_text(binding.node_id, sizeof(binding.node_id));
-    if (!engine->engine.bind_graph_parameter(binding.param_id, node_id.c_str())) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    parameter_bindings.push_back(
+        {binding.param_id, fixed_text(binding.node_id, sizeof(binding.node_id))});
+  }
+  if (!engine->engine.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(),
+                                 spec->num_channels, std::move(parameter_bindings))) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   return SONARE_OK;
   SONARE_C_CATCH
@@ -173,6 +182,7 @@ SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
 }
 
 SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_GRAPH)
   *out_count = engine->engine.graph_node_count();
@@ -183,6 +193,7 @@ SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t*
 }
 
 SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_GRAPH)
   *out_count = engine->engine.graph_connection_count();
