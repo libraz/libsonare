@@ -18,6 +18,7 @@ using namespace sonare_c_detail;
 SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,
                                          float current_midi, float target_midi, float** out,
                                          size_t* out_length) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   // The caller asserts the source pitch via current_midi; the clip is shifted by
@@ -51,6 +52,7 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      const int32_t* voiced, size_t n_frames,
                                                      int hop_length, float target_midi, float** out,
                                                      size_t* out_length) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length || !f0_hz || n_frames == 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -87,6 +89,7 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
 }
 
 SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* config) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!config) return SONARE_ERROR_INVALID_PARAMETER;
   const editing::pitch_editor::PitchCorrectionConfig defaults{};
@@ -110,6 +113,7 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                                              const int32_t* voiced, size_t n_frames, int hop_length,
                                              const SonarePitchCorrectionConfig* config, float** out,
                                              size_t* out_length) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length || !f0_hz || n_frames == 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -180,6 +184,7 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
 

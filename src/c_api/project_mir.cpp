@@ -6,6 +6,7 @@
 
 SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio, size_t len,
                                       int sample_rate, float* out_bpm) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bpm) *out_bpm = 0.0f;
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
@@ -32,6 +33,7 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
 
 SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq, double strength,
                                         double* out_ppq) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_ppq) *out_ppq = ppq;
   if (!project || !out_ppq || !finite_non_negative(ppq) || !std::isfinite(strength) ||
@@ -72,6 +74,7 @@ bool valid_ppq_span(double start, double end) noexcept {
 
 SonareError sonare_project_annotate_keys(SonareProject* project,
                                          const SonareProjectKeySegment* keys, size_t count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || (count > 0 && !keys) || count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -104,6 +107,7 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
 
 SonareError sonare_project_annotate_chords(SonareProject* project,
                                            const SonareProjectChordSymbol* chords, size_t count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || (count > 0 && !chords) || count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;

@@ -25,6 +25,7 @@ using namespace sonare_c_detail;
 
 SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
                         int kernel_percussive, SonareHpssResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->harmonic = nullptr;
@@ -50,36 +51,42 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 
 SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate, float** out,
                             size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [](const Audio& a) { return harmonic(a); });
 }
 
 SonareError sonare_percussive(const float* samples, size_t length, int sample_rate, float** out,
                               size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [](const Audio& a) { return percussive(a); });
 }
 
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
                                 float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [rate](const Audio& a) { return time_stretch(a, rate); });
 }
 
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [semitones](const Audio& a) { return pitch_shift(a, semitones); });
 }
 
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [target_db](const Audio& a) { return normalize(a, target_db); });
 }
 
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return run_mono_offline(
       samples, length, sample_rate, out, out_length,
       [threshold_db](const Audio& a) { return trim_absolute(a, threshold_db); });
@@ -89,6 +96,7 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
                                        int n_components, int n_iter, float beta, const char* init,
                                        float** out_w, size_t* out_w_length, float** out_h,
                                        size_t* out_h_length) {
+  SONARE_C_API_ENTRY;
   if (!out_w || !out_w_length || !out_h || !out_h_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out_w = nullptr;
   *out_w_length = 0;
@@ -122,6 +130,7 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
 SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n_components,
                              int n_iter, float beta, float** out_w, size_t* out_w_length,
                              float** out_h, size_t* out_h_length) {
+  SONARE_C_API_ENTRY;
   // Backward-compatible delegation: original ABI always used random init.
   return sonare_decompose_with_init(s, n_features, n_frames, n_components, n_iter, beta, "random",
                                     out_w, out_w_length, out_h, out_h_length);
@@ -129,6 +138,7 @@ SonareError sonare_decompose(const float* s, int n_features, int n_frames, int n
 
 SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const char* aggregate,
                              int k, int width, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;
@@ -149,6 +159,7 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
 
 SonareError sonare_remix(const float* samples, size_t length, int sample_rate, const int* intervals,
                          size_t interval_count, int align_zeros, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;
@@ -171,6 +182,7 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
                                       float** out_harmonic, float** out_percussive,
                                       float** out_residual, size_t* out_length,
                                       int* out_sample_rate) {
+  SONARE_C_API_ENTRY;
   if (!out_harmonic || !out_percussive || !out_residual || !out_length || !out_sample_rate) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -205,6 +217,7 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 
 SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate, float rate,
                                  int n_fft, int hop_length, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;
@@ -250,6 +263,7 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
                                  const SonareSpectralEditConfig* config,
                                  const SonareSpectralRegionOp* ops, size_t n_ops, float** out,
                                  size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   *out_length = 0;

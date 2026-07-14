@@ -170,6 +170,7 @@ void clear_float_output(float** out, size_t* out_length) {
 SonareError sonare_mastering_repair_declick(const float* samples, size_t length, int sample_rate,
                                             const SonareDeclickConfig* config, float** out,
                                             size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
 
@@ -183,6 +184,7 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
                                                       int sample_rate,
                                                       const SonareDenoiseClassicalConfig* config,
                                                       float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
   if (config) {
@@ -200,6 +202,7 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
 SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
                                            const SonareDeclipConfig* config, float** out,
                                            size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
 
@@ -212,6 +215,7 @@ SonareError sonare_mastering_repair_declip(const float* samples, size_t length, 
 SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,
                                               const SonareDecrackleConfig* config, float** out,
                                               size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
 
@@ -224,6 +228,7 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
 SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,
                                           const SonareDehumConfig* config, float** out,
                                           size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
 
@@ -237,6 +242,7 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        int sample_rate,
                                                        const SonareDereverbClassicalConfig* config,
                                                        float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
   if (config) {
@@ -257,6 +263,7 @@ SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t le
                                                  int sample_rate,
                                                  const SonareTrimSilenceConfig* config, float** out,
                                                  size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
 

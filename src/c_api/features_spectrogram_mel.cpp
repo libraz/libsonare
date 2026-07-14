@@ -5,6 +5,7 @@
 
 SonareError sonare_stft(const float* samples, size_t length, int sample_rate, int n_fft,
                         int hop_length, SonareStftResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->magnitude = nullptr;
@@ -38,6 +39,7 @@ SonareError sonare_stft(const float* samples, size_t length, int sample_rate, in
 
 SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate, int n_fft,
                            int hop_length, int* out_n_bins, int* out_n_frames, float** out_db) {
+  SONARE_C_API_ENTRY;
   if (!out_n_bins || !out_n_frames || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out_db = nullptr;
@@ -64,6 +66,7 @@ SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
 SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int sample_rate,
                                       int n_fft, int hop_length, int n_mels, float fmin, float fmax,
                                       int htk, SonareMelResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->power = nullptr;
@@ -100,6 +103,7 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
 
 SonareError sonare_mel_spectrogram(const float* samples, size_t length, int sample_rate, int n_fft,
                                    int hop_length, int n_mels, SonareMelResult* out) {
+  SONARE_C_API_ENTRY;
   // Default Mel range (fmin 0, fmax sr/2, Slaney) — see sonare_mel_spectrogram_ex
   // for the custom-range forward transform that round-trips with the inverse API.
   return sonare_mel_spectrogram_ex(samples, length, sample_rate, n_fft, hop_length, n_mels, 0.0f,
@@ -109,6 +113,7 @@ SonareError sonare_mel_spectrogram(const float* samples, size_t length, int samp
 SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate, int n_fft,
                            int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
                            float lifter, SonareMfccResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->coefficients = nullptr;
@@ -135,6 +140,7 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
 
 SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, int n_fft,
                         int hop_length, int n_mels, int n_mfcc, SonareMfccResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_mfcc_ex(samples, length, sample_rate, n_fft, hop_length, n_mels, n_mfcc, 0.0f, 0.0f,
                         0, 0.0f, out);
 }

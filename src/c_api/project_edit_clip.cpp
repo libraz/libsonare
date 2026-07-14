@@ -90,6 +90,7 @@ SonareError clip_comp_segments_from_desc(const SonareProjectClipCompSegment* seg
 
 SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectClipDesc* desc,
                                     uint32_t* out_clip_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_clip_id) *out_clip_id = 0;
   if (!project || !desc || !out_clip_id) return SONARE_ERROR_INVALID_PARAMETER;
@@ -165,6 +166,7 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
 SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
                                                     const SonareProjectLoopRecordingDesc* desc,
                                                     uint32_t* out_clip_id, size_t* out_take_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_clip_id) *out_clip_id = 0;
   if (out_take_count) *out_take_count = 0;
@@ -304,6 +306,7 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
 SonareError sonare_project_add_midi_clip(SonareProject* project, double start_ppq,
                                          double length_ppq, uint32_t* out_track_id,
                                          uint32_t* out_clip_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_track_id) *out_track_id = 0;
   if (out_clip_id) *out_clip_id = 0;
@@ -339,6 +342,7 @@ SonareError sonare_project_add_midi_clip(SonareProject* project, double start_pp
 
 SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, double split_ppq,
                                       uint32_t* out_new_clip_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_new_clip_id) *out_new_clip_id = 0;
   if (!project || clip_id == 0 || !std::isfinite(split_ppq)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -356,6 +360,7 @@ SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, 
 
 SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, double new_start_ppq,
                                      double new_length_ppq) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || !finite_non_negative(new_start_ppq) ||
       !finite_positive(new_length_ppq)) {
@@ -373,6 +378,7 @@ SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, d
 
 SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, double new_start_ppq,
                                      uint32_t new_track_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || !finite_non_negative(new_start_ppq)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -389,6 +395,7 @@ SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, d
 
 SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t clip_id,
                                              uint32_t warp_ref_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (project->history.project().find_clip(clip_id) == nullptr) {
@@ -406,6 +413,7 @@ SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t cl
 
 SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t clip_id,
                                               SonareProjectWarpMode mode) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (mode != SONARE_PROJECT_WARP_MODE_OFF && mode != SONARE_PROJECT_WARP_MODE_REPITCH &&
@@ -434,6 +442,7 @@ SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t c
 SonareError sonare_project_set_clip_takes(SonareProject* project, uint32_t clip_id,
                                           const SonareProjectClipTake* takes, size_t take_count,
                                           uint32_t active_take_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (project->history.project().find_clip(clip_id) == nullptr) {
@@ -455,6 +464,7 @@ SonareError sonare_project_set_clip_takes(SonareProject* project, uint32_t clip_
 SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32_t clip_id,
                                                   const SonareProjectClipCompSegment* segments,
                                                   size_t segment_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (project->history.project().find_clip(clip_id) == nullptr) {
@@ -474,6 +484,7 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
 }
 
 SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (project->history.project().find_clip(clip_id) == nullptr) {
@@ -490,6 +501,7 @@ SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id)
 }
 
 SonareError sonare_project_set_clip_gain(SonareProject* project, uint32_t clip_id, float gain) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || !std::isfinite(gain) || gain < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -510,6 +522,7 @@ SonareError sonare_project_set_clip_gain(SonareProject* project, uint32_t clip_i
 SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_id,
                                          const SonareProjectClipFade* fade_in,
                                          const SonareProjectClipFade* fade_out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || !fade_in || !fade_out) return SONARE_ERROR_INVALID_PARAMETER;
   if (project->history.project().find_clip(clip_id) == nullptr) {
@@ -533,6 +546,7 @@ SonareError sonare_project_set_clip_fade(SonareProject* project, uint32_t clip_i
 
 SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_id, int loop_mode,
                                          double loop_length_ppq, double loop_crossfade_ppq) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || loop_mode < SONARE_LOOP_MODE_OFF ||
       loop_mode > SONARE_LOOP_MODE_LOOP) {
@@ -562,6 +576,7 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
 
 SonareError sonare_project_set_clip_source(SonareProject* project, uint32_t clip_id,
                                            uint32_t source_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || source_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (project->history.project().find_clip(clip_id) == nullptr ||
@@ -580,6 +595,7 @@ SonareError sonare_project_set_clip_source(SonareProject* project, uint32_t clip
 
 SonareError sonare_project_duplicate_clip(SonareProject* project, uint32_t clip_id,
                                           double new_start_ppq, uint32_t* out_new_clip_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_new_clip_id) *out_new_clip_id = 0;
   if (!project || clip_id == 0 || !finite_non_negative(new_start_ppq)) {

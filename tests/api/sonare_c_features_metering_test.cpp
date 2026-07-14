@@ -536,6 +536,21 @@ TEST_CASE("sonare_metering_dynamic_range", "[c_api]") {
     REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), 48000, 0.0f, 0.0f, 0.9f,
                                           0.1f, &result) == SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("rejects non-finite parameters before applying default sentinels") {
+    auto samples = generate_sine(440.0f, 48000, 0.05f);
+    SonareDynamicRangeResult result = {};
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), 48000, nan, 0.0f, -1.0f,
+                                          -1.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), 48000, 0.0f, inf, -1.0f,
+                                          -1.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), 48000, 0.0f, 0.0f, nan,
+                                          -1.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_metering_dynamic_range(samples.data(), samples.size(), 48000, -inf, 0.0f, -1.0f,
+                                          -1.0f, &result) == SONARE_ERROR_INVALID_PARAMETER);
+  }
 }
 
 TEST_CASE("sonare_metering stereo wrappers", "[c_api]") {

@@ -2,6 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 namespace {
@@ -63,6 +64,31 @@ TEST_CASE("sonare acoustic C API synthesizes and frees RIRs", "[c_api][acoustic]
   sonare_free_rir_synth_result(&result);
   REQUIRE(result.rir == nullptr);
   REQUIRE(result.length == 0);
+}
+
+TEST_CASE("sonare acoustic C API rejects non-finite and out-of-range RIR inputs",
+          "[c_api][acoustic][numeric]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  for (float invalid : {nan, inf, -inf}) {
+    SonareRirSynthConfig cfg = valid_rir_config();
+    cfg.max_seconds = invalid;
+    SonareRirSynthResult result{};
+    REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result.rir == nullptr);
+  }
+
+  float absorption[] = {0.2f, nan};
+  SonareRirSynthConfig cfg = valid_rir_config();
+  cfg.absorption_bands = absorption;
+  cfg.absorption_band_count = 2;
+  SonareRirSynthResult result{};
+  REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
+
+  cfg = valid_rir_config();
+  cfg.mixing_time_ms = 10001.0f;
+  REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare acoustic C API honors the late-tail model selector", "[c_api][acoustic]") {

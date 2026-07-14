@@ -85,6 +85,7 @@ engine::MetronomeConfig metronome_from_c(const SonareEngineMetronomeConfig& conf
 }  // namespace
 
 SonareError sonare_engine_create(SonareRealtimeEngine** out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   *out = new SonareRealtimeEngine{};
@@ -97,6 +98,7 @@ void sonare_engine_destroy(SonareRealtimeEngine* engine) { delete engine; }
 SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_rate,
                                   int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity) {
+  SONARE_C_API_ENTRY;
   if (!engine || sample_rate <= 0.0 || max_block_size <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -107,6 +109,7 @@ SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_ra
 }
 
 SonareError sonare_engine_play(SonareRealtimeEngine* engine, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   rt::Command command{};
   command.type = rt::CommandType::kTransportPlay;
@@ -115,6 +118,7 @@ SonareError sonare_engine_play(SonareRealtimeEngine* engine, int64_t render_fram
 }
 
 SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   rt::Command command{};
   command.type = rt::CommandType::kTransportStop;
@@ -124,6 +128,7 @@ SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_fram
 
 SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t timeline_sample,
                                       int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   rt::Command command{};
   command.type = rt::CommandType::kTransportSeekSample;
@@ -133,6 +138,7 @@ SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t time
 }
 
 SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(ppq) || ppq < 0.0) return SONARE_ERROR_INVALID_PARAMETER;
   rt::Command command{};
   command.type = rt::CommandType::kTransportSeekPpq;
@@ -142,12 +148,14 @@ SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int
 }
 
 SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.settle_parameters();
   return SONARE_OK;
 }
 
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm) {
+  SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(bpm) || bpm <= 0.0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   engine->engine.set_tempo(bpm);
@@ -157,6 +165,7 @@ SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm) {
 
 SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int numerator,
                                              int denominator) {
+  SONARE_C_API_ENTRY;
   if (!engine || numerator <= 0 || denominator <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   engine->engine.set_time_signature(numerator, denominator);
@@ -166,6 +175,7 @@ SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int n
 
 SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq,
                                         int64_t* out_sample) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_sample || !std::isfinite(ppq) || ppq < 0.0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -175,6 +185,7 @@ SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq
 
 SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_ppq, double end_ppq,
                                    int enabled) {
+  SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(start_ppq) || !std::isfinite(end_ppq) || start_ppq < 0.0 ||
       end_ppq < 0.0 || (enabled && end_ppq <= start_ppq)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -185,6 +196,7 @@ SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_pp
 
 SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
                                         const SonareParameterInfo* info) {
+  SONARE_C_API_ENTRY;
   if (!engine || !info || info->max_value < info->min_value) return SONARE_ERROR_INVALID_PARAMETER;
   if (sonare::engine::RealtimeEngine::parameter_target_reserved(info->id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -215,6 +227,7 @@ SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
 }
 
 SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   // Clear the registry first (it holds raw pointers into parameter_strings),
   // then release the backing strings so no dangling pointer ever exists.
@@ -225,6 +238,7 @@ SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine) {
 }
 
 SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = engine->parameters.parameter_count();
   return SONARE_OK;
@@ -232,6 +246,7 @@ SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* 
 
 SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, size_t index,
                                                   SonareParameterInfo* out) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   automation::ParameterInfo info{};
   if (!engine->parameters.parameter_info_by_index(index, &info)) {
@@ -243,6 +258,7 @@ SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, 
 
 SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t id,
                                          SonareParameterInfo* out) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   automation::ParameterInfo info{};
   if (!engine->parameters.parameter_info(id, &info)) {
@@ -255,6 +271,7 @@ SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t 
 SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint32_t param_id,
                                               const SonareAutomationPoint* points,
                                               size_t point_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || (point_count > 0 && !points)) return SONARE_ERROR_INVALID_PARAMETER;
   if (registered_parameter_rejects_realtime(engine, param_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -289,6 +306,7 @@ SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint
 }
 
 SonareError sonare_engine_automation_lane_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = engine->engine.automation().lane_count();
   return SONARE_OK;
@@ -296,6 +314,7 @@ SonareError sonare_engine_automation_lane_count(SonareRealtimeEngine* engine, si
 
 SonareError sonare_engine_set_markers(SonareRealtimeEngine* engine,
                                       const SonareEngineMarker* markers, size_t marker_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || (marker_count > 0 && !markers)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   // All-or-nothing: stage the names and markers in local storage so a mid-list
@@ -329,6 +348,7 @@ SonareError sonare_engine_set_markers(SonareRealtimeEngine* engine,
 }
 
 SonareError sonare_engine_marker_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = engine->engine.marker_count();
   return SONARE_OK;
@@ -336,6 +356,7 @@ SonareError sonare_engine_marker_count(SonareRealtimeEngine* engine, size_t* out
 
 SonareError sonare_engine_marker_by_index(SonareRealtimeEngine* engine, size_t index,
                                           SonareEngineMarker* out) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   transport::Marker marker{};
   if (!engine->engine.marker_by_index(index, &marker)) {
@@ -347,6 +368,7 @@ SonareError sonare_engine_marker_by_index(SonareRealtimeEngine* engine, size_t i
 
 SonareError sonare_engine_marker(SonareRealtimeEngine* engine, uint32_t id,
                                  SonareEngineMarker* out) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   transport::Marker marker{};
   if (!engine->engine.marker_by_id(id, &marker)) {
@@ -358,6 +380,7 @@ SonareError sonare_engine_marker(SonareRealtimeEngine* engine, uint32_t id,
 
 SonareError sonare_engine_seek_marker(SonareRealtimeEngine* engine, uint32_t marker_id,
                                       int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   rt::Command command{};
   command.type = rt::CommandType::kSeekMarker;
@@ -368,6 +391,7 @@ SonareError sonare_engine_seek_marker(SonareRealtimeEngine* engine, uint32_t mar
 
 SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
                                                 uint32_t start_marker_id, uint32_t end_marker_id) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   return engine->engine.set_loop_from_markers(start_marker_id, end_marker_id)
              ? SONARE_OK
@@ -376,6 +400,7 @@ SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
                                         const SonareEngineMetronomeConfig* config) {
+  SONARE_C_API_ENTRY;
   // click_samples == 0 is the documented "use the sample-rate-derived default"
   // sentinel (the engine derives it from click_seconds and the sample rate).
   // Only a negative explicit length is invalid.
@@ -389,6 +414,7 @@ SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_metronome(SonareRealtimeEngine* engine,
                                     SonareEngineMetronomeConfig* out) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = metronome_to_c(engine->engine.metronome_config());
   return SONARE_OK;
@@ -396,6 +422,7 @@ SonareError sonare_engine_metronome(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int64_t start_sample,
                                               int bars, int64_t* out_sample) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_sample || start_sample < 0 || bars <= 0)
     return SONARE_ERROR_INVALID_PARAMETER;
   *out_sample = engine->engine.count_in_end_sample(start_sample, bars);
@@ -404,6 +431,7 @@ SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int6
 
 SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t param_id,
                                         float value, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(value)) return SONARE_ERROR_INVALID_PARAMETER;
   if (registered_parameter_rejects_realtime(engine, param_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -418,6 +446,7 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
 
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(value)) return SONARE_ERROR_INVALID_PARAMETER;
   if (registered_parameter_rejects_realtime(engine, param_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -431,6 +460,7 @@ SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, u
 }
 
 SonareError sonare_engine_set_param_smoothing_ms(SonareRealtimeEngine* engine, float smoothing_ms) {
+  SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(smoothing_ms) || smoothing_ms < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -440,6 +470,7 @@ SonareError sonare_engine_set_param_smoothing_ms(SonareRealtimeEngine* engine, f
 
 SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t lane_index, int solo,
                                         int mute, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
   (void)lane_index;
@@ -459,6 +490,7 @@ SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t l
 
 SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
                                               SonareTransportState* out) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   const transport::TransportState state = engine->engine.transport_state_control();
   out->playing = state.playing ? 1 : 0;

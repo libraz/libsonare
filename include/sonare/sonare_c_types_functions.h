@@ -111,8 +111,10 @@ const char* sonare_error_message(SonareError error);
 ///   detailed message is currently recorded.
 ///
 ///   CONTRACT (read carefully):
-///   - Every public C-ABI call CLEARS the thread-local message on entry, so a
-///     detailed message can never leak from an earlier, unrelated call.
+///   - Every public C-ABI call that returns SonareError CLEARS the thread-local
+///     message on entry, so a detailed message can never leak into a later
+///     error-code result. Diagnostic accessors and void cleanup helpers do not
+///     clear it, allowing callers to release partial outputs before inspection.
 ///   - A message is recorded ONLY on the caught-C++-exception return path (the
 ///     library mapped a thrown sonare::SonareException / std::exception to a
 ///     SonareError). For those, this returns the exception's what() text.

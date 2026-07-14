@@ -92,6 +92,7 @@ SonareError process_realtime_voice_change_compensated(SonareRealtimeVoiceChanger
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -112,6 +113,7 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
 SonareError sonare_voice_change_realtime(const float* samples, size_t length, int sample_rate,
                                          const char* preset, int channels, float** out,
                                          size_t* out_length) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
@@ -248,6 +250,7 @@ editing::voice_changer::VoiceCharacterPreset vc_preset_from_c(SonareVoiceCharact
 
 SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPreset preset,
                                                         SonareRealtimeVoiceChangerConfig* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -265,6 +268,7 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
                                                  int sample_rate, int max_block_size,
                                                  int num_channels,
                                                  SonareRealtimeVoiceChanger** out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!out || sample_rate <= 0 || max_block_size <= 0 || num_channels < 1 || num_channels > 2) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -303,6 +307,7 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
 
 SonareError sonare_realtime_voice_changer_set_config(
     SonareRealtimeVoiceChanger* handle, const SonareRealtimeVoiceChangerConfig* config) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || !config) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -322,6 +327,7 @@ SonareError sonare_realtime_voice_changer_set_config(
 
 SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceChanger* handle,
                                                      SonareRealtimeVoiceChangerConfig* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || !out) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -337,6 +343,7 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
                                                       int sample_rate, int max_block_size,
                                                       int num_channels,
                                                       SonareRealtimeVoiceChanger** out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!out || sample_rate <= 0 || max_block_size <= 0 || num_channels < 1 || num_channels > 2) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -371,6 +378,7 @@ void sonare_realtime_voice_changer_destroy(SonareRealtimeVoiceChanger* handle) {
 }
 
 SonareError sonare_realtime_voice_changer_reset(SonareRealtimeVoiceChanger* handle) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -384,6 +392,7 @@ SonareError sonare_realtime_voice_changer_reset(SonareRealtimeVoiceChanger* hand
 
 SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceChanger* handle,
                                                           const char* preset_or_config_json) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || !preset_or_config_json) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -399,6 +408,7 @@ SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceCha
 SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChanger* handle,
                                                        const float* input, float* output,
                                                        size_t num_samples) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || (!input && num_samples > 0) || (!output && num_samples > 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -418,6 +428,7 @@ SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChange
 SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoiceChanger* handle,
                                                               const float* input, float* output,
                                                               size_t num_frames, int num_channels) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || (!input && num_frames > 0) || (!output && num_frames > 0) || num_channels < 1 ||
       num_channels > handle->num_channels) {
@@ -454,6 +465,7 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
 SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVoiceChanger* handle,
                                                                 float* left, float* right,
                                                                 size_t num_frames) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || (!left && num_frames > 0) || (!right && num_frames > 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -478,6 +490,7 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
 
 SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVoiceChanger* handle,
                                                           int* out_latency_samples) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || !out_latency_samples) return SONARE_ERROR_INVALID_PARAMETER;
   *out_latency_samples = handle->changer.latency_samples();
@@ -489,6 +502,7 @@ SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVo
 
 SonareError sonare_realtime_voice_changer_config_json(const SonareRealtimeVoiceChanger* handle,
                                                       char** out_json) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || !out_json) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
@@ -545,6 +559,7 @@ const char* sonare_voice_character_preset_id(SonareVoiceCharacterPreset preset) 
 }
 
 SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** out_json) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!name || !out_json) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
@@ -561,6 +576,7 @@ SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** o
 SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
                                                                char** out_normalized_json,
                                                                char** out_error) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!json || !out_normalized_json || !out_error) return SONARE_ERROR_INVALID_PARAMETER;
   *out_normalized_json = nullptr;

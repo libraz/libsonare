@@ -65,6 +65,7 @@ mastering::final::DitherType dither_type_from_int(int value) {
 
 SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* channels,
                                   int num_channels, int num_frames) {
+  SONARE_C_API_ENTRY;
   if (!engine || num_channels < 0 || num_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.process(channels, num_channels, num_frames);
   return SONARE_OK;
@@ -73,6 +74,7 @@ SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* ch
 SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, float* const* channels,
                                                float* const* monitor_out, int num_channels,
                                                int num_frames) {
+  SONARE_C_API_ENTRY;
   if (!engine || num_channels < 0 || num_frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
   engine->engine.process_with_monitor(channels, monitor_out, num_channels, num_frames);
   return SONARE_OK;
@@ -80,6 +82,7 @@ SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, flo
 
 SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
                                          int num_channels, int64_t total_frames, int block_size) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out || num_channels <= 0 || total_frames < 0 || block_size <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -96,6 +99,7 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
 }
 
 SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* options) {
+  SONARE_C_API_ENTRY;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
   *options = SonareEngineBounceOptions{};
   options->block_size = 128;
@@ -113,6 +117,7 @@ SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* opti
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out) {
+  SONARE_C_API_ENTRY;
   // Zero the owned out-pointer/lengths BEFORE any validation early-return so a
   // failed validation always leaves a NULL owned pointer (matching the analysis
   // wrappers in sonare_c.cpp). Otherwise the standard
@@ -203,6 +208,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
 SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineFreezeOptions* options,
                                          SonareEngineFreezeResult* out) {
+  SONARE_C_API_ENTRY;
   if (!engine || !options || !out || options->total_frames <= 0 || options->block_size <= 0 ||
       options->num_channels <= 0 || !std::isfinite(options->start_ppq) ||
       options->start_ppq < 0.0 || !(std::isfinite(options->gain) && options->gain >= 0.0f)) {
@@ -253,6 +259,7 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written) {
+  SONARE_C_API_ENTRY;
   if (!engine || !written || (max_records > 0 && !out)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -276,6 +283,7 @@ SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEn
 SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count || (max_records > 0 && !out)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -314,6 +322,7 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
 SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engine,
                                                      SonareMeterTelemetryRecordWide* out,
                                                      size_t max_records, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count || (max_records > 0 && !out)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -360,6 +369,7 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engin
 SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine,
                                                     int interval_frames, unsigned int band_count,
                                                     unsigned int* out_band_count) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_MIXING)
   const uint32_t applied =
@@ -377,6 +387,7 @@ SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine
 SonareError sonare_engine_drain_scope_telemetry(SonareRealtimeEngine* engine,
                                                 SonareScopeTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count || (max_records > 0 && !out)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }

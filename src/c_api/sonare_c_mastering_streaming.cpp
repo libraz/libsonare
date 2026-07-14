@@ -21,6 +21,7 @@ using namespace sonare_c_mastering_detail;
 SonareError sonare_mastering_streaming_preview(const float* samples, size_t length, int sample_rate,
                                                const SonareStreamingPlatform* platforms,
                                                size_t platform_count, char** json_out) {
+  SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
   if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
   *json_out = nullptr;
@@ -46,6 +47,7 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
 SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,
                                                const SonareMasteringParam* params,
                                                size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -64,6 +66,7 @@ SonareError sonare_mastering_assistant_suggest(const float* samples, size_t leng
 SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
                                            const SonareMasteringParam* params, size_t param_count,
                                            char** json_out) {
+  SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -134,6 +137,7 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
   SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain * handle,
                                                        int sample_rate, int max_block_size,
                                                        int num_channels) {
+    SONARE_C_API_ENTRY;
     if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
     if (sample_rate <= 0 || max_block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
@@ -144,6 +148,7 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
 
   SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain * handle,
                                                             float* samples, size_t num_samples) {
+    SONARE_C_API_ENTRY;
     if (!handle || !handle->chain || (!samples && num_samples > 0)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -158,6 +163,7 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
 
   SonareError sonare_streaming_mastering_chain_process_stereo(
       SonareStreamingMasteringChain * handle, float* left, float* right, size_t num_samples) {
+    SONARE_C_API_ENTRY;
     if (!handle || !handle->chain || (!left && num_samples > 0) || (!right && num_samples > 0)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -173,6 +179,7 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
   }
 
   SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain * handle) {
+    SONARE_C_API_ENTRY;
     if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     handle->chain->reset();

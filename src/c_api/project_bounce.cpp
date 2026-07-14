@@ -656,6 +656,7 @@ sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
 
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
                                   float** out_interleaved, size_t* out_len) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   return do_project_bounce(project, options, {}, out_interleaved, out_len);
@@ -670,6 +671,7 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
                                                    const SonareInstrumentBinding* instruments,
                                                    size_t instrument_count, float** out_interleaved,
                                                    size_t* out_len) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
@@ -699,6 +701,7 @@ SonareError sonare_project_bounce_with_builtin_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareBuiltinInstrumentBinding* instruments, size_t instrument_count,
     float** out_interleaved, size_t* out_len) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
@@ -777,6 +780,7 @@ const char* sonare_synth_enum_names(int kind) {
 }
 
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (!name || !out) return SONARE_ERROR_INVALID_PARAMETER;
@@ -797,6 +801,7 @@ SonareError sonare_project_bounce_with_synth_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSynthInstrumentBinding* instruments, size_t instrument_count,
     float** out_interleaved, size_t* out_len) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
@@ -829,6 +834,7 @@ SonareError sonare_project_bounce_with_sf2_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,
     size_t* out_len) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;

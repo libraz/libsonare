@@ -28,6 +28,7 @@ bool all_finite(const float* input, int rows, int n_frames) noexcept {
 SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, int sample_rate,
                                   int n_fft, float fmin, float fmax, int htk,
                                   SonareInverseResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !mel) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mels <= 0 || n_frames <= 0 || n_fft <= 0 || sample_rate <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -50,12 +51,14 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
 
 SonareError sonare_mel_to_stft(const float* mel, int n_mels, int n_frames, int sample_rate,
                                int n_fft, float fmin, float fmax, SonareInverseResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_mel_to_stft_ex(mel, n_mels, n_frames, sample_rate, n_fft, fmin, fmax, 0, out);
 }
 
 SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, int sample_rate,
                                    int n_fft, int hop_length, float fmin, float fmax, int htk,
                                    int n_iter, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length || !mel) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mels <= 0 || n_frames <= 0 || n_fft <= 0 || hop_length <= 0 || sample_rate <= 0 ||
       n_iter <= 0) {
@@ -82,12 +85,14 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
 SonareError sonare_mel_to_audio(const float* mel, int n_mels, int n_frames, int sample_rate,
                                 int n_fft, int hop_length, float fmin, float fmax, int n_iter,
                                 float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return sonare_mel_to_audio_ex(mel, n_mels, n_frames, sample_rate, n_fft, hop_length, fmin, fmax,
                                 0, n_iter, out, out_length);
 }
 
 SonareError sonare_mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                SonareInverseResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -104,6 +109,7 @@ SonareError sonare_mfcc_to_audio_ex(const float* mfcc, int n_mfcc, int n_frames,
                                     int sample_rate, int n_fft, int hop_length, float fmin,
                                     float fmax, int htk, int n_iter, float** out,
                                     size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0 || n_fft <= 0 || hop_length <= 0 ||
       sample_rate <= 0 || n_iter <= 0) {
@@ -130,6 +136,7 @@ SonareError sonare_mfcc_to_audio_ex(const float* mfcc, int n_mfcc, int n_frames,
 SonareError sonare_mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                  int sample_rate, int n_fft, int hop_length, float fmin, float fmax,
                                  int n_iter, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return sonare_mfcc_to_audio_ex(mfcc, n_mfcc, n_frames, n_mels, sample_rate, n_fft, hop_length,
                                  fmin, fmax, 0, n_iter, out, out_length);
 }
@@ -137,6 +144,7 @@ SonareError sonare_mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, in
 SonareError sonare_mel_to_stft_checked(const float* mel, size_t input_length, int n_mels,
                                        int n_frames, int sample_rate, int n_fft, float fmin,
                                        float fmax, SonareInverseResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !mel) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
@@ -148,6 +156,7 @@ SonareError sonare_mel_to_stft_checked(const float* mel, size_t input_length, in
 SonareError sonare_mel_to_stft_checked_ex(const float* mel, size_t input_length, int n_mels,
                                           int n_frames, int sample_rate, int n_fft, float fmin,
                                           float fmax, int htk, SonareInverseResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !mel) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
@@ -160,6 +169,7 @@ SonareError sonare_mel_to_audio_checked(const float* mel, size_t input_length, i
                                         int n_frames, int sample_rate, int n_fft, int hop_length,
                                         float fmin, float fmax, int n_iter, float** out,
                                         size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length || !mel) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
@@ -173,6 +183,7 @@ SonareError sonare_mel_to_audio_checked_ex(const float* mel, size_t input_length
                                            int n_frames, int sample_rate, int n_fft, int hop_length,
                                            float fmin, float fmax, int htk, int n_iter, float** out,
                                            size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length || !mel) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mels <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mels, n_frames) != SONARE_OK) {
@@ -184,6 +195,7 @@ SonareError sonare_mel_to_audio_checked_ex(const float* mel, size_t input_length
 
 SonareError sonare_mfcc_to_mel_checked(const float* mfcc, size_t input_length, int n_mfcc,
                                        int n_frames, int n_mels, SonareInverseResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {
@@ -196,6 +208,7 @@ SonareError sonare_mfcc_to_audio_checked(const float* mfcc, size_t input_length,
                                          int n_frames, int n_mels, int sample_rate, int n_fft,
                                          int hop_length, float fmin, float fmax, int n_iter,
                                          float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {
@@ -209,6 +222,7 @@ SonareError sonare_mfcc_to_audio_checked_ex(const float* mfcc, size_t input_leng
                                             int n_frames, int n_mels, int sample_rate, int n_fft,
                                             int hop_length, float fmin, float fmax, int htk,
                                             int n_iter, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length || !mfcc) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_mfcc <= 0 || n_frames <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (check_inverse_input_length(input_length, n_mfcc, n_frames) != SONARE_OK) {

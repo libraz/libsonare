@@ -99,6 +99,7 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
                                                  int sample_rate,
                                                  const SonareCompressorConfig* config, float** out,
                                                  size_t* out_length, int* out_latency_samples) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
   if (out_latency_samples) *out_latency_samples = 0;
@@ -116,6 +117,7 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
 SonareError sonare_mastering_dynamics_gate(const float* samples, size_t length, int sample_rate,
                                            const SonareGateConfig* config, float** out,
                                            size_t* out_length, int* out_latency_samples) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
   if (out_latency_samples) *out_latency_samples = 0;
@@ -135,6 +137,7 @@ SonareError sonare_mastering_dynamics_transient_shaper(const float* samples, siz
                                                        const SonareTransientShaperConfig* config,
                                                        float** out, size_t* out_length,
                                                        int* out_latency_samples) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
   clear_float_output(out, out_length);
   if (out_latency_samples) *out_latency_samples = 0;

@@ -2,6 +2,7 @@
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -111,11 +112,36 @@ float* copy_bands(const std::vector<float>& values, size_t* count) {
 
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,
                                   SonareRirSynthResult* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
   if (sample_rate < sonare_c_detail::kMinSampleRate ||
       sample_rate > sonare_c_detail::kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const auto finite = [](float value) { return std::isfinite(value); };
+  const auto unit = [&](float value) { return finite(value) && value >= 0.0f && value <= 1.0f; };
+  constexpr size_t kMaxMaterialBands = 64;
+  if (!finite(config->length_m) || !finite(config->width_m) || !finite(config->height_m) ||
+      !finite(config->source_x) || !finite(config->source_y) || !finite(config->source_z) ||
+      !finite(config->listener_x) || !finite(config->listener_y) || !finite(config->listener_z) ||
+      !unit(config->absorption) || config->ism_order < 0 || !std::isfinite(config->max_seconds) ||
+      config->max_seconds < 0.0f || config->max_seconds > sonare::acoustic::kMaxRirSeconds ||
+      !std::isfinite(config->mixing_time_ms) || config->mixing_time_ms < 0.0f ||
+      config->mixing_time_ms > sonare::acoustic::kMaxRirMixingTimeMs ||
+      !std::isfinite(config->crossfade_ms) || config->crossfade_ms < 0.0f ||
+      config->crossfade_ms > sonare::acoustic::kMaxRirCrossfadeMs ||
+      config->absorption_band_count > kMaxMaterialBands ||
+      config->scattering_band_count > kMaxMaterialBands ||
+      (config->absorption_band_count > 0 && config->absorption_bands == nullptr) ||
+      (config->scattering_band_count > 0 && config->scattering_bands == nullptr)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  for (size_t i = 0; i < config->absorption_band_count; ++i) {
+    if (!unit(config->absorption_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  for (size_t i = 0; i < config->scattering_band_count; ++i) {
+    if (!unit(config->scattering_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
   }
   out->rir = nullptr;
   out->length = 0;
@@ -166,6 +192,7 @@ void sonare_free_rir_synth_result(SonareRirSynthResult* result) {
 
 SonareError sonare_estimate_room(const float* samples, size_t length, int sample_rate,
                                  const SonareRoomEstimateConfig* config, SonareRoomEstimate* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
   out->absorption_bands = nullptr;
@@ -228,6 +255,7 @@ void sonare_free_room_estimate(SonareRoomEstimate* result) {
 SonareError sonare_room_morph(const float* samples, size_t length, int sample_rate,
                               const SonareRoomMorphConfig* config, float** out,
                               size_t* out_length) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   if (!config) return SONARE_ERROR_INVALID_PARAMETER;
   return run_mono_offline(

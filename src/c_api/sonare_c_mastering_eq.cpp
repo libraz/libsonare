@@ -56,6 +56,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   void sonare_eq_destroy(SonareEq * eq) { delete eq; }
 
   SonareError sonare_eq_set_band(SonareEq * eq, int index, const char* band_json) {
+    SONARE_C_API_ENTRY;
     if (!eq || !band_json || index < 0 || index >= static_cast<int>(SONARE_EQ_MAX_BANDS)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -73,6 +74,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   }
 
   SonareError sonare_eq_set_phase_mode(SonareEq * eq, int mode) {
+    SONARE_C_API_ENTRY;
     if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     eq->processor.set_phase_mode(parse_phase(mode));
@@ -82,6 +84,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
 
   SonareError sonare_eq_match(SonareEq * eq, const float* source, const float* reference,
                               size_t length, int sample_rate, int max_bands) {
+    SONARE_C_API_ENTRY;
     if (!eq || max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -113,6 +116,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   }
 
   SonareError sonare_eq_set_gain_scale(SonareEq * eq, float scale) {
+    SONARE_C_API_ENTRY;
     if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     eq->processor.set_gain_scale(scale);
@@ -121,6 +125,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   }
 
   SonareError sonare_eq_set_output_gain_db(SonareEq * eq, float gain_db) {
+    SONARE_C_API_ENTRY;
     if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     eq->processor.set_output_gain_db(gain_db);
@@ -129,6 +134,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   }
 
   SonareError sonare_eq_set_output_pan(SonareEq * eq, float pan) {
+    SONARE_C_API_ENTRY;
     if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     eq->processor.set_output_pan(pan);
@@ -142,6 +148,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
 
   SonareError sonare_eq_set_sidechain(SonareEq * eq, const float* const* channels, int num_channels,
                                       int num_samples) {
+    SONARE_C_API_ENTRY;
     if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     eq->processor.set_sidechain(channels, num_channels, num_samples);
@@ -157,6 +164,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
 
   SonareError sonare_eq_process(SonareEq * eq, float* const* channels, int num_channels,
                                 int num_samples) {
+    SONARE_C_API_ENTRY;
     if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     eq->processor.process(channels, num_channels, num_samples);
@@ -165,6 +173,7 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   }
 
   SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
+    SONARE_C_API_ENTRY;
     if (!eq || !out) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     const auto snapshot = eq->processor.spectrum_snapshot();

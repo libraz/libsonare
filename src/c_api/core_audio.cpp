@@ -2,6 +2,7 @@
 
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
                                      SonareAudio** out) {
+  SONARE_C_API_ENTRY;
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(data, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -13,6 +14,7 @@ SonareError sonare_audio_from_buffer(const float* data, size_t length, int sampl
 }
 
 SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareAudio** out) {
+  SONARE_C_API_ENTRY;
   if (data == nullptr || out == nullptr || length == 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -25,6 +27,7 @@ SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareA
 
 #ifndef __EMSCRIPTEN__
 SonareError sonare_audio_from_file(const char* path, SonareAudio** out) {
+  SONARE_C_API_ENTRY;
   if (path == nullptr || out == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -67,6 +70,7 @@ float sonare_audio_duration(const SonareAudio* audio) {
 }
 
 SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm) {
+  SONARE_C_API_ENTRY;
   if (audio == nullptr || out_bpm == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
@@ -77,6 +81,7 @@ SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm) {
 }
 
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key) {
+  SONARE_C_API_ENTRY;
   if (audio == nullptr || out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
@@ -90,6 +95,7 @@ SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key
 
 SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times,
                                       size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (audio == nullptr || out_times == nullptr || out_count == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -103,6 +109,7 @@ SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_time
 
 SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_times,
                                           size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (audio == nullptr || out_times == nullptr || out_count == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -116,6 +123,7 @@ SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_
 
 SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_times,
                                        size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (audio == nullptr || out_times == nullptr || out_count == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -128,6 +136,7 @@ SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_tim
 }
 
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out) {
+  SONARE_C_API_ENTRY;
   if (audio == nullptr || out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the whole struct up front so a rejected input never leaves an

@@ -152,6 +152,7 @@ std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& 
 
 SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t* data,
                                           size_t size) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -170,6 +171,7 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
 }
 
 SonareError sonare_project_clear_soundfont(SonareProject* project) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   project->soundfont.reset();
@@ -180,6 +182,7 @@ SonareError sonare_project_clear_soundfont(SonareProject* project) {
 }
 
 SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = project->soundfont ? project->soundfont->presets().size() : 0;
@@ -191,6 +194,7 @@ SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t
 
 SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2ProgramStatus* out,
                                               size_t max_entries, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out_count || (max_entries > 0 && out == nullptr)) {
     return SONARE_ERROR_INVALID_PARAMETER;

@@ -5,6 +5,7 @@
 
 SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_rate,
                               float* out_bpm) {
+  SONARE_C_API_ENTRY;
   if (out_bpm == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -15,6 +16,7 @@ SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_ra
 
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
                               SonareKey* out_key) {
+  SONARE_C_API_ENTRY;
   if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -30,6 +32,7 @@ SonareError sonare_detect_key_with_options(const float* samples, size_t length, 
                                            int n_fft, int hop_length, int use_hpss,
                                            int loudness_weighted, float high_pass_hz,
                                            SonareKey* out_key) {
+  SONARE_C_API_ENTRY;
   return sonare_detect_key_with_options_and_modes(samples, length, sample_rate, n_fft, hop_length,
                                                   use_hpss, loudness_weighted, high_pass_hz,
                                                   nullptr, 0, out_key);
@@ -40,6 +43,7 @@ SonareError sonare_detect_key_with_options_and_modes(const float* samples, size_
                                                      int use_hpss, int loudness_weighted,
                                                      float high_pass_hz, const SonareMode* modes,
                                                      size_t mode_count, SonareKey* out_key) {
+  SONARE_C_API_ENTRY;
   return sonare_detect_key_with_extended_options(
       samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
       modes, mode_count, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, out_key);
@@ -49,6 +53,7 @@ SonareError sonare_detect_key_with_extended_options(
     const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
     int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key) {
+  SONARE_C_API_ENTRY;
   if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_fft <= 0 || hop_length <= 0 || high_pass_hz < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -82,6 +87,7 @@ SonareError sonare_detect_key_candidates(const float* samples, size_t length, in
                                          int n_fft, int hop_length, int use_hpss,
                                          int loudness_weighted, float high_pass_hz,
                                          SonareKeyCandidate** out_candidates, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   return sonare_detect_key_candidates_with_modes(samples, length, sample_rate, n_fft, hop_length,
                                                  use_hpss, loudness_weighted, high_pass_hz, nullptr,
                                                  0, out_candidates, out_count);
@@ -91,6 +97,7 @@ SonareError sonare_detect_key_candidates_with_modes(
     const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
     int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
     SonareKeyCandidate** out_candidates, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   return sonare_detect_key_candidates_with_extended_options(
       samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
       modes, mode_count, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, out_candidates,
@@ -102,6 +109,7 @@ SonareError sonare_detect_key_candidates_with_extended_options(
     int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKeyCandidate** out_candidates,
     size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (out_candidates == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_candidates = nullptr;
   *out_count = 0;
@@ -147,6 +155,7 @@ SonareError sonare_detect_key_candidates_with_extended_options(
 
 SonareError sonare_detect_beats(const float* samples, size_t length, int sample_rate,
                                 float** out_times, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -157,6 +166,7 @@ SonareError sonare_detect_beats(const float* samples, size_t length, int sample_
 
 SonareError sonare_detect_downbeats(const float* samples, size_t length, int sample_rate,
                                     float** out_times, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -168,6 +178,7 @@ SonareError sonare_detect_downbeats(const float* samples, size_t length, int sam
 
 SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
                                  float** out_times, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -184,6 +195,7 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
 
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out) {
+  SONARE_C_API_ENTRY;
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the whole struct up front so a rejected input (e.g. validate_audio_params
@@ -225,6 +237,7 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
 // WASM native object. *out_json is heap-allocated; free with sonare_free_string.
 SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
                                 char** out_json) {
+  SONARE_C_API_ENTRY;
   if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
 
@@ -242,6 +255,7 @@ SonareError sonare_analyze_json(const float* samples, size_t length, int sample_
 SonareError sonare_analyze_json_with_progress(const float* samples, size_t length, int sample_rate,
                                               SonareAnalyzeProgressCallback callback,
                                               void* user_data, char** out_json) {
+  SONARE_C_API_ENTRY;
   if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
 

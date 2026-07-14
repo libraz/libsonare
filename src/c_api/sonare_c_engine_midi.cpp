@@ -103,6 +103,7 @@ bool midi_event_from_c(const SonareEngineMidiEvent& src, midi::MidiEvent* out) n
 SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
                                          const SonareEngineMidiClipSchedule* clips,
                                          size_t clip_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || (clip_count > 0 && clips == nullptr)) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)clips;
@@ -147,6 +148,7 @@ SonareError sonare_engine_set_midi_clips(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
                                                  uint32_t destination_id,
                                                  const SonareEngineBuiltinSynthConfig* config) {
+  SONARE_C_API_ENTRY;
   if (!engine || !config) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -162,6 +164,7 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
                                                uint32_t destination_id,
                                                const SonareSynthPatch* patch) {
+  SONARE_C_API_ENTRY;
   if (!engine || !patch) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -182,6 +185,7 @@ SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uint8_t* data,
                                          size_t size) {
+  SONARE_C_API_ENTRY;
   if (!engine || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -201,6 +205,7 @@ SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uin
 
 SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint32_t destination_id,
                                              const SonareEngineSf2InstrumentConfig* config) {
+  SONARE_C_API_ENTRY;
   if (!engine || !config) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -229,6 +234,7 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
 
 SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -244,6 +250,7 @@ SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
 }
 
 SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
@@ -257,6 +264,7 @@ SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, si
 SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t channel,
                                        uint8_t controller, uint32_t param_id, float min_value,
                                        float max_value) {
+  SONARE_C_API_ENTRY;
   if (!engine || channel > 15 || controller > 127 || param_id == 0 || !std::isfinite(min_value) ||
       !std::isfinite(max_value) || max_value < min_value) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -274,6 +282,7 @@ SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t cha
 }
 
 SonareError sonare_engine_clear_midi_cc_bindings(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -284,6 +293,7 @@ SonareError sonare_engine_clear_midi_cc_bindings(SonareRealtimeEngine* engine) {
 }
 
 SonareError sonare_engine_midi_cc_binding_count(SonareRealtimeEngine* engine, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
@@ -296,6 +306,7 @@ SonareError sonare_engine_midi_cc_binding_count(SonareRealtimeEngine* engine, si
 
 SonareError sonare_engine_set_midi_fx(SonareRealtimeEngine* engine, uint32_t destination_id,
                                       const char* config_json) {
+  SONARE_C_API_ENTRY;
   if (!engine || !config_json) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -311,6 +322,7 @@ SonareError sonare_engine_set_midi_fx(SonareRealtimeEngine* engine, uint32_t des
 }
 
 SonareError sonare_engine_clear_midi_fx(SonareRealtimeEngine* engine, uint32_t destination_id) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -323,6 +335,7 @@ SonareError sonare_engine_clear_midi_fx(SonareRealtimeEngine* engine, uint32_t d
 
 SonareError sonare_engine_set_midi_input_source(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -335,6 +348,7 @@ SonareError sonare_engine_set_midi_input_source(SonareRealtimeEngine* engine,
 }
 
 SonareError sonare_engine_clear_midi_input_source(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -347,6 +361,7 @@ SonareError sonare_engine_clear_midi_input_source(SonareRealtimeEngine* engine) 
 
 SonareError sonare_engine_midi_input_pending_count(SonareRealtimeEngine* engine,
                                                    size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   *out_count = 0;
@@ -360,6 +375,7 @@ SonareError sonare_engine_midi_input_pending_count(SonareRealtimeEngine* engine,
 SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, uint8_t group,
                                                   uint8_t channel, uint8_t note, uint8_t velocity,
                                                   int64_t port_time_samples) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
@@ -382,6 +398,7 @@ SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, 
 SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine, uint8_t group,
                                                    uint8_t channel, uint8_t note, uint8_t velocity,
                                                    int64_t port_time_samples) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
@@ -404,6 +421,7 @@ SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine,
 SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8_t group,
                                              uint8_t channel, uint8_t controller, uint8_t value,
                                              int64_t port_time_samples) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
@@ -427,6 +445,7 @@ SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8
 SonareError sonare_engine_push_midi_note_on(SonareRealtimeEngine* engine, uint32_t destination_id,
                                             uint8_t group, uint8_t channel, uint8_t note,
                                             uint8_t velocity, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -450,6 +469,7 @@ SonareError sonare_engine_push_midi_note_on(SonareRealtimeEngine* engine, uint32
 SonareError sonare_engine_push_midi_note_off(SonareRealtimeEngine* engine, uint32_t destination_id,
                                              uint8_t group, uint8_t channel, uint8_t note,
                                              uint8_t velocity, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -473,6 +493,7 @@ SonareError sonare_engine_push_midi_note_off(SonareRealtimeEngine* engine, uint3
 SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t destination_id,
                                        uint8_t group, uint8_t channel, uint8_t controller,
                                        uint8_t value, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   if (group > 15 || channel > 15 || controller > 127 || value > 127) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -497,6 +518,7 @@ SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t de
 }
 
 SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)render_frame;
@@ -512,6 +534,7 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
 
 SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t destination_id,
                                           const uint8_t* data, size_t size, int64_t render_frame) {
+  SONARE_C_API_ENTRY;
   if (!engine || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -531,6 +554,7 @@ SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t
 
 SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* engine,
                                                         uint32_t destination_id, int external) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -548,6 +572,7 @@ SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* en
 
 SonareError sonare_engine_set_external_midi_clock_enabled(SonareRealtimeEngine* engine,
                                                           int enabled) {
+  SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)enabled;
@@ -562,6 +587,7 @@ SonareError sonare_engine_set_external_midi_clock_enabled(SonareRealtimeEngine* 
 
 SonareError sonare_engine_external_midi_dropped_count(SonareRealtimeEngine* engine,
                                                       uint32_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -576,6 +602,7 @@ SonareError sonare_engine_external_midi_dropped_count(SonareRealtimeEngine* engi
 SonareError sonare_engine_drain_external_midi(SonareRealtimeEngine* engine,
                                               SonareExternalMidiEvent* out, size_t max_events,
                                               size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!engine || !out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   // Initialise the count before any early error return so a defensive consumer
   // never reads an uninitialised value on the rejected-buffer path.

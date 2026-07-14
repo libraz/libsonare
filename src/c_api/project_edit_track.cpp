@@ -62,6 +62,7 @@ SonareError automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
 
 SonareError sonare_project_add_track(SonareProject* project, const SonareProjectTrackDesc* desc,
                                      uint32_t* out_track_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_track_id) *out_track_id = 0;
   if (!project || !desc || !out_track_id) return SONARE_ERROR_INVALID_PARAMETER;
@@ -84,6 +85,7 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
 }
 
 SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t overlap_policy) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || overlap_policy > SONARE_PROJECT_OVERLAP_ALLOW) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -102,6 +104,7 @@ SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t o
 SonareError sonare_project_set_tempo_segments(SonareProject* project,
                                               const SonareProjectTempoSegment* segments,
                                               size_t segment_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -134,6 +137,7 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
 SonareError sonare_project_set_time_signatures(SonareProject* project,
                                                const SonareProjectTimeSignatureSegment* segments,
                                                size_t segment_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -163,6 +167,7 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
 
 SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id, double ppq,
                                       const char* name, uint32_t* out_marker_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
   if (!project || !out_marker_id || !finite_non_negative(ppq)) {
@@ -182,6 +187,7 @@ SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id
 
 SonareError sonare_project_set_marker_ex(SonareProject* project, const SonareProjectMarker* marker,
                                          uint32_t* out_marker_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
   if (!project || !out_marker_id || !marker || !finite_non_negative(marker->ppq) ||
@@ -212,6 +218,7 @@ SonareError sonare_project_set_marker_ex(SonareProject* project, const SonarePro
 }
 
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
   if (!project || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -229,6 +236,7 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
 
 SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track_id,
                                           uint32_t kind) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0 || kind > SONARE_TRACK_AUX) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -244,6 +252,7 @@ SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track
 
 SonareError sonare_project_set_warp_map(SonareProject* project,
                                         const SonareProjectWarpMapDesc* desc) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !desc || desc->id == 0 || desc->anchor_count < 2 || !desc->anchors ||
       desc->anchor_count > kMaxBufferSize) {
@@ -280,6 +289,7 @@ SonareError sonare_project_set_warp_map(SonareProject* project,
 }
 
 SonareError sonare_project_remove_warp_map(SonareProject* project, uint32_t warp_ref_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || warp_ref_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_warp_map(warp_ref_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -295,6 +305,7 @@ SonareError sonare_project_remove_warp_map(SonareProject* project, uint32_t warp
 
 SonareError sonare_project_set_track_midi_destination(SonareProject* project, uint32_t track_id,
                                                       uint32_t destination_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -309,6 +320,7 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
 }
 
 SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track_id, float gain) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0 || !std::isfinite(gain) || gain < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -325,6 +337,7 @@ SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track
 }
 
 SonareError sonare_project_set_track_mute(SonareProject* project, uint32_t track_id, int mute) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -339,6 +352,7 @@ SonareError sonare_project_set_track_mute(SonareProject* project, uint32_t track
 }
 
 SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track_id, int solo) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -353,6 +367,7 @@ SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track
 }
 
 SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_id, float pan) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0 || !std::isfinite(pan)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -367,6 +382,7 @@ SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_
 }
 
 SonareError sonare_project_remove_track(SonareProject* project, uint32_t track_id) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -382,6 +398,7 @@ SonareError sonare_project_remove_track(SonareProject* project, uint32_t track_i
 
 SonareError sonare_project_rename_track(SonareProject* project, uint32_t track_id,
                                         const char* name) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -399,6 +416,7 @@ SonareError sonare_project_rename_track(SonareProject* project, uint32_t track_i
 SonareError sonare_project_set_track_route(SonareProject* project, uint32_t track_id,
                                            const char* channel_strip_ref,
                                            const char* output_target) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
@@ -417,6 +435,7 @@ SonareError sonare_project_set_track_route(SonareProject* project, uint32_t trac
 SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t track_id,
                                                const SonareAutomationLaneDesc* desc,
                                                size_t* out_lane_index) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_lane_index) *out_lane_index = 0;
   if (!project || track_id == 0 || !desc) return SONARE_ERROR_INVALID_PARAMETER;
@@ -439,6 +458,7 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
 SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t track_id,
                                                 size_t lane_index,
                                                 const SonareAutomationLaneDesc* desc) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0 || !desc) return SONARE_ERROR_INVALID_PARAMETER;
   const arr::Track* track = project->history.project().find_track(track_id);
@@ -460,6 +480,7 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
 
 SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32_t track_id,
                                                   size_t lane_index) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   const arr::Track* track = project->history.project().find_track(track_id);
@@ -477,6 +498,7 @@ SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32
 }
 
 SonareError sonare_project_undo(SonareProject* project) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -488,6 +510,7 @@ SonareError sonare_project_undo(SonareProject* project) {
 }
 
 SonareError sonare_project_redo(SonareProject* project) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY

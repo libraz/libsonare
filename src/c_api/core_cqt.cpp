@@ -2,6 +2,7 @@
 
 SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                        float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -22,6 +23,7 @@ SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int
 
 SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -42,6 +44,7 @@ SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_ra
 
 SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -63,6 +66,7 @@ SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_ra
 SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
                        float fmin, int n_bins, int bins_per_octave, float gamma,
                        SonareCqtResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0 || gamma < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;

@@ -31,6 +31,7 @@ SonareError fill_chroma_result(const Chroma& chroma, SonareChromaResult* out) {
 
 SonareError sonare_onset_strength(const float* samples, size_t length, int sr, int n_fft,
                                   int hop_length, int n_mels, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = nullptr;
@@ -50,6 +51,7 @@ SonareError sonare_onset_strength(const float* samples, size_t length, int sr, i
 SonareError sonare_onset_strength_multi(const float* samples, size_t length, int sr, int n_fft,
                                         int hop_length, int n_mels, int n_bands, float** out,
                                         size_t* out_length, int* out_n_frames) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_bands <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -75,6 +77,7 @@ SonareError sonare_onset_strength_multi(const float* samples, size_t length, int
 
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
                           int hop_length, SonareChromaResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->features = nullptr;
@@ -92,6 +95,7 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
 
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -108,6 +112,7 @@ SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_r
 
 SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               int n_chroma, SonareChromaResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -124,6 +129,7 @@ SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_ra
 
 SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -140,6 +146,7 @@ SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_r
 
 SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, float** out,
                                size_t* out_length, int* out_n_frames) {
+  SONARE_C_API_ENTRY;
   if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = nullptr;

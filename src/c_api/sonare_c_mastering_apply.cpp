@@ -20,6 +20,7 @@ using namespace sonare_c_mastering_detail;
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
                                      const SonareMasteringConfig* config,
                                      SonareMasteringResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   out->samples = nullptr;
@@ -48,6 +49,7 @@ SonareError sonare_mastering_apply_processor(const char* processor_name, const f
                                              size_t length, int sample_rate,
                                              const SonareMasteringParam* params, size_t param_count,
                                              SonareMasteringResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !processor_name || processor_name[0] == '\0') {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -77,6 +79,7 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
                                                     const SonareMasteringParam* params,
                                                     size_t param_count,
                                                     SonareMasteringStereoResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !processor_name || processor_name[0] == '\0') {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -215,6 +218,7 @@ SonareError sonare_mastering_apply_pair_processor_ex(
     const char* processor_name, const float* source, size_t source_length, const float* reference,
     size_t reference_length, int sample_rate, const SonareMasteringParam* params,
     size_t param_count, SonareMasteringResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !processor_name || processor_name[0] == '\0') {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -245,6 +249,7 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor_name, co
                                                   int sample_rate,
                                                   const SonareMasteringParam* params,
                                                   size_t param_count, SonareMasteringResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_mastering_apply_pair_processor_ex(processor_name, source, length, reference, length,
                                                   sample_rate, params, param_count, out);
 }
@@ -254,6 +259,7 @@ SonareError sonare_mastering_analyze_pair_ex(const char* analysis_name, const fl
                                              size_t reference_length, int sample_rate,
                                              const SonareMasteringParam* params, size_t param_count,
                                              char** json_out) {
+  SONARE_C_API_ENTRY;
   if (!json_out || !analysis_name) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(source, source_length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -274,6 +280,7 @@ SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float
                                           const float* reference, size_t length, int sample_rate,
                                           const SonareMasteringParam* params, size_t param_count,
                                           char** json_out) {
+  SONARE_C_API_ENTRY;
   return sonare_mastering_analyze_pair_ex(analysis_name, source, length, reference, length,
                                           sample_rate, params, param_count, json_out);
 }
@@ -282,6 +289,7 @@ SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const flo
                                             const float* right, size_t length, int sample_rate,
                                             const SonareMasteringParam* params, size_t param_count,
                                             char** json_out) {
+  SONARE_C_API_ENTRY;
   if (!json_out || !analysis_name) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(left, length, sample_rate);
   if (err != SONARE_OK) return err;

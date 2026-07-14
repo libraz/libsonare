@@ -26,6 +26,7 @@ size_t sonare_mixer_strip_count(const SonareMixer* mixer) {
 }
 
 SonareError sonare_mixer_get_strip_count(const SonareMixer* mixer, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !out_count) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -34,6 +35,7 @@ SonareError sonare_mixer_get_strip_count(const SonareMixer* mixer, size_t* out_c
 }
 
 SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char* role) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !id) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -51,6 +53,7 @@ SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char*
 }
 
 SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !id) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -93,6 +96,7 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
 }
 
 SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !out_count) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -102,6 +106,7 @@ SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count) 
 
 SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float gain_db,
                                        const char* const* members, size_t member_count) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !id || (member_count > 0 && !members)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -144,6 +149,7 @@ SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float
 }
 
 SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* id, float gain_db) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !id) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -172,6 +178,7 @@ SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* i
 }
 
 SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !id) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -200,6 +207,7 @@ SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
 }
 
 SonareError sonare_mixer_vca_group_count(const SonareMixer* mixer, size_t* out_count) {
+  SONARE_C_API_ENTRY;
   if (!mixer || !out_count) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -348,6 +356,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   }
 
   SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out) {
+    SONARE_C_API_ENTRY;
     if (!mixer || !json_out) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -392,6 +401,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   }
 
   SonareError sonare_mixer_compile(SonareMixer * mixer) {
+    SONARE_C_API_ENTRY;
     if (!mixer) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -402,6 +412,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   }
 
   SonareError sonare_mixer_latency_samples(SonareMixer * mixer, int* out_latency_samples) {
+    SONARE_C_API_ENTRY;
     if (!mixer || !out_latency_samples) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -415,6 +426,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   }
 
   SonareError sonare_mixer_tail_samples(SonareMixer * mixer, int* out_tail_samples) {
+    SONARE_C_API_ENTRY;
     if (!mixer || !out_tail_samples) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -430,6 +442,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   SonareError sonare_mixer_process_stereo(
       SonareMixer * mixer, const float* const* input_left, const float* const* input_right,
       size_t input_count, float* output_left, float* output_right, size_t num_samples) {
+    SONARE_C_API_ENTRY;
     if (!mixer || !output_left || !output_right || (!input_left && input_count > 0) ||
         (!input_right && input_count > 0) || input_count > mixer->strips.size() ||
         num_samples > static_cast<size_t>(mixer->max_block_size)) {
@@ -475,6 +488,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
   SonareError sonare_mixer_drain_tail_stereo(SonareMixer * mixer, float* output_left,
                                              float* output_right, size_t num_samples) {
+    SONARE_C_API_ENTRY;
     return sonare_mixer_process_stereo(mixer, nullptr, nullptr, 0, output_left, output_right,
                                        num_samples);
   }
@@ -490,6 +504,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
   }
 
   SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out) {
+    SONARE_C_API_ENTRY;
     if (!preset_name || !json_out) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }

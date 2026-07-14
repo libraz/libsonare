@@ -7,6 +7,7 @@
 #include <limits>
 #include <thread>
 
+#include "c_api/sonare_c_engine_internal.h"
 #include "sonare_c_test_helpers.h"
 
 namespace {
@@ -1708,6 +1709,123 @@ TEST_CASE("sonare_engine_set_markers rejects an invalid list without dangling th
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine graph replacement is transactional and drops omitted automation targets",
+          "[c_api][engine][graph]") {
+#if defined(SONARE_WITH_GRAPH)
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
+
+  SonareParameterInfo parameter{};
+  parameter.id = 7;
+  std::strncpy(parameter.name, "gain", sizeof(parameter.name) - 1);
+  parameter.min_value = -60.0f;
+  parameter.max_value = 12.0f;
+  parameter.default_value = 0.0f;
+  parameter.rt_safe = 1;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+
+  SonareEngineGraphNode gain_nodes[3]{};
+  std::strncpy(gain_nodes[0].id, "in", sizeof(gain_nodes[0].id) - 1);
+  gain_nodes[0].type = 0;
+  gain_nodes[0].num_ports = 1;
+  std::strncpy(gain_nodes[1].id, "gain", sizeof(gain_nodes[1].id) - 1);
+  gain_nodes[1].type = 1;
+  gain_nodes[1].num_ports = 1;
+  std::strncpy(gain_nodes[2].id, "out", sizeof(gain_nodes[2].id) - 1);
+  gain_nodes[2].type = 0;
+  gain_nodes[2].num_ports = 1;
+  SonareEngineGraphConnection gain_connections[2]{};
+  std::strncpy(gain_connections[0].source_node, "in", sizeof(gain_connections[0].source_node) - 1);
+  std::strncpy(gain_connections[0].dest_node, "gain", sizeof(gain_connections[0].dest_node) - 1);
+  gain_connections[0].mix = 1;
+  std::strncpy(gain_connections[1].source_node, "gain",
+               sizeof(gain_connections[1].source_node) - 1);
+  std::strncpy(gain_connections[1].dest_node, "out", sizeof(gain_connections[1].dest_node) - 1);
+  gain_connections[1].mix = 1;
+  SonareEngineGraphParameterBinding gain_binding{};
+  gain_binding.param_id = 7;
+  std::strncpy(gain_binding.node_id, "gain", sizeof(gain_binding.node_id) - 1);
+  SonareEngineGraphSpec gain_graph{};
+  gain_graph.nodes = gain_nodes;
+  gain_graph.node_count = 3;
+  gain_graph.connections = gain_connections;
+  gain_graph.connection_count = 2;
+  gain_graph.parameter_bindings = &gain_binding;
+  gain_graph.parameter_binding_count = 1;
+  std::strncpy(gain_graph.input_node, "in", sizeof(gain_graph.input_node) - 1);
+  std::strncpy(gain_graph.output_node, "out", sizeof(gain_graph.output_node) - 1);
+  gain_graph.num_channels = 1;
+  REQUIRE(sonare_engine_set_graph(engine, &gain_graph) == SONARE_OK);
+
+  std::array<float, 64> audio{};
+  float* channels[] = {audio.data()};
+  audio.fill(1.0f);
+  REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(audio[0] < 0.01f);
+
+  // The second binding is invalid. The valid first binding must not be
+  // committed, and the live graph + target table must remain untouched.
+  SonareEngineGraphNode pass_nodes[2]{};
+  std::strncpy(pass_nodes[0].id, "in", sizeof(pass_nodes[0].id) - 1);
+  pass_nodes[0].type = 0;
+  pass_nodes[0].num_ports = 1;
+  std::strncpy(pass_nodes[1].id, "out", sizeof(pass_nodes[1].id) - 1);
+  pass_nodes[1].type = 0;
+  pass_nodes[1].num_ports = 1;
+  SonareEngineGraphConnection pass_connection{};
+  std::strncpy(pass_connection.source_node, "in", sizeof(pass_connection.source_node) - 1);
+  std::strncpy(pass_connection.dest_node, "out", sizeof(pass_connection.dest_node) - 1);
+  pass_connection.mix = 1;
+  SonareEngineGraphParameterBinding invalid_bindings[2]{};
+  invalid_bindings[0].param_id = 7;
+  std::strncpy(invalid_bindings[0].node_id, "in", sizeof(invalid_bindings[0].node_id) - 1);
+  invalid_bindings[1].param_id = 8;
+  std::strncpy(invalid_bindings[1].node_id, "missing", sizeof(invalid_bindings[1].node_id) - 1);
+  SonareEngineGraphSpec pass_graph{};
+  pass_graph.nodes = pass_nodes;
+  pass_graph.node_count = 2;
+  pass_graph.connections = &pass_connection;
+  pass_graph.connection_count = 1;
+  pass_graph.parameter_bindings = invalid_bindings;
+  pass_graph.parameter_binding_count = 2;
+  std::strncpy(pass_graph.input_node, "in", sizeof(pass_graph.input_node) - 1);
+  std::strncpy(pass_graph.output_node, "out", sizeof(pass_graph.output_node) - 1);
+  pass_graph.num_channels = 1;
+  REQUIRE(sonare_engine_set_graph(engine, &pass_graph) == SONARE_ERROR_INVALID_PARAMETER);
+  size_t node_count = 0;
+  size_t connection_count = 0;
+  REQUIRE(sonare_engine_graph_node_count(engine, &node_count) == SONARE_OK);
+  REQUIRE(sonare_engine_graph_connection_count(engine, &connection_count) == SONARE_OK);
+  REQUIRE(node_count == 3);
+  REQUIRE(connection_count == 2);
+  audio.fill(1.0f);
+  REQUIRE(sonare_engine_set_parameter(engine, 7, 0.0f, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(audio[0] == Catch::Approx(1.0f));
+
+  // A valid graph with no bindings removes the old target. Adopt it, then
+  // publish once more so the retired gain graph is reclaimed on the control
+  // thread. Repeated parameter commands must neither touch freed memory nor
+  // alter the pass-through output (ASan exercises the former guarantee).
+  pass_graph.parameter_bindings = nullptr;
+  pass_graph.parameter_binding_count = 0;
+  REQUIRE(sonare_engine_set_graph(engine, &pass_graph) == SONARE_OK);
+  audio.fill(1.0f);
+  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(sonare_engine_set_graph(engine, &pass_graph) == SONARE_OK);
+  for (int block = 0; block < 100; ++block) {
+    audio.fill(1.0f);
+    REQUIRE(sonare_engine_set_parameter(engine, 7, -60.0f, -1) == SONARE_OK);
+    REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+    REQUIRE(audio[0] == Catch::Approx(1.0f));
+  }
+
+  sonare_engine_destroy(engine);
+#endif
+}
+
 TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
@@ -2337,6 +2455,54 @@ TEST_CASE("sonare_engine streams paged clip providers and reports page misses", 
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_clip_page_provider bounds metadata and reclaims retired pages",
+          "[c_api][engine][paged]") {
+  SonareClipPageProvider* rejected = nullptr;
+  REQUIRE(sonare_clip_page_provider_create(sonare::engine::kMaxClipPageChannels + 1, 8, 4,
+                                           &rejected) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(rejected == nullptr);
+  REQUIRE(sonare_clip_page_provider_create(1, 8, sonare::engine::kMaxClipPageFrames + 1,
+                                           &rejected) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_clip_page_provider_create(1, sonare::engine::kMaxClipPageCount + 1, 1,
+                                           &rejected) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_clip_page_provider_create(1, 1000000000000LL, 1, &rejected) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  constexpr int64_t kFrames = 256;
+  SonareClipPageProvider* provider = nullptr;
+  REQUIRE(sonare_clip_page_provider_create(1, kFrames, kFrames, &provider) == SONARE_OK);
+  REQUIRE(provider != nullptr);
+  std::array<float, static_cast<size_t>(kFrames)> page{};
+  const float* page_channels[] = {page.data()};
+  REQUIRE(sonare_clip_page_provider_supply(provider, 0, page_channels, 1, kFrames) == SONARE_OK);
+
+  std::atomic<bool> done{false};
+  std::atomic<bool> bad_read{false};
+  std::thread reader([&] {
+    while (!done.load(std::memory_order_acquire)) {
+      float sample = 0.0f;
+      if (provider->provider->sample_at(0, 17, &sample) && !std::isfinite(sample)) {
+        bad_read.store(true, std::memory_order_relaxed);
+      }
+    }
+  });
+
+  // Repeated replacement/eviction used to retain every page until provider
+  // destruction. The epoch hand-off now reclaims each retired page immediately
+  // after in-flight readers leave their old epoch.
+  for (int iteration = 0; iteration < 2000; ++iteration) {
+    page.fill(static_cast<float>(iteration));
+    REQUIRE(sonare_clip_page_provider_supply(provider, 0, page_channels, 1, kFrames) == SONARE_OK);
+    REQUIRE(sonare_clip_page_provider_clear(provider, 0) == SONARE_OK);
+  }
+  done.store(true, std::memory_order_release);
+  reader.join();
+  REQUIRE_FALSE(bad_read.load(std::memory_order_relaxed));
+  REQUIRE(provider->provider->retired_page_count_for_test() == 0);
+
+  sonare_clip_page_provider_destroy(provider);
+}
+
 TEST_CASE("sonare_engine offline bounce and freeze consume paged clip providers",
           "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
@@ -2485,6 +2651,29 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(std::string(msg).find("ffmpeg") != std::string::npos);
 #endif
     REQUIRE(audio == nullptr);
+  }
+
+  SECTION("validation early returns clear unrelated detailed errors") {
+    const auto record_detailed_error = [] {
+      const std::vector<uint8_t> garbage = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                            0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B};
+      SonareAudio* audio = nullptr;
+      REQUIRE(sonare_audio_from_memory(garbage.data(), garbage.size(), &audio) != SONARE_OK);
+      REQUIRE(audio == nullptr);
+      REQUIRE(std::strlen(sonare_last_error_message()) > 0);
+    };
+
+    record_detailed_error();
+    REQUIRE(sonare_audio_from_memory(nullptr, 1, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
+
+    record_detailed_error();
+    REQUIRE(sonare_engine_prepare(nullptr, 48000.0, 128, 16, 16) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
+
+    record_detailed_error();
+    REQUIRE(sonare_project_create(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
   }
 }
 

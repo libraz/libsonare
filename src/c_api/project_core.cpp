@@ -25,6 +25,7 @@ uint32_t sonare_project_abi_version(void) {
 // ============================================================================
 
 SonareError sonare_project_create(SonareProject** out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
@@ -47,6 +48,7 @@ void sonare_project_destroy(SonareProject* project) {
 
 SonareError sonare_project_serialize(const SonareProject* project, char** out_json,
                                      size_t* out_len) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out_json) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
@@ -81,6 +83,7 @@ std::string serialize_deserialize_diagnostics(
 
 SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
                                        char** out_diag) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!json || !out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
@@ -109,6 +112,7 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
 }
 
 SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !finite_positive(sample_rate) || sample_rate < kMinSampleRate ||
       sample_rate > kMaxSampleRate) {
@@ -126,6 +130,7 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, double sample
 }
 
 SonareError sonare_project_get_sample_rate(const SonareProject* project, double* out_sample_rate) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out_sample_rate) return SONARE_ERROR_INVALID_PARAMETER;
   *out_sample_rate = project->history.project().sample_rate();
@@ -137,6 +142,7 @@ SonareError sonare_project_get_sample_rate(const SonareProject* project, double*
 
 SonareError sonare_project_get_overlap_policy(const SonareProject* project,
                                               uint32_t* out_overlap_policy) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out_overlap_policy) return SONARE_ERROR_INVALID_PARAMETER;
   *out_overlap_policy = static_cast<uint32_t>(project->history.project().overlap_policy());
@@ -160,6 +166,7 @@ SonareError project_count(const SonareProject* project, size_t* out_count, Count
 }  // namespace
 
 SonareError sonare_project_track_count(const SonareProject* project, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count, [](const arr::Project& p) { return p.tracks().size(); });
 #else
@@ -168,6 +175,7 @@ SonareError sonare_project_track_count(const SonareProject* project, size_t* out
 }
 
 SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count, [](const arr::Project& p) { return p.clips().size(); });
 #else
@@ -176,6 +184,7 @@ SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_
 }
 
 SonareError sonare_project_source_count(const SonareProject* project, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.sources().size(); });
@@ -185,6 +194,7 @@ SonareError sonare_project_source_count(const SonareProject* project, size_t* ou
 }
 
 SonareError sonare_project_marker_count(const SonareProject* project, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.markers().size(); });
@@ -195,6 +205,7 @@ SonareError sonare_project_marker_count(const SonareProject* project, size_t* ou
 
 SonareError sonare_project_marker_by_index(const SonareProject* project, size_t index,
                                            SonareProjectMarker* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
   const std::vector<arr::ProjectMarker>& markers = project->history.project().markers();
@@ -215,6 +226,7 @@ SonareError sonare_project_marker_by_index(const SonareProject* project, size_t 
 }
 
 SonareError sonare_project_tempo_segment_count(const SonareProject* project, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.tempo_segments().size(); });
@@ -224,6 +236,7 @@ SonareError sonare_project_tempo_segment_count(const SonareProject* project, siz
 }
 
 SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.time_signatures().size(); });
@@ -233,6 +246,7 @@ SonareError sonare_project_time_signature_count(const SonareProject* project, si
 }
 
 SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out) *out = {};
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
@@ -249,6 +263,7 @@ SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileR
 
 SonareError sonare_project_last_bounce_compile_result(const SonareProject* project,
                                                       SonareProjectCompileResult* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out) *out = {};
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
@@ -277,6 +292,7 @@ SonareError sonare_project_set_assist_sidecar(SonareProject* project, const char
                                               uint32_t schema_version, uint32_t target_track_id,
                                               double region_start_ppq, double region_end_ppq,
                                               const uint8_t* payload, size_t payload_len) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !module_id || module_id[0] == '\0' || (payload_len > 0 && !payload) ||
       payload_len > kMaxBufferSize || !finite_non_negative(region_start_ppq) ||
@@ -315,6 +331,7 @@ size_t sonare_project_assist_sidecar_count(const SonareProject* project) {
 
 SonareError sonare_project_get_assist_sidecar(const SonareProject* project, size_t index,
                                               SonareProjectAssistSidecar* out) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out) *out = {};
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;

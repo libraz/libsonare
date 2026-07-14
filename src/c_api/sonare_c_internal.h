@@ -318,6 +318,13 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
     return SONARE_ERROR_NOT_SUPPORTED;         \
   } while (false)
 
+// Common entry guard for every public SonareError-returning C ABI function.
+// Keep this before all pointer/range validation so a non-throwing early return
+// cannot expose detail from an unrelated previous call. The read-only error and
+// warning accessors are deliberately excluded: reading a diagnostic must not
+// destroy it. SONARE_C_TRY also clears defensively for legacy/helper entry paths.
+#define SONARE_C_API_ENTRY sonare_c_detail::clear_last_error()
+
 // Clears any stale detailed-error message before running the guarded body so a
 // message recorded by an earlier call can never leak. The catch arms below set a
 // fresh message on every caught-exception path. Validation early-returns that

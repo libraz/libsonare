@@ -3,6 +3,7 @@
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
                                int max_candidates, SonareBpmAnalysisResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (bpm_min <= 0.0f || bpm_max <= bpm_min || n_fft <= 0 || hop_length <= 0 ||
       max_candidates < 0) {
@@ -52,6 +53,7 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
 
 SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
                                             int n_octave_bands, SonareAcousticResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_octave_bands < 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -73,6 +75,7 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
                                    int n_octave_bands, int n_third_octave_subbands,
                                    float min_decay_db, float noise_floor_margin_db,
                                    SonareAcousticResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_octave_bands < 0 || n_third_octave_subbands < 0 || min_decay_db <= 0.0f ||
       noise_floor_margin_db < 0.0f) {
@@ -100,6 +103,7 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
 SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sample_rate,
                                   float bpm_min, float bpm_max, float start_bpm, int n_fft,
                                   int hop_length, SonareRhythmResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (bpm_min <= 0.0f || bpm_max <= bpm_min || n_fft <= 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -137,6 +141,7 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
 SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sample_rate,
                                     float window_sec, int hop_length, float compression_threshold,
                                     SonareDynamicsResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (window_sec <= 0.0f || hop_length <= 0 || compression_threshold < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -179,6 +184,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
 SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate, int n_fft,
                                   int hop_length, int n_mels, int n_mfcc, float window_sec,
                                   SonareTimbreResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_fft <= 0 || hop_length <= 0 || n_mels <= 0 || n_mfcc <= 0 || window_sec <= 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -242,6 +248,7 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
                                  float min_duration, float smoothing_window, float threshold,
                                  int use_triads_only, int n_fft, int hop_length, int use_beat_sync,
                                  SonareChordAnalysisResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (min_duration < 0.0f || smoothing_window <= 0.0f || threshold < 0.0f || n_fft <= 0 ||
       hop_length <= 0) {
@@ -270,6 +277,7 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
 SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
                                     const SonareChordDetectionOptions* options,
                                     SonareChordAnalysisResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !options) return SONARE_ERROR_INVALID_PARAMETER;
   if (options->min_duration < 0.0f || options->smoothing_window <= 0.0f ||
       options->threshold < 0.0f || options->n_fft <= 0 || options->hop_length <= 0 ||
@@ -322,6 +330,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
                                              const SonareChordDetectionOptions* options,
                                              SonarePitchClass key_root, SonareMode key_mode,
                                              SonareStringArray* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !options) return SONARE_ERROR_INVALID_PARAMETER;
   if (options->min_duration < 0.0f || options->smoothing_window <= 0.0f ||
       options->threshold < 0.0f || options->n_fft <= 0 || options->hop_length <= 0 ||
@@ -397,6 +406,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
                                     int hop_length, float min_section_sec,
                                     SonareSectionResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (n_fft <= 0 || hop_length <= 0 || min_section_sec < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -431,6 +441,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
                                   float fmax, int frame_length, int hop_length, float threshold,
                                   SonareMelodyResult* out) {
+  SONARE_C_API_ENTRY;
   // Preserve the historical default contour: plain per-frame YIN, left-aligned
   // (use_pyin = 0). center is irrelevant when use_pyin is 0.
   return sonare_analyze_melody_ex(samples, length, sample_rate, fmin, fmax, frame_length,
@@ -441,6 +452,7 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
                                      float fmin, float fmax, int frame_length, int hop_length,
                                      float threshold, int use_pyin, int center,
                                      SonareMelodyResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   if (fmin <= 0.0f || fmax <= fmin || frame_length <= 0 || hop_length <= 0 || threshold <= 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;

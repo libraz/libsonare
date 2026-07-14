@@ -40,6 +40,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_fader_db(SonareStrip * strip, float db) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -51,6 +52,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_input_trim_db(SonareStrip * strip, float db) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -62,6 +64,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_pan(SonareStrip * strip, float pan, int pan_mode) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -88,6 +91,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_dual_pan(SonareStrip * strip, float left_pan, float right_pan) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -106,6 +110,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_surround_pan(SonareStrip * strip, const SonareSurroundPan* pan) {
+      SONARE_C_API_ENTRY;
       if (!strip || !pan) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -126,6 +131,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_width(SonareStrip * strip, float width) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -137,6 +143,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_muted(SonareStrip * strip, int muted) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -148,6 +155,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_soloed(SonareStrip * strip, int soloed) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -165,6 +173,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_solo_safe(SonareStrip * strip, int solo_safe) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -181,6 +190,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_polarity_invert(SonareStrip * strip, int invert_left,
                                                  int invert_right) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -193,6 +203,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_pan_law(SonareStrip * strip, int pan_law) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -204,6 +215,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_channel_delay_samples(SonareStrip * strip, int delay_samples) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -220,6 +232,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_vca_offset_db(SonareStrip * strip, float offset_db) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -233,6 +246,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     SonareError sonare_strip_add_send(SonareStrip * strip, const char* id,
                                       const char* destination_bus_id, float send_db, int timing,
                                       size_t* index_out) {
+      SONARE_C_API_ENTRY;
       if (!strip || !destination_bus_id) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -260,6 +274,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_set_send_db(SonareStrip * strip, size_t index, float send_db) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -279,6 +294,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_remove_send(SonareStrip * strip, unsigned int index) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -307,6 +323,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     }
 
     SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot* out) {
+      SONARE_C_API_ENTRY;
       if (!strip || !out) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -318,6 +335,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap,
                                        SonareMixMeterSnapshot* out) {
+      SONARE_C_API_ENTRY;
       if (!strip || !out) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -361,6 +379,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     SonareError sonare_strip_schedule_insert_automation(
         SonareStrip * strip, unsigned int insert_index, unsigned int param_id, int64_t sample_pos,
         float value, int curve) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -396,6 +415,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_schedule_fader_automation(SonareStrip * strip, int64_t sample_pos,
                                                        float fader_db, int curve) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -412,6 +432,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_schedule_pan_automation(SonareStrip * strip, int64_t sample_pos,
                                                      float pan, int curve) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -428,6 +449,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_schedule_width_automation(SonareStrip * strip, int64_t sample_pos,
                                                        float width, int curve) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
@@ -444,6 +466,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_schedule_send_automation(SonareStrip * strip, size_t send_index,
                                                       int64_t sample_pos, float db, int curve) {
+      SONARE_C_API_ENTRY;
       if (!strip) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }

@@ -29,6 +29,7 @@ const char* sonare_mastering_preset_names(void) {
 SonareError sonare_master_audio(const char* preset_name, const float* samples, size_t length,
                                 int sample_rate, const SonareMasteringParam* overrides,
                                 size_t override_count, SonareMasteringChainResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -57,6 +58,7 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
                                        const float* right, size_t length, int sample_rate,
                                        const SonareMasteringParam* overrides, size_t override_count,
                                        SonareMasteringChainStereoResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
   // Match the mono paths: reject non-finite samples and out-of-range
   // sample_rate/length, not just null pointers.
@@ -92,6 +94,7 @@ SonareError sonare_master_audio_with_progress(const char* preset_name, const flo
                                               size_t override_count,
                                               SonareMasteringProgressCallback callback,
                                               void* user_data, SonareMasteringChainResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
   if (err != SONARE_OK) return err;
@@ -131,6 +134,7 @@ SonareError sonare_master_audio_stereo_with_progress(
     const SonareMasteringParam* overrides, size_t override_count,
     SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out || !preset_name) return SONARE_ERROR_INVALID_PARAMETER;
   // Match the mono paths: reject non-finite samples and out-of-range
   // sample_rate/length, not just null pointers.
