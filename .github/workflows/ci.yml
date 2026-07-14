@@ -121,6 +121,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 5.0.2
       - run: corepack enable
       - uses: actions/setup-node@v5
         with:
