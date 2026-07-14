@@ -69,6 +69,9 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
                      2048, scope_band_count_);
 #endif
   automation_.prepare(sample_rate, active_tempo_map_);
+#if defined(SONARE_WITH_GRAPH)
+  automation_.set_external_target_resolver(&RealtimeEngine::resolve_graph_parameter_thunk, this);
+#endif
 #if defined(SONARE_WITH_MIXING)
   // Route reserved engine-namespace automation lanes (mixer fader/pan) straight
   // to the mixer runtimes instead of the bound-processor table.

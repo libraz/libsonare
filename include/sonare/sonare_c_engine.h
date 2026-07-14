@@ -52,6 +52,12 @@ extern "C" {
 ///   `sonare_engine_set_metronome`, `sonare_engine_set_track_lanes`,
 ///   `sonare_engine_set_track_strip_json`,
 ///   `sonare_engine_set_master_strip_json`.
+/// - Live MIDI configuration: `sonare_engine_set_midi_fx`,
+///   `sonare_engine_clear_midi_fx`, `sonare_engine_bind_midi_cc`, and
+///   `sonare_engine_clear_midi_cc_bindings` publish immutable state that is
+///   adopted at the next audio-block boundary. These four calls may run on the
+///   control thread while `sonare_engine_process` is active; callbacks and note
+///   flushes are performed only by the audio thread.
 /// - Offline render: `sonare_engine_render_offline`,
 ///   `sonare_engine_bounce_offline`, `sonare_engine_freeze_offline` (these own
 ///   the audio role internally; do not also call them from a render callback).

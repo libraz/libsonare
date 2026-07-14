@@ -328,7 +328,7 @@ void CcMap::reset_live_decode() noexcept {
   }
 }
 
-bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) noexcept {
+bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) const noexcept {
   if (out_param == nullptr || out_unit == nullptr) {
     return false;
   }

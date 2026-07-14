@@ -63,12 +63,16 @@ bool RealtimeEngine::parameter_target_reserved(uint32_t target_id) noexcept {
 
 #if defined(SONARE_WITH_GRAPH)
 bool RealtimeEngine::swap_graph(std::unique_ptr<graph::Graph> graph, const char* input_node_id,
-                                const char* output_node_id, int num_channels) {
+                                const char* output_node_id, int num_channels,
+                                std::vector<GraphRuntime::ParameterBinding> parameter_bindings) {
   if (!graph || !input_node_id || !output_node_id || num_channels <= 0) {
     return false;
   }
+  for (const GraphRuntime::ParameterBinding& binding : parameter_bindings) {
+    if (parameter_target_reserved(binding.param_id)) return false;
+  }
   return graph_runtime_.swap(std::shared_ptr<graph::Graph>(std::move(graph)), input_node_id,
-                             output_node_id, num_channels);
+                             output_node_id, num_channels, std::move(parameter_bindings));
 }
 
 size_t RealtimeEngine::graph_node_count() const noexcept {
@@ -85,15 +89,17 @@ bool RealtimeEngine::bind_graph_parameter(uint32_t param_id, const char* node_id
   if (parameter_target_reserved(param_id)) {
     return false;
   }
-  graph::Graph* graph = graph_runtime_.active_graph();
-  if (!graph || !node_id) {
+  if (!node_id) return false;
+  try {
+    return graph_runtime_.bind_parameter(param_id, node_id);
+  } catch (...) {
     return false;
   }
-  graph::Node* node = graph->node(node_id);
-  if (!node) {
-    return false;
-  }
-  return automation_.bind_target(param_id, &node->processor());
+}
+
+rt::ProcessorBase* RealtimeEngine::resolve_graph_parameter_thunk(void* context,
+                                                                 uint32_t param_id) noexcept {
+  return static_cast<RealtimeEngine*>(context)->graph_runtime_.parameter_target(param_id);
 }
 #endif
 
@@ -300,9 +306,10 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const midi::Ump ump = midi::make_midi1_control_change(group, channel, controller, value7);
       uint32_t param_id = 0;
       float mapped_value = 0.0f;
-      if (midi_cc_map_.lookup_param(controller, channel, &param_id) &&
-          midi_cc_map_.value_to_unit(controller, channel, static_cast<float>(value7) / 127.0f,
-                                     &mapped_value)) {
+      const midi::CcMap* cc_map = midi_cc_maps_.current();
+      if (cc_map != nullptr && cc_map->lookup_param(controller, channel, &param_id) &&
+          cc_map->value_to_unit(controller, channel, static_cast<float>(value7) / 127.0f,
+                                &mapped_value)) {
         automation_.set_parameter(param_id, mapped_value);
       }
       midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);

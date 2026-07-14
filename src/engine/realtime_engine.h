@@ -200,18 +200,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool push_midi_sysex(uint32_t destination_id, const uint8_t* data, size_t size,
                        int64_t render_frame) noexcept;
   bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
-                    float max_value) noexcept {
-    if (parameter_target_reserved(param_id)) return false;
-    midi::CcBinding binding{};
-    binding.cc_number = controller;
-    binding.channel = channel;
-    binding.param_id = param_id;
-    binding.min_value = min_value;
-    binding.max_value = max_value;
-    return midi_cc_map_.bind(binding);
-  }
-  void clear_midi_cc_bindings() noexcept { midi_cc_map_.clear(); }
-  size_t midi_cc_binding_count() const noexcept { return midi_cc_map_.binding_count(); }
+                    float max_value) noexcept;
+  void clear_midi_cc_bindings() noexcept;
+  size_t midi_cc_binding_count() const noexcept;
   void set_midi_output_sink(host::MidiOutputSink* sink) noexcept {
     midi_dispatch_sink_.output.store(sink, std::memory_order_release);
   }
@@ -437,7 +428,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Control-thread graph hot-swap. Allocates a new binding internally, so this
   // is intentionally NOT noexcept (a throwing allocation propagates).
   bool swap_graph(std::unique_ptr<graph::Graph> graph, const char* input_node_id,
-                  const char* output_node_id, int num_channels);
+                  const char* output_node_id, int num_channels,
+                  std::vector<GraphRuntime::ParameterBinding> parameter_bindings = {});
   bool has_graph() const noexcept { return graph_runtime_.active_graph() != nullptr; }
   size_t graph_node_count() const noexcept;
   size_t graph_connection_count() const noexcept;
@@ -448,6 +440,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   int max_block_size() const noexcept { return max_block_size_; }
 
  private:
+  static rt::ProcessorBase* resolve_graph_parameter_thunk(void* context,
+                                                          uint32_t param_id) noexcept;
   void drain_commands(int64_t block_render_frame, int num_frames) noexcept;
   // Store a command in the pending bank. When @p prefer_current is true (the
   // command is due in the current block) and the bank is full, evict the
@@ -625,7 +619,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   std::atomic<host::MidiInputSource*> midi_input_source_{nullptr};
   std::atomic<uint32_t> midi_input_destination_id_{0};
   uint32_t live_midi_input_destination_id_ = 0;
-  midi::CcMap midi_cc_map_{};
+  mutable rt::RtPublisher<midi::CcMap> midi_cc_maps_{};
   static constexpr size_t kMaxLiveMidiInputEvents = 256;
   std::array<midi::MidiEvent, kMaxLiveMidiInputEvents> live_midi_input_events_{};
   size_t live_midi_input_count_ = 0;

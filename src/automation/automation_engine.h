@@ -40,6 +40,7 @@ class AutomationEngine {
   /// disjoint id namespaces (e.g. mixer fader/pan plus insert automation). Pure
   /// and stateless: configured at prepare time, called on the audio thread.
   using EngineParamGate = bool (*)(uint32_t param_id);
+  using ExternalTargetResolver = rt::ProcessorBase* (*)(void* context, uint32_t param_id) noexcept;
 
   void prepare(double sample_rate, const transport::TempoMap* tempo_map);
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
@@ -64,6 +65,12 @@ class AutomationEngine {
   /// non-realtime-safe targets before any RT automation path reaches a
   /// processor. Unregistered ids keep the legacy unknown-target behavior.
   void set_parameter_metadata(std::vector<ParameterInfo> parameters);
+  /// Adds a block-stable target source owned by another immutable runtime
+  /// snapshot (for example GraphRuntime). Configure before processing starts.
+  void set_external_target_resolver(ExternalTargetResolver resolver, void* context) noexcept {
+    external_target_resolver_ = resolver;
+    external_target_context_ = context;
+  }
   void set_lanes(std::vector<AutomationLane> lanes);
   bool bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept;
   void clear_targets() noexcept;
@@ -157,6 +164,8 @@ class AutomationEngine {
   // Optional gate predicate; null keeps the mask/match fast path (see
   // set_engine_param_gate). Plain member: written once at prepare time.
   EngineParamGate engine_param_gate_ = nullptr;
+  ExternalTargetResolver external_target_resolver_ = nullptr;
+  void* external_target_context_ = nullptr;
   rt::RtSnapshot<std::vector<ParameterInfo>> parameter_metadata_{};
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
   std::atomic<size_t> lane_count_{0};

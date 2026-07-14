@@ -1,5 +1,6 @@
 #include <atomic>
 #include <cstring>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -7,6 +8,42 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace sonare::engine {
+
+bool RealtimeEngine::bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id,
+                                  float min_value, float max_value) noexcept {
+  if (parameter_target_reserved(param_id)) return false;
+  try {
+    auto next = std::make_shared<midi::CcMap>();
+    if (const std::shared_ptr<const midi::CcMap>& current = midi_cc_maps_.control_current()) {
+      *next = *current;
+    }
+    midi::CcBinding binding{};
+    binding.cc_number = controller;
+    binding.channel = channel;
+    binding.param_id = param_id;
+    binding.min_value = min_value;
+    binding.max_value = max_value;
+    if (!next->bind(binding)) return false;
+    next->reset_live_decode();
+    return midi_cc_maps_.publish(std::shared_ptr<const midi::CcMap>(std::move(next)));
+  } catch (...) {
+    return false;
+  }
+}
+
+void RealtimeEngine::clear_midi_cc_bindings() noexcept {
+  try {
+    auto next = std::make_shared<midi::CcMap>();
+    midi_cc_maps_.publish(std::shared_ptr<const midi::CcMap>(std::move(next)));
+  } catch (...) {
+    // Preserve the current map if a new empty snapshot cannot be allocated.
+  }
+}
+
+size_t RealtimeEngine::midi_cc_binding_count() const noexcept {
+  const std::shared_ptr<const midi::CcMap>& current = midi_cc_maps_.control_current();
+  return current ? current->binding_count() : 0;
+}
 
 void RealtimeEngine::set_midi_clips(std::vector<midi::MidiClipSchedule> clips) {
   midi_sequencer_.set_midi_clips(std::move(clips));
@@ -123,7 +160,8 @@ void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int nu
     // precision instead of MSB-only 7 bits (see CcMap::observe_live_cc).
     uint32_t param_id = 0;
     float mapped_value = 0.0f;
-    if (midi_cc_map_.observe_live_cc(event.ump, &param_id, &mapped_value)) {
+    const midi::CcMap* cc_map = midi_cc_maps_.current();
+    if (cc_map != nullptr && cc_map->observe_live_cc(event.ump, &param_id, &mapped_value)) {
       automation_.set_parameter(param_id, mapped_value);
     }
     midi_sequencer_.inject_event(live_midi_input_destination_id_, event.render_frame, event.ump);

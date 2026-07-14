@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <memory>
+#include <unordered_set>
+#include <utility>
 
 namespace sonare::engine {
 
@@ -21,7 +23,8 @@ bool GraphRuntime::bind(graph::Graph* graph, const char* input_node_id, const ch
 }
 
 bool GraphRuntime::swap(std::shared_ptr<graph::Graph> graph, const char* input_node_id,
-                        const char* output_node_id, int num_channels) {
+                        const char* output_node_id, int num_channels,
+                        std::vector<ParameterBinding> parameter_bindings) {
   // Refuse a non-compiled graph here so an uncompiled topology can never be
   // published to the audio thread. Graph::process_block() is a no-op on an
   // uncompiled graph (it is noexcept and cannot throw), but rejecting at the
@@ -36,6 +39,24 @@ bool GraphRuntime::swap(std::shared_ptr<graph::Graph> graph, const char* input_n
       output->num_ports() < num_channels) {
     return false;
   }
+  if (parameter_bindings.size() > kMaxParameterBindings) {
+    return false;
+  }
+
+  std::vector<Binding::Target> targets;
+  targets.reserve(parameter_bindings.size());
+  std::unordered_set<uint32_t> seen_ids;
+  seen_ids.reserve(parameter_bindings.size());
+  for (const ParameterBinding& parameter_binding : parameter_bindings) {
+    if (parameter_binding.param_id == 0 || !seen_ids.insert(parameter_binding.param_id).second) {
+      return false;
+    }
+    graph::Node* node = graph->node(parameter_binding.node_id);
+    if (!node) {
+      return false;
+    }
+    targets.push_back({parameter_binding.param_id, &node->processor()});
+  }
   // Control thread: the allocation may throw bad_alloc and that propagates
   // (this function is intentionally NOT noexcept). publish() hands the new
   // binding to the audio thread lock-free; the old binding is later freed off
@@ -45,7 +66,36 @@ bool GraphRuntime::swap(std::shared_ptr<graph::Graph> graph, const char* input_n
   binding->input = input;
   binding->output = output;
   binding->num_channels = num_channels;
+  binding->parameter_targets = std::move(targets);
   return binding_.publish(std::shared_ptr<const Binding>(std::move(binding)));
+}
+
+bool GraphRuntime::bind_parameter(uint32_t param_id, const char* node_id) {
+  if (param_id == 0 || !node_id) return false;
+  const std::shared_ptr<const Binding>& current = binding_.control_current();
+  if (!current || !current->graph) return false;
+  graph::Node* node = current->graph->node(node_id);
+  if (!node) return false;
+
+  auto replacement = std::make_shared<Binding>(*current);
+  for (Binding::Target& target : replacement->parameter_targets) {
+    if (target.param_id == param_id) {
+      target.processor = &node->processor();
+      return binding_.publish(std::shared_ptr<const Binding>(std::move(replacement)));
+    }
+  }
+  if (replacement->parameter_targets.size() >= kMaxParameterBindings) return false;
+  replacement->parameter_targets.push_back({param_id, &node->processor()});
+  return binding_.publish(std::shared_ptr<const Binding>(std::move(replacement)));
+}
+
+rt::ProcessorBase* GraphRuntime::parameter_target(uint32_t param_id) const noexcept {
+  const Binding* binding = binding_.current();
+  if (!binding || param_id == 0) return nullptr;
+  for (const Binding::Target& target : binding->parameter_targets) {
+    if (target.param_id == param_id) return target.processor;
+  }
+  return nullptr;
 }
 
 graph::Graph* GraphRuntime::swap(graph::Graph* graph, const char* input_node_id,
@@ -71,9 +121,10 @@ void GraphRuntime::process(float* const* io, int num_channels, int offset,
   // binding when the initial sub-block is not at offset 0 (a standalone caller
   // that renders a mid-block segment before any block head), so nothing is
   // silently rendered from an unadopted (null) binding.
-  if (offset == 0 || binding_.current() == nullptr) {
+  if ((offset == 0 && !acquired_for_block_) || binding_.current() == nullptr) {
     binding_.acquire();
   }
+  if (offset == 0) acquired_for_block_ = false;
   const Binding* binding = binding_.current();
   if (!binding || !binding->graph || !binding->input || !binding->output || !io ||
       num_channels <= 0 || num_frames <= 0 || offset < 0) {

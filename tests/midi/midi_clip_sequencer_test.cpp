@@ -389,6 +389,7 @@ TEST_CASE("MidiSequencer applies live MIDI FX per destination before dispatch", 
   chord.intervals[1] = 7;
   fx.set_chord(chord);
   REQUIRE(seq.set_midi_fx(7, fx));
+  seq.acquire_midi_fx(0);
 
   MidiClipSchedule processed;
   processed.id = 1;
@@ -435,6 +436,7 @@ TEST_CASE("MidiSequencer live MIDI FX keeps future arpeggiator events pending", 
   arp.gate_frames = 10;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
 
   MidiClipSchedule clip;
   clip.id = 1;
@@ -478,6 +480,7 @@ TEST_CASE("MidiSequencer clamps overdue pending MIDI FX events to block start", 
   arp.gate_frames = 10;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
 
   MidiClipSchedule clip;
   clip.id = 121;
@@ -515,6 +518,7 @@ TEST_CASE("MidiSequencer keeps arpeggiator pending events across loop wrap", "[m
   arp.gate_frames = 5;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
 
   MidiClipSchedule clip;
   clip.id = 101;
@@ -558,6 +562,7 @@ TEST_CASE("MidiSequencer MIDI FX hot-swap releases transformed active notes", "[
   up.semitones = 12;
   transpose_up.set_transpose(up);
   REQUIRE(seq.set_midi_fx(7, transpose_up));
+  seq.acquire_midi_fx(0);
 
   MidiClipSchedule clip;
   clip.id = 111;
@@ -575,6 +580,7 @@ TEST_CASE("MidiSequencer MIDI FX hot-swap releases transformed active notes", "[
   MidiFxChain bypass;
   sink.events.clear();
   REQUIRE(seq.set_midi_fx(7, bypass, 64));
+  seq.acquire_midi_fx(64);
 
   REQUIRE(seq.active_note_count() == 0);
   REQUIRE_FALSE(sink.events.empty());
@@ -586,6 +592,85 @@ TEST_CASE("MidiSequencer MIDI FX hot-swap releases transformed active notes", "[
     }
   }
   REQUIRE(saw_old_pitch_release);
+}
+
+TEST_CASE("MidiSequencer MIDI FX clear releases generated notes at the audio boundary", "[midi]") {
+  auto exercise_clear = [](const MidiFxChain& fx, const std::vector<uint8_t>& generated_notes) {
+    MidiSequencer seq;
+    CapturingSink sink;
+    seq.prepare(48000.0);
+    seq.set_sink(&sink);
+    REQUIRE(seq.set_midi_fx(7, fx));
+    seq.acquire_midi_fx(0);
+
+    seq.inject_event(7, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    REQUIRE(seq.active_note_count() == generated_notes.size());
+    sink.events.clear();
+
+    // The control call only publishes. Note flush and chain reset happen when
+    // the audio thread adopts the snapshot at the next block boundary.
+    seq.clear_midi_fx(7);
+    REQUIRE(seq.active_note_count() == generated_notes.size());
+    REQUIRE(sink.events.empty());
+    seq.acquire_midi_fx(64);
+    REQUIRE(seq.active_note_count() == 0);
+
+    for (uint8_t note : generated_notes) {
+      bool released = false;
+      for (const auto& captured : sink.events) {
+        if (captured.destination == 7 && captured.event.render_frame == 64 &&
+            captured.event.ump.is_note_off() && captured.event.ump.note_number() == note) {
+          released = true;
+        }
+      }
+      REQUIRE(released);
+    }
+
+    // Pending arpeggiator/chord output was discarded with the old chain. The
+    // source note-off now passes through unchanged and cannot resurrect state.
+    sink.events.clear();
+    seq.process_block(64, 64);
+    REQUIRE(sink.events.empty());
+    seq.inject_event(7, 128, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+    REQUIRE(seq.active_note_count() == 0);
+    REQUIRE(sink.events.size() == 1);
+    REQUIRE(sink.events[0].event.ump.note_number() == 60);
+  };
+
+  SECTION("transpose") {
+    MidiFxChain fx;
+    sonare::midi::TransposeConfig transpose;
+    transpose.enabled = true;
+    transpose.semitones = 12;
+    fx.set_transpose(transpose);
+    exercise_clear(fx, {72});
+  }
+
+  SECTION("chord") {
+    MidiFxChain fx;
+    sonare::midi::ChordConfig chord;
+    chord.enabled = true;
+    chord.count = 3;
+    chord.intervals[0] = 0;
+    chord.intervals[1] = 4;
+    chord.intervals[2] = 7;
+    fx.set_chord(chord);
+    exercise_clear(fx, {60, 64, 67});
+  }
+
+  SECTION("arpeggiator") {
+    MidiFxChain fx;
+    sonare::midi::ArpeggiatorConfig arp;
+    arp.enabled = true;
+    arp.steps = 3;
+    arp.intervals[0] = 0;
+    arp.intervals[1] = 4;
+    arp.intervals[2] = 7;
+    arp.step_frames = 32;
+    arp.gate_frames = 16;
+    fx.set_arpeggiator(arp);
+    exercise_clear(fx, {60});
+  }
 }
 
 TEST_CASE("MidiSequencer all_notes_off releases sounding notes (hang-note safety)", "[midi]") {

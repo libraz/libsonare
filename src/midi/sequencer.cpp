@@ -17,6 +17,7 @@ void MidiSequencer::reset() noexcept {
   active_count_ = 0;
   pending_fx_count_ = 0;
   last_clips_ = nullptr;
+  last_midi_fx_snapshot_ = nullptr;
   dispatched_event_count_.store(0, std::memory_order_relaxed);
 }
 
@@ -79,37 +80,111 @@ const MidiSequencer::DestinationFx* MidiSequencer::find_midi_fx(
 
 bool MidiSequencer::set_midi_fx(uint32_t destination_id, const MidiFxChain& chain,
                                 int64_t render_frame) noexcept {
-  DestinationFx* slot = find_midi_fx(destination_id);
-  if (slot == nullptr) {
-    for (DestinationFx& candidate : midi_fx_) {
-      if (!candidate.active) {
+  (void)render_frame;
+  try {
+    auto next = std::make_shared<MidiFxSnapshot>();
+    if (const std::shared_ptr<const MidiFxSnapshot>& current =
+            midi_fx_snapshots_.control_current()) {
+      *next = *current;
+    }
+    DestinationFxConfig* slot = nullptr;
+    for (DestinationFxConfig& candidate : next->destinations) {
+      if (candidate.active && candidate.destination_id == destination_id) {
         slot = &candidate;
-        slot->active = true;
-        slot->destination_id = destination_id;
         break;
       }
     }
+    if (slot == nullptr) {
+      for (DestinationFxConfig& candidate : next->destinations) {
+        if (!candidate.active) {
+          slot = &candidate;
+          break;
+        }
+      }
+    }
+    if (slot == nullptr) return false;
+    slot->active = true;
+    slot->destination_id = destination_id;
+    slot->generation = next_midi_fx_generation_++;
+    if (next_midi_fx_generation_ == 0) next_midi_fx_generation_ = 1;
+    slot->transpose = chain.transpose();
+    slot->quantize = chain.quantize();
+    slot->velocity = chain.velocity_curve();
+    slot->chord = chain.chord();
+    slot->arpeggiator = chain.arpeggiator();
+    slot->humanize = chain.humanize();
+    return midi_fx_snapshots_.publish(std::shared_ptr<const MidiFxSnapshot>(std::move(next)));
+  } catch (...) {
+    return false;
   }
-  if (slot == nullptr) return false;
-  all_notes_off_for_destination(destination_id, render_frame);
-  slot->chain.set_transpose(chain.transpose());
-  slot->chain.set_quantize(chain.quantize());
-  slot->chain.set_velocity_curve(chain.velocity_curve());
-  slot->chain.set_chord(chain.chord());
-  slot->chain.set_arpeggiator(chain.arpeggiator());
-  slot->chain.set_humanize(chain.humanize());
-  slot->chain.prepare();
-  slot->buffer.clear();
-  return true;
 }
 
 void MidiSequencer::clear_midi_fx(uint32_t destination_id) noexcept {
-  DestinationFx* slot = find_midi_fx(destination_id);
-  if (slot == nullptr) return;
-  slot->active = false;
-  slot->destination_id = 0;
-  slot->buffer.clear();
-  clear_pending_for_destination(destination_id);
+  try {
+    const std::shared_ptr<const MidiFxSnapshot>& current = midi_fx_snapshots_.control_current();
+    if (!current) return;
+    auto next = std::make_shared<MidiFxSnapshot>(*current);
+    for (DestinationFxConfig& slot : next->destinations) {
+      if (!slot.active || slot.destination_id != destination_id) continue;
+      slot.active = false;
+      slot.destination_id = 0;
+      slot.generation = next_midi_fx_generation_++;
+      if (next_midi_fx_generation_ == 0) next_midi_fx_generation_ = 1;
+      midi_fx_snapshots_.publish(std::shared_ptr<const MidiFxSnapshot>(std::move(next)));
+      return;
+    }
+  } catch (...) {
+    // Keep the current published configuration on allocation failure.
+  }
+}
+
+void MidiSequencer::acquire_midi_fx(int64_t render_frame) noexcept {
+  midi_fx_snapshots_.acquire();
+  const MidiFxSnapshot* snapshot = midi_fx_snapshots_.current();
+  if (snapshot == last_midi_fx_snapshot_) return;
+
+  // Flush every live destination whose exact configuration generation is not
+  // present in the new snapshot. This runs on the audio thread, so sink calls
+  // are correctly ordered before the replacement becomes visible.
+  for (const DestinationFx& live : midi_fx_) {
+    if (!live.active) continue;
+    bool unchanged = false;
+    if (snapshot != nullptr) {
+      for (const DestinationFxConfig& config : snapshot->destinations) {
+        if (config.active && config.destination_id == live.destination_id &&
+            config.generation == live.generation) {
+          unchanged = true;
+          break;
+        }
+      }
+    }
+    if (!unchanged) all_notes_off_for_destination(live.destination_id, render_frame);
+  }
+
+  for (DestinationFx& live : midi_fx_) {
+    live.active = false;
+    live.destination_id = 0;
+    live.generation = 0;
+    live.buffer.clear();
+  }
+  if (snapshot != nullptr) {
+    for (size_t i = 0; i < snapshot->destinations.size(); ++i) {
+      const DestinationFxConfig& config = snapshot->destinations[i];
+      if (!config.active) continue;
+      DestinationFx& live = midi_fx_[i];
+      live.active = true;
+      live.destination_id = config.destination_id;
+      live.generation = config.generation;
+      live.chain.set_transpose(config.transpose);
+      live.chain.set_quantize(config.quantize);
+      live.chain.set_velocity_curve(config.velocity);
+      live.chain.set_chord(config.chord);
+      live.chain.set_arpeggiator(config.arpeggiator);
+      live.chain.set_humanize(config.humanize);
+      live.chain.prepare();
+    }
+  }
+  last_midi_fx_snapshot_ = snapshot;
 }
 
 void MidiSequencer::dispatch(uint32_t destination_id, const MidiEvent& event) noexcept {

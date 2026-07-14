@@ -101,6 +101,7 @@ TEST_CASE("MidiSequencer live MIDI FX path performs no heap allocation after pre
   arp.gate_frames = 24;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(5, fx));
+  seq.acquire_midi_fx(0);
 
   MidiClipSchedule clip;
   clip.id = 1;

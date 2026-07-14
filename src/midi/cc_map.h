@@ -154,7 +154,7 @@ class CcMap {
   /// target param id to @p out_param and the unit value to @p out_unit and
   /// returns true. RT-safe: no allocation, no lock; mutates only the per-channel
   /// live-decode state. Must be called from a single (audio) thread.
-  bool observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) noexcept;
+  bool observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit) const noexcept;
 
   /// Resets the per-channel live-decode accumulator state (14-bit MSB pending,
   /// RPN/NRPN selectors, Data Entry MSB). Does not touch bindings. Call when the
@@ -231,7 +231,7 @@ class CcMap {
     // 14-bit Data Entry value.
     uint8_t data_msb = 0;
   };
-  std::array<LiveChannelState, 16> live_{};
+  mutable std::array<LiveChannelState, 16> live_{};
 
   // Kind-aware binding lookup for the live-decode path: finds a binding by an
   // arbitrary predicate, preferring an exact-channel match over kCcAnyChannel.

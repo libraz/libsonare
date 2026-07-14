@@ -232,6 +232,12 @@ size_t AutomationEngine::lane_count() const noexcept {
 
 rt::ProcessorBase* AutomationEngine::target_for(uint32_t param_id) const noexcept {
   if (param_id == 0) return nullptr;  // 0 is reserved as the invalid/none id.
+  if (external_target_resolver_ != nullptr) {
+    if (rt::ProcessorBase* processor =
+            external_target_resolver_(external_target_context_, param_id)) {
+      return processor;
+    }
+  }
   // Scan the full bound range and SKIP null/cleared slots instead of stopping
   // at the first one. Stopping early silently dropped any target bound after a
   // cleared earlier slot (e.g. after a clear+rebind). bound_count_ is read with

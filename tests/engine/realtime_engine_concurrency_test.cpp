@@ -82,6 +82,24 @@ static void run_concurrent_mutation(int blocks) {
            {1.0, static_cast<float>((i % 10) * 0.1f), sonare::automation::CurveType::Linear}});
       engine.automation().set_lanes({lane});
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+      sonare::midi::MidiFxChain midi_fx;
+      sonare::midi::TransposeConfig transpose;
+      transpose.enabled = true;
+      transpose.semitones = i % 25 - 12;
+      midi_fx.set_transpose(transpose);
+      if (i % 3 == 0) {
+        engine.clear_midi_fx(9);
+      } else {
+        REQUIRE(engine.set_midi_fx(9, midi_fx));
+      }
+      if (i % 4 == 0) {
+        engine.clear_midi_cc_bindings();
+      } else {
+        REQUIRE(engine.bind_midi_cc(74, 0, 11, 0.0f, 1.0f));
+      }
+#endif
+
       // Pace the control thread so it stays well within the 64-generation
       // RtSnapshot retention window even if the audio thread is descheduled.
       std::this_thread::sleep_for(std::chrono::microseconds(20));

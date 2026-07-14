@@ -49,9 +49,16 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // block start. Every per-sub-block read below then sees a stable set, so a
   // control-thread publish can never swap data mid-block.
   clip_player_.acquire_clips();
+#if defined(SONARE_WITH_GRAPH)
+  // Graph topology and its automation target table share one immutable
+  // snapshot, adopted before automation so both remain aligned for this block.
+  graph_runtime_.acquire();
+#endif
   automation_.acquire_lanes();
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.acquire_midi_clips();
+  midi_sequencer_.acquire_midi_fx(state.render_frame);
+  midi_cc_maps_.acquire();
   host::MidiInputSource* midi_input_source = midi_input_source_.load(std::memory_order_acquire);
   live_midi_input_destination_id_ = midi_input_destination_id_.load(std::memory_order_relaxed);
   live_midi_input_count_ = midi_input_source != nullptr

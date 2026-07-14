@@ -81,6 +81,11 @@ class MidiSequencer {
                    int64_t render_frame = 0) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
 
+  /// AUDIO thread: adopt pending FX configuration at a block boundary. Any
+  /// replaced/removed destination is flushed to the sink before the new chain
+  /// becomes active, so generated notes and pending events cannot hang.
+  void acquire_midi_fx(int64_t render_frame) noexcept;
+
   /// AUDIO thread: adopt the latest published clip set. Call once at block
   /// start before process_block. RT-safe, no alloc.
   void acquire_midi_clips() noexcept { clips_.acquire(); }
@@ -156,9 +161,24 @@ class MidiSequencer {
   };
   struct DestinationFx {
     uint32_t destination_id = 0;
+    uint64_t generation = 0;
     bool active = false;
     MidiFxChain chain;
     MidiFxBuffer buffer;
+  };
+  struct DestinationFxConfig {
+    uint32_t destination_id = 0;
+    uint64_t generation = 0;
+    bool active = false;
+    TransposeConfig transpose{};
+    QuantizeConfig quantize{};
+    VelocityCurveConfig velocity{};
+    ChordConfig chord{};
+    ArpeggiatorConfig arpeggiator{};
+    HumanizeConfig humanize{};
+  };
+  struct MidiFxSnapshot {
+    std::array<DestinationFxConfig, kMaxMidiFxInserts> destinations{};
   };
   struct PendingFxEvent {
     uint32_t destination_id = 0;
@@ -221,6 +241,9 @@ class MidiSequencer {
   size_t active_count_ = 0;
   std::atomic<uint32_t> active_note_overflow_count_{0};
   std::atomic<uint32_t> dispatched_event_count_{0};
+  mutable rt::RtPublisher<MidiFxSnapshot> midi_fx_snapshots_;
+  const MidiFxSnapshot* last_midi_fx_snapshot_ = nullptr;
+  uint64_t next_midi_fx_generation_ = 1;  // control-thread only
   std::array<DestinationFx, kMaxMidiFxInserts> midi_fx_{};
   std::array<PendingFxEvent, kMaxPendingFxEvents> pending_fx_{};
   size_t pending_fx_count_ = 0;
