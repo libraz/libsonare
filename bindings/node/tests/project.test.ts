@@ -421,10 +421,11 @@ describe('Project value-model accessors', () => {
   it('round-trips track and source counts', () => {
     const project = Project.create();
     expect(project.trackCount()).toBe(0);
+    expect(project.clipCount()).toBe(0);
     project.addTrack({ kind: 'audio', name: 'lead' });
     expect(project.trackCount()).toBe(1);
     const audio = new Float32Array(64).fill(0.1);
-    project.addClip({
+    const clipId = project.addClip({
       trackId: 1,
       startPpq: 0,
       lengthPpq: 4,
@@ -432,7 +433,13 @@ describe('Project value-model accessors', () => {
       audioChannels: 1,
       audioSampleRate: 48000,
     });
+    expect(project.clipCount()).toBe(1);
     expect(project.sourceCount()).toBeGreaterThanOrEqual(1);
+    const restored = Project.fromJson(project.toJson());
+    expect(restored.clipCount()).toBe(1);
+    restored.destroy();
+    project.removeClip(clipId);
+    expect(project.clipCount()).toBe(0);
     project.destroy();
   });
 

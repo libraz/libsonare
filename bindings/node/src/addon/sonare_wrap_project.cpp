@@ -91,6 +91,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetTempoSegments>("setTempoSegments"),
           InstanceMethod<&ProjectWrap::SetTimeSignatures>("setTimeSignatures"),
           InstanceMethod<&ProjectWrap::TrackCount>("trackCount"),
+          InstanceMethod<&ProjectWrap::ClipCount>("clipCount"),
           InstanceMethod<&ProjectWrap::SourceCount>("sourceCount"),
           InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount"),
           InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount"),
@@ -374,6 +375,14 @@ Napi::Value ProjectWrap::TrackCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   size_t out = 0;
   ThrowIfError(env, sonare_project_track_count(project_, &out));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out));
+}
+
+Napi::Value ProjectWrap::ClipCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t out = 0;
+  ThrowIfError(env, sonare_project_clip_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
 }

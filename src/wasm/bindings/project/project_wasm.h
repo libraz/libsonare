@@ -307,6 +307,7 @@ struct ProjectWasm {
   val markerByIndex(int index) const;
   double markerCount() const;
   double trackCount() const;
+  double clipCount() const;
   double sourceCount() const;
   double tempoSegmentCount() const;
   double timeSignatureCount() const;

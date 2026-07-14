@@ -13,7 +13,7 @@ val ProjectWasm::compile() {
   const SonareError err = sonare_project_compile(project_.get(), &result);
   if (err != SONARE_OK) {
     sonare_project_free_compile_result(&result);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to compile project");
+    throwCError(err, "failed to compile project");
   }
   val out = projectCompileResultToVal(result);
   sonare_project_free_compile_result(&result);
@@ -126,7 +126,7 @@ val ProjectWasm::bounce(val options) {
   const SonareError err = sonare_project_bounce(project_.get(), &opts, &interleaved, &len);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to bounce project");
+    throwCError(err, "failed to bounce project");
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
@@ -143,8 +143,7 @@ val ProjectWasm::bounceWithBuiltinInstrument(val bindings, val options) {
       &len);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to bounce project with built-in instrument");
+    throwCError(err, "failed to bounce project with built-in instrument");
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
@@ -178,8 +177,7 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
       &len);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to bounce project with synth instrument");
+    throwCError(err, "failed to bounce project with synth instrument");
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);
@@ -191,14 +189,14 @@ void ProjectWasm::loadSoundFont(val data) {
   const SonareError err = sonare_project_load_soundfont(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "failed to load SoundFont");
+    throwCError(err, "failed to load SoundFont");
   }
 }
 
 void ProjectWasm::clearSoundFont() {
   const SonareError err = sonare_project_clear_soundfont(project_.get());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to clear SoundFont");
+    throwCError(err, "failed to clear SoundFont");
   }
 }
 
@@ -206,8 +204,7 @@ size_t ProjectWasm::soundFontPresetCount() {
   size_t count = 0;
   const SonareError err = sonare_project_soundfont_preset_count(project_.get(), &count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to query SoundFont preset count");
+    throwCError(err, "failed to query SoundFont preset count");
   }
   return count;
 }
@@ -216,15 +213,13 @@ val ProjectWasm::soundFontManifest() {
   size_t total = 0;
   SonareError err = sonare_project_soundfont_manifest(project_.get(), nullptr, 0, &total);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to build SoundFont manifest");
+    throwCError(err, "failed to build SoundFont manifest");
   }
   std::vector<SonareSf2ProgramStatus> entries(total);
   if (total > 0) {
     err = sonare_project_soundfont_manifest(project_.get(), entries.data(), total, &total);
     if (err != SONARE_OK) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                    "failed to build SoundFont manifest");
+      throwCError(err, "failed to build SoundFont manifest");
     }
   }
   val out = val::array();
@@ -279,8 +274,7 @@ val ProjectWasm::bounceWithSf2Instrument(val bindings, val options) {
       &interleaved, &len);
   if (err != SONARE_OK) {
     sonare_free_floats(interleaved);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to bounce project with SF2 instrument");
+    throwCError(err, "failed to bounce project with SF2 instrument");
   }
   std::vector<float> samples(interleaved, interleaved + len);
   sonare_free_floats(interleaved);

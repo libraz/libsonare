@@ -671,10 +671,13 @@ def _make_instrument_callbacks(
     if callable(prepare):
 
         def _prepare(_user, sample_rate, max_block_size, _fn=prepare):  # type: ignore[no-untyped-def]
+            if errors:
+                return
             try:
                 _fn(float(sample_rate), int(max_block_size))
             except BaseException as exc:  # noqa: BLE001
-                errors.append(exc)
+                if not errors:
+                    errors.append(exc)
 
         cb_prepare = SonareInstrumentPrepareCallback(_prepare)
         keepalive.append(cb_prepare)
@@ -684,11 +687,14 @@ def _make_instrument_callbacks(
     if callable(on_event):
 
         def _on_event(_user, dest, words, count, frame, _fn=on_event):  # type: ignore[no-untyped-def]
+            if errors:
+                return
             try:
                 ump = tuple(int(words[i]) for i in range(int(count)))
                 _fn(int(dest), ump, int(frame))
             except BaseException as exc:  # noqa: BLE001
-                errors.append(exc)
+                if not errors:
+                    errors.append(exc)
 
         cb_event = SonareInstrumentOnEventCallback(_on_event)
         keepalive.append(cb_event)
@@ -697,6 +703,8 @@ def _make_instrument_callbacks(
     render = instrument.render
 
     def _render(_user, channels, num_channels, num_frames, _fn=render):  # type: ignore[no-untyped-def]
+        if errors:
+            return
         try:
             nch = int(num_channels)
             nfr = int(num_frames)
@@ -711,7 +719,8 @@ def _make_instrument_callbacks(
                 dst = np.ctypeslib.as_array(channels[ch], shape=(nfr,))
                 dst += block[ch]
         except BaseException as exc:  # noqa: BLE001
-            errors.append(exc)
+            if not errors:
+                errors.append(exc)
 
     cb_render = SonareInstrumentRenderCallback(_render)
     keepalive.append(cb_render)
@@ -2302,6 +2311,10 @@ class Project:
     def marker_count(self) -> int:
         """Number of timeline markers in the project."""
         return self._count("sonare_project_marker_count")
+
+    def clip_count(self) -> int:
+        """Number of clips in the project."""
+        return self._count("sonare_project_clip_count")
 
     def source_count(self) -> int:
         """Number of registered audio sources in the project."""

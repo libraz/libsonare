@@ -133,21 +133,20 @@ void RealtimeEngineWasm::setGraph(val spec) {
   graph->prepare(state.sample_rate, engine_.max_block_size());
   const std::string input_node = stringProperty(spec, "inputNode", "");
   const std::string output_node = stringProperty(spec, "outputNode", "");
-  if (!engine_.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(),
-                          num_channels)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to swap graph");
-  }
+  std::vector<sonare::engine::GraphRuntime::ParameterBinding> parameter_bindings;
   if (hasProperty(spec, "parameterBindings")) {
     val bindings = spec["parameterBindings"];
     const int binding_count = bindings["length"].as<int>();
+    parameter_bindings.reserve(static_cast<size_t>(std::max(binding_count, 0)));
     for (int i = 0; i < binding_count; ++i) {
       val binding = bindings[i];
-      if (!engine_.bind_graph_parameter(static_cast<uint32_t>(intProperty(binding, "paramId", 0)),
-                                        stringProperty(binding, "nodeId", "").c_str())) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "failed to bind graph parameter");
-      }
+      parameter_bindings.push_back({static_cast<uint32_t>(intProperty(binding, "paramId", 0)),
+                                    stringProperty(binding, "nodeId", "")});
     }
+  }
+  if (!engine_.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(), num_channels,
+                          std::move(parameter_bindings))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to swap graph");
   }
 #else
   (void)spec;

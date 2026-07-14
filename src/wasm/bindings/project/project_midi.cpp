@@ -27,7 +27,7 @@ void ProjectWasm::setMidiEvents(uint32_t clip_id, val events) {
   const SonareError err = sonare_project_set_midi_events(
       project_.get(), clip_id, pods.empty() ? nullptr : pods.data(), pods.size());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set MIDI events");
+    throwCError(err, "failed to set MIDI events");
   }
 }
 
@@ -37,7 +37,7 @@ uint32_t ProjectWasm::importSmf(val data) {
   const SonareError err = sonare_project_import_smf(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size(), &first_clip);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "failed to import SMF");
+    throwCError(err, "failed to import SMF");
   }
   return first_clip;
 }
@@ -48,7 +48,7 @@ val ProjectWasm::exportSmf() {
   const SonareError err = sonare_project_export_smf(project_.get(), &bytes, &len);
   if (err != SONARE_OK) {
     sonare_free_bytes(bytes);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to export SMF");
+    throwCError(err, "failed to export SMF");
   }
   std::vector<uint8_t> out(bytes, bytes + len);
   sonare_free_bytes(bytes);
@@ -61,8 +61,7 @@ uint32_t ProjectWasm::importClipFile(val data) {
   const SonareError err = sonare_project_import_clip_file(
       project_.get(), bytes.empty() ? nullptr : bytes.data(), bytes.size(), &first_clip);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
-                                  "failed to import MIDI Clip File");
+    throwCError(err, "failed to import MIDI Clip File");
   }
   return first_clip;
 }
@@ -73,8 +72,7 @@ val ProjectWasm::exportClipFile() {
   const SonareError err = sonare_project_export_clip_file(project_.get(), &bytes, &len);
   if (err != SONARE_OK) {
     sonare_free_bytes(bytes);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to export MIDI Clip File");
+    throwCError(err, "failed to export MIDI Clip File");
   }
   std::vector<uint8_t> out(bytes, bytes + len);
   sonare_free_bytes(bytes);
@@ -84,8 +82,7 @@ val ProjectWasm::exportClipFile() {
 void ProjectWasm::setProgram(uint32_t clip_id, int program, int bank) {
   const SonareError err = sonare_project_set_program(project_.get(), clip_id, program, bank);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set MIDI program");
+    throwCError(err, "failed to set MIDI program");
   }
 }
 
@@ -95,15 +92,14 @@ void ProjectWasm::setProgramOnChannel(uint32_t clip_id, uint32_t group, uint32_t
       sonare_project_set_program_on_channel(project_.get(), clip_id, static_cast<uint8_t>(group),
                                             static_cast<uint8_t>(channel), program, bank);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set MIDI program");
+    throwCError(err, "failed to set MIDI program");
   }
 }
 
 void ProjectWasm::bakeMidiFx(uint32_t clip_id, const std::string& config_json) {
   const SonareError err = sonare_project_bake_midi_fx(project_.get(), clip_id, config_json.c_str());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set MIDI FX");
+    throwCError(err, "failed to set MIDI FX");
   }
 }
 
@@ -115,8 +111,7 @@ val ProjectWasm::validateMidiNotes(uint32_t clip_id) {
   SonareNotePairValidation result{};
   const SonareError err = sonare_project_validate_midi_notes(project_.get(), clip_id, &result);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to validate MIDI notes");
+    throwCError(err, "failed to validate MIDI notes");
   }
   val out = val::object();
   out.set("ok", result.ok != 0);
@@ -131,8 +126,7 @@ float ProjectWasm::autoTempo(val audio, int sample_rate) {
   const SonareError err =
       sonare_project_auto_tempo(project_.get(), samples.data(), samples.size(), sample_rate, &bpm);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to detect project tempo");
+    throwCError(err, "failed to detect project tempo");
   }
   return bpm;
 }
@@ -141,7 +135,7 @@ double ProjectWasm::snapToGrid(double ppq, double strength) {
   double out = 0.0;
   const SonareError err = sonare_project_snap_to_grid(project_.get(), ppq, strength, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to snap to grid");
+    throwCError(err, "failed to snap to grid");
   }
   return out;
 }
@@ -204,8 +198,7 @@ val js_midi_bank_program(double ppq, int group, int channel, int bank_msb, int b
       sonare_midi_bank_program(ppq, static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                                bank_msb, bank_lsb, program, events, 3, &count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid MIDI bank/program arguments");
+    throwCError(err, "invalid MIDI bank/program arguments");
   }
   val out = val::array();
   for (size_t i = 0; i < count; ++i) {
@@ -287,8 +280,7 @@ val js_midi_cc_learn(val events, uint32_t param_id, float min_value, float max_v
                            max_value, static_cast<uint8_t>(min_movement), &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid MIDI CC learn arguments");
+    throwCError(err, "invalid MIDI CC learn arguments");
   }
   return js_cc_binding_to_val(learned);
 }
@@ -301,8 +293,7 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
       cc_bindings.empty() ? nullptr : cc_bindings.data(), cc_bindings.size(), &pod, &point);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid MIDI CC breakpoint arguments");
+    throwCError(err, "invalid MIDI CC breakpoint arguments");
   }
   val out = val::object();
   out.set("ppq", point.ppq);
@@ -319,8 +310,7 @@ val js_midi_param_to_cc(val bindings, uint32_t param_id, float unit_value, int g
       static_cast<uint8_t>(group), ppq, &event);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid MIDI param-to-CC arguments");
+    throwCError(err, "invalid MIDI param-to-CC arguments");
   }
   return js_midi_event_to_val(event);
 }
@@ -360,8 +350,7 @@ val js_midi_route_events(val events, val config) {
                                output.empty() ? nullptr : output.data(), output.size(),
                                &output_count, &overflowed, &overflow_count);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid MIDI route arguments");
+    throwCError(err, "invalid MIDI route arguments");
   }
 
   val out = val::object();

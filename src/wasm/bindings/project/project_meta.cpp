@@ -103,8 +103,7 @@ val ProjectWasm::getAssistSidecar(double index) const {
   const SonareError err =
       sonare_project_get_assist_sidecar(project_.get(), static_cast<size_t>(index), &sidecar);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to read assist sidecar");
+    throwCError(err, "failed to read assist sidecar");
   }
   val out = val::object();
   out.set("moduleId", std::string(sidecar.module_id != nullptr ? sidecar.module_id : ""));
@@ -121,8 +120,7 @@ val ProjectWasm::getAssistSidecar(double index) const {
 void ProjectWasm::setOverlapPolicy(uint32_t policy) {
   const SonareError err = sonare_project_set_overlap_policy(project_.get(), policy);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set overlap policy");
+    throwCError(err, "failed to set overlap policy");
   }
 }
 
@@ -130,7 +128,7 @@ uint32_t ProjectWasm::getOverlapPolicy() const {
   uint32_t out = 0;
   const SonareError err = sonare_project_get_overlap_policy(project_.get(), &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to read overlap policy");
+    throwCError(err, "failed to read overlap policy");
   }
   return out;
 }
@@ -139,7 +137,7 @@ double ProjectWasm::getSampleRate() const {
   double out = 0.0;
   const SonareError err = sonare_project_get_sample_rate(project_.get(), &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to read sample rate");
+    throwCError(err, "failed to read sample rate");
   }
   return out;
 }
@@ -147,8 +145,7 @@ double ProjectWasm::getSampleRate() const {
 void ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
   const SonareError err = sonare_project_set_mixer_scene_json(project_.get(), scene_json.c_str());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set mixer scene JSON");
+    throwCError(err, "failed to set mixer scene JSON");
   }
 }
 
@@ -157,7 +154,7 @@ uint32_t ProjectWasm::setMarker(uint32_t marker_id, double ppq, const std::strin
   const SonareError err =
       sonare_project_set_marker(project_.get(), marker_id, ppq, name.c_str(), &out_id);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set marker");
+    throwCError(err, "failed to set marker");
   }
   return out_id;
 }
@@ -175,7 +172,7 @@ uint32_t ProjectWasm::setMarkerEx(val marker) {
   uint32_t out_id = 0;
   const SonareError err = sonare_project_set_marker_ex(project_.get(), &desc, &out_id);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set marker");
+    throwCError(err, "failed to set marker");
   }
   return out_id;
 }
@@ -185,7 +182,7 @@ val ProjectWasm::markerByIndex(int index) const {
   const SonareError err =
       sonare_project_marker_by_index(project_.get(), static_cast<size_t>(index), &desc);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "marker index out of range");
+    throwCError(err, "marker index out of range");
   }
   val out = val::object();
   out.set("id", desc.id);
@@ -201,7 +198,7 @@ double ProjectWasm::markerCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_marker_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to read marker count");
+    throwCError(err, "failed to read marker count");
   }
   return static_cast<double>(out);
 }
@@ -210,7 +207,16 @@ double ProjectWasm::trackCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_track_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to read track count");
+    throwCError(err, "failed to read track count");
+  }
+  return static_cast<double>(out);
+}
+
+double ProjectWasm::clipCount() const {
+  size_t out = 0;
+  const SonareError err = sonare_project_clip_count(project_.get(), &out);
+  if (err != SONARE_OK) {
+    throwCError(err, "failed to read clip count");
   }
   return static_cast<double>(out);
 }
@@ -219,7 +225,7 @@ double ProjectWasm::sourceCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_source_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to read source count");
+    throwCError(err, "failed to read source count");
   }
   return static_cast<double>(out);
 }
@@ -228,8 +234,7 @@ double ProjectWasm::tempoSegmentCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_tempo_segment_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to read tempo segment count");
+    throwCError(err, "failed to read tempo segment count");
   }
   return static_cast<double>(out);
 }
@@ -238,8 +243,7 @@ double ProjectWasm::timeSignatureCount() const {
   size_t out = 0;
   const SonareError err = sonare_project_time_signature_count(project_.get(), &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to read time signature count");
+    throwCError(err, "failed to read time signature count");
   }
   return static_cast<double>(out);
 }
@@ -261,8 +265,7 @@ void ProjectWasm::setTempoSegments(val segments) {
   const SonareError err = sonare_project_set_tempo_segments(
       project_.get(), segs.empty() ? nullptr : segs.data(), segs.size());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set tempo segments");
+    throwCError(err, "failed to set tempo segments");
   }
 }
 
@@ -283,8 +286,7 @@ void ProjectWasm::setTimeSignatures(val segments) {
   const SonareError err = sonare_project_set_time_signatures(
       project_.get(), segs.empty() ? nullptr : segs.data(), segs.size());
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set time signatures");
+    throwCError(err, "failed to set time signatures");
   }
 }
 
@@ -293,8 +295,7 @@ val ProjectWasm::lastBounceCompileResult() const {
   const SonareError err = sonare_project_last_bounce_compile_result(project_.get(), &result);
   if (err != SONARE_OK) {
     sonare_project_free_compile_result(&result);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to read last bounce compile result");
+    throwCError(err, "failed to read last bounce compile result");
   }
   val out = projectCompileResultToVal(result);
   sonare_project_free_compile_result(&result);
@@ -316,6 +317,7 @@ void registerProjectMeta(class_<ProjectWasm>& cls) {
       .function("markerByIndex", &ProjectWasm::markerByIndex)
       .function("markerCount", &ProjectWasm::markerCount)
       .function("trackCount", &ProjectWasm::trackCount)
+      .function("clipCount", &ProjectWasm::clipCount)
       .function("sourceCount", &ProjectWasm::sourceCount)
       .function("tempoSegmentCount", &ProjectWasm::tempoSegmentCount)
       .function("timeSignatureCount", &ProjectWasm::timeSignatureCount)

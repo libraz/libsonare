@@ -542,8 +542,10 @@ export class Project {
    * built-in oscillator synth so a MIDI-only arrangement bounces to audible
    * audio. Pass a {@link BuiltinSynthBinding} (or an array of them) to choose
    * the patch and MIDI destination; omit it (or pass `{}`) for one
-   * default-destination sine patch. An explicitly empty array `[]` (or
-   * `undefined` / `null`) produces zero bindings, so MIDI tracks render silently.
+   * default-destination sine patch. Because the parameter defaults to `{}`,
+   * omission and explicit `undefined` both create that one default binding.
+   * Use an explicitly empty array `[]` (or runtime `null`) for zero bindings,
+   * so MIDI tracks render silently.
    *
    * Like {@link bounce}, omitting `totalFrames` auto-derives the render length
    * from the arrangement plus the synth's release tail.
@@ -572,9 +574,10 @@ export class Project {
    * string (`'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}), or
    * an array of either; each object entry may carry a `destinationId` binding
    * convenience (default 0), which is not part of the NativeSynth patch itself.
-   * An explicitly empty array (or `undefined` / `null`) produces zero bindings.
-   * Unknown preset names throw. Deterministic for a fixed project + options +
-   * patch.
+   * Because the parameter defaults to `{}`, omission and explicit `undefined`
+   * both create one default binding. Use an explicitly empty array `[]` (or
+   * runtime `null`) for zero bindings. Unknown preset names throw.
+   * Deterministic for a fixed project + options + patch.
    */
   bounceWithSynthInstrument(
     instrument: SynthPatch | string | ReadonlyArray<SynthPatch | string> = {},
@@ -624,8 +627,10 @@ export class Project {
    * honored. Programs the SoundFont does not cover — including bouncing with
    * no SoundFont loaded at all — play through the built-in synthesizer GM
    * fallback bank (the data-free floor; see {@link soundFontManifest} for the
-   * per-program backend). An explicitly empty array `[]` (or `undefined` /
-   * `null`) produces zero bindings, so MIDI tracks render silently.
+   * per-program backend). Because the parameter defaults to `{}`, omission and
+   * explicit `undefined` both create one default binding. Use an explicitly
+   * empty array `[]` (or runtime `null`) for zero bindings, so MIDI tracks
+   * render silently.
    */
   bounceWithSf2Instrument(
     instrument: Sf2InstrumentConfig | ReadonlyArray<Sf2InstrumentConfig> = {},
@@ -813,6 +818,11 @@ export class Project {
   /** Number of tracks in the project. */
   trackCount(): number {
     return this.native.trackCount();
+  }
+
+  /** Number of clips in the project. */
+  clipCount(): number {
+    return this.native.clipCount();
   }
 
   /** Number of audio sources registered on the project. */

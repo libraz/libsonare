@@ -826,6 +826,13 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('rejects paged providers whose metadata exceeds shared limits', () => {
+    const engine = new RealtimeEngine(48000, 8);
+    expect(() => engine.createClipPageProvider(1, 1_000_000_000_000, 1)).toThrow();
+    expect(() => engine.createClipPageProvider(65, 8, 4)).toThrow();
+    engine.destroy();
+  });
+
   it('feeds paged clips from raw float32 files', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'sonare-paged-'));
     const rawPath = join(tmpDir, 'clip.f32');

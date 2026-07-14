@@ -286,6 +286,26 @@ def _method_keys(ex: Extraction | None) -> set[str]:
     return {f.key for f in ex.functions if "." in f.raw_name}
 
 
+def _class_method_keys(ex: Extraction | None, class_name: str) -> set[str]:
+    """Canonical keys exposed specifically by ``class_name``.
+
+    Handle coverage must not let an identically named method on another class
+    satisfy the C operation. For example, ``RealtimeEngine.clipCount`` does not
+    expose ``sonare_project_clip_count`` on ``Project``.
+    """
+    if ex is None:
+        return set()
+    prefix = f"{class_name}."
+    return {f.key for f in ex.functions if f.raw_name.startswith(prefix)}
+
+
+def _free_keys(ex: Extraction | None) -> set[str]:
+    """Canonical keys exposed as free functions rather than class members."""
+    if ex is None:
+        return set()
+    return {f.key for f in ex.functions if "." not in f.raw_name}
+
+
 def _is_handle_key(key: str, prefixes: tuple[str, ...]) -> bool:
     if key in HANDLE_PREFIX_FREEFN_EXCEPTIONS:
         return False
@@ -332,6 +352,10 @@ def build_report(
 
     # Class-method keys per facade (for handle/class matching).
     method_keys = {s: _method_keys(extractions.get(s)) for s in selected}
+    project_method_keys = {
+        s: _class_method_keys(extractions.get(s), "Project") for s in selected
+    }
+    free_keys = {s: _free_keys(extractions.get(s)) for s in selected}
 
     rep.handle_keys = sorted(k for k in c_index if _is_handle_key(k, handle_prefixes))
 
@@ -346,8 +370,21 @@ def build_report(
         for s in selected:
             if s == "c":
                 continue
+            # Project handle reachability is class-specific. Without this rule,
+            # an unrelated class method with the same tail (notably
+            # RealtimeEngine.clipCount) can hide a missing Project method.
+            candidate_methods = (
+                project_method_keys.get(s, set())
+                if key.startswith("project_")
+                else method_keys.get(s, set())
+            )
+            candidate_symbols = (
+                candidate_methods | free_keys.get(s, set())
+                if key.startswith("project_")
+                else candidate_methods | set(indexed.get(s, {}))
+            )
             present_free = key in indexed.get(s, {})
-            present_method = key in method_keys.get(s, set())
+            present_method = key in candidate_methods
             if present_free or present_method:
                 continue
             # Handle-instance C key (``mixer_add_bus``): the facade exposes the
@@ -361,18 +398,13 @@ def build_report(
                 if key.startswith(prefix) and len(key) > len(prefix):
                     stripped = key[len(prefix) :]
                     break
-            if stripped is not None and (
-                stripped in method_keys.get(s, set()) or stripped in indexed.get(s, {})
-            ):
+            if stripped is not None and stripped in candidate_symbols:
                 continue
             # Idiomatic rename: the capability is exposed under a different
             # canonical name (verified alias). Credit it when any listed alias is
             # present as a method / free function on this surface.
             aliases = _ALIAS_COVERAGE.get(key)
-            if aliases and any(
-                a in method_keys.get(s, set()) or a in indexed.get(s, {})
-                for a in aliases
-            ):
+            if aliases and any(a in candidate_symbols for a in aliases):
                 continue
             if allow.coverage_ok(key, s):
                 rep.findings.append(Finding("coverage", key, s, "", allowlisted=True))

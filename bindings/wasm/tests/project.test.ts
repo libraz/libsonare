@@ -6,7 +6,14 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { EXPECTED_PROJECT_ABI_VERSION, init, Project, projectAbiVersion } from '../dist/index.js';
+import {
+  ErrorCode,
+  EXPECTED_PROJECT_ABI_VERSION,
+  init,
+  isSonareError,
+  Project,
+  projectAbiVersion,
+} from '../dist/index.js';
 
 describe('Sonare WASM Project', () => {
   beforeAll(async () => {
@@ -212,6 +219,34 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('preserves C error codes across every project bounce mapper', () => {
+    const project = buildProject();
+    const expectInvalidParameter = (call: () => unknown): void => {
+      let caught: unknown;
+      try {
+        call();
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      if (!isSonareError(caught)) {
+        throw new Error('expected SonareError');
+      }
+      expect(caught.code).toBe(ErrorCode.InvalidParameter);
+      expect(caught.codeName).toBe('InvalidParameter');
+    };
+
+    try {
+      const invalidOptions = { totalFrames: 128, sampleRate: 1 };
+      expectInvalidParameter(() => project.bounce(invalidOptions));
+      expectInvalidParameter(() => project.bounceWithBuiltinInstrument({}, invalidOptions));
+      expectInvalidParameter(() => project.bounceWithSynthInstrument({}, invalidOptions));
+      expectInvalidParameter(() => project.bounceWithSf2Instrument({}, invalidOptions));
+    } finally {
+      project.delete();
+    }
+  });
+
   function buildMidiOnlyProject(): Project {
     const project = new Project();
     project.setSampleRate(48000);
@@ -251,6 +286,28 @@ describe('Sonare WASM Project', () => {
       expect(audible).toBeInstanceOf(Float32Array);
       expect(audible.length).toBe(48000 * 2);
       expect(maxAbs(audible)).toBeGreaterThan(0.01);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('defines omitted, undefined, empty, and null instrument binding semantics', () => {
+    const project = buildMidiOnlyProject();
+    const options = { totalFrames: 4096, numChannels: 1, sampleRate: 48000 };
+    try {
+      const omitted = project.bounceWithBuiltinInstrument();
+      const explicitUndefined = project.bounceWithBuiltinInstrument(undefined, options);
+      const empty = project.bounceWithBuiltinInstrument([], options);
+      const runtimeNull = project.bounceWithBuiltinInstrument(null as never, options);
+      expect(maxAbs(omitted)).toBeGreaterThan(0.01);
+      expect(maxAbs(explicitUndefined)).toBeGreaterThan(0.01);
+      expect(maxAbs(empty)).toBe(0);
+      expect(maxAbs(runtimeNull)).toBe(0);
+
+      expect(maxAbs(project.bounceWithSynthInstrument(undefined, options))).toBeGreaterThan(0.01);
+      expect(maxAbs(project.bounceWithSynthInstrument([], options))).toBe(0);
+      expect(maxAbs(project.bounceWithSf2Instrument(undefined, options))).toBeGreaterThan(0.01);
+      expect(maxAbs(project.bounceWithSf2Instrument([], options))).toBe(0);
     } finally {
       project.delete();
     }
@@ -461,6 +518,26 @@ describe('Sonare WASM Project', () => {
 
   it('throws cleanly on malformed fromJson input', () => {
     expect(() => Project.fromJson('{ not valid project json')).toThrow();
+  });
+
+  it('reports clip count after add, import, and remove', () => {
+    const project = new Project();
+    try {
+      expect(project.clipCount()).toBe(0);
+      const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+      expect(project.clipCount()).toBe(1);
+      const restored = Project.fromJson(project.toJson());
+      try {
+        expect(restored.clipCount()).toBe(1);
+      } finally {
+        restored.delete();
+      }
+      project.removeClip(clipId);
+      expect(project.clipCount()).toBe(0);
+    } finally {
+      project.delete();
+    }
   });
 
   it('fromJsonWithDiagnostics returns warnings from successful loads', () => {

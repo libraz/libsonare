@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Project, RealtimeEngine } from '../dist/index.js';
+import { ErrorCode, init, isSonareError, Project, RealtimeEngine } from '../dist/index.js';
 
 const fixturePath = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -58,7 +58,19 @@ describe('Sonare WASM SoundFont (SF2)', () => {
   it('rejects malformed SoundFont bytes and keeps the previous state', () => {
     const project = new Project();
     project.loadSoundFont(sf2Bytes);
-    expect(() => project.loadSoundFont(new Uint8Array([1, 2, 3, 4]))).toThrow();
+    let caught: unknown;
+    try {
+      project.loadSoundFont(new Uint8Array([1, 2, 3, 4]));
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    if (!isSonareError(caught)) {
+      throw new Error('expected SonareError');
+    }
+    // Project C oracle classifies parse rejection as InvalidParameter (the
+    // realtime-engine SoundFont API uses InvalidFormat); preserve that surface.
+    expect(caught.code).toBe(ErrorCode.InvalidParameter);
     expect(project.soundFontPresetCount()).toBe(3);
     project.delete();
   });

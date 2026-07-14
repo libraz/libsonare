@@ -34,6 +34,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 
   // -- value-model counts --
   Napi::Value TrackCount(const Napi::CallbackInfo& info);
+  Napi::Value ClipCount(const Napi::CallbackInfo& info);
   Napi::Value SourceCount(const Napi::CallbackInfo& info);
   Napi::Value TempoSegmentCount(const Napi::CallbackInfo& info);
   Napi::Value TimeSignatureCount(const Napi::CallbackInfo& info);

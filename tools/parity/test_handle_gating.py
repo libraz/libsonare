@@ -79,6 +79,21 @@ def test_handle_op_covered_by_method_is_silent() -> None:
     assert ("engine_set_tempo", "python") not in _active(rep), _active(rep)
 
 
+def test_project_op_requires_a_project_method() -> None:
+    """A same-named method on another handle cannot hide a Project gap."""
+    rep = _report(
+        _c("project_clip_count"),
+        _py(methods={"clip_count": "RealtimeEngine"}),
+    )
+    assert ("project_clip_count", "python") in _active(rep), _active(rep)
+
+    covered = _report(
+        _c("project_clip_count"),
+        _py(methods={"clip_count": "Project"}),
+    )
+    assert ("project_clip_count", "python") not in _active(covered), _active(covered)
+
+
 def test_handle_op_covered_by_alias_is_silent() -> None:
     """An idiomatic rename in ``_ALIAS_COVERAGE`` (serialize -> to_json) is covered."""
     rep = _report(_c("project_serialize"), _py(methods={"to_json": "Project"}))

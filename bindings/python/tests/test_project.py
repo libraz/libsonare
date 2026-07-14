@@ -351,15 +351,21 @@ def test_bounce_with_instruments_propagates_callback_error() -> None:
         pytest.skip("libsonare built without the external-instrument bounce ABI")
 
     class Boom:
+        def __init__(self) -> None:
+            self.calls = 0
+
         def render(self, channels: np.ndarray, num_frames: int) -> None:
+            self.calls += 1
             raise ValueError("synthesis failed")
 
     project = _build_midi_only_project()
+    instrument = Boom()
     try:
         with pytest.raises(ValueError, match="synthesis failed"):
             project.bounce_with_instruments(
-                Boom(), total_frames=4800, num_channels=2, sample_rate=48000
+                instrument, total_frames=48000, block_size=32, num_channels=2, sample_rate=48000
             )
+        assert instrument.calls == 1
     finally:
         project.close()
 
@@ -868,7 +874,19 @@ def test_project_getters_setters_and_counts() -> None:
         assert marker_id > 0
 
         assert project.track_count() == 0
+        assert project.clip_count() == 0
         assert project.source_count() == 0
+
+        track_id = project.add_track("midi", "notes")
+        clip_id = project.add_clip(track_id, 0.0, 4.0, is_midi=True)
+        assert project.clip_count() == 1
+        restored = Project.from_json(project.to_json())
+        try:
+            assert restored.clip_count() == 1
+        finally:
+            restored.close()
+        project.remove_clip(clip_id)
+        assert project.clip_count() == 0
     finally:
         project.close()
 

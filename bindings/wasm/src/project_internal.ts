@@ -146,6 +146,7 @@ export interface WasmProject {
   markerByIndex: (index: number) => ProjectMarker;
   markerCount: () => number;
   trackCount: () => number;
+  clipCount: () => number;
   sourceCount: () => number;
   tempoSegmentCount: () => number;
   timeSignatureCount: () => number;

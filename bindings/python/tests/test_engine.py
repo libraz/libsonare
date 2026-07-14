@@ -738,6 +738,10 @@ def test_engine_feeds_paged_clips_from_raw_float32_files(tmp_path) -> None:
 def test_clip_page_provider_failed_construction_does_not_emit_del_noise(capsys) -> None:
     with pytest.raises(SonareError):
         ClipPageProvider(0, 0, 0)
+    with pytest.raises(SonareError):
+        ClipPageProvider(1, 1_000_000_000_000, 1)
+    with pytest.raises(SonareError):
+        ClipPageProvider(65, 8, 4)
     gc.collect()
     assert "Exception ignored in" not in capsys.readouterr().err
 

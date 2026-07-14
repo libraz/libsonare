@@ -395,6 +395,8 @@ describe('Sonare WASM Module', () => {
       shortTempoEngine.destroy();
 
       const pagedEngine = new RealtimeEngine(48000, 8);
+      expect(() => pagedEngine.createClipPageProvider(1, 1_000_000_000_000, 1)).toThrow();
+      expect(() => pagedEngine.createClipPageProvider(65, 8, 4)).toThrow();
       const provider = pagedEngine.createClipPageProvider(1, 8, 4);
       expect(() => provider.supply(0, [new Float32Array([1, 2])])).toThrow();
       expect(() =>

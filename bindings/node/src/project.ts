@@ -397,6 +397,11 @@ export class Project {
     return this.native.trackCount();
   }
 
+  /** Number of clips in the project value model. */
+  clipCount(): number {
+    return this.native.clipCount();
+  }
+
   /** Number of sources in the project value model. */
   sourceCount(): number {
     return this.native.sourceCount();

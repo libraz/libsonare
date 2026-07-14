@@ -748,6 +748,7 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
         ]
 
     for _name in (
+        "sonare_project_clip_count",
         "sonare_project_marker_count",
         "sonare_project_source_count",
         "sonare_project_tempo_segment_count",
