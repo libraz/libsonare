@@ -105,10 +105,12 @@ struct ProgressiveEstimate {
 
 /// @brief Statistics and current state of the analyzer.
 struct AnalyzerStats {
-  int total_frames = 0;           ///< Total frames processed
-  size_t total_samples = 0;       ///< Total samples processed
-  float duration_seconds = 0.0f;  ///< Total duration processed
-  ProgressiveEstimate estimate;   ///< Current progressive estimate
+  int total_frames = 0;              ///< Total frames processed
+  size_t total_samples = 0;          ///< Total samples processed
+  float duration_seconds = 0.0f;     ///< Total duration processed
+  size_t pending_frames = 0;         ///< Unread output frames currently retained
+  size_t dropped_output_frames = 0;  ///< Oldest frames dropped at the pending-frame limit
+  ProgressiveEstimate estimate;      ///< Current progressive estimate
 };
 
 /// @brief Frame buffer in Structure of Arrays format.

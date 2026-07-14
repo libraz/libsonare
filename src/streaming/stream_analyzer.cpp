@@ -88,6 +88,10 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   if (config_.magnitude_downsample <= 0)
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamConfig: magnitude_downsample must be positive");
+  if (config_.max_pending_frames == 0 || config_.max_pending_frames > kMaxStreamPendingFrames) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamConfig: max_pending_frames is outside supported bounds");
+  }
 
   /// Onset strength (and therefore progressive BPM) is derived from the
   /// frame-to-frame difference of the log-mel spectrum (see compute_onset()).

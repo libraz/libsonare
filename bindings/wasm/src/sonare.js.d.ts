@@ -194,6 +194,7 @@ export interface WasmStreamConfigDefaults {
   computeSpectral: boolean;
   emitEveryNFrames: number;
   magnitudeDownsample: number;
+  maxPendingFrames: number;
   keyUpdateIntervalSec: number;
   bpmUpdateIntervalSec: number;
   window: number;
@@ -2026,6 +2027,7 @@ export interface SonareModule {
     computeSpectral: boolean,
     emitEveryNFrames: number,
     magnitudeDownsample: number,
+    maxPendingFrames: number,
     keyUpdateIntervalSec: number,
     bpmUpdateIntervalSec: number,
     window: number,
@@ -2300,6 +2302,8 @@ export interface WasmAnalyzerStats {
   totalFrames: number;
   totalSamples: number;
   durationSeconds: number;
+  pendingFrames: number;
+  droppedOutputFrames: number;
   estimate: WasmProgressiveEstimate;
 }
 

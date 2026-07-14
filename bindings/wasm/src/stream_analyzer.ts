@@ -71,6 +71,7 @@ export class StreamAnalyzer {
       config.computeSpectral ?? defaults.computeSpectral,
       config.emitEveryNFrames ?? defaults.emitEveryNFrames,
       config.magnitudeDownsample ?? defaults.magnitudeDownsample,
+      config.maxPendingFrames ?? defaults.maxPendingFrames,
       config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,
       config.bpmUpdateIntervalSec ?? defaults.bpmUpdateIntervalSec,
       config.window ?? defaults.window,
@@ -163,6 +164,8 @@ export class StreamAnalyzer {
       totalFrames: s.totalFrames,
       totalSamples: s.totalSamples,
       durationSeconds: s.durationSeconds,
+      pendingFrames: s.pendingFrames,
+      droppedOutputFrames: s.droppedOutputFrames,
       estimate: {
         bpm: s.estimate.bpm,
         bpmConfidence: s.estimate.bpmConfidence,

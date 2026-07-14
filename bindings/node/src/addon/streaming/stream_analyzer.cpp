@@ -16,6 +16,7 @@
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_streaming.h"
 #include "sonare_wrap_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare_node {
 
@@ -128,6 +129,12 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
         static_cast<int>(node_double_option(opts, "emitEveryNFrames", config.emit_every_n_frames));
     config.magnitude_downsample = static_cast<int>(
         node_double_option(opts, "magnitudeDownsample", config.magnitude_downsample));
+    const double max_pending_frames =
+        node_double_option(opts, "maxPendingFrames", config.max_pending_frames);
+    if (!sonare::numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "maxPendingFrames must be a non-negative integer");
+    }
     config.key_update_interval_sec = static_cast<float>(
         node_double_option(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
     config.bpm_update_interval_sec = static_cast<float>(
@@ -334,6 +341,9 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
   out.Set("totalFrames", Napi::Number::New(env, s.total_frames));
   out.Set("totalSamples", Napi::Number::New(env, static_cast<double>(s.total_samples)));
   out.Set("durationSeconds", Napi::Number::New(env, s.duration_seconds));
+  out.Set("pendingFrames", Napi::Number::New(env, static_cast<double>(s.pending_frames)));
+  out.Set("droppedOutputFrames",
+          Napi::Number::New(env, static_cast<double>(s.dropped_output_frames)));
 
   const sonare::ProgressiveEstimate& est = s.estimate;
   Napi::Object estimate = Napi::Object::New(env);

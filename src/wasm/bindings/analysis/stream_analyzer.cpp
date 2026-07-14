@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -85,6 +86,7 @@ val js_stream_analyzer_config_default() {
   out.set("computeSpectral", defaults.compute_spectral);
   out.set("emitEveryNFrames", defaults.emit_every_n_frames);
   out.set("magnitudeDownsample", defaults.magnitude_downsample);
+  out.set("maxPendingFrames", defaults.max_pending_frames);
   out.set("keyUpdateIntervalSec", defaults.key_update_interval_sec);
   out.set("bpmUpdateIntervalSec", defaults.bpm_update_interval_sec);
   out.set("window", streamWindowToCValue(defaults.window));
@@ -99,8 +101,8 @@ class StreamAnalyzerWrapper {
                         float fmax, float tuning_ref_hz, bool compute_magnitude, bool compute_mel,
                         bool compute_chroma, bool compute_onset, bool compute_spectral,
                         int emit_every_n_frames, int magnitude_downsample,
-                        float key_update_interval_sec, float bpm_update_interval_sec, int window,
-                        int output_format) {
+                        double max_pending_frames, float key_update_interval_sec,
+                        float bpm_update_interval_sec, int window, int output_format) {
     if (compute_magnitude) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "computeMagnitude is not supported because magnitude frames are not "
@@ -125,6 +127,10 @@ class StreamAnalyzerWrapper {
     config.compute_spectral = compute_spectral;
     config.emit_every_n_frames = emit_every_n_frames;
     config.magnitude_downsample = magnitude_downsample;
+    if (!numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "maxPendingFrames must be a non-negative integer");
+    }
     config.output_format = output_format == 1   ? OutputFormat::Int16
                            : output_format == 2 ? OutputFormat::Uint8
                                                 : OutputFormat::Float32;
@@ -223,6 +229,8 @@ class StreamAnalyzerWrapper {
     out.set("totalFrames", s.total_frames);
     out.set("totalSamples", static_cast<int>(s.total_samples));
     out.set("durationSeconds", s.duration_seconds);
+    out.set("pendingFrames", s.pending_frames);
+    out.set("droppedOutputFrames", s.dropped_output_frames);
 
     val estimate = val::object();
     estimate.set("bpm", s.estimate.bpm);
@@ -325,7 +333,7 @@ void registerStreamAnalyzerBindings() {
   function("streamAnalyzerConfigDefault", &js_stream_analyzer_config_default);
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
       .constructor<int, int, int, int, float, float, float, bool, bool, bool, bool, bool, int, int,
-                   float, float, int, int>()
+                   double, float, float, int, int>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("finalize", &StreamAnalyzerWrapper::finalize)

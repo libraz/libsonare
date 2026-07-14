@@ -10,7 +10,7 @@
 ///        acoustic per-subsystem versioning pattern. Exposed at runtime through
 ///        the aggregate sonare_abi_version() so a prebuilt binding can detect a
 ///        struct-layout mismatch before exchanging a single byte.
-#define SONARE_FEATURE_ABI_VERSION 1u
+#define SONARE_FEATURE_ABI_VERSION 2u
 
 /// @brief Single aggregate C-ABI version. Encodes the per-subsystem versions so a
 ///        prebuilt binding linked against a different libsonare can detect a

@@ -4,10 +4,24 @@
 #include "filters/chroma.h"
 #include "streaming/stream_analyzer.h"
 #include "streaming/stream_analyzer_utils.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
 using namespace streaming_detail;
+
+namespace {
+
+void validate_quantize_config(const QuantizeConfig& config) {
+  if (!numeric::finite_ordered_range(config.mel_db_min, config.mel_db_max) ||
+      !numeric::finite_positive(config.onset_max) || !numeric::finite_positive(config.rms_max) ||
+      !numeric::finite_positive(config.centroid_max)) {
+    throw SonareException(ErrorCode::InvalidParameter, "invalid stream quantization range");
+  }
+}
+
+}  // namespace
 
 size_t StreamAnalyzer::available_frames() const { return output_buffer_.size(); }
 
@@ -57,6 +71,7 @@ void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
 
 void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameBufferU8& buffer,
                                               const QuantizeConfig& qconfig) {
+  validate_quantize_config(qconfig);
   buffer.clear();
 
   size_t count = std::min(max_frames, output_buffer_.size());
@@ -94,6 +109,7 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
 
 void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrameBufferI16& buffer,
                                                const QuantizeConfig& qconfig) {
+  validate_quantize_config(qconfig);
   buffer.clear();
 
   size_t count = std::min(max_frames, output_buffer_.size());
@@ -137,6 +153,7 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   finalized_ = false;
 
   overlap_buffer_.clear();
+  dropped_output_frames_ = 0;
   overlap_read_pos_ = 0;
   output_buffer_.clear();
 
@@ -175,14 +192,26 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
 }
 
 void StreamAnalyzer::set_expected_duration(float duration_seconds) {
+  if (!numeric::finite_non_negative(duration_seconds)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "expected duration must be finite and non-negative");
+  }
   expected_duration_ = duration_seconds;
 }
 
 void StreamAnalyzer::set_normalization_gain(float gain) {
+  if (!numeric::finite_positive(gain)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "normalization gain must be finite and positive");
+  }
   normalization_gain_ = std::clamp(gain, 0.01f, 100.0f);
 }
 
 void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
+  if (!numeric::finite_positive(ref_hz)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tuning reference must be finite and positive");
+  }
   ref_hz = std::clamp(ref_hz, 220.0f, 880.0f);
   config_.tuning_ref_hz = ref_hz;
 
@@ -202,6 +231,8 @@ AnalyzerStats StreamAnalyzer::stats() const {
   stats.total_frames = frame_count_;
   stats.total_samples = cumulative_samples_;
   stats.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
+  stats.pending_frames = output_buffer_.size();
+  stats.dropped_output_frames = dropped_output_frames_;
   stats.estimate = current_estimate_;
 
   return stats;

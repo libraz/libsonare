@@ -3,6 +3,8 @@
 /// @file stream_config.h
 /// @brief Configuration for streaming audio analysis.
 
+#include <cstddef>
+
 #include "util/constants.h"
 #include "util/types.h"
 
@@ -14,6 +16,9 @@ enum class OutputFormat {
   Int16,    ///< 16-bit signed integer (for bandwidth reduction)
   Uint8,    ///< 8-bit unsigned integer (for visualization)
 };
+
+inline constexpr size_t kDefaultStreamMaxPendingFrames = 4096;
+inline constexpr size_t kMaxStreamPendingFrames = 1u << 20;
 
 /// @brief Configuration for StreamAnalyzer.
 struct StreamConfig {
@@ -63,6 +68,9 @@ struct StreamConfig {
   OutputFormat output_format = OutputFormat::Float32;
   int emit_every_n_frames = 1;   ///< Emit every N frames (for throttling)
   int magnitude_downsample = 1;  ///< Downsample factor for magnitude
+  /// Maximum unread output frames. On overflow the oldest frame is dropped,
+  /// keeping live analysis current and memory bounded.
+  size_t max_pending_frames = kDefaultStreamMaxPendingFrames;
 
   // Progressive estimation configuration
   float key_update_interval_sec = 5.0f;   ///< Interval for key re-estimation

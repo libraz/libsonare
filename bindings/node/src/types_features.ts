@@ -52,6 +52,8 @@ export interface StreamAnalyzerConfig {
   computeSpectral?: boolean;
   emitEveryNFrames?: number;
   magnitudeDownsample?: number;
+  /** Maximum unread frames; overflow drops the oldest frame. */
+  maxPendingFrames?: number;
   keyUpdateIntervalSec?: number;
   bpmUpdateIntervalSec?: number;
   /** Window type: 0 Hann, 1 Hamming, 2 Blackman, 3 Rectangular. */
@@ -182,6 +184,8 @@ export interface StreamAnalyzerStats {
   totalFrames: number;
   totalSamples: number;
   durationSeconds: number;
+  pendingFrames: number;
+  droppedOutputFrames: number;
   estimate: StreamProgressiveEstimate;
 }
 

@@ -18,22 +18,23 @@ extern "C" {
    sonare_stream_analyzer_config_default to populate librosa/real-time defaults
    before overriding fields. */
 typedef struct {
-  int sample_rate;          /* Input sample rate in Hz (default 44100) */
-  int n_fft;                /* FFT size (default 2048) */
-  int hop_length;           /* Hop length between frames (default 512) */
-  int n_mels;               /* Number of Mel bands (default 128) */
-  float fmin;               /* Minimum Mel frequency */
-  float fmax;               /* Maximum Mel frequency (0 = Nyquist) */
-  float tuning_ref_hz;      /* A4 tuning reference */
-  int compute_magnitude;    /* Magnitude readout is not yet supported through the
-                               C ABI; must be 0 (non-zero is rejected with
-                               SONARE_ERROR_INVALID_PARAMETER). */
-  int compute_mel;          /* Non-zero to compute Mel spectra */
-  int compute_chroma;       /* Non-zero to compute chroma */
-  int compute_onset;        /* Non-zero to compute onset strength */
-  int compute_spectral;     /* Non-zero to compute spectral scalar features */
-  int emit_every_n_frames;  /* Emit every N frames (>=1, for throttling) */
-  int magnitude_downsample; /* Downsample factor for magnitude output */
+  int sample_rate;           /* Input sample rate in Hz (default 44100) */
+  int n_fft;                 /* FFT size (default 2048) */
+  int hop_length;            /* Hop length between frames (default 512) */
+  int n_mels;                /* Number of Mel bands (default 128) */
+  float fmin;                /* Minimum Mel frequency */
+  float fmax;                /* Maximum Mel frequency (0 = Nyquist) */
+  float tuning_ref_hz;       /* A4 tuning reference */
+  int compute_magnitude;     /* Magnitude readout is not yet supported through the
+                                C ABI; must be 0 (non-zero is rejected with
+                                SONARE_ERROR_INVALID_PARAMETER). */
+  int compute_mel;           /* Non-zero to compute Mel spectra */
+  int compute_chroma;        /* Non-zero to compute chroma */
+  int compute_onset;         /* Non-zero to compute onset strength */
+  int compute_spectral;      /* Non-zero to compute spectral scalar features */
+  int emit_every_n_frames;   /* Emit every N frames (>=1, for throttling) */
+  int magnitude_downsample;  /* Downsample factor for magnitude output */
+  size_t max_pending_frames; /* Unread-frame cap; overflow drops oldest (default 4096) */
   float key_update_interval_sec;
   float bpm_update_interval_sec;
   int window;        /* SonareWindowType value (default Hann) */
@@ -134,21 +135,23 @@ typedef struct {
    arrays are intentionally omitted from this fixed-size struct; query the SOA
    per-frame chord fields for chord history. */
 typedef struct {
-  int total_frames;        /* Total frames processed */
-  size_t total_samples;    /* Total samples processed */
-  float duration_seconds;  /* Total audio processed (s) */
-  float bpm;               /* Estimated BPM (0 if not yet estimated) */
-  float bpm_confidence;    /* BPM confidence (0-1) */
-  int bpm_candidate_count; /* Number of BPM candidates considered */
-  int key;                 /* Estimated key (0-11, -1 = unknown) */
-  int key_minor;           /* Non-zero if minor mode */
-  float key_confidence;    /* Key confidence (0-1) */
-  int chord_root;          /* Current chord root (0-11, -1 = unknown) */
-  int chord_quality;       /* Current chord quality (0=Maj, 1=Min, ...) */
-  float chord_confidence;  /* Current chord confidence (0-1) */
-  float chord_start_time;  /* Start time of current chord (s) */
-  int current_bar;         /* Current bar index (-1 if BPM not stable) */
-  float bar_duration;      /* Duration of one bar (s, 0 if not stable) */
+  int total_frames;             /* Total frames processed */
+  size_t total_samples;         /* Total samples processed */
+  float duration_seconds;       /* Total audio processed (s) */
+  size_t pending_frames;        /* Unread frames currently retained */
+  size_t dropped_output_frames; /* Oldest unread frames dropped at the configured cap */
+  float bpm;                    /* Estimated BPM (0 if not yet estimated) */
+  float bpm_confidence;         /* BPM confidence (0-1) */
+  int bpm_candidate_count;      /* Number of BPM candidates considered */
+  int key;                      /* Estimated key (0-11, -1 = unknown) */
+  int key_minor;                /* Non-zero if minor mode */
+  float key_confidence;         /* Key confidence (0-1) */
+  int chord_root;               /* Current chord root (0-11, -1 = unknown) */
+  int chord_quality;            /* Current chord quality (0=Maj, 1=Min, ...) */
+  float chord_confidence;       /* Current chord confidence (0-1) */
+  float chord_start_time;       /* Start time of current chord (s) */
+  int current_bar;              /* Current bar index (-1 if BPM not stable) */
+  float bar_duration;           /* Duration of one bar (s, 0 if not stable) */
   size_t chord_progression_count;
   SonareStreamChordChange* chord_progression;
   size_t bar_chord_progression_count;

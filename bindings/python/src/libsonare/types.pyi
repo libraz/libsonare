@@ -1246,6 +1246,7 @@ class StreamConfig:
     compute_spectral: bool
     emit_every_n_frames: int
     magnitude_downsample: int
+    max_pending_frames: int
     key_update_interval_sec: float
     bpm_update_interval_sec: float
     window: int
@@ -1266,6 +1267,7 @@ class StreamConfig:
         compute_spectral: bool = True,
         emit_every_n_frames: int = 1,
         magnitude_downsample: int = 1,
+        max_pending_frames: int = 4096,
         key_update_interval_sec: float = 5.0,
         bpm_update_interval_sec: float = 10.0,
         window: int = 0,
@@ -1352,6 +1354,8 @@ class StreamStats:
     total_frames: int
     total_samples: int
     duration_seconds: float
+    pending_frames: int
+    dropped_output_frames: int
     bpm: float
     bpm_confidence: float
     bpm_candidate_count: int
@@ -1379,6 +1383,8 @@ class StreamStats:
         total_frames: int,
         total_samples: int,
         duration_seconds: float,
+        pending_frames: int,
+        dropped_output_frames: int,
         bpm: float,
         bpm_confidence: float,
         bpm_candidate_count: int,

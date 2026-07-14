@@ -368,6 +368,43 @@ TEST_CASE("StreamAnalyzer rejects malformed config geometry", "[streaming][edge]
   SECTION("valid config still constructs") { REQUIRE_NOTHROW(StreamAnalyzer(base())); }
 }
 
+TEST_CASE("StreamAnalyzer rejects non-finite runtime and quantization parameters",
+          "[streaming][edge][numeric]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 512;
+  config.hop_length = 128;
+  config.n_mels = 24;
+  StreamAnalyzer analyzer(config);
+
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  for (float invalid : {nan, inf, -inf}) {
+    REQUIRE_THROWS_AS(analyzer.set_expected_duration(invalid), SonareException);
+    REQUIRE_THROWS_AS(analyzer.set_normalization_gain(invalid), SonareException);
+    REQUIRE_THROWS_AS(analyzer.set_tuning_ref_hz(invalid), SonareException);
+  }
+
+  QuantizedFrameBufferU8 u8;
+  QuantizedFrameBufferI16 i16;
+  QuantizeConfig quantize;
+  quantize.mel_db_min = nan;
+  REQUIRE_THROWS_AS(analyzer.read_frames_quantized_u8(0, u8, quantize), SonareException);
+  quantize = {};
+  quantize.mel_db_max = inf;
+  REQUIRE_THROWS_AS(analyzer.read_frames_quantized_i16(0, i16, quantize), SonareException);
+  quantize = {};
+  quantize.onset_max = 0.0f;
+  REQUIRE_THROWS_AS(analyzer.read_frames_quantized_u8(0, u8, quantize), SonareException);
+  quantize = {};
+  quantize.mel_db_min = quantize.mel_db_max;
+  REQUIRE_THROWS_AS(analyzer.read_frames_quantized_u8(0, u8, quantize), SonareException);
+  quantize = {};
+  quantize.mel_db_min = 1.0f;
+  quantize.mel_db_max = 0.0f;
+  REQUIRE_THROWS_AS(analyzer.read_frames_quantized_i16(0, i16, quantize), SonareException);
+}
+
 TEST_CASE("StreamAnalyzer SOA read", "[streaming]") {
   StreamConfig config;
   config.sample_rate = 22050;
@@ -388,6 +425,33 @@ TEST_CASE("StreamAnalyzer SOA read", "[streaming]") {
   REQUIRE(buffer.timestamps.size() == buffer.n_frames);
   REQUIRE(buffer.mel.size() == buffer.n_frames * 64);
   REQUIRE(buffer.chroma.size() == buffer.n_frames * 12);
+}
+
+TEST_CASE("StreamAnalyzer pending output is bounded with drop-oldest telemetry",
+          "[streaming][long]") {
+  StreamConfig config;
+  config.sample_rate = 8000;
+  config.n_fft = 32;
+  config.hop_length = 32;
+  config.n_mels = 8;
+  config.max_pending_frames = 4;
+  StreamAnalyzer analyzer(config);
+
+  // Accelerated long-consumer-stall simulation: hundreds of complete frames
+  // arrive without one read, while retained memory stays at the configured cap.
+  std::vector<float> audio(32 * 512, 0.0f);
+  analyzer.process(audio.data(), audio.size());
+
+  const AnalyzerStats stats = analyzer.stats();
+  REQUIRE(analyzer.available_frames() == 4);
+  REQUIRE(stats.pending_frames == 4);
+  REQUIRE(stats.dropped_output_frames > 0);
+  REQUIRE(stats.pending_frames + stats.dropped_output_frames ==
+          static_cast<size_t>(stats.total_frames));
+
+  analyzer.reset();
+  REQUIRE(analyzer.stats().pending_frames == 0);
+  REQUIRE(analyzer.stats().dropped_output_frames == 0);
 }
 
 TEST_CASE("StreamAnalyzer stats", "[streaming]") {

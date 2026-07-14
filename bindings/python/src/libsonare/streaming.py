@@ -83,6 +83,7 @@ class StreamAnalyzer:
             raw.compute_spectral = int(config.compute_spectral)
             raw.emit_every_n_frames = int(config.emit_every_n_frames)
             raw.magnitude_downsample = int(config.magnitude_downsample)
+            raw.max_pending_frames = int(config.max_pending_frames)
             raw.key_update_interval_sec = float(config.key_update_interval_sec)
             raw.bpm_update_interval_sec = float(config.bpm_update_interval_sec)
             raw.window = int(config.window)
@@ -428,6 +429,8 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
         total_frames=int(raw.total_frames),
         total_samples=int(raw.total_samples),
         duration_seconds=float(raw.duration_seconds),
+        pending_frames=int(raw.pending_frames),
+        dropped_output_frames=int(raw.dropped_output_frames),
         bpm=float(raw.bpm),
         bpm_confidence=float(raw.bpm_confidence),
         bpm_candidate_count=int(raw.bpm_candidate_count),

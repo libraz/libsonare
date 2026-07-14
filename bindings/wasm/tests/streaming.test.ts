@@ -28,6 +28,7 @@ describe('StreamAnalyzer', () => {
         computeSpectral: true,
         emitEveryNFrames: 1,
         magnitudeDownsample: 1,
+        maxPendingFrames: 4096,
         keyUpdateIntervalSec: 5,
         bpmUpdateIntervalSec: 10,
         window: 0,
@@ -63,6 +64,22 @@ describe('StreamAnalyzer', () => {
         () => new StreamAnalyzer({ sampleRate: 22050, nFft: 1024, hopLength: 2048 }),
       ).toThrow();
       expect(() => new StreamAnalyzer({ sampleRate: 22050, fmin: 8000, fmax: 4000 })).toThrow();
+    });
+
+    it('bounds unread frames and reports drop-oldest telemetry', () => {
+      const analyzer = new StreamAnalyzer({
+        sampleRate: 8000,
+        nFft: 32,
+        hopLength: 32,
+        nMels: 8,
+        maxPendingFrames: 3,
+      });
+      analyzer.process(new Float32Array(32 * 64));
+      const stats = analyzer.stats();
+      expect(stats.pendingFrames).toBe(3);
+      expect(stats.droppedOutputFrames).toBeGreaterThan(0);
+      expect(stats.pendingFrames + stats.droppedOutputFrames).toBe(stats.totalFrames);
+      analyzer.delete();
     });
   });
 

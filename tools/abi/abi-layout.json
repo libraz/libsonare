@@ -5106,7 +5106,7 @@
     "size": 16
   },
   "SonareStreamConfig": {
-    "align": 4,
+    "align": 8,
     "fields": [
       {
         "kind": "signed",
@@ -5193,31 +5193,37 @@
         "size": 4
       },
       {
+        "kind": "unsigned",
+        "name": "max_pending_frames",
+        "offset": 56,
+        "size": 8
+      },
+      {
         "kind": "float",
         "name": "key_update_interval_sec",
-        "offset": 56,
+        "offset": 64,
         "size": 4
       },
       {
         "kind": "float",
         "name": "bpm_update_interval_sec",
-        "offset": 60,
+        "offset": 68,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "window",
-        "offset": 64,
+        "offset": 72,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "output_format",
-        "offset": 68,
+        "offset": 76,
         "size": 4
       }
     ],
-    "size": 72
+    "size": 80
   },
   "SonareStreamFrames": {
     "align": 8,
@@ -5493,163 +5499,175 @@
         "size": 4
       },
       {
+        "kind": "unsigned",
+        "name": "pending_frames",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "dropped_output_frames",
+        "offset": 32,
+        "size": 8
+      },
+      {
         "kind": "float",
         "name": "bpm",
-        "offset": 20,
+        "offset": 40,
         "size": 4
       },
       {
         "kind": "float",
         "name": "bpm_confidence",
-        "offset": 24,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "bpm_candidate_count",
-        "offset": 28,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "key",
-        "offset": 32,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "key_minor",
-        "offset": 36,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "key_confidence",
-        "offset": 40,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "chord_root",
         "offset": 44,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "chord_quality",
+        "name": "bpm_candidate_count",
         "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "key",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "key_minor",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "key_confidence",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "chord_root",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "chord_quality",
+        "offset": 68,
         "size": 4
       },
       {
         "kind": "float",
         "name": "chord_confidence",
-        "offset": 52,
+        "offset": 72,
         "size": 4
       },
       {
         "kind": "float",
         "name": "chord_start_time",
-        "offset": 56,
+        "offset": 76,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "current_bar",
-        "offset": 60,
+        "offset": 80,
         "size": 4
       },
       {
         "kind": "float",
         "name": "bar_duration",
-        "offset": 64,
+        "offset": 84,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "chord_progression_count",
-        "offset": 72,
-        "size": 8
-      },
-      {
-        "kind": "pointer",
-        "name": "chord_progression",
-        "offset": 80,
-        "size": 8
-      },
-      {
-        "kind": "unsigned",
-        "name": "bar_chord_progression_count",
         "offset": 88,
         "size": 8
       },
       {
         "kind": "pointer",
-        "name": "bar_chord_progression",
+        "name": "chord_progression",
         "offset": 96,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "bar_chord_progression_count",
+        "offset": 104,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "bar_chord_progression",
+        "offset": 112,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "pattern_length",
-        "offset": 104,
+        "offset": 120,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "voted_pattern_count",
-        "offset": 112,
+        "offset": 128,
         "size": 8
       },
       {
         "kind": "pointer",
         "name": "voted_pattern",
-        "offset": 120,
+        "offset": 136,
         "size": 8
       },
       {
         "kind": "aggregate",
         "name": "detected_pattern_name",
-        "offset": 128,
+        "offset": 144,
         "size": 64
       },
       {
         "kind": "float",
         "name": "detected_pattern_score",
-        "offset": 192,
+        "offset": 208,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "all_pattern_scores_count",
-        "offset": 200,
+        "offset": 216,
         "size": 8
       },
       {
         "kind": "pointer",
         "name": "all_pattern_scores",
-        "offset": 208,
+        "offset": 224,
         "size": 8
       },
       {
         "kind": "float",
         "name": "accumulated_seconds",
-        "offset": 216,
+        "offset": 232,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "used_frames",
-        "offset": 220,
+        "offset": 236,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "updated",
-        "offset": 224,
+        "offset": 240,
         "size": 4
       }
     ],
-    "size": 232
+    "size": 248
   },
   "SonareStreamingPlatform": {
     "align": 8,

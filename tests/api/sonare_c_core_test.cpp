@@ -1,6 +1,7 @@
 /// @file sonare_c_core_test.cpp
 /// @brief Core C API tests.
 
+#include <limits>
 #include <set>
 
 #include "analysis/analysis_json.h"
@@ -329,6 +330,35 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
+  SECTION("rejects non-finite setters and quantization ranges") {
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+    REQUIRE(analyzer != nullptr);
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    REQUIRE(sonare_stream_analyzer_set_expected_duration(analyzer, nan) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_stream_analyzer_set_normalization_gain(analyzer, inf) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_stream_analyzer_set_tuning_ref_hz(analyzer, nan) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_stream_analyzer_set_expected_duration(analyzer, -inf) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+
+    SonareStreamQuantizeConfig quantize{};
+    REQUIRE(sonare_stream_quantize_config_default(&quantize) == SONARE_OK);
+    quantize.rms_max = inf;
+    SonareStreamFramesU8 frames{};
+    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(analyzer, &quantize, 0, &frames) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_stream_quantize_config_default(&quantize) == SONARE_OK);
+    quantize.mel_db_min = quantize.mel_db_max;
+    REQUIRE(sonare_stream_analyzer_read_frames_u8_ex(analyzer, &quantize, 0, &frames) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    sonare_stream_analyzer_destroy(analyzer);
+  }
+
   SECTION("reads U8 and I16 frames") {
     SonareStreamAnalyzer* analyzer = nullptr;
     REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
@@ -441,6 +471,31 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     sonare_free_stream_frames_u8(&wide_frames);
     sonare_stream_analyzer_destroy(tight);
     sonare_stream_analyzer_destroy(wide);
+  }
+
+  SECTION("bounds unread output and reports dropped frames") {
+    SonareStreamConfig bounded = config;
+    bounded.n_fft = 32;
+    bounded.hop_length = 32;
+    bounded.n_mels = 8;
+    bounded.max_pending_frames = 3;
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&bounded, &analyzer) == SONARE_OK);
+
+    std::vector<float> samples(32 * 64, 0.0f);
+    REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+    size_t available = 0;
+    REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
+    REQUIRE(available == 3);
+
+    SonareStreamStats stats{};
+    REQUIRE(sonare_stream_analyzer_stats(analyzer, &stats) == SONARE_OK);
+    REQUIRE(stats.pending_frames == 3);
+    REQUIRE(stats.dropped_output_frames > 0);
+    REQUIRE(stats.pending_frames + stats.dropped_output_frames ==
+            static_cast<size_t>(stats.total_frames));
+    sonare_free_stream_stats(&stats);
+    sonare_stream_analyzer_destroy(analyzer);
   }
 }
 

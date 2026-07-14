@@ -163,12 +163,23 @@ void StreamAnalyzer::finalize() {
 
 void StreamAnalyzer::emit_frame(const float* frame_start, size_t frame_sample_offset,
                                 bool force_emit) {
-  StreamFrame frame = process_single_frame(frame_start, frame_sample_offset);
-
   ++emitted_frame_count_;
-  if (force_emit || emitted_frame_count_ >= config_.emit_every_n_frames) {
+  const bool will_emit = force_emit || emitted_frame_count_ >= config_.emit_every_n_frames;
+  if (will_emit) {
     emitted_frame_count_ = 0;
+    StreamFrame frame;
+    if (output_buffer_.size() >= config_.max_pending_frames) {
+      // Recycle the evicted frame's fixed-shape vector capacity so a stalled
+      // consumer reaches steady state after the configured number of frames
+      // instead of allocating/freeing mel/chroma vectors forever.
+      frame = std::move(output_buffer_.front());
+      output_buffer_.pop_front();
+      ++dropped_output_frames_;
+    }
+    process_single_frame(frame_start, frame_sample_offset, frame);
     output_buffer_.push_back(std::move(frame));
+  } else {
+    process_single_frame(frame_start, frame_sample_offset, scratch_frame_);
   }
 }
 
@@ -183,8 +194,19 @@ const float* StreamAnalyzer::sanitize_into(const float* src, size_t n_samples,
   return dst.data();
 }
 
-StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_t sample_offset) {
-  StreamFrame frame;
+void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sample_offset,
+                                          StreamFrame& frame) {
+  frame.magnitude.clear();
+  frame.mel.clear();
+  frame.chroma.clear();
+  frame.spectral_centroid = 0.0f;
+  frame.spectral_flatness = 0.0f;
+  frame.rms_energy = 0.0f;
+  frame.onset_strength = 0.0f;
+  frame.onset_valid = false;
+  frame.chord_root = -1;
+  frame.chord_quality = 0;
+  frame.chord_confidence = 0.0f;
 
   /// Calculate timestamp
   frame.timestamp = static_cast<float>(sample_offset) / static_cast<float>(config_.sample_rate);
@@ -291,8 +313,6 @@ StreamFrame StreamAnalyzer::process_single_frame(const float* frame_start, size_
 
   /// Compute RMS energy (from time-domain)
   frame.rms_energy = compute_rms_frame(frame_start, config_.n_fft);
-
-  return frame;
 }
 
 }  // namespace sonare

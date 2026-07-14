@@ -256,8 +256,11 @@ class StreamAnalyzer {
   std::vector<float> overlap_buffer_;
   size_t overlap_read_pos_ = 0;
 
-  // Output ring buffer
+  // Bounded output queue. When full, emit_frame drops the oldest unread frame
+  // before appending the current one (live/drop-oldest policy).
   std::deque<StreamFrame> output_buffer_;
+  size_t dropped_output_frames_ = 0;
+  StreamFrame scratch_frame_;  // Reused for throttled (non-emitted) frames
 
   // FFT processor (reusable)
   std::unique_ptr<FFT> fft_;
@@ -379,7 +382,7 @@ class StreamAnalyzer {
   ///        with 0. Returns dst.data(). Used to keep one bad input sample from
   ///        poisoning every downstream estimate (FFT, mel, chroma, onset).
   static const float* sanitize_into(const float* src, size_t n_samples, std::vector<float>& dst);
-  StreamFrame process_single_frame(const float* frame_start, size_t sample_offset);
+  void process_single_frame(const float* frame_start, size_t sample_offset, StreamFrame& frame);
   void compute_stft(const float* frame_start);
   void compute_mel();
   void compute_chroma();

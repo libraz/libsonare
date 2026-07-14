@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <deque>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "streaming/stream_analyzer.h"
 #include "streaming/stream_analyzer_utils.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -476,7 +478,10 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   int min_bars_for_lock;
 
   if (expected_duration_ > 0.0f && bar_duration_ > 0.0f) {
-    int expected_total_bars = static_cast<int>(expected_duration_ / bar_duration_);
+    int expected_total_bars = 0;
+    if (!numeric::checked_round_cast(expected_duration_ / bar_duration_, &expected_total_bars)) {
+      expected_total_bars = std::numeric_limits<int>::max();
+    }
     // Lock after 25% of song, but at least 2 repetitions
     min_bars_for_lock = std::max(pattern_len * 2, expected_total_bars / 4);
   } else {
@@ -634,3 +639,4 @@ void StreamAnalyzer::detect_progression_pattern() {
 }
 
 }  // namespace sonare
+#include "util/numeric_validation.h"
