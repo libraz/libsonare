@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/audio.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -13,8 +14,9 @@ HaasEnhancer::HaasEnhancer(HaasEnhancerConfig config) : config_(config) {
 }
 
 void HaasEnhancer::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  if (!std::isfinite(sample_rate) || sample_rate < kMinAudioSampleRate ||
+      sample_rate > kMaxAudioSampleRate) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate is outside supported bounds");
   }
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
@@ -69,8 +71,10 @@ void HaasEnhancer::set_config(const HaasEnhancerConfig& config) {
 }
 
 bool HaasEnhancer::set_parameter(unsigned int param_id, float value) {
+  if (!std::isfinite(value)) return false;
   switch (param_id) {
     case 0:
+      if (value > 1000.0f) return false;
       config_.delay_ms = std::max(0.0f, value);
       // Changing the delay length requires resizing the delay line, which
       // reallocates and clears the buffered samples.
@@ -96,7 +100,9 @@ bool HaasEnhancer::parameter_is_realtime_safe(unsigned int param_id) const noexc
 }
 
 void HaasEnhancer::validate_config(const HaasEnhancerConfig& config) {
-  if (config.delay_ms < 0.0f || config.mix < 0.0f || config.mix > 1.0f) {
+  constexpr float kMaxDelayMs = 1000.0f;
+  if (!std::isfinite(config.delay_ms) || config.delay_ms < 0.0f || config.delay_ms > kMaxDelayMs ||
+      !std::isfinite(config.mix) || config.mix < 0.0f || config.mix > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid Haas enhancer configuration");
   }
 }

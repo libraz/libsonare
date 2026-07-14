@@ -7,6 +7,7 @@
 #include "acoustic/late_reverb.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::acoustic {
 
@@ -51,8 +52,22 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
                               int sample_rate, const RirSynthConfig& config) {
   RirSynthResult result;
   result.diagnostics = validate_shoebox(room, placement);
-  if (has_error(result.diagnostics) || sample_rate <= 0) {
-    result.rir = Audio::from_vector(std::vector<float>{}, sample_rate > 0 ? sample_rate : 1);
+  if (config.ism_order < 0 ||
+      !numeric::finite_in_closed_range(config.max_seconds, 0.0f, kMaxRirSeconds) ||
+      !numeric::finite_in_closed_range(config.mixing_time_ms, 0.0f, kMaxRirMixingTimeMs) ||
+      !numeric::finite_in_closed_range(config.crossfade_ms, 0.0f, kMaxRirCrossfadeMs)) {
+    result.diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_rir_config",
+                                  "RIR timing values must be finite and within safe bounds"});
+  }
+  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
+    result.diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_sample_rate",
+                                  "sample rate is outside supported bounds"});
+  }
+  if (has_error(result.diagnostics)) {
+    const int diagnostic_sample_rate =
+        sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate ? sample_rate
+                                                                                 : 48000;
+    result.rir = Audio::from_vector(std::vector<float>{}, diagnostic_sample_rate);
     return result;
   }
 

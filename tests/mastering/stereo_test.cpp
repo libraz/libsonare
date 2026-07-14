@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "mastering/stereo/auto_pan.h"
@@ -317,8 +318,8 @@ TEST_CASE("HaasEnhancer delays one side from the opposite channel", "[mastering]
   std::vector<float> left = {1.0f, 0.0f, 0.0f, 0.0f};
   std::vector<float> right(4, 0.0f);
 
-  HaasEnhancer haas({1.0f, 1.0f, true});
-  haas.prepare(1000.0, 4);
+  HaasEnhancer haas({0.125f, 1.0f, true});
+  haas.prepare(8000.0, 4);
   process_stereo(haas, left, right);
 
   REQUIRE(haas.delay_samples() == 1);
@@ -329,6 +330,15 @@ TEST_CASE("HaasEnhancer delays one side from the opposite channel", "[mastering]
 TEST_CASE("HaasEnhancer validates configuration", "[mastering][stereo]") {
   REQUIRE_THROWS(HaasEnhancer({-1.0f, 1.0f, true}));
   REQUIRE_THROWS(HaasEnhancer({1.0f, 1.5f, true}));
+  REQUIRE_THROWS(HaasEnhancer({std::numeric_limits<float>::quiet_NaN(), 1.0f, true}));
+  REQUIRE_THROWS(HaasEnhancer({1.0f, std::numeric_limits<float>::infinity(), true}));
+
+  HaasEnhancer haas;
+  REQUIRE_FALSE(haas.set_parameter(0, std::numeric_limits<float>::quiet_NaN()));
+  REQUIRE_FALSE(haas.set_parameter(1, std::numeric_limits<float>::infinity()));
+  REQUIRE_FALSE(haas.set_parameter(0, 1001.0f));
+  REQUIRE_THROWS(haas.prepare(std::numeric_limits<double>::infinity(), 64));
+  REQUIRE_THROWS(haas.prepare(1.0e300, 64));
 }
 
 TEST_CASE("PhaseAlign delays the selected channel by integer samples", "[mastering][stereo]") {

@@ -373,6 +373,20 @@ std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceLi
       band_mismatch = true;
       break;
     }
+    for (float coefficient : w.absorption) {
+      if (!std::isfinite(coefficient) || coefficient < 0.0f || coefficient > 1.0f) {
+        diags.push_back({Diagnostic::Severity::Error, "acoustic.invalid_absorption",
+                         "material absorption must be finite and within [0,1]"});
+        return diags;
+      }
+    }
+    for (float coefficient : w.scattering) {
+      if (!std::isfinite(coefficient) || coefficient < 0.0f || coefficient > 1.0f) {
+        diags.push_back({Diagnostic::Severity::Error, "acoustic.invalid_scattering",
+                         "material scattering must be finite and within [0,1]"});
+        return diags;
+      }
+    }
   }
   if (band_mismatch) {
     diags.push_back({Diagnostic::Severity::Warning, "acoustic.material_band_mismatch",

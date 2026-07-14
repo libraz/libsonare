@@ -42,6 +42,15 @@
 /// @ref project_from_json catches @ref sonare::util::json::JsonError and any
 /// structural inconsistency and returns a @ref DeserializeResult carrying
 /// diagnostics with an empty optional Project.
+///
+/// Entity ID policy
+/// ----------------
+/// Source, track, clip, and marker IDs use the inclusive range
+/// `[1, UINT32_MAX - 1]`. Zero is the public failure/not-found sentinel and
+/// `UINT32_MAX` is reserved as the allocator-exhausted marker. Deserialization
+/// rejects either reserved value and rejects duplicate IDs within each entity
+/// namespace. Importing `UINT32_MAX - 1` is valid, but subsequent allocation in
+/// that namespace fails explicitly by returning zero rather than wrapping.
 
 #include <cstdint>
 #include <optional>

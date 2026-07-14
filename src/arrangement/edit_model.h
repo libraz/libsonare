@@ -374,9 +374,11 @@ class Project {
 
   // ---- Source registry -----------------------------------------------------
 
-  /// Registers an audio source and returns its stable id (allocated here).
+  /// Registers an audio source and returns its stable id (allocated here), or
+  /// 0 when the uint32 id space is exhausted.
   SourceId add_audio_source(AudioSourceRef ref);
-  /// Registers a MIDI source and returns its stable id (allocated here).
+  /// Registers a MIDI source and returns its stable id (allocated here), or 0
+  /// when the uint32 id space is exhausted.
   SourceId add_midi_source(MidiSourceRef ref);
 
   const std::vector<ClipSource>& sources() const noexcept { return sources_; }
@@ -387,7 +389,7 @@ class Project {
   // ---- Tracks --------------------------------------------------------------
 
   /// Adds a track (id is allocated here, overriding any id on the argument) and
-  /// returns its stable id.
+  /// returns its stable id, or 0 when the uint32 id space is exhausted.
   TrackId add_track(Track track);
 
   const std::vector<Track>& tracks() const noexcept { return tracks_; }
@@ -423,7 +425,7 @@ class Project {
 
   /// Adds a marker (id is allocated here) and returns its stable id. `kind`
   /// mirrors SonareMarkerKind; the key fields apply only to the key-signature
-  /// kind.
+  /// kind. Returns 0 when the uint32 id space is exhausted.
   uint32_t add_marker(double ppq, std::string name, uint8_t kind = 0, int8_t key_fifths = 0,
                       bool key_minor = false);
   const std::vector<ProjectMarker>& markers() const noexcept { return markers_; }
@@ -504,7 +506,8 @@ class Project {
   /// removals). On failure returns a default-constructed variant and false.
   std::pair<ClipSource, bool> remove_source(SourceId id);
 
-  /// Sets the next id counters to at least the given values. invert() of an
+  /// Sets the next id counters past the given allocated id. UINT32_MAX is the
+  /// saturated/exhausted state and is never itself allocated. invert() of an
   /// Add* command calls this so that a redo allocates the SAME id again, keeping
   /// ids stable across undo/redo round-trips.
   void ensure_next_source_id(SourceId id) noexcept;

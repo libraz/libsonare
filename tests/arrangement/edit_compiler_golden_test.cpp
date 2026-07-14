@@ -86,6 +86,41 @@ Fixture make_fixture(int source_frames = 48000, double source_sr = kProjectSr) {
   return f;
 }
 
+std::vector<float> render(const arr::CompiledTimeline& timeline, int64_t frames);
+
+TEST_CASE("compile rejects ragged decoded audio channels before scheduling", "[arrangement]") {
+  SECTION("short second channel") {
+    Fixture f = make_fixture(128);
+    f.audio.sources.at(f.source_id).channels[1].resize(64);
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.has_errors());
+    REQUIRE_FALSE(result.timeline.has_value());
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kRaggedAudioSource;
+    }));
+  }
+
+  SECTION("empty second channel") {
+    Fixture f = make_fixture(128);
+    f.audio.sources.at(f.source_id).channels[1].clear();
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.has_errors());
+    REQUIRE_FALSE(result.timeline.has_value());
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kRaggedAudioSource;
+    }));
+  }
+
+  SECTION("equal channels still compile and render") {
+    Fixture f = make_fixture(128);
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE_FALSE(result.has_errors());
+    REQUIRE(result.timeline.has_value());
+    const auto rendered = render(*result.timeline, 128);
+    REQUIRE(rendered.size() == 256);
+  }
+}
+
 // Renders a compiled timeline offline and returns interleaved output.
 std::vector<float> render(const arr::CompiledTimeline& timeline, int64_t frames) {
   sonare::engine::RealtimeEngine engine;

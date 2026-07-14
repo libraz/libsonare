@@ -66,6 +66,38 @@ TEST_CASE("extreme room dimensions never yield a NaN RIR", "[acoustic][rir]") {
   }
 }
 
+TEST_CASE("RIR synthesis rejects non-finite material and timing inputs",
+          "[acoustic][rir][numeric]") {
+  const SourceListener placement{{1.0f, 1.0f, 1.0f}, {2.0f, 2.0f, 2.0f}};
+
+  ShoeboxRoom room = uniform_room(7.0f, 5.0f, 3.0f, 0.3f);
+  room.walls[0].absorption[0] = std::numeric_limits<float>::quiet_NaN();
+  auto result = synthesize_rir(room, placement, 48000);
+  REQUIRE(has_error(result.diagnostics));
+  REQUIRE(has_code(result.diagnostics, "acoustic.invalid_absorption"));
+  REQUIRE(result.rir.empty());
+
+  room = uniform_room(7.0f, 5.0f, 3.0f, 0.3f);
+  room.walls[0].scattering[0] = std::numeric_limits<float>::infinity();
+  result = synthesize_rir(room, placement, 48000);
+  REQUIRE(has_error(result.diagnostics));
+  REQUIRE(has_code(result.diagnostics, "acoustic.invalid_scattering"));
+  REQUIRE(result.rir.empty());
+
+  RirSynthConfig config;
+  config.max_seconds = std::numeric_limits<float>::infinity();
+  result = synthesize_rir(room, placement, 48000, config);
+  REQUIRE(has_error(result.diagnostics));
+  REQUIRE(has_code(result.diagnostics, "acoustic.invalid_rir_config"));
+  REQUIRE(result.rir.empty());
+
+  config = {};
+  result = synthesize_rir(room, placement, std::numeric_limits<int>::max(), config);
+  REQUIRE(has_error(result.diagnostics));
+  REQUIRE(has_code(result.diagnostics, "acoustic.invalid_sample_rate"));
+  REQUIRE(result.rir.empty());
+}
+
 // When the late tail is shorter than the mixing time, a crossfade to late-only
 // exactly where the tail is zero would silence the early reflections. The
 // synthesizer must instead preserve the geometric energy.

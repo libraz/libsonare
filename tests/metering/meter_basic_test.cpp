@@ -17,6 +17,7 @@
 #include "metering/true_peak.h"
 #include "metering/waveform.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -462,6 +463,31 @@ TEST_CASE("dynamic range increases with level changes", "[meter]") {
   REQUIRE(result.window_rms_db.size() == 4);
   REQUIRE(result.dynamic_range_db > 15.0f);
   REQUIRE(result.high_percentile_db > result.low_percentile_db);
+}
+
+TEST_CASE("dynamic range rejects non-finite and overflowing configuration", "[meter][numeric]") {
+  const Audio audio = make_sine(0.5f, 48000, 0.05f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  for (float value : {nan, inf, -inf}) {
+    metering::DynamicRangeConfig config;
+    config.window_sec = value;
+    REQUIRE_THROWS_AS(metering::dynamic_range(audio, config), SonareException);
+    config = {};
+    config.hop_sec = value;
+    REQUIRE_THROWS_AS(metering::dynamic_range(audio, config), SonareException);
+    config = {};
+    config.low_percentile = value;
+    REQUIRE_THROWS_AS(metering::dynamic_range(audio, config), SonareException);
+    config = {};
+    config.floor_db = value;
+    REQUIRE_THROWS_AS(metering::dynamic_range(audio, config), SonareException);
+  }
+
+  metering::DynamicRangeConfig huge;
+  huge.window_sec = std::numeric_limits<float>::max();
+  REQUIRE_THROWS_AS(metering::dynamic_range(audio, huge), SonareException);
 }
 
 TEST_CASE("spectrum identifies dominant sine frequency", "[meter]") {

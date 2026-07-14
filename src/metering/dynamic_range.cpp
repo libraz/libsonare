@@ -9,6 +9,7 @@
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::metering {
 
@@ -37,21 +38,28 @@ float percentile_sorted(const std::vector<float>& sorted, float percentile) {
 }  // namespace
 
 DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& config) {
-  SONARE_CHECK(config.window_sec > 0.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_sec > 0.0f, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.low_percentile >= 0.0f && config.low_percentile <= 1.0f,
+  SONARE_CHECK(numeric::finite_positive(config.window_sec), ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(config.hop_sec), ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_in_closed_range(config.low_percentile, 0.0f, 1.0f),
                ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.high_percentile >= 0.0f && config.high_percentile <= 1.0f,
+  SONARE_CHECK(numeric::finite_in_closed_range(config.high_percentile, 0.0f, 1.0f),
                ErrorCode::InvalidParameter);
   SONARE_CHECK(config.low_percentile <= config.high_percentile, ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config.floor_db), ErrorCode::InvalidParameter);
 
   DynamicRangeResult result;
   if (audio.empty()) return result;
 
-  const size_t window =
-      std::max<size_t>(1, static_cast<size_t>(std::round(config.window_sec * audio.sample_rate())));
-  const size_t hop =
-      std::max<size_t>(1, static_cast<size_t>(std::round(config.hop_sec * audio.sample_rate())));
+  size_t window = 0;
+  size_t hop = 0;
+  SONARE_CHECK(numeric::checked_round_cast(
+                   static_cast<double>(config.window_sec) * audio.sample_rate(), &window) &&
+                   window > 0,
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::checked_round_cast(
+                   static_cast<double>(config.hop_sec) * audio.sample_rate(), &hop) &&
+                   hop > 0,
+               ErrorCode::InvalidParameter);
   const float* data = audio.data();
 
   if (audio.size() < window) {
@@ -62,8 +70,11 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
     // Emit only complete windows. A trailing partial window is computed over its
     // own (shorter) length, so its RMS is not comparable to the full-length
     // windows and would skew the low/high percentiles.
-    for (size_t start = 0; start + window <= audio.size(); start += hop) {
+    const size_t last_start = audio.size() - window;
+    for (size_t start = 0;;) {
       result.window_rms_db.push_back(rms_db_for_window(data, start, window, config.floor_db));
+      if (hop > last_start - start) break;
+      start += hop;
     }
   }
 

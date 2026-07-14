@@ -17,7 +17,11 @@
 /// three consumers pick up.
 
 #include <cmath>
+#include <limits>
 #include <type_traits>
+
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::api::detail {
 
@@ -26,19 +30,42 @@ namespace sonare::mastering::api::detail {
 /// Integral and enum members round to the nearest integer (the flat param API
 /// carries every value as a double); bool follows the "non-zero is true"
 /// convention used throughout the chain param surface.
-inline void assign_field(float& dst, double value) { dst = static_cast<float>(value); }
-inline void assign_field(double& dst, double value) { dst = value; }
-inline void assign_field(bool& dst, double value) { dst = value != 0.0; }
+inline void assign_field(float& dst, double value) {
+  if (!numeric::finite(value) ||
+      std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "mastering parameter is out of range");
+  }
+  dst = static_cast<float>(value);
+}
+inline void assign_field(double& dst, double value) {
+  if (!numeric::finite(value)) {
+    throw SonareException(ErrorCode::InvalidParameter, "mastering parameter must be finite");
+  }
+  dst = value;
+}
+inline void assign_field(bool& dst, double value) {
+  if (!numeric::finite(value)) {
+    throw SonareException(ErrorCode::InvalidParameter, "mastering parameter must be finite");
+  }
+  dst = value != 0.0;
+}
 
 template <typename Int,
           std::enable_if_t<std::is_integral_v<Int> && !std::is_same_v<Int, bool>, int> = 0>
 inline void assign_field(Int& dst, double value) {
-  dst = static_cast<Int>(std::lround(value));
+  if (!numeric::checked_round_cast(value, &dst)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mastering integer parameter is out of range");
+  }
 }
 
 template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
 inline void assign_field(Enum& dst, double value) {
-  dst = static_cast<Enum>(static_cast<int>(std::lround(value)));
+  int converted = 0;
+  if (!numeric::checked_round_cast(value, &converted)) {
+    throw SonareException(ErrorCode::InvalidParameter, "mastering enum parameter is out of range");
+  }
+  dst = static_cast<Enum>(converted);
 }
 
 }  // namespace sonare::mastering::api::detail

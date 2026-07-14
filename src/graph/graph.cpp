@@ -269,8 +269,8 @@ void Graph::clear_inputs(int num_samples) noexcept {
 
 void Graph::set_input(const std::string& node_id, int port, const float* samples, int num_samples) {
   Node* target = node(node_id);
-  if (target == nullptr || samples == nullptr || num_samples < 0 ||
-      num_samples > target->max_block_size()) {
+  if (target == nullptr || port < 0 || port >= target->num_ports() || samples == nullptr ||
+      num_samples < 0 || num_samples > target->max_block_size()) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid graph input");
   }
   float* dest = target->input_port(port);
@@ -334,7 +334,8 @@ void Graph::process_block(int num_samples) noexcept {
 
 const float* Graph::output(const std::string& node_id, int port) const {
   const Node* target = node(node_id);
-  return target == nullptr ? nullptr : target->output_port(port);
+  return target == nullptr || port < 0 || port >= target->num_ports() ? nullptr
+                                                                      : target->output_port(port);
 }
 
 Node* Graph::node(const std::string& id) {

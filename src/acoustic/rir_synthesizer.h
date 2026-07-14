@@ -19,6 +19,10 @@
 
 namespace sonare::acoustic {
 
+inline constexpr float kMaxRirSeconds = 600.0f;
+inline constexpr float kMaxRirMixingTimeMs = 10000.0f;
+inline constexpr float kMaxRirCrossfadeMs = 1000.0f;
+
 /// @brief Configuration for room-impulse-response synthesis.
 struct RirSynthConfig {
   int ism_order = 3;  ///< image-source reflection order (early reflections)

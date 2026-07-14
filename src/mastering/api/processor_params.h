@@ -137,6 +137,11 @@ class ParamMap {
 inline ParamMap make_map(const std::vector<Param>& params) {
   ParamMap map;
   for (const auto& param : params) {
+    if (!numeric::finite(param.value) ||
+        std::fabs(param.value) > static_cast<double>(std::numeric_limits<float>::max())) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "mastering parameters must be finite and representable");
+    }
     map[param.key] = param.value;
   }
   return map;
@@ -149,7 +154,12 @@ inline float f(const ParamMap& params, const char* key, float default_value) {
 
 inline int i(const ParamMap& params, const char* key, int default_value) {
   auto it = params.find(key);
-  return it == params.end() ? default_value : static_cast<int>(std::lround(it->second));
+  if (it == params.end()) return default_value;
+  int converted = 0;
+  if (!numeric::checked_round_cast(it->second, &converted)) {
+    throw SonareException(ErrorCode::InvalidParameter, "mastering integer parameter is invalid");
+  }
+  return converted;
 }
 
 inline bool b(const ParamMap& params, const char* key, bool default_value) {

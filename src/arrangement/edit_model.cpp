@@ -4,19 +4,42 @@
 #include "arrangement/edit_model.h"
 
 #include <cmath>
+#include <limits>
+#include <type_traits>
 #include <utility>
 
 namespace sonare::arrangement {
 
+namespace {
+
+template <typename Id>
+Id allocate_entity_id(Id& next) noexcept {
+  static_assert(std::is_same_v<Id, uint32_t>);
+  // 0 is the public failure/sentinel value and UINT32_MAX is reserved as the
+  // exhausted-counter marker. Never increment either value.
+  if (next == 0 || next == std::numeric_limits<Id>::max()) return 0;
+  return next++;
+}
+
+template <typename Id>
+void ensure_next_entity_id(Id id, Id& next) noexcept {
+  const Id reserved = std::numeric_limits<Id>::max();
+  if (id >= next) next = id >= reserved - 1 ? reserved : static_cast<Id>(id + 1);
+}
+
+}  // namespace
+
 SourceId Project::add_audio_source(AudioSourceRef ref) {
-  const SourceId id = next_source_id_++;
+  const SourceId id = allocate_entity_id(next_source_id_);
+  if (id == 0) return 0;
   ref.id = id;
   sources_.emplace_back(std::move(ref));
   return id;
 }
 
 SourceId Project::add_midi_source(MidiSourceRef ref) {
-  const SourceId id = next_source_id_++;
+  const SourceId id = allocate_entity_id(next_source_id_);
+  if (id == 0) return 0;
   ref.id = id;
   sources_.emplace_back(std::move(ref));
   return id;
@@ -35,7 +58,8 @@ const ClipSource* Project::find_source(SourceId id) const noexcept {
 }
 
 TrackId Project::add_track(Track track) {
-  const TrackId id = next_track_id_++;
+  const TrackId id = allocate_entity_id(next_track_id_);
+  if (id == 0) return 0;
   track.id = id;
   tracks_.emplace_back(std::move(track));
   return id;
@@ -100,7 +124,8 @@ ClipId Project::add_clip(EditClip clip) {
     return 0;
   }
 
-  const ClipId id = next_clip_id_++;
+  const ClipId id = allocate_entity_id(next_clip_id_);
+  if (id == 0) return 0;
   clip.id = id;
   clips_.emplace_back(std::move(clip));
   return id;
@@ -197,7 +222,8 @@ std::pair<WarpMapRef, bool> Project::remove_warp_map(WarpRefId id) {
 
 uint32_t Project::add_marker(double ppq, std::string name, uint8_t kind, int8_t key_fifths,
                              bool key_minor) {
-  const uint32_t id = next_marker_id_++;
+  const uint32_t id = allocate_entity_id(next_marker_id_);
+  if (id == 0) return 0;
   ProjectMarker marker;
   marker.ppq = ppq;
   marker.id = id;
@@ -232,7 +258,7 @@ std::pair<EditClip, bool> Project::remove_clip(ClipId id) {
 }
 
 bool Project::insert_clip_raw(EditClip clip, size_t index) {
-  if (clip.id == 0 || has_clip(clip.id)) {
+  if (clip.id == 0 || clip.id == std::numeric_limits<ClipId>::max() || has_clip(clip.id)) {
     return false;
   }
   if (index >= clips_.size()) {
@@ -244,7 +270,7 @@ bool Project::insert_clip_raw(EditClip clip, size_t index) {
 }
 
 bool Project::insert_track_raw(Track track, size_t index) {
-  if (track.id == 0 || has_track(track.id)) {
+  if (track.id == 0 || track.id == std::numeric_limits<TrackId>::max() || has_track(track.id)) {
     return false;
   }
   if (index >= tracks_.size()) {
@@ -269,7 +295,7 @@ ClipSource* Project::find_source_mutable(SourceId id) noexcept {
 
 bool Project::insert_source_raw(ClipSource source, size_t index) {
   const SourceId id = source_id(source);
-  if (id == 0 || has_source(id)) {
+  if (id == 0 || id == std::numeric_limits<SourceId>::max() || has_source(id)) {
     return false;
   }
   if (index >= sources_.size()) {
@@ -319,27 +345,17 @@ std::pair<ClipSource, bool> Project::remove_source(SourceId id) {
 }
 
 void Project::ensure_next_source_id(SourceId id) noexcept {
-  if (id >= next_source_id_) {
-    next_source_id_ = id + 1;
-  }
+  ensure_next_entity_id(id, next_source_id_);
 }
 
 void Project::ensure_next_track_id(TrackId id) noexcept {
-  if (id >= next_track_id_) {
-    next_track_id_ = id + 1;
-  }
+  ensure_next_entity_id(id, next_track_id_);
 }
 
-void Project::ensure_next_clip_id(ClipId id) noexcept {
-  if (id >= next_clip_id_) {
-    next_clip_id_ = id + 1;
-  }
-}
+void Project::ensure_next_clip_id(ClipId id) noexcept { ensure_next_entity_id(id, next_clip_id_); }
 
 void Project::ensure_next_marker_id(uint32_t id) noexcept {
-  if (id >= next_marker_id_) {
-    next_marker_id_ = id + 1;
-  }
+  ensure_next_entity_id(id, next_marker_id_);
 }
 
 }  // namespace sonare::arrangement

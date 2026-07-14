@@ -6,6 +6,7 @@
 #include <string>
 #include <utility>
 
+#include "core/audio.h"
 #include "core/resample.h"
 #include "engine/tempo_sync.h"
 #include "midi/midi_clip.h"
@@ -523,9 +524,22 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                  clip.id, "audio source is registered but contains no samples");
         continue;
       }
-      if (!(samples->sample_rate > 0.0)) {
+      const size_t source_frame_count = samples->channels[0].size();
+      const bool ragged_channels =
+          std::any_of(samples->channels.begin(), samples->channels.end(),
+                      [source_frame_count](const std::vector<float>& channel) {
+                        return channel.empty() || channel.size() != source_frame_count;
+                      });
+      if (ragged_channels) {
+        add_diag(&result, Diagnostic::Code::kRaggedAudioSource, Diagnostic::Severity::kError,
+                 clip.id,
+                 "audio source channels must be non-empty and have identical frame counts");
+        continue;
+      }
+      if (!std::isfinite(samples->sample_rate) || samples->sample_rate < kMinAudioSampleRate ||
+          samples->sample_rate > kMaxAudioSampleRate) {
         add_diag(&result, Diagnostic::Code::kInvalidSampleRate, Diagnostic::Severity::kError,
-                 clip.id, "audio source has an invalid native sample rate");
+                 clip.id, "audio source native sample rate is outside supported bounds");
         continue;
       }
 

@@ -14,6 +14,7 @@
 #include "serialize/project_serializer_internal.h"
 #include "transport/tempo_map.h"
 #include "util/json.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::serialize {
 namespace {
@@ -122,12 +123,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
       return result;
     }
     const double version_d = version->as_number();
-    if (version_d < 0.0) {
-      result.diagnostics.push_back(
-          {DiagnosticSeverity::kError, "invalid_version", "negative schema version"});
+    uint32_t schema_version = 0;
+    if (!numeric::checked_integral_cast(version_d, &schema_version)) {
+      result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_version",
+                                    "schema version must be a non-negative uint32 integer"});
       return result;
     }
-    const uint32_t schema_version = static_cast<uint32_t>(version_d);
     if (!schema_version_supported(schema_version)) {
       result.diagnostics.push_back({DiagnosticSeverity::kError, "unsupported_schema_version",
                                     "schema version " + std::to_string(schema_version) +
@@ -137,6 +138,15 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
 
     arrangement::Project project;
+    const auto invalid_entity_id = [](uint32_t id) {
+      return id == 0 || id == std::numeric_limits<uint32_t>::max();
+    };
+    const auto reject_entity_id = [&](const char* entity, uint32_t id, bool duplicate) {
+      result.diagnostics.push_back(
+          {DiagnosticSeverity::kError, duplicate ? "duplicate_entity_id" : "invalid_entity_id",
+           std::string(entity) + " id " + std::to_string(id) +
+               (duplicate ? " is duplicated" : " is reserved or out of range")});
+    };
     // Default matches arrangement::Project's constructor default (48 kHz, the
     // conventional DAW render rate) so a document that omits "sample_rate"
     // round-trips to the same rate an in-memory project would have.
@@ -245,8 +255,15 @@ DeserializeResult project_from_json(const std::string& json_text) {
         if (!sv.is_object()) continue;
         arrangement::ClipSource src = source_from_json(sv);
         const arrangement::SourceId sid = arrangement::source_id(src);
+        if (invalid_entity_id(sid)) {
+          reject_entity_id("source", sid, false);
+          return result;
+        }
         if (sid > max_source_id) max_source_id = sid;
-        project.insert_source_raw(std::move(src));
+        if (!project.insert_source_raw(std::move(src))) {
+          reject_entity_id("source", sid, true);
+          return result;
+        }
       }
     }
     if (max_source_id > 0) project.ensure_next_source_id(max_source_id);
@@ -257,8 +274,16 @@ DeserializeResult project_from_json(const std::string& json_text) {
       for (const auto& tv : *arr) {
         if (!tv.is_object()) continue;
         arrangement::Track t = track_from_json(tv);
+        if (invalid_entity_id(t.id)) {
+          reject_entity_id("track", t.id, false);
+          return result;
+        }
         if (t.id > max_track_id) max_track_id = t.id;
-        project.insert_track_raw(std::move(t));
+        const uint32_t id = t.id;
+        if (!project.insert_track_raw(std::move(t))) {
+          reject_entity_id("track", id, true);
+          return result;
+        }
       }
     }
     if (max_track_id > 0) project.ensure_next_track_id(max_track_id);
@@ -270,8 +295,16 @@ DeserializeResult project_from_json(const std::string& json_text) {
       for (const auto& cv : *arr) {
         if (!cv.is_object()) continue;
         arrangement::EditClip c = clip_from_json(cv);
+        if (invalid_entity_id(c.id)) {
+          reject_entity_id("clip", c.id, false);
+          return result;
+        }
         if (c.id > max_clip_id) max_clip_id = c.id;
-        project.insert_clip_raw(std::move(c));
+        const uint32_t id = c.id;
+        if (!project.insert_clip_raw(std::move(c))) {
+          reject_entity_id("clip", id, true);
+          return result;
+        }
       }
     }
     if (max_clip_id > 0) project.ensure_next_clip_id(max_clip_id);
@@ -337,6 +370,16 @@ DeserializeResult project_from_json(const std::string& json_text) {
         // fields, in which case the write side must serialize them too.
         m.key_fifths = static_cast<int8_t>(num_or(mv, "key_fifths", 0.0));
         m.key_minor = bool_or(mv, "key_minor", false);
+        if (invalid_entity_id(m.id)) {
+          reject_entity_id("marker", m.id, false);
+          return result;
+        }
+        if (std::any_of(
+                project.markers().begin(), project.markers().end(),
+                [&](const arrangement::ProjectMarker& existing) { return existing.id == m.id; })) {
+          reject_entity_id("marker", m.id, true);
+          return result;
+        }
         if (m.id > max_marker_id) max_marker_id = m.id;
         project.markers_mutable().push_back(std::move(m));
       }

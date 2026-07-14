@@ -112,6 +112,21 @@ TEST_CASE("huge and degenerate numbers do not crash", "[serialize]") {
   }
 }
 
+TEST_CASE("project schema version rejects fractional and out-of-range numbers", "[serialize]") {
+  const std::vector<std::string> inputs = {
+      "{\"version\": 1.5}",
+      "{\"version\": 4294967296}",
+      "{\"version\": 1e100}",
+  };
+  for (const auto& input : inputs) {
+    INFO("input: " << input);
+    const auto result = safe_parse(input);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    REQUIRE(result.diagnostics.front().code == "invalid_version");
+  }
+}
+
 TEST_CASE("every truncated prefix of a valid project never crashes", "[serialize]") {
   // Build a representative valid project, then feed every byte-prefix of its
   // serialization to the deserializer. All but the full string are malformed;

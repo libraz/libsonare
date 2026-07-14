@@ -16,6 +16,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -49,6 +50,24 @@ using sonare::mastering::api::detail::make_map;
 using sonare::mastering::api::detail::populate_compressor_bands;
 
 }  // namespace
+
+TEST_CASE("mastering flat parameters reject non-finite and unrepresentable values",
+          "[mastering][params][numeric]") {
+  using sonare::SonareException;
+
+  const double invalid_values[] = {std::numeric_limits<double>::quiet_NaN(),
+                                   std::numeric_limits<double>::infinity(),
+                                   -std::numeric_limits<double>::infinity(), 1.0e300, -1.0e300};
+  for (double value : invalid_values) {
+    INFO("value=" << value);
+    REQUIRE_THROWS_AS(make_map({{"delayMs", value}}), SonareException);
+    REQUIRE_THROWS_AS(
+        parse_chain_config_params(std::vector<Param>{{"stereo.imager.width", value}}.data(), 1),
+        SonareException);
+  }
+
+  REQUIRE_THROWS_AS(make_insert("stereo.haasEnhancer", R"({"delayMs":1e300})"), SonareException);
+}
 
 // --- H4 -------------------------------------------------------------------
 

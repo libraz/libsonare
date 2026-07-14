@@ -82,7 +82,14 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
   // Repair stages keep bespoke parsing (size_t / enum-clamping quirks), so they
   // still need the float / int views of the value.
   const float vf = static_cast<float>(v);
-  const int vi = static_cast<int>(v);
+  const auto vi = [&]() {
+    int converted = 0;
+    if (!numeric::checked_round_cast(v, &converted)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "mastering integer parameter is out of range");
+    }
+    return converted;
+  };
   // ---- repair.declick ----
   if (key == "repair.declick.enabled") {
     mark_enabled(flags.declick, v);
@@ -99,12 +106,12 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.declick.maxClickSamples") {
-    cfg.repair.declick.config.max_click_samples = static_cast<size_t>(vi);
+    cfg.repair.declick.config.max_click_samples = static_cast<size_t>(vi());
     mark_field(flags.declick);
     return true;
   }
   if (key == "repair.declick.lpcOrder") {
-    cfg.repair.declick.config.lpc_order = vi;
+    cfg.repair.declick.config.lpc_order = vi();
     mark_field(flags.declick);
     return true;
   }
@@ -125,12 +132,12 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.declip.lpcOrder") {
-    cfg.repair.declip.config.lpc_order = vi;
+    cfg.repair.declip.config.lpc_order = vi();
     mark_field(flags.declip);
     return true;
   }
   if (key == "repair.declip.iterations") {
-    cfg.repair.declip.config.iterations = vi;
+    cfg.repair.declip.config.iterations = vi();
     mark_field(flags.declip);
     return true;
   }
@@ -151,13 +158,14 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.decrackle.mode") {
-    cfg.repair.decrackle.config.mode = vi == 1 ? mastering::repair::DecrackleMode::WaveletShrinkage
-                                               : mastering::repair::DecrackleMode::Median;
+    cfg.repair.decrackle.config.mode = vi() == 1
+                                           ? mastering::repair::DecrackleMode::WaveletShrinkage
+                                           : mastering::repair::DecrackleMode::Median;
     mark_field(flags.decrackle);
     return true;
   }
   if (key == "repair.decrackle.levels") {
-    cfg.repair.decrackle.config.levels = vi;
+    cfg.repair.decrackle.config.levels = vi();
     mark_field(flags.decrackle);
     return true;
   }
@@ -173,7 +181,7 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.dehum.harmonics") {
-    cfg.repair.dehum.config.harmonics = vi;
+    cfg.repair.dehum.config.harmonics = vi();
     mark_field(flags.dehum);
     return true;
   }
@@ -198,7 +206,7 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.dehum.frameSize") {
-    cfg.repair.dehum.config.frame_size = vi;
+    cfg.repair.dehum.config.frame_size = vi();
     mark_field(flags.dehum);
     return true;
   }
@@ -224,12 +232,12 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.dereverb.nFft") {
-    cfg.repair.dereverb.config.n_fft = vi;
+    cfg.repair.dereverb.config.n_fft = vi();
     mark_field(flags.dereverb);
     return true;
   }
   if (key == "repair.dereverb.hopLength") {
-    cfg.repair.dereverb.config.hop_length = vi;
+    cfg.repair.dereverb.config.hop_length = vi();
     mark_field(flags.dereverb);
     return true;
   }
@@ -259,12 +267,12 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.dereverb.wpeIterations") {
-    cfg.repair.dereverb.config.wpe_iterations = vi;
+    cfg.repair.dereverb.config.wpe_iterations = vi();
     mark_field(flags.dereverb);
     return true;
   }
   if (key == "repair.dereverb.wpeTaps") {
-    cfg.repair.dereverb.config.wpe_taps = vi;
+    cfg.repair.dereverb.config.wpe_taps = vi();
     mark_field(flags.dereverb);
     return true;
   }
@@ -280,22 +288,22 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.denoise.mode") {
-    cfg.repair.denoise.config.mode = static_cast<repair::DenoiseMode>(vi);
+    cfg.repair.denoise.config.mode = static_cast<repair::DenoiseMode>(vi());
     mark_field(flags.denoise);
     return true;
   }
   if (key == "repair.denoise.noiseEstimator") {
-    cfg.repair.denoise.config.noise_estimator = static_cast<repair::DenoiseNoiseEstimator>(vi);
+    cfg.repair.denoise.config.noise_estimator = static_cast<repair::DenoiseNoiseEstimator>(vi());
     mark_field(flags.denoise);
     return true;
   }
   if (key == "repair.denoise.nFft") {
-    cfg.repair.denoise.config.n_fft = vi;
+    cfg.repair.denoise.config.n_fft = vi();
     mark_field(flags.denoise);
     return true;
   }
   if (key == "repair.denoise.hopLength") {
-    cfg.repair.denoise.config.hop_length = vi;
+    cfg.repair.denoise.config.hop_length = vi();
     mark_field(flags.denoise);
     return true;
   }
@@ -618,6 +626,12 @@ bool apply_maximizer_loudness_param(MasteringChainConfig& cfg, const std::string
 
 void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key, double v,
                                StageFlagsSet& flags) {
+  // Every chain parameter is ultimately stored as float, int, bool, or enum.
+  // Reject non-finite and non-float-representable values before bespoke parsing
+  // can narrow them. Integer fields add a lazy checked conversion above.
+  float validated = 0.0f;
+  detail::assign_field(validated, v);
+  (void)validated;
   if (apply_repair_param(cfg, key, v, flags)) return;
   if (apply_eq_dynamics_param(cfg, key, v, flags)) return;
   if (apply_saturation_param(cfg, key, v, flags)) return;

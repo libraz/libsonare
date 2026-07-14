@@ -266,6 +266,7 @@ struct Diagnostic {
     kSourceKindMismatch = 9,  // clip source kind does not match its track kind
     kMidiClipNoInstrument =
         10,  // project has MIDI clips; bounce is silent unless an instrument is bound
+    kRaggedAudioSource = 11,  // decoded channels are empty or have unequal frame counts
   };
   // Severity ordinals are a FROZEN WIRE VALUE: they are exposed numerically as
   // SonareProjectDiagnostic.severity through the C ABI (see

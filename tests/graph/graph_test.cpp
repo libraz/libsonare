@@ -163,6 +163,27 @@ TEST_CASE("Graph compiles acyclic routing in topological order", "[graph]") {
   REQUIRE_THAT(output[3], WithinAbs(8.0f, 0.0001f));
 }
 
+TEST_CASE("Graph public port access rejects invalid ports without aliasing port zero", "[graph]") {
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("io", pass(), 1));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, 4);
+
+  const std::array<float, 4> input{1.0f, 2.0f, 3.0f, 4.0f};
+  graph.clear_inputs(4);
+  graph.set_input("io", 0, input.data(), 4);
+  for (int invalid_port : {-1, 1, 1000000}) {
+    REQUIRE_THROWS_AS(graph.set_input("io", invalid_port, input.data(), 4),
+                      sonare::SonareException);
+    REQUIRE(graph.output("io", invalid_port) == nullptr);
+  }
+
+  graph.process_block(4);
+  const float* output = graph.output("io", 0);
+  REQUIRE(output != nullptr);
+  REQUIRE(std::equal(input.begin(), input.end(), output));
+}
+
 TEST_CASE("Graph topological order of independent nodes follows insertion order", "[graph]") {
   // Independent (unconnected, indegree-0) nodes must compile into a stable,
   // reproducible order derived from add_node insertion order — not the

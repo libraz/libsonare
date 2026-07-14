@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -843,7 +844,7 @@ TEST_CASE("out-of-range MIDI content keys are ignored instead of truncating to u
   CHECK(found_sysex_key);
 }
 
-TEST_CASE("out-of-range uint fields fall back instead of wrapping", "[serialize]") {
+TEST_CASE("out-of-range entity ids are rejected instead of wrapping", "[serialize]") {
   const std::string in =
       "{\"version\": 1, "
       "\"sources\": [{\"kind\": 0, \"id\": 5000000000.0}], "
@@ -851,10 +852,69 @@ TEST_CASE("out-of-range uint fields fall back instead of wrapping", "[serialize]
       "\"clips\": [{\"id\": 5000000000.0, \"track_id\": 5000000000.0, "
       "\"source_id\": 5000000000.0, \"length_ppq\": 1.0}]}";
   auto result = project_from_json(in);
+  CHECK_FALSE(result.ok());
+  REQUIRE_FALSE(result.diagnostics.empty());
+  CHECK(result.diagnostics.back().code == "invalid_entity_id");
+}
+
+TEST_CASE("maximum usable entity ids saturate allocators without wrapping", "[serialize]") {
+  constexpr uint32_t kLastId = std::numeric_limits<uint32_t>::max() - 1;
+  const std::string id = std::to_string(kLastId);
+  const std::string in =
+      "{\"version\":1,"
+      "\"sources\":[{\"kind\":0,\"id\":" +
+      id + "}],\"tracks\":[{\"id\":" + id + ",\"kind\":0}],\"clips\":[{\"id\":" + id +
+      ",\"track_id\":" + id + ",\"source_id\":" + id +
+      ",\"length_ppq\":1.0}],\"markers\":[{\"id\":" + id + ",\"ppq\":0.0,\"name\":\"last\"}]}";
+
+  auto result = project_from_json(in);
   REQUIRE(result.ok());
-  CHECK(result.project->sources().empty());
-  CHECK(result.project->tracks().empty());
-  CHECK(result.project->clips().empty());
+  Project& project = *result.project;
+  CHECK(project.next_source_id() == std::numeric_limits<uint32_t>::max());
+  CHECK(project.next_track_id() == std::numeric_limits<uint32_t>::max());
+  CHECK(project.next_clip_id() == std::numeric_limits<uint32_t>::max());
+  CHECK(project.next_marker_id() == std::numeric_limits<uint32_t>::max());
+
+  CHECK(project.add_audio_source(AudioSourceRef{}) == 0);
+  CHECK(project.add_track(Track{}) == 0);
+  EditClip clip;
+  clip.track_id = kLastId;
+  clip.source_id = kLastId;
+  clip.length_ppq = 1.0;
+  CHECK(project.add_clip(clip) == 0);
+  CHECK(project.add_marker(0.0, "exhausted") == 0);
+
+  const auto roundtrip = project_from_json(project_to_json(project, result.midi));
+  REQUIRE(roundtrip.ok());
+  CHECK(roundtrip.project->sources().front().index() == project.sources().front().index());
+  CHECK(source_id(roundtrip.project->sources().front()) == kLastId);
+  CHECK(roundtrip.project->tracks().front().id == kLastId);
+  CHECK(roundtrip.project->clips().front().id == kLastId);
+  CHECK(roundtrip.project->markers().front().id == kLastId);
+}
+
+TEST_CASE("reserved and duplicate entity ids are rejected", "[serialize]") {
+  const std::string max = std::to_string(std::numeric_limits<uint32_t>::max());
+  const std::vector<std::pair<std::string, std::string>> fixtures = {
+      {"{\"version\":1,\"sources\":[{\"kind\":0,\"id\":0}]}", "invalid_entity_id"},
+      {"{\"version\":1,\"tracks\":[{\"id\":" + max + ",\"kind\":0}]}", "invalid_entity_id"},
+      {"{\"version\":1,\"clips\":[{\"id\":0,\"length_ppq\":1}]}", "invalid_entity_id"},
+      {"{\"version\":1,\"markers\":[{\"id\":" + max + "}]}", "invalid_entity_id"},
+      {"{\"version\":1,\"sources\":[{\"kind\":0,\"id\":1},{\"kind\":0,\"id\":1}]}",
+       "duplicate_entity_id"},
+      {"{\"version\":1,\"tracks\":[{\"id\":1,\"kind\":0},{\"id\":1,\"kind\":0}]}",
+       "duplicate_entity_id"},
+      {"{\"version\":1,\"clips\":[{\"id\":1,\"length_ppq\":1},{\"id\":1,\"length_ppq\":1}]}",
+       "duplicate_entity_id"},
+      {"{\"version\":1,\"markers\":[{\"id\":1},{\"id\":1}]}", "duplicate_entity_id"},
+  };
+
+  for (const auto& [json, expected_code] : fixtures) {
+    const auto result = project_from_json(json);
+    CHECK_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == expected_code);
+  }
 }
 
 TEST_CASE("dangling clip references and source-kind mismatch emit diagnostics", "[serialize]") {
