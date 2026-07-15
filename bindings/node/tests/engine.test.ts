@@ -1108,6 +1108,9 @@ describe('RealtimeEngine native binding', () => {
       throw new Error('expected SonareError');
     }
     expect(badPpqError.code).toBe(ErrorCode.InvalidParameter);
+    expect(() => engine.sampleAtPpq(1e300)).toThrow();
+    expect(() => engine.seekPpq(1e300)).toThrow();
+    expect(() => engine.setLoop(0, 1e300, true)).toThrow();
     engine.setTempo(90);
     engine.addParameter({
       id: 3,
@@ -1234,6 +1237,7 @@ describe('RealtimeEngine native binding', () => {
     expect(compressor).toBeDefined();
     expect(compressor?.kind).toBe('realtime');
     expect(compressor?.realtimeInsertable).toBe(true);
+    expect(typeof compressor?.latencySamples).toBe('number');
     // Per-channel/linked processors process every plane in one call.
     expect(compressor?.channelPolicy).toBe('multichannel');
 

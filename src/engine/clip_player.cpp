@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::engine {
 
@@ -54,7 +55,8 @@ void ClipPlayer::prepare(double sample_rate, int max_block_size) {
 
 void ClipPlayer::process(float* const* channels, int num_channels, int num_samples) {
   process_at(channels, num_channels, num_samples, timeline_sample_);
-  timeline_sample_ += std::max(num_samples, 0);
+  timeline_sample_ =
+      numeric::saturating_add(timeline_sample_, static_cast<int64_t>(std::max(num_samples, 0)));
 }
 
 void ClipPlayer::set_tempo_map(const transport::TempoMap* tempo_map) noexcept {
@@ -137,8 +139,9 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
         clip.length_samples <= 0) {
       continue;
     }
-    const int64_t clip_end = clip.start_sample + clip.length_samples;
-    const int64_t block_end = timeline_sample + num_samples;
+    const int64_t clip_end = numeric::saturating_add(clip.start_sample, clip.length_samples);
+    const int64_t block_end =
+        numeric::saturating_add(timeline_sample, static_cast<int64_t>(num_samples));
     if (block_end <= clip.start_sample || timeline_sample >= clip_end) {
       continue;
     }
@@ -146,8 +149,9 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
     const int start = static_cast<int>(std::max<int64_t>(0, clip.start_sample - timeline_sample));
     const int end = static_cast<int>(std::min<int64_t>(num_samples, clip_end - timeline_sample));
     for (int i = start; i < end; ++i) {
-      const int64_t position = timeline_sample + i - clip.start_sample;
-      const LoopRead read = resolve_loop_read(clip, timeline_sample + i);
+      const int64_t sample = numeric::saturating_add(timeline_sample, static_cast<int64_t>(i));
+      const int64_t position = sample - clip.start_sample;
+      const LoopRead read = resolve_loop_read(clip, sample);
       const double source_pos = read.pos;
       if (!(source_pos >= 0.0) ||
           source_pos >= static_cast<double>(std::max<int64_t>(source_sample_count(clip), 0))) {
@@ -198,7 +202,8 @@ void ClipPlayer::collect_boundaries(int64_t block_start_sample, int num_frames,
   if (!out) return;
   out->clear();
   if (num_frames <= 0) return;
-  const int64_t block_end = block_start_sample + num_frames;
+  const int64_t block_end =
+      numeric::saturating_add(block_start_sample, static_cast<int64_t>(num_frames));
   // Idempotent re-acquire so standalone callers (and the engine block-start
   // acquire_clips()) both see the published set; a wait-free pointer swap.
   clips_.acquire();
@@ -206,7 +211,7 @@ void ClipPlayer::collect_boundaries(int64_t block_start_sample, int num_frames,
   if (!clips) return;
   for (const ClipSchedule& clip : *clips) {
     const int64_t start = clip.start_sample;
-    const int64_t end = clip.start_sample + clip.length_samples;
+    const int64_t end = numeric::saturating_add(clip.start_sample, clip.length_samples);
     if (start > block_start_sample && start <= block_end) {
       out->add(static_cast<int>(start - block_start_sample));
     }

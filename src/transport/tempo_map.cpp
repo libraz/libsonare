@@ -185,12 +185,18 @@ int64_t TempoMap::ppq_to_sample(double ppq) const noexcept {
   if (!std::isfinite(ppq)) return 0;
   const size_t index = segment_index_for_ppq(*segments, ppq);
   const TempoSegment& segment = (*segments)[index];
-  const double sample = segment.start_sample + segment_samples_at_ppq(segment, sample_rate_, ppq);
+  const long double sample =
+      static_cast<long double>(segment.start_sample) +
+      static_cast<long double>(segment_samples_at_ppq(segment, sample_rate_, ppq));
   if (!std::isfinite(sample)) return ppq > 0.0 ? std::numeric_limits<int64_t>::max() : 0;
-  const double clamped =
-      std::clamp(sample, static_cast<double>(std::numeric_limits<int64_t>::min()),
-                 static_cast<double>(std::numeric_limits<int64_t>::max()));
-  return static_cast<int64_t>(std::llround(clamped));
+  constexpr long double kMinSample =
+      static_cast<long double>(std::numeric_limits<int64_t>::lowest());
+  constexpr long double kMaxSample = static_cast<long double>(std::numeric_limits<int64_t>::max());
+  // Compare before rounding. In particular, double(INT64_MAX) is 2^63, so a
+  // double clamp followed by llround can still invoke undefined behavior.
+  if (sample <= kMinSample) return std::numeric_limits<int64_t>::lowest();
+  if (sample >= kMaxSample) return std::numeric_limits<int64_t>::max();
+  return static_cast<int64_t>(std::round(sample));
 }
 
 double TempoMap::bpm_at_sample(int64_t sample) const noexcept {

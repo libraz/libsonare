@@ -7,7 +7,9 @@
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
+#include "transport/tempo_map.h"
 #include "util/json.h"
+#include "util/numeric_validation.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
 namespace wasm_json = sonare::util::json;
@@ -34,9 +36,25 @@ bool wasmJsonHasNumber(const wasm_json::Value& obj, const char* key) {
 }
 
 int wasmJsonIntOr(const wasm_json::Value& obj, const char* key, int fallback) {
-  const double value = wasmJsonNumberOr(obj, key, static_cast<double>(fallback));
-  if (!std::isfinite(value)) return fallback;
-  return static_cast<int>(std::lround(value));
+  const wasm_json::Value* value = obj.find(key);
+  if (value == nullptr || !value->is_number()) return fallback;
+  int converted = 0;
+  if (!sonare::numeric::checked_integral_cast(value->as_number(), &converted)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string("invalid integer MIDI-FX field: ") + key);
+  }
+  return converted;
+}
+
+int64_t wasmPpqFrames(double ppq) {
+  int64_t frames = 0;
+  if (!sonare::transport::valid_public_ppq(ppq) ||
+      !sonare::numeric::checked_round_cast(ppq * static_cast<double>(sonare::midi::kMidiFxPpqScale),
+                                           &frames)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "MIDI-FX PPQ is outside the public timeline range");
+  }
+  return frames;
 }
 
 void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiFxChain* chain) {
@@ -89,8 +107,7 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
     }
     sonare::midi::QuantizeConfig quantize;
     quantize.enabled = true;
-    quantize.grid_frames = std::max<int64_t>(
-        1, static_cast<int64_t>(std::llround(grid_ppq * sonare::midi::kMidiFxPpqScale)));
+    quantize.grid_frames = std::max<int64_t>(1, wasmPpqFrames(grid_ppq));
     quantize.strength = static_cast<float>(strength);
     chain->set_quantize(quantize);
   }
@@ -113,7 +130,10 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "MIDI-FX chord intervals must be numeric");
       }
-      chord.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
+      if (!sonare::numeric::checked_integral_cast(values[i].as_number(), &chord.intervals[i])) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "MIDI-FX chord interval must be an integer");
+      }
     }
     chain->set_chord(chord);
   }
@@ -144,12 +164,14 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "MIDI-FX arpeggiator intervals must be numeric");
       }
-      arpeggiator.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
+      if (!sonare::numeric::checked_integral_cast(values[i].as_number(),
+                                                  &arpeggiator.intervals[i])) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "MIDI-FX arpeggiator interval must be an integer");
+      }
     }
-    arpeggiator.step_frames = std::max<int64_t>(
-        1, static_cast<int64_t>(std::llround(step_ppq * sonare::midi::kMidiFxPpqScale)));
-    const int64_t gate_frames = std::max<int64_t>(
-        1, static_cast<int64_t>(std::llround(gate_ppq * sonare::midi::kMidiFxPpqScale)));
+    arpeggiator.step_frames = std::max<int64_t>(1, wasmPpqFrames(step_ppq));
+    const int64_t gate_frames = std::max<int64_t>(1, wasmPpqFrames(gate_ppq));
     arpeggiator.gate_frames = std::min(gate_frames, arpeggiator.step_frames);
     chain->set_arpeggiator(arpeggiator);
   }
@@ -169,8 +191,7 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
     sonare::midi::HumanizeConfig humanize;
     humanize.enabled = true;
     humanize.seed = static_cast<uint32_t>(seed);
-    humanize.timing_frames =
-        static_cast<int64_t>(std::llround(timing_ppq * sonare::midi::kMidiFxPpqScale));
+    humanize.timing_frames = wasmPpqFrames(timing_ppq);
     humanize.velocity_amount = velocity_amount;
     chain->set_humanize(humanize);
   }

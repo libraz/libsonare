@@ -615,6 +615,9 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => engine.clearMidiFx(0)).not.toThrow();
       expect(() => engine.setMidiFx(0, '{bad json')).toThrow();
       expect(() => engine.setMidiFx(0, '{"quantize_ppq":0}')).toThrow();
+      expect(() => engine.setMidiFx(0, '{"quantize_ppq":1e300}')).toThrow();
+      expect(() => engine.setMidiFx(0, '{"transpose_semitones":1e100}')).toThrow();
+      expect(() => engine.setMidiFx(0, '{"chord_intervals":[0,7.5]}')).toThrow();
       expect(() =>
         engine.setMidiFx(0, '{"arpeggiator_intervals":[],"arpeggiator_step_ppq":0.25}'),
       ).toThrow();

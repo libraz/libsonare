@@ -10,6 +10,8 @@
 #include "engine/clip_page_limits.h"
 #include "engine/tempo_sync.h"
 #include "realtime_engine_wasm.h"
+#include "transport/tempo_map.h"
+#include "util/numeric_validation.h"
 
 class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
  public:
@@ -194,6 +196,11 @@ void RealtimeEngineWasm::setClips(val clips) {
       schedule.buffer = {pointers.data(), channel_count, num_samples};
     }
     schedule.start_ppq = objectProperty(clip_val, "startPpq").as<double>();
+    if (!std::isfinite(schedule.start_ppq) ||
+        !sonare::transport::valid_public_ppq(schedule.start_ppq)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "clip startPpq is outside the public timeline range");
+    }
     // clip_offset_samples / fade_*_samples are int64_t in ClipSchedule; read
     // them at full 64-bit precision (like length_samples below) so large
     // offsets above 2^31 samples do not silently truncate/sign-flip.
@@ -203,12 +210,15 @@ void RealtimeEngineWasm::setClips(val clips) {
     const int64_t source_samples = has_page_provider && schedule.page_provider
                                        ? schedule.page_provider->num_samples()
                                        : num_samples;
+    if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= source_samples) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "clip offset is outside the source");
+    }
     const int64_t default_length = source_samples - schedule.clip_offset_samples;
     schedule.length_samples = hasProperty(clip_val, "lengthSamples")
                                   ? objectProperty(clip_val, "lengthSamples").as<int64_t>()
                                   : default_length;
-    if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= source_samples ||
-        schedule.length_samples <= 0) {
+    if (schedule.length_samples <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "clip offset or length is outside the source");
     }
@@ -254,8 +264,17 @@ void RealtimeEngineWasm::setClips(val clips) {
         anchors->reserve(static_cast<size_t>(anchor_count));
         for (int anchor_index = 0; anchor_index < anchor_count; ++anchor_index) {
           val anchor_val = anchors_val[anchor_index];
-          anchors->push_back({objectProperty(anchor_val, "warpSample").as<double>(),
-                              objectProperty(anchor_val, "sourceSample").as<double>()});
+          const sonare::engine::WarpAnchor anchor{
+              objectProperty(anchor_val, "warpSample").as<double>(),
+              objectProperty(anchor_val, "sourceSample").as<double>()};
+          if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample) ||
+              anchor.warp_sample < 0.0 || anchor.source_sample < 0.0 ||
+              (!anchors->empty() && (!(anchor.warp_sample > anchors->back().warp_sample) ||
+                                     !(anchor.source_sample > anchors->back().source_sample)))) {
+            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                          "warp anchors must be finite and strictly increasing");
+          }
+          anchors->push_back(anchor);
         }
         schedule.warp_anchors = std::move(anchors);
       }
@@ -273,9 +292,8 @@ void RealtimeEngineWasm::setClips(val clips) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "tempo-sync clip offset is outside the source");
       }
-      const auto rounded_nonnegative_sample = [](double sample) noexcept -> size_t {
-        if (!std::isfinite(sample) || sample <= 0.0) return 0;
-        return static_cast<size_t>(std::llround(sample));
+      const auto rounded_nonnegative_sample = [](double sample, size_t* out) noexcept {
+        return sonare::numeric::checked_round_cast(sample, out) && sample >= 0.0;
       };
       std::vector<sonare::engine::TempoSyncWarpSegment> segments;
       const size_t base_offset =
@@ -287,12 +305,22 @@ void RealtimeEngineWasm::setClips(val clips) {
              ++anchor_index) {
           const auto& prev = (*schedule.warp_anchors)[anchor_index - 1];
           const auto& next = (*schedule.warp_anchors)[anchor_index];
-          const size_t source_start = rounded_nonnegative_sample(prev.source_sample);
-          const size_t source_end = rounded_nonnegative_sample(next.source_sample);
-          const size_t target_start = rounded_nonnegative_sample(prev.warp_sample);
-          const size_t target_end = rounded_nonnegative_sample(next.warp_sample);
+          size_t source_start = 0;
+          size_t source_end = 0;
+          size_t target_start = 0;
+          size_t target_end = 0;
+          if (!rounded_nonnegative_sample(prev.source_sample, &source_start) ||
+              !rounded_nonnegative_sample(next.source_sample, &source_end) ||
+              !rounded_nonnegative_sample(prev.warp_sample, &target_start) ||
+              !rounded_nonnegative_sample(next.warp_sample, &target_end)) {
+            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                          "tempo-sync warp anchor is out of sample range");
+          }
           sonare::engine::TempoSyncWarpSegment segment;
-          segment.source_offset = base_offset + source_start;
+          if (!sonare::numeric::checked_add(base_offset, source_start, &segment.source_offset)) {
+            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                          "tempo-sync warp source offset is out of range");
+          }
           segment.source_samples = source_end > source_start ? source_end - source_start : 0;
           segment.target_samples = target_end > target_start ? target_end - target_start : 0;
           if (segment.source_offset > static_cast<size_t>(num_samples) ||
@@ -301,7 +329,11 @@ void RealtimeEngineWasm::setClips(val clips) {
             throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                           "tempo-sync warp anchors must span positive samples");
           }
-          target_samples += segment.target_samples;
+          if (!sonare::numeric::checked_add(target_samples, segment.target_samples,
+                                            &target_samples)) {
+            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                          "tempo-sync warp target length is out of range");
+          }
           segments.push_back(segment);
         }
       } else {

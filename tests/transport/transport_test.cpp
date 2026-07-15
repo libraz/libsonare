@@ -23,6 +23,23 @@ TEST_CASE("TempoMap::ppq_to_sample guards non-finite input", "[transport]") {
   REQUIRE(map.ppq_to_sample(1.0) == 24000);
 }
 
+TEST_CASE("TempoMap::ppq_to_sample saturates before the int64 rounding boundary",
+          "[transport][validation]") {
+  sonare::transport::TempoMap map;
+  // At 60 BPM and a 1 Hz sample rate, one PPQ is exactly one sample. 2^63 is
+  // exactly representable as double whereas INT64_MAX is not.
+  map.prepare(1.0);
+  map.set_segments({{0.0, 60.0, 0.0}});
+  const double two_to_63 = std::ldexp(1.0, 63);
+  const double below = std::nextafter(two_to_63, 0.0);
+
+  REQUIRE(map.ppq_to_sample(two_to_63) == std::numeric_limits<int64_t>::max());
+  REQUIRE(map.ppq_to_sample(std::nextafter(two_to_63, std::numeric_limits<double>::infinity())) ==
+          std::numeric_limits<int64_t>::max());
+  REQUIRE(map.ppq_to_sample(1.0e300) == std::numeric_limits<int64_t>::max());
+  REQUIRE(map.ppq_to_sample(below) == static_cast<int64_t>(below));
+}
+
 TEST_CASE("Transport::set_loop rejects non-finite bounds", "[transport]") {
   sonare::transport::TempoMap map;
   map.prepare(48000.0);

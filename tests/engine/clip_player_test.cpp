@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -73,6 +74,32 @@ TEST_CASE("ClipPlayer starts and stops on sample boundaries", "[engine][clip_pla
   REQUIRE(out_l[5] == 4.0f);
   REQUIRE(out_l[6] == 0.0f);
   REQUIRE(out_r[2] == -1.0f);
+}
+
+TEST_CASE("ClipPlayer saturates clip and block ends at the int64 timeline boundary",
+          "[engine][clip_player][validation]") {
+  std::array<float, 4> source{1.0f, 2.0f, 3.0f, 4.0f};
+  const float* source_channels[] = {source.data()};
+  constexpr int64_t kMax = std::numeric_limits<int64_t>::max();
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 8);
+  player.set_clips({{1, {source_channels, 1, 4}, 0.0, kMax - 2, 0, 10, false, 1.0f, 0, 0}});
+
+  std::array<float, 8> output{};
+  float* output_channels[] = {output.data()};
+  player.process_at(output_channels, 1, 8, kMax - 4);
+  CHECK(output[0] == 0.0f);
+  CHECK(output[1] == 0.0f);
+  CHECK(output[2] == 1.0f);
+  CHECK(output[3] == 2.0f);
+  CHECK(output[4] == 0.0f);
+
+  sonare::engine::ClipBoundaryList boundaries;
+  player.collect_boundaries(kMax - 4, 8, &boundaries);
+  REQUIRE(boundaries.size == 2);
+  CHECK(boundaries.offsets[0] == 2);
+  CHECK(boundaries.offsets[1] == 4);
 }
 
 TEST_CASE("ClipPlayer can render tracks separately without changing summed output",

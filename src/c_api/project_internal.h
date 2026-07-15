@@ -39,6 +39,7 @@
 #include "serialize/project_serializer.h"
 #include "transport/tempo_map.h"
 #include "util/json.h"
+#include "util/numeric_validation.h"
 #endif
 
 using namespace sonare_c_detail;
@@ -163,7 +164,7 @@ void fill_compile_result_from_diagnostics(const std::vector<arr::Diagnostic>& di
 }
 
 bool valid_midi_event_pod(const SonareMidiEventPod& event) noexcept {
-  if (!std::isfinite(event.ppq) || event.ppq < 0.0) return false;
+  if (!sonare::transport::valid_public_ppq(event.ppq)) return false;
   const uint8_t mt = static_cast<uint8_t>((event.data0 >> 28u) & 0x0Fu);
   if (mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi1ChannelVoice) &&
       mt != static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice)) {
@@ -212,14 +213,19 @@ bool is_bank_or_program_event_for(const arr::MidiClipEvent& event, uint8_t group
   return cc == 0 || cc == 32;
 }
 
-arr::MidiClipEventList apply_midi_fx_to_events(const arr::MidiClipEventList& events,
-                                               sonare::midi::MidiFxChain* chain) {
+bool apply_midi_fx_to_events(const arr::MidiClipEventList& events, sonare::midi::MidiFxChain* chain,
+                             arr::MidiClipEventList* transformed) {
+  if (chain == nullptr || transformed == nullptr) return false;
   std::vector<sonare::midi::MidiEvent> in;
   in.reserve(events.size());
   for (const arr::MidiClipEvent& event : events) {
     sonare::midi::MidiEvent midi_event;
-    midi_event.render_frame =
-        static_cast<int64_t>(std::llround(event.ppq * sonare::midi::kMidiFxPpqScale));
+    if (!sonare::transport::valid_public_ppq(event.ppq) ||
+        !sonare::numeric::checked_round_cast(
+            event.ppq * static_cast<double>(sonare::midi::kMidiFxPpqScale),
+            &midi_event.render_frame)) {
+      return false;
+    }
     midi_event.ump.words[0] = event.data0;
     midi_event.ump.words[1] = event.data1;
     midi_event.ump.word_count = ump_word_count_from_word0(event.data0);
@@ -230,8 +236,8 @@ arr::MidiClipEventList apply_midi_fx_to_events(const arr::MidiClipEventList& eve
   sonare::midi::MidiFxBuffer out;
   chain->process(in.data(), in.size(), &out);
 
-  arr::MidiClipEventList transformed;
-  transformed.reserve(out.size);
+  transformed->clear();
+  transformed->reserve(out.size);
   for (size_t i = 0; i < out.size; ++i) {
     arr::MidiClipEvent event;
     event.ppq = static_cast<double>(out.events[i].render_frame) /
@@ -239,14 +245,14 @@ arr::MidiClipEventList apply_midi_fx_to_events(const arr::MidiClipEventList& eve
     event.data0 = out.events[i].ump.words[0];
     event.data1 = out.events[i].ump.words[1];
     event.sysex_handle = out.events[i].ump.sysex_handle;
-    transformed.push_back(event);
+    transformed->push_back(event);
   }
-  std::stable_sort(transformed.begin(), transformed.end(),
+  std::stable_sort(transformed->begin(), transformed->end(),
                    [](const arr::MidiClipEvent& a, const arr::MidiClipEvent& b) {
                      if (a.ppq != b.ppq) return a.ppq < b.ppq;
                      return a.data0 < b.data0 || (a.data0 == b.data0 && a.data1 < b.data1);
                    });
-  return transformed;
+  return true;
 }
 
 sonare::midi::SysExHandle remap_sysex_handle(
@@ -276,36 +282,104 @@ void fill_ump_from_arr_event(const arr::MidiClipEvent& event, const arr::MidiCon
   out->sysex_handle = sysex;
 }
 
-sonare::midi::MidiClip make_smf_clip_from_events(
+// Bound offline loop expansion independently of the audio-sample buffer cap.
+// One million UMP events is already tens of MiB in the intermediate vectors and
+// is large enough for practical project export while preventing a tiny loop
+// length from turning one accepted event into an unbounded allocation.
+inline constexpr size_t kMaxProjectMidiExportEvents = 1'000'000;
+inline constexpr size_t kMaxMidiExportLoopIterations = 1'000'000;
+
+SonareError make_smf_clip_from_events(
     const arr::EditClip& clip, const arr::MidiClipEventList& events,
     const arr::MidiContentStore& midi, sonare::midi::SysExStore* export_store,
-    std::map<uint32_t, sonare::midi::SysExHandle>* exported_handles) {
-  sonare::midi::MidiClip out;
+    std::map<uint32_t, sonare::midi::SysExHandle>* exported_handles, size_t max_output_events,
+    sonare::midi::MidiClip* out) {
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
+  if (!std::isfinite(clip.start_ppq) || !std::isfinite(clip.length_ppq) ||
+      !std::isfinite(clip.source_offset_ppq) || clip.start_ppq < 0.0 || clip.length_ppq <= 0.0 ||
+      clip.source_offset_ppq < 0.0) {
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+  if (clip.loop_mode == arr::LoopMode::kLoop &&
+      (!std::isfinite(clip.loop_length_ppq) || clip.loop_length_ppq < 0.0)) {
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
   const double clip_end = clip.end_ppq();
+  if (!std::isfinite(clip_end) || !(clip_end > clip.start_ppq)) {
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
+
+  const bool looping = clip.loop_mode == arr::LoopMode::kLoop && clip.loop_length_ppq > 0.0;
+  size_t loop_iterations = 1;
+  if (looping) {
+    if (!sonare::numeric::checked_ceil_ratio(clip.length_ppq, clip.loop_length_ppq,
+                                             kMaxMidiExportLoopIterations, &loop_iterations) ||
+        loop_iterations == 0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
+
+  size_t eligible_events = 0;
   for (const arr::MidiClipEvent& event : events) {
     if (!std::isfinite(event.ppq) || event.ppq < clip.source_offset_ppq) continue;
     const double rebased = event.ppq - clip.source_offset_ppq;
-    if (clip.loop_mode == arr::LoopMode::kLoop && clip.loop_length_ppq > 0.0) {
+    if (!std::isfinite(rebased)) return SONARE_ERROR_INVALID_FORMAT;
+    if ((looping && rebased < clip.loop_length_ppq) || (!looping && rebased < clip.length_ppq)) {
+      ++eligible_events;
+    }
+  }
+  size_t projected_events = 0;
+  if (!sonare::numeric::checked_size_product(eligible_events, loop_iterations, max_output_events,
+                                             &projected_events)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  std::vector<sonare::midi::MidiClipEvent> expanded;
+  expanded.reserve(projected_events);
+  for (const arr::MidiClipEvent& event : events) {
+    if (!std::isfinite(event.ppq) || event.ppq < clip.source_offset_ppq) continue;
+    const double rebased = event.ppq - clip.source_offset_ppq;
+    if (looping) {
       if (rebased >= clip.loop_length_ppq) continue;
-      for (double loop_start = clip.start_ppq; loop_start < clip_end;
-           loop_start += clip.loop_length_ppq) {
+      double previous_loop_start = 0.0;
+      double previous_event_ppq = 0.0;
+      bool have_previous = false;
+      for (size_t iteration = 0; iteration < loop_iterations; ++iteration) {
+        const long double loop_start_wide =
+            static_cast<long double>(clip.start_ppq) +
+            static_cast<long double>(iteration) * static_cast<long double>(clip.loop_length_ppq);
+        const double loop_start = static_cast<double>(loop_start_wide);
+        if (!std::isfinite(loop_start) || (have_previous && !(loop_start > previous_loop_start))) {
+          return SONARE_ERROR_INVALID_FORMAT;
+        }
+        if (loop_start >= clip_end) break;
         const double ppq = loop_start + rebased;
+        if (!std::isfinite(ppq) || (have_previous && !(ppq > previous_event_ppq))) {
+          return SONARE_ERROR_INVALID_FORMAT;
+        }
+        previous_loop_start = loop_start;
+        previous_event_ppq = ppq;
+        have_previous = true;
         if (ppq >= clip_end) continue;
         sonare::midi::MidiClipEvent out_event;
         out_event.ppq = ppq;
         fill_ump_from_arr_event(event, midi, export_store, exported_handles, &out_event.ump);
-        out.add_event(out_event);
+        expanded.push_back(out_event);
       }
     } else {
       if (rebased >= clip.length_ppq) continue;
+      const double ppq = clip.start_ppq + rebased;
+      if (!std::isfinite(ppq) || ppq < clip.start_ppq) return SONARE_ERROR_INVALID_FORMAT;
       sonare::midi::MidiClipEvent out_event;
-      out_event.ppq = clip.start_ppq + rebased;
+      out_event.ppq = ppq;
       fill_ump_from_arr_event(event, midi, export_store, exported_handles, &out_event.ump);
-      out.add_event(out_event);
+      expanded.push_back(out_event);
     }
   }
-  out.sort_stable();
-  return out;
+  out->set_events(std::move(expanded));
+  out->sort_stable();
+  return SONARE_OK;
 }
 
 /// Builds a TempoMap from the project's tempo / time-signature segments (or a

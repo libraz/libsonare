@@ -1248,7 +1248,29 @@ TEST_CASE("sonare_engine converts PPQ to samples from the tempo map", "[c_api][e
   REQUIRE(sonare_engine_sample_at_ppq(engine, -1.0, &sample) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_sample_at_ppq(engine, std::numeric_limits<double>::quiet_NaN(), &sample) ==
           SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_sample_at_ppq(engine, 1.0e300, &sample) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_seek_ppq(engine, 1.0e300, -1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_loop(engine, 0.0, 1.0e300, 1) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_sample_at_ppq(engine, 1.0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  std::array<float, 4> clip_audio{1.0f, 0.0f, 0.0f, 0.0f};
+  const float* clip_channels[] = {clip_audio.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.channels = clip_channels;
+  clip.num_channels = 1;
+  clip.num_samples = static_cast<int64_t>(clip_audio.size());
+  clip.start_ppq = 1.0e300;
+  clip.length_samples = 4;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
+
+  const SonareEngineWarpAnchor anchors[] = {{0.0, 0.0}, {1.0e300, 1.0e300}};
+  clip.start_ppq = 0.0;
+  clip.warp_mode = SONARE_ENGINE_WARP_MODE_TEMPO_SYNC;
+  clip.warp_anchors = anchors;
+  clip.warp_anchor_count = 2;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
 }
@@ -1302,6 +1324,12 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantize_ppq\":0}") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantize_ppq\":1e300}") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":1e100}") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"chord_intervals\":[0,7.5]}") ==
           SONARE_ERROR_INVALID_PARAMETER);
 #else
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":12}") ==

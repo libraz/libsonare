@@ -420,6 +420,19 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('rejects MIDI loop export that exceeds the expansion budget', () => {
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
+      project.setClipLoop(clipId, 'loop', 1e-9);
+      expect(() => project.exportSmf()).toThrow();
+      expect(() => project.exportClipFile()).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
   it('round-trips a MIDI 2.0 Clip File through the binding', () => {
     const project = buildProject();
     try {

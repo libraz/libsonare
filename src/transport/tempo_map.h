@@ -12,6 +12,14 @@
 
 namespace sonare::transport {
 
+/// Practical upper bound accepted by public control-plane PPQ APIs. This is
+/// over 1.9 million years at 120 BPM while keeping obviously hostile magnitudes
+/// out of downstream timeline arithmetic. TempoMap itself still saturates any
+/// larger finite value because it is also used by internal/offline code.
+inline constexpr double kMaxPublicPpq = 1.0e12;
+
+inline bool valid_public_ppq(double ppq) noexcept { return ppq >= 0.0 && ppq <= kMaxPublicPpq; }
+
 struct TempoSegment {
   double start_ppq = 0.0;
   double bpm = constants::kDefaultBpm;

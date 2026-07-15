@@ -394,8 +394,9 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   // startPpq yields an undefined clip position, and a non-finite/negative gain
   // fills NaN or phase-inverts the frozen clip. Reject up front instead of
   // letting WASM produce a corrupt freeze where C/Node/Python error.
-  if (!std::isfinite(schedule.start_ppq) || schedule.start_ppq < 0.0 ||
-      !std::isfinite(schedule.gain) || schedule.gain < 0.0f) {
+  if (!std::isfinite(schedule.start_ppq) ||
+      !sonare::transport::valid_public_ppq(schedule.start_ppq) || !std::isfinite(schedule.gain) ||
+      schedule.gain < 0.0f) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid freeze startPpq or gain");
   }

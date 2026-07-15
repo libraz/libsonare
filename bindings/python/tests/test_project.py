@@ -671,6 +671,20 @@ def test_export_smf_returns_bytes() -> None:
         project.close()
 
 
+def test_midi_loop_export_rejects_expansion_above_budget() -> None:
+    project = Project()
+    try:
+        _track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+        project.set_midi_events(clip_id, [Project.midi_note_on(0.0, 0, 0, 60, 100)])
+        project.set_clip_loop(clip_id, "loop", 1e-9)
+        with pytest.raises(SonareError):
+            project.export_smf()
+        with pytest.raises(SonareError):
+            project.export_clip_file()
+    finally:
+        project.close()
+
+
 def test_clip_file_round_trips_midi_2_losslessly() -> None:
     project, _audio_clip, _midi_track, midi_clip = _build_project()
     try:

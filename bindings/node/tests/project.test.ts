@@ -217,6 +217,16 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('rejects MIDI loop export that exceeds the expansion budget', () => {
+    const project = Project.create();
+    const { clipId } = project.addMidiClip(0, 4);
+    project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
+    project.setClipLoop(clipId, 'loop', 1e-9);
+    expect(() => project.exportSmf()).toThrow();
+    expect(() => project.exportClipFile()).toThrow();
+    project.destroy();
+  });
+
   it('round-trips a MIDI 2.0 Clip File through the binding', () => {
     const project = buildProject();
     const { clipId } = project.addMidiClip(0, 4);

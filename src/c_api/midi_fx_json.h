@@ -7,7 +7,9 @@
 #include <cstdint>
 
 #include "midi/midi_fx.h"
+#include "transport/tempo_map.h"
 #include "util/json.h"
+#include "util/numeric_validation.h"
 
 namespace sonare_c_detail {
 
@@ -25,10 +27,19 @@ inline bool has_number(const json::Value& obj, const char* key) {
   return value != nullptr && value->is_number();
 }
 
-inline int int_or(const json::Value& obj, const char* key, int fallback) {
-  const double value = number_or(obj, key, static_cast<double>(fallback));
-  if (!std::isfinite(value)) return fallback;
-  return static_cast<int>(std::lround(value));
+inline bool int_or(const json::Value& obj, const char* key, int fallback, int* out) {
+  const json::Value* value = obj.find(key);
+  if (value == nullptr || !value->is_number()) {
+    *out = fallback;
+    return true;
+  }
+  return sonare::numeric::checked_integral_cast(value->as_number(), out);
+}
+
+inline bool ppq_frames(double ppq, int64_t* out) {
+  if (!sonare::transport::valid_public_ppq(ppq)) return false;
+  return sonare::numeric::checked_round_cast(
+      ppq * static_cast<double>(sonare::midi::kMidiFxPpqScale), out);
 }
 
 }  // namespace midi_fx_json_detail
@@ -50,7 +61,9 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   sonare::midi::TransposeConfig transpose;
   if (has_number(root, "transpose_semitones")) {
     transpose.enabled = true;
-    transpose.semitones = int_or(root, "transpose_semitones", 0);
+    if (!int_or(root, "transpose_semitones", 0, &transpose.semitones)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     chain->set_transpose(transpose);
   }
 
@@ -73,14 +86,14 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   if (has_number(root, "quantize_ppq")) {
     const double grid_ppq = number_or(root, "quantize_ppq", 0.0);
     const double strength = number_or(root, "quantize_strength", 1.0);
-    if (!std::isfinite(grid_ppq) || grid_ppq <= 0.0 || !std::isfinite(strength) || strength < 0.0 ||
-        strength > 1.0) {
+    int64_t grid_frames = 0;
+    if (!std::isfinite(grid_ppq) || grid_ppq <= 0.0 || !ppq_frames(grid_ppq, &grid_frames) ||
+        !std::isfinite(strength) || strength < 0.0 || strength > 1.0) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     sonare::midi::QuantizeConfig quantize;
     quantize.enabled = true;
-    quantize.grid_frames = std::max<int64_t>(
-        1, static_cast<int64_t>(std::llround(grid_ppq * sonare::midi::kMidiFxPpqScale)));
+    quantize.grid_frames = std::max<int64_t>(1, grid_frames);
     quantize.strength = static_cast<float>(strength);
     chain->set_quantize(quantize);
   }
@@ -95,8 +108,10 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     }
     chord.count = values.size();
     for (size_t i = 0; i < values.size(); ++i) {
-      if (!values[i].is_number()) return SONARE_ERROR_INVALID_PARAMETER;
-      chord.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
+      if (!values[i].is_number() ||
+          !sonare::numeric::checked_integral_cast(values[i].as_number(), &chord.intervals[i])) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
     }
     chain->set_chord(chord);
   }
@@ -108,22 +123,27 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     const double step_ppq = number_or(root, "arpeggiator_step_ppq", 0.0);
-    if (!std::isfinite(step_ppq) || step_ppq <= 0.0) return SONARE_ERROR_INVALID_PARAMETER;
+    int64_t step_frames = 0;
+    if (!std::isfinite(step_ppq) || step_ppq <= 0.0 || !ppq_frames(step_ppq, &step_frames)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     // Gate defaults to a full-length (legato) step when omitted.
     const double gate_ppq = number_or(root, "arpeggiator_gate_ppq", step_ppq);
-    if (!std::isfinite(gate_ppq) || gate_ppq <= 0.0) return SONARE_ERROR_INVALID_PARAMETER;
+    int64_t gate_frames = 0;
+    if (!std::isfinite(gate_ppq) || gate_ppq <= 0.0 || !ppq_frames(gate_ppq, &gate_frames)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     sonare::midi::ArpeggiatorConfig arpeggiator;
     arpeggiator.enabled = true;
     arpeggiator.steps = values.size();
     for (size_t i = 0; i < values.size(); ++i) {
-      if (!values[i].is_number()) return SONARE_ERROR_INVALID_PARAMETER;
-      arpeggiator.intervals[i] = static_cast<int>(std::lround(values[i].as_number()));
+      if (!values[i].is_number() || !sonare::numeric::checked_integral_cast(
+                                        values[i].as_number(), &arpeggiator.intervals[i])) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
     }
-    arpeggiator.step_frames = std::max<int64_t>(
-        1, static_cast<int64_t>(std::llround(step_ppq * sonare::midi::kMidiFxPpqScale)));
-    const int64_t gate_frames = std::max<int64_t>(
-        1, static_cast<int64_t>(std::llround(gate_ppq * sonare::midi::kMidiFxPpqScale)));
-    arpeggiator.gate_frames = std::min(gate_frames, arpeggiator.step_frames);
+    arpeggiator.step_frames = std::max<int64_t>(1, step_frames);
+    arpeggiator.gate_frames = std::min(std::max<int64_t>(1, gate_frames), arpeggiator.step_frames);
     chain->set_arpeggiator(arpeggiator);
   }
 
@@ -131,8 +151,13 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
                             has_number(root, "humanize_velocity") || has_number(root, "seed");
   if (has_humanize) {
     const double timing_ppq = number_or(root, "humanize_ppq", 0.0);
-    const int velocity_amount = int_or(root, "humanize_velocity", 0);
-    const int seed = int_or(root, "seed", 0);
+    int velocity_amount = 0;
+    int seed = 0;
+    int64_t timing_frames = 0;
+    if (!int_or(root, "humanize_velocity", 0, &velocity_amount) ||
+        !int_or(root, "seed", 0, &seed) || !ppq_frames(timing_ppq, &timing_frames)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     if (!std::isfinite(timing_ppq) || timing_ppq < 0.0 || velocity_amount < 0 ||
         velocity_amount > 127 || seed < 0) {
       return SONARE_ERROR_INVALID_PARAMETER;
@@ -140,8 +165,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     sonare::midi::HumanizeConfig humanize;
     humanize.enabled = true;
     humanize.seed = static_cast<uint32_t>(seed);
-    humanize.timing_frames =
-        static_cast<int64_t>(std::llround(timing_ppq * sonare::midi::kMidiFxPpqScale));
+    humanize.timing_frames = timing_frames;
     humanize.velocity_amount = velocity_amount;
     chain->set_humanize(humanize);
   }

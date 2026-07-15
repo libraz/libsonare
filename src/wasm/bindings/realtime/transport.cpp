@@ -41,6 +41,10 @@ void RealtimeEngineWasm::seekSample(int64_t timeline_sample, int64_t render_fram
 }
 
 void RealtimeEngineWasm::seekPpq(double ppq, int64_t render_frame) {
+  if (!std::isfinite(ppq) || !sonare::transport::valid_public_ppq(ppq)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "seekPpq: ppq is outside the public timeline range");
+  }
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportSeekPpq;
   command.sample_time = render_frame;
@@ -110,17 +114,18 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
   engine_.set_time_signature_segments(std::move(parsed));
 }
 int64_t RealtimeEngineWasm::sampleAtPpq(double ppq) {
-  if (!std::isfinite(ppq) || ppq < 0.0) {
+  if (!std::isfinite(ppq) || !sonare::transport::valid_public_ppq(ppq)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "sampleAtPpq: ppq must be finite and non-negative");
+                                  "sampleAtPpq: ppq is outside the public timeline range");
   }
   return engine_.sample_at_ppq(ppq);
 }
 void RealtimeEngineWasm::setLoop(double start_ppq, double end_ppq, bool enabled) {
   // Mirror the C-ABI guard (sonare_engine_set_loop): reject non-finite or
   // negative bounds, and an empty/inverted range when enabling the loop.
-  if (!std::isfinite(start_ppq) || !std::isfinite(end_ppq) || start_ppq < 0.0 || end_ppq < 0.0 ||
-      (enabled && end_ppq <= start_ppq)) {
+  if (!std::isfinite(start_ppq) || !std::isfinite(end_ppq) ||
+      !sonare::transport::valid_public_ppq(start_ppq) ||
+      !sonare::transport::valid_public_ppq(end_ppq) || (enabled && end_ppq <= start_ppq)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "setLoop: bounds must be finite, non-negative, and end > start");
   }

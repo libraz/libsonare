@@ -499,6 +499,12 @@ def test_realtime_engine_process_and_telemetry() -> None:
         with pytest.raises(SonareError) as bad_ppq_error:
             engine.sample_at_ppq(math.nan)
         assert bad_ppq_error.value.code == 4
+        with pytest.raises(SonareError):
+            engine.sample_at_ppq(1.0e300)
+        with pytest.raises(SonareError):
+            engine.seek_ppq(1.0e300)
+        with pytest.raises(SonareError):
+            engine.set_loop(0.0, 1.0e300)
         engine.set_metronome(EngineMetronomeConfig(enabled=False))
         engine.add_parameter(
             ParameterInfo(

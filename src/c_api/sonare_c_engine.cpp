@@ -139,7 +139,9 @@ SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t time
 
 SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine || !std::isfinite(ppq) || ppq < 0.0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine || !std::isfinite(ppq) || !transport::valid_public_ppq(ppq)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   rt::Command command{};
   command.type = rt::CommandType::kTransportSeekPpq;
   command.sample_time = render_frame;
@@ -176,7 +178,7 @@ SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int n
 SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq,
                                         int64_t* out_sample) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_sample || !std::isfinite(ppq) || ppq < 0.0) {
+  if (!engine || !out_sample || !std::isfinite(ppq) || !transport::valid_public_ppq(ppq)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   *out_sample = engine->engine.sample_at_ppq(ppq);
@@ -186,8 +188,9 @@ SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq
 SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_ppq, double end_ppq,
                                    int enabled) {
   SONARE_C_API_ENTRY;
-  if (!engine || !std::isfinite(start_ppq) || !std::isfinite(end_ppq) || start_ppq < 0.0 ||
-      end_ppq < 0.0 || (enabled && end_ppq <= start_ppq)) {
+  if (!engine || !std::isfinite(start_ppq) || !std::isfinite(end_ppq) ||
+      !transport::valid_public_ppq(start_ppq) || !transport::valid_public_ppq(end_ppq) ||
+      (enabled && end_ppq <= start_ppq)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   engine->engine.set_loop(start_ppq, end_ppq, enabled != 0);

@@ -43,6 +43,99 @@ TEST_CASE("project C surface exports MIDI events to SMF", "[project]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project MIDI loop export is bounded and requires representable progress",
+          "[project][midi][validation]") {
+  SECTION("ordinary loops expand deterministically in both export formats") {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+    SonareMidiEventPod event{};
+    REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &event) == SONARE_OK);
+    REQUIRE(sonare_project_set_midi_events(project, clip, &event, 1) == SONARE_OK);
+    REQUIRE(sonare_project_set_clip_loop(project, clip, SONARE_LOOP_MODE_LOOP, 1.0, 0.0) ==
+            SONARE_OK);
+
+    uint8_t* first_bytes = nullptr;
+    size_t first_len = 0;
+    REQUIRE(sonare_project_export_smf(project, &first_bytes, &first_len) == SONARE_OK);
+    const auto smf = sonare::midi::import_smf(first_bytes, first_len);
+    REQUIRE(smf.ok());
+    REQUIRE(smf.clips.size() == 1);
+    REQUIRE(smf.clips[0].events().size() == 4);
+    for (size_t i = 0; i < 4; ++i) {
+      CHECK(smf.clips[0].events()[i].ppq == static_cast<double>(i));
+    }
+
+    uint8_t* second_bytes = nullptr;
+    size_t second_len = 0;
+    REQUIRE(sonare_project_export_smf(project, &second_bytes, &second_len) == SONARE_OK);
+    REQUIRE(second_len == first_len);
+    CHECK(std::memcmp(second_bytes, first_bytes, first_len) == 0);
+    sonare_free_bytes(second_bytes);
+    sonare_free_bytes(first_bytes);
+
+    uint8_t* clip_bytes = nullptr;
+    size_t clip_len = 0;
+    REQUIRE(sonare_project_export_clip_file(project, &clip_bytes, &clip_len) == SONARE_OK);
+    const auto clip_file = sonare::midi::import_clip_file(clip_bytes, clip_len);
+    REQUIRE(clip_file.ok());
+    REQUIRE(clip_file.clips.size() == 1);
+    CHECK(clip_file.clips[0].events().size() == 4);
+    sonare_free_bytes(clip_bytes);
+    sonare_project_destroy(project);
+  }
+
+  SECTION("a loop step below the double ULP fails instead of spinning") {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    constexpr double kTwoTo53 = 9007199254740992.0;
+    REQUIRE(sonare_project_add_midi_clip(project, kTwoTo53, 4.0, &track, &clip) == SONARE_OK);
+    SonareMidiEventPod event{};
+    REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &event) == SONARE_OK);
+    REQUIRE(sonare_project_set_midi_events(project, clip, &event, 1) == SONARE_OK);
+    REQUIRE(sonare_project_set_clip_loop(project, clip, SONARE_LOOP_MODE_LOOP, 1.0, 0.0) ==
+            SONARE_OK);
+
+    uint8_t* bytes = nullptr;
+    size_t len = 0;
+    REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_ERROR_INVALID_FORMAT);
+    CHECK(bytes == nullptr);
+    CHECK(len == 0);
+    REQUIRE(sonare_project_export_clip_file(project, &bytes, &len) == SONARE_ERROR_INVALID_FORMAT);
+    CHECK(bytes == nullptr);
+    CHECK(len == 0);
+    sonare_project_destroy(project);
+  }
+
+  SECTION("projected loop expansion above the event budget is rejected early") {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+    SonareMidiEventPod event{};
+    REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &event) == SONARE_OK);
+    REQUIRE(sonare_project_set_midi_events(project, clip, &event, 1) == SONARE_OK);
+    REQUIRE(sonare_project_set_clip_loop(project, clip, SONARE_LOOP_MODE_LOOP, 1.0e-9, 0.0) ==
+            SONARE_OK);
+
+    uint8_t* bytes = nullptr;
+    size_t len = 0;
+    REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(bytes == nullptr);
+    CHECK(len == 0);
+    REQUIRE(sonare_project_export_clip_file(project, &bytes, &len) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(bytes == nullptr);
+    CHECK(len == 0);
+    sonare_project_destroy(project);
+  }
+}
+
 TEST_CASE("project C surface round-trips a MIDI 2.0 Clip File losslessly", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -103,6 +196,7 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   REQUIRE(sonare_midi_channel_pressure(0.5, 0, 0, 127, &event) == SONARE_OK);
   REQUIRE(sonare_midi_pitch_bend(0.5, 0, 0, 8192, &event) == SONARE_OK);
   REQUIRE(sonare_midi_note_on(0.0, 16, 0, 60, 100, &event) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi_note_on(1.0e300, 0, 0, 60, 100, &event) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_midi_pitch_bend(0.0, 0, 0, 16384, &event) == SONARE_ERROR_INVALID_PARAMETER);
 
   REQUIRE(std::strcmp(sonare_midi_gm_instrument_name(0), "Acoustic Grand Piano") == 0);
@@ -249,6 +343,10 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   SonareMidiEventPod invalid{};
   invalid.ppq = 0.0;
   invalid.data0 = 0xFFFFFFFFu;  // Not a supported MIDI 1.0/2.0 channel-voice UMP.
+  REQUIRE(sonare_project_set_midi_events(project, clip, &invalid, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  invalid.ppq = 1.0e300;
+  invalid.data0 = 0x20903C40u;
   REQUIRE(sonare_project_set_midi_events(project, clip, &invalid, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(serialize(project) == before);
@@ -602,6 +700,24 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   REQUIRE(sonare_midi_note_on(0.10, 0, 0, 60, 100, &events[0]) == SONARE_OK);
   REQUIRE(sonare_midi_note_off(1.10, 0, 0, 60, 0, &events[1]) == SONARE_OK);
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+
+  // Deserialized MIDI content bypasses the event-constructor helpers. Baking
+  // must still reject a PPQ value that cannot be converted to a MIDI-FX frame.
+  std::string huge_ppq_json = serialize(project);
+  const size_t data_pos = huge_ppq_json.find("\"data0\":");
+  REQUIRE(data_pos != std::string::npos);
+  const size_t ppq_pos = huge_ppq_json.find("\"ppq\":", data_pos);
+  REQUIRE(ppq_pos != std::string::npos);
+  const size_t ppq_value_pos = ppq_pos + std::strlen("\"ppq\":");
+  const size_t ppq_value_end = huge_ppq_json.find_first_of(",}", ppq_value_pos);
+  REQUIRE(ppq_value_end != std::string::npos);
+  huge_ppq_json.replace(ppq_value_pos, ppq_value_end - ppq_value_pos, "1e300");
+  SonareProject* huge_ppq_project = nullptr;
+  REQUIRE(sonare_project_deserialize(huge_ppq_json.data(), huge_ppq_json.size(), &huge_ppq_project,
+                                     nullptr) == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(huge_ppq_project, clip, "{}") ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_project_destroy(huge_ppq_project);
 
   const char* config =
       "{\"transpose_semitones\":12,\"quantize_ppq\":0.25,\"quantize_strength\":1.0,"

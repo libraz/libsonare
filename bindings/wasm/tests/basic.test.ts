@@ -143,6 +143,9 @@ describe('Sonare WASM Module', () => {
         throw new Error('expected SonareError');
       }
       expect(badPpqError.code).toBe(ErrorCode.InvalidParameter);
+      expect(() => engine.sampleAtPpq(1e300)).toThrow();
+      expect(() => engine.seekPpq(1e300)).toThrow();
+      expect(() => engine.setLoop(0, 1e300, true)).toThrow();
       engine.setMetronome({ enabled: false });
       engine.addParameter({
         id: 7,
