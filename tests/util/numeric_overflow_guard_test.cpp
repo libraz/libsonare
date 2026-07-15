@@ -14,8 +14,68 @@
 
 #include "core/audio.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 using namespace sonare;
+
+TEST_CASE("checked projected counts reject non-finite and oversized results",
+          "[numeric][overflow]") {
+  std::size_t out = 99;
+  REQUIRE(numeric::checked_projected_count(std::size_t{100}, 0.5f, std::size_t{200}, &out));
+  REQUIRE(out == 200);
+
+  out = 99;
+  REQUIRE_FALSE(numeric::checked_projected_count(
+      std::size_t{100}, std::numeric_limits<float>::quiet_NaN(), std::size_t{200}, &out));
+  REQUIRE(out == 99);
+  REQUIRE_FALSE(numeric::checked_projected_count(
+      std::size_t{100}, std::numeric_limits<float>::infinity(), std::size_t{200}, &out));
+  REQUIRE_FALSE(numeric::checked_projected_count(std::size_t{100}, 0.49f, std::size_t{200}, &out));
+  REQUIRE_FALSE(numeric::checked_projected_count(
+      std::size_t{100}, std::numeric_limits<float>::min(), std::size_t{200}, &out));
+
+  REQUIRE(numeric::checked_size_product(std::size_t{10}, std::size_t{20}, std::size_t{200}, &out));
+  REQUIRE(out == 200);
+  REQUIRE_FALSE(
+      numeric::checked_size_product(std::size_t{10}, std::size_t{21}, std::size_t{200}, &out));
+}
+
+TEST_CASE("checked and saturating addition handle both signed boundaries", "[numeric][overflow]") {
+  int64_t out = 0;
+  REQUIRE(numeric::checked_add<int64_t>(40, 2, &out));
+  REQUIRE(out == 42);
+
+  out = 7;
+  REQUIRE_FALSE(numeric::checked_add(std::numeric_limits<int64_t>::max(), int64_t{1}, &out));
+  REQUIRE(out == 7);
+  REQUIRE_FALSE(numeric::checked_add(std::numeric_limits<int64_t>::lowest(), int64_t{-1}, &out));
+  REQUIRE(out == 7);
+
+  REQUIRE(numeric::saturating_add(std::numeric_limits<int64_t>::max(), int64_t{1}) ==
+          std::numeric_limits<int64_t>::max());
+  REQUIRE(numeric::saturating_add(std::numeric_limits<int64_t>::lowest(), int64_t{-1}) ==
+          std::numeric_limits<int64_t>::lowest());
+}
+
+TEST_CASE("checked ceil ratios enforce iteration limits at the exact boundary",
+          "[numeric][overflow]") {
+  size_t iterations = 99;
+  REQUIRE(numeric::checked_ceil_ratio(4.0, 1.0, size_t{4}, &iterations));
+  REQUIRE(iterations == 4);
+
+  constexpr size_t kMidiExportIterationLimit = 1'000'000;
+  REQUIRE(numeric::checked_ceil_ratio(1'000'000.0, 1.0, kMidiExportIterationLimit, &iterations));
+  REQUIRE(iterations == kMidiExportIterationLimit);
+  REQUIRE_FALSE(
+      numeric::checked_ceil_ratio(1'000'001.0, 1.0, kMidiExportIterationLimit, &iterations));
+
+  iterations = 99;
+  REQUIRE_FALSE(numeric::checked_ceil_ratio(4.0, 0.99, size_t{4}, &iterations));
+  REQUIRE(iterations == 99);
+  REQUIRE_FALSE(
+      numeric::checked_ceil_ratio(4.0, std::numeric_limits<double>::min(), size_t{4}, &iterations));
+  REQUIRE_FALSE(numeric::checked_ceil_ratio(4.0, 0.0, size_t{4}, &iterations));
+}
 
 TEST_CASE("next_power_of_2(int) saturates for huge inputs without hanging",
           "[math_utils][overflow]") {
