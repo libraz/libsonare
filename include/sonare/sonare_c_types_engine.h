@@ -262,8 +262,8 @@ typedef struct {
   uint32_t bus_id;
   float gain_db;
   /* Channel layout of this bus (SonareChannelLayout). The master bus carries the
-     project output layout. Defaults to stereo; stored but inert until the
-     surround DSP path lands. */
+     project output layout. Defaults to stereo. A 5.1/7.1 bus enables the
+     realtime lane mixer's surround scatter and per-plane metering. */
   uint8_t channel_layout;
 } SonareEngineBus;
 
