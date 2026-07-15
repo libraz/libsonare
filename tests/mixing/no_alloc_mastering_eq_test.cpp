@@ -1,6 +1,7 @@
 /// @file no_alloc_mastering_eq_test.cpp
 /// @brief Mastering EQ no-allocation realtime tests.
 
+#include "mastering/api/insert_factory.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
@@ -8,7 +9,9 @@
 #include "mastering/saturation/transformer.h"
 #include "mastering/saturation/waveshaper.h"
 #include "mastering/spectral/air_band.h"
+#include "mastering/spectral/low_end_focus.h"
 #include "mastering/spectral/presence_enhancer.h"
+#include "mastering/spectral/spectral_shaper.h"
 #include "no_alloc_test_helpers.h"
 
 namespace {
@@ -34,6 +37,48 @@ void require_no_audio_thread_alloc(Proc& proc) {
   proc.process(mono, 1, kBlock);    // channel-count change must not allocate
   proc.process(stereo, 2, kBlock);
   REQUIRE(guard.count() == 0);
+}
+
+template <typename Proc, typename Config>
+void require_no_spectral_state_alloc(const Config& updated_config) {
+  constexpr int kBlock = 64;
+  for (const int num_channels : {1, 2, 6}) {
+    Proc proc;
+    proc.prepare(48000.0, kBlock);
+    std::array<std::array<float, kBlock>, 6> storage{};
+    std::array<float*, 6> channels{};
+    for (int ch = 0; ch < num_channels; ++ch) {
+      storage[static_cast<size_t>(ch)][0] = 0.5f;
+      channels[static_cast<size_t>(ch)] = storage[static_cast<size_t>(ch)].data();
+    }
+
+    size_t first_block_allocations = 0;
+    {
+      AllocationGuard guard;
+      proc.process(channels.data(), num_channels, kBlock);
+      first_block_allocations = guard.count();
+    }
+    INFO("first block channel count=" << num_channels);
+    REQUIRE(first_block_allocations == 0);
+
+    proc.set_config(updated_config);
+    size_t changed_config_allocations = 0;
+    {
+      AllocationGuard guard;
+      proc.process(channels.data(), num_channels, kBlock);
+      changed_config_allocations = guard.count();
+    }
+    INFO("config-change block channel count=" << num_channels);
+    REQUIRE(changed_config_allocations == 0);
+  }
+
+  Proc over_capacity;
+  over_capacity.prepare(48000.0, kBlock);
+  std::array<float, kBlock> samples{};
+  std::array<float*, 65> too_many_channels{};
+  too_many_channels.fill(samples.data());
+  REQUIRE_THROWS_AS(over_capacity.process(too_many_channels.data(), 65, kBlock),
+                    sonare::SonareException);
 }
 
 }  // namespace
@@ -87,6 +132,48 @@ TEST_CASE("PresenceEnhancer process is allocation free from the first block",
   sonare::mastering::spectral::PresenceEnhancer proc{
       sonare::mastering::spectral::PresenceEnhancerConfig{}};
   require_no_audio_thread_alloc(proc);
+}
+
+TEST_CASE("LowEndFocus mono stereo and surround first blocks are allocation free",
+          "[mastering][spectral][rt]") {
+  sonare::mastering::spectral::LowEndFocusConfig updated;
+  updated.cutoff_hz = 180.0f;
+  updated.subharmonic_amount = 0.2f;
+  require_no_spectral_state_alloc<sonare::mastering::spectral::LowEndFocus>(updated);
+}
+
+TEST_CASE("SpectralShaper mono stereo and surround first blocks are allocation free",
+          "[mastering][spectral][rt]") {
+  sonare::mastering::spectral::SpectralShaperConfig updated;
+  updated.attack_ms = 5.0f;
+  updated.release_ms = 120.0f;
+  require_no_spectral_state_alloc<sonare::mastering::spectral::SpectralShaper>(updated);
+}
+
+TEST_CASE("every realtime insert factory processor is allocation free on its first block",
+          "[mastering][rt][catalog]") {
+  constexpr int kBlock = 64;
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left[0] = 0.5f;
+  right[0] = -0.25f;
+  float* channels[] = {left.data(), right.data()};
+
+  const std::vector<std::string> insert_ids = sonare::mastering::api::insert_factory_names();
+  REQUIRE_FALSE(insert_ids.empty());
+  for (const std::string& id : insert_ids) {
+    INFO("realtime insert id=" << id);
+    auto processor = sonare::mastering::api::make_insert(id, "{}");
+    REQUIRE(processor != nullptr);
+    processor->prepare(48000.0, kBlock);
+    size_t allocations = 0;
+    {
+      AllocationGuard guard;
+      processor->process(channels, 2, kBlock);
+      allocations = guard.count();
+    }
+    REQUIRE(allocations == 0);
+  }
 }
 
 TEST_CASE("TruePeakLimiter process performs no heap allocation after prepare",

@@ -179,7 +179,7 @@ class DynamicEq : public rt::ProcessorBase {
   // skip reference). Seeded to NaN so the first apply always programs the band.
   std::array<float, kMaxBands> last_applied_coeff_gain_db_{};
   std::array<DetectorState, kMaxBands> detectors_{};
-  std::vector<float*> sub_channels_;
+  std::vector<float*> sub_channels_;  // fixed to kRealtimePreparedChannels in prepare()
   float last_detector_db_ = sonare::constants::kFloorDb;
   const float* const* sidechain_channels_ = nullptr;
   int sidechain_num_channels_ = 0;

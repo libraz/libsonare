@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
@@ -16,6 +17,12 @@ void LowEndFocus::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
   }
   sample_rate_ = sample_rate;
+  const size_t channel_count = dynamics::kRealtimePreparedChannels;
+  low_state_.assign(channel_count, 0.0f);
+  sub_state_.assign(channel_count, 0.0f);
+  transient_state_.assign(channel_count, 0.0f);
+  previous_low_.assign(channel_count, 0.0f);
+  divider_polarity_.assign(channel_count, 1.0f);
   prepared_ = true;
   reset();
 }
@@ -28,13 +35,9 @@ void LowEndFocus::process(float* const* channels, int num_channels, int num_samp
   if (num_channels == 0 || num_samples == 0) return;
   if (channels == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
-  if (low_state_.size() != static_cast<size_t>(num_channels)) {
-    const auto size = static_cast<size_t>(num_channels);
-    low_state_.assign(size, 0.0f);
-    sub_state_.assign(size, 0.0f);
-    transient_state_.assign(size, 0.0f);
-    previous_low_.assign(size, 0.0f);
-    divider_polarity_.assign(size, 1.0f);
+  if (static_cast<size_t>(num_channels) > low_state_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "LowEndFocus channel count exceeds prepared capacity");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)

@@ -144,6 +144,7 @@ class Crossover {
   CrossoverConfig config_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
+  int prepared_channel_capacity_ = 0;
   bool prepared_ = false;
   // Set when coefficients must be recomputed (config/sample-rate change). The
   // per-block split path only reinstalls coefficients when this is set or when

@@ -47,6 +47,8 @@ class SpectralShaper : public rt::ProcessorBase {
   SpectralShaperConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
+  // prepare() fixes these at dynamics::kRealtimePreparedChannels so process()
+  // never rebuilds filters/followers on the audio thread.
   std::vector<float> low_state_;
   std::vector<float> band_low_state_;
   std::vector<float> gain_state_;

@@ -38,6 +38,7 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
       channel.look_pos = 0;
     }
   }
+  sub_channels_.assign(kRealtimePreparedChannels, nullptr);
   prepared_ = true;
   rebuild();
 }
@@ -94,10 +95,11 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
         dynamic_band.static_gain_db + dynamic_gain_delta(dynamic_band, last_band_detector_db_[i]);
   }
 
-  // Reusable view buffer for the sub-block pointers (resized at most once per
-  // channel-count change; no per-sub-block allocation on the audio thread).
-  if (sub_channels_.size() != static_cast<size_t>(num_channels)) {
-    sub_channels_.assign(static_cast<size_t>(num_channels), nullptr);
+  // Reusable view buffer is fixed to the common realtime channel capacity in
+  // prepare(); reject a wider block instead of resizing on the audio thread.
+  if (static_cast<size_t>(num_channels) > sub_channels_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared DynamicEq view capacity");
   }
   for (int offset = 0; offset < num_samples; offset += kCoeffUpdateInterval) {
     const int chunk = std::min(kCoeffUpdateInterval, num_samples - offset);

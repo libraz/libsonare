@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/window.h"
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -88,15 +89,17 @@ void Crossover::prepare(double sample_rate, int max_block_size) {
   validate_config(config_, sample_rate);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  prepared_channel_capacity_ =
+      static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels);
   prepared_ = true;
   coeffs_dirty_ = true;
   if (config_.mode == CrossoverMode::FirLinearPhase) {
     rebuild_fir_kernels();
-    rebuild_fir_state(fir_delay_history_.empty() ? 0 : static_cast<int>(fir_delay_history_.size()));
+    rebuild_fir_state(prepared_channel_capacity_);
   } else {
     // Build IIR state and coefficients now so the per-block split path does not
     // re-run install_coefficients() unless the channel count or config changes.
-    rebuild_state(states_.empty() ? 0 : static_cast<int>(states_[0].size()));
+    rebuild_state(prepared_channel_capacity_);
   }
   reset();
 }
@@ -446,15 +449,19 @@ void Crossover::process_block_fir(float* const* channels, int num_channels, int 
 }
 
 void Crossover::rebuild_fir_state(int num_channels) {
+  if (num_channels > prepared_channel_capacity_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "crossover channel count exceeds prepared capacity");
+  }
   rebuild_fir_kernels();
   const size_t splits = config_.cutoffs_hz.size();
   const size_t kernel_size = static_cast<size_t>(config_.fir_kernel_size);
   const size_t delay_size = static_cast<size_t>(config_.fir_kernel_size / 2 + 1);
   const bool shape_matches =
       fir_history_.size() == splits &&
-      (splits == 0 || fir_history_[0].size() == static_cast<size_t>(num_channels)) &&
+      (splits == 0 || fir_history_[0].size() >= static_cast<size_t>(num_channels)) &&
       (splits == 0 || num_channels == 0 || fir_history_[0][0].size() == kernel_size) &&
-      fir_delay_history_.size() == static_cast<size_t>(num_channels) &&
+      fir_delay_history_.size() >= static_cast<size_t>(num_channels) &&
       (num_channels == 0 || fir_delay_history_[0].size() == delay_size);
   if (shape_matches) {
     return;
@@ -523,6 +530,10 @@ float Crossover::process_fir_delay(float sample, int channel) {
 }
 
 void Crossover::rebuild_state(int num_channels) {
+  if (num_channels > prepared_channel_capacity_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "crossover channel count exceeds prepared capacity");
+  }
   const size_t splits = config_.cutoffs_hz.size();
   const size_t bands = splits + 1;
   // filter_sections() allocates temporary vectors; recompute the stage count
@@ -534,11 +545,11 @@ void Crossover::rebuild_state(int num_channels) {
   const size_t stages = cached_section_count_;
   const bool shape_matches =
       states_.size() == splits &&
-      (splits == 0 || states_[0].size() == static_cast<size_t>(num_channels)) &&
+      (splits == 0 || states_[0].size() >= static_cast<size_t>(num_channels)) &&
       (splits == 0 || num_channels == 0 ||
        (states_[0][0].lowpass.size() == stages && states_[0][0].highpass.size() == stages)) &&
       compensation_states_.size() == bands &&
-      (bands == 0 || compensation_states_[0].size() == static_cast<size_t>(num_channels)) &&
+      (bands == 0 || compensation_states_[0].size() >= static_cast<size_t>(num_channels)) &&
       (bands == 0 || num_channels == 0 ||
        compensation_states_[0][0].allpass_by_split.size() == splits);
   if (!shape_matches) {

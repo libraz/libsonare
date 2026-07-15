@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -21,6 +22,11 @@ void SpectralShaper::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
   }
   sample_rate_ = sample_rate;
+  const size_t channel_count = dynamics::kRealtimePreparedChannels;
+  low_state_.assign(channel_count, 0.0f);
+  band_low_state_.assign(channel_count, 0.0f);
+  gain_state_.assign(channel_count, 1.0f);
+  envelopes_.assign(channel_count, {});
   for (auto& envelope : envelopes_)
     envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
   prepared_ = true;
@@ -35,14 +41,9 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
   if (num_channels == 0 || num_samples == 0) return;
   if (channels == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
-  if (low_state_.size() != static_cast<size_t>(num_channels)) {
-    low_state_.assign(static_cast<size_t>(num_channels), 0.0f);
-    band_low_state_.assign(static_cast<size_t>(num_channels), 0.0f);
-    gain_state_.assign(static_cast<size_t>(num_channels), 1.0f);
-    envelopes_.assign(static_cast<size_t>(num_channels), {});
-    for (auto& envelope : envelopes_) {
-      envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
-    }
+  if (static_cast<size_t>(num_channels) > low_state_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "SpectralShaper channel count exceeds prepared capacity");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)

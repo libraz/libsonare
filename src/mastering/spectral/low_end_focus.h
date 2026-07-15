@@ -38,6 +38,8 @@ class LowEndFocus : public rt::ProcessorBase {
   LowEndFocusConfig config_{};
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
+  // prepare() fixes these at dynamics::kRealtimePreparedChannels so process()
+  // never resizes per-channel state on the audio thread.
   std::vector<float> low_state_;
   std::vector<float> sub_state_;
   std::vector<float> transient_state_;

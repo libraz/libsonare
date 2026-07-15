@@ -6,6 +6,7 @@
 
 #include "core/fft.h"
 #include "core/window.h"
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -181,6 +182,10 @@ void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   prepared_ = true;
   rebuild_kernel();
+  // A raw LinearPhaseEq is also exposed as a realtime factory insert. Reserve
+  // the common realtime channel capacity here so its first process block never
+  // constructs per-channel histories/convolvers on the audio thread.
+  ensure_channel_state(static_cast<int>(dynamics::kRealtimePreparedChannels));
   reset();
 }
 
@@ -198,7 +203,10 @@ void LinearPhaseEq::process(float* const* channels, int num_channels, int num_sa
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
-  ensure_channel_state(num_channels);
+  if (static_cast<size_t>(num_channels) > states_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "LinearPhaseEq channel count exceeds prepared capacity");
+  }
 
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
@@ -400,38 +408,28 @@ void LinearPhaseEq::ensure_channel_state(int num_channels) {
   if (kernel_.empty()) {
     return;
   }
-  if (states_.size() == static_cast<size_t>(num_channels)) {
-    const int partition_size = active_partition_size();
-    for (auto& state : states_) {
-      if (config_.use_partitioned_convolution && partition_size > 0) {
-        if (!state.convolver) {
-          state.convolver = std::make_unique<sonare::rt::PartitionedConvolver>(
-              sonare::rt::PartitionedConvolverConfig{partition_size});
-          state.convolver_kernel_current = false;
-        }
-        if (!state.convolver_kernel_current) {
-          state.convolver->set_impulse_response(kernel_);
-          state.convolver_kernel_current = true;
-        }
-      } else {
-        state.convolver.reset();
+  if (states_.size() < static_cast<size_t>(num_channels)) {
+    states_.resize(static_cast<size_t>(num_channels));
+  }
+  const int partition_size = active_partition_size();
+  for (auto& state : states_) {
+    if (state.history.size() != kernel_.size()) {
+      state.history.assign(kernel_.size(), 0.0f);
+      state.write_index = 0;
+    }
+    if (config_.use_partitioned_convolution && partition_size > 0) {
+      if (!state.convolver) {
+        state.convolver = std::make_unique<sonare::rt::PartitionedConvolver>(
+            sonare::rt::PartitionedConvolverConfig{partition_size});
         state.convolver_kernel_current = false;
       }
-    }
-    return;
-  }
-
-  states_.clear();
-  states_.resize(static_cast<size_t>(num_channels));
-  for (auto& state : states_) {
-    state.history.assign(kernel_.size(), 0.0f);
-    state.write_index = 0;
-    const int partition_size = active_partition_size();
-    if (config_.use_partitioned_convolution && partition_size > 0) {
-      state.convolver = std::make_unique<sonare::rt::PartitionedConvolver>(
-          sonare::rt::PartitionedConvolverConfig{partition_size});
-      state.convolver->set_impulse_response(kernel_);
-      state.convolver_kernel_current = true;
+      if (!state.convolver_kernel_current) {
+        state.convolver->set_impulse_response(kernel_);
+        state.convolver_kernel_current = true;
+      }
+    } else {
+      state.convolver.reset();
+      state.convolver_kernel_current = false;
     }
   }
 }

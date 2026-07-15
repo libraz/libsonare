@@ -103,6 +103,8 @@ class LinearPhaseEq : public rt::ProcessorBase {
   bool prepared_ = false;
   std::array<EqBand, kMaxBands> bands_{};
   std::vector<float> kernel_;
+  // prepare() fills this to the common realtime channel capacity. A larger
+  // explicit prepare_channels() call may grow it on the control thread.
   std::vector<ChannelState> states_;
 };
 
