@@ -183,6 +183,20 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);
+
+    config.target_lufs = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    config.target_lufs = -18.0f;
+    config.ceiling_db = std::numeric_limits<float>::infinity();
+    REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+
+    config.ceiling_db = -1.0f;
+    REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result) ==
+            SONARE_OK);
+    for (size_t i = 0; i < result.length; ++i) REQUIRE(std::isfinite(result.samples[i]));
+    sonare_free_mastering_result(&result);
   }
 
   SECTION("applies named mono and stereo processors") {

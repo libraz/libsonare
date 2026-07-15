@@ -55,6 +55,13 @@ def test_mastering_accepts_release_and_input_rate_knobs() -> None:
     assert zero.samples == omitted.samples
     assert zero.samples == explicit.samples
 
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering(samples, sample_rate=sr, target_lufs=float("nan"))
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering(samples, sample_rate=sr, ceiling_db=float("inf"))
+    recovered = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0, ceiling_db=-1.0)
+    assert all(math.isfinite(value) for value in recovered.samples)
+
 
 def test_named_mastering_processors() -> None:
     """Named mastering processors are exposed through the shared API."""

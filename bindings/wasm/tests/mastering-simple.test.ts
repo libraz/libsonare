@@ -49,4 +49,12 @@ describe('simple mastering() knobs (WASM)', () => {
     expect(Array.from(zero.samples)).toEqual(Array.from(omitted.samples));
     expect(Array.from(zero.samples)).toEqual(Array.from(explicit.samples));
   });
+
+  it('rejects non-finite targets and accepts a later finite call', () => {
+    const x = sine(220, 0.1);
+    expect(() => mastering(x, SR, { targetLufs: Number.NaN })).toThrow();
+    expect(() => mastering(x, SR, { ceilingDb: Number.POSITIVE_INFINITY })).toThrow();
+    const recovered = mastering(x, SR, { targetLufs: -14, ceilingDb: -1 });
+    expect(allFinite(recovered.samples)).toBe(true);
+  });
 });

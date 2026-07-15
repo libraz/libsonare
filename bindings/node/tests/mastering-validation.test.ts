@@ -73,4 +73,12 @@ describe('simple mastering() accepts the appended maximizer knobs', () => {
     expect(zero.samples).toEqual(omitted.samples);
     expect(zero.samples).toEqual(explicit.samples);
   });
+
+  it('rejects non-finite targets and accepts a later finite call', () => {
+    const x = sine(4096, 220, 0.2);
+    expect(() => mastering(x, SR, { targetLufs: Number.NaN })).toThrow();
+    expect(() => mastering(x, SR, { ceilingDb: Number.POSITIVE_INFINITY })).toThrow();
+    const recovered = mastering(x, SR, { targetLufs: -14, ceilingDb: -1 });
+    expect(recovered.samples.every((value) => Number.isFinite(value))).toBe(true);
+  });
 });

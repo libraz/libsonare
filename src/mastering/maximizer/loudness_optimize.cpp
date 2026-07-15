@@ -14,6 +14,12 @@ namespace sonare::mastering::maximizer {
 
 LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptimizeConfig& config) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  if (!std::isfinite(config.target_lufs) || !std::isfinite(config.ceiling_db) ||
+      !std::isfinite(config.release_ms) || config.release_ms <= 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "target_lufs, ceiling_db, and release_ms must be finite and release_ms "
+                          "must be positive");
+  }
   if (config.true_peak_oversample != 1 && config.true_peak_oversample != 2 &&
       config.true_peak_oversample != 4 && config.true_peak_oversample != 8 &&
       config.true_peak_oversample != 16) {
