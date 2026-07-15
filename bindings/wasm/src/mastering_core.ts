@@ -130,6 +130,11 @@ export interface MasteringProcessorCatalogEntry {
   /** True for processors with no mono implementation (stereo-only). */
   stereoOnly: boolean;
   /**
+   * Reported latency for the default 48 kHz / 512-sample probe configuration.
+   * Zero for offline processors; configuration-dependent values are estimates.
+   */
+  latencySamples: number;
+  /**
    * How the mixer wraps the processor on a >2-channel (surround) bus insert:
    * "multichannel" (one full-buffer call) or "stereoPairOnly" (front L/R pair,
    * surround planes passed through dry).

@@ -57,6 +57,7 @@ describe('insert param validation (WASM)', () => {
       realtimeInsertable: true,
       channelPolicy: 'multichannel',
     });
+    expect(typeof byId.get('dynamics.compressor')?.latencySamples).toBe('number');
     // Pair (two-input match.*) id.
     expect(byId.get('match.abCrossfade')?.kind).toBe('pair');
     // Whole-file-only id.

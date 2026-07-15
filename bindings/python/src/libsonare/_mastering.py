@@ -195,10 +195,13 @@ def mastering_processor_catalog() -> list[dict[str, Any]]:
     id, e.g. ``dynamics.compressor``), ``kind`` (one of ``"realtime"``,
     ``"offline"`` or ``"pair"``), ``realtimeInsertable`` (whether the processor
     can run as a realtime insert), ``stereoOnly`` (whether it requires a
-    stereo signal) and ``channelPolicy`` (how the mixer wraps the processor on
-    a >2-channel surround bus insert: ``"multichannel"`` for one full-buffer
-    call, ``"stereoPairOnly"`` for front-L/R-only with surround planes passed
-    through dry). ``kind`` follows the precedence pair > realtime > offline:
+    stereo signal), ``latencySamples`` (reported latency for the default 48 kHz
+    / 512-sample probe configuration; 0 for offline processors and an estimate
+    for configuration-dependent processors) and ``channelPolicy`` (how the
+    mixer wraps the processor on a >2-channel surround bus insert:
+    ``"multichannel"`` for one full-buffer call, ``"stereoPairOnly"`` for
+    front-L/R-only with surround planes passed through dry). ``kind`` follows
+    the precedence pair > realtime > offline:
     a processor exposed as a pair processor is reported as ``"pair"``, an
     otherwise realtime-capable processor as ``"realtime"``, and the remainder
     as ``"offline"``. Returns an empty list when the build lacks mastering
