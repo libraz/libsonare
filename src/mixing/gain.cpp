@@ -1,11 +1,16 @@
 #include "mixing/gain.h"
 
+#include <cmath>
+
 #include "util/db.h"
 
 namespace sonare::mixing {
 
 GainProcessor::GainProcessor(GainConfig config)
-    : smoothing_ms_(config.smoothing_ms), gain_db_(config.gain_db) {}
+    : smoothing_ms_(std::isfinite(config.smoothing_ms) && config.smoothing_ms >= 0.0f
+                        ? config.smoothing_ms
+                        : 5.0f),
+      gain_db_(std::isfinite(config.gain_db) ? config.gain_db : 0.0f) {}
 
 void GainProcessor::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -41,14 +46,17 @@ void GainProcessor::settle() noexcept {
 }
 
 void GainProcessor::set_gain_db(float gain_db) noexcept {
+  if (!std::isfinite(gain_db)) return;
   gain_db_.store(gain_db, std::memory_order_relaxed);
 }
 
 void GainProcessor::set_vca_offset_db(float offset_db) noexcept {
+  if (!std::isfinite(offset_db)) return;
   vca_trim_offset_db_.store(offset_db, std::memory_order_relaxed);
 }
 
 void GainProcessor::add_vca_group_offset_db(float delta_db) noexcept {
+  if (!std::isfinite(delta_db)) return;
   // VCA-group contributions accumulate (a strip may belong to several groups).
   // Group membership changes are serialized on the control thread, but use an
   // atomic fetch_add rather than a separate load/store read-modify-write so the

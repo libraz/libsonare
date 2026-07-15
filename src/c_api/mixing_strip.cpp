@@ -41,7 +41,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_fader_db(SonareStrip * strip, float db) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(db)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
@@ -53,7 +53,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_input_trim_db(SonareStrip * strip, float db) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(db)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
@@ -65,7 +65,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_pan(SonareStrip * strip, float pan, int pan_mode) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(pan)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
@@ -92,7 +92,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_dual_pan(SonareStrip * strip, float left_pan, float right_pan) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(left_pan) || !finite(right_pan)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
@@ -111,7 +111,8 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_surround_pan(SonareStrip * strip, const SonareSurroundPan* pan) {
       SONARE_C_API_ENTRY;
-      if (!strip || !pan) {
+      if (!strip || !pan || !finite(pan->azimuth) || !finite(pan->elevation) ||
+          !finite(pan->divergence) || !finite(pan->lfe) || !finite(pan->distance)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
@@ -132,7 +133,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_width(SonareStrip * strip, float width) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(width)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
@@ -233,7 +234,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_vca_offset_db(SonareStrip * strip, float offset_db) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(offset_db)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
@@ -247,7 +248,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
                                       const char* destination_bus_id, float send_db, int timing,
                                       size_t* index_out) {
       SONARE_C_API_ENTRY;
-      if (!strip || !destination_bus_id) {
+      if (!strip || !destination_bus_id || !finite(send_db)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
@@ -275,7 +276,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_send_db(SonareStrip * strip, size_t index, float send_db) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(send_db)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       // Reject an out-of-range send index rather than silently returning OK after a
@@ -380,7 +381,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
         SonareStrip * strip, unsigned int insert_index, unsigned int param_id, int64_t sample_pos,
         float value, int curve) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(value)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       sonare::mixing::AutomationCurveType curve_enum;
@@ -416,7 +417,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     SonareError sonare_strip_schedule_fader_automation(SonareStrip * strip, int64_t sample_pos,
                                                        float fader_db, int curve) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(fader_db)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       sonare::mixing::AutomationCurveType curve_enum;
@@ -433,7 +434,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     SonareError sonare_strip_schedule_pan_automation(SonareStrip * strip, int64_t sample_pos,
                                                      float pan, int curve) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(pan)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       sonare::mixing::AutomationCurveType curve_enum;
@@ -450,7 +451,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     SonareError sonare_strip_schedule_width_automation(SonareStrip * strip, int64_t sample_pos,
                                                        float width, int curve) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(width)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       sonare::mixing::AutomationCurveType curve_enum;
@@ -467,7 +468,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     SonareError sonare_strip_schedule_send_automation(SonareStrip * strip, size_t send_index,
                                                       int64_t sample_pos, float db, int curve) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || !finite(db)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       sonare::mixing::AutomationCurveType curve_enum;

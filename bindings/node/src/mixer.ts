@@ -128,7 +128,7 @@ export class Mixer {
     return this.native.sceneWarnings();
   }
 
-  /** Maximum processor tail length (samples) currently in the compiled graph. */
+  /** Longest audible serial processor-tail path to the master, in samples. */
   tailSamples(): number {
     return this.native.tailSamples();
   }

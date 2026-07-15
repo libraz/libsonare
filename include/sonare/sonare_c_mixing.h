@@ -248,8 +248,9 @@ SonareError sonare_mixer_compile(SonareMixer* mixer);
 // Reports the compiled mixer's latency at the master output. Lazily compiles if
 // the topology is dirty. Returns INVALID_PARAMETER for NULL arguments.
 SonareError sonare_mixer_latency_samples(SonareMixer* mixer, int* out_latency_samples);
-// Reports the maximum processor tail length currently present in the compiled
-// mixer graph. Lazily compiles if the topology is dirty.
+// Reports the longest audible processor-tail path to the compiled master:
+// serial processor/node tails add, while parallel main/send branches take the
+// maximum. Lazily compiles if the topology is dirty.
 SonareError sonare_mixer_tail_samples(SonareMixer* mixer, int* out_tail_samples);
 // Processes one stereo block through the compiled mixer graph.
 //

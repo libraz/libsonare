@@ -90,8 +90,9 @@ TEST_CASE("ChannelStrip insert bypass preserves dry signal and reports tail",
   auto insert = std::make_unique<TailGainProcessor>(0.25f, 128);
   TailGainProcessor* raw_insert = insert.get();
   strip.add_pre_insert(std::move(insert));
+  strip.add_post_insert(std::make_unique<TailGainProcessor>(1.0f, 256));
   strip.prepare(48000.0, 8);
-  REQUIRE(strip.tail_samples() == 128);
+  REQUIRE(strip.tail_samples() == 384);
 
   std::array<float, 4> left{};
   std::array<float, 4> right{};

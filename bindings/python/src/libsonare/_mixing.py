@@ -655,11 +655,11 @@ class Mixer:
         )
 
     def tail_samples(self) -> int:
-        """Return the mixer's reverb/delay tail length in samples.
+        """Return the longest audible reverb/delay path to the master, in samples.
 
         This is how many additional samples should be drained with
         :meth:`drain_tail_stereo` after the last input block to capture the
-        decaying effect tails (reverb, delay) left in the routing graph.
+        decaying effect tails (reverb, delay) left on the master routing path.
         """
         self._require()
         out = ctypes.c_int()

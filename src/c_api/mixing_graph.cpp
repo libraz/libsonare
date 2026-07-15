@@ -1,5 +1,6 @@
 #include "c_api/mixing_internal.h"
 #include "mixing/solo_mute.h"
+#include "mixing/tail_utils.h"
 
 namespace sonare_c_mixing_detail {
 
@@ -113,11 +114,18 @@ void build_and_compile(SonareMixer* mixer) {
 
   sonare::graph::Graph graph;
   apply_solo_mutes(mixer);
-  int tail_samples = 0;
+  std::unordered_map<std::string, int> local_tail_by_id;
+  std::unordered_map<std::string, std::vector<std::string>> audio_inputs_by_id;
   auto checked_connect = [&](sonare::graph::Connection connection) {
     if (!graph.connect(std::move(connection))) {
       throw SonareException(ErrorCode::InvalidParameter, "invalid or duplicate mixer connection");
     }
+  };
+  auto checked_connect_audio = [&](const std::string& source, int source_left, int source_right,
+                                   const std::string& destination) {
+    checked_connect({source, source_left, destination, 0, sonare::graph::Connection::Mix::Add});
+    checked_connect({source, source_right, destination, 1, sonare::graph::Connection::Mix::Add});
+    audio_inputs_by_id[destination].push_back(source);
   };
 
   // Work on a local bus list so manually-built mixers (no scene) still get a
@@ -194,7 +202,7 @@ void build_and_compile(SonareMixer* mixer) {
     }
     bus_sidechain_inputs_by_id[bus.id] = sidechain_inputs;
     bus_sidechain_keys_by_id[bus.id] = sidechain_keys;
-    tail_samples = std::max(tail_samples, fx_bus->tail_samples());
+    local_tail_by_id[bus.id] = std::max(0, fx_bus->tail_samples());
     auto node = std::make_unique<BusNode>(std::move(fx_bus), std::move(sidechain_inputs));
     if (!graph.add_node(bus.id, std::move(node), next_sidechain_port)) {
       throw SonareException(ErrorCode::InvalidParameter, "duplicate or invalid bus id: " + bus.id);
@@ -239,7 +247,7 @@ void build_and_compile(SonareMixer* mixer) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "duplicate or invalid strip id: " + strip->id);
     }
-    tail_samples = std::max(tail_samples, strip->strip.tail_samples());
+    local_tail_by_id[strip->id] = std::max(0, strip->strip.tail_samples());
     strip_by_id[strip->id] = strip.get();
   }
 
@@ -252,16 +260,14 @@ void build_and_compile(SonareMixer* mixer) {
           ErrorCode::InvalidParameter,
           "connection references unknown node: " + conn.source + " -> " + conn.destination);
     }
-    checked_connect({conn.source, 0, conn.destination, 0, sonare::graph::Connection::Mix::Add});
-    checked_connect({conn.source, 1, conn.destination, 1, sonare::graph::Connection::Mix::Add});
+    checked_connect_audio(conn.source, 0, 1, conn.destination);
     has_main_out[conn.source] = true;
   }
 
   // Default-route strips with no outgoing main connection to the master bus.
   for (const auto& strip : mixer->strips) {
     if (!has_main_out[strip->id] && strip->id != master_id) {
-      checked_connect({strip->id, 0, master_id, 0, sonare::graph::Connection::Mix::Add});
-      checked_connect({strip->id, 1, master_id, 1, sonare::graph::Connection::Mix::Add});
+      checked_connect_audio(strip->id, 0, 1, master_id);
     }
   }
 
@@ -270,8 +276,7 @@ void build_and_compile(SonareMixer* mixer) {
   // aux/submix buses.
   for (const auto& bus : buses) {
     if (is_implicit_bus[bus.id] && !has_main_out[bus.id] && bus.id != master_id) {
-      checked_connect({bus.id, 0, master_id, 0, sonare::graph::Connection::Mix::Add});
-      checked_connect({bus.id, 1, master_id, 1, sonare::graph::Connection::Mix::Add});
+      checked_connect_audio(bus.id, 0, 1, master_id);
     }
   }
 
@@ -291,8 +296,7 @@ void build_and_compile(SonareMixer* mixer) {
       }
       const int src_l = 2 + 2 * static_cast<int>(s);
       const int src_r = 3 + 2 * static_cast<int>(s);
-      checked_connect({strip->id, src_l, dest, 0, sonare::graph::Connection::Mix::Add});
-      checked_connect({strip->id, src_r, dest, 1, sonare::graph::Connection::Mix::Add});
+      checked_connect_audio(strip->id, src_l, src_r, dest);
     }
   }
 
@@ -355,10 +359,39 @@ void build_and_compile(SonareMixer* mixer) {
   const int master_latency_q8 =
       graph.node_latency_samples_q8(master_id) + master_node->processor().latency_samples_q8();
 
+  // Tail propagation follows only audible main/send edges. Sidechain edges are
+  // graph dependencies but do not feed their source audio into the keyed
+  // processor's output, so including them would overstate the master tail.
+  // Serial nodes add their local tails; merged main/send branches take max.
+  std::unordered_map<std::string, int> accumulated_tail_by_id;
+  for (const std::string& node_id : graph.topo_order_ids()) {
+    int upstream_tail = 0;
+    const auto inputs_it = audio_inputs_by_id.find(node_id);
+    if (inputs_it != audio_inputs_by_id.end()) {
+      for (const std::string& source_id : inputs_it->second) {
+        const auto source_it = accumulated_tail_by_id.find(source_id);
+        if (source_it == accumulated_tail_by_id.end()) {
+          throw SonareException(ErrorCode::InvalidState,
+                                "mixer tail topology is not in dependency order");
+        }
+        upstream_tail = sonare::mixing::combine_tail_samples(
+            upstream_tail, source_it->second, sonare::mixing::TailTopology::kParallel);
+      }
+    }
+    const auto local_it = local_tail_by_id.find(node_id);
+    const int local_tail = local_it == local_tail_by_id.end() ? 0 : local_it->second;
+    accumulated_tail_by_id[node_id] = sonare::mixing::combine_tail_samples(
+        upstream_tail, local_tail, sonare::mixing::TailTopology::kSerial);
+  }
+  const auto master_tail_it = accumulated_tail_by_id.find(master_id);
+  if (master_tail_it == accumulated_tail_by_id.end()) {
+    throw SonareException(ErrorCode::InvalidState, "mixer master tail path missing after compile");
+  }
+
   mixer->graph = std::move(graph);
   mixer->master_id = std::move(master_id);
   mixer->latency_samples = std::max(0, master_latency_q8 >> 8);
-  mixer->tail_samples = tail_samples;
+  mixer->tail_samples = master_tail_it->second;
   mixer->compiled_dirty = false;
 }
 

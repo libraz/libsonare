@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "mastering/master.h"
@@ -80,6 +81,18 @@ TEST_CASE("ParamSmoother reaches target immediately with zero time", "[mastering
 
   REQUIRE_THAT(smoother.process(), WithinAbs(1.0f, 0.0001f));
   REQUIRE_THAT(smoother.current(), WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("ParamSmoother ignores non-finite updates and accepts later finite targets",
+          "[mastering][validation]") {
+  ParamSmoother smoother(0.25f, 0.0f, 48000.0);
+  smoother.set_target(std::numeric_limits<float>::quiet_NaN());
+  REQUIRE_THAT(smoother.process(), WithinAbs(0.25f, 0.0001f));
+  smoother.reset(std::numeric_limits<float>::infinity());
+  REQUIRE_THAT(smoother.current(), WithinAbs(0.25f, 0.0001f));
+
+  smoother.set_target(0.75f);
+  REQUIRE_THAT(smoother.process(), WithinAbs(0.75f, 0.0001f));
 }
 
 TEST_CASE("ParamSmoother approaches target monotonically", "[mastering]") {

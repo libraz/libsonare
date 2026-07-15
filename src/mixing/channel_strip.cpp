@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <utility>
 
+#include "mixing/tail_utils.h"
 #include "util/exception.h"
 
 namespace sonare::mixing {
@@ -49,14 +51,6 @@ int total_latency_q8(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inse
   int total = 0;
   for (const auto& insert : inserts) {
     total += insert->latency_samples_q8();
-  }
-  return total;
-}
-
-int total_tail_samples(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
-  int total = 0;
-  for (const auto& insert : inserts) {
-    total += std::max(0, insert->tail_samples());
   }
   return total;
 }
@@ -534,7 +528,8 @@ int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8()
 int ChannelStrip::latency_samples_q8() const noexcept { return post_fader_latency_samples_q8(); }
 
 int ChannelStrip::tail_samples() const noexcept {
-  return total_tail_samples(pre_inserts_) + total_tail_samples(post_inserts_);
+  return combine_tail_samples(processor_chain_tail_samples(pre_inserts_),
+                              processor_chain_tail_samples(post_inserts_), TailTopology::kSerial);
 }
 
 int ChannelStrip::pre_fader_latency_samples_q8() const noexcept {
@@ -564,6 +559,7 @@ void ChannelStrip::set_channel_delay_samples(int delay_samples) {
 
 bool ChannelStrip::schedule_width_automation(int64_t sample_pos, float width,
                                              AutomationCurveType curve) noexcept {
+  if (!std::isfinite(width)) return false;
   AutomationEvent event;
   event.sample_pos = sample_pos;
   event.value = width;
@@ -574,6 +570,7 @@ bool ChannelStrip::schedule_width_automation(int64_t sample_pos, float width,
 
 bool ChannelStrip::schedule_fader_automation(int64_t sample_pos, float fader_db,
                                              AutomationCurveType curve) noexcept {
+  if (!std::isfinite(fader_db)) return false;
   AutomationEvent event;
   event.sample_pos = sample_pos;
   event.value = fader_db;
@@ -584,6 +581,7 @@ bool ChannelStrip::schedule_fader_automation(int64_t sample_pos, float fader_db,
 
 bool ChannelStrip::schedule_pan_automation(int64_t sample_pos, float pan,
                                            AutomationCurveType curve) noexcept {
+  if (!std::isfinite(pan)) return false;
   AutomationEvent event;
   event.sample_pos = sample_pos;
   event.value = pan;
@@ -609,7 +607,7 @@ bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigne
                                               int64_t sample_pos, float value,
                                               AutomationCurveType curve) noexcept {
   constexpr unsigned int kMaxReasonableParamId = 65535u;
-  if (param_id > kMaxReasonableParamId) {
+  if (param_id > kMaxReasonableParamId || !std::isfinite(value)) {
     return false;
   }
   const size_t idx = insert_index;
@@ -841,7 +839,7 @@ void ChannelStrip::set_send_db(size_t index, float db) {
 
 bool ChannelStrip::schedule_send_automation(size_t index, int64_t sample_pos, float db,
                                             AutomationCurveType curve) noexcept {
-  if (index >= send_automation_.size()) {
+  if (index >= send_automation_.size() || !std::isfinite(db)) {
     return false;
   }
   if (!send_automation_[index]) {

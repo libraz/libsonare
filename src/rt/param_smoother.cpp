@@ -8,10 +8,10 @@
 namespace sonare::rt {
 
 ParamSmoother::ParamSmoother(float initial_value, float time_ms, double sample_rate)
-    : sample_rate_(sample_rate),
-      time_ms_(time_ms),
-      current_(initial_value),
-      target_(initial_value) {
+    : sample_rate_(std::isfinite(sample_rate) && sample_rate > 0.0 ? sample_rate : 48000.0),
+      time_ms_(std::isfinite(time_ms) && time_ms >= 0.0f ? time_ms : 0.0f),
+      current_(std::isfinite(initial_value) ? initial_value : 0.0f),
+      target_(std::isfinite(initial_value) ? initial_value : 0.0f) {
   update_coefficient();
 }
 
@@ -33,17 +33,22 @@ ParamSmoother& ParamSmoother::operator=(const ParamSmoother& other) noexcept {
 }
 
 void ParamSmoother::prepare(double sample_rate, float time_ms) {
+  if (!std::isfinite(sample_rate) || sample_rate <= 0.0 || !std::isfinite(time_ms)) return;
   sample_rate_ = sample_rate;
   time_ms_ = time_ms;
   update_coefficient();
 }
 
 void ParamSmoother::reset(float value) {
+  if (!std::isfinite(value)) return;
   current_ = value;
   target_.store(value, std::memory_order_release);
 }
 
-void ParamSmoother::set_target(float value) { target_.store(value, std::memory_order_release); }
+void ParamSmoother::set_target(float value) {
+  if (!std::isfinite(value)) return;
+  target_.store(value, std::memory_order_release);
+}
 
 float ParamSmoother::process() {
   const float target = target_.load(std::memory_order_acquire);

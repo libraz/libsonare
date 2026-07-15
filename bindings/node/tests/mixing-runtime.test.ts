@@ -13,6 +13,34 @@ function buildMixer(): Mixer {
   return Mixer.fromSceneJson(mixingScenePresetJson(DIRECT_PRESET), SAMPLE_RATE, BLOCK_SIZE);
 }
 
+function serialTailScene(): string {
+  const delay = (ms: number) => ({
+    slot: 'post',
+    processor: 'effects.delay.stereo',
+    params: JSON.stringify({
+      delayTimeLMs: ms,
+      delayTimeRMs: ms,
+      feedback: 0,
+      dryWet: 1,
+    }),
+  });
+  return JSON.stringify({
+    version: 1,
+    strips: [
+      {
+        id: 'source',
+        inserts: [delay(10)],
+        sends: [{ id: 'to-aux', destinationBusId: 'aux', sendDb: 0, timing: 'post' }],
+      },
+    ],
+    buses: [
+      { id: 'aux', role: 'aux', inserts: [delay(20)] },
+      { id: 'master', role: 'master', inserts: [delay(30)] },
+    ],
+    connections: [{ source: 'aux', destination: 'master' }],
+  });
+}
+
 function constantStrips(amplitudes: number[]): {
   left: Float32Array[];
   right: Float32Array[];
@@ -255,6 +283,14 @@ describe('Mixer argument validation', () => {
     expect(() => mixer.setSoloed('not-a-strip', true)).toThrow(/not found/i);
   });
 
+  it('rejects non-finite live values and accepts later finite values', () => {
+    expect(() => mixer.setFaderDb('host', Number.NaN)).toThrow();
+    expect(() => mixer.setPan('host', Number.POSITIVE_INFINITY)).toThrow();
+    expect(() => mixer.scheduleFaderAutomation('host', 0, Number.NaN, 'linear')).toThrow();
+    expect(() => mixer.setFaderDb('host', -3)).not.toThrow();
+    expect(() => mixer.setPan('host', 0.25)).not.toThrow();
+  });
+
   it('maps string unions to native ints end-to-end', () => {
     expect(() => mixer.setPanLaw('host', 'const3dB')).not.toThrow();
     expect(() => mixer.setPanLaw('host', 'const4.5dB')).not.toThrow();
@@ -297,6 +333,15 @@ describe('Mixer argument validation', () => {
     const tail = mixer.tailSamples();
     expect(typeof tail).toBe('number');
     expect(tail).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reports the longest serial send tail', () => {
+    const routed = Mixer.fromSceneJson(serialTailScene(), SAMPLE_RATE, BLOCK_SIZE);
+    try {
+      expect(routed.tailSamples()).toBeGreaterThan(1440);
+    } finally {
+      routed.destroy();
+    }
   });
 
   it('reports a numeric latency', () => {

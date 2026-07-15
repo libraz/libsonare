@@ -1,6 +1,9 @@
 /// @file routing_capi_test.cpp
 /// @brief Routed mixer C API tests.
 
+#include <limits>
+
+#include "mastering/api/insert_factory.h"
 #include "routing_test_helpers.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
@@ -30,6 +33,18 @@ TEST_CASE("C-API strip runtime setters validate NULL and bad enums", "[mixing][c
   REQUIRE(mixer != nullptr);
   SonareStrip* strip = sonare_mixer_add_strip(mixer, "s");
   REQUIRE(strip != nullptr);
+
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  REQUIRE(sonare_strip_set_fader_db(strip, nan) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_set_pan(strip, inf, SONARE_PAN_MODE_BALANCE) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_set_width(strip, nan) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_schedule_fader_automation(strip, 0, inf, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_schedule_pan_automation(strip, 0, nan, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_set_fader_db(strip, -3.0f) == SONARE_OK);
+  REQUIRE(sonare_strip_set_pan(strip, 0.25f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
 
   // Valid calls on a real strip succeed.
   REQUIRE(sonare_strip_set_soloed(strip, 1) == SONARE_OK);
@@ -94,6 +109,86 @@ TEST_CASE("C-API mixer reports latency and drains delayed output", "[mixing][cap
   REQUIRE(block_energy(out_l, out_r) > 0.0);
   REQUIRE(sonare_mixer_drain_tail_stereo(mixer, nullptr, out_r.data(), kBlock) ==
           SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API mixer tail follows the longest audible serial route", "[mixing][capi][tail]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlock = 64;
+  const auto delay_tail = [=](const char* params) {
+    auto processor = sonare::mastering::api::make_insert("effects.delay.stereo", params);
+    REQUIRE(processor != nullptr);
+    processor->prepare(kSampleRate, kBlock);
+    return processor->tail_samples();
+  };
+  const char* strip_params = R"({"delayTimeLMs":10,"delayTimeRMs":10,"feedback":0,"dryWet":1})";
+  const char* aux_params = R"({"delayTimeLMs":20,"delayTimeRMs":20,"feedback":0,"dryWet":1})";
+  const char* master_params = R"({"delayTimeLMs":30,"delayTimeRMs":30,"feedback":0,"dryWet":1})";
+  const char* orphan_params = R"({"delayTimeLMs":100,"delayTimeRMs":100,"feedback":0,"dryWet":1})";
+  const int strip_tail = delay_tail(strip_params);
+  const int aux_tail = delay_tail(aux_params);
+  const int master_tail = delay_tail(master_params);
+  const int expected_tail = strip_tail + aux_tail + master_tail;
+  REQUIRE(expected_tail > std::max({strip_tail, aux_tail, master_tail}));
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip source;
+  source.id = "source";
+  source.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "effects.delay.stereo", strip_params});
+  source.sends.push_back({"to-aux", "aux", 0.0f, sonare::mixing::api::SendTiming::PostFader});
+  scene.strips.push_back(std::move(source));
+
+  sonare::mixing::api::Bus aux{"aux", "aux"};
+  aux.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "effects.delay.stereo", aux_params});
+  scene.buses.push_back(std::move(aux));
+  sonare::mixing::api::Bus master{"master", "master"};
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "effects.delay.stereo", master_params});
+  scene.buses.push_back(std::move(master));
+  sonare::mixing::api::Bus orphan{"orphan", "aux"};
+  orphan.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "effects.delay.stereo", orphan_params});
+  scene.buses.push_back(std::move(orphan));
+  scene.connections.push_back({"aux", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSampleRate, kBlock);
+  REQUIRE(mixer != nullptr);
+  int reported_tail = 0;
+  REQUIRE(sonare_mixer_tail_samples(mixer, &reported_tail) == SONARE_OK);
+  REQUIRE(reported_tail == expected_tail);
+
+  std::vector<float> input_l(kBlock, 0.0f);
+  std::vector<float> input_r(kBlock, 0.0f);
+  input_l[0] = 1.0f;
+  input_r[0] = 1.0f;
+  const float* inputs_l[] = {input_l.data()};
+  const float* inputs_r[] = {input_r.data()};
+  std::vector<float> block_l(kBlock, 0.0f);
+  std::vector<float> block_r(kBlock, 0.0f);
+  std::vector<float> rendered_l(static_cast<size_t>(expected_tail + 2 * kBlock), 0.0f);
+  std::vector<float> rendered_r(rendered_l.size(), 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, block_l.data(), block_r.data(),
+                                      kBlock) == SONARE_OK);
+  std::copy(block_l.begin(), block_l.end(), rendered_l.begin());
+  std::copy(block_r.begin(), block_r.end(), rendered_r.begin());
+  for (size_t cursor = kBlock; cursor < rendered_l.size(); cursor += kBlock) {
+    REQUIRE(sonare_mixer_drain_tail_stereo(mixer, block_l.data(), block_r.data(), kBlock) ==
+            SONARE_OK);
+    const size_t count = std::min<size_t>(kBlock, rendered_l.size() - cursor);
+    std::copy_n(block_l.begin(), count, rendered_l.begin() + static_cast<ptrdiff_t>(cursor));
+    std::copy_n(block_r.begin(), count, rendered_r.begin() + static_cast<ptrdiff_t>(cursor));
+  }
+  float late_peak = 0.0f;
+  const size_t late_begin = static_cast<size_t>(std::max(0, expected_tail - 8));
+  const size_t late_end = std::min(rendered_l.size(), static_cast<size_t>(expected_tail + 9));
+  for (size_t i = late_begin; i < late_end; ++i) {
+    late_peak = std::max({late_peak, std::abs(rendered_l[i]), std::abs(rendered_r[i])});
+  }
+  REQUIRE(late_peak > 0.1f);
 
   sonare_mixer_destroy(mixer);
 }

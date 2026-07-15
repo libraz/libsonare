@@ -26,12 +26,49 @@ function silentBlocks(count: number): Float32Array[] {
   return blocks;
 }
 
+function serialTailScene(): string {
+  const delay = (ms: number) => ({
+    slot: 'post',
+    processor: 'effects.delay.stereo',
+    params: JSON.stringify({
+      delayTimeLMs: ms,
+      delayTimeRMs: ms,
+      feedback: 0,
+      dryWet: 1,
+    }),
+  });
+  return JSON.stringify({
+    version: 1,
+    strips: [
+      {
+        id: 'source',
+        inserts: [delay(10)],
+        sends: [{ id: 'to-aux', destinationBusId: 'aux', sendDb: 0, timing: 'post' }],
+      },
+    ],
+    buses: [
+      { id: 'aux', role: 'aux', inserts: [delay(20)] },
+      { id: 'master', role: 'master', inserts: [delay(30)] },
+    ],
+    connections: [{ source: 'aux', destination: 'master' }],
+  });
+}
+
 describe('Mixer runtime controls (WASM)', () => {
   beforeAll(async () => {
     await init();
   });
 
   describe('type contracts of readers and setters', () => {
+    it('reports the longest serial send tail', () => {
+      const mixer = Mixer.fromSceneJson(serialTailScene(), SR, BLOCK);
+      try {
+        expect(mixer.tailSamples()).toBeGreaterThan(1440);
+      } finally {
+        mixer.delete();
+      }
+    });
+
     it('exposes setters, meter readers, and goniometer with the documented shapes', () => {
       const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
       try {
@@ -67,6 +104,12 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(() =>
           mixer.scheduleSendAutomation(vocal, sendIndex, 0, -18, 'exponential'),
         ).not.toThrow();
+
+        expect(() => mixer.setFaderDb(vocal, Number.NaN)).toThrow();
+        expect(() => mixer.setPan(vocal, Number.POSITIVE_INFINITY)).toThrow();
+        expect(() => mixer.scheduleFaderAutomation(vocal, 0, Number.NaN, 'linear')).toThrow();
+        expect(() => mixer.setFaderDb(vocal, -3)).not.toThrow();
+        expect(() => mixer.setPan(vocal, 0.25)).not.toThrow();
 
         mixer.compile();
 

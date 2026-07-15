@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -49,6 +50,8 @@ struct SonareMixer {
 };
 
 namespace sonare_c_mixing_detail {
+
+inline bool finite(float value) noexcept { return std::isfinite(value); }
 
 static_assert(static_cast<int>(sonare::mixing::AutomationCurveType::Linear) == 0,
               "sonare::mixing::AutomationCurveType::Linear must be ordinal 0 to keep "

@@ -21,6 +21,42 @@ def _first_preset_json() -> str:
     return mixing_scene_preset_json(names[0])
 
 
+def _serial_tail_scene() -> str:
+    def delay(ms: int) -> dict[str, object]:
+        return {
+            "slot": "post",
+            "processor": "effects.delay.stereo",
+            "params": json.dumps(
+                {"delayTimeLMs": ms, "delayTimeRMs": ms, "feedback": 0, "dryWet": 1}
+            ),
+        }
+
+    return json.dumps(
+        {
+            "version": 1,
+            "strips": [
+                {
+                    "id": "source",
+                    "inserts": [delay(10)],
+                    "sends": [
+                        {
+                            "id": "to-aux",
+                            "destinationBusId": "aux",
+                            "sendDb": 0,
+                            "timing": "post",
+                        }
+                    ],
+                }
+            ],
+            "buses": [
+                {"id": "aux", "role": "aux", "inserts": [delay(20)]},
+                {"id": "master", "role": "master", "inserts": [delay(30)]},
+            ],
+            "connections": [{"source": "aux", "destination": "master"}],
+        }
+    )
+
+
 @pytest.fixture()
 def mixer():
     """Build a Mixer from the first preset scene and close it afterwards."""
@@ -259,6 +295,16 @@ def test_tail_samples_and_drain_tail_stereo(mixer) -> None:
     assert len(result.left) == 128
     assert len(result.right) == 128
     assert result.sample_rate == 48000
+
+
+def test_tail_samples_reports_longest_serial_send_route() -> None:
+    from libsonare import Mixer
+
+    mixer = Mixer.from_scene_json(_serial_tail_scene(), sample_rate=48000, block_size=128)
+    try:
+        assert mixer.tail_samples() > 1440
+    finally:
+        mixer.close()
 
 
 def _scene_with_insert_params(processor: str, params: dict[str, float]) -> str:

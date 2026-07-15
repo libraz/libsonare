@@ -6,7 +6,8 @@
 namespace sonare::mixing {
 
 StereoWidthProcessor::StereoWidthProcessor(float width, float smoothing_ms)
-    : smoothing_ms_(smoothing_ms), width_target_(std::clamp(width, 0.0f, 2.0f)) {
+    : smoothing_ms_(std::isfinite(smoothing_ms) && smoothing_ms >= 0.0f ? smoothing_ms : 5.0f),
+      width_target_(std::isfinite(width) ? std::clamp(width, 0.0f, 2.0f) : 1.0f) {
   // Seed the smoother at the initial width so a processor used without an explicit prepare()
   // (e.g. the direct process() path in tests) reflects the requested width from the first
   // sample, instead of ramping from the smoother's default starting value of 1.0.
@@ -43,6 +44,7 @@ void StereoWidthProcessor::reset() {
 }
 
 void StereoWidthProcessor::set_width(float width) noexcept {
+  if (!std::isfinite(width)) return;
   width_target_.store(std::clamp(width, 0.0f, 2.0f), std::memory_order_relaxed);
 }
 

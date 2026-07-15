@@ -2,6 +2,7 @@
 /// @brief Mixing channel strip tests.
 
 #include <algorithm>
+#include <limits>
 
 #include "mastering/api/insert_factory.h"
 #include "mixing_test_helpers.h"
@@ -423,6 +424,29 @@ TEST_CASE("ChannelStrip reset clears pending automation lanes", "[mixing]") {
     REQUIRE_THAT(left[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0001f));
     REQUIRE_THAT(right[static_cast<size_t>(i)], WithinAbs(1.0f, 0.0001f));
   }
+}
+
+TEST_CASE("ChannelStrip rejects non-finite live values without poisoning later updates",
+          "[mixing][validation]") {
+  sonare::mixing::ChannelStrip strip;
+  strip.prepare(48000.0, 8);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  strip.set_fader_db(-6.0f);
+  strip.set_fader_db(nan);
+  REQUIRE(strip.fader_db() == -6.0f);
+  strip.set_pan(0.25f);
+  strip.set_pan(inf);
+  REQUIRE(strip.pan() == 0.25f);
+  strip.set_width(0.75f);
+  strip.set_width(nan);
+  REQUIRE(strip.width() == 0.75f);
+
+  REQUIRE_FALSE(strip.schedule_fader_automation(0, nan));
+  REQUIRE_FALSE(strip.schedule_pan_automation(0, inf));
+  REQUIRE_FALSE(strip.schedule_width_automation(0, nan));
+  REQUIRE(strip.schedule_fader_automation(0, -3.0f));
 }
 
 TEST_CASE("ChannelStrip applies pan and width automation in sample order", "[mixing]") {

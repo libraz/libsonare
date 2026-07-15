@@ -185,7 +185,7 @@ class MixerWasm {
 
   void processPreparedStereo(size_t num_samples);
 
-  // Reports the maximum processor tail length in the compiled mixer graph
+  // Reports the longest audible serial processor-tail path to the master
   // (samples). Lazily compiles if the topology is dirty.
   int tailSamples();
 

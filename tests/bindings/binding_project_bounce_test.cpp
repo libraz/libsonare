@@ -520,6 +520,76 @@ TEST_CASE("channel-strip bounce auto-renders mixer insert tails", "[project]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("channel-strip bounce preserves the longest serial send tail", "[project][tail]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  const char* scene_json = R"({
+    "version":1,
+    "strips":[{"id":"source","inserts":[
+      {"slot":"post","processor":"effects.delay.stereo",
+       "params":"{\"delayTimeLMs\":10,\"delayTimeRMs\":10,\"feedback\":0,\"dryWet\":1}"}],
+      "sends":[{"id":"to-aux","destinationBusId":"aux","sendDb":0,"timing":"post"}]}],
+    "buses":[
+      {"id":"aux","role":"aux","inserts":[
+        {"slot":"post","processor":"effects.delay.stereo",
+         "params":"{\"delayTimeLMs\":20,\"delayTimeRMs\":20,\"feedback\":0,\"dryWet\":1}"}]},
+      {"id":"master","role":"master","inserts":[
+        {"slot":"post","processor":"effects.delay.stereo",
+         "params":"{\"delayTimeLMs\":30,\"delayTimeRMs\":30,\"feedback\":0,\"dryWet\":1}"}]}],
+    "connections":[{"source":"aux","destination":"master"}]
+  })";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene_json) == SONARE_OK);
+
+  // The accessor and auto-length bounce consume the same compiled master-path
+  // value. It must exceed every individual insert tail on this serial route.
+  SonareMixer* probe = sonare_mixer_from_scene_json(scene_json, 48000, 128);
+  REQUIRE(probe != nullptr);
+  int expected_tail = 0;
+  REQUIRE(sonare_mixer_tail_samples(probe, &expected_tail) == SONARE_OK);
+  REQUIRE(expected_tail > 1440);  // master delay alone is about 30 ms / 1440 samples.
+  sonare_mixer_destroy(probe);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "serial-tail-impulse";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track, "source", nullptr) == SONARE_OK);
+
+  constexpr int kClipFrames = 240;
+  std::vector<float> impulse(static_cast<size_t>(kClipFrames) * 2, 0.0f);
+  impulse[0] = 1.0f;
+  impulse[1] = 1.0f;
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track;
+  clip_desc.start_ppq = 0.0;
+  clip_desc.length_ppq = 0.01;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = impulse.data();
+  clip_desc.audio_frames = kClipFrames;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == static_cast<size_t>(kClipFrames + expected_tail) * 2u);
+  const size_t late_route_start = static_cast<size_t>(std::max(0, expected_tail - 128)) * 2u;
+  REQUIRE(buffer_peak(out, out_len, late_route_start) > 0.1f);
+
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("channel-strip bounce preserves tail impulse through master latency insert",
           "[project]") {
   SonareProject* project = nullptr;

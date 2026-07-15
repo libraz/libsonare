@@ -6,8 +6,10 @@
 namespace sonare::mixing {
 
 PannerProcessor::PannerProcessor(PannerConfig config)
-    : smoothing_ms_(config.smoothing_ms),
-      pan_(config.pan),
+    : smoothing_ms_(std::isfinite(config.smoothing_ms) && config.smoothing_ms >= 0.0f
+                        ? config.smoothing_ms
+                        : 5.0f),
+      pan_(std::isfinite(config.pan) ? std::clamp(config.pan, -1.0f, 1.0f) : 0.0f),
       pan_law_(config.pan_law),
       pan_mode_(config.mode) {}
 
@@ -129,10 +131,12 @@ void PannerProcessor::reset() {
 }
 
 void PannerProcessor::set_pan(float pan) noexcept {
+  if (!std::isfinite(pan)) return;
   pan_.store(std::clamp(pan, -1.0f, 1.0f), std::memory_order_relaxed);
 }
 
 void PannerProcessor::set_dual_pan(float left_pan, float right_pan) noexcept {
+  if (!std::isfinite(left_pan) || !std::isfinite(right_pan)) return;
   dual_pan_left_.store(std::clamp(left_pan, -1.0f, 1.0f), std::memory_order_relaxed);
   dual_pan_right_.store(std::clamp(right_pan, -1.0f, 1.0f), std::memory_order_relaxed);
 }
