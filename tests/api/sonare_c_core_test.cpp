@@ -55,6 +55,20 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
 
 }  // namespace
 
+TEST_CASE("C VQT rejects non-finite gamma without touching core casts", "[c_api][vqt]") {
+  std::vector<float> samples(2048, 0.0f);
+  SonareCqtResult result{};
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, nan, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, inf, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(result.magnitude == nullptr);
+  REQUIRE(result.frequencies == nullptr);
+}
+
 TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
   SECTION("creates audio from valid buffer") {
     auto samples = generate_sine(440.0f, 22050, 1.0f);

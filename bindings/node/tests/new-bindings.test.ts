@@ -139,6 +139,14 @@ describe('newly exposed Node functions', () => {
     expect(allFinite(pitchShift(x, SR, 2))).toBe(true);
   });
 
+  it('timeStretch rejects non-finite and oversized projected rates, then recovers', () => {
+    const x = sine(0.1, 220);
+    expect(() => timeStretch(x, SR, Number.NaN)).toThrow();
+    expect(() => timeStretch(x, SR, Number.POSITIVE_INFINITY)).toThrow();
+    expect(() => timeStretch(x, SR, 1.1754943508222875e-38)).toThrow();
+    expect(allFinite(timeStretch(x, SR, 1))).toBe(true);
+  });
+
   it('realtimeVoiceChangerPresetConfig exposes the ISP true-peak limiter fields', () => {
     const cfg = realtimeVoiceChangerPresetConfig('neutral-monitor') as Record<string, unknown>;
     expect(typeof cfg.limiterEnableIspLimiter).toBe('boolean');

@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "effects/phase_vocoder.h"
@@ -300,5 +301,20 @@ TEST_CASE("phase_vocoder validation", "[time_stretch]") {
 
     REQUIRE_THROWS(phase_vocoder(spec, 0.0f));
     REQUIRE_THROWS(phase_vocoder(spec, -1.0f));
+    REQUIRE_THROWS(phase_vocoder(spec, std::numeric_limits<float>::quiet_NaN()));
+    REQUIRE_THROWS(phase_vocoder(spec, std::numeric_limits<float>::infinity()));
+    REQUIRE_THROWS(phase_vocoder(spec, std::numeric_limits<float>::min()));
   }
+}
+
+TEST_CASE("time_stretch rejects rates whose projected output exceeds the public limit",
+          "[time_stretch][overflow]") {
+  Audio audio = create_test_audio(440.0f, 22050, 0.05f);
+  REQUIRE_THROWS(time_stretch(audio, std::numeric_limits<float>::quiet_NaN()));
+  REQUIRE_THROWS(time_stretch(audio, std::numeric_limits<float>::infinity()));
+  REQUIRE_THROWS(time_stretch(audio, std::numeric_limits<float>::min()));
+
+  const Audio recovered = time_stretch(audio, 1.0f);
+  REQUIRE(recovered.size() == audio.size());
+  for (const float value : recovered) REQUIRE(std::isfinite(value));
 }

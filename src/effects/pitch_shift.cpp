@@ -7,10 +7,12 @@
 #include "effects/time_stretch.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
 Audio pitch_shift(const Audio& audio, float semitones, const PitchShiftConfig& config) {
+  SONARE_CHECK(numeric::finite(semitones), ErrorCode::InvalidParameter);
   /// Convert semitones to frequency ratio
   float ratio = std::pow(2.0f, semitones / constants::kSemitonesPerOctave);
   return pitch_shift_ratio(audio, ratio, config);
@@ -18,7 +20,16 @@ Audio pitch_shift(const Audio& audio, float semitones, const PitchShiftConfig& c
 
 Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(ratio > 0.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(ratio), ErrorCode::InvalidParameter);
+
+  const long double effective_sr_wide =
+      std::round(static_cast<long double>(audio.sample_rate()) * static_cast<long double>(ratio));
+  constexpr int kMinEffectiveSr = 1000;
+  constexpr int kMaxEffectiveSr = 192000;
+  SONARE_CHECK(std::isfinite(effective_sr_wide) && effective_sr_wide >= kMinEffectiveSr &&
+                   effective_sr_wide <= kMaxEffectiveSr,
+               ErrorCode::InvalidParameter);
+  const int effective_sr = static_cast<int>(effective_sr_wide);
 
   if (config.backend == StretchBackend::NativeSpectral) {
     return native_spectral_pitch_shift_ratio(audio, ratio, config.n_fft, config.hop_length);
@@ -42,21 +53,12 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   /// Step 2: Resample the stretched signal (treated as if sampled at sr*ratio)
   /// back to the original sample rate. Length: (N*ratio) * sr/(sr*ratio) = N.
   int original_sr = audio.sample_rate();
-  int effective_sr = static_cast<int>(std::round(static_cast<float>(original_sr) * ratio));
-
   /// The resample step treats the stretched signal as if sampled at sr*ratio.
   /// If that effective rate falls outside the supported resampler range, the
   /// old code silently clamped it, which changed the effective ratio and
   /// returned wrong-pitch audio. Reject such ratios explicitly instead so the
   /// caller learns the request is unsupported rather than getting bad output.
   /// (In-range ratios — roughly +/-2 octaves at 44.1/48 kHz — are unaffected.)
-  constexpr int kMinEffectiveSr = 1000;
-  constexpr int kMaxEffectiveSr = 192000;
-  if (effective_sr < kMinEffectiveSr || effective_sr > kMaxEffectiveSr) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "pitch_shift: ratio out of supported range for this sample rate");
-  }
-
   /// Single resample from effective rate to original rate
   std::vector<float> result_samples =
       resample(stretched.data(), stretched.size(), effective_sr, original_sr);

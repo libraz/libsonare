@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cmath>
 #include <map>
 #include <sstream>
@@ -75,6 +76,10 @@ std::string Chord::to_string() const {
 
 ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
+                   std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
+                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f,
+               ErrorCode::InvalidParameter);
 
   if (config.chroma_method == ChromaMethod::NNLS) {
     NnlsChromaConfig nnls_config;
@@ -116,6 +121,10 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
 
 ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const ChordConfig& config)
     : chroma_(chroma), config_(config) {
+  SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
+                   std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
+                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f,
+               ErrorCode::InvalidParameter);
   // Generate templates
   if (config.use_triads_only) {
     templates_ = generate_triad_templates();
@@ -133,6 +142,10 @@ ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& bea
 ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& beat_times,
                              const Chroma& bass_chroma, const ChordConfig& config)
     : chroma_(chroma), bass_chroma_(bass_chroma), config_(config) {
+  SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
+                   std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
+                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f,
+               ErrorCode::InvalidParameter);
   // Generate templates
   if (config.use_triads_only) {
     templates_ = generate_triad_templates();
@@ -317,8 +330,12 @@ void ChordAnalyzer::analyze_chords() {
   int n_chroma = std::min(chroma_.n_chroma(), 12);
 
   // Smoothing: apply running average to chroma
-  int smooth_frames =
-      static_cast<int>(config_.smoothing_window * chroma_.sample_rate() / chroma_.hop_length());
+  const double smooth_frames_wide = static_cast<double>(config_.smoothing_window) *
+                                    static_cast<double>(chroma_.sample_rate()) /
+                                    static_cast<double>(chroma_.hop_length());
+  SONARE_CHECK(std::isfinite(smooth_frames_wide) && smooth_frames_wide <= INT_MAX,
+               ErrorCode::InvalidParameter);
+  int smooth_frames = static_cast<int>(smooth_frames_wide);
   smooth_frames = std::max(1, smooth_frames);
 
   // Detect chord for each frame

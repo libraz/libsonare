@@ -1,6 +1,8 @@
 /// @file sonare_c_music_test.cpp
 /// @brief Music and acoustic C API tests.
 
+#include <limits>
+
 #include "sonare_c_test_helpers.h"
 
 TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
@@ -203,6 +205,12 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
                                  0, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048,
                                  512, 0, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, nan, 0.5f, 0, 2048,
+                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, inf, 0.5f, 0, 2048,
+                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("extended options enable HMM and inversion detection without changing legacy ABI") {

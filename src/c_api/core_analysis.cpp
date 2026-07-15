@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "c_api/core_internal.h"
 
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
@@ -250,7 +252,8 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
                                  SonareChordAnalysisResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  if (min_duration < 0.0f || smoothing_window <= 0.0f || threshold < 0.0f || n_fft <= 0 ||
+  if (!std::isfinite(min_duration) || min_duration < 0.0f || !std::isfinite(smoothing_window) ||
+      smoothing_window <= 0.0f || !std::isfinite(threshold) || threshold < 0.0f || n_fft <= 0 ||
       hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -279,9 +282,10 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
                                     SonareChordAnalysisResult* out) {
   SONARE_C_API_ENTRY;
   if (!out || !options) return SONARE_ERROR_INVALID_PARAMETER;
-  if (options->min_duration < 0.0f || options->smoothing_window <= 0.0f ||
-      options->threshold < 0.0f || options->n_fft <= 0 || options->hop_length <= 0 ||
-      options->hmm_beam_width < 0) {
+  if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
+      !std::isfinite(options->smoothing_window) || options->smoothing_window <= 0.0f ||
+      !std::isfinite(options->threshold) || options->threshold < 0.0f || options->n_fft <= 0 ||
+      options->hop_length <= 0 || options->hmm_beam_width < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Reject out-of-range enum-like fields instead of silently mapping them to a
@@ -332,9 +336,10 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
                                              SonareStringArray* out) {
   SONARE_C_API_ENTRY;
   if (!out || !options) return SONARE_ERROR_INVALID_PARAMETER;
-  if (options->min_duration < 0.0f || options->smoothing_window <= 0.0f ||
-      options->threshold < 0.0f || options->n_fft <= 0 || options->hop_length <= 0 ||
-      options->hmm_beam_width < 0) {
+  if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
+      !std::isfinite(options->smoothing_window) || options->smoothing_window <= 0.0f ||
+      !std::isfinite(options->threshold) || options->threshold < 0.0f || options->n_fft <= 0 ||
+      options->hop_length <= 0 || options->hmm_beam_width < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (options->chroma_method != 0 && options->chroma_method != 1) {

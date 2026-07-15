@@ -44,6 +44,29 @@ TEST_CASE("vqt_frequencies basic", "[vqt]") {
   REQUIRE_THAT(freqs[23], WithinRel(fmin * std::pow(2.0f, 23.0f / 12.0f), 0.01f));
 }
 
+TEST_CASE("vqt rejects non-finite public configuration before kernel construction",
+          "[vqt][validation]") {
+  Audio audio = generate_sine(440.0f, 0.05f);
+  VqtConfig config;
+  config.n_bins = 12;
+
+  config.gamma = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_THROWS(vqt(audio, config));
+  config.gamma = std::numeric_limits<float>::infinity();
+  REQUIRE_THROWS(vqt(audio, config));
+  config.gamma = 0.0f;
+  config.fmin = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_THROWS(vqt(audio, config));
+  config.fmin = 32.7f;
+  config.filter_scale = std::numeric_limits<float>::infinity();
+  REQUIRE_THROWS(vqt(audio, config));
+
+  config.filter_scale = 1.0f;
+  const VqtResult recovered = vqt(audio, config);
+  REQUIRE(recovered.n_bins() == config.n_bins);
+  for (const float value : recovered.magnitude()) REQUIRE(std::isfinite(value));
+}
+
 TEST_CASE("vqt_bandwidths with gamma=0", "[vqt]") {
   std::vector<float> freqs = {100.0f, 200.0f, 400.0f};
   int bins_per_octave = 12;

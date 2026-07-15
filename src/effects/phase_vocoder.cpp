@@ -1,6 +1,7 @@
 #include "effects/phase_vocoder.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <complex>
 #include <utility>
@@ -10,6 +11,7 @@
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -39,8 +41,24 @@ double wrap_phase(double phase) {
   return std::remainder(phase, kTwoPiD);
 }
 
-size_t ceil_divide_samples(size_t samples, float rate) noexcept {
-  return static_cast<size_t>(std::ceil(static_cast<double>(samples) / static_cast<double>(rate)));
+size_t checked_output_count(size_t input_count, float rate) {
+  size_t output_count = 0;
+  constexpr size_t kMaxOutputCount =
+      std::min<size_t>(kMaxAudioBufferSize, static_cast<size_t>(INT_MAX));
+  SONARE_CHECK(numeric::checked_projected_count(input_count, rate, kMaxOutputCount, &output_count),
+               ErrorCode::InvalidParameter);
+  return output_count;
+}
+
+int checked_output_frames(int n_bins, int input_frames, float rate) {
+  SONARE_CHECK(n_bins > 0 && input_frames > 0, ErrorCode::InvalidParameter);
+  const size_t output_frames = checked_output_count(static_cast<size_t>(input_frames), rate);
+  size_t output_elements = 0;
+  SONARE_CHECK(numeric::checked_size_product(static_cast<size_t>(n_bins), output_frames,
+                                             kMaxAudioBufferSize, &output_elements),
+               ErrorCode::InvalidParameter);
+  (void)output_elements;
+  return std::max(1, static_cast<int>(output_frames));
 }
 
 }  // namespace
@@ -130,7 +148,7 @@ void StreamingPhaseVocoder::push(const Audio& audio) {
 int StreamingPhaseVocoder::latency_samples() const noexcept { return config_.n_fft / 2; }
 
 void StreamingPhaseVocoder::bind_rate(float rate) {
-  SONARE_CHECK(rate > 0.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
   if (active_rate_ == 0.0f) {
     active_rate_ = rate;
     return;
@@ -207,8 +225,7 @@ void StreamingPhaseVocoder::synthesize_available_frames(bool final) {
   int target_output_frames = final ? 0 : next_output_frame_;
   if (final) {
     target_output_frames =
-        std::max(1, static_cast<int>(std::ceil(static_cast<double>(available_input_frames) /
-                                               static_cast<double>(active_rate_))));
+        checked_output_frames(config_.n_fft / 2 + 1, available_input_frames, active_rate_);
   } else {
     while (true) {
       const int t_in = static_cast<int>(static_cast<float>(target_output_frames) * active_rate_);
@@ -410,7 +427,7 @@ Audio StreamingPhaseVocoder::drain_available(bool final) {
   size_t stable_user_samples = 0;
   if (final) {
     stable_user_samples =
-        std::max<size_t>(1, ceil_divide_samples(input_base_sample_ + input_.size(), active_rate_));
+        std::max<size_t>(1, checked_output_count(input_base_sample_ + input_.size(), active_rate_));
   } else {
     const size_t stable_full_samples =
         static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);
@@ -435,7 +452,7 @@ size_t StreamingPhaseVocoder::drain_into(bool final, float* out, size_t out_capa
   size_t stable_user_samples = 0;
   if (final) {
     stable_user_samples =
-        std::max<size_t>(1, ceil_divide_samples(input_base_sample_ + input_.size(), active_rate_));
+        std::max<size_t>(1, checked_output_count(input_base_sample_ + input_.size(), active_rate_));
   } else {
     const size_t stable_full_samples =
         static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);
@@ -509,7 +526,7 @@ Audio StreamingPhaseVocoder::finish(float rate) {
 Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocoderConfig& config) {
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
-  SONARE_CHECK(rate > 0.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
 
   int n_bins = spec.n_bins();
   int n_frames_in = spec.n_frames();
@@ -518,14 +535,13 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
   int sample_rate = spec.sample_rate();
 
   /// Calculate output number of frames
-  int n_frames_out = static_cast<int>(std::ceil(static_cast<float>(n_frames_in) / rate));
-  if (n_frames_out < 1) n_frames_out = 1;
+  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, rate);
 
   /// Get input complex spectrum
   const std::complex<float>* input = spec.complex_data();
 
   /// Output complex spectrum
-  std::vector<std::complex<float>> output(n_bins * n_frames_out);
+  std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames_out);
 
   /// Phase accumulator (double precision to avoid drift over long signals).
   std::vector<double> phase_acc(n_bins, 0.0);
@@ -595,7 +611,7 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
                                       const PhaseVocoderConfig& config) {
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
-  SONARE_CHECK(rate > 0.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
 
   int n_bins = spec.n_bins();
   int n_frames_in = spec.n_frames();
@@ -603,11 +619,10 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
   int hop_length = config.hop_length > 0 ? config.hop_length : spec.hop_length();
   int sample_rate = spec.sample_rate();
 
-  int n_frames_out = static_cast<int>(std::ceil(static_cast<float>(n_frames_in) / rate));
-  if (n_frames_out < 1) n_frames_out = 1;
+  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, rate);
 
   const std::complex<float>* input = spec.complex_data();
-  std::vector<std::complex<float>> output(n_bins * n_frames_out);
+  std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames_out);
 
   /// Synthesis phase accumulator (per bin, double precision to avoid drift).
   std::vector<double> phase_acc(n_bins, 0.0);

@@ -2,6 +2,7 @@
 
 #include <Eigen/Dense>
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <memory>
 
@@ -10,6 +11,7 @@
 #include "util/exception.h"
 #include "util/lru_cache.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -134,6 +136,8 @@ std::vector<float> vqt_frequencies(float fmin, int n_bins, int bins_per_octave) 
 
 std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bins_per_octave,
                                   float gamma) {
+  SONARE_CHECK(bins_per_octave > 0 && numeric::finite_non_negative(gamma),
+               ErrorCode::InvalidParameter);
   std::vector<float> bandwidths(frequencies.size());
 
   // alpha = 2^(1/bins_per_octave) - 1
@@ -148,6 +152,11 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
 }
 
 std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
+  SONARE_CHECK(sr > 0 && config.n_bins > 0 && config.bins_per_octave > 0 &&
+                   numeric::finite_positive(config.fmin) &&
+                   numeric::finite_non_negative(config.gamma) &&
+                   numeric::finite_positive(config.filter_scale),
+               ErrorCode::InvalidParameter);
   auto kernel = std::unique_ptr<VqtKernel>(new VqtKernel());
 
   // Compute center frequencies
@@ -168,7 +177,10 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     // uses the fractional `wavelet_lengths`); the integer length is only the
     // sample count for windowing / FFT sizing.
     float bandwidth = kernel->bandwidths_[k];
-    float raw_length = config.filter_scale * sr / bandwidth;
+    const float raw_length = config.filter_scale * static_cast<float>(sr) / bandwidth;
+    SONARE_CHECK(numeric::finite_positive(bandwidth) && numeric::finite_positive(raw_length) &&
+                     raw_length <= static_cast<float>(INT_MAX),
+                 ErrorCode::InvalidParameter);
     int length = static_cast<int>(std::ceil(raw_length));
     kernel->raw_lengths_[k] = raw_length;
     kernel->lengths_[k] = length;
@@ -258,7 +270,9 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.fmin > 0.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(config.fmin), ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_non_negative(config.gamma), ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(config.filter_scale), ErrorCode::InvalidParameter);
 
   // If gamma is 0, use CQT directly
   if (config.gamma == 0.0f) {

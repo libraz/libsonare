@@ -545,6 +545,14 @@ describe('Feature API precision (reference compatibility)', () => {
       expect(stretched.length).toBeLessThan(tone.length * 2.5);
     });
 
+    it('timeStretch rejects non-finite and oversized projected rates, then recovers', () => {
+      const tone = generateSine(440, SR, 0.1);
+      expect(() => timeStretch(tone, SR, Number.NaN)).toThrow();
+      expect(() => timeStretch(tone, SR, Number.POSITIVE_INFINITY)).toThrow();
+      expect(() => timeStretch(tone, SR, 1.1754943508222875e-38)).toThrow();
+      expect(Array.from(timeStretch(tone, SR, 1)).every(Number.isFinite)).toBe(true);
+    });
+
     it('pitchShift should return Float32Array of similar length', () => {
       const tone = generateSine(440, SR, DURATION);
       const shifted = pitchShift(tone, SR, 2);

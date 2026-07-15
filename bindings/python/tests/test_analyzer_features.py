@@ -167,6 +167,13 @@ def test_time_stretch() -> None:
     slow = time_stretch(tone, sample_rate=22050, rate=0.5)
     assert len(slow) > len(tone)
 
+    import libsonare
+
+    for invalid in (float("nan"), float("inf"), 1.1754943508222875e-38):
+        with pytest.raises(libsonare.SonareError):
+            time_stretch(tone[:4096], sample_rate=22050, rate=invalid)
+    assert all(math.isfinite(value) for value in time_stretch(tone[:4096], 22050, 1.0))
+
 
 def test_pitch_shift() -> None:
     """pitch_shift returns non-empty audio."""

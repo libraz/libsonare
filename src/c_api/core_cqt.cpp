@@ -68,7 +68,8 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
                        SonareCqtResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  if (hop_length <= 0 || fmin <= 0.0f || n_bins <= 0 || bins_per_octave <= 0 || gamma < 0.0f) {
+  if (hop_length <= 0 || !std::isfinite(fmin) || fmin <= 0.0f || n_bins <= 0 ||
+      bins_per_octave <= 0 || !std::isfinite(gamma) || gamma < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
