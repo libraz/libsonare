@@ -445,6 +445,7 @@ export type {
   EngineTrackLane,
   EngineTrackSend,
   EngineTransportState,
+  ExternalMidiEvent,
   MidiCcBindOptions,
 } from './realtime_engine';
 export { EXPECTED_ENGINE_ABI_VERSION, engineCapabilities, RealtimeEngine } from './realtime_engine';
