@@ -13,9 +13,33 @@
 #include "serialize/project_serializer_internal.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::serialize {
 namespace detail {
+
+namespace {
+
+template <typename Enum>
+Enum enum_or(const Value& value, const char* key, Enum fallback, uint32_t maximum) {
+  const uint32_t ordinal = uint_or(value, key, static_cast<uint32_t>(fallback));
+  if (ordinal > maximum) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string("enum field is out of range: ") + key);
+  }
+  return static_cast<Enum>(ordinal);
+}
+
+uint8_t pitch_class_or(const Value& value, const char* key) {
+  const uint32_t pitch_class = uint_or(value, key, arrangement::kUnknownPitchClass);
+  if (pitch_class > 11 && pitch_class != arrangement::kUnknownPitchClass) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string("pitch-class field is out of range: ") + key);
+  }
+  return static_cast<uint8_t>(pitch_class);
+}
+
+}  // namespace
 
 // ===========================================================================
 // Decode helpers: util::json::Value -> arrangement model
@@ -33,8 +57,8 @@ transport::TempoSegment tempo_segment_from_json(const Value& v) {
 transport::TimeSignatureSegment time_signature_from_json(const Value& v) {
   transport::TimeSignatureSegment s;
   s.start_ppq = num_or(v, "start_ppq", 0.0);
-  s.time_sig.numerator = static_cast<int>(num_or(v, "numerator", 4.0));
-  s.time_sig.denominator = static_cast<int>(num_or(v, "denominator", 4.0));
+  s.time_sig.numerator = int_or(v, "numerator", 4);
+  s.time_sig.denominator = int_or(v, "denominator", 4);
   return s;
 }
 
@@ -47,8 +71,7 @@ automation::AutomationLane automation_lane_from_json(const Value& v) {
       automation::Breakpoint bp;
       bp.ppq = num_or(pv, "ppq", 0.0);
       bp.value = static_cast<float>(num_or(pv, "value", 0.0));
-      bp.curve_to_next =
-          static_cast<automation::CurveType>(static_cast<int>(num_or(pv, "curve_to_next", 0.0)));
+      bp.curve_to_next = enum_or(pv, "curve_to_next", automation::CurveType::Linear, 3);
       points.push_back(bp);
     }
   }
@@ -60,7 +83,7 @@ arrangement::Track track_from_json(const Value& v) {
   arrangement::Track t;
   t.id = uint_or(v, "id", 0);
   t.name = str_or(v, "name", "");
-  t.kind = static_cast<arrangement::Track::Kind>(uint_or(v, "kind", 0));
+  t.kind = enum_or(v, "kind", arrangement::Track::Kind::kAudio, 2);
   t.gain = std::max(0.0f, static_cast<float>(num_or(v, "gain", 1.0)));
   t.mute = bool_or(v, "mute", false);
   t.solo = bool_or(v, "solo", false);
@@ -79,7 +102,7 @@ arrangement::Track track_from_json(const Value& v) {
 arrangement::ClipFade fade_from_json(const Value& v) {
   arrangement::ClipFade f;
   f.length_ppq = num_or(v, "length_ppq", 0.0);
-  f.curve = static_cast<arrangement::FadeCurve>(uint_or(v, "curve", 0));
+  f.curve = enum_or(v, "curve", arrangement::FadeCurve::kLinear, 3);
   return f;
 }
 
@@ -111,11 +134,11 @@ arrangement::EditClip clip_from_json(const Value& v) {
   c.gain = static_cast<float>(num_or(v, "gain", 1.0));
   if (const auto* fi = object_at(v, "fade_in")) c.fade_in = fade_from_json(Value(*fi));
   if (const auto* fo = object_at(v, "fade_out")) c.fade_out = fade_from_json(Value(*fo));
-  c.loop_mode = static_cast<arrangement::LoopMode>(uint_or(v, "loop_mode", 0));
+  c.loop_mode = enum_or(v, "loop_mode", arrangement::LoopMode::kOff, 1);
   c.loop_length_ppq = num_or(v, "loop_length_ppq", 0.0);
   c.loop_crossfade_ppq = num_or(v, "loop_crossfade_ppq", 0.0);
   c.warp_ref_id = uint_or(v, "warp_ref_id", 0);
-  c.warp_mode = static_cast<arrangement::WarpMode>(uint_or(v, "warp_mode", 0));
+  c.warp_mode = enum_or(v, "warp_mode", arrangement::WarpMode::kOff, 2);
   if (const auto* arr = array_at(v, "takes")) {
     for (const auto& tv : *arr) {
       if (tv.is_object()) c.takes.push_back(take_from_json(tv));
@@ -147,7 +170,7 @@ arrangement::WarpMapRef warp_map_from_json(const Value& v) {
 }
 
 arrangement::ClipSource source_from_json(const Value& v) {
-  const auto kind = static_cast<arrangement::SourceKind>(uint_or(v, "kind", 0));
+  const auto kind = enum_or(v, "kind", arrangement::SourceKind::kAudio, 1);
   if (kind == arrangement::SourceKind::kMidi) {
     arrangement::MidiSourceRef m;
     m.id = uint_or(v, "id", 0);
@@ -170,15 +193,20 @@ arrangement::ChordSymbol chord_from_json(const Value& v) {
   arrangement::ChordSymbol c;
   c.start_ppq = num_or(v, "start_ppq", 0.0);
   c.end_ppq = num_or(v, "end_ppq", 0.0);
-  c.root_pc = static_cast<uint8_t>(uint_or(v, "root_pc", arrangement::kUnknownPitchClass));
-  c.quality = static_cast<arrangement::ChordQuality>(uint_or(v, "quality", 0));
+  c.root_pc = pitch_class_or(v, "root_pc");
+  c.quality = enum_or(v, "quality", arrangement::ChordQuality::kUnknown, 7);
   if (const auto* arr = array_at(v, "extensions")) {
     for (const auto& ev : *arr) {
-      if (ev.is_number()) c.extensions.push_back(static_cast<uint8_t>(ev.as_int()));
+      if (!ev.is_number()) continue;
+      uint8_t extension = 0;
+      if (!numeric::checked_integral_cast(ev.as_number(), &extension)) {
+        throw SonareException(ErrorCode::InvalidFormat,
+                              "chord extension is fractional or out of uint8 range");
+      }
+      c.extensions.push_back(extension);
     }
   }
-  c.slash_bass_pc =
-      static_cast<uint8_t>(uint_or(v, "slash_bass_pc", arrangement::kUnknownPitchClass));
+  c.slash_bass_pc = pitch_class_or(v, "slash_bass_pc");
   c.roman_numeral = str_or(v, "roman_numeral", "");
   c.modulation_boundary = bool_or(v, "modulation_boundary", false);
   return c;
@@ -188,8 +216,8 @@ arrangement::KeySegment key_segment_from_json(const Value& v) {
   arrangement::KeySegment k;
   k.start_ppq = num_or(v, "start_ppq", 0.0);
   k.end_ppq = num_or(v, "end_ppq", 0.0);
-  k.tonic_pc = static_cast<uint8_t>(uint_or(v, "tonic_pc", arrangement::kUnknownPitchClass));
-  k.mode = static_cast<arrangement::KeyMode>(uint_or(v, "mode", 0));
+  k.tonic_pc = pitch_class_or(v, "tonic_pc");
+  k.mode = enum_or(v, "mode", arrangement::KeyMode::kUnknown, 7);
   return k;
 }
 
@@ -251,7 +279,7 @@ mixing::api::Insert insert_from_json(const Value& v) {
 
 mixing::api::Scene scene_from_value(const Value& v) {
   mixing::api::Scene scene;
-  scene.version = static_cast<int>(num_or(v, "version", 1.0));
+  scene.version = int_or(v, "version", 1);
   // Mirror the standalone scene_from_json guard: reject an embedded mixer scene
   // whose version exceeds what this build understands instead of silently
   // mis-reading a future schema. Version 1 is the only supported value today.
@@ -271,15 +299,23 @@ mixing::api::Scene scene_from_value(const Value& v) {
       s.muted = bool_or(sv, "muted", false);
       s.soloed = bool_or(sv, "soloed", false);
       s.solo_safe = bool_or_any(sv, "soloSafe", "solo_safe", false);
-      s.pan_mode = static_cast<int>(num_or_any(sv, "panMode", "pan_mode", 0.0));
+      s.pan_mode = int_or_any(sv, "panMode", "pan_mode", 0);
+      if (s.pan_mode < 0 || s.pan_mode > 2) {
+        throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
+      }
       s.dual_pan_left = static_cast<float>(num_or_any(sv, "dualPanLeft", "dual_pan_left", -1.0));
       s.dual_pan_right = static_cast<float>(num_or_any(sv, "dualPanRight", "dual_pan_right", 1.0));
       s.polarity_invert_left = bool_or_any(sv, "polarityInvertLeft", "polarity_invert_left", false);
       s.polarity_invert_right =
           bool_or_any(sv, "polarityInvertRight", "polarity_invert_right", false);
-      s.pan_law = static_cast<int>(num_or_any(sv, "panLaw", "pan_law", 0.0));
-      s.channel_delay_samples =
-          static_cast<int>(num_or_any(sv, "channelDelaySamples", "channel_delay_samples", 0.0));
+      s.pan_law = int_or_any(sv, "panLaw", "pan_law", 0);
+      if (s.pan_law < 0 || s.pan_law > 3) {
+        throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
+      }
+      s.channel_delay_samples = int_or_any(sv, "channelDelaySamples", "channel_delay_samples", 0);
+      if (s.channel_delay_samples < 0) {
+        throw SonareException(ErrorCode::InvalidFormat, "channelDelaySamples must be non-negative");
+      }
       if (const std::string layout = str_or(sv, "sourceLayout", ""); !layout.empty()) {
         ChannelLayout parsed = ChannelLayout::Stereo;
         if (channel_layout_from_string(layout, parsed)) s.source_layout = parsed;

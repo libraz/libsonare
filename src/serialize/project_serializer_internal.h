@@ -48,6 +48,8 @@ bool base64_decode(const std::string& text, std::vector<uint8_t>* out);
 
 double num_or(const Value& obj, const char* key, double fallback);
 uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback);
+int int_or(const Value& obj, const char* key, int fallback);
+int8_t int8_or(const Value& obj, const char* key, int8_t fallback);
 bool parse_uint32_key(const std::string& key, uint32_t* out);
 std::string str_or(const Value& obj, const char* key, const std::string& fallback);
 bool bool_or(const Value& obj, const char* key, bool fallback);
@@ -56,6 +58,7 @@ uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
 const Array* array_at(const Value& obj, const char* key);
 const Object* object_at(const Value& obj, const char* key);
 double num_or_any(const Value& obj, const char* primary, const char* legacy, double fallback);
+int int_or_any(const Value& obj, const char* primary, const char* legacy, int fallback);
 std::string str_or_any(const Value& obj, const char* primary, const char* legacy,
                        const std::string& fallback);
 bool bool_or_any(const Value& obj, const char* primary, const char* legacy, bool fallback);

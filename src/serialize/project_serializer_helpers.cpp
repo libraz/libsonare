@@ -10,6 +10,7 @@
 #include "serialize/project_serializer.h"
 #include "serialize/project_serializer_internal.h"
 #include "util/base64.h"
+#include "util/exception.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::serialize {
@@ -77,20 +78,59 @@ double num_or(const Value& obj, const char* key, double fallback) {
 
 uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback) {
   const auto* v = obj.find(key);
-  if (!v || !v->is_number()) return fallback;
+  if (!v) return fallback;
+  if (!v->is_number()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "integer field must be numeric: " + std::string(key));
+  }
   uint32_t converted = 0;
-  return numeric::checked_integral_cast(v->as_number(), &converted) ? converted : fallback;
+  if (!numeric::checked_integral_cast(v->as_number(), &converted)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "integer field is fractional or out of range: " + std::string(key));
+  }
+  return converted;
+}
+
+int int_or(const Value& obj, const char* key, int fallback) {
+  const auto* v = obj.find(key);
+  if (!v) return fallback;
+  if (!v->is_number()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "integer field must be numeric: " + std::string(key));
+  }
+  int converted = 0;
+  if (!numeric::checked_integral_cast(v->as_number(), &converted)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "integer field is fractional or out of range: " + std::string(key));
+  }
+  return converted;
+}
+
+int8_t int8_or(const Value& obj, const char* key, int8_t fallback) {
+  const auto* v = obj.find(key);
+  if (!v) return fallback;
+  if (!v->is_number()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "integer field must be numeric: " + std::string(key));
+  }
+  int8_t converted = 0;
+  if (!numeric::checked_integral_cast(v->as_number(), &converted)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "integer field is fractional or out of range: " + std::string(key));
+  }
+  return converted;
 }
 
 bool parse_uint32_key(const std::string& key, uint32_t* out) {
   if (out == nullptr || key.empty()) return false;
-  uint64_t value = 0;
+  uint32_t value = 0;
   for (const char c : key) {
     if (c < '0' || c > '9') return false;
-    value = value * 10u + static_cast<uint64_t>(c - '0');
-    if (value > std::numeric_limits<uint32_t>::max()) return false;
+    const uint32_t digit = static_cast<uint32_t>(c - '0');
+    if (value > (std::numeric_limits<uint32_t>::max() - digit) / 10u) return false;
+    value = value * 10u + digit;
   }
-  *out = static_cast<uint32_t>(value);
+  *out = value;
   return true;
 }
 
@@ -122,7 +162,12 @@ uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
                                 std::to_string(clamped)});
     return clamped;
   }
-  return static_cast<uint32_t>(d);
+  uint32_t converted = 0;
+  if (!numeric::checked_integral_cast(d, &converted)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "MIDI data word is fractional: " + std::string(key));
+  }
+  return converted;
 }
 
 const Array* array_at(const Value& obj, const char* key) {
@@ -139,6 +184,11 @@ double num_or_any(const Value& obj, const char* primary, const char* legacy, dou
   const auto* v = obj.find(primary);
   if (v && v->is_number()) return v->as_number();
   return num_or(obj, legacy, fallback);
+}
+
+int int_or_any(const Value& obj, const char* primary, const char* legacy, int fallback) {
+  if (obj.find(primary)) return int_or(obj, primary, fallback);
+  return int_or(obj, legacy, fallback);
 }
 
 std::string str_or_any(const Value& obj, const char* primary, const char* legacy,

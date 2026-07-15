@@ -803,6 +803,38 @@ TEST_CASE("invalid time signature is rejected with a diagnostic", "[serialize]")
   CHECK(found);
 }
 
+TEST_CASE("present invalid project integer and enum fields report invalid_format", "[serialize]") {
+  const std::vector<std::string> documents = {
+      // Finite-but-unrepresentable values must never reach a floating-to-int cast.
+      R"({"version":1,"time_signatures":[{"numerator":1e100,"denominator":4}]})",
+      R"({"version":1,"time_signatures":[{"numerator":2147483648,"denominator":4}]})",
+      R"({"version":1,"time_signatures":[{"numerator":-2147483649,"denominator":4}]})",
+      // Integer fields and enum ordinals are exact, not truncating conversions.
+      R"({"version":1,"time_signatures":[{"numerator":4.5,"denominator":4}]})",
+      R"({"version":1,"tracks":[{"id":1,"kind":0.5}]})",
+      R"({"version":1,"tracks":[{"id":1,"kind":3}]})",
+      R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","panMode":1.5}]}})",
+      R"({"version":1,"annotation":{"chords":[{"extensions":[7.5]}]}})",
+      R"({"version":1,"midi_content":{"1":[{"data0":1.5}]}})",
+      R"({"version":1,"overlap_policy":2})",
+  };
+
+  for (const auto& document : documents) {
+    INFO(document);
+    const auto result = project_from_json(document);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
+  }
+
+  // The representable edge itself remains valid; only INT_MAX + 1 is rejected.
+  const auto edge = project_from_json(
+      R"({"version":1,"time_signatures":[{"numerator":2147483647,"denominator":4}]})");
+  REQUIRE(edge.ok());
+  REQUIRE(edge.project->time_signatures().size() == 1);
+  CHECK(edge.project->time_signatures()[0].time_sig.numerator == std::numeric_limits<int>::max());
+}
+
 TEST_CASE("out-of-range MIDI data word is clamped with a warning, not silently zeroed",
           "[serialize]") {
   // data0 below zero clamps to 0; data1 above uint32 max clamps to 0xFFFFFFFF.
@@ -854,7 +886,7 @@ TEST_CASE("out-of-range entity ids are rejected instead of wrapping", "[serializ
   auto result = project_from_json(in);
   CHECK_FALSE(result.ok());
   REQUIRE_FALSE(result.diagnostics.empty());
-  CHECK(result.diagnostics.back().code == "invalid_entity_id");
+  CHECK(result.diagnostics.back().code == "invalid_format");
 }
 
 TEST_CASE("maximum usable entity ids saturate allocators without wrapping", "[serialize]") {

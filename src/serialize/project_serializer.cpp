@@ -13,6 +13,7 @@
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer_internal.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 #include "util/json.h"
 #include "util/numeric_validation.h"
 
@@ -158,8 +159,11 @@ DeserializeResult project_from_json(const std::string& json_text) {
       return result;
     }
     project.set_sample_rate(sample_rate);
-    project.set_overlap_policy(
-        static_cast<arrangement::OverlapPolicy>(uint_or(root, "overlap_policy", 0)));
+    const uint32_t overlap_policy = uint_or(root, "overlap_policy", 0);
+    if (overlap_policy > static_cast<uint32_t>(arrangement::OverlapPolicy::kAllow)) {
+      throw SonareException(ErrorCode::InvalidFormat, "overlap_policy enum is out of range");
+    }
+    project.set_overlap_policy(static_cast<arrangement::OverlapPolicy>(overlap_policy));
 
     // Tempo / time signature. Segments are validated (finite, positive BPM and
     // start_ppq) and normalized on load: a segment with NaN/Inf or non-positive
@@ -362,13 +366,20 @@ DeserializeResult project_from_json(const std::string& json_text) {
         m.id = uint_or(mv, "id", 0);
         m.ppq = num_or(mv, "ppq", 0.0);
         m.name = str_or(mv, "name", "");
-        m.kind = static_cast<uint8_t>(uint_or(mv, "kind", 0));
+        const uint32_t marker_kind = uint_or(mv, "kind", 0);
+        if (marker_kind > 4) {
+          throw SonareException(ErrorCode::InvalidFormat, "marker kind enum is out of range");
+        }
+        m.kind = static_cast<uint8_t>(marker_kind);
         // key_fifths/key_minor are written only for the key-signature kind (4)
         // but read unconditionally: non-key markers simply default to 0/false
         // (their correct zero values), so the round-trip is lossless. Benign
         // today; keep in mind if a non-key marker ever gains meaningful key
         // fields, in which case the write side must serialize them too.
-        m.key_fifths = static_cast<int8_t>(num_or(mv, "key_fifths", 0.0));
+        m.key_fifths = int8_or(mv, "key_fifths", 0);
+        if (m.key_fifths < -7 || m.key_fifths > 7) {
+          throw SonareException(ErrorCode::InvalidFormat, "key_fifths must be within [-7, 7]");
+        }
         m.key_minor = bool_or(mv, "key_minor", false);
         if (invalid_entity_id(m.id)) {
           reject_entity_id("marker", m.id, false);
@@ -457,6 +468,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
 
     result.project = std::move(project);
+    return result;
+  } catch (const SonareException& e) {
+    result.project.reset();
+    result.diagnostics.push_back(
+        {DiagnosticSeverity::kError,
+         e.code() == ErrorCode::InvalidFormat ? "invalid_format" : "deserialize_failed", e.what()});
     return result;
   } catch (const std::exception& e) {
     // Any structural surprise (bad get<>, etc.) becomes a diagnostic, never a
