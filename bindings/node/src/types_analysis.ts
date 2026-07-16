@@ -542,6 +542,7 @@ export type ChordChromaMethod = 'stft' | 'nnls';
 export interface ChordDetectionOptions {
   minDuration?: number;
   smoothingWindow?: number;
+  /** Final-template correlation threshold in [0, 1]; below it emits `unknown` / N.C. */
   threshold?: number;
   useTriadsOnly?: boolean;
   nFft?: number;

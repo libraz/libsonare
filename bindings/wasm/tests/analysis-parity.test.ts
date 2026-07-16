@@ -15,6 +15,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyze,
   analyzeMelody,
+  ChordQuality,
   chordFunctionalAnalysis,
   detectChords,
   init,
@@ -101,6 +102,27 @@ describe('WASM wave3 analysis parity', () => {
     it('succeeds on valid input', () => {
       const result = detectChords(samples, SR);
       expect(Array.isArray(result.chords)).toBe(true);
+    });
+
+    it('uses threshold to emit a continuous N.C. segment', () => {
+      const silence = new Float32Array(4096);
+      const common = {
+        minDuration: 0,
+        smoothingWindow: 0.01,
+        useTriadsOnly: true,
+        nFft: 2048,
+        hopLength: 512,
+        useBeatSync: false,
+      } as const;
+      const low = detectChords(silence, SR, { ...common, threshold: 0 });
+      const high = detectChords(silence, SR, { ...common, threshold: 0.99 });
+      expect(low.chords).toHaveLength(1);
+      expect(low.chords[0]?.quality).not.toBe(ChordQuality.Unknown);
+      expect(high.chords).toHaveLength(1);
+      expect(high.chords[0]?.quality).toBe(ChordQuality.Unknown);
+      expect(high.chords[0]?.name).toBe('N.C.');
+      expect(high.chords[0]?.start).toBe(0);
+      expect(high.chords[0]?.end).toBeGreaterThan(0);
     });
 
     it('throws on an out-of-range key root when key context is enabled', () => {

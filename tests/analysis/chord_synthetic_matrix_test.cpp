@@ -2,6 +2,7 @@
 /// @brief Synthetic matrix tests for chord detection.
 
 #include <catch2/catch_test_macros.hpp>
+#include <string>
 #include <vector>
 
 #include "analysis/chord_analyzer.h"
@@ -126,6 +127,51 @@ TEST_CASE("ChordAnalyzer HMM smoothing is opt-in", "[chord_analyzer][hmm]") {
   ChordAnalyzer analyzer(chroma, config);
   REQUIRE(analyzer.count() >= 1);
   REQUIRE(analyzer.frame_chords().size() == kFrames);
+}
+
+TEST_CASE("ChordAnalyzer threshold emits continuous N.C. for frame beat and HMM paths",
+          "[chord_analyzer][threshold]") {
+  constexpr int kFrames = 4;
+  constexpr int kSampleRate = 1000;
+  constexpr int kHopLength = 1000;
+  const std::vector<float> beat_times = {0.0f, 1.0f, 2.0f, 3.0f};
+
+  for (const bool beat_sync : {false, true}) {
+    for (const bool use_hmm : {false, true}) {
+      CAPTURE(beat_sync, use_hmm);
+      const Chroma ambiguous(std::vector<float>(12 * kFrames, 0.0f), 12, kFrames, kSampleRate,
+                             kHopLength);
+
+      ChordConfig low;
+      low.min_duration = 0.0f;
+      low.smoothing_window = 0.0f;
+      low.threshold = 0.0f;
+      low.use_triads_only = true;
+      low.use_beat_sync = beat_sync;
+      low.use_hmm = use_hmm;
+      low.hmm_beam_width = 4;
+      const ChordAnalyzer low_analyzer =
+          beat_sync ? ChordAnalyzer(ambiguous, beat_times, low) : ChordAnalyzer(ambiguous, low);
+      REQUIRE(low_analyzer.count() == 1);
+      REQUIRE(low_analyzer.chords().front().quality != ChordQuality::Unknown);
+
+      ChordConfig high = low;
+      high.threshold = 0.5f;
+      const ChordAnalyzer high_analyzer =
+          beat_sync ? ChordAnalyzer(ambiguous, beat_times, high) : ChordAnalyzer(ambiguous, high);
+      REQUIRE(high_analyzer.count() == 1);
+      const Chord& no_chord = high_analyzer.chords().front();
+      REQUIRE(no_chord.quality == ChordQuality::Unknown);
+      REQUIRE(no_chord.to_string() == "N.C.");
+      REQUIRE(no_chord.start == 0.0f);
+      REQUIRE(no_chord.end > no_chord.start);
+      REQUIRE(high_analyzer.progression_pattern() == "N.C.");
+      REQUIRE(high_analyzer.functional_analysis(PitchClass::C) == std::vector<std::string>{"N.C."});
+      if (!beat_sync) {
+        REQUIRE(high_analyzer.frame_chords() == std::vector<int>(kFrames, -1));
+      }
+    }
+  }
 }
 
 TEST_CASE("ChordAnalyzer folds a short leading segment into the next segment without gaps",

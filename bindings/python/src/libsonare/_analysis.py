@@ -930,7 +930,11 @@ def detect_chords(
     detect_inversions: bool = False,
     chroma_method: str = "stft",
 ) -> ChordAnalysisResult:
-    """Detect chord segments without generating a summary report."""
+    """Detect a continuous chord/N.C. timeline.
+
+    ``threshold`` is a final-template correlation cutoff in ``[0, 1]``;
+    rejected intervals use quality ``"unknown"`` and ``Chord.name == "N.C."``.
+    """
     chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
     if chroma_method_value is None:
         raise ValueError("chroma_method must be 'stft' or 'nnls'")

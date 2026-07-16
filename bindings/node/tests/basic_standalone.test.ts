@@ -288,6 +288,26 @@ describe('standalone functions', () => {
     expect(romansOptions).toEqual(romansPositional);
   });
 
+  it('detectChords threshold emits unknown for ambiguous input', () => {
+    const silence = new Float32Array(4096);
+    const common = {
+      minDuration: 0,
+      smoothingWindow: 0.01,
+      useTriadsOnly: true,
+      nFft: 2048,
+      hopLength: 512,
+      useBeatSync: false,
+    } as const;
+    const low = detectChords(silence, SR, { ...common, threshold: 0 });
+    const high = detectChords(silence, SR, { ...common, threshold: 0.99 });
+    expect(low.chords).toHaveLength(1);
+    expect(low.chords[0]?.quality).not.toBe('unknown');
+    expect(high.chords).toHaveLength(1);
+    expect(high.chords[0]?.quality).toBe('unknown');
+    expect(high.chords[0]?.start).toBe(0);
+    expect(high.chords[0]?.end).toBeGreaterThan(0);
+  });
+
   it('chordFunctionalAnalysis rejects non-Float32Array input', () => {
     expect(() =>
       chordFunctionalAnalysis(new Float64Array(SR) as unknown as Float32Array, 0, 0, SR),

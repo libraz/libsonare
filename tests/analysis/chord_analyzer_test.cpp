@@ -398,6 +398,9 @@ TEST_CASE("ChordAnalyzer Chord::to_string", "[chord_analyzer]") {
   chord.quality = ChordQuality::Major;
   chord.bass = PitchClass::E;
   REQUIRE(chord.to_string() == "C/E");
+
+  chord.quality = ChordQuality::Unknown;
+  REQUIRE(chord.to_string() == "N.C.");
 }
 
 TEST_CASE("ChordAnalyzer frame chords", "[chord_analyzer]") {
@@ -409,7 +412,8 @@ TEST_CASE("ChordAnalyzer frame chords", "[chord_analyzer]") {
 
   REQUIRE(!frame_chords.empty());
 
-  // All frame chord indices should be valid
+  // A tonal fixture at the default threshold should have valid template ids;
+  // ambiguous/rejected frames use the documented -1 N.C. sentinel.
   for (int idx : frame_chords) {
     REQUIRE(idx >= 0);
     REQUIRE(idx < static_cast<int>(analyzer.templates().size()));

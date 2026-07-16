@@ -140,6 +140,7 @@ export interface KeyCandidate {
 export interface ChordDetectionOptions extends ValidateOptions {
   minDuration?: number;
   smoothingWindow?: number;
+  /** Final-template correlation threshold in [0, 1]; below it emits Unknown / N.C. */
   threshold?: number;
   useTriadsOnly?: boolean;
   nFft?: number;

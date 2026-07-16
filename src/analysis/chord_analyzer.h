@@ -57,7 +57,7 @@ struct ChordConfig {
   float min_duration = chord_constants::kMinDurationSec;  ///< Minimum chord duration in seconds
   float smoothing_window =
       chord_constants::kSmoothingWindowSec;                  ///< Smoothing window (2.0s default)
-  float threshold = chord_constants::kCorrelationThreshold;  ///< Minimum correlation for detection
+  float threshold = chord_constants::kCorrelationThreshold;  ///< Minimum correlation [0, 1]
   bool use_triads_only = false;                              ///< Use only triads (no 7th chords)
   int n_fft = 2048;                                          ///< FFT size for STFT
   int hop_length = 512;                                      ///< Hop length for STFT
@@ -126,7 +126,8 @@ class ChordAnalyzer {
   Chord most_common_chord() const;
 
   /// @brief Returns frame-level chord sequence.
-  /// @return Vector of chord indices for each frame
+  /// @return Vector of chord-template indices for each frame; @c -1 denotes
+  ///   N.C. (the final selected template correlation was below @c threshold).
   const std::vector<int>& frame_chords() const { return frame_chords_; }
 
   /// @brief Returns the chord templates used.

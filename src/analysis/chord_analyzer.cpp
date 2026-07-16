@@ -14,6 +14,9 @@
 namespace sonare {
 
 std::string Chord::to_string() const {
+  if (quality == ChordQuality::Unknown) {
+    return "N.C.";
+  }
   std::string name = pitch_class_to_string(root);
   switch (quality) {
     case ChordQuality::Major:
@@ -78,7 +81,8 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
                    std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
-                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f,
+                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
+                   config_.threshold <= 1.0f,
                ErrorCode::InvalidParameter);
 
   if (config.chroma_method == ChromaMethod::NNLS) {
@@ -123,7 +127,8 @@ ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const ChordConfig& config)
     : chroma_(chroma), config_(config) {
   SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
                    std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
-                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f,
+                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
+                   config_.threshold <= 1.0f,
                ErrorCode::InvalidParameter);
   // Generate templates
   if (config.use_triads_only) {
@@ -144,7 +149,8 @@ ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& bea
     : chroma_(chroma), bass_chroma_(bass_chroma), config_(config) {
   SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
                    std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
-                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f,
+                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
+                   config_.threshold <= 1.0f,
                ErrorCode::InvalidParameter);
   // Generate templates
   if (config.use_triads_only) {
@@ -391,6 +397,15 @@ void ChordAnalyzer::analyze_chords() {
     }
   }
 
+  // Threshold the final decision, after optional HMM replacement, so both the
+  // direct argmax and Viterbi paths compare the correlation of the chord they
+  // actually emit. -1 is the internal N.C. frame sentinel.
+  for (int f = 0; f < n_frames; ++f) {
+    if (confidences[f] < config_.threshold) {
+      frame_chords_[f] = -1;
+    }
+  }
+
   // Convert frame-level to segment-level chords
   if (n_frames == 0) return;
 
@@ -408,13 +423,14 @@ void ChordAnalyzer::analyze_chords() {
     if (chord_changed || is_last) {
       // End current segment
       Chord chord;
-      chord.root = templates_[current_chord].root;
-      chord.quality = templates_[current_chord].quality;
+      const bool no_chord = current_chord < 0;
+      chord.root = no_chord ? PitchClass::C : templates_[current_chord].root;
+      chord.quality = no_chord ? ChordQuality::Unknown : templates_[current_chord].quality;
       chord.start = static_cast<float>(segment_start) * hop_duration;
       chord.end = static_cast<float>(f) * hop_duration;
       chord.confidence = segment_confidence / static_cast<float>(confidence_count);
       chord.bass = chord.root;
-      if (config_.detect_inversions) {
+      if (!no_chord && config_.detect_inversions) {
         const PitchClass estimated_bass =
             estimate_bass_pitch_class(segment_start, f, templates_[current_chord]);
         if (chord_contains_pitch_class(templates_[current_chord], estimated_bass)) {
@@ -514,6 +530,15 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
     }
   }
 
+  // Apply the same final-decision threshold as the frame path. HMM smoothing
+  // may select a different template, so thresholding happens after confidence
+  // is recomputed against the selected beat_chroma.
+  for (size_t i = 0; i < beat_chords.size(); ++i) {
+    if (beat_confidences[i] < config_.threshold) {
+      beat_chords[i] = -1;
+    }
+  }
+
   int current_chord = beat_chords[0];
   float segment_start = beat_times[0];
   float segment_confidence = beat_confidences[0];
@@ -528,8 +553,9 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
       float segment_end = is_last ? (beat_times.back() + 0.5f) : beat_times[i];
 
       Chord chord;
-      chord.root = templates_[current_chord].root;
-      chord.quality = templates_[current_chord].quality;
+      const bool no_chord = current_chord < 0;
+      chord.root = no_chord ? PitchClass::C : templates_[current_chord].root;
+      chord.quality = no_chord ? ChordQuality::Unknown : templates_[current_chord].quality;
       chord.start = segment_start;
       chord.end = segment_end;
       chord.confidence = segment_confidence / static_cast<float>(confidence_count);
@@ -537,7 +563,7 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
       const int end_frame =
           std::min(chroma_.n_frames(), static_cast<int>(segment_end / hop_duration) + 1);
       chord.bass = chord.root;
-      if (config_.detect_inversions) {
+      if (!no_chord && config_.detect_inversions) {
         const PitchClass estimated_bass =
             estimate_bass_pitch_class(start_frame, end_frame, templates_[current_chord]);
         if (chord_contains_pitch_class(templates_[current_chord], estimated_bass)) {
@@ -573,13 +599,36 @@ void ChordAnalyzer::merge_short_segments() {
   for (size_t i = 0; i < chords_.size(); ++i) {
     const Chord& chord = chords_[i];
 
+    // N.C. is an explicit rejected interval, not a weak chord that
+    // min_duration may absorb into a neighbour. Preserve it so every surface
+    // reports the thresholded timeline without inventing chord coverage;
+    // adjacent N.C. intervals still coalesce into one continuous segment.
+    if (chord.quality == ChordQuality::Unknown) {
+      Chord retained = chord;
+      if (pending_start >= 0.0f) {
+        retained.start = pending_start;
+        pending_start = -1.0f;
+      }
+      if (!merged.empty() && merged.back().quality == ChordQuality::Unknown) {
+        merged.back().end = retained.end;
+        merged.back().confidence = (merged.back().confidence + retained.confidence) / 2.0f;
+      } else {
+        merged.push_back(retained);
+      }
+      continue;
+    }
+
     const bool short_chord = chord.duration() < config_.min_duration;
     const bool is_last = i + 1 == chords_.size();
+    const bool previous_is_no_chord =
+        !merged.empty() && merged.back().quality == ChordQuality::Unknown;
     const bool same_as_prev = !merged.empty() && merged.back().root == chord.root &&
                               merged.back().quality == chord.quality &&
                               merged.back().bass == chord.bass;
 
-    if (short_chord && !merged.empty() && is_last && !same_as_prev) {
+    if (short_chord && previous_is_no_chord) {
+      merged.push_back(chord);
+    } else if (short_chord && !merged.empty() && is_last && !same_as_prev) {
       // A short but distinct FINAL chord (e.g. a quick ending tonic) must keep
       // its own identity: absorbing it into the previous chord's time range
       // would silently drop the last chord of the progression. Interior short
@@ -636,6 +685,9 @@ std::string ChordAnalyzer::progression_pattern() const {
 
 std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass key_root,
                                                   Mode mode) const {
+  if (chord.quality == ChordQuality::Unknown) {
+    return "N.C.";
+  }
   // Calculate interval from key root
   int interval = (static_cast<int>(chord.root) - static_cast<int>(key_root) + 12) % 12;
 
@@ -778,7 +830,7 @@ Chord ChordAnalyzer::chord_at(float time) const {
   // Return empty chord
   Chord empty;
   empty.root = PitchClass::C;
-  empty.quality = ChordQuality::Major;
+  empty.quality = ChordQuality::Unknown;
   empty.start = 0.0f;
   empty.end = 0.0f;
   empty.confidence = 0.0f;
@@ -790,7 +842,7 @@ Chord ChordAnalyzer::most_common_chord() const {
   if (chords_.empty()) {
     Chord empty;
     empty.root = PitchClass::C;
-    empty.quality = ChordQuality::Major;
+    empty.quality = ChordQuality::Unknown;
     empty.start = 0.0f;
     empty.end = 0.0f;
     empty.confidence = 0.0f;

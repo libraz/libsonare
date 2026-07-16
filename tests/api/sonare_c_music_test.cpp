@@ -199,6 +199,8 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
                                  512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, -0.1f, 0, 2048,
                                  512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 1.01f, 0, 2048,
+                                 512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 0, 512,
                                  0, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, 2.0f, 0.5f, 0, 2048,
@@ -211,6 +213,24 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
                                  512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_detect_chords(samples.data(), samples.size(), 22050, 0.3f, inf, 0.5f, 0, 2048,
                                  512, 0, &result) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("threshold changes ambiguous input to an explicit N.C. segment") {
+    std::vector<float> silence(4096, 0.0f);
+    SonareChordAnalysisResult low{};
+    SonareChordAnalysisResult high{};
+    REQUIRE(sonare_detect_chords(silence.data(), silence.size(), 22050, 0.0f, 0.01f, 0.0f, 1, 2048,
+                                 512, 0, &low) == SONARE_OK);
+    REQUIRE(sonare_detect_chords(silence.data(), silence.size(), 22050, 0.0f, 0.01f, 0.99f, 1, 2048,
+                                 512, 0, &high) == SONARE_OK);
+    REQUIRE(low.chord_count == 1);
+    REQUIRE(low.chords[0].quality != SONARE_CHORD_UNKNOWN);
+    REQUIRE(high.chord_count == 1);
+    REQUIRE(high.chords[0].quality == SONARE_CHORD_UNKNOWN);
+    REQUIRE(high.chords[0].start == 0.0f);
+    REQUIRE(high.chords[0].end > high.chords[0].start);
+    sonare_free_chord_analysis_result(&low);
+    sonare_free_chord_analysis_result(&high);
   }
 
   SECTION("extended options enable HMM and inversion detection without changing legacy ABI") {

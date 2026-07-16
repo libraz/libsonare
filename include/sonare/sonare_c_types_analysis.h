@@ -246,7 +246,7 @@ typedef struct {
 typedef struct {
   float min_duration;
   float smoothing_window;
-  float threshold;
+  float threshold; /* final-template correlation threshold [0, 1]; below => UNKNOWN / N.C. */
   int use_triads_only;
   int n_fft;
   int hop_length;

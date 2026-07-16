@@ -126,6 +126,31 @@ def test_chord_functional_analysis() -> None:
         )
 
 
+def test_chord_threshold_emits_no_chord_for_ambiguous_input() -> None:
+    """Low/high thresholds differ and rejected intervals have the N.C. name."""
+    from libsonare import detect_chords
+
+    silence = [0.0] * 4096
+    common = {
+        "sample_rate": 22050,
+        "min_duration": 0.0,
+        "smoothing_window": 0.01,
+        "use_triads_only": True,
+        "n_fft": 2048,
+        "hop_length": 512,
+        "use_beat_sync": False,
+    }
+    low = detect_chords(silence, threshold=0.0, **common)
+    high = detect_chords(silence, threshold=0.99, **common)
+    assert len(low.chords) == 1
+    assert low.chords[0].quality != "unknown"
+    assert len(high.chords) == 1
+    assert high.chords[0].quality == "unknown"
+    assert high.chords[0].name == "N.C."
+    assert high.chords[0].start == 0.0
+    assert high.chords[0].end > high.chords[0].start
+
+
 ## Effects tests
 
 
@@ -177,11 +202,14 @@ def test_time_stretch() -> None:
 
 def test_pitch_shift() -> None:
     """pitch_shift returns non-empty audio."""
+    import libsonare
     from libsonare import pitch_shift
 
     tone = _generate_sine(440, 22050, 1.0)
     result = pitch_shift(tone, sample_rate=22050, semitones=2.0)
     assert len(result) > 0
+    with pytest.raises(libsonare.SonareError):
+        pitch_shift([0.0] * 4, sample_rate=48000, semitones=48.0)
 
 
 def test_normalize() -> None:
