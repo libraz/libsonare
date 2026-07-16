@@ -179,6 +179,23 @@ describe('editing effects', () => {
     );
   });
 
+  it('RealtimeVoiceChanger destroy releases native state and is idempotent', () => {
+    const changer = new RealtimeVoiceChanger({
+      sampleRate: 48000,
+      maxBlockSize: 128,
+      channels: 1,
+      preset: 'neutral-monitor',
+    });
+    changer.destroy();
+    expect(() => changer.processMono(new Float32Array(16))).toThrow(/destroyed/);
+    expect(() => changer.reset()).toThrow(/destroyed/);
+    expect(() => changer.configJson()).toThrow(/destroyed/);
+    expect(() => changer.latencySamples()).toThrow(/destroyed/);
+    expect(() => changer.setConfig('neutral-monitor')).toThrow(/destroyed/);
+    expect(() => changer.destroy()).not.toThrow();
+    expect(() => changer[Symbol.dispose]()).not.toThrow();
+  });
+
   it('exposes editing methods on the Audio class', () => {
     const audio = Audio.fromBuffer(tone, SR);
     expect(audio.pitchCorrectToMidi(69, 71)).toBeInstanceOf(Float32Array);

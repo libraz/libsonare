@@ -48,6 +48,7 @@ Napi::Object RealtimeVoiceChangerWrap::Init(Napi::Env env, Napi::Object exports)
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessInterleavedInto>(
               "processInterleavedInto"),
           InstanceMethod<&RealtimeVoiceChangerWrap::ProcessPlanarStereo>("processPlanarStereo"),
+          InstanceMethod<&RealtimeVoiceChangerWrap::Destroy>("destroy"),
       });
 
   constructor_ = Napi::Persistent(func);
@@ -60,18 +61,40 @@ RealtimeVoiceChangerWrap::RealtimeVoiceChangerWrap(const Napi::CallbackInfo& inf
     : Napi::ObjectWrap<RealtimeVoiceChangerWrap>(info) {
   Napi::Env env = info.Env();
   try {
+    changer_ = std::make_unique<sonare::editing::voice_changer::RealtimeVoiceChanger>();
     const auto text = info.Length() >= 1 ? JsonTextFromJs(info[0]) : std::string("neutral-monitor");
-    changer_.set_config(
+    changer_->set_config(
         sonare::editing::voice_changer::realtime_voice_changer_config_from_json(text));
   } catch (const std::exception& e) {
     Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
   }
 }
 
-RealtimeVoiceChangerWrap::~RealtimeVoiceChangerWrap() = default;
+RealtimeVoiceChangerWrap::~RealtimeVoiceChangerWrap() { ReleaseNative(); }
+
+bool RealtimeVoiceChangerWrap::EnsureAlive(Napi::Env env) const {
+  if (changer_) return true;
+  Napi::Error::New(env, "RealtimeVoiceChanger has been destroyed").ThrowAsJavaScriptException();
+  return false;
+}
+
+void RealtimeVoiceChangerWrap::ReleaseNative() noexcept {
+  changer_.reset();
+  prepared_ = false;
+  max_block_size_ = 0;
+  channels_ = 0;
+  std::vector<float>().swap(planar_scratch_);
+  std::vector<float*>().swap(planar_ptrs_);
+}
+
+Napi::Value RealtimeVoiceChangerWrap::Destroy(const Napi::CallbackInfo& info) {
+  ReleaseNative();
+  return info.Env().Undefined();
+}
 
 Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!EnsureAlive(env)) return env.Undefined();
   if (info.Length() < 1 || !info[0].IsNumber()) {
     Napi::TypeError::New(env, "Expected (sampleRate, maxBlockSize?, channels?)")
         .ThrowAsJavaScriptException();
@@ -83,7 +106,7 @@ Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
       info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 128;
   const int channels =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 1;
-  changer_.prepare(sample_rate, max_block_size, channels);
+  changer_->prepare(sample_rate, max_block_size, channels);
   prepared_ = true;
   max_block_size_ = max_block_size;
   channels_ = channels;
@@ -103,37 +126,42 @@ Napi::Value RealtimeVoiceChangerWrap::Prepare(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeVoiceChangerWrap::Reset(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!EnsureAlive(env)) return env.Undefined();
   SONARE_NODE_TRY
-  changer_.reset();
+  changer_->reset();
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeVoiceChangerWrap::SetConfig(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!EnsureAlive(env)) return env.Undefined();
   if (info.Length() < 1) {
     Napi::TypeError::New(env, "Expected (presetIdOrConfig)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  changer_.set_config(sonare::editing::voice_changer::realtime_voice_changer_config_from_json(
+  changer_->set_config(sonare::editing::voice_changer::realtime_voice_changer_config_from_json(
       JsonTextFromJs(info[0])));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeVoiceChangerWrap::ConfigJson(const Napi::CallbackInfo& info) {
+  if (!EnsureAlive(info.Env())) return info.Env().Undefined();
   return Napi::String::New(
       info.Env(),
-      sonare::editing::voice_changer::realtime_voice_changer_config_to_json(changer_.config()));
+      sonare::editing::voice_changer::realtime_voice_changer_config_to_json(changer_->config()));
 }
 
 Napi::Value RealtimeVoiceChangerWrap::LatencySamples(const Napi::CallbackInfo& info) {
-  return Napi::Number::New(info.Env(), changer_.latency_samples());
+  if (!EnsureAlive(info.Env())) return info.Env().Undefined();
+  return Napi::Number::New(info.Env(), changer_->latency_samples());
 }
 
 Napi::Value RealtimeVoiceChangerWrap::ProcessMono(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
     Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
         .ThrowAsJavaScriptException();
@@ -150,13 +178,14 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMono(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   Napi::Float32Array output = Napi::Float32Array::New(env, input.ElementLength());
-  changer_.process_block(input.Data(), output.Data(), static_cast<int>(input.ElementLength()));
+  changer_->process_block(input.Data(), output.Data(), static_cast<int>(input.ElementLength()));
   return output;
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeVoiceChangerWrap::ProcessMonoInto(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
     Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
         .ThrowAsJavaScriptException();
@@ -178,13 +207,14 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMonoInto(const Napi::CallbackInfo& 
     Napi::RangeError::New(env, "block exceeds maxBlockSize").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  changer_.process_block(input.Data(), output.Data(), static_cast<int>(input.ElementLength()));
+  changer_->process_block(input.Data(), output.Data(), static_cast<int>(input.ElementLength()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeVoiceChangerWrap::ProcessInterleaved(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
     Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
         .ThrowAsJavaScriptException();
@@ -217,7 +247,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleaved(const Napi::CallbackInf
       dst[i] = input.Data()[i * static_cast<size_t>(channels) + ch];
     }
   }
-  changer_.process_block(planar_ptrs_.data(), channels, static_cast<int>(frames));
+  changer_->process_block(planar_ptrs_.data(), channels, static_cast<int>(frames));
   Napi::Float32Array output = Napi::Float32Array::New(env, input.ElementLength());
   for (int ch = 0; ch < channels; ++ch) {
     const float* src = planar_scratch_.data() + static_cast<size_t>(ch) * stride;
@@ -231,6 +261,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleaved(const Napi::CallbackInf
 
 Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedInto(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
     Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
         .ThrowAsJavaScriptException();
@@ -272,7 +303,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedInto(const Napi::Callbac
       dst[i] = in_data[i * static_cast<size_t>(channels) + ch];
     }
   }
-  changer_.process_block(planar_ptrs_.data(), channels, static_cast<int>(frames));
+  changer_->process_block(planar_ptrs_.data(), channels, static_cast<int>(frames));
   float* out_data = output.Data();
   for (int ch = 0; ch < channels; ++ch) {
     const float* src = planar_scratch_.data() + static_cast<size_t>(ch) * stride;
@@ -286,6 +317,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedInto(const Napi::Callbac
 
 Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
     Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
         .ThrowAsJavaScriptException();
@@ -316,7 +348,7 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereo(const Napi::CallbackIn
   // In-place planar stereo: the planar process_block reads and writes the
   // supplied channel buffers directly, so the caller's L/R arrays are mutated.
   float* channels[2] = {left.Data(), right.Data()};
-  changer_.process_block(channels, 2, static_cast<int>(frames));
+  changer_->process_block(channels, 2, static_cast<int>(frames));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

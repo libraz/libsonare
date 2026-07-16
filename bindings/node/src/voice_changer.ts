@@ -64,12 +64,7 @@ export class RealtimeVoiceChanger {
       return;
     }
     this.disposed = true;
-    // N-API ObjectWrap instances do not have a `.delete` method, so this guard
-    // is purely defensive in case the native binding ever exposes one. The
-    // real lifecycle is GC-driven via the C++ destructor.
-    if (typeof this.native.delete === 'function') {
-      this.native.delete();
-    }
+    this.native.destroy();
   }
 
   /** Releases native resources; lets `using` (Node 22+) free them automatically. */
