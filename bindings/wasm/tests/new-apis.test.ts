@@ -889,6 +889,99 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(allFinite(audio)).toBe(true);
     });
 
+    it('accepts request objects for inverse Mel and MFCC reconstruction', () => {
+      const tone = generateSine(440, SR, 0.25);
+      const nFft = 1024;
+      const hopLength = 256;
+      const nMels = 40;
+      const nMfcc = 13;
+      const fmin = 80;
+      const fmax = 4000;
+      const mel = melSpectrogram(tone, SR, nFft, hopLength, nMels, fmin, fmax, true);
+      const coefficients = mfcc(tone, SR, nFft, hopLength, nMels, nMfcc, fmin, fmax, true);
+
+      const positionalStft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, fmin, fmax, true);
+      const requestStft = melToStft({
+        melPower: mel.power,
+        nMels,
+        nFrames: mel.nFrames,
+        sampleRate: SR,
+        nFft,
+        fmin,
+        fmax,
+        htk: true,
+      });
+      expect(requestStft).toEqual(positionalStft);
+
+      const positionalMel = mfccToMel(
+        coefficients.coefficients,
+        nMfcc,
+        coefficients.nFrames,
+        nMels,
+      );
+      const requestMel = mfccToMel({
+        mfccCoefficients: coefficients.coefficients,
+        nMfcc,
+        nFrames: coefficients.nFrames,
+        nMels,
+      });
+      expect(requestMel).toEqual(positionalMel);
+
+      const positionalAudio = melToAudio(
+        mel.power,
+        nMels,
+        mel.nFrames,
+        SR,
+        nFft,
+        hopLength,
+        fmin,
+        fmax,
+        2,
+        true,
+      );
+      const requestAudio = melToAudio({
+        melPower: mel.power,
+        nMels,
+        nFrames: mel.nFrames,
+        sampleRate: SR,
+        nFft,
+        hopLength,
+        fmin,
+        fmax,
+        nIter: 2,
+        htk: true,
+      });
+      expect(requestAudio).toEqual(positionalAudio);
+
+      const positionalMfccAudio = mfccToAudio(
+        coefficients.coefficients,
+        nMfcc,
+        coefficients.nFrames,
+        nMels,
+        SR,
+        nFft,
+        hopLength,
+        fmin,
+        fmax,
+        2,
+        true,
+      );
+      const requestMfccAudio = mfccToAudio({
+        mfccCoefficients: coefficients.coefficients,
+        nMfcc,
+        nFrames: coefficients.nFrames,
+        nMels,
+        sampleRate: SR,
+        nFft,
+        hopLength,
+        fmin,
+        fmax,
+        nIter: 2,
+        htk: true,
+      });
+      expect(requestMfccAudio).toEqual(positionalMfccAudio);
+    });
+
     it('computes CQT and VQT magnitude grids', () => {
       const cqtResult = cqt(signal, SR, 512, 32.7, 24, 12);
       expect(cqtResult.nBins).toBe(24);

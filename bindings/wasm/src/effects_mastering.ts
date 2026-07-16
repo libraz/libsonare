@@ -11,7 +11,12 @@ export {
   spectralEdit,
   timeStretch,
 } from './effects_transform';
-export type { VoiceChangeOptions, VoiceChangeRealtimeOptions } from './effects_voice_change';
+export type {
+  VoiceChangeOptions,
+  VoiceChangeRealtimeOptions,
+  VoiceChangeRealtimeRequest,
+  VoiceChangeRequest,
+} from './effects_voice_change';
 export { voiceChange, voiceChangeRealtime } from './effects_voice_change';
 export {
   masterAudio,
@@ -27,7 +32,14 @@ export {
 export type {
   MasteringChannelPolicy,
   MasteringInsertParamInfo,
+  MasteringPairAnalyzeRequest,
+  MasteringPairProcessRequest,
   MasteringProcessorCatalogEntry,
+  MasteringProcessRequest,
+  MasteringProcessStereoRequest,
+  MasteringSamplesParamsRequest,
+  MasteringStereoAnalyzeRequest,
+  MasteringStreamingPreviewRequest,
 } from './mastering_core';
 export {
   mastering,
@@ -53,6 +65,9 @@ export type {
   CompressorOptions,
   DynamicsResult,
   GateOptions,
+  MasteringDynamicsCompressorRequest,
+  MasteringDynamicsGateRequest,
+  MasteringDynamicsTransientShaperRequest,
   TransientShaperOptions,
 } from './mastering_dynamics';
 export {
@@ -70,6 +85,13 @@ export type {
   DenoiseClassicalNoiseEstimator,
   DenoiseClassicalOptions,
   DereverbClassicalOptions,
+  MasteringRepairDeclickRequest,
+  MasteringRepairDeclipRequest,
+  MasteringRepairDecrackleRequest,
+  MasteringRepairDehumRequest,
+  MasteringRepairDenoiseClassicalRequest,
+  MasteringRepairDereverbClassicalRequest,
+  MasteringRepairTrimSilenceRequest,
   TrimSilenceMode,
   TrimSilenceOptions,
 } from './mastering_repair';
@@ -82,4 +104,5 @@ export {
   masteringRepairDereverbClassical,
   masteringRepairTrimSilence,
 } from './mastering_repair';
+export type { MixStereoRequest } from './mixing_oneshot';
 export { mixingScenePresetJson, mixingScenePresetNames, mixStereo } from './mixing_oneshot';

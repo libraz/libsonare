@@ -37,6 +37,52 @@ function requireModule() {
 
 type GuardedOptions = ValidateOptions;
 
+/** Canonical request form for one-shot analysis functions. */
+export interface SamplesRequest extends GuardedOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+/** Canonical request form for key detection functions. */
+export interface DetectKeyRequest extends KeyDetectionOptions, SamplesRequest {}
+
+/** Canonical request form for analysis with synchronous progress reporting. */
+export interface AnalyzeWithProgressRequest extends SamplesRequest {
+  onProgress: ProgressCallback;
+}
+
+/** Canonical request form for chord detection. */
+export interface DetectChordsRequest extends ChordDetectionOptions, SamplesRequest {}
+
+/** Canonical request form for functional chord analysis. */
+export interface ChordFunctionalAnalysisRequest extends DetectChordsRequest {
+  keyRoot: PitchClass;
+  keyMode: Mode;
+}
+
+/** Canonical request form for impulse-response analysis. */
+export interface AnalyzeImpulseResponseRequest extends SamplesRequest {
+  nOctaveBands?: number;
+}
+
+/** Canonical request form for acoustic analysis. */
+export interface DetectAcousticRequest extends AcousticOptions, SamplesRequest {}
+
+/** Canonical request form for equivalent-room estimation. */
+export interface EstimateRoomRequest extends RoomEstimateOptions, SamplesRequest {}
+
+/** Canonical request form for room-reverb morphing. */
+export interface RoomMorphRequest extends RoomMorphOptions, GuardedOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+/** Canonical request forms for detailed music-analysis APIs. */
+export interface AnalyzeBpmRequest extends AnalyzeBpmOptions, SamplesRequest {}
+export interface AnalyzeRhythmRequest extends AnalyzeRhythmOptions, SamplesRequest {}
+export interface AnalyzeDynamicsRequest extends AnalyzeDynamicsOptions, SamplesRequest {}
+export interface AnalyzeTimbreRequest extends AnalyzeTimbreOptions, SamplesRequest {}
+
 function validateAnalysisInput(
   fnName: string,
   samples: Float32Array,
@@ -58,13 +104,20 @@ function validateAnalysisInput(
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Detected BPM
  */
+export function detectBpm(request: SamplesRequest): number;
 export function detectBpm(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: GuardedOptions,
+): number;
+export function detectBpm(
+  samples: Float32Array | SamplesRequest,
   sampleRate = 22050,
   options: GuardedOptions = {},
 ): number {
-  validateAnalysisInput('detectBpm', samples, sampleRate, options);
-  return requireModule().detectBpm(samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('detectBpm', request.samples, request.sampleRate ?? 22050, request);
+  return requireModule().detectBpm(request.samples, request.sampleRate ?? 22050);
 }
 
 /**
@@ -74,23 +127,30 @@ export function detectBpm(
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Detected key
  */
+export function detectKey(request: DetectKeyRequest): Key;
 export function detectKey(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: KeyDetectionOptions,
+): Key;
+export function detectKey(
+  samples: Float32Array | DetectKeyRequest,
   sampleRate = 22050,
   options: KeyDetectionOptions = {},
 ): Key {
-  validateAnalysisInput('detectKey', samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('detectKey', request.samples, request.sampleRate ?? 22050, request);
   const result = requireModule()._detectKeyWithOptions(
-    samples,
-    sampleRate,
-    options.nFft ?? 4096,
-    options.hopLength ?? 512,
-    options.useHpss ?? false,
-    options.loudnessWeighted ?? false,
-    options.highPassHz ?? 0,
-    keyModeValues(options.modes),
-    keyProfileValue(options.profile),
-    options.genreHint ?? '',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.nFft ?? 4096,
+    request.hopLength ?? 512,
+    request.useHpss ?? false,
+    request.loudnessWeighted ?? false,
+    request.highPassHz ?? 0,
+    keyModeValues(request.modes),
+    keyProfileValue(request.profile),
+    request.genreHint ?? '',
   );
   return {
     root: result.root as PitchClass,
@@ -101,28 +161,40 @@ export function detectKey(
   };
 }
 
+export function detectKeyCandidates(request: DetectKeyRequest): KeyCandidate[];
 export function detectKeyCandidates(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: KeyDetectionOptions,
+): KeyCandidate[];
+export function detectKeyCandidates(
+  samples: Float32Array | DetectKeyRequest,
   sampleRate = 22050,
   options: KeyDetectionOptions = {},
 ): KeyCandidate[] {
-  validateAnalysisInput('detectKeyCandidates', samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput(
+    'detectKeyCandidates',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
   // The embind value marshalling returns an array whose constructor is not this
   // realm's Array; chaining .map() onto it propagates that constructor via
   // Symbol.species, leaving a result that structuredClone (and so postMessage to
   // a Worker) rejects with "could not be cloned". Array.from() re-roots it as a
   // plain Array before mapping.
   const candidates = requireModule()._detectKeyCandidates(
-    samples,
-    sampleRate,
-    options.nFft ?? 4096,
-    options.hopLength ?? 512,
-    options.useHpss ?? false,
-    options.loudnessWeighted ?? false,
-    options.highPassHz ?? 0,
-    keyModeValues(options.modes),
-    keyProfileValue(options.profile),
-    options.genreHint ?? '',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.nFft ?? 4096,
+    request.hopLength ?? 512,
+    request.useHpss ?? false,
+    request.loudnessWeighted ?? false,
+    request.highPassHz ?? 0,
+    keyModeValues(request.modes),
+    keyProfileValue(request.profile),
+    request.genreHint ?? '',
   );
   return Array.from(candidates, convertKeyCandidate);
 }
@@ -134,13 +206,20 @@ export function detectKeyCandidates(
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Array of onset times in seconds
  */
+export function detectOnsets(request: SamplesRequest): Float32Array;
 export function detectOnsets(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: GuardedOptions,
+): Float32Array;
+export function detectOnsets(
+  samples: Float32Array | SamplesRequest,
   sampleRate = 22050,
   options: GuardedOptions = {},
 ): Float32Array {
-  validateAnalysisInput('detectOnsets', samples, sampleRate, options);
-  return requireModule().detectOnsets(samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('detectOnsets', request.samples, request.sampleRate ?? 22050, request);
+  return requireModule().detectOnsets(request.samples, request.sampleRate ?? 22050);
 }
 
 /**
@@ -150,13 +229,20 @@ export function detectOnsets(
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Array of beat times in seconds
  */
+export function detectBeats(request: SamplesRequest): Float32Array;
 export function detectBeats(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: GuardedOptions,
+): Float32Array;
+export function detectBeats(
+  samples: Float32Array | SamplesRequest,
   sampleRate = 22050,
   options: GuardedOptions = {},
 ): Float32Array {
-  validateAnalysisInput('detectBeats', samples, sampleRate, options);
-  return requireModule().detectBeats(samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('detectBeats', request.samples, request.sampleRate ?? 22050, request);
+  return requireModule().detectBeats(request.samples, request.sampleRate ?? 22050);
 }
 
 /**
@@ -166,13 +252,20 @@ export function detectBeats(
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Array of downbeat times in seconds
  */
+export function detectDownbeats(request: SamplesRequest): Float32Array;
 export function detectDownbeats(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: GuardedOptions,
+): Float32Array;
+export function detectDownbeats(
+  samples: Float32Array | SamplesRequest,
   sampleRate = 22050,
   options: GuardedOptions = {},
 ): Float32Array {
-  validateAnalysisInput('detectDownbeats', samples, sampleRate, options);
-  return requireModule().detectDownbeats(samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('detectDownbeats', request.samples, request.sampleRate ?? 22050, request);
+  return requireModule().detectDownbeats(request.samples, request.sampleRate ?? 22050);
 }
 
 /**
@@ -183,29 +276,36 @@ export function detectDownbeats(
  * @param options - Optional chord detection settings
  * @returns Detected chord segments
  */
+export function detectChords(request: DetectChordsRequest): ChordAnalysisResult;
 export function detectChords(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: ChordDetectionOptions,
+): ChordAnalysisResult;
+export function detectChords(
+  samples: Float32Array | DetectChordsRequest,
   sampleRate = 22050,
   options: ChordDetectionOptions = {},
 ): ChordAnalysisResult {
-  validateAnalysisInput('detectChords', samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('detectChords', request.samples, request.sampleRate ?? 22050, request);
   const result = requireModule().detectChords(
-    samples,
-    sampleRate,
-    options.minDuration ?? 0.3,
-    options.smoothingWindow ?? 2.0,
-    options.threshold ?? 0.5,
-    options.useTriadsOnly ?? false,
-    options.nFft ?? 2048,
-    options.hopLength ?? 512,
-    options.useBeatSync ?? true,
-    options.useHmm ?? false,
-    options.hmmBeamWidth ?? 24,
-    options.useKeyContext ?? false,
-    options.keyRoot ?? PitchClass.C,
-    options.keyMode ?? Mode.Major,
-    options.detectInversions ?? false,
-    chordChromaMethodValue(options.chromaMethod ?? 'stft'),
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.minDuration ?? 0.3,
+    request.smoothingWindow ?? 2.0,
+    request.threshold ?? 0.5,
+    request.useTriadsOnly ?? false,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.useBeatSync ?? true,
+    request.useHmm ?? false,
+    request.hmmBeamWidth ?? 24,
+    request.useKeyContext ?? false,
+    request.keyRoot ?? PitchClass.C,
+    request.keyMode ?? Mode.Major,
+    request.detectInversions ?? false,
+    chordChromaMethodValue(request.chromaMethod ?? 'stft'),
   );
   return convertChordAnalysisResult(result);
 }
@@ -217,31 +317,48 @@ export function detectChords(
  *
  * @returns One Roman-numeral label (e.g. "I", "IV", "V", "vi") per detected chord
  */
+export function chordFunctionalAnalysis(request: ChordFunctionalAnalysisRequest): string[];
 export function chordFunctionalAnalysis(
   samples: Float32Array,
   keyRoot: PitchClass,
   keyMode: Mode,
+  sampleRate?: number,
+  options?: ChordDetectionOptions,
+): string[];
+export function chordFunctionalAnalysis(
+  samples: Float32Array | ChordFunctionalAnalysisRequest,
+  keyRoot?: PitchClass,
+  keyMode?: Mode,
   sampleRate = 22050,
   options: ChordDetectionOptions = {},
 ): string[] {
-  validateAnalysisInput('chordFunctionalAnalysis', samples, sampleRate, options);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, keyRoot, keyMode, sampleRate, ...options }
+      : samples;
+  validateAnalysisInput(
+    'chordFunctionalAnalysis',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
   return requireModule().chordFunctionalAnalysis(
-    samples,
-    keyRoot,
-    keyMode,
-    sampleRate,
-    options.minDuration ?? 0.3,
-    options.smoothingWindow ?? 2.0,
-    options.threshold ?? 0.5,
-    options.useTriadsOnly ?? false,
-    options.nFft ?? 2048,
-    options.hopLength ?? 512,
-    options.useBeatSync ?? true,
-    options.useHmm ?? false,
-    options.hmmBeamWidth ?? 24,
-    options.useKeyContext ?? false,
-    options.detectInversions ?? false,
-    chordChromaMethodValue(options.chromaMethod ?? 'stft'),
+    request.samples,
+    request.keyRoot as PitchClass,
+    request.keyMode as Mode,
+    request.sampleRate ?? 22050,
+    request.minDuration ?? 0.3,
+    request.smoothingWindow ?? 2.0,
+    request.threshold ?? 0.5,
+    request.useTriadsOnly ?? false,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.useBeatSync ?? true,
+    request.useHmm ?? false,
+    request.hmmBeamWidth ?? 24,
+    request.useKeyContext ?? false,
+    request.detectInversions ?? false,
+    chordChromaMethodValue(request.chromaMethod ?? 'stft'),
   );
 }
 
@@ -260,43 +377,69 @@ export function chordFunctionalAnalysis(
  * the UI responsive for long inputs, drive this from a Web Worker and use
  * {@link analyzeWithProgress} to report progress.
  */
+export function analyze(request: SamplesRequest): AnalysisResult;
 export function analyze(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: GuardedOptions,
+): AnalysisResult;
+export function analyze(
+  samples: Float32Array | SamplesRequest,
   sampleRate = 22050,
   options: GuardedOptions = {},
 ): AnalysisResult {
-  validateAnalysisInput('analyze', samples, sampleRate, options);
-  const result = requireModule().analyze(samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('analyze', request.samples, request.sampleRate ?? 22050, request);
+  const result = requireModule().analyze(request.samples, request.sampleRate ?? 22050);
   return convertAnalysisResult(result);
 }
 
+export function analyzeImpulseResponse(request: AnalyzeImpulseResponseRequest): AcousticResult;
 export function analyzeImpulseResponse(
   samples: Float32Array,
+  sampleRate?: number,
+  nOctaveBands?: number,
+): AcousticResult;
+export function analyzeImpulseResponse(
+  samples: Float32Array | AnalyzeImpulseResponseRequest,
   sampleRate = 48000,
   nOctaveBands = 6,
 ): AcousticResult {
-  validateAnalysisInput('analyzeImpulseResponse', samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, nOctaveBands } : samples;
+  validateAnalysisInput(
+    'analyzeImpulseResponse',
+    request.samples,
+    request.sampleRate ?? 48000,
+    request,
+  );
   const result: WasmAcousticResult = requireModule().analyzeImpulseResponse(
-    samples,
-    sampleRate,
-    nOctaveBands,
+    request.samples,
+    request.sampleRate ?? 48000,
+    request.nOctaveBands ?? 6,
   );
   return result;
 }
 
+export function detectAcoustic(request: DetectAcousticRequest): AcousticResult;
 export function detectAcoustic(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: AcousticOptions,
+): AcousticResult;
+export function detectAcoustic(
+  samples: Float32Array | DetectAcousticRequest,
   sampleRate = 48000,
   options: AcousticOptions = {},
 ): AcousticResult {
-  validateAnalysisInput('detectAcoustic', samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('detectAcoustic', request.samples, request.sampleRate ?? 48000, request);
   const result: WasmAcousticResult = requireModule().detectAcoustic(
-    samples,
-    sampleRate,
-    options.nOctaveBands ?? 6,
-    options.nThirdOctaveSubbands ?? 24,
-    options.minDecayDb ?? 30.0,
-    options.noiseFloorMarginDb ?? 10.0,
+    request.samples,
+    request.sampleRate ?? 48000,
+    request.nOctaveBands ?? 6,
+    request.nThirdOctaveSubbands ?? 24,
+    request.minDecayDb ?? 30.0,
+    request.noiseFloorMarginDb ?? 10.0,
   );
   return result;
 }
@@ -317,8 +460,14 @@ export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
  * Estimate an equivalent room (volume/dimensions/absorption/DRR) from a
  * recording or impulse response.
  */
+export function estimateRoom(request: EstimateRoomRequest): RoomEstimateResult;
 export function estimateRoom(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: RoomEstimateOptions,
+): RoomEstimateResult;
+export function estimateRoom(
+  samples: Float32Array | EstimateRoomRequest,
   sampleRate = 48000,
   options: RoomEstimateOptions = {},
 ): RoomEstimateResult {
@@ -326,8 +475,9 @@ export function estimateRoom(
   if (typeof module.estimateRoom !== 'function') {
     throw new Error('libsonare was built without acoustic-simulation support');
   }
-  validateAnalysisInput('estimateRoom', samples, sampleRate);
-  return module.estimateRoom(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('estimateRoom', request.samples, request.sampleRate ?? 48000, request);
+  return module.estimateRoom(request.samples, request.sampleRate ?? 48000, request);
 }
 
 /**
@@ -335,17 +485,27 @@ export function estimateRoom(
  * dereverberation). Returns the morphed samples (input length plus the target
  * room's reverb tail).
  */
+export function roomMorph(request: RoomMorphRequest): Float32Array;
 export function roomMorph(
   samples: Float32Array,
   sampleRate: number,
+  options?: RoomMorphOptions,
+): Float32Array;
+export function roomMorph(
+  samples: Float32Array | RoomMorphRequest,
+  sampleRate?: number,
   options: RoomMorphOptions = {},
 ): Float32Array {
   const module = requireModule();
   if (typeof module.roomMorph !== 'function') {
     throw new Error('libsonare was built without acoustic-simulation support');
   }
-  validateAnalysisInput('roomMorph', samples, sampleRate);
-  return module.roomMorph(samples, sampleRate, options);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  validateAnalysisInput('roomMorph', request.samples, request.sampleRate, request);
+  return module.roomMorph(request.samples, request.sampleRate, request);
 }
 
 /**
@@ -356,13 +516,32 @@ export function roomMorph(
  * @param onProgress - Progress callback (progress: 0-1, stage: string)
  * @returns Complete analysis result
  */
+export function analyzeWithProgress(request: AnalyzeWithProgressRequest): AnalysisResult;
 export function analyzeWithProgress(
   samples: Float32Array,
-  sampleRate = 22050,
+  sampleRate: number | undefined,
   onProgress: ProgressCallback,
+): AnalysisResult;
+export function analyzeWithProgress(
+  samples: Float32Array | AnalyzeWithProgressRequest,
+  sampleRate = 22050,
+  onProgress?: ProgressCallback,
 ): AnalysisResult {
-  validateAnalysisInput('analyzeWithProgress', samples, sampleRate);
-  const result = requireModule().analyzeWithProgress(samples, sampleRate, onProgress);
+  const request: AnalyzeWithProgressRequest =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, onProgress: onProgress as ProgressCallback }
+      : samples;
+  validateAnalysisInput(
+    'analyzeWithProgress',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
+  const result = requireModule().analyzeWithProgress(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.onProgress,
+  );
   return convertAnalysisResult(result);
 }
 
@@ -423,60 +602,81 @@ export interface TimbreAnalysisResult extends TimbreFrame {
  * Detailed BPM analysis (BPM, confidence, alternate candidates, autocorrelation,
  * tempogram). Matches the Node `analyzeBpm` / Python `analyze_bpm` surface.
  */
+export function analyzeBpm(request: AnalyzeBpmRequest): BpmAnalysisResult;
 export function analyzeBpm(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: AnalyzeBpmOptions,
+): BpmAnalysisResult;
+export function analyzeBpm(
+  samples: Float32Array | AnalyzeBpmRequest,
   sampleRate = 22050,
   options: AnalyzeBpmOptions = {},
 ): BpmAnalysisResult {
-  validateAnalysisInput('analyzeBpm', samples, sampleRate, options);
-  assertNonNegativeInteger('analyzeBpm', options.maxCandidates ?? 5, 'maxCandidates');
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('analyzeBpm', request.samples, request.sampleRate ?? 22050, request);
+  assertNonNegativeInteger('analyzeBpm', request.maxCandidates ?? 5, 'maxCandidates');
   return requireModule().analyzeBpm(
-    samples,
-    sampleRate,
-    options.bpmMin ?? 30.0,
-    options.bpmMax ?? 300.0,
-    options.startBpm ?? 120.0,
-    options.nFft ?? 2048,
-    options.hopLength ?? 512,
-    options.maxCandidates ?? 5,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.bpmMin ?? 30.0,
+    request.bpmMax ?? 300.0,
+    request.startBpm ?? 120.0,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.maxCandidates ?? 5,
   );
 }
 
 /**
  * Detailed rhythm analysis (time signature, groove, syncopation, beat intervals).
  */
+export function analyzeRhythm(request: AnalyzeRhythmRequest): RhythmAnalysisResult;
 export function analyzeRhythm(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: AnalyzeRhythmOptions,
+): RhythmAnalysisResult;
+export function analyzeRhythm(
+  samples: Float32Array | AnalyzeRhythmRequest,
   sampleRate = 22050,
   options: AnalyzeRhythmOptions = {},
 ): RhythmAnalysisResult {
-  validateAnalysisInput('analyzeRhythm', samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('analyzeRhythm', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().analyzeRhythm(
-    samples,
-    sampleRate,
-    options.bpmMin ?? 60.0,
-    options.bpmMax ?? 200.0,
-    options.startBpm ?? 120.0,
-    options.nFft ?? 2048,
-    options.hopLength ?? 512,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.bpmMin ?? 60.0,
+    request.bpmMax ?? 200.0,
+    request.startBpm ?? 120.0,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
   );
 }
 
 /**
  * Dynamics analysis (RMS, peak, crest factor, LRA, loudness curve).
  */
+export function analyzeDynamics(request: AnalyzeDynamicsRequest): DynamicsAnalysisResult;
 export function analyzeDynamics(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: AnalyzeDynamicsOptions,
+): DynamicsAnalysisResult;
+export function analyzeDynamics(
+  samples: Float32Array | AnalyzeDynamicsRequest,
   sampleRate = 22050,
   options: AnalyzeDynamicsOptions = {},
 ): DynamicsAnalysisResult {
-  validateAnalysisInput('analyzeDynamics', samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('analyzeDynamics', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().analyzeDynamics(
-    samples,
-    sampleRate,
-    options.windowSec ?? 0.4,
-    options.hopLength ?? 512,
-    options.compressionThreshold ?? 6.0,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.windowSec ?? 0.4,
+    request.hopLength ?? 512,
+    request.compressionThreshold ?? 6.0,
   );
 }
 
@@ -484,20 +684,27 @@ export function analyzeDynamics(
  * Timbre analysis (brightness/warmth/density/roughness/complexity plus spectral
  * features and per-window timbre frames).
  */
+export function analyzeTimbre(request: AnalyzeTimbreRequest): TimbreAnalysisResult;
 export function analyzeTimbre(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: AnalyzeTimbreOptions,
+): TimbreAnalysisResult;
+export function analyzeTimbre(
+  samples: Float32Array | AnalyzeTimbreRequest,
   sampleRate = 22050,
   options: AnalyzeTimbreOptions = {},
 ): TimbreAnalysisResult {
-  validateAnalysisInput('analyzeTimbre', samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  validateAnalysisInput('analyzeTimbre', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().analyzeTimbre(
-    samples,
-    sampleRate,
-    options.nFft ?? 2048,
-    options.hopLength ?? 512,
-    options.nMels ?? 128,
-    options.nMfcc ?? 13,
-    options.windowSec ?? 0.5,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.nMels ?? 128,
+    request.nMfcc ?? 13,
+    request.windowSec ?? 0.5,
   );
 }
 

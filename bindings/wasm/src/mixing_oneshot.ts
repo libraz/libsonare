@@ -21,6 +21,13 @@ export function mixingScenePresetJson(presetName: string): string {
   return requireModule().mixingScenePresetJson(presetName);
 }
 
+/** Inputs for the one-shot {@link mixStereo} facade. */
+export interface MixStereoRequest extends MixOptions {
+  leftChannels: Float32Array[];
+  rightChannels: Float32Array[];
+  sampleRate?: number;
+}
+
 /**
  * One-shot stereo mix of multiple strips through the routing graph + master bus.
  *
@@ -36,19 +43,32 @@ export function mixingScenePresetJson(presetName: string): string {
  * @param sampleRate - Sample rate in Hz
  * @param options - Per-strip mix options (trim, fader, pan, width, mute)
  */
+export function mixStereo(request: MixStereoRequest): MixResult;
 export function mixStereo(
   leftChannels: Float32Array[],
   rightChannels: Float32Array[],
+  sampleRate?: number,
+  options?: MixOptions,
+): MixResult;
+export function mixStereo(
+  leftChannels: Float32Array[] | MixStereoRequest,
+  rightChannels?: Float32Array[],
   sampleRate = 48000,
   options: MixOptions = {},
 ): MixResult {
-  if (leftChannels.length === 0 || leftChannels.length !== rightChannels.length) {
+  const request = Array.isArray(leftChannels)
+    ? { leftChannels, rightChannels: rightChannels ?? [], sampleRate, ...options }
+    : leftChannels;
+  if (
+    request.leftChannels.length === 0 ||
+    request.leftChannels.length !== request.rightChannels.length
+  ) {
     throw new Error('leftChannels and rightChannels must have the same non-zero length.');
   }
   return requireModule().mixStereo(
-    leftChannels,
-    rightChannels,
-    sampleRate,
-    options as Record<string, unknown>,
+    request.leftChannels,
+    request.rightChannels,
+    request.sampleRate ?? 48000,
+    request as unknown as Record<string, unknown>,
   );
 }

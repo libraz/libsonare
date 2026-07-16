@@ -29,6 +29,12 @@ export interface CompressorOptions extends ValidateOptions {
   pdrReleaseScale?: number;
 }
 
+/** Canonical request form for the offline compressor. */
+export interface MasteringDynamicsCompressorRequest extends CompressorOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
 /** Options for `masteringDynamicsGate`. */
 export interface GateOptions extends ValidateOptions {
   thresholdDb?: number;
@@ -38,6 +44,12 @@ export interface GateOptions extends ValidateOptions {
   holdMs?: number;
   closeThresholdDb?: number;
   keyHpfHz?: number;
+}
+
+/** Canonical request form for the offline gate. */
+export interface MasteringDynamicsGateRequest extends GateOptions {
+  samples: Float32Array;
+  sampleRate: number;
 }
 
 /** Options for `masteringDynamicsTransientShaper`. */
@@ -54,6 +66,12 @@ export interface TransientShaperOptions extends ValidateOptions {
   lookaheadMs?: number;
 }
 
+/** Canonical request form for the offline transient shaper. */
+export interface MasteringDynamicsTransientShaperRequest extends TransientShaperOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
 /** Result envelope returned by offline mastering dynamics processors. */
 export interface DynamicsResult {
   samples: Float32Array;
@@ -68,38 +86,76 @@ const COMPRESSOR_DETECTOR_MAP: Record<CompressorDetector, number> = {
 
 /** Offline feed-forward compressor (soft knee, optional auto-makeup / sidechain HPF). */
 export function masteringDynamicsCompressor(
+  request: MasteringDynamicsCompressorRequest,
+): DynamicsResult;
+export function masteringDynamicsCompressor(
   samples: Float32Array,
   sampleRate: number,
+  options?: CompressorOptions,
+): DynamicsResult;
+export function masteringDynamicsCompressor(
+  samples: Float32Array | MasteringDynamicsCompressorRequest,
+  sampleRate?: number,
   options: CompressorOptions = {},
 ): DynamicsResult {
-  assertSamples('masteringDynamicsCompressor', samples, options.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  assertSamples('masteringDynamicsCompressor', request.samples, request.validate !== false);
   const detector =
-    typeof options.detector === 'string'
-      ? COMPRESSOR_DETECTOR_MAP[options.detector]
-      : options.detector;
-  const opts: Record<string, unknown> = { ...options };
+    typeof request.detector === 'string'
+      ? COMPRESSOR_DETECTOR_MAP[request.detector]
+      : request.detector;
+  const opts: Record<string, unknown> = { ...request };
   if (detector !== undefined) {
     opts.detector = detector;
   }
-  return requireModule().masteringDynamicsCompressor(samples, sampleRate, opts);
+  return requireModule().masteringDynamicsCompressor(request.samples, request.sampleRate, opts);
 }
 
 /** Offline noise gate (hysteresis, hold, optional key HPF). */
+export function masteringDynamicsGate(request: MasteringDynamicsGateRequest): DynamicsResult;
 export function masteringDynamicsGate(
   samples: Float32Array,
   sampleRate: number,
+  options?: GateOptions,
+): DynamicsResult;
+export function masteringDynamicsGate(
+  samples: Float32Array | MasteringDynamicsGateRequest,
+  sampleRate?: number,
   options: GateOptions = {},
 ): DynamicsResult {
-  assertSamples('masteringDynamicsGate', samples, options.validate !== false);
-  return requireModule().masteringDynamicsGate(samples, sampleRate, options);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  assertSamples('masteringDynamicsGate', request.samples, request.validate !== false);
+  return requireModule().masteringDynamicsGate(request.samples, request.sampleRate, request);
 }
 
 /** Offline transient shaper (envelope-difference attack/sustain control). */
 export function masteringDynamicsTransientShaper(
+  request: MasteringDynamicsTransientShaperRequest,
+): DynamicsResult;
+export function masteringDynamicsTransientShaper(
   samples: Float32Array,
   sampleRate: number,
+  options?: TransientShaperOptions,
+): DynamicsResult;
+export function masteringDynamicsTransientShaper(
+  samples: Float32Array | MasteringDynamicsTransientShaperRequest,
+  sampleRate?: number,
   options: TransientShaperOptions = {},
 ): DynamicsResult {
-  assertSamples('masteringDynamicsTransientShaper', samples, options.validate !== false);
-  return requireModule().masteringDynamicsTransientShaper(samples, sampleRate, options);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  assertSamples('masteringDynamicsTransientShaper', request.samples, request.validate !== false);
+  return requireModule().masteringDynamicsTransientShaper(
+    request.samples,
+    request.sampleRate,
+    request,
+  );
 }

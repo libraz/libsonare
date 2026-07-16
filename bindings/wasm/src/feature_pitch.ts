@@ -22,8 +22,30 @@ function requireModule() {
  * @param fillNa - If true, return 0 for unvoiced f0 frames; otherwise keep NaN (default: false)
  * @returns Pitch detection result
  */
+export interface PitchYinRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  frameLength?: number;
+  hopLength?: number;
+  fmin?: number;
+  fmax?: number;
+  threshold?: number;
+  fillNa?: boolean;
+}
+
+export function pitchYin(request: PitchYinRequest): PitchResult;
 export function pitchYin(
   samples: Float32Array,
+  sampleRate?: number,
+  frameLength?: number,
+  hopLength?: number,
+  fmin?: number,
+  fmax?: number,
+  threshold?: number,
+  fillNa?: boolean,
+): PitchResult;
+export function pitchYin(
+  samples: Float32Array | PitchYinRequest,
   sampleRate = 22050,
   frameLength = 2048,
   hopLength = 512,
@@ -32,6 +54,19 @@ export function pitchYin(
   threshold = 0.3,
   fillNa = false,
 ): PitchResult {
+  if (!(samples instanceof Float32Array)) {
+    const request = samples;
+    return pitchYin(
+      request.samples,
+      request.sampleRate,
+      request.frameLength,
+      request.hopLength,
+      request.fmin,
+      request.fmax,
+      request.threshold,
+      request.fillNa,
+    );
+  }
   return requireModule().pitchYin(
     samples,
     sampleRate,
@@ -57,8 +92,21 @@ export function pitchYin(
  * @param fillNa - If true, return 0 for unvoiced f0 frames; otherwise keep NaN (default: false)
  * @returns Pitch detection result
  */
+export interface PitchPyinRequest extends PitchYinRequest {}
+
+export function pitchPyin(request: PitchPyinRequest): PitchResult;
 export function pitchPyin(
   samples: Float32Array,
+  sampleRate?: number,
+  frameLength?: number,
+  hopLength?: number,
+  fmin?: number,
+  fmax?: number,
+  threshold?: number,
+  fillNa?: boolean,
+): PitchResult;
+export function pitchPyin(
+  samples: Float32Array | PitchPyinRequest,
   sampleRate = 22050,
   frameLength = 2048,
   hopLength = 512,
@@ -67,6 +115,19 @@ export function pitchPyin(
   threshold = 0.3,
   fillNa = false,
 ): PitchResult {
+  if (!(samples instanceof Float32Array)) {
+    const request = samples;
+    return pitchPyin(
+      request.samples,
+      request.sampleRate,
+      request.frameLength,
+      request.hopLength,
+      request.fmin,
+      request.fmax,
+      request.threshold,
+      request.fillNa,
+    );
+  }
   return requireModule().pitchPyin(
     samples,
     sampleRate,

@@ -18,8 +18,15 @@ import {
   hasFfmpegSupport,
   init,
   Mode,
+  masterAudio,
+  masterAudioStereo,
   masterAudioStereoWithProgress,
   masterAudioWithProgress,
+  mastering,
+  masteringChain,
+  masteringChainStereo,
+  masteringProcess,
+  masteringProcessStereo,
   PitchClass,
 } from '../src/index';
 import { sine as genSine } from './_helpers';
@@ -145,6 +152,66 @@ describe('WASM analyzer coverage parity', () => {
   });
 
   describe('masterAudioWithProgress', () => {
+    it('accepts the canonical loudness-mastering request object', () => {
+      const samples = makeSine(2, 440);
+      const positional = mastering(samples, SR, { targetLufs: -18 });
+      const request = mastering({ samples, sampleRate: SR, targetLufs: -18 });
+
+      expect(request).toEqual(positional);
+    });
+
+    it('accepts canonical named-processor request objects', () => {
+      const samples = makeSine(2, 440);
+      expect(
+        masteringProcess({
+          processorName: 'dynamics.compressor',
+          samples,
+          sampleRate: SR,
+          params: { ratio: 2 },
+        }),
+      ).toEqual(masteringProcess('dynamics.compressor', samples, SR, { ratio: 2 }));
+
+      const left = makeSine(2, 440);
+      const right = makeSine(2, 660);
+      expect(
+        masteringProcessStereo({
+          processorName: 'stereo.imager',
+          left,
+          right,
+          sampleRate: SR,
+          params: { width: 1 },
+        }),
+      ).toEqual(masteringProcessStereo('stereo.imager', left, right, SR, { width: 1 }));
+    });
+
+    it('accepts canonical mastering-chain request objects', () => {
+      const samples = makeSine(2, 440);
+      expect(masteringChain({ samples, sampleRate: SR })).toEqual(masteringChain(samples, SR));
+
+      const left = makeSine(2, 440);
+      const right = makeSine(2, 660);
+      expect(masteringChainStereo({ left, right, sampleRate: SR })).toEqual(
+        masteringChainStereo(left, right, SR),
+      );
+    });
+
+    it('accepts the canonical mono request object', () => {
+      const samples = makeSine(2, 440);
+      const positional = masterAudio(samples, SR, 'pop');
+      const request = masterAudio({ samples, sampleRate: SR, preset: 'pop' });
+
+      expect(request).toEqual(positional);
+    });
+
+    it('accepts the canonical stereo request object', () => {
+      const left = makeSine(2, 440);
+      const right = makeSine(2, 660);
+      const positional = masterAudioStereo(left, right, SR, 'pop');
+      const request = masterAudioStereo({ left, right, sampleRate: SR, preset: 'pop' });
+
+      expect(request).toEqual(positional);
+    });
+
     it('invokes the progress callback at least once and returns mastered samples', () => {
       const samples = makeSine(2, 440);
       let calls = 0;
@@ -158,6 +225,22 @@ describe('WASM analyzer coverage parity', () => {
       expect(calls).toBeGreaterThan(0);
       expect(result.samples.length).toBeGreaterThan(0);
       expect(Number.isFinite(result.outputLufs)).toBe(true);
+    });
+
+    it('uses onProgress from a canonical request object', () => {
+      const samples = makeSine(2, 440);
+      let calls = 0;
+      const result = masterAudio({
+        samples,
+        sampleRate: SR,
+        preset: 'pop',
+        onProgress: () => {
+          calls++;
+        },
+      });
+
+      expect(calls).toBeGreaterThan(0);
+      expect(result.samples.length).toBeGreaterThan(0);
     });
 
     it('stereo variant accepts two channels and reports stages', () => {

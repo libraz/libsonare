@@ -15,6 +15,68 @@ function requireModule() {
   return getSonareModule();
 }
 
+/** Canonical request form for loudness/true-peak mastering. */
+export interface MasteringRequest extends MasteringOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+export interface MasteringProcessRequest {
+  processorName: SoloProcessor;
+  samples: Float32Array;
+  sampleRate?: number;
+  params?: MasteringProcessorParams;
+}
+
+export interface MasteringProcessStereoRequest {
+  processorName: SoloProcessor;
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  params?: MasteringProcessorParams;
+}
+
+/** Canonical request form for a two-input match processor. */
+export interface MasteringPairProcessRequest {
+  processorName: PairProcessor;
+  source: Float32Array;
+  reference: Float32Array;
+  sampleRate?: number;
+  params?: MasteringProcessorParams;
+}
+
+/** Canonical request form for a two-input match analysis. */
+export interface MasteringPairAnalyzeRequest {
+  analysisName: PairAnalysis;
+  source: Float32Array;
+  reference: Float32Array;
+  sampleRate?: number;
+  params?: MasteringProcessorParams;
+}
+
+/** Canonical request form for a stereo analysis. */
+export interface MasteringStereoAnalyzeRequest {
+  analysisName: StereoAnalysis;
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  params?: MasteringProcessorParams;
+}
+
+/** Canonical request form for assistant/profile calls. */
+export interface MasteringSamplesParamsRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  params?: MasteringProcessorParams;
+}
+
+/** Canonical request form for streaming-platform preview. */
+export interface MasteringStreamingPreviewRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  platforms?: StreamingPlatform[];
+}
+
 /**
  * Apply mastering loudness normalization with a true-peak ceiling.
  *
@@ -23,19 +85,26 @@ function requireModule() {
  * @param options - Loudness/ceiling settings ({@link MasteringOptions})
  * @returns Processed audio and loudness metadata
  */
+export function mastering(request: MasteringRequest): MasteringResult;
 export function mastering(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: MasteringOptions,
+): MasteringResult;
+export function mastering(
+  samples: MasteringRequest | Float32Array,
   sampleRate = 22050,
   options: MasteringOptions = {},
 ): MasteringResult {
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return requireModule().mastering(
-    samples,
-    sampleRate,
-    options.targetLufs ?? -14.0,
-    options.ceilingDb ?? -1.0,
-    options.truePeakOversample ?? 4,
-    options.releaseMs ?? 0, // 0 => library default (50 ms)
-    options.applyGainAtInputRate ?? false,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.targetLufs ?? -14.0,
+    request.ceilingDb ?? -1.0,
+    request.truePeakOversample ?? 4,
+    request.releaseMs ?? 0, // 0 => library default (50 ms)
+    request.applyGainAtInputRate ?? false,
   );
 }
 
@@ -172,26 +241,68 @@ export function masteringStereoAnalysisNames(): StereoAnalysis[] {
   return Array.from(requireModule().masteringStereoAnalysisNames()) as StereoAnalysis[];
 }
 
+export function masteringProcess(request: MasteringProcessRequest): MasteringResult;
 export function masteringProcess(
   processorName: SoloProcessor,
   samples: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): MasteringResult;
+export function masteringProcess(
+  processorName: SoloProcessor | MasteringProcessRequest,
+  samples?: Float32Array,
   sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): MasteringResult {
-  return requireModule().masteringProcess(processorName, samples, sampleRate, params);
+  const request =
+    typeof processorName === 'string'
+      ? { processorName, samples: samples as Float32Array, sampleRate, params }
+      : processorName;
+  return requireModule().masteringProcess(
+    request.processorName,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringProcessStereo(
+  request: MasteringProcessStereoRequest,
+): MasteringStereoResult;
 export function masteringProcessStereo(
   processorName: SoloProcessor,
   left: Float32Array,
   right: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): MasteringStereoResult;
+export function masteringProcessStereo(
+  processorName: SoloProcessor | MasteringProcessStereoRequest,
+  left?: Float32Array,
+  right?: Float32Array,
   sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): MasteringStereoResult {
-  if (left.length !== right.length) {
+  const request =
+    typeof processorName === 'string'
+      ? {
+          processorName,
+          left: left as Float32Array,
+          right: right as Float32Array,
+          sampleRate,
+          params,
+        }
+      : processorName;
+  if (request.left.length !== request.right.length) {
     throw new Error('Stereo channel lengths must match.');
   }
-  return requireModule().masteringProcessStereo(processorName, left, right, sampleRate, params);
+  return requireModule().masteringProcessStereo(
+    request.processorName,
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
 /**
@@ -199,60 +310,165 @@ export function masteringProcessStereo(
  * independent lengths — the match primitives consume each buffer at its own
  * length.
  */
+export function masteringPairProcess(request: MasteringPairProcessRequest): MasteringResult;
 export function masteringPairProcess(
   processorName: PairProcessor,
   source: Float32Array,
   reference: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): MasteringResult;
+export function masteringPairProcess(
+  processorName: PairProcessor | MasteringPairProcessRequest,
+  source?: Float32Array,
+  reference?: Float32Array,
   sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): MasteringResult {
-  return requireModule().masteringPairProcess(processorName, source, reference, sampleRate, params);
+  const request =
+    typeof processorName === 'string'
+      ? {
+          processorName,
+          source: source as Float32Array,
+          reference: reference as Float32Array,
+          sampleRate,
+          params,
+        }
+      : processorName;
+  return requireModule().masteringPairProcess(
+    request.processorName,
+    request.source,
+    request.reference,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
 /**
  * Analyze a `source` against a `reference` with a two-input analysis. The two
  * buffers may have independent lengths.
  */
+export function masteringPairAnalyze(request: MasteringPairAnalyzeRequest): string;
 export function masteringPairAnalyze(
   analysisName: PairAnalysis,
   source: Float32Array,
   reference: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): string;
+export function masteringPairAnalyze(
+  analysisName: PairAnalysis | MasteringPairAnalyzeRequest,
+  source?: Float32Array,
+  reference?: Float32Array,
   sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
-  return requireModule().masteringPairAnalyze(analysisName, source, reference, sampleRate, params);
+  const request =
+    typeof analysisName === 'string'
+      ? {
+          analysisName,
+          source: source as Float32Array,
+          reference: reference as Float32Array,
+          sampleRate,
+          params,
+        }
+      : analysisName;
+  return requireModule().masteringPairAnalyze(
+    request.analysisName,
+    request.source,
+    request.reference,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringStereoAnalyze(request: MasteringStereoAnalyzeRequest): string;
 export function masteringStereoAnalyze(
   analysisName: StereoAnalysis,
   left: Float32Array,
   right: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): string;
+export function masteringStereoAnalyze(
+  analysisName: StereoAnalysis | MasteringStereoAnalyzeRequest,
+  left?: Float32Array,
+  right?: Float32Array,
   sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
-  return requireModule().masteringStereoAnalyze(analysisName, left, right, sampleRate, params);
+  const request =
+    typeof analysisName === 'string'
+      ? {
+          analysisName,
+          left: left as Float32Array,
+          right: right as Float32Array,
+          sampleRate,
+          params,
+        }
+      : analysisName;
+  return requireModule().masteringStereoAnalyze(
+    request.analysisName,
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringAssistantSuggest(request: MasteringSamplesParamsRequest): string;
 export function masteringAssistantSuggest(
   samples: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): string;
+export function masteringAssistantSuggest(
+  samples: Float32Array | MasteringSamplesParamsRequest,
   sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
-  return requireModule().masteringAssistantSuggest(samples, sampleRate, params);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
+  return requireModule().masteringAssistantSuggest(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringAudioProfile(request: MasteringSamplesParamsRequest): string;
 export function masteringAudioProfile(
   samples: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): string;
+export function masteringAudioProfile(
+  samples: Float32Array | MasteringSamplesParamsRequest,
   sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
-  return requireModule().masteringAudioProfile(samples, sampleRate, params);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
+  return requireModule().masteringAudioProfile(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringStreamingPreview(request: MasteringStreamingPreviewRequest): string;
 export function masteringStreamingPreview(
   samples: Float32Array,
+  sampleRate?: number,
+  platforms?: StreamingPlatform[],
+): string;
+export function masteringStreamingPreview(
+  samples: Float32Array | MasteringStreamingPreviewRequest,
   sampleRate = 22050,
   platforms: StreamingPlatform[] = [],
 ): string {
-  return requireModule().masteringStreamingPreview(samples, sampleRate, platforms);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, platforms } : samples;
+  return requireModule().masteringStreamingPreview(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.platforms ?? [],
+  );
 }

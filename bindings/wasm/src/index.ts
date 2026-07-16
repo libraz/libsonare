@@ -52,13 +52,33 @@ export type {
   DynamicsResult,
   GateOptions,
   MasteringChannelPolicy,
+  MasteringDynamicsCompressorRequest,
+  MasteringDynamicsGateRequest,
+  MasteringDynamicsTransientShaperRequest,
   MasteringInsertParamInfo,
+  MasteringPairAnalyzeRequest,
+  MasteringPairProcessRequest,
   MasteringProcessorCatalogEntry,
+  MasteringProcessRequest,
+  MasteringProcessStereoRequest,
+  MasteringRepairDeclickRequest,
+  MasteringRepairDeclipRequest,
+  MasteringRepairDecrackleRequest,
+  MasteringRepairDehumRequest,
+  MasteringRepairDenoiseClassicalRequest,
+  MasteringRepairDereverbClassicalRequest,
+  MasteringRepairTrimSilenceRequest,
+  MasteringSamplesParamsRequest,
+  MasteringStereoAnalyzeRequest,
+  MasteringStreamingPreviewRequest,
+  MixStereoRequest,
   TransientShaperOptions,
   TrimSilenceMode,
   TrimSilenceOptions,
   VoiceChangeOptions,
   VoiceChangeRealtimeOptions,
+  VoiceChangeRealtimeRequest,
+  VoiceChangeRequest,
 } from './effects_mastering';
 export {
   harmonic,
@@ -115,7 +135,36 @@ export {
   voiceChangeRealtime,
 } from './effects_mastering';
 export { ErrorCode, isSonareError, SonareError } from './errors';
-export type { MelodyOptions } from './feature_music';
+export type {
+  CqtRequest,
+  CqtToAudioRequest,
+  FourierTempogramRequest,
+  MelodyOptions,
+  OnsetEnvelopeRequest,
+  OnsetStrengthMultiRequest,
+  TempogramRatioRequest,
+  VqtRequest,
+  VqtToAudioRequest,
+} from './feature_music';
+export type { PitchPyinRequest, PitchYinRequest } from './feature_pitch';
+export type { ResampleRequest } from './feature_resample';
+export type {
+  DecomposeRequest,
+  DecomposeWithInitRequest,
+  SpectralFrameRequest,
+  SpectralRolloffRequest,
+  ZeroCrossingRateRequest,
+} from './feature_spectral';
+export type {
+  ChromaSpectrogramRequest,
+  MelSpectrogramRequest,
+  MelToAudioRequest,
+  MelToStftRequest,
+  MfccRequest,
+  MfccToAudioRequest,
+  MfccToMelRequest,
+  SpectrogramRequest,
+} from './feature_spectrogram';
 export {
   amplitudeToDb,
   analyzeMelody,
@@ -205,14 +254,24 @@ export type {
   ClippingReport,
   DynamicRangeReport,
   MeteringDetectClippingOptions,
+  MeteringDetectClippingRequest,
   MeteringDynamicRangeOptions,
+  MeteringDynamicRangeRequest,
+  MeteringSamplesRequest,
+  MeteringSpectrumFrameRequest,
+  MeteringSpectrumRequest,
+  MeteringStereoDecimatedRequest,
+  MeteringStereoRequest,
+  MeteringTruePeakRequest,
   PhaseScopeReport,
   SpectrumOptions,
   SpectrumReport,
   VectorscopeReport,
   WaveformPeakPyramidOptions,
+  WaveformPeakPyramidRequest,
   WaveformPeaksOptions,
   WaveformPeaksReport,
+  WaveformPeaksRequest,
 } from './metering';
 export {
   meteringCrestFactorDb,
@@ -393,10 +452,13 @@ export {
   SectionType,
 } from './public_types';
 export type {
+  AnalyzeWithProgressRequest,
   BpmAnalysisResult,
   BpmCandidate,
+  DetectKeyRequest,
   DynamicsAnalysisResult,
   RhythmAnalysisResult,
+  SamplesRequest,
   TimbreAnalysisResult,
   TimbreFrame,
 } from './quick_analysis';

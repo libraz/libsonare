@@ -13,6 +13,77 @@ function requireModule() {
   return getSonareModule();
 }
 
+/** Canonical request form for HPSS. */
+export interface HpssRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  kernelHarmonic?: number;
+  kernelPercussive?: number;
+}
+
+export interface HarmonicRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+export interface PercussiveRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+export interface TimeStretchRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  rate: number;
+}
+
+export interface PitchShiftRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  semitones: number;
+}
+
+export interface PitchCorrectToMidiRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+  currentMidi?: number;
+  targetMidi?: number;
+}
+
+export interface PitchCorrectToMidiTimevaryingRequest extends ValidateOptions {
+  samples: Float32Array;
+  f0Hz: Float32Array;
+  targetMidi: number;
+  sampleRate?: number;
+  hopLength?: number;
+  voiced?: Int32Array;
+  voicedProb?: Float32Array;
+}
+
+export interface PitchCorrectTimevaryingRequest extends PitchCorrectOptions {
+  samples: Float32Array;
+  f0Hz: Float32Array;
+  sampleRate?: number;
+  hopLength?: number;
+}
+
+export interface NoteStretchRequest extends NoteStretchOptions, ValidateOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+export interface NormalizeRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  targetDb?: number;
+}
+
+export interface SpectralEditRequest extends SpectralEditOptions, ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  ops?: SpectralRegionOp[];
+}
+
 // ============================================================================
 // Effects
 // ============================================================================
@@ -26,13 +97,29 @@ function requireModule() {
  * @param kernelPercussive - Vertical median filter size for percussive (default: 31)
  * @returns Separated harmonic and percussive components
  */
+export function hpss(request: HpssRequest): HpssResult;
 export function hpss(
   samples: Float32Array,
+  sampleRate?: number,
+  kernelHarmonic?: number,
+  kernelPercussive?: number,
+): HpssResult;
+export function hpss(
+  samples: Float32Array | HpssRequest,
   sampleRate = 22050,
   kernelHarmonic = 31,
   kernelPercussive = 31,
 ): HpssResult {
-  return requireModule().hpss(samples, sampleRate, kernelHarmonic, kernelPercussive);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, kernelHarmonic, kernelPercussive }
+      : samples;
+  return requireModule().hpss(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.kernelHarmonic ?? 31,
+    request.kernelPercussive ?? 31,
+  );
 }
 
 /**
@@ -42,13 +129,20 @@ export function hpss(
  * @param sampleRate - Sample rate in Hz
  * @returns Harmonic component
  */
+export function harmonic(request: HarmonicRequest): Float32Array;
 export function harmonic(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function harmonic(
+  samples: Float32Array | HarmonicRequest,
+  sampleRate = 22050,
   options: ValidateOptions = {},
 ): Float32Array {
-  assertSamples('harmonic', samples, options.validate !== false);
-  return requireModule().harmonic(samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertSamples('harmonic', request.samples, request.validate !== false);
+  return requireModule().harmonic(request.samples, request.sampleRate ?? 22050);
 }
 
 /**
@@ -58,13 +152,20 @@ export function harmonic(
  * @param sampleRate - Sample rate in Hz
  * @returns Percussive component
  */
+export function percussive(request: PercussiveRequest): Float32Array;
 export function percussive(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function percussive(
+  samples: Float32Array | PercussiveRequest,
+  sampleRate = 22050,
   options: ValidateOptions = {},
 ): Float32Array {
-  assertSamples('percussive', samples, options.validate !== false);
-  return requireModule().percussive(samples, sampleRate);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertSamples('percussive', request.samples, request.validate !== false);
+  return requireModule().percussive(request.samples, request.sampleRate ?? 22050);
 }
 
 /**
@@ -75,14 +176,25 @@ export function percussive(
  * @param rate - Time stretch rate (0.5 = double duration, 2.0 = half duration)
  * @returns Time-stretched audio
  */
+export function timeStretch(request: TimeStretchRequest): Float32Array;
 export function timeStretch(
   samples: Float32Array,
   sampleRate: number,
   rate: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function timeStretch(
+  samples: Float32Array | TimeStretchRequest,
+  sampleRate?: number,
+  rate?: number,
   options: ValidateOptions = {},
 ): Float32Array {
-  assertSamples('timeStretch', samples, options.validate !== false);
-  return requireModule().timeStretch(samples, sampleRate, rate);
+  const request: TimeStretchRequest =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, rate: rate as number, ...options }
+      : samples;
+  assertSamples('timeStretch', request.samples, request.validate !== false);
+  return requireModule().timeStretch(request.samples, request.sampleRate, request.rate);
 }
 
 /**
@@ -93,14 +205,25 @@ export function timeStretch(
  * @param semitones - Pitch shift in semitones (+12 = one octave up, -12 = one octave down)
  * @returns Pitch-shifted audio
  */
+export function pitchShift(request: PitchShiftRequest): Float32Array;
 export function pitchShift(
   samples: Float32Array,
   sampleRate: number,
   semitones: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function pitchShift(
+  samples: Float32Array | PitchShiftRequest,
+  sampleRate?: number,
+  semitones?: number,
   options: ValidateOptions = {},
 ): Float32Array {
-  assertSamples('pitchShift', samples, options.validate !== false);
-  return requireModule().pitchShift(samples, sampleRate, semitones);
+  const request: PitchShiftRequest =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, semitones: semitones as number, ...options }
+      : samples;
+  assertSamples('pitchShift', request.samples, request.validate !== false);
+  return requireModule().pitchShift(request.samples, request.sampleRate, request.semitones);
 }
 
 /**
@@ -112,15 +235,32 @@ export function pitchShift(
  * @param targetMidi - Desired MIDI note number
  * @returns Pitch-corrected audio
  */
+export function pitchCorrectToMidi(request: PitchCorrectToMidiRequest): Float32Array;
 export function pitchCorrectToMidi(
   samples: Float32Array,
+  sampleRate?: number,
+  currentMidi?: number,
+  targetMidi?: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function pitchCorrectToMidi(
+  samples: Float32Array | PitchCorrectToMidiRequest,
   sampleRate = 22050,
   currentMidi = 69.0,
   targetMidi = 69.0,
   options: ValidateOptions = {},
 ): Float32Array {
-  assertSamples('pitchCorrectToMidi', samples, options.validate !== false);
-  return requireModule().pitchCorrectToMidi(samples, sampleRate, currentMidi, targetMidi);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, currentMidi, targetMidi, ...options }
+      : samples;
+  assertSamples('pitchCorrectToMidi', request.samples, request.validate !== false);
+  return requireModule().pitchCorrectToMidi(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.currentMidi ?? 69.0,
+    request.targetMidi ?? 69.0,
+  );
 }
 
 /**
@@ -142,33 +282,59 @@ export function pitchCorrectToMidi(
  * @returns Pitch-corrected audio
  */
 export function pitchCorrectToMidiTimevarying(
+  request: PitchCorrectToMidiTimevaryingRequest,
+): Float32Array;
+export function pitchCorrectToMidiTimevarying(
   samples: Float32Array,
   f0Hz: Float32Array,
   targetMidi: number,
+  sampleRate?: number,
+  hopLength?: number,
+  voiced?: Int32Array,
+  voicedProb?: Float32Array,
+  options?: ValidateOptions,
+): Float32Array;
+export function pitchCorrectToMidiTimevarying(
+  samples: Float32Array | PitchCorrectToMidiTimevaryingRequest,
+  f0Hz?: Float32Array,
+  targetMidi?: number,
   sampleRate = 22050,
   hopLength = 512,
   voiced?: Int32Array,
   voicedProb?: Float32Array,
   options: ValidateOptions = {},
 ): Float32Array {
-  assertSamples('pitchCorrectToMidiTimevarying', samples, options.validate !== false);
-  if (voiced && voiced.length !== f0Hz.length) {
+  const request: PitchCorrectToMidiTimevaryingRequest =
+    samples instanceof Float32Array
+      ? {
+          samples,
+          f0Hz: f0Hz as Float32Array,
+          targetMidi: targetMidi as number,
+          sampleRate,
+          hopLength,
+          voiced,
+          voicedProb,
+          ...options,
+        }
+      : samples;
+  assertSamples('pitchCorrectToMidiTimevarying', request.samples, request.validate !== false);
+  if (request.voiced && request.voiced.length !== request.f0Hz.length) {
     throw new RangeError('pitchCorrectToMidiTimevarying: voiced length must match f0Hz length');
   }
-  if (voicedProb && voicedProb.length !== f0Hz.length) {
+  if (request.voicedProb && request.voicedProb.length !== request.f0Hz.length) {
     throw new RangeError('pitchCorrectToMidiTimevarying: voicedProb length must match f0Hz length');
   }
   // The embind layer reads the companion arrays as Float32Array (voiced uses
   // 0.0/1.0); convert here so a single native conversion path suffices.
-  const voicedF32 = voiced ? Float32Array.from(voiced) : undefined;
+  const voicedF32 = request.voiced ? Float32Array.from(request.voiced) : undefined;
   return requireModule().pitchCorrectToMidiTimevarying(
-    samples,
-    sampleRate,
-    f0Hz,
-    targetMidi,
-    hopLength,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.f0Hz,
+    request.targetMidi,
+    request.hopLength ?? 512,
     voicedF32,
-    voicedProb,
+    request.voicedProb,
   );
 }
 
@@ -188,31 +354,43 @@ export function pitchCorrectToMidiTimevarying(
  * @param options - Target mode + retune knobs + optional voiced/voicedProb arrays
  * @returns Pitch-corrected audio
  */
+export function pitchCorrectTimevarying(request: PitchCorrectTimevaryingRequest): Float32Array;
 export function pitchCorrectTimevarying(
   samples: Float32Array,
   f0Hz: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  options?: PitchCorrectOptions,
+): Float32Array;
+export function pitchCorrectTimevarying(
+  samples: Float32Array | PitchCorrectTimevaryingRequest,
+  f0Hz?: Float32Array,
   sampleRate = 22050,
   hopLength = 512,
   options: PitchCorrectOptions = {},
 ): Float32Array {
-  assertSamples('pitchCorrectTimevarying', samples, options.validate !== false);
-  if (options.voiced && options.voiced.length !== f0Hz.length) {
+  const request: PitchCorrectTimevaryingRequest =
+    samples instanceof Float32Array
+      ? { samples, f0Hz: f0Hz as Float32Array, sampleRate, hopLength, ...options }
+      : samples;
+  assertSamples('pitchCorrectTimevarying', request.samples, request.validate !== false);
+  if (request.voiced && request.voiced.length !== request.f0Hz.length) {
     throw new RangeError('pitchCorrectTimevarying: voiced length must match f0Hz length');
   }
-  if (options.voicedProb && options.voicedProb.length !== f0Hz.length) {
+  if (request.voicedProb && request.voicedProb.length !== request.f0Hz.length) {
     throw new RangeError('pitchCorrectTimevarying: voicedProb length must match f0Hz length');
   }
   // The embind layer reads the companion arrays as Float32Array (voiced uses
   // 0.0/1.0); convert here so a single native conversion path suffices.
   const nativeOptions = {
-    ...options,
-    voiced: options.voiced ? Float32Array.from(options.voiced) : undefined,
+    ...request,
+    voiced: request.voiced ? Float32Array.from(request.voiced) : undefined,
   };
   return requireModule().pitchCorrectTimevarying(
-    samples,
-    sampleRate,
-    f0Hz,
-    hopLength,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.f0Hz,
+    request.hopLength ?? 512,
     nativeOptions,
   );
 }
@@ -227,18 +405,25 @@ export function pitchCorrectTimevarying(
  * @param stretchRatio - Stretch ratio (0.5 = double duration, 2.0 = half duration)
  * @returns Audio with the note region stretched
  */
+export function noteStretch(request: NoteStretchRequest): Float32Array;
 export function noteStretch(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: NoteStretchOptions & ValidateOptions,
+): Float32Array;
+export function noteStretch(
+  samples: Float32Array | NoteStretchRequest,
   sampleRate = 22050,
   options: NoteStretchOptions & ValidateOptions = {},
 ): Float32Array {
-  assertSamples('noteStretch', samples, options.validate !== false);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertSamples('noteStretch', request.samples, request.validate !== false);
   return requireModule().noteStretch(
-    samples,
-    sampleRate,
-    options.onsetSample ?? 0,
-    options.offsetSample ?? 0,
-    options.stretchRatio ?? 1.0,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.onsetSample ?? 0,
+    request.offsetSample ?? 0,
+    request.stretchRatio ?? 1.0,
   );
 }
 
@@ -250,14 +435,25 @@ export function noteStretch(
  * @param targetDb - Target peak level in dB (default: 0 dB = full scale)
  * @returns Normalized audio
  */
+export function normalize(request: NormalizeRequest): Float32Array;
 export function normalize(
   samples: Float32Array,
   sampleRate: number,
+  targetDb?: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function normalize(
+  samples: Float32Array | NormalizeRequest,
+  sampleRate?: number,
   targetDb = 0.0,
   options: ValidateOptions = {},
 ): Float32Array {
-  assertSamples('normalize', samples, options.validate !== false);
-  return requireModule().normalize(samples, sampleRate, targetDb);
+  const request: NormalizeRequest =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, targetDb, ...options }
+      : samples;
+  assertSamples('normalize', request.samples, request.validate !== false);
+  return requireModule().normalize(request.samples, request.sampleRate, request.targetDb ?? 0.0);
 }
 
 /**
@@ -274,13 +470,29 @@ export function normalize(
  * @param options - STFT + heal configuration ({@link SpectralEditOptions})
  * @returns Edited audio
  */
+export function spectralEdit(request: SpectralEditRequest): Float32Array;
 export function spectralEdit(
   samples: Float32Array,
   sampleRate: number,
+  ops?: SpectralRegionOp[],
+  options?: SpectralEditOptions & ValidateOptions,
+): Float32Array;
+export function spectralEdit(
+  samples: Float32Array | SpectralEditRequest,
+  sampleRate?: number,
   ops: SpectralRegionOp[] = [],
   options: SpectralEditOptions & ValidateOptions = {},
 ): Float32Array {
-  assertSamples('spectralEdit', samples, options.validate !== false);
-  assertSampleRate('spectralEdit', sampleRate);
-  return requireModule().spectralEdit(samples, sampleRate, ops, options as Record<string, unknown>);
+  const request: SpectralEditRequest =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ops, ...options }
+      : samples;
+  assertSamples('spectralEdit', request.samples, request.validate !== false);
+  assertSampleRate('spectralEdit', request.sampleRate);
+  return requireModule().spectralEdit(
+    request.samples,
+    request.sampleRate,
+    request.ops ?? [],
+    request as unknown as Record<string, unknown>,
+  );
 }
