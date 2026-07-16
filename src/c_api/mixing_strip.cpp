@@ -388,30 +388,29 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       if (!parse_automation_curve(curve, &curve_enum)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
-      // ChannelStrip::schedule_insert_automation silently drops out-of-range indices
-      // at apply time (it only returns false when its event lane is full), so bound
-      // insert_index against the combined [pre... post...] insert count here to give
-      // callers an explicit error.
+      // Bound insert_index against the combined [pre... post...] insert count so
+      // callers get an explicit bad-argument classification.
       const size_t insert_count = strip->strip.num_pre_inserts() + strip->strip.num_post_inserts();
       if (insert_index >= insert_count) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
-      // Mirror ChannelStrip::schedule_insert_automation's gross param-id bound
-      // (kMaxReasonableParamId) so an out-of-range param id is reported as a bad
-      // argument rather than being conflated with the full-lane capacity condition
-      // below (the underlying call returns a bare bool for both).
+      // Reject obviously corrupt ids before descriptor lookup.
       constexpr unsigned int kMaxReasonableParamId = 65535u;
       if (param_id > kMaxReasonableParamId) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
-      // After the index/param-id bounds above, a false return is dominated by the
-      // capacity condition (the event lane is full): map it to OUT_OF_MEMORY so
-      // callers can distinguish "lane full" from a bad argument.
-      if (!strip->strip.schedule_insert_automation(insert_index, param_id, sample_pos, value,
-                                                   curve_enum)) {
-        return SONARE_ERROR_OUT_OF_MEMORY;
+      switch (strip->strip.schedule_insert_automation_result(insert_index, param_id, sample_pos,
+                                                             value, curve_enum)) {
+        case sonare::mixing::InsertAutomationScheduleResult::Success:
+          return SONARE_OK;
+        case sonare::mixing::InsertAutomationScheduleResult::InvalidParameter:
+          return SONARE_ERROR_INVALID_PARAMETER;
+        case sonare::mixing::InsertAutomationScheduleResult::NotSupported:
+          return SONARE_ERROR_NOT_SUPPORTED;
+        case sonare::mixing::InsertAutomationScheduleResult::OutOfMemory:
+          return SONARE_ERROR_OUT_OF_MEMORY;
       }
-      return SONARE_OK;
+      return SONARE_ERROR_UNKNOWN;
     }
 
     SonareError sonare_strip_schedule_fader_automation(SonareStrip * strip, int64_t sample_pos,

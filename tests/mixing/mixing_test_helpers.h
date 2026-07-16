@@ -106,6 +106,12 @@ class ScaleProcessor final : public sonare::rt::ProcessorBase {
     }
     return false;
   }
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return param_id == 0;
+  }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    return {{"scale", 0}};
+  }
 
  private:
   float scale_ = 1.0f;

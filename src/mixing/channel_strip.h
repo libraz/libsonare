@@ -45,6 +45,13 @@ struct ChannelStripConfig {
   float input_trim_db = 0.0f;
 };
 
+enum class InsertAutomationScheduleResult {
+  Success,
+  InvalidParameter,
+  NotSupported,
+  OutOfMemory,
+};
+
 /// @brief Per-track signal path: trim, EQ, pre-fader sends, fader, pan,
 ///        post-fader sends, meter, and optional insert chain.
 ///
@@ -192,6 +199,11 @@ class ChannelStrip : public rt::ProcessorBase {
   // the combined insert sequence [pre_inserts_ ... then post_inserts_ ...]. Control-thread API.
   bool set_insert_bypassed(unsigned int insert_index, bool bypassed,
                            bool reset_on_bypass = false) noexcept;
+  InsertAutomationScheduleResult schedule_insert_automation_result(
+      unsigned int insert_index, unsigned int param_id, int64_t sample_pos, float value,
+      AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+  // Backward-compatible convenience wrapper. Use the result-returning overload
+  // when the caller must distinguish invalid ids, non-RT parameters, and a full lane.
   bool schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
                                   int64_t sample_pos, float value,
                                   AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
@@ -243,8 +255,8 @@ class ChannelStrip : public rt::ProcessorBase {
   // schedule_insert_automation() (control thread) cannot trigger a
   // reallocation of insert_automation_ while the audio thread is iterating
   // it inside process_at() -- such a reallocation would invalidate the
-  // audio-thread iterator (C++ UB). schedule_insert_automation() returns
-  // false once this cap is reached instead of growing the vector.
+  // audio-thread iterator (C++ UB). schedule_insert_automation_result() returns
+  // OutOfMemory once this cap is reached instead of growing the vector.
   static constexpr size_t kMaxInsertAutomationLanes = 64;
 
   // Upper bound on inserts per strip (pre + post combined). Reserved at

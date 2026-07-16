@@ -8,6 +8,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mixing/api/scene.h"
@@ -32,6 +33,23 @@ std::string make_compressor_scene() {
   scene.strips.push_back(strip);
   scene.buses.push_back({"master", "master"});
   scene.connections.push_back({"comp", "master"});
+  return sonare::mixing::api::scene_to_json(scene);
+}
+
+std::string make_repeated_insert_scene(const std::string& processor_name, int count) {
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip strip;
+  strip.id = "inserts";
+  for (int index = 0; index < count; ++index) {
+    sonare::mixing::api::Insert insert;
+    insert.slot = sonare::mixing::api::InsertSlot::PreFader;
+    insert.processor_name = processor_name;
+    insert.params_json = "{}";
+    strip.inserts.push_back(std::move(insert));
+  }
+  scene.strips.push_back(std::move(strip));
+  scene.buses.push_back({"master", "master"});
+  scene.connections.push_back({"inserts", "master"});
   return sonare::mixing::api::scene_to_json(scene);
 }
 
@@ -129,7 +147,9 @@ TEST_CASE("C-API insert-automation handles bad arguments", "[mixing][automation]
   // Unknown curve value.
   REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 0, 0, -24.0f, /*curve=*/99) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  // Outlandish parameter ids are rejected before they can become silent no-ops.
+  // Unknown and outlandish ids are invalid rather than accepted silent no-ops.
+  REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 12u, 0, -24.0f, /*curve=*/0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_strip_schedule_insert_automation(strip, 0, 1000000u, 0, -24.0f, /*curve=*/0) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // Valid linear, exponential, hold, and s-curve curves all succeed.
@@ -143,6 +163,44 @@ TEST_CASE("C-API insert-automation handles bad arguments", "[mixing][automation]
           SONARE_OK);
 
   sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API insert-automation distinguishes non-RT parameters and full lanes",
+          "[mixing][automation]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 256;
+
+  const std::string maximizer_json = make_repeated_insert_scene("maximizer.maximizer", 1);
+  SonareMixer* maximizer = sonare_mixer_from_scene_json(maximizer_json.c_str(), kSr, kBlock);
+  REQUIRE(maximizer != nullptr);
+  SonareStrip* maximizer_strip = sonare_mixer_strip_by_id(maximizer, "inserts");
+  REQUIRE(maximizer_strip != nullptr);
+  // Maximizer ceilingDb (id 1) rebuilds the oversampled limiter and is known,
+  // but deliberately unavailable to audio-thread automation.
+  REQUIRE(sonare_strip_schedule_insert_automation(maximizer_strip, 0, 1, 0, -1.0f, 0) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  sonare_mixer_destroy(maximizer);
+
+  const std::string compressors_json = make_repeated_insert_scene("dynamics.compressor", 6);
+  SonareMixer* compressors = sonare_mixer_from_scene_json(compressors_json.c_str(), kSr, kBlock);
+  REQUIRE(compressors != nullptr);
+  SonareStrip* compressor_strip = sonare_mixer_strip_by_id(compressors, "inserts");
+  REQUIRE(compressor_strip != nullptr);
+
+  size_t scheduled = 0;
+  for (unsigned int insert = 0; insert < 6 && scheduled < 64; ++insert) {
+    for (unsigned int param = 0; param < 12 && scheduled < 64; ++param) {
+      REQUIRE(sonare_strip_schedule_insert_automation(compressor_strip, insert, param, 0, 0.5f,
+                                                      0) == SONARE_OK);
+      ++scheduled;
+    }
+  }
+  REQUIRE(scheduled == 64);
+  // The 65th distinct target is valid and RT-safe, so only lane capacity can
+  // reject it; the C ABI must preserve that as OutOfMemory.
+  REQUIRE(sonare_strip_schedule_insert_automation(compressor_strip, 5, 4, 0, 0.5f, 0) ==
+          SONARE_ERROR_OUT_OF_MEMORY);
+  sonare_mixer_destroy(compressors);
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

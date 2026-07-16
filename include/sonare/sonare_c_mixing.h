@@ -203,8 +203,11 @@ SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id);
 // engine-automation and mixer-automation APIs. Each call site pins the ordinals
 // with static_assert.
 //
-// Returns @c SONARE_OK on success, or @c SONARE_ERROR_INVALID_PARAMETER if
-// strip is NULL, curve is unknown, or insert_index is out of range.
+// Returns @c SONARE_OK on success; @c SONARE_ERROR_INVALID_PARAMETER for a NULL
+// strip, unknown curve/param_id, or out-of-range insert; @c
+// SONARE_ERROR_NOT_SUPPORTED when the parameter exists but is not realtime-safe;
+// or @c SONARE_ERROR_OUT_OF_MEMORY when the fixed automation-lane/event capacity
+// is exhausted.
 SonareError sonare_strip_schedule_insert_automation(SonareStrip* strip, unsigned int insert_index,
                                                     unsigned int param_id, int64_t sample_pos,
                                                     float value, int curve);

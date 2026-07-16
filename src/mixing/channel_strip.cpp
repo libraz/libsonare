@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <new>
 #include <utility>
 
 #include "mixing/tail_utils.h"
@@ -603,12 +604,12 @@ bool ChannelStrip::set_insert_bypassed(unsigned int insert_index, bool bypassed,
   return insert != nullptr && insert->set_bypassed(bypassed, reset_on_bypass);
 }
 
-bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
-                                              int64_t sample_pos, float value,
-                                              AutomationCurveType curve) noexcept {
+InsertAutomationScheduleResult ChannelStrip::schedule_insert_automation_result(
+    unsigned int insert_index, unsigned int param_id, int64_t sample_pos, float value,
+    AutomationCurveType curve) noexcept {
   constexpr unsigned int kMaxReasonableParamId = 65535u;
   if (param_id > kMaxReasonableParamId || !std::isfinite(value)) {
-    return false;
+    return InsertAutomationScheduleResult::InvalidParameter;
   }
   const size_t idx = insert_index;
   const size_t pre_count = pre_inserts_.size();
@@ -618,8 +619,25 @@ bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigne
   } else if (idx - pre_count < post_inserts_.size()) {
     insert = post_inserts_[idx - pre_count].get();
   }
-  if (insert == nullptr || !insert->parameter_is_realtime_safe(param_id)) {
-    return false;
+  if (insert == nullptr) {
+    return InsertAutomationScheduleResult::InvalidParameter;
+  }
+
+  try {
+    const std::vector<rt::ParamDescriptor> descriptors = insert->parameter_descriptors();
+    const bool exists = std::any_of(
+        descriptors.begin(), descriptors.end(),
+        [param_id](const rt::ParamDescriptor& descriptor) { return descriptor.id == param_id; });
+    if (!exists) {
+      return InsertAutomationScheduleResult::InvalidParameter;
+    }
+  } catch (const std::bad_alloc&) {
+    return InsertAutomationScheduleResult::OutOfMemory;
+  } catch (...) {
+    return InsertAutomationScheduleResult::InvalidParameter;
+  }
+  if (!insert->parameter_is_realtime_safe(param_id)) {
+    return InsertAutomationScheduleResult::NotSupported;
   }
 
   AutomationEvent event;
@@ -635,22 +653,39 @@ bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigne
   for (size_t li = 0; li < published; ++li) {
     InsertAutomationLane& lane = insert_automation_[li];
     if (lane.target == event.target && lane.lane) {
-      return lane.lane->push(event);
+      return lane.lane->push(event) ? InsertAutomationScheduleResult::Success
+                                    : InsertAutomationScheduleResult::OutOfMemory;
     }
   }
   // Hard cap: the push_back below MUST NOT reallocate, because the audio thread
   // may concurrently index insert_automation_ in process_at(). Capacity is
   // reserved up-front in the constructor (kMaxInsertAutomationLanes).
   if (published >= kMaxInsertAutomationLanes) {
-    return false;
+    return InsertAutomationScheduleResult::OutOfMemory;
   }
   // Fully construct the new lane into the reserved slot, then publish the new
   // size with release ordering so the audio thread only observes a complete
   // element. The reader pairs this with an acquire load.
-  insert_automation_.push_back({event.target, std::make_unique<AutomationLane>()});
-  const bool pushed = insert_automation_.back().lane->push(event);
-  insert_automation_size_.store(insert_automation_.size(), std::memory_order_release);
-  return pushed;
+  try {
+    auto lane = std::make_unique<AutomationLane>();
+    if (!lane->push(event)) {
+      return InsertAutomationScheduleResult::OutOfMemory;
+    }
+    insert_automation_.push_back({event.target, std::move(lane)});
+    insert_automation_size_.store(insert_automation_.size(), std::memory_order_release);
+    return InsertAutomationScheduleResult::Success;
+  } catch (const std::bad_alloc&) {
+    return InsertAutomationScheduleResult::OutOfMemory;
+  } catch (...) {
+    return InsertAutomationScheduleResult::InvalidParameter;
+  }
+}
+
+bool ChannelStrip::schedule_insert_automation(unsigned int insert_index, unsigned int param_id,
+                                              int64_t sample_pos, float value,
+                                              AutomationCurveType curve) noexcept {
+  return schedule_insert_automation_result(insert_index, param_id, sample_pos, value, curve) ==
+         InsertAutomationScheduleResult::Success;
 }
 
 void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept {

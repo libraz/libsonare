@@ -6,9 +6,11 @@
 #include <array>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdlib>
 #include <memory>
 #include <new>
+#include <string>
 #include <vector>
 #if defined(_WIN32)
 #include <malloc.h>
@@ -111,6 +113,22 @@ class ScaleProcessor final : public sonare::rt::ProcessorBase {
     }
   }
   void reset() override {}
+  bool set_parameter(unsigned int param_id, float value) override {
+    if (param_id > 64u || !std::isfinite(value)) return false;
+    scale_ = value;
+    return true;
+  }
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return param_id <= 64u;
+  }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    std::vector<sonare::rt::ParamDescriptor> descriptors;
+    descriptors.reserve(65);
+    for (unsigned int id = 0; id <= 64u; ++id) {
+      descriptors.push_back({"scale" + std::to_string(id), id});
+    }
+    return descriptors;
+  }
 
  private:
   float scale_ = 1.0f;
@@ -125,6 +143,17 @@ class ParameterCaptureProcessor final : public sonare::rt::ProcessorBase {
     last_param = param_id;
     last_value = value;
     return true;
+  }
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return param_id <= 64u;
+  }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    std::vector<sonare::rt::ParamDescriptor> descriptors;
+    descriptors.reserve(65);
+    for (unsigned int id = 0; id <= 64u; ++id) {
+      descriptors.push_back({"parameter" + std::to_string(id), id});
+    }
+    return descriptors;
   }
 
   unsigned int last_param = 0;

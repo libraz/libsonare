@@ -182,6 +182,8 @@ TEST_CASE("ChannelStrip schedule_insert_automation enforces kMaxInsertAutomation
   const bool overflow =
       strip.schedule_insert_automation(0, static_cast<unsigned int>(cap), 0, 0.5f);
   REQUIRE_FALSE(overflow);
+  REQUIRE(strip.schedule_insert_automation_result(0, static_cast<unsigned int>(cap), 0, 0.5f) ==
+          sonare::mixing::InsertAutomationScheduleResult::OutOfMemory);
 }
 
 TEST_CASE("ChannelStrip add_insert enforces kMaxInserts cap", "[mixing][rt-safety]") {

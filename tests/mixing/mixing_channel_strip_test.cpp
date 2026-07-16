@@ -566,6 +566,10 @@ TEST_CASE("ChannelStrip rejects non-RT-safe insert automation", "[mixing]") {
   linear_phase_strip.add_pre_insert(std::make_unique<sonare::mastering::eq::LinearPhaseEq>());
   linear_phase_strip.prepare(48000.0, 128);
 
+  REQUIRE(linear_phase_strip.schedule_insert_automation_result(0, 1, 0, 6.0f) ==
+          sonare::mixing::InsertAutomationScheduleResult::NotSupported);
+  REQUIRE(linear_phase_strip.schedule_insert_automation_result(0, 1000, 0, 6.0f) ==
+          sonare::mixing::InsertAutomationScheduleResult::InvalidParameter);
   REQUIRE_FALSE(linear_phase_strip.schedule_insert_automation(0, 1, 0, 6.0f));
 
   auto equalizer = std::make_unique<sonare::mastering::eq::EqualizerProcessor>();
@@ -577,6 +581,8 @@ TEST_CASE("ChannelStrip rejects non-RT-safe insert automation", "[mixing]") {
   equalizer_strip.add_pre_insert(std::move(equalizer));
   equalizer_strip.prepare(48000.0, 128);
 
+  REQUIRE(equalizer_strip.schedule_insert_automation_result(0, 1, 0, 6.0f) ==
+          sonare::mixing::InsertAutomationScheduleResult::NotSupported);
   REQUIRE_FALSE(equalizer_strip.schedule_insert_automation(0, 1, 0, 6.0f));
 
   sonare::mixing::ChannelStrip maximizer_strip;
@@ -584,6 +590,8 @@ TEST_CASE("ChannelStrip rejects non-RT-safe insert automation", "[mixing]") {
   maximizer_strip.prepare(48000.0, 128);
 
   REQUIRE(maximizer_strip.schedule_insert_automation(0, 0, 0, 3.0f));
+  REQUIRE(maximizer_strip.schedule_insert_automation_result(0, 1, 0, -2.0f) ==
+          sonare::mixing::InsertAutomationScheduleResult::NotSupported);
   REQUIRE_FALSE(maximizer_strip.schedule_insert_automation(0, 1, 0, -2.0f));
   REQUIRE(maximizer_strip.schedule_insert_automation(0, 2, 0, 20.0f));
 }
