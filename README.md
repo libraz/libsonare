@@ -105,16 +105,25 @@ per-runtime API.
 `@libraz/libsonare` accepts decoded `Float32Array` samples (use the Web Audio API
 or a JS decoder to obtain them).
 
+Top-level one-shot APIs use a request object as their documented form. Positional
+calls remain supported for compatibility; stateful methods and small scalar helpers
+keep their natural forms.
+
 ```typescript
 import { init, analyze, detectKey, masterAudio } from '@libraz/libsonare';
 
 await init();
 
-const result = analyze(samples, sampleRate);   // BPM, key, chords, sections, ...
-const key = detectKey(samples, sampleRate);     // { name: "C major", confidence: 0.95 }
+const result = analyze({ samples, sampleRate });   // BPM, key, chords, sections, ...
+const key = detectKey({ samples, sampleRate });    // { name: "C major", confidence: 0.95 }
 
 // One-shot mastering with a named preset.
-const mastered = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
+const mastered = masterAudio({
+  samples,
+  sampleRate,
+  preset: 'aiMusic',
+  overrides: { 'loudness.targetLufs': -13 },
+});
 ```
 
 → [JavaScript API](https://libsonare.libraz.net/docs/js-api) · [Browser / WASM](https://libsonare.libraz.net/docs/wasm)

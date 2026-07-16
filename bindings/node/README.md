@@ -61,6 +61,18 @@ on Debian/Ubuntu).
 `detectKey` / `analyze` functions are thin wrappers around `Audio` for
 one-shot calls and are kept for convenience.
 
+### Request-object calls
+
+For top-level one-shot analysis, effects, mastering, metering, and feature APIs, pass one request object. This is the documented form because each input has a name and optional settings can grow without changing argument order. Existing positional calls remain supported for compatibility and produce the same results; stateful `Audio` methods and small scalar conversions retain their natural positional forms.
+
+```typescript
+// Recommended
+detectBpm({ samples, sampleRate: 48_000 });
+
+// Still supported for existing applications
+detectBpm(samples, 48_000);
+```
+
 ### Analysis
 
 ```typescript
@@ -75,11 +87,13 @@ console.log(`BPM: ${result.bpm.toFixed(1)}  Key: ${result.key.name}`);
 
 // Or call the standalone functions on Float32Array samples
 const samples: Float32Array = audio.getData();
-const bpm = detectBpm(samples, audio.getSampleRate());
-const key = detectKey(samples, audio.getSampleRate());
+const bpm = detectBpm({ samples, sampleRate: audio.getSampleRate() });
+const key = detectKey({ samples, sampleRate: audio.getSampleRate() });
 
 // Advanced key options are opt-in; defaults preserve existing behavior.
-const keyWithOptions = detectKey(samples, audio.getSampleRate(), {
+const keyWithOptions = detectKey({
+  samples,
+  sampleRate: audio.getSampleRate(),
   useHpss: true,
   loudnessWeighted: true,
   highPassHz: 80,
@@ -206,7 +220,9 @@ const samples = audio.getData();
 // Full mastering chain (loudness optimizer toward a target LUFS / true-peak ceiling).
 // Returns MasteringResult(samples, sampleRate, inputLufs, outputLufs,
 // appliedGainDb, latencySamples).
-const mastered = mastering(samples, sampleRate, {
+const mastered = mastering({
+  samples,
+  sampleRate,
   targetLufs: -14.0,
   ceilingDb: -1.0,
   truePeakOversample: 4,
@@ -220,14 +236,23 @@ console.log(
 const masteredViaAudio = audio.mastering({ targetLufs: -14.0, ceilingDb: -1.0 });
 
 // Apply a single named processor
-const compressed = masteringProcess('dynamics.compressor', samples, sampleRate, {
+const compressed = masteringProcess({
+  processorName: 'dynamics.compressor',
+  samples,
+  sampleRate,
+  params: {
   thresholdDb: -24,
   ratio: 1.5,
+  },
 });
 
 // Stereo processor
-const widened = masteringProcessStereo('stereo.imager', left, right, sampleRate, {
-  width: 1.1,
+const widened = masteringProcessStereo({
+  processorName: 'stereo.imager',
+  left,
+  right,
+  sampleRate,
+  params: { width: 1.1 },
 });
 
 // Reference-based mastering (source + reference)
