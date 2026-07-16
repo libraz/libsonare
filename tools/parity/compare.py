@@ -579,8 +579,10 @@ def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:
 
 
 # C config param names that are opaque struct/options pointers the facades
-# legitimately flatten into individual fields (or fold into an options bag).
-_STRUCT_BAG_NAMES = {"config", "params", "options", "overrides", "opts"}
+# legitimately flatten into individual fields (or fold into an options/request
+# bag). A request object is a facade-only grouping of the same positional
+# inputs, so it has no C-level order signal of its own.
+_STRUCT_BAG_NAMES = {"config", "params", "options", "overrides", "opts", "request"}
 
 # Sample-rate spellings. In several C functions (tempogram/mel/mfcc/pcen
 # families) ``sr`` / ``sample_rate`` is a POSITIONAL C argument that sits inside
