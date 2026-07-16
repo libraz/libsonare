@@ -12,6 +12,7 @@ import {
   bassChroma,
   chromaCens,
   cqt,
+  cqtToAudio,
   fourierTempogram,
   hybridCqt,
   init,
@@ -42,6 +43,7 @@ import {
   tempogramRatio,
   voiceChange,
   vqt,
+  vqtToAudio,
 } from '../dist/index.js';
 
 const SR = 22050;
@@ -900,6 +902,53 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(vqtResult.nBins).toBe(24);
       expect(vqtResult.magnitude.length).toBe(vqtResult.nBins * vqtResult.nFrames);
       expect(allFinite(vqtResult.magnitude)).toBe(true);
+
+      // Shared deterministic oracle fixture with Node/Python.
+      const inverseSource = generateSine(261.6256, 8000, 0.256, 0.5);
+      const inverseCqt = cqt(inverseSource, 8000, 128, 130.8128, 12, 12);
+      const inverseVqt = vqt(inverseSource, 8000, 128, 130.8128, 12, 12, 0);
+      const cqtAudio = cqtToAudio(
+        inverseCqt.magnitude,
+        inverseCqt.nBins,
+        inverseCqt.nFrames,
+        8000,
+        128,
+        130.8128,
+        12,
+        2,
+      );
+      const vqtAudio = vqtToAudio(
+        inverseVqt.magnitude,
+        inverseVqt.nBins,
+        inverseVqt.nFrames,
+        8000,
+        128,
+        130.8128,
+        12,
+        0,
+        2,
+      );
+      expect(cqtAudio.length).toBe(inverseSource.length);
+      expect(allFinite(cqtAudio)).toBe(true);
+      expect(Math.max(...cqtAudio.map(Math.abs))).toBeGreaterThan(1e-5);
+      expect(vqtAudio.length).toBe(inverseSource.length);
+      expect(allFinite(vqtAudio)).toBe(true);
+      expect(() =>
+        cqtToAudio(cqtResult.magnitude.subarray(1), cqtResult.nBins, cqtResult.nFrames),
+      ).toThrow(/length/);
+      expect(() =>
+        vqtToAudio(
+          vqtResult.magnitude,
+          vqtResult.nBins,
+          vqtResult.nFrames,
+          SR,
+          512,
+          32.7,
+          12,
+          10,
+          257,
+        ),
+      ).toThrow(/nIter/);
 
       const pseudo = pseudoCqt(signal, SR, 512, 32.7, 24, 12);
       expect(pseudo.nBins).toBe(24);

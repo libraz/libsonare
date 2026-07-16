@@ -1938,6 +1938,42 @@ def hybrid_cqt(
     )
 
 
+def cqt_to_audio(
+    magnitude: Sequence[float] | list[float],
+    n_bins: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566257483,
+    bins_per_octave: int = 12,
+    n_iter: int = 32,
+) -> list[float]:
+    """Reconstruct mono audio from row-major CQT magnitude via Griffin-Lim."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(magnitude)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_cqt_to_audio_checked(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(n_bins),
+        ctypes.c_int(n_frames),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_int(bins_per_octave),
+        ctypes.c_int(n_iter),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out:
+            lib.sonare_free_floats(out)
+
+
 # ============================================================================
 # Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
 # ============================================================================
@@ -2256,3 +2292,41 @@ def vqt(
         return _cqt_result_from_c(out)
     finally:
         lib.sonare_free_cqt_result(ctypes.byref(out))
+
+
+def vqt_to_audio(
+    magnitude: Sequence[float] | list[float],
+    n_bins: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566257483,
+    bins_per_octave: int = 12,
+    gamma: float = 0.0,
+    n_iter: int = 32,
+) -> list[float]:
+    """Reconstruct mono audio from row-major VQT magnitude via Griffin-Lim."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(magnitude)
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_vqt_to_audio_checked(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(n_bins),
+        ctypes.c_int(n_frames),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_int(bins_per_octave),
+        ctypes.c_float(gamma),
+        ctypes.c_int(n_iter),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, out_length.value)
+    finally:
+        if out:
+            lib.sonare_free_floats(out)

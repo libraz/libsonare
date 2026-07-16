@@ -1,4 +1,5 @@
 #include "c_api/features_internal.h"
+#include "util/resource_limits.h"
 
 namespace {
 
@@ -15,6 +16,14 @@ SonareError check_inverse_input_length(size_t input_length, int rows, int n_fram
   return SONARE_OK;
 }
 
+size_t inverse_input_length(int rows, int n_frames) noexcept {
+  if (rows <= 0 || n_frames <= 0) return 0;
+  const size_t r = static_cast<size_t>(rows);
+  const size_t f = static_cast<size_t>(n_frames);
+  if (r > sonare_c_detail::kMaxBufferSize / f) return 0;
+  return r * f;
+}
+
 bool all_finite(const float* input, int rows, int n_frames) noexcept {
   const auto total = static_cast<size_t>(rows) * static_cast<size_t>(n_frames);
   for (size_t index = 0; index < total; ++index) {
@@ -23,7 +32,89 @@ bool all_finite(const float* input, int rows, int n_frames) noexcept {
   return true;
 }
 
+SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, int n_bins,
+                                 int n_frames, int sample_rate, int hop_length, float fmin,
+                                 int bins_per_octave, int n_iter) {
+  if (!magnitude || n_bins <= 0 || n_frames <= 0 || sample_rate < kMinSampleRate ||
+      sample_rate > kMaxSampleRate || hop_length <= 0 || !std::isfinite(fmin) || fmin <= 0.0f ||
+      bins_per_octave <= 0 || n_iter <= 0 || n_iter > sonare::resource::kMaxGriffinLimIterations) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (check_inverse_input_length(input_length, n_bins, n_frames) != SONARE_OK ||
+      !all_finite(magnitude, n_bins, n_frames)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
+
 }  // namespace
+
+SonareError sonare_cqt_to_audio_checked(const float* magnitude, size_t input_length, int n_bins,
+                                        int n_frames, int sample_rate, int hop_length, float fmin,
+                                        int bins_per_octave, int n_iter, float** out,
+                                        size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
+  const SonareError validation =
+      validate_cqt_inverse(magnitude, input_length, n_bins, n_frames, sample_rate, hop_length, fmin,
+                           bins_per_octave, n_iter);
+  if (validation != SONARE_OK) return validation;
+
+  SONARE_C_TRY
+  CqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+  return fill_audio_samples(
+      griffinlim_cqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter), out, out_length);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_cqt_to_audio(const float* magnitude, int n_bins, int n_frames, int sample_rate,
+                                int hop_length, float fmin, int bins_per_octave, int n_iter,
+                                float** out, size_t* out_length) {
+  return sonare_cqt_to_audio_checked(magnitude, inverse_input_length(n_bins, n_frames), n_bins,
+                                     n_frames, sample_rate, hop_length, fmin, bins_per_octave,
+                                     n_iter, out, out_length);
+}
+
+SonareError sonare_vqt_to_audio_checked(const float* magnitude, size_t input_length, int n_bins,
+                                        int n_frames, int sample_rate, int hop_length, float fmin,
+                                        int bins_per_octave, float gamma, int n_iter, float** out,
+                                        size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (!out || !out_length || !std::isfinite(gamma) || gamma < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out = nullptr;
+  *out_length = 0;
+  const SonareError validation =
+      validate_cqt_inverse(magnitude, input_length, n_bins, n_frames, sample_rate, hop_length, fmin,
+                           bins_per_octave, n_iter);
+  if (validation != SONARE_OK) return validation;
+
+  SONARE_C_TRY
+  VqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+  config.gamma = gamma;
+  return fill_audio_samples(
+      griffinlim_vqt(magnitude, n_bins, n_frames, config, sample_rate, n_iter), out, out_length);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_vqt_to_audio(const float* magnitude, int n_bins, int n_frames, int sample_rate,
+                                int hop_length, float fmin, int bins_per_octave, float gamma,
+                                int n_iter, float** out, size_t* out_length) {
+  return sonare_vqt_to_audio_checked(magnitude, inverse_input_length(n_bins, n_frames), n_bins,
+                                     n_frames, sample_rate, hop_length, fmin, bins_per_octave,
+                                     gamma, n_iter, out, out_length);
+}
 
 SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, int sample_rate,
                                   int n_fft, float fmin, float fmax, int htk,

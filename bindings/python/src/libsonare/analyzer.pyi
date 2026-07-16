@@ -26,6 +26,8 @@ from .types import (
     LufsResult,
     MasteringChainResult,
     MasteringChainStereoResult,
+    MasteringInsertParamInfo,
+    MasteringProcessorCatalogEntry,
     MasteringResult,
     MasteringStereoResult,
     MelodyResult,
@@ -624,8 +626,8 @@ def mastering_chain_stereo(
 def mastering_preset_names() -> list[MasteringPreset]: ...
 def mastering_insert_names() -> list[str]: ...
 def mastering_insert_param_names(name: str) -> list[str]: ...
-def mastering_insert_param_info(name: str) -> list[dict[str, Any]]: ...
-def mastering_processor_catalog() -> list[dict[str, Any]]: ...
+def mastering_insert_param_info(name: str) -> list[MasteringInsertParamInfo]: ...
+def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]: ...
 def mixing_scene_preset_names() -> list[str]: ...
 def mixing_scene_preset_json(preset_name: str) -> str: ...
 
@@ -1339,6 +1341,27 @@ def mel_to_stft(
     fmax: float = 0.0,
     htk: bool = False,
 ) -> InverseResult: ...
+def cqt_to_audio(
+    magnitude: FloatSamples,
+    n_bins: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566257483,
+    bins_per_octave: int = 12,
+    n_iter: int = 32,
+) -> list[float]: ...
+def vqt_to_audio(
+    magnitude: FloatSamples,
+    n_bins: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    fmin: float = 32.70319566257483,
+    bins_per_octave: int = 12,
+    gamma: float = 0.0,
+    n_iter: int = 32,
+) -> list[float]: ...
 def mel_to_audio(
     mel: FloatSamples,
     n_mels: int,

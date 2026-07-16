@@ -31,10 +31,14 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
 SonareError sonare_analyze_timbre(const float* samples, size_t length, int sample_rate, int n_fft,
                                   int hop_length, int n_mels, int n_mfcc, float window_sec,
                                   SonareTimbreResult* out);
+/// @brief Detects a continuous chord/N.C. timeline.
+/// @details Final correlations below @p threshold (which must be in [0, 1])
+///   produce @c SONARE_CHORD_UNKNOWN segments instead of a guessed chord.
 SonareError sonare_detect_chords(const float* samples, size_t length, int sample_rate,
                                  float min_duration, float smoothing_window, float threshold,
                                  int use_triads_only, int n_fft, int hop_length, int use_beat_sync,
                                  SonareChordAnalysisResult* out);
+/// @brief Extended chord detection with the same UNKNOWN/N.C. threshold contract.
 SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sample_rate,
                                     const SonareChordDetectionOptions* options,
                                     SonareChordAnalysisResult* out);
@@ -112,6 +116,35 @@ SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int
                        float fmin, int n_bins, int bins_per_octave, float gamma,
                        SonareCqtResult* out);
 void sonare_free_cqt_result(SonareCqtResult* result);
+
+/// @brief Reconstructs mono audio from row-major CQT magnitude with Griffin-Lim.
+/// @details The matrix must contain @p n_bins * @p n_frames elements. C callers
+///   that cannot prove the allocation size should use @ref sonare_cqt_to_audio_checked.
+///   Iterations must be in [1, 256]. The output is owned by the caller and
+///   released with @ref sonare_free_floats.
+SonareError sonare_cqt_to_audio(const float* magnitude, int n_bins, int n_frames, int sample_rate,
+                                int hop_length, float fmin, int bins_per_octave, int n_iter,
+                                float** out, size_t* out_length);
+
+/// @brief Length-checked sonare_cqt_to_audio.
+/// @details @p input_length must equal @p n_bins * @p n_frames.
+SonareError sonare_cqt_to_audio_checked(const float* magnitude, size_t input_length, int n_bins,
+                                        int n_frames, int sample_rate, int hop_length, float fmin,
+                                        int bins_per_octave, int n_iter, float** out,
+                                        size_t* out_length);
+
+/// @brief Reconstructs mono audio from row-major VQT magnitude with Griffin-Lim.
+/// @details Shape, ownership, and iteration rules match @ref sonare_cqt_to_audio.
+SonareError sonare_vqt_to_audio(const float* magnitude, int n_bins, int n_frames, int sample_rate,
+                                int hop_length, float fmin, int bins_per_octave, float gamma,
+                                int n_iter, float** out, size_t* out_length);
+
+/// @brief Length-checked sonare_vqt_to_audio.
+/// @details @p input_length must equal @p n_bins * @p n_frames.
+SonareError sonare_vqt_to_audio_checked(const float* magnitude, size_t input_length, int n_bins,
+                                        int n_frames, int sample_rate, int hop_length, float fmin,
+                                        int bins_per_octave, float gamma, int n_iter, float** out,
+                                        size_t* out_length);
 
 // ============================================================================
 // Features - Spectrogram

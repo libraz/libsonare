@@ -33,6 +33,7 @@ export {
   analyzeMelody,
   analyzeSections,
   cqt,
+  cqtToAudio,
   fourierTempogram,
   hybridCqt,
   lufs,
@@ -44,6 +45,7 @@ export {
   shortTermLufs,
   tempogramRatio,
   vqt,
+  vqtToAudio,
 } from './feature_music';
 export { pitchPyin, pitchYin } from './feature_pitch';
 export { resample } from './feature_resample';

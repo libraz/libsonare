@@ -184,6 +184,8 @@ node = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  "cqt_to_audio_checked",
+  "vqt_to_audio_checked",
   # HTK-aware inverse variants are folded into the base facades through the
   # `htk` option and route to the _ex C entry points internally.
   "mel_to_stft_ex",
@@ -240,6 +242,8 @@ wasm = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  "cqt_to_audio_checked",
+  "vqt_to_audio_checked",
   "mel_to_stft_ex",
   "mel_to_audio_ex",
   "mfcc_to_audio_ex",
@@ -305,6 +309,8 @@ python = [
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
   "mfcc_to_audio_checked",
+  "cqt_to_audio_checked",
+  "vqt_to_audio_checked",
   "mel_to_stft_ex",
   "mel_to_audio_ex",
   "mfcc_to_audio_ex",

@@ -4,6 +4,8 @@ import {
   bassChroma,
   chroma,
   chromaCens,
+  cqt,
+  cqtToAudio,
   framesToTime,
   harmonic,
   hpss,
@@ -39,16 +41,18 @@ import {
   timeStretch,
   timeToFrames,
   trim,
+  vqt,
+  vqtToAudio,
   zeroCrossingRate,
 } from '../src/index.js';
 
 const SR = 22050;
 
-function generateSine(freq: number, sr: number, duration: number): Float32Array {
+function generateSine(freq: number, sr: number, duration: number, amp = 1): Float32Array {
   const n = Math.floor(sr * duration);
   const samples = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    samples[i] = Math.sin((2 * Math.PI * freq * i) / sr);
+    samples[i] = amp * Math.sin((2 * Math.PI * freq * i) / sr);
   }
   return samples;
 }
@@ -86,6 +90,11 @@ describe('effects', () => {
     const result = pitchShift(tone, SR, 2);
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('pitchShift rejects an unsupported effective rate before processing input', () => {
+    expect(() => pitchShift(new Float32Array(4), 48000, 48)).toThrow();
+    expect(pitchShift(tone, SR, 0)).toBeInstanceOf(Float32Array);
   });
 
   it('normalize sets peak close to target', () => {
@@ -291,6 +300,25 @@ describe('features', () => {
     mfccCoeffs[7] = Number.POSITIVE_INFINITY;
     expect(() => mfccToMel(mfccCoeffs, 5, 4, 8)).toThrow(/NaN|Inf/);
     expect(() => mfccToAudio(mfccCoeffs, 5, 4, 8, SR, 256, 64, 0, 0, 2)).toThrow(/NaN|Inf/);
+  });
+
+  it('reconstructs CQT and VQT magnitudes with shape validation', () => {
+    // Shared deterministic oracle fixture with Python/WASM.
+    const source = generateSine(261.6256, 8000, 0.256, 0.5);
+    const cq = cqt(source, 8000, 128, 130.8128, 12, 12);
+    const cqtAudio = cqtToAudio(cq.magnitude, cq.nBins, cq.nFrames, 8000, 128, 130.8128, 12, 2);
+    expect(cqtAudio.length).toBe(source.length);
+    expect(Array.from(cqtAudio).every(Number.isFinite)).toBe(true);
+    expect(Math.max(...cqtAudio.map(Math.abs))).toBeGreaterThan(1e-5);
+
+    const vq = vqt(source, 8000, 128, 130.8128, 12, 12, 0);
+    const vqtAudio = vqtToAudio(vq.magnitude, vq.nBins, vq.nFrames, 8000, 128, 130.8128, 12, 0, 2);
+    expect(vqtAudio.length).toBe(source.length);
+    expect(Array.from(vqtAudio).every(Number.isFinite)).toBe(true);
+    expect(() => cqtToAudio(cq.magnitude.subarray(1), cq.nBins, cq.nFrames)).toThrow();
+    expect(() =>
+      vqtToAudio(vq.magnitude, vq.nBins, vq.nFrames, 8000, 128, 130.8128, 12, 0, 257),
+    ).toThrow();
   });
 
   it('mfcc returns coefficients', () => {

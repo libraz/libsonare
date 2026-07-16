@@ -322,6 +322,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("pseudoCqt", Napi::Function::New(env, &SonareWrap::PseudoCqt, "pseudoCqt"));
   exports.Set("hybridCqt", Napi::Function::New(env, &SonareWrap::HybridCqt, "hybridCqt"));
   exports.Set("vqt", Napi::Function::New(env, &SonareWrap::Vqt, "vqt"));
+  exports.Set("cqtToAudio", Napi::Function::New(env, &SonareWrap::CqtToAudio, "cqtToAudio"));
+  exports.Set("vqtToAudio", Napi::Function::New(env, &SonareWrap::VqtToAudio, "vqtToAudio"));
 
   // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
   exports.Set("melToStft", Napi::Function::New(env, &SonareWrap::MelToStft, "melToStft"));

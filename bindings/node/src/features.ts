@@ -162,6 +162,54 @@ export function vqt(
   return addon.vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
 }
 
+/** Reconstruct mono audio from a row-major CQT magnitude via Griffin-Lim. */
+export function cqtToAudio(
+  magnitude: Float32Array,
+  nBins: number,
+  nFrames: number,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  binsPerOctave = 12,
+  nIter = 32,
+): Float32Array {
+  return addon.cqtToAudio(
+    magnitude,
+    nBins,
+    nFrames,
+    sampleRate,
+    hopLength,
+    fmin,
+    binsPerOctave,
+    nIter,
+  );
+}
+
+/** Reconstruct mono audio from a row-major VQT magnitude via Griffin-Lim. */
+export function vqtToAudio(
+  magnitude: Float32Array,
+  nBins: number,
+  nFrames: number,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  binsPerOctave = 12,
+  gamma = 0,
+  nIter = 32,
+): Float32Array {
+  return addon.vqtToAudio(
+    magnitude,
+    nBins,
+    nFrames,
+    sampleRate,
+    hopLength,
+    fmin,
+    binsPerOctave,
+    gamma,
+    nIter,
+  );
+}
+
 /** Reconstruct STFT power from a mel spectrogram. */
 export function melToStft(
   mel: Float32Array,

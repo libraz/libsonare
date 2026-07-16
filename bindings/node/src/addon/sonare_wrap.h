@@ -174,6 +174,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value PseudoCqt(const Napi::CallbackInfo& info);
   static Napi::Value HybridCqt(const Napi::CallbackInfo& info);
   static Napi::Value Vqt(const Napi::CallbackInfo& info);
+  static Napi::Value CqtToAudio(const Napi::CallbackInfo& info);
+  static Napi::Value VqtToAudio(const Napi::CallbackInfo& info);
 
   // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
   static Napi::Value MelToStft(const Napi::CallbackInfo& info);

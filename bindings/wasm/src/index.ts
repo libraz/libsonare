@@ -125,6 +125,7 @@ export {
   chromaCens,
   chromaCqt,
   cqt,
+  cqtToAudio,
   cyclicTempogram,
   dbToAmplitude,
   dbToPower,
@@ -193,6 +194,7 @@ export {
   trimSilence,
   vectorNormalize,
   vqt,
+  vqtToAudio,
   zeroCrossingRate,
   zeroCrossings,
 } from './features';

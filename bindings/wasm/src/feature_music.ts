@@ -180,6 +180,111 @@ export function vqt(
   return requireModule().vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
 }
 
+function validateCqtInverse(
+  fnName: string,
+  magnitude: Float32Array,
+  nBins: number,
+  nFrames: number,
+  sampleRate: number,
+  hopLength: number,
+  fmin: number,
+  binsPerOctave: number,
+  nIter: number,
+  options: GuardedOptions,
+): void {
+  assertSampleRate(fnName, sampleRate);
+  validatePositiveIntegers(fnName, { nBins, nFrames, hopLength, binsPerOctave, nIter });
+  if (nIter > 256) {
+    throw new RangeError(`${fnName}: nIter must be at most 256`);
+  }
+  validateFrequencyBounds(fnName, fmin);
+  if (fmin === 0) {
+    throw new RangeError(`${fnName}: fmin must be positive`);
+  }
+  if (magnitude.length !== nBins * nFrames) {
+    throw new RangeError(`${fnName}: magnitude length must equal nBins * nFrames`);
+  }
+  assertSamples(fnName, magnitude, options.validate !== false);
+}
+
+/** Reconstruct mono audio from row-major CQT magnitude via Griffin-Lim. */
+export function cqtToAudio(
+  magnitude: Float32Array,
+  nBins: number,
+  nFrames: number,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  binsPerOctave = 12,
+  nIter = 32,
+  options: GuardedOptions = {},
+): Float32Array {
+  validateCqtInverse(
+    'cqtToAudio',
+    magnitude,
+    nBins,
+    nFrames,
+    sampleRate,
+    hopLength,
+    fmin,
+    binsPerOctave,
+    nIter,
+    options,
+  );
+  return requireModule().cqtToAudio(
+    magnitude,
+    nBins,
+    nFrames,
+    sampleRate,
+    hopLength,
+    fmin,
+    binsPerOctave,
+    nIter,
+  );
+}
+
+/** Reconstruct mono audio from row-major VQT magnitude via Griffin-Lim. */
+export function vqtToAudio(
+  magnitude: Float32Array,
+  nBins: number,
+  nFrames: number,
+  sampleRate = 22050,
+  hopLength = 512,
+  fmin = 32.70319566257483,
+  binsPerOctave = 12,
+  gamma = 0,
+  nIter = 32,
+  options: GuardedOptions = {},
+): Float32Array {
+  validateCqtInverse(
+    'vqtToAudio',
+    magnitude,
+    nBins,
+    nFrames,
+    sampleRate,
+    hopLength,
+    fmin,
+    binsPerOctave,
+    nIter,
+    options,
+  );
+  assertFiniteScalar('vqtToAudio', gamma, 'gamma');
+  if (gamma < 0) {
+    throw new RangeError('vqtToAudio: gamma must be non-negative');
+  }
+  return requireModule().vqtToAudio(
+    magnitude,
+    nBins,
+    nFrames,
+    sampleRate,
+    hopLength,
+    fmin,
+    binsPerOctave,
+    gamma,
+    nIter,
+  );
+}
+
 /**
  * Detect song-structure sections (intro/verse/chorus/...).
  *

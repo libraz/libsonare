@@ -6,6 +6,8 @@
 
 #include "analysis/analysis_json.h"
 #include "sonare_c_test_helpers.h"
+#include "support/alloc_guard.h"
+#include "util/constants.h"
 #include "util/json.h"
 
 namespace {
@@ -55,6 +57,24 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
 
 }  // namespace
 
+TEST_CASE("C pitch shift rejects unsupported expansion before allocating",
+          "[c_api][pitch_shift][resource_limit]") {
+  const float samples[4] = {0.0f, 0.25f, -0.25f, 0.0f};
+  float* out = nullptr;
+  size_t out_length = 0;
+  SonareError error = SONARE_OK;
+  size_t allocations = 999;
+  {
+    sonare::test::AllocationGuard guard;
+    error = sonare_pitch_shift(samples, 4, 48000, 48.0f, &out, &out_length);
+    allocations = guard.count();
+  }
+  REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(allocations == 0);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+}
+
 TEST_CASE("C VQT rejects non-finite gamma without touching core casts", "[c_api][vqt]") {
   std::vector<float> samples(2048, 0.0f);
   SonareCqtResult result{};
@@ -67,6 +87,56 @@ TEST_CASE("C VQT rejects non-finite gamma without touching core casts", "[c_api]
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(result.magnitude == nullptr);
   REQUIRE(result.frequencies == nullptr);
+}
+
+TEST_CASE("C API reconstructs CQT and VQT magnitude with checked ownership",
+          "[c_api][features][inverse_cqt]") {
+  constexpr int sample_rate = 8000;
+  constexpr int hop_length = 128;
+  constexpr int n_bins = 12;
+  constexpr int bins_per_octave = 12;
+  constexpr float fmin = 130.8128f;
+  std::vector<float> input(2048, 0.0f);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = 0.25f * std::sin(2.0f * sonare::constants::kPi * 261.6256f * static_cast<float>(i) /
+                                sample_rate);
+  }
+
+  SonareCqtResult cqt_result{};
+  REQUIRE(sonare_cqt(input.data(), input.size(), sample_rate, hop_length, fmin, n_bins,
+                     bins_per_octave, &cqt_result) == SONARE_OK);
+  REQUIRE(cqt_result.n_frames > 0);
+  const size_t matrix_length =
+      static_cast<size_t>(cqt_result.n_bins) * static_cast<size_t>(cqt_result.n_frames);
+
+  float* output = nullptr;
+  size_t output_length = 0;
+  REQUIRE(sonare_cqt_to_audio(cqt_result.magnitude, cqt_result.n_bins, cqt_result.n_frames,
+                              sample_rate, hop_length, fmin, bins_per_octave, 2, &output,
+                              &output_length) == SONARE_OK);
+  REQUIRE(output != nullptr);
+  REQUIRE(output_length > 0);
+  for (size_t i = 0; i < output_length; ++i) REQUIRE(std::isfinite(output[i]));
+  sonare_free_floats(output);
+
+  output = nullptr;
+  output_length = 0;
+  REQUIRE(sonare_vqt_to_audio(cqt_result.magnitude, cqt_result.n_bins, cqt_result.n_frames,
+                              sample_rate, hop_length, fmin, bins_per_octave, 0.0f, 2, &output,
+                              &output_length) == SONARE_OK);
+  REQUIRE(output != nullptr);
+  REQUIRE(output_length > 0);
+  sonare_free_floats(output);
+
+  REQUIRE(sonare_cqt_to_audio_checked(cqt_result.magnitude, matrix_length - 1, cqt_result.n_bins,
+                                      cqt_result.n_frames, sample_rate, hop_length, fmin,
+                                      bins_per_octave, 2, &output,
+                                      &output_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_vqt_to_audio_checked(cqt_result.magnitude, matrix_length, cqt_result.n_bins,
+                                      cqt_result.n_frames, sample_rate, hop_length, fmin,
+                                      bins_per_octave, 0.0f, 257, &output,
+                                      &output_length) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_free_cqt_result(&cqt_result);
 }
 
 TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
@@ -317,6 +387,7 @@ TEST_CASE("sonare_detect_key", "[c_api]") {
 TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized frames", "[c_api]") {
   SonareStreamConfig config = {};
   REQUIRE(sonare_stream_analyzer_config_default(&config) == SONARE_OK);
+  REQUIRE(config.max_progression_entries == 4096);
   config.sample_rate = 22050;
   config.n_fft = 1024;
   config.hop_length = 256;
@@ -336,6 +407,10 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     SonareStreamConfig bad = config;
     bad.key_update_interval_sec = 0.0f;
     SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+
+    bad = config;
+    bad.max_progression_entries = 0;
     REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
 
     bad = config;
@@ -508,6 +583,8 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(stats.dropped_output_frames > 0);
     REQUIRE(stats.pending_frames + stats.dropped_output_frames ==
             static_cast<size_t>(stats.total_frames));
+    REQUIRE(stats.dropped_chord_progression_entries == 0);
+    REQUIRE(stats.dropped_bar_progression_entries == 0);
     sonare_free_stream_stats(&stats);
     sonare_stream_analyzer_destroy(analyzer);
   }

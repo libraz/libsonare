@@ -459,6 +459,35 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ]
         lib.sonare_free_cqt_result.restype = None
         lib.sonare_free_cqt_result.argtypes = [ctypes.POINTER(SonareCqtResult)]
+        lib.sonare_cqt_to_audio_checked.restype = ctypes.c_int32
+        lib.sonare_cqt_to_audio_checked.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_vqt_to_audio_checked.restype = ctypes.c_int32
+        lib.sonare_vqt_to_audio_checked.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
 
     # --- Features - Inverse reconstruction ---
 

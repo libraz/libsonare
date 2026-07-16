@@ -89,6 +89,7 @@ from .analyzer import (
 from .analyzer import (
     cqt as cqt,
 )
+from .analyzer import cqt_to_audio as cqt_to_audio
 from .analyzer import (
     cyclic_tempogram as cyclic_tempogram,
 )
@@ -506,6 +507,7 @@ from .analyzer import (
 from .analyzer import (
     vqt as vqt,
 )
+from .analyzer import vqt_to_audio as vqt_to_audio
 from .analyzer import (
     waveform_peak_pyramid as waveform_peak_pyramid,
 )
@@ -664,6 +666,10 @@ from .types import (
 from .types import (
     MasteringChainStereoResult as MasteringChainStereoResult,
 )
+from .types import MasteringChannelPolicy as MasteringChannelPolicy
+from .types import MasteringInsertParamInfo as MasteringInsertParamInfo
+from .types import MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry
+from .types import MasteringProcessorKind as MasteringProcessorKind
 from .types import (
     MasteringResult as MasteringResult,
 )

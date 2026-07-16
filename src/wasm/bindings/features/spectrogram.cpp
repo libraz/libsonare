@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "util/resource_limits.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -245,6 +246,48 @@ val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_
   return vectorToFloat32Array(out_vec);
 }
 
+val js_cqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, int hop_length,
+                    float fmin, int bins_per_octave, int n_iter) {
+  std::vector<float> data = float32ArrayToVector(magnitude);
+  validate_sample_rate("cqtToAudio", sample_rate);
+  validate_matrix("cqtToAudio", data, n_bins, n_frames, "magnitude", "n_bins");
+  validate_positive("cqtToAudio", hop_length, "hop_length");
+  validate_positive("cqtToAudio", bins_per_octave, "bins_per_octave");
+  validate_positive("cqtToAudio", n_iter, "n_iter");
+  if (!std::isfinite(fmin) || fmin <= 0.0f || n_iter > sonare::resource::kMaxGriffinLimIterations) {
+    throw std::invalid_argument("cqtToAudio: invalid fmin or n_iter");
+  }
+  CqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+  const Audio result = griffinlim_cqt(data.data(), n_bins, n_frames, config, sample_rate, n_iter);
+  return vectorToFloat32Array(std::vector<float>(result.data(), result.data() + result.size()));
+}
+
+val js_vqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, int hop_length,
+                    float fmin, int bins_per_octave, float gamma, int n_iter) {
+  std::vector<float> data = float32ArrayToVector(magnitude);
+  validate_sample_rate("vqtToAudio", sample_rate);
+  validate_matrix("vqtToAudio", data, n_bins, n_frames, "magnitude", "n_bins");
+  validate_positive("vqtToAudio", hop_length, "hop_length");
+  validate_positive("vqtToAudio", bins_per_octave, "bins_per_octave");
+  validate_positive("vqtToAudio", n_iter, "n_iter");
+  if (!std::isfinite(fmin) || fmin <= 0.0f || !std::isfinite(gamma) || gamma < 0.0f ||
+      n_iter > sonare::resource::kMaxGriffinLimIterations) {
+    throw std::invalid_argument("vqtToAudio: invalid fmin, gamma, or n_iter");
+  }
+  VqtConfig config;
+  config.hop_length = hop_length;
+  config.fmin = fmin;
+  config.n_bins = n_bins;
+  config.bins_per_octave = bins_per_octave;
+  config.gamma = gamma;
+  const Audio result = griffinlim_vqt(data.data(), n_bins, n_frames, config, sample_rate, n_iter);
+  return vectorToFloat32Array(std::vector<float>(result.data(), result.data() + result.size()));
+}
+
 void registerFeatureSpectrogramBindings() {
   function("stft", &js_stft);
   function("stftDb", &js_stft_db);
@@ -254,6 +297,8 @@ void registerFeatureSpectrogramBindings() {
   function("melToAudio", &js_mel_to_audio);
   function("mfccToMel", &js_mfcc_to_mel);
   function("mfccToAudio", &js_mfcc_to_audio);
+  function("cqtToAudio", &js_cqt_to_audio);
+  function("vqtToAudio", &js_vqt_to_audio);
 }
 
 #endif  // __EMSCRIPTEN__
