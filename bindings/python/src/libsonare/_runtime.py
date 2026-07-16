@@ -214,11 +214,17 @@ _PAN_MODE_NAMES = {
 
 
 def _enum_error(
-    value: object, names: Mapping[str, int], what: str, verb: str, expected: bool
+    value: object,
+    names: Mapping[str, int],
+    what: str,
+    verb: str,
+    expected: bool,
+    quote_value: bool,
 ) -> str:
     if expected:
         return f"{verb} {what}: {value!r} (expected one of {sorted(names)})"
-    return f"{verb} {what}: {value}"
+    rendered = repr(value) if quote_value else str(value)
+    return f"{verb} {what}: {rendered}"
 
 
 def _resolve_enum(
@@ -228,9 +234,13 @@ def _resolve_enum(
     *,
     enum_cls: type | None = None,
     dash: bool = False,
+    underscore: bool = False,
+    strip: bool = False,
+    validate_int: bool = False,
     reject_bool: bool = False,
     verb: str = "unknown",
     expected: bool = False,
+    quote_value: bool = False,
 ) -> int:
     """Resolve a string / int / enum ``value`` to its C enum ordinal.
 
@@ -243,15 +253,28 @@ def _resolve_enum(
     if enum_cls is not None and isinstance(value, enum_cls):
         return int(value)
     if isinstance(value, int):
-        if reject_bool and isinstance(value, bool):
-            raise ValueError(_enum_error(value, names, what, verb, expected))
+        if (reject_bool and isinstance(value, bool)) or (
+            validate_int and value not in names.values()
+        ):
+            raise ValueError(_enum_error(value, names, what, verb, expected, quote_value))
         return value
     if not isinstance(value, str):
-        raise ValueError(_enum_error(value, names, what, verb, expected))
-    key = value.replace("_", "-").lower() if dash else value.lower()
+        raise ValueError(_enum_error(value, names, what, verb, expected, quote_value))
+    key = value.strip() if strip else value
+    if dash:
+        key = key.replace("_", "-")
+    elif underscore:
+        key = key.replace("-", "_")
+    key = key.lower()
     if key not in names:
-        raise ValueError(_enum_error(value, names, what, verb, expected))
+        raise ValueError(_enum_error(value, names, what, verb, expected, quote_value))
     return names[key]
+
+
+def _require_power_of_two(value: int, name: str) -> None:
+    """Validate a positive power-of-two integer with a consistent error."""
+    if value <= 0 or (value & (value - 1)) != 0:
+        raise ValueError(f"{name} must be a positive power of two")
 
 
 def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
@@ -458,14 +481,15 @@ def _out_float_array(
 
     Yields ``(out, out_length)`` to pass by reference into a C call. The heap
     buffer is released with ``sonare_free_floats`` on both the success and the
-    exception paths, guarded on a non-null pointer and a positive length.
+    exception paths whenever the pointer is non-null, including zero-length
+    sentinel allocations.
     """
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
     try:
         yield out, out_length
     finally:
-        if out and out_length.value > 0:
+        if out:
             lib.sonare_free_floats(out)
 
 
@@ -483,7 +507,7 @@ def _out_int_array(
     try:
         yield out, out_length
     finally:
-        if out and out_length.value > 0:
+        if out:
             lib.sonare_free_ints(out)
 
 

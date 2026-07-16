@@ -142,12 +142,110 @@ class Beat:
     strength: float | None
     def __init__(self, time: float, strength: float | None = None) -> None: ...
 
+class AnalysisDynamics:
+    dynamic_range_db: float
+    peak_db: float
+    rms_db: float
+    crest_factor: float
+    loudness_range_db: float
+    is_compressed: bool
+    def __init__(
+        self,
+        dynamic_range_db: float,
+        peak_db: float,
+        rms_db: float,
+        crest_factor: float,
+        loudness_range_db: float,
+        is_compressed: bool,
+    ) -> None: ...
+    @property
+    def dynamicRangeDb(self) -> float: ...
+    @property
+    def peakDb(self) -> float: ...
+    @property
+    def rmsDb(self) -> float: ...
+    @property
+    def crestFactor(self) -> float: ...
+    @property
+    def loudnessRangeDb(self) -> float: ...
+    @property
+    def isCompressed(self) -> bool: ...
+
+class AnalysisTimbre:
+    brightness: float
+    warmth: float
+    density: float
+    roughness: float
+    complexity: float
+    def __init__(
+        self,
+        brightness: float,
+        warmth: float,
+        density: float,
+        roughness: float,
+        complexity: float,
+    ) -> None: ...
+
+class AnalysisRhythm:
+    time_signature: TimeSignature
+    syncopation: float
+    groove_type: str
+    pattern_regularity: float
+    tempo_stability: float
+    def __init__(
+        self,
+        time_signature: TimeSignature,
+        syncopation: float,
+        groove_type: str,
+        pattern_regularity: float,
+        tempo_stability: float,
+    ) -> None: ...
+    @property
+    def timeSignature(self) -> TimeSignature: ...
+    @property
+    def grooveType(self) -> str: ...
+    @property
+    def patternRegularity(self) -> float: ...
+    @property
+    def tempoStability(self) -> float: ...
+
+class AnalysisMelody:
+    pitch_range_octaves: float
+    pitch_stability: float
+    mean_frequency: float
+    vibrato_rate: float
+    pitches: list[MelodyPoint]
+    def __init__(
+        self,
+        pitch_range_octaves: float,
+        pitch_stability: float,
+        mean_frequency: float,
+        vibrato_rate: float,
+        pitches: list[MelodyPoint],
+    ) -> None: ...
+    @property
+    def pitchRangeOctaves(self) -> float: ...
+    @property
+    def pitchStability(self) -> float: ...
+    @property
+    def meanFrequency(self) -> float: ...
+    @property
+    def vibratoRate(self) -> float: ...
+
 class AnalysisResult:
     bpm: float
     bpm_confidence: float
     key: Key
     time_signature: TimeSignature
     beat_times: list[float]
+    beat_strengths: list[float]
+    chords: list[Chord]
+    sections: list[Section]
+    timbre: AnalysisTimbre | None
+    dynamics: AnalysisDynamics | None
+    rhythm: AnalysisRhythm | None
+    melody: AnalysisMelody | None
+    form: str
     def __init__(
         self,
         bpm: float,
@@ -155,6 +253,14 @@ class AnalysisResult:
         key: Key,
         time_signature: TimeSignature,
         beat_times: list[float],
+        beat_strengths: list[float] = ...,
+        chords: list[Chord] = ...,
+        sections: list[Section] = ...,
+        timbre: AnalysisTimbre | None = None,
+        dynamics: AnalysisDynamics | None = None,
+        rhythm: AnalysisRhythm | None = None,
+        melody: AnalysisMelody | None = None,
+        form: str = "",
     ) -> None: ...
     @property
     def bpmConfidence(self) -> float: ...
@@ -162,6 +268,8 @@ class AnalysisResult:
     def timeSignature(self) -> TimeSignature: ...
     @property
     def beatTimes(self) -> list[float]: ...
+    @property
+    def beatStrengths(self) -> list[float]: ...
     @property
     def beats(self) -> list[Beat]: ...
 
@@ -915,6 +1023,50 @@ class EngineClip:
         page_provider: object | None = None,
     ) -> None: ...
 
+class EngineMidiEvent:
+    render_frame: int
+    word0: int
+    word1: int
+    word2: int
+    word3: int
+    word_count: int
+    group: int
+    sysex_handle: int
+    def __init__(
+        self,
+        render_frame: int,
+        word0: int = 0,
+        word1: int = 0,
+        word2: int = 0,
+        word3: int = 0,
+        word_count: int = 0,
+        group: int = 0,
+        sysex_handle: int = 0,
+    ) -> None: ...
+
+class EngineMidiClipSchedule:
+    events: list[EngineMidiEvent]
+    id: int
+    track_id: int
+    destination_id: int
+    start_sample: int
+    start_ppq: float
+    length_samples: int
+    loop: bool
+    loop_length_samples: int
+    def __init__(
+        self,
+        events: list[EngineMidiEvent],
+        id: int = 0,
+        track_id: int = 0,
+        destination_id: int = 0,
+        start_sample: int = 0,
+        start_ppq: float = 0.0,
+        length_samples: int = 0,
+        loop: bool = False,
+        loop_length_samples: int = 0,
+    ) -> None: ...
+
 class ClipPageRequest:
     clip_id: int
     channel: int
@@ -1247,6 +1399,21 @@ class CqtResult:
         sample_rate: int,
         magnitude: list[float],
         frequencies: list[float],
+    ) -> None: ...
+
+class QuantizeConfig:
+    mel_db_min: float
+    mel_db_max: float
+    onset_max: float
+    rms_max: float
+    centroid_max: float
+    def __init__(
+        self,
+        mel_db_min: float = -80.0,
+        mel_db_max: float = 0.0,
+        onset_max: float = 50.0,
+        rms_max: float = 1.0,
+        centroid_max: float = 11025.0,
     ) -> None: ...
 
 class StreamConfig:
