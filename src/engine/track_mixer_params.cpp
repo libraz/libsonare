@@ -324,25 +324,35 @@ bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int inser
   const size_t count = sidechain_binding_count_.load(std::memory_order_relaxed);
   for (size_t i = 0; i < count; ++i) {
     SidechainBinding& binding = sidechain_bindings_[i];
-    if (binding.track_id != track_id || binding.insert_index != insert_index) continue;
+    if (binding.track_id.load(std::memory_order_acquire) != track_id ||
+        binding.insert_index.load(std::memory_order_acquire) != insert_index) {
+      continue;
+    }
     if (source_track_id == 0) {
-      // Drop the binding; the strip's key state clears so the insert falls
-      // back to its internal key until (and unless) another binding feeds it.
-      const int lane_index = lane_index_for_track(track_id);
-      if (lane_index >= 0 && lane_states_[static_cast<size_t>(lane_index)].strip) {
-        lane_states_[static_cast<size_t>(lane_index)].strip->clear_insert_sidechains();
-      }
-      sidechain_bindings_[i] = sidechain_bindings_[count - 1];
-      sidechain_bindings_[count - 1] = SidechainBinding{};
+      // Drop the binding. The audio thread clears stale keys before delivering
+      // the current table, so this control path never touches lane_states_.
+      SidechainBinding& last = sidechain_bindings_[count - 1];
+      binding.track_id.store(last.track_id.load(std::memory_order_acquire),
+                             std::memory_order_release);
+      binding.insert_index.store(last.insert_index.load(std::memory_order_acquire),
+                                 std::memory_order_release);
+      binding.source_track_id.store(last.source_track_id.load(std::memory_order_acquire),
+                                    std::memory_order_release);
+      last.track_id.store(0, std::memory_order_release);
+      last.insert_index.store(0, std::memory_order_release);
+      last.source_track_id.store(0, std::memory_order_release);
       sidechain_binding_count_.store(count - 1, std::memory_order_release);
     } else {
-      binding.source_track_id = source_track_id;
+      binding.source_track_id.store(source_track_id, std::memory_order_release);
     }
     return true;
   }
   if (source_track_id == 0) return true;
   if (count >= kMaxSidechainBindings) return false;
-  sidechain_bindings_[count] = SidechainBinding{track_id, insert_index, source_track_id};
+  SidechainBinding& binding = sidechain_bindings_[count];
+  binding.track_id.store(track_id, std::memory_order_relaxed);
+  binding.insert_index.store(insert_index, std::memory_order_relaxed);
+  binding.source_track_id.store(source_track_id, std::memory_order_relaxed);
   sidechain_binding_count_.store(count + 1, std::memory_order_release);
   return true;
 }
@@ -357,15 +367,19 @@ int TrackMixerRuntime::lane_index_for_track(uint32_t track_id) const noexcept {
 
 void TrackMixerRuntime::deliver_lane_sidechains(size_t lane_index, int num_channels,
                                                 int num_samples) noexcept {
-  const size_t count = sidechain_binding_count_.load(std::memory_order_acquire);
-  if (count == 0) return;
   LaneState& lane = lane_states_[lane_index];
   if (!lane.strip || lane.track_id == 0) return;
+  // Clear any binding removed by the control thread without touching the
+  // audio-owned lane state there. Current bindings are restored below.
+  lane.strip->clear_insert_sidechains();
+  const size_t count = sidechain_binding_count_.load(std::memory_order_acquire);
+  if (count == 0) return;
   std::array<const float*, kMaxLaneChannels> key{};
   for (size_t i = 0; i < count; ++i) {
     const SidechainBinding& binding = sidechain_bindings_[i];
-    if (binding.track_id != lane.track_id) continue;
-    const int source_index = lane_index_for_track(binding.source_track_id);
+    if (binding.track_id.load(std::memory_order_acquire) != lane.track_id) continue;
+    const int source_index =
+        lane_index_for_track(binding.source_track_id.load(std::memory_order_acquire));
     if (source_index < 0) continue;
     // The source lane's key snapshot holds its most recent post-strip,
     // pre-fader audio: the current block when the source renders before this
@@ -373,8 +387,9 @@ void TrackMixerRuntime::deliver_lane_sidechains(size_t lane_index, int num_chann
     for (int ch = 0; ch < num_channels && ch < kMaxLaneChannels; ++ch) {
       key[static_cast<size_t>(ch)] = key_channel(static_cast<size_t>(source_index), ch);
     }
-    lane.strip->set_insert_sidechain(binding.insert_index, key.data(),
-                                     std::min(num_channels, kMaxLaneChannels), num_samples);
+    lane.strip->set_insert_sidechain(binding.insert_index.load(std::memory_order_acquire),
+                                     key.data(), std::min(num_channels, kMaxLaneChannels),
+                                     num_samples);
   }
 }
 
@@ -386,7 +401,7 @@ void TrackMixerRuntime::snapshot_sidechain_key(size_t lane_index, int num_channe
   if (track_id == 0) return;
   bool is_source = false;
   for (size_t i = 0; i < count; ++i) {
-    if (sidechain_bindings_[i].source_track_id == track_id) {
+    if (sidechain_bindings_[i].source_track_id.load(std::memory_order_acquire) == track_id) {
       is_source = true;
       break;
     }

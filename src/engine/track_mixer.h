@@ -87,8 +87,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// lane strip as its sidechain key (ducking/sidechainRouter inserts).
   /// Source lanes rendered earlier in the block deliver same-block audio;
   /// later ones deliver the previous block (one block of key latency).
-  /// source_track_id 0 removes the binding. Control-thread only (not safe
-  /// concurrently with process()); bindings are keyed by track id and survive
+  /// source_track_id 0 removes the binding. Single control-thread writer; safe
+  /// concurrently with process(). Bindings are keyed by track id and survive
   /// lane republishes. Returns false when the binding table is full.
   bool set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
                           uint32_t source_track_id) noexcept;
@@ -279,9 +279,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
   struct SidechainBinding {
-    uint32_t track_id = 0;
-    unsigned int insert_index = 0;
-    uint32_t source_track_id = 0;
+    std::atomic<uint32_t> track_id{0};
+    std::atomic<unsigned int> insert_index{0};
+    std::atomic<uint32_t> source_track_id{0};
   };
   static constexpr size_t kMaxSidechainBindings = 16;
 
@@ -394,8 +394,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // thread in deliver_lane_sidechains()/snapshot_sidechain_key(). Acquire/release
   // so the count is published only after the binding it indexes is fully
   // written, and an audio-thread reader that observes the new count also sees
-  // that binding. The binding structs themselves are small PODs; a torn read of
-  // one field only mis-routes a single block and self-heals next block.
+  // that binding. Each field is atomic because an audio reader may already hold
+  // the previous count while the control thread updates or compacts the table.
   std::atomic<size_t> sidechain_binding_count_{0};
   // Fixed-capacity insert-automation slot table (lane + bus). Prepared once in
   // prepare(); claimed/advanced on the audio thread with no allocation.
