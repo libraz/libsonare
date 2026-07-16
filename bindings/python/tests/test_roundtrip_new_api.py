@@ -37,6 +37,8 @@ def test_stream_config_defaults_match_native_config():
     assert int(cfg.compute_spectral) == raw.compute_spectral
     assert cfg.emit_every_n_frames == raw.emit_every_n_frames
     assert cfg.magnitude_downsample == raw.magnitude_downsample
+    assert cfg.max_pending_frames == raw.max_pending_frames
+    assert cfg.max_progression_entries == raw.max_progression_entries
     assert cfg.key_update_interval_sec == raw.key_update_interval_sec
     assert cfg.bpm_update_interval_sec == raw.bpm_update_interval_sec
     assert cfg.window == raw.window
@@ -177,6 +179,27 @@ def test_inverse_transforms_reject_non_finite_cells():
         )
 
 
+def test_cqt_vqt_inverse_reconstruction_and_shape_validation():
+    sr = 8000
+    source = _sine(2048, 261.6256, sr)
+    cq = ls.cqt(source, sample_rate=sr, hop_length=128, fmin=130.8128, n_bins=12)
+    reconstructed = ls.cqt_to_audio(cq.magnitude, cq.n_bins, cq.n_frames, sr, 128, 130.8128, 12, 2)
+    assert len(reconstructed) == len(source)
+    assert _is_finite_list(reconstructed)
+    assert max(map(abs, reconstructed)) > 1e-5
+
+    vq = ls.vqt(source, sample_rate=sr, hop_length=128, fmin=130.8128, n_bins=12)
+    vqt_reconstructed = ls.vqt_to_audio(
+        vq.magnitude, vq.n_bins, vq.n_frames, sr, 128, 130.8128, 12, 0, 2
+    )
+    assert len(vqt_reconstructed) == len(source)
+    assert _is_finite_list(vqt_reconstructed)
+    with pytest.raises(ls.SonareError):
+        ls.cqt_to_audio(cq.magnitude[:-1], cq.n_bins, cq.n_frames)
+    with pytest.raises(ls.SonareError):
+        ls.vqt_to_audio(vq.magnitude, vq.n_bins, vq.n_frames, n_iter=257)
+
+
 def test_stream_analyzer_abi_and_stats():
     sr = 22050
     n_samples = sr * 4  # 4 seconds
@@ -293,3 +316,21 @@ def test_stream_analyzer_reset():
         assert sa.frame_count() == 0
     finally:
         sa.close()
+
+
+def test_stream_analyzer_external_offsets_preserve_buffered_timestamps_and_reject_gaps():
+    cfg = ls.StreamConfig(sample_rate=22050, n_fft=2048, hop_length=512)
+    audio = [0.0] * 4096
+    with ls.StreamAnalyzer(cfg) as reference:
+        reference.process(audio)
+        expected = reference.read_frames(64).timestamps
+    with ls.StreamAnalyzer(cfg) as analyzer:
+        for offset in range(0, len(audio), 128):
+            analyzer.process_with_offset(audio[offset : offset + 128], offset)
+        assert analyzer.read_frames(64).timestamps == pytest.approx(expected, abs=1e-7)
+        analyzer.reset()
+        analyzer.process_with_offset(audio[:128], 1000)
+        with pytest.raises(ls.SonareError):
+            analyzer.process_with_offset(audio[128:256], 1129)
+        analyzer.reset(5000)
+        analyzer.process_with_offset(audio[:128], 5000)

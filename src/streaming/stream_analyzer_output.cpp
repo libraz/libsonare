@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "analysis/progression_patterns.h"
 #include "filters/chroma.h"
 #include "streaming/stream_analyzer.h"
 #include "streaming/stream_analyzer_utils.h"
@@ -23,16 +24,48 @@ void validate_quantize_config(const QuantizeConfig& config) {
 
 }  // namespace
 
-size_t StreamAnalyzer::available_frames() const { return output_buffer_.size(); }
+void StreamAnalyzer::prepare_output_frame(StreamFrame& frame) const {
+  if (config_.compute_magnitude) {
+    frame.magnitude.reserve(static_cast<size_t>(config_.n_bins() / config_.magnitude_downsample));
+  }
+  if (config_.compute_mel) {
+    frame.mel.reserve(static_cast<size_t>(config_.n_mels));
+  }
+  if (config_.compute_chroma) {
+    frame.chroma.reserve(12);
+  }
+}
+
+void StreamAnalyzer::prepare_progressive_estimate() {
+  current_estimate_.chord_progression.reserve(config_.max_progression_entries);
+  current_estimate_.bar_chord_progression.reserve(config_.max_progression_entries);
+  current_estimate_.voted_pattern.reserve(4);
+  current_estimate_.all_pattern_scores.reserve(known_progression_patterns().size());
+  current_estimate_.detected_pattern_name.reserve(64);
+}
+
+const StreamFrame& StreamAnalyzer::output_front() const {
+  return output_buffer_[output_read_index_];
+}
+
+void StreamAnalyzer::pop_output_front() {
+  if (output_size_ == 0) {
+    return;
+  }
+  output_read_index_ = (output_read_index_ + 1) % output_buffer_.size();
+  --output_size_;
+}
+
+size_t StreamAnalyzer::available_frames() const { return output_size_; }
 
 std::vector<StreamFrame> StreamAnalyzer::read_frames(size_t max_frames) {
-  size_t count = std::min(max_frames, output_buffer_.size());
+  size_t count = std::min(max_frames, output_size_);
   std::vector<StreamFrame> result;
   result.reserve(count);
 
   for (size_t i = 0; i < count; ++i) {
-    result.push_back(std::move(output_buffer_.front()));
-    output_buffer_.pop_front();
+    result.push_back(output_front());
+    pop_output_front();
   }
 
   return result;
@@ -41,7 +74,7 @@ std::vector<StreamFrame> StreamAnalyzer::read_frames(size_t max_frames) {
 void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
   buffer.clear();
 
-  size_t count = std::min(max_frames, output_buffer_.size());
+  size_t count = std::min(max_frames, output_size_);
   buffer.n_frames = count;
 
   if (count == 0) {
@@ -51,7 +84,7 @@ void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
   buffer.reserve(count, config_.n_mels);
 
   for (size_t i = 0; i < count; ++i) {
-    StreamFrame& frame = output_buffer_.front();
+    const StreamFrame& frame = output_front();
 
     buffer.timestamps.push_back(frame.timestamp);
     buffer.onset_strength.push_back(frame.onset_strength);
@@ -65,7 +98,7 @@ void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
     buffer.mel.insert(buffer.mel.end(), frame.mel.begin(), frame.mel.end());
     buffer.chroma.insert(buffer.chroma.end(), frame.chroma.begin(), frame.chroma.end());
 
-    output_buffer_.pop_front();
+    pop_output_front();
   }
 }
 
@@ -74,7 +107,7 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
   validate_quantize_config(qconfig);
   buffer.clear();
 
-  size_t count = std::min(max_frames, output_buffer_.size());
+  size_t count = std::min(max_frames, output_size_);
   buffer.n_frames = count;
 
   if (count == 0) {
@@ -84,7 +117,7 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
   buffer.reserve(count, config_.n_mels);
 
   for (size_t i = 0; i < count; ++i) {
-    StreamFrame& frame = output_buffer_.front();
+    const StreamFrame& frame = output_front();
 
     buffer.timestamps.push_back(frame.timestamp);
 
@@ -103,7 +136,7 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
         quantize_to_u8(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
     buffer.spectral_flatness.push_back(quantize_to_u8(frame.spectral_flatness, 0.0f, 1.0f));
 
-    output_buffer_.pop_front();
+    pop_output_front();
   }
 }
 
@@ -112,7 +145,7 @@ void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrame
   validate_quantize_config(qconfig);
   buffer.clear();
 
-  size_t count = std::min(max_frames, output_buffer_.size());
+  size_t count = std::min(max_frames, output_size_);
   buffer.n_frames = count;
 
   if (count == 0) {
@@ -122,7 +155,7 @@ void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrame
   buffer.reserve(count, config_.n_mels);
 
   for (size_t i = 0; i < count; ++i) {
-    StreamFrame& frame = output_buffer_.front();
+    const StreamFrame& frame = output_front();
 
     buffer.timestamps.push_back(frame.timestamp);
 
@@ -141,11 +174,13 @@ void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrame
         quantize_to_i16(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
     buffer.spectral_flatness.push_back(quantize_to_i16(frame.spectral_flatness, 0.0f, 1.0f));
 
-    output_buffer_.pop_front();
+    pop_output_front();
   }
 }
 
 void StreamAnalyzer::reset(size_t base_sample_offset) {
+  offset_tracking_mode_ = OffsetTrackingMode::Unset;
+  next_external_sample_offset_ = 0;
   cumulative_samples_ = base_sample_offset;
   cumulative_samples_exact_ = static_cast<double>(base_sample_offset);
   frame_count_ = 0;
@@ -155,27 +190,34 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   overlap_buffer_.clear();
   dropped_output_frames_ = 0;
   overlap_read_pos_ = 0;
-  output_buffer_.clear();
+  output_read_index_ = 0;
+  output_size_ = 0;
 
   if (config_.compute_mel) {
     std::fill(prev_mel_log_.begin(), prev_mel_log_.end(), 0.0f);
   }
   has_prev_frame_ = false;
 
-  onset_accumulator_.clear();
+  onset_accumulator_start_ = 0;
+  onset_accumulator_size_ = 0;
   chroma_sum_.fill(0.0f);
   chroma_frame_count_ = 0;
   last_key_update_time_ = 0.0f;
   last_bpm_update_time_ = 0.0f;
   current_estimate_ = ProgressiveEstimate();
+  prepare_progressive_estimate();
+  dropped_chord_progression_entries_ = 0;
+  dropped_bar_progression_entries_ = 0;
 
   prev_chord_root_ = -1;
   prev_chord_quality_ = -1;
   chord_stable_time_ = 0.0f;
   current_chord_start_time_ = 0.0f;
   prev_chord_confidence_ = 0.0f;
-  chroma_history_.clear();
-  full_chroma_history_.clear();
+  chroma_history_start_ = 0;
+  chroma_history_size_ = 0;
+  full_chroma_history_start_ = 0;
+  full_chroma_history_size_ = 0;
   full_chroma_history_offset_ = 0;
   if (stream_resampler_) {
     stream_resampler_->reset();
@@ -231,8 +273,10 @@ AnalyzerStats StreamAnalyzer::stats() const {
   stats.total_frames = frame_count_;
   stats.total_samples = cumulative_samples_;
   stats.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
-  stats.pending_frames = output_buffer_.size();
+  stats.pending_frames = output_size_;
   stats.dropped_output_frames = dropped_output_frames_;
+  stats.dropped_chord_progression_entries = dropped_chord_progression_entries_;
+  stats.dropped_bar_progression_entries = dropped_bar_progression_entries_;
   stats.estimate = current_estimate_;
 
   return stats;

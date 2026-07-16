@@ -5221,9 +5221,15 @@
         "name": "output_format",
         "offset": 76,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "max_progression_entries",
+        "offset": 80,
+        "size": 8
       }
     ],
-    "size": 80
+    "size": 88
   },
   "SonareStreamFrames": {
     "align": 8,
@@ -5665,9 +5671,21 @@
         "name": "updated",
         "offset": 240,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "dropped_chord_progression_entries",
+        "offset": 248,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "dropped_bar_progression_entries",
+        "offset": 256,
+        "size": 8
       }
     ],
-    "size": 248
+    "size": 264
   },
   "SonareStreamingPlatform": {
     "align": 8,

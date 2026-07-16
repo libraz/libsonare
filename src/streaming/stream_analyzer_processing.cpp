@@ -1,19 +1,40 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
 #include "analysis/chord_analyzer.h"
 #include "streaming/stream_analyzer.h"
 #include "streaming/stream_analyzer_utils.h"
+#include "util/exception.h"
 
 namespace sonare {
 
 using namespace streaming_detail;
 
 void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t sample_offset) {
-  /// Sync cumulative samples with the caller-supplied original-rate offset.
+  if (samples == nullptr || n_samples == 0) {
+    process_internal(samples, n_samples);
+    return;
+  }
+  if (n_samples > std::numeric_limits<size_t>::max() - sample_offset) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamAnalyzer external sample offset overflows");
+  }
+  if (offset_tracking_mode_ == OffsetTrackingMode::Internal) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "cannot switch StreamAnalyzer offset mode without reset()");
+  }
+  if (offset_tracking_mode_ == OffsetTrackingMode::External &&
+      sample_offset != next_external_sample_offset_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamAnalyzer external sample offset is not contiguous; call reset()");
+  }
+
+  /// Seed the buffered frame-start position once. Re-seeding it for every
+  /// chunk would relabel a partial frame with the final chunk's offset.
   /// NOTE: this overload is only exact when no internal resampling is active.
   /// When the input sample rate exceeds kMaxDirectSampleRate the analyzer
   /// resamples (introducing filter latency and a changed sample count), so the
@@ -21,9 +42,13 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t samp
   /// offsets derived from it are then best-effort/approximate. Use the
   /// offset-less process() overload (which advances a continuous internal
   /// position) when resampling is in play.
-  cumulative_samples_ = sample_offset;
-  cumulative_samples_exact_ = static_cast<double>(sample_offset);
+  if (offset_tracking_mode_ == OffsetTrackingMode::Unset) {
+    cumulative_samples_ = sample_offset;
+    cumulative_samples_exact_ = static_cast<double>(sample_offset);
+    offset_tracking_mode_ = OffsetTrackingMode::External;
+  }
   process_internal(samples, n_samples);
+  next_external_sample_offset_ = sample_offset + n_samples;
 }
 
 void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
@@ -167,20 +192,67 @@ void StreamAnalyzer::emit_frame(const float* frame_start, size_t frame_sample_of
   const bool will_emit = force_emit || emitted_frame_count_ >= config_.emit_every_n_frames;
   if (will_emit) {
     emitted_frame_count_ = 0;
-    StreamFrame frame;
-    if (output_buffer_.size() >= config_.max_pending_frames) {
-      // Recycle the evicted frame's fixed-shape vector capacity so a stalled
-      // consumer reaches steady state after the configured number of frames
-      // instead of allocating/freeing mel/chroma vectors forever.
-      frame = std::move(output_buffer_.front());
-      output_buffer_.pop_front();
+    size_t write_index = 0;
+    if (output_size_ >= output_buffer_.size()) {
+      // Overwrite the oldest slot and advance the logical front. All slot
+      // vectors retain their constructor-prepared capacity.
+      write_index = output_read_index_;
+      output_read_index_ = (output_read_index_ + 1) % output_buffer_.size();
       ++dropped_output_frames_;
+    } else {
+      write_index = (output_read_index_ + output_size_) % output_buffer_.size();
+      ++output_size_;
     }
-    process_single_frame(frame_start, frame_sample_offset, frame);
-    output_buffer_.push_back(std::move(frame));
+    process_single_frame(frame_start, frame_sample_offset, output_buffer_[write_index]);
   } else {
     process_single_frame(frame_start, frame_sample_offset, scratch_frame_);
   }
+}
+
+void StreamAnalyzer::append_onset(float value) {
+  if (onset_accumulator_size_ < onset_accumulator_.size()) {
+    const size_t index =
+        (onset_accumulator_start_ + onset_accumulator_size_) % onset_accumulator_.size();
+    onset_accumulator_[index] = value;
+    ++onset_accumulator_size_;
+    return;
+  }
+  onset_accumulator_[onset_accumulator_start_] = value;
+  onset_accumulator_start_ = (onset_accumulator_start_ + 1) % onset_accumulator_.size();
+}
+
+void StreamAnalyzer::append_recent_chroma(const std::array<float, 12>& chroma) {
+  if (chroma_history_size_ < chroma_history_.size()) {
+    const size_t index = (chroma_history_start_ + chroma_history_size_) % chroma_history_.size();
+    chroma_history_[index] = chroma;
+    ++chroma_history_size_;
+    return;
+  }
+  chroma_history_[chroma_history_start_] = chroma;
+  chroma_history_start_ = (chroma_history_start_ + 1) % chroma_history_.size();
+}
+
+void StreamAnalyzer::append_full_chroma(const std::array<float, 12>& chroma) {
+  if (full_chroma_history_size_ < full_chroma_history_.size()) {
+    const size_t index =
+        (full_chroma_history_start_ + full_chroma_history_size_) % full_chroma_history_.size();
+    full_chroma_history_[index] = chroma;
+    ++full_chroma_history_size_;
+    return;
+  }
+  full_chroma_history_[full_chroma_history_start_] = chroma;
+  full_chroma_history_start_ = (full_chroma_history_start_ + 1) % full_chroma_history_.size();
+  ++full_chroma_history_offset_;
+}
+
+std::array<float, 12> StreamAnalyzer::median_recent_chroma() {
+  return compute_median_chroma(chroma_history_, chroma_history_start_, chroma_history_size_,
+                               median_chroma_scratch_);
+}
+
+std::array<float, 12> StreamAnalyzer::median_full_chroma(size_t start, size_t count) {
+  const size_t physical_start = (full_chroma_history_start_ + start) % full_chroma_history_.size();
+  return compute_median_chroma(full_chroma_history_, physical_start, count, median_chroma_scratch_);
 }
 
 const float* StreamAnalyzer::sanitize_into(const float* src, size_t n_samples,
@@ -247,26 +319,14 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
       /// Add current chroma to history
       std::array<float, 12> current_chroma;
       std::copy(chroma_buffer_.begin(), chroma_buffer_.end(), current_chroma.begin());
-      chroma_history_.push_back(current_chroma);
+      append_recent_chroma(current_chroma);
 
-      /// Keep history limited to smoothing window
-      while (chroma_history_.size() > static_cast<size_t>(kChordSmoothingFrames)) {
-        chroma_history_.pop_front();
-      }
-
-      /// Store to full chroma history for retroactive bar detection. Trim the
-      /// oldest frame with an O(1) deque pop_front instead of an O(N) vector
-      /// erase(begin()) memmove; the retained content is identical.
-      full_chroma_history_.push_back(current_chroma);
-      while (full_chroma_history_.size() > kMaxChromaHistoryFrames) {
-        full_chroma_history_.pop_front();
-        /// Advance the absolute index of the surviving front frame so
-        /// retroactive bar timing stays correct once old frames are dropped.
-        ++full_chroma_history_offset_;
-      }
+      /// Store to the fixed full-chroma ring for retroactive bar detection.
+      /// Once full, appending overwrites the oldest frame in O(1).
+      append_full_chroma(current_chroma);
 
       /// Compute median-filtered chroma (more robust to noise than averaging)
-      std::array<float, 12> smoothed_chroma = compute_median_chroma(chroma_history_);
+      std::array<float, 12> smoothed_chroma = median_recent_chroma();
 
       /// Find best chord using smoothed chroma
       auto [best_chord, chord_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
@@ -299,10 +359,7 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
     /// front keeps the most-recent onset_window_frames_ frames, which still far
     /// exceeds the autocorrelation's maximum lag.
     if (frame.onset_valid) {
-      onset_accumulator_.push_back(frame.onset_strength);
-      while (onset_accumulator_.size() > onset_window_frames_) {
-        onset_accumulator_.pop_front();
-      }
+      append_onset(frame.onset_strength);
     }
   }
 

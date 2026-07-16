@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <deque>
 #include <limits>
 #include <string>
 #include <utility>
@@ -22,6 +21,28 @@ using namespace streaming_detail;
 
 /// Seconds over which progressive key/BPM confidence ramps to full.
 constexpr float kConfidenceRampSeconds = 30.0f;
+
+void StreamAnalyzer::append_chord_progression(const ChordChange& change) {
+  auto& progression = current_estimate_.chord_progression;
+  if (progression.size() < config_.max_progression_entries) {
+    progression.push_back(change);
+    return;
+  }
+  std::move(progression.begin() + 1, progression.end(), progression.begin());
+  progression.back() = change;
+  ++dropped_chord_progression_entries_;
+}
+
+void StreamAnalyzer::append_bar_progression(const BarChord& chord) {
+  auto& progression = current_estimate_.bar_chord_progression;
+  if (progression.size() < config_.max_progression_entries) {
+    progression.push_back(chord);
+    return;
+  }
+  std::move(progression.begin() + 1, progression.end(), progression.begin());
+  progression.back() = chord;
+  ++dropped_bar_progression_entries_;
+}
 
 void StreamAnalyzer::update_progressive_estimate(float current_time) {
   current_estimate_.accumulated_seconds = current_time;
@@ -59,9 +80,9 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
     }
 
     /// Update chord estimate (every frame, using smoothed chroma)
-    if (!chord_templates_.empty() && !chroma_history_.empty()) {
+    if (!chord_templates_.empty() && chroma_history_size_ > 0) {
       /// Compute median-filtered chroma (more robust to noise than averaging)
-      std::array<float, 12> smoothed_chroma = compute_median_chroma(chroma_history_);
+      std::array<float, 12> smoothed_chroma = median_recent_chroma();
 
       auto [best_chord, chord_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
       int new_root = static_cast<int>(best_chord.root);
@@ -120,7 +141,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
               /// new_confidence (which belongs to the chord that triggered the
               /// transition).
               change.confidence = prev_chord_confidence_;
-              current_estimate_.chord_progression.push_back(change);
+              append_chord_progression(change);
             }
           }
 
@@ -144,7 +165,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
 
   /// Update BPM estimate
   if (config_.compute_onset) {
-    int n_onset = static_cast<int>(onset_accumulator_.size());
+    int n_onset = static_cast<int>(onset_accumulator_size_);
     current_estimate_.bpm_candidate_count = n_onset;
 
     float time_since_bpm_update = current_time - last_bpm_update_time_;
@@ -154,17 +175,20 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       max_lag = std::min(max_lag, n_onset - 1);
 
       if (max_lag > 2) {
-        /// Compute autocorrelation over the bounded onset window. Copy the
-        /// deque into a contiguous vector for the (vectorized) autocorrelation;
-        /// this runs only on the throttled BPM-update cadence and over a
-        /// window-bounded length, so it stays O(1) per stream rather than
-        /// growing with total duration.
-        std::vector<float> onset_window(onset_accumulator_.begin(), onset_accumulator_.end());
-        auto autocorr = compute_autocorrelation_streaming(onset_window, max_lag);
+        /// Copy the fixed onset ring into constructor-reserved contiguous
+        /// scratch, then reuse the prepared autocorrelation output.
+        onset_window_scratch_.resize(static_cast<size_t>(n_onset));
+        for (int i = 0; i < n_onset; ++i) {
+          const size_t index =
+              (onset_accumulator_start_ + static_cast<size_t>(i)) % onset_accumulator_.size();
+          onset_window_scratch_[static_cast<size_t>(i)] = onset_accumulator_[index];
+        }
+        compute_autocorrelation_streaming(onset_window_scratch_.data(), n_onset, max_lag,
+                                          bpm_autocorr_scratch_);
 
         /// Find best tempo (use internal sample rate)
-        auto [bpm, rel_confidence] =
-            find_best_tempo(autocorr, internal_sample_rate_, config_.hop_length, kBpmMin, kBpmMax);
+        auto [bpm, rel_confidence] = find_best_tempo(bpm_autocorr_scratch_, internal_sample_rate_,
+                                                     config_.hop_length, kBpmMin, kBpmMax);
 
         current_estimate_.bpm = bpm;
 
@@ -220,9 +244,9 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
 
   /// Vote for chord using current frame's smoothed chroma (from chroma_history_)
   /// This uses the same smoothed detection as per-frame chord output
-  if (!chord_templates_.empty() && !chroma_history_.empty()) {
+  if (!chord_templates_.empty() && chroma_history_size_ > 0) {
     /// Compute median-filtered chroma (more robust to noise than averaging)
-    std::array<float, 12> smoothed_chroma = compute_median_chroma(chroma_history_);
+    std::array<float, 12> smoothed_chroma = median_recent_chroma();
 
     /// Detect chord for this frame
     auto [frame_chord, frame_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
@@ -267,7 +291,7 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
       bar_chord.quality = best_quality;
       bar_chord.start_time = bar_start_time_;
       bar_chord.confidence = confidence;
-      current_estimate_.bar_chord_progression.push_back(bar_chord);
+      append_bar_progression(bar_chord);
 
       /// Update voted pattern and detect progression periodically (every 4 bars)
       if ((current_bar_index_ + 1) % 4 == 0) {
@@ -288,7 +312,7 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
 }
 
 void StreamAnalyzer::compute_retroactive_bar_chords() {
-  if (full_chroma_history_.empty() || bar_duration_ <= 0.0f) {
+  if (full_chroma_history_size_ == 0 || bar_duration_ <= 0.0f) {
     return;
   }
 
@@ -307,7 +331,7 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
       static_cast<float>(full_chroma_history_offset_) * seconds_per_frame;
 
   /// How many complete bars can we detect from full history?
-  int retroactive_frames = static_cast<int>(full_chroma_history_.size());
+  int retroactive_frames = static_cast<int>(full_chroma_history_size_);
   int retroactive_bars = retroactive_frames / frames_per_bar;
 
   /// Clear existing bar progression and recompute from start
@@ -334,9 +358,8 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
       /// intentional, not a bit-exact match of the live estimate.
       int smooth_start = std::max(0, f - kChordSmoothingFrames / 2);
       int smooth_end = std::min(retroactive_frames, f + kChordSmoothingFrames / 2);
-      std::deque<std::array<float, 12>> window(full_chroma_history_.begin() + smooth_start,
-                                               full_chroma_history_.begin() + smooth_end);
-      std::array<float, 12> smoothed = compute_median_chroma(window);
+      std::array<float, 12> smoothed = median_full_chroma(
+          static_cast<size_t>(smooth_start), static_cast<size_t>(smooth_end - smooth_start));
 
       /// Detect chord
       auto [chord, corr] = find_best_chord(smoothed.data(), chord_templates_);
@@ -371,7 +394,7 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     bc.quality = best_quality;
     bc.start_time = history_start_sec + bar * bar_duration_;
     bc.confidence = confidence;
-    current_estimate_.bar_chord_progression.push_back(bc);
+    append_bar_progression(bc);
   }
 
   /// Update bar index to continue from where retroactive detection ended

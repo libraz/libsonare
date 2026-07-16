@@ -339,6 +339,7 @@ describe('StreamAnalyzer quantize-config override', () => {
     expect(() => new StreamAnalyzer({ sampleRate: SR, nMels: 0 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, nFft: 1024, hopLength: 2048 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, fmin: 8000, fmax: 4000 })).toThrow();
+    expect(() => new StreamAnalyzer({ sampleRate: SR, maxProgressionEntries: 0 })).toThrow();
   });
 
   it('bounds unread frames and reports drop-oldest telemetry', () => {
@@ -348,11 +349,35 @@ describe('StreamAnalyzer quantize-config override', () => {
       hopLength: 32,
       nMels: 8,
       maxPendingFrames: 3,
+      maxProgressionEntries: 3,
     });
     analyzer.process(new Float32Array(32 * 64));
     const stats = analyzer.stats();
     expect(stats.pendingFrames).toBe(3);
     expect(stats.droppedOutputFrames).toBeGreaterThan(0);
     expect(stats.pendingFrames + stats.droppedOutputFrames).toBe(stats.totalFrames);
+    expect(stats.droppedChordProgressionEntries).toBe(0);
+    expect(stats.droppedBarProgressionEntries).toBe(0);
+  });
+});
+
+describe('StreamAnalyzer external offsets', () => {
+  it('preserves buffered timestamps and rejects discontinuities until reset', () => {
+    const config = { sampleRate: SR, nFft: 2048, hopLength: 512 };
+    const audio = new Float32Array(4096);
+    const reference = new StreamAnalyzer(config);
+    reference.process(audio);
+    const expected = reference.readFrames(64).timestamps;
+
+    const analyzer = new StreamAnalyzer(config);
+    for (let offset = 0; offset < audio.length; offset += 128) {
+      analyzer.processWithOffset(audio.subarray(offset, offset + 128), offset);
+    }
+    expect(Array.from(analyzer.readFrames(64).timestamps)).toEqual(Array.from(expected));
+    analyzer.reset();
+    analyzer.processWithOffset(audio.subarray(0, 128), 1000);
+    expect(() => analyzer.processWithOffset(audio.subarray(128, 256), 1129)).toThrow();
+    analyzer.reset(5000);
+    expect(() => analyzer.processWithOffset(audio.subarray(0, 128), 5000)).not.toThrow();
   });
 });

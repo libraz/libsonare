@@ -19,6 +19,8 @@ enum class OutputFormat {
 
 inline constexpr size_t kDefaultStreamMaxPendingFrames = 4096;
 inline constexpr size_t kMaxStreamPendingFrames = 1u << 20;
+inline constexpr size_t kDefaultStreamMaxProgressionEntries = 4096;
+inline constexpr size_t kMaxStreamProgressionEntries = 1u << 20;
 
 /// @brief Configuration for StreamAnalyzer.
 struct StreamConfig {
@@ -71,6 +73,9 @@ struct StreamConfig {
   /// Maximum unread output frames. On overflow the oldest frame is dropped,
   /// keeping live analysis current and memory bounded.
   size_t max_pending_frames = kDefaultStreamMaxPendingFrames;
+  /// Maximum retained entries in each chord/bar progression. On overflow the
+  /// oldest entry is dropped and the matching AnalyzerStats counter advances.
+  size_t max_progression_entries = kDefaultStreamMaxProgressionEntries;
 
   // Progressive estimation configuration
   float key_update_interval_sec = 5.0f;   ///< Interval for key re-estimation

@@ -29,6 +29,7 @@ describe('StreamAnalyzer', () => {
         emitEveryNFrames: 1,
         magnitudeDownsample: 1,
         maxPendingFrames: 4096,
+        maxProgressionEntries: 4096,
         keyUpdateIntervalSec: 5,
         bpmUpdateIntervalSec: 10,
         window: 0,
@@ -64,6 +65,7 @@ describe('StreamAnalyzer', () => {
         () => new StreamAnalyzer({ sampleRate: 22050, nFft: 1024, hopLength: 2048 }),
       ).toThrow();
       expect(() => new StreamAnalyzer({ sampleRate: 22050, fmin: 8000, fmax: 4000 })).toThrow();
+      expect(() => new StreamAnalyzer({ sampleRate: 22050, maxProgressionEntries: 0 })).toThrow();
     });
 
     it('bounds unread frames and reports drop-oldest telemetry', () => {
@@ -73,12 +75,15 @@ describe('StreamAnalyzer', () => {
         hopLength: 32,
         nMels: 8,
         maxPendingFrames: 3,
+        maxProgressionEntries: 3,
       });
       analyzer.process(new Float32Array(32 * 64));
       const stats = analyzer.stats();
       expect(stats.pendingFrames).toBe(3);
       expect(stats.droppedOutputFrames).toBeGreaterThan(0);
       expect(stats.pendingFrames + stats.droppedOutputFrames).toBe(stats.totalFrames);
+      expect(stats.droppedChordProgressionEntries).toBe(0);
+      expect(stats.droppedBarProgressionEntries).toBe(0);
       analyzer.delete();
     });
   });
@@ -676,26 +681,28 @@ describe('StreamAnalyzer', () => {
   });
 
   describe('processWithOffset', () => {
-    it('should process a chunk with explicit sample offset', () => {
+    it('preserves buffered frame timestamps and rejects gaps until reset', () => {
       const sampleRate = 22050;
+      const audio = new Float32Array(4096);
+      const reference = new StreamAnalyzer({ sampleRate });
+      reference.process(audio);
+      const expected = reference.readFrames(64).timestamps;
+
       const analyzer = new StreamAnalyzer({ sampleRate });
-
-      const chunkSize = 4096;
-      const chunk = new Float32Array(chunkSize);
-      for (let i = 0; i < chunkSize; i++) {
-        chunk[i] = Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 0.5;
+      for (let offset = 0; offset < audio.length; offset += 128) {
+        analyzer.processWithOffset(audio.subarray(offset, offset + 128), offset);
       }
+      const actual = analyzer.readFrames(64).timestamps;
+      expect(Array.from(actual)).toEqual(Array.from(expected));
 
-      // Process with an explicit offset as if we already processed some audio
-      const offset = sampleRate * 2; // pretend 2 seconds have passed
-      analyzer.processWithOffset(chunk, offset);
-
-      const stats = analyzer.stats();
-      // The analyzer should reflect the offset in timing
-      expect(stats.totalFrames).toBeGreaterThan(0);
-      expect(stats.totalSamples).toBeGreaterThan(0);
+      analyzer.reset();
+      analyzer.processWithOffset(audio.subarray(0, 128), 1000);
+      expect(() => analyzer.processWithOffset(audio.subarray(128, 256), 1129)).toThrow();
+      analyzer.reset(5000);
+      expect(() => analyzer.processWithOffset(audio.subarray(0, 128), 5000)).not.toThrow();
 
       analyzer.dispose();
+      reference.dispose();
     });
   });
 

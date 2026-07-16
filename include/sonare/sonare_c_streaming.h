@@ -37,8 +37,9 @@ typedef struct {
   size_t max_pending_frames; /* Unread-frame cap; overflow drops oldest (default 4096) */
   float key_update_interval_sec;
   float bpm_update_interval_sec;
-  int window;        /* SonareWindowType value (default Hann) */
-  int output_format; /* SonareStreamOutputFormat value (default Float32) */
+  int window;                     /* SonareWindowType value (default Hann) */
+  int output_format;              /* SonareStreamOutputFormat value (default Float32) */
+  size_t max_progression_entries; /* Per chord/bar progression cap; drops oldest (default 4096) */
 } SonareStreamConfig;
 
 typedef enum {
@@ -130,10 +131,9 @@ typedef struct {
   float centroid_max; /* max expected spectral centroid Hz (default 11025) */
 } SonareStreamQuantizeConfig;
 
-/* Progressive estimate + counters snapshot. Mirrors the scalar fields of
-   sonare::AnalyzerStats and ProgressiveEstimate. Variable-length progression
-   arrays are intentionally omitted from this fixed-size struct; query the SOA
-   per-frame chord fields for chord history. */
+/* Progressive estimate + counters snapshot. Mirrors sonare::AnalyzerStats and
+   ProgressiveEstimate. Variable-length arrays are owned by this result and
+   released by sonare_free_stream_stats. */
 typedef struct {
   int total_frames;             /* Total frames processed */
   size_t total_samples;         /* Total samples processed */
@@ -163,9 +163,11 @@ typedef struct {
   float detected_pattern_score;
   size_t all_pattern_scores_count;
   SonareStreamPatternScore* all_pattern_scores;
-  float accumulated_seconds; /* Total audio processed for estimation (s) */
-  int used_frames;           /* Number of frames used for estimation */
-  int updated;               /* Non-zero if estimate was updated this read */
+  float accumulated_seconds;                /* Total audio processed for estimation (s) */
+  int used_frames;                          /* Number of frames used for estimation */
+  int updated;                              /* Non-zero if estimate was updated this read */
+  size_t dropped_chord_progression_entries; /* Oldest chord changes dropped at cap */
+  size_t dropped_bar_progression_entries;   /* Oldest bar chords dropped at cap */
 } SonareStreamStats;
 
 /// @brief Fills @p config with real-time defaults (44100 Hz, n_fft 2048, etc.).
@@ -186,6 +188,10 @@ SonareError sonare_stream_analyzer_process(SonareStreamAnalyzer* analyzer, const
                                            size_t n_samples);
 
 /// @brief Feeds an audio chunk with an explicit external sample offset.
+/// @details Offsets must be contiguous across non-empty calls. A gap, seek, or
+///   switch from the internally tracked overload returns
+///   SONARE_ERROR_INVALID_PARAMETER; call sonare_stream_analyzer_reset first to
+///   discard the buffered partial frame and begin a new timeline segment.
 SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* analyzer,
                                                        const float* samples, size_t n_samples,
                                                        size_t sample_offset);

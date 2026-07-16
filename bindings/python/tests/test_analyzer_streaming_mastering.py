@@ -23,6 +23,7 @@ def test_stream_analyzer_rejects_malformed_config_geometry() -> None:
         StreamConfig(n_mels=0),
         StreamConfig(n_fft=1024, hop_length=2048),
         StreamConfig(fmin=8000.0, fmax=4000.0),
+        StreamConfig(max_progression_entries=0),
     ):
         with pytest.raises(SonareError):
             StreamAnalyzer(bad)
@@ -34,13 +35,22 @@ def test_stream_analyzer_rejects_malformed_config_geometry() -> None:
 def test_stream_analyzer_bounds_unread_frames_and_reports_drops() -> None:
     from libsonare import StreamAnalyzer, StreamConfig
 
-    config = StreamConfig(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8, max_pending_frames=3)
+    config = StreamConfig(
+        sample_rate=8000,
+        n_fft=32,
+        hop_length=32,
+        n_mels=8,
+        max_pending_frames=3,
+        max_progression_entries=3,
+    )
     with StreamAnalyzer(config) as analyzer:
         analyzer.process([0.0] * (32 * 64))
         stats = analyzer.stats()
         assert stats.pending_frames == 3
         assert stats.dropped_output_frames > 0
         assert stats.pending_frames + stats.dropped_output_frames == stats.total_frames
+        assert stats.dropped_chord_progression_entries == 0
+        assert stats.dropped_bar_progression_entries == 0
 
 
 def test_streaming_mastering_chain_processes_mono_block() -> None:

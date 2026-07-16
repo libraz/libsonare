@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "stream_analyzer_test_helpers.h"
+#include "support/alloc_guard.h"
 #include "util/exception.h"
 
 TEST_CASE("StreamConfig helpers", "[streaming]") {
@@ -213,6 +214,59 @@ TEST_CASE("StreamAnalyzer reset", "[streaming]") {
   }
 }
 
+TEST_CASE("StreamAnalyzer external offsets preserve buffered frame timestamps",
+          "[streaming][offset]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_magnitude = false;
+  config.compute_mel = false;
+  config.compute_chroma = false;
+  config.compute_spectral = false;
+  config.max_pending_frames = 64;
+
+  std::vector<float> audio(8192, 0.0f);
+  StreamAnalyzer reference(config);
+  reference.process(audio.data(), audio.size());
+  const auto expected = reference.read_frames(64);
+  REQUIRE_FALSE(expected.empty());
+
+  for (const size_t chunk_size : {size_t{128}, size_t{512}, size_t{4096}}) {
+    CAPTURE(chunk_size);
+    StreamAnalyzer analyzer(config);
+    for (size_t offset = 0; offset < audio.size(); offset += chunk_size) {
+      const size_t count = std::min(chunk_size, audio.size() - offset);
+      analyzer.process(audio.data() + offset, count, offset);
+    }
+    const auto actual = analyzer.read_frames(64);
+    REQUIRE(actual.size() == expected.size());
+    for (size_t i = 0; i < actual.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE_THAT(actual[i].timestamp, WithinAbs(expected[i].timestamp, 1.0e-7f));
+    }
+  }
+}
+
+TEST_CASE("StreamAnalyzer external offset discontinuities require reset", "[streaming][offset]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  StreamAnalyzer analyzer(config);
+  std::vector<float> chunk(128, 0.0f);
+
+  analyzer.process(chunk.data(), chunk.size(), 1000);
+  REQUIRE_THROWS_AS(analyzer.process(chunk.data(), chunk.size(), 1129), SonareException);
+  REQUIRE_THROWS_AS(analyzer.process(chunk.data(), chunk.size()), SonareException);
+
+  analyzer.reset(5000);
+  REQUIRE_NOTHROW(analyzer.process(chunk.data(), chunk.size(), 5000));
+  analyzer.reset();
+  REQUIRE_NOTHROW(analyzer.process(chunk.data(), chunk.size()));
+  REQUIRE_THROWS_AS(analyzer.process(chunk.data(), chunk.size(), 128), SonareException);
+}
+
 TEST_CASE("StreamAnalyzer feature computation", "[streaming]") {
   StreamConfig config;
   config.sample_rate = 22050;
@@ -365,6 +419,11 @@ TEST_CASE("StreamAnalyzer rejects malformed config geometry", "[streaming][edge]
     c.bpm_update_interval_sec = std::numeric_limits<float>::infinity();
     REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
   }
+  SECTION("zero progression cap") {
+    StreamConfig c = base();
+    c.max_progression_entries = 0;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
   SECTION("valid config still constructs") { REQUIRE_NOTHROW(StreamAnalyzer(base())); }
 }
 
@@ -452,6 +511,128 @@ TEST_CASE("StreamAnalyzer pending output is bounded with drop-oldest telemetry",
   analyzer.reset();
   REQUIRE(analyzer.stats().pending_frames == 0);
   REQUIRE(analyzer.stats().dropped_output_frames == 0);
+}
+
+TEST_CASE("StreamAnalyzer realtime process path remains allocation free across bounded histories",
+          "[streaming][long][rt]") {
+  StreamConfig config;
+  config.sample_rate = 8000;
+  config.n_fft = 256;
+  config.hop_length = 128;
+  config.n_mels = 16;
+  config.max_pending_frames = 4;
+  config.max_progression_entries = 4;
+  config.key_update_interval_sec = 0.25f;
+  config.bpm_update_interval_sec = 0.25f;
+  StreamAnalyzer analyzer(config);
+  StreamConfig reference_config = config;
+  reference_config.max_progression_entries = 4096;
+  StreamAnalyzer reference(reference_config);
+
+  constexpr int kSeconds = 60;
+  constexpr size_t kBlock = 128;
+  std::vector<float> audio(static_cast<size_t>(config.sample_rate * kSeconds), 0.0f);
+  const std::array<std::array<float, 3>, 2> chords = {
+      std::array<float, 3>{261.63f, 329.63f, 392.0f},
+      std::array<float, 3>{392.0f, 493.88f, 587.33f},
+  };
+  for (size_t i = 0; i < audio.size(); ++i) {
+    const size_t half_second = static_cast<size_t>(config.sample_rate / 2);
+    const auto& chord = chords[(i / half_second) % chords.size()];
+    const float t = static_cast<float>(i) / static_cast<float>(config.sample_rate);
+    for (float frequency : chord) {
+      audio[i] += 0.15f * std::sin(2.0f * sonare::constants::kPi * frequency * t);
+    }
+    if (i % half_second < 8) {
+      audio[i] += 0.8f * (1.0f - static_cast<float>(i % half_second) / 8.0f);
+    }
+  }
+
+  size_t allocations = 0;
+  for (size_t offset = 0; offset < audio.size(); offset += kBlock) {
+    const size_t count = std::min(kBlock, audio.size() - offset);
+    size_t block_allocations = 0;
+    {
+      sonare::test::AllocationGuard guard;
+      analyzer.process(audio.data() + offset, count);
+      block_allocations = guard.count();
+    }
+    CAPTURE(offset, analyzer.frame_count());
+    REQUIRE(block_allocations == 0);
+    allocations += block_allocations;
+    analyzer.read_frames(16);
+    reference.process(audio.data() + offset, count);
+    reference.read_frames(16);
+  }
+
+  const AnalyzerStats stats = analyzer.stats();
+  const AnalyzerStats reference_stats = reference.stats();
+  REQUIRE(allocations == 0);
+  REQUIRE(analyzer.full_chroma_history_size_for_test() ==
+          StreamAnalyzer::full_chroma_history_cap_for_test());
+  REQUIRE(stats.estimate.chord_progression.size() <= config.max_progression_entries);
+  REQUIRE(stats.estimate.bar_chord_progression.size() <= config.max_progression_entries);
+  REQUIRE(stats.dropped_chord_progression_entries > 0);
+  REQUIRE(stats.dropped_bar_progression_entries > 0);
+  REQUIRE(stats.estimate.chord_progression.size() + stats.dropped_chord_progression_entries ==
+          reference_stats.estimate.chord_progression.size());
+  REQUIRE(stats.estimate.bar_chord_progression.size() + stats.dropped_bar_progression_entries ==
+          reference_stats.estimate.bar_chord_progression.size());
+
+  const size_t chord_suffix =
+      reference_stats.estimate.chord_progression.size() - stats.estimate.chord_progression.size();
+  for (size_t i = 0; i < stats.estimate.chord_progression.size(); ++i) {
+    const auto& retained = stats.estimate.chord_progression[i];
+    const auto& expected = reference_stats.estimate.chord_progression[chord_suffix + i];
+    REQUIRE(retained.root == expected.root);
+    REQUIRE(retained.quality == expected.quality);
+    REQUIRE(retained.start_time == expected.start_time);
+  }
+
+  const size_t bar_suffix = reference_stats.estimate.bar_chord_progression.size() -
+                            stats.estimate.bar_chord_progression.size();
+  for (size_t i = 0; i < stats.estimate.bar_chord_progression.size(); ++i) {
+    const auto& retained = stats.estimate.bar_chord_progression[i];
+    const auto& expected = reference_stats.estimate.bar_chord_progression[bar_suffix + i];
+    REQUIRE(retained.bar_index == expected.bar_index);
+    REQUIRE(retained.root == expected.root);
+    REQUIRE(retained.quality == expected.quality);
+  }
+}
+
+TEST_CASE("StreamAnalyzer 24-hour-equivalent callback count stays bounded and allocation free",
+          "[streaming][long][.][slow][rt]") {
+  StreamConfig config;
+  config.sample_rate = 64;
+  config.n_fft = 32;
+  config.hop_length = 32;
+  config.n_mels = 8;
+  config.compute_mel = false;
+  config.compute_chroma = false;
+  config.compute_onset = false;
+  config.compute_spectral = false;
+  config.max_pending_frames = 4;
+  config.max_progression_entries = 4;
+  StreamAnalyzer analyzer(config);
+
+  constexpr size_t kCallbacks = 24u * 60u * 60u * 2u;
+  std::array<float, 32> block{};
+  size_t allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    for (size_t i = 0; i < kCallbacks; ++i) {
+      analyzer.process(block.data(), block.size());
+    }
+    allocations = guard.count();
+  }
+
+  const AnalyzerStats stats = analyzer.stats();
+  REQUIRE(allocations == 0);
+  REQUIRE(stats.total_frames == static_cast<int>(kCallbacks));
+  REQUIRE(stats.pending_frames == config.max_pending_frames);
+  REQUIRE(stats.pending_frames + stats.dropped_output_frames == kCallbacks);
+  REQUIRE(stats.estimate.chord_progression.empty());
+  REQUIRE(stats.estimate.bar_chord_progression.empty());
 }
 
 TEST_CASE("StreamAnalyzer stats", "[streaming]") {

@@ -234,6 +234,7 @@ class SonareStreamConfig(ctypes.Structure):
         ("bpm_update_interval_sec", ctypes.c_float),
         ("window", ctypes.c_int32),
         ("output_format", ctypes.c_int32),
+        ("max_progression_entries", ctypes.c_size_t),
     ]
 
 
@@ -357,6 +358,8 @@ class SonareStreamStats(ctypes.Structure):
         ("accumulated_seconds", ctypes.c_float),
         ("used_frames", ctypes.c_int32),
         ("updated", ctypes.c_int32),
+        ("dropped_chord_progression_entries", ctypes.c_size_t),
+        ("dropped_bar_progression_entries", ctypes.c_size_t),
     ]
 
 

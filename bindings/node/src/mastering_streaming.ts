@@ -128,7 +128,10 @@ export class StreamAnalyzer {
     this.native.process(samples);
   }
 
-  /** Feed a mono block anchored at an absolute sample offset. */
+  /**
+   * Feed a mono block anchored at a contiguous absolute sample offset. Gaps,
+   * seeks, and switching from `process()` require `reset()` first.
+   */
   processWithOffset(samples: Float32Array, sampleOffset: number): void {
     this.native.processWithOffset(samples, sampleOffset);
   }

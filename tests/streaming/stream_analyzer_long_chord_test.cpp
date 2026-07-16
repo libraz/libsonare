@@ -116,8 +116,8 @@ TEST_CASE("StreamAnalyzer onset auto-enables mel so BPM is not silently zero", "
 }
 
 // ============================================================================
-// Perf/container regression: full_chroma_history_ must stay bounded with O(1)
-// front-trimming (deque), and the downstream chroma-derived result must be
+// Perf/container regression: full_chroma_history_ must stay bounded in an O(1)
+// fixed ring, and the downstream chroma-derived result must be
 // unchanged by the container switch.
 // ============================================================================
 
@@ -126,7 +126,7 @@ TEST_CASE("StreamAnalyzer full chroma history stays bounded over a long stream",
   // full_chroma_history_ feeds retroactive bar-chord detection and is capped at
   // kMaxChromaHistoryFrames. It used to be a std::vector trimmed with
   // erase(begin()) every frame (an O(N) memmove of ~kMaxChromaHistoryFrames*12
-  // floats per frame); it is now a std::deque trimmed with an O(1) pop_front.
+  // floats per frame); it is now a prepared fixed ring with O(1) overwrite.
   // The retained chroma CONTENT is identical — only the container/perf changes.
   // This test feeds far more than the cap and asserts the history never exceeds
   // it (the front-trim engaged) while the chroma-derived key estimate is still
@@ -173,7 +173,7 @@ TEST_CASE("StreamAnalyzer full chroma history stays bounded over a long stream",
   REQUIRE(stats.estimate.key == 9);
   REQUIRE(stats.estimate.key_confidence > 0.0f);
 
-  // reset() must clear the bounded history (deque::clear), like the old vector.
+  // reset() must logically clear the bounded history without releasing storage.
   analyzer.reset();
   REQUIRE(analyzer.full_chroma_history_size_for_test() == 0);
 }

@@ -195,6 +195,7 @@ export interface WasmStreamConfigDefaults {
   emitEveryNFrames: number;
   magnitudeDownsample: number;
   maxPendingFrames: number;
+  maxProgressionEntries: number;
   keyUpdateIntervalSec: number;
   bpmUpdateIntervalSec: number;
   window: number;
@@ -1906,6 +1907,27 @@ export interface SonareModule {
     binsPerOctave: number,
     gamma: number,
   ) => WasmCqtResult;
+  cqtToAudio: (
+    magnitude: Float32Array,
+    nBins: number,
+    nFrames: number,
+    sampleRate: number,
+    hopLength: number,
+    fmin: number,
+    binsPerOctave: number,
+    nIter: number,
+  ) => Float32Array;
+  vqtToAudio: (
+    magnitude: Float32Array,
+    nBins: number,
+    nFrames: number,
+    sampleRate: number,
+    hopLength: number,
+    fmin: number,
+    binsPerOctave: number,
+    gamma: number,
+    nIter: number,
+  ) => Float32Array;
   analyzeSections: (
     samples: Float32Array,
     sampleRate: number,
@@ -2028,6 +2050,7 @@ export interface SonareModule {
     emitEveryNFrames: number,
     magnitudeDownsample: number,
     maxPendingFrames: number,
+    maxProgressionEntries: number,
     keyUpdateIntervalSec: number,
     bpmUpdateIntervalSec: number,
     window: number,
@@ -2304,6 +2327,8 @@ export interface WasmAnalyzerStats {
   durationSeconds: number;
   pendingFrames: number;
   droppedOutputFrames: number;
+  droppedChordProgressionEntries: number;
+  droppedBarProgressionEntries: number;
   estimate: WasmProgressiveEstimate;
 }
 

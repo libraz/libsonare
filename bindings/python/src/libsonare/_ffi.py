@@ -19,7 +19,7 @@ from ._ffi_signatures_repair_dynamics import configure_repair_dynamics_signature
 from ._ffi_types import *  # noqa: F403
 from ._ffi_types import __all__ as _type_exports
 
-EXPECTED_ABI_VERSION = 0x03020102
+EXPECTED_ABI_VERSION = 0x03020103
 
 # --- Library discovery ---
 

@@ -84,6 +84,7 @@ class StreamAnalyzer:
             raw.emit_every_n_frames = int(config.emit_every_n_frames)
             raw.magnitude_downsample = int(config.magnitude_downsample)
             raw.max_pending_frames = int(config.max_pending_frames)
+            raw.max_progression_entries = int(config.max_progression_entries)
             raw.key_update_interval_sec = float(config.key_update_interval_sec)
             raw.bpm_update_interval_sec = float(config.bpm_update_interval_sec)
             raw.window = int(config.window)
@@ -132,7 +133,12 @@ class StreamAnalyzer:
     def process_with_offset(
         self, samples: Sequence[float] | list[float], sample_offset: int
     ) -> None:
-        """Feed an audio chunk with an explicit external sample offset."""
+        """Feed a chunk with a contiguous external sample offset.
+
+        A gap, seek, or switch from :meth:`process` is rejected. Call
+        :meth:`reset` first to discard the buffered partial frame and anchor a
+        new timeline segment.
+        """
         c_array, length = _to_c_float_array(samples)
         _check(
             _get_lib().sonare_stream_analyzer_process_with_offset(
@@ -431,6 +437,8 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
         duration_seconds=float(raw.duration_seconds),
         pending_frames=int(raw.pending_frames),
         dropped_output_frames=int(raw.dropped_output_frames),
+        dropped_chord_progression_entries=int(raw.dropped_chord_progression_entries),
+        dropped_bar_progression_entries=int(raw.dropped_bar_progression_entries),
         bpm=float(raw.bpm),
         bpm_confidence=float(raw.bpm_confidence),
         bpm_candidate_count=int(raw.bpm_candidate_count),

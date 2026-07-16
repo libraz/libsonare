@@ -135,6 +135,13 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "maxPendingFrames must be a non-negative integer");
     }
+    const double max_progression_entries =
+        node_double_option(opts, "maxProgressionEntries", config.max_progression_entries);
+    if (!sonare::numeric::checked_integral_cast(max_progression_entries,
+                                                &config.max_progression_entries)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "maxProgressionEntries must be a non-negative integer");
+    }
     config.key_update_interval_sec = static_cast<float>(
         node_double_option(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
     config.bpm_update_interval_sec = static_cast<float>(
@@ -344,6 +351,10 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
   out.Set("pendingFrames", Napi::Number::New(env, static_cast<double>(s.pending_frames)));
   out.Set("droppedOutputFrames",
           Napi::Number::New(env, static_cast<double>(s.dropped_output_frames)));
+  out.Set("droppedChordProgressionEntries",
+          Napi::Number::New(env, static_cast<double>(s.dropped_chord_progression_entries)));
+  out.Set("droppedBarProgressionEntries",
+          Napi::Number::New(env, static_cast<double>(s.dropped_bar_progression_entries)));
 
   const sonare::ProgressiveEstimate& est = s.estimate;
   Napi::Object estimate = Napi::Object::New(env);

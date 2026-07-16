@@ -110,7 +110,9 @@ struct AnalyzerStats {
   float duration_seconds = 0.0f;     ///< Total duration processed
   size_t pending_frames = 0;         ///< Unread output frames currently retained
   size_t dropped_output_frames = 0;  ///< Oldest frames dropped at the pending-frame limit
-  ProgressiveEstimate estimate;      ///< Current progressive estimate
+  size_t dropped_chord_progression_entries = 0;  ///< Chord changes dropped at the history cap
+  size_t dropped_bar_progression_entries = 0;    ///< Bar chords dropped at the history cap
+  ProgressiveEstimate estimate;                  ///< Current progressive estimate
 };
 
 /// @brief Frame buffer in Structure of Arrays format.

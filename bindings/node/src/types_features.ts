@@ -54,6 +54,8 @@ export interface StreamAnalyzerConfig {
   magnitudeDownsample?: number;
   /** Maximum unread frames; overflow drops the oldest frame. */
   maxPendingFrames?: number;
+  /** Maximum retained chord and bar progression entries; overflow drops oldest. */
+  maxProgressionEntries?: number;
   keyUpdateIntervalSec?: number;
   bpmUpdateIntervalSec?: number;
   /** Window type: 0 Hann, 1 Hamming, 2 Blackman, 3 Rectangular. */
@@ -186,6 +188,8 @@ export interface StreamAnalyzerStats {
   durationSeconds: number;
   pendingFrames: number;
   droppedOutputFrames: number;
+  droppedChordProgressionEntries: number;
+  droppedBarProgressionEntries: number;
   estimate: StreamProgressiveEstimate;
 }
 

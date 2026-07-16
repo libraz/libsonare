@@ -85,11 +85,40 @@ int bpm_to_lag(float bpm, int sr, int hop_length) {
                           static_cast<float>(hop_length));
 }
 
-std::vector<float> compute_autocorrelation_streaming(const std::vector<float>& signal,
-                                                     int max_lag) {
-  std::vector<float> autocorr(max_lag, 0.0f);
-  compute_autocorrelation(signal.data(), static_cast<int>(signal.size()), max_lag, autocorr.data());
-  return autocorr;
+void compute_autocorrelation_streaming(const float* signal, int signal_size, int max_lag,
+                                       std::vector<float>& autocorr) {
+  autocorr.resize(static_cast<size_t>(std::max(max_lag, 0)));
+  std::fill(autocorr.begin(), autocorr.end(), 0.0f);
+  if (signal == nullptr || signal_size <= 0 || max_lag <= 0) {
+    return;
+  }
+
+  double mean_value = 0.0;
+  for (int i = 0; i < signal_size; ++i) {
+    mean_value += signal[i];
+  }
+  mean_value /= static_cast<double>(signal_size);
+
+  double variance = 0.0;
+  for (int i = 0; i < signal_size; ++i) {
+    const double centered = static_cast<double>(signal[i]) - mean_value;
+    variance += centered * centered;
+  }
+  if (variance < constants::kEpsilon) {
+    return;
+  }
+
+  // max_lag is small for the supported BPM range (~86 at 44.1 kHz/512), so a
+  // direct bounded correlation is cheaper than constructing an FFT and, most
+  // importantly for the callback, uses only the prepared output vector.
+  for (int lag = 0; lag < max_lag; ++lag) {
+    double sum = 0.0;
+    for (int i = 0; i + lag < signal_size; ++i) {
+      sum += (static_cast<double>(signal[i]) - mean_value) *
+             (static_cast<double>(signal[i + lag]) - mean_value);
+    }
+    autocorr[static_cast<size_t>(lag)] = static_cast<float>(sum / variance);
+  }
 }
 
 std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int sr, int hop_length,
@@ -108,43 +137,39 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
     return {0.0f, 0.0f};
   }
 
-  std::vector<std::pair<float, float>> candidates;
-
-  /// Scan every interior lag that has both neighbors available. The previous
-  /// bound (lag < lag_max - 1) needlessly skipped lag == lag_max - 1, even
-  /// though autocorr[lag + 1] = autocorr[lag_max] is a valid in-range index
-  /// (lag_max <= autocorr.size() - 1). That dropped a legitimate tempo peak at
-  /// the slow (low-BPM) edge of the search range.
-  for (int lag = lag_min + 1; lag <= lag_max - 1; ++lag) {
-    if (autocorr[lag] > autocorr[lag - 1] && autocorr[lag] > autocorr[lag + 1] &&
-        autocorr[lag] > 0.0f) {
-      float bpm = lag_to_bpm(lag, sr, hop_length);
-      if (bpm >= bpm_min && bpm <= bpm_max) {
-        candidates.emplace_back(bpm, autocorr[lag]);
-      }
-    }
-  }
-
-  /// No clear periodicity detected: signal "unknown" (BPM 0, confidence 0)
-  /// rather than a misleading default tempo.
-  if (candidates.empty()) {
-    return {0.0f, 0.0f};
-  }
-
-  float max_weight = 0.0f;
-  for (const auto& candidate : candidates) {
-    max_weight = std::max(max_weight, candidate.second);
-  }
-
   constexpr float kCommonBpmMin = 80.0f;
   constexpr float kCommonBpmMax = 180.0f;
   constexpr float kWeightThreshold = 0.3f;
 
+  // First pass: find the strongest valid peak and retain it as the fallback.
+  // This replaces the old per-update candidates vector with constant storage.
+  float max_weight = 0.0f;
+  float fallback_bpm = 0.0f;
+  for (int lag = lag_min + 1; lag <= lag_max - 1; ++lag) {
+    const float weight = autocorr[lag];
+    if (weight > autocorr[lag - 1] && weight > autocorr[lag + 1] && weight > 0.0f) {
+      const float bpm = lag_to_bpm(lag, sr, hop_length);
+      if (bpm >= bpm_min && bpm <= bpm_max && weight > max_weight) {
+        max_weight = weight;
+        fallback_bpm = bpm;
+      }
+    }
+  }
+
+  if (max_weight <= 0.0f) {
+    return {0.0f, 0.0f};
+  }
+
+  // Second pass: preserve the common-tempo preference without materializing
+  // candidate pairs. If none qualifies, use the strongest peak from pass one.
   float best_bpm = 0.0f;
   float best_weight = 0.0f;
-  for (const auto& [bpm, weight] : candidates) {
-    if (bpm >= kCommonBpmMin && bpm <= kCommonBpmMax && weight >= kWeightThreshold * max_weight) {
-      if (weight > best_weight) {
+  for (int lag = lag_min + 1; lag <= lag_max - 1; ++lag) {
+    const float weight = autocorr[lag];
+    if (weight > autocorr[lag - 1] && weight > autocorr[lag + 1] && weight > 0.0f) {
+      const float bpm = lag_to_bpm(lag, sr, hop_length);
+      if (bpm >= kCommonBpmMin && bpm <= kCommonBpmMax && weight >= kWeightThreshold * max_weight &&
+          weight > best_weight) {
         best_bpm = bpm;
         best_weight = weight;
       }
@@ -152,12 +177,8 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
   }
 
   if (best_bpm == 0.0f) {
-    for (const auto& [bpm, weight] : candidates) {
-      if (weight > best_weight) {
-        best_bpm = bpm;
-        best_weight = weight;
-      }
-    }
+    best_bpm = fallback_bpm;
+    best_weight = max_weight;
   }
 
   float confidence = (max_weight > 0.0f) ? best_weight / max_weight : 0.0f;
@@ -220,26 +241,27 @@ bool are_chords_confusable(int root1, int quality1, int root2, int quality2) {
   return count_shared_notes(root1, quality1, root2, quality2) >= 2;
 }
 
-std::array<float, 12> compute_median_chroma(const std::deque<std::array<float, 12>>& history) {
+std::array<float, 12> compute_median_chroma(const std::vector<std::array<float, 12>>& history,
+                                            size_t start, size_t count,
+                                            std::array<float, 12>& scratch) {
   std::array<float, 12> result = {};
-  if (history.empty()) {
+  if (history.empty() || count == 0) {
     return result;
   }
 
-  size_t n_frames = history.size();
-  std::vector<float> values(n_frames);
+  const size_t n_frames = std::min(count, scratch.size());
 
   for (int c = 0; c < 12; ++c) {
     for (size_t f = 0; f < n_frames; ++f) {
-      values[f] = history[f][c];
+      scratch[f] = history[(start + f) % history.size()][c];
     }
 
-    std::sort(values.begin(), values.end());
+    std::sort(scratch.begin(), scratch.begin() + static_cast<std::ptrdiff_t>(n_frames));
 
     if (n_frames % 2 == 0) {
-      result[c] = (values[n_frames / 2 - 1] + values[n_frames / 2]) * 0.5f;
+      result[c] = (scratch[n_frames / 2 - 1] + scratch[n_frames / 2]) * 0.5f;
     } else {
-      result[c] = values[n_frames / 2];
+      result[c] = scratch[n_frames / 2];
     }
   }
 

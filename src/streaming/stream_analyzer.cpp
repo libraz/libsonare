@@ -92,6 +92,11 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamConfig: max_pending_frames is outside supported bounds");
   }
+  if (config_.max_progression_entries == 0 ||
+      config_.max_progression_entries > kMaxStreamProgressionEntries) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamConfig: max_progression_entries is outside supported bounds");
+  }
 
   /// Onset strength (and therefore progressive BPM) is derived from the
   /// frame-to-frame difference of the log-mel spectrum (see compute_onset()).
@@ -139,6 +144,18 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     const size_t min_window = static_cast<size_t>(std::max(max_lag, 1)) * 4;
     onset_window_frames_ = std::max(window_from_seconds, min_window);
   }
+
+  // Prepare every bounded history and BPM scratch buffer before process().
+  // resize() is intentional for ring storage; logical sizes are tracked by
+  // separate counters and begin at zero.
+  onset_accumulator_.resize(onset_window_frames_);
+  onset_window_scratch_.reserve(onset_window_frames_);
+  const int prepared_max_lag =
+      std::max(1, streaming_detail::bpm_to_lag(streaming_detail::kBpmMin, internal_sample_rate_,
+                                               config_.hop_length));
+  bpm_autocorr_scratch_.reserve(static_cast<size_t>(prepared_max_lag));
+  chroma_history_.resize(static_cast<size_t>(kChordSmoothingFrames));
+  full_chroma_history_.resize(kMaxChromaHistoryFrames);
 
   /// Initialize FFT
   fft_ = std::make_unique<FFT>(config_.n_fft);
@@ -197,8 +214,22 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     chord_templates_ = generate_triad_templates();
   }
 
-  /// Reserve overlap buffer capacity
-  overlap_buffer_.reserve(config_.overlap());
+  // Prepare the common callback block range (AudioWorklet/device callbacks are
+  // normally 128-2048 samples). Larger one-shot chunks remain supported and
+  // may grow these control buffers, but ordinary realtime callbacks do not.
+  constexpr size_t kPreparedInputBlockSamples = 16384;
+  const size_t prepared_input =
+      std::max(kPreparedInputBlockSamples, static_cast<size_t>(config_.n_fft));
+  sanitize_buffer_.reserve(prepared_input);
+  resample_buffer_.reserve(prepared_input);
+  overlap_buffer_.reserve(prepared_input + static_cast<size_t>(config_.n_fft));
+
+  output_buffer_.resize(config_.max_pending_frames);
+  for (auto& frame : output_buffer_) {
+    prepare_output_frame(frame);
+  }
+  prepare_output_frame(scratch_frame_);
+  prepare_progressive_estimate();
 }
 
 StreamAnalyzer::~StreamAnalyzer() = default;
@@ -207,6 +238,13 @@ StreamAnalyzer::StreamAnalyzer(StreamAnalyzer&&) noexcept = default;
 StreamAnalyzer& StreamAnalyzer::operator=(StreamAnalyzer&&) noexcept = default;
 
 void StreamAnalyzer::process(const float* samples, size_t n_samples) {
+  if (samples != nullptr && n_samples > 0) {
+    if (offset_tracking_mode_ == OffsetTrackingMode::External) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "cannot switch StreamAnalyzer offset mode without reset()");
+    }
+    offset_tracking_mode_ = OffsetTrackingMode::Internal;
+  }
   process_internal(samples, n_samples);
 }
 

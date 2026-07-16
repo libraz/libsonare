@@ -72,6 +72,7 @@ export class StreamAnalyzer {
       config.emitEveryNFrames ?? defaults.emitEveryNFrames,
       config.magnitudeDownsample ?? defaults.magnitudeDownsample,
       config.maxPendingFrames ?? defaults.maxPendingFrames,
+      config.maxProgressionEntries ?? defaults.maxProgressionEntries,
       config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,
       config.bpmUpdateIntervalSec ?? defaults.bpmUpdateIntervalSec,
       config.window ?? defaults.window,
@@ -89,7 +90,8 @@ export class StreamAnalyzer {
   }
 
   /**
-   * Process audio samples with explicit sample offset.
+   * Process audio samples with a contiguous explicit sample offset. A gap,
+   * seek, or switch from `process()` requires `reset()` first.
    *
    * @param samples - Audio samples (mono, float32)
    * @param sampleOffset - Cumulative sample count at start of this chunk
@@ -166,6 +168,8 @@ export class StreamAnalyzer {
       durationSeconds: s.durationSeconds,
       pendingFrames: s.pendingFrames,
       droppedOutputFrames: s.droppedOutputFrames,
+      droppedChordProgressionEntries: s.droppedChordProgressionEntries,
+      droppedBarProgressionEntries: s.droppedBarProgressionEntries,
       estimate: {
         bpm: s.estimate.bpm,
         bpmConfidence: s.estimate.bpmConfidence,

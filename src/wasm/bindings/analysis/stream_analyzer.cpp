@@ -87,6 +87,7 @@ val js_stream_analyzer_config_default() {
   out.set("emitEveryNFrames", defaults.emit_every_n_frames);
   out.set("magnitudeDownsample", defaults.magnitude_downsample);
   out.set("maxPendingFrames", defaults.max_pending_frames);
+  out.set("maxProgressionEntries", defaults.max_progression_entries);
   out.set("keyUpdateIntervalSec", defaults.key_update_interval_sec);
   out.set("bpmUpdateIntervalSec", defaults.bpm_update_interval_sec);
   out.set("window", streamWindowToCValue(defaults.window));
@@ -101,8 +102,9 @@ class StreamAnalyzerWrapper {
                         float fmax, float tuning_ref_hz, bool compute_magnitude, bool compute_mel,
                         bool compute_chroma, bool compute_onset, bool compute_spectral,
                         int emit_every_n_frames, int magnitude_downsample,
-                        double max_pending_frames, float key_update_interval_sec,
-                        float bpm_update_interval_sec, int window, int output_format) {
+                        double max_pending_frames, double max_progression_entries,
+                        float key_update_interval_sec, float bpm_update_interval_sec, int window,
+                        int output_format) {
     if (compute_magnitude) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "computeMagnitude is not supported because magnitude frames are not "
@@ -130,6 +132,10 @@ class StreamAnalyzerWrapper {
     if (!numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "maxPendingFrames must be a non-negative integer");
+    }
+    if (!numeric::checked_integral_cast(max_progression_entries, &config.max_progression_entries)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "maxProgressionEntries must be a non-negative integer");
     }
     config.output_format = output_format == 1   ? OutputFormat::Int16
                            : output_format == 2 ? OutputFormat::Uint8
@@ -231,6 +237,8 @@ class StreamAnalyzerWrapper {
     out.set("durationSeconds", s.duration_seconds);
     out.set("pendingFrames", s.pending_frames);
     out.set("droppedOutputFrames", s.dropped_output_frames);
+    out.set("droppedChordProgressionEntries", s.dropped_chord_progression_entries);
+    out.set("droppedBarProgressionEntries", s.dropped_bar_progression_entries);
 
     val estimate = val::object();
     estimate.set("bpm", s.estimate.bpm);
@@ -333,7 +341,7 @@ void registerStreamAnalyzerBindings() {
   function("streamAnalyzerConfigDefault", &js_stream_analyzer_config_default);
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
       .constructor<int, int, int, int, float, float, float, bool, bool, bool, bool, bool, int, int,
-                   double, float, float, int, int>()
+                   double, double, float, float, int, int>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("finalize", &StreamAnalyzerWrapper::finalize)

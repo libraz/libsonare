@@ -5,7 +5,6 @@
 
 #include <array>
 #include <complex>
-#include <deque>
 #include <memory>
 #include <vector>
 
@@ -109,7 +108,12 @@ class StreamAnalyzer {
   /// @param n_samples Number of samples
   /// @param sample_offset Cumulative sample count at start of this chunk
   /// @details Use this overload when you need precise synchronization with
-  ///          an external timeline (e.g., AudioContext).
+  ///          an external timeline (e.g., AudioContext). Consecutive calls must
+  ///          use contiguous original-rate offsets: the next offset must equal
+  ///          the previous offset plus its input sample count. A gap, seek, or
+  ///          switch between offset-tracking overloads is rejected; call
+  ///          reset() first to discard the buffered partial frame and start a
+  ///          new timeline segment. Empty calls do not select a tracking mode.
   void process(const float* samples, size_t n_samples, size_t sample_offset);
 
   /// @brief Finalizes the current stream by analyzing the remaining partial frame.
@@ -205,16 +209,16 @@ class StreamAnalyzer {
   /// @details Exposes the size of the bounded onset history so regression tests
   ///          can assert the sliding-window cap holds over long streams. Not
   ///          part of the public streaming API; intended for white-box tests.
-  size_t onset_accumulator_size_for_test() const { return onset_accumulator_.size(); }
+  size_t onset_accumulator_size_for_test() const { return onset_accumulator_size_; }
 
   /// @brief Test-only accessor for the onset accumulator's frame cap.
   size_t onset_window_frames_for_test() const { return onset_window_frames_; }
 
   /// @brief Test-only accessor for the current full chroma history size.
   /// @details Exposes the size of the bounded retroactive-bar chroma history so
-  ///          regression tests can assert the front-trim cap holds. The history
-  ///          is a deque (O(1) front-pop); not part of the public streaming API.
-  size_t full_chroma_history_size_for_test() const { return full_chroma_history_.size(); }
+  ///          regression tests can assert the fixed-ring cap holds. Not part of
+  ///          the public streaming API.
+  size_t full_chroma_history_size_for_test() const { return full_chroma_history_size_; }
 
   /// @brief Test-only accessor for the full chroma history frame cap.
   static constexpr size_t full_chroma_history_cap_for_test() { return kMaxChromaHistoryFrames; }
@@ -242,6 +246,9 @@ class StreamAnalyzer {
   float normalization_gain_ = 1.0f;  // Gain factor for loud audio
 
   // Cumulative state
+  enum class OffsetTrackingMode { Unset, Internal, External };
+  OffsetTrackingMode offset_tracking_mode_ = OffsetTrackingMode::Unset;
+  size_t next_external_sample_offset_ = 0;
   size_t cumulative_samples_ = 0;
   double cumulative_samples_exact_ = 0.0;
   int frame_count_ = 0;
@@ -256,9 +263,12 @@ class StreamAnalyzer {
   std::vector<float> overlap_buffer_;
   size_t overlap_read_pos_ = 0;
 
-  // Bounded output queue. When full, emit_frame drops the oldest unread frame
-  // before appending the current one (live/drop-oldest policy).
-  std::deque<StreamFrame> output_buffer_;
+  // Fixed output ring. Every StreamFrame and its fixed-shape feature vectors
+  // are prepared by the constructor so emit_frame never allocates, including
+  // when a consumer drains the queue between every callback.
+  std::vector<StreamFrame> output_buffer_;
+  size_t output_read_index_ = 0;
+  size_t output_size_ = 0;
   size_t dropped_output_frames_ = 0;
   StreamFrame scratch_frame_;  // Reused for throttled (non-emitted) frames
 
@@ -302,8 +312,12 @@ class StreamAnalyzer {
   // autocorrelation lag (bpm_to_lag(kBpmMin) ≈ 86 frames at 44.1 kHz / hop 512),
   // so trimming never removes lags the BPM estimator needs — it only discards
   // ancient onsets that no longer reflect the current tempo. Declared as a
-  // deque so front-trimming is O(1) instead of an O(N) vector erase per frame.
-  std::deque<float> onset_accumulator_;
+  // fixed ring so both growth and front-trimming are allocation-free.
+  std::vector<float> onset_accumulator_;
+  size_t onset_accumulator_start_ = 0;
+  size_t onset_accumulator_size_ = 0;
+  std::vector<float> onset_window_scratch_;
+  std::vector<float> bpm_autocorr_scratch_;
 
   /// @brief Seconds of onset history retained by onset_accumulator_.
   /// @details Far larger than the BPM autocorrelation's maximum lag (~1 s at
@@ -319,6 +333,8 @@ class StreamAnalyzer {
   float last_key_update_time_ = 0.0f;
   float last_bpm_update_time_ = 0.0f;
   ProgressiveEstimate current_estimate_;
+  size_t dropped_chord_progression_entries_ = 0;
+  size_t dropped_bar_progression_entries_ = 0;
 
   // Chord progression tracking
   int prev_chord_root_ = -1;
@@ -337,7 +353,10 @@ class StreamAnalyzer {
   static constexpr int kChordSmoothingFrames =
       12;  ///< Number of frames to smooth (~0.25s at default settings)
   static constexpr float kChordConfidenceThreshold = 0.5f;  ///< Min correlation for chord detection
-  std::deque<std::array<float, 12>> chroma_history_;        ///< History for chord smoothing
+  std::vector<std::array<float, 12>> chroma_history_;       ///< Prepared chord-smoothing ring
+  size_t chroma_history_start_ = 0;
+  size_t chroma_history_size_ = 0;
+  std::array<float, kChordSmoothingFrames> median_chroma_scratch_ = {};
 
   // Bar-synchronized chord tracking (requires stable BPM)
   static constexpr float kBpmConfidenceThreshold = 0.3f;  ///< Min BPM confidence for bar sync
@@ -357,13 +376,13 @@ class StreamAnalyzer {
   bool pattern_locked_ = false;     ///< True if pattern is locked
   float expected_duration_ = 0.0f;  ///< Expected total duration (0 = unknown)
 
-  // Full chroma history for retroactive bar chord detection.
-  // Declared as a deque (not a vector) so trimming the oldest frame once the
-  // cap is reached is an O(1) pop_front instead of a vector erase(begin())
-  // (an O(N) memmove of ~kMaxChromaHistoryFrames * 12 floats every frame). The
-  // retained chroma content is identical; only the container changes.
+  // Full chroma history for retroactive bar chord detection. Storage is
+  // prepared to the cap and used as a ring, so the callback never grows a
+  // container while retaining O(1) drop-oldest behavior.
   static constexpr size_t kMaxChromaHistoryFrames = 3000;  ///< ~35s at default settings
-  std::deque<std::array<float, 12>> full_chroma_history_;  ///< All chroma vectors
+  std::vector<std::array<float, 12>> full_chroma_history_;
+  size_t full_chroma_history_start_ = 0;
+  size_t full_chroma_history_size_ = 0;
   // Absolute frame index of full_chroma_history_.front(). Starts at 0 and
   // advances by one every time the cap drops the oldest frame. Retroactive bar
   // detection multiplies (this + local index) by the per-frame duration to get
@@ -390,6 +409,17 @@ class StreamAnalyzer {
   void compute_spectral_features(StreamFrame& frame);
   void update_progressive_estimate(float current_time);
   void update_bar_chord_tracking(float current_time);
+  void prepare_output_frame(StreamFrame& frame) const;
+  void prepare_progressive_estimate();
+  const StreamFrame& output_front() const;
+  void pop_output_front();
+  void append_onset(float value);
+  void append_recent_chroma(const std::array<float, 12>& chroma);
+  void append_full_chroma(const std::array<float, 12>& chroma);
+  std::array<float, 12> median_recent_chroma();
+  std::array<float, 12> median_full_chroma(size_t start, size_t count);
+  void append_chord_progression(const ChordChange& change);
+  void append_bar_progression(const BarChord& chord);
 };
 
 }  // namespace sonare

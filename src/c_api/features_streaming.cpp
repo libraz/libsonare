@@ -107,6 +107,7 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
   config->bpm_update_interval_sec = defaults.bpm_update_interval_sec;
   config->window = SONARE_WINDOW_HANN;
   config->output_format = SONARE_STREAM_OUTPUT_FLOAT32;
+  config->max_progression_entries = defaults.max_progression_entries;
   return SONARE_OK;
 }
 
@@ -118,6 +119,8 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       config->hop_length > config->n_fft || config->n_mels <= 0 ||
       config->emit_every_n_frames <= 0 || config->magnitude_downsample <= 0 ||
       config->max_pending_frames == 0 || config->max_pending_frames > kMaxStreamPendingFrames ||
+      config->max_progression_entries == 0 ||
+      config->max_progression_entries > kMaxStreamProgressionEntries ||
       !finite_non_negative(config->fmin) || !finite_non_negative(config->fmax) ||
       (config->fmax > 0.0f && config->fmax <= config->fmin) ||
       !finite_positive(config->tuning_ref_hz) ||
@@ -152,6 +155,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.emit_every_n_frames = config->emit_every_n_frames;
   cfg.magnitude_downsample = config->magnitude_downsample;
   cfg.max_pending_frames = config->max_pending_frames;
+  cfg.max_progression_entries = config->max_progression_entries;
   cfg.output_format = to_output_format(config->output_format);
   cfg.key_update_interval_sec = config->key_update_interval_sec;
   cfg.bpm_update_interval_sec = config->bpm_update_interval_sec;
@@ -379,6 +383,8 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   out->accumulated_seconds = s.estimate.accumulated_seconds;
   out->used_frames = s.estimate.used_frames;
   out->updated = s.estimate.updated ? 1 : 0;
+  out->dropped_chord_progression_entries = s.dropped_chord_progression_entries;
+  out->dropped_bar_progression_entries = s.dropped_bar_progression_entries;
   return SONARE_OK;
   SONARE_C_CATCH
 }
