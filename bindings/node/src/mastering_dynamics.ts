@@ -52,32 +52,66 @@ export interface DynamicsProcessorResult {
   latencySamples: number;
 }
 
+/** Canonical request form for the offline compressor. */
+export interface MasteringDynamicsCompressorRequest extends CompressorOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+/** Canonical request form for the offline noise gate. */
+export interface MasteringDynamicsGateRequest extends GateOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+/** Canonical request form for the offline transient shaper. */
+export interface MasteringDynamicsTransientShaperRequest extends TransientShaperOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
 /** Offline feed-forward compressor (soft-knee, optional makeup, sidechain HPF, PDR). */
 export function masteringDynamicsCompressor(
-  samples: Float32Array,
+  request: MasteringDynamicsCompressorRequest,
+): DynamicsProcessorResult;
+export function masteringDynamicsCompressor(
+  samples: Float32Array | MasteringDynamicsCompressorRequest,
   sampleRate = 22050,
   options: CompressorOptions = {},
 ): DynamicsProcessorResult {
-  assertSamples('masteringDynamicsCompressor', samples, options.validate !== false);
-  return addon.masteringDynamicsCompressor(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertSamples('masteringDynamicsCompressor', request.samples, request.validate !== false);
+  return addon.masteringDynamicsCompressor(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /** Offline noise gate with hysteresis, hold, and optional key HPF. */
 export function masteringDynamicsGate(
-  samples: Float32Array,
+  request: MasteringDynamicsGateRequest,
+): DynamicsProcessorResult;
+export function masteringDynamicsGate(
+  samples: Float32Array | MasteringDynamicsGateRequest,
   sampleRate = 22050,
   options: GateOptions = {},
 ): DynamicsProcessorResult {
-  assertSamples('masteringDynamicsGate', samples, options.validate !== false);
-  return addon.masteringDynamicsGate(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertSamples('masteringDynamicsGate', request.samples, request.validate !== false);
+  return addon.masteringDynamicsGate(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /** Offline transient shaper (envelope-difference attack/sustain control). */
 export function masteringDynamicsTransientShaper(
-  samples: Float32Array,
+  request: MasteringDynamicsTransientShaperRequest,
+): DynamicsProcessorResult;
+export function masteringDynamicsTransientShaper(
+  samples: Float32Array | MasteringDynamicsTransientShaperRequest,
   sampleRate = 22050,
   options: TransientShaperOptions = {},
 ): DynamicsProcessorResult {
-  assertSamples('masteringDynamicsTransientShaper', samples, options.validate !== false);
-  return addon.masteringDynamicsTransientShaper(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertSamples('masteringDynamicsTransientShaper', request.samples, request.validate !== false);
+  return addon.masteringDynamicsTransientShaper(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }

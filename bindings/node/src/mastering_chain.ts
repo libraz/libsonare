@@ -15,88 +15,335 @@ import type {
   StreamingPlatform,
 } from './types.js';
 
-export function normalize(samples: Float32Array, sampleRate = 22050, targetDb = 0.0): Float32Array {
-  return addon.normalize(samples, sampleRate, targetDb);
+export interface NormalizeRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  targetDb?: number;
 }
 
+export function normalize(request: NormalizeRequest): Float32Array;
+export function normalize(
+  samples: Float32Array,
+  sampleRate?: number,
+  targetDb?: number,
+): Float32Array;
+export function normalize(
+  samples: Float32Array | NormalizeRequest,
+  sampleRate = 22050,
+  targetDb = 0.0,
+): Float32Array {
+  const request = samples instanceof Float32Array ? { samples, sampleRate, targetDb } : samples;
+  return addon.normalize(request.samples, request.sampleRate ?? 22050, request.targetDb ?? 0.0);
+}
+
+/** Canonical request form for loudness/true-peak mastering. */
+export interface MasteringRequest extends MasteringOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+export interface MasteringProcessRequest {
+  processorName: SoloProcessor;
+  samples: Float32Array;
+  sampleRate?: number;
+  params?: Record<string, number | boolean>;
+}
+
+export interface MasteringProcessStereoRequest {
+  processorName: SoloProcessor;
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  params?: Record<string, number | boolean>;
+}
+
+export interface MasteringChainRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  config?: MasteringChainConfig;
+  onProgress?: (progress: number, stage: string) => void;
+}
+
+export interface MasteringChainStereoRequest {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  config?: MasteringChainConfig;
+  onProgress?: (progress: number, stage: string) => void;
+}
+
+export interface MasteringPairProcessRequest {
+  processorName: PairProcessor;
+  source: Float32Array;
+  reference: Float32Array;
+  sampleRate?: number;
+  params?: Record<string, number | boolean>;
+}
+
+export interface MasteringPairAnalyzeRequest {
+  analysisName: PairAnalysis;
+  source: Float32Array;
+  reference: Float32Array;
+  sampleRate?: number;
+  params?: Record<string, number | boolean>;
+}
+
+export interface MasteringStereoAnalyzeRequest {
+  analysisName: StereoAnalysis;
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  params?: Record<string, number | boolean>;
+}
+
+export interface MasteringAssistantSuggestRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  params?: Record<string, number | boolean>;
+}
+
+export interface MasteringAudioProfileRequest extends MasteringAssistantSuggestRequest {}
+
+export interface MasteringStreamingPreviewRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  platforms?: StreamingPlatform[];
+}
+
+export function mastering(request: MasteringRequest): MasteringResult;
 export function mastering(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: MasteringOptions,
+): MasteringResult;
+export function mastering(
+  samples: MasteringRequest | Float32Array,
   sampleRate = 22050,
   options: MasteringOptions = {},
 ): MasteringResult {
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return addon.mastering(
-    samples,
-    sampleRate,
-    options.targetLufs ?? -14.0,
-    options.ceilingDb ?? -1.0,
-    options.truePeakOversample ?? 4,
-    options.releaseMs ?? 0, // 0 => library default (50 ms)
-    options.applyGainAtInputRate ?? false,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.targetLufs ?? -14.0,
+    request.ceilingDb ?? -1.0,
+    request.truePeakOversample ?? 4,
+    request.releaseMs ?? 0, // 0 => library default (50 ms)
+    request.applyGainAtInputRate ?? false,
   );
 }
 
+export function masteringProcess(request: MasteringProcessRequest): MasteringResult;
 export function masteringProcess(
   processorName: SoloProcessor,
   samples: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): MasteringResult;
+export function masteringProcess(
+  processorName: SoloProcessor | MasteringProcessRequest,
+  samples?: Float32Array,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): MasteringResult {
-  return addon.masteringProcess(processorName, samples, sampleRate, params);
+  const request =
+    typeof processorName === 'string'
+      ? { processorName, samples: samples as Float32Array, sampleRate, params }
+      : processorName;
+  return addon.masteringProcess(
+    request.processorName,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringProcessStereo(
+  request: MasteringProcessStereoRequest,
+): MasteringStereoResult;
 export function masteringProcessStereo(
   processorName: SoloProcessor,
   left: Float32Array,
   right: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): MasteringStereoResult;
+export function masteringProcessStereo(
+  processorName: SoloProcessor | MasteringProcessStereoRequest,
+  left?: Float32Array,
+  right?: Float32Array,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): MasteringStereoResult {
-  return addon.masteringProcessStereo(processorName, left, right, sampleRate, params);
+  const request =
+    typeof processorName === 'string'
+      ? {
+          processorName,
+          left: left as Float32Array,
+          right: right as Float32Array,
+          sampleRate,
+          params,
+        }
+      : processorName;
+  return addon.masteringProcessStereo(
+    request.processorName,
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringChain(request: MasteringChainRequest): MasteringChainResult;
 export function masteringChain(
   samples: Float32Array,
+  sampleRate?: number,
+  config?: MasteringChainConfig,
+  onProgress?: (progress: number, stage: string) => void,
+): MasteringChainResult;
+export function masteringChain(
+  samples: Float32Array | MasteringChainRequest,
   sampleRate = 22050,
   config: MasteringChainConfig = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
-  const flat = flattenChainConfig(config);
-  if (onProgress) {
-    return addon.masteringChainWithProgress(samples, sampleRate, flat, onProgress);
+  const request =
+    samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
+  const flat = flattenChainConfig(request.config ?? {});
+  if (request.onProgress) {
+    return addon.masteringChainWithProgress(
+      request.samples,
+      request.sampleRate ?? 22050,
+      flat,
+      request.onProgress,
+    );
   }
-  return addon.masteringChain(samples, sampleRate, flat);
+  return addon.masteringChain(request.samples, request.sampleRate ?? 22050, flat);
 }
 
 export function masteringChainStereo(
+  request: MasteringChainStereoRequest,
+): MasteringChainStereoResult;
+export function masteringChainStereo(
   left: Float32Array,
   right: Float32Array,
+  sampleRate?: number,
+  config?: MasteringChainConfig,
+  onProgress?: (progress: number, stage: string) => void,
+): MasteringChainStereoResult;
+export function masteringChainStereo(
+  left: Float32Array | MasteringChainStereoRequest,
+  right?: Float32Array,
   sampleRate = 22050,
   config: MasteringChainConfig = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
-  const flat = flattenChainConfig(config);
-  if (onProgress) {
-    return addon.masteringChainStereoWithProgress(left, right, sampleRate, flat, onProgress);
+  const request =
+    left instanceof Float32Array
+      ? { left, right: right as Float32Array, sampleRate, config, onProgress }
+      : left;
+  const flat = flattenChainConfig(request.config ?? {});
+  if (request.onProgress) {
+    return addon.masteringChainStereoWithProgress(
+      request.left,
+      request.right,
+      request.sampleRate ?? 22050,
+      flat,
+      request.onProgress,
+    );
   }
-  return addon.masteringChainStereo(left, right, sampleRate, flat);
+  return addon.masteringChainStereo(request.left, request.right, request.sampleRate ?? 22050, flat);
 }
 
 export function masteringPresetNames(): MasteringPreset[] {
   return addon.masteringPresetNames();
 }
 
+/** Canonical request form for one-shot preset mastering. */
+export interface MasterAudioRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  preset?: MasteringPreset;
+  overrides?: MasteringChainConfig;
+  onProgress?: (progress: number, stage: string) => void;
+}
+
+/** Canonical request form for one-shot stereo preset mastering. */
+export interface MasterAudioStereoRequest {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  preset?: MasteringPreset;
+  overrides?: MasteringChainConfig;
+  onProgress?: (progress: number, stage: string) => void;
+}
+
+function masterAudioRequest(
+  requestOrSamples: MasterAudioRequest | Float32Array,
+  sampleRate: number,
+  preset: MasteringPreset,
+  overrides: MasteringChainConfig,
+  onProgress?: (progress: number, stage: string) => void,
+): Required<Pick<MasterAudioRequest, 'samples'>> & Omit<MasterAudioRequest, 'samples'> {
+  if (requestOrSamples instanceof Float32Array) {
+    return { samples: requestOrSamples, sampleRate, preset, overrides, onProgress };
+  }
+  return requestOrSamples;
+}
+
+function masterAudioStereoRequest(
+  requestOrLeft: MasterAudioStereoRequest | Float32Array,
+  right: Float32Array | undefined,
+  sampleRate: number,
+  preset: MasteringPreset,
+  overrides: MasteringChainConfig,
+  onProgress?: (progress: number, stage: string) => void,
+): MasterAudioStereoRequest {
+  if (requestOrLeft instanceof Float32Array) {
+    return {
+      left: requestOrLeft,
+      right: right as Float32Array,
+      sampleRate,
+      preset,
+      overrides,
+      onProgress,
+    };
+  }
+  return requestOrLeft;
+}
+
+export function masterAudio(request: MasterAudioRequest): MasteringChainResult;
 export function masterAudio(
   samples: Float32Array,
+  sampleRate?: number,
+  presetName?: MasteringPreset,
+  overrides?: MasteringChainConfig,
+  onProgress?: (progress: number, stage: string) => void,
+): MasteringChainResult;
+export function masterAudio(
+  samples: MasterAudioRequest | Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainResult {
-  const flat = flattenChainConfig(overrides);
-  if (onProgress) {
-    return addon.masterAudioWithProgress(presetName, samples, sampleRate, flat, onProgress);
+  const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
+  const flat = flattenChainConfig(request.overrides ?? {});
+  if (request.onProgress) {
+    return addon.masterAudioWithProgress(
+      request.preset ?? 'pop',
+      request.samples,
+      request.sampleRate ?? 22050,
+      flat,
+      request.onProgress,
+    );
   }
-  return addon.masterAudio(presetName, samples, sampleRate, flat);
+  return addon.masterAudio(
+    request.preset ?? 'pop',
+    request.samples,
+    request.sampleRate ?? 22050,
+    flat,
+  );
 }
 
 /**
@@ -107,52 +354,101 @@ export function masterAudio(
  * spin up multiple async calls in parallel).
  */
 export function masterAudioAsync(
+  request: Omit<MasterAudioRequest, 'onProgress'>,
+): Promise<MasteringChainResult>;
+export function masterAudioAsync(
   samples: Float32Array,
+  sampleRate?: number,
+  presetName?: MasteringPreset,
+  overrides?: MasteringChainConfig,
+): Promise<MasteringChainResult>;
+export function masterAudioAsync(
+  samples: Omit<MasterAudioRequest, 'onProgress'> | Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
 ): Promise<MasteringChainResult> {
-  return addon.masterAudioAsync(presetName, samples, sampleRate, flattenChainConfig(overrides));
+  const request = masterAudioRequest(samples, sampleRate, presetName, overrides);
+  return addon.masterAudioAsync(
+    request.preset ?? 'pop',
+    request.samples,
+    request.sampleRate ?? 22050,
+    flattenChainConfig(request.overrides ?? {}),
+  );
 }
 
+export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult;
 export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
+  sampleRate?: number,
+  presetName?: MasteringPreset,
+  overrides?: MasteringChainConfig,
+  onProgress?: (progress: number, stage: string) => void,
+): MasteringChainStereoResult;
+export function masterAudioStereo(
+  left: MasterAudioStereoRequest | Float32Array,
+  right: Float32Array | undefined = undefined,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
   onProgress?: (progress: number, stage: string) => void,
 ): MasteringChainStereoResult {
-  const flat = flattenChainConfig(overrides);
-  if (onProgress) {
+  const request = masterAudioStereoRequest(
+    left,
+    right,
+    sampleRate,
+    presetName,
+    overrides,
+    onProgress,
+  );
+  const flat = flattenChainConfig(request.overrides ?? {});
+  if (request.onProgress) {
     return addon.masterAudioStereoWithProgress(
-      presetName,
-      left,
-      right,
-      sampleRate,
+      request.preset ?? 'pop',
+      request.left,
+      request.right,
+      request.sampleRate ?? 22050,
       flat,
-      onProgress,
+      request.onProgress,
     );
   }
-  return addon.masterAudioStereo(presetName, left, right, sampleRate, flat);
+  return addon.masterAudioStereo(
+    request.preset ?? 'pop',
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    flat,
+  );
 }
 
 /**
  * Asynchronous variant of {@link masterAudioStereo}.
  */
 export function masterAudioStereoAsync(
+  request: Omit<MasterAudioStereoRequest, 'onProgress'>,
+): Promise<MasteringChainStereoResult>;
+export function masterAudioStereoAsync(
   left: Float32Array,
   right: Float32Array,
+  sampleRate?: number,
+  presetName?: MasteringPreset,
+  overrides?: MasteringChainConfig,
+): Promise<MasteringChainStereoResult>;
+export function masterAudioStereoAsync(
+  left: Omit<MasterAudioStereoRequest, 'onProgress'> | Float32Array,
+  right: Float32Array | undefined = undefined,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
 ): Promise<MasteringChainStereoResult> {
+  const request = masterAudioStereoRequest(left, right, sampleRate, presetName, overrides);
   return addon.masterAudioStereoAsync(
-    presetName,
-    left,
-    right,
-    sampleRate,
-    flattenChainConfig(overrides),
+    request.preset ?? 'pop',
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    flattenChainConfig(request.overrides ?? {}),
   );
 }
 
@@ -289,60 +585,129 @@ export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
  * independent lengths — the match primitives consume each buffer at its own
  * length.
  */
+export function masteringPairProcess(request: MasteringPairProcessRequest): MasteringResult;
 export function masteringPairProcess(
-  processorName: PairProcessor,
-  source: Float32Array,
-  reference: Float32Array,
+  processorName: PairProcessor | MasteringPairProcessRequest,
+  source?: Float32Array,
+  reference?: Float32Array,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): MasteringResult {
-  return addon.masteringPairProcess(processorName, source, reference, sampleRate, params);
+  const request =
+    typeof processorName === 'string'
+      ? {
+          processorName,
+          source: source as Float32Array,
+          reference: reference as Float32Array,
+          sampleRate,
+          params,
+        }
+      : processorName;
+  return addon.masteringPairProcess(
+    request.processorName,
+    request.source,
+    request.reference,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
 /**
  * Analyze a `source` against a `reference` with a two-input analysis. The two
  * buffers may have independent lengths.
  */
+export function masteringPairAnalyze(request: MasteringPairAnalyzeRequest): string;
 export function masteringPairAnalyze(
-  analysisName: PairAnalysis,
-  source: Float32Array,
-  reference: Float32Array,
+  analysisName: PairAnalysis | MasteringPairAnalyzeRequest,
+  source?: Float32Array,
+  reference?: Float32Array,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): string {
-  return addon.masteringPairAnalyze(analysisName, source, reference, sampleRate, params);
+  const request =
+    typeof analysisName === 'string'
+      ? {
+          analysisName,
+          source: source as Float32Array,
+          reference: reference as Float32Array,
+          sampleRate,
+          params,
+        }
+      : analysisName;
+  return addon.masteringPairAnalyze(
+    request.analysisName,
+    request.source,
+    request.reference,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringStereoAnalyze(request: MasteringStereoAnalyzeRequest): string;
 export function masteringStereoAnalyze(
-  analysisName: StereoAnalysis,
-  left: Float32Array,
-  right: Float32Array,
+  analysisName: StereoAnalysis | MasteringStereoAnalyzeRequest,
+  left?: Float32Array,
+  right?: Float32Array,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): string {
-  return addon.masteringStereoAnalyze(analysisName, left, right, sampleRate, params);
+  const request =
+    typeof analysisName === 'string'
+      ? {
+          analysisName,
+          left: left as Float32Array,
+          right: right as Float32Array,
+          sampleRate,
+          params,
+        }
+      : analysisName;
+  return addon.masteringStereoAnalyze(
+    request.analysisName,
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringAssistantSuggest(request: MasteringAssistantSuggestRequest): string;
 export function masteringAssistantSuggest(
-  samples: Float32Array,
+  samples: Float32Array | MasteringAssistantSuggestRequest,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): string {
-  return addon.masteringAssistantSuggest(samples, sampleRate, params);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
+  return addon.masteringAssistantSuggest(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringAudioProfile(request: MasteringAudioProfileRequest): string;
 export function masteringAudioProfile(
-  samples: Float32Array,
+  samples: Float32Array | MasteringAudioProfileRequest,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): string {
-  return addon.masteringAudioProfile(samples, sampleRate, params);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
+  return addon.masteringAudioProfile(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
 }
 
+export function masteringStreamingPreview(request: MasteringStreamingPreviewRequest): string;
 export function masteringStreamingPreview(
-  samples: Float32Array,
+  samples: Float32Array | MasteringStreamingPreviewRequest,
   sampleRate = 22050,
   platforms: StreamingPlatform[] = [],
 ): string {
-  return addon.masteringStreamingPreview(samples, sampleRate, platforms);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, platforms } : samples;
+  return addon.masteringStreamingPreview(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.platforms ?? [],
+  );
 }

@@ -81,23 +81,43 @@ export interface VoiceChangeOptions extends ValidateOptions {
   formantFactor?: number;
 }
 
+/** Inputs for the one-shot {@link voiceChange} facade. */
+export interface VoiceChangeRequest extends VoiceChangeOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
+export function voiceChange(request: VoiceChangeRequest): Float32Array;
 export function voiceChange(
   samples: Float32Array,
+  sampleRate?: number,
+  options?: VoiceChangeOptions,
+): Float32Array;
+export function voiceChange(
+  samples: Float32Array | VoiceChangeRequest,
   sampleRate = 22050,
   options: VoiceChangeOptions = {},
 ): Float32Array {
-  assertSamples('voiceChange', samples, options.validate !== false);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertSamples('voiceChange', request.samples, request.validate !== false);
   return addon.voiceChange(
-    samples,
-    sampleRate,
-    options.pitchSemitones ?? 0.0,
-    options.formantFactor ?? 1.0,
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.pitchSemitones ?? 0.0,
+    request.formantFactor ?? 1.0,
   );
 }
 
 export interface VoiceChangeRealtimeOptions extends ValidateOptions {
   /** Channel count: 1 = mono, 2 = interleaved stereo (L0,R0,L1,R1,...). */
   channels?: 1 | 2;
+}
+
+/** Inputs for the one-shot {@link voiceChangeRealtime} facade. */
+export interface VoiceChangeRealtimeRequest extends VoiceChangeRealtimeOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+  preset?: RealtimeVoiceChangerConfigInput;
 }
 
 function latencyCompensatedVoiceChange(
@@ -135,30 +155,39 @@ function latencyCompensatedVoiceChange(
   return processed.slice(offset, offset + samples.length);
 }
 
+export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array;
 export function voiceChangeRealtime(
   samples: Float32Array,
+  sampleRate?: number,
+  preset?: RealtimeVoiceChangerConfigInput,
+  options?: VoiceChangeRealtimeOptions,
+): Float32Array;
+export function voiceChangeRealtime(
+  samples: Float32Array | VoiceChangeRealtimeRequest,
   sampleRate = 48000,
   preset: RealtimeVoiceChangerConfigInput = 'neutral-monitor',
   options: VoiceChangeRealtimeOptions = {},
 ): Float32Array {
-  const validate = options.validate !== false;
-  assertSamples('voiceChangeRealtime', samples, validate);
-  const channels = options.channels ?? 1;
+  const request =
+    samples instanceof Float32Array ? { samples, sampleRate, preset, ...options } : samples;
+  const validate = request.validate !== false;
+  assertSamples('voiceChangeRealtime', request.samples, validate);
+  const channels = request.channels ?? 1;
   if (channels !== 1 && channels !== 2) {
     throw new Error('voiceChangeRealtime: channels must be 1 or 2.');
   }
-  if (channels === 2 && samples.length % 2 !== 0) {
+  if (channels === 2 && request.samples.length % 2 !== 0) {
     throw new Error('voiceChangeRealtime: stereo input length must be a multiple of 2.');
   }
   const block = 512;
   const changer = new RealtimeVoiceChanger({
-    sampleRate,
+    sampleRate: request.sampleRate ?? 48000,
     maxBlockSize: block,
     channels,
-    preset,
+    preset: request.preset ?? 'neutral-monitor',
   });
   try {
-    return latencyCompensatedVoiceChange(changer, samples, channels, block);
+    return latencyCompensatedVoiceChange(changer, request.samples, channels, block);
   } finally {
     changer.destroy();
   }

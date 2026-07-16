@@ -30,6 +30,7 @@ import {
   pitchPyin,
   pitchShift,
   pitchYin,
+  powerToDb,
   resample,
   rmsEnergy,
   spectralBandwidth,
@@ -41,6 +42,7 @@ import {
   timeStretch,
   timeToFrames,
   trim,
+  trimSilence,
   vqt,
   vqtToAudio,
   zeroCrossingRate,
@@ -230,6 +232,74 @@ describe('effects', () => {
 
 describe('features', () => {
   const tone = generateSine(440, SR, 1.0);
+
+  it('accepts request objects for transform and feature extraction APIs', () => {
+    const positionalStft = stft(tone, SR, 512, 128);
+    const requestedStft = stft({ samples: tone, sampleRate: SR, nFft: 512, hopLength: 128 });
+    expect(requestedStft.magnitude).toEqual(positionalStft.magnitude);
+
+    const positionalMel = melSpectrogram(tone, SR, 512, 128, 24, 80, 6000, true);
+    const requestedMel = melSpectrogram({
+      samples: tone,
+      sampleRate: SR,
+      nFft: 512,
+      hopLength: 128,
+      nMels: 24,
+      fmin: 80,
+      fmax: 6000,
+      htk: true,
+    });
+    expect(requestedMel.power).toEqual(positionalMel.power);
+
+    const positionalMfcc = mfcc(tone, SR, 512, 128, 24, 10, 80, 6000, true, 4);
+    const requestedMfcc = mfcc({
+      samples: tone,
+      sampleRate: SR,
+      nFft: 512,
+      hopLength: 128,
+      nMels: 24,
+      nMfcc: 10,
+      fmin: 80,
+      fmax: 6000,
+      htk: true,
+      lifter: 4,
+    });
+    expect(requestedMfcc.coefficients).toEqual(positionalMfcc.coefficients);
+
+    const positionalCqt = cqt(tone, SR, 128, 130.8128, 12, 12);
+    const requestedCqt = cqt({
+      samples: tone,
+      sampleRate: SR,
+      hopLength: 128,
+      fmin: 130.8128,
+      nBins: 12,
+      binsPerOctave: 12,
+    });
+    expect(requestedCqt.magnitude).toEqual(positionalCqt.magnitude);
+
+    expect(spectralCentroid({ samples: tone, sampleRate: SR, nFft: 512, hopLength: 128 })).toEqual(
+      spectralCentroid(tone, SR, 512, 128),
+    );
+    expect(
+      pitchYin({
+        samples: tone,
+        sampleRate: SR,
+        frameLength: 512,
+        hopLength: 128,
+        fmin: 80,
+        fmax: 1000,
+        threshold: 0.2,
+        fillNa: true,
+      }).f0,
+    ).toEqual(pitchYin(tone, SR, 512, 128, 80, 1000, 0.2, true).f0);
+    expect(framesToTime({ frames: 8, sr: SR, hopLength: 128 })).toBe(framesToTime(8, SR, 128));
+    expect(
+      powerToDb({ values: new Float32Array([0.25]), ref: 0.5, amin: 1e-8, topDb: 60 }),
+    ).toEqual(powerToDb(new Float32Array([0.25]), 0.5, 1e-8, 60));
+    expect(
+      trimSilence({ samples: tone, topDb: 40, frameLength: 512, hopLength: 128 }).audio,
+    ).toEqual(trimSilence(tone, 40, 512, 128).audio);
+  });
 
   it('stft returns magnitude and power', () => {
     const result = stft(tone, SR, 2048, 512);

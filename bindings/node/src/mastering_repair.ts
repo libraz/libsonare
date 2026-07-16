@@ -1,5 +1,11 @@
 import { addon } from './native.js';
 
+/** Common input fields for offline repair processors. */
+export interface MasteringRepairSamplesRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+
 /** Options for `masteringRepairDeclick`. */
 export interface DeclickOptions {
   threshold?: number;
@@ -8,6 +14,9 @@ export interface DeclickOptions {
   lpcOrder?: number;
   residualRatio?: number;
 }
+export interface MasteringRepairDeclickRequest
+  extends MasteringRepairSamplesRequest,
+    DeclickOptions {}
 
 /** Algorithms accepted by `masteringRepairDenoiseClassical`. */
 export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
@@ -29,23 +38,36 @@ export interface DenoiseClassicalOptions {
   speechPresenceGain?: boolean;
   gainSmoothing?: boolean;
 }
+export interface MasteringRepairDenoiseClassicalRequest
+  extends MasteringRepairSamplesRequest,
+    DenoiseClassicalOptions {}
 
 /** Offline LPC-based declicker. */
+export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): Float32Array;
 export function masteringRepairDeclick(
-  samples: Float32Array,
+  samples: Float32Array | MasteringRepairDeclickRequest,
   sampleRate = 22050,
   options: DeclickOptions = {},
 ): Float32Array {
-  return addon.masteringRepairDeclick(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.masteringRepairDeclick(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /** Offline STFT-domain classical denoiser (LogMMSE / MMSE-STSA / SpectralSubtraction). */
 export function masteringRepairDenoiseClassical(
-  samples: Float32Array,
+  request: MasteringRepairDenoiseClassicalRequest,
+): Float32Array;
+export function masteringRepairDenoiseClassical(
+  samples: Float32Array | MasteringRepairDenoiseClassicalRequest,
   sampleRate = 22050,
   options: DenoiseClassicalOptions = {},
 ): Float32Array {
-  return addon.masteringRepairDenoiseClassical(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.masteringRepairDenoiseClassical(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /** Options for `masteringRepairDeclip`. */
@@ -55,6 +77,9 @@ export interface DeclipOptions {
   iterations?: number;
   lpcBlend?: number;
 }
+export interface MasteringRepairDeclipRequest
+  extends MasteringRepairSamplesRequest,
+    DeclipOptions {}
 
 /** Algorithms accepted by `masteringRepairDecrackle`. */
 export type DecrackleMode = 'median' | 'waveletShrinkage';
@@ -65,6 +90,9 @@ export interface DecrackleOptions {
   mode?: DecrackleMode;
   levels?: number;
 }
+export interface MasteringRepairDecrackleRequest
+  extends MasteringRepairSamplesRequest,
+    DecrackleOptions {}
 
 /** Options for `masteringRepairDehum`. */
 export interface DehumOptions {
@@ -77,6 +105,7 @@ export interface DehumOptions {
   frameSize?: number;
   pllBandwidth?: number;
 }
+export interface MasteringRepairDehumRequest extends MasteringRepairSamplesRequest, DehumOptions {}
 
 /** Options for `masteringRepairDereverbClassical`. */
 export interface DereverbClassicalOptions {
@@ -93,6 +122,9 @@ export interface DereverbClassicalOptions {
   wpeTaps?: number;
   wpeStrength?: number;
 }
+export interface MasteringRepairDereverbClassicalRequest
+  extends MasteringRepairSamplesRequest,
+    DereverbClassicalOptions {}
 
 /** Trimming modes accepted by `masteringRepairTrimSilence`. */
 export type TrimSilenceMode = 'peak' | 'lufsGated';
@@ -105,48 +137,69 @@ export interface TrimSilenceOptions {
   gateLufs?: number;
   windowMs?: number;
 }
+export interface MasteringRepairTrimSilenceRequest
+  extends MasteringRepairSamplesRequest,
+    TrimSilenceOptions {}
 
 /** Offline LPC-based declipper. */
+export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): Float32Array;
 export function masteringRepairDeclip(
-  samples: Float32Array,
+  samples: Float32Array | MasteringRepairDeclipRequest,
   sampleRate = 22050,
   options: DeclipOptions = {},
 ): Float32Array {
-  return addon.masteringRepairDeclip(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.masteringRepairDeclip(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /** Offline crackle suppressor (median or wavelet-shrinkage). */
+export function masteringRepairDecrackle(request: MasteringRepairDecrackleRequest): Float32Array;
 export function masteringRepairDecrackle(
-  samples: Float32Array,
+  samples: Float32Array | MasteringRepairDecrackleRequest,
   sampleRate = 22050,
   options: DecrackleOptions = {},
 ): Float32Array {
-  return addon.masteringRepairDecrackle(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.masteringRepairDecrackle(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /** Offline mains-hum remover. */
+export function masteringRepairDehum(request: MasteringRepairDehumRequest): Float32Array;
 export function masteringRepairDehum(
-  samples: Float32Array,
+  samples: Float32Array | MasteringRepairDehumRequest,
   sampleRate = 22050,
   options: DehumOptions = {},
 ): Float32Array {
-  return addon.masteringRepairDehum(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.masteringRepairDehum(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /** Offline classical dereverberator (spectral subtraction + optional WPE). */
 export function masteringRepairDereverbClassical(
-  samples: Float32Array,
+  request: MasteringRepairDereverbClassicalRequest,
+): Float32Array;
+export function masteringRepairDereverbClassical(
+  samples: Float32Array | MasteringRepairDereverbClassicalRequest,
   sampleRate = 22050,
   options: DereverbClassicalOptions = {},
 ): Float32Array {
-  return addon.masteringRepairDereverbClassical(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.masteringRepairDereverbClassical(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /** Offline silence trimmer (peak threshold or LUFS-gated). */
 export function masteringRepairTrimSilence(
-  samples: Float32Array,
+  request: MasteringRepairTrimSilenceRequest,
+): Float32Array;
+export function masteringRepairTrimSilence(
+  samples: Float32Array | MasteringRepairTrimSilenceRequest,
   sampleRate = 22050,
   options: TrimSilenceOptions = {},
 ): Float32Array {
-  return addon.masteringRepairTrimSilence(samples, sampleRate, options);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.masteringRepairTrimSilence(request.samples, request.sampleRate ?? 22050, request);
 }

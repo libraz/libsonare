@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
+  deemphasis,
+  ebur128LoudnessRange,
   fourierTempogram,
   lufs,
   masteringChain,
   momentaryLufs,
   nnlsChroma,
   onsetEnvelope,
+  preemphasis,
   StreamAnalyzer,
   StreamingEqualizer,
   StreamingMasteringChain,
@@ -47,6 +50,41 @@ describe('progress callback', () => {
     expect(stages).toContain('eq.tilt');
     expect(stages).toContain('dynamics.compressor');
     expect(progresses[progresses.length - 1]).toBeCloseTo(1.0, 5);
+  });
+});
+
+describe('feature request-object compatibility', () => {
+  it('preserves positional results for emphasis, chroma, and loudness features', () => {
+    const filterInput = new Float32Array([1, 1, 1, 1]);
+    const emphasized = preemphasis(filterInput, 0.5, 0);
+    expect(Array.from(preemphasis({ samples: filterInput, coef: 0.5, zi: 0 }))).toEqual(
+      Array.from(emphasized),
+    );
+    expect(Array.from(deemphasis({ samples: emphasized, coef: 0.5, zi: 0 }))).toEqual(
+      Array.from(deemphasis(emphasized, 0.5, 0)),
+    );
+
+    const chromaInput = generateSine(440, SR, 2.0);
+    const chroma = nnlsChroma(chromaInput, SR);
+    const objectChroma = nnlsChroma({ samples: chromaInput, sampleRate: SR });
+    expect(objectChroma.nChroma).toBe(chroma.nChroma);
+    expect(objectChroma.nFrames).toBe(chroma.nFrames);
+    expect(Array.from(objectChroma.data)).toEqual(Array.from(chroma.data));
+
+    const loudnessInput = generateSine(440, 48000, 3.0);
+    const positional = lufs(loudnessInput, 48000);
+    const object = lufs({ samples: loudnessInput, sampleRate: 48000 });
+    expect(object.integratedLufs).toBeCloseTo(positional.integratedLufs, 10);
+    expect(Array.from(momentaryLufs({ samples: loudnessInput, sampleRate: 48000 }))).toEqual(
+      Array.from(momentaryLufs(loudnessInput, 48000)),
+    );
+    expect(Array.from(shortTermLufs({ samples: loudnessInput, sampleRate: 48000 }))).toEqual(
+      Array.from(shortTermLufs(loudnessInput, 48000)),
+    );
+    expect(ebur128LoudnessRange({ samples: loudnessInput, sampleRate: 48000 })).toBeCloseTo(
+      ebur128LoudnessRange(loudnessInput, 48000),
+      10,
+    );
   });
 });
 

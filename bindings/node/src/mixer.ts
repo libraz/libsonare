@@ -76,8 +76,22 @@ export function scalePitchClassEnabled(
   return addon.scalePitchClassEnabled(root, modeMask, pitchClass);
 }
 
-export function resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array {
-  return addon.resample(samples, srcSr, targetSr);
+/** Inputs for the one-shot {@link resample} facade. */
+export interface ResampleRequest {
+  samples: Float32Array;
+  srcSr: number;
+  targetSr: number;
+}
+
+export function resample(request: ResampleRequest): Float32Array;
+export function resample(samples: Float32Array, srcSr: number, targetSr: number): Float32Array;
+export function resample(
+  samples: Float32Array | ResampleRequest,
+  srcSr?: number,
+  targetSr?: number,
+): Float32Array {
+  const request = samples instanceof Float32Array ? { samples, srcSr, targetSr } : samples;
+  return addon.resample(request.samples, request.srcSr, request.targetSr);
 }
 
 export function mixingScenePresetNames(): string[] {
@@ -452,11 +466,33 @@ export class Mixer {
  * read the -120 dB floor sentinel. Use the streaming {@link Mixer} for
  * meaningful loudness/true-peak readings.
  */
+/** Inputs for the one-shot {@link mixStereo} facade. */
+export interface MixStereoRequest extends MixOptions {
+  leftChannels: Float32Array[];
+  rightChannels: Float32Array[];
+  sampleRate?: number;
+}
+
+export function mixStereo(request: MixStereoRequest): MixResult;
 export function mixStereo(
   leftChannels: Float32Array[],
   rightChannels: Float32Array[],
+  sampleRate?: number,
+  options?: MixOptions,
+): MixResult;
+export function mixStereo(
+  leftChannels: Float32Array[] | MixStereoRequest,
+  rightChannels?: Float32Array[],
   sampleRate = 48000,
   options: MixOptions = {},
 ): MixResult {
-  return addon.mixStereo(leftChannels, rightChannels, sampleRate, options);
+  const request = Array.isArray(leftChannels)
+    ? { leftChannels, rightChannels: rightChannels as Float32Array[], sampleRate, ...options }
+    : leftChannels;
+  return addon.mixStereo(
+    request.leftChannels,
+    request.rightChannels,
+    request.sampleRate ?? 48000,
+    request,
+  );
 }
