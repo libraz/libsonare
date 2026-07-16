@@ -40,6 +40,7 @@
 #include "transport/tempo_map.h"
 #include "util/json.h"
 #include "util/numeric_validation.h"
+#include "util/resource_limits.h"
 #endif
 
 using namespace sonare_c_detail;
@@ -286,8 +287,9 @@ void fill_ump_from_arr_event(const arr::MidiClipEvent& event, const arr::MidiCon
 // One million UMP events is already tens of MiB in the intermediate vectors and
 // is large enough for practical project export while preventing a tiny loop
 // length from turning one accepted event into an unbounded allocation.
-inline constexpr size_t kMaxProjectMidiExportEvents = 1'000'000;
-inline constexpr size_t kMaxMidiExportLoopIterations = 1'000'000;
+inline constexpr size_t kMaxProjectMidiExportEvents = sonare::resource::kMaxProjectMidiExportEvents;
+inline constexpr size_t kMaxMidiExportLoopIterations =
+    sonare::resource::kMaxMidiExportLoopIterations;
 
 SonareError make_smf_clip_from_events(
     const arr::EditClip& clip, const arr::MidiClipEventList& events,

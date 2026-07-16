@@ -133,6 +133,29 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('addMidiClip undoes and redoes track, source, and clip as one edit', () => {
+    const project = Project.create();
+    const before = project.toJson();
+    project.addMidiClip(2, 4);
+    const added = project.toJson();
+    expect(project.trackCount()).toBe(1);
+    expect(project.sourceCount()).toBe(1);
+    expect(project.clipCount()).toBe(1);
+
+    project.undo();
+    expect(project.toJson()).toBe(before);
+    expect(project.trackCount()).toBe(0);
+    expect(project.sourceCount()).toBe(0);
+    expect(project.clipCount()).toBe(0);
+
+    project.redo();
+    expect(project.toJson()).toBe(added);
+    expect(project.trackCount()).toBe(1);
+    expect(project.sourceCount()).toBe(1);
+    expect(project.clipCount()).toBe(1);
+    project.destroy();
+  });
+
   it('routes a track to a MIDI destination and undoes it', () => {
     const project = Project.create();
     const trackId = project.addTrack({ kind: 'midi', name: 'lead' });

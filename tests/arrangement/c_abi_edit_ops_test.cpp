@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "c_api/project_internal.h"
+
 namespace {
 
 // Serializes the project to deterministic JSON for deep-equality comparisons.
@@ -71,6 +73,121 @@ AudioFixture add_audio_track_clip(SonareProject* project, double start_ppq, doub
 }
 
 }  // namespace
+
+TEST_CASE("C-ABI add_clip owns decoded audio in one undo transaction", "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "audio";
+  uint32_t track_id = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track_id) == SONARE_OK);
+  const std::string before = serialize(project);
+
+  const std::vector<float> audio = {0.25f, -0.25f, 0.5f, -0.5f};
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track_id;
+  clip_desc.length_ppq = 1.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = audio.data();
+  clip_desc.audio_frames = 2;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+  uint32_t clip_id = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip_id) == SONARE_OK);
+  const std::string added = serialize(project);
+
+  size_t count = 0;
+  REQUIRE(sonare_project_source_count(project, &count) == SONARE_OK);
+  REQUIRE(count == 1);
+  REQUIRE(project->audio.sources.size() == 1);
+  const arr::SourceId source_id = project->audio.sources.begin()->first;
+  REQUIRE(project->audio.sources.at(source_id).channels[0] == std::vector<float>{0.25f, 0.5f});
+  REQUIRE(project->audio.sources.at(source_id).channels[1] == std::vector<float>{-0.25f, -0.5f});
+
+  // One undo removes the clip, its source metadata, and decoded sample owner.
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+  REQUIRE(sonare_project_source_count(project, &count) == SONARE_OK);
+  REQUIRE(count == 0);
+  REQUIRE(project->audio.sources.empty());
+
+  // Redo restores the same ids, bytes, and sample content in one step.
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == added);
+  REQUIRE(project->audio.sources.size() == 1);
+  REQUIRE(project->audio.sources.at(source_id).channels[0] == std::vector<float>{0.25f, 0.5f});
+
+  // A later command failure (overlap rejection) rolls the source metadata back
+  // before the audio transfer command runs, leaving the existing store exact.
+  uint32_t failed_clip_id = 123;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &failed_clip_id) ==
+          SONARE_ERROR_INVALID_STATE);
+  REQUIRE(failed_clip_id == 0);
+  REQUIRE(serialize(project) == added);
+  REQUIRE(project->audio.sources.size() == 1);
+  REQUIRE(project->audio.sources.at(source_id).channels[0] == std::vector<float>{0.25f, 0.5f});
+
+  SonareProjectCompileResult compile{};
+  REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
+  REQUIRE(compile.has_timeline == 1);
+  sonare_project_free_compile_result(&compile);
+
+  // Discarding the redo branch releases history-owned detached audio rather
+  // than returning it to AudioContentStore as an orphan.
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(project->audio.sources.empty());
+  REQUIRE(sonare_project_rename_track(project, track_id, "renamed") == SONARE_OK);
+  REQUIRE(sonare_project_redo(project) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(project->audio.sources.empty());
+  REQUIRE(sonare_project_source_count(project, &count) == SONARE_OK);
+  REQUIRE(count == 0);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("C-ABI add_midi_clip creates track source and clip as one transaction",
+          "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const std::string before = serialize(project);
+
+  uint32_t track_id = 0;
+  uint32_t clip_id = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 2.0, 4.0, &track_id, &clip_id) == SONARE_OK);
+  const std::string added = serialize(project);
+
+  size_t track_count = 0;
+  size_t clip_count = 0;
+  size_t source_count = 0;
+  REQUIRE(sonare_project_track_count(project, &track_count) == SONARE_OK);
+  REQUIRE(sonare_project_clip_count(project, &clip_count) == SONARE_OK);
+  REQUIRE(sonare_project_source_count(project, &source_count) == SONARE_OK);
+  REQUIRE(track_count == 1);
+  REQUIRE(clip_count == 1);
+  REQUIRE(source_count == 1);
+
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+  REQUIRE(sonare_project_track_count(project, &track_count) == SONARE_OK);
+  REQUIRE(sonare_project_clip_count(project, &clip_count) == SONARE_OK);
+  REQUIRE(sonare_project_source_count(project, &source_count) == SONARE_OK);
+  REQUIRE(track_count == 0);
+  REQUIRE(clip_count == 0);
+  REQUIRE(source_count == 0);
+
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == added);
+  REQUIRE(sonare_project_track_count(project, &track_count) == SONARE_OK);
+  REQUIRE(sonare_project_clip_count(project, &clip_count) == SONARE_OK);
+  REQUIRE(sonare_project_source_count(project, &source_count) == SONARE_OK);
+  REQUIRE(track_count == 1);
+  REQUIRE(clip_count == 1);
+  REQUIRE(source_count == 1);
+
+  sonare_project_destroy(project);
+}
 
 TEST_CASE("C-ABI remove_clip removes and undo restores", "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
@@ -329,6 +446,7 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   track.kind = SONARE_TRACK_AUDIO;
   uint32_t track_id = 0;
   REQUIRE(sonare_project_add_track(project, &track, &track_id) == SONARE_OK);
+  const std::string before = serialize(project);
 
   std::vector<float> audio(48000, 0.0f);
   std::fill(audio.begin(), audio.begin() + 24000, 0.25f);
@@ -348,6 +466,7 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
           SONARE_OK);
   REQUIRE(clip_id != 0);
   REQUIRE(take_count == 2);
+  REQUIRE(project->audio.sources.size() == 2);
 
   const std::string json = serialize(project);
   REQUIRE(json.find("\"takes\"") != std::string::npos);
@@ -361,7 +480,19 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
 
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   const std::string undone = serialize(project);
-  REQUIRE(undone.find("\"clips\":[]") != std::string::npos);
+  REQUIRE(undone == before);
+  REQUIRE(project->audio.sources.empty());
+
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == json);
+  REQUIRE(project->audio.sources.size() == 2);
+  REQUIRE(sonare_project_compile(project, &compile) == SONARE_OK);
+  REQUIRE(compile.has_timeline == 1);
+  sonare_project_free_compile_result(&compile);
+
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == before);
+  REQUIRE(project->audio.sources.empty());
 
   desc.track_id = 9999;
   REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count) ==

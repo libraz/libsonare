@@ -285,17 +285,21 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
                                      uint32_t* out_track_id);
 
 /// @brief Adds a clip (audio or MIDI per @p desc); returns the allocated clip id.
+///        Source registration, clip insertion, and decoded audio ownership are
+///        one undo transaction. One undo removes all three; redo restores them.
 SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectClipDesc* desc,
                                     uint32_t* out_clip_id);
 
 /// @brief Splits captured loop-recording audio into takes and adds one clip.
-///        Returns the allocated clip id and optional take count.
+///        Returns the allocated clip id and optional take count. All take
+///        sources, decoded buffers, and the clip form one undo transaction.
 SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
                                                     const SonareProjectLoopRecordingDesc* desc,
                                                     uint32_t* out_clip_id, size_t* out_take_count);
 
 /// @brief Convenience wrapper that creates a MIDI track + a MIDI clip on it.
-///        Returns the allocated track and clip ids. @p length_ppq must be > 0.
+///        The track, source, and clip form one undo transaction. Returns the
+///        allocated track and clip ids. @p length_ppq must be > 0.
 SonareError sonare_project_add_midi_clip(SonareProject* project, double start_ppq,
                                          double length_ppq, uint32_t* out_track_id,
                                          uint32_t* out_clip_id);

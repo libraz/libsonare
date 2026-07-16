@@ -25,6 +25,88 @@ static_assert(static_cast<uint32_t>(arr::OverlapPolicy::kAllow) == SONARE_PROJEC
 
 namespace {
 
+enum class AudioContentTransferDirection { kStore, kHistory };
+
+/// Shared ownership state for decoded audio added by a compound public edit.
+///
+/// While the edit is applied, `contents` is empty and the samples live only in
+/// AudioContentStore. Undo extracts the map nodes into this history-owned state;
+/// redo inserts the same nodes back without copying their sample buffers. If an
+/// undone edit's redo branch is discarded, destroying the history entry also
+/// destroys the detached samples, so decoded audio cannot survive as an orphan.
+struct AudioContentTransferState {
+  arr::AudioContentStore* store = nullptr;
+  std::vector<arr::SourceId> source_ids;
+  std::map<arr::SourceId, arr::AudioSourceSamples> contents;
+};
+
+class TransferAudioContent final : public arr::EditCommand {
+ public:
+  TransferAudioContent(std::shared_ptr<AudioContentTransferState> state,
+                       AudioContentTransferDirection direction)
+      : state_(std::move(state)), direction_(direction) {}
+
+  bool apply(arr::Project& /*project*/, arr::MidiContentStore& /*midi*/) override {
+    if (state_ == nullptr || state_->store == nullptr || state_->source_ids.empty()) {
+      return false;
+    }
+    auto& store = state_->store->sources;
+    auto& contents = state_->contents;
+    if (direction_ == AudioContentTransferDirection::kStore) {
+      if (contents.size() != state_->source_ids.size()) return false;
+      for (arr::SourceId id : state_->source_ids) {
+        if (contents.find(id) == contents.end() || store.find(id) != store.end()) return false;
+      }
+      for (arr::SourceId id : state_->source_ids) {
+        store.insert(contents.extract(id));
+      }
+      return true;
+    }
+
+    if (!contents.empty()) return false;
+    for (arr::SourceId id : state_->source_ids) {
+      if (store.find(id) == store.end()) return false;
+    }
+    for (arr::SourceId id : state_->source_ids) {
+      contents.insert(store.extract(id));
+    }
+    return true;
+  }
+
+  arr::EditCommandPtr invert(const arr::Project& /*before*/,
+                             const arr::MidiContentStore& /*midi_before*/) const override {
+    const auto inverse = direction_ == AudioContentTransferDirection::kStore
+                             ? AudioContentTransferDirection::kHistory
+                             : AudioContentTransferDirection::kStore;
+    return std::make_unique<TransferAudioContent>(state_, inverse);
+  }
+
+  const char* type_name() const noexcept override { return "TransferAudioContent"; }
+
+ private:
+  std::shared_ptr<AudioContentTransferState> state_;
+  AudioContentTransferDirection direction_;
+};
+
+arr::EditCommandPtr make_store_audio_content_command(
+    arr::AudioContentStore* store, std::map<arr::SourceId, arr::AudioSourceSamples> contents) {
+  if (store == nullptr || contents.empty()) return nullptr;
+  auto state = std::make_shared<AudioContentTransferState>();
+  state->store = store;
+  state->source_ids.reserve(contents.size());
+  for (const auto& [source_id, samples] : contents) {
+    (void)samples;
+    state->source_ids.push_back(source_id);
+  }
+  state->contents = std::move(contents);
+  return std::make_unique<TransferAudioContent>(std::move(state),
+                                                AudioContentTransferDirection::kStore);
+}
+
+bool valid_next_id(uint32_t id) noexcept {
+  return id != 0 && id != std::numeric_limits<uint32_t>::max();
+}
+
 // Validates a fade desc and copies it into an arrangement ClipFade. Returns
 // SONARE_OK on success; the fade length must be finite and >= 0 and the curve
 // ordinal in range.
@@ -106,16 +188,19 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
       desc->is_midi == 0 ? validate_audio_clip_payload(desc, nullptr) : SONARE_OK;
   if (audio_err != SONARE_OK) return audio_err;
   SONARE_C_TRY
-  const size_t rollback_depth = project->history.undo_depth();
-  // Register the clip source (audio or MIDI) through a command, then add the
-  // clip. Both mutations go through EditHistory so they participate in undo.
-  arr::SourceId source_id = 0;
+  const arr::SourceId source_id = project->history.project().next_source_id();
+  const arr::ClipId clip_id = project->history.project().next_clip_id();
+  if (!valid_next_id(source_id) || !valid_next_id(clip_id)) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
+
+  std::vector<arr::EditCommandPtr> commands;
+  commands.reserve(3);
+  std::map<arr::SourceId, arr::AudioSourceSamples> audio_contents;
   if (desc->is_midi != 0) {
     arr::MidiSourceRef ref;
     auto attach = std::make_unique<arr::AttachMidiSource>(ref);
-    arr::AttachMidiSource* raw = attach.get();
-    if (!project->history.apply(std::move(attach))) return SONARE_ERROR_INVALID_STATE;
-    source_id = raw->allocated_id();
+    commands.push_back(std::move(attach));
   } else {
     arr::AudioSourceRef ref;
     if (desc->source_uri) ref.uri = desc->source_uri;
@@ -125,9 +210,7 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
       ref.sample_rate_hint = static_cast<double>(desc->audio_sample_rate);
     }
     auto attach = std::make_unique<arr::AttachAudioSource>(ref);
-    arr::AttachAudioSource* raw = attach.get();
-    if (!project->history.apply(std::move(attach))) return SONARE_ERROR_INVALID_STATE;
-    source_id = raw->allocated_id();
+    commands.push_back(std::move(attach));
 
     if (desc->audio_interleaved && desc->audio_frames > 0 && desc->audio_channels > 0 &&
         desc->audio_sample_rate > 0) {
@@ -135,7 +218,7 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
       samples.sample_rate = static_cast<double>(desc->audio_sample_rate);
       samples.channels =
           deinterleave(desc->audio_interleaved, desc->audio_frames, desc->audio_channels);
-      project->audio.sources[source_id] = std::move(samples);
+      audio_contents.emplace(source_id, std::move(samples));
     }
   }
 
@@ -149,13 +232,15 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
   // 0 is a legitimately silent clip, not a request for unity. No coercion here.
   clip.gain = desc->gain;
   auto command = std::make_unique<arr::AddClip>(clip);
-  arr::AddClip* raw = command.get();
-  if (!project->history.apply(std::move(command)) || raw->allocated_id() == 0) {
-    project->audio.sources.erase(source_id);
-    rollback_to_depth(project, rollback_depth);
+  commands.push_back(std::move(command));
+  if (!audio_contents.empty()) {
+    commands.push_back(
+        make_store_audio_content_command(&project->audio, std::move(audio_contents)));
+  }
+  if (!project->history.apply_transaction(std::move(commands))) {
     return SONARE_ERROR_INVALID_STATE;
   }
-  *out_clip_id = raw->allocated_id();
+  *out_clip_id = clip_id;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -230,23 +315,19 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  const size_t rollback_depth = project->history.undo_depth();
+  const arr::SourceId first_source_id = project->history.project().next_source_id();
+  const arr::ClipId clip_id = project->history.project().next_clip_id();
+  const auto reserved_id = std::numeric_limits<uint32_t>::max();
+  if (!valid_next_id(first_source_id) || !valid_next_id(clip_id) ||
+      take_count > static_cast<size_t>(reserved_id - first_source_id)) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
+
   std::vector<arr::SourceId> source_ids;
   source_ids.reserve(take_count);
-  struct LoopRecordingRollback {
-    SonareProject* project = nullptr;
-    size_t rollback_depth = 0;
-    std::vector<arr::SourceId>* source_ids = nullptr;
-    bool committed = false;
-
-    ~LoopRecordingRollback() {
-      if (committed || project == nullptr || source_ids == nullptr) return;
-      for (arr::SourceId id : *source_ids) {
-        project->audio.sources.erase(id);
-      }
-      rollback_to_depth(project, rollback_depth);
-    }
-  } rollback{project, rollback_depth, &source_ids, false};
+  std::vector<arr::EditCommandPtr> commands;
+  commands.reserve(take_count + 2);
+  std::map<arr::SourceId, arr::AudioSourceSamples> audio_contents;
 
   for (size_t take_index = 0; take_index < take_count; ++take_index) {
     const int64_t frame_start = static_cast<int64_t>(take_index) * loop_audio_frames;
@@ -258,18 +339,15 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
     ref.channel_count = static_cast<uint32_t>(desc->audio_channels);
     ref.sample_rate_hint = static_cast<double>(desc->audio_sample_rate);
     auto attach = std::make_unique<arr::AttachAudioSource>(ref);
-    arr::AttachAudioSource* raw = attach.get();
-    if (!project->history.apply(std::move(attach))) {
-      return SONARE_ERROR_INVALID_STATE;
-    }
-    const arr::SourceId source_id = raw->allocated_id();
+    const arr::SourceId source_id = first_source_id + static_cast<arr::SourceId>(take_index);
+    commands.push_back(std::move(attach));
     source_ids.push_back(source_id);
 
     arr::AudioSourceSamples samples;
     samples.sample_rate = static_cast<double>(desc->audio_sample_rate);
     samples.channels = deinterleave(desc->audio_interleaved + frame_start * desc->audio_channels,
                                     frame_count, desc->audio_channels);
-    project->audio.sources[source_id] = std::move(samples);
+    audio_contents.emplace(source_id, std::move(samples));
   }
   if (source_ids.empty()) {
     return SONARE_ERROR_INVALID_STATE;
@@ -289,13 +367,13 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
   }
 
   auto command = std::make_unique<arr::AddClip>(clip);
-  arr::AddClip* raw = command.get();
-  if (!project->history.apply(std::move(command)) || raw->allocated_id() == 0) {
+  commands.push_back(std::move(command));
+  commands.push_back(make_store_audio_content_command(&project->audio, std::move(audio_contents)));
+  if (!project->history.apply_transaction(std::move(commands))) {
     return SONARE_ERROR_INVALID_STATE;
   }
-  *out_clip_id = raw->allocated_id();
+  *out_clip_id = clip_id;
   if (out_take_count) *out_take_count = source_ids.size();
-  rollback.committed = true;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -314,27 +392,42 @@ SonareError sonare_project_add_midi_clip(SonareProject* project, double start_pp
       !finite_positive(length_ppq)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const size_t rollback_depth = project->history.undo_depth();
-
-  SonareProjectTrackDesc track_desc{};
-  track_desc.kind = SONARE_TRACK_MIDI;
-  track_desc.name = "midi";
-  SonareError err = sonare_project_add_track(project, &track_desc, out_track_id);
-  if (err != SONARE_OK) {
-    rollback_to_depth(project, rollback_depth);
-    return err;
+  SONARE_C_TRY
+  const arr::TrackId track_id = project->history.project().next_track_id();
+  const arr::SourceId source_id = project->history.project().next_source_id();
+  const arr::ClipId clip_id = project->history.project().next_clip_id();
+  if (!valid_next_id(track_id) || !valid_next_id(source_id) || !valid_next_id(clip_id)) {
+    return SONARE_ERROR_INVALID_STATE;
   }
 
-  SonareProjectClipDesc clip_desc{};
-  clip_desc.track_id = *out_track_id;
-  clip_desc.is_midi = 1;
-  clip_desc.start_ppq = start_ppq;
-  clip_desc.length_ppq = length_ppq;
-  err = sonare_project_add_clip(project, &clip_desc, out_clip_id);
-  if (err != SONARE_OK) {
-    rollback_to_depth(project, rollback_depth);
+  std::vector<arr::EditCommandPtr> commands;
+  commands.reserve(3);
+
+  arr::Track track;
+  track.kind = arr::Track::Kind::kMidi;
+  track.name = "midi";
+  auto add_track = std::make_unique<arr::AddTrack>(std::move(track));
+  commands.push_back(std::move(add_track));
+
+  auto attach = std::make_unique<arr::AttachMidiSource>(arr::MidiSourceRef{});
+  commands.push_back(std::move(attach));
+
+  arr::EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.start_ppq = start_ppq;
+  clip.length_ppq = length_ppq;
+  clip.gain = 0.0f;
+  auto add_clip = std::make_unique<arr::AddClip>(std::move(clip));
+  commands.push_back(std::move(add_clip));
+
+  if (!project->history.apply_transaction(std::move(commands))) {
+    return SONARE_ERROR_INVALID_STATE;
   }
-  return err;
+  *out_track_id = track_id;
+  *out_clip_id = clip_id;
+  return SONARE_OK;
+  SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, start_ppq, length_ppq, out_track_id, out_clip_id);
 #endif

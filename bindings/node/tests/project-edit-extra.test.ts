@@ -178,6 +178,7 @@ describe('Project edit ops (new bindings)', () => {
     const project = Project.create();
     project.setSampleRate(48000);
     const track = project.addTrack({ kind: 'audio', name: 'record' });
+    const before = project.toJson();
     const audio = new Float32Array(48000);
     audio.fill(0.25, 0, 24000);
     audio.fill(0.75, 24000);
@@ -193,8 +194,14 @@ describe('Project edit ops (new bindings)', () => {
     expect(result.clipId).toBeGreaterThan(0);
     expect(result.takeCount).toBe(2);
     expect(project.toJson()).toContain('"active_take_id":2');
+    expect(project.sourceCount()).toBe(2);
+    const added = project.toJson();
     project.undo();
-    expect(project.toJson()).toContain('"clips":[]');
+    expect(project.toJson()).toBe(before);
+    expect(project.sourceCount()).toBe(0);
+    project.redo();
+    expect(project.toJson()).toBe(added);
+    expect(project.sourceCount()).toBe(2);
     project.destroy();
   });
 

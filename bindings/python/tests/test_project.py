@@ -452,6 +452,31 @@ def test_undo_on_empty_stack_raises() -> None:
         project.close()
 
 
+def test_add_midi_clip_is_one_undo_transaction() -> None:
+    project = Project()
+    try:
+        before = project.to_json_bytes()
+        project.add_midi_clip(2.0, 4.0)
+        added = project.to_json_bytes()
+        assert project.track_count() == 1
+        assert project.source_count() == 1
+        assert project.clip_count() == 1
+
+        project.undo()
+        assert project.to_json_bytes() == before
+        assert project.track_count() == 0
+        assert project.source_count() == 0
+        assert project.clip_count() == 0
+
+        project.redo()
+        assert project.to_json_bytes() == added
+        assert project.track_count() == 1
+        assert project.source_count() == 1
+        assert project.clip_count() == 1
+    finally:
+        project.close()
+
+
 def test_set_track_midi_destination_round_trips_and_undoes() -> None:
     project = Project()
     try:
@@ -556,6 +581,7 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
     try:
         project.set_sample_rate(48000.0)
         track_id = project.add_track("audio", "record")
+        before = project.to_json_bytes()
         audio = np.empty(48000, dtype=np.float32)
         audio[:24000] = 0.25
         audio[24000:] = 0.75
@@ -573,9 +599,14 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
         json = project.to_json_bytes()
         assert b'"takes"' in json
         assert b'"active_take_id":2' in json
+        assert project.source_count() == 2
 
         project.undo()
-        assert b'"clips":[]' in project.to_json_bytes()
+        assert project.to_json_bytes() == before
+        assert project.source_count() == 0
+        project.redo()
+        assert project.to_json_bytes() == json
+        assert project.source_count() == 2
     finally:
         project.close()
 
