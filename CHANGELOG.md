@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.5.2 (2026-07-16)
+
+This release adds a spectral-reconstruction path and a handful of additive analysis, project and streaming surfaces, and continues the v1.5.1 hardening pass across the mastering, mixing, MIDI-import and realtime-thread paths.
+
+### New surfaces
+
+- `sonare_griffinlim_cqt` / `sonare_griffinlim_vqt` reconstruct a time-domain signal from a constant-Q or variable-Q magnitude spectrogram via Griffin-Lim, callable on the Node, Python, WASM and C-ABI surfaces.
+- The chord analyzer now reports an explicit no-chord (N.C.) interval whenever the frame correlation falls below the detection threshold, surfaced on every binding instead of silently dropping the segment.
+- Compound clip edits go through the C-ABI project surface as a single undo transaction, so a multi-clip operation is undone or redone in one step across Node, Python and WASM.
+- The mastering processor catalog reports each insert's decay-tail length alongside its latency, wired into the typed Node, Python and WASM surfaces.
+- The Node realtime voice changer gained an explicit `destroy()` so its native resources can be released deterministically rather than on GC.
+- The WASM entry point re-exports the `ExternalMidiEvent` type.
+- Insert-automation scheduling failures are now classified through the mixing C ABI instead of returning a single opaque error.
+
+### Hardening and bug fixes
+
+- Streaming analysis bounds its chord-progression history and enforces contiguous frame offsets, rejecting out-of-order or gapped input.
+- Lane sidechain rebinding, live mixer parameters and realtime insert channel state are made safe against concurrent audio-thread processing, and realtime seqlock snapshots are stored in lock-free atomic words.
+- The mastering path validates named-processor configs before applying them and rejects non-finite loudness-optimize targets; the mixing path reports the longest audible tail.
+- Offline pitch-shift expansion is bounded by the shared resource limits.
+- MIDI import enforces SoundFont resource limits and rejects malformed records, overflowing SMF ticks and mismatched export track counts.
+- The core rejects non-finite and oversized time / pitch / VQT / chord inputs through new overflow-safe size, addition and projection helpers; project serialization rejects out-of-range enum and integer fields; and the engine bounds the public PPQ and guards timeline and MIDI-FX overflow.
+
 ## v1.5.1 (2026-07-14)
 
 This is a stabilization release for the v1.5.0 instrument and engine work: it hardens input validation across every surface, tightens realtime-thread safety, and fixes a set of mastering, warp and MIDI-import edge cases. A few small additive surfaces round out cross-binding parity.
