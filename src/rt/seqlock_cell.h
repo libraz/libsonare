@@ -95,7 +95,11 @@ class SeqlockCell {
 
   void store_words(const T& value) noexcept {
     PackedWords packed{};
-    std::memcpy(packed.data(), &value, sizeof(T));
+    // T is trivially copyable (asserted above); the void* cast keeps GCC's
+    // -Wclass-memaccess from flagging the copy when T merely has a user-declared
+    // default constructor or default member initializers (non-trivial, but still
+    // trivially copyable).
+    std::memcpy(packed.data(), static_cast<const void*>(&value), sizeof(T));
     for (size_t index = 0; index < kWordCount; ++index) {
       value_words_[index].store(packed[index], std::memory_order_relaxed);
     }
@@ -107,7 +111,7 @@ class SeqlockCell {
       packed[index] = value_words_[index].load(std::memory_order_relaxed);
     }
     T value{};
-    std::memcpy(&value, packed.data(), sizeof(T));
+    std::memcpy(static_cast<void*>(&value), packed.data(), sizeof(T));
     return value;
   }
 
