@@ -23,12 +23,15 @@
 ///
 /// The guard transitions use release on the writer side and acquire on the
 /// reader side, with an acquire fence between the value copy and the second
-/// guard load, so the copy cannot be reordered past the guard check. `T` must
-/// be trivially copyable; the value field is plain (the guard alone provides
-/// the synchronization), matching the original hand-written implementations.
+/// guard load, so the copy cannot be reordered past the guard check. The value
+/// is stored as lock-free atomic 32-bit words: a guard cannot make concurrent
+/// access to a plain POD legal in the C++ memory model, even when torn reads are
+/// detected and discarded. `T` must be trivially copyable.
 
+#include <array>
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <type_traits>
 
 namespace sonare::rt {
@@ -40,16 +43,17 @@ class SeqlockCell {
  public:
   static_assert(std::is_trivially_copyable<T>::value,
                 "SeqlockCell<T> requires a trivially copyable snapshot type");
+  static_assert(std::atomic<uint32_t>::is_always_lock_free,
+                "SeqlockCell requires lock-free 32-bit atomics");
 
-  SeqlockCell() = default;
-  explicit SeqlockCell(const T& initial) : value_(initial), cached_(initial) {}
+  SeqlockCell() noexcept { store_words(T{}); }
+  explicit SeqlockCell(const T& initial) noexcept : cached_(initial) { store_words(initial); }
 
   /// @brief Publishes a new snapshot. Control-thread only. The guard is odd for
   ///        the duration of the store so a concurrent reader detects the write.
   void store(const T& value) noexcept {
-    guard_.fetch_add(1, std::memory_order_release);  // now odd: write in progress
-    std::atomic_thread_fence(std::memory_order_release);
-    value_ = value;
+    guard_.fetch_add(1, std::memory_order_acq_rel);  // now odd: write in progress
+    store_words(value);
     guard_.fetch_add(1, std::memory_order_release);  // now even: write complete
   }
 
@@ -59,7 +63,7 @@ class SeqlockCell {
     for (;;) {
       const uint32_t g1 = guard_.load(std::memory_order_acquire);
       if (g1 & 1u) continue;  // writer mid-update
-      T copy = value_;
+      const T copy = load_words();
       std::atomic_thread_fence(std::memory_order_acquire);
       const uint32_t g2 = guard_.load(std::memory_order_acquire);
       if (g1 == g2) return copy;
@@ -74,7 +78,7 @@ class SeqlockCell {
   T try_load() const noexcept {
     const uint32_t g1 = guard_.load(std::memory_order_acquire);
     if ((g1 & 1u) == 0u) {  // not mid-update
-      T copy = value_;
+      const T copy = load_words();
       std::atomic_thread_fence(std::memory_order_acquire);
       const uint32_t g2 = guard_.load(std::memory_order_acquire);
       if (g1 == g2) {
@@ -86,9 +90,28 @@ class SeqlockCell {
   }
 
  private:
-  // Plain value; the guard provides the synchronization (matches the original
-  // hand-written seqlocks). Mutable so const readers can update the fallback.
-  mutable T value_{};
+  static constexpr size_t kWordCount = (sizeof(T) + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+  using PackedWords = std::array<uint32_t, kWordCount>;
+
+  void store_words(const T& value) noexcept {
+    PackedWords packed{};
+    std::memcpy(packed.data(), &value, sizeof(T));
+    for (size_t index = 0; index < kWordCount; ++index) {
+      value_words_[index].store(packed[index], std::memory_order_relaxed);
+    }
+  }
+
+  T load_words() const noexcept {
+    PackedWords packed{};
+    for (size_t index = 0; index < kWordCount; ++index) {
+      packed[index] = value_words_[index].load(std::memory_order_relaxed);
+    }
+    T value{};
+    std::memcpy(&value, packed.data(), sizeof(T));
+    return value;
+  }
+
+  std::array<std::atomic<uint32_t>, kWordCount> value_words_{};
   mutable std::atomic<uint32_t> guard_{0};
   // Last torn-free value observed by try_load(); the audio-thread fallback.
   mutable T cached_{};
