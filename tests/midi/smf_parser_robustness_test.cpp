@@ -8,6 +8,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "midi/midi_clip.h"
@@ -232,6 +233,41 @@ TEST_CASE("SMF export clamps a delta beyond the 4-byte VLQ range so it re-import
   }
   REQUIRE(note_off_ppq == Catch::Approx(clamped_ppq));
   REQUIRE(note_off_ppq < 600000.0);
+}
+
+TEST_CASE("SMF import keeps cumulative ticks beyond uint32 without wrapping", "[midi][smf_tick]") {
+  std::vector<uint8_t> body;
+  constexpr int kEvents = 17;
+  for (int i = 0; i < kEvents; ++i) {
+    body.insert(body.end(), {0xFF, 0xFF, 0xFF, 0x7F});  // max 28-bit delta
+    body.insert(body.end(), {0x90, static_cast<uint8_t>(60 + (i % 4)), 0x40});
+  }
+  body.insert(body.end(), {0x00, 0xFF, 0x2F, 0x00});
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == kEvents);
+  const double expected_ticks = static_cast<double>(kEvents) * static_cast<double>(0x0FFFFFFF);
+  REQUIRE(imported.clips[0].events().back().ppq == Catch::Approx(expected_ticks / 480.0));
+  REQUIRE(imported.clips[0].events().back().ppq >
+          static_cast<double>(std::numeric_limits<uint32_t>::max()) / 480.0);
+}
+
+TEST_CASE("SMF export enforces the 16-bit track-count boundary", "[midi][smf_track_count][slow]") {
+  constexpr size_t kMaxDataTracks = static_cast<size_t>(std::numeric_limits<uint16_t>::max()) - 1;
+  std::vector<MidiClip> clips(kMaxDataTracks);
+  const auto boundary = export_smf(clips, {}, {});
+  REQUIRE(boundary.ok());
+  REQUIRE(boundary.bytes.size() >= 12);
+  REQUIRE(boundary.bytes[10] == 0xFF);
+  REQUIRE(boundary.bytes[11] == 0xFF);
+
+  clips.emplace_back();
+  const auto overflow = export_smf(clips, {}, {});
+  REQUIRE_FALSE(overflow.ok());
+  REQUIRE(overflow.bytes.empty());
+  REQUIRE(overflow.diagnostic.find("65534") != std::string::npos);
 }
 
 // An intervening event discards a pending split SysEx so a later F7 packet

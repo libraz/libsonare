@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 
 #include "midi/tick_conversion.h"
 #include "midi/ump.h"
@@ -215,11 +216,12 @@ struct TrackParseState {
 bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* track,
                  std::vector<transport::TempoSegment>* tempos,
                  std::vector<transport::TimeSignatureSegment>* time_sigs,
-                 std::vector<SmfMarker>* markers, SysExStore* sysex_store, uint32_t* skipped) {
+                 std::vector<SmfMarker>* markers, SysExStore* sysex_store, uint32_t* skipped,
+                 bool* timing_overflow) {
   const size_t end_pos = reader->pos() + length;
   if (length > reader->remaining()) return false;
 
-  uint32_t tick = 0;
+  uint64_t tick = 0;
   uint8_t running_status = 0;
   bool saw_end_of_track = false;
   std::vector<uint8_t> pending_sysex;
@@ -248,7 +250,11 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     const uint32_t delta = reader->vlq();
     if (reader->overflow()) return false;
     if (reader->pos() > end_pos) break;  // A VLQ delta ran past the track end.
-    tick += delta;
+    if (tick > std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(delta)) {
+      *timing_overflow = true;
+      return false;
+    }
+    tick += static_cast<uint64_t>(delta);
     const double ppq = smf_ticks_to_ppq(tick, ppqn);
 
     if (track_remaining() == 0) break;  // No room for a status byte.
@@ -573,11 +579,13 @@ SmfImportResult import_smf(const uint8_t* data, size_t size) {
     }
 
     TrackParseState track;
+    bool timing_overflow = false;
     if (!parse_track(&reader, track_len, division, &track, &result.tempo_segments,
                      &result.time_signatures, &result.markers, &result.sysex_store,
-                     &result.skipped_events)) {
-      result.status = SmfStatus::kTruncated;
-      result.diagnostic = "malformed or truncated track data";
+                     &result.skipped_events, &timing_overflow)) {
+      result.status = timing_overflow ? SmfStatus::kBadTrack : SmfStatus::kTruncated;
+      result.diagnostic = timing_overflow ? "cumulative SMF tick exceeds uint64 range"
+                                          : "malformed or truncated track data";
       return result;
     }
 
@@ -664,8 +672,16 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
   SmfExportResult result;
   const uint16_t ppqn = options.ticks_per_quarter != 0 ? options.ticks_per_quarter : 480;
 
+  constexpr size_t kMaxDataTracks = static_cast<size_t>(std::numeric_limits<uint16_t>::max()) - 1;
+  if (clips.size() > kMaxDataTracks) {
+    result.status = SmfStatus::kInvalidArgument;
+    result.diagnostic = "SMF format 1 supports at most 65534 data tracks";
+    return result;
+  }
+
   // Header: format 1, num_tracks = 1 meta track + one per clip.
   const uint16_t num_tracks = static_cast<uint16_t>(1 + clips.size());
+  size_t written_tracks = 0;
   put_tag(&result.bytes, kMThd);
   put_u32(&result.bytes, 6);
   put_u16(&result.bytes, 1);  // Format 1.
@@ -770,6 +786,7 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     // End-of-track.
     put_meta(&body, 0, kMetaEndOfTrack, nullptr, 0);
     append_track_chunk(&result.bytes, body);
+    ++written_tracks;
   }
 
   // -------- One MTrk per clip. --------
@@ -836,6 +853,14 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     }
     put_meta(&body, 0, kMetaEndOfTrack, nullptr, 0);
     append_track_chunk(&result.bytes, body);
+    ++written_tracks;
+  }
+
+  if (written_tracks != static_cast<size_t>(num_tracks)) {
+    result.status = SmfStatus::kBadTrack;
+    result.diagnostic = "SMF header track count does not match emitted MTrk chunks";
+    result.bytes.clear();
+    return result;
   }
 
   result.status = SmfStatus::kOk;

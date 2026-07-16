@@ -177,7 +177,9 @@ struct SmfExportResult {
 /// when `options.sysex_store` can resolve the payload. `clip_names` (if
 /// non-empty and index-parallel to `clips`) supplies per-track name meta events.
 /// The result is round-trippable through @ref import_smf for MIDI 1.0
-/// channel-voice data and stored SysEx payloads.
+/// channel-voice data and stored SysEx payloads. Format 1 reserves one 16-bit
+/// track-count slot for the conductor track, so more than 65,534 clips are
+/// rejected before any output bytes are written.
 SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                            const std::vector<transport::TempoSegment>& tempo_segments,
                            const std::vector<transport::TimeSignatureSegment>& time_signatures,

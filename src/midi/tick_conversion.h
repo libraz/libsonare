@@ -28,7 +28,7 @@ inline double clock_ticks_to_ppq(int64_t ticks) noexcept {
 
 /// @brief SMF ticks at `ppqn` resolution -> PPQ (quarter-note units, matching
 ///        MidiClipEvent::ppq). Returns 0 for a degenerate `ppqn` of 0.
-inline double smf_ticks_to_ppq(uint32_t ticks, uint16_t ppqn) noexcept {
+inline double smf_ticks_to_ppq(uint64_t ticks, uint16_t ppqn) noexcept {
   if (ppqn == 0) return 0.0;
   return static_cast<double>(ticks) / static_cast<double>(ppqn);
 }
