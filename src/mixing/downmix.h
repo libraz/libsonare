@@ -10,6 +10,7 @@
 #include <cstddef>
 
 #include "core/channel_layout.h"
+#include "util/constants.h"
 
 namespace sonare::mixing {
 
@@ -17,7 +18,7 @@ namespace sonare::mixing {
 namespace downmix_coeff {
 /// -3 dB attenuation (1/sqrt(2)) applied to the center and surround feeds when
 /// folding them into the front L/R pair.
-inline constexpr float kMinus3dB = 0.70710678118654752f;
+inline constexpr float kMinus3dB = sonare::constants::kInvSqrt2;
 }  // namespace downmix_coeff
 
 /// Downmix options. Defaults match the BS.775 stereo deliverable: LFE dropped,

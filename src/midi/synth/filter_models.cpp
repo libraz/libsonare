@@ -3,17 +3,17 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare::midi::synth {
 
 namespace {
-
-constexpr float kPi = 3.14159265358979323846f;
 
 /// Bilinear prewarp: g = tan(pi * fc / sr), cutoff clamped like the SVF.
 float prewarp(float cutoff_hz, double sample_rate) noexcept {
   const float sr = static_cast<float>(sample_rate);
   const float fc = std::clamp(cutoff_hz, 10.0f, 0.49f * sr);
-  return std::tan(kPi * fc / sr);
+  return std::tan(constants::kPi * fc / sr);
 }
 
 /// Loop saturation shared by the ladder / Sallen-Key models: keeps the
@@ -24,7 +24,8 @@ float loop_tanh(float x) noexcept { return std::tanh(x); }
 }  // namespace
 
 float filter_resonance01_from_q(float q) noexcept {
-  return std::clamp((q - 0.707f) / (kSelfOscQ - 0.707f), 0.0f, 1.0f);
+  return std::clamp((q - constants::kButterworthQ) / (kSelfOscQ - constants::kButterworthQ), 0.0f,
+                    1.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +104,7 @@ void DiodeLadderFilter::set(float cutoff_hz, float resonance01) noexcept {
   // resonant peak ~1/sqrt(2) below the per-stage corner (Stinchcombe). Scale
   // the internal corner so the audible peak / self-oscillation lands on the
   // requested cutoff and the knob means the same across models.
-  const float g = prewarp(cutoff_hz * 1.41421356f, sample_rate_);
+  const float g = prewarp(cutoff_hz * constants::kSqrt2, sample_rate_);
   const float gp1 = 1.0f + g;
   const float g4 = 0.5f * g / gp1;
   const float g3 = 0.5f * g / (gp1 - 0.5f * g * g4);

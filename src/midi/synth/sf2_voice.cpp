@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare::midi::synth {
 
 namespace {
@@ -187,7 +189,7 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
   p.filter_fc_cents = static_cast<float>(gens.get(kGenInitialFilterFc)) + vel_offset;
   // initialFilterQ is the resonance peak height in centibels: Q = 10^(cB/200).
   const float q_cb = static_cast<float>(gens.get(kGenInitialFilterQ));
-  p.filter_q = std::max(0.707f, std::pow(10.0f, q_cb / 200.0f));
+  p.filter_q = std::max(constants::kButterworthQ, std::pow(10.0f, q_cb / 200.0f));
 
   // --- LFOs ---
   p.mod_lfo_delay_s =

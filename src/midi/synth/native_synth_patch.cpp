@@ -2,6 +2,7 @@
 #include <cmath>
 
 #include "midi/synth/native_synth.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -24,7 +25,9 @@ float sanitize(float value, float fallback) noexcept {
 
 }  // namespace
 
-float synth_note_to_hz(float note) noexcept { return 440.0f * std::exp2((note - 69.0f) / 12.0f); }
+float synth_note_to_hz(float note) noexcept {
+  return constants::kA4Hz * std::exp2((note - constants::kMidiA4) / constants::kSemitonesPerOctave);
+}
 
 NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthPatch p = patch;
@@ -36,7 +39,7 @@ NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noexcept {
   p.gain = std::clamp(sanitize(p.gain, 0.5f), 0.0f, 4.0f);
   p.amp_env = clamp_env(p.amp_env);
   p.cutoff_hz = std::clamp(sanitize(p.cutoff_hz, 12000.0f), 10.0f, 22000.0f);
-  p.resonance_q = std::clamp(sanitize(p.resonance_q, 0.707f), 0.5f, 30.0f);
+  p.resonance_q = std::clamp(sanitize(p.resonance_q, constants::kButterworthQ), 0.5f, 30.0f);
   p.drive = std::clamp(sanitize(p.drive, 0.0f), 0.0f, 1.0f);
   p.filter_env = clamp_env(p.filter_env);
   p.env_to_cutoff_cents = std::clamp(sanitize(p.env_to_cutoff_cents, 0.0f), -9600.0f, 9600.0f);

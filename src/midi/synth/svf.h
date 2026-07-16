@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare::midi::synth {
 
 class TptSvf {
@@ -38,8 +40,7 @@ class TptSvf {
   void set(float cutoff_hz, float q) noexcept {
     cutoff_hz_ = std::clamp(cutoff_hz, 10.0f, static_cast<float>(0.49 * sample_rate_));
     q_ = std::clamp(q, 0.5f, 100.0f);
-    const float g =
-        std::tan(3.14159265358979323846f * cutoff_hz_ / static_cast<float>(sample_rate_));
+    const float g = std::tan(constants::kPi * cutoff_hz_ / static_cast<float>(sample_rate_));
     k_ = 1.0f / q_;
     a1_ = 1.0f / (1.0f + g * (g + k_));
     a2_ = g * a1_;
@@ -71,8 +72,8 @@ class TptSvf {
  private:
   double sample_rate_ = 48000.0;
   float cutoff_hz_ = 1000.0f;
-  float q_ = 0.70710678f;
-  float k_ = 1.41421356f;
+  float q_ = constants::kButterworthQ;
+  float k_ = constants::kSqrt2;
   float a1_ = 0.0f;
   float a2_ = 0.0f;
   float a3_ = 0.0f;

@@ -4,13 +4,11 @@
 #include <cmath>
 
 #include "midi/ump.h"
+#include "util/constants.h"
 
 namespace sonare::midi {
 
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-constexpr double kTwoPi = 2.0 * kPi;
 
 float clampf(float v, float lo, float hi) noexcept { return std::min(std::max(v, lo), hi); }
 
@@ -22,7 +20,8 @@ float stage_increment(float ms, double sample_rate) noexcept {
 }
 
 double note_to_hz(uint8_t note) noexcept {
-  return 440.0 * std::pow(2.0, (static_cast<double>(note) - 69.0) / 12.0);
+  return constants::kA4Hz * std::pow(2.0, (static_cast<double>(note) - constants::kMidiA4) /
+                                              constants::kSemitonesPerOctave);
 }
 
 // Fixed MPE pitch-bend range (semitones for a full-scale bend in either
@@ -37,7 +36,7 @@ constexpr float kPressureModDepth = 1.0f;
 // Multiplier on the base phase increment for a bend expressed in semitones.
 double bend_ratio(float semitones) noexcept {
   if (semitones == 0.0f) return 1.0;
-  return std::pow(2.0, static_cast<double>(semitones) / 12.0);
+  return std::pow(2.0, static_cast<double>(semitones) / constants::kSemitonesPerOctave);
 }
 
 }  // namespace
@@ -332,7 +331,7 @@ float BuiltinSynth::render_voice_sample(Voice& v) noexcept {
   float osc = 0.0f;
   switch (config_.waveform) {
     case SynthWaveform::kSine:
-      osc = static_cast<float>(std::sin(kTwoPi * p));
+      osc = static_cast<float>(std::sin(constants::kTwoPiD * p));
       break;
     case SynthWaveform::kSaw:
       osc = static_cast<float>(2.0 * p - 1.0);

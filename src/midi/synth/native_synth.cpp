@@ -7,6 +7,7 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/voice_random.h"
 #include "midi/ump.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -142,7 +143,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     tail_samples_ += static_cast<int64_t>(sample_rate_ * kKsSympatheticRingS);
   }
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
-  dc_r_ = 1.0f - static_cast<float>(2.0 * 3.14159265358979 * 8.0 / sample_rate_);
+  dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
   dc_x1_ = {};
   dc_y1_ = {};
   bus_drive_gain_ = config_.bus_drive > 0.0f ? 1.0f + 3.0f * config_.bus_drive : 0.0f;
@@ -587,8 +588,7 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
     if (fc < 19000.0f) {
       swell_active = true;
       swell_coeff_ = std::clamp(
-          1.0f - std::exp(-2.0f * 3.14159265358979f * fc / static_cast<float>(sample_rate_)), 0.0f,
-          1.0f);
+          1.0f - std::exp(-constants::kTwoPi * fc / static_cast<float>(sample_rate_)), 0.0f, 1.0f);
     }
   }
 
@@ -658,12 +658,14 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
     }
     if (left != nullptr) {
       // Mono host: fold both pan legs so centre-panned voices keep level.
-      left[i] += mono ? 0.70710678f * (mix_l + mix_r) : mix_l;
+      left[i] += mono ? constants::kInvSqrt2 * (mix_l + mix_r) : mix_l;
     }
     if (right != nullptr) right[i] += mix_r;
     // Fan a mono fold-down to any additional channels.
     for (int ch = 2; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) channels[ch][i] += 0.70710678f * (mix_l + mix_r);
+      if (channels[ch] != nullptr) {
+        channels[ch][i] += constants::kInvSqrt2 * (mix_l + mix_r);
+      }
     }
   }
 }
