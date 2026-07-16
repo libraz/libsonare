@@ -1,9 +1,27 @@
 from __future__ import annotations
 
 from enum import IntEnum
+from typing import Literal, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
+
+MasteringProcessorKind = Literal["realtime", "offline", "pair"]
+MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
+
+class MasteringInsertParamInfo(TypedDict):
+    name: str
+    id: int
+    rtSafe: bool
+
+class MasteringProcessorCatalogEntry(TypedDict):
+    id: str
+    kind: MasteringProcessorKind
+    realtimeInsertable: bool
+    stereoOnly: bool
+    latencySamples: int
+    tailSamples: int
+    channelPolicy: MasteringChannelPolicy
 
 class PitchClass(IntEnum):
     C = 0
@@ -1247,6 +1265,7 @@ class StreamConfig:
     emit_every_n_frames: int
     magnitude_downsample: int
     max_pending_frames: int
+    max_progression_entries: int
     key_update_interval_sec: float
     bpm_update_interval_sec: float
     window: int
@@ -1268,6 +1287,7 @@ class StreamConfig:
         emit_every_n_frames: int = 1,
         magnitude_downsample: int = 1,
         max_pending_frames: int = 4096,
+        max_progression_entries: int = 4096,
         key_update_interval_sec: float = 5.0,
         bpm_update_interval_sec: float = 10.0,
         window: int = 0,
@@ -1356,6 +1376,8 @@ class StreamStats:
     duration_seconds: float
     pending_frames: int
     dropped_output_frames: int
+    dropped_chord_progression_entries: int
+    dropped_bar_progression_entries: int
     bpm: float
     bpm_confidence: float
     bpm_candidate_count: int
@@ -1385,6 +1407,8 @@ class StreamStats:
         duration_seconds: float,
         pending_frames: int,
         dropped_output_frames: int,
+        dropped_chord_progression_entries: int,
+        dropped_bar_progression_entries: int,
         bpm: float,
         bpm_confidence: float,
         bpm_candidate_count: int,

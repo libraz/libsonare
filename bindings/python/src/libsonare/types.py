@@ -9,11 +9,35 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
+
+
+MasteringProcessorKind = Literal["realtime", "offline", "pair"]
+MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
+
+
+class MasteringInsertParamInfo(TypedDict):
+    """Metadata for one automatable mastering-insert parameter."""
+
+    name: str
+    id: int
+    rtSafe: bool
+
+
+class MasteringProcessorCatalogEntry(TypedDict):
+    """Capabilities exposed by :func:`mastering_processor_catalog`."""
+
+    id: str
+    kind: MasteringProcessorKind
+    realtimeInsertable: bool
+    stereoOnly: bool
+    latencySamples: int
+    tailSamples: int
+    channelPolicy: MasteringChannelPolicy
 
 
 class PitchClass(IntEnum):
@@ -768,6 +792,8 @@ class Chord:
 
     @property
     def name(self) -> str:
+        if self.quality == "unknown":
+            return "N.C."
         suffixes = {
             "major": "maj",
             "minor": "m",
@@ -1465,6 +1491,7 @@ class StreamConfig:
     emit_every_n_frames: int = 1
     magnitude_downsample: int = 1
     max_pending_frames: int = 4096
+    max_progression_entries: int = 4096
     key_update_interval_sec: float = 5.0
     bpm_update_interval_sec: float = 10.0
     window: int = 0
@@ -1564,6 +1591,8 @@ class StreamStats:
     duration_seconds: float
     pending_frames: int
     dropped_output_frames: int
+    dropped_chord_progression_entries: int
+    dropped_bar_progression_entries: int
     bpm: float
     bpm_confidence: float
     bpm_candidate_count: int

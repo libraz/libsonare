@@ -1238,6 +1238,7 @@ describe('RealtimeEngine native binding', () => {
     expect(compressor?.kind).toBe('realtime');
     expect(compressor?.realtimeInsertable).toBe(true);
     expect(typeof compressor?.latencySamples).toBe('number');
+    expect(typeof compressor?.tailSamples).toBe('number');
     // Per-channel/linked processors process every plane in one call.
     expect(compressor?.channelPolicy).toBe('multichannel');
 
@@ -1258,6 +1259,9 @@ describe('RealtimeEngine native binding', () => {
 
     const imager = byId('stereo.imager');
     expect(imager?.channelPolicy).toBe('stereoPairOnly');
+
+    expect(byId('stereo.haasEnhancer')?.tailSamples).toBe(576);
+    expect(byId('stereo.phaseAlign')?.tailSamples).toBe(0);
   });
 
   it('reports realtime insert param descriptors and changes them live', () => {

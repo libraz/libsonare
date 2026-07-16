@@ -58,6 +58,7 @@ describe('insert param validation (WASM)', () => {
       channelPolicy: 'multichannel',
     });
     expect(typeof byId.get('dynamics.compressor')?.latencySamples).toBe('number');
+    expect(typeof byId.get('dynamics.compressor')?.tailSamples).toBe('number');
     // Pair (two-input match.*) id.
     expect(byId.get('match.abCrossfade')?.kind).toBe('pair');
     // Whole-file-only id.
@@ -70,6 +71,8 @@ describe('insert param validation (WASM)', () => {
     // channelPolicy: inherently-stereo processors are wrapped on the L/R pair.
     expect(byId.get('eq.midSide')?.channelPolicy).toBe('stereoPairOnly');
     expect(byId.get('stereo.imager')?.channelPolicy).toBe('stereoPairOnly');
+    expect(byId.get('stereo.haasEnhancer')?.tailSamples).toBe(576);
+    expect(byId.get('stereo.phaseAlign')?.tailSamples).toBe(0);
     // realtimeInsertable entries form the always-succeeds scene-insert set.
     const insertable = catalog.filter((entry) => entry.realtimeInsertable).map((entry) => entry.id);
     expect(insertable).toContain('dynamics.compressor');

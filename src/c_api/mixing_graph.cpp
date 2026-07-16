@@ -45,6 +45,7 @@ class StripNode final : public sonare::rt::ProcessorBase {
   }
   int latency_samples() const noexcept override { return strip_->latency_samples(); }
   int latency_samples_q8() const noexcept override { return strip_->latency_samples_q8(); }
+  int tail_samples() const noexcept override { return strip_->tail_samples(); }
   int output_latency_samples_q8(int output_port) const noexcept override {
     if (output_port >= 2) {
       const int send_index = (output_port - 2) / 2;
@@ -88,6 +89,7 @@ class BusNode final : public sonare::rt::ProcessorBase {
   void reset() override { bus_->reset(); }
   int latency_samples() const noexcept override { return bus_->latency_samples(); }
   int latency_samples_q8() const noexcept override { return bus_->latency_samples_q8(); }
+  int tail_samples() const noexcept override { return bus_->tail_samples(); }
 
  private:
   std::unique_ptr<sonare::mixing::FxBus> bus_;
@@ -202,7 +204,6 @@ void build_and_compile(SonareMixer* mixer) {
     }
     bus_sidechain_inputs_by_id[bus.id] = sidechain_inputs;
     bus_sidechain_keys_by_id[bus.id] = sidechain_keys;
-    local_tail_by_id[bus.id] = std::max(0, fx_bus->tail_samples());
     auto node = std::make_unique<BusNode>(std::move(fx_bus), std::move(sidechain_inputs));
     if (!graph.add_node(bus.id, std::move(node), next_sidechain_port)) {
       throw SonareException(ErrorCode::InvalidParameter, "duplicate or invalid bus id: " + bus.id);
@@ -247,7 +248,6 @@ void build_and_compile(SonareMixer* mixer) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "duplicate or invalid strip id: " + strip->id);
     }
-    local_tail_by_id[strip->id] = std::max(0, strip->strip.tail_samples());
     strip_by_id[strip->id] = strip.get();
   }
 
@@ -351,6 +351,17 @@ void build_and_compile(SonareMixer* mixer) {
   // node or edge is needed here.
 
   graph.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
+
+  // Tail values are prepared-state capabilities just like latency. Query the
+  // graph wrappers only after prepare() so config-dependent delay lengths are
+  // the exact values used by processing, rather than constructor fallbacks.
+  for (const std::string& node_id : graph.topo_order_ids()) {
+    const sonare::graph::Node* node = graph.node(node_id);
+    if (node == nullptr) {
+      throw SonareException(ErrorCode::InvalidState, "mixer tail node missing after compile");
+    }
+    local_tail_by_id[node_id] = std::max(0, node->processor().tail_samples());
+  }
 
   const sonare::graph::Node* master_node = graph.node(master_id);
   if (master_node == nullptr) {

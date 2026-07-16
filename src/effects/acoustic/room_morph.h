@@ -76,6 +76,8 @@ class RoomMorphProcessor : public rt::ProcessorBase {
 
   /// Latency is the underlying partitioned-convolution latency.
   int latency_samples() const noexcept override { return reverb_.latency_samples(); }
+  /// Audible target-room decay follows the same prepared convolution contract.
+  int tail_samples() const noexcept override { return reverb_.tail_samples(); }
 
   /// Parameters (RT-safe):
   ///   0 = wet (target-room mix, [0,1])

@@ -193,6 +193,61 @@ TEST_CASE("C-API mixer tail follows the longest audible serial route", "[mixing]
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("C-API mixer drains serial Haas and fractional phase-align tails",
+          "[mixing][capi][tail]") {
+  constexpr int kSampleRate = 8000;
+  constexpr int kBlock = 1;
+  const char* haas_params = R"({"delayMs":0.25,"mix":1,"delayRight":true})";
+  const char* phase_params = R"({"delaySamples":3,"fractionalDelaySamples":0.5,"delayRight":true})";
+
+  auto haas = sonare::mastering::api::make_insert("stereo.haasEnhancer", haas_params);
+  auto phase = sonare::mastering::api::make_insert("stereo.phaseAlign", phase_params);
+  REQUIRE(haas != nullptr);
+  REQUIRE(phase != nullptr);
+  haas->prepare(kSampleRate, kBlock);
+  phase->prepare(kSampleRate, kBlock);
+  REQUIRE(haas->tail_samples() == 2);
+  REQUIRE(phase->tail_samples() == 7);
+  const int expected_tail = haas->tail_samples() + phase->tail_samples();
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip strip;
+  strip.id = "source";
+  strip.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "stereo.haasEnhancer", haas_params});
+  scene.strips.push_back(std::move(strip));
+  sonare::mixing::api::Bus master{"master", "master"};
+  master.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "stereo.phaseAlign", phase_params});
+  scene.buses.push_back(std::move(master));
+  scene.connections.push_back({"source", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSampleRate, kBlock);
+  REQUIRE(mixer != nullptr);
+  int reported_tail = 0;
+  REQUIRE(sonare_mixer_tail_samples(mixer, &reported_tail) == SONARE_OK);
+  REQUIRE(reported_tail == expected_tail);
+
+  float input_l = 1.0f;
+  float input_r = 0.0f;
+  const float* inputs_l[] = {&input_l};
+  const float* inputs_r[] = {&input_r};
+  float output_l = 0.0f;
+  float output_r = 0.0f;
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, &output_l, &output_r, kBlock) ==
+          SONARE_OK);
+
+  for (int i = 0; i < expected_tail; ++i) {
+    REQUIRE(sonare_mixer_drain_tail_stereo(mixer, &output_l, &output_r, kBlock) == SONARE_OK);
+  }
+  REQUIRE(std::abs(output_r) > 1.0e-6f);
+  REQUIRE(sonare_mixer_drain_tail_stereo(mixer, &output_l, &output_r, kBlock) == SONARE_OK);
+  REQUIRE_THAT(output_r, WithinAbs(0.0f, 1.0e-6f));
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("C-API VCA groups deduplicate duplicate member ids", "[mixing][capi]") {
   constexpr int kSr = 48000;
   constexpr int kBlock = 4096;

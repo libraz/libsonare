@@ -6,6 +6,7 @@
 
 #include "effects/delay/stereo_delay.h"
 #include "effects/reverb/convolution_reverb.h"
+#include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
 #include "effects/reverb/velvet_reverb.h"
 
@@ -13,6 +14,8 @@ using sonare::effects::delay::StereoDelay;
 using sonare::effects::delay::StereoDelayConfig;
 using sonare::effects::reverb::ConvolutionReverb;
 using sonare::effects::reverb::ConvolutionReverbConfig;
+using sonare::effects::reverb::DattorroReverb;
+using sonare::effects::reverb::DattorroReverbConfig;
 using sonare::effects::reverb::FdnReverb;
 using sonare::effects::reverb::FdnReverbConfig;
 using sonare::effects::reverb::VelvetReverb;
@@ -83,4 +86,44 @@ TEST_CASE("StereoDelay with no feedback reports one delay length", "[effects][de
   // Without feedback the tail is a single pass through the longer delay line.
   REQUIRE(delay.tail_samples() >= longest);
   REQUIRE(delay.tail_samples() < 2 * longest);
+}
+
+TEST_CASE("Delay and reverb tails are zero for dry-only configurations",
+          "[effects][reverb][delay][tail]") {
+  SECTION("stereo delay") {
+    StereoDelayConfig config;
+    config.dry_wet = 0.0f;
+    StereoDelay effect(config);
+    effect.prepare(48000.0, 512);
+    REQUIRE(effect.tail_samples() == 0);
+  }
+  SECTION("Dattorro") {
+    DattorroReverbConfig config;
+    config.dry_wet = 0.0f;
+    DattorroReverb effect(config);
+    effect.prepare(48000.0, 512);
+    REQUIRE(effect.tail_samples() == 0);
+  }
+  SECTION("FDN") {
+    FdnReverbConfig config;
+    config.dry_wet = 0.0f;
+    FdnReverb effect(config);
+    effect.prepare(48000.0, 512);
+    REQUIRE(effect.tail_samples() == 0);
+  }
+  SECTION("velvet") {
+    VelvetReverbConfig config;
+    config.dry_wet = 0.0f;
+    VelvetReverb effect(config);
+    effect.prepare(48000.0, 512);
+    REQUIRE(effect.tail_samples() == 0);
+  }
+  SECTION("convolution") {
+    ConvolutionReverbConfig config;
+    config.dry_wet = 0.0f;
+    ConvolutionReverb effect(config);
+    effect.prepare(48000.0, 512);
+    REQUIRE(effect.latency_samples() > 0);
+    REQUIRE(effect.tail_samples() == 0);
+  }
 }

@@ -129,10 +129,10 @@ Audio room_morph(const Audio& recording, const RoomMorphConfig& config) {
   constexpr int kBlock = 256;
   processor.prepare(static_cast<double>(sr), kBlock);
 
-  const int tail = processor.target_ir_size();
+  const int tail = processor.tail_samples();
   // ConvolutionReverb reports a fixed latency, but an empty (invalid-target) IR
   // is a no-op that applies no delay, so only compensate when a RIR was loaded.
-  const int latency = tail > 0 ? processor.latency_samples() : 0;
+  const int latency = processor.target_ir_size() > 0 ? processor.latency_samples() : 0;
 
   const size_t out_len = recording.size() + static_cast<size_t>(tail);
   const size_t total = out_len + static_cast<size_t>(latency);

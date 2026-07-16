@@ -98,6 +98,7 @@ TEST_CASE("room_morph is a passthrough at zero wet and zero suppression",
   cfg.source_tail_suppression = 0.0f;  // suppressor bypassed
 
   const Audio out = room_morph(rec, cfg);
+  REQUIRE(out.size() == rec.size());
   // Dry-only, latency-compensated: the leading recording is reproduced exactly.
   for (size_t i = 0; i < rec.size(); ++i) {
     REQUIRE(std::abs(out[i] - rec[i]) < 1e-5f);

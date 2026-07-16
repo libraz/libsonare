@@ -7,6 +7,7 @@
 //   * chain JSON round-trips the full repair.denoise field set,
 //   * the streaming preset matches the pop preset.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -21,6 +22,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "rt/processor_base.h"
+#include "util/json.h"
 
 namespace {
 
@@ -479,6 +481,30 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   REQUIRE(json.front() == '[');
   REQUIRE(json.back() == ']');
 
+  const auto catalog = sonare::util::json::parse(json);
+  REQUIRE(catalog.is_array());
+  for (const auto& entry : catalog.as_array()) {
+    REQUIRE(entry.contains("id"));
+    REQUIRE(entry.contains("realtimeInsertable"));
+    REQUIRE(entry.contains("latencySamples"));
+    REQUIRE(entry.contains("tailSamples"));
+    const int latency = entry["latencySamples"].as_int();
+    const int tail = entry["tailSamples"].as_int();
+    REQUIRE(latency >= 0);
+    REQUIRE(tail >= 0);
+
+    if (entry["realtimeInsertable"].as_bool()) {
+      auto processor = make_insert(entry["id"].as_string(), "{}");
+      REQUIRE(processor != nullptr);
+      processor->prepare(48000.0, 512);
+      REQUIRE(latency == std::max(0, processor->latency_samples()));
+      REQUIRE(tail == std::max(0, processor->tail_samples()));
+    } else {
+      REQUIRE(latency == 0);
+      REQUIRE(tail == 0);
+    }
+  }
+
   // Every realtime-insertable id is reported as kind "realtime" with the flag set
   // (none of the insert ids are pair processors, so the precedence resolves to
   // realtime). This is the invariant the host relies on to avoid offering an id
@@ -505,10 +531,19 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   // stereoOnly is surfaced independently of kind: eq.midSide is realtime-insertable
   // yet has no mono implementation, so it is realtime + stereoOnly. It is also an
   // inherently-stereo processor, so its channelPolicy is "stereoPairOnly".
-  REQUIRE(
-      json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
-                "\"stereoOnly\":true,\"latencySamples\":0,\"channelPolicy\":\"stereoPairOnly\"}") !=
-      std::string::npos);
+  REQUIRE(json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
+                    "\"stereoOnly\":true,\"latencySamples\":0,\"tailSamples\":0,"
+                    "\"channelPolicy\":\"stereoPairOnly\"}") != std::string::npos);
+
+  // Delay-like stereo tools publish their prepared audible tail through the
+  // same probe used for latency. Default Haas is 12 ms at 48 kHz; default
+  // PhaseAlign has no delay.
+  REQUIRE(json.find("{\"id\":\"stereo.haasEnhancer\",\"kind\":\"realtime\","
+                    "\"realtimeInsertable\":true,\"stereoOnly\":true,"
+                    "\"latencySamples\":0,\"tailSamples\":576,") != std::string::npos);
+  REQUIRE(json.find("{\"id\":\"stereo.phaseAlign\",\"kind\":\"realtime\","
+                    "\"realtimeInsertable\":true,\"stereoOnly\":true,"
+                    "\"latencySamples\":0,\"tailSamples\":0,") != std::string::npos);
 
   // Realtime-only ids that are absent from processor_names() are still reported.
   if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {
@@ -558,7 +593,7 @@ TEST_CASE(
 
   // Per-channel and linked-dynamics processors process every plane in one call.
   for (const char* id : {"dynamics.compressor", "eq.parametric", "saturation.tape",
-                         "multiband.compressor", "maximizer.maximizer"}) {
+                         "multiband.compressor", "maximizer.maximizer", "spectral.lowEndFocus"}) {
     REQUIRE(channel_policy(id) == ChannelPolicy::Multichannel);
   }
 

@@ -193,15 +193,16 @@ const char* sonare_mastering_pair_analysis_names(void);
 const char* sonare_mastering_stereo_analysis_names(void);
 
 /// @brief Machine-readable classification catalog for every named processor id.
-/// @return A JSON array string `[{"id","kind","realtimeInsertable","stereoOnly"},
-///   ...]` (UTF-8). `kind` is one of "realtime" / "offline" / "pair" (pair >
-///   realtime > offline precedence); `realtimeInsertable` is true exactly for the
-///   ids in @ref sonare_mastering_insert_names (the set that always succeeds as a
-///   realtime scene insert); `stereoOnly` flags processors with no mono path. The
-///   id universe is the union of @ref sonare_mastering_processor_names, the insert
+/// @return A JSON array string whose entries contain `id`, `kind`,
+///   `realtimeInsertable`, `stereoOnly`, `latencySamples`, `tailSamples`, and
+///   `channelPolicy` (UTF-8). `kind` is one of "realtime" / "offline" / "pair"
+///   (pair > realtime > offline precedence); `realtimeInsertable` is true exactly
+///   for the ids in @ref sonare_mastering_insert_names. Timing values come from
+///   one prepared default 48 kHz / 512-sample probe and are representative for
+///   configuration-dependent inserts; offline entries report zero. The id
+///   universe is the union of @ref sonare_mastering_processor_names, the insert
 ///   set, and @ref sonare_mastering_pair_processor_names, so realtime-only and
-///   pair-only ids are still reported. Lets hosts filter a processor picker by
-///   realtime-insertability instead of offering ids the rt strip would reject.
+///   pair-only ids are still reported.
 /// @details Backed by thread-local storage filled on first use; the pointer is
 ///          valid for the calling thread's lifetime and stays valid across later
 ///          API calls on that thread. Do NOT cache it across threads or use it

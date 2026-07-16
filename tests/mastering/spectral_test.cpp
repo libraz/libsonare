@@ -139,6 +139,66 @@ TEST_CASE("LowEndFocus transient tightness emphasizes low-end attacks", "[master
   REQUIRE(tight_signal[32] > dry_signal[32]);
 }
 
+TEST_CASE("LowEndFocus applies dry and wet contracts to mono stereo 5.1 and 7.1",
+          "[mastering][spectral][surround]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kFrames = 512;
+  const LowEndFocusConfig dry_config{/*cutoff_hz=*/180.0f, /*width=*/1.0f,
+                                     /*subharmonic_amount=*/0.0f,
+                                     /*transient_tightness=*/0.0f};
+  const LowEndFocusConfig wet_config{/*cutoff_hz=*/180.0f, /*width=*/1.0f,
+                                     /*subharmonic_amount=*/0.65f,
+                                     /*transient_tightness=*/0.4f};
+
+  for (const int channel_count : {1, 2, 6, 8}) {
+    DYNAMIC_SECTION(channel_count << " channels") {
+      std::vector<std::vector<float>> original(static_cast<size_t>(channel_count),
+                                               std::vector<float>(kFrames, 0.0f));
+      for (int ch = 0; ch < channel_count; ++ch) {
+        const float frequency = 55.0f + 7.0f * static_cast<float>(ch);
+        for (int frame = 0; frame < kFrames; ++frame) {
+          const float phase = 2.0f * 3.14159265358979323846f * frequency *
+                              static_cast<float>(frame) / static_cast<float>(kSampleRate);
+          original[static_cast<size_t>(ch)][static_cast<size_t>(frame)] =
+              0.2f * std::sin(phase) + (frame >= 32 ? 0.05f : 0.0f);
+        }
+      }
+
+      auto dry = original;
+      std::vector<float*> dry_planes;
+      dry_planes.reserve(dry.size());
+      for (auto& plane : dry) dry_planes.push_back(plane.data());
+      LowEndFocus dry_focus(dry_config);
+      dry_focus.prepare(kSampleRate, kFrames);
+      dry_focus.process(dry_planes.data(), channel_count, kFrames);
+      for (int ch = 0; ch < channel_count; ++ch) {
+        REQUIRE(max_abs_difference(dry[static_cast<size_t>(ch)],
+                                   original[static_cast<size_t>(ch)]) < 1.0e-6f);
+      }
+
+      auto wet = original;
+      std::vector<float*> wet_planes;
+      wet_planes.reserve(wet.size());
+      for (auto& plane : wet) wet_planes.push_back(plane.data());
+      LowEndFocus multichannel(wet_config);
+      multichannel.prepare(kSampleRate, kFrames);
+      multichannel.process(wet_planes.data(), channel_count, kFrames);
+
+      // width=1 makes each plane independent. A mono instance is therefore a
+      // golden oracle for every plane of the multichannel call.
+      for (int ch = 0; ch < channel_count; ++ch) {
+        auto mono_golden = original[static_cast<size_t>(ch)];
+        LowEndFocus mono(wet_config);
+        mono.prepare(kSampleRate, kFrames);
+        process(mono, mono_golden);
+        REQUIRE(max_abs_difference(wet[static_cast<size_t>(ch)], mono_golden) < 1.0e-6f);
+        REQUIRE(max_abs_difference(wet[static_cast<size_t>(ch)],
+                                   original[static_cast<size_t>(ch)]) > 1.0e-4f);
+      }
+    }
+  }
+}
+
 TEST_CASE("AirBand adds high-frequency detail", "[mastering][spectral]") {
   AirBand air({0.5f});
   air.prepare(48000.0, 16);

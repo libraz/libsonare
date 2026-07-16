@@ -323,8 +323,32 @@ TEST_CASE("HaasEnhancer delays one side from the opposite channel", "[mastering]
   process_stereo(haas, left, right);
 
   REQUIRE(haas.delay_samples() == 1);
+  REQUIRE(haas.tail_samples() == 1);
   REQUIRE_THAT(right[0], WithinAbs(0.0f, 0.000001f));
   REQUIRE_THAT(right[1], WithinAbs(1.0f, 0.000001f));
+}
+
+TEST_CASE("HaasEnhancer tail follows wet prepared delay and reprepare",
+          "[mastering][stereo][tail]") {
+  HaasEnhancer haas({1000.0f, 0.0f, true});
+  REQUIRE(haas.tail_samples() == 0);
+
+  haas.prepare(8000.0, 64);
+  REQUIRE(haas.delay_samples() == 8000);
+  REQUIRE(haas.tail_samples() == 0);
+
+  haas.set_config({1000.0f, 1.0f, true});
+  REQUIRE(haas.tail_samples() == 8000);
+  std::vector<float> left(static_cast<size_t>(haas.tail_samples() + 2), 0.0f);
+  std::vector<float> right(left.size(), 0.0f);
+  left[0] = 1.0f;
+  process_stereo(haas, left, right);
+  REQUIRE_THAT(right[8000], WithinAbs(1.0f, 0.000001f));
+  REQUIRE_THAT(right[8001], WithinAbs(0.0f, 0.000001f));
+
+  haas.prepare(16000.0, 64);
+  REQUIRE(haas.delay_samples() == 16000);
+  REQUIRE(haas.tail_samples() == 16000);
 }
 
 TEST_CASE("HaasEnhancer validates configuration", "[mastering][stereo]") {
@@ -349,6 +373,7 @@ TEST_CASE("PhaseAlign delays the selected channel by integer samples", "[masteri
   align.prepare(48000.0, 5);
   process_stereo(align, left, right);
 
+  REQUIRE(align.tail_samples() == 2);
   REQUIRE_THAT(right[0], WithinAbs(0.0f, 0.000001f));
   REQUIRE_THAT(right[1], WithinAbs(0.0f, 0.000001f));
   REQUIRE_THAT(right[2], WithinAbs(1.0f, 0.000001f));
@@ -362,9 +387,29 @@ TEST_CASE("PhaseAlign supports fractional sample delay", "[mastering][stereo]") 
   align.prepare(48000.0, 8);
   process_stereo(align, left, right);
 
+  REQUIRE(align.tail_samples() == 6);
   REQUIRE(std::abs(right[2]) > 0.1f);
   REQUIRE(std::abs(right[3]) > std::abs(right[2]));
-  REQUIRE(std::abs(right[6]) < 0.1f);
+  REQUIRE(std::abs(right[6]) > 0.0001f);
+  REQUIRE_THAT(right[7], WithinAbs(0.0f, 0.000001f));
+}
+
+TEST_CASE("PhaseAlign tail follows fractional stencil and reconfiguration",
+          "[mastering][stereo][tail]") {
+  PhaseAlign align;
+  REQUIRE(align.tail_samples() == 0);
+  align.prepare(48000.0, 64);
+  REQUIRE(align.tail_samples() == 0);
+
+  align.set_config({64, false, 0.25f});
+  REQUIRE(align.tail_samples() == 68);
+  align.prepare(96000.0, 128);
+  REQUIRE(align.tail_samples() == 68);
+
+  REQUIRE(align.set_parameter(0, 0.0f));
+  REQUIRE(align.tail_samples() == 64);
+  REQUIRE_FALSE(align.set_parameter(0, std::numeric_limits<float>::quiet_NaN()));
+  REQUIRE(align.tail_samples() == 64);
 }
 
 TEST_CASE("PhaseAlign estimates relative delay by cross-correlation", "[mastering][stereo]") {
@@ -388,6 +433,7 @@ TEST_CASE("PhaseAlign validates configuration", "[mastering][stereo]") {
   REQUIRE_THROWS(PhaseAlign({-1, true}));
   REQUIRE_THROWS(PhaseAlign({0, true, -0.1f}));
   REQUIRE_THROWS(PhaseAlign({0, true, 1.0f}));
+  REQUIRE_THROWS(PhaseAlign({0, true, std::numeric_limits<float>::quiet_NaN()}));
 }
 
 TEST_CASE("MonoCompatCheck detects anti-phase stereo risk", "[mastering][stereo]") {

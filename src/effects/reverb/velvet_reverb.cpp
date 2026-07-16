@@ -146,6 +146,7 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
 }
 
 int VelvetReverb::tail_samples() const noexcept {
+  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
   // The velvet-noise taps span one effective T60 (the same rt60 the tap tables
   // are built for in prepare()), so the tail decays over that window.
   const float rt60 =

@@ -86,6 +86,7 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
 }
 
 int StereoDelay::tail_samples() const noexcept {
+  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
   // After the input goes silent the last echo keeps circulating, losing the
   // feedback gain on every pass through the (longer of the two) delay lines.
   // The tail is the number of passes needed to decay 60 dB times that length.

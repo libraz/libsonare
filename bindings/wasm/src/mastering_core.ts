@@ -135,6 +135,11 @@ export interface MasteringProcessorCatalogEntry {
    */
   latencySamples: number;
   /**
+   * Audible decay length for the same default prepared probe. Zero for
+   * offline, dry-only, and no-tail processors.
+   */
+  tailSamples: number;
+  /**
    * How the mixer wraps the processor on a >2-channel (surround) bus insert:
    * "multichannel" (one full-buffer call) or "stereoPairOnly" (front L/R pair,
    * surround planes passed through dry).

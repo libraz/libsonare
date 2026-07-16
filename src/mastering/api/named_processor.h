@@ -77,12 +77,14 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // single JSON array. Each entry is
 //   {"id":string,"kind":"realtime"|"offline"|"pair",
 //    "realtimeInsertable":bool,"stereoOnly":bool,"latencySamples":int,
-//    "channelPolicy":string}
+//    "tailSamples":int,"channelPolicy":string}
 // where kind is pair > realtime > offline by precedence, realtimeInsertable is
 // membership in insert_factory_names(), stereoOnly is membership in
 // stereo_processor_names(), latencySamples is the realtime insert's reported
 // processing latency for its default configuration (0 for offline ids and for
-// config-dependent processors this is representative, not exact), and
+// config-dependent processors this is representative, not exact), tailSamples
+// is its corresponding audible decay length under the same prepared default
+// probe (0 for offline/dry-only/no-tail ids), and
 // channelPolicy is channel_policy(id) as a wire string (how the mixer wraps a
 // >2ch bus insert). The id universe is the union
 // of the three lists, so

@@ -25,6 +25,8 @@ from .types import (
     EqSpectrumSnapshot,
     MasteringChainResult,
     MasteringChainStereoResult,
+    MasteringInsertParamInfo,
+    MasteringProcessorCatalogEntry,
     MasteringResult,
     MasteringStereoResult,
 )
@@ -166,7 +168,7 @@ def mastering_insert_param_names(name: str) -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
-def mastering_insert_param_info(name: str) -> list[dict[str, Any]]:
+def mastering_insert_param_info(name: str) -> list[MasteringInsertParamInfo]:
     """Return parameter metadata for a given insert/FX processor.
 
     Each entry describes one parameter the insert reads, with keys ``name``
@@ -185,19 +187,20 @@ def mastering_insert_param_info(name: str) -> list[dict[str, Any]]:
     if not raw:
         return []
     parsed = json.loads(raw.decode("utf-8"))
-    return cast("list[dict[str, Any]]", parsed)
+    return cast("list[MasteringInsertParamInfo]", parsed)
 
 
-def mastering_processor_catalog() -> list[dict[str, Any]]:
+def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
     """Return the full catalog of mastering processors.
 
     Each entry describes one processor with keys ``id`` (camelCase processor
     id, e.g. ``dynamics.compressor``), ``kind`` (one of ``"realtime"``,
     ``"offline"`` or ``"pair"``), ``realtimeInsertable`` (whether the processor
     can run as a realtime insert), ``stereoOnly`` (whether it requires a
-    stereo signal), ``latencySamples`` (reported latency for the default 48 kHz
-    / 512-sample probe configuration; 0 for offline processors and an estimate
-    for configuration-dependent processors) and ``channelPolicy`` (how the
+    stereo signal), ``latencySamples`` and ``tailSamples`` (reported processing
+    latency and audible decay for one default 48 kHz / 512-sample prepared
+    probe; 0 for offline processors and representative values for
+    configuration-dependent processors), and ``channelPolicy`` (how the
     mixer wraps the processor on a >2-channel surround bus insert:
     ``"multichannel"`` for one full-buffer call, ``"stereoPairOnly"`` for
     front-L/R-only with surround planes passed through dry). ``kind`` follows
@@ -217,7 +220,7 @@ def mastering_processor_catalog() -> list[dict[str, Any]]:
     if not raw:
         return []
     parsed = json.loads(raw.decode("utf-8"))
-    return cast("list[dict[str, Any]]", parsed)
+    return cast("list[MasteringProcessorCatalogEntry]", parsed)
 
 
 def mastering_process(

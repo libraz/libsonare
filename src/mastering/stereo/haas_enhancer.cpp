@@ -62,6 +62,13 @@ void HaasEnhancer::reset() {
   delay_index_ = 0;
 }
 
+int HaasEnhancer::tail_samples() const noexcept {
+  // The delayed cross-channel path is finite: after input becomes silent, the
+  // last sample emerges exactly delay_samples_ later. A dry-only or zero-delay
+  // configuration never contributes delayed output.
+  return prepared_ && config_.mix > 0.0f ? std::max(0, delay_samples_) : 0;
+}
+
 void HaasEnhancer::set_config(const HaasEnhancerConfig& config) {
   validate_config(config);
   config_ = config;

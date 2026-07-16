@@ -40,7 +40,8 @@ void PhaseAlign::process(float* const* channels, int num_channels, int num_sampl
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     }
   }
-  if (num_channels < 2 || total_delay_samples() == 0.0f) {
+  if (num_channels < 2 ||
+      (config_.delay_samples == 0 && config_.fractional_delay_samples == 0.0f)) {
     return;
   }
 
@@ -55,6 +56,20 @@ void PhaseAlign::reset() {
   delay_index_ = 0;
 }
 
+int PhaseAlign::tail_samples() const noexcept {
+  if (!prepared_ || (config_.delay_samples == 0 && config_.fractional_delay_samples == 0.0f)) {
+    return 0;
+  }
+  // An integer delay uses only tap 0. A non-zero fractional delay uses the full
+  // five-point Lagrange stencil (taps whole_delay + 0..4), so its final possible
+  // non-zero output is four samples after the whole-sample delay.
+  const int interpolation_tail = config_.fractional_delay_samples > 0.0f ? 4 : 0;
+  if (config_.delay_samples > std::numeric_limits<int>::max() - interpolation_tail) {
+    return std::numeric_limits<int>::max();
+  }
+  return config_.delay_samples + interpolation_tail;
+}
+
 void PhaseAlign::set_config(const PhaseAlignConfig& config) {
   validate_config(config);
   config_ = config;
@@ -64,6 +79,7 @@ void PhaseAlign::set_config(const PhaseAlignConfig& config) {
 }
 
 bool PhaseAlign::set_parameter(unsigned int param_id, float value) {
+  if (!std::isfinite(value)) return false;
   switch (param_id) {
     case 0:
       // Keep within [0, 1): the whole-sample delay (delay_samples_) is fixed, so
@@ -81,22 +97,21 @@ std::vector<rt::ParamDescriptor> PhaseAlign::parameter_descriptors() const {
 }
 
 void PhaseAlign::validate_config(const PhaseAlignConfig& config) {
-  if (config.delay_samples < 0 || config.fractional_delay_samples < 0.0f ||
-      config.fractional_delay_samples >= 1.0f) {
+  if (config.delay_samples < 0 || !std::isfinite(config.fractional_delay_samples) ||
+      config.fractional_delay_samples < 0.0f || config.fractional_delay_samples >= 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "phase align delay must be non-negative");
   }
 }
 
 void PhaseAlign::rebuild_delay() {
-  const int whole_delay = static_cast<int>(std::floor(total_delay_samples()));
-  delay_.assign(static_cast<size_t>(std::max(whole_delay + 5, 1)), 0.0f);
+  const size_t delay_line_size = static_cast<size_t>(config_.delay_samples) + 5u;
+  delay_.assign(std::max(delay_line_size, size_t{1}), 0.0f);
   delay_index_ = 0;
 }
 
 float PhaseAlign::process_delay(float input) {
-  const float delay = total_delay_samples();
-  const int whole_delay = static_cast<int>(std::floor(delay));
-  const float fraction = delay - static_cast<float>(whole_delay);
+  const int whole_delay = config_.delay_samples;
+  const float fraction = config_.fractional_delay_samples;
 
   delay_[delay_index_] = input;
   const size_t size = delay_.size();
@@ -119,15 +134,12 @@ float PhaseAlign::process_delay(float input) {
       }
       weight *= (fraction - static_cast<float>(other)) / static_cast<float>(tap - other);
     }
-    const size_t read_index = (delay_index_ + size - static_cast<size_t>(whole_delay + tap)) % size;
+    const size_t tap_offset = static_cast<size_t>(whole_delay) + static_cast<size_t>(tap);
+    const size_t read_index = (delay_index_ + size - tap_offset) % size;
     delayed += weight * delay_[read_index];
   }
   delay_index_ = (delay_index_ + 1) % delay_.size();
   return delayed;
-}
-
-float PhaseAlign::total_delay_samples() const noexcept {
-  return static_cast<float>(config_.delay_samples) + config_.fractional_delay_samples;
 }
 
 float PhaseAlign::estimate_delay_samples(const float* reference, const float* target,

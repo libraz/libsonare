@@ -3,6 +3,7 @@
 /// @file convolution_reverb.h
 /// @brief Non-RT IR-loadable FFT partitioned convolution reverb.
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -72,8 +73,11 @@ class ConvolutionReverb : public rt::ProcessorBase {
     return (ir_.empty() || partition_size_ <= 0) ? 0 : partition_size_;
   }
   /// After the input goes silent the convolver keeps emitting the impulse
-  /// response, so the decay tail equals the loaded/synthesized IR length.
-  int tail_samples() const noexcept override { return static_cast<int>(ir_.size()); }
+  /// response, so the decay tail equals the loaded/synthesized IR length. A
+  /// dry-only configuration has processing latency but no audible decay tail.
+  int tail_samples() const noexcept override {
+    return std::clamp(dry_wet_, 0.0f, 1.0f) > 0.0f ? static_cast<int>(ir_.size()) : 0;
+  }
   int ir_size() const noexcept { return static_cast<int>(ir_.size()); }
 
  protected:

@@ -281,6 +281,7 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
 }
 
 int DattorroReverb::tail_samples() const noexcept {
+  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
   const double decay = std::clamp(static_cast<double>(config_.decay), 0.0, 0.98);
   if (decay <= 0.0) return 0;
 

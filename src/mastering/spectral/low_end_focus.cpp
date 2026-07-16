@@ -60,21 +60,20 @@ void LowEndFocus::process(float* const* channels, int num_channels, int num_samp
       sub_state_[index] += sub_alpha * (divided - sub_state_[index]);
       transient_state_[index] += transient_alpha * (low_state_[index] - transient_state_[index]);
     }
-    if (num_channels >= 2) {
-      const float mono_low = 0.5f * (low_state_[0] + low_state_[1]);
-      for (int ch = 0; ch < 2; ++ch) {
-        const auto index = static_cast<size_t>(ch);
-        const float low = mono_low + (low_state_[index] - mono_low) * config_.width;
-        const float high = channels[ch][i] - low_state_[index];
-        const float transient = low_state_[index] - transient_state_[index];
-        channels[ch][i] = high + low + config_.subharmonic_amount * sub_state_[index] +
-                          config_.transient_tightness * transient;
-      }
-    } else {
-      const float high = channels[0][i] - low_state_[0];
-      const float transient = low_state_[0] - transient_state_[0];
-      channels[0][i] = high + low_state_[0] + config_.subharmonic_amount * sub_state_[0] +
-                       config_.transient_tightness * transient;
+    // Width is a front L/R relationship. The low-end enhancement itself is
+    // per-plane, so center/LFE/surround/height planes must still receive their
+    // own subharmonic and transient processing under the catalog's
+    // Multichannel policy.
+    const float front_mono_low = num_channels >= 2 ? 0.5f * (low_state_[0] + low_state_[1]) : 0.0f;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      const auto index = static_cast<size_t>(ch);
+      const float low = ch < 2 && num_channels >= 2
+                            ? front_mono_low + (low_state_[index] - front_mono_low) * config_.width
+                            : low_state_[index];
+      const float high = channels[ch][i] - low_state_[index];
+      const float transient = low_state_[index] - transient_state_[index];
+      channels[ch][i] = high + low + config_.subharmonic_amount * sub_state_[index] +
+                        config_.transient_tightness * transient;
     }
   }
 }

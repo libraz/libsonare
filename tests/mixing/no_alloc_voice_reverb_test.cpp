@@ -70,6 +70,8 @@ TEST_CASE("RoomMorphProcessor process performs no heap allocation after prepare"
 
   sonare::effects::acoustic::RoomMorphProcessor morph(config);
   morph.prepare(48000.0, kBlock);
+  REQUIRE(morph.tail_samples() == morph.target_ir_size());
+  REQUIRE(morph.tail_samples() > 0);
 
   std::array<float, kBlock> buf{};
   buf.fill(0.05f);

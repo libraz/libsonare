@@ -15,6 +15,9 @@ struct LowEndFocusConfig {
 
 class LowEndFocus : public rt::ProcessorBase {
  public:
+  /// Processes every supplied plane. Stereo width is applied only to the
+  /// front L/R pair (planes 0/1); subharmonic and transient focus are applied
+  /// independently to every remaining center/LFE/surround/height plane.
   explicit LowEndFocus(LowEndFocusConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;

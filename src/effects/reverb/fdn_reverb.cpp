@@ -99,6 +99,7 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
 }
 
 int FdnReverb::tail_samples() const noexcept {
+  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
   // The low-frequency band has the longest T60 in the network (the HF band is
   // shortened by hf_damping, see update_absorption()), so t60_lf bounds the
   // audible tail. Mirror the T60 mapping used there.
