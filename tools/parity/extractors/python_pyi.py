@@ -92,7 +92,13 @@ def _params_from_args(args: ast.arguments) -> list[Param]:
     return params
 
 
-def _walk(node: ast.AST, ex: Extraction, file: str, class_prefix: str = "") -> None:
+def _walk(
+    node: ast.AST,
+    ex: Extraction,
+    file: str,
+    class_bases: dict[str, list[str]],
+    class_prefix: str = "",
+) -> None:
     for child in ast.iter_child_nodes(node):
         if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
             name = child.name
@@ -111,11 +117,62 @@ def _walk(node: ast.AST, ex: Extraction, file: str, class_prefix: str = "") -> N
                 )
             )
         elif isinstance(child, ast.ClassDef):
-            _walk(child, ex, file, class_prefix=child.name)
+            # Record simple-name bases so ``extract`` can flatten mixin methods
+            # (e.g. ``Project(_ProjectEditMixin, ...)``) onto the concrete class.
+            bases = [b.id for b in child.bases if isinstance(b, ast.Name)]
+            if bases:
+                class_bases.setdefault(child.name, []).extend(bases)
+            _walk(child, ex, file, class_bases, class_prefix=child.name)
+
+
+def _flatten_mixin_methods(ex: Extraction, class_bases: dict[str, list[str]]) -> None:
+    """Re-emit inherited methods under each concrete subclass name.
+
+    The Python facades compose their handle classes from split mixins
+    (``Project(_ProjectEditMixin, _ProjectMidiMixin, ...)``), so a method is
+    physically defined on the mixin, not on ``Project``. Handle-op parity keys
+    on the concrete class name, so without this pass every mixin method reads as
+    "not exposed on the python facade". Resolve the bases transitively and add a
+    ``Subclass.method`` alias for every method a subclass inherits but does not
+    override.
+    """
+    own_methods: dict[str, dict[str, FunctionSig]] = {}
+    for f in ex.functions:
+        cls, sep, meth = f.raw_name.partition(".")
+        if sep:
+            own_methods.setdefault(cls, {})[meth] = f
+
+    def inherited(cls: str, seen: set[str]) -> dict[str, FunctionSig]:
+        acc: dict[str, FunctionSig] = {}
+        for parent in class_bases.get(cls, []):
+            if parent in seen:
+                continue
+            seen.add(parent)
+            acc.update(inherited(parent, seen))
+            acc.update(own_methods.get(parent, {}))
+        return acc
+
+    for cls in list(class_bases):
+        own = own_methods.get(cls, {})
+        for meth, f in inherited(cls, set()).items():
+            if meth in own:
+                continue
+            ex.functions.append(
+                FunctionSig(
+                    key=f.key,
+                    surface="python",
+                    raw_name=f"{cls}.{meth}",
+                    params=f.params,
+                    returns=f.returns,
+                    file=f.file,
+                    line=f.line,
+                )
+            )
 
 
 def extract(root: Path) -> Extraction:
     ex = Extraction(surface="python")
+    class_bases: dict[str, list[str]] = {}
     base = root / "bindings" / "python" / "src" / "libsonare"
     for fname in (
         # .pyi stubs are parsed FIRST so their richer signatures (Literal enums,
@@ -128,14 +185,41 @@ def extract(root: Path) -> Extraction:
         "analyzer.py",
         "audio.py",
         "engine.py",
+        # The facade modules below were split out of the monolithic
+        # ``_project.py`` / ``_effects.py`` / ``_features.py`` / ``_mastering.py``
+        # / ``_analysis.py`` / ``engine.py`` files; each split sibling must be
+        # listed here or its members read as "not exposed in python".
         "_project.py",
         "_project_synth.py",
+        "_project_edit.py",
+        "_project_inspection.py",
+        "_project_midi.py",
+        "_project_model.py",
+        "_project_render.py",
         "streaming.py",
         "_effects.py",
+        "_effects_editing.py",
+        "_effects_mastering.py",
+        "_effects_separation.py",
+        "_effects_voice.py",
         "_mixing.py",
         "_mastering.py",
+        "_mastering_offline.py",
+        "_mastering_pair.py",
+        "_mastering_streaming.py",
         "_analysis.py",
+        "_analysis_detection.py",
+        "_analysis_music.py",
+        "_analysis_reports.py",
         "_features.py",
+        "_features_core.py",
+        "_features_metering.py",
+        "_features_transforms.py",
+        "_engine_conversions.py",
+        "_engine_io.py",
+        "_engine_midi.py",
+        "_engine_mixing.py",
+        "_engine_pages.py",
         "_acoustic.py",
         "_conversions.py",
     ):
@@ -149,5 +233,6 @@ def extract(root: Path) -> Extraction:
             ex.unparsed += 1
             ex.unparsed_notes.append(f"{fname}: parse error {e}")
             continue
-        _walk(tree, ex, str(path.relative_to(root)))
+        _walk(tree, ex, str(path.relative_to(root)), class_bases)
+    _flatten_mixin_methods(ex, class_bases)
     return ex

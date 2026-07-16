@@ -100,7 +100,7 @@ MIRRORS: tuple[tuple[str, str, str], ...] = (
     ("bindings/python/src/libsonare/_ffi.py", r"EXPECTED_ABI_VERSION\s*=\s*(\w+)", "aggregate"),
     # Project ABI.
     (
-        "bindings/python/src/libsonare/_project.py",
+        "bindings/python/src/libsonare/_project_model.py",
         r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)",
         "project",
     ),
