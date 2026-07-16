@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/channel_layout.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -27,7 +28,7 @@ using AudioLoadResult = std::tuple<std::vector<float>, int>;
 struct AudioLoadOptions {
   /// @brief Maximum file size in bytes (0 = no limit).
   /// @details Default is 500MB. Set to 0 to disable size checking.
-  size_t max_file_size = 500 * 1024 * 1024;
+  size_t max_file_size = resource::kMaxAudioFileBytes;
 };
 
 /// @brief Default audio load options.

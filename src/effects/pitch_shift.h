@@ -3,6 +3,8 @@
 /// @file pitch_shift.h
 /// @brief Pitch shifting without changing duration.
 
+#include <cstddef>
+
 #include "core/audio.h"
 #include "effects/time_stretch.h"
 
@@ -14,6 +16,20 @@ struct PitchShiftConfig {
   int hop_length = 512;  ///< Hop length for time stretch (used by both backends)
   StretchBackend backend = StretchBackend::NativeSpectral;
 };
+
+/// Allocation-free validation result for a one-shot pitch shift. Public
+/// facades use this before copying caller-owned input; the DSP paths use the
+/// same plan immediately before creating the stretched intermediate.
+struct PitchShiftPlan {
+  float ratio = 0.0f;
+  int effective_sample_rate = 0;
+  std::size_t stretched_samples = 0;
+};
+
+bool make_pitch_shift_ratio_plan(std::size_t input_samples, int sample_rate, float ratio,
+                                 PitchShiftPlan* out) noexcept;
+bool make_pitch_shift_plan(std::size_t input_samples, int sample_rate, float semitones,
+                           PitchShiftPlan* out) noexcept;
 
 /// @brief Pitch-shifts audio without changing duration.
 /// @details Uses time stretching followed by resampling.

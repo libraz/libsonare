@@ -7,6 +7,7 @@
 
 #include "core/resample.h"
 #include "effects/phase_vocoder.h"
+#include "effects/pitch_shift.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -45,17 +46,9 @@ Audio native_spectral_time_stretch(const Audio& audio, float rate, int n_fft, in
 
 Audio native_spectral_pitch_shift_ratio(const Audio& audio, float ratio, int n_fft,
                                         int hop_length) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_positive(ratio), ErrorCode::InvalidParameter);
-
-  const long double effective_sr_wide =
-      std::round(static_cast<long double>(audio.sample_rate()) * static_cast<long double>(ratio));
-  constexpr int kMinEffectiveSr = 1000;
-  constexpr int kMaxEffectiveSr = 192000;
-  SONARE_CHECK(std::isfinite(effective_sr_wide) && effective_sr_wide >= kMinEffectiveSr &&
-                   effective_sr_wide <= kMaxEffectiveSr,
+  PitchShiftPlan plan;
+  SONARE_CHECK(make_pitch_shift_ratio_plan(audio.size(), audio.sample_rate(), ratio, &plan),
                ErrorCode::InvalidParameter);
-  const int effective_sr = static_cast<int>(effective_sr_wide);
 
   // Time-stretch longer by 1/ratio (preserves pitch), then resample as if
   // sampled at sr*ratio back to sr: raises pitch by ratio, restores length.
@@ -64,7 +57,7 @@ Audio native_spectral_pitch_shift_ratio(const Audio& audio, float ratio, int n_f
   // Reject ratios whose effective rate falls outside the supported resampler
   // range instead of clamping (which silently changed the ratio -> wrong pitch).
   std::vector<float> result_samples =
-      resample(stretched.data(), stretched.size(), effective_sr, audio.sample_rate());
+      resample(stretched.data(), stretched.size(), plan.effective_sample_rate, audio.sample_rate());
   return Audio::from_vector(std::move(result_samples), audio.sample_rate());
 }
 

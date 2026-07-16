@@ -563,6 +563,11 @@ describe('Feature API precision (reference compatibility)', () => {
       expect(shifted.length).toBeLessThan(tone.length * 1.5);
     });
 
+    it('pitchShift rejects an unsupported effective rate before processing input', () => {
+      expect(() => pitchShift(new Float32Array(4), 48000, 48)).toThrow();
+      expect(pitchShift(generateSine(440, SR, 0.1), SR, 0)).toBeInstanceOf(Float32Array);
+    });
+
     it('normalize should produce peak close to target', () => {
       // Generate a quiet sine wave
       const n = Math.floor(SR * DURATION);

@@ -108,6 +108,26 @@ TEST_CASE("pitch_shift_ratio rejects out-of-range ratios", "[pitch_shift]") {
   REQUIRE_NOTHROW(pitch_shift_ratio(audio, 2.0f, config));
 }
 
+TEST_CASE("pitch shift preflight checks effective rate and expansion boundaries",
+          "[pitch_shift][resource_limit]") {
+  PitchShiftPlan plan;
+
+  // 48 kHz * 4 (+24 semitones) is the supported effective-rate ceiling.
+  REQUIRE(make_pitch_shift_plan(1024, 48000, 24.0f, &plan));
+  REQUIRE(plan.ratio == 4.0f);
+  REQUIRE(plan.effective_sample_rate == 192000);
+  REQUIRE(plan.stretched_samples == 4096);
+  REQUIRE_FALSE(make_pitch_shift_plan(1024, 48000, 48.0f, &plan));
+
+  // At ratio 4, 125,000,000 input samples project to the exact 500,000,000
+  // sample ceiling. One more input sample must fail without materialising it.
+  REQUIRE(make_pitch_shift_ratio_plan(125'000'000, 48000, 4.0f, &plan));
+  REQUIRE(plan.stretched_samples == kMaxAudioBufferSize);
+  REQUIRE_FALSE(make_pitch_shift_ratio_plan(125'000'001, 48000, 4.0f, &plan));
+  REQUIRE(make_pitch_shift_ratio_plan(kMaxAudioBufferSize, 48000, 0.5f, &plan));
+  REQUIRE_FALSE(make_pitch_shift_ratio_plan(kMaxAudioBufferSize + 1, 48000, 0.5f, &plan));
+}
+
 TEST_CASE("pitch_shift native spectral backend preserves duration", "[pitch_shift]") {
   Audio audio = create_test_audio(440.0f, 44100, 0.25f);
 

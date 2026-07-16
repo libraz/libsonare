@@ -73,6 +73,13 @@ SonareError sonare_time_stretch(const float* samples, size_t length, int sample_
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  PitchShiftPlan plan;
+  if (!make_pitch_shift_plan(length, sample_rate, semitones, &plan)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
                           [semitones](const Audio& a) { return pitch_shift(a, semitones); });
 }

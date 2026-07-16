@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "util/resource_limits.h"
+
 namespace sonare {
 
 /// @brief Audio buffer with shared ownership and zero-copy slicing.
@@ -110,7 +112,7 @@ class Audio {
 /// @{
 inline constexpr int kMinAudioSampleRate = 8000;
 inline constexpr int kMaxAudioSampleRate = 384000;
-inline constexpr std::size_t kMaxAudioBufferSize = 500000000;
+inline constexpr std::size_t kMaxAudioBufferSize = resource::kMaxOfflineAudioSamples;
 
 /// @brief Validates an offline-analysis audio buffer (single source of truth).
 /// @param samples       Pointer to mono/interleaved float sample data.

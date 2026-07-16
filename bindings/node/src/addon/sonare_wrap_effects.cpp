@@ -161,6 +161,11 @@ Napi::Value SonareWrap::PitchShift(const Napi::CallbackInfo& info) {
   int sr = info[1].As<Napi::Number>().Int32Value();
   float semitones = info[2].As<Napi::Number>().FloatValue();
 
+  sonare::PitchShiftPlan plan;
+  if (!sonare::make_pitch_shift_plan(length, sr, semitones, &plan)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unsupported pitch-shift expansion");
+  }
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::pitch_shift(audio, semitones);
   std::vector<float> out_vec(result.data(), result.data() + result.size());

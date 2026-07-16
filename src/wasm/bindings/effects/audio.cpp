@@ -66,6 +66,10 @@ val js_time_stretch(val samples, int sample_rate, float rate) {
 
 // Pitch shift
 val js_pitch_shift(val samples, int sample_rate, float semitones) {
+  PitchShiftPlan plan;
+  if (!make_pitch_shift_plan(samples["length"].as<size_t>(), sample_rate, semitones, &plan)) {
+    throw SonareException(ErrorCode::InvalidParameter, "unsupported pitch-shift expansion");
+  }
   Audio audio = loadValidatedAudio(samples, sample_rate);
   Audio result = pitch_shift(audio, semitones);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
