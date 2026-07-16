@@ -673,6 +673,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/additive_voice.cpp
     midi/synth/percussion_voice.cpp
     midi/synth/piano_voice.cpp
+    midi/synth/piano_resonance.cpp
     midi/synth/pipe_organ_voice.cpp
     midi/synth/bowed_string_voice.cpp
     midi/synth/reed_voice.cpp
@@ -686,10 +687,19 @@ if(BUILD_ARRANGEMENT)
     midi/synth/native_synth_live_control.cpp
     midi/synth/native_synth.cpp
     midi/synth/gm_fallback_map.cpp
+    midi/synth/gm_fallback_families.cpp
+    midi/synth/gm_fallback_programs.cpp
+    midi/synth/gm_fallback_programs_keyed.cpp
+    midi/synth/gm_fallback_programs_percussion.cpp
+    midi/synth/gm_fallback_programs_physical.cpp
+    midi/synth/gm_fallback_drums.cpp
     midi/synth/synth_presets.cpp
     midi/synth/sf2_file.cpp
     midi/synth/sf2_voice.cpp
     midi/synth/sf2_player.cpp
+    midi/synth/sf2_player_control.cpp
+    midi/synth/sf2_player_midi.cpp
+    midi/synth/sf2_player_render.cpp
     midi/synth/gs_layer.cpp
   )
   target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
