@@ -136,6 +136,13 @@ Enum checked_enum(int value, int count, const char* what) {
   return static_cast<Enum>(value);
 }
 
+std::size_t checked_nonnegative_size(int value, const char* what) {
+  if (value < 0) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(what) + " must be non-negative");
+  }
+  return static_cast<std::size_t>(value);
+}
+
 // Per-channel decorrelation offset XORed into the dither RNG seed. Without this,
 // both stereo channels seed std::mt19937 identically and produce bit-identical
 // (fully correlated) dither + noise-shaper feedback, which collapses the dither
@@ -379,12 +386,13 @@ void configure_processor(const std::string& name, const ParamMap& params,
   } else if (name == "repair.trimSilence") {
     repair::TrimSilenceConfig config;
     config.threshold = f(params, "threshold", config.threshold);
-    config.padding_samples =
-        static_cast<size_t>(i(params, "paddingSamples", config.padding_samples));
+    config.padding_samples = checked_nonnegative_size(
+        i(params, "paddingSamples", static_cast<int>(config.padding_samples)), "paddingSamples");
     config.mode =
         checked_enum<repair::TrimSilenceMode>(i(params, "mode", 0), 2, "trim silence mode");
     config.gate_lufs = f(params, "gateLufs", config.gate_lufs);
     config.window_ms = f(params, "windowMs", config.window_ms);
+    repair::validate_config(config);
     auto audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
     auto out = repair::trim_silence(audio, config);
     samples.assign(out.data(), out.data() + out.size());
@@ -589,11 +597,12 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     // resulting length mismatch.
     repair::TrimSilenceConfig config;
     config.threshold = f(map, "threshold", config.threshold);
-    config.padding_samples =
-        static_cast<std::size_t>(i(map, "paddingSamples", config.padding_samples));
-    config.mode = static_cast<repair::TrimSilenceMode>(i(map, "mode", 0));
+    config.padding_samples = checked_nonnegative_size(
+        i(map, "paddingSamples", static_cast<int>(config.padding_samples)), "paddingSamples");
+    config.mode = checked_enum<repair::TrimSilenceMode>(i(map, "mode", 0), 2, "trim silence mode");
     config.gate_lufs = f(map, "gateLufs", config.gate_lufs);
     config.window_ms = f(map, "windowMs", config.window_ms);
+    repair::validate_config(config);
     const std::vector<float> mono = detail::mono_mix(result.left, result.right);
     const repair::TrimRange range =
         repair::detect_trim_range(mono.data(), mono.size(), sample_rate, config);
@@ -689,7 +698,8 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
   Audio out;
   if (name == "match.applyMatchEq") {
     ::sonare::mastering::match::MatchEqConfig match_config;
-    match_config.max_bands = static_cast<size_t>(i(map, "maxBands", match_config.max_bands));
+    match_config.max_bands = checked_nonnegative_size(
+        i(map, "maxBands", static_cast<int>(match_config.max_bands)), "maxBands");
     match_config.max_gain_db = f(map, "maxGainDb", match_config.max_gain_db);
     match_config.min_frequency_hz = f(map, "minFrequencyHz", match_config.min_frequency_hz);
     match_config.max_frequency_hz = f(map, "maxFrequencyHz", match_config.max_frequency_hz);
@@ -698,8 +708,11 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
     ::sonare::mastering::match::MatchEqFirConfig fir_config;
     fir_config.fft_size = i(map, "fftSize", fir_config.fft_size);
     fir_config.kernel_size = i(map, "kernelSize", fir_config.kernel_size);
-    fir_config.phase = static_cast<::sonare::mastering::match::MatchEqFirPhase>(i(map, "phase", 0));
+    fir_config.phase = checked_enum<::sonare::mastering::match::MatchEqFirPhase>(
+        i(map, "phase", 0), 2, "match EQ FIR phase");
     fir_config.partition_size = i(map, "partitionSize", fir_config.partition_size);
+    ::sonare::mastering::match::validate_config(match_config);
+    ::sonare::mastering::match::validate_config(fir_config);
     auto source_spectrum = ::sonare::mastering::match::reference_spectrum(source_audio);
     auto reference_spectrum = ::sonare::mastering::match::reference_spectrum(reference_audio);
     out = ::sonare::mastering::match::apply_match_eq(source_audio, source_spectrum,
@@ -708,9 +721,10 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
     out = ::sonare::mastering::match::align_reference_to_source(source_audio, reference_audio,
                                                                 i(map, "maxAbsDelay", 4096));
   } else if (name == "match.abSwitch") {
-    out = ::sonare::mastering::match::ab_switch(
-        source_audio, reference_audio,
-        static_cast<::sonare::mastering::match::ABSelection>(i(map, "selection", 0)));
+    out =
+        ::sonare::mastering::match::ab_switch(source_audio, reference_audio,
+                                              checked_enum<::sonare::mastering::match::ABSelection>(
+                                                  i(map, "selection", 0), 2, "A/B selection"));
   } else if (name == "match.abCrossfade") {
     out = ::sonare::mastering::match::ab_crossfade(source_audio, reference_audio,
                                                    f(map, "mix", 0.5f));
@@ -765,12 +779,14 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
     json << "]";
   } else if (name == "match.matchEqCurve") {
     ::sonare::mastering::match::MatchEqConfig config;
-    config.max_bands = static_cast<size_t>(i(map, "maxBands", config.max_bands));
+    config.max_bands = checked_nonnegative_size(
+        i(map, "maxBands", static_cast<int>(config.max_bands)), "maxBands");
     config.max_gain_db = f(map, "maxGainDb", config.max_gain_db);
     config.min_frequency_hz = f(map, "minFrequencyHz", config.min_frequency_hz);
     config.max_frequency_hz = f(map, "maxFrequencyHz", config.max_frequency_hz);
     config.q = f(map, "q", config.q);
     config.smoothing_bins = i(map, "smoothingBins", config.smoothing_bins);
+    ::sonare::mastering::match::validate_config(config);
     auto curve = ::sonare::mastering::match::match_eq_curve(
         ::sonare::mastering::match::reference_spectrum(source_audio),
         ::sonare::mastering::match::reference_spectrum(reference_audio), config);

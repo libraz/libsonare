@@ -9,6 +9,7 @@ namespace sonare::mastering::match {
 
 enum class ABSelection { A, B };
 
+void validate_selection(ABSelection selection);
 Audio ab_switch(const Audio& a, const Audio& b, ABSelection selection);
 Audio ab_crossfade(const Audio& a, const Audio& b, float mix);
 

@@ -29,8 +29,27 @@ bool is_active_sample(const float* samples, size_t size, size_t index,
 
 }  // namespace
 
+void validate_config(const TrimSilenceConfig& config) {
+  if (!std::isfinite(config.threshold) || config.threshold < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter, "threshold must be finite and non-negative");
+  }
+  if (config.mode != TrimSilenceMode::Peak && config.mode != TrimSilenceMode::LufsGated) {
+    throw SonareException(ErrorCode::InvalidParameter, "invalid trim silence mode");
+  }
+  if (!std::isfinite(config.gate_lufs)) {
+    throw SonareException(ErrorCode::InvalidParameter, "gate_lufs must be finite");
+  }
+  if (!std::isfinite(config.window_ms) || config.window_ms <= 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter, "window_ms must be finite and positive");
+  }
+}
+
 TrimRange detect_trim_range(const float* samples, size_t size, int sample_rate,
                             const TrimSilenceConfig& config) {
+  validate_config(config);
+  if (sample_rate <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  }
   TrimRange range;
   if (samples == nullptr || size == 0) return range;
 
@@ -55,10 +74,7 @@ TrimRange detect_trim_range(const float* samples, size_t size, int sample_rate,
 
 Audio trim_silence(const Audio& audio, const TrimSilenceConfig& config) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  if (!(config.threshold >= 0.0f))
-    throw SonareException(ErrorCode::InvalidParameter, "threshold must be non-negative");
-  if (!(config.window_ms > 0.0f))
-    throw SonareException(ErrorCode::InvalidParameter, "window_ms must be positive");
+  validate_config(config);
 
   const TrimRange range =
       detect_trim_range(audio.data(), audio.size(), audio.sample_rate(), config);

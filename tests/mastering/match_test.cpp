@@ -253,4 +253,10 @@ TEST_CASE("Match helpers validate inputs", "[mastering][match]") {
 
   const auto audio = sine_audio(1000.0f, 0.1f);
   REQUIRE_THROWS(ab_crossfade(audio, audio, 1.5f));
+  REQUIRE_THROWS(ab_switch(audio, audio, static_cast<ABSelection>(2)));
+
+  MatchEqCurve curve{{100.0f, 1000.0f}, {0.0f, 3.0f}};
+  MatchEqFirConfig invalid_phase;
+  invalid_phase.phase = static_cast<MatchEqFirPhase>(2);
+  REQUIRE_THROWS(match_eq_fir_kernel(curve, 48000, invalid_phase));
 }

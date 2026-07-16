@@ -22,8 +22,15 @@ void validate_pair(const Audio& a, const Audio& b) {
 
 }  // namespace
 
+void validate_selection(ABSelection selection) {
+  if (selection != ABSelection::A && selection != ABSelection::B) {
+    throw SonareException(ErrorCode::InvalidParameter, "invalid A/B selection");
+  }
+}
+
 Audio ab_switch(const Audio& a, const Audio& b, ABSelection selection) {
   validate_pair(a, b);
+  validate_selection(selection);
   return selection == ABSelection::A ? a : b;
 }
 

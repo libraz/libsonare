@@ -24,6 +24,11 @@ struct TrimRange {
   size_t last_exclusive = 0;
 };
 
+/// Validates every public TrimSilenceConfig field. Named mono/stereo dispatch
+/// and the direct DSP entrypoints share this oracle so enum/range handling
+/// cannot drift between surfaces.
+void validate_config(const TrimSilenceConfig& config);
+
 TrimRange detect_trim_range(const float* samples, size_t size, int sample_rate,
                             const TrimSilenceConfig& config = {});
 

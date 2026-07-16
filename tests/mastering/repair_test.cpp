@@ -48,6 +48,20 @@ TEST_CASE("TrimSilence supports LUFS-gated trimming", "[mastering][repair]") {
   REQUIRE(rms(result) > 0.05f);
 }
 
+TEST_CASE("TrimSilence shares enum and range validation across direct entrypoints",
+          "[mastering][repair]") {
+  const std::vector<float> samples = {0.0f, 0.2f, 0.0f};
+  TrimSilenceConfig invalid_mode;
+  invalid_mode.mode = static_cast<TrimSilenceMode>(2);
+  REQUIRE_THROWS(trim_silence(make_audio(samples), invalid_mode));
+  REQUIRE_THROWS(detect_trim_range(samples.data(), samples.size(), 48000, invalid_mode));
+
+  TrimSilenceConfig invalid_window;
+  invalid_window.window_ms = -1.0f;
+  REQUIRE_THROWS(trim_silence(make_audio(samples), invalid_window));
+  REQUIRE_THROWS(detect_trim_range(samples.data(), samples.size(), 48000, invalid_window));
+}
+
 TEST_CASE("Declick interpolates isolated spikes", "[mastering][repair]") {
   const auto result = declick(make_audio({0.1f, 1.0f, 0.1f}), {0.8f, 4.0f});
 

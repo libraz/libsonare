@@ -40,6 +40,9 @@ struct MatchEqFirConfig {
   int partition_size = 0;
 };
 
+void validate_config(const MatchEqConfig& config);
+void validate_config(const MatchEqFirConfig& config);
+
 MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpectrum& reference,
                             const MatchEqConfig& config = {});
 std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rate,

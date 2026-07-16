@@ -549,6 +549,10 @@ TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
   REQUIRE(sonare_mastering_stereo_analysis_names() == sonare_mastering_stereo_analysis_names());
   REQUIRE(sonare_mastering_insert_names() == sonare_mastering_insert_names());
   REQUIRE(sonare_mastering_processor_catalog() == sonare_mastering_processor_catalog());
+  const char* catalog = sonare_mastering_processor_catalog();
+  REQUIRE(catalog != nullptr);
+  REQUIRE(std::strstr(catalog, "\"latencySamples\":") != nullptr);
+  REQUIRE(std::strstr(catalog, "\"tailSamples\":") != nullptr);
 }
 
 TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
@@ -570,11 +574,41 @@ TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
                                            44100, bad_mode, 1,
                                            &out) == SONARE_ERROR_INVALID_PARAMETER);
 
+  SonareMasteringStereoResult stereo_out{};
+  REQUIRE(sonare_mastering_apply_processor_stereo(
+              "repair.trimSilence", samples.data(), samples.data(), samples.size(), 44100, bad_mode,
+              1, &stereo_out) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareMasteringParam negative_padding[] = {{"paddingSamples", -1.0}};
+  REQUIRE(sonare_mastering_apply_processor("repair.trimSilence", samples.data(), samples.size(),
+                                           44100, negative_padding, 1,
+                                           &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mastering_apply_processor_stereo(
+              "repair.trimSilence", samples.data(), samples.data(), samples.size(), 44100,
+              negative_padding, 1, &stereo_out) == SONARE_ERROR_INVALID_PARAMETER);
+
   // A valid mode still succeeds.
   SonareMasteringParam good_mode[] = {{"mode", 0.0}};
   REQUIRE(sonare_mastering_apply_processor("repair.denoiseClassical", samples.data(),
                                            samples.size(), 44100, good_mode, 1, &out) == SONARE_OK);
   sonare_free_mastering_result(&out);
+}
+
+TEST_CASE("sonare_mastering pair processors reject invalid enums consistently",
+          "[c_api][mastering][match]") {
+  std::vector<float> source(2048, 0.1f);
+  std::vector<float> reference(2048, 0.2f);
+  SonareMasteringResult out{};
+
+  SonareMasteringParam bad_phase[] = {{"phase", 2.0}};
+  REQUIRE(sonare_mastering_apply_pair_processor("match.applyMatchEq", source.data(),
+                                                reference.data(), source.size(), 44100, bad_phase,
+                                                1, &out) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareMasteringParam bad_selection[] = {{"selection", -1.0}};
+  REQUIRE(sonare_mastering_apply_pair_processor("match.abSwitch", source.data(), reference.data(),
+                                                source.size(), 44100, bad_selection, 1,
+                                                &out) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare_mastering pair _ex accepts differing reference length", "[c_api][mastering]") {

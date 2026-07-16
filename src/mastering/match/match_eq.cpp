@@ -170,13 +170,29 @@ std::vector<float> apply_fir_partitioned(const Audio& audio, const std::vector<f
 
 }  // namespace
 
-MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpectrum& reference,
-                            const MatchEqConfig& config) {
-  if (!(config.max_gain_db >= 0.0f) || !(config.min_frequency_hz > 0.0f) ||
-      !(config.max_frequency_hz > config.min_frequency_hz) || !(config.q > 0.0f) ||
-      config.smoothing_bins < 0) {
+void validate_config(const MatchEqConfig& config) {
+  if (config.max_bands == 0 || !std::isfinite(config.max_gain_db) || config.max_gain_db < 0.0f ||
+      !std::isfinite(config.min_frequency_hz) || config.min_frequency_hz <= 0.0f ||
+      !std::isfinite(config.max_frequency_hz) ||
+      config.max_frequency_hz <= config.min_frequency_hz || !std::isfinite(config.q) ||
+      config.q <= 0.0f || config.smoothing_bins < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ configuration");
   }
+}
+
+void validate_config(const MatchEqFirConfig& config) {
+  if (!is_power_of_two(config.fft_size) || config.kernel_size <= 0 ||
+      config.kernel_size > config.fft_size || (config.kernel_size % 2) == 0 ||
+      config.partition_size < 0 ||
+      (config.phase != MatchEqFirPhase::LinearPhase &&
+       config.phase != MatchEqFirPhase::MinimumPhase)) {
+    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ FIR configuration");
+  }
+}
+
+MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpectrum& reference,
+                            const MatchEqConfig& config) {
+  validate_config(config);
   if (source.sample_rate != reference.sample_rate) {
     throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
@@ -204,11 +220,10 @@ std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rat
   if (curve.frequencies.empty() || curve.frequencies.size() != curve.gain_db.size()) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ curve");
   }
-  if (sample_rate <= 0 || !is_power_of_two(config.fft_size) || config.kernel_size <= 0 ||
-      config.kernel_size > config.fft_size || (config.kernel_size % 2) == 0 ||
-      config.partition_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ FIR configuration");
+  if (sample_rate <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
+  validate_config(config);
 
   FFT fft(config.fft_size);
   std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
