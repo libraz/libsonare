@@ -24,6 +24,13 @@
 
 namespace sonare::midi::synth {
 
+/// SoundFont 2.04 shdr sample-rate range. Terminal EOS records are excluded.
+inline constexpr uint32_t kSf2MinSampleRate = 400;
+inline constexpr uint32_t kSf2MaxSampleRate = 50000;
+inline constexpr bool valid_sf2_sample_rate(uint32_t sample_rate) noexcept {
+  return sample_rate >= kSf2MinSampleRate && sample_rate <= kSf2MaxSampleRate;
+}
+
 /// SF2 generator operators (SoundFont 2.04 §8.1.2; subset used by the player,
 /// raw values preserved for the rest).
 enum Sf2GenOper : uint16_t {

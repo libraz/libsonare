@@ -9,6 +9,7 @@
 #include "engine/realtime_engine.h"
 #include "rt/command.h"
 #include "sonare_c_internal.h"
+#include "util/resource_limits.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
@@ -191,6 +192,10 @@ SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uin
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
+  if (!sonare::resource::sf2_file_fits(size)) {
+    set_last_error("sf2: file resource limit exceeded");
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
   auto soundfont = std::make_shared<sonare::midi::synth::Sf2File>();
   std::string error;
   if (!soundfont->parse(data, size, &error)) {

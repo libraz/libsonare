@@ -478,6 +478,26 @@ TEST_CASE("Sf2Player prefers SF2 presets and falls back only when uncovered",
   }
 }
 
+TEST_CASE("Sf2Player skips a malformed-rate zone and keeps the GM fallback audible",
+          "[midi][sf2][synth][malformed]") {
+  auto sf2 = make_single_preset_fixture();
+  auto& samples = const_cast<std::vector<sonare::midi::synth::Sf2Sample>&>(sf2->samples());
+  REQUIRE_FALSE(samples.empty());
+  samples[0].sample_rate = 0;  // Defense-in-depth for an externally corrupted model.
+
+  Sf2PlayerConfig config;
+  config.gain = 1.0f;
+  Sf2Player player(config);
+  player.set_soundfont(sf2);
+  player.prepare(kOutRate, 256);
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+  const StereoRender output = render(player, 4096);
+  const auto [minimum, maximum] = std::minmax_element(output.left.begin(), output.left.end());
+  REQUIRE(peak(output.left) > 1.0e-4f);
+  REQUIRE(*maximum - *minimum > 1.0e-4f);  // Not a stuck/DC sample position.
+  REQUIRE(player.active_voice_count() > 0);
+}
+
 TEST_CASE("Sf2Player fallback tail covers the slowest fallback release", "[midi][sf2][synth]") {
   Sf2Player player = make_fallback_player();
   REQUIRE(player.tail_samples() > 0);

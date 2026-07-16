@@ -7,6 +7,7 @@
 #include <tuple>
 
 #include "midi/synth/sf2_player.h"
+#include "util/resource_limits.h"
 
 namespace {
 
@@ -156,6 +157,10 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
+  if (!sonare::resource::sf2_file_fits(size)) {
+    sonare_c_detail::set_last_error("sf2: file resource limit exceeded");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   auto soundfont = std::make_shared<synth::Sf2File>();
   std::string error;
   if (!soundfont->parse(data, size, &error)) {

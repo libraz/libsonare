@@ -12,10 +12,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
 #include "support/sf2_builder.h"
+#include "util/resource_limits.h"
 
 namespace {
 
@@ -114,7 +116,71 @@ std::vector<uint8_t> build_fixture_with_empty_pdta_chunk(const char* target_id) 
   return bytes;
 }
 
+std::vector<uint8_t> build_huge_smpl_header_fixture() {
+  std::vector<uint8_t> bytes(32, 0);
+  std::memcpy(bytes.data(), "RIFF", 4);
+  write_u32(bytes, 4, 24);  // bytes after the RIFF size field
+  std::memcpy(bytes.data() + 8, "sfbk", 4);
+  std::memcpy(bytes.data() + 12, "LIST", 4);
+  write_u32(bytes, 16, 12);  // sdta type + one sub-chunk header
+  std::memcpy(bytes.data() + 20, "sdta", 4);
+  std::memcpy(bytes.data() + 24, "smpl", 4);
+  write_u32(bytes, 28, std::numeric_limits<uint32_t>::max());
+  return bytes;
+}
+
+bool set_first_sample_rate(std::vector<uint8_t>* bytes, uint32_t sample_rate) {
+  for (size_t offset = 0; offset + 8 + 46 <= bytes->size(); ++offset) {
+    if (!fourcc_at(*bytes, offset, "shdr")) continue;
+    const uint32_t chunk_size = read_u32(*bytes, offset + 4);
+    if (chunk_size < 92 || offset + 8 + chunk_size > bytes->size()) return false;
+    write_u32(*bytes, offset + 8 + 36, sample_rate);
+    return true;
+  }
+  return false;
+}
+
 }  // namespace
+
+TEST_CASE("SF2 resource budgets enforce exact boundaries without allocation",
+          "[midi][sf2][resource_limit]") {
+  using sonare::resource::sf2_file_fits;
+  using sonare::resource::sf2_sample_expansion_fits;
+  using sonare::resource::sf2_table_records_fit;
+  using sonare::resource::Sf2ResourceLimits;
+
+  const Sf2ResourceLimits limits{/*max_file_bytes=*/200, /*max_sample_points=*/100,
+                                 /*max_peak_bytes=*/180, /*max_table_records=*/5};
+  REQUIRE(sf2_file_fits(200, limits));
+  REQUIRE_FALSE(sf2_file_fits(201, limits));
+
+  // file 100 + 20 float points (80 bytes) lands exactly on the peak cap.
+  REQUIRE(sf2_sample_expansion_fits(100, 20, limits));
+  REQUIRE_FALSE(sf2_sample_expansion_fits(101, 20, limits));
+
+  const Sf2ResourceLimits point_limits{/*max_file_bytes=*/200, /*max_sample_points=*/20,
+                                       /*max_peak_bytes=*/1000, /*max_table_records=*/5};
+  REQUIRE(sf2_sample_expansion_fits(10, 20, point_limits));
+  REQUIRE_FALSE(sf2_sample_expansion_fits(10, 21, point_limits));
+  REQUIRE(sf2_table_records_fit(2, 3, limits));
+  REQUIRE_FALSE(sf2_table_records_fit(2, 4, limits));
+}
+
+TEST_CASE("Sf2File rejects oversized resources before reading payloads",
+          "[midi][sf2][resource_limit]") {
+  Sf2File sf2;
+  std::string error;
+
+  const uint8_t sentinel = 0;
+  REQUIRE_FALSE(
+      sf2.parse(&sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1, &error));
+  REQUIRE(error == "sf2: file resource limit exceeded");
+
+  const std::vector<uint8_t> huge_header = build_huge_smpl_header_fixture();
+  REQUIRE_FALSE(sf2.parse(huge_header.data(), huge_header.size(), &error));
+  REQUIRE(error == "sf2: sample resource limit exceeded");
+  REQUIRE(sf2.sample_pool().empty());
+}
 
 TEST_CASE("Sf2File parses presets, instruments, zones and samples", "[midi][sf2]") {
   const std::vector<uint8_t> bytes = build_fixture();
@@ -175,6 +241,28 @@ TEST_CASE("Sf2File parses presets, instruments, zones and samples", "[midi][sf2]
   REQUIRE(pool.size() >= sine.end);
   REQUIRE(pool[sine.start] == Approx(0.0f).margin(1e-4));
   REQUIRE(pool[sine.start + 8] == Approx(1.0f).margin(1e-3));  // sin(pi/2)
+}
+
+TEST_CASE("Sf2File enforces the SoundFont sample-rate range", "[midi][sf2][malformed]") {
+  for (const uint32_t invalid_rate : {uint32_t{0}, uint32_t{399}, uint32_t{50001}}) {
+    CAPTURE(invalid_rate);
+    std::vector<uint8_t> bytes = build_fixture();
+    REQUIRE(set_first_sample_rate(&bytes, invalid_rate));
+    Sf2File sf2;
+    std::string error;
+    REQUIRE_FALSE(sf2.parse(bytes.data(), bytes.size(), &error));
+    REQUIRE(error == "sf2: sample rate out of range [400, 50000]");
+    REQUIRE(sf2.samples().empty());
+  }
+
+  for (const uint32_t valid_rate : {uint32_t{400}, uint32_t{50000}}) {
+    CAPTURE(valid_rate);
+    std::vector<uint8_t> bytes = build_fixture();
+    REQUIRE(set_first_sample_rate(&bytes, valid_rate));
+    Sf2File sf2;
+    REQUIRE(sf2.parse(bytes.data(), bytes.size(), nullptr));
+    REQUIRE(sf2.samples()[0].sample_rate == valid_rate);
+  }
 }
 
 TEST_CASE("Sf2File velocity/key zone matching helper", "[midi][sf2]") {

@@ -476,7 +476,11 @@ SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
 ///        @ref sonare_engine_set_sf2_instrument. Control-thread API; replaces
 ///        any previously loaded SoundFont (already-bound SF2 instruments keep
 ///        the SoundFont they were created with). The bytes are copied/decoded,
-///        so @p data may be freed after the call.
+///        so @p data may be freed after the call. Resource limits are
+///        268,435,456 input bytes, 67,108,864 sample points, 536,870,912 peak
+///        input-plus-decoded bytes, and 65,536 records per pdta table. A
+///        resource-limit failure returns SONARE_ERROR_INVALID_FORMAT and leaves
+///        the previously loaded SoundFont unchanged.
 SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uint8_t* data,
                                          size_t size);
 

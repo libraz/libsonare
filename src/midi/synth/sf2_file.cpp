@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include "util/resource_limits.h"
+
 namespace sonare::midi::synth {
 
 namespace {
@@ -25,7 +27,14 @@ class ByteReader {
     }
   }
 
-  void skip(size_t n) noexcept { seek(pos_ + n); }
+  void skip(size_t n) noexcept {
+    if (n > remaining()) {
+      ok_ = false;
+      pos_ = size_;
+      return;
+    }
+    pos_ += n;
+  }
 
   uint8_t u8() noexcept {
     if (pos_ + 1 > size_) {
@@ -149,6 +158,34 @@ struct Bag {
   uint16_t mod_index = 0;
 };
 
+bool valid_bag_table(const std::vector<Bag>& bags, size_t gen_count, size_t mod_count) noexcept {
+  uint16_t previous_gen = 0;
+  uint16_t previous_mod = 0;
+  for (const Bag& bag : bags) {
+    if (bag.gen_index < previous_gen || bag.mod_index < previous_mod ||
+        static_cast<size_t>(bag.gen_index) > gen_count ||
+        static_cast<size_t>(bag.mod_index) > mod_count) {
+      return false;
+    }
+    previous_gen = bag.gen_index;
+    previous_mod = bag.mod_index;
+  }
+  return true;
+}
+
+template <typename Header>
+bool valid_header_bag_indices(const std::vector<Header>& headers,
+                              size_t terminal_bag_index) noexcept {
+  uint16_t previous = 0;
+  for (const Header& header : headers) {
+    if (header.bag_index < previous || static_cast<size_t>(header.bag_index) > terminal_bag_index) {
+      return false;
+    }
+    previous = header.bag_index;
+  }
+  return true;
+}
+
 /// Decodes one bag range [first, last) of generators/modulators into an
 /// Sf2Zone, capturing key/vel ranges and the terminal instrument/sampleID.
 Sf2Zone make_zone(const std::vector<Sf2Gen>& gens, const std::vector<Sf2Mod>& mods,
@@ -211,7 +248,9 @@ void Sf2File::clear() {
 
 bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
   clear();
-  if (data == nullptr || size < 12) return fail(error, "sf2: file too small");
+  if (data == nullptr) return fail(error, "sf2: file too small");
+  if (!resource::sf2_file_fits(size)) return fail(error, "sf2: file resource limit exceeded");
+  if (size < 12) return fail(error, "sf2: file too small");
 
   ByteReader file(data, size);
   char id[4];
@@ -249,6 +288,10 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
           char sub_id[4];
           if (!list.fourcc(sub_id)) break;
           const uint32_t sub_size = list.u32();
+          if (id_is(sub_id, "smpl") &&
+              !resource::sf2_sample_expansion_fits(size, static_cast<size_t>(sub_size) / 2u)) {
+            return fail(error, "sf2: sample resource limit exceeded");
+          }
           if (sub_size > list.remaining()) return fail(error, "sf2: sdta sub-chunk overruns");
           if (id_is(sub_id, "smpl")) {
             smpl_data = data + chunk_pos + list.pos();
@@ -290,7 +333,12 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
       ByteReader sub(data + pdta_pos + pdta.pos(), sub_size);
       if (id_is(sub_id, "phdr")) {
         if (sub_size % 38 != 0) return fail(error, "sf2: phdr record size mismatch");
-        for (size_t i = 0; i < sub_size / 38; ++i) {
+        const size_t record_count = sub_size / 38;
+        if (!resource::sf2_table_records_fit(phdr.size(), record_count)) {
+          return fail(error, "sf2: pdta table resource limit exceeded");
+        }
+        phdr.reserve(phdr.size() + record_count);
+        for (size_t i = 0; i < record_count; ++i) {
           PresetHeader h;
           h.name = sub.name(20);
           h.preset = sub.u16();
@@ -302,7 +350,12 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
       } else if (id_is(sub_id, "pbag") || id_is(sub_id, "ibag")) {
         if (sub_size % 4 != 0) return fail(error, "sf2: bag record size mismatch");
         auto& bags = sub_id[0] == 'p' ? pbag : ibag;
-        for (size_t i = 0; i < sub_size / 4; ++i) {
+        const size_t record_count = sub_size / 4;
+        if (!resource::sf2_table_records_fit(bags.size(), record_count)) {
+          return fail(error, "sf2: pdta table resource limit exceeded");
+        }
+        bags.reserve(bags.size() + record_count);
+        for (size_t i = 0; i < record_count; ++i) {
           Bag b;
           b.gen_index = sub.u16();
           b.mod_index = sub.u16();
@@ -311,7 +364,12 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
       } else if (id_is(sub_id, "pmod") || id_is(sub_id, "imod")) {
         if (sub_size % 10 != 0) return fail(error, "sf2: mod record size mismatch");
         auto& mods = sub_id[0] == 'p' ? pmod : imod;
-        for (size_t i = 0; i < sub_size / 10; ++i) {
+        const size_t record_count = sub_size / 10;
+        if (!resource::sf2_table_records_fit(mods.size(), record_count)) {
+          return fail(error, "sf2: pdta table resource limit exceeded");
+        }
+        mods.reserve(mods.size() + record_count);
+        for (size_t i = 0; i < record_count; ++i) {
           Sf2Mod m;
           m.src_oper = sub.u16();
           m.dest_oper = sub.u16();
@@ -323,7 +381,12 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
       } else if (id_is(sub_id, "pgen") || id_is(sub_id, "igen")) {
         if (sub_size % 4 != 0) return fail(error, "sf2: gen record size mismatch");
         auto& gens = sub_id[0] == 'p' ? pgen : igen;
-        for (size_t i = 0; i < sub_size / 4; ++i) {
+        const size_t record_count = sub_size / 4;
+        if (!resource::sf2_table_records_fit(gens.size(), record_count)) {
+          return fail(error, "sf2: pdta table resource limit exceeded");
+        }
+        gens.reserve(gens.size() + record_count);
+        for (size_t i = 0; i < record_count; ++i) {
           Sf2Gen g;
           g.oper = sub.u16();
           g.amount = sub.s16();
@@ -331,7 +394,12 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
         }
       } else if (id_is(sub_id, "inst")) {
         if (sub_size % 22 != 0) return fail(error, "sf2: inst record size mismatch");
-        for (size_t i = 0; i < sub_size / 22; ++i) {
+        const size_t record_count = sub_size / 22;
+        if (!resource::sf2_table_records_fit(inst.size(), record_count)) {
+          return fail(error, "sf2: pdta table resource limit exceeded");
+        }
+        inst.reserve(inst.size() + record_count);
+        for (size_t i = 0; i < record_count; ++i) {
           InstHeader h;
           h.name = sub.name(20);
           h.bag_index = sub.u16();
@@ -339,7 +407,12 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
         }
       } else if (id_is(sub_id, "shdr")) {
         if (sub_size % 46 != 0) return fail(error, "sf2: shdr record size mismatch");
-        for (size_t i = 0; i < sub_size / 46; ++i) {
+        const size_t record_count = sub_size / 46;
+        if (!resource::sf2_table_records_fit(samples_.size(), record_count)) {
+          return fail(error, "sf2: pdta table resource limit exceeded");
+        }
+        samples_.reserve(samples_.size() + record_count);
+        for (size_t i = 0; i < record_count; ++i) {
           Sf2Sample s;
           s.name = sub.name(20);
           s.start = sub.u32();
@@ -363,10 +436,26 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
     clear();
     return fail(error, "sf2: missing phdr or shdr records");
   }
+  if (!valid_bag_table(pbag, pgen.size(), pmod.size()) ||
+      !valid_bag_table(ibag, igen.size(), imod.size())) {
+    clear();
+    return fail(error, "sf2: bag record indices are not monotonic");
+  }
+  if ((!pbag.empty() && !valid_header_bag_indices(phdr, pbag.size() - 1)) ||
+      (!ibag.empty() && !valid_header_bag_indices(inst, ibag.size() - 1))) {
+    clear();
+    return fail(error, "sf2: header bag indices are not monotonic");
+  }
   // Drop the terminal records (EOP / EOI / EOS).
   phdr.pop_back();
   if (!inst.empty()) inst.pop_back();
   samples_.pop_back();
+  for (const Sf2Sample& sample : samples_) {
+    if (!valid_sf2_sample_rate(sample.sample_rate)) {
+      clear();
+      return fail(error, "sf2: sample rate out of range [400, 50000]");
+    }
+  }
 
   // --- sample pool: convert 16-bit (+ optional 24-bit extension) to float ---
   if (smpl_data == nullptr || smpl_bytes < 2) {
@@ -374,6 +463,10 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
     return fail(error, "sf2: missing smpl PCM data");
   }
   const size_t num_points = smpl_bytes / 2;
+  if (!resource::sf2_sample_expansion_fits(size, num_points)) {
+    clear();
+    return fail(error, "sf2: sample resource limit exceeded");
+  }
   const bool use_sm24 = sm24_data != nullptr && sm24_bytes >= num_points;
   sample_pool_.resize(num_points);
   for (size_t i = 0; i < num_points; ++i) {

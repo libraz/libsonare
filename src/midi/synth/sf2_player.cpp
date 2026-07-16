@@ -542,8 +542,10 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
         continue;
       }
       const Sf2Sample& sample = soundfont_->samples()[static_cast<size_t>(izone.sample)];
-      if (sample.is_rom() || sample.end <= sample.start) continue;
-      has_renderable_zone = true;
+      if (sample.is_rom() || !valid_sf2_sample_rate(sample.sample_rate) ||
+          sample.end <= sample.start || sample.end > soundfont_->sample_pool().size()) {
+        continue;
+      }
 
       // Stack generators: defaults -> instrument global -> instrument zone
       // (absolute), then + preset global + preset zone (relative).
@@ -554,6 +556,11 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
       gens.add_relative(pzone);
 
       Sf2VoiceParams params = resolve_voice_params(gens, sample, note, velocity, sample_rate_);
+      if (params.end <= params.start || params.end > soundfont_->sample_pool().size() ||
+          !std::isfinite(params.pitch_increment) || params.pitch_increment <= 0.0) {
+        continue;
+      }
+      has_renderable_zone = true;
 
       // GS layer: NRPN part edits + per-note drum-kit overrides.
       apply_gs_part_params(params, ch.gs);

@@ -6,6 +6,7 @@
 
 #include "binding_project_parity_test_helpers.h"
 #include "support/sf2_builder.h"
+#include "util/resource_limits.h"
 
 namespace {
 
@@ -98,6 +99,15 @@ TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project
   REQUIRE(count == 0);
 
   REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+  REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
+  REQUIRE(count == 4);
+
+  // Size-only preflight rejects before reading the one-byte pointer and keeps
+  // the previously loaded SoundFont intact.
+  const uint8_t sentinel = 0;
+  REQUIRE(sonare_project_load_soundfont(
+              project, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
   REQUIRE(count == 4);
 
@@ -360,6 +370,10 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
   REQUIRE(sonare_engine_load_soundfont(engine, garbage, sizeof(garbage)) ==
           SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_load_soundfont(engine, sf2.data(), sf2.size()) == SONARE_OK);
+  const uint8_t sentinel = 0;
+  REQUIRE(sonare_engine_load_soundfont(
+              engine, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
+          SONARE_ERROR_INVALID_FORMAT);
 
   config.struct_version = 99;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
