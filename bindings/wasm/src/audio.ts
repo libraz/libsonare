@@ -344,15 +344,30 @@ export class Audio {
     return mastering(this._samples, this._sampleRate, options);
   }
 
-  masteringChain(config: MasteringChainConfig): MasteringChainResult {
-    return masteringChain(this._samples, this._sampleRate, config);
+  masteringChain(
+    config: MasteringChainConfig = {},
+    onProgress?: ProgressCallback,
+  ): MasteringChainResult {
+    return masteringChain({
+      samples: this._samples,
+      sampleRate: this._sampleRate,
+      config,
+      onProgress,
+    });
   }
 
   masterAudio(
     presetName: MasteringPreset = 'pop',
-    overrides: Record<string, number | boolean> | null = null,
+    overrides: MasteringChainConfig | null = null,
+    onProgress?: ProgressCallback,
   ): MasteringChainResult {
-    return masterAudio(this._samples, this._sampleRate, presetName, overrides ?? {});
+    return masterAudio({
+      samples: this._samples,
+      sampleRate: this._sampleRate,
+      preset: presetName,
+      overrides: overrides ?? {},
+      onProgress,
+    });
   }
 
   masteringProcess(

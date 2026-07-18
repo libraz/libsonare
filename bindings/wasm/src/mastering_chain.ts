@@ -1,3 +1,4 @@
+import { flattenChainConfig } from './_chain_config';
 import { getSonareModule } from './module_state';
 import type {
   MasteringChainConfig,
@@ -31,7 +32,7 @@ export interface MasterAudioRequest {
   samples: Float32Array;
   sampleRate?: number;
   preset?: MasteringPreset;
-  overrides?: Record<string, number | boolean>;
+  overrides?: MasteringChainConfig;
   onProgress?: ProgressCallback;
 }
 
@@ -41,7 +42,7 @@ export interface MasterAudioStereoRequest {
   right: Float32Array;
   sampleRate?: number;
   preset?: MasteringPreset;
-  overrides?: Record<string, number | boolean>;
+  overrides?: MasteringChainConfig;
   onProgress?: ProgressCallback;
 }
 
@@ -49,7 +50,7 @@ function masterAudioRequest(
   requestOrSamples: MasterAudioRequest | Float32Array,
   sampleRate: number,
   preset: MasteringPreset,
-  overrides: Record<string, number | boolean> | null,
+  overrides: MasteringChainConfig | null,
   onProgress?: ProgressCallback,
 ): MasterAudioRequest {
   if (requestOrSamples instanceof Float32Array) {
@@ -69,7 +70,7 @@ function masterAudioStereoRequest(
   right: Float32Array | undefined,
   sampleRate: number,
   preset: MasteringPreset,
-  overrides: Record<string, number | boolean> | null,
+  overrides: MasteringChainConfig | null,
   onProgress?: ProgressCallback,
 ): MasterAudioStereoRequest {
   if (requestOrLeft instanceof Float32Array) {
@@ -266,7 +267,8 @@ export function masteringPresetNames(): MasteringPreset[] {
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param presetName - Preset identifier from {@link masteringPresetNames}
- * @param overrides - Optional flat overrides (dot-notation, e.g. `'loudness.targetLufs'`) applied on top of the preset. Pass `null` for preset defaults.
+ * @param overrides - Optional nested {@link MasteringChainConfig} applied on top of the preset (e.g. `{ loudness: { targetLufs: -14 } }`). Pass `null` for preset defaults.
+ * @param onProgress - Optional per-stage progress callback (progress: 0-1, stage: string).
  * @returns Processed audio, loudness metadata, and applied stage names
  */
 export function masterAudio(request: MasterAudioRequest): MasteringChainResult;
@@ -274,21 +276,24 @@ export function masterAudio(
   samples: Float32Array,
   sampleRate?: number,
   presetName?: MasteringPreset,
-  overrides?: Record<string, number | boolean>,
+  overrides?: MasteringChainConfig,
+  onProgress?: ProgressCallback,
 ): MasteringChainResult;
 export function masterAudio(
   samples: MasterAudioRequest | Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
-  overrides: Record<string, number | boolean> = {},
+  overrides: MasteringChainConfig = {},
+  onProgress?: ProgressCallback,
 ): MasteringChainResult {
-  const request = masterAudioRequest(samples, sampleRate, presetName, overrides);
+  const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
+  const flat = flattenChainConfig(request.overrides ?? {});
   if (request.onProgress) {
     return requireModule().masterAudioWithProgress(
       request.preset ?? 'pop',
       request.samples,
       request.sampleRate ?? 22050,
-      request.overrides ?? {},
+      flat,
       request.onProgress,
     );
   }
@@ -296,7 +301,7 @@ export function masterAudio(
     request.preset ?? 'pop',
     request.samples,
     request.sampleRate ?? 22050,
-    request.overrides ?? {},
+    flat,
   );
 }
 
@@ -307,7 +312,8 @@ export function masterAudio(
  * @param right - Right channel samples
  * @param sampleRate - Sample rate in Hz
  * @param presetName - Preset identifier from {@link masteringPresetNames}
- * @param overrides - Optional flat overrides (dot-notation, e.g. `'loudness.targetLufs'`) applied on top of the preset. Pass `null` for preset defaults.
+ * @param overrides - Optional nested {@link MasteringChainConfig} applied on top of the preset (e.g. `{ loudness: { targetLufs: -14 } }`). Pass `null` for preset defaults.
+ * @param onProgress - Optional per-stage progress callback (progress: 0-1, stage: string).
  * @returns Processed stereo audio, loudness metadata, and applied stage names
  */
 export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringStereoChainResult;
@@ -316,16 +322,26 @@ export function masterAudioStereo(
   right: Float32Array,
   sampleRate?: number,
   presetName?: MasteringPreset,
-  overrides?: Record<string, number | boolean>,
+  overrides?: MasteringChainConfig,
+  onProgress?: ProgressCallback,
 ): MasteringStereoChainResult;
 export function masterAudioStereo(
   left: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined = undefined,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
-  overrides: Record<string, number | boolean> = {},
+  overrides: MasteringChainConfig = {},
+  onProgress?: ProgressCallback,
 ): MasteringStereoChainResult {
-  const request = masterAudioStereoRequest(left, right, sampleRate, presetName, overrides);
+  const request = masterAudioStereoRequest(
+    left,
+    right,
+    sampleRate,
+    presetName,
+    overrides,
+    onProgress,
+  );
+  const flat = flattenChainConfig(request.overrides ?? {});
   if (request.left.length !== request.right.length) {
     throw new Error('Stereo channel lengths must match.');
   }
@@ -335,7 +351,7 @@ export function masterAudioStereo(
       request.left,
       request.right,
       request.sampleRate ?? 22050,
-      request.overrides ?? {},
+      flat,
       request.onProgress,
     );
   }
@@ -344,7 +360,7 @@ export function masterAudioStereo(
     request.left,
     request.right,
     request.sampleRate ?? 22050,
-    request.overrides ?? {},
+    flat,
   );
 }
 
@@ -360,14 +376,14 @@ export function masterAudioWithProgress(
   sampleRate?: number,
   presetName?: MasteringPreset,
   onProgress?: ProgressCallback,
-  overrides?: Record<string, number | boolean> | null,
+  overrides?: MasteringChainConfig | null,
 ): MasteringChainResult;
 export function masterAudioWithProgress(
   samples: MasterAudioRequest | Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   onProgress?: ProgressCallback,
-  overrides: Record<string, number | boolean> | null = null,
+  overrides: MasteringChainConfig | null = null,
 ): MasteringChainResult {
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
   if (!request.onProgress) {
@@ -377,7 +393,7 @@ export function masterAudioWithProgress(
     request.preset ?? 'pop',
     request.samples,
     request.sampleRate ?? 22050,
-    request.overrides ?? {},
+    flattenChainConfig(request.overrides ?? {}),
     request.onProgress,
   );
 }
@@ -394,7 +410,7 @@ export function masterAudioStereoWithProgress(
   sampleRate?: number,
   presetName?: MasteringPreset,
   onProgress?: ProgressCallback,
-  overrides?: Record<string, number | boolean> | null,
+  overrides?: MasteringChainConfig | null,
 ): MasteringStereoChainResult;
 export function masterAudioStereoWithProgress(
   left: MasterAudioStereoRequest | Float32Array,
@@ -402,7 +418,7 @@ export function masterAudioStereoWithProgress(
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   onProgress?: ProgressCallback,
-  overrides: Record<string, number | boolean> | null = null,
+  overrides: MasteringChainConfig | null = null,
 ): MasteringStereoChainResult {
   const request = masterAudioStereoRequest(
     left,
@@ -423,7 +439,7 @@ export function masterAudioStereoWithProgress(
     request.left,
     request.right,
     request.sampleRate ?? 22050,
-    request.overrides ?? {},
+    flattenChainConfig(request.overrides ?? {}),
     request.onProgress,
   );
 }
