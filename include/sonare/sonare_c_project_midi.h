@@ -19,9 +19,11 @@ extern "C" {
 ///
 /// Layout rationale: this C POD is the stable public channel-voice event shape.
 /// @p data0 and @p data1 are the first two UMP words of a channel-voice
-/// message: callers building a note may pack
-///   data0 = (0x2u << 28) | (status << 16) | (note << 8) | velocity, data1 = 0
-/// (matching @ref make_midi1_note_on word[0]). The core stores these words in
+/// message: callers building a MIDI 1.0 note-on may pack
+///   data0 = (0x2u << 28) | (group << 24) | (status << 20) | (channel << 16) |
+///           (note << 8) | velocity, data1 = 0
+/// (matching @ref make_midi1_note_on word[0], where status is the 0x9 note-on
+/// nibble). The core stores these words in
 /// the project and the compiler / SMF exporter interpret valid UMP channel-voice
 /// packets as MIDI events. SysEx payloads imported from SMF are carried by an
 /// internal side store and are preserved by project serialization / SMF export;

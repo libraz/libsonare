@@ -123,6 +123,36 @@ describe('metering request object compatibility (WASM)', () => {
     expect(phaseScope.correlation).toBeCloseTo(phaseScopePositional.correlation, 6);
   });
 
+  it('folds maxPoints into the primary scope functions (Node-shape parity)', () => {
+    const maxPoints = 64;
+    // The primary function with maxPoints must bound the point count and match
+    // the decimated variant exactly.
+    const vectorscope = meteringVectorscope({ left: samples, right, sampleRate, maxPoints });
+    expect(vectorscope.mid.length).toBeLessThanOrEqual(maxPoints);
+    const vectorscopeDecimated = meteringVectorscopeDecimated({
+      left: samples,
+      right,
+      sampleRate,
+      maxPoints,
+    });
+    expectFloatArraysEqual(vectorscope.mid, vectorscopeDecimated.mid);
+    expectFloatArraysEqual(vectorscope.side, vectorscopeDecimated.side);
+
+    const phaseScope = meteringPhaseScope(samples, right, sampleRate, { maxPoints });
+    expect(phaseScope.radius.length).toBeLessThanOrEqual(maxPoints);
+    const phaseScopeDecimated = meteringPhaseScopeDecimated({
+      left: samples,
+      right,
+      sampleRate,
+      maxPoints,
+    });
+    expectFloatArraysEqual(phaseScope.radius, phaseScopeDecimated.radius);
+
+    // Omitting maxPoints stays full resolution (one point per input sample).
+    const full = meteringVectorscope({ left: samples, right, sampleRate });
+    expect(full.mid.length).toBe(samples.length);
+  });
+
   it('matches positional spectrum calls', () => {
     const options = { nFft: 1024, applyOctaveSmoothing: true, octaveFraction: 3, validate: true };
     const spectrum = meteringSpectrum({ samples, sampleRate, ...options });

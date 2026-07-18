@@ -302,6 +302,16 @@ export interface MeteringStereoDecimatedRequest extends MeteringStereoRequest {
   maxPoints?: number;
 }
 
+/** Options for the scope functions (mirrors the Node `ScopeOptions`). */
+export interface ScopeOptions extends ValidateOptions {
+  /**
+   * Upper bound on the returned point count. Omit / `0` (or a value `>= length`)
+   * yields one point per input sample; otherwise the point cloud is
+   * deterministically decimated to at most `maxPoints` points for display.
+   */
+  maxPoints?: number;
+}
+
 /** Canonical request form for whole-signal spectrum analysis. */
 export interface MeteringSpectrumRequest extends SpectrumOptions, ValidateOptions {
   samples: Float32Array;
@@ -393,19 +403,23 @@ export function meteringStereoWidth(
   );
 }
 
-/** Per-sample mid/side point series (one entry per input frame). */
-export function meteringVectorscope(request: MeteringStereoRequest): VectorscopeReport;
+/**
+ * Mid/side vectorscope point series. By default emits one point per input
+ * sample; pass `maxPoints` to get a display-sized decimated point set (matching
+ * the Node `meteringVectorscope` shape).
+ */
+export function meteringVectorscope(request: MeteringStereoDecimatedRequest): VectorscopeReport;
 export function meteringVectorscope(
   left: Float32Array,
   right: Float32Array,
   sampleRate?: number,
-  options?: ValidateOptions,
+  options?: ScopeOptions,
 ): VectorscopeReport;
 export function meteringVectorscope(
-  left: Float32Array | MeteringStereoRequest,
+  left: Float32Array | MeteringStereoDecimatedRequest,
   right?: Float32Array,
   sampleRate = 22050,
-  options: ValidateOptions = {},
+  options: ScopeOptions = {},
 ): VectorscopeReport {
   const request =
     left instanceof Float32Array
@@ -414,18 +428,20 @@ export function meteringVectorscope(
   const validate = request.validate !== false;
   assertSamples('meteringVectorscope', request.left, validate, 'left');
   assertSamples('meteringVectorscope', request.right, validate, 'right');
-  return requireModule().meteringVectorscope(
+  return requireModule().meteringVectorscopeDecimated(
     request.left,
     request.right,
     request.sampleRate ?? 22050,
+    request.maxPoints ?? 0,
   );
 }
 
 /**
- * Display-sized mid/side vectorscope. Like {@link meteringVectorscope} but the
- * point series is deterministically decimated to at most `maxPoints` points
- * (`0`, or a value `>= length`, yields one point per input sample). Mirrors the
- * Node/Python decimated vectorscope.
+ * Display-sized mid/side vectorscope.
+ *
+ * @deprecated Pass `maxPoints` to {@link meteringVectorscope} instead; it now
+ * folds `maxPoints` into the request, matching the Node surface. This alias is
+ * kept for backward compatibility and simply delegates.
  */
 export function meteringVectorscopeDecimated(
   request: MeteringStereoDecimatedRequest,
@@ -459,19 +475,24 @@ export function meteringVectorscopeDecimated(
   );
 }
 
-/** Phase-scope point series plus summary stats. */
-export function meteringPhaseScope(request: MeteringStereoRequest): PhaseScopeReport;
+/**
+ * Phase-scope point series plus summary stats. By default emits one point per
+ * input sample; pass `maxPoints` to decimate the point cloud for display
+ * (matching the Node `meteringPhaseScope` shape). The summary stats are always
+ * computed over the full-resolution signal.
+ */
+export function meteringPhaseScope(request: MeteringStereoDecimatedRequest): PhaseScopeReport;
 export function meteringPhaseScope(
   left: Float32Array,
   right: Float32Array,
   sampleRate?: number,
-  options?: ValidateOptions,
+  options?: ScopeOptions,
 ): PhaseScopeReport;
 export function meteringPhaseScope(
-  left: Float32Array | MeteringStereoRequest,
+  left: Float32Array | MeteringStereoDecimatedRequest,
   right?: Float32Array,
   sampleRate = 22050,
-  options: ValidateOptions = {},
+  options: ScopeOptions = {},
 ): PhaseScopeReport {
   const request =
     left instanceof Float32Array
@@ -480,19 +501,20 @@ export function meteringPhaseScope(
   const validate = request.validate !== false;
   assertSamples('meteringPhaseScope', request.left, validate, 'left');
   assertSamples('meteringPhaseScope', request.right, validate, 'right');
-  return requireModule().meteringPhaseScope(
+  return requireModule().meteringPhaseScopeDecimated(
     request.left,
     request.right,
     request.sampleRate ?? 22050,
+    request.maxPoints ?? 0,
   );
 }
 
 /**
- * Display-sized phase scope. Like {@link meteringPhaseScope} but the point
- * series is deterministically decimated to at most `maxPoints` points (`0`, or
- * a value `>= length`, yields one point per input sample). The summary stats are
- * always computed over the full-resolution signal. Mirrors the Node/Python
- * decimated phase scope.
+ * Display-sized phase scope.
+ *
+ * @deprecated Pass `maxPoints` to {@link meteringPhaseScope} instead; it now
+ * folds `maxPoints` into the request, matching the Node surface. This alias is
+ * kept for backward compatibility and simply delegates.
  */
 export function meteringPhaseScopeDecimated(
   request: MeteringStereoDecimatedRequest,

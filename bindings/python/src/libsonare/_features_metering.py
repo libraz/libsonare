@@ -380,10 +380,21 @@ def metering_vectorscope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
+    max_points: int = 0,
     *,
     validate: bool = True,
 ) -> VectorscopeReport:
-    """Per-sample mid/side point series for a (left, right) stereo pair."""
+    """Mid/side point series for a (left, right) stereo pair.
+
+    By default emits one point per input sample. Pass ``max_points`` to
+    deterministically decimate the point cloud to a display size (matching the
+    Node/WASM ``meteringVectorscope`` shape); ``0`` (or a value >= the buffer
+    length) yields full resolution.
+    """
+    if max_points:
+        return metering_vectorscope_decimated(
+            left, right, sample_rate, max_points, validate=validate
+        )
     left_buf = _validate_samples("metering_vectorscope", left, validate=validate, arg_name="left")
     right_buf = _validate_samples(
         "metering_vectorscope", right, validate=validate, arg_name="right"
@@ -482,10 +493,22 @@ def metering_phase_scope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
+    max_points: int = 0,
     *,
     validate: bool = True,
 ) -> PhaseScopeReport:
-    """Phase-scope point series plus summary stats for a stereo pair."""
+    """Phase-scope point series plus summary stats for a stereo pair.
+
+    By default emits one point per input sample. Pass ``max_points`` to
+    deterministically decimate the point cloud to a display size (matching the
+    Node/WASM ``meteringPhaseScope`` shape); ``0`` (or a value >= the buffer
+    length) yields full resolution. The summary stats are always computed over
+    the full-resolution signal.
+    """
+    if max_points:
+        return metering_phase_scope_decimated(
+            left, right, sample_rate, max_points, validate=validate
+        )
     left_buf = _validate_samples("metering_phase_scope", left, validate=validate, arg_name="left")
     right_buf = _validate_samples(
         "metering_phase_scope", right, validate=validate, arg_name="right"

@@ -125,7 +125,9 @@ std::vector<float> create_chroma_filterbank(int sr, int n_fft, const ChromaFilte
 
   std::vector<float> filterbank(static_cast<size_t>(n_chroma) * n_bins, 0.0f);
   const double n_chroma2 = std::round(0.5 * n_chroma);
-  const int roll = 3 * (n_chroma / 12);  // base_c rotation (rows shift up by 3 per 12)
+  // base_c=true aligns pitch class 0 with C (librosa default); base_c=false
+  // leaves the bank anchored at A. Only rotate when base_c is set.
+  const int roll = config.base_c ? 3 * (n_chroma / 12) : 0;
 
   for (int k = 0; k < n_bins; ++k) {
     const double fb = frqbins[k];

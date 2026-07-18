@@ -59,8 +59,12 @@ def test_set_clip_fade_and_loop_round_trip() -> None:
     assert "loop_crossfade_ppq" in p.to_json()
     p.undo()
     assert p.to_json() == before
-    with pytest.raises((ValueError, Exception)):
-        p.set_clip_loop(clip, "loop", 0.0)  # looping needs length > 0
+    # loop_length_ppq == 0 while looping means "loop the entire clip" (the
+    # C-ABI semantics); Python must accept it rather than over-validate.
+    p.set_clip_loop(clip, "loop", 0.0)
+    assert p.to_json() != before
+    p.undo()
+    assert p.to_json() == before
     with pytest.raises((ValueError, Exception)):
         p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=-1.0)  # crossfade must be >= 0
 

@@ -1231,7 +1231,12 @@ def metering_stereo_width(
     left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
 ) -> float: ...
 def metering_vectorscope(
-    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    max_points: int = 0,
+    *,
+    validate: bool = True,
 ) -> VectorscopeReport: ...
 def metering_vectorscope_decimated(
     left: FloatSamples,
@@ -1242,7 +1247,12 @@ def metering_vectorscope_decimated(
     validate: bool = True,
 ) -> VectorscopeReport: ...
 def metering_phase_scope(
-    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    max_points: int = 0,
+    *,
+    validate: bool = True,
 ) -> PhaseScopeReport: ...
 def metering_phase_scope_decimated(
     left: FloatSamples,

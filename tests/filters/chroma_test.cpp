@@ -73,6 +73,35 @@ TEST_CASE("create_chroma_filterbank dimensions", "[chroma]") {
   REQUIRE(fb.size() == static_cast<size_t>(config.n_chroma * n_bins));
 }
 
+TEST_CASE("create_chroma_filterbank honors base_c anchoring", "[chroma]") {
+  // base_c=true anchors pitch class 0 on C by rolling the rows up by 3 (per 12);
+  // base_c=false leaves the raw A-anchored bank. The two must differ, and the
+  // base_c=true row r must equal the base_c=false row (r + 3) mod 12.
+  const int sr = 22050;
+  const int n_fft = 2048;
+  const int n_bins = n_fft / 2 + 1;
+
+  ChromaFilterConfig c_config;
+  c_config.n_chroma = 12;
+  c_config.base_c = true;
+  ChromaFilterConfig a_config = c_config;
+  a_config.base_c = false;
+
+  const std::vector<float> c_fb = create_chroma_filterbank(sr, n_fft, c_config);
+  const std::vector<float> a_fb = create_chroma_filterbank(sr, n_fft, a_config);
+
+  REQUIRE(c_fb != a_fb);  // base_c must actually change the bank.
+
+  const int roll = 3;
+  for (int r = 0; r < 12; ++r) {
+    const int src = (r + roll) % 12;
+    for (int k = 0; k < n_bins; ++k) {
+      REQUIRE(c_fb[static_cast<size_t>(r) * n_bins + k] ==
+              a_fb[static_cast<size_t>(src) * n_bins + k]);
+    }
+  }
+}
+
 TEST_CASE("create_chroma_filterbank L2 normalized by default", "[chroma]") {
   // librosa.filters.chroma's default norm is L2 — each filter row must have
   // unit Euclidean norm. Switching from the legacy L1 (sum=1) makes the

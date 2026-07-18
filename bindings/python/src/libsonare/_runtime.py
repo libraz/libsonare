@@ -148,6 +148,27 @@ def _to_c_float_array(
     return c_array, length
 
 
+def _to_c_float_array_owned(
+    samples: Sequence[float] | list[float] | np.ndarray,
+) -> tuple[ctypes.Array[ctypes.c_float], int]:
+    """Like :func:`_to_c_float_array`, but always over a fresh writable copy.
+
+    Use this for C entry points that mutate the buffer in place: unlike
+    :func:`_to_c_float_array` (which shares memory with a contiguous ``float32``
+    ndarray for speed), this never aliases the caller's array, so processing
+    cannot overwrite the input. The single bulk copy is negligible next to the
+    DSP work these offline/streaming calls perform.
+    """
+    buf = np.array(_as_float32_buffer(samples), dtype=np.float32, copy=True, order="C").reshape(-1)
+    length = int(buf.shape[0])
+    if length == 0:  # noqa: SIM108
+        c_array = (ctypes.c_float * 0)()
+    else:
+        c_array = (ctypes.c_float * length).from_buffer(buf)  # type: ignore[arg-type]
+    c_array._np_backing = buf  # type: ignore[attr-defined]
+    return c_array, length
+
+
 def _from_c_float_array(array: object, count: int) -> np.ndarray:
     """Copy a C ``float*`` (or fixed-length ``c_float * N`` array) into numpy.
 

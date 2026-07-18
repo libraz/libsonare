@@ -452,6 +452,10 @@ Ump midi1_to_midi2(const Ump& ump) noexcept {
   const uint8_t d2 = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
   switch (static_cast<UmpStatus>(status)) {
     case UmpStatus::kNoteOn:
+      // MIDI 1.0 running-status note-on with velocity 0 means note-off.
+      if (d2 == 0) {
+        return make_midi2_note_off(ump.group, channel, d1, scale_velocity_7_to_16(d2));
+      }
       return make_midi2_note_on(ump.group, channel, d1, scale_velocity_7_to_16(d2));
     case UmpStatus::kNoteOff:
       return make_midi2_note_off(ump.group, channel, d1, scale_velocity_7_to_16(d2));

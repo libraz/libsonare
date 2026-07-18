@@ -536,9 +536,11 @@ export class Project {
   /**
    * Set a clip's loop mode + loop length (PPQ) via an undoable edit.
    * `loopMode` is a {@link ProjectLoopMode} ordinal/name (0/off, 1/loop). When
-   * looping, `loopLengthPpq` must be finite and > 0. `loopCrossfadePpq` is an
-   * optional equal-power crossfade at the loop seam (PPQ, finite and >= 0; 0 =
-   * hard loop); the engine clamps it to the clip's pre-roll and half the loop.
+   * looping, `loopLengthPpq` must be finite and >= 0, where `0` means "loop the
+   * entire clip" (the effective length is resolved from the clip's own
+   * duration). `loopCrossfadePpq` is an optional equal-power crossfade at the
+   * loop seam (PPQ, finite and >= 0; 0 = hard loop); the engine clamps it to the
+   * clip's pre-roll and half the loop.
    */
   setClipLoop(
     clipId: number,

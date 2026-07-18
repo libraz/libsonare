@@ -63,6 +63,26 @@ def test_metering_vectorscope_returns_float32_arrays() -> None:
     assert float(np.max(np.abs(report.side))) < 1e-3
 
 
+def test_metering_scope_max_points_folds_into_primary() -> None:
+    # Passing max_points to the primary function bounds the point count and
+    # matches the *_decimated variant (Node/WASM-shape parity).
+    left = _sine(440.0, 0.1)
+    max_points = 64
+    vs = libsonare.metering_vectorscope(left, left, SR, max_points)
+    assert vs.mid.shape[0] <= max_points
+    vs_dec = libsonare.metering_vectorscope_decimated(left, left, SR, max_points)
+    assert np.array_equal(vs.mid, vs_dec.mid)
+    assert np.array_equal(vs.side, vs_dec.side)
+
+    ps = libsonare.metering_phase_scope(left, left, SR, max_points)
+    assert ps.radius.shape[0] <= max_points
+    ps_dec = libsonare.metering_phase_scope_decimated(left, left, SR, max_points)
+    assert np.array_equal(ps.radius, ps_dec.radius)
+
+    # max_points=0 stays full resolution.
+    assert libsonare.metering_vectorscope(left, left, SR).mid.shape == left.shape
+
+
 def test_metering_phase_scope_populates_summary_stats() -> None:
     left = _sine(440.0, 0.1)
     report = libsonare.metering_phase_scope(left, left, SR)

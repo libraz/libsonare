@@ -13,7 +13,7 @@ from ._ffi import (
     SonareEqSnapshot,
 )
 from ._mastering_offline import _chain_params
-from ._runtime import _check, _get_lib, _to_c_float_array
+from ._runtime import _check, _get_lib, _to_c_float_array, _to_c_float_array_owned
 from .types import (
     EqSpectrumSnapshot,
 )
@@ -125,9 +125,13 @@ class StreamingMasteringChain:
         self._prepared_channels = int(num_channels)
 
     def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
-        """Process one mono block, returning the processed samples (length unchanged)."""
+        """Process one mono block, returning the processed samples (length unchanged).
+
+        The input is never modified: the C call processes in place over a private
+        copy, so a caller passing a ``float32`` ndarray keeps their dry signal.
+        """
         self._ensure_open()
-        c_array, length = _to_c_float_array(samples)
+        c_array, length = _to_c_float_array_owned(samples)
         rc = self._lib.sonare_streaming_mastering_chain_process_mono(
             self._handle, c_array, ctypes.c_size_t(length)
         )
@@ -139,10 +143,14 @@ class StreamingMasteringChain:
         left: Sequence[float] | list[float],
         right: Sequence[float] | list[float],
     ) -> tuple[list[float], list[float]]:
-        """Process one stereo block, returning the processed (left, right) channels."""
+        """Process one stereo block, returning the processed (left, right) channels.
+
+        Neither input channel is modified; the C call processes in place over
+        private copies.
+        """
         self._ensure_open()
-        left_array, left_length = _to_c_float_array(left)
-        right_array, right_length = _to_c_float_array(right)
+        left_array, left_length = _to_c_float_array_owned(left)
+        right_array, right_length = _to_c_float_array_owned(right)
         if left_length != right_length:
             raise ValueError("left and right channel lengths must match")
         rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
@@ -339,9 +347,13 @@ class StreamingEqualizer:
         _check(rc)
 
     def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
-        """Process one mono block, returning processed samples."""
+        """Process one mono block, returning processed samples.
+
+        The input is never modified; the C call processes in place over a
+        private copy.
+        """
         self._ensure_open()
-        c_array, length = _to_c_float_array(samples)
+        c_array, length = _to_c_float_array_owned(samples)
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 1
         channels = channel_array_type(ctypes.cast(c_array, ctypes.POINTER(ctypes.c_float)))
         _check(self._lib.sonare_eq_process(self._handle, channels, ctypes.c_int(1), length))
@@ -353,10 +365,14 @@ class StreamingEqualizer:
         left: Sequence[float] | list[float],
         right: Sequence[float] | list[float],
     ) -> tuple[list[float], list[float]]:
-        """Process one stereo block, returning the processed (left, right) channels."""
+        """Process one stereo block, returning the processed (left, right) channels.
+
+        Neither input channel is modified; the C call processes in place over
+        private copies.
+        """
         self._ensure_open()
-        left_array, left_length = _to_c_float_array(left)
-        right_array, right_length = _to_c_float_array(right)
+        left_array, left_length = _to_c_float_array_owned(left)
+        right_array, right_length = _to_c_float_array_owned(right)
         if left_length != right_length:
             raise ValueError("left and right channel lengths must match")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2

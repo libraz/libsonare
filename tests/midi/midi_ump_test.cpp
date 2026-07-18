@@ -63,6 +63,32 @@ TEST_CASE("UMP MIDI 1.0 channel-voice encode exposes the expected fields", "[mid
   REQUIRE((bend.words[0] & 0x7Fu) == 0x24u);
 }
 
+TEST_CASE("documented sonare_c_project_midi data0 packing yields a note-on", "[midi]") {
+  // The public C-ABI header documents how a caller hand-packs a MIDI 1.0 note-on
+  // into data0. A word built by that exact formula must be recognized as a
+  // note-on and expose the packed fields, and must match make_midi1_note_on.
+  const uint32_t group = 2;
+  const uint32_t status = static_cast<uint32_t>(UmpStatus::kNoteOn);  // 0x9
+  const uint32_t channel = 5;
+  const uint32_t note = 60;
+  const uint32_t velocity = 100;
+  const uint32_t data0 =
+      (0x2u << 28) | (group << 24) | (status << 20) | (channel << 16) | (note << 8) | velocity;
+
+  Ump packed;
+  packed.words[0] = data0;
+  packed.word_count = 1;
+  packed.group = static_cast<uint8_t>(group);
+
+  REQUIRE(packed.is_note_on());
+  REQUIRE(packed.channel() == channel);
+  REQUIRE(packed.note_number() == note);
+  REQUIRE(packed.words[0] == sonare::midi::make_midi1_note_on(
+                                 static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
+                                 static_cast<uint8_t>(note), static_cast<uint8_t>(velocity))
+                                 .words[0]);
+}
+
 TEST_CASE("MIDI 1.0 note-on velocity zero is treated as note-off", "[midi]") {
   const Ump zero_vel = sonare::midi::make_midi1_note_on(0, 0, 60, 0);
   REQUIRE(zero_vel.message_type() == UmpMessageType::kMidi1ChannelVoice);
@@ -74,6 +100,19 @@ TEST_CASE("MIDI 1.0 note-on velocity zero is treated as note-off", "[midi]") {
   REQUIRE(midi2_zero_vel.message_type() == UmpMessageType::kMidi2ChannelVoice);
   REQUIRE(midi2_zero_vel.is_note_on());
   REQUIRE_FALSE(midi2_zero_vel.is_note_off());
+}
+
+TEST_CASE("MIDI 1.0 -> 2.0 lowers a velocity-zero note-on to a note-off", "[midi]") {
+  const Ump m1_zero = sonare::midi::make_midi1_note_on(2, 5, /*note=*/60, /*velocity7=*/0);
+  const Ump m2 = sonare::midi::midi1_to_midi2(m1_zero);
+  REQUIRE(m2.message_type() == UmpMessageType::kMidi2ChannelVoice);
+  REQUIRE(m2.is_note_off());
+  REQUIRE_FALSE(m2.is_note_on());
+
+  const Ump m1_hit = sonare::midi::make_midi1_note_on(2, 5, 60, /*velocity7=*/64);
+  const Ump m2_hit = sonare::midi::midi1_to_midi2(m1_hit);
+  REQUIRE(m2_hit.is_note_on());
+  REQUIRE_FALSE(m2_hit.is_note_off());
 }
 
 TEST_CASE("UMP MIDI 2.0 channel-voice encode exposes the expected fields", "[midi]") {

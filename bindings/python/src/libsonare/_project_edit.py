@@ -452,18 +452,17 @@ class _ProjectEditMixin:
         """Set a clip's loop mode + loop length (PPQ) via an undoable edit.
 
         ``loop_mode`` is a :data:`LOOP_MODE_*` ordinal or name. When looping,
-        ``loop_length_ppq`` must be finite and > 0; otherwise finite and >= 0.
-        ``loop_crossfade_ppq`` is an optional equal-power crossfade at the loop
-        seam (PPQ, finite and >= 0; 0 = hard loop); the engine clamps it to the
-        clip's pre-roll and half the loop.
+        ``loop_length_ppq`` must be finite and >= 0, where ``0`` means "loop the
+        entire clip" (the effective length is resolved from the clip's own
+        duration). ``loop_crossfade_ppq`` is an optional equal-power crossfade at
+        the loop seam (PPQ, finite and >= 0; 0 = hard loop); the engine clamps it
+        to the clip's pre-roll and half the loop.
         """
         mode = _loop_mode_value(loop_mode)
         length = float(loop_length_ppq)
         crossfade = float(loop_crossfade_ppq)
         if not math.isfinite(length) or length < 0.0:
             raise ValueError("loop_length_ppq must be a finite number >= 0")
-        if mode == LOOP_MODE_LOOP and length <= 0.0:
-            raise ValueError("loop_length_ppq must be > 0 when looping")
         if not math.isfinite(crossfade) or crossfade < 0.0:
             raise ValueError("loop_crossfade_ppq must be a finite number >= 0")
         _check(

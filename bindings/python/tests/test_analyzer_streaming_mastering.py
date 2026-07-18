@@ -66,6 +66,40 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     chain.reset()
 
 
+def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
+    """process_* must not overwrite a float32 ndarray input (non-destructive)."""
+    import numpy as np
+
+    from libsonare import StreamingMasteringChain
+
+    chain = StreamingMasteringChain({"eq.tilt.tiltDb": 3.0})
+    chain.prepare(sample_rate=44100, max_block_size=256, num_channels=1)
+    block = np.full(256, 0.25, dtype=np.float32)
+    original = block.copy()
+    out = chain.process_mono(block)
+    # The dry input is untouched; the returned wet block differs from it.
+    assert np.array_equal(block, original)
+    assert any(abs(out[i] - float(original[i])) > 1e-6 for i in range(len(out)))
+    chain.close()
+
+
+def test_streaming_equalizer_preserves_ndarray_input() -> None:
+    """StreamingEqualizer.process_mono must not overwrite a float32 ndarray input."""
+    import numpy as np
+
+    from libsonare import StreamingEqualizer
+
+    with StreamingEqualizer(sample_rate=44100, max_block_size=256) as eq:
+        eq.set_band(
+            0,
+            {"type": "Peak", "frequencyHz": 1000.0, "gainDb": 6.0, "q": 1.0, "enabled": True},
+        )
+        block = np.full(256, 0.25, dtype=np.float32)
+        original = block.copy()
+        eq.process_mono(block)
+        assert np.array_equal(block, original)
+
+
 def test_streaming_mastering_chain_reports_stage_names() -> None:
     """stage_names() exposes the realized stages after prepare()."""
     from libsonare import StreamingMasteringChain
