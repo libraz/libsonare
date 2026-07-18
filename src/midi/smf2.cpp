@@ -206,6 +206,50 @@ uint32_t flex_word0(uint8_t bank, uint8_t status) noexcept {
          (static_cast<uint32_t>(bank) << 8) | static_cast<uint32_t>(status);
 }
 
+// Flex Data word[0] with an explicit multi-packet format field
+// (0=complete, 1=start, 2=continue, 3=end), group-addressed.
+uint32_t flex_word0_fmt(uint8_t bank, uint8_t status, uint8_t format) noexcept {
+  const uint8_t byte1 = static_cast<uint8_t>((format << 6) | 0x10u);  // addr=group(1).
+  return (kMtFlexData << 28) | (static_cast<uint32_t>(byte1) << 16) |
+         (static_cast<uint32_t>(bank) << 8) | static_cast<uint32_t>(status);
+}
+
+// Emits a metadata-text Flex Data message as one or more DCS(0)-prefixed
+// packets. Each packet carries up to 12 NUL-padded text bytes in words[1..3].
+// Text of 12 bytes or fewer uses a single complete packet; longer text is split
+// across a start / continue* / end chain (format field) so names of any length
+// survive the round trip. Returns the number of packets emitted.
+size_t put_flex_text(std::vector<uint8_t>* out, uint8_t bank, uint8_t status,
+                     const std::string& text) {
+  const size_t total = text.size();
+  const size_t packet_count = total <= 12u ? 1u : (total + 11u) / 12u;
+  for (size_t p = 0; p < packet_count; ++p) {
+    uint8_t format;
+    if (packet_count == 1u) {
+      format = 0u;  // complete
+    } else if (p == 0u) {
+      format = 1u;  // start
+    } else if (p + 1u == packet_count) {
+      format = 3u;  // end
+    } else {
+      format = 2u;  // continue
+    }
+    std::array<uint8_t, 12> chunk{};
+    const size_t off = p * 12u;
+    const size_t n = std::min<size_t>(12u, total - off);
+    for (size_t i = 0; i < n; ++i) chunk[i] = static_cast<uint8_t>(text[off + i]);
+    put_word(out, delta_clockstamp_word(0));
+    put_word(out, flex_word0_fmt(bank, status, format));
+    for (int w = 0; w < 3; ++w) {
+      put_word(out, (static_cast<uint32_t>(chunk[static_cast<size_t>(w) * 4 + 0]) << 24) |
+                        (static_cast<uint32_t>(chunk[static_cast<size_t>(w) * 4 + 1]) << 16) |
+                        (static_cast<uint32_t>(chunk[static_cast<size_t>(w) * 4 + 2]) << 8) |
+                        static_cast<uint32_t>(chunk[static_cast<size_t>(w) * 4 + 3]));
+    }
+  }
+  return packet_count;
+}
+
 // A single Delta Clockstamp carries a 20-bit delta. To express a delta larger
 // than 0xFFFFF, the MIDI Clip File spec chains multiple DCS messages, which the
 // importer accumulates additively (running_tick += word & 0xFFFFF). Emit one
@@ -670,18 +714,7 @@ Smf2ExportResult export_clip_file(
     put_word(&out, 0);
   }
   if (!options.name.empty()) {
-    std::array<uint8_t, 12> text{};
-    const size_t n = std::min<size_t>(options.name.size(), text.size());
-    for (size_t i = 0; i < n; ++i) text[i] = static_cast<uint8_t>(options.name[i]);
-    if (options.name.size() > text.size()) ++result.skipped_events;
-    put_word(&out, delta_clockstamp_word(0));
-    put_word(&out, flex_word0(kFlexBankMetadataText, kFlexStatusSongName));
-    for (int w = 0; w < 3; ++w) {
-      put_word(&out, (static_cast<uint32_t>(text[static_cast<size_t>(w) * 4 + 0]) << 24) |
-                         (static_cast<uint32_t>(text[static_cast<size_t>(w) * 4 + 1]) << 16) |
-                         (static_cast<uint32_t>(text[static_cast<size_t>(w) * 4 + 2]) << 8) |
-                         static_cast<uint32_t>(text[static_cast<size_t>(w) * 4 + 3]));
-    }
+    put_flex_text(&out, kFlexBankMetadataText, kFlexStatusSongName, options.name);
   }
 
   // Start of clip.

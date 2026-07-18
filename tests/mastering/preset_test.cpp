@@ -136,9 +136,11 @@ TEST_CASE("chain config JSON rejects duplicate top-level keys", "[mastering][pre
 TEST_CASE("preset_config(Pop) has expected enabled stages", "[mastering][preset]") {
   auto config = preset_config(Preset::Pop);
   REQUIRE(config.dynamics.compressor.enabled);
-  REQUIRE(config.maximizer.true_peak_limiter.enabled);
   REQUIRE(config.loudness.enabled);
   REQUIRE_THAT(config.loudness.target_lufs, WithinAbs(-14.0f, 1e-6f));
+  // The loudness stage's built-in limiter guarantees the ceiling; presets do not
+  // additionally enable the standalone maximizer limiter (avoids double limiting).
+  REQUIRE_FALSE(config.maximizer.true_peak_limiter.enabled);
 }
 
 TEST_CASE("preset_config(AIMusic) enables denoise and air_band", "[mastering][preset]") {
@@ -176,7 +178,7 @@ TEST_CASE("new platform and genre presets expose planned loudness targets", "[ma
   for (const auto& item : expected) {
     auto config = preset_config(item.preset);
     REQUIRE(config.loudness.enabled);
-    REQUIRE(config.maximizer.true_peak_limiter.enabled);
+    REQUIRE_FALSE(config.maximizer.true_peak_limiter.enabled);
     REQUIRE_THAT(config.loudness.target_lufs, WithinAbs(item.lufs, 1e-6f));
     REQUIRE_THAT(config.loudness.ceiling_db, WithinAbs(item.ceiling, 1e-6f));
   }

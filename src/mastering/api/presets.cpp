@@ -25,8 +25,12 @@ namespace {
 // ---------------------------------------------------------------------------
 
 void enable_loudness(MasteringChainConfig& cfg, float target_lufs, float ceiling_db) {
-  cfg.maximizer.true_peak_limiter.enabled = true;
-  cfg.maximizer.true_peak_limiter.config.ceiling_db = ceiling_db;
+  // The loudness stage runs its own true-peak limiter at this same ceiling after
+  // applying the normalization gain, so it alone guarantees the ceiling. Enabling
+  // the standalone maximizer limiter as well would limit the signal twice around
+  // the loudness gain (limit -> re-amplify -> limit), pumping transient-heavy
+  // material for no ceiling benefit. Presets therefore rely on the loudness
+  // stage's built-in limiter only.
   cfg.loudness.enabled = true;
   cfg.loudness.target_lufs = target_lufs;
   cfg.loudness.ceiling_db = ceiling_db;

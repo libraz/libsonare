@@ -318,7 +318,13 @@ DeserializeResult project_from_json(const std::string& json_text) {
       for (const auto& wv : *arr) {
         if (!wv.is_object()) continue;
         arrangement::WarpMapRef map = warp_map_from_json(wv);
-        project.set_warp_map(std::move(map));
+        const uint32_t map_id = map.id;
+        if (!project.set_warp_map(std::move(map))) {
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kWarning, "invalid_warp_map",
+               "warp map " + std::to_string(map_id) +
+                   " has an invalid id or malformed anchors and was dropped"});
+        }
       }
     }
 
@@ -340,6 +346,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
                                       "clip " + std::to_string(c.id) +
                                           " references missing track " +
                                           std::to_string(c.track_id)});
+      }
+      if (c.warp_ref_id != 0 && !project.has_warp_map(c.warp_ref_id)) {
+        result.diagnostics.push_back({DiagnosticSeverity::kWarning, "dangling_clip_warp",
+                                      "clip " + std::to_string(c.id) +
+                                          " references missing warp map " +
+                                          std::to_string(c.warp_ref_id)});
       }
       if (src != nullptr && track != nullptr) {
         const arrangement::SourceKind sk = arrangement::source_kind(*src);

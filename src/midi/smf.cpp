@@ -739,7 +739,11 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
       prev_tick = item.tick;
       if (item.kind == 0) {
         const double us = kMicrosPerMinute / item.bpm;
-        const uint32_t us_per_quarter = static_cast<uint32_t>(std::llround(us));
+        // SMF stores tempo as a 24-bit microseconds-per-quarter field; clamp so
+        // an extremely slow tempo (bpm < ~3.576) does not wrap to an unrelated
+        // fast tempo when masked to 3 bytes.
+        const uint32_t us_per_quarter =
+            static_cast<uint32_t>(std::min<int64_t>(std::llround(us), 0xFFFFFF));
         const uint8_t payload[3] = {static_cast<uint8_t>((us_per_quarter >> 16) & 0xFFu),
                                     static_cast<uint8_t>((us_per_quarter >> 8) & 0xFFu),
                                     static_cast<uint8_t>(us_per_quarter & 0xFFu)};

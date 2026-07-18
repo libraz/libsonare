@@ -2,6 +2,7 @@
 /// @brief MIDI core: Standard MIDI File import / export round-trip,
 ///        running-status + meta-event coverage and malformed-input safety.
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <string>
@@ -389,6 +390,28 @@ TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
     REQUIRE(a[i].ppq == b[i].ppq);
     REQUIRE(a[i].ump == b[i].ump);
   }
+}
+
+TEST_CASE("SMF export clamps an extreme slow tempo to the 24-bit field", "[midi]") {
+  // bpm = 1.0 -> 60,000,000 us/quarter, which overflows the 24-bit SMF tempo
+  // field. Without clamping the value wraps to ~6.2 BPM (an unrelated tempo);
+  // the writer must clamp to 0xFFFFFF us (~3.576 BPM) instead.
+  std::vector<sonare::transport::TempoSegment> tempo;
+  sonare::transport::TempoSegment seg;
+  seg.start_ppq = 0.0;
+  seg.bpm = 1.0;
+  tempo.push_back(seg);
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  const auto exported = export_smf({}, tempo, {}, {}, opts);
+  REQUIRE(exported.ok());
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.tempo_segments.size() == 1);
+  const double clamped_bpm = 60'000'000.0 / static_cast<double>(0xFFFFFF);
+  REQUIRE(round.tempo_segments[0].bpm == Catch::Approx(clamped_bpm).epsilon(1e-6));
 }
 
 TEST_CASE("SMF export flags a non-power-of-two time-signature denominator as lossy", "[midi]") {

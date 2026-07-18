@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "util/exception.h"
+#include "util/resource_limits.h"
 
 // FFmpeg headers expose a classic C API. Their public macros and inline helpers
 // trip several of the project's strict warnings (notably -Wzero-as-null-pointer
@@ -277,6 +278,11 @@ AudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx) {
                          "FFmpeg: swr_convert failed: " + ff_err(converted));
       }
       samples.resize(prev_size + static_cast<size_t>(converted));
+      // A short, highly-compressed stream can decode to an unbounded sample pool.
+      // Cap total accumulation at the offline decode limit so a crafted file
+      // cannot drive an out-of-memory condition.
+      SONARE_CHECK_MSG(samples.size() <= resource::kMaxOfflineAudioSamples, ErrorCode::DecodeFailed,
+                       "FFmpeg decoded more samples than the offline decode limit");
       av_frame_unref(frame.get());
     }
   };

@@ -206,6 +206,39 @@ TEST_CASE("SMF2 round-trips the clip name via Flex Data metadata", "[midi][smf2]
   REQUIRE(imported.clip_names.front() == "Lead");
 }
 
+TEST_CASE("SMF2 round-trips a clip name longer than one Flex packet", "[midi][smf2]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+
+  // 20 characters spans two 12-byte Flex Data packets; a single-packet writer
+  // would silently truncate to "Acoustic Gra".
+  const std::string long_name = "Acoustic Grand Piano";
+  Smf2ExportOptions options;
+  options.name = long_name;
+  const auto exported = export_clip_file(clip, {}, {}, options);
+  REQUIRE(exported.skipped_events == 0);
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clip_names.size() == 1);
+  REQUIRE(imported.clip_names.front() == long_name);
+}
+
+TEST_CASE("SMF2 round-trips a clip name that is an exact Flex-packet multiple", "[midi][smf2]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+
+  // Exactly 24 bytes: two full packets with no trailing NUL in the final one.
+  const std::string name = "TwelveCharsABTwelveCharsA";  // 25 chars
+  const std::string name24 = name.substr(0, 24);
+  Smf2ExportOptions options;
+  options.name = name24;
+  const auto exported = export_clip_file(clip, {}, {}, options);
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clip_names.size() == 1);
+  REQUIRE(imported.clip_names.front() == name24);
+}
+
 TEST_CASE("SMF2 round-trips a SysEx payload", "[midi][smf2]") {
   SysExStore store;
   const std::vector<uint8_t> payload = {0x7E, 0x00, 0x09, 0x01};

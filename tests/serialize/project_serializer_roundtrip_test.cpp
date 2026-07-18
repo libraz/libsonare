@@ -790,6 +790,32 @@ TEST_CASE("invalid project sample rate is rejected with a diagnostic", "[seriali
   }
 }
 
+TEST_CASE("malformed warp map is dropped with a diagnostic instead of silently", "[serialize]") {
+  // Anchors that are not strictly increasing violate the warp mapping contract;
+  // set_warp_map rejects them. The loader must surface that as a diagnostic
+  // rather than discarding the map silently.
+  auto result = project_from_json(
+      "{\"version\": 1, \"warp_maps\": [{\"id\": 7, \"anchors\": ["
+      "{\"warp_sample\": 100.0, \"source_sample\": 0.0}, "
+      "{\"warp_sample\": 50.0, \"source_sample\": 100.0}]}]}");
+  bool found = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "invalid_warp_map") found = true;
+  }
+  CHECK(found);
+}
+
+TEST_CASE("clip referencing a missing warp map reports a dangling diagnostic", "[serialize]") {
+  auto result = project_from_json(
+      "{\"version\": 1, \"clips\": [{\"id\": 1, \"track_id\": 1, \"source_id\": 1, "
+      "\"warp_ref_id\": 99}]}");
+  bool found = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "dangling_clip_warp") found = true;
+  }
+  CHECK(found);
+}
+
 TEST_CASE("invalid time signature is rejected with a diagnostic", "[serialize]") {
   auto result = project_from_json(
       "{\"version\": 1, \"time_signatures\": [{\"start_ppq\": 0.0, \"numerator\": 4, "

@@ -14,6 +14,8 @@
 #endif
 
 #include "util/exception.h"
+#include "util/numeric_validation.h"
+#include "util/resource_limits.h"
 
 #ifdef SONARE_WITH_FFMPEG
 #include "core/audio_io_ffmpeg.h"
@@ -221,7 +223,15 @@ AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
   SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
                    "Invalid WAV channel count");
 
-  size_t total_samples = wav.totalPCMFrameCount * wav.channels;
+  // A crafted WAV (e.g. an MS-ADPCM `fact` chunk) can declare a huge PCM frame
+  // count before any real sample data is present. Reject over the offline decode
+  // limit — with an overflow-safe multiply — before the multi-GB zero-init.
+  size_t total_samples = 0;
+  SONARE_CHECK_MSG(numeric::checked_size_product(static_cast<size_t>(wav.totalPCMFrameCount),
+                                                 static_cast<size_t>(wav.channels),
+                                                 resource::kMaxOfflineAudioSamples, &total_samples),
+                   ErrorCode::DecodeFailed,
+                   "WAV declares more samples than the offline decode limit");
   std::vector<float> samples(total_samples);
 
   drwav_uint64 frames_read =
@@ -256,6 +266,11 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
   SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
                    "Invalid MP3 channel count");
   size_t total_samples = static_cast<size_t>(info.samples);
+  // A tiny, highly-compressed MP3 can decode to an outsized sample pool. Reject
+  // over the offline limit before the mono buffer doubles it (buffer_guard frees
+  // the decoder buffer on throw).
+  SONARE_CHECK_MSG(total_samples <= resource::kMaxOfflineAudioSamples, ErrorCode::DecodeFailed,
+                   "MP3 decoded more samples than the offline decode limit");
 
   // Convert int16 samples to float and mono
   std::vector<float> mono = int16_stereo_to_mono(info.buffer, total_samples, channels);
