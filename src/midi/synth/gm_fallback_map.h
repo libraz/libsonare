@@ -23,6 +23,24 @@ namespace sonare::midi::synth {
 /// programs resolve through their GM family.
 const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexcept;
 
+/// True when a synth engine is a dedicated physical / resonator model whose
+/// data-free voice matches or exceeds a general-purpose SoundFont sample for
+/// its instrument family (piano, plucked/bowed/reed/brass/flute waveguides,
+/// modal mallets, membrane percussion, free reed). The signal-synthesis
+/// engines (subtractive / FM / additive drawbar) and the source-filter vocal
+/// engine are excluded: for those families a loaded SF2 sample stays the
+/// reference, so they are not model-first candidates. This is the single
+/// source of truth for that classification.
+bool is_dedicated_model_engine(SynthEngineMode mode) noexcept;
+
+/// True when the built-in GM fallback resolves this melodic (bank, program) to
+/// a dedicated model engine (see is_dedicated_model_engine) — i.e. the program
+/// belongs to the "model-first" set where the physical model is preferred over
+/// an SF2 sample. Derived from gm_fallback_patch so it cannot drift from the
+/// actual routing. Drums (bank 128) are out of scope: they always play the
+/// percussion model via gm_fallback_drum_patch on their own path.
+bool gm_program_has_dedicated_model(uint16_t bank, uint8_t program) noexcept;
+
 /// Fallback patch for a GM drum note (rhythm parts / bank 128). Always the
 /// Standard kit; GS kit variations are applied per voice by apply_gs_drum_kit.
 const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept;

@@ -385,6 +385,42 @@ TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi]
   REQUIRE(gm_fallback_patch(0, 80).mode == SynthEngineMode::kSubtractive);  // Square Lead
 }
 
+TEST_CASE("model-first program set matches the GM fallback routing", "[midi][synth]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  using sonare::midi::synth::gm_program_has_dedicated_model;
+  using sonare::midi::synth::is_dedicated_model_engine;
+  // Golden set: the GM programs whose data-free fallback is a dedicated model
+  // (physical waveguide / modal / percussion / free reed) rather than a signal
+  // sketch or the formant vocal voice — i.e. the families where the model is
+  // preferred over an SF2 sample. A change here means a program's fallback
+  // engine changed: reconcile the routing and this expectation together.
+  static constexpr int kModelFirst[] = {
+      0,   1,   2,   3,   6,                   // piano + harpsichord
+      8,   9,   10,  11,  12,  13,  14,  15,   // chromatic percussion (modal / KS)
+      19,  20,  21,  22,  23,                  // church organ + free reeds
+      24,  25,  26,  27,  28,  29,  30,  31,   // guitars (KS)
+      32,  33,  34,  35,  36,  37,             // acoustic / electric basses (KS)
+      40,  41,  42,  43,  45,  46,  47,        // bowed strings + pizz / harp / timpani
+      56,  57,  58,  59,  60,                  // brass (lip reed)
+      64,  65,  66,  67,  68,  69,  70,  71,   // reeds (sax / oboe / clarinet ...)
+      72,  73,  74,  75,  76,  77,  78,  79,   // air-jet flutes
+      104, 105, 106, 107, 108, 109, 110, 111,  // ethnic plucked / bowed / reed
+      112, 113, 114, 115, 116, 117, 118, 119,  // pitched / synth percussion
+  };
+  bool expected[128] = {};
+  for (int program : kModelFirst) expected[program] = true;
+
+  for (int program = 0; program < 128; ++program) {
+    const auto p = static_cast<uint8_t>(program);
+    INFO("GM program " << program);
+    const bool has_model = gm_program_has_dedicated_model(0, p);
+    // The predicate must match the golden model-first membership, and it must
+    // agree with the engine the fallback actually resolves the program to.
+    REQUIRE(has_model == expected[program]);
+    REQUIRE(has_model == is_dedicated_model_engine(gm_fallback_patch(0, p).mode));
+  }
+}
+
 TEST_CASE("harpsichord GS/GM2 banks select registration variations", "[midi][synth]") {
   using sonare::midi::synth::gm_fallback_patch;
   // Bank 0 (capital tone): the plain 8', no 4' companion and no key-off noise —

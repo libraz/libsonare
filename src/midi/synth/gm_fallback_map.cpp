@@ -184,6 +184,35 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexce
   return family_patches()[static_cast<size_t>((program & 0x7Fu) >> 3)];
 }
 
+bool is_dedicated_model_engine(SynthEngineMode mode) noexcept {
+  // Exhaustive over SynthEngineMode with no default: adding a new engine
+  // triggers a -Wswitch warning so it must be classified here explicitly.
+  switch (mode) {
+    case SynthEngineMode::kKarplusStrong:
+    case SynthEngineMode::kModal:
+    case SynthEngineMode::kPercussion:
+    case SynthEngineMode::kPiano:
+    case SynthEngineMode::kPipeOrgan:
+    case SynthEngineMode::kBowedString:
+    case SynthEngineMode::kReed:
+    case SynthEngineMode::kBrass:
+    case SynthEngineMode::kFlute:
+    case SynthEngineMode::kPluckedString:
+    case SynthEngineMode::kFreeReed:
+      return true;
+    case SynthEngineMode::kSubtractive:
+    case SynthEngineMode::kFm:
+    case SynthEngineMode::kAdditive:
+    case SynthEngineMode::kVocal:
+      return false;
+  }
+  return false;
+}
+
+bool gm_program_has_dedicated_model(uint16_t bank, uint8_t program) noexcept {
+  return is_dedicated_model_engine(gm_fallback_patch(bank, program).mode);
+}
+
 const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept {
   return drum_note_table()[note & 0x7Fu];
 }
