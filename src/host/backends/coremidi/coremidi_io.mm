@@ -197,6 +197,21 @@ size_t CoreMidiOutput::flush_output() noexcept {
   MIDIEventPacket* packet = MIDIEventListInit(list, kMIDIProtocol_2_0);
   const MIDITimeStamp now = 0;  // 0 = send immediately
   size_t sent = 0;
+  // Append one UMP, flushing the list when the fixed storage fills. A large
+  // SysEx dump can expand to far more packets than `storage` holds;
+  // MIDIEventListAdd returns nullptr on overflow, and reusing that nullptr as
+  // the prior packet on the next call dereferences null inside CoreMIDI. So on
+  // overflow, send what has accumulated, restart a fresh list, and retry the
+  // add once (a single UMP always fits an empty list).
+  auto add_event = [&](UInt32 word_count, const UInt32* words) {
+    MIDIEventPacket* next = MIDIEventListAdd(list, storage.size(), packet, now, word_count, words);
+    if (next == nullptr) {
+      MIDISendEventList(impl_->port, impl_->destination, list);
+      packet = MIDIEventListInit(list, kMIDIProtocol_2_0);
+      next = MIDIEventListAdd(list, storage.size(), packet, now, word_count, words);
+    }
+    if (next != nullptr) packet = next;
+  };
   for (size_t i = 0; i < n; ++i) {
     const midi::Ump& ump = impl_->scratch[i].ump;
     if (ump.word_count == 0) continue;
@@ -208,13 +223,12 @@ size_t CoreMidiOutput::flush_output() noexcept {
       const size_t count = midi::sysex7_payload_to_umps(payload->data(), payload->size(), ump.group,
                                                         packets.data(), packets.size());
       for (size_t k = 0; k < count; ++k) {
-        packet = MIDIEventListAdd(list, storage.size(), packet, now, packets[k].word_count,
-                                  packets[k].words);
+        add_event(packets[k].word_count, packets[k].words);
       }
       if (count > 0) ++sent;
       continue;
     }
-    packet = MIDIEventListAdd(list, storage.size(), packet, now, ump.word_count, ump.words);
+    add_event(ump.word_count, ump.words);
     ++sent;
   }
   if (sent > 0) MIDISendEventList(impl_->port, impl_->destination, list);

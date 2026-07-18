@@ -34,6 +34,10 @@ struct CoreAudioDevice::Impl {
   AudioUnit unit = nullptr;
   AudioObjectID device_id = kAudioObjectUnknown;
   AudioDeviceCallback* callback = nullptr;
+  // True only after callback->open() has succeeded. close() runs on every
+  // mid-open failure path (the AU instance already exists), so it must not call
+  // callback->close() unless the paired open() actually ran.
+  bool callback_opened = false;
   AudioStreamConfig config{};
 
   // Pre-sized planar scratch the render callback deinterleaves CoreAudio's
@@ -214,6 +218,7 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
     close();
     return false;
   }
+  impl_->callback_opened = true;
   return true;
 }
 
@@ -236,7 +241,8 @@ void CoreAudioDevice::stop() noexcept {
 void CoreAudioDevice::close() noexcept {
   if (impl_->unit == nullptr) return;
   stop();
-  if (impl_->callback != nullptr) impl_->callback->close();
+  if (impl_->callback != nullptr && impl_->callback_opened) impl_->callback->close();
+  impl_->callback_opened = false;
   AudioUnitUninitialize(impl_->unit);
   AudioComponentInstanceDispose(impl_->unit);
   impl_->unit = nullptr;

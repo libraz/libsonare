@@ -113,6 +113,9 @@ class AuMidiInstrument final : public midi::MidiInstrument {
   void prepare(double sample_rate, int max_block_size) override {
     sample_rate_ = sample_rate;
     max_block_ = max_block_size;
+    // Scratch backing for channels the host does not supply, so process() never
+    // allocates. One row per possible channel, each max_block_size long.
+    scratch_.assign(kMaxChannels * static_cast<size_t>(max_block_size), 0.0f);
     auto frames = static_cast<UInt32>(max_block_size);
     AudioUnitSetProperty(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
                          &frames, sizeof(frames));
@@ -128,21 +131,30 @@ class AuMidiInstrument final : public midi::MidiInstrument {
     if (unit_ == nullptr || num_channels <= 0) return;
     const int chans = num_channels > static_cast<int>(kMaxChannels) ? static_cast<int>(kMaxChannels)
                                                                     : num_channels;
-    // Match the AU's output stream format to the host's actual channel count. A
-    // format change requires uninitialising the AU, so this only fires when the
-    // channel count differs from the last negotiation (typically just the first
-    // block); steady-state rendering never reconfigures.
-    if (chans != output_channels_) configure_output_channels(chans);
+    // Do NOT renegotiate the AU stream format here: an AU format change requires
+    // AudioUnitUninitialize/Initialize, and running those on the audio thread
+    // violates the process() no-allocation/no-I-O contract (midi/instrument.h).
+    // The AU keeps the channel count negotiated in prepare(); the buffer list
+    // below is adapted to it (a host channel the AU does not fill is silenced,
+    // a channel the host did not supply is backed by pre-sized scratch). The
+    // common steady stereo host matches output_channels_ exactly with no scratch.
     // Deliver events in non-decreasing intra-block frame order. AUs expect the
     // MusicDeviceMIDIEvent offset to be monotonic within one render cycle, but
     // on_event queues in arrival order, which can interleave across clips routed
-    // to the same destination. stable_sort keeps same-frame events (e.g. a
-    // note-off before a note-on at the same frame) in their queued order, and is
-    // bounded (<= kEventQueueDepth) with no heap allocation.
-    std::stable_sort(events_.begin(), events_.begin() + event_count_,
-                     [](const midi::MidiEvent& a, const midi::MidiEvent& b) {
-                       return a.render_frame < b.render_frame;
-                     });
+    // to the same destination. Insertion sort is stable (same-frame events, e.g.
+    // a note-off before a note-on at the same frame, keep their queued order) and
+    // never allocates on the audio thread, unlike std::stable_sort which may grab
+    // a temporary buffer. event_count_ is bounded (<= kEventQueueDepth) and is
+    // typically a handful per block.
+    for (size_t i = 1; i < event_count_; ++i) {
+      const midi::MidiEvent key = events_[i];
+      size_t j = i;
+      while (j > 0 && events_[j - 1].render_frame > key.render_frame) {
+        events_[j] = events_[j - 1];
+        --j;
+      }
+      events_[j] = key;
+    }
     // Flush queued events at their intra-block sample offset before rendering.
     for (size_t i = 0; i < event_count_; ++i) {
       const int64_t offset = events_[i].render_frame - position_;
@@ -162,18 +174,27 @@ class AuMidiInstrument final : public midi::MidiInstrument {
     }
     event_count_ = 0;
 
+    // Present exactly the AU's negotiated channel count. Back any channel the
+    // host did not supply with pre-sized scratch (never allocated here); num_samples
+    // is bounded by the max_block_size passed to prepare(), so the scratch rows fit.
     AudioBufferList* list = buffers_.list();
-    list->mNumberBuffers = static_cast<UInt32>(chans);
-    for (int c = 0; c < chans; ++c) {
+    const int render_chans = output_channels_;
+    list->mNumberBuffers = static_cast<UInt32>(render_chans);
+    for (int c = 0; c < render_chans; ++c) {
+      float* dst = c < chans ? channels[c] : scratch_.data() + static_cast<size_t>(c) * max_block_;
       list->mBuffers[c].mNumberChannels = 1;
       list->mBuffers[c].mDataByteSize = static_cast<UInt32>(num_samples * sizeof(float));
-      list->mBuffers[c].mData = channels[c];
+      list->mBuffers[c].mData = dst;
     }
     AudioUnitRenderActionFlags flags = 0;
     AudioTimeStamp ts{};
     ts.mFlags = kAudioTimeStampSampleTimeValid;
     ts.mSampleTime = static_cast<Float64>(position_);
     AudioUnitRender(unit_, &flags, &ts, 0, static_cast<UInt32>(num_samples), list);
+    // Silence host channels the AU did not fill (host supplied more than the AU renders).
+    for (int c = render_chans; c < chans; ++c) {
+      std::memset(channels[c], 0, static_cast<size_t>(num_samples) * sizeof(float));
+    }
     position_ += num_samples;
   }
 
@@ -210,6 +231,7 @@ class AuMidiInstrument final : public midi::MidiInstrument {
   bool initialized_ = false;
   int64_t position_ = 0;
   BufferListStorage buffers_{};
+  std::vector<float> scratch_{};
   std::array<midi::MidiEvent, kEventQueueDepth> events_{};
   size_t event_count_ = 0;
 };
@@ -226,6 +248,10 @@ class AuEffectProcessor final : public rt::ProcessorBase {
 
   void prepare(double sample_rate, int max_block_size) override {
     sample_rate_ = sample_rate;
+    max_block_ = max_block_size;
+    // Scratch backing for channels the host does not supply, so process() never
+    // allocates. One row per possible channel, each max_block_size long.
+    scratch_.assign(kMaxChannels * static_cast<size_t>(max_block_size), 0.0f);
     auto frames = static_cast<UInt32>(max_block_size);
     AudioUnitSetProperty(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
                          &frames, sizeof(frames));
@@ -247,23 +273,34 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     if (unit_ == nullptr || num_channels <= 0) return;
     const int chans = num_channels > static_cast<int>(kMaxChannels) ? static_cast<int>(kMaxChannels)
                                                                     : num_channels;
-    // Match the AU's input/output format to the host's actual channel count;
-    // only reconfigures when it changes (typically just the first block).
-    if (chans != channels_) configure_channels(chans);
+    // Do NOT renegotiate the AU format here: uninitialising/reinitialising the AU
+    // on the audio thread violates the process() no-allocation/no-I-O contract
+    // (midi/instrument.h). Keep the channel count negotiated in prepare() and
+    // adapt the buffer list to it. The input callback already copies min(host,
+    // negotiated) channels and silences the rest via in_count_.
     in_channels_ = channels;
     in_count_ = chans;
+    // Present exactly the AU's negotiated channel count; back any channel the host
+    // did not supply with pre-sized scratch (num_samples is bounded by prepare()'s
+    // max_block_size, so the scratch rows fit).
     AudioBufferList* list = buffers_.list();
-    list->mNumberBuffers = static_cast<UInt32>(chans);
-    for (int c = 0; c < chans; ++c) {
+    const int render_chans = channels_;
+    list->mNumberBuffers = static_cast<UInt32>(render_chans);
+    for (int c = 0; c < render_chans; ++c) {
+      float* dst = c < chans ? channels[c] : scratch_.data() + static_cast<size_t>(c) * max_block_;
       list->mBuffers[c].mNumberChannels = 1;
       list->mBuffers[c].mDataByteSize = static_cast<UInt32>(num_samples * sizeof(float));
-      list->mBuffers[c].mData = channels[c];
+      list->mBuffers[c].mData = dst;
     }
     AudioUnitRenderActionFlags flags = 0;
     AudioTimeStamp ts{};
     ts.mFlags = kAudioTimeStampSampleTimeValid;
     ts.mSampleTime = static_cast<Float64>(position_);
     AudioUnitRender(unit_, &flags, &ts, 0, static_cast<UInt32>(num_samples), list);
+    // Silence host channels the AU did not fill (host supplied more than the AU renders).
+    for (int c = render_chans; c < chans; ++c) {
+      std::memset(channels[c], 0, static_cast<size_t>(num_samples) * sizeof(float));
+    }
     position_ += num_samples;
     in_channels_ = nullptr;
   }
@@ -310,11 +347,13 @@ class AuEffectProcessor final : public rt::ProcessorBase {
 
   AudioUnit unit_ = nullptr;
   double sample_rate_ = 48000.0;
+  int max_block_ = 512;
   int latency_ = 0;
   int channels_ = 0;
   bool initialized_ = false;
   int64_t position_ = 0;
   BufferListStorage buffers_{};
+  std::vector<float> scratch_{};
   float* const* in_channels_ = nullptr;
   int in_count_ = 0;
 };

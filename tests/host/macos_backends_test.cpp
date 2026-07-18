@@ -124,15 +124,15 @@ TEST_CASE("AU host enumerates and renders a system instrument", "[host][au][.]")
   REQUIRE(instrument->latency_samples() >= 0);
 }
 
-TEST_CASE("AU host renders mono then stereo through per-call channel negotiation",
+TEST_CASE("AU host renders mono then stereo without audio-thread reconfiguration",
           "[host][au][.]") {
-  // The adapter used to hardcode a 2-channel stream format at prepare(). A host
-  // rendering a single channel then pointed a 1-buffer list at an AU whose format
-  // still claimed two planar buffers. This exercises the new per-call
-  // negotiation: rendering mono re-negotiates the AU to one channel, then
-  // switching to stereo re-negotiates again. Both must stay finite and neither
-  // may crash (an AU produces well-defined finite output only when its format
-  // matches the buffer list the host supplies).
+  // The AU is negotiated once (stereo) in prepare(); process() must NOT
+  // re-negotiate the stream format, because AudioUnitUninitialize/Initialize on
+  // the audio thread violates the render-thread no-allocation/no-I-O contract.
+  // A host rendering a different channel count is adapted to the negotiated
+  // format instead: a missing channel is backed by pre-sized scratch, an extra
+  // host channel is silenced. This checks that rendering mono then stereo both
+  // stay finite and neither crashes despite the mismatch.
   using sonare::host::backends::AuInstrumentProvider;
   const auto instruments = AuInstrumentProvider::enumerate(sonare::host::PluginKind::kInstrument);
   if (instruments.empty()) {
@@ -146,8 +146,8 @@ TEST_CASE("AU host renders mono then stereo through per-call channel negotiation
   instrument->on_event(0,
                        sonare::midi::MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
 
-  // Render mono (re-negotiates from the stereo default), then switch back to
-  // stereo (re-negotiates again): both must stay finite.
+  // Render mono (adapted to the stereo negotiation via scratch), then stereo:
+  // both must stay finite.
   std::array<float, 512> mono{};
   std::array<float*, 1> mono_channels{mono.data()};
   instrument->process(mono_channels.data(), 1, 512);
