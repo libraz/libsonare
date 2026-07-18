@@ -187,8 +187,17 @@ double num_or_any(const Value& obj, const char* primary, const char* legacy, dou
 }
 
 int int_or_any(const Value& obj, const char* primary, const char* legacy, int fallback) {
-  if (obj.find(primary)) return int_or(obj, primary, fallback);
-  return int_or(obj, legacy, fallback);
+  // Match the num_or_any / str_or_any / bool_or_any contract: a present-but-
+  // wrong-typed value falls back rather than aborting the whole load. The old
+  // form called the strict int_or on `primary` unconditionally, so a non-numeric
+  // panMode/panLaw/channelDelaySamples threw and rejected an otherwise-valid
+  // project (while faderDb/soloSafe only fell back). A numeric-but-fractional /
+  // out-of-range value still throws via int_or -- that is a genuine value error.
+  const auto* v = obj.find(primary);
+  if (v && v->is_number()) return int_or(obj, primary, fallback);
+  const auto* legacy_v = obj.find(legacy);
+  if (legacy_v && legacy_v->is_number()) return int_or(obj, legacy, fallback);
+  return fallback;
 }
 
 std::string str_or_any(const Value& obj, const char* primary, const char* legacy,

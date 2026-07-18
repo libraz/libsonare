@@ -1,4 +1,5 @@
 #include "c_api/project_internal.h"
+#include "util/constants.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -284,7 +285,7 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
   std::vector<sonare::transport::TempoSegment> tempo_segments =
       project->history.project().tempo_segments();
   if (tempo_segments.empty()) {
-    tempo_segments.push_back({0.0, 120.0, 0.0});
+    tempo_segments.push_back({0.0, sonare::constants::kDefaultBpm, 0.0});
   }
   tempo_map.set_segments(std::move(tempo_segments));
   std::vector<sonare::transport::TimeSignatureSegment> time_signatures =

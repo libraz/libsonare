@@ -142,6 +142,39 @@ TEST_CASE("TempoMap reports bar and beat positions", "[transport]") {
   REQUIRE_THAT(map.bar_start_ppq(10.0), WithinAbs(8.0, 1.0e-9));
 }
 
+TEST_CASE("TempoMap reported tempo tracks the clamped playhead tempo", "[transport]") {
+  // A positive-but-sub-kMinBpm segment passes the finite-positive load guard, but
+  // the playhead advances at kMinBpm (samples_per_ppq clamps). The reported tempo
+  // must be clamped to match, not echo the raw near-zero value.
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  sonare::transport::TempoSegment tiny{};
+  tiny.start_ppq = 0.0;
+  tiny.bpm = 1.0e-300;  // finite, positive, far below kMinBpm (1e-6)
+  map.set_segments({tiny});
+  REQUIRE(map.bpm_at_sample(0) >= 1.0e-6);
+}
+
+TEST_CASE("TempoMap numbers bars across an off-grid time-signature change", "[transport]") {
+  // The 4/4 segment spans ppq [0, 5): 5 is not a whole number of 4/4 bars
+  // (bar length 4.0), so it leaves a partial bar that has already STARTED. The
+  // ceil branch must count that partial bar as one so the 3/4 segment's bar 0
+  // does not collide with it. (The existing multi-signature test uses an exact
+  // 2-bar boundary and never exercises this path.)
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  map.set_time_signatures({{0.0, {4, 4}}, {5.0, {3, 4}}});
+
+  // ppq 4.0 is bar 1 within the 4/4 segment (one full 4-quarter bar elapsed).
+  REQUIRE(map.ppq_to_bar_beat(4.0).bar == 1);
+  // ppq 4.5 is still inside the partial second bar of the 4/4 segment.
+  REQUIRE(map.ppq_to_bar_beat(4.5).bar == 1);
+  // At the boundary the partial 4/4 bar (bars 0 and 1) is counted, so the first
+  // 3/4 bar is bar 2 -- not a collision with the partial bar's number.
+  REQUIRE(map.ppq_to_bar_beat(5.0).bar == 2);
+  REQUIRE(map.ppq_to_bar_beat(8.0).bar == 3);  // one 3/4 bar (length 3.0) later
+}
+
 TEST_CASE("TempoMap bar count is saturating, not undefined, at extreme denominators",
           "[transport]") {
   // An individually-valid time signature with a huge denominator makes the bar

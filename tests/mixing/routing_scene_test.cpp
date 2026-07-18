@@ -5,6 +5,8 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 #include "util/exception.h"
 
 TEST_CASE("Routed mixer scene round-trip preserves topology", "[mixing][routing]") {
@@ -350,6 +352,28 @@ TEST_CASE("Scene channel layout round-trips and defaults to stereo", "[mixing][r
   REQUIRE(restored.strips[0].source_layout == ChannelLayout::FivePointOne);
   REQUIRE(restored.buses.size() == 1);
   REQUIRE(restored.buses[0].layout == ChannelLayout::SevenPointOne);
+}
+
+TEST_CASE("scene_from_json rejects out-of-range strip enums like the project walker",
+          "[mixing][routing]") {
+  // The project-embedded scene walker (project_serializer_decode.cpp) already
+  // rejects these; this canonical loader must reject the same JSON so a strip
+  // spec is not accepted through one path and refused through the other.
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a","panMode":5}]})"),
+      ContainsSubstring("panMode"));
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a","panLaw":9}]})"),
+      ContainsSubstring("panLaw"));
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
+                          R"({"version":1,"strips":[{"id":"a","channelDelaySamples":-3}]})"),
+                      ContainsSubstring("channelDelaySamples"));
+  // A valid strip still loads.
+  const auto ok = sonare::mixing::api::scene_from_json(
+      R"({"version":1,"strips":[{"id":"a","panMode":2,"panLaw":3,"channelDelaySamples":0}]})");
+  REQUIRE(ok.strips.size() == 1);
+  REQUIRE(ok.strips[0].pan_mode == 2);
 }
 
 TEST_CASE("Scene omits the layout fields when stereo (byte-compat)", "[mixing][routing]") {

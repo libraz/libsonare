@@ -137,12 +137,25 @@ Strip strip_from_value(const JsonValue& object) {
   strip.soloed = bool_or(object, "soloed", strip.soloed);
   strip.solo_safe = bool_or(object, "soloSafe", strip.solo_safe);
   strip.pan_mode = int_or(object, "panMode", strip.pan_mode);
+  // Reject out-of-range enum/count values so this canonical loader matches the
+  // project-embedded scene walker (project_serializer_decode.cpp), which already
+  // validates these. Previously an out-of-range value was accepted here but
+  // rejected there, so the same JSON loaded through one path and failed the other.
+  if (strip.pan_mode < 0 || strip.pan_mode > 2) {
+    throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
+  }
   strip.dual_pan_left = number_or(object, "dualPanLeft", strip.dual_pan_left);
   strip.dual_pan_right = number_or(object, "dualPanRight", strip.dual_pan_right);
   strip.polarity_invert_left = bool_or(object, "polarityInvertLeft", strip.polarity_invert_left);
   strip.polarity_invert_right = bool_or(object, "polarityInvertRight", strip.polarity_invert_right);
   strip.pan_law = int_or(object, "panLaw", strip.pan_law);
+  if (strip.pan_law < 0 || strip.pan_law > 3) {
+    throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
+  }
   strip.channel_delay_samples = int_or(object, "channelDelaySamples", strip.channel_delay_samples);
+  if (strip.channel_delay_samples < 0) {
+    throw SonareException(ErrorCode::InvalidFormat, "channelDelaySamples must be non-negative");
+  }
   strip.source_layout = channel_layout_or(object, "sourceLayout", strip.source_layout);
   if (const auto* sp = object.find("surroundPan"); sp && sp->is_object()) {
     strip.surround_pan.azimuth = number_or(*sp, "azimuth", strip.surround_pan.azimuth);

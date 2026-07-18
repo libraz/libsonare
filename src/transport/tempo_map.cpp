@@ -219,7 +219,12 @@ double TempoMap::bpm_at_sample(int64_t sample) const noexcept {
   const TempoSegment& segment =
       (*segments)[segment_index_for_sample(*segments, static_cast<double>(sample))];
   const double end_bpm = effective_end_bpm(segment);
-  if (end_bpm == segment.bpm) return segment.bpm;
+  // Clamp to kMinBpm so the reported tempo matches the effective playhead tempo:
+  // samples_per_ppq clamps bpm to kMinBpm, so a sub-kMinBpm-but-positive segment
+  // (which passes the finite-positive load guard) would otherwise display a value
+  // far below the tempo the transport actually advances at. The ramped path below
+  // already clamps its result.
+  if (end_bpm == segment.bpm) return std::max(segment.bpm, kMinBpm);
   // Report the instantaneous ramped tempo at this sample position.
   const double ppq = segment_ppq_at_samples(segment, sample_rate_,
                                             static_cast<double>(sample) - segment.start_sample);

@@ -40,6 +40,15 @@ bool Graph::remove_node(const std::string& id) {
                nodes_.end());
   node_map_.erase(found);
   compiled_ = false;
+  // Drop compile-derived state so a stale read cannot outlive the removed node:
+  // node_latency_samples_q8() looks up node_latency_q8_ directly and would return
+  // the previous compilation's value for the just-removed id instead of reporting
+  // it as unknown. All of this is rebuilt by the next compile().
+  topo_order_.clear();
+  topo_order_ids_.clear();
+  runtime_connections_.clear();
+  incoming_by_topo_.clear();
+  node_latency_q8_.clear();
   return true;
 }
 

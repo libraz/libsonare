@@ -163,6 +163,23 @@ TEST_CASE("Graph compiles acyclic routing in topological order", "[graph]") {
   REQUIRE_THAT(output[3], WithinAbs(8.0f, 0.0001f));
 }
 
+TEST_CASE("remove_node drops the removed node's compiled latency state", "[graph]") {
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("input", pass(), 1));
+  REQUIRE(graph.add_node("gain", std::make_unique<GainProcessor>(2.0f), 1));
+  REQUIRE(graph.connect({"input", 0, "gain", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+
+  // After a compile the node has a latency entry.
+  REQUIRE(graph.node_latency_samples_q8("gain") >= 0);
+
+  // Removing it must not leave a stale latency entry that outlives the node: a
+  // query for the removed id reports it as unknown instead of returning the
+  // previous compilation's value.
+  REQUIRE(graph.remove_node("gain"));
+  REQUIRE_THROWS(graph.node_latency_samples_q8("gain"));
+}
+
 TEST_CASE("Graph public port access rejects invalid ports without aliasing port zero", "[graph]") {
   sonare::graph::Graph graph;
   REQUIRE(graph.add_node("io", pass(), 1));

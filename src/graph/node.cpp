@@ -121,7 +121,7 @@ float* Node::port_data(std::vector<float>& storage, int port) noexcept {
   if (port < 0 || port >= num_ports_ || max_block_size_ <= 0) {
     return storage.data();
   }
-  return storage.data() + static_cast<size_t>(port * max_block_size_);
+  return storage.data() + static_cast<size_t>(port) * static_cast<size_t>(max_block_size_);
 }
 
 const float* Node::port_data(const std::vector<float>& storage, int port) const noexcept {
@@ -129,7 +129,7 @@ const float* Node::port_data(const std::vector<float>& storage, int port) const 
   if (port < 0 || port >= num_ports_ || max_block_size_ <= 0) {
     return storage.data();
   }
-  return storage.data() + static_cast<size_t>(port * max_block_size_);
+  return storage.data() + static_cast<size_t>(port) * static_cast<size_t>(max_block_size_);
 }
 
 }  // namespace sonare::graph
