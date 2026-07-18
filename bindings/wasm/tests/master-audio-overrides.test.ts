@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Audio, init, masterAudio, masterAudioStereo, masteringChain } from '../src/index';
+import { Audio, init, masterAudio, masterAudioStereo } from '../src/index';
 
 const sampleRate = 22_050;
 const samples = Float32Array.from(
