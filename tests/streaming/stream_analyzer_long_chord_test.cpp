@@ -329,3 +329,159 @@ TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chor
   // matching the first proves it did NOT record the second's value.
   REQUIRE(std::abs(completed.confidence - second_chord_max_conf) > 0.04f);
 }
+
+// ============================================================================
+// Regression: finalize() must flush the chord still being held at end of
+// stream. chord_progression only gains an entry when a chord CHANGES (the
+// "changed" branch in update_progressive_estimate appends the just-completed
+// chord); the chord held when the stream ends was therefore never appended.
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer finalize flushes the chord still held at end of stream",
+          "[streaming][chord]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+
+  StreamAnalyzer analyzer(config);
+
+  const int sr = 22050;
+  // Each chord segment must clear kChordMinDuration (0.3s) even after the
+  // ~0.28s worst-case lag of the 12-frame chroma smoothing window catching up
+  // to a chord change, so the second (held-at-finalize) chord still has a
+  // valid duration once the smoothing window has caught up.
+  const float chord_sec = 0.9f;
+  const int chord_samples = static_cast<int>(chord_sec * sr);
+  const float amp = 0.3f;
+
+  const float c_major[] = {261.63f, 329.63f, 392.00f};
+  const float g_major[] = {392.00f, 493.88f, 587.33f};
+
+  std::vector<float> audio(static_cast<size_t>(2 * chord_samples), 0.0f);
+  for (int i = 0; i < chord_samples; ++i) {
+    float s = 0.0f;
+    for (float f : c_major) s += amp * std::sin(kTwoPi * f * static_cast<float>(i) / sr);
+    audio[static_cast<size_t>(i)] = s;
+  }
+  for (int i = 0; i < chord_samples; ++i) {
+    float s = 0.0f;
+    for (float f : g_major) s += amp * std::sin(kTwoPi * f * static_cast<float>(i) / sr);
+    audio[static_cast<size_t>(chord_samples + i)] = s;
+  }
+
+  analyzer.process(audio.data(), audio.size());
+
+  // Record which chord each half of the stream actually resolved to, without
+  // assuming a specific pitch-class numbering for the synthesized triads.
+  auto frames = analyzer.read_frames(100000);
+  REQUIRE(frames.size() > 1);
+
+  int first_root = -1;
+  int first_quality = 0;
+  int second_root = -1;
+  int second_quality = 0;
+  for (const auto& f : frames) {
+    if (f.chord_root < 0) continue;
+    if (f.timestamp < chord_sec) {
+      first_root = f.chord_root;
+      first_quality = f.chord_quality;
+    } else {
+      second_root = f.chord_root;
+      second_quality = f.chord_quality;
+    }
+  }
+  REQUIRE(first_root >= 0);
+  REQUIRE(second_root >= 0);
+  REQUIRE(first_root != second_root);
+
+  analyzer.finalize();
+
+  auto stats = analyzer.stats();
+  const auto& prog = stats.estimate.chord_progression;
+
+  // Before the fix, only the C->G transition entry existed here (one entry).
+  // The held G chord must now also be flushed by finalize().
+  REQUIRE(prog.size() == 2);
+  REQUIRE(prog[0].root == first_root);
+  REQUIRE(prog[0].quality == first_quality);
+  REQUIRE(prog[1].root == second_root);
+  REQUIRE(prog[1].quality == second_quality);
+  REQUIRE(prog[0].start_time < prog[1].start_time);
+}
+
+// ============================================================================
+// Regression: with mel computation disabled the read APIs must report 0 mel
+// bands, not the configured n_mels (default 128). Before the fix, n_mels was
+// reported unconditionally while the mel array stayed empty, so a consumer
+// reshaping mel into [n_frames, n_mels] hit a length mismatch.
+// ============================================================================
+
+TEST_CASE("StreamAnalyzer reports zero mel bands when mel computation is disabled", "[streaming]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;  // Still emit frames.
+  config.compute_mel = false;    // The behavior under test.
+  config.compute_onset = false;  // Onset would coerce mel back on.
+
+  StreamAnalyzer analyzer(config);
+  REQUIRE_FALSE(analyzer.config().compute_mel);  // Not coerced on.
+
+  const int sr = 22050;
+  std::vector<float> audio = generate_sine(sr / 2, 440.0f, sr);  // 0.5 s -> several frames.
+
+  SECTION("float SoA read leaves the mel array empty") {
+    analyzer.process(audio.data(), audio.size());
+    sonare::FrameBuffer buffer;
+    analyzer.read_frames_soa(10000, buffer);
+    REQUIRE(buffer.n_frames > 0);
+    REQUIRE(buffer.mel.empty());  // n_frames * 0 == 0.
+  }
+
+  SECTION("quantized U8 read reports n_mels == 0 with an empty mel array") {
+    analyzer.process(audio.data(), audio.size());
+    sonare::QuantizedFrameBufferU8 buffer;
+    analyzer.read_frames_quantized_u8(10000, buffer);
+    REQUIRE(buffer.n_frames > 0);
+    REQUIRE(buffer.n_mels == 0);
+    REQUIRE(buffer.mel.empty());
+  }
+}
+
+TEST_CASE("StreamAnalyzer finalize on a single sustained chord yields exactly one entry",
+          "[streaming][chord]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+
+  StreamAnalyzer analyzer(config);
+
+  const int sr = 22050;
+  const float chord_sec = 0.5f;  // Comfortably above kChordMinDuration (0.3s).
+  const int chord_samples = static_cast<int>(chord_sec * sr);
+  const float amp = 0.3f;
+  const float c_major[] = {261.63f, 329.63f, 392.00f};
+
+  std::vector<float> audio(static_cast<size_t>(chord_samples), 0.0f);
+  for (int i = 0; i < chord_samples; ++i) {
+    float s = 0.0f;
+    for (float f : c_major) s += amp * std::sin(kTwoPi * f * static_cast<float>(i) / sr);
+    audio[static_cast<size_t>(i)] = s;
+  }
+
+  analyzer.process(audio.data(), audio.size());
+  analyzer.finalize();
+
+  auto stats = analyzer.stats();
+  const auto& prog = stats.estimate.chord_progression;
+
+  // Before the fix, a stream containing only one chord produced an EMPTY
+  // progression (there is never a "changed" transition to append it).
+  REQUIRE(prog.size() == 1);
+  REQUIRE(prog[0].root >= 0);
+}

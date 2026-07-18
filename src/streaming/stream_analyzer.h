@@ -74,15 +74,26 @@ inline constexpr int kNumChordQualities = 17;
 /// @code
 ///   StreamAnalyzer analyzer(config);
 ///
-///   // In AudioWorklet.process():
 ///   analyzer.process(samples, n_samples);
-///
-///   // In main thread (via postMessage):
 ///   auto frames = analyzer.read_frames(10);
 ///   for (const auto& frame : frames) {
 ///     visualize(frame);
 ///   }
 /// @endcode
+///
+/// @par Thread-safety
+/// StreamAnalyzer is not internally synchronized: process() and the read/pop
+/// output accessors (read_frames(), read_frames_soa(), the quantized
+/// variants, available_frames(), stats()) must all be called from a single
+/// thread (or otherwise fully serialized by the caller — no two of these
+/// calls may run concurrently). In particular, calling process() from an
+/// audio-rendering thread while reading frames from a different thread
+/// without your own synchronization is a data race on the internal output
+/// ring. Callers that need an audio thread producing frames and a separate
+/// thread consuming them must marshal the data across that boundary
+/// themselves (e.g. copy out StreamFrame values under a lock, or hand off
+/// through a caller-owned queue) rather than sharing one StreamAnalyzer
+/// instance across threads.
 class StreamAnalyzer {
  public:
   /// @brief Constructs analyzer with configuration.
@@ -121,6 +132,18 @@ class StreamAnalyzer {
   ///          samples buffered, this zero-pads that tail and emits one final
   ///          frame. Calling finalize() more than once is idempotent. Call
   ///          reset() before reusing the analyzer for another stream.
+  ///
+  /// @note At sample rates above @ref kMaxDirectSampleRate, input is routed
+  ///       through a persistent, phase-continuous resampler that needs its
+  ///       startup filter latency (a few ms of input) before it emits any
+  ///       samples. finalize() intentionally does not drain that resampler
+  ///       tail (draining would either fabricate zero-padded samples or
+  ///       restart its phase — see StreamResampler). A clip shorter than the
+  ///       resampler's startup latency (e.g. a 96 kHz stream of only a few
+  ///       hundred samples) can therefore yield zero analysis frames even
+  ///       after finalize(). This is a bounded, stream-end-only trade-off;
+  ///       continuous realtime use (chunks pushed well past the startup
+  ///       latency) is unaffected.
   void finalize();
 
   /// @brief Returns number of frames available to read.
@@ -266,6 +289,10 @@ class StreamAnalyzer {
   // Fixed output ring. Every StreamFrame and its fixed-shape feature vectors
   // are prepared by the constructor so emit_frame never allocates, including
   // when a consumer drains the queue between every callback.
+  //
+  // Plain size_t, not atomic: process() (writer) and the read/pop accessors
+  // (reader) are required to run on a single thread — see the class-level
+  // "Thread-safety" doc above. This is not a wait-free SPSC ring.
   std::vector<StreamFrame> output_buffer_;
   size_t output_read_index_ = 0;
   size_t output_size_ = 0;
@@ -420,6 +447,7 @@ class StreamAnalyzer {
   std::array<float, 12> median_full_chroma(size_t start, size_t count);
   void append_chord_progression(const ChordChange& change);
   void append_bar_progression(const BarChord& chord);
+  void flush_pending_chord();
 };
 
 }  // namespace sonare

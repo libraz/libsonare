@@ -170,7 +170,10 @@ class StreamAnalyzerWrapper {
 
     val out = val::object();
     out.set("nFrames", buffer.n_frames);
-    out.set("nMels", config_.n_mels);
+    // 0 (not the configured n_mels) when mel computation is disabled,
+    // matching the empty mel array so nMels * nFrames == mel.length always
+    // holds.
+    out.set("nMels", config_.compute_mel ? config_.n_mels : 0);
     out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
     out.set("mel", vectorToFloat32Array(buffer.mel));
     out.set("chroma", vectorToFloat32Array(buffer.chroma));

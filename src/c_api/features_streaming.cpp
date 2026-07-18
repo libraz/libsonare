@@ -225,7 +225,9 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
   analyzer->analyzer->read_frames_soa(max_frames, buffer);
 
   out->n_frames = static_cast<int>(buffer.n_frames);
-  out->n_mels = analyzer->analyzer->config().n_mels;
+  // 0 (not the configured n_mels) when mel computation is disabled, matching
+  // the empty mel array so n_mels * n_frames == mel length always holds.
+  out->n_mels = analyzer->analyzer->config().compute_mel ? analyzer->analyzer->config().n_mels : 0;
   out->timestamps = copy_vector(buffer.timestamps);
   out->mel = copy_vector(buffer.mel);
   out->chroma = copy_vector(buffer.chroma);

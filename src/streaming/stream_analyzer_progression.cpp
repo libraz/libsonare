@@ -44,6 +44,29 @@ void StreamAnalyzer::append_bar_progression(const BarChord& chord) {
   ++dropped_bar_progression_entries_;
 }
 
+void StreamAnalyzer::flush_pending_chord() {
+  // The chord progression only gains an entry once a chord changes (see the
+  // "changed" branch below in update_progressive_estimate, which appends the
+  // just-completed chord). The chord still being held at end-of-stream is
+  // therefore never appended on its own — finalize() calls this once to emit
+  // that final segment using the same held-chord state the live path tracks.
+  if (prev_chord_root_ < 0 || chord_stable_time_ < kChordMinDuration) {
+    return;
+  }
+  auto& progression = current_estimate_.chord_progression;
+  if (!progression.empty() && progression.back().root == prev_chord_root_ &&
+      progression.back().quality == prev_chord_quality_) {
+    // Already recorded (e.g. a transition just before finalize() appended it).
+    return;
+  }
+  ChordChange change;
+  change.root = prev_chord_root_;
+  change.quality = prev_chord_quality_;
+  change.start_time = current_chord_start_time_;
+  change.confidence = prev_chord_confidence_;
+  append_chord_progression(change);
+}
+
 void StreamAnalyzer::update_progressive_estimate(float current_time) {
   current_estimate_.accumulated_seconds = current_time;
   current_estimate_.used_frames = frame_count_;

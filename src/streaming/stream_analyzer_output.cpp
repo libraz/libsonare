@@ -81,7 +81,9 @@ void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
     return;
   }
 
-  buffer.reserve(count, config_.n_mels);
+  // Skip reserving mel capacity when mel computation is disabled, mirroring
+  // the empty frame.mel that per-frame processing leaves in that case.
+  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0);
 
   for (size_t i = 0; i < count; ++i) {
     const StreamFrame& frame = output_front();
@@ -114,7 +116,10 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
     return;
   }
 
-  buffer.reserve(count, config_.n_mels);
+  // Report 0 mel bands (not the configured n_mels) when mel computation is
+  // disabled, so n_mels * n_frames always matches the actual (empty) mel
+  // array length instead of implying a non-empty buffer that never fills.
+  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0);
 
   for (size_t i = 0; i < count; ++i) {
     const StreamFrame& frame = output_front();
@@ -152,7 +157,10 @@ void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrame
     return;
   }
 
-  buffer.reserve(count, config_.n_mels);
+  // Report 0 mel bands (not the configured n_mels) when mel computation is
+  // disabled, so n_mels * n_frames always matches the actual (empty) mel
+  // array length instead of implying a non-empty buffer that never fills.
+  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0);
 
   for (size_t i = 0; i < count; ++i) {
     const StreamFrame& frame = output_front();

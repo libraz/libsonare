@@ -163,6 +163,12 @@ void StreamAnalyzer::finalize() {
   // that tail is proportionally larger but remains a benign, bounded stream-end
   // truncation rather than a mid-stream gap.
 
+  // Emit the chord that is still being held at end-of-stream. The live
+  // progression path (update_progressive_estimate) only appends an entry when
+  // a chord changes, so the final held chord — including the only chord of a
+  // single-chord stream — would otherwise never reach chord_progression.
+  flush_pending_chord();
+
   if (overlap_read_pos_ > 0) {
     overlap_buffer_.erase(overlap_buffer_.begin(),
                           overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(overlap_read_pos_));
