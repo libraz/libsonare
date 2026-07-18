@@ -126,6 +126,61 @@ TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine tempo and time-signature segments validate their input",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  // Valid tempo ramp: constant 120 then ramp to 140.
+  const SonareProjectTempoSegment tempo[] = {{0.0, 120.0, 0.0, 0.0}, {1920.0, 120.0, 0.0, 140.0}};
+  REQUIRE(sonare_engine_set_tempo_segments(engine, tempo, 2) == SONARE_OK);
+  // Empty clears the map.
+  REQUIRE(sonare_engine_set_tempo_segments(engine, nullptr, 0) == SONARE_OK);
+  // Non-finite start_ppq, non-positive bpm, and negative end_bpm are rejected.
+  const SonareProjectTempoSegment nan_start[] = {
+      {std::numeric_limits<double>::quiet_NaN(), 120.0, 0.0, 0.0}};
+  REQUIRE(sonare_engine_set_tempo_segments(engine, nan_start, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTempoSegment zero_bpm[] = {{0.0, 0.0, 0.0, 0.0}};
+  REQUIRE(sonare_engine_set_tempo_segments(engine, zero_bpm, 1) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // Valid time-signature map, then invalid numerator.
+  const SonareProjectTimeSignatureSegment sig[] = {{0.0, 4, 4}, {1920.0, 3, 4}};
+  REQUIRE(sonare_engine_set_time_signature_segments(engine, sig, 2) == SONARE_OK);
+  const SonareProjectTimeSignatureSegment bad_sig[] = {{0.0, 0, 4}};
+  REQUIRE(sonare_engine_set_time_signature_segments(engine, bad_sig, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine rejects out-of-range automation curve ordinals", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  // An out-of-range default curve is rejected, not clamped.
+  SonareParameterInfo parameter{};
+  parameter.id = 88;
+  parameter.min_value = 0.0f;
+  parameter.max_value = 1.0f;
+  parameter.rt_safe = 1;
+  parameter.default_curve = 99;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_ERROR_INVALID_PARAMETER);
+  parameter.default_curve = 3;  // In range now.
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+
+  // An out-of-range breakpoint curve is rejected, matching the project path.
+  const SonareAutomationPoint bad_curve[] = {{0.0, 0.5f, 99}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, 88, bad_curve, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  const SonareAutomationPoint ok_curve[] = {{0.0, 0.5f, 2}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, 88, ok_curve, 1) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine rejects engine-reserved automation parameter ids", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

@@ -21,6 +21,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SeekPpq(const Napi::CallbackInfo& info);
   Napi::Value SetTempo(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignature(const Napi::CallbackInfo& info);
+  Napi::Value SetTempoSegments(const Napi::CallbackInfo& info);
+  Napi::Value SetTimeSignatureSegments(const Napi::CallbackInfo& info);
   Napi::Value SampleAtPpq(const Napi::CallbackInfo& info);
   Napi::Value SetLoop(const Napi::CallbackInfo& info);
   Napi::Value AddParameter(const Napi::CallbackInfo& info);

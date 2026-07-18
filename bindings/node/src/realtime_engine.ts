@@ -29,6 +29,8 @@ import type {
   MidiCcBindOptions,
   PanLaw,
   PanMode,
+  ProjectTempoSegment,
+  ProjectTimeSignatureSegment,
   Sf2InstrumentConfig,
   SynthPatch,
 } from './types.js';
@@ -98,6 +100,23 @@ export class RealtimeEngine {
 
   setTimeSignature(numerator: number, denominator: number): void {
     this.native.setTimeSignature(numerator, denominator);
+  }
+
+  /**
+   * Installs a tempo map from ramp segments. Each segment needs a finite
+   * non-negative `startPpq` and a positive `bpm`; a non-zero `endBpm` ramps to
+   * that tempo. An empty array clears the map back to the single-tempo value.
+   */
+  setTempoSegments(segments: ReadonlyArray<ProjectTempoSegment>): void {
+    this.native.setTempoSegments(segments);
+  }
+
+  /**
+   * Installs a time-signature map. Each segment needs a finite non-negative
+   * `startPpq` and a positive `numerator` / `denominator`.
+   */
+  setTimeSignatureSegments(segments: ReadonlyArray<ProjectTimeSignatureSegment>): void {
+    this.native.setTimeSignatureSegments(segments);
   }
 
   sampleAtPpq(ppq: number): number {

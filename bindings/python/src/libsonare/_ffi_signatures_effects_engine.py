@@ -278,6 +278,20 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_engine_set_tempo.argtypes = [ctypes.c_void_p, ctypes.c_double]
     lib.sonare_engine_set_time_signature.restype = ctypes.c_int32
     lib.sonare_engine_set_time_signature.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+    if hasattr(lib, "sonare_engine_set_tempo_segments"):
+        lib.sonare_engine_set_tempo_segments.restype = ctypes.c_int32
+        lib.sonare_engine_set_tempo_segments.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectTempoSegment),
+            ctypes.c_size_t,
+        ]
+    if hasattr(lib, "sonare_engine_set_time_signature_segments"):
+        lib.sonare_engine_set_time_signature_segments.restype = ctypes.c_int32
+        lib.sonare_engine_set_time_signature_segments.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareProjectTimeSignatureSegment),
+            ctypes.c_size_t,
+        ]
     if hasattr(lib, "sonare_engine_sample_at_ppq"):
         lib.sonare_engine_sample_at_ppq.restype = ctypes.c_int32
         lib.sonare_engine_sample_at_ppq.argtypes = [

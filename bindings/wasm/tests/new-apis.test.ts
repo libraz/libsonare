@@ -715,6 +715,29 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('rejects an out-of-range automation curve ordinal instead of clamping it', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      // curveToNext outside the AutomationCurve enum (0..3) is rejected, not
+      // silently clamped to Linear.
+      expect(() =>
+        engine.setAutomationLane(0x4d580001, [{ ppq: 0, value: -6, curveToNext: 4 }]),
+      ).toThrow();
+      // A defaultCurve outside the enum is rejected at addParameter.
+      expect(() =>
+        engine.addParameter({
+          id: 9,
+          name: 'gain',
+          unit: 'dB',
+          minValue: -60,
+          maxValue: 12,
+          defaultValue: 0,
+          rtSafe: true,
+          defaultCurve: 5,
+        }),
+      ).toThrow();
+      engine.destroy();
+    });
+
     it('routes a lane through its group bus and ducks a lane from a sidechain key', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setTempo(120);

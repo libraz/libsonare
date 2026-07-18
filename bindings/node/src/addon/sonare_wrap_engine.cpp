@@ -125,6 +125,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SeekPpq>("seekPpq"),
           InstanceMethod<&RealtimeEngineWrap::SetTempo>("setTempo"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignature>("setTimeSignature"),
+          InstanceMethod<&RealtimeEngineWrap::SetTempoSegments>("setTempoSegments"),
+          InstanceMethod<&RealtimeEngineWrap::SetTimeSignatureSegments>("setTimeSignatureSegments"),
           InstanceMethod<&RealtimeEngineWrap::SampleAtPpq>("sampleAtPpq"),
           InstanceMethod<&RealtimeEngineWrap::SetLoop>("setLoop"),
           InstanceMethod<&RealtimeEngineWrap::AddParameter>("addParameter"),
@@ -349,6 +351,57 @@ Napi::Value RealtimeEngineWrap::SetTimeSignature(const Napi::CallbackInfo& info)
   const int numerator = info.Length() > 0 ? info[0].As<Napi::Number>().Int32Value() : 4;
   const int denominator = info.Length() > 1 ? info[1].As<Napi::Number>().Int32Value() : 4;
   ThrowIfError(env, sonare_engine_set_time_signature(engine_, numerator, denominator));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  std::vector<SonareProjectTempoSegment> segments;
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array input = info[0].As<Napi::Array>();
+    segments.reserve(input.Length());
+    for (uint32_t i = 0; i < input.Length(); ++i) {
+      if (!input.Get(i).IsObject()) {
+        Napi::TypeError::New(env, "tempo segment must be an object").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object obj = input.Get(i).As<Napi::Object>();
+      SonareProjectTempoSegment segment{};
+      segment.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
+      segment.bpm = obj.Get("bpm").As<Napi::Number>().DoubleValue();
+      segment.start_sample = 0.0;
+      segment.end_bpm = obj.Has("endBpm") && !obj.Get("endBpm").IsUndefined()
+                            ? obj.Get("endBpm").As<Napi::Number>().DoubleValue()
+                            : 0.0;
+      segments.push_back(segment);
+    }
+  }
+  ThrowIfError(env, sonare_engine_set_tempo_segments(engine_, segments.data(), segments.size()));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetTimeSignatureSegments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  std::vector<SonareProjectTimeSignatureSegment> segments;
+  if (info.Length() > 0 && info[0].IsArray()) {
+    Napi::Array input = info[0].As<Napi::Array>();
+    segments.reserve(input.Length());
+    for (uint32_t i = 0; i < input.Length(); ++i) {
+      if (!input.Get(i).IsObject()) {
+        Napi::TypeError::New(env, "time signature segment must be an object")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object obj = input.Get(i).As<Napi::Object>();
+      SonareProjectTimeSignatureSegment segment{};
+      segment.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
+      segment.numerator = obj.Get("numerator").As<Napi::Number>().Int32Value();
+      segment.denominator = obj.Get("denominator").As<Napi::Number>().Int32Value();
+      segments.push_back(segment);
+    }
+  }
+  ThrowIfError(
+      env, sonare_engine_set_time_signature_segments(engine_, segments.data(), segments.size()));
   return env.Undefined();
 }
 

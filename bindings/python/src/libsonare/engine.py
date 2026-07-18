@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ._engine_conversions import (
@@ -65,7 +65,12 @@ from ._ffi_types_core import (
     SonareParameterInfo,
     SonareTransportState,
 )
-from ._ffi_types_mastering_project import SonareEngineMidiClipSchedule, SonareEngineMidiEvent
+from ._ffi_types_mastering_project import (
+    SonareEngineMidiClipSchedule,
+    SonareEngineMidiEvent,
+    SonareProjectTempoSegment,
+    SonareProjectTimeSignatureSegment,
+)
 from ._runtime import (
     _check,
     _get_lib,
@@ -197,6 +202,77 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(
             _get_lib().sonare_engine_set_time_signature(
                 self._require_handle(), int(numerator), int(denominator)
+            )
+        )
+
+    def set_tempo_segments(
+        self,
+        segments: Sequence[Mapping[str, float] | Sequence[float]],
+    ) -> None:
+        """Install a tempo map from ramp segments.
+
+        Each segment is a mapping (``start_ppq`` / ``bpm`` / optional ``end_bpm``)
+        or a tuple ``(start_ppq, bpm, start_sample=ignored, end_bpm=0.0)``.
+        ``end_bpm`` 0 means a constant-tempo segment; a positive value ramps to
+        that tempo. Pass an empty sequence to clear the map.
+        """
+        rows = list(segments)
+        count = len(rows)
+        c_segments = (SonareProjectTempoSegment * count)() if count else None
+        for i, seg in enumerate(rows):
+            if isinstance(seg, Mapping):
+                start_ppq = float(seg["start_ppq"])
+                bpm = float(seg["bpm"])
+                end_bpm = float(seg.get("end_bpm", 0.0))
+            else:
+                tup = tuple(seg)
+                if len(tup) < 2:
+                    raise ValueError(f"segments[{i}] must contain (start_ppq, bpm)")
+                start_ppq = float(tup[0])
+                bpm = float(tup[1])
+                end_bpm = float(tup[3]) if len(tup) >= 4 else 0.0
+            c_segments[i].start_ppq = start_ppq
+            c_segments[i].bpm = bpm
+            c_segments[i].end_bpm = end_bpm
+        _check(
+            _get_lib().sonare_engine_set_tempo_segments(
+                self._require_handle(), c_segments, ctypes.c_size_t(count)
+            )
+        )
+
+    def set_time_signature_segments(
+        self,
+        segments: Sequence[Mapping[str, float] | Sequence[float]],
+    ) -> None:
+        """Install a time-signature map.
+
+        Each segment is a mapping (``start_ppq`` / ``numerator`` / ``denominator``)
+        or a tuple ``(start_ppq, numerator, denominator)``. Pass an empty sequence
+        to clear the map.
+        """
+        rows = list(segments)
+        count = len(rows)
+        c_segments = (SonareProjectTimeSignatureSegment * count)() if count else None
+        for i, seg in enumerate(rows):
+            if isinstance(seg, Mapping):
+                start_ppq = float(seg["start_ppq"])
+                numerator = int(seg["numerator"])
+                denominator = int(seg["denominator"])
+            else:
+                tup = tuple(seg)
+                if len(tup) < 3:
+                    raise ValueError(
+                        f"segments[{i}] must contain (start_ppq, numerator, denominator)"
+                    )
+                start_ppq = float(tup[0])
+                numerator = int(tup[1])
+                denominator = int(tup[2])
+            c_segments[i].start_ppq = start_ppq
+            c_segments[i].numerator = numerator
+            c_segments[i].denominator = denominator
+        _check(
+            _get_lib().sonare_engine_set_time_signature_segments(
+                self._require_handle(), c_segments, ctypes.c_size_t(count)
             )
         )
 

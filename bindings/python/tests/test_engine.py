@@ -87,6 +87,65 @@ def test_engine_transport_state_and_live_parameters() -> None:
         assert isinstance(records, list)
 
 
+def test_engine_tempo_and_time_signature_segments() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        # Valid ramp + time-signature map (mappings and tuples both accepted).
+        engine.set_tempo_segments(
+            [
+                {"start_ppq": 0.0, "bpm": 120.0},
+                {"start_ppq": 1920.0, "bpm": 120.0, "end_bpm": 140.0},
+            ]
+        )
+        engine.set_time_signature_segments(
+            [{"start_ppq": 0.0, "numerator": 4, "denominator": 4}, (1920.0, 3, 4)]
+        )
+        # An empty sequence clears the map without error.
+        engine.set_tempo_segments([])
+        engine.set_time_signature_segments([])
+        # Invalid input is rejected, matching the C ABI and the other surfaces.
+        with pytest.raises(SonareError):
+            engine.set_tempo_segments([{"start_ppq": 0.0, "bpm": 0.0}])
+        with pytest.raises(SonareError):
+            engine.set_tempo_segments([{"start_ppq": float("nan"), "bpm": 120.0}])
+        with pytest.raises(SonareError):
+            engine.set_time_signature_segments(
+                [{"start_ppq": 0.0, "numerator": 0, "denominator": 4}]
+            )
+
+
+def test_engine_rejects_out_of_range_automation_curve() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.add_parameter(
+            ParameterInfo(
+                id=5,
+                name="gain",
+                unit="dB",
+                min_value=0.0,
+                max_value=1.0,
+                default_value=0.0,
+                rt_safe=True,
+                default_curve=AutomationCurve.LINEAR,
+            )
+        )
+        # An out-of-range breakpoint curve ordinal is rejected (not clamped).
+        with pytest.raises((ValueError, SonareError)):
+            engine.set_automation_lane(5, [AutomationPoint(ppq=0.0, value=0.5, curve_to_next=99)])
+        # An out-of-range default curve is likewise rejected.
+        with pytest.raises((ValueError, SonareError)):
+            engine.add_parameter(
+                ParameterInfo(
+                    id=6,
+                    name="pan",
+                    unit="",
+                    min_value=-1.0,
+                    max_value=1.0,
+                    default_value=0.0,
+                    rt_safe=True,
+                    default_curve=99,  # type: ignore[arg-type]
+                )
+            )
+
+
 def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
     frames = 256 * 10
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:

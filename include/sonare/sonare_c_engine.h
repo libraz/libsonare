@@ -4,6 +4,9 @@
 #include <stdint.h>
 
 #include "sonare_c_types.h"
+// Realtime tempo / time-signature ramps reuse the shared segment descriptors
+// SonareProjectTempoSegment / SonareProjectTimeSignatureSegment.
+#include "sonare_c_project_core.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -89,6 +92,20 @@ SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine);
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm);
 SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int numerator,
                                              int denominator);
+/// @brief Installs a tempo map from @p segment_count ramp segments (control
+///   thread only). Each segment needs a finite non-negative @c start_ppq and a
+///   positive @c bpm; a non-zero @c end_bpm ramps to that tempo. Passing zero
+///   segments clears the map back to the single-tempo value. @c start_sample and
+///   @c end_ppq of the descriptor are ignored (derived internally).
+SonareError sonare_engine_set_tempo_segments(SonareRealtimeEngine* engine,
+                                             const SonareProjectTempoSegment* segments,
+                                             size_t segment_count);
+/// @brief Installs a time-signature map from @p segment_count segments (control
+///   thread only). Each segment needs a finite non-negative @c start_ppq and a
+///   positive @c numerator / @c denominator.
+SonareError sonare_engine_set_time_signature_segments(
+    SonareRealtimeEngine* engine, const SonareProjectTimeSignatureSegment* segments,
+    size_t segment_count);
 SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq,
                                         int64_t* out_sample);
 SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_ppq, double end_ppq,

@@ -35,6 +35,57 @@ describe('RealtimeEngine native binding', () => {
     expect(v).toBeGreaterThan(0);
   });
 
+  it('installs tempo and time-signature segments and validates them', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    // Valid ramp then a valid time-signature map.
+    engine.setTempoSegments([
+      { startPpq: 0, bpm: 120 },
+      { startPpq: 1920, bpm: 120, endBpm: 140 },
+    ]);
+    engine.setTimeSignatureSegments([
+      { startPpq: 0, numerator: 4, denominator: 4 },
+      { startPpq: 1920, numerator: 3, denominator: 4 },
+    ]);
+    // Empty arrays clear the maps without error.
+    engine.setTempoSegments([]);
+    engine.setTimeSignatureSegments([]);
+    // Invalid input is rejected (matching the C ABI and Python).
+    expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 0 }])).toThrow();
+    expect(() => engine.setTempoSegments([{ startPpq: Number.NaN, bpm: 120 }])).toThrow();
+    expect(() =>
+      engine.setTimeSignatureSegments([{ startPpq: 0, numerator: 0, denominator: 4 }]),
+    ).toThrow();
+  });
+
+  it('rejects out-of-range automation curve ordinals', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.addParameter({
+      id: 9,
+      name: 'gain',
+      unit: 'dB',
+      minValue: 0,
+      maxValue: 1,
+      defaultValue: 0,
+      rtSafe: true,
+      defaultCurve: 0,
+    });
+    // An out-of-range breakpoint curve is rejected, not clamped.
+    expect(() => engine.setAutomationLane(9, [{ ppq: 0, value: 0.5, curveToNext: 99 }])).toThrow();
+    // An out-of-range default curve is rejected on registration.
+    expect(() =>
+      engine.addParameter({
+        id: 10,
+        name: 'pan',
+        unit: '',
+        minValue: -1,
+        maxValue: 1,
+        defaultValue: 0,
+        rtSafe: true,
+        defaultCurve: 99,
+      }),
+    ).toThrow();
+  });
+
   it('processes a block and drains telemetry', () => {
     const engine = new RealtimeEngine(48000, 128);
     engine.setTempo(60);

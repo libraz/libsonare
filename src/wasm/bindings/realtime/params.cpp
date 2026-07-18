@@ -8,8 +8,11 @@
 // Canonical AutomationCurve ordinals (Linear=0, Exp=1, Hold=2, SCurve=3) are
 // shared with the C ABI and other bindings; conversion is a direct cast.
 sonare::automation::CurveType automationCurveFromInt(int curve) {
+  // Reject an out-of-range curve ordinal (not clamp), matching the C ABI and
+  // Python so every surface returns the same error for the same invalid input.
   if (curve < 0 || curve > 3) {
-    return sonare::automation::CurveType::Linear;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "automation curve ordinal is out of range");
   }
   return static_cast<sonare::automation::CurveType>(curve);
 }

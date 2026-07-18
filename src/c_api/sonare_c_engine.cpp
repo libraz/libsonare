@@ -175,6 +175,61 @@ SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int n
   SONARE_C_CATCH
 }
 
+SonareError sonare_engine_set_tempo_segments(SonareRealtimeEngine* engine,
+                                             const SonareProjectTempoSegment* segments,
+                                             size_t segment_count) {
+  SONARE_C_API_ENTRY;
+  if (!engine || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  std::vector<transport::TempoSegment> out;
+  out.reserve(segment_count);
+  for (size_t i = 0; i < segment_count; ++i) {
+    const SonareProjectTempoSegment& in = segments[i];
+    if (!std::isfinite(in.start_ppq) || in.start_ppq < 0.0 || !std::isfinite(in.bpm) ||
+        in.bpm <= 0.0 || !std::isfinite(in.end_bpm) || in.end_bpm < 0.0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    transport::TempoSegment seg;
+    seg.start_ppq = in.start_ppq;
+    seg.bpm = in.bpm;
+    seg.start_sample = 0.0;
+    seg.end_bpm = in.end_bpm;
+    out.push_back(seg);
+  }
+  SONARE_C_TRY
+  engine->engine.set_tempo_segments(std::move(out));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_engine_set_time_signature_segments(
+    SonareRealtimeEngine* engine, const SonareProjectTimeSignatureSegment* segments,
+    size_t segment_count) {
+  SONARE_C_API_ENTRY;
+  if (!engine || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  std::vector<transport::TimeSignatureSegment> out;
+  out.reserve(segment_count);
+  for (size_t i = 0; i < segment_count; ++i) {
+    const SonareProjectTimeSignatureSegment& in = segments[i];
+    if (!std::isfinite(in.start_ppq) || in.start_ppq < 0.0 || in.numerator <= 0 ||
+        in.denominator <= 0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    transport::TimeSignatureSegment seg;
+    seg.start_ppq = in.start_ppq;
+    seg.time_sig.numerator = in.numerator;
+    seg.time_sig.denominator = in.denominator;
+    out.push_back(seg);
+  }
+  SONARE_C_TRY
+  engine->engine.set_time_signature_segments(std::move(out));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_engine_sample_at_ppq(SonareRealtimeEngine* engine, double ppq,
                                         int64_t* out_sample) {
   SONARE_C_API_ENTRY;
@@ -201,6 +256,9 @@ SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
                                         const SonareParameterInfo* info) {
   SONARE_C_API_ENTRY;
   if (!engine || !info || info->max_value < info->min_value) return SONARE_ERROR_INVALID_PARAMETER;
+  // Reject an out-of-range default curve ordinal instead of silently clamping,
+  // matching the automation-lane path and the other surfaces.
+  if (info->default_curve < 0 || info->default_curve > 3) return SONARE_ERROR_INVALID_PARAMETER;
   if (sonare::engine::RealtimeEngine::parameter_target_reserved(info->id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -285,8 +343,10 @@ SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint
   for (size_t i = 0; i < point_count; ++i) {
     // Reject non-finite breakpoints (both axes): a NaN/Inf ppq or value would
     // poison the lane's interpolation and propagate through every parameter the
-    // lane drives.
-    if (!std::isfinite(points[i].ppq) || !std::isfinite(points[i].value)) {
+    // lane drives. An out-of-range curve ordinal is rejected (not clamped) so
+    // every surface reports the same error for the same invalid input.
+    if (!std::isfinite(points[i].ppq) || !std::isfinite(points[i].value) ||
+        points[i].curve_to_next < 0 || points[i].curve_to_next > 3) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     breakpoints.push_back(
