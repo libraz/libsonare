@@ -605,6 +605,30 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
+    it('treats an explicit numPorts of 0 as a fallback to numChannels like the C ABI', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      // The C ABI resolves a non-positive num_ports to num_channels; a plain-JS
+      // caller who writes numPorts:0 must get the same fallback, not a throw.
+      expect(() =>
+        engine.setGraph({
+          nodes: [
+            { id: 'in', numPorts: 0 },
+            { id: 'gain', type: 1, gainDb: 0, numPorts: 0 },
+            { id: 'out', numPorts: 0 },
+          ],
+          connections: [
+            { sourceNode: 'in', sourcePort: 0, destNode: 'gain', destPort: 0 },
+            { sourceNode: 'gain', sourcePort: 0, destNode: 'out', destPort: 0 },
+          ],
+          inputNode: 'in',
+          outputNode: 'out',
+          numChannels: 2,
+        }),
+      ).not.toThrow();
+      expect(engine.graphNodeCount()).toBe(3);
+      engine.destroy();
+    });
+
     it('routes track clips through lanes and lane commands', () => {
       const engine = new RealtimeEngine(48000, 256);
       const frames = 256 * 10;

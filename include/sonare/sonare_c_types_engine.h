@@ -348,7 +348,12 @@ typedef struct {
   int source_port;
   char dest_node[64];
   int dest_port;
-  int mix; /* 0 = replace, 1 = add */
+  /* Mixing intent (0 = replace, 1 = add). NOTE: not currently honored — the
+     compiled graph always sums edges into a shared destination port in an
+     order-independent way (the first edge into a port overwrites, every later
+     edge adds), regardless of this value. Retained for API compatibility and to
+     express intent; multiple edges into one port are always summed. */
+  int mix;
 } SonareEngineGraphConnection;
 
 typedef struct {

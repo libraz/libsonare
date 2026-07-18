@@ -274,6 +274,32 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('accepts the canonical s-curve spelling and rejects unknown curves', () => {
+    const { project, trackId } = buildAudioProject();
+    try {
+      // Canonical 's-curve' (matches Node + the mixer) and legacy 'scurve' both work.
+      expect(() =>
+        project.addAutomationLane(trackId, {
+          targetParamId: 1,
+          points: [
+            { ppq: 0, value: 0.0, curve: 's-curve' },
+            { ppq: 4, value: 1.0, curve: 'scurve' },
+          ],
+        }),
+      ).not.toThrow();
+      // A misspelled curve is rejected, not silently coerced to Linear.
+      expect(() =>
+        project.addAutomationLane(trackId, {
+          targetParamId: 1,
+          // biome-ignore lint/suspicious/noExplicitAny: exercising an invalid spelling on purpose.
+          points: [{ ppq: 0, value: 0.0, curve: 's_curve' as any }],
+        }),
+      ).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
   it('annotateKeys / annotateChords apply and survive serialization', () => {
     const { project } = buildAudioProject();
     try {

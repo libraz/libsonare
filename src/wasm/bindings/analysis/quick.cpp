@@ -461,6 +461,14 @@ val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands
 val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
                        int n_third_octave_subbands, float min_decay_db,
                        float noise_floor_margin_db) {
+  // Mirror the C ABI's sonare_detect_acoustic guard so a negative band/subband
+  // count or non-positive decay window is rejected here too, instead of silently
+  // producing an empty-subband result (the C++ core treats them as benign).
+  if (n_octave_bands < 0 || n_third_octave_subbands < 0 || min_decay_db <= 0.0f ||
+      noise_floor_margin_db < 0.0f) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "detectAcoustic parameters out of range");
+  }
   Audio audio = loadValidatedAudio(samples, sample_rate);
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
@@ -472,6 +480,17 @@ val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
 }
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM
+// Mirrors the C ABI's per-material-band cap (sonare_c_acoustic.cpp) so a crafted
+// bandAbsorption/bandScattering array cannot drive an unbounded per-wall
+// allocation. The C ABI is bypassed here (synthesize_rir is called directly), so
+// this binding must re-apply the same guard.
+constexpr size_t kMaxMaterialBands = 64;
+
+// Finite [0, 1] test matching the C ABI's `unit` predicate for absorption /
+// scattering coefficients. Out-of-range values are rejected (not silently
+// clamped) so the same mistake surfaces the same error on every surface.
+bool isUnitCoefficient(float v) { return std::isfinite(v) && v >= 0.0f && v <= 1.0f; }
+
 // Maps a materialPreset selector (mirroring SONARE_MATERIAL_PRESET_*: 1 concrete,
 // 2 wood, 3 curtain, 4 carpet, 5 glass) onto a MaterialPreset. Returns false for
 // 0/none or any unknown value, leaving the per-band/scalar path to apply.
@@ -506,6 +525,10 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   const RoomDimensions dims{floatProperty(opts, "lengthM", 7.0f),
                             floatProperty(opts, "widthM", 5.0f),
                             floatProperty(opts, "heightM", 3.0f)};
+  if (!std::isfinite(dims.length) || !std::isfinite(dims.width) || !std::isfinite(dims.height)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "room dimensions must be finite");
+  }
 
   MaterialPreset preset{};
   if (materialPresetFromInt(intProperty(opts, "materialPreset", 0), &preset)) {
@@ -522,22 +545,41 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
       const std::vector<float> scattering_bands = hasProperty(opts, "bandScattering")
                                                       ? float32ArrayToVector(opts["bandScattering"])
                                                       : std::vector<float>{};
+      if (bands.size() > kMaxMaterialBands || scattering_bands.size() > kMaxMaterialBands) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "material band count exceeds the maximum of 64");
+      }
       ShoeboxRoom room;
       room.dims = dims;
       Material wall;
       wall.absorption.reserve(bands.size());
-      for (float a : bands) wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
+      for (float a : bands) {
+        if (!isUnitCoefficient(a)) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "bandAbsorption values must be within [0, 1]");
+        }
+        wall.absorption.push_back(a);
+      }
       wall.scattering.reserve(bands.size());
       for (size_t i = 0; i < bands.size(); ++i) {
         const float scattering = i < scattering_bands.size() ? scattering_bands[i] : 0.0f;
-        wall.scattering.push_back(std::clamp(scattering, 0.0f, 1.0f));
+        if (!isUnitCoefficient(scattering)) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "bandScattering values must be within [0, 1]");
+        }
+        wall.scattering.push_back(scattering);
       }
       for (Material& w : room.walls) w = wall;
       return room;
     }
   }
 
-  return uniform_shoebox(dims, floatProperty(opts, "absorption", def_absorption));
+  const float scalar = floatProperty(opts, "absorption", def_absorption);
+  if (!isUnitCoefficient(scalar)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "absorption must be within [0, 1]");
+  }
+  return uniform_shoebox(dims, scalar);
 }
 
 sonare::acoustic::SourceListener placementFromVal(val opts) {
@@ -557,6 +599,29 @@ void validateAcousticSampleRate(int sample_rate) {
   if (sample_rate < kAcousticMinSampleRate || sample_rate > kAcousticMaxSampleRate) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "sampleRate out of supported range [8000, 384000]");
+  }
+}
+
+// Validates the RIR shape/timing config against the same bounds the C ABI checks
+// before building a room, so WASM rejects (rather than silently accepts) the
+// NaN/out-of-range inputs the C ABI/Python already refuse.
+void validateRirShapeAndTiming(const sonare::acoustic::SourceListener& placement,
+                               const sonare::acoustic::RirSynthConfig& config) {
+  using namespace sonare::acoustic;
+  const auto finite3 = [](const Vec3& v) {
+    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+  };
+  if (!finite3(placement.source) || !finite3(placement.listener)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "source/listener position must be finite");
+  }
+  if (!std::isfinite(config.max_seconds) || config.max_seconds < 0.0f ||
+      config.max_seconds > kMaxRirSeconds || !std::isfinite(config.mixing_time_ms) ||
+      config.mixing_time_ms < 0.0f || config.mixing_time_ms > kMaxRirMixingTimeMs ||
+      !std::isfinite(config.crossfade_ms) || config.crossfade_ms < 0.0f ||
+      config.crossfade_ms > kMaxRirCrossfadeMs) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "RIR timing parameters out of range");
   }
 }
 
@@ -592,8 +657,10 @@ val js_synthesize_rir(val opts) {
   const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
   if (crossfade_ms > 0.0f) config.crossfade_ms = crossfade_ms;
 
-  const auto result = sonare::acoustic::synthesize_rir(roomFromVal(opts, 0.2f),
-                                                       placementFromVal(opts), sample_rate, config);
+  const auto placement = placementFromVal(opts);
+  validateRirShapeAndTiming(placement, config);
+  const auto result =
+      sonare::acoustic::synthesize_rir(roomFromVal(opts, 0.2f), placement, sample_rate, config);
   std::vector<float> rir;
   if (!result.rir.empty()) {
     rir.assign(result.rir.data(), result.rir.data() + result.rir.size());

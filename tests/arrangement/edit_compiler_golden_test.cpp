@@ -88,6 +88,47 @@ Fixture make_fixture(int source_frames = 48000, double source_sr = kProjectSr) {
 
 std::vector<float> render(const arr::CompiledTimeline& timeline, int64_t frames);
 
+TEST_CASE("compile warns when a trailing tempo segment carries an ignored ramp", "[arrangement]") {
+  SECTION("ramp on the final segment emits a non-fatal warning") {
+    Fixture f = make_fixture(128);
+    // A ramp (end_bpm != bpm) on the LAST segment has no following segment to
+    // bound its span, so the tempo map silently flattens it. Compile must still
+    // succeed but surface a warning so the intended ritardando is not lost silently.
+    sonare::transport::TempoSegment head{};
+    head.start_ppq = 0.0;
+    head.bpm = 120.0;
+    sonare::transport::TempoSegment trailing_ramp{};
+    trailing_ramp.start_ppq = 2.0;
+    trailing_ramp.bpm = 120.0;
+    trailing_ramp.end_bpm = 60.0;  // closing ritardando with nothing after it
+    f.project.set_tempo_segments({head, trailing_ramp});
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE_FALSE(result.has_errors());
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kInvalidTempo &&
+             d.severity == arr::Diagnostic::Severity::kWarning;
+    }));
+  }
+
+  SECTION("a bounded ramp (with a following terminal segment) does not warn") {
+    Fixture f = make_fixture(128);
+    sonare::transport::TempoSegment ramp{};
+    ramp.start_ppq = 0.0;
+    ramp.bpm = 120.0;
+    ramp.end_bpm = 60.0;
+    sonare::transport::TempoSegment tail{};
+    tail.start_ppq = 2.0;
+    tail.bpm = 60.0;  // terminal constant segment bounds the ramp above
+    f.project.set_tempo_segments({ramp, tail});
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE_FALSE(result.has_errors());
+    REQUIRE(std::none_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kInvalidTempo;
+    }));
+  }
+}
+
 TEST_CASE("compile rejects ragged decoded audio channels before scheduling", "[arrangement]") {
   SECTION("short second channel") {
     Fixture f = make_fixture(128);

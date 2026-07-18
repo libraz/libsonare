@@ -362,8 +362,22 @@ export interface ProjectLoopRecordingResult {
 export type ProjectLoopMode = 'off' | 'loop' | 0 | 1;
 export type ProjectWarpMode = 'off' | 'repitch' | 'tempo-sync' | 0 | 1 | 2;
 
-/** Automation breakpoint interpolation for {@link ProjectAutomationPoint}. */
-export type ProjectAutomationCurve = 'linear' | 'exponential' | 'hold' | 'scurve' | 0 | 1 | 2 | 3;
+/**
+ * Automation breakpoint interpolation for {@link ProjectAutomationPoint}.
+ *
+ * `'s-curve'` is the canonical spelling, matching the Node engine and the mixer
+ * automation types. The legacy `'scurve'` remains accepted for compatibility.
+ */
+export type ProjectAutomationCurve =
+  | 'linear'
+  | 'exponential'
+  | 'hold'
+  | 's-curve'
+  | 'scurve'
+  | 0
+  | 1
+  | 2
+  | 3;
 
 /** One automation breakpoint accepted by the automation-lane edit ops. */
 export interface ProjectAutomationPoint {

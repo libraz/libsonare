@@ -292,6 +292,13 @@ AudioLoadResult load_mp3(const std::string& path) {
 #endif  // !__EMSCRIPTEN__
 
 AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
+  // The file-path loaders cap their input at kMaxAudioFileBytes before decoding
+  // (read_file). The buffer/memory path is the entry most exposed to untrusted
+  // input, so apply the same ceiling here to reject an oversized blob before any
+  // decoder can start expanding it. Match read_file's error class.
+  SONARE_CHECK_MSG(size <= resource::kMaxAudioFileBytes, ErrorCode::InvalidParameter,
+                   "Audio buffer too large: " + std::to_string(size) +
+                       " bytes (max: " + std::to_string(resource::kMaxAudioFileBytes) + " bytes)");
   AudioFormat format = detect_format(data, size);
 
   switch (format) {

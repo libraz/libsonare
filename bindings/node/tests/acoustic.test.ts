@@ -91,6 +91,24 @@ describe('geometric room acoustics', () => {
     expect(() => roomMorph(bad, 48000, { lengthM: 5, widthM: 4, heightM: 3 })).toThrow();
   });
 
+  it('rejects the same invalid room/material inputs the C ABI refuses', () => {
+    // Over the 64-band material cap.
+    expect(() => synthesizeRir({ bandAbsorption: new Array(65).fill(0.2) })).toThrow();
+    // Absorption / scattering outside [0, 1] are rejected, not silently clamped.
+    expect(() => synthesizeRir({ bandAbsorption: [0.2, 1.5, 0.3] })).toThrow();
+    expect(() =>
+      synthesizeRir({ bandAbsorption: [0.2, 0.3], bandScattering: [0, -0.5] }),
+    ).toThrow();
+    expect(() => synthesizeRir({ absorption: 2 })).toThrow();
+    // Non-finite geometry and timing.
+    expect(() => synthesizeRir({ lengthM: Number.NaN })).toThrow();
+    expect(() => synthesizeRir({ sourceX: Number.POSITIVE_INFINITY })).toThrow();
+    expect(() => synthesizeRir({ maxSeconds: 100000 })).toThrow();
+    // An in-range absorption of exactly 1.0 is accepted (matches the C ABI's
+    // [0, 1] bound, not the old 0.999 clamp).
+    expect(() => synthesizeRir({ absorption: 1, maxSeconds: 0.1 })).not.toThrow();
+  });
+
   it('honors the late-tail model selector', () => {
     const base = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.4, maxSeconds: 0.3 };
     const sabine = synthesizeRir({ ...base, preferEyring: false });

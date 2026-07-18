@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 
 #include "transport/musical_time.h"
@@ -139,6 +140,26 @@ TEST_CASE("TempoMap reports bar and beat positions", "[transport]") {
   REQUIRE(three_four.bar == 2);
   REQUIRE(three_four.beat == 3);
   REQUIRE_THAT(map.bar_start_ppq(10.0), WithinAbs(8.0, 1.0e-9));
+}
+
+TEST_CASE("TempoMap bar count is saturating, not undefined, at extreme denominators",
+          "[transport]") {
+  // An individually-valid time signature with a huge denominator makes the bar
+  // length tiny; combined with a large seek, the raw bar count exceeds INT64_MAX.
+  // The floor/ceil -> int64 conversion must saturate instead of invoking the
+  // [conv.fpint] UB that a bare static_cast would (ASan/UBSan catches the old bug).
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  map.set_time_signatures({{0.0, {1, 1000000000}}});
+
+  auto extreme = map.ppq_to_bar_beat(1.0e12);
+  REQUIRE(extreme.bar == std::numeric_limits<int64_t>::max());
+  REQUIRE(extreme.beat >= 1);
+
+  // A normal signature still produces an exact, non-saturated count.
+  map.set_time_signatures({{0.0, {4, 4}}});
+  auto normal = map.ppq_to_bar_beat(40.0);
+  REQUIRE(normal.bar == 10);
 }
 
 TEST_CASE("Musical time helpers convert note values", "[transport]") {

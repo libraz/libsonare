@@ -8,13 +8,16 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <vector>
 
+#include "core/audio.h"
 #include "support/audio_fixtures.h"
 #include "util/exception.h"
+#include "util/resource_limits.h"
 
 using namespace sonare;
 
@@ -263,6 +266,20 @@ TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]")
   cleanup();
 }
 #endif  // SONARE_WITH_FFMPEG
+
+TEST_CASE("load_buffer rejects an oversized input before decoding", "[audio_io]") {
+  // The size ceiling is checked before `data` is dereferenced, so a tiny actual
+  // buffer paired with an over-limit declared size exercises the guard without a
+  // half-gigabyte allocation. This mirrors the file-path loader's ceiling so the
+  // buffer/memory entry (the one most exposed to untrusted input) is not weaker.
+  uint8_t dummy = 0;
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(load_buffer(&dummy, resource::kMaxAudioFileBytes + 1),
+                      ContainsSubstring("too large"));
+  // The C-ABI/Node/Python/WASM memory entries all funnel through load_buffer via
+  // Audio::from_memory, so guarding here covers every surface.
+  REQUIRE_THROWS(Audio::from_memory(&dummy, resource::kMaxAudioFileBytes + 1));
+}
 
 #ifndef SONARE_WITH_FFMPEG
 TEST_CASE("load_buffer rejects unknown format with actionable message", "[audio_io]") {

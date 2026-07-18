@@ -104,7 +104,11 @@ void RealtimeEngineWasm::setGraph(val spec) {
                                     "unsupported graph node type");
     }
     const std::string id = stringProperty(node, "id", "");
-    const int ports = intProperty(node, "numPorts", num_channels);
+    // Match the C ABI (sonare_engine_set_graph): a non-positive numPorts — which
+    // includes an explicit `numPorts: 0` that intProperty passes through as-is —
+    // falls back to num_channels rather than reaching add_node with 0 and throwing.
+    const int requested_ports = intProperty(node, "numPorts", num_channels);
+    const int ports = requested_ports > 0 ? requested_ports : num_channels;
     if (!graph->add_node(id, std::move(processor), ports)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "failed to add graph node");

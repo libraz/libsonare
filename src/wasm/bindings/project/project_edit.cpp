@@ -185,10 +185,21 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
       val curve = point["curve"];
       if (curve.typeOf().as<std::string>() == "string") {
         const std::string s = curve.as<std::string>();
-        p.curve_to_next = s == "exponential" ? SONARE_CURVE_EXPONENTIAL
-                          : s == "hold"      ? SONARE_CURVE_HOLD
-                          : s == "scurve"    ? SONARE_CURVE_SCURVE
-                                             : SONARE_CURVE_LINEAR;
+        // Accept the canonical 's-curve' (used by Node and the WASM mixer) as well
+        // as the legacy 'scurve'. An unrecognised spelling is rejected rather than
+        // silently coerced to Linear, which had quietly changed the curve shape.
+        if (s == "linear") {
+          p.curve_to_next = SONARE_CURVE_LINEAR;
+        } else if (s == "exponential") {
+          p.curve_to_next = SONARE_CURVE_EXPONENTIAL;
+        } else if (s == "hold") {
+          p.curve_to_next = SONARE_CURVE_HOLD;
+        } else if (s == "s-curve" || s == "scurve") {
+          p.curve_to_next = SONARE_CURVE_SCURVE;
+        } else {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "unknown automation curve: " + s);
+        }
       } else {
         p.curve_to_next = curve.as<int>();
       }

@@ -83,6 +83,20 @@ double bar_length_ppq(TimeSignature sig) noexcept {
   return static_cast<double>(numerator) * 4.0 / static_cast<double>(denominator);
 }
 
+// Saturating double -> int64 conversion. double(INT64_MAX) is 2^63, so a bare
+// static_cast of a value at or above the int64 range is undefined behavior;
+// compare against the exact bounds before converting. Used for bar counts, which
+// an extreme (but individually valid) time-signature denominator combined with a
+// large seek can push past INT64_MAX.
+int64_t saturating_to_int64(double value) noexcept {
+  if (!std::isfinite(value)) return value > 0.0 ? std::numeric_limits<int64_t>::max() : 0;
+  constexpr double kMax = static_cast<double>(std::numeric_limits<int64_t>::max());
+  constexpr double kMin = static_cast<double>(std::numeric_limits<int64_t>::lowest());
+  if (value >= kMax) return std::numeric_limits<int64_t>::max();
+  if (value <= kMin) return std::numeric_limits<int64_t>::lowest();
+  return static_cast<int64_t>(value);
+}
+
 std::vector<TempoSegment> normalize_segments(std::vector<TempoSegment> segments,
                                              double sample_rate) {
   segments.erase(std::remove_if(segments.begin(), segments.end(),
@@ -245,11 +259,11 @@ BarBeat TempoMap::ppq_to_bar_beat(double ppq) const noexcept {
     // partial bar's number, producing duplicate/wrong bar numbers across the
     // boundary. ceil reduces to floor when the span is an exact bar multiple.
     const double bars = std::max(0.0, next_start - sigs[i].start_ppq) / len;
-    bar_count += static_cast<int64_t>(std::ceil(bars - kBarEpsilon));
+    bar_count += saturating_to_int64(std::ceil(bars - kBarEpsilon));
   }
   const double current_len = bar_length_ppq(sig);
-  bar_count += static_cast<int64_t>(
-      std::floor(std::max(0.0, ppq - sigs[sig_index].start_ppq) / current_len));
+  bar_count +=
+      saturating_to_int64(std::floor(std::max(0.0, ppq - sigs[sig_index].start_ppq) / current_len));
   return {bar_count, beat_index + 1, (offset / beat_len) - static_cast<double>(beat_index)};
 }
 

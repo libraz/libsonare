@@ -4,7 +4,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { estimateRoom, init, roomMorph, synthesizeRir } from '../src/index';
+import { detectAcoustic, estimateRoom, init, roomMorph, synthesizeRir } from '../src/index';
 
 beforeAll(async () => {
   await init();
@@ -64,6 +64,36 @@ describe('geometric room acoustics', () => {
     bad[10] = Number.NaN;
     expect(() => estimateRoom(bad, 48000)).toThrow();
     expect(() => roomMorph(bad, 48000, { lengthM: 5, widthM: 4, heightM: 3 })).toThrow();
+  });
+
+  it('rejects the same invalid room/material inputs the C ABI refuses', () => {
+    // Over the 64-band material cap.
+    expect(() => synthesizeRir({ bandAbsorption: new Float32Array(65).fill(0.2) })).toThrow();
+    // Absorption / scattering outside [0, 1] are rejected, not silently clamped.
+    expect(() => synthesizeRir({ bandAbsorption: new Float32Array([0.2, 1.5, 0.3]) })).toThrow();
+    expect(() =>
+      synthesizeRir({
+        bandAbsorption: new Float32Array([0.2, 0.3]),
+        bandScattering: new Float32Array([0, -0.5]),
+      }),
+    ).toThrow();
+    expect(() => synthesizeRir({ absorption: 2 })).toThrow();
+    // Non-finite geometry and timing.
+    expect(() => synthesizeRir({ lengthM: Number.NaN })).toThrow();
+    expect(() => synthesizeRir({ sourceX: Number.POSITIVE_INFINITY })).toThrow();
+    expect(() => synthesizeRir({ maxSeconds: 100000 })).toThrow();
+    // An in-range absorption of exactly 1.0 is accepted (matches the C ABI's
+    // [0, 1] bound, not the old 0.999 clamp).
+    expect(() => synthesizeRir({ absorption: 1, maxSeconds: 0.1 })).not.toThrow();
+  });
+
+  it('rejects a negative third-octave subband count like the C ABI', () => {
+    const samples = new Float32Array(2000);
+    samples[0] = 1.0;
+    expect(() =>
+      detectAcoustic({ samples, sampleRate: 48000, nThirdOctaveSubbands: -1 }),
+    ).toThrow();
+    expect(() => detectAcoustic({ samples, sampleRate: 48000, nOctaveBands: -1 })).toThrow();
   });
 
   it('honors the late-tail model selector', () => {

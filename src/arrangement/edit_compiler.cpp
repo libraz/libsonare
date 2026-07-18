@@ -244,6 +244,20 @@ bool validate_tempo(const Project& project, CompileResult* result) {
     }
     prev_ppq = seg.start_ppq;
   }
+  // A ramp (end_bpm != bpm) on the LAST segment has no following segment to bound
+  // its span, so the tempo map treats its end_ppq as +inf and silently drops the
+  // ramp (effective_end_bpm falls back to the constant bpm). Warn rather than let
+  // an intended closing ritardando/accelerando vanish without a trace; add a
+  // terminal segment to realize it. Non-fatal: the map is still valid, just flat.
+  const auto& segments = project.tempo_segments();
+  if (!segments.empty()) {
+    const transport::TempoSegment& last = segments.back();
+    if (last.end_bpm > 0.0 && last.end_bpm != last.bpm) {
+      add_diag(result, Diagnostic::Code::kInvalidTempo, Diagnostic::Severity::kWarning, 0,
+               "trailing tempo segment end_bpm is ignored: a ramp on the final segment has no "
+               "following segment to bound it; add a terminal segment to realize the ramp");
+    }
+  }
   return true;
 }
 
