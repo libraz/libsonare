@@ -259,6 +259,9 @@ class BrassVoiceCore {
   float lp_alpha_ = 1.0f;
   float lp_state_ = 0.0f;
   float loss_gain_ = 0.95f;
+  // Retained from start() so live brightness updates apply the same conical
+  // darkening bias as the note-on seed (a conical bore reflects darker).
+  bool conical_ = false;
   // In-loop DC blocker (the positive-feedback comb has a DC mode that does not
   // radiate, and the breath DC drives the lips, so the loop must shed the offset).
   float dc_x1_ = 0.0f;
@@ -383,6 +386,9 @@ class BrassVoiceCore {
   float lip_resonator(float dp) noexcept;
   // Second lip mode (4d): the transverse resonance, same bandpass form.
   float lip_resonator2(float dp) noexcept;
+  // Bell-loop pole for a brightness in [0,1], including the conical darkening
+  // bias, shared by the note-on seed and live CC74 updates.
+  float bell_alpha_for_brightness(float bright01) const noexcept;
 };
 
 }  // namespace sonare::midi::synth

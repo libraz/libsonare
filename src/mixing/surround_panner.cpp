@@ -184,6 +184,14 @@ void SurroundPannerProcessor::process_add(const float* const* in, int num_in_cha
     return;
   }
 
+  // compute_surround_pan_gains throws on a layout outside (2, kMaxSurroundPlanes],
+  // so validate the destination here to keep this RT-thread method no-throw
+  // rather than relying on the caller to catch (as the engine render path does).
+  const int layout_count = channel_count(layout());
+  if (layout_count <= 2 || layout_count > kMaxSurroundPlanes) {
+    return;
+  }
+
   SurroundPanGains gains;
   load_target_gains(gains);
   const int planes = std::min(gains.count, num_out_planes);

@@ -392,10 +392,8 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       if (slot_index < sysex_payload_slots_.size()) {
         SysExPayloadSlot& slot = sysex_payload_slots_[slot_index];
         const uint32_t seq_before = slot.generation.load(std::memory_order_acquire);
-        uint32_t payload_size = slot.size;
-        if (payload_size > kMaxSysExPayloadBytes) payload_size = kMaxSysExPayloadBytes;
         std::array<uint8_t, kMaxSysExPayloadBytes> payload;
-        std::memcpy(payload.data(), slot.bytes.data(), payload_size);
+        const uint32_t payload_size = slot.load_payload(payload);
         // Order the payload copy before the second generation read so a mid-copy
         // rewrite is always observed as a generation mismatch below.
         std::atomic_thread_fence(std::memory_order_acquire);

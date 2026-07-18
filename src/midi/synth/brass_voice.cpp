@@ -216,10 +216,10 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   lip_couple_ = kLipCouple;
 
   // Bell loop lowpass: brightness -> pole a (y += (1-a)(x - y)); a conical brass
-  // reflects a touch darker.
-  float a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * kBellPoleSpan;
-  if (params.conical) a = std::min(a + kConicalDarken, 0.95f);
-  lp_alpha_ = 1.0f - a;
+  // reflects a touch darker. Live CC74 updates reuse the same mapping via
+  // set_brightness(), so remember the bore shape.
+  conical_ = params.conical;
+  lp_alpha_ = bell_alpha_for_brightness(params.brightness);
   lp_alpha_target_ = lp_alpha_;
   loss_gain_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
                           kLossFloor, kLossCeil);
@@ -235,7 +235,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // it and would otherwise sharpen the low range). The lag and lead enter comp
   // with opposite signs.
   const float omega = kTwoPi / std::max(1.0f, bore_period_);
-  const float tau_lp = onepole_group_delay_samples(a, omega);
+  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
   const float sw = std::sin(omega);
   const float cw = std::cos(omega);
   const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
@@ -469,9 +469,14 @@ void BrassVoiceCore::set_breath(float breath01) noexcept {
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
 }
 
+float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
+  float a = (1.0f - std::clamp(bright01, 0.0f, 1.0f)) * kBellPoleSpan;
+  if (conical_) a = std::min(a + kConicalDarken, 0.95f);
+  return 1.0f - a;
+}
+
 void BrassVoiceCore::set_brightness(float bright01) noexcept {
-  const float br = bright01 < 0.0f ? 0.0f : (bright01 > 1.0f ? 1.0f : bright01);
-  lp_alpha_target_ = 1.0f - (1.0f - br) * kBellPoleSpan;
+  lp_alpha_target_ = bell_alpha_for_brightness(bright01);
 }
 
 void BrassVoiceCore::snap_brass_control() noexcept {

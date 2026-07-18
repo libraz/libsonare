@@ -71,8 +71,7 @@ bool RealtimeEngine::push_midi_sysex(uint32_t destination_id, const uint8_t* dat
   // Order the in-progress mark before the payload writes so a reader can never
   // observe fresh payload bytes still tagged with the previous (even) generation.
   std::atomic_thread_fence(std::memory_order_release);
-  std::memcpy(slot.bytes.data(), data, size);
-  slot.size = static_cast<uint32_t>(size);
+  slot.store_payload(data, static_cast<uint32_t>(size));
   // Release-store the even (done) generation; it publishes the payload writes to
   // the audio thread's acquire load.
   slot.generation.store(generation, std::memory_order_release);

@@ -27,6 +27,18 @@ inline constexpr float kSoundSpeed = 343.0f;
 /// bypasses the C-ABI validation) can drive an explosion.
 inline constexpr int kMaxImageSourceOrder = 12;
 
+/// @brief Hard cap on the polyhedral breadth-first frontier carried between
+///        reflection orders.
+///
+/// The polyhedral generator keeps exploring even invalid candidates (a later
+/// bounce can re-expose a temporarily occluded path), so the frontier grows ~
+/// faces^order and, on a dense mesh, exhausts memory well before the order
+/// ceiling bites. When a frontier exceeds this cap it is pruned to the
+/// highest-reflection-energy candidates (the perceptually dominant paths), so the
+/// cost stays bounded regardless of face count. Well above any real early-
+/// reflection budget on a plausible room.
+inline constexpr size_t kMaxPolyhedralFrontier = 4096;
+
 /// @brief A mirrored (image) source contributing one early reflection.
 ///
 /// `reflection` holds the per-octave-band pressure reflection product

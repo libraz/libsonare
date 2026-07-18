@@ -650,6 +650,13 @@ void put_meta(std::vector<uint8_t>* body, uint32_t delta, uint8_t type, const ui
   }
 }
 
+// SysEx is stored as a reassembled payload with no record of its on-disk framing
+// (a single F0 event, an F0 dump split across continuation packets, or an
+// independent F7 escape all import to the same payload). Export therefore emits
+// one canonical F0 SysEx event: split dumps are rejoined and F7-escape events are
+// normalized to F0. This is intentional — the engine's SysEx dispatch treats the
+// payload as an opaque blob and does not distinguish the origin framing, so the
+// round-trip contract preserves the payload, not the byte-level event type.
 void put_sysex(std::vector<uint8_t>* body, uint32_t delta, const std::vector<uint8_t>& payload) {
   put_vlq(body, delta);
   put_u8(body, kSysExStart);

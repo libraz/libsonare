@@ -140,3 +140,29 @@ TEST_CASE("surround panner scatters a mono lane additively", "[mixing][surround]
   CHECK_THAT(planes[0][0], WithinAbs(0.0f, 1e-4f));  // L silent
   CHECK_THAT(planes[5][0], WithinAbs(0.0f, 1e-4f));  // Rs silent
 }
+
+TEST_CASE("surround panner process_add is no-throw on a non-surround layout",
+          "[mixing][surround]") {
+  // process_add runs on the RT audio thread, so a layout the gain solver would
+  // reject must be dropped in-place, never thrown, even though set_layout accepts
+  // any enum value.
+  SurroundPanParams p;
+  SurroundPannerProcessor panner(ChannelLayout::FivePointOne, p);
+  panner.prepare(48000.0, 64);
+  panner.reset();
+  panner.set_layout(ChannelLayout::Stereo);
+
+  const int n = 64;
+  std::vector<float> mono(n, 1.0f);
+  const float* mono_ptr = mono.data();
+  std::array<std::vector<float>, 6> planes;
+  std::array<float*, 6> out{};
+  for (int c = 0; c < 6; ++c) {
+    planes[c].assign(n, 0.0f);
+    out[c] = planes[c].data();
+  }
+
+  REQUIRE_NOTHROW(panner.process_add(&mono_ptr, 1, out.data(), 6, n));
+  // The invalid layout produced no placement, so nothing was added.
+  CHECK_THAT(planes[2][0], WithinAbs(0.0f, 1e-6f));
+}

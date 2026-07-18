@@ -76,7 +76,11 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
   float fmax = config.fmax > 0 ? config.fmax : nyquist;
   // librosa allows fmax above Nyquist (it only warns); clamp to Nyquist rather
   // than hard-erroring so a request for the full band does not fail. Bins above
-  // Nyquist do not exist, so Nyquist is the meaningful ceiling.
+  // Nyquist do not exist, so Nyquist is the meaningful ceiling. This intentionally
+  // diverges from librosa when a super-Nyquist fmax is requested: librosa spreads
+  // the mel band centers up to the requested fmax (changing the spacing even below
+  // Nyquist), whereas we anchor the top band at Nyquist. Revisit only if strict
+  // above-Nyquist librosa parity becomes a requirement.
   if (fmax > nyquist) {
     fmax = nyquist;
   }

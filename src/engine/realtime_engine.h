@@ -640,9 +640,44 @@ class RealtimeEngine : private ClipPageRequestSink {
   static constexpr size_t kMaxSysExPayloadBytes = 512;
   static constexpr size_t kSysExPayloadSlots = 64;
   struct SysExPayloadSlot {
-    std::array<uint8_t, kMaxSysExPayloadBytes> bytes{};
-    uint32_t size = 0;
+    // The generation seqlock (release/acquire) supplies all cross-thread
+    // ordering, but a guard does not make a concurrent plain-POD access race-free
+    // in the C++ memory model. So the payload itself lives in relaxed atomic
+    // words, mirroring rt::SeqlockCell's packing; the generation still gates
+    // torn/recycled slots. size and bytes are packed together: word 0 is the byte
+    // count, the rest are the payload bytes.
+    static constexpr size_t kPayloadWords =
+        (kMaxSysExPayloadBytes + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+    std::atomic<uint32_t> size{0};
+    std::array<std::atomic<uint32_t>, kPayloadWords> byte_words{};
     std::atomic<uint32_t> generation{0};
+
+    /// Control-thread writer: pack @p n bytes into the relaxed word store.
+    /// Callers guarantee n <= kMaxSysExPayloadBytes.
+    void store_payload(const uint8_t* data, uint32_t n) noexcept {
+      std::array<uint32_t, kPayloadWords> packed{};
+      std::memcpy(packed.data(), data, n);
+      const size_t words = (n + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+      for (size_t i = 0; i < words; ++i) {
+        byte_words[i].store(packed[i], std::memory_order_relaxed);
+      }
+      size.store(n, std::memory_order_relaxed);
+    }
+
+    /// Audio-thread reader: copy the payload into @p out and return its clamped
+    /// size. Called inside the generation bracket; a torn size is clamped so the
+    /// word loop never overruns before the generation mismatch drops the slot.
+    uint32_t load_payload(std::array<uint8_t, kMaxSysExPayloadBytes>& out) const noexcept {
+      uint32_t n = size.load(std::memory_order_relaxed);
+      if (n > kMaxSysExPayloadBytes) n = kMaxSysExPayloadBytes;
+      std::array<uint32_t, kPayloadWords> packed{};
+      const size_t words = (n + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+      for (size_t i = 0; i < words; ++i) {
+        packed[i] = byte_words[i].load(std::memory_order_relaxed);
+      }
+      std::memcpy(out.data(), packed.data(), n);
+      return n;
+    }
   };
   std::array<SysExPayloadSlot, kSysExPayloadSlots> sysex_payload_slots_{};
   uint32_t sysex_payload_cursor_ = 0;  // control-thread only

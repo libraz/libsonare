@@ -191,6 +191,13 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
     out.push_back(direct);
   }
 
+  // Per-face reflection coefficients depend only on the face material, so
+  // precompute them once instead of recomputing per (parent, face) pair.
+  std::vector<std::vector<float>> face_betas(room.faces.size());
+  for (size_t f = 0; f < room.faces.size(); ++f) {
+    face_betas[f] = material_beta(face_material(room, f), bands);
+  }
+
   // Breadth-first reflection across faces, validating each candidate's full path.
   std::vector<PendingImage> frontier;
   frontier.push_back({source, 0, std::vector<float>(bands, 1.0f), {}});
@@ -211,7 +218,7 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
         cand.order = order;
         cand.chain = parent.chain;
         cand.chain.push_back(static_cast<int>(f));
-        const std::vector<float> fb = material_beta(face_material(room, f), bands);
+        const std::vector<float>& fb = face_betas[f];
         cand.reflection.resize(bands);
         for (size_t b = 0; b < bands; ++b) cand.reflection[b] = parent.reflection[b] * fb[b];
 
@@ -242,6 +249,20 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
         }
         next.push_back(std::move(cand));  // keep exploring even if this order was invalid
       }
+    }
+    // Cap the breadth-first frontier so a dense mesh cannot grow it as
+    // faces^order and exhaust memory. Keep the highest-reflection-energy
+    // candidates (the perceptually dominant paths) and drop the rest.
+    if (next.size() > kMaxPolyhedralFrontier) {
+      const auto energy = [](const PendingImage& p) {
+        float sum = 0.0f;
+        for (float b : p.reflection) sum += b;
+        return sum;
+      };
+      std::nth_element(
+          next.begin(), next.begin() + kMaxPolyhedralFrontier, next.end(),
+          [&](const PendingImage& a, const PendingImage& b) { return energy(a) > energy(b); });
+      next.resize(kMaxPolyhedralFrontier);
     }
     frontier.swap(next);
   }

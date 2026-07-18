@@ -109,6 +109,7 @@ add_executable(sonare_tests
   transport/marker_test.cpp
   transport/transport_test.cpp
   api/quick_test.cpp
+  api/core_common_fill_test.cpp
   api/sonare_c_core_test.cpp
   api/sonare_c_music_test.cpp
   api/sonare_c_mastering_test.cpp

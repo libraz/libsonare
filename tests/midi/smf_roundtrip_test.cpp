@@ -654,6 +654,61 @@ TEST_CASE("SMF import and export preserve SysEx payloads via handles", "[midi]")
   REQUIRE(*round_payload == payload);
 }
 
+TEST_CASE("SMF normalizes an F7-escape SysEx to an F0 event on export", "[midi]") {
+  // An independent F7-escape event imports to the same opaque payload as an F0
+  // SysEx (the engine does not track the on-disk framing), so export emits one
+  // canonical F0 event. This pins that documented normalization: the payload
+  // round-trips but the byte-level event status becomes F0.
+  const std::vector<uint8_t> payload = {0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  std::vector<uint8_t> body;
+  push_vlq(&body, 0);    // delta
+  body.push_back(0xF7);  // independent F7 escape (not an F0 SysEx)
+  push_vlq(&body, static_cast<uint32_t>(payload.size()));
+  body.insert(body.end(), payload.begin(), payload.end());
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  REQUIRE(imported.clips[0].events().size() == 1);
+  const Ump& imported_ump = imported.clips[0].events()[0].ump;
+  REQUIRE(imported_ump.sysex_handle != 0);
+  const std::vector<uint8_t>* imported_payload =
+      imported.sysex_store.lookup(imported_ump.sysex_handle);
+  REQUIRE(imported_payload != nullptr);
+  REQUIRE(*imported_payload == payload);
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+  opts.sysex_store = &imported.sysex_store;
+  const auto exported = export_smf(imported.clips, imported.tempo_segments,
+                                   imported.time_signatures, imported.clip_names, opts);
+  REQUIRE(exported.ok());
+
+  // The event is emitted as F0 + vlq(size) + payload. The F0-framed byte run must
+  // appear; the F7-framed one must not (that is the normalization).
+  const std::vector<uint8_t> f0_event{0xF0, 0x05, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  const std::vector<uint8_t> f7_event{0xF7, 0x05, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  const auto found_f0 =
+      std::search(exported.bytes.begin(), exported.bytes.end(), f0_event.begin(), f0_event.end());
+  const auto found_f7 =
+      std::search(exported.bytes.begin(), exported.bytes.end(), f7_event.begin(), f7_event.end());
+  REQUIRE(found_f0 != exported.bytes.end());  // normalized to an F0 event
+  REQUIRE(found_f7 == exported.bytes.end());  // no F7-escape framing survives
+
+  // The payload itself still round-trips.
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.clips.size() == 1);
+  const Ump& round_ump = round.clips[0].events()[0].ump;
+  const std::vector<uint8_t>* round_payload = round.sysex_store.lookup(round_ump.sysex_handle);
+  REQUIRE(round_payload != nullptr);
+  REQUIRE(*round_payload == payload);
+}
+
 TEST_CASE("SMF import skips invalid time signature denominator exponents", "[midi]") {
   std::vector<uint8_t> body;
   body.push_back(0x00);

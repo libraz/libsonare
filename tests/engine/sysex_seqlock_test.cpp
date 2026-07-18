@@ -26,12 +26,37 @@
 namespace {
 
 // Standalone mirror of RealtimeEngine::SysExPayloadSlot and its seqlock
-// protocol. The write/read steps are split so a test can interleave them.
+// protocol. The write/read steps are split so a test can interleave them. The
+// payload lives in relaxed atomic words (word 0 = size, the rest = bytes) so the
+// shared data itself is race-free, not merely gated by the generation guard.
 struct SeqlockSlot {
   static constexpr size_t kMaxBytes = 512;
-  std::array<uint8_t, kMaxBytes> bytes{};
-  uint32_t size = 0;
+  static constexpr size_t kPayloadWords = (kMaxBytes + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+  std::atomic<uint32_t> size{0};
+  std::array<std::atomic<uint32_t>, kPayloadWords> byte_words{};
   std::atomic<uint32_t> generation{0};
+
+  void store_payload(const uint8_t* data, uint32_t n) noexcept {
+    std::array<uint32_t, kPayloadWords> packed{};
+    std::memcpy(packed.data(), data, n);
+    const size_t words = (n + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+    for (size_t i = 0; i < words; ++i) {
+      byte_words[i].store(packed[i], std::memory_order_relaxed);
+    }
+    size.store(n, std::memory_order_relaxed);
+  }
+
+  uint32_t load_payload(uint8_t* out) const noexcept {
+    uint32_t n = size.load(std::memory_order_relaxed);
+    if (n > kMaxBytes) n = kMaxBytes;
+    std::array<uint32_t, kPayloadWords> packed{};
+    const size_t words = (n + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+    for (size_t i = 0; i < words; ++i) {
+      packed[i] = byte_words[i].load(std::memory_order_relaxed);
+    }
+    std::memcpy(out, packed.data(), n);
+    return n;
+  }
 };
 
 // Writer: mark the slot in progress (odd), then return the even "done" value the
@@ -45,8 +70,7 @@ uint32_t seqlock_write_begin(SeqlockSlot& slot) {
 }
 
 void seqlock_write_payload(SeqlockSlot& slot, const uint8_t* data, uint32_t n) {
-  std::memcpy(slot.bytes.data(), data, n);
-  slot.size = n;
+  slot.store_payload(data, n);
 }
 
 void seqlock_write_commit(SeqlockSlot& slot, uint32_t done_generation) {
@@ -65,9 +89,7 @@ uint32_t seqlock_write(SeqlockSlot& slot, const uint8_t* data, uint32_t n) {
 // accept only a stable even generation matching the command's generation.
 bool seqlock_read(SeqlockSlot& slot, uint32_t generation, uint8_t* out, uint32_t* out_size) {
   const uint32_t seq_before = slot.generation.load(std::memory_order_acquire);
-  uint32_t size = slot.size;
-  if (size > SeqlockSlot::kMaxBytes) size = SeqlockSlot::kMaxBytes;
-  std::memcpy(out, slot.bytes.data(), size);
+  const uint32_t size = slot.load_payload(out);
   std::atomic_thread_fence(std::memory_order_acquire);
   const uint32_t seq_after = slot.generation.load(std::memory_order_relaxed);
   if (seq_before == seq_after && (seq_before & 1u) == 0u && seq_before == generation && size > 0) {
@@ -181,8 +203,7 @@ TEST_CASE("SysEx seqlock rejects a copy torn by a concurrent rewrite", "[engine]
   // the slot. The bracketing generations then differ and the copy is rejected.
   const uint32_t seq_before = slot.generation.load(std::memory_order_acquire);
   std::array<uint8_t, SeqlockSlot::kMaxBytes> out{};
-  uint32_t size = slot.size;
-  std::memcpy(out.data(), slot.bytes.data(), size);
+  const uint32_t size = slot.load_payload(out.data());
   // Concurrent rewrite lands between the two generation reads.
   const uint32_t gen_rewrite = seqlock_write(slot, rewrite.data(), 3);
   const uint32_t seq_after = slot.generation.load(std::memory_order_relaxed);
@@ -191,6 +212,23 @@ TEST_CASE("SysEx seqlock rejects a copy torn by a concurrent rewrite", "[engine]
       seq_before == seq_after && (seq_before & 1u) == 0u && seq_before == generation && size > 0;
   REQUIRE_FALSE(accepted);
   REQUIRE(gen_rewrite != generation);
+}
+
+TEST_CASE("SysEx seqlock round-trips a multi-word payload exactly", "[engine][seqlock]") {
+  // The relaxed word store must reconstruct a payload whose length is not a whole
+  // number of 32-bit words (partial trailing word) across many words.
+  SeqlockSlot slot;
+  std::array<uint8_t, 130> data{};
+  for (size_t i = 0; i < data.size(); ++i) {
+    data[i] = static_cast<uint8_t>((i * 7u + 1u) & 0xFFu);
+  }
+  const uint32_t generation = seqlock_write(slot, data.data(), static_cast<uint32_t>(data.size()));
+
+  std::array<uint8_t, SeqlockSlot::kMaxBytes> out{};
+  uint32_t out_size = 0;
+  REQUIRE(seqlock_read(slot, generation, out.data(), &out_size));
+  REQUIRE(out_size == data.size());
+  REQUIRE(std::memcmp(out.data(), data.data(), data.size()) == 0);
 }
 
 TEST_CASE("SysEx seqlock rejects a never-written slot", "[engine][seqlock]") {

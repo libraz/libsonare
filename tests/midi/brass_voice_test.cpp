@@ -308,6 +308,23 @@ TEST_CASE("brass CC74 brightness is wired to the sounding voice", "[midi][synth]
   REQUIRE(dark != bright);  // the control changes the sound
 }
 
+TEST_CASE("brass CC74 preserves the conical darkening on the live path", "[midi][synth][brass]") {
+  // The conical bell bias must apply to live CC74 updates, not only the note-on
+  // seed: under an identical live brightness slam, a conical bore stays darker
+  // than a cylindrical one. Before the live path carried the bias the two
+  // converged to the same pole and this contrast collapsed.
+  NativeSynthPatch cyl = brass_base_patch();  // cylindrical (conical = false)
+  NativeSynthPatch con = brass_base_patch();
+  con.brass.conical = true;
+
+  const std::vector<float> cyl_live = render_cc_change(cyl, 53, 100, 8000, 32000, 74, 110);
+  const std::vector<float> con_live = render_cc_change(con, 53, 100, 8000, 32000, 74, 110);
+  REQUIRE(peak(con_live) < 4.0f);
+  REQUIRE(std::isfinite(con_live.back()));
+  // Measure well past the CC change at sample 8000, in the sustained tail.
+  REQUIRE(spectral_centroid(cyl_live, 16000) > spectral_centroid(con_live, 16000));
+}
+
 TEST_CASE("brass presets speak and stay bounded", "[midi][synth][brass]") {
   // Every catalog brass preset must resolve, sound, and stay bounded across the
   // brass range.

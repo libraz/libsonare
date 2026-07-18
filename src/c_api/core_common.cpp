@@ -90,6 +90,9 @@ bool fill_key_modes(const SonareMode* modes, size_t mode_count, KeyConfig* confi
 void fill_chord_result(const std::vector<Chord>& chords, SonareChordAnalysisResult* out) {
   out->chord_count = chords.size();
   if (chords.empty()) {
+    // Own the empty-result contract like fill_cqt_result: never leave the
+    // caller's pointer field undefined, so a blind free() cannot double-free.
+    out->chords = nullptr;
     return;
   }
 

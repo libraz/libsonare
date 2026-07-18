@@ -256,6 +256,34 @@ TEST_CASE("Borish order-2 cube images are valid (subset of shoebox, no spurious)
   }
 }
 
+TEST_CASE("polyhedral frontier cap keeps a high order bounded and spurious-free",
+          "[acoustic][image_source]") {
+  // A 12-triangle cube grows the breadth-first frontier as ~faces^order, so by
+  // order 4 it exceeds kMaxPolyhedralFrontier and the energy-pruning cap engages.
+  // The run must still terminate and every accepted image must stay a real
+  // shoebox reflection (pruning bounds cost, it never invents spurious images).
+  PolyhedralRoom mesh;
+  mesh.faces = unit_cube();
+  mesh.face_materials = {uniform_material(0.0f, 0.1f)};
+  const SourceListener pl{{0.35f, 0.42f, 0.55f}, {0.62f, 0.58f, 0.47f}};
+
+  const int order = 4;
+  const auto borish = polyhedral_image_sources(mesh, pl, order);
+  const ShoeboxRoom box = make_room(1.0f, 1.0f, 1.0f);
+  const auto shoebox = shoebox_image_sources(box, pl, order);
+
+  REQUIRE(!borish.empty());
+  for (int o = 1; o <= order; ++o) {
+    const auto ref = sorted_distances(shoebox, o);
+    const auto got = sorted_distances(borish, o);
+    for (float dist : got) {
+      const bool matched =
+          std::any_of(ref.begin(), ref.end(), [&](float r) { return std::fabs(r - dist) < 1e-3f; });
+      REQUIRE(matched);
+    }
+  }
+}
+
 TEST_CASE("negative order and empty mesh yield no images", "[acoustic][image_source]") {
   const ShoeboxRoom room = make_room(4.0f, 3.0f, 2.5f);
   const SourceListener pl{{1.0f, 1.0f, 1.0f}, {2.0f, 2.0f, 1.5f}};
