@@ -67,6 +67,10 @@ int cmd_chroma(const CliArgs& args, const Audio& audio) {
     printf("  Duration: %.2fs\n", chroma.duration());
     std::cout << "\nMean Energy by Pitch Class:\n";
     float max_e = *std::max_element(mean_energy.begin(), mean_energy.end());
+    // A fully silent input leaves every pitch-class energy at 0, so max_e is 0;
+    // guard the division (as cmd_nnls_chroma does) to avoid a 0/0 -> NaN -> int
+    // cast, which is undefined behavior. The bars then render empty.
+    if (max_e <= 0.0f) max_e = 1.0f;
     for (int i = 0; i < 12; ++i) {
       int bar = static_cast<int>(mean_energy[i] / max_e * 20);
       printf("  %-2s: %.3f ", names[i], mean_energy[i]);

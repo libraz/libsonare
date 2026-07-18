@@ -76,14 +76,26 @@ JsonBuilder& JsonBuilder::value(size_t v) {
 
 JsonBuilder& JsonBuilder::value(float v) {
   append_separator();
-  ss_ << v;
+  // RFC 8259 forbids NaN/Infinity as JSON numbers; emit `null` (as util/json.h
+  // does) so a non-finite reading -- e.g. a -inf LUFS/true-peak for a fully
+  // silent input -- yields valid JSON that json.loads/jq/JSON.parse can read.
+  if (std::isfinite(v)) {
+    ss_ << v;
+  } else {
+    ss_ << "null";
+  }
   needs_comma_.back() = true;
   return *this;
 }
 
 JsonBuilder& JsonBuilder::value(double v) {
   append_separator();
-  ss_ << v;
+  // See value(float): non-finite numbers serialize as JSON null, not "nan"/"inf".
+  if (std::isfinite(v)) {
+    ss_ << v;
+  } else {
+    ss_ << "null";
+  }
   needs_comma_.back() = true;
   return *this;
 }
@@ -227,15 +239,30 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
 
 void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[], int& i,
                              int argc) {
-  static const std::vector<std::string> bool_flags = {"harmonic-only",     "percussive-only",
-                                                      "with-residual",     "hard-mask",
-                                                      "triads-only",       "no-hpss",
-                                                      "with-seventh",      "no-pad",
-                                                      "use-hpss",          "hpss",
-                                                      "loudness-weighted", "nnls",
-                                                      "use-hmm",           "detect-inversions",
-                                                      "key-context",       "auto-gain",
-                                                      "proportional-q"};
+  // Presence-only flags: they carry no value, so they must NOT consume the next
+  // token. Without registering them here a documented `<command> [options]
+  // <audio_file>` invocation like `sonare acoustic --ir take.wav` would bind
+  // take.wav as the value of --ir and leave the input file empty. `candidates`
+  // is intentionally absent -- it is a value option (`--candidates <spec>`).
+  static const std::vector<std::string> bool_flags = {"harmonic-only",
+                                                      "percussive-only",
+                                                      "with-residual",
+                                                      "hard-mask",
+                                                      "triads-only",
+                                                      "no-hpss",
+                                                      "with-seventh",
+                                                      "no-pad",
+                                                      "use-hpss",
+                                                      "hpss",
+                                                      "loudness-weighted",
+                                                      "nnls",
+                                                      "use-hmm",
+                                                      "detect-inversions",
+                                                      "key-context",
+                                                      "auto-gain",
+                                                      "proportional-q",
+                                                      "ir",
+                                                      "series"};
 
   bool is_flag = std::find(bool_flags.begin(), bool_flags.end(), key) != bool_flags.end() ||
                  key.find("-only") != std::string::npos;

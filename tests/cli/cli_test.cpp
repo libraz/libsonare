@@ -450,6 +450,37 @@ TEST_CASE("CLI chroma command", "[cli]") {
   }
 }
 
+TEST_CASE("CLI lufs --json stays valid JSON on a silent input", "[cli]") {
+  // A fully silent input drives LUFS/true-peak to -inf; the JSON builder must
+  // emit `null` (not "-inf"/"nan", which no JSON parser accepts) for those fields.
+  create_test_wav(TEST_WAV, 1.0f, 0.0f);  // frequency 0 => all-zero samples
+  auto [code, output] = exec_command(CLI + " lufs " + TEST_WAV + " --json -q");
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, ContainsSubstring("\"integrated_lufs\""));
+  // No non-finite tokens leaked into the JSON.
+  REQUIRE_THAT(output, !ContainsSubstring("inf"));
+  REQUIRE_THAT(output, !ContainsSubstring("nan"));
+}
+
+TEST_CASE("CLI presence flags do not swallow the audio file argument", "[cli]") {
+  // Documented order is `<command> [options] <audio_file>`; a presence-only flag
+  // like --ir must not consume the following path as its value and leave the
+  // input empty (which produced a misleading "Missing audio file").
+  create_test_wav(TEST_WAV);
+  auto [code, output] = exec_command(CLI + " acoustic --ir " + TEST_WAV + " -q");
+  REQUIRE_THAT(output, !ContainsSubstring("Missing audio file"));
+  REQUIRE(code == 0);
+}
+
+TEST_CASE("CLI chroma text output survives a silent input", "[cli]") {
+  // Silent input leaves every pitch-class energy at 0; the bar renderer must not
+  // divide by a zero max and cast a NaN to int (undefined behavior; UBSan trap).
+  create_test_wav(TEST_WAV, 1.0f, 0.0f);
+  auto [code, output] = exec_command(CLI + " chroma " + TEST_WAV + " -q");
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, ContainsSubstring("Chromagram"));
+}
+
 TEST_CASE("CLI spectral command", "[cli]") {
   create_test_wav(TEST_WAV);
 
