@@ -103,16 +103,25 @@ FFmpeg を自動検出します）。ネイティブビルドや FFmpeg まわ�
 `@libraz/libsonare` はデコード済みの `Float32Array` を受け取ります（Web Audio API や
 JS デコーダで用意してください）。
 
+トップレベルの一括 API はリクエストオブジェクトを正準形として受け取ります。位置引数の
+呼び出しも互換性のため引き続き利用でき、ステートフルなメソッドや小さなスカラーヘルパーは
+本来の形を保ちます。
+
 ```typescript
 import { init, analyze, detectKey, masterAudio } from '@libraz/libsonare';
 
 await init();
 
-const result = analyze(samples, sampleRate);   // BPM・キー・コード・セクションなど
-const key = detectKey(samples, sampleRate);     // { name: "C major", confidence: 0.95 }
+const result = analyze({ samples, sampleRate });   // BPM・キー・コード・セクションなど
+const key = detectKey({ samples, sampleRate });     // { name: "C major", confidence: 0.95 }
 
 // 名前付きプリセットで一括マスタリング。
-const mastered = masterAudio(samples, sampleRate, 'aiMusic', { 'loudness.targetLufs': -13 });
+const mastered = masterAudio({
+  samples,
+  sampleRate,
+  preset: 'aiMusic',
+  overrides: { loudness: { targetLufs: -13 } },
+});
 ```
 
 → [JavaScript API](https://libsonare.libraz.net/ja/docs/js-api) · [ブラウザ / WASM](https://libsonare.libraz.net/ja/docs/wasm)

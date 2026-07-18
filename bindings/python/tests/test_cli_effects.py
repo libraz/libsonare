@@ -367,3 +367,29 @@ def test_voice_macro_override_table_maps_expected_dsp_paths() -> None:
     probe = {}
     cli._apply_voice_macro_override(probe, "macros.pitch", "not-a-number")
     assert probe == {}
+
+
+def test_voice_preset_validate_help_describes_a_preset_file() -> None:
+    """The positional is a JSON preset, not audio, and audio-analysis flags
+    (--n-fft/--hop-length/--n-mels) do not leak into this subcommand's help."""
+    result = _run_cli(["voice-preset-validate", "--help"])
+    assert result.returncode == 0, result.stderr
+    assert "Voice preset JSON file" in result.stdout
+    assert "Audio file path" not in result.stdout
+    for leaked in ("--n-fft", "--hop-length", "--n-mels"):
+        assert leaked not in result.stdout
+
+
+def test_voice_preset_validate_normalizes_a_preset_file() -> None:
+    """The command still validates a preset JSON file end-to-end after the
+    positional argument was reworked to take a preset file."""
+    preset = _run_cli(["voice-preset", "--preset", "neutral-monitor", "--json"])
+    assert preset.returncode == 0, preset.stderr
+    with tempfile.TemporaryDirectory() as tmpdir:
+        preset_path = os.path.join(tmpdir, "preset.json")
+        with open(preset_path, "w", encoding="utf-8") as fh:
+            fh.write(preset.stdout)
+        result = _run_cli(["voice-preset-validate", preset_path, "--json"])
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert isinstance(payload, dict)

@@ -122,7 +122,7 @@ const mastered = masterAudio({
   samples,
   sampleRate,
   preset: 'aiMusic',
-  overrides: { 'loudness.targetLufs': -13 },
+  overrides: { loudness: { targetLufs: -13 } },
 });
 ```
 

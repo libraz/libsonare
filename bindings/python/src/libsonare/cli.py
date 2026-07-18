@@ -302,9 +302,14 @@ def main() -> None:
     voice_preset_p = sub.add_parser("voice-preset", help="Print a realtime voice changer preset")
     voice_preset_p.add_argument("--preset", default="neutral-monitor", help="Preset id")
     voice_preset_p.add_argument("--json", action="store_true", help="Emit JSON")
+    # Not a parents=[common] subcommand: it consumes a JSON preset, not audio,
+    # so the analysis flags (--n-fft/--hop-length/--n-mels) do not apply and the
+    # positional argument is a preset file rather than an audio file.
     voice_preset_validate_p = sub.add_parser(
-        "voice-preset-validate", parents=[common], help="Validate and normalize voice preset JSON"
+        "voice-preset-validate", help="Validate and normalize voice preset JSON"
     )
+    voice_preset_validate_p.add_argument("file", help="Voice preset JSON file")
+    voice_preset_validate_p.add_argument("--json", action="store_true", help="Output JSON")
     voice_preset_validate_p.add_argument(
         "--preset", default="", help="Preset id when validating a pack"
     )
@@ -640,7 +645,6 @@ def main() -> None:
         "declip",
         "mastering-suggest",
         "mastering-profile",
-        "voice-preset-validate",
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
 

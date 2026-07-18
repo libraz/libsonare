@@ -62,6 +62,18 @@ console.log(`Key: ${audio.detectKey().name}`);
 const audioKeyWithOptions = audio.detectKey({ useHpss: true, highPassHz: 80 });
 ```
 
+### Request-object calls
+
+For top-level one-shot analysis, effects, mastering, metering, and feature APIs, pass one request object. This is the documented form because each input has a name and optional settings can grow without changing argument order. Existing positional calls remain supported for compatibility and produce the same results; stateful `Audio` methods and small scalar conversions retain their natural positional forms.
+
+```typescript
+// Recommended
+detectBpm({ samples, sampleRate: 48_000 });
+
+// Still supported for existing applications
+detectBpm(samples, 48_000);
+```
+
 ### Pitch, timbre, and spectral APIs
 
 Pitch tracking keeps unvoiced `f0` frames as `NaN` by default. Pass
@@ -311,9 +323,12 @@ await init();
 
 masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
 
-const result = masterAudio(samples, sampleRate, 'aiMusic', {
-  // optional flat overrides applied on top of the preset (dot notation)
-  'loudness.targetLufs': -13,
+const result = masterAudio({
+  samples,
+  sampleRate,
+  preset: 'aiMusic',
+  // optional overrides applied on top of the preset
+  overrides: { loudness: { targetLufs: -13 } },
 });
 console.log(result.outputLufs, result.appliedGainDb);
 ```
