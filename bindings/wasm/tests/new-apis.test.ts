@@ -696,6 +696,25 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('rejects non-finite automation breakpoints like the C ABI oracle', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      // Non-finite ppq is rejected.
+      expect(() =>
+        engine.setAutomationLane(0x4d580001, [{ ppq: Number.NaN, value: -6, curveToNext: 0 }]),
+      ).toThrow();
+      // Non-finite value is rejected.
+      expect(() =>
+        engine.setAutomationLane(0x4d580001, [
+          { ppq: 0, value: Number.POSITIVE_INFINITY, curveToNext: 0 },
+        ]),
+      ).toThrow();
+      // A finite lane is accepted.
+      expect(() =>
+        engine.setAutomationLane(0x4d580001, [{ ppq: 0, value: -6, curveToNext: 0 }]),
+      ).not.toThrow();
+      engine.destroy();
+    });
+
     it('routes a lane through its group bus and ducks a lane from a sidechain key', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setTempo(120);

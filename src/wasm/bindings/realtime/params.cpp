@@ -84,9 +84,15 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
   breakpoints.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {
     val point = points[i];
-    breakpoints.push_back({objectProperty(point, "ppq").as<double>(),
-                           floatProperty(point, "value", 0.0f),
-                           automationCurveFromInt(intProperty(point, "curveToNext", 0))});
+    const double ppq = objectProperty(point, "ppq").as<double>();
+    const float value = floatProperty(point, "value", 0.0f);
+    // Match the C ABI: reject non-finite automation breakpoints (WASM bypasses the C-ABI guard).
+    if (!std::isfinite(ppq) || !std::isfinite(value)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "automation breakpoint ppq and value must be finite");
+    }
+    breakpoints.push_back(
+        {ppq, value, automationCurveFromInt(intProperty(point, "curveToNext", 0))});
   }
   lane.set_points(std::move(breakpoints));
   bool replaced = false;

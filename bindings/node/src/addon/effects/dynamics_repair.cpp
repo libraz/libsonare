@@ -150,6 +150,8 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::CompressorConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -187,6 +189,8 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::GateConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -218,6 +222,8 @@ Napi::Value SonareWrap::MasteringDynamicsTransientShaper(const Napi::CallbackInf
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::dynamics::TransientShaperConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -252,6 +258,8 @@ Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclickConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -287,6 +295,8 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DenoiseClassicalConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -365,6 +375,8 @@ Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DeclipConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -391,6 +403,8 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DecrackleConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -416,6 +430,8 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DehumConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -446,6 +462,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::DereverbClassicalConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -489,6 +507,8 @@ Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& inf
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
   const int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sr);
   sonare::mastering::repair::TrimSilenceConfig config;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -531,6 +551,8 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   float threshold_db =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -60.0f;
 
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::Audio result = sonare::trim_absolute(audio, threshold_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());

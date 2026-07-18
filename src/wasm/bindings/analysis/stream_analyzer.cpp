@@ -233,7 +233,10 @@ class StreamAnalyzerWrapper {
 
     val out = val::object();
     out.set("totalFrames", s.total_frames);
-    out.set("totalSamples", static_cast<int>(s.total_samples));
+    // A double exactly represents every size_t value that occurs here, and JS
+    // numbers are doubles; static_cast<int> would truncate/wrap streams past
+    // 2^31 samples (~13.5h @44.1kHz) or a reset() with a large base offset.
+    out.set("totalSamples", static_cast<double>(s.total_samples));
     out.set("durationSeconds", s.duration_seconds);
     out.set("pendingFrames", s.pending_frames);
     out.set("droppedOutputFrames", s.dropped_output_frames);

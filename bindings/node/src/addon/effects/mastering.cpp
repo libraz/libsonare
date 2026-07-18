@@ -50,6 +50,8 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
   int sr = info[1].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(data, length, sr);
 
   sonare::mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs =
@@ -92,6 +94,9 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto name = info[0].As<Napi::String>().Utf8Value();
   auto typed = info[1].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
+                                       info[2].As<Napi::Number>().Int32Value());
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 4 && info[3].IsObject()) {
     params = ParamsFromObject(info[3].As<Napi::Object>());
@@ -127,13 +132,16 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  const int sr = info[3].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject()) {
     params = ParamsFromObject(info[4].As<Napi::Object>());
   }
   auto result = sonare::mastering::api::apply_named_processor_stereo(
-      name, left.Data(), right.Data(), left.ElementLength(),
-      info[3].As<Napi::Number>().Int32Value(), params);
+      name, left.Data(), right.Data(), left.ElementLength(), sr, params);
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, result.left));
   out.Set("right", VecToFloat32(env, result.right));
@@ -155,6 +163,9 @@ Napi::Value SonareWrap::MasteringChain(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
+                                       info[1].As<Napi::Number>().Int32Value());
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 3 && info[2].IsObject()) {
     params = ParamsFromObject(info[2].As<Napi::Object>());
@@ -193,13 +204,16 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  const int sr = info[2].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 4 && info[3].IsObject()) {
     params = ParamsFromObject(info[3].As<Napi::Object>());
   }
   auto result = sonare::mastering::api::run_chain_stereo_params(
-      params.data(), params.size(), left.Data(), right.Data(), left.ElementLength(),
-      info[2].As<Napi::Number>().Int32Value());
+      params.data(), params.size(), left.Data(), right.Data(), left.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, result.left));
   out.Set("right", VecToFloat32(env, result.right));
@@ -236,6 +250,9 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   std::string preset_name = info[0].As<Napi::String>().Utf8Value();
   auto typed = info[1].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
+                                       info[2].As<Napi::Number>().Int32Value());
   std::vector<sonare::mastering::api::Param> overrides;
   if (info.Length() >= 4 && info[3].IsObject()) {
     overrides = ParamsFromObject(info[3].As<Napi::Object>());
@@ -303,6 +320,8 @@ class MasterAudioAsyncWorker : public Napi::AsyncWorker {
 
   void Execute() override {
     try {
+      // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+      sonare::validate_offline_audio_input(samples_.data(), samples_.size(), sample_rate_);
       auto preset = sonare::mastering::api::preset_from_string(preset_name_);
       result_ = sonare::mastering::api::master_audio_mono(preset, samples_.data(), samples_.size(),
                                                           sample_rate_, overrides_.data(),
@@ -348,6 +367,9 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
 
   void Execute() override {
     try {
+      // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+      sonare::validate_offline_audio_input(left_.data(), left_.size(), sample_rate_);
+      sonare::validate_offline_audio_input(right_.data(), right_.size(), sample_rate_);
       auto preset = sonare::mastering::api::preset_from_string(preset_name_);
       result_ = sonare::mastering::api::master_audio_stereo(preset, left_.data(), right_.data(),
                                                             left_.size(), sample_rate_,
@@ -463,14 +485,18 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  const int sr = info[3].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   std::vector<sonare::mastering::api::Param> overrides;
   if (info.Length() >= 5 && info[4].IsObject()) {
     overrides = ParamsFromObject(info[4].As<Napi::Object>());
   }
   auto preset = sonare::mastering::api::preset_from_string(preset_name);
-  auto result = sonare::mastering::api::master_audio_stereo(
-      preset, left.Data(), right.Data(), left.ElementLength(),
-      info[3].As<Napi::Number>().Int32Value(), overrides.data(), overrides.size());
+  auto result = sonare::mastering::api::master_audio_stereo(preset, left.Data(), right.Data(),
+                                                            left.ElementLength(), sr,
+                                                            overrides.data(), overrides.size());
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, result.left));
   out.Set("right", VecToFloat32(env, result.right));
@@ -497,6 +523,9 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
   }
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
+                                       info[1].As<Napi::Number>().Int32Value());
   auto params = ParamsFromObject(info[2].As<Napi::Object>());
   Napi::Function js_cb = info[3].As<Napi::Function>();
   auto config = sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
@@ -538,6 +567,10 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  const int sr = info[2].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   auto params = ParamsFromObject(info[3].As<Napi::Object>());
   Napi::Function js_cb = info[4].As<Napi::Function>();
   auto config = sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
@@ -545,8 +578,7 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
   chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
     js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
   });
-  auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(),
-                                     info[2].As<Napi::Number>().Int32Value());
+  auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, result.left));
   out.Set("right", VecToFloat32(env, result.right));
@@ -575,6 +607,9 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   std::string preset_name = info[0].As<Napi::String>().Utf8Value();
   auto typed = info[1].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
+                                       info[2].As<Napi::Number>().Int32Value());
   auto overrides = ParamsFromObject(info[3].As<Napi::Object>());
   Napi::Function js_cb = info[4].As<Napi::Function>();
   auto preset = sonare::mastering::api::preset_from_string(preset_name);
@@ -623,6 +658,10 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  const int sr = info[3].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   auto overrides = ParamsFromObject(info[4].As<Napi::Object>());
   Napi::Function js_cb = info[5].As<Napi::Function>();
   auto preset = sonare::mastering::api::preset_from_string(preset_name);
@@ -635,8 +674,7 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
   chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
     js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
   });
-  auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(),
-                                     info[3].As<Napi::Number>().Int32Value());
+  auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(), sr);
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", VecToFloat32(env, result.left));
   out.Set("right", VecToFloat32(env, result.right));
@@ -782,6 +820,12 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto source = info[1].As<Napi::Float32Array>();
   auto reference = info[2].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  // source and reference may have independent lengths, so each is validated at its
+  // own length with the shared sample rate.
+  const int sr = info[3].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(source.Data(), source.ElementLength(), sr);
+  sonare::validate_offline_audio_input(reference.Data(), reference.ElementLength(), sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject())
     params = ParamsFromObject(info[4].As<Napi::Object>());
@@ -789,8 +833,7 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   // consume each buffer at its own length.
   auto result = sonare::mastering::api::apply_named_pair_processor(
       info[0].As<Napi::String>().Utf8Value(), source.Data(), reference.Data(),
-      source.ElementLength(), reference.ElementLength(), info[3].As<Napi::Number>().Int32Value(),
-      params);
+      source.ElementLength(), reference.ElementLength(), sr, params);
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
   out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
@@ -813,14 +856,19 @@ Napi::Value SonareWrap::MasteringPairAnalyze(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto source = info[1].As<Napi::Float32Array>();
   auto reference = info[2].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  // source and reference may have independent lengths, so each is validated at its
+  // own length with the shared sample rate.
+  const int sr = info[3].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(source.Data(), source.ElementLength(), sr);
+  sonare::validate_offline_audio_input(reference.Data(), reference.ElementLength(), sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject())
     params = ParamsFromObject(info[4].As<Napi::Object>());
   // source and reference may have independent lengths.
   auto json = sonare::mastering::api::analyze_named_pair(
       info[0].As<Napi::String>().Utf8Value(), source.Data(), reference.Data(),
-      source.ElementLength(), reference.ElementLength(), info[3].As<Napi::Number>().Int32Value(),
-      params);
+      source.ElementLength(), reference.ElementLength(), sr, params);
   return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
 }
@@ -840,12 +888,16 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "left and right lengths must match").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  const int sr = info[3].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
+  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject())
     params = ParamsFromObject(info[4].As<Napi::Object>());
-  auto json = sonare::mastering::api::analyze_named_stereo(
-      info[0].As<Napi::String>().Utf8Value(), left.Data(), right.Data(), left.ElementLength(),
-      info[3].As<Napi::Number>().Int32Value(), params);
+  auto json = sonare::mastering::api::analyze_named_stereo(info[0].As<Napi::String>().Utf8Value(),
+                                                           left.Data(), right.Data(),
+                                                           left.ElementLength(), sr, params);
   return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
 }
@@ -859,6 +911,9 @@ Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info
   }
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
+                                       info[1].As<Napi::Number>().Int32Value());
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 3 && info[2].IsObject())
     params = ParamsFromObject(info[2].As<Napi::Object>());
@@ -891,6 +946,9 @@ Napi::Value SonareWrap::MasteringAudioProfile(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
+                                       info[1].As<Napi::Number>().Int32Value());
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 3 && info[2].IsObject())
     params = ParamsFromObject(info[2].As<Napi::Object>());
@@ -919,6 +977,9 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
   }
   SONARE_NODE_TRY
   auto samples = info[0].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
+                                       info[1].As<Napi::Number>().Int32Value());
   std::vector<sonare::mastering::maximizer::StreamingPlatform> platforms;
   if (info.Length() >= 3 && info[2].IsArray()) {
     Napi::Array input = info[2].As<Napi::Array>();

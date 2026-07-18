@@ -706,6 +706,33 @@ describe('StreamAnalyzer', () => {
     });
   });
 
+  describe('stats().totalSamples range', () => {
+    it('reports a large base sample offset without wrapping negative', () => {
+      const sampleRate = 22050;
+      const analyzer = new StreamAnalyzer({ sampleRate });
+
+      // size_t is 32-bit on the wasm32 target, so 3e9 sits past the signed
+      // int32 range (~2.15e9) while still fitting size_t (~4.29e9 max) - this
+      // reproduces the exact truncation window a `static_cast<int>` would wrap
+      // negative, while a `static_cast<double>` round-trips exactly.
+      const baseOffset = 3_000_000_000;
+      analyzer.reset(baseOffset);
+      // reset() writes the offset straight into the analyzer's running sample
+      // counter, so it round-trips through stats() before any audio is pushed.
+      expect(analyzer.stats().totalSamples).toBe(baseOffset);
+
+      // Pushing a short buffer (shorter than one analysis window) must not
+      // regress the counter into negative/garbage territory either.
+      const audio = new Float32Array(512);
+      analyzer.processWithOffset(audio, baseOffset);
+      const stats = analyzer.stats();
+      expect(stats.totalSamples).toBeGreaterThanOrEqual(baseOffset);
+      expect(Number.isFinite(stats.totalSamples)).toBe(true);
+
+      analyzer.dispose();
+    });
+  });
+
   describe('sampleRate', () => {
     it('should return the configured sample rate', () => {
       const analyzer44 = new StreamAnalyzer({ sampleRate: 44100 });
