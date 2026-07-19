@@ -122,6 +122,11 @@ python = [
 #    not allowlisted here.)
 #   onset_strength: exposed by the facades under the ergonomic name
 #     `onset_envelope`.
+#   project_auto_tempo_ex / project_snap_to_grid_ex: folded into each Project
+#     facade's base auto-tempo / snap-to-grid method. The extended candidate,
+#     meter-apply, and division arguments are public optional parameters and the
+#     wrappers call the corresponding C `_ex` entry points; the defaults match
+#     the legacy base calls.
 #   error_message / last_error_message / last_warning_message: C-ABI
 #     error/warning-string helpers consumed internally by each facade (errors map
 #     to native exceptions; the scene-load warning surfaces as Mixer.sceneWarnings
@@ -143,6 +148,8 @@ node = [
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
   "onset_strength",
+  "project_auto_tempo_ex",
+  "project_snap_to_grid_ex",
   "error_message",
   "last_error_message",
   "last_warning_message",
@@ -223,6 +230,8 @@ wasm = [
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
   "onset_strength",
+  "project_auto_tempo_ex",
+  "project_snap_to_grid_ex",
   "error_message",
   "last_error_message",
   "last_warning_message",
@@ -290,6 +299,8 @@ python = [
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
   "onset_strength",
+  "project_auto_tempo_ex",
+  "project_snap_to_grid_ex",
   "error_message",
   "last_error_message",
   "last_warning_message",

@@ -3869,6 +3869,42 @@
     ],
     "size": 80
   },
+  "SonareProjectTempoCandidate": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "bpm",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "confidence",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "kind",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "time_signature_count",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "first_time_signature",
+        "offset": 16,
+        "size": 16
+      }
+    ],
+    "size": 32
+  },
   "SonareProjectTempoSegment": {
     "align": 8,
     "fields": [

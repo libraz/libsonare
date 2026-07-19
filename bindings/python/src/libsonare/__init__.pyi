@@ -343,6 +343,9 @@ from .analyzer import (
     normalize as normalize,
 )
 from .analyzer import (
+    note_move as note_move,
+)
+from .analyzer import (
     note_stretch as note_stretch,
 )
 from .analyzer import (
