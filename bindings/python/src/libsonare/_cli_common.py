@@ -6,6 +6,9 @@ import argparse
 import json
 import math
 import os
+import tempfile
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager, suppress
 from typing import Any, cast
 
 from ._ffi import (
@@ -85,6 +88,8 @@ def _exit_code_for(exc: BaseException) -> int:
         return _SONARE_CODE_TO_EXIT.get(exc.code, EXIT_ERROR)
     if isinstance(exc, FileNotFoundError):
         return EXIT_FILE_NOT_FOUND
+    if isinstance(exc, MemoryError):
+        return EXIT_OUT_OF_MEMORY
     if isinstance(exc, (ValueError, json.JSONDecodeError)):
         return EXIT_INVALID_PARAMETER
     return EXIT_ERROR
@@ -184,21 +189,73 @@ def _pcm16(sample: float) -> bytes:
     return struct.pack("<h", int(round(clamped * 32767.0)))
 
 
+_WAV_CHUNK_FRAMES = 8192
+
+
+@contextmanager
+def _atomic_wav_writer(path: str, channels: int, sample_rate: int) -> Iterator[Any]:
+    """Yield a WAV writer whose completed file atomically replaces ``path``."""
+    import wave
+
+    target = os.path.abspath(path)
+    directory = os.path.dirname(target)
+    raw = tempfile.NamedTemporaryFile(  # noqa: SIM115 - lifetime spans the yielded writer
+        mode="w+b",
+        prefix=f".{os.path.basename(target)}.",
+        suffix=".tmp",
+        dir=directory,
+        delete=False,
+    )
+    temporary = raw.name
+    wav = None
+    try:
+        wav = wave.open(raw, "wb")  # noqa: SIM115 - closed before the atomic replace
+        wav.setnchannels(channels)
+        wav.setsampwidth(2)
+        wav.setframerate(int(sample_rate))
+        yield wav
+        wav.close()
+        raw.flush()
+        os.fsync(raw.fileno())
+        raw.close()
+        os.replace(temporary, target)
+    except BaseException:
+        if wav is not None:
+            with suppress(Exception):
+                wav.close()
+        with suppress(Exception):
+            raw.close()
+        with suppress(FileNotFoundError):
+            os.unlink(temporary)
+        raise
+
+
+def _write_wav_mono_frames(wav: Any, samples: Sequence[float]) -> None:
+    """Append one bounded mono PCM16 chunk to an open WAV writer."""
+    frames = bytearray()
+    for sample in samples:
+        frames.extend(_pcm16(float(sample)))
+    wav.writeframesraw(frames)
+
+
+def _write_wav_stereo_frames(wav: Any, left: Sequence[float], right: Sequence[float]) -> None:
+    """Append one bounded stereo PCM16 chunk to an open WAV writer."""
+    count = min(len(left), len(right))
+    frames = bytearray()
+    for index in range(count):
+        frames.extend(_pcm16(float(left[index])))
+        frames.extend(_pcm16(float(right[index])))
+    wav.writeframesraw(frames)
+
+
 def _write_wav(path: str, samples: list[float], sample_rate: int) -> None:
     """Write mono 16-bit PCM WAV using only the Python standard library.
 
     Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767.
     """
-    import wave
-
-    frames = bytearray()
-    for s in samples:
-        frames += _pcm16(s)
-    with wave.open(path, "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(int(sample_rate))
-        wav.writeframes(bytes(frames))
+    with _atomic_wav_writer(path, 1, sample_rate) as wav:
+        for offset in range(0, len(samples), _WAV_CHUNK_FRAMES):
+            _write_wav_mono_frames(wav, samples[offset : offset + _WAV_CHUNK_FRAMES])
 
 
 def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_rate: int) -> None:
@@ -206,49 +263,83 @@ def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_r
 
     Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767.
     """
-    import wave
-
-    frames = bytearray()
     count = min(len(left), len(right))
-    for i in range(count):
-        for s in (left[i], right[i]):
-            frames += _pcm16(s)
-    with wave.open(path, "wb") as wav:
-        wav.setnchannels(2)
-        wav.setsampwidth(2)
-        wav.setframerate(int(sample_rate))
-        wav.writeframes(bytes(frames))
+    with _atomic_wav_writer(path, 2, sample_rate) as wav:
+        for offset in range(0, count, _WAV_CHUNK_FRAMES):
+            end = min(offset + _WAV_CHUNK_FRAMES, count)
+            _write_wav_stereo_frames(wav, left[offset:end], right[offset:end])
 
 
 def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
     """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
-    import wave
+    frames = len(cast(Any, audio))
+    shape = getattr(audio, "shape", ())
+    if len(shape) >= 2:
+        channels = max(1, int(shape[1]))
+    else:
+        channels = 1
+        for row in cast(Any, audio):
+            if isinstance(row, Sequence) and not isinstance(row, (str, bytes, bytearray)):
+                channels = max(channels, len(row))
 
-    rows = getattr(audio, "tolist", lambda: audio)()
-    if not isinstance(rows, list):
-        rows = list(rows)
-    frames = len(rows)
-    channels = 1
-    normalized: list[list[float]] = []
-    for row in rows:
-        if isinstance(row, list):
-            channels = max(channels, len(row))
-            normalized.append([float(sample) for sample in row])
-        else:
-            normalized.append([float(row)])
-
-    pcm = bytearray()
-    for row in normalized:
-        for ch in range(channels):
-            sample = row[ch] if ch < len(row) else 0.0
-            pcm += _pcm16(sample)
-
-    with wave.open(path, "wb") as wav:
-        wav.setnchannels(channels)
-        wav.setsampwidth(2)
-        wav.setframerate(int(sample_rate))
-        wav.writeframes(bytes(pcm))
+    with _atomic_wav_writer(path, channels, sample_rate) as wav:
+        pcm = bytearray()
+        chunk_frames = 0
+        for row in cast(Any, audio):
+            if hasattr(row, "__iter__") and not isinstance(row, (str, bytes, bytearray)):
+                values = row
+            else:
+                values = (row,)
+            row_values = [float(sample) for sample in values]
+            for channel in range(channels):
+                pcm.extend(_pcm16(row_values[channel] if channel < len(row_values) else 0.0))
+            chunk_frames += 1
+            if chunk_frames == _WAV_CHUNK_FRAMES:
+                wav.writeframesraw(pcm)
+                pcm.clear()
+                chunk_frames = 0
+        if pcm:
+            wav.writeframesraw(pcm)
     return frames, channels
+
+
+def _atomic_write_bytes(path: str, data: bytes) -> None:
+    """Atomically replace ``path`` with ``data`` after a successful flush."""
+    target = os.path.abspath(path)
+    directory = os.path.dirname(target)
+    temporary = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=f".{os.path.basename(target)}.",
+            suffix=".tmp",
+            dir=directory,
+            delete=False,
+        ) as fh:
+            temporary = fh.name
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temporary, target)
+    except BaseException:
+        if temporary:
+            with suppress(FileNotFoundError):
+                os.unlink(temporary)
+        raise
+
+
+def _read_bounded(path: str, max_bytes: int) -> bytes:
+    """Read at most ``max_bytes`` and reject oversized files before facade copies."""
+    if max_bytes < 0:
+        raise ValueError("max_bytes must be non-negative")
+    size = os.stat(path).st_size
+    if size > max_bytes:
+        raise ValueError(f"input file exceeds {max_bytes} byte limit")
+    with open(path, "rb") as fh:
+        data = fh.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError(f"input file exceeds {max_bytes} byte limit")
+    return data
 
 
 def _emit_effect_result(

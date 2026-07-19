@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from types import SimpleNamespace
 
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
@@ -187,7 +188,7 @@ def test_effect_cli_commands_appear_in_help() -> None:
         assert command in result.stdout
 
 
-def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch) -> None:
+def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
     """cmd_mix resamples each input to the mixer rate before mixing (M-8)."""
     import libsonare
     from libsonare import cli
@@ -211,20 +212,21 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch) -> None:
 
         def process_stereo(self, left, right):
             captured["left_len"] = len(left[0])
-            return list(left[0]), list(right[0])
+            return SimpleNamespace(left=list(left[0]), right=list(right[0]))
+
+        def tail_samples(self) -> int:
+            return 0
 
         def close(self) -> None:
             pass
 
     monkeypatch.setattr(libsonare, "Mixer", FakeMixer)
     monkeypatch.setattr(libsonare, "mixing_scene_preset_json", lambda name: "{}")
-    monkeypatch.setattr(cli, "_write_wav_stereo", lambda *args: None)
-
     args = argparse.Namespace(
         scene="",
         preset="demo",
         input=["stem.wav"],
-        output="out.wav",
+        output=str(tmp_path / "out.wav"),
         sample_rate=48000,
         block_size=512,
         json=True,
@@ -233,6 +235,224 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch) -> None:
     # 441 samples at 44.1 kHz resample to 480 samples at 48 kHz.
     assert captured["sample_rate"] == 48000
     assert captured["left_len"] == 480
+
+
+def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) -> None:
+    """The CLI keeps one mixer alive across bounded blocks and drains its tail."""
+    import libsonare
+    from libsonare import cli
+
+    block_lengths: list[int] = []
+    drain_lengths: list[int] = []
+    monkeypatch.setattr(cli, "_load_audio", lambda _path: ([0.25] * 513, 48000))
+
+    class FakeMixer:
+        @classmethod
+        def from_scene_json(cls, _scene_json, *, sample_rate, block_size):
+            assert sample_rate == 48000
+            assert block_size == 512
+            return cls()
+
+        def strip_count(self) -> int:
+            return 1
+
+        def compile(self) -> None:
+            pass
+
+        def process_stereo(self, left, right):
+            block_lengths.append(len(left[0]))
+            return SimpleNamespace(left=list(left[0]), right=list(right[0]))
+
+        def tail_samples(self) -> int:
+            return 515
+
+        def drain_tail_stereo(self, count):
+            drain_lengths.append(count)
+            return SimpleNamespace(left=[0.0] * count, right=[0.0] * count)
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(libsonare, "Mixer", FakeMixer)
+    monkeypatch.setattr(libsonare, "mixing_scene_preset_json", lambda _name: "{}")
+    output = tmp_path / "mix.wav"
+    args = argparse.Namespace(
+        scene="",
+        preset="demo",
+        input=["stem.wav"],
+        output=str(output),
+        sample_rate=48000,
+        block_size=512,
+        json=True,
+    )
+
+    assert cli.cmd_mix(args) == 0
+    assert block_lengths == [512, 1]
+    assert drain_lengths == [512, 3]
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 2
+        assert wav.getnframes() == 1028
+
+
+def test_mix_cli_rejects_output_without_inputs(tmp_path) -> None:
+    """An explicit output never succeeds without producing an artifact."""
+    output = tmp_path / "missing.wav"
+    result = _run_cli(["mix", "--preset", "vocalReverbSend", "-o", str(output)])
+
+    assert result.returncode == 3
+    assert "requires at least one --input" in result.stderr
+    assert not output.exists()
+
+
+def test_mix_cli_real_mixer_handles_multiple_blocks_and_stems(tmp_path) -> None:
+    """The subprocess path renders >block-size input through the real mixer."""
+    first = tmp_path / "first.wav"
+    second = tmp_path / "second.wav"
+    output = tmp_path / "mix.wav"
+    _write_test_wav(str(first), [0.1] * 513, 48000)
+    _write_test_wav(str(second), [0.05] * 513, 48000)
+
+    result = _run_cli(
+        [
+            "mix",
+            "--preset",
+            "vocalReverbSend",
+            "--input",
+            str(first),
+            "--input",
+            str(second),
+            "--block-size",
+            "512",
+            "--sample-rate",
+            "48000",
+            "--output",
+            str(output),
+            "--json",
+        ]
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["rendered_samples"] >= 513
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 2
+        assert wav.getnframes() == payload["rendered_samples"]
+
+
+@pytest.mark.parametrize(
+    ("command", "accepted"),
+    [
+        ("key", True),
+        ("mel", True),
+        ("chroma", True),
+        ("spectral", True),
+        ("hpss", False),
+        ("onset-envelope", True),
+        ("nnls-chroma", False),
+        ("tempogram", True),
+        ("plp", True),
+        ("bpm", False),
+        ("beats", False),
+        ("analyze", False),
+        ("pitch", False),
+        ("mastering", False),
+    ],
+)
+def test_fft_options_are_only_advertised_by_consuming_commands(command, accepted) -> None:
+    """A visible FFT option always belongs to a handler that consumes it."""
+    result = _run_cli([command, "--help"])
+    assert result.returncode == 0
+    assert ("--n-fft" in result.stdout) is accepted
+    assert ("--hop-length" in result.stdout) is accepted
+    expects_mels = accepted and command in {
+        "mel",
+        "onset-envelope",
+        "nnls-chroma",
+        "tempogram",
+        "plp",
+    }
+    assert ("--n-mels" in result.stdout) is expects_mels
+
+
+def test_catalog_json_uses_native_cli_object_shapes(monkeypatch, capsys) -> None:
+    """Catalog commands expose stable named top-level arrays."""
+    import libsonare
+    from libsonare import cli
+
+    monkeypatch.setattr(libsonare, "mastering_processor_names", lambda: ["a"])
+    monkeypatch.setattr(libsonare, "mastering_pair_processor_names", lambda: ["b"])
+    monkeypatch.setattr(libsonare, "mastering_pair_analysis_names", lambda: ["c"])
+    monkeypatch.setattr(libsonare, "mixing_scene_preset_names", lambda: ["d"])
+    args = argparse.Namespace(json=True)
+
+    cli.cmd_mastering_processors(args)
+    cli.cmd_mastering_pair_processors(args)
+    cli.cmd_mastering_pair_analyses(args)
+    cli.cmd_mixing_presets(args)
+    assert [json.loads(line) for line in capsys.readouterr().out.splitlines()] == [
+        {"processors": ["a"]},
+        {"processors": ["b"]},
+        {"analyses": ["c"]},
+        {"presets": ["d"]},
+    ]
+
+
+def test_atomic_byte_writer_preserves_old_output_and_cleans_temp(monkeypatch, tmp_path) -> None:
+    """A failed final replace leaves the previous artifact untouched."""
+    from libsonare import cli
+
+    output = tmp_path / "result.bin"
+    output.write_bytes(b"old")
+
+    def fail_replace(_source, _target):
+        raise OSError("injected replace failure")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+    with pytest.raises(OSError, match="injected"):
+        cli._atomic_write_bytes(str(output), b"new")
+
+    assert output.read_bytes() == b"old"
+    assert list(tmp_path.iterdir()) == [output]
+
+
+def test_atomic_wav_writer_preserves_old_output_and_cleans_temp(monkeypatch, tmp_path) -> None:
+    """WAV finalization failure cannot truncate an earlier render."""
+    from libsonare import cli
+
+    output = tmp_path / "result.wav"
+    output.write_bytes(b"old")
+
+    def fail_replace(_source, _target):
+        raise OSError("injected replace failure")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+    with pytest.raises(OSError, match="injected"):
+        cli._write_wav(str(output), [0.25] * 10, 48000)
+
+    assert output.read_bytes() == b"old"
+    assert list(tmp_path.iterdir()) == [output]
+
+
+@pytest.mark.parametrize(("size", "accepted"), [(1023, True), (1024, True), (1025, False)])
+def test_bounded_reader_enforces_limit_before_copy(tmp_path, size, accepted) -> None:
+    """Project/MIDI imports accept the limit and reject the first byte above it."""
+    from libsonare import cli
+
+    source = tmp_path / "large.mid"
+    with source.open("wb") as fh:
+        fh.truncate(size)
+
+    if accepted:
+        assert len(cli._read_bounded(str(source), 1024)) == size
+    else:
+        with pytest.raises(ValueError, match="1024 byte limit"):
+            cli._read_bounded(str(source), 1024)
+
+
+def test_memory_error_maps_to_out_of_memory_exit() -> None:
+    from libsonare import cli
+
+    assert cli._exit_code_for(MemoryError()) == cli.EXIT_OUT_OF_MEMORY
 
 
 def test_resample_uses_native_antialiased_resampler(monkeypatch) -> None:

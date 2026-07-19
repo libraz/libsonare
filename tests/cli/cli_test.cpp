@@ -1046,6 +1046,7 @@ TEST_CASE("CLI mixing command", "[cli][mixing]") {
   SECTION("lists and prints mixer presets") {
     auto [list_code, list_output] = exec_command(CLI + " mixing-presets --json");
     REQUIRE(list_code == 0);
+    REQUIRE_THAT(list_output, ContainsSubstring("\"presets\""));
     REQUIRE_THAT(list_output, ContainsSubstring("vocalReverbSend"));
 
     auto [preset_code, preset_output] =

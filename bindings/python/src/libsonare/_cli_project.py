@@ -7,23 +7,26 @@ from typing import Any, cast
 
 from ._cli_common import (
     EXIT_INVALID_STATE,
+    _atomic_write_bytes,
     _legacy_exit_codes,
+    _read_bounded,
     _strict_json_dumps,
     _write_project_bounce_wav,
 )
+
+_MAX_PROJECT_OR_MIDI_BYTES = 64 * 1024 * 1024
 
 
 def _load_project(path: str) -> object:
     from . import Project
 
-    with open(path, encoding="utf-8") as fh:
-        return Project.from_json(fh.read())
+    data = _read_bounded(path, _MAX_PROJECT_OR_MIDI_BYTES)
+    return Project.from_json(data.decode("utf-8"))
 
 
 def _write_project_json(project: object, path: str) -> int:
     data = cast(Any, project).to_json_bytes()
-    with open(path, "wb") as fh:
-        fh.write(data)
+    _atomic_write_bytes(path, data)
     return len(data)
 
 
@@ -148,8 +151,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             data = cast(Any, project).export_smf()
         finally:
             cast(Any, project).close()
-        with open(args.output, "wb") as fh:
-            fh.write(data)
+        _atomic_write_bytes(args.output, data)
         print(
             _strict_json_dumps({"output": args.output, "bytes": len(data)})
             if args.json
@@ -159,8 +161,7 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand == "import-smf":
         if not args.output:
             raise ValueError("project import-smf requires --output")
-        with open(args.smf, "rb") as fh:
-            data = fh.read()
+        data = _read_bounded(args.smf, _MAX_PROJECT_OR_MIDI_BYTES)
         project = Project()
         try:
             first_clip = project.import_smf(data)
@@ -184,8 +185,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             data = cast(Any, project).export_clip_file()
         finally:
             cast(Any, project).close()
-        with open(args.output, "wb") as fh:
-            fh.write(data)
+        _atomic_write_bytes(args.output, data)
         print(
             _strict_json_dumps({"output": args.output, "bytes": len(data)})
             if args.json
@@ -195,8 +195,7 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand == "import-midi2":
         if not args.output:
             raise ValueError("project import-midi2 requires --output")
-        with open(args.midi2, "rb") as fh:
-            data = fh.read()
+        data = _read_bounded(args.midi2, _MAX_PROJECT_OR_MIDI_BYTES)
         project = Project()
         try:
             first_clip = project.import_clip_file(data)

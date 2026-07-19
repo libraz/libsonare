@@ -57,6 +57,9 @@ from ._cli_common import (
     _array_stats as _array_stats,
 )
 from ._cli_common import (
+    _atomic_write_bytes as _atomic_write_bytes,
+)
+from ._cli_common import (
     _emit_effect_result as _emit_effect_result,
 )
 from ._cli_common import (
@@ -108,6 +111,9 @@ from ._cli_common import (
     _pcm16 as _pcm16,
 )
 from ._cli_common import (
+    _read_bounded as _read_bounded,
+)
+from ._cli_common import (
     _resample as _resample,
 )
 from ._cli_common import (
@@ -145,12 +151,17 @@ def main() -> None:
     # Common arguments shared by all subcommands
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="Output JSON")
-    common.add_argument("--n-fft", type=int, default=2048, help="FFT size (default: 2048)")
-    common.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
-    common.add_argument(
+    common.add_argument("-o", "--output", type=str, default="", help="Output file path")
+
+    fft_options = argparse.ArgumentParser(add_help=False, parents=[common])
+    fft_options.add_argument("--n-fft", type=int, default=2048, help="FFT size (default: 2048)")
+    fft_options.add_argument(
+        "--hop-length", type=int, default=512, help="Hop length (default: 512)"
+    )
+    mel_options = argparse.ArgumentParser(add_help=False, parents=[fft_options])
+    mel_options.add_argument(
         "--n-mels", type=int, default=128, help="Number of mel bands (default: 128)"
     )
-    common.add_argument("-o", "--output", type=str, default="", help="Output file path")
 
     parser = argparse.ArgumentParser(
         prog="sonare",
@@ -161,7 +172,7 @@ def main() -> None:
     sub.add_parser("version", parents=[common], help="Show version")
     sub.add_parser("info", parents=[common], help="Show audio file information")
     sub.add_parser("bpm", parents=[common], help="Detect BPM")
-    key_p = sub.add_parser("key", parents=[common], help="Detect musical key")
+    key_p = sub.add_parser("key", parents=[fft_options], help="Detect musical key")
     key_p.add_argument(
         "--candidates",
         type=int,
@@ -211,12 +222,12 @@ def main() -> None:
     chords_p.add_argument("--key-mode", default="major")
     chords_p.add_argument("--detect-inversions", action="store_true")
     sub.add_parser("analyze", parents=[common], help="Full music analysis")
-    mel_p = sub.add_parser("mel", parents=[common], help="Compute mel spectrogram")
+    mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
     mel_p.add_argument("--fmin", type=float, default=0.0)
     mel_p.add_argument("--fmax", type=float, default=0.0)
     mel_p.add_argument("--htk", action="store_true")
-    sub.add_parser("chroma", parents=[common], help="Compute chromagram")
-    sub.add_parser("spectral", parents=[common], help="Compute spectral features")
+    sub.add_parser("chroma", parents=[fft_options], help="Compute chromagram")
+    sub.add_parser("spectral", parents=[fft_options], help="Compute spectral features")
     pitch_p = sub.add_parser("pitch", parents=[common], help="Track pitch")
     pitch_p.add_argument("--algorithm", choices=["yin", "pyin"], default="pyin")
     sub.add_parser("hpss", parents=[common], help="Harmonic-percussive separation")
@@ -390,10 +401,12 @@ def main() -> None:
     lufs_p.add_argument(
         "--series", action="store_true", help="Also emit momentary/short-term LUFS series"
     )
-    sub.add_parser("onset-envelope", parents=[common], help="Compute the onset strength envelope")
+    sub.add_parser(
+        "onset-envelope", parents=[mel_options], help="Compute the onset strength envelope"
+    )
     sub.add_parser("nnls-chroma", parents=[common], help="Compute NNLS chroma")
-    sub.add_parser("tempogram", parents=[common], help="Compute autocorrelation tempogram")
-    sub.add_parser("plp", parents=[common], help="Compute predominant local pulse")
+    sub.add_parser("tempogram", parents=[mel_options], help="Compute autocorrelation tempogram")
+    sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
 
     # Mastering commands
     mastering_p = sub.add_parser(
@@ -511,9 +524,6 @@ def main() -> None:
     # is overwritten by the child parser's false/empty default.
     project_common = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
     project_common.add_argument("--json", action="store_true")
-    project_common.add_argument("--n-fft", type=int)
-    project_common.add_argument("--hop-length", type=int)
-    project_common.add_argument("--n-mels", type=int)
     project_common.add_argument("-o", "--output", type=str)
 
     project_sub.add_parser("abi", parents=[project_common], help="Print the project ABI version")

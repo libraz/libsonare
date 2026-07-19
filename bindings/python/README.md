@@ -662,7 +662,7 @@ sonare mixing-preset --preset vocalReverbSend
 sonare mix --preset vocalReverbSend
 sonare mix --scene scene.json --input a.wav --input b.wav -o mix.wav
 
-sonare synth-presets                  # List NativeSynth presets
+sonare project synth-presets          # List NativeSynth presets
 
 # Headless project / MIDI
 sonare project new --sample-rate 48000 -o project.json

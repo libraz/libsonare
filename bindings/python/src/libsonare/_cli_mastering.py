@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from ._cli_common import (
+    _atomic_wav_writer,
     _float_sequence,
     _parse_json_config,
     _parse_json_list,
@@ -13,7 +14,7 @@ from ._cli_common import (
     _resample,
     _strict_json_dumps,
     _write_wav,
-    _write_wav_stereo,
+    _write_wav_stereo_frames,
 )
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
@@ -173,7 +174,7 @@ def cmd_mastering_processors(args: argparse.Namespace) -> int:
 
     names = mastering_processor_names()
     if args.json:
-        print(_strict_json_dumps(names))
+        print(_strict_json_dumps({"processors": names}))
     else:
         print("  Mastering processors:")
         for name in names:
@@ -186,7 +187,7 @@ def cmd_mastering_pair_processors(args: argparse.Namespace) -> int:
 
     names = mastering_pair_processor_names()
     if args.json:
-        print(_strict_json_dumps(names))
+        print(_strict_json_dumps({"processors": names}))
     else:
         print("  Mastering pair processors:")
         for name in names:
@@ -199,7 +200,7 @@ def cmd_mastering_pair_analyses(args: argparse.Namespace) -> int:
 
     names = mastering_pair_analysis_names()
     if args.json:
-        print(_strict_json_dumps(names))
+        print(_strict_json_dumps({"analyses": names}))
     else:
         print("  Mastering pair analyses:")
         for name in names:
@@ -380,6 +381,8 @@ def cmd_mix(args: argparse.Namespace) -> int:
 
     if args.input and not args.output:
         raise ValueError("mix with --input requires --output")
+    if args.output and not args.input:
+        raise ValueError("mix with --output requires at least one --input")
 
     # Resolve the scene JSON from either a file or a built-in preset.
     if args.scene:
@@ -396,17 +399,14 @@ def cmd_mix(args: argparse.Namespace) -> int:
     try:
         strip_count = mixer.strip_count()
 
-        rendered = False
-        out_left: list[float] = []
-        out_right: list[float] = []
+        rendered_samples = 0
         if args.input:
             # Process each input WAV as one strip (mono inputs are duplicated to
             # both channels). Inputs that were captured at a different sample
             # rate are resampled to the mixer rate so a 44.1 kHz stem is not
             # played back fast at the 48 kHz default. All inputs must share a
             # length after resampling.
-            left_channels: list[list[float]] = []
-            right_channels: list[list[float]] = []
+            channels: list[list[float]] = []
             length: int | None = None
             for path in args.input:
                 samples, in_sr = _load_audio(path)
@@ -416,17 +416,29 @@ def cmd_mix(args: argparse.Namespace) -> int:
                     length = len(samples)
                 elif len(samples) != length:
                     raise ValueError("all --input files must have the same length")
-                left_channels.append(list(samples))
-                right_channels.append(list(samples))
-            if len(left_channels) != strip_count:
+                channels.append(list(samples))
+            if len(channels) != strip_count:
                 raise ValueError(
-                    f"scene has {strip_count} strips but {len(left_channels)} inputs were given"
+                    f"scene has {strip_count} strips but {len(channels)} inputs were given"
                 )
             mixer.compile()
-            out_left, out_right = mixer.process_stereo(left_channels, right_channels)
-            rendered = True
-            if args.output:
-                _write_wav_stereo(args.output, out_left, out_right, args.sample_rate)
+            # The mixer reports its graph latency separately. Output begins at
+            # sample zero without trimming so routing alignment is preserved.
+            with _atomic_wav_writer(args.output, 2, args.sample_rate) as wav:
+                for offset in range(0, length or 0, args.block_size):
+                    end = min(offset + args.block_size, length or 0)
+                    block = [channel[offset:end] for channel in channels]
+                    result = mixer.process_stereo(block, block)
+                    _write_wav_stereo_frames(wav, result.left, result.right)
+                    rendered_samples += len(result.left)
+
+                tail_remaining = mixer.tail_samples()
+                while tail_remaining > 0:
+                    count = min(tail_remaining, args.block_size)
+                    result = mixer.drain_tail_stereo(count)
+                    _write_wav_stereo_frames(wav, result.left, result.right)
+                    rendered_samples += len(result.left)
+                    tail_remaining -= count
 
         if args.json:
             payload: dict[str, object] = {
@@ -434,20 +446,18 @@ def cmd_mix(args: argparse.Namespace) -> int:
                 "sample_rate": args.sample_rate,
                 "block_size": args.block_size,
             }
-            if rendered:
-                payload["rendered_samples"] = len(out_left)
-                if args.output:
-                    payload["output"] = args.output
+            if args.input:
+                payload["rendered_samples"] = rendered_samples
+                payload["output"] = args.output
             print(_strict_json_dumps(payload))
         else:
             print("  Mixer:")
             print(f"    Strips:      {strip_count}")
             print(f"    Sample rate: {args.sample_rate} Hz")
             print(f"    Block size:  {args.block_size}")
-            if rendered:
-                print(f"    Rendered:    {len(out_left)} samples (stereo)")
-                if args.output:
-                    print(f"    Wrote: {args.output}")
+            if args.input:
+                print(f"    Rendered:    {rendered_samples} samples (stereo)")
+                print(f"    Wrote: {args.output}")
     finally:
         mixer.close()
     return 0

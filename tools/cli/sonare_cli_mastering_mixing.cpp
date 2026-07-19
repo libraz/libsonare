@@ -467,9 +467,9 @@ int cmd_mixing_presets(const CliArgs& args, const Audio&) {
   const auto names = mixing::api::scene_preset_names();
   if (args.json_output) {
     JsonBuilder json;
-    json.begin_array();
+    json.begin_object().key("presets").begin_array();
     for (const auto& name : names) json.value(name);
-    json.end_array().print();
+    json.end_array().end_object().print();
   } else {
     for (const auto& name : names) std::cout << name << "\n";
   }
