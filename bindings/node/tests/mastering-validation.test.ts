@@ -57,6 +57,31 @@ describe('mastering offline input validation (inherited from the C++ core)', () 
     const result = masteringChain(x, SR);
     expect(result.samples.length).toBe(x.length);
   });
+
+  it('reports output true-peak, LRA, and per-stage gain reductions', () => {
+    const x = sine(4096, 220, 0.3);
+    const result = masteringChain(x, SR, {
+      dynamics: { compressor: { thresholdDb: -30, ratio: 4 } },
+      loudness: { targetLufs: -14, ceilingDb: -1 },
+    });
+    expect(Number.isFinite(result.outputTruePeakDbtp)).toBe(true);
+    expect(result.outputTruePeakDbtp).toBeLessThanOrEqual(0);
+    expect(Number.isFinite(result.outputLra)).toBe(true);
+    expect(result.outputLra).toBeGreaterThanOrEqual(0);
+
+    const grStages = result.stageGainReductions.map((r) => r.stage);
+    expect(grStages).toContain('dynamics.compressor');
+    for (const reduction of result.stageGainReductions) {
+      expect(result.stages).toContain(reduction.stage);
+      expect(reduction.gainReductionDb).toBeLessThanOrEqual(0);
+    }
+
+    // masterAudio (preset path) exposes the same fields.
+    const preset = masterAudio(x, SR, 'pop');
+    expect(Number.isFinite(preset.outputTruePeakDbtp)).toBe(true);
+    expect(Number.isFinite(preset.outputLra)).toBe(true);
+    expect(Array.isArray(preset.stageGainReductions)).toBe(true);
+  });
 });
 
 describe('simple mastering() accepts the appended maximizer knobs', () => {

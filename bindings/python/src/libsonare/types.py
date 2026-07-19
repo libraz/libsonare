@@ -151,6 +151,9 @@ from ._types_analysis import (
     SpectrumReport as SpectrumReport,
 )
 from ._types_analysis import (
+    StageGainReduction as StageGainReduction,
+)
+from ._types_analysis import (
     StftResult as StftResult,
 )
 from ._types_analysis import (

@@ -37,6 +37,29 @@
 
 using namespace sonare_node;
 
+namespace {
+
+// Append the chain-metric fields (output true peak, LRA, per-stage gain
+// reductions) shared by every mastering-chain result object. MonoChainResult
+// and StereoChainResult both derive ChainMetrics, so the same builder serves
+// both paths.
+void SetChainMetrics(Napi::Env env, Napi::Object out,
+                     const sonare::mastering::api::ChainMetrics& metrics) {
+  out.Set("outputTruePeakDbtp", Napi::Number::New(env, metrics.output_true_peak_dbtp));
+  out.Set("outputLra", Napi::Number::New(env, metrics.output_lra));
+  Napi::Array reductions = Napi::Array::New(env, metrics.stage_gain_reductions.size());
+  for (size_t i = 0; i < metrics.stage_gain_reductions.size(); ++i) {
+    Napi::Object entry = Napi::Object::New(env);
+    entry.Set("stage", Napi::String::New(env, metrics.stage_gain_reductions[i].stage));
+    entry.Set("gainReductionDb",
+              Napi::Number::New(env, metrics.stage_gain_reductions[i].gain_reduction_db));
+    reductions.Set(static_cast<uint32_t>(i), entry);
+  }
+  out.Set("stageGainReductions", reductions);
+}
+
+}  // namespace
+
 Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
@@ -189,6 +212,7 @@ Napi::Value SonareWrap::MasteringChain(const Napi::CallbackInfo& info) {
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -231,6 +255,7 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -277,6 +302,7 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -307,6 +333,7 @@ Napi::Object MonoResultToObject(Napi::Env env,
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
 }
 
@@ -398,6 +425,7 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
       stages.Set(static_cast<uint32_t>(i), Napi::String::New(Env(), result_.stages[i]));
     }
     out.Set("stages", stages);
+    SetChainMetrics(Env(), out, result_);
     deferred_.Resolve(out);
   }
 
@@ -514,6 +542,7 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -552,6 +581,7 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -596,6 +626,7 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -640,6 +671,7 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -692,6 +724,7 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
     stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
   }
   out.Set("stages", stages);
+  SetChainMetrics(env, out, result);
   return out;
   SONARE_NODE_CATCH(env)
 }

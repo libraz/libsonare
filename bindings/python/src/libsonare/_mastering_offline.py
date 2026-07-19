@@ -24,6 +24,7 @@ from .types import (
     MasteringProcessorCatalogEntry,
     MasteringResult,
     MasteringStereoResult,
+    StageGainReduction,
 )
 
 
@@ -345,6 +346,25 @@ def _extract_stages(stages_ptr: object, count: int) -> list[str]:
     return result
 
 
+def _extract_stage_gain_reductions(
+    stages_ptr: object, values_ptr: object, count: int
+) -> list[StageGainReduction]:
+    if not stages_ptr or not values_ptr or count == 0:
+        return []
+    raw_stages = cast(Any, stages_ptr)
+    raw_values = cast(Any, values_ptr)
+    result: list[StageGainReduction] = []
+    for i in range(count):
+        raw = raw_stages[i]
+        result.append(
+            StageGainReduction(
+                stage=raw.decode("utf-8") if raw else "",
+                gain_reduction_db=float(raw_values[i]),
+            )
+        )
+    return result
+
+
 def _make_progress_trampoline(
     on_progress: Callable[[float, str], None],
 ) -> Any:
@@ -434,6 +454,13 @@ def mastering_chain(
             output_lufs=float(out.output_lufs),
             applied_gain_db=float(out.applied_gain_db),
             stages=_extract_stages(out.stages, int(out.stages_count)),
+            output_true_peak_dbtp=float(out.output_true_peak_dbtp),
+            output_lra=float(out.output_lra),
+            stage_gain_reductions=_extract_stage_gain_reductions(
+                out.stage_gain_reduction_stages,
+                out.stage_gain_reduction_values,
+                int(out.stage_gain_reductions_count),
+            ),
         )
     finally:
         lib.sonare_free_mastering_chain_result(ctypes.byref(out))
@@ -496,6 +523,13 @@ def mastering_chain_stereo(
             output_lufs=float(out.output_lufs),
             applied_gain_db=float(out.applied_gain_db),
             stages=_extract_stages(out.stages, int(out.stages_count)),
+            output_true_peak_dbtp=float(out.output_true_peak_dbtp),
+            output_lra=float(out.output_lra),
+            stage_gain_reductions=_extract_stage_gain_reductions(
+                out.stage_gain_reduction_stages,
+                out.stage_gain_reduction_values,
+                int(out.stage_gain_reductions_count),
+            ),
         )
     finally:
         lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
@@ -525,6 +559,12 @@ def master_audio(
         preset_name: Preset identifier from :func:`mastering_preset_names`.
         overrides: Optional nested overrides applied on top of the preset
             defaults. Uses the same config shape as :func:`mastering_chain`.
+            Exception: the color stages ``saturation.tape`` and
+            ``saturation.exciter`` are engaged from an override only when you
+            pass ``enabled=True`` explicitly. On a preset where they are off,
+            adjusting a parameter alone (e.g.
+            ``{"saturation": {"tape": {"driveDb": 6}}}``) has no audible effect;
+            use ``{"saturation": {"tape": {"enabled": True, "driveDb": 6}}}``.
         on_progress: Optional callback ``(progress, stage)`` invoked after each
             enabled stage completes. See :func:`mastering_chain` for details.
 
@@ -572,6 +612,13 @@ def master_audio(
             output_lufs=float(out.output_lufs),
             applied_gain_db=float(out.applied_gain_db),
             stages=_extract_stages(out.stages, int(out.stages_count)),
+            output_true_peak_dbtp=float(out.output_true_peak_dbtp),
+            output_lra=float(out.output_lra),
+            stage_gain_reductions=_extract_stage_gain_reductions(
+                out.stage_gain_reduction_stages,
+                out.stage_gain_reduction_values,
+                int(out.stage_gain_reductions_count),
+            ),
         )
     finally:
         lib.sonare_free_mastering_chain_result(ctypes.byref(out))
@@ -636,6 +683,13 @@ def master_audio_stereo(
             output_lufs=float(out.output_lufs),
             applied_gain_db=float(out.applied_gain_db),
             stages=_extract_stages(out.stages, int(out.stages_count)),
+            output_true_peak_dbtp=float(out.output_true_peak_dbtp),
+            output_lra=float(out.output_lra),
+            stage_gain_reductions=_extract_stage_gain_reductions(
+                out.stage_gain_reduction_stages,
+                out.stage_gain_reduction_values,
+                int(out.stage_gain_reductions_count),
+            ),
         )
     finally:
         lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))

@@ -3,8 +3,8 @@ import { getSonareModule } from './module_state';
 import type {
   MasteringChainConfig,
   MasteringChainResult,
+  MasteringChainStereoResult,
   MasteringPreset,
-  MasteringStereoChainResult,
 } from './public_types';
 import type { ProgressCallback } from './sonare.js';
 
@@ -140,21 +140,21 @@ export function masteringChain(
  */
 export function masteringChainStereo(
   request: MasteringChainStereoRequest,
-): MasteringStereoChainResult;
+): MasteringChainStereoResult;
 export function masteringChainStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate?: number,
   config?: MasteringChainConfig,
   onProgress?: ProgressCallback,
-): MasteringStereoChainResult;
+): MasteringChainStereoResult;
 export function masteringChainStereo(
   left: Float32Array | MasteringChainStereoRequest,
   right?: Float32Array,
   sampleRate = 22050,
   config: MasteringChainConfig = {},
   onProgress?: ProgressCallback,
-): MasteringStereoChainResult {
+): MasteringChainStereoResult {
   const request =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, config, onProgress }
@@ -228,21 +228,21 @@ export function masteringChainWithProgress(
  */
 export function masteringChainStereoWithProgress(
   request: MasteringChainStereoRequest & Required<Pick<MasteringChainStereoRequest, 'onProgress'>>,
-): MasteringStereoChainResult;
+): MasteringChainStereoResult;
 export function masteringChainStereoWithProgress(
   left: Float32Array,
   right: Float32Array,
   sampleRate?: number,
   config?: MasteringChainConfig,
   onProgress?: ProgressCallback,
-): MasteringStereoChainResult;
+): MasteringChainStereoResult;
 export function masteringChainStereoWithProgress(
   left: Float32Array | MasteringChainStereoRequest,
   right?: Float32Array,
   sampleRate = 22050,
   config: MasteringChainConfig = {},
   onProgress?: ProgressCallback,
-): MasteringStereoChainResult {
+): MasteringChainStereoResult {
   const request =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, config, onProgress }
@@ -326,7 +326,7 @@ export function masterAudio(
  * @param onProgress - Optional per-stage progress callback (progress: 0-1, stage: string).
  * @returns Processed stereo audio, loudness metadata, and applied stage names
  */
-export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringStereoChainResult;
+export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult;
 export function masterAudioStereo(
   left: Float32Array,
   right: Float32Array,
@@ -334,7 +334,7 @@ export function masterAudioStereo(
   presetName?: MasteringPreset,
   overrides?: MasteringChainConfig,
   onProgress?: ProgressCallback,
-): MasteringStereoChainResult;
+): MasteringChainStereoResult;
 export function masterAudioStereo(
   left: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined = undefined,
@@ -342,7 +342,7 @@ export function masterAudioStereo(
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
   onProgress?: ProgressCallback,
-): MasteringStereoChainResult {
+): MasteringChainStereoResult {
   const request = masterAudioStereoRequest(
     left,
     right,
@@ -413,7 +413,7 @@ export function masterAudioWithProgress(
  */
 export function masterAudioStereoWithProgress(
   request: MasterAudioStereoRequest & Required<Pick<MasterAudioStereoRequest, 'onProgress'>>,
-): MasteringStereoChainResult;
+): MasteringChainStereoResult;
 export function masterAudioStereoWithProgress(
   left: Float32Array,
   right: Float32Array,
@@ -421,7 +421,7 @@ export function masterAudioStereoWithProgress(
   presetName?: MasteringPreset,
   overrides?: MasteringChainConfig | null,
   onProgress?: ProgressCallback,
-): MasteringStereoChainResult;
+): MasteringChainStereoResult;
 export function masterAudioStereoWithProgress(
   left: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined = undefined,
@@ -429,7 +429,7 @@ export function masterAudioStereoWithProgress(
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig | null = null,
   onProgress?: ProgressCallback,
-): MasteringStereoChainResult {
+): MasteringChainStereoResult {
   const request = masterAudioStereoRequest(
     left,
     right,

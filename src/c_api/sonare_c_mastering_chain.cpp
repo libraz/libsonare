@@ -28,6 +28,7 @@ SonareError sonare_mastering_chain(const float* samples, size_t length, int samp
   out->applied_gain_db = 0.0f;
   out->stages = nullptr;
   out->stages_count = 0;
+  zero_chain_metrics(out);
 
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
@@ -43,6 +44,7 @@ SonareError sonare_mastering_chain(const float* samples, size_t length, int samp
   out->samples = copy_vector(result.samples);
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
+  set_chain_metrics(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -70,6 +72,7 @@ SonareError sonare_mastering_chain_stereo(const float* left, const float* right,
   out->applied_gain_db = 0.0f;
   out->stages = nullptr;
   out->stages_count = 0;
+  zero_chain_metrics(out);
 
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
@@ -86,6 +89,7 @@ SonareError sonare_mastering_chain_stereo(const float* left, const float* right,
   out->right = copy_vector(result.right);
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
+  set_chain_metrics(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -110,6 +114,7 @@ SonareError sonare_mastering_chain_with_progress(const float* samples, size_t le
   out->applied_gain_db = 0.0f;
   out->stages = nullptr;
   out->stages_count = 0;
+  zero_chain_metrics(out);
 
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
@@ -132,6 +137,7 @@ SonareError sonare_mastering_chain_with_progress(const float* samples, size_t le
   out->samples = copy_vector(result.samples);
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
+  set_chain_metrics(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -162,6 +168,7 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
   out->applied_gain_db = 0.0f;
   out->stages = nullptr;
   out->stages_count = 0;
+  zero_chain_metrics(out);
 
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
@@ -185,6 +192,7 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
   out->right = copy_vector(result.right);
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
+  set_chain_metrics(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -202,6 +210,7 @@ void sonare_free_mastering_chain_result(SonareMasteringChainResult* result) {
   }
   result->stages = nullptr;
   result->stages_count = 0;
+  free_chain_metrics(result);
 }
 
 void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult* result) {
@@ -219,4 +228,5 @@ void sonare_free_mastering_chain_stereo_result(SonareMasteringChainStereoResult*
   }
   result->stages = nullptr;
   result->stages_count = 0;
+  free_chain_metrics(result);
 }

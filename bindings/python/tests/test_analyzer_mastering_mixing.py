@@ -327,3 +327,39 @@ def test_mastering_chain_validates_offline_input() -> None:
     # Valid input still masters and preserves length.
     result = libsonare.mastering_chain(ok, sample_rate=sr)
     assert len(result.samples) == len(ok)
+
+
+def test_mastering_chain_reports_output_metrics() -> None:
+    """The chain result exposes output true-peak (dBTP), LRA, and per-stage gain
+    reductions computed by the core (M-1). The gain-reduction stages are a subset
+    of the reported stages, in the same order."""
+    import math
+
+    import libsonare
+
+    sr = 44100
+    samples = [0.3 * math.sin(2 * math.pi * 220 * i / sr) for i in range(4096)]
+    config = {
+        "dynamics": {"compressor": {"thresholdDb": -30.0, "ratio": 4.0}},
+        "loudness": {"targetLufs": -14.0, "ceilingDb": -1.0},
+    }
+    result = libsonare.mastering_chain(samples, sample_rate=sr, config=config)
+
+    # Output true peak must be finite and near/under the -1 dBTP ceiling.
+    assert math.isfinite(result.output_true_peak_dbtp)
+    assert result.output_true_peak_dbtp <= 0.0
+    assert math.isfinite(result.output_lra)
+    assert result.output_lra >= 0.0
+
+    # A compressor stage ran, so at least one gain-reduction entry is reported.
+    gr_stages = [r.stage for r in result.stage_gain_reductions]
+    assert "dynamics.compressor" in gr_stages
+    for reduction in result.stage_gain_reductions:
+        assert reduction.stage in result.stages
+        assert reduction.gain_reduction_db <= 0.0
+
+    # master_audio (preset + overrides path) exposes the same fields.
+    preset_result = libsonare.master_audio(samples, sample_rate=sr, preset_name="pop")
+    assert math.isfinite(preset_result.output_true_peak_dbtp)
+    assert math.isfinite(preset_result.output_lra)
+    assert isinstance(preset_result.stage_gain_reductions, list)

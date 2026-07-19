@@ -7,7 +7,7 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import TYPE_CHECKING, Literal, TypedDict
 
@@ -921,6 +921,19 @@ class MasteringStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class StageGainReduction:
+    """Gain reduction reported by a single dynamics/maximizer chain stage.
+
+    ``gain_reduction_db`` is the most recent (typically last-block) gain
+    reduction in dB (negative or zero); for multiband stages it is the
+    most-reduced band.
+    """
+
+    stage: str
+    gain_reduction_db: float
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringChainResult:
     """Result of running a configurable mastering chain on mono audio."""
 
@@ -930,6 +943,14 @@ class MasteringChainResult:
     output_lufs: float
     applied_gain_db: float
     stages: list[str]
+    #: ITU-R BS.1770-4 true peak of the output (dBTP), measured with the chain's
+    #: configured loudness true-peak oversample factor (default 4x).
+    output_true_peak_dbtp: float = 0.0
+    #: EBU Tech 3342 Loudness Range of the output (LU).
+    output_lra: float = 0.0
+    #: Per-stage gain reductions for the dynamics/maximizer stages (a subset of
+    #: :attr:`stages`).
+    stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -943,3 +964,7 @@ class MasteringChainStereoResult:
     output_lufs: float
     applied_gain_db: float
     stages: list[str]
+    #: See :class:`MasteringChainResult` for field semantics.
+    output_true_peak_dbtp: float = 0.0
+    output_lra: float = 0.0
+    stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)

@@ -7,6 +7,7 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "wasm/bindings/common/common.h"
+#include "wasm/bindings/mastering/chain_result.h"
 
 val js_mastering_processor_names() {
   val out = val::array();
@@ -89,6 +90,7 @@ val js_master_audio(std::string preset_name, val samples, int sample_rate, val o
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
+  setChainMetrics(out, result);
   return out;
 }
 
@@ -116,6 +118,7 @@ val js_master_audio_stereo(std::string preset_name, val left_samples, val right_
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
+  setChainMetrics(out, result);
   return out;
 }
 
@@ -148,6 +151,7 @@ val js_master_audio_with_progress(std::string preset_name, val samples, int samp
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
+  setChainMetrics(out, result);
   return out;
 }
 
@@ -185,6 +189,7 @@ val js_master_audio_stereo_with_progress(std::string preset_name, val left_sampl
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
+  setChainMetrics(out, result);
   return out;
 }
 

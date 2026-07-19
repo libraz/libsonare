@@ -95,6 +95,63 @@ inline char** copy_stage_array(const std::vector<std::string>& stages) {
   return out.release();
 }
 
+// Zero the chain-metric fields (true peak, LRA, per-stage gain reductions) so a
+// validation-failure early return leaves them safe to pass to the matching free
+// function. Works for both mono and stereo chain-result structs (identical
+// field names). @c stages / @c stages_count are zeroed separately by callers.
+template <typename ChainResultT>
+inline void zero_chain_metrics(ChainResultT* out) {
+  out->output_true_peak_dbtp = 0.0f;
+  out->output_lra = 0.0f;
+  out->stage_gain_reduction_stages = nullptr;
+  out->stage_gain_reduction_values = nullptr;
+  out->stage_gain_reductions_count = 0;
+}
+
+// Copy the chain-metric fields from the C++ result into the C struct. The
+// per-stage gain reductions become two parallel arrays (stage names + dB
+// values) mirroring @ref sonare::mastering::api::ChainMetrics::stage_gain_reductions.
+template <typename ChainResultT>
+inline void set_chain_metrics(const sonare::mastering::api::ChainMetrics& metrics,
+                              ChainResultT* out) {
+  out->output_true_peak_dbtp = metrics.output_true_peak_dbtp;
+  out->output_lra = metrics.output_lra;
+  const auto& reductions = metrics.stage_gain_reductions;
+  out->stage_gain_reductions_count = reductions.size();
+  if (reductions.empty()) {
+    out->stage_gain_reduction_stages = nullptr;
+    out->stage_gain_reduction_values = nullptr;
+    return;
+  }
+  std::vector<std::string> names;
+  names.reserve(reductions.size());
+  std::unique_ptr<float[]> values(new float[reductions.size()]);
+  for (size_t i = 0; i < reductions.size(); ++i) {
+    names.push_back(reductions[i].stage);
+    values[i] = reductions[i].gain_reduction_db;
+  }
+  // copy_stage_array may throw (bad_alloc); do it before releasing values so a
+  // throw does not leak the float array.
+  out->stage_gain_reduction_stages = copy_stage_array(names);
+  out->stage_gain_reduction_values = sonare_c_detail::release_array(values);
+}
+
+// Release the parallel per-stage gain-reduction arrays and reset the metric
+// fields. Safe to call on a zero-initialized struct.
+template <typename ChainResultT>
+inline void free_chain_metrics(ChainResultT* out) {
+  if (out->stage_gain_reduction_stages) {
+    for (size_t i = 0; i < out->stage_gain_reductions_count; ++i) {
+      delete[] out->stage_gain_reduction_stages[i];
+    }
+    delete[] out->stage_gain_reduction_stages;
+  }
+  delete[] out->stage_gain_reduction_values;
+  out->stage_gain_reduction_stages = nullptr;
+  out->stage_gain_reduction_values = nullptr;
+  out->stage_gain_reductions_count = 0;
+}
+
 inline void fill_mono_chain_result(const sonare::mastering::api::MonoChainResult& result,
                                    SonareMasteringChainResult* out) {
   out->length = result.samples.size();
@@ -110,6 +167,7 @@ inline void fill_mono_chain_result(const sonare::mastering::api::MonoChainResult
   }
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
+  set_chain_metrics(result, out);
 }
 
 inline void fill_stereo_chain_result(const sonare::mastering::api::StereoChainResult& result,
@@ -130,6 +188,7 @@ inline void fill_stereo_chain_result(const sonare::mastering::api::StereoChainRe
   }
   out->stages = copy_stage_array(result.stages);
   out->stages_count = result.stages.size();
+  set_chain_metrics(result, out);
 }
 
 }  // namespace sonare_c_mastering_detail

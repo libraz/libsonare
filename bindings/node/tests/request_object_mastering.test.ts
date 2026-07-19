@@ -157,6 +157,59 @@ describe('mastering request-object compatibility', () => {
     );
   });
 
+  // The positional and request forms funnel through one private normalizer, so an
+  // invalid input must fail identically either way. These assert the error path —
+  // not just the success path above — stays equivalent across both call shapes.
+  function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+    try {
+      fn();
+      return { threw: false, message: '' };
+    } catch (error) {
+      return { threw: true, message: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  it('positional and request forms throw identically on invalid input', () => {
+    const samples = signal();
+    const source = signal();
+    const reference = signal();
+
+    const soloPositional = captureThrow(() =>
+      masteringProcess('does.not.exist' as never, samples, sampleRate),
+    );
+    const soloRequest = captureThrow(() =>
+      masteringProcess({ processorName: 'does.not.exist' as never, samples, sampleRate }),
+    );
+    expect(soloPositional.threw).toBe(true);
+    expect(soloRequest.threw).toBe(true);
+    expect(soloRequest.message).toBe(soloPositional.message);
+
+    const pairPositional = captureThrow(() =>
+      masteringPairProcess('does.not.exist' as never, source, reference, sampleRate),
+    );
+    const pairRequest = captureThrow(() =>
+      masteringPairProcess({
+        processorName: 'does.not.exist' as never,
+        source,
+        reference,
+        sampleRate,
+      }),
+    );
+    expect(pairPositional.threw).toBe(true);
+    expect(pairRequest.threw).toBe(true);
+    expect(pairRequest.message).toBe(pairPositional.message);
+
+    const presetPositional = captureThrow(() =>
+      masterAudio(samples, sampleRate, 'not-a-preset' as never),
+    );
+    const presetRequest = captureThrow(() =>
+      masterAudio({ samples, sampleRate, preset: 'not-a-preset' as never }),
+    );
+    expect(presetPositional.threw).toBe(true);
+    expect(presetRequest.threw).toBe(true);
+    expect(presetRequest.message).toBe(presetPositional.message);
+  });
+
   it('pair, stereo, and recommendation calls preserve positional results', () => {
     const source = signal();
     const reference = signal();

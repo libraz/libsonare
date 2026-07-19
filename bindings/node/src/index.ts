@@ -130,6 +130,7 @@ export type {
   SpectralEditMode,
   SpectralEditOptions,
   SpectralRegionOp,
+  StageGainReduction,
   StftDbResult,
   StftResult,
   StreamAnalyzerConfig,

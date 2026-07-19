@@ -2329,9 +2329,39 @@
         "name": "stages_count",
         "offset": 40,
         "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "output_true_peak_dbtp",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "output_lra",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "stage_gain_reduction_stages",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "stage_gain_reduction_values",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "stage_gain_reductions_count",
+        "offset": 72,
+        "size": 8
       }
     ],
-    "size": 48
+    "size": 80
   },
   "SonareMasteringChainStereoResult": {
     "align": 8,
@@ -2389,9 +2419,39 @@
         "name": "stages_count",
         "offset": 48,
         "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "output_true_peak_dbtp",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "output_lra",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "stage_gain_reduction_stages",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "stage_gain_reduction_values",
+        "offset": 72,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "stage_gain_reductions_count",
+        "offset": 80,
+        "size": 8
       }
     ],
-    "size": 56
+    "size": 88
   },
   "SonareMasteringConfig": {
     "align": 4,

@@ -470,8 +470,16 @@ export interface WasmMasteringResult {
   latencySamples?: number;
 }
 
+export interface WasmStageGainReduction {
+  stage: string;
+  gainReductionDb: number;
+}
+
 export interface WasmMasteringChainResult extends WasmMasteringResult {
   stages: string[];
+  outputTruePeakDbtp: number;
+  outputLra: number;
+  stageGainReductions: WasmStageGainReduction[];
 }
 
 export interface WasmMasteringStereoChainResult {
@@ -482,6 +490,9 @@ export interface WasmMasteringStereoChainResult {
   outputLufs: number;
   appliedGainDb: number;
   stages: string[];
+  outputTruePeakDbtp: number;
+  outputLra: number;
+  stageGainReductions: WasmStageGainReduction[];
 }
 
 export interface WasmMasteringStereoResult {

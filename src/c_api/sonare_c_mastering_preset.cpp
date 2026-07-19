@@ -43,6 +43,7 @@ SonareError sonare_master_audio(const char* preset_name, const float* samples, s
   out->applied_gain_db = 0.0f;
   out->stages = nullptr;
   out->stages_count = 0;
+  zero_chain_metrics(out);
 
   SONARE_C_TRY
   const auto preset = sonare::mastering::api::preset_from_string(preset_name);
@@ -77,6 +78,7 @@ SonareError sonare_master_audio_stereo(const char* preset_name, const float* lef
   out->applied_gain_db = 0.0f;
   out->stages = nullptr;
   out->stages_count = 0;
+  zero_chain_metrics(out);
 
   SONARE_C_TRY
   const auto preset = sonare::mastering::api::preset_from_string(preset_name);
@@ -108,6 +110,7 @@ SonareError sonare_master_audio_with_progress(const char* preset_name, const flo
   out->applied_gain_db = 0.0f;
   out->stages = nullptr;
   out->stages_count = 0;
+  zero_chain_metrics(out);
 
   SONARE_C_TRY
   const auto preset = sonare::mastering::api::preset_from_string(preset_name);
@@ -153,6 +156,7 @@ SonareError sonare_master_audio_stereo_with_progress(
   out->applied_gain_db = 0.0f;
   out->stages = nullptr;
   out->stages_count = 0;
+  zero_chain_metrics(out);
 
   SONARE_C_TRY
   const auto preset = sonare::mastering::api::preset_from_string(preset_name);

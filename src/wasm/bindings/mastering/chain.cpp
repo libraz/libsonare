@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include "wasm/bindings/common/common.h"
+#include "wasm/bindings/mastering/chain_result.h"
 
 val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_db,
                  int true_peak_oversample, float release_ms, bool apply_gain_at_input_rate) {
@@ -253,6 +254,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
 
 val js_mastering_chain(val samples, int sample_rate, val config) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
   auto result = chain.process_mono(data.data(), data.size(), sample_rate);
 
@@ -267,6 +269,7 @@ val js_mastering_chain(val samples, int sample_rate, val config) {
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
+  setChainMetrics(out, result);
   return out;
 }
 
@@ -275,6 +278,8 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, int sample_ra
                                "masteringChainStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
+  validate_offline_audio_input(left.data(), left.size(), sample_rate);
+  validate_offline_audio_input(right.data(), right.size(), sample_rate);
 
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
   auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
@@ -291,6 +296,7 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, int sample_ra
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
+  setChainMetrics(out, result);
   return out;
 }
 
@@ -298,6 +304,7 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, int sample_ra
 val js_mastering_chain_with_progress(val samples, int sample_rate, val config,
                                      val progress_callback) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
     chain.set_progress_callback([progress_callback](float progress, const char* stage) {
@@ -317,6 +324,7 @@ val js_mastering_chain_with_progress(val samples, int sample_rate, val config,
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
+  setChainMetrics(out, result);
   return out;
 }
 
@@ -327,6 +335,8 @@ val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples,
                                "masteringChainStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
+  validate_offline_audio_input(left.data(), left.size(), sample_rate);
+  validate_offline_audio_input(right.data(), right.size(), sample_rate);
 
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
@@ -348,6 +358,7 @@ val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples,
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
+  setChainMetrics(out, result);
   return out;
 }
 

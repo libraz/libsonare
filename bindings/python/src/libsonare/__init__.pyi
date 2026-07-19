@@ -756,6 +756,9 @@ from .types import (
     SpectrumReport as SpectrumReport,
 )
 from .types import (
+    StageGainReduction as StageGainReduction,
+)
+from .types import (
     StftResult as StftResult,
 )
 from .types import (

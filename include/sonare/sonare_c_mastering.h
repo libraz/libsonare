@@ -86,6 +86,20 @@ typedef struct {
   float applied_gain_db;
   char** stages;  // newline-free stage identifiers, e.g. "dynamics.compressor"
   size_t stages_count;
+  // ITU-R BS.1770-4 true peak of the output (dBTP), measured with the chain's
+  // configured loudness true-peak oversample factor (default 4x). Lets callers
+  // verify a preset ceiling was met without a second oversampled scan.
+  float output_true_peak_dbtp;
+  // EBU Tech 3342 Loudness Range of the output (LU).
+  float output_lra;
+  // Per-stage gain reductions for the dynamics / maximizer stages that report
+  // one (a subset of @c stages). @c stage_gain_reduction_stages holds the stage
+  // identifiers and @c stage_gain_reduction_values the matching dB values
+  // (<= 0), both of length @c stage_gain_reductions_count. Memory is allocated
+  // by libsonare and released by @c sonare_free_mastering_chain_result.
+  char** stage_gain_reduction_stages;
+  float* stage_gain_reduction_values;
+  size_t stage_gain_reductions_count;
 } SonareMasteringChainResult;
 
 // Result of running the MasteringChain on stereo buffers. Offline chain/master_audio
@@ -102,6 +116,13 @@ typedef struct {
   float applied_gain_db;
   char** stages;
   size_t stages_count;
+  // See @c SonareMasteringChainResult for field semantics. Released by
+  // @c sonare_free_mastering_chain_stereo_result.
+  float output_true_peak_dbtp;
+  float output_lra;
+  char** stage_gain_reduction_stages;
+  float* stage_gain_reduction_values;
+  size_t stage_gain_reductions_count;
 } SonareMasteringChainStereoResult;
 
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,

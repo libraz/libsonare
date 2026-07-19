@@ -292,6 +292,12 @@ export interface MasteringChainSection {
  * A boolean toggles a module/processor's `enabled` flag; setting any field
  * implicitly enables its module unless `enabled: false` is also given. Unknown
  * keys throw at apply time. (`stereo.*` modules apply on the stereo path only.)
+ *
+ * Exception — color stages as `masterAudio` overrides: the `saturation.tape`
+ * and `saturation.exciter` stages are engaged from an override only when you
+ * pass `enabled: true` explicitly. On a preset where they are off, adjusting a
+ * parameter alone (e.g. `saturation: { tape: { driveDb: 6 } }`) has no audible
+ * effect; use `saturation: { tape: { enabled: true, driveDb: 6 } }`.
  */
 export interface MasteringChainConfig {
   repair?: MasteringChainSection;
@@ -304,6 +310,17 @@ export interface MasteringChainConfig {
   loudness?: MasteringChainSection;
 }
 
+/** Gain reduction reported by a single dynamics/maximizer chain stage. */
+export interface StageGainReduction {
+  /** Stage identifier, e.g. `"dynamics.compressor"`. */
+  stage: string;
+  /**
+   * Most recent (typically last-block) gain reduction in dB (negative or
+   * zero); for multiband stages it is the most-reduced band.
+   */
+  gainReductionDb: number;
+}
+
 export interface MasteringChainResult {
   /** Latency-compensated offline output; no separate latency field is reported. */
   samples: Float32Array;
@@ -312,6 +329,16 @@ export interface MasteringChainResult {
   outputLufs: number;
   appliedGainDb: number;
   stages: string[];
+  /**
+   * ITU-R BS.1770-4 true peak of the output (dBTP), measured with the chain's
+   * configured loudness true-peak oversample factor (default 4x). Lets callers
+   * verify a preset ceiling was met without a second oversampled scan.
+   */
+  outputTruePeakDbtp: number;
+  /** EBU Tech 3342 Loudness Range of the output (LU). */
+  outputLra: number;
+  /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
+  stageGainReductions: StageGainReduction[];
 }
 
 export interface MasteringChainStereoResult {
@@ -322,6 +349,10 @@ export interface MasteringChainStereoResult {
   outputLufs: number;
   appliedGainDb: number;
   stages: string[];
+  /** See {@link MasteringChainResult} for field semantics. */
+  outputTruePeakDbtp: number;
+  outputLra: number;
+  stageGainReductions: StageGainReduction[];
 }
 
 export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;

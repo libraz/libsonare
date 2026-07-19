@@ -102,3 +102,49 @@ describe('remaining WASM mastering request objects', () => {
     );
   });
 });
+
+describe('WASM mastering request/positional error-path equivalence', () => {
+  // Both call shapes share one private normalizer, so an invalid input must fail
+  // identically either way — the success-path equivalence above does not prove
+  // the error path stays in lockstep.
+  function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+    try {
+      fn();
+      return { threw: false, message: '' };
+    } catch (error) {
+      return { threw: true, message: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  it('throws identically on an unknown processor name', () => {
+    const reference = Float32Array.from(samples, (value) => value * 0.8);
+    const positional = captureThrow(() =>
+      masteringPairProcess('does.not.exist' as never, samples, reference, sampleRate),
+    );
+    const request = captureThrow(() =>
+      masteringPairProcess({
+        processorName: 'does.not.exist' as never,
+        source: samples,
+        reference,
+        sampleRate,
+      }),
+    );
+    expect(positional.threw).toBe(true);
+    expect(request.threw).toBe(true);
+    expect(request.message).toBe(positional.message);
+  });
+
+  it('throws identically on non-finite samples', () => {
+    const bad = Float32Array.from(samples);
+    bad[64] = Number.NaN;
+    const positional = captureThrow(() =>
+      masteringDynamicsCompressor(bad, sampleRate, { thresholdDb: -18 }),
+    );
+    const request = captureThrow(() =>
+      masteringDynamicsCompressor({ samples: bad, sampleRate, thresholdDb: -18 }),
+    );
+    expect(positional.threw).toBe(true);
+    expect(request.threw).toBe(true);
+    expect(request.message).toBe(positional.message);
+  });
+});

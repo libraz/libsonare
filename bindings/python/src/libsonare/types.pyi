@@ -776,6 +776,11 @@ class MasteringStereoResult:
         latency_samples: int = 0,
     ) -> None: ...
 
+class StageGainReduction:
+    stage: str
+    gain_reduction_db: float
+    def __init__(self, stage: str, gain_reduction_db: float) -> None: ...
+
 class MasteringChainResult:
     samples: list[float]
     sample_rate: int
@@ -783,6 +788,9 @@ class MasteringChainResult:
     output_lufs: float
     applied_gain_db: float
     stages: list[str]
+    output_true_peak_dbtp: float
+    output_lra: float
+    stage_gain_reductions: list[StageGainReduction]
     def __init__(
         self,
         samples: list[float],
@@ -791,6 +799,9 @@ class MasteringChainResult:
         output_lufs: float,
         applied_gain_db: float,
         stages: list[str],
+        output_true_peak_dbtp: float = ...,
+        output_lra: float = ...,
+        stage_gain_reductions: list[StageGainReduction] = ...,
     ) -> None: ...
 
 class MasteringChainStereoResult:
@@ -801,6 +812,9 @@ class MasteringChainStereoResult:
     output_lufs: float
     applied_gain_db: float
     stages: list[str]
+    output_true_peak_dbtp: float
+    output_lra: float
+    stage_gain_reductions: list[StageGainReduction]
     def __init__(
         self,
         left: list[float],
@@ -810,6 +824,9 @@ class MasteringChainStereoResult:
         output_lufs: float,
         applied_gain_db: float,
         stages: list[str],
+        output_true_peak_dbtp: float = ...,
+        output_lra: float = ...,
+        stage_gain_reductions: list[StageGainReduction] = ...,
     ) -> None: ...
 
 class MixMeterSnapshot:
