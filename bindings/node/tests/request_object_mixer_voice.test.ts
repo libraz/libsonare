@@ -36,4 +36,31 @@ describe('mixer and voice request objects', () => {
       voiceChangeRealtime({ samples, sampleRate, preset: 'neutral-monitor', ...options }),
     ).toEqual(voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', options));
   });
+
+  // Both call shapes funnel through one private normalizer, so an invalid input
+  // must fail identically either way — the positive-path equivalence above does
+  // not prove the error path stays in lockstep.
+  it('throws identically on invalid input in both call forms', () => {
+    const empty = new Float32Array(0);
+    const posVoice = captureThrow(() => voiceChange(empty, sampleRate));
+    const reqVoice = captureThrow(() => voiceChange({ samples: empty, sampleRate }));
+    expect(posVoice.threw).toBe(true);
+    expect(reqVoice.threw).toBe(true);
+    expect(reqVoice.message).toBe(posVoice.message);
+
+    const posResample = captureThrow(() => resample(samples, sampleRate, 0));
+    const reqResample = captureThrow(() => resample({ samples, srcSr: sampleRate, targetSr: 0 }));
+    expect(posResample.threw).toBe(true);
+    expect(reqResample.threw).toBe(true);
+    expect(reqResample.message).toBe(posResample.message);
+  });
 });
+
+function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+  try {
+    fn();
+    return { threw: false, message: '' };
+  } catch (error) {
+    return { threw: true, message: error instanceof Error ? error.message : String(error) };
+  }
+}

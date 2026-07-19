@@ -135,4 +135,33 @@ describe('remaining feature request-object compatibility', () => {
       ebur128LoudnessRange(samples, sampleRate),
     );
   });
+
+  // Both call shapes funnel through one private normalizer, so an invalid input
+  // must fail identically either way — the positive-path equivalence above does
+  // not prove the error path stays in lockstep.
+  it('throws identically on invalid input in both call forms', () => {
+    const posRate = captureThrow(() => phaseVocoder(samples, 0, sampleRate, 512, 128));
+    const reqRate = captureThrow(() =>
+      phaseVocoder({ samples, rate: 0, sampleRate, nFft: 512, hopLength: 128 }),
+    );
+    expect(posRate.threw).toBe(true);
+    expect(reqRate.threw).toBe(true);
+    expect(reqRate.message).toBe(posRate.message);
+
+    const empty = new Float32Array(0);
+    const posLufs = captureThrow(() => lufs(empty, sampleRate));
+    const reqLufs = captureThrow(() => lufs({ samples: empty, sampleRate }));
+    expect(posLufs.threw).toBe(true);
+    expect(reqLufs.threw).toBe(true);
+    expect(reqLufs.message).toBe(posLufs.message);
+  });
 });
+
+function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+  try {
+    fn();
+    return { threw: false, message: '' };
+  } catch (error) {
+    return { threw: true, message: error instanceof Error ? error.message : String(error) };
+  }
+}

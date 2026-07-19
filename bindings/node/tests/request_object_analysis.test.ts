@@ -114,4 +114,31 @@ describe('analysis request-object compatibility', () => {
       roomMorph(samples, sampleRate, morphOptions),
     );
   });
+
+  // Both call shapes funnel through one private normalizer, so an invalid input
+  // must fail identically either way — the positive-path equivalence above does
+  // not prove the error path stays in lockstep.
+  it('throws identically on invalid input in both call forms', () => {
+    const empty = new Float32Array(0);
+    const pos = captureThrow(() => detectBpm(empty, sampleRate));
+    const req = captureThrow(() => detectBpm({ samples: empty, sampleRate }));
+    expect(pos.threw).toBe(true);
+    expect(req.threw).toBe(true);
+    expect(req.message).toBe(pos.message);
+
+    const posT = captureThrow(() => analyzeTimbre(empty, sampleRate, { nMels: 32 }));
+    const reqT = captureThrow(() => analyzeTimbre({ samples: empty, sampleRate, nMels: 32 }));
+    expect(posT.threw).toBe(true);
+    expect(reqT.threw).toBe(true);
+    expect(reqT.message).toBe(posT.message);
+  });
 });
+
+function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+  try {
+    fn();
+    return { threw: false, message: '' };
+  } catch (error) {
+    return { threw: true, message: error instanceof Error ? error.message : String(error) };
+  }
+}

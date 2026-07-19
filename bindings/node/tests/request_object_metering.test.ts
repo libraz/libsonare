@@ -88,4 +88,43 @@ describe('metering request-object compatibility', () => {
       waveformPeakPyramid({ samples: interleaved, channels: 2, samplesPerBucketLevels: levels }),
     ).toEqual(waveformPeakPyramid(interleaved, 2, { samplesPerBucketLevels: levels }));
   });
+
+  // Both call shapes funnel through one private normalizer, so an invalid input
+  // must fail identically either way — the positive-path equivalence above does
+  // not prove the error path stays in lockstep.
+  it('throws identically on invalid input in both call forms', () => {
+    const empty = new Float32Array(0);
+    const posEmpty = captureThrow(() => meteringPeakDb(empty, sampleRate));
+    const reqEmpty = captureThrow(() => meteringPeakDb({ samples: empty, sampleRate }));
+    expect(posEmpty.threw).toBe(true);
+    expect(reqEmpty.threw).toBe(true);
+    expect(reqEmpty.message).toBe(posEmpty.message);
+
+    const posFactor = captureThrow(() => meteringTruePeakDb(samples, sampleRate, 3));
+    const reqFactor = captureThrow(() =>
+      meteringTruePeakDb({ samples, sampleRate, oversampleFactor: 3 }),
+    );
+    expect(posFactor.threw).toBe(true);
+    expect(reqFactor.threw).toBe(true);
+    expect(reqFactor.message).toBe(posFactor.message);
+
+    const posPair = captureThrow(() =>
+      meteringStereoCorrelation(left, right.subarray(1), sampleRate),
+    );
+    const reqPair = captureThrow(() =>
+      meteringStereoCorrelation({ left, right: right.subarray(1), sampleRate }),
+    );
+    expect(posPair.threw).toBe(true);
+    expect(reqPair.threw).toBe(true);
+    expect(reqPair.message).toBe(posPair.message);
+  });
 });
+
+function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+  try {
+    fn();
+    return { threw: false, message: '' };
+  } catch (error) {
+    return { threw: true, message: error instanceof Error ? error.message : String(error) };
+  }
+}

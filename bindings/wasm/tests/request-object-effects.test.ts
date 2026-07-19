@@ -95,4 +95,31 @@ describe('effects request-object compatibility (WASM)', () => {
       }),
     ).toEqual(mixStereo([left], [right], sampleRate, { inputTrimDb: 1.5, faderDb: -2 }));
   });
+
+  // Both call shapes funnel through one private normalizer, so an invalid input
+  // must fail identically either way — the positive-path equivalence above does
+  // not prove the error path stays in lockstep.
+  it('throws identically on invalid input in both call forms', () => {
+    const empty = new Float32Array(0);
+    const posShift = captureThrow(() => pitchShift(empty, sampleRate, 2));
+    const reqShift = captureThrow(() => pitchShift({ samples: empty, sampleRate, semitones: 2 }));
+    expect(posShift.threw).toBe(true);
+    expect(reqShift.threw).toBe(true);
+    expect(reqShift.message).toBe(posShift.message);
+
+    const posNorm = captureThrow(() => normalize(empty, sampleRate, -3));
+    const reqNorm = captureThrow(() => normalize({ samples: empty, sampleRate, targetDb: -3 }));
+    expect(posNorm.threw).toBe(true);
+    expect(reqNorm.threw).toBe(true);
+    expect(reqNorm.message).toBe(posNorm.message);
+  });
 });
+
+function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+  try {
+    fn();
+    return { threw: false, message: '' };
+  } catch (error) {
+    return { threw: true, message: error instanceof Error ? error.message : String(error) };
+  }
+}

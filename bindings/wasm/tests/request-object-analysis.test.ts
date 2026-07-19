@@ -355,4 +355,31 @@ describe('WASM basic analysis request objects', () => {
       ),
     );
   });
+
+  // Both call shapes funnel through one private normalizer, so an invalid input
+  // must fail identically either way — the positive-path equivalence above does
+  // not prove the error path stays in lockstep.
+  it('throws identically on invalid input in both call forms', () => {
+    const empty = new Float32Array(0);
+    const posBpm = captureThrow(() => detectBpm(empty, sampleRate));
+    const reqBpm = captureThrow(() => detectBpm({ samples: empty, sampleRate }));
+    expect(posBpm.threw).toBe(true);
+    expect(reqBpm.threw).toBe(true);
+    expect(reqBpm.message).toBe(posBpm.message);
+
+    const posTimbre = captureThrow(() => analyzeTimbre(empty, sampleRate));
+    const reqTimbre = captureThrow(() => analyzeTimbre({ samples: empty, sampleRate }));
+    expect(posTimbre.threw).toBe(true);
+    expect(reqTimbre.threw).toBe(true);
+    expect(reqTimbre.message).toBe(posTimbre.message);
+  });
 });
+
+function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+  try {
+    fn();
+    return { threw: false, message: '' };
+  } catch (error) {
+    return { threw: true, message: error instanceof Error ? error.message : String(error) };
+  }
+}

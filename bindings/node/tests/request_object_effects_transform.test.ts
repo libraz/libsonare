@@ -72,4 +72,31 @@ describe('effects transform request-object compatibility', () => {
       noteStretch(samples, sampleRate, stretch),
     );
   });
+
+  // Both call shapes funnel through one private normalizer, so an invalid input
+  // must fail identically either way — the positive-path equivalence above does
+  // not prove the error path stays in lockstep.
+  it('throws identically on invalid input in both call forms', () => {
+    const empty = new Float32Array(0);
+    const posShift = captureThrow(() => pitchShift(empty, sampleRate, 2));
+    const reqShift = captureThrow(() => pitchShift({ samples: empty, sampleRate, semitones: 2 }));
+    expect(posShift.threw).toBe(true);
+    expect(reqShift.threw).toBe(true);
+    expect(reqShift.message).toBe(posShift.message);
+
+    const posStretch = captureThrow(() => timeStretch(empty, sampleRate, 1.25));
+    const reqStretch = captureThrow(() => timeStretch({ samples: empty, sampleRate, rate: 1.25 }));
+    expect(posStretch.threw).toBe(true);
+    expect(reqStretch.threw).toBe(true);
+    expect(reqStretch.message).toBe(posStretch.message);
+  });
 });
+
+function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
+  try {
+    fn();
+    return { threw: false, message: '' };
+  } catch (error) {
+    return { threw: true, message: error instanceof Error ? error.message : String(error) };
+  }
+}

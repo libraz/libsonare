@@ -191,6 +191,31 @@ describe('editing effects', () => {
     );
   });
 
+  it('RealtimeVoiceChanger sanitizes non-finite input without poisoning IIR state', () => {
+    const changer = new RealtimeVoiceChanger({
+      sampleRate: SR,
+      maxBlockSize: 128,
+      channels: 1,
+      preset: 'neutral-monitor',
+    });
+    try {
+      // The live block path has no JS-side finite preflight (it is the RT hot
+      // path), so a NaN/Inf sample reaches the core, which must flush it to a
+      // finite value in place before it recirculates through the filters.
+      const bad = tone.subarray(0, 128).slice();
+      bad[64] = Number.NaN;
+      bad[65] = Number.POSITIVE_INFINITY;
+      const out = changer.processMono(bad);
+      expect(out.every((sample) => Number.isFinite(sample))).toBe(true);
+      // A subsequent clean block must also stay finite: a single upstream NaN
+      // must not permanently poison the recirculating filter / retune state.
+      const clean = changer.processMono(tone.subarray(128, 256));
+      expect(clean.every((sample) => Number.isFinite(sample))).toBe(true);
+    } finally {
+      changer.destroy();
+    }
+  });
+
   it('RealtimeVoiceChanger destroy releases native state and is idempotent', () => {
     const changer = new RealtimeVoiceChanger({
       sampleRate: 48000,
