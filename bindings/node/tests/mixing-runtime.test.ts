@@ -358,4 +358,17 @@ describe('Mixer argument validation', () => {
     expect(result.right).toHaveLength(BLOCK_SIZE);
     expect(result.sampleRate).toBe(SAMPLE_RATE);
   });
+
+  it('enforces the [1, blockSize] integer rule shared with WASM and Python', () => {
+    mixer.compile();
+    // 0 is rejected (the tail must advance at least one frame).
+    expect(() => mixer.drainTailStereo(0)).toThrow(/\[1, /);
+    // Fractional counts are rejected rather than truncated toward zero.
+    expect(() => mixer.drainTailStereo(2.5)).toThrow(/integer/);
+    // Above the configured block size is rejected.
+    expect(() => mixer.drainTailStereo(BLOCK_SIZE + 1)).toThrow(/\[1, /);
+    // The endpoints of the range are accepted.
+    expect(() => mixer.drainTailStereo(1)).not.toThrow();
+    expect(() => mixer.drainTailStereo(BLOCK_SIZE)).not.toThrow();
+  });
 });

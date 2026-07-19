@@ -14,6 +14,15 @@ export interface ValidateOptions {
   validate?: boolean;
 }
 
+/**
+ * Offline-analysis sample-rate bounds, mirroring the C++ core limits
+ * (`sonare::kMinAudioSampleRate` / `kMaxAudioSampleRate` in `core/audio.h`).
+ * Every guarded WASM entry point rejects the same out-of-range rates the C ABI,
+ * Node, and Python surfaces do.
+ */
+export const MIN_AUDIO_SAMPLE_RATE = 8000;
+export const MAX_AUDIO_SAMPLE_RATE = 384000;
+
 function assertNonEmptySamples(
   fnName: string,
   samples: ArrayLike<number>,
@@ -58,8 +67,14 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
 }
 
 export function assertSampleRate(fnName: string, sampleRate: number): void {
-  if (!Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 384000) {
-    throw new RangeError(`${fnName}: sampleRate out of supported range [8000, 384000]`);
+  if (
+    !Number.isInteger(sampleRate) ||
+    sampleRate < MIN_AUDIO_SAMPLE_RATE ||
+    sampleRate > MAX_AUDIO_SAMPLE_RATE
+  ) {
+    throw new RangeError(
+      `${fnName}: sampleRate out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,
+    );
   }
 }
 

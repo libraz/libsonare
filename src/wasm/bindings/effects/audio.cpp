@@ -76,6 +76,16 @@ val js_pitch_shift(val samples, int sample_rate, float semitones) {
   return vectorToFloat32Array(out_vec);
 }
 
+// Pitch-editor bindings (pitch-correct / note stretch / note move).
+//
+// The C ABI gates its pitch-editor entry points behind
+// `#if defined(SONARE_WITH_PITCH_EDITOR)` and returns a NOT_SUPPORTED stub when
+// the feature is compiled out. These WASM bindings deliberately call the
+// editing::pitch_editor core unconditionally: the top-level CMake forces
+// BUILD_PITCH_EDITOR ON for every configuration (it is a hard dependency of the
+// C editing API), so the feature is always linked and the `#else` stub branch is
+// unreachable on this surface — adding the guard here would compile the stub and
+// break the binding rather than mirror the C ABI.
 val js_pitch_correct_to_midi(val samples, int sample_rate, float current_midi, float target_midi) {
   // current_midi is baked into the F0 track below, so the core cannot range-check
   // it (midi_to_hz(200) is a valid-but-huge frequency). Validate it here exactly
@@ -365,7 +375,10 @@ val js_nn_filter(val s, int n_features, int n_frames, std::string aggregate, int
 // slices. Mirrors the C ABI sonare_remix / librosa.effects.remix. @p intervals
 // is a flat Int32Array of (start, end) pairs.
 val js_remix(val samples, val intervals, int sample_rate, bool align_zeros) {
-  std::vector<float> data = float32ArrayToVector(samples);
+  // Validate finite samples, non-empty input, and the sample-rate range up front
+  // so js_remix rejects exactly what the C ABI's run_offline (sonare_remix) does,
+  // rather than copying NaN/Inf through or silently accepting a bad rate.
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   // Sample indices must survive as exact integers: converting through float32
   // would round any boundary above 2^24 (16,777,216) and silently misalign the
   // slice. Read the Int32Array straight into int32 storage instead.
@@ -379,10 +392,7 @@ val js_remix(val samples, val intervals, int sample_rate, bool align_zeros) {
   for (size_t i = 0; i + 1 < interval_ints.size(); i += 2) {
     pairs.emplace_back(static_cast<int>(interval_ints[i]), static_cast<int>(interval_ints[i + 1]));
   }
-  // sample_rate is validated for API symmetry with the C ABI but not consumed
-  // by the time-domain remix itself.
-  (void)sample_rate;
-  std::vector<float> remixed = remix(data.data(), data.size(), pairs, align_zeros);
+  std::vector<float> remixed = remix(audio.data(), audio.size(), pairs, align_zeros);
   return vectorToFloat32Array(remixed);
 }
 
@@ -419,12 +429,13 @@ val js_hpss_with_residual(val samples, int sample_rate, int kernel_harmonic,
 // Mirrors the C ABI sonare_phase_vocoder. rate < 1.0 = slower, > 1.0 = faster.
 val js_phase_vocoder(val samples, int sample_rate, float rate, int n_fft, int hop_length) {
   // Guard the time-scale rate before deriving the output length: a non-finite
-  // or non-positive rate yields an opaque embind exception, and a tiny rate
-  // would request an enormous output buffer. Mirrors the C ABI rate > 0 check
-  // (sonare_phase_vocoder) and adds a sane upper bound.
-  if (!std::isfinite(rate) || rate <= 0.0f || rate > 100.0f) {
+  // rate would request an enormous (Inf) or garbage (NaN) output buffer, and a
+  // non-positive rate is rejected. Mirrors the C ABI rate > 0 check
+  // (sonare_phase_vocoder); the finite guard is a WASM-heap safeguard that never
+  // rejects a valid finite rate, so no upper cap is imposed on fast rates.
+  if (!std::isfinite(rate) || rate <= 0.0f) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "phaseVocoder: rate must be finite and within (0, 100]");
+                                  "phaseVocoder: rate must be a finite positive number");
   }
   Audio audio = loadValidatedAudio(samples, sample_rate);
 

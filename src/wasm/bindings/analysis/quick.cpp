@@ -589,16 +589,15 @@ sonare::acoustic::SourceListener placementFromVal(val opts) {
            floatProperty(opts, "listenerZ", 1.7f)}};
 }
 
-// Acoustic sample-rate bounds, kept in sync with the C ABI's
-// sonare_c_detail::kMinSampleRate / kMaxSampleRate so every binding rejects the
-// same out-of-range rates (the C++ functions are otherwise called directly).
-constexpr int kAcousticMinSampleRate = 8000;
-constexpr int kAcousticMaxSampleRate = 384000;
-
+// Acoustic sample-rate bounds, sourced from the shared core limits
+// (sonare::kMinAudioSampleRate / kMaxAudioSampleRate) so every binding rejects
+// the same out-of-range rates (the C++ functions are otherwise called directly).
 void validateAcousticSampleRate(int sample_rate) {
-  if (sample_rate < kAcousticMinSampleRate || sample_rate > kAcousticMaxSampleRate) {
+  if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "sampleRate out of supported range [8000, 384000]");
+                                  "sampleRate out of supported range [" +
+                                      std::to_string(sonare::kMinAudioSampleRate) + ", " +
+                                      std::to_string(sonare::kMaxAudioSampleRate) + "]");
   }
 }
 

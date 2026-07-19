@@ -7,42 +7,15 @@ import {
   mixStereo,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
-
-const SR = 48000;
-const BLOCK = 128;
-
-function sine(amplitude: number): Float32Array {
-  const out = new Float32Array(BLOCK);
-  for (let i = 0; i < out.length; i++) {
-    out[i] = amplitude * Math.sin((2 * Math.PI * 1000 * i) / SR);
-  }
-  return out;
-}
-
-function rms(samples: Float32Array): number {
-  let sum = 0;
-  for (const sample of samples) {
-    sum += sample * sample;
-  }
-  return Math.sqrt(sum / samples.length);
-}
-
-function configureDynamicEq(eq: ReturnType<ReturnType<typeof getSonareModule>['createEqualizer']>) {
-  eq.setBand(0, {
-    type: 'Peak',
-    frequencyHz: 1000,
-    gainDb: 0,
-    q: 2,
-    enabled: true,
-    dynamic: true,
-    externalSidechain: true,
-    thresholdDb: -32,
-    ratio: 4,
-    rangeDb: -12,
-    attackMs: 0,
-    releaseMs: 20,
-  });
-}
+import {
+  BLOCK,
+  configureDynamicEq,
+  INVALID_DRAIN_COUNTS,
+  INVERSE_OVERFLOW_SHAPES,
+  rms,
+  SR,
+  sine,
+} from './_boundary_fixtures.mjs';
 
 describe('audit boundary regressions (WASM)', () => {
   beforeAll(async () => {
@@ -52,11 +25,7 @@ describe('audit boundary regressions (WASM)', () => {
   it('rejects inverse matrix overflow shapes before copying or entering the core', () => {
     const module = getSonareModule();
     const tiny = new Float32Array(1);
-    for (const [rows, frames] of [
-      [65536, 65536],
-      [65537, 65537],
-      [2147483647, 2],
-    ]) {
+    for (const [rows, frames] of INVERSE_OVERFLOW_SHAPES) {
       expect(() => module.melToStft(tiny, rows, frames, SR, 1024, 0, 0, false)).toThrow(
         /matrix shape exceeds WASM budget/,
       );
@@ -158,15 +127,7 @@ describe('audit boundary regressions (WASM)', () => {
   it('validates drainTailStereo before allocation at both facade and raw boundaries', () => {
     const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
     try {
-      for (const invalid of [
-        0,
-        BLOCK + 1,
-        -1,
-        0.5,
-        Number.NaN,
-        Number.POSITIVE_INFINITY,
-        2 ** 32 + 1,
-      ]) {
+      for (const invalid of INVALID_DRAIN_COUNTS) {
         expect(() => mixer.drainTailStereo(invalid)).toThrow();
       }
       expect(mixer.drainTailStereo(BLOCK - 1).left.length).toBe(BLOCK - 1);
@@ -181,15 +142,7 @@ describe('audit boundary regressions (WASM)', () => {
       BLOCK,
     );
     try {
-      for (const invalid of [
-        0,
-        BLOCK + 1,
-        -1,
-        0.5,
-        Number.NaN,
-        Number.POSITIVE_INFINITY,
-        2 ** 32 + 1,
-      ]) {
+      for (const invalid of INVALID_DRAIN_COUNTS) {
         expect(() => raw.drainTailStereo(invalid)).toThrow();
       }
       expect(raw.drainTailStereo(BLOCK - 1).left.length).toBe(BLOCK - 1);

@@ -297,6 +297,18 @@ def test_tail_samples_and_drain_tail_stereo(mixer) -> None:
     assert result.sample_rate == 48000
 
 
+def test_drain_tail_stereo_enforces_block_count_range(mixer) -> None:
+    # The accepted range is an integer in [1, block_size], shared with the Node
+    # and WASM facades: 0 and out-of-range counts are rejected, and a fractional
+    # float is refused rather than truncated toward zero.
+    with pytest.raises(ValueError):
+        mixer.drain_tail_stereo(0)
+    with pytest.raises(ValueError):
+        mixer.drain_tail_stereo(2.5)
+    with pytest.raises(ValueError):
+        mixer.drain_tail_stereo(1_000_000)
+
+
 def test_tail_samples_reports_longest_serial_send_route() -> None:
     from libsonare import Mixer
 

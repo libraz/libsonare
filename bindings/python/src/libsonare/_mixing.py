@@ -681,18 +681,19 @@ class Mixer:
         """Drain ``num_samples`` of trailing effect-tail audio with no new input.
 
         Pushes silence through the compiled graph so the stereo master keeps
-        emitting the decaying reverb / delay tails. ``num_samples`` must be
-        ``> 0`` and not exceed the mixer's block size. Returns a
-        :class:`MixerStereoResult` matching :meth:`process_stereo`.
+        emitting the decaying reverb / delay tails. ``num_samples`` must be an
+        integer in ``[1, block_size]`` (the same range the Node and WASM facades
+        enforce). Returns a :class:`MixerStereoResult` matching
+        :meth:`process_stereo`.
         """
         self._require()
+        # Unify the accepted range with the Node and WASM facades: an integer in
+        # [1, block_size]. Reject non-integer floats rather than truncating them.
+        if isinstance(num_samples, float) and not num_samples.is_integer():
+            raise ValueError(f"num_samples must be an integer in [1, {self._block_size}]")
         count = int(num_samples)
-        if count <= 0:
-            raise ValueError("num_samples must be > 0")
-        if count > self._block_size:
-            raise ValueError(
-                f"num_samples ({count}) must not exceed the mixer block size ({self._block_size})"
-            )
+        if count < 1 or count > self._block_size:
+            raise ValueError(f"num_samples must be an integer in [1, {self._block_size}]")
         out_left = (ctypes.c_float * count)()
         out_right = (ctypes.c_float * count)()
         _check(

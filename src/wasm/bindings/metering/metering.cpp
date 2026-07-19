@@ -139,7 +139,7 @@ namespace {
 
 void ensureStereoPair(const val& left, const val& right, int sample_rate, const char* fn_label,
                       std::vector<float>* out_left, std::vector<float>* out_right) {
-  if (sample_rate < 8000 || sample_rate > 384000) {
+  if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   std::string(fn_label) + ": sampleRate is out of range");
   }

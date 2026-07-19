@@ -2,6 +2,25 @@ import { getSonareModule } from './module_state';
 import type { ValidateOptions } from './validation';
 import { assertSamples } from './validation';
 
+/**
+ * Validates a true-peak oversample factor: `0` (meaning "use the default 4") or
+ * a power of two in `[1, 16]`. The native layer applies the same `0 -> 4`
+ * normalization (see `metering::true_peak_db`), so the raw factor can be passed
+ * through unchanged after this check. Kept module-local (not exported) so it does
+ * not surface as a WASM-only symbol with no C-API counterpart.
+ */
+function assertOversampleFactor(fnName: string, factor: number): void {
+  const normalized = factor === 0 ? 4 : factor;
+  if (
+    !Number.isInteger(normalized) ||
+    normalized < 1 ||
+    normalized > 16 ||
+    (normalized & (normalized - 1)) !== 0
+  ) {
+    throw new RangeError(`${fnName}: oversampleFactor must be 0 or a power of two from 1 to 16`);
+  }
+}
+
 // ============================================================================
 // Metering — basic / true-peak / clipping / dynamic range
 // ============================================================================
@@ -164,16 +183,7 @@ export function meteringTruePeakDb(
       : samples;
   assertSamples('meteringTruePeakDb', request.samples, request.validate !== false);
   const factor = request.oversampleFactor ?? 4;
-  const normalizedFactor = factor === 0 ? 4 : factor;
-  if (
-    normalizedFactor < 1 ||
-    normalizedFactor > 16 ||
-    (normalizedFactor & (normalizedFactor - 1)) !== 0
-  ) {
-    throw new RangeError(
-      'meteringTruePeakDb: oversampleFactor must be 0 or a power of two from 1 to 16',
-    );
-  }
+  assertOversampleFactor('meteringTruePeakDb', factor);
   return requireModule().meteringTruePeakDb(request.samples, request.sampleRate ?? 22050, factor);
 }
 

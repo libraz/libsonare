@@ -16,9 +16,10 @@ void validate_positive(const char* fn_name, int value, const char* arg_name) {
 }
 
 void validate_sample_rate(const char* fn_name, int sample_rate) {
-  if (sample_rate < 8000 || sample_rate > 384000) {
-    throw std::invalid_argument(std::string(fn_name) +
-                                ": sample_rate out of supported range [8000, 384000]");
+  if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
+    throw std::invalid_argument(std::string(fn_name) + ": sample_rate out of supported range [" +
+                                std::to_string(sonare::kMinAudioSampleRate) + ", " +
+                                std::to_string(sonare::kMaxAudioSampleRate) + "]");
   }
 }
 

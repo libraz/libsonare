@@ -1,5 +1,6 @@
 #include "sonare_wrap_mixer.h"
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -229,17 +230,19 @@ Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Expected (numSamples: number)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const int64_t requested = info[0].As<Napi::Number>().Int64Value();
-  if (requested < 0) {
-    Napi::TypeError::New(env, "numSamples must be non-negative").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  const size_t num_samples = static_cast<size_t>(requested);
-  if (num_samples > static_cast<size_t>(block_size_)) {
-    Napi::TypeError::New(env, "numSamples exceeds the mixer's configured block size")
+  // Unify the accepted range with the WASM and Python facades: numSamples must be
+  // an integer in [1, blockSize]. Rejecting 0 and non-integers here (rather than
+  // truncating a float or draining a zero-length block) keeps drainTailStereo's
+  // contract identical across every surface.
+  const double requested = info[0].As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(requested) || std::floor(requested) != requested || requested < 1.0 ||
+      requested > static_cast<double>(block_size_)) {
+    Napi::RangeError::New(
+        env, "numSamples must be an integer in [1, " + std::to_string(block_size_) + "]")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  const size_t num_samples = static_cast<size_t>(requested);
 
   Napi::Float32Array left_out = Napi::Float32Array::New(env, num_samples);
   Napi::Float32Array right_out = Napi::Float32Array::New(env, num_samples);

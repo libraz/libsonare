@@ -45,10 +45,16 @@ function browserHarness() {
 <meta charset="utf-8">
 <script type="module">
 import createSonare from '/dist/sonare.js';
-
-const SR = 48000;
-const BLOCK = 128;
-const WASM_FLOAT_BUDGET = 64 * 1024 * 1024;
+import {
+  BLOCK,
+  configureDynamicEq,
+  INVALID_DRAIN_COUNTS,
+  INVERSE_OVERFLOW_SHAPES,
+  rms,
+  sine,
+  SR,
+  WASM_FLOAT_BUDGET,
+} from '/fixtures.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -61,37 +67,6 @@ function expectThrow(fn, label) {
     return;
   }
   throw new Error(label + ' did not throw');
-}
-
-function sine(amplitude) {
-  const out = new Float32Array(BLOCK);
-  for (let i = 0; i < out.length; i++) {
-    out[i] = amplitude * Math.sin((2 * Math.PI * 1000 * i) / SR);
-  }
-  return out;
-}
-
-function rms(samples) {
-  let sum = 0;
-  for (const sample of samples) sum += sample * sample;
-  return Math.sqrt(sum / samples.length);
-}
-
-function configureDynamicEq(eq) {
-  eq.setBand(0, {
-    type: 'Peak',
-    frequencyHz: 1000,
-    gainDb: 0,
-    q: 2,
-    enabled: true,
-    dynamic: true,
-    externalSidechain: true,
-    thresholdDb: -32,
-    ratio: 4,
-    rangeDb: -12,
-    attackMs: 0,
-    releaseMs: 20,
-  });
 }
 
 window.runAuditBoundarySmoke = async () => {
@@ -110,10 +85,12 @@ window.runAuditBoundarySmoke = async () => {
   };
 
   checked('inverse overflow rejected and recovered', () => {
-    expectThrow(
-      () => module.melToStft(new Float32Array(1), 65537, 65537, SR, 1024, 0, 0, false),
-      'overflowing inverse shape',
-    );
+    for (const [rows, frames] of INVERSE_OVERFLOW_SHAPES) {
+      expectThrow(
+        () => module.melToStft(new Float32Array(1), rows, frames, SR, 1024, 0, 0, false),
+        'overflowing inverse shape ' + rows + 'x' + frames,
+      );
+    }
     const valid = module.melToStft(new Float32Array([1]), 1, 1, SR, 2, 0, 0, false);
     assert(valid.nFrames === 1 && valid.power.length > 0, 'inverse module recovery failed');
   });
@@ -177,7 +154,7 @@ window.runAuditBoundarySmoke = async () => {
     const scene = module.mixingScenePresetJson('vocalReverbSend');
     const mixer = module.createMixerFromSceneJson(scene, SR, BLOCK);
     try {
-      for (const invalid of [0, BLOCK + 1, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 32 + 1]) {
+      for (const invalid of INVALID_DRAIN_COUNTS) {
         expectThrow(() => mixer.drainTailStereo(invalid), 'invalid drain frame count ' + invalid);
       }
       assert(mixer.drainTailStereo(BLOCK - 1).left.length === BLOCK - 1, 'short drain recovery failed');
@@ -207,6 +184,12 @@ function startServer() {
       if (url.pathname === '/audit.html') {
         res.writeHead(200, headers('text/html'));
         res.end(browserHarness());
+        return;
+      }
+      if (url.pathname === '/fixtures.mjs') {
+        const fixtures = await readFile(path.join(root, 'tests', '_boundary_fixtures.mjs'));
+        res.writeHead(200, headers('text/javascript'));
+        res.end(fixtures);
         return;
       }
       if (url.pathname.startsWith('/dist/')) {

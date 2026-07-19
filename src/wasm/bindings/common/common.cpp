@@ -160,13 +160,43 @@ std::vector<float> loadValidatedInterleaved(val samples, int channels, int sampl
   return data;
 }
 
+// Shared safe-integer + budget guard for the non-Float32 typed-array inputs
+// (Int32Array sample indices, Uint8Array byte blobs). Mirrors the bounds
+// wasmFloat32ArrayLength enforces so a huge, non-finite, or fractional
+// `.length`/`.byteLength` is rejected before any allocation, rather than
+// triggering an unbounded (or wrapped-around) std::vector resize.
+static std::size_t validatedTypedArrayCount(const val& arr, const char* length_key,
+                                            const char* subject) {
+  if (arr.isNull() || arr.isUndefined()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " must be an array-like object");
+  }
+  const val length_value = arr[length_key];
+  if (length_value.isUndefined() || length_value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " length must be a number");
+  }
+  const double length = length_value.as<double>();
+  constexpr double kMaxSafeInteger = 9007199254740991.0;
+  if (!std::isfinite(length) || length < 0.0 || std::floor(length) != length ||
+      length > kMaxSafeInteger) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " length must be a non-negative safe integer");
+  }
+  if (length > static_cast<double>(kMaxWasmFloat32Elements)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " exceeds the WASM input element budget");
+  }
+  return static_cast<std::size_t>(length);
+}
+
 // Int32 sibling of float32ArrayToVector. Used where a JS Int32Array carries
 // integer sample indices (e.g. remix interval boundaries) that must not be
 // round-tripped through float32 — values above 2^24 lose precision as float.
 // The typed_memory_view<int32_t> wraps the destination vector's storage so the
 // single boundary crossing (view.set(arr)) copies the raw 32-bit integers.
 std::vector<int32_t> int32ArrayToVector(val arr) {
-  const size_t n = arr["length"].as<size_t>();
+  const size_t n = validatedTypedArrayCount(arr, "length", "Int32Array");
   std::vector<int32_t> result(n);
   if (n == 0) return result;
   val view = val(typed_memory_view(n, result.data()));
@@ -175,7 +205,7 @@ std::vector<int32_t> int32ArrayToVector(val arr) {
 }
 
 std::vector<uint8_t> uint8ArrayToVector(val arr) {
-  const size_t n = arr["byteLength"].as<size_t>();
+  const size_t n = validatedTypedArrayCount(arr, "byteLength", "Uint8Array");
   std::vector<uint8_t> result(n);
   if (n == 0) return result;
   val view = val(typed_memory_view(n, result.data()));
