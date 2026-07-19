@@ -135,29 +135,9 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
   // "default" so that 0.0 is a real request for the 0th percentile (the true
   // minimum-RMS window); 0.0 previously meant "default" and made the 0th
   // percentile unreachable.
-  if (!std::isfinite(window_sec) || !std::isfinite(hop_sec) || !std::isfinite(low_percentile) ||
-      !std::isfinite(high_percentile) || window_sec < 0.0f || hop_sec < 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  metering::DynamicRangeConfig cfg;
-  if (window_sec > 0.0f) cfg.window_sec = window_sec;
-  if (hop_sec > 0.0f) cfg.hop_sec = hop_sec;
-  // A negative value (e.g. -1) selects the library default; 0.0 .. 1.0 are taken
-  // verbatim. Values > 1.0 are out of range. The core additionally validates the
-  // [0,1] range, but we range-check here so the sentinel decode stays explicit.
-  if (low_percentile >= 0.0f) {
-    if (low_percentile > 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
-    cfg.low_percentile = low_percentile;
-  }
-  if (high_percentile >= 0.0f) {
-    if (high_percentile > 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
-    cfg.high_percentile = high_percentile;
-  }
-  // The core accepts low == high (a valid 0-LU range), so only reject a strictly
-  // inverted pair (low > high) here instead of the previous low >= high guard.
-  if (cfg.low_percentile > cfg.high_percentile) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  SONARE_C_TRY
+  const metering::DynamicRangeConfig cfg = metering::dynamic_range_config_from_public(
+      window_sec, hop_sec, low_percentile, high_percentile);
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     metering::DynamicRangeResult result = metering::dynamic_range(audio, cfg);
     out->dynamic_range_db = result.dynamic_range_db;
@@ -167,6 +147,7 @@ SonareError sonare_metering_dynamic_range(const float* samples, size_t length, i
     out->window_rms_db = copy_vector(result.window_rms_db);
     return SONARE_OK;
   });
+  SONARE_C_CATCH
 }
 
 void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result) {

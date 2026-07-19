@@ -87,6 +87,35 @@ describe('geometric room acoustics', () => {
     expect(() => synthesizeRir({ absorption: 1, maxSeconds: 0.1 })).not.toThrow();
   });
 
+  it('rejects invalid estimation priors and room-morph configuration', () => {
+    const samples = new Float32Array(2000);
+    samples[0] = 1;
+    expect(() => estimateRoom(samples, 48000, { referenceAbsorption: Number.NaN })).toThrow();
+    expect(() =>
+      estimateRoom(samples, 48000, { aspectHintLw: Number.POSITIVE_INFINITY }),
+    ).toThrow();
+    expect(() => roomMorph(samples, 48000, { lengthM: -1, widthM: 4, heightM: 3 })).toThrow();
+    expect(() =>
+      roomMorph(samples, 48000, {
+        lengthM: 5,
+        widthM: 4,
+        heightM: 3,
+        sourceX: 99,
+      }),
+    ).toThrow();
+    expect(() =>
+      roomMorph(samples, 48000, { lengthM: 5, widthM: 4, heightM: 3, wet: Number.NaN }),
+    ).toThrow();
+    expect(() =>
+      roomMorph(samples, 48000, {
+        lengthM: 5,
+        widthM: 4,
+        heightM: 3,
+        maxSeconds: Number.POSITIVE_INFINITY,
+      }),
+    ).toThrow();
+  });
+
   it('rejects a negative third-octave subband count like the C ABI', () => {
     const samples = new Float32Array(2000);
     samples[0] = 1.0;

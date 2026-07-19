@@ -17,6 +17,7 @@
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/gate.h"
@@ -917,20 +918,8 @@ Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 3 && info[2].IsObject())
     params = ParamsFromObject(info[2].As<Napi::Object>());
-  sonare::mastering::assistant::AssistantConfig config;
-  for (const auto& param : params) {
-    if (param.key == "targetLufs" || param.key == "target_lufs") {
-      config.target_lufs = static_cast<float>(param.value);
-    } else if (param.key == "ceilingDb" || param.key == "ceiling_db") {
-      config.ceiling_db = static_cast<float>(param.value);
-    } else if (param.key == "enableRepair" || param.key == "enable_repair") {
-      config.enable_repair = param.value != 0.0;
-    } else if (param.key == "preferStreamingSafe" || param.key == "prefer_streaming_safe") {
-      config.prefer_streaming_safe = param.value != 0.0;
-    } else if (param.key == "speechMonoAmount" || param.key == "speech_mono_amount") {
-      config.speech_mono_amount = static_cast<float>(param.value);
-    }
-  }
+  const sonare::mastering::assistant::AssistantConfig config =
+      sonare::mastering::assistant::assistant_config_from_params(params.data(), params.size());
   const auto result = sonare::mastering::assistant::suggest_chain(
       samples.Data(), samples.ElementLength(), info[1].As<Napi::Number>().Int32Value(), config);
   return Napi::String::New(env, sonare::mastering::assistant::assistant_result_to_json(result));
@@ -952,16 +941,8 @@ Napi::Value SonareWrap::MasteringAudioProfile(const Napi::CallbackInfo& info) {
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 3 && info[2].IsObject())
     params = ParamsFromObject(info[2].As<Napi::Object>());
-  sonare::mastering::assistant::AudioProfileConfig config;
-  for (const auto& param : params) {
-    if (param.key == "nFft" || param.key == "n_fft") {
-      config.n_fft = static_cast<int>(param.value);
-    } else if (param.key == "hopLength" || param.key == "hop_length") {
-      config.hop_length = static_cast<int>(param.value);
-    } else if (param.key == "truePeakOversample" || param.key == "true_peak_oversample") {
-      config.true_peak_oversample = static_cast<int>(param.value);
-    }
-  }
+  const sonare::mastering::assistant::AudioProfileConfig config =
+      sonare::mastering::assistant::audio_profile_config_from_params(params.data(), params.size());
   const auto profile = sonare::mastering::assistant::analyze_audio_profile(
       samples.Data(), samples.ElementLength(), info[1].As<Napi::Number>().Int32Value(), config);
   return Napi::String::New(env, sonare::mastering::assistant::audio_profile_to_json(profile));

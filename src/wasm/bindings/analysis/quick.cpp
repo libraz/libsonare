@@ -685,11 +685,11 @@ val js_estimate_room(val samples, int sample_rate, val opts) {
       floatProperty(opts, "referenceAbsorption", config.reference_absorption);
   config.prefer_eyring = boolProperty(opts, "preferEyring", true);
   const int n_bands = intProperty(opts, "nOctaveBands", 0);
-  if (n_bands > 0) config.acoustic.n_octave_bands = n_bands;
+  if (n_bands != 0) config.acoustic.n_octave_bands = n_bands;
   const float min_decay_db = floatProperty(opts, "minDecayDb", 0.0f);
-  if (min_decay_db > 0.0f) config.acoustic.min_decay_db = min_decay_db;
+  if (min_decay_db != 0.0f) config.acoustic.min_decay_db = min_decay_db;
   const float noise_floor_margin_db = floatProperty(opts, "noiseFloorMarginDb", 0.0f);
-  if (noise_floor_margin_db > 0.0f) config.acoustic.noise_floor_margin_db = noise_floor_margin_db;
+  if (noise_floor_margin_db != 0.0f) config.acoustic.noise_floor_margin_db = noise_floor_margin_db;
   switch (intProperty(opts, "mode", 0)) {
     case 1:
       config.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
@@ -733,7 +733,7 @@ val js_room_morph(val samples, int sample_rate, val opts) {
   config.source_tail_suppression =
       floatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
   config.wet = floatProperty(opts, "wet", config.wet);
-  config.ism_order = std::max(0, intProperty(opts, "ismOrder", config.ism_order));
+  config.ism_order = intProperty(opts, "ismOrder", config.ism_order);
   // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
   // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
   // surface instead of seeding the PRNG with 0.
@@ -745,7 +745,7 @@ val js_room_morph(val samples, int sample_rate, val opts) {
                           : sonare::acoustic::ReverbModel::Sabine;
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
   const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
-  if (crossfade_ms > 0.0f) config.crossfade_ms = crossfade_ms;
+  if (crossfade_ms != 0.0f) config.crossfade_ms = crossfade_ms;
 
   const Audio result = sonare::effects::acoustic::room_morph(audio, config);
   std::vector<float> out;

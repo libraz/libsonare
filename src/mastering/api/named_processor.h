@@ -14,6 +14,11 @@ struct Param {
   double value = 0.0;
 };
 
+/// Validates a public flat parameter list before any DSP/config state is
+/// constructed. Values must be finite and safely representable by float-backed
+/// processor fields.
+void validate_params(const Param* params, std::size_t count);
+
 // Per-processor results share the same shape as the shared audio-result base
 // types. They are exposed as aliases so callers (binding layers, tests) can
 // keep using `MonoResult` / `StereoResult` while the field definitions live

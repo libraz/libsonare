@@ -37,7 +37,7 @@ float percentile_sorted(const std::vector<float>& sorted, float percentile) {
 
 }  // namespace
 
-DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& config) {
+void validate_dynamic_range_config(const DynamicRangeConfig& config) {
   SONARE_CHECK(numeric::finite_positive(config.window_sec), ErrorCode::InvalidParameter);
   SONARE_CHECK(numeric::finite_positive(config.hop_sec), ErrorCode::InvalidParameter);
   SONARE_CHECK(numeric::finite_in_closed_range(config.low_percentile, 0.0f, 1.0f),
@@ -46,6 +46,26 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
                ErrorCode::InvalidParameter);
   SONARE_CHECK(config.low_percentile <= config.high_percentile, ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.floor_db), ErrorCode::InvalidParameter);
+}
+
+DynamicRangeConfig dynamic_range_config_from_public(float window_sec, float hop_sec,
+                                                    float low_percentile, float high_percentile) {
+  SONARE_CHECK(numeric::finite_non_negative(window_sec), ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_non_negative(hop_sec), ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite(low_percentile), ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite(high_percentile), ErrorCode::InvalidParameter);
+
+  DynamicRangeConfig config;
+  if (window_sec > 0.0f) config.window_sec = window_sec;
+  if (hop_sec > 0.0f) config.hop_sec = hop_sec;
+  if (low_percentile >= 0.0f) config.low_percentile = low_percentile;
+  if (high_percentile >= 0.0f) config.high_percentile = high_percentile;
+  validate_dynamic_range_config(config);
+  return config;
+}
+
+DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& config) {
+  validate_dynamic_range_config(config);
 
   DynamicRangeResult result;
   if (audio.empty()) return result;

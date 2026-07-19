@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "acoustic/late_reverb.h"
@@ -11,6 +12,7 @@
 #include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
 #include "core/audio.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinRel;
 using namespace sonare;
@@ -200,6 +202,22 @@ TEST_CASE("estimate_room reports zero confidence for silence", "[acoustic][room_
   const RoomEstimate est = estimate_room(audio);
   REQUIRE(est.confidence == 0.0f);
   REQUIRE(est.volume == 0.0f);
+}
+
+TEST_CASE("estimate_room rejects invalid priors before analysis",
+          "[acoustic][room_estimator][numeric]") {
+  const Audio audio = Audio::from_vector(std::vector<float>(1024, 0.0f), 48000);
+
+  RoomEstimateConfig absorption;
+  absorption.reference_absorption = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_THROWS_AS(estimate_room(audio, absorption), SonareException);
+
+  RoomEstimateConfig aspect;
+  aspect.aspect_hint_lw = std::numeric_limits<float>::infinity();
+  REQUIRE_THROWS_AS(estimate_room(audio, aspect), SonareException);
+
+  aspect.aspect_hint_lw = -1.0f;
+  REQUIRE_THROWS_AS(estimate_room(audio, aspect), SonareException);
 }
 
 TEST_CASE("estimate_room volume follows the absorption-prior scaling law",

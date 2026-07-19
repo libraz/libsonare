@@ -18,6 +18,7 @@ namespace sonare::mastering::assistant {
 
 /// @brief Build an AssistantConfig from a flat param list.
 inline AssistantConfig assistant_config_from_params(const api::Param* params, std::size_t count) {
+  api::validate_params(params, count);
   AssistantConfig config;
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;
@@ -40,6 +41,7 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
 /// @brief Build an AudioProfileConfig from a flat param list.
 inline AudioProfileConfig audio_profile_config_from_params(const api::Param* params,
                                                            std::size_t count) {
+  api::validate_params(params, count);
   AudioProfileConfig config;
   for (std::size_t index = 0; index < count; ++index) {
     const std::string& key = params[index].key;

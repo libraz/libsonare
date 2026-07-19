@@ -6,6 +6,8 @@
 
 #include "acoustic/late_reverb.h"
 #include "util/db.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 namespace {
@@ -55,7 +57,20 @@ float estimate_drr_db(const Audio& x) {
 
 }  // namespace
 
+void validate_room_estimate_config(const RoomEstimateConfig& config) {
+  SONARE_CHECK_MSG(numeric::finite_positive(config.aspect_hint_lw) &&
+                       numeric::finite_positive(config.aspect_hint_lh),
+                   ErrorCode::InvalidParameter, "room aspect priors must be finite and positive");
+  SONARE_CHECK_MSG(numeric::finite(config.reference_absorption), ErrorCode::InvalidParameter,
+                   "room absorption prior must be finite");
+  SONARE_CHECK_MSG(config.acoustic.n_octave_bands >= 0 &&
+                       numeric::finite_positive(config.acoustic.min_decay_db) &&
+                       numeric::finite_non_negative(config.acoustic.noise_floor_margin_db),
+                   ErrorCode::InvalidParameter, "room acoustic analysis settings are invalid");
+}
+
 RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& config) {
+  validate_room_estimate_config(config);
   RoomEstimate est;
 
   const AcousticParameters ap = detect_acoustic(recording, config.acoustic);

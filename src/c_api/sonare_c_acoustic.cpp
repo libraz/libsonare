@@ -201,13 +201,13 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     sonare::RoomEstimateConfig cfg;
-    cfg.aspect_hint_lw = config->aspect_hint_lw > 0.0f ? config->aspect_hint_lw : 1.0f;
-    cfg.aspect_hint_lh = config->aspect_hint_lh > 0.0f ? config->aspect_hint_lh : 1.0f;
+    cfg.aspect_hint_lw = config->aspect_hint_lw == 0.0f ? 1.0f : config->aspect_hint_lw;
+    cfg.aspect_hint_lh = config->aspect_hint_lh == 0.0f ? 1.0f : config->aspect_hint_lh;
     cfg.reference_absorption = config->reference_absorption;
     cfg.prefer_eyring = config->prefer_eyring != 0;
-    if (config->n_octave_bands > 0) cfg.acoustic.n_octave_bands = config->n_octave_bands;
-    if (config->min_decay_db > 0.0f) cfg.acoustic.min_decay_db = config->min_decay_db;
-    if (config->noise_floor_margin_db > 0.0f) {
+    if (config->n_octave_bands != 0) cfg.acoustic.n_octave_bands = config->n_octave_bands;
+    if (config->min_decay_db != 0.0f) cfg.acoustic.min_decay_db = config->min_decay_db;
+    if (config->noise_floor_margin_db != 0.0f) {
       cfg.acoustic.noise_floor_margin_db = config->noise_floor_margin_db;
     }
     switch (config->mode) {
@@ -258,6 +258,23 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  const auto unit = [](float value) {
+    return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
+  };
+  constexpr size_t kMaxMaterialBands = 64;
+  if (!unit(config->absorption) || !unit(config->source_tail_suppression) || !unit(config->wet) ||
+      config->absorption_band_count > kMaxMaterialBands ||
+      config->scattering_band_count > kMaxMaterialBands ||
+      (config->absorption_band_count > 0 && config->absorption_bands == nullptr) ||
+      (config->scattering_band_count > 0 && config->scattering_bands == nullptr)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  for (size_t i = 0; i < config->absorption_band_count; ++i) {
+    if (!unit(config->absorption_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  for (size_t i = 0; i < config->scattering_band_count; ++i) {
+    if (!unit(config->scattering_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
   return run_mono_offline(
       samples, length, sample_rate, out, out_length, [&](const Audio& audio) -> Audio {
         sonare::effects::acoustic::RoomMorphConfig cfg;
@@ -269,7 +286,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
                          {config->listener_x, config->listener_y, config->listener_z}};
         cfg.source_tail_suppression = config->source_tail_suppression;
         cfg.wet = config->wet;
-        cfg.ism_order = config->ism_order < 0 ? 0 : config->ism_order;
+        cfg.ism_order = config->ism_order;
         // seed == 0 keeps the library default (1); see synthesize_rir above.
         if (config->seed != 0) cfg.seed = config->seed;
         cfg.max_seconds = config->max_seconds;
@@ -277,7 +294,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
         cfg.mixing_time_ms = config->mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
         // crossfade_ms == 0 preserves the C++ default (a true zero crossfade is
         // not a useful setting), matching the RIR-synth ABI convention.
-        if (config->crossfade_ms > 0.0f) cfg.crossfade_ms = config->crossfade_ms;
+        if (config->crossfade_ms != 0.0f) cfg.crossfade_ms = config->crossfade_ms;
         return sonare::effects::acoustic::room_morph(audio, cfg);
       });
 #else

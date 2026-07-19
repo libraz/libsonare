@@ -111,6 +111,10 @@ def test_named_mastering_processors() -> None:
 
     with pytest.raises(libsonare.SonareError):
         libsonare.mastering_process("stereo.imager", samples, sample_rate=sr, params={"width": 1.1})
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering_process(
+            "dynamics.compressor", samples, sample_rate=sr, params={"ratio": float("nan")}
+        )
 
 
 def test_mastering_processor_catalog_reports_kind_and_flags() -> None:

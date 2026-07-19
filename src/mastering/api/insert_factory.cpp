@@ -567,7 +567,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.source_tail_suppression =
         f(params, "sourceTailSuppression", config.source_tail_suppression);
     config.wet = f(params, "dryWet", config.wet);
-    config.ism_order = std::max(0, detail::i(params, "ismOrder", config.ism_order));
+    config.ism_order = detail::i(params, "ismOrder", config.ism_order);
     config.seed = static_cast<unsigned>(
         std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
     config.max_seconds = f(params, "maxSeconds", config.max_seconds);

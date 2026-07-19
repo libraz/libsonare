@@ -647,6 +647,7 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
 // ---------------------------------------------------------------------------
 
 MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t count) {
+  validate_params(params, count);
   MasteringChainConfig cfg;
   StageFlagsSet flags;
 
@@ -687,6 +688,7 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
 
 void apply_chain_config_overrides(MasteringChainConfig& cfg, const Param* params,
                                   std::size_t count) {
+  validate_params(params, count);
   StageFlagsSet flags;
 
   for (std::size_t i = 0; i < count; ++i) {

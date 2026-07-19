@@ -63,6 +63,10 @@ struct RoomEstimateConfig {
   bool prefer_eyring = true;
 };
 
+/// Validates room-shape/absorption priors and delegated acoustic analysis
+/// settings before analysis starts.
+void validate_room_estimate_config(const RoomEstimateConfig& config);
+
 /// @brief Estimate the equivalent room from a recording.
 ///
 /// Runs the acoustic analyzer, inverts Sabine/Eyring under the configured

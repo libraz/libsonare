@@ -272,11 +272,11 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
       node_float_option(opts, "referenceAbsorption", cfg.reference_absorption);
   cfg.prefer_eyring = node_bool_option(opts, "preferEyring", true);
   const int n_bands = node_int_option(opts, "nOctaveBands", 0);
-  if (n_bands > 0) cfg.acoustic.n_octave_bands = n_bands;
+  if (n_bands != 0) cfg.acoustic.n_octave_bands = n_bands;
   const float min_decay_db = node_float_option(opts, "minDecayDb", 0.0f);
-  if (min_decay_db > 0.0f) cfg.acoustic.min_decay_db = min_decay_db;
+  if (min_decay_db != 0.0f) cfg.acoustic.min_decay_db = min_decay_db;
   const float noise_floor_margin_db = node_float_option(opts, "noiseFloorMarginDb", 0.0f);
-  if (noise_floor_margin_db > 0.0f) cfg.acoustic.noise_floor_margin_db = noise_floor_margin_db;
+  if (noise_floor_margin_db != 0.0f) cfg.acoustic.noise_floor_margin_db = noise_floor_margin_db;
   switch (node_int_option(opts, "mode", 0)) {
     case 1:
       cfg.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
@@ -331,7 +331,7 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   cfg.source_tail_suppression =
       node_float_option(opts, "sourceTailSuppression", cfg.source_tail_suppression);
   cfg.wet = node_float_option(opts, "wet", cfg.wet);
-  cfg.ism_order = std::max(0, node_int_option(opts, "ismOrder", cfg.ism_order));
+  cfg.ism_order = node_int_option(opts, "ismOrder", cfg.ism_order);
   // seed <= 0 keeps the RirSynthConfig default (1), matching the C ABI's
   // "seed == 0 keeps the library default" so seed:0 yields the same RIR on every
   // surface instead of seeding the PRNG with 0.
@@ -345,7 +345,7 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   // crossfadeMs == 0 keeps the RoomMorphConfig default (5 ms), matching the C ABI's
   // "crossfade_ms == 0 means keep the library default"; a literal zero crossfade
   // shifts the splice by ~1 sample and clicks, so only a positive override applies.
-  if (const float crossfade_ms = node_float_option(opts, "crossfadeMs", 0.0f); crossfade_ms > 0.0f)
+  if (const float crossfade_ms = node_float_option(opts, "crossfadeMs", 0.0f); crossfade_ms != 0.0f)
     cfg.crossfade_ms = crossfade_ms;
 
   const sonare::Audio result = sonare::effects::acoustic::room_morph(audio, cfg);

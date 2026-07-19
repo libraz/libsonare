@@ -373,6 +373,47 @@ TEST_CASE("sonare acoustic C API estimates a room from a synthesized RIR", "[c_a
   sonare_free_rir_synth_result(&rir);
 }
 
+TEST_CASE("sonare acoustic C API rejects invalid estimate priors and morph geometry",
+          "[c_api][acoustic][numeric]") {
+  std::vector<float> input(2000, 0.0f);
+  input[0] = 1.0f;
+
+  SonareRoomEstimateConfig estimate_cfg = valid_estimate_config();
+  estimate_cfg.reference_absorption = std::numeric_limits<float>::quiet_NaN();
+  SonareRoomEstimate estimate{};
+  REQUIRE(sonare_estimate_room(input.data(), input.size(), 48000, &estimate_cfg, &estimate) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(estimate.absorption_bands == nullptr);
+  REQUIRE(estimate.rt60_bands == nullptr);
+
+  SonareRoomMorphConfig morph{};
+  morph.length_m = 5.0f;
+  morph.width_m = 4.0f;
+  morph.height_m = 3.0f;
+  morph.source_x = 99.0f;
+  morph.source_y = 1.0f;
+  morph.source_z = 1.0f;
+  morph.listener_x = 3.0f;
+  morph.listener_y = 2.0f;
+  morph.listener_z = 1.0f;
+  morph.absorption = 0.2f;
+  morph.source_tail_suppression = 0.5f;
+  morph.wet = 0.5f;
+  morph.ism_order = 3;
+  float* output = nullptr;
+  size_t output_length = 0;
+  REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &morph, &output, &output_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(output == nullptr);
+  REQUIRE(output_length == 0);
+
+  morph.source_x = 1.0f;
+  morph.wet = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &morph, &output, &output_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(output == nullptr);
+}
+
 TEST_CASE("sonare acoustic C API room morph appends a target tail", "[c_api][acoustic]") {
   std::vector<float> input(4000, 0.0f);
   input[0] = 1.0f;

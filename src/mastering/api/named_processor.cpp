@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <sstream>
 
 #include "core/audio.h"
@@ -87,6 +88,19 @@
 #include "util/exception.h"
 
 namespace sonare::mastering::api {
+
+void validate_params(const Param* params, std::size_t count) {
+  SONARE_CHECK_MSG(count == 0 || params != nullptr, ErrorCode::InvalidParameter,
+                   "mastering parameter list is null");
+  for (std::size_t index = 0; index < count; ++index) {
+    SONARE_CHECK_MSG(std::isfinite(params[index].value) &&
+                         std::fabs(params[index].value) <=
+                             static_cast<double>(std::numeric_limits<float>::max()),
+                     ErrorCode::InvalidParameter,
+                     "mastering parameters must be finite and representable");
+  }
+}
+
 namespace {
 
 using detail::b;
@@ -481,13 +495,15 @@ bool try_run_effects_insert_stereo(const std::string& name, const std::vector<Pa
 
 MonoResult apply_named_processor(const std::string& name, const float* samples, std::size_t length,
                                  int sample_rate, const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
+  validate_offline_audio_input(samples, length, sample_rate);
+  auto map = make_map(params);
   MonoResult result;
   result.samples.assign(samples, samples + length);
   result.sample_rate = sample_rate;
   result.input_lufs = lufs_for(result.samples, sample_rate);
   if (!try_run_effects_insert_mono(name, params, result.samples, sample_rate,
                                    result.latency_samples)) {
-    auto map = make_map(params);
     configure_processor(name, map, result.samples, sample_rate, result.latency_samples,
                         result.applied_gain_db);
   }
@@ -498,13 +514,15 @@ MonoResult apply_named_processor(const std::string& name, const float* samples, 
 StereoResult apply_named_processor_stereo(const std::string& name, const float* left,
                                           const float* right, std::size_t length, int sample_rate,
                                           const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
+  validate_offline_audio_input(left, length, sample_rate);
+  validate_offline_audio_input(right, length, sample_rate);
+  auto map = make_map(params);
   StereoResult result;
   result.left.assign(left, left + length);
   result.right.assign(right, right + length);
   result.sample_rate = sample_rate;
   result.input_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
-  auto map = make_map(params);
-
   if (try_run_effects_insert_stereo(name, params, result.left, result.right, sample_rate,
                                     result.latency_samples)) {
     // Handled by the streaming-effects insert path below; fall through to the
@@ -692,6 +710,9 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
                                       const float* reference, std::size_t source_length,
                                       std::size_t reference_length, int sample_rate,
                                       const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
+  validate_offline_audio_input(source, source_length, sample_rate);
+  validate_offline_audio_input(reference, reference_length, sample_rate);
   auto map = make_map(params);
   auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
   auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
@@ -749,6 +770,9 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
                                std::size_t source_length, std::size_t reference_length,
                                int sample_rate, const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
+  validate_offline_audio_input(source, source_length, sample_rate);
+  validate_offline_audio_input(reference, reference_length, sample_rate);
   auto map = make_map(params);
   auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
   auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
@@ -821,6 +845,9 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,
                                  std::size_t length, int sample_rate,
                                  const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
+  validate_offline_audio_input(left, length, sample_rate);
+  validate_offline_audio_input(right, length, sample_rate);
   auto map = make_map(params);
   std::ostringstream json;
   json << "{";

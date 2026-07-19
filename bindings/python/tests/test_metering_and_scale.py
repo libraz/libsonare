@@ -93,6 +93,14 @@ def test_metering_dynamic_range_rejects_inverted_percentiles() -> None:
         libsonare.metering_dynamic_range(samples, SR, low_percentile=0.9, high_percentile=0.1)
 
 
+def test_metering_dynamic_range_rejects_non_finite_options() -> None:
+    samples = _sine(440.0, 1.0)
+    with pytest.raises(RuntimeError):
+        libsonare.metering_dynamic_range(samples, SR, window_sec=float("nan"))
+    with pytest.raises(RuntimeError):
+        libsonare.metering_dynamic_range(samples, SR, high_percentile=float("inf"))
+
+
 def test_waveform_peaks_bucket_interleaved_stereo_audio() -> None:
     samples = np.array(
         [-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9],

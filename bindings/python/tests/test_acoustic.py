@@ -116,6 +116,19 @@ def test_estimate_room_zero_confidence_for_silence() -> None:
 
 
 @acoustic
+def test_room_estimate_and_morph_reject_invalid_configuration() -> None:
+    samples = [1.0] + [0.0] * 1999
+    with pytest.raises(libsonare.SonareError):
+        libsonare.estimate_room(samples, sample_rate=48000, reference_absorption=float("nan"))
+    with pytest.raises(libsonare.SonareError):
+        libsonare.estimate_room(samples, sample_rate=48000, aspect_hint_lw=float("inf"))
+    with pytest.raises(libsonare.SonareError):
+        libsonare.room_morph(samples, 48000, -1.0, 4.0, 3.0)
+    with pytest.raises(libsonare.SonareError):
+        libsonare.room_morph(samples, 48000, 5.0, 4.0, 3.0, wet=float("nan"))
+
+
+@acoustic
 def test_synthesize_rir_uses_default_room_dimensions() -> None:
     # Room dimensions default to 7 x 5 x 3 to match the Node/WASM/CLI bindings.
     result = libsonare.synthesize_rir()

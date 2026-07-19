@@ -117,6 +117,14 @@ describe('Offline metering wrappers (WASM)', () => {
     ).toThrow();
   });
 
+  it('dynamic range rejects non-finite and out-of-range options', () => {
+    const samples = sine(440, 1);
+    expect(() => meteringDynamicRange(samples, SR, { windowSec: Number.NaN })).toThrow();
+    expect(() => meteringDynamicRange(samples, SR, { hopSec: Number.POSITIVE_INFINITY })).toThrow();
+    expect(() => meteringDynamicRange(samples, SR, { lowPercentile: Number.NaN })).toThrow();
+    expect(() => meteringDynamicRange(samples, SR, { highPercentile: 2 })).toThrow();
+  });
+
   it('waveform peaks bucket interleaved stereo audio', () => {
     const samples = new Float32Array([-1.0, 0.5, 0.25, -0.25, 0.75, 0.1, -0.5, -0.75, 0.0, 0.9]);
     const report = waveformPeaks(samples, 2, { samplesPerBucket: 2 });

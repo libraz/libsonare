@@ -135,13 +135,9 @@ class ParamMap {
 };
 
 inline ParamMap make_map(const std::vector<Param>& params) {
+  validate_params(params.data(), params.size());
   ParamMap map;
   for (const auto& param : params) {
-    if (!numeric::finite(param.value) ||
-        std::fabs(param.value) > static_cast<double>(std::numeric_limits<float>::max())) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "mastering parameters must be finite and representable");
-    }
     map[param.key] = param.value;
   }
   return map;

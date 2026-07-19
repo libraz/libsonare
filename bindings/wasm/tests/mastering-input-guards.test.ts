@@ -55,6 +55,15 @@ describe('masteringProcess offline-audio input guards', () => {
     }
     expect(() => masteringProcess(name, buf, 22050, {})).not.toThrow();
   });
+
+  it('rejects non-finite named parameters', () => {
+    const name = masteringProcessorNames()[0];
+    const buf = new Float32Array(1024);
+    expect(() => masteringProcess(name, buf, 22050, { gainDb: Number.NaN })).toThrow();
+    expect(() =>
+      masteringProcess(name, buf, 22050, { gainDb: Number.POSITIVE_INFINITY }),
+    ).toThrow();
+  });
 });
 
 describe('masteringStereoAnalyze channel-length guard', () => {

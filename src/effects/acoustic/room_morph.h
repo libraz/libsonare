@@ -55,6 +55,10 @@ struct RoomMorphConfig {
   float crossfade_ms = 5.0f;                  ///< equal-power crossfade width around mixing time
 };
 
+/// Validates the target room, placement, morph controls, and RIR timing before
+/// source samples or processor state are changed.
+void validate_room_morph_config(const RoomMorphConfig& config);
+
 /// @brief Offline room-character morph.
 ///
 /// Returns a buffer of length `recording.size()` plus the target room's reverb

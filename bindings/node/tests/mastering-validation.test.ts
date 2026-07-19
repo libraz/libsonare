@@ -6,7 +6,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { masterAudio, mastering, masteringChain, masteringChainStereo } from '../src/index';
+import {
+  masterAudio,
+  mastering,
+  masteringChain,
+  masteringChainStereo,
+  masteringProcess,
+} from '../src/index';
 
 const SR = 44100;
 
@@ -80,5 +86,22 @@ describe('simple mastering() accepts the appended maximizer knobs', () => {
     expect(() => mastering(x, SR, { ceilingDb: Number.POSITIVE_INFINITY })).toThrow();
     const recovered = mastering(x, SR, { targetLufs: -14, ceilingDb: -1 });
     expect(recovered.samples.every((value) => Number.isFinite(value))).toBe(true);
+  });
+});
+
+describe('named mastering parameter validation', () => {
+  it('rejects non-finite direct parameters before processing', () => {
+    const x = sine(2048);
+    expect(() => masteringProcess('dynamics.compressor', x, 0, { ratio: 2 })).toThrow();
+    const invalidSamples = x.slice();
+    invalidSamples[4] = Number.NaN;
+    expect(() =>
+      masteringProcess('dynamics.compressor', invalidSamples, SR, { ratio: 2 }),
+    ).toThrow();
+    expect(() => masteringProcess('dynamics.compressor', x, SR, { ratio: Number.NaN })).toThrow();
+    expect(() =>
+      masteringProcess('dynamics.compressor', x, SR, { ratio: Number.POSITIVE_INFINITY }),
+    ).toThrow();
+    expect(() => masteringProcess('dynamics.compressor', x, SR, { ratio: 2 })).not.toThrow();
   });
 });

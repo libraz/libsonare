@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -10,6 +11,7 @@
 #include "acoustic/room_model.h"
 #include "analysis/acoustic_analyzer.h"
 #include "core/audio.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using namespace sonare::effects::acoustic;
@@ -138,7 +140,7 @@ TEST_CASE("room_morph suppression reduces the source tail energy",
   REQUIRE(out_peak >= 0.8f);  // input onset was 1.0
 }
 
-TEST_CASE("room_morph degrades cleanly for an invalid target room",
+TEST_CASE("room_morph rejects an invalid target room before processing",
           "[effects][acoustic][room_morph]") {
   const int sr = 48000;
   ShoeboxRoom target = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
@@ -151,8 +153,29 @@ TEST_CASE("room_morph degrades cleanly for an invalid target room",
   // Source placed outside the room => validate_shoebox errors => empty RIR.
   cfg.placement = {{99.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
 
-  const Audio out = room_morph(rec, cfg);
-  REQUIRE(out.size() == rec.size());  // no reverb tail appended, no crash
+  REQUIRE_THROWS_AS(room_morph(rec, cfg), SonareException);
+}
+
+TEST_CASE("room_morph rejects non-finite and out-of-range controls",
+          "[effects][acoustic][room_morph][numeric]") {
+  std::vector<float> samples(1000, 0.0f);
+  samples[0] = 1.0f;
+  const Audio rec = Audio::from_vector(std::move(samples), 48000);
+
+  RoomMorphConfig base;
+  base.target = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
+  base.placement = {{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+
+  for (float invalid : {std::numeric_limits<float>::quiet_NaN(),
+                        std::numeric_limits<float>::infinity(), -0.1f, 1.1f}) {
+    RoomMorphConfig cfg = base;
+    cfg.wet = invalid;
+    REQUIRE_THROWS_AS(room_morph(rec, cfg), SonareException);
+  }
+
+  RoomMorphConfig timing = base;
+  timing.max_seconds = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_THROWS_AS(room_morph(rec, timing), SonareException);
 }
 
 TEST_CASE("room_morph is deterministic", "[effects][acoustic][room_morph]") {

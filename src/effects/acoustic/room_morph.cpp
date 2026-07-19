@@ -6,6 +6,8 @@
 
 #include "acoustic/rir_synthesizer.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::effects::acoustic {
 
@@ -27,7 +29,29 @@ float one_pole_coef(float tau_seconds, int sample_rate) {
 }
 }  // namespace
 
-RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config) : config_(std::move(config)) {}
+void validate_room_morph_config(const RoomMorphConfig& config) {
+  const std::vector<Diagnostic> geometry =
+      sonare::acoustic::validate_shoebox(config.target, config.placement);
+  SONARE_CHECK_MSG(!has_error(geometry), ErrorCode::InvalidParameter,
+                   "room morph target geometry, placement, or material is invalid");
+  SONARE_CHECK_MSG(numeric::finite_in_closed_range(config.source_tail_suppression, 0.0f, 1.0f) &&
+                       numeric::finite_in_closed_range(config.wet, 0.0f, 1.0f),
+                   ErrorCode::InvalidParameter,
+                   "room morph wet and source-tail suppression must be within [0,1]");
+  SONARE_CHECK_MSG(config.ism_order >= 0, ErrorCode::InvalidParameter,
+                   "room morph image-source order must be non-negative");
+  SONARE_CHECK_MSG(
+      numeric::finite_in_closed_range(config.max_seconds, 0.0f, sonare::acoustic::kMaxRirSeconds) &&
+          numeric::finite_in_closed_range(config.mixing_time_ms, 0.0f,
+                                          sonare::acoustic::kMaxRirMixingTimeMs) &&
+          numeric::finite_in_closed_range(config.crossfade_ms, 0.0f,
+                                          sonare::acoustic::kMaxRirCrossfadeMs),
+      ErrorCode::InvalidParameter, "room morph RIR timing values are invalid");
+}
+
+RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config) : config_(std::move(config)) {
+  validate_room_morph_config(config_);
+}
 
 void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   using namespace sonare::acoustic;
@@ -103,6 +127,7 @@ void RoomMorphProcessor::reset() {
 }
 
 bool RoomMorphProcessor::set_parameter(unsigned int param_id, float value) {
+  if (!numeric::finite_in_closed_range(value, 0.0f, 1.0f)) return false;
   switch (param_id) {
     case 0:
       config_.wet = value;
@@ -120,6 +145,7 @@ std::vector<rt::ParamDescriptor> RoomMorphProcessor::parameter_descriptors() con
 }
 
 Audio room_morph(const Audio& recording, const RoomMorphConfig& config) {
+  validate_room_morph_config(config);
   if (recording.empty()) {
     return recording;
   }
