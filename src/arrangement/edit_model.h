@@ -404,7 +404,8 @@ class Project {
   ///  - clip.track_id references an existing track,
   ///  - clip.source_id references an existing source,
   ///  - length_ppq > 0 and start_ppq >= 0 and source_offset_ppq >= 0,
-  ///  - loop_length_ppq > 0 when loop_mode == kLoop,
+  ///  - loop_length_ppq >= 0 when loop_mode == kLoop (0 = loop the entire
+  ///    clip),
   ///  - no overlap with an existing clip on the same track when the overlap
   ///    policy is kDisallow.
   /// The id field of the argument is ignored; a fresh id is allocated.

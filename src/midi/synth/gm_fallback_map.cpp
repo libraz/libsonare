@@ -1,6 +1,7 @@
 #include "midi/synth/gm_fallback_map.h"
 
 #include <algorithm>
+#include <cstddef>
 
 #include "midi/synth/gm_fallback_data.h"
 
@@ -399,15 +400,12 @@ float gm_fallback_max_release_ms() noexcept {
     for (const NativeSynthPatch& p : drum_note_table()) {
       max_ms = std::max(max_ms, std::max(p.amp_env.release_ms, p.amp_env.decay_ms));
     }
-    const ProgramOverrides& o = program_overrides();
-    for (const NativeSynthPatch* p :
-         {&o.e_piano,       &o.clav,       &o.celesta,      &o.glockenspiel,
-          &o.music_box,     &o.vibraphone, &o.marimba,      &o.xylophone,
-          &o.tubular_bells, &o.dulcimer,   &o.nylon_guitar, &o.electric_guitar,
-          &o.muted_guitar,  &o.overdriven, &o.distortion,   &o.harp,
-          &o.church_organ,  &o.reed_organ, &o.harmonica,    &o.bandoneon,
-          &o.orchestra_hit}) {
-      max_ms = std::max(max_ms, std::max(p->amp_env.release_ms, p->amp_env.decay_ms));
+    // Program overrides: sweep the whole table through its contiguous view so
+    // a newly added override patch is bounded without touching this function.
+    const NativeSynthPatch* overrides = detail::program_override_patches(program_overrides());
+    for (std::size_t i = 0; i < detail::kProgramOverrideCount; ++i) {
+      max_ms = std::max(max_ms,
+                        std::max(overrides[i].amp_env.release_ms, overrides[i].amp_env.decay_ms));
     }
     return max_ms;
   }();

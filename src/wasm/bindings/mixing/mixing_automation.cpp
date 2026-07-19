@@ -11,7 +11,7 @@
 // strip_index. insert_index addresses the strip's combined insert sequence
 // [pre-inserts... post-inserts...]. param_id is processor-specific. sample_pos
 // is in absolute samples from the start of processing. curve: 0 = Linear,
-// 1 = Exponential.
+// 1 = Exponential, 2 = Hold, 3 = SCurve.
 void MixerWasm::scheduleInsertAutomation(unsigned int strip_index, unsigned int insert_index,
                                          unsigned int param_id, double sample_pos, float value,
                                          int curve) {
@@ -49,7 +49,8 @@ val MixerWasm::stripMeter(unsigned int strip_index) {
 }
 
 // Schedules sample-accurate fader automation on a strip. sample_pos uses the
-// absolute-sample timeline; curve: 0 = Linear, 1 = Exponential.
+// absolute-sample timeline; curve: 0 = Linear, 1 = Exponential, 2 = Hold,
+// 3 = SCurve.
 void MixerWasm::scheduleFaderAutomation(unsigned int strip_index, double sample_pos, float fader_db,
                                         int curve) {
   checkStripError(sonare_strip_schedule_fader_automation(

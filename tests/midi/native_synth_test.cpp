@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <set>
@@ -18,6 +19,7 @@
 
 #include "core/fft.h"
 #include "midi/midi_event.h"
+#include "midi/synth/gm_fallback_data.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/oscillator.h"
 #include "midi/synth/sf2_player.h"
@@ -545,6 +547,26 @@ TEST_CASE("Sf2Player fallback tail covers the slowest fallback release", "[midi]
   player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
   const StereoRender out = render(player, player.tail_samples() + 4096);
   REQUIRE(peak(out.left, out.left.size() - 256) < 1.0e-3f);
+}
+
+TEST_CASE("gm_fallback_max_release_ms bounds every fallback patch table", "[midi][synth]") {
+  const float bound = sonare::midi::synth::gm_fallback_max_release_ms();
+  const auto covered = [bound](const sonare::midi::synth::NativeSynthPatch& p) {
+    return bound >= p.amp_env.release_ms && bound >= p.amp_env.decay_ms;
+  };
+  for (const auto& p : sonare::midi::synth::detail::family_patches()) {
+    REQUIRE(covered(p));
+  }
+  for (const auto& p : sonare::midi::synth::detail::drum_note_table()) {
+    REQUIRE(covered(p));
+  }
+  // Every program override, including ones added after this test was written:
+  // the contiguous view spans the whole ProgramOverrides table.
+  const auto* overrides = sonare::midi::synth::detail::program_override_patches(
+      sonare::midi::synth::detail::program_overrides());
+  for (std::size_t i = 0; i < sonare::midi::synth::detail::kProgramOverrideCount; ++i) {
+    REQUIRE(covered(overrides[i]));
+  }
 }
 
 TEST_CASE("NativeSynth audio path is allocation-free", "[midi][synth]") {

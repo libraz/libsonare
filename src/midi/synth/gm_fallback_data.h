@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 
 #include "midi/synth/native_synth.h"
 
@@ -98,6 +99,26 @@ struct ProgramOverrides {
   NativeSynthPatch tin_whistle;    // program 78
   NativeSynthPatch ocarina;        // program 79
 };
+
+/// Number of override patches in ProgramOverrides. The struct is a homogeneous
+/// aggregate of NativeSynthPatch members, so the count falls out of the sizes;
+/// the asserts below keep that assumption enforced.
+inline constexpr std::size_t kProgramOverrideCount =
+    sizeof(ProgramOverrides) / sizeof(NativeSynthPatch);
+
+static_assert(sizeof(ProgramOverrides) == kProgramOverrideCount * sizeof(NativeSynthPatch),
+              "ProgramOverrides must contain only NativeSynthPatch members");
+static_assert(alignof(ProgramOverrides) == alignof(NativeSynthPatch),
+              "ProgramOverrides must contain only NativeSynthPatch members");
+
+/// Contiguous view over every patch in a ProgramOverrides table. Whole-table
+/// sweeps (e.g. the maximum release/decay bound in gm_fallback_max_release_ms)
+/// iterate this view so a newly added override member is picked up
+/// automatically instead of depending on a hand-maintained member list.
+inline const NativeSynthPatch* program_override_patches(
+    const ProgramOverrides& overrides) noexcept {
+  return reinterpret_cast<const NativeSynthPatch*>(&overrides);
+}
 
 void configure_keyed_programs(ProgramOverrides& overrides) noexcept;
 void configure_percussion_programs(ProgramOverrides& overrides) noexcept;
