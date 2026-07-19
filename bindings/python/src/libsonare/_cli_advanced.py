@@ -8,6 +8,7 @@ import json
 from ._cli_common import (
     PITCH_NAMES,
     _array_stats,
+    _strict_json_dumps,
 )
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
@@ -137,7 +138,7 @@ def cmd_lufs(args: argparse.Namespace) -> int:
         if args.series:
             payload["momentary_series"] = [round(v, 4) for v in momentary_series]
             payload["short_term_series"] = [round(v, 4) for v in short_term_series]
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print("  Loudness (LUFS):")
         print(f"    Integrated:     {r.integrated_lufs:.2f} LUFS")

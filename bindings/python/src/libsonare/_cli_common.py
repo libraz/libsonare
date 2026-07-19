@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from typing import Any, cast
 
@@ -53,6 +54,22 @@ _SONARE_CODE_TO_EXIT = {
     SONARE_ERROR_NOT_SUPPORTED: EXIT_NOT_SUPPORTED,
     SONARE_ERROR_INVALID_STATE: EXIT_INVALID_STATE,
 }
+
+
+def _sanitize_json_value(value: object) -> object:
+    """Recursively replace non-finite floats with JSON ``null`` values."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _sanitize_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_json_value(item) for item in value]
+    return value
+
+
+def _strict_json_dumps(value: object, **kwargs: Any) -> str:
+    """Serialize a CLI payload as standards-compliant JSON."""
+    return json.dumps(_sanitize_json_value(value), allow_nan=False, **kwargs)
 
 
 def _legacy_exit_codes() -> bool:

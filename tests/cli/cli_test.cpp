@@ -146,6 +146,140 @@ TEST_CASE("CLI help command", "[cli]") {
   REQUIRE_THAT(output, ContainsSubstring("UTILITY COMMANDS"));
 }
 
+TEST_CASE("CLI rejects option typos and terminal required options before dispatch",
+          "[cli][argument-contract]") {
+  std::vector<std::string> commands = {"analyze",
+                                       "bpm",
+                                       "key",
+                                       "beats",
+                                       "downbeats",
+                                       "onsets",
+                                       "chords",
+                                       "sections",
+                                       "timbre",
+                                       "dynamics",
+                                       "rhythm",
+                                       "melody",
+                                       "boundaries",
+                                       "acoustic",
+                                       "lufs",
+                                       "meter",
+                                       "clipping",
+                                       "dynamic-range",
+                                       "stereo",
+                                       "phase",
+                                       "pitch-shift",
+                                       "time-stretch",
+                                       "pitch-correct",
+                                       "note-stretch",
+                                       "voice-change",
+                                       "voice-presets",
+                                       "voice-preset",
+                                       "voice-preset-validate",
+                                       "hpss",
+                                       "preemphasis",
+                                       "deemphasis",
+                                       "trim-silence",
+                                       "split-silence",
+                                       "normalize",
+                                       "gain",
+                                       "fade",
+                                       "filter",
+                                       "resample",
+                                       "tone",
+                                       "chirp",
+                                       "clicks",
+                                       "mel",
+                                       "chroma",
+                                       "tonnetz",
+                                       "spectral",
+                                       "pitch",
+                                       "onset-env",
+                                       "onset-envelope",
+                                       "tempogram",
+                                       "fourier-tempogram",
+                                       "tempogram-ratio",
+                                       "plp",
+                                       "nnls-chroma",
+                                       "cqt",
+                                       "vqt",
+                                       "mel-to-audio",
+                                       "mfcc-to-audio",
+                                       "frames-to-samples",
+                                       "samples-to-frames",
+                                       "power-to-db",
+                                       "amplitude-to-db",
+                                       "db-to-power",
+                                       "db-to-amplitude",
+                                       "frame-signal",
+                                       "pad-center",
+                                       "fix-length",
+                                       "fix-frames",
+                                       "peak-pick",
+                                       "vector-normalize",
+                                       "pcen",
+                                       "info",
+                                       "version",
+                                       "system-info"};
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+  commands.insert(commands.end(), {"estimate-room", "synthesize-rir", "room-morph"});
+#endif
+#ifdef SONARE_WITH_MASTERING
+  commands.insert(
+      commands.end(),
+      {"mastering", "eq", "mastering-processor", "mastering-pair-processor",
+       "mastering-pair-analyze", "mastering-stereo-analyze", "mastering-processors",
+       "mastering-pair-processors", "mastering-pair-analyses", "mastering-stereo-analyses"});
+#endif
+#ifdef SONARE_WITH_MIXING
+  commands.insert(commands.end(), {"mix", "mixing-presets", "mixing-preset"});
+#endif
+#ifdef SONARE_WITH_ARRANGEMENT
+  commands.push_back("project");
+#endif
+
+  for (const std::string& command : commands) {
+    CAPTURE(command);
+    auto [typo_code, typo_output] =
+        exec_command(CLI + " " + command + " --definitely-unknown-option");
+    REQUIRE(typo_code != 0);
+    REQUIRE_THAT(typo_output, ContainsSubstring("Unknown option"));
+
+    auto [terminal_code, terminal_output] = exec_command(CLI + " " + command + " --n-fft");
+    REQUIRE(terminal_code != 0);
+    REQUIRE_THAT(terminal_output, ContainsSubstring("Missing value for option '--n-fft'"));
+  }
+}
+
+TEST_CASE("CLI rejects extra positionals and preserves flag and negative-value parsing",
+          "[cli][argument-contract]") {
+  SECTION("unconsumed positional") {
+    auto [code, output] = exec_command(CLI + " version unexpected");
+    REQUIRE(code != 0);
+    REQUIRE_THAT(output, ContainsSubstring("Unexpected positional argument 'unexpected'"));
+  }
+
+  SECTION("negative numeric list remains an option value") {
+    auto [code, output] = exec_command(CLI + " power-to-db --values -6,-3 --json");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("["));
+  }
+
+  SECTION("terminal boolean flag remains presence-only") {
+    auto [code, output] = exec_command(CLI + " fix-frames --values 1,2 --no-pad --json");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("["));
+  }
+
+#ifdef SONARE_WITH_ARRANGEMENT
+  SECTION("terminal optional-value flag remains valid") {
+    auto [code, output] = exec_command(CLI + " project abi --synth --json");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("abi_version"));
+  }
+#endif
+}
+
 TEST_CASE("CLI info command", "[cli]") {
   create_test_wav(TEST_WAV);
 

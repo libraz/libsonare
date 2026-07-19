@@ -55,12 +55,18 @@ struct CliArgs {
   float fmax = 0.0f;
 
   std::map<std::string, std::string> options;
+  std::vector<std::string> positionals;
+  std::vector<std::string> missing_value_options;
 
   float get_float(const std::string& k, float def) const;
   int get_int(const std::string& k, int def) const;
   bool has(const std::string& k) const;
   std::string get_string(const std::string& k, const std::string& def = "") const;
 };
+
+/// Validates command-specific option names, required option values, and
+/// positional arity. Returns an empty string when the invocation is valid.
+std::string validate_cli_arguments(const CliArgs& args, bool requires_audio);
 
 class ArgParser {
  public:

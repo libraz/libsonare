@@ -187,6 +187,29 @@ def test_cli_new_commands_smoke(command: str) -> None:
         assert result.stdout.strip()
 
 
+def test_cli_lufs_silence_series_emits_strict_json() -> None:
+    """Silence loudness sentinels become null, including both optional series."""
+
+    def reject_nonfinite(value: str) -> None:
+        pytest.fail(f"non-standard JSON constant emitted: {value}")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "silence.wav")
+        _write_test_wav(wav_path, [0.0] * (48000 * 4), 48000)
+
+        result = _run_cli(["lufs", wav_path, "--json", "--series"])
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout, parse_constant=reject_nonfinite)
+
+    assert payload["integrated"] is None
+    assert payload["momentary"] is None
+    assert payload["short_term"] is None
+    assert payload["momentary_series"]
+    assert payload["short_term_series"]
+    assert all(value is None for value in payload["momentary_series"])
+    assert all(value is None for value in payload["short_term_series"])
+
+
 def test_project_cli_help_documents_sf2_limitations() -> None:
     """Project MIDI rendering help states the current SF2/synth-json CLI boundary."""
 

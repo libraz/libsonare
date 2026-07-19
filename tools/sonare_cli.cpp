@@ -183,23 +183,28 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  // Version command (no audio needed)
-  if (args.command == "version") {
-    return cmd_version(args);
-  }
-
-  if (args.command == "system-info") {
-    return cmd_system_info(args);
-  }
-
   // Find command
   const CommandInfo* cmd = find_command(args.command);
-  if (!cmd) {
+  const bool built_in_command = args.command == "version" || args.command == "system-info";
+  if (!cmd && !built_in_command) {
     std::cerr << color::red << "Error: Unknown command '" << args.command << "'" << color::reset
               << "\n\n";
     print_usage(argv[0]);
     return 1;
   }
+
+  const std::string argument_error =
+      validate_cli_arguments(args, cmd ? cmd->requires_audio : false);
+  if (!argument_error.empty()) {
+    std::cerr << color::red << "Error: " << argument_error << color::reset << "\n\n";
+    print_usage(argv[0]);
+    return 1;
+  }
+
+  // Version/system-info have no audio and are dispatched only after their
+  // empty command schemas and positional arity have been validated.
+  if (args.command == "version") return cmd_version(args);
+  if (args.command == "system-info") return cmd_system_info(args);
 
   // Check for audio file
   if (cmd->requires_audio && args.input_file.empty()) {
