@@ -123,6 +123,7 @@ export {
   mixingScenePresetNames,
   mixStereo,
   normalize,
+  noteMove,
   noteStretch,
   percussive,
   pitchCorrectTimevarying,

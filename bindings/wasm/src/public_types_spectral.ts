@@ -36,6 +36,13 @@ export interface NoteStretchOptions {
   stretchRatio?: number;
 }
 
+/** Options for `noteMove`. */
+export interface NoteMoveOptions {
+  onsetSample?: number;
+  offsetSample?: number;
+  targetOnsetSample?: number;
+}
+
 /** How a `spectralEdit` region op modifies the masked bins. */
 export type SpectralEditMode = 'gain' | 'attenuate' | 'mute' | 'heal';
 

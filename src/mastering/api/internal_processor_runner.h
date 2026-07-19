@@ -23,43 +23,59 @@
 
 namespace sonare::mastering::api::internal {
 
+/// Upper bound for offline processor work buffers. Keeping this independent of
+/// track length prevents processors such as TruePeakLimiter from allocating an
+/// oversampled scratch buffer for an entire song.
+inline constexpr int kOfflineProcessorBlockSize = 64 * 1024;
+
+inline int offline_processor_block_size(int total_samples) {
+  return std::min(total_samples, kOfflineProcessorBlockSize);
+}
+
 /// @brief Run @p processor over a mono buffer in place, compensating for the
 ///        processor's reported latency so the output length matches the input
 ///        length and the time alignment is preserved.
 ///
 /// Behaviour:
 ///  - empty input is a no-op (no `prepare()` call);
-///  - otherwise the processor is prepared at @p samples.size() to discover its
-///    latency; when latency is zero the buffer is processed in place;
-///  - when latency is positive the processor is re-prepared at
-///    `samples.size() + latency`, the buffer is padded with `latency` trailing
-///    zeros, processed, then the leading `latency` output samples are
-///    discarded so the delayed tail is flushed out and the result is time-
-///    aligned with the input.
+///  - otherwise the processor is prepared and run in fixed-size chunks to
+///    bound its working memory independently of track duration;
+///  - when latency is positive, `latency` trailing zero samples are streamed
+///    through the same chunks, then the leading delayed output is discarded so
+///    the result remains time-aligned with the input.
 inline void run_processor_mono(rt::ProcessorBase& processor, std::vector<float>& samples,
                                int sample_rate) {
   if (samples.empty()) {
     return;
   }
   const int n = static_cast<int>(samples.size());
-  // Prepare once at N to query latency (valid post-prepare for our processors).
-  processor.prepare(sample_rate, n);
+  const int probe_block_size = offline_processor_block_size(n);
+  // Prepare once at the bounded block size to query latency (valid
+  // post-prepare for our processors). The channel-aware overload lets offline
+  // mono processing avoid reserving realtime-only per-channel scratch space.
+  processor.prepare(sample_rate, probe_block_size, 1);
   const int latency = processor.latency_samples();
-  if (latency <= 0) {
-    float* channels[] = {samples.data()};
-    processor.process(channels, 1, n);
-    return;
+  const int block_size = offline_processor_block_size(n + std::max(latency, 0));
+  processor.prepare(sample_rate, block_size, 1);
+  for (int offset = 0; offset < n; offset += block_size) {
+    const int count = std::min(block_size, n - offset);
+    float* channels[] = {samples.data() + offset};
+    processor.process(channels, 1, count);
   }
-  // Re-prepare for the padded length (prepare() reinitializes processor state,
-  // so a separate reset() before it would be redundant), then process
-  // N signal + `latency` zeros and drop the leading `latency` output samples so
-  // the result is time-aligned and the delayed tail is flushed out.
-  processor.prepare(sample_rate, n + latency);
-  std::vector<float> padded(samples.begin(), samples.end());
-  padded.resize(static_cast<std::size_t>(n) + latency, 0.0f);
-  float* channels[] = {padded.data()};
-  processor.process(channels, 1, n + latency);
-  std::copy(padded.begin() + latency, padded.begin() + latency + n, samples.begin());
+  if (latency <= 0) return;
+
+  std::vector<float> tail(static_cast<size_t>(latency));
+  for (int offset = 0; offset < latency; offset += block_size) {
+    const int count = std::min(block_size, latency - offset);
+    float* channels[] = {tail.data() + offset};
+    processor.process(channels, 1, count);
+  }
+  if (latency < n) {
+    std::move(samples.begin() + latency, samples.end(), samples.begin());
+    std::copy(tail.begin(), tail.end(), samples.end() - latency);
+  } else {
+    std::copy(tail.begin() + (latency - n), tail.end(), samples.begin());
+  }
 }
 
 /// @brief Stereo counterpart to run_processor_mono(). @p left and @p right must
@@ -74,22 +90,34 @@ inline void run_processor_stereo(rt::ProcessorBase& processor, std::vector<float
     throw SonareException(ErrorCode::InvalidParameter, "stereo channel lengths must match");
   }
   const int n = static_cast<int>(left.size());
-  processor.prepare(sample_rate, n);
+  const int probe_block_size = offline_processor_block_size(n);
+  processor.prepare(sample_rate, probe_block_size, 2);
   const int latency = processor.latency_samples();
-  if (latency <= 0) {
-    float* channels[] = {left.data(), right.data()};
-    processor.process(channels, 2, n);
-    return;
+  const int block_size = offline_processor_block_size(n + std::max(latency, 0));
+  processor.prepare(sample_rate, block_size, 2);
+  for (int offset = 0; offset < n; offset += block_size) {
+    const int count = std::min(block_size, n - offset);
+    float* channels[] = {left.data() + offset, right.data() + offset};
+    processor.process(channels, 2, count);
   }
-  processor.prepare(sample_rate, n + latency);
-  std::vector<float> padded_left(left.begin(), left.end());
-  std::vector<float> padded_right(right.begin(), right.end());
-  padded_left.resize(static_cast<std::size_t>(n) + latency, 0.0f);
-  padded_right.resize(static_cast<std::size_t>(n) + latency, 0.0f);
-  float* channels[] = {padded_left.data(), padded_right.data()};
-  processor.process(channels, 2, n + latency);
-  std::copy(padded_left.begin() + latency, padded_left.begin() + latency + n, left.begin());
-  std::copy(padded_right.begin() + latency, padded_right.begin() + latency + n, right.begin());
+  if (latency <= 0) return;
+
+  std::vector<float> left_tail(static_cast<size_t>(latency));
+  std::vector<float> right_tail(static_cast<size_t>(latency));
+  for (int offset = 0; offset < latency; offset += block_size) {
+    const int count = std::min(block_size, latency - offset);
+    float* channels[] = {left_tail.data() + offset, right_tail.data() + offset};
+    processor.process(channels, 2, count);
+  }
+  if (latency < n) {
+    std::move(left.begin() + latency, left.end(), left.begin());
+    std::move(right.begin() + latency, right.end(), right.begin());
+    std::copy(left_tail.begin(), left_tail.end(), left.end() - latency);
+    std::copy(right_tail.begin(), right_tail.end(), right.end() - latency);
+  } else {
+    std::copy(left_tail.begin() + (latency - n), left_tail.end(), left.begin());
+    std::copy(right_tail.begin() + (latency - n), right_tail.end(), right.begin());
+  }
 }
 
 }  // namespace sonare::mastering::api::internal

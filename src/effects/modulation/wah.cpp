@@ -28,8 +28,9 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
   rt::ScopedNoDenormals no_denormals;
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
-  const float lo = std::min(config_.min_hz, config_.max_hz);
-  const float hi = std::max(config_.min_hz, config_.max_hz);
+  const float nyquist = static_cast<float>(0.5 * sample_rate_);
+  const float lo = std::clamp(std::min(config_.min_hz, config_.max_hz), 10.0f, nyquist);
+  const float hi = std::clamp(std::max(config_.min_hz, config_.max_hz), lo, nyquist);
   const float q = std::max(0.5f, config_.resonance);
   // Stereo-pair processor: one bandpass filter per plane is allocated for two
   // planes only, so planes beyond the pair pass through dry (see the registry's

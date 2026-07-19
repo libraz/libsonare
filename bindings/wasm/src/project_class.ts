@@ -32,6 +32,7 @@ import type {
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
+  ProjectTempoCandidate,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrackDesc,
@@ -504,14 +505,24 @@ export class Project {
     return this.native.validateMidiNotes(clipId);
   }
 
-  /** Detect tempo from a mono buffer and install it; returns the primary BPM. */
-  autoTempo(audio: Float32Array, sampleRate: number): number {
-    return this.native.autoTempo(audio, sampleRate);
+  /** Return ranked tempo-octave and detected-meter candidates without editing. */
+  analyzeTempo(audio: Float32Array, sampleRate: number): ProjectTempoCandidate[] {
+    return this.native.analyzeTempo(audio, sampleRate);
   }
 
-  /** Snap a PPQ coordinate to the nearest beat of the project grid. */
-  snapToGrid(ppq: number, strength = 1.0): number {
-    return this.native.snapToGrid(ppq, strength);
+  /** Detect and install a ranked tempo candidate; optionally apply detected meter. */
+  autoTempo(
+    audio: Float32Array,
+    sampleRate: number,
+    candidateIndex = 0,
+    applyTimeSignatures = false,
+  ): number {
+    return this.native.autoTempo(audio, sampleRate, candidateIndex, applyTimeSignatures);
+  }
+
+  /** Snap to a bar (`division=0`), beat (`1`), or beat subdivision (`2+`). */
+  snapToGrid(ppq: number, strength = 1.0, division = 1): number {
+    return this.native.snapToGrid(ppq, strength, division);
   }
 
   /** Compile the project into a renderable timeline, surfacing diagnostics. */

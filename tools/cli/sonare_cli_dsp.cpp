@@ -181,24 +181,23 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
     std::cerr << color::red << "Error: resample requires output file (-o)" << color::reset << "\n";
     return 1;
   }
-  if (!args.has("target-sr")) {
-    std::cerr << color::red << "Error: --target-sr required" << color::reset << "\n";
+  if (!args.has("target-rate") && !args.has("target-sr")) {
+    std::cerr << color::red << "Error: --target-rate required" << color::reset << "\n";
     return 1;
   }
   const int source_sr = audio.sample_rate();
-  const int target_sr = args.get_int("target-sr", source_sr);
+  const int target_sr = args.get_int("target-rate", args.get_int("target-sr", source_sr));
   Audio result = resample(audio, target_sr);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("output", args.output_file)
-        .kv("source_sr", source_sr)
-        .kv("target_sr", target_sr)
-        .kv("duration", result.duration())
-        .end_object()
-        .print();
+    JsonBuilder json;
+    json.begin_object()
+        .kv("length", result.size())
+        .kv("source_rate", source_sr)
+        .kv("sample_rate", target_sr);
+    if (!args.output_file.empty()) json.kv("output", args.output_file);
+    json.end_object().print();
   } else if (!args.quiet) {
     std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
   }

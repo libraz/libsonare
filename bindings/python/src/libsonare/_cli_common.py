@@ -85,6 +85,8 @@ def _exit_code_for(exc: BaseException) -> int:
         return _SONARE_CODE_TO_EXIT.get(exc.code, EXIT_ERROR)
     if isinstance(exc, FileNotFoundError):
         return EXIT_FILE_NOT_FOUND
+    if isinstance(exc, (ValueError, json.JSONDecodeError)):
+        return EXIT_INVALID_PARAMETER
     return EXIT_ERROR
 
 
@@ -274,7 +276,7 @@ def _emit_effect_result(
             payload.update(extra)
         if args.output:
             payload["output"] = args.output
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print(f"  {label}: {len(result)} samples")
         if args.output:

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <vector>
@@ -68,6 +69,9 @@ struct CoreAudioDevice::Impl {
   int reported_output_latency = 0;
   int reported_input_latency = 0;
   int64_t frame_counter = 0;
+  // HAL sample times need not start at zero. Latch the per-start origin so all
+  // engine and MIDI-facing frame coordinates remain transport-relative.
+  int64_t device_sample_origin = -1;
   mach_timebase_info_data_t timebase{};
   MidiHostTimeMapper midi_time_mapper;
   // Device sample time expected at the start of the next render callback (the
@@ -107,7 +111,9 @@ struct CoreAudioDevice::Impl {
     view.time.sample_time = frame_counter;
     if (ts != nullptr && (ts->mFlags & kAudioTimeStampSampleTimeValid)) {
       const int64_t current = static_cast<int64_t>(ts->mSampleTime);
-      view.time.sample_time = current;
+      if (device_sample_origin < 0) device_sample_origin = current;
+      const int64_t relative = std::max<int64_t>(0, current - device_sample_origin);
+      view.time.sample_time = relative;
       // A forward discontinuity in the device sample clock between callbacks
       // means the HAL could not service the previous cycle in time and skipped
       // samples: count it as an xrun. The first callback (expected == -1) and an
@@ -116,8 +122,8 @@ struct CoreAudioDevice::Impl {
         xruns.fetch_add(1, std::memory_order_relaxed);
         ++callback_xruns;
       }
-      frame_plan = detail::plan_coreaudio_callback(frames, config.max_block_size, current);
-      expected_next_sample_time = frame_plan.next_sample_time;
+      frame_plan = detail::plan_coreaudio_callback(frames, config.max_block_size, relative);
+      expected_next_sample_time = current + static_cast<int64_t>(frames);
     }
     if (ts != nullptr && (ts->mFlags & kAudioTimeStampHostTimeValid)) {
       host_ticks_to_ns(ts->mHostTime, timebase, &view.time.host_time_ns);
@@ -166,8 +172,9 @@ CoreAudioDevice::CoreAudioDevice() : impl_(std::make_unique<Impl>()) {}
 CoreAudioDevice::~CoreAudioDevice() { close(); }
 
 bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback* callback) {
-  if (callback == nullptr || impl_->unit != nullptr || config.sample_rate <= 0.0 ||
-      config.max_block_size <= 0 || config.num_output_channels <= 0) {
+  if (callback == nullptr || impl_->unit != nullptr || !std::isfinite(config.sample_rate) ||
+      config.sample_rate <= 0.0 || config.max_block_size <= 0 || config.num_output_channels <= 0 ||
+      config.num_input_channels > 0) {
     return false;
   }
   impl_->config = config;
@@ -188,8 +195,11 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
                                          kAudioObjectPropertyScopeGlobal,
                                          kAudioObjectPropertyElementMain};
   UInt32 device_size = sizeof(impl_->device_id);
-  AudioObjectGetPropertyData(kAudioObjectSystemObject, &default_out, 0, nullptr, &device_size,
-                             &impl_->device_id);
+  impl_->device_id = kAudioObjectUnknown;
+  if (!ok(AudioObjectGetPropertyData(kAudioObjectSystemObject, &default_out, 0, nullptr,
+                                     &device_size, &impl_->device_id))) {
+    impl_->device_id = kAudioObjectUnknown;
+  }
   if (impl_->device_id != kAudioObjectUnknown) {
     AudioUnitSetProperty(impl_->unit, kAudioOutputUnitProperty_CurrentDevice,
                          kAudioUnitScope_Global, 0, &impl_->device_id, sizeof(impl_->device_id));
@@ -279,6 +289,7 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
 bool CoreAudioDevice::start() {
   if (impl_->unit == nullptr || impl_->running.load()) return false;
   impl_->frame_counter = 0;
+  impl_->device_sample_origin = -1;
   impl_->expected_next_sample_time = -1;  // no baseline until the first callback
   impl_->midi_time_mapper.reset();
   impl_->xruns.store(0, std::memory_order_relaxed);
@@ -302,6 +313,7 @@ void CoreAudioDevice::close() noexcept {
   AudioComponentInstanceDispose(impl_->unit);
   impl_->unit = nullptr;
   impl_->callback = nullptr;
+  impl_->device_id = kAudioObjectUnknown;
 }
 
 bool CoreAudioDevice::is_running() const noexcept { return impl_->running.load(); }

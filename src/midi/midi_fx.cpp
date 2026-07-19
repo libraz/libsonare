@@ -342,12 +342,17 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
           // Preserve the source velocity at its native resolution (full 16-bit
           // for MIDI 2.0) instead of round-tripping through 7 bits.
           on_ev.ump = make_note_preserving_velocity(ev.ump, true, static_cast<uint8_t>(arp_note));
-          shape_and_push(on_ev, ordinal++);
+          // A generated gate is one logical note. Its on/off pair must share
+          // timing jitter; deriving separate jitter from consecutive ordinals
+          // could place the off before the on for short gates, leaving a hung
+          // note after chronological sorting.
+          const size_t note_ordinal = ordinal++;
+          shape_and_push(on_ev, note_ordinal);
 
           MidiEvent off_ev;
           off_ev.render_frame = onset + gate;
           off_ev.ump = make_note(ev.ump, false, static_cast<uint8_t>(arp_note), 0);
-          shape_and_push(off_ev, ordinal++);
+          shape_and_push(off_ev, note_ordinal);
         }
       }
     } else if (note_off && arpeggiator_.enabled && arpeggiator_.steps > 0 &&

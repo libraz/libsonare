@@ -117,6 +117,12 @@ void CcMap::clear() noexcept {
   reset_live_decode();
 }
 
+void CcMap::copy_bindings_from(const CcMap& source) noexcept {
+  bindings_ = source.bindings_;
+  count_ = source.count_;
+  live_ = source.live_;
+}
+
 void CcMap::begin_learn(uint32_t param_id, float min_value, float max_value,
                         uint8_t min_movement) noexcept {
   learning_ = true;
@@ -323,7 +329,7 @@ bool CcMap::value_to_unit(uint8_t cc_number, uint8_t channel, float norm,
 }
 
 void CcMap::reset_live_decode() noexcept {
-  for (auto& state : live_) {
+  for (auto& state : live_->channels) {
     state = LiveChannelState{};
   }
 }
@@ -352,34 +358,43 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
   }
 
   const uint8_t value7 = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
-  LiveChannelState& st = live_[channel & 0x0Fu];
+  LiveChannelState& st = live_->channels[channel & 0x0Fu];
 
   auto emit_from = [&](size_t idx, float norm) {
     const CcBinding& b = bindings_[idx];
     *out_param = b.param_id;
     *out_unit = b.min_value + norm * (b.max_value - b.min_value);
   };
+  auto emit_plain = [&] {
+    uint32_t param = 0;
+    if (!lookup_param(cc, channel, &param) ||
+        !value_to_unit(cc, channel, static_cast<float>(value7) / kCc7BitMax, out_unit)) {
+      return false;
+    }
+    *out_param = param;
+    return true;
+  };
 
   // RPN/NRPN selector messages address a parameter; they never emit a value.
   if (cc == kRpnMsb) {
     st.rpn_msb = value7;
     st.nrpn_active = false;
-    return false;
+    return emit_plain();
   }
   if (cc == kRpnLsb) {
     st.rpn_lsb = value7;
     st.nrpn_active = false;
-    return false;
+    return emit_plain();
   }
   if (cc == kNrpnMsb) {
     st.nrpn_msb = value7;
     st.nrpn_active = true;
-    return false;
+    return emit_plain();
   }
   if (cc == kNrpnLsb) {
     st.nrpn_lsb = value7;
     st.nrpn_active = true;
-    return false;
+    return emit_plain();
   }
 
   // Data Entry drives the currently-selected RPN/NRPN binding at 14 bits.
@@ -392,7 +407,7 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
       return b.kind == want && b.selector_msb == sel_msb && b.selector_lsb == sel_lsb;
     });
     if (idx == kMaxBindings) {
-      return false;
+      return emit_plain();
     }
     uint16_t value14 = 0;
     if (cc == kDataEntryMsb) {
@@ -440,13 +455,7 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
   }
 
   // Plain 7-bit Control Change.
-  uint32_t param = 0;
-  if (lookup_param(cc, channel, &param) &&
-      value_to_unit(cc, channel, static_cast<float>(value7) / kCc7BitMax, out_unit)) {
-    *out_param = param;
-    return true;
-  }
-  return false;
+  return emit_plain();
 }
 
 bool CcMap::cc_to_breakpoint(const Ump& ump, double ppq,

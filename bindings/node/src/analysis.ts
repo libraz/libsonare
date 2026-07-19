@@ -68,6 +68,11 @@ export function detectBpm(samples: Float32Array | SamplesRequest, sampleRate = 2
 
 export function detectKey(request: DetectKeyRequest): Key;
 export function detectKey(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: KeyDetectionOptions,
+): Key;
+export function detectKey(
   samples: Float32Array | DetectKeyRequest,
   sampleRate?: number,
   options?: KeyDetectionOptions,
@@ -77,6 +82,11 @@ export function detectKey(
 }
 
 export function detectKeyCandidates(request: DetectKeyRequest): KeyCandidate[];
+export function detectKeyCandidates(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: KeyDetectionOptions,
+): KeyCandidate[];
 export function detectKeyCandidates(
   samples: Float32Array | DetectKeyRequest,
   sampleRate?: number,
@@ -203,6 +213,11 @@ export function analyzeAsync(
  * shape matches {@link analyze}.
  */
 export function analyzeWithProgress(request: AnalyzeWithProgressRequest): AnalysisResult;
+export function analyzeWithProgress(
+  samples: Float32Array,
+  sampleRate: number | undefined,
+  onProgress: AnalysisProgressCallback,
+): AnalysisResult;
 export function analyzeWithProgress(
   samples: Float32Array | AnalyzeWithProgressRequest,
   sampleRate?: number,

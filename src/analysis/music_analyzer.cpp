@@ -285,7 +285,8 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     // Step 4: Bass-weighted chroma (optional, controlled by use_bass_weighted)
     if (config_.use_bass_weighted && n_frames > 0) {
       // Apply preemphasis to filtered audio (already harmonic)
-      auto preemph_samples = preemphasis(filtered_audio.data(), filtered_audio.size(), 0.97f);
+      auto preemph_samples =
+          preemphasis_zero_initial_state(filtered_audio.data(), filtered_audio.size(), 0.97f);
 
       // Use reduced CQT for bass (lower 4 octaves = 48 bins)
       CqtConfig bass_cqt_config;

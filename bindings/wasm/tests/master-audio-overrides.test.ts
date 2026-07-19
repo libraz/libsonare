@@ -49,6 +49,38 @@ describe('WASM masterAudio nested overrides (H-1)', () => {
   });
 });
 
+describe('WASM canonical mastering-chain config (H-1)', () => {
+  it('routes nested tilt and all repair stages through the core flat parser', async () => {
+    const { masteringChain } = await import('../src/index');
+    const input = Float32Array.from(
+      { length: 8192 },
+      (_, i) => 0.25 * Math.sin((2 * Math.PI * 220 * i) / sampleRate),
+    );
+    const result = masteringChain(input, sampleRate, {
+      eq: { tilt: { tiltDb: 1 } },
+      repair: {
+        declip: { clipThreshold: 0.95 },
+        decrackle: { threshold: 0.25 },
+        dehum: { fundamentalHz: 60 },
+      },
+    });
+    expect(result.stages).toEqual(
+      expect.arrayContaining(['eq.tilt', 'repair.declip', 'repair.decrackle', 'repair.dehum']),
+    );
+  });
+
+  it('honors enabled:false without truthy coercion', async () => {
+    const { masteringChain } = await import('../src/index');
+    const input = new Float32Array(4096).fill(0.1);
+    const result = masteringChain(input, sampleRate, {
+      repair: { denoise: { enabled: false } },
+      eq: { tilt: { enabled: false, tiltDb: 3 } },
+    });
+    expect(result.stages).not.toContain('repair.denoise');
+    expect(result.stages).not.toContain('eq.tilt');
+  });
+});
+
 describe('WASM masterAudio / masteringChain progress wiring (M-1)', () => {
   it('invokes onProgress from the positional masterAudio form', () => {
     let calls = 0;

@@ -1,6 +1,7 @@
 import { addon } from './native.js';
 import type {
   HpssResult,
+  NoteMoveOptions,
   NoteStretchOptions,
   PitchCorrectOptions,
   SpectralEditOptions,
@@ -49,6 +50,7 @@ export interface PitchCorrectTimevaryingRequest extends EffectSamplesRequest, Pi
 }
 
 export interface NoteStretchRequest extends EffectSamplesRequest, NoteStretchOptions {}
+export interface NoteMoveRequest extends EffectSamplesRequest, NoteMoveOptions {}
 
 // -- Effects --
 
@@ -324,5 +326,27 @@ export function noteStretch(
     request.onsetSample ?? 0,
     request.offsetSample ?? 0,
     request.stretchRatio ?? 1.0,
+  );
+}
+
+/** Move a note region to a new onset sample without changing its duration. */
+export function noteMove(request: NoteMoveRequest): Float32Array;
+export function noteMove(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: NoteMoveOptions,
+): Float32Array;
+export function noteMove(
+  samples: Float32Array | NoteMoveRequest,
+  sampleRate = 22050,
+  options: NoteMoveOptions = {},
+): Float32Array {
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.noteMove(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.onsetSample ?? 0,
+    request.offsetSample ?? 0,
+    request.targetOnsetSample ?? 0,
   );
 }

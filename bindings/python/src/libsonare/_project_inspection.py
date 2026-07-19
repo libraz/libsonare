@@ -23,6 +23,7 @@ from ._runtime import (
     SonareProjectCompileResult,
     SonareProjectKeySegment,
     SonareProjectMarker,
+    SonareProjectTempoCandidate,
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
     _check,
@@ -37,7 +38,47 @@ class _ProjectInspectionMixin:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
 
-    def auto_tempo(self, audio: Sequence[float] | np.ndarray, sample_rate: int) -> float:
+    def analyze_tempo(
+        self, audio: Sequence[float] | np.ndarray, sample_rate: int
+    ) -> list[dict[str, object]]:
+        """Return ranked primary/half/double tempo and meter candidates without editing."""
+        c_array, length = _to_c_float_array(audio)
+        count = ctypes.c_size_t()
+        candidates = (SonareProjectTempoCandidate * 3)()
+        _check(
+            _get_lib().sonare_project_analyze_tempo(
+                self._require_handle(),
+                c_array,
+                ctypes.c_size_t(length),
+                int(sample_rate),
+                candidates,
+                ctypes.c_size_t(len(candidates)),
+                ctypes.byref(count),
+            )
+        )
+        labels = ("primary", "half", "double")
+        return [
+            {
+                "bpm": float(candidate.bpm),
+                "confidence": float(candidate.confidence),
+                "label": labels[candidate.kind] if candidate.kind < len(labels) else "primary",
+                "time_signature_count": int(candidate.time_signature_count),
+                "time_signature": {
+                    "start_ppq": float(candidate.first_time_signature.start_ppq),
+                    "numerator": int(candidate.first_time_signature.numerator),
+                    "denominator": int(candidate.first_time_signature.denominator),
+                },
+            }
+            for candidate in candidates[: min(count.value, len(candidates))]
+        ]
+
+    def auto_tempo(
+        self,
+        audio: Sequence[float] | np.ndarray,
+        sample_rate: int,
+        candidate_index: int = 0,
+        apply_time_signatures: bool = False,
+    ) -> float:
         """Detect tempo from a mono buffer and install it (undoable).
 
         Returns the primary BPM estimate.
@@ -45,27 +86,32 @@ class _ProjectInspectionMixin:
         c_array, length = _to_c_float_array(audio)
         out_bpm = ctypes.c_float()
         _check(
-            _get_lib().sonare_project_auto_tempo(
+            _get_lib().sonare_project_auto_tempo_ex(
                 self._require_handle(),
                 c_array,
                 ctypes.c_size_t(length),
                 int(sample_rate),
+                ctypes.c_size_t(candidate_index),
+                ctypes.c_uint8(apply_time_signatures),
                 ctypes.byref(out_bpm),
             )
         )
         return float(out_bpm.value)
 
-    def snap_to_grid(self, ppq: float, strength: float = 1.0) -> float:
-        """Snap a PPQ coordinate to the nearest beat of the project grid.
+    def snap_to_grid(self, ppq: float, strength: float = 1.0, division: int = 1) -> float:
+        """Snap a PPQ coordinate to a project-grid line.
 
-        ``strength`` in ``[0, 1]`` (0 = no snap, 1 = exact grid line).
+        ``division`` is ``0`` for bars, ``1`` for beats, or the number of
+        subdivisions per beat (for example, ``4`` for sixteenths). ``strength``
+        is in ``[0, 1]`` (0 = no snap, 1 = exact grid line).
         """
         out_ppq = ctypes.c_double()
         _check(
-            _get_lib().sonare_project_snap_to_grid(
+            _get_lib().sonare_project_snap_to_grid_ex(
                 self._require_handle(),
                 float(ppq),
                 float(strength),
+                int(division),
                 ctypes.byref(out_ppq),
             )
         )

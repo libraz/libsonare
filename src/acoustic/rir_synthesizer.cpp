@@ -102,7 +102,9 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
     const float center = 125.0f * std::pow(2.0f, static_cast<float>(b));  // octave_center_hz
     if (center * sonare::constants::kSqrt2 >= nyquist) continue;
-    longest = std::max(longest, rt.rt60_bands[b]);
+    // Keep this diagnostic estimate aligned with synthesize_late_tail(), which
+    // caps each rendered RT60 at 60 seconds before deriving its storage size.
+    longest = std::max(longest, std::min(rt.rt60_bands[b], 60.0f));
   }
   // Mirror synthesize_late_tail's ceiling so the estimate cannot overflow int or
   // claim a clamp that the late tail's own cap (not max_seconds) actually made.
@@ -141,12 +143,15 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const float volume = shoebox_volume(room);
   float mixing_ms;
   if (config.mixing_time_ms > 0.0f) {
+    // Public validation permits an intentional long crossover up to
+    // kMaxRirMixingTimeMs. Do not silently collapse that request to the much
+    // smaller auto-estimate range.
     mixing_ms = config.mixing_time_ms;
   } else {
     const float scatter_factor = 1.0f - kScatterMixingShift * mean_scattering;
     mixing_ms = std::sqrt(std::max(volume, 0.0f)) * scatter_factor;
+    mixing_ms = std::clamp(mixing_ms, kMinMixingMs, kMaxMixingMs);
   }
-  mixing_ms = std::clamp(mixing_ms, kMinMixingMs, kMaxMixingMs);
   const int half_xfade = std::max(
       1, static_cast<int>(std::lround(std::max(0.0f, config.crossfade_ms) * 0.001f * sr * 0.5f)));
 

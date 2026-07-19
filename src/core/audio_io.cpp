@@ -1,6 +1,7 @@
 #include "core/audio_io.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 
@@ -80,14 +81,12 @@ std::string unsupported_file_message(const std::string& path) {
 #endif  // !__EMSCRIPTEN__
 #endif  // !SONARE_WITH_FFMPEG
 
-/// @brief RAII guard for MP3 decode buffer.
-/// @details Ensures mp3dec_file_info_t.buffer is freed even on exception.
-struct Mp3BufferGuard {
-  mp3d_sample_t* ptr = nullptr;
-  ~Mp3BufferGuard() {
-    if (ptr) {
-      free(ptr);
-    }
+/// @brief RAII guard for minimp3's streaming decoder state.
+struct Mp3DecoderGuard {
+  mp3dec_ex_t decoder{};
+  bool opened = false;
+  ~Mp3DecoderGuard() {
+    if (opened) mp3dec_ex_close(&decoder);
   }
 };
 
@@ -110,35 +109,6 @@ std::vector<float> stereo_to_mono(const float* data, size_t total_samples, int c
         sum += data[i * channels + ch];
       }
       mono[i] = sum / static_cast<float>(channels);
-    }
-  }
-  return mono;
-}
-
-/// @brief Converts interleaved int16 stereo to mono float.
-/// @details Handles int16-to-float conversion and channel mixing in a single pass.
-std::vector<float> int16_stereo_to_mono(const mp3d_sample_t* data, size_t total_samples,
-                                        int channels) {
-  size_t frame_count = total_samples / static_cast<size_t>(channels);
-  std::vector<float> mono(frame_count);
-  constexpr float kInt16Scale = 1.0f / 32768.0f;
-
-  if (channels == 1) {
-    for (size_t i = 0; i < frame_count; ++i) {
-      mono[i] = static_cast<float>(data[i]) * kInt16Scale;
-    }
-  } else if (channels == 2) {
-    for (size_t i = 0; i < frame_count; ++i) {
-      mono[i] = (static_cast<float>(data[i * 2]) + static_cast<float>(data[i * 2 + 1])) *
-                kInt16Scale * 0.5f;
-    }
-  } else {
-    for (size_t i = 0; i < frame_count; ++i) {
-      float sum = 0.0f;
-      for (int ch = 0; ch < channels; ++ch) {
-        sum += static_cast<float>(data[i * channels + ch]);
-      }
-      mono[i] = sum * kInt16Scale / static_cast<float>(channels);
     }
   }
   return mono;
@@ -247,35 +217,58 @@ AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
 }
 
 AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
-  mp3dec_t mp3d;
-  mp3dec_file_info_t info;
-
-  mp3dec_init(&mp3d);
-  int result = mp3dec_load_buf(&mp3d, data, size, &info, nullptr, nullptr);
+  // mp3dec_load_buf decodes the entire stream into one malloc before exposing
+  // its sample count, so a low-bitrate, long-duration upload can OOM before we
+  // get a chance to enforce kMaxOfflineAudioSamples. The streaming API scans
+  // metadata/indexes first, then lets us enforce the bound for every decoded
+  // chunk before appending PCM to the result.
+  Mp3DecoderGuard decoder_guard;
+  const int result = mp3dec_ex_open_buf(&decoder_guard.decoder, data, size, 0);
   SONARE_CHECK_MSG(result == 0, ErrorCode::DecodeFailed, "Failed to decode MP3 data");
+  decoder_guard.opened = true;
 
-  // Use RAII guard to ensure buffer is freed even on exception
-  Mp3BufferGuard buffer_guard;
-  buffer_guard.ptr = info.buffer;
+  SONARE_CHECK_MSG(decoder_guard.decoder.samples > 0, ErrorCode::DecodeFailed,
+                   "No audio samples in MP3 data");
 
-  SONARE_CHECK_MSG(info.samples > 0, ErrorCode::DecodeFailed, "No audio samples in MP3 data");
-
-  int sample_rate = info.hz;
-  int channels = info.channels;
+  int sample_rate = decoder_guard.decoder.info.hz;
+  int channels = decoder_guard.decoder.info.channels;
   SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid MP3 sample rate");
   SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
                    "Invalid MP3 channel count");
-  size_t total_samples = static_cast<size_t>(info.samples);
-  // A tiny, highly-compressed MP3 can decode to an outsized sample pool. Reject
-  // over the offline limit before the mono buffer doubles it (buffer_guard frees
-  // the decoder buffer on throw).
-  SONARE_CHECK_MSG(total_samples <= resource::kMaxOfflineAudioSamples, ErrorCode::DecodeFailed,
-                   "MP3 decoded more samples than the offline decode limit");
 
-  // Convert int16 samples to float and mono
-  std::vector<float> mono = int16_stereo_to_mono(info.buffer, total_samples, channels);
+  const uint64_t declared_samples = decoder_guard.decoder.samples;
+  SONARE_CHECK_MSG(declared_samples <= resource::kMaxOfflineAudioSamples, ErrorCode::DecodeFailed,
+                   "MP3 declares more samples than the offline decode limit");
 
-  // buffer_guard will free info.buffer on destruction
+  constexpr size_t kMp3DecodeChunkSamples = 16 * 1024;
+  std::array<mp3d_sample_t, kMp3DecodeChunkSamples> chunk{};
+  std::vector<float> mono;
+  size_t decoded_samples = 0;
+  while (true) {
+    const size_t read_samples = mp3dec_ex_read(&decoder_guard.decoder, chunk.data(), chunk.size());
+    if (read_samples == 0) break;
+
+    size_t next_total = 0;
+    SONARE_CHECK_MSG(numeric::checked_add(decoded_samples, read_samples, &next_total) &&
+                         next_total <= resource::kMaxOfflineAudioSamples,
+                     ErrorCode::DecodeFailed,
+                     "MP3 decoded more samples than the offline decode limit");
+    SONARE_CHECK_MSG(read_samples % static_cast<size_t>(channels) == 0, ErrorCode::DecodeFailed,
+                     "MP3 decoder returned an incomplete audio frame");
+    decoded_samples = next_total;
+
+    const size_t frame_count = read_samples / static_cast<size_t>(channels);
+    for (size_t frame = 0; frame < frame_count; ++frame) {
+      float sum = 0.0f;
+      for (int channel = 0; channel < channels; ++channel) {
+        sum += static_cast<float>(
+            chunk[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)]);
+      }
+      mono.push_back(sum / (32768.0f * static_cast<float>(channels)));
+    }
+  }
+  SONARE_CHECK_MSG(!mono.empty(), ErrorCode::DecodeFailed, "No audio samples in MP3 data");
+
   return {std::move(mono), sample_rate};
 }
 
@@ -329,6 +322,30 @@ AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& opti
 #endif
   }
   return load_buffer(data.data(), data.size());
+}
+
+int audio_channel_count(const std::string& path, const AudioLoadOptions& options) {
+  const std::vector<uint8_t> data = read_file(path, options.max_file_size);
+  switch (detect_format(data.data(), data.size())) {
+    case AudioFormat::WAV: {
+      drwav wav;
+      SONARE_CHECK_MSG(drwav_init_memory(&wav, data.data(), data.size(), nullptr),
+                       ErrorCode::DecodeFailed, "Failed to parse WAV data");
+      const int channels = static_cast<int>(wav.channels);
+      drwav_uninit(&wav);
+      return channels;
+    }
+    case AudioFormat::MP3: {
+      Mp3DecoderGuard decoder_guard;
+      SONARE_CHECK_MSG(mp3dec_ex_open_buf(&decoder_guard.decoder, data.data(), data.size(), 0) == 0,
+                       ErrorCode::DecodeFailed, "Failed to decode MP3 data");
+      decoder_guard.opened = true;
+      return decoder_guard.decoder.info.channels;
+    }
+    case AudioFormat::Unknown:
+      return 0;
+  }
+  return 0;
 }
 
 namespace {

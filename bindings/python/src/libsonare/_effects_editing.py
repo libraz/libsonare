@@ -386,6 +386,24 @@ def note_stretch(
     )
 
 
+def note_move(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    onset_sample: int = 0,
+    offset_sample: int = 0,
+    target_onset_sample: int = 0,
+) -> list[float]:
+    """Move a note region to a new onset without changing its duration."""
+    return _call_float_transform(
+        "sonare_note_move",
+        samples,
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(onset_sample),
+        ctypes.c_int(offset_sample),
+        ctypes.c_int(target_onset_sample),
+    )
+
+
 _SPECTRAL_EDIT_MODE_NAMES: dict[str, int] = {
     "gain": SONARE_SPECTRAL_EDIT_MODE_GAIN,
     "attenuate": SONARE_SPECTRAL_EDIT_MODE_ATTENUATE,

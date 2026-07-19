@@ -145,12 +145,52 @@ export type MasteringProcessorParams = Record<string, number | boolean>;
 
 export interface MasteringChainConfig {
   repair?: {
-    denoise?: boolean;
+    /** `boolean` is retained as a deprecated shorthand for `{ enabled }`. */
+    denoise?:
+      | boolean
+      | {
+          enabled?: boolean;
+          nFft?: number;
+          hopLength?: number;
+          ddAlpha?: number;
+          gainFloor?: number;
+          overSubtraction?: number;
+          spectralFloor?: number;
+          noiseEstimationQuantile?: number;
+          speechPresenceGain?: boolean;
+          gainSmoothing?: boolean;
+        };
     nFft?: number;
     hopLength?: number;
     ddAlpha?: number;
     gainFloor?: number;
+    declip?: {
+      enabled?: boolean;
+      clipThreshold?: number;
+      lpcOrder?: number;
+      iterations?: number;
+      lpcBlend?: number;
+    };
+    decrackle?: {
+      enabled?: boolean;
+      threshold?: number;
+      /** 0 = median, 1 = wavelet shrinkage. */
+      mode?: number;
+      levels?: number;
+    };
+    dehum?: {
+      enabled?: boolean;
+      fundamentalHz?: number;
+      harmonics?: number;
+      q?: number;
+      adaptive?: boolean;
+      searchRangeHz?: number;
+      adaptation?: number;
+      frameSize?: number;
+      pllBandwidth?: number;
+    };
     declick?: {
+      enabled?: boolean;
       threshold?: number;
       neighborRatio?: number;
       maxClickSamples?: number;
@@ -158,6 +198,7 @@ export interface MasteringChainConfig {
       residualRatio?: number;
     };
     dereverb?: {
+      enabled?: boolean;
       threshold?: number;
       attenuation?: number;
       nFft?: number;
@@ -173,11 +214,20 @@ export interface MasteringChainConfig {
     };
   };
   eq?: {
+    /** Canonical nested tilt stage. */
+    tilt?: {
+      enabled?: boolean;
+      tiltDb?: number;
+      pivotHz?: number;
+    };
+    /** @deprecated Use `eq.tilt.tiltDb`. */
     tiltDb?: number;
+    /** @deprecated Use `eq.tilt.pivotHz`. */
     pivotHz?: number;
   };
   dynamics?: {
     compressor?: {
+      enabled?: boolean;
       thresholdDb?: number;
       ratio?: number;
       attackMs?: number;
@@ -187,6 +237,7 @@ export interface MasteringChainConfig {
       autoMakeup?: boolean;
     };
     deesser?: {
+      enabled?: boolean;
       frequencyHz?: number;
       thresholdDb?: number;
       ratio?: number;
@@ -196,6 +247,7 @@ export interface MasteringChainConfig {
       bandpassQ?: number;
     };
     transientShaper?: {
+      enabled?: boolean;
       attackGainDb?: number;
       sustainGainDb?: number;
       fastAttackMs?: number;
@@ -208,6 +260,7 @@ export interface MasteringChainConfig {
       lookaheadMs?: number;
     };
     multibandComp?: {
+      enabled?: boolean;
       lowCutoffHz?: number;
       highCutoffHz?: number;
       lowThresholdDb?: number;
@@ -226,6 +279,7 @@ export interface MasteringChainConfig {
   };
   saturation?: {
     tape?: {
+      enabled?: boolean;
       driveDb?: number;
       saturation?: number;
       hysteresis?: number;
@@ -236,6 +290,7 @@ export interface MasteringChainConfig {
       gapLoss?: number;
     };
     exciter?: {
+      enabled?: boolean;
       frequencyHz?: number;
       driveDb?: number;
       amount?: number;
@@ -245,6 +300,7 @@ export interface MasteringChainConfig {
   };
   spectral?: {
     airBand?: {
+      enabled?: boolean;
       amount?: number;
       shelfFrequencyHz?: number;
       dynamicThresholdDb?: number;
@@ -253,17 +309,20 @@ export interface MasteringChainConfig {
   };
   stereo?: {
     imager?: {
+      enabled?: boolean;
       width?: number;
       outputGainDb?: number;
       decorrelationAmount?: number;
       preserveEnergy?: boolean;
     };
     monoMaker?: {
+      enabled?: boolean;
       amount?: number;
     };
   };
   maximizer?: {
     truePeakLimiter?: {
+      enabled?: boolean;
       ceilingDb?: number;
       lookaheadMs?: number;
       releaseMs?: number;
@@ -272,9 +331,12 @@ export interface MasteringChainConfig {
     };
   };
   loudness?: {
+    enabled?: boolean;
     targetLufs?: number;
     ceilingDb?: number;
     truePeakOversample?: number;
+    releaseMs?: number;
+    applyGainAtInputRate?: boolean;
   };
 }
 

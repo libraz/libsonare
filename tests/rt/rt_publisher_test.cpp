@@ -66,6 +66,21 @@ TEST_CASE("RtPublisher tolerates repeated sequential acquire calls", "[rt][publi
   REQUIRE(*publisher.current() == 7);
 }
 
+TEST_CASE("RtPublisher reclaim releases the final snapshot after audio quiescence",
+          "[rt][publisher]") {
+  CountedSnapshot::destroyed.store(0);
+  sonare::rt::RtPublisher<CountedSnapshot> publisher;
+  REQUIRE(publisher.publish(make_snapshot(7)));
+  publisher.acquire();
+  REQUIRE(publisher.current() != nullptr);
+
+  publisher.reclaim();
+
+  REQUIRE(publisher.current() == nullptr);
+  REQUIRE(publisher.control_current() == nullptr);
+  REQUIRE(CountedSnapshot::destroyed.load() == 1);
+}
+
 TEST_CASE("RtPublisher acquire adopts the newest of several pending publishes", "[rt][publisher]") {
   CountedSnapshot::destroyed.store(0);
   sonare::rt::RtPublisher<CountedSnapshot> publisher;

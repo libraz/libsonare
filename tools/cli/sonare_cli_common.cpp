@@ -332,8 +332,8 @@ int cmd_system_info(const CliArgs& args) {
 
 int cmd_frames_to_samples(const CliArgs& args, const Audio&) {
   const int frames = args.get_int("frames", 0);
-  const int hop_length = args.get_int("hop-length", args.hop_length);
-  const int n_fft = args.get_int("n-fft", 0);
+  const int hop_length = args.hop_length;
+  const int n_fft = args.n_fft;
   const int samples = frames_to_samples(frames, hop_length, n_fft);
   if (args.json_output) {
     JsonBuilder().begin_object().kv("samples", samples).end_object().print();
@@ -345,8 +345,8 @@ int cmd_frames_to_samples(const CliArgs& args, const Audio&) {
 
 int cmd_samples_to_frames(const CliArgs& args, const Audio&) {
   const int samples = args.get_int("samples", 0);
-  const int hop_length = args.get_int("hop-length", args.hop_length);
-  const int n_fft = args.get_int("n-fft", 0);
+  const int hop_length = args.hop_length;
+  const int n_fft = args.n_fft;
   const int frames = samples_to_frames(samples, hop_length, n_fft);
   if (args.json_output) {
     JsonBuilder().begin_object().kv("frames", frames).end_object().print();
@@ -447,7 +447,7 @@ int cmd_pcen(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
   PcenConfig config;
   config.sr = args.get_int("sample-rate", config.sr);
-  config.hop_length = args.get_int("hop-length", config.hop_length);
+  config.hop_length = args.hop_length;
   config.time_constant = args.get_float("time-constant", config.time_constant);
   config.gain = args.get_float("gain", config.gain);
   config.bias = args.get_float("bias", config.bias);
@@ -459,6 +459,12 @@ int cmd_pcen(const CliArgs& args, const Audio&) {
 }
 
 int cmd_info(const CliArgs& args, const Audio& audio) {
+  int channels = 0;
+  try {
+    channels = audio_channel_count(args.input_file);
+  } catch (const sonare::SonareException&) {
+    // `audio` has already decoded successfully; omit unavailable metadata.
+  }
   float peak = 0.0f, rms_sum = 0.0f;
   for (size_t i = 0; i < audio.size(); ++i) {
     float val = std::abs(audio.data()[i]);
@@ -475,6 +481,7 @@ int cmd_info(const CliArgs& args, const Audio& audio) {
         .kv("path", args.input_file)
         .kv("duration", audio.duration())
         .kv("sample_rate", audio.sample_rate())
+        .kv("channels", channels)
         .kv("samples", audio.size())
         .kv("peak_db", peak_db)
         .kv("rms_db", rms_db)
@@ -490,6 +497,9 @@ int cmd_info(const CliArgs& args, const Audio& audio) {
               << audio.duration() << "s)" << color::reset << "\n";
     std::cout << "  " << color::blue << "> Sample Rate: " << audio.sample_rate() << " Hz"
               << color::reset << "\n";
+    if (channels > 0) {
+      std::cout << "  " << color::blue << "> Channels: " << channels << color::reset << "\n";
+    }
     std::cout << "  " << color::blue << "> Samples: " << audio.size() << color::reset << "\n";
     std::cout << "  " << color::green << "> Peak Level: " << std::fixed << std::setprecision(1)
               << peak_db << " dB" << color::reset << "\n";

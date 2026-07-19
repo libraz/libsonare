@@ -164,6 +164,25 @@ TEST_CASE("AutomationEngine applies lane values through ProcessorBase set_parame
   REQUIRE_THAT(processor.last_value, WithinAbs(0.5f, 1.0e-6f));
 }
 
+TEST_CASE("AutomationEngine keeps the first lane for a duplicate target", "[automation]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  sonare::automation::AutomationLane first(7);
+  first.set_points({{0.0, 0.25f, sonare::automation::CurveType::Linear}});
+  sonare::automation::AutomationLane second(7);
+  second.set_points({{0.0, 0.75f, sonare::automation::CurveType::Linear}});
+  CaptureProcessor processor;
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_lanes({first, second});
+  REQUIRE(engine.lane_count() == 1);
+  engine.acquire_lanes();
+  REQUIRE(engine.bind_target(7, &processor));
+  engine.apply({}, 0, 64);
+  REQUIRE(processor.set_count == 1);
+  REQUIRE_THAT(processor.last_value, WithinAbs(0.25f, 1.0e-6f));
+}
+
 TEST_CASE("AutomationEngine skips non realtime-safe parameters", "[automation]") {
   sonare::transport::TempoMap tempo;
   tempo.prepare(48000.0);

@@ -23,8 +23,8 @@
 ///
 /// Lossy MIDI 1.0 <-> MIDI 2.0 translation (DOCUMENTED, pinned in the test):
 ///   - Velocity: MIDI 1.0 uses 7-bit velocity; MIDI 2.0 uses 16-bit. The
-///     1.0 -> 2.0 up-scale is the MIDI-Association "min-center-max" bit-scaling
-///     (left-justify + replicate). The 2.0 -> 1.0 down-scale takes the top 7
+///     1.0 -> 2.0 up-scale repeats the source bit pattern to fill the target
+///     width. The 2.0 -> 1.0 down-scale takes the top 7
 ///     bits (>> 9). A round-trip 1.0 -> 2.0 -> 1.0 is LOSSLESS for velocity (the
 ///     top 7 bits survive), but a 2.0 velocity whose low 9 bits are non-zero is
 ///     LOSSY through 1.0.

@@ -48,9 +48,10 @@ void runDynamicsOffline(Processor& processor, std::vector<float>& samples, int s
     latency_samples_out = 0;
     return;
   }
-  processor.prepare(sample_rate, static_cast<int>(samples.size()));
-  float* channels[] = {samples.data()};
-  processor.process(channels, 1, static_cast<int>(samples.size()));
+  // Keep the direct WASM binding aligned with the C-ABI/Python offline path:
+  // drain lookahead latency and return an input-aligned buffer, rather than
+  // exposing a delayed buffer with a latency value the caller cannot apply.
+  mastering::api::internal::run_processor_mono(processor, samples, sample_rate);
   latency_samples_out = processor.latency_samples();
 }
 
@@ -216,6 +217,17 @@ bool js_scale_pitch_class_enabled(int root, int mode_mask, int pitch_class) {
 
 val js_resample(val samples, int src_sr, int target_sr) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), src_sr);
+  if (target_sr < kMinAudioSampleRate || target_sr > kMaxAudioSampleRate) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "resample: target sample rate is out of range");
+  }
+  const double projected = static_cast<double>(data.size()) * static_cast<double>(target_sr) /
+                           static_cast<double>(src_sr);
+  if (projected > static_cast<double>(kMaxAudioBufferSize)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "resample: output buffer would be too large");
+  }
   std::vector<float> result = resample(data.data(), data.size(), src_sr, target_sr);
   return vectorToFloat32Array(result);
 }

@@ -11,10 +11,16 @@ export interface EngineClipContext {
   readonly clips: Map<number, EngineClip>;
   readonly midiClips: Map<number, EngineMidiClipSchedule>;
   allocateClipId(): number;
-  postSync(message: SonareEngineSyncMessage): void;
+  postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void;
   resolveTargetId(target: string | number): number;
   ensureTrackLane(target: string | number): number;
 }
+
+// Keep control-message work bounded even for long tempo-synced clips. The
+// worklet creates a native page provider, receives these transferable PCM
+// chunks, and only schedules the clip after all pages arrive.
+const PREBAKED_CLIP_PAGE_THRESHOLD = 16_384;
+const PREBAKED_CLIP_PAGE_FRAMES = 4_096;
 
 export function addClip(
   ctx: EngineClipContext,
@@ -57,9 +63,68 @@ export function setMidiClips(
 function syncClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds: number[]): void {
   const clips = Array.from(ctx.clips.values());
   ctx.offlineEngine.setClips(clips);
+  const preparedById = new Map<number, EngineClip>();
+  for (const clip of clips) {
+    if (clip.id === undefined) {
+      continue;
+    }
+    const bakedChannels = ctx.offlineEngine.prebakedClipChannels(clip.id);
+    preparedById.set(
+      clip.id,
+      bakedChannels === null
+        ? clip
+        : {
+            ...clip,
+            channels: bakedChannels,
+            clipOffsetSamples: 0,
+            lengthSamples: bakedChannels[0]?.length ?? 0,
+            loop: false,
+            warpMode: 'off',
+            warpAnchors: undefined,
+          },
+    );
+  }
+  const inlineUpserts: EngineClip[] = [];
+  for (const clip of upserts) {
+    const prepared = clip.id === undefined ? clip : (preparedById.get(clip.id) ?? clip);
+    const channels = prepared.channels;
+    if (
+      prepared.id === undefined ||
+      prepared.warpMode !== 'off' ||
+      !channels ||
+      channels.length === 0 ||
+      channels[0].length <= PREBAKED_CLIP_PAGE_THRESHOLD
+    ) {
+      inlineUpserts.push(prepared);
+      continue;
+    }
+    const numSamples = channels[0].length;
+    ctx.postSync({
+      type: 'syncClipPageProvider',
+      clipId: prepared.id,
+      clip: { ...prepared, channels: undefined, pageProvider: undefined },
+      numChannels: channels.length,
+      numSamples,
+      pageFrames: PREBAKED_CLIP_PAGE_FRAMES,
+    });
+    for (
+      let start = 0, pageIndex = 0;
+      start < numSamples;
+      start += PREBAKED_CLIP_PAGE_FRAMES, pageIndex++
+    ) {
+      const page = channels.map((channel) =>
+        channel.slice(start, start + PREBAKED_CLIP_PAGE_FRAMES),
+      );
+      ctx.postSync(
+        { type: 'syncClipPage', clipId: prepared.id, pageIndex, channels: page },
+        page.map((channel) => channel.buffer as Transferable),
+      );
+    }
+    ctx.postSync({ type: 'syncClipPageCommit', clipId: prepared.id });
+  }
   ctx.postSync({
     type: 'syncClipsDelta',
-    upserts,
+    upserts: inlineUpserts,
     removeIds,
   });
 }

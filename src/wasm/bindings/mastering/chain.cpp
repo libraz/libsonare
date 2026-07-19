@@ -12,7 +12,8 @@ val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_
   mastering::maximizer::LoudnessOptimizeConfig config;
   config.target_lufs = target_lufs;
   config.ceiling_db = ceiling_db;
-  config.true_peak_oversample = true_peak_oversample;
+  // Keep C-ABI sentinel semantics: 0 requests the default oversample factor.
+  if (true_peak_oversample > 0) config.true_peak_oversample = true_peak_oversample;
   // release_ms == 0 keeps the C++ default (50 ms); only a positive value overrides.
   if (release_ms > 0.0f) config.release_ms = release_ms;
   config.apply_gain_at_input_rate = apply_gain_at_input_rate;
@@ -35,6 +36,15 @@ val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_
 // ---------------------------------------------------------------------------
 
 mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
+  // The TypeScript facade supplies canonical dotted parameters in this private
+  // envelope. Parsing them with the core parser keeps WASM in lockstep with
+  // C-ABI/Node/Python while the legacy nested object branch below remains only
+  // for direct embind callers from older generated glue.
+  val flat_params = objectProperty(config, "__flatParams");
+  if (!flat_params.isUndefined()) {
+    const std::vector<mastering::api::Param> params = masteringParamsFromObject(flat_params);
+    return mastering::api::parse_chain_config_params(params.data(), params.size());
+  }
   mastering::api::MasteringChainConfig out;
 
   val repair = objectProperty(config, "repair");

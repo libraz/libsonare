@@ -380,28 +380,34 @@ int cmd_deemphasis(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
-  const float top_db = args.get_float("top-db", 60.0f);
-  std::vector<float> input(audio.begin(), audio.end());
-  TrimResult result = sonare::trim(input, top_db, args.n_fft, args.hop_length);
+  // Match Python's public trim() command: an absolute dB threshold. --top-db
+  // remains a native compatibility alias for the legacy relative algorithm.
+  const bool use_legacy_top_db = args.has("top-db") && !args.has("threshold-db");
+  const float threshold_db = args.get_float("threshold-db", -60.0f);
+  Audio result =
+      use_legacy_top_db
+          ? Audio::from_vector(
+                sonare::trim(std::vector<float>(audio.begin(), audio.end()),
+                             args.get_float("top-db", 60.0f), args.n_fft, args.hop_length)
+                    .audio,
+                audio.sample_rate())
+          : trim_absolute(audio, threshold_db, args.n_fft, args.hop_length);
 
   if (!args.output_file.empty()) {
-    save_wav(args.output_file, result.audio.data(), result.audio.size(), audio.sample_rate());
+    save_wav(args.output_file, result.data(), result.size(), audio.sample_rate());
   }
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("start_sample", result.start_sample)
-        .kv("end_sample", result.end_sample)
-        .kv("samples", result.audio.size())
-        .kv("top_db", top_db)
-        .kv("output", args.output_file)
-        .end_object()
-        .print();
+    JsonBuilder json;
+    json.begin_object()
+        .kv("length", result.size())
+        .kv("sample_rate", audio.sample_rate())
+        .kv("threshold_db", threshold_db);
+    if (!args.output_file.empty()) json.kv("output", args.output_file);
+    json.end_object().print();
   } else {
     std::cout << "Silence Trim:\n";
-    printf("  Range:   %d - %d\n", result.start_sample, result.end_sample);
-    printf("  Samples: %zu\n", result.audio.size());
+    printf("  Samples: %zu\n", result.size());
     if (!args.output_file.empty()) std::cout << "  Output:  " << args.output_file << "\n";
   }
   return 0;

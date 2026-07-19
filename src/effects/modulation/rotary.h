@@ -13,10 +13,13 @@
 namespace sonare::effects::modulation {
 
 struct RotaryConfig {
-  float rate_hz = 6.0f;        ///< horn rotor rate (the drum rotor tracks slower).
-  float depth_ms = 1.2f;       ///< peak doppler delay swing.
-  float tremolo = 0.5f;        ///< amplitude-modulation depth [0, 1].
-  float stereo_spread = 1.0f;  ///< L/R anti-phase amount [0, 1].
+  float rate_hz = 6.0f;   ///< horn rotor rate (the drum rotor tracks slower).
+  float depth_ms = 1.2f;  ///< peak doppler delay swing.
+  float tremolo = 0.5f;   ///< amplitude-modulation depth [0, 1].
+  /// L/R anti-phase amount [0, 1]. Construction/reset-only: changing it
+  /// requires reconstructing or resetting the effect, so it is intentionally
+  /// absent from the realtime automation parameter list.
+  float stereo_spread = 1.0f;
   float dry_wet = 1.0f;
 };
 

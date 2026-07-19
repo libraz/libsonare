@@ -28,6 +28,8 @@
 ///
 /// @section keyctx_determinism Determinism
 /// All functions are pure given their inputs. No clocks, no std::rand. The only
+/// @note Internal composition-assist primitive. It is not a stable C ABI or
+/// language-binding API; public callers use the project annotation/edit APIs.
 /// floating-point is IEEE arithmetic on the analyzer outputs.
 
 #include <cstdint>

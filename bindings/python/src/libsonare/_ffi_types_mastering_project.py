@@ -324,6 +324,18 @@ class SonareProjectTimeSignatureSegment(ctypes.Structure):
     ]
 
 
+class SonareProjectTempoCandidate(ctypes.Structure):
+    """Maps to SonareProjectTempoCandidate in sonare_c_project.h."""
+
+    _fields_ = [
+        ("bpm", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+        ("kind", ctypes.c_uint32),
+        ("time_signature_count", ctypes.c_uint32),
+        ("first_time_signature", SonareProjectTimeSignatureSegment),
+    ]
+
+
 # Built-in synth waveform ordinals (mirror SonareSynthWaveform).
 SONARE_SYNTH_WAVEFORM_SINE = 0
 SONARE_SYNTH_WAVEFORM_SAW = 1

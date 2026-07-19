@@ -704,6 +704,12 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   Napi::Float32Array source = info[0].As<Napi::Float32Array>();
   Napi::Float32Array reference = info[1].As<Napi::Float32Array>();
+  sonare::validate_offline_audio_input(source.Data(), source.ElementLength(), sample_rate);
+  sonare::validate_offline_audio_input(reference.Data(), reference.ElementLength(), sample_rate);
+  if (max_bands == 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "StreamingEqualizer.match: maxBands must be positive");
+  }
   sonare::Audio source_audio =
       sonare::Audio::from_buffer(source.Data(), source.ElementLength(), sample_rate);
   sonare::Audio reference_audio =

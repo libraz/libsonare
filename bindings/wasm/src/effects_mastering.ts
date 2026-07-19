@@ -2,6 +2,7 @@ export {
   harmonic,
   hpss,
   normalize,
+  noteMove,
   noteStretch,
   percussive,
   pitchCorrectTimevarying,

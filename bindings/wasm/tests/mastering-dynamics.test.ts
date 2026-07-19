@@ -180,6 +180,18 @@ describe('masteringDynamicsTransientShaper (WASM)', () => {
     expect(withLookahead.latencySamples).toBeGreaterThanOrEqual(noLookahead.latencySamples);
   });
 
+  it('compensates lookahead so a leading impulse stays at frame zero', () => {
+    const x = new Float32Array(4096);
+    x[0] = 0.5;
+    const r = masteringDynamicsTransientShaper(x, SR, {
+      attackGainDb: 0,
+      sustainGainDb: 0,
+      lookaheadMs: 5,
+    });
+    expect(r.latencySamples).toBeGreaterThan(0);
+    expect(r.samples[0]).toBeCloseTo(0.5, 6);
+  });
+
   it('rejects empty input with a clear RangeError', () => {
     expect(() => masteringDynamicsTransientShaper(new Float32Array(0), SR)).toThrow(
       /masteringDynamicsTransientShaper: samples must not be empty/,

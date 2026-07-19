@@ -139,7 +139,7 @@ class Project(
 
     def to_json(self) -> str:
         """Serialize the project to deterministic JSON (UTF-8 decoded)."""
-        return self.to_json_bytes().decode("utf-8")
+        return self.to_json_bytes().decode("utf-8", errors="replace")
 
     @classmethod
     def from_json(cls, json: str | bytes) -> Project:

@@ -4,10 +4,13 @@ import {
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
+  meteringDcOffset,
   meteringPeakDb,
   meteringRmsDb,
   meteringStereoCorrelation,
   meteringTruePeakDb,
+  pitchYin,
+  StreamingEqualizer,
   voiceChange,
   voiceChangeRealtime,
 } from '../src/index';
@@ -92,6 +95,10 @@ describe('empty-sample guards (Node)', () => {
 });
 
 describe('NaN/Inf guards (Node)', () => {
+  it('StreamingEqualizer.match rejects a NaN reference', () => {
+    const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
+    expect(() => equalizer.match(sine(), withNaN(), { maxBands: 4 })).toThrow();
+  });
   it('lufs rejects NaN with index', () => {
     expect(() => lufs(withNaN(), SR)).toThrow(/lufs: samples contains NaN or Inf at index 100/);
   });
@@ -113,19 +120,31 @@ describe('NaN/Inf guards (Node)', () => {
       /meteringPeakDb: samples contains NaN or Inf at index 100/,
     );
   });
+  it('pitchYin rejects NaN', () => {
+    expect(() => pitchYin(withNaN(), SR)).toThrow(/samples contains NaN or Inf/);
+  });
+  it('meteringDcOffset rejects Inf', () => {
+    expect(() => meteringDcOffset(withInf(), SR)).toThrow(/samples contains NaN or Inf/);
+  });
 });
 
-describe('validate=false skips NaN check (Node)', () => {
-  it('lufs with validate=false does not throw on NaN', () => {
-    // Underlying C may return -Infinity or NaN-equivalent; the binding must not throw.
-    expect(() => lufs(withNaN(), SR, { validate: false })).not.toThrow(
-      /samples contains NaN or Inf/,
-    );
+describe('sample-rate guards (Node)', () => {
+  it('pitchYin rejects an out-of-range sample rate', () => {
+    expect(() => pitchYin(sine(), 0)).toThrow();
   });
-  it('masteringDynamicsCompressor with validate=false does not throw on NaN', () => {
-    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).not.toThrow(
-      /samples contains NaN or Inf/,
-    );
+  it('meteringDcOffset rejects an out-of-range sample rate', () => {
+    expect(() => meteringDcOffset(sine(), 0)).toThrow();
+  });
+});
+
+describe('validate=false still has the C-ABI NaN backstop (Node)', () => {
+  it('lufs with validate=false rejects NaN in the C-ABI', () => {
+    // `validate: false` bypasses only the TypeScript preflight. The C-ABI
+    // repeats this safety check and must continue to reject non-finite audio.
+    expect(() => lufs(withNaN(), SR, { validate: false })).toThrow();
+  });
+  it('masteringDynamicsCompressor with validate=false rejects NaN in the C-ABI', () => {
+    expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).toThrow();
   });
 });
 

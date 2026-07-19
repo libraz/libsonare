@@ -216,12 +216,18 @@ describe('WASM analyzer coverage parity', () => {
       const samples = makeSine(2, 440);
       let calls = 0;
       let lastProgress = -1;
-      const result = masterAudioWithProgress(samples, SR, 'pop', (p, stage) => {
-        calls++;
-        expect(typeof stage).toBe('string');
-        expect(p).toBeGreaterThanOrEqual(lastProgress); // monotonic
-        lastProgress = p;
-      });
+      const result = masterAudioWithProgress(
+        samples,
+        SR,
+        'pop',
+        { eq: { tilt: { tiltDb: 1 } } },
+        (p, stage) => {
+          calls++;
+          expect(typeof stage).toBe('string');
+          expect(p).toBeGreaterThanOrEqual(lastProgress); // monotonic
+          lastProgress = p;
+        },
+      );
       expect(calls).toBeGreaterThan(0);
       expect(result.samples.length).toBeGreaterThan(0);
       expect(Number.isFinite(result.outputLufs)).toBe(true);
@@ -247,7 +253,7 @@ describe('WASM analyzer coverage parity', () => {
       const left = makeSine(2, 440);
       const right = makeSine(2, 660);
       let calls = 0;
-      const result = masterAudioStereoWithProgress(left, right, SR, 'pop', () => {
+      const result = masterAudioStereoWithProgress(left, right, SR, 'pop', {}, () => {
         calls++;
       });
       expect(calls).toBeGreaterThan(0);

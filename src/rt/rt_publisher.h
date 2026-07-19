@@ -132,6 +132,25 @@ class RtPublisher {
   /// Most recently published snapshot as seen by the control thread.
   const std::shared_ptr<const T>& control_current() const noexcept { return control_current_; }
 
+  /// Release every retained snapshot from the CONTROL thread after the audio
+  /// consumer has been stopped. This is intended for unload/teardown paths:
+  /// unlike publish(), it also drops the audio-owned current snapshot, so it
+  /// must never run concurrently with acquire()/current() on the audio thread.
+  /// Not real-time safe.
+  void reclaim() noexcept {
+    reclaim_retired();
+    std::shared_ptr<const T> pending;
+    while (publish_ring_.pop(pending)) {
+      pending.reset();
+    }
+    // The audio thread is quiescent by contract, so no pending-slot reader can
+    // race this control-thread cleanup.
+    pending_slot_.reset();
+    pending_state_.store(kPendingEmpty, std::memory_order_release);
+    control_current_.reset();
+    audio_current_.reset();
+  }
+
  private:
   // SPSC ring specialised for shared_ptr<const T>. push() runs on the producer
   // thread; pop() runs on the consumer thread. For the publish ring the

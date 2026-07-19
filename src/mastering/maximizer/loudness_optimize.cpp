@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "mastering/api/internal_processor_runner.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "util/db.h"
@@ -46,28 +47,14 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   // Bound inter-sample peaks to the ceiling with a real oversampling true-peak
   // limiter instead of a per-sample clamp, so reconstructed (D/A) peaks stay at
   // or below config.ceiling_db rather than only the discrete sample peaks. The
-  // limiter has look-ahead latency, so pad by its latency, process, and drop the
-  // leading delayed samples to keep the output time-aligned (mirrors the chain's
-  // run_processor_mono helper).
-  const int num_samples = static_cast<int>(samples.size());
+  // limiter has look-ahead latency, so the shared runner streams trailing
+  // silence and removes the delayed prefix. Its fixed-size blocks also keep
+  // the limiter's oversampled scratch allocation independent of track length.
   const TruePeakLimiterConfig limiter_config =
       loudness_limiter_config(config.ceiling_db, config.true_peak_oversample, config.release_ms,
                               config.apply_gain_at_input_rate);
   TruePeakLimiter limiter(limiter_config);
-  limiter.prepare(static_cast<double>(audio.sample_rate()), num_samples);
-  const int latency = limiter.latency_samples();
-  if (latency > 0) {
-    limiter.reset();
-    limiter.prepare(static_cast<double>(audio.sample_rate()), num_samples + latency);
-    samples.resize(static_cast<std::size_t>(num_samples) + static_cast<std::size_t>(latency), 0.0f);
-    float* channel_ptrs[] = {samples.data()};
-    limiter.process(channel_ptrs, 1, num_samples + latency);
-    samples.erase(samples.begin(), samples.begin() + latency);
-    samples.resize(static_cast<std::size_t>(num_samples));
-  } else {
-    float* channel_ptrs[] = {samples.data()};
-    limiter.process(channel_ptrs, 1, num_samples);
-  }
+  api::internal::run_processor_mono(limiter, samples, audio.sample_rate());
 
   LoudnessOptimizeResult result;
   result.audio = Audio::from_vector(std::move(samples), audio.sample_rate());
@@ -75,10 +62,9 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   result.output_lufs = common::measure_lufs(result.audio);
   result.applied_gain_db = linear_to_db(gain);
   // The returned audio is time-aligned: the limiter's look-ahead latency was
-  // padded, processed, and dropped above, so no downstream compensation is
+  // streamed and dropped above, so no downstream compensation is
   // needed. Report zero rather than the internal limiter latency, which would
   // otherwise make a caller double-compensate an already-aligned buffer.
-  (void)latency;
   result.latency_samples = 0;
   return result;
 }

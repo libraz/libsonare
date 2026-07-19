@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "arrangement/edit_source.h"
@@ -295,6 +297,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // Sources (insert verbatim, preserving ids, then bump the id counters so a
     // later add_* allocates a fresh non-colliding id).
     uint32_t max_source_id = 0;
+    std::unordered_set<arrangement::SourceId> source_ids;
     if (const auto* arr = array_at(root, "sources")) {
       for (const auto& sv : *arr) {
         if (!sv.is_object()) continue;
@@ -305,7 +308,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
           return result;
         }
         if (sid > max_source_id) max_source_id = sid;
-        if (!project.insert_source_raw(std::move(src))) {
+        if (!source_ids.insert(sid).second ||
+            !project.insert_source_raw(std::move(src), arrangement::Project::kAppend, true)) {
           reject_entity_id("source", sid, true);
           return result;
         }
@@ -315,6 +319,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     // Tracks.
     uint32_t max_track_id = 0;
+    std::unordered_set<arrangement::TrackId> track_ids;
     if (const auto* arr = array_at(root, "tracks")) {
       for (const auto& tv : *arr) {
         if (!tv.is_object()) continue;
@@ -325,7 +330,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
         }
         if (t.id > max_track_id) max_track_id = t.id;
         const uint32_t id = t.id;
-        if (!project.insert_track_raw(std::move(t))) {
+        if (!track_ids.insert(id).second ||
+            !project.insert_track_raw(std::move(t), arrangement::Project::kAppend, true)) {
           reject_entity_id("track", id, true);
           return result;
         }
@@ -336,6 +342,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // Clips (insert verbatim; bypasses overlap validation to preserve the saved
     // arrangement exactly, including comp lanes that intentionally overlap).
     uint32_t max_clip_id = 0;
+    std::unordered_set<arrangement::ClipId> clip_ids;
     if (const auto* arr = array_at(root, "clips")) {
       for (const auto& cv : *arr) {
         if (!cv.is_object()) continue;
@@ -346,7 +353,21 @@ DeserializeResult project_from_json(const std::string& json_text) {
         }
         if (c.id > max_clip_id) max_clip_id = c.id;
         const uint32_t id = c.id;
-        if (!project.insert_clip_raw(std::move(c))) {
+        if (c.gain < 0.0f) {
+          c.gain = 0.0f;
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kWarning, "clip_gain_clamped",
+               "clip " + std::to_string(id) + " had a negative gain; clamped to zero"});
+        }
+        if (!std::isfinite(c.start_ppq) || !std::isfinite(c.length_ppq) ||
+            !std::isfinite(c.source_offset_ppq) || c.start_ppq < 0.0 || c.length_ppq <= 0.0 ||
+            c.source_offset_ppq < 0.0) {
+          result.diagnostics.push_back(
+              {DiagnosticSeverity::kWarning, "invalid_clip_ppq",
+               "clip " + std::to_string(id) + " has PPQ values outside the public edit contract"});
+        }
+        if (!clip_ids.insert(id).second ||
+            !project.insert_clip_raw(std::move(c), arrangement::Project::kAppend, true)) {
           reject_entity_id("clip", id, true);
           return result;
         }
@@ -355,6 +376,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (max_clip_id > 0) project.ensure_next_clip_id(max_clip_id);
 
     // Warp maps (plain project metadata referenced by EditClip::warp_ref_id).
+    std::unordered_set<arrangement::WarpRefId> warp_ids;
     if (const auto* arr = array_at(root, "warp_maps")) {
       for (const auto& wv : *arr) {
         if (!wv.is_object()) continue;
@@ -365,6 +387,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
               {DiagnosticSeverity::kWarning, "invalid_warp_map",
                "warp map " + std::to_string(map_id) +
                    " has an invalid id or malformed anchors and was dropped"});
+        } else {
+          warp_ids.insert(map_id);
         }
       }
     }
@@ -373,26 +397,51 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // preserved verbatim, but dangling clip references and clip/source-kind
     // mismatches are surfaced as diagnostics so a host can repair them. Sources
     // and tracks are fully loaded above, so lookups here see the whole project.
+    // A malformed document may intentionally make every clip dangling. Bound
+    // the retained diagnostic strings so that reporting the problem does not
+    // become a second, much larger allocation than the document itself.
+    constexpr size_t kMaxReferentialDiagnostics = 128;
+    size_t referential_diagnostic_count = 0;
+    size_t suppressed_referential_diagnostics = 0;
+    const auto emit_referential_warning = [&](std::string code, std::string message) {
+      if (referential_diagnostic_count < kMaxReferentialDiagnostics) {
+        result.diagnostics.push_back(
+            {DiagnosticSeverity::kWarning, std::move(code), std::move(message)});
+        ++referential_diagnostic_count;
+      } else {
+        ++suppressed_referential_diagnostics;
+      }
+    };
+    std::unordered_map<arrangement::SourceId, const arrangement::ClipSource*> source_index;
+    source_index.reserve(project.sources().size());
+    for (const arrangement::ClipSource& source : project.sources()) {
+      source_index.emplace(arrangement::source_id(source), &source);
+    }
+    std::unordered_map<arrangement::TrackId, const arrangement::Track*> track_index;
+    track_index.reserve(project.tracks().size());
+    for (const arrangement::Track& track : project.tracks()) {
+      track_index.emplace(track.id, &track);
+    }
     for (const auto& c : project.clips()) {
-      const arrangement::ClipSource* src = project.find_source(c.source_id);
+      const auto source_it = source_index.find(c.source_id);
+      const arrangement::ClipSource* src =
+          source_it == source_index.end() ? nullptr : source_it->second;
       if (src == nullptr) {
-        result.diagnostics.push_back({DiagnosticSeverity::kWarning, "dangling_clip_source",
-                                      "clip " + std::to_string(c.id) +
-                                          " references missing source " +
-                                          std::to_string(c.source_id)});
+        emit_referential_warning("dangling_clip_source", "clip " + std::to_string(c.id) +
+                                                             " references missing source " +
+                                                             std::to_string(c.source_id));
       }
-      const arrangement::Track* track = project.find_track(c.track_id);
+      const auto track_it = track_index.find(c.track_id);
+      const arrangement::Track* track = track_it == track_index.end() ? nullptr : track_it->second;
       if (track == nullptr) {
-        result.diagnostics.push_back({DiagnosticSeverity::kWarning, "dangling_clip_track",
-                                      "clip " + std::to_string(c.id) +
-                                          " references missing track " +
-                                          std::to_string(c.track_id)});
+        emit_referential_warning("dangling_clip_track", "clip " + std::to_string(c.id) +
+                                                            " references missing track " +
+                                                            std::to_string(c.track_id));
       }
-      if (c.warp_ref_id != 0 && !project.has_warp_map(c.warp_ref_id)) {
-        result.diagnostics.push_back({DiagnosticSeverity::kWarning, "dangling_clip_warp",
-                                      "clip " + std::to_string(c.id) +
-                                          " references missing warp map " +
-                                          std::to_string(c.warp_ref_id)});
+      if (c.warp_ref_id != 0 && warp_ids.find(c.warp_ref_id) == warp_ids.end()) {
+        emit_referential_warning("dangling_clip_warp", "clip " + std::to_string(c.id) +
+                                                           " references missing warp map " +
+                                                           std::to_string(c.warp_ref_id));
       }
       if (src != nullptr && track != nullptr) {
         const arrangement::SourceKind sk = arrangement::source_kind(*src);
@@ -402,12 +451,18 @@ DeserializeResult project_from_json(const std::string& json_text) {
             track->kind == arrangement::Track::Kind::kMidi && sk == arrangement::SourceKind::kMidi;
         // kAux tracks hold no clip sources; any source kind on one is a mismatch.
         if (!audio_ok && !midi_ok) {
-          result.diagnostics.push_back({DiagnosticSeverity::kWarning, "clip_source_kind_mismatch",
-                                        "clip " + std::to_string(c.id) +
-                                            " source kind does not match track " +
-                                            std::to_string(c.track_id) + " kind"});
+          emit_referential_warning("clip_source_kind_mismatch",
+                                   "clip " + std::to_string(c.id) +
+                                       " source kind does not match track " +
+                                       std::to_string(c.track_id) + " kind");
         }
       }
+    }
+    if (suppressed_referential_diagnostics > 0) {
+      result.diagnostics.push_back(
+          {DiagnosticSeverity::kWarning, "referential_diagnostics_truncated",
+           std::to_string(suppressed_referential_diagnostics) +
+               " additional dangling-reference diagnostics were suppressed"});
     }
 
     // Markers.

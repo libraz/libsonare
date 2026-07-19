@@ -111,7 +111,7 @@ int query_latency_samples(const AuRuntimeApi& api, AudioUnit unit, double sample
 }
 
 /// Storage for a flexible AudioBufferList sized for kMaxChannels.
-struct BufferListStorage {
+struct alignas(AudioBufferList) BufferListStorage {
   std::array<uint8_t, sizeof(AudioBufferList) + kMaxChannels * sizeof(AudioBuffer)> bytes{};
   AudioBufferList* list() noexcept { return reinterpret_cast<AudioBufferList*>(bytes.data()); }
 };
@@ -415,15 +415,18 @@ class AuEffectProcessor final : public rt::ProcessorBase {
                                    AudioBufferList* data) noexcept {
     auto* self = static_cast<AuEffectProcessor*>(ref);
     if (self->in_channels_ == nullptr || data == nullptr) return noErr;
-    const int n = static_cast<int>(frames);
+    const size_t requested = std::min(static_cast<size_t>(frames),
+                                      static_cast<size_t>(std::max(self->max_block_, 0)));
     const int buffers = static_cast<int>(data->mNumberBuffers);
     for (int c = 0; c < buffers; ++c) {
       auto* dst = static_cast<float*>(data->mBuffers[c].mData);
       const float* src = c < self->in_count_ ? self->in_channels_[c] : nullptr;
+      if (dst == nullptr) continue;
+      const size_t writable = std::min(requested, data->mBuffers[c].mDataByteSize / sizeof(float));
       if (src != nullptr) {
-        std::memcpy(dst, src, static_cast<size_t>(n) * sizeof(float));
+        std::memcpy(dst, src, writable * sizeof(float));
       } else {
-        std::memset(dst, 0, static_cast<size_t>(n) * sizeof(float));
+        std::memset(dst, 0, writable * sizeof(float));
       }
     }
     return noErr;
@@ -584,11 +587,16 @@ AuInstrumentProvider::~AuInstrumentProvider() {
 
 std::vector<PluginDescriptor> AuInstrumentProvider::enumerate(PluginKind kind) {
   std::vector<PluginDescriptor> out;
-  AudioComponentDescription query{};
-  query.componentType =
-      kind == PluginKind::kInstrument ? kAudioUnitType_MusicDevice : kAudioUnitType_Effect;
-  AudioComponent comp = nullptr;
-  while ((comp = AudioComponentFindNext(comp, &query)) != nullptr) {
+  const std::array<OSType, 2> component_types =
+      kind == PluginKind::kInstrument
+          ? std::array<OSType, 2>{kAudioUnitType_MusicDevice, 0}
+          : std::array<OSType, 2>{kAudioUnitType_Effect, kAudioUnitType_MusicEffect};
+  for (const OSType type : component_types) {
+    if (type == 0) continue;
+    AudioComponentDescription query{};
+    query.componentType = type;
+    AudioComponent comp = nullptr;
+    while ((comp = AudioComponentFindNext(comp, &query)) != nullptr) {
     AudioComponentDescription desc{};
     if (AudioComponentGetDescription(comp, &desc) != noErr) continue;
     CFStringRef name = nullptr;
@@ -601,7 +609,8 @@ std::vector<PluginDescriptor> AuInstrumentProvider::enumerate(PluginKind kind) {
       if (CFStringGetCString(name, nbuf, sizeof(nbuf), kCFStringEncodingUTF8)) pd.name = nbuf;
       CFRelease(name);
     }
-    out.push_back(std::move(pd));
+      out.push_back(std::move(pd));
+    }
   }
   return out;
 }
@@ -624,7 +633,8 @@ std::unique_ptr<rt::ProcessorBase> AuInstrumentProvider::create_effect(
     const PluginDescriptor& descriptor) {
   if (descriptor.kind != PluginKind::kEffect || descriptor.format != "au") return nullptr;
   AudioComponentDescription desc{};
-  if (!decode_id(descriptor.id, desc) || desc.componentType != kAudioUnitType_Effect)
+  if (!decode_id(descriptor.id, desc) ||
+      (desc.componentType != kAudioUnitType_Effect && desc.componentType != kAudioUnitType_MusicEffect))
     return nullptr;
   AudioUnit unit = instantiate(descriptor);
   if (unit == nullptr) return nullptr;

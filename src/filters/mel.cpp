@@ -138,8 +138,11 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
 std::shared_ptr<const std::vector<float>> get_mel_filterbank_cached(int sr, int n_fft,
                                                                     const MelFilterConfig& config) {
   // Normalize fmax: 0 means sr/2 — collapse to that explicit value so callers
-  // who pass 0 hit the same cache entry as callers who pass sr/2.
+  // who pass 0 hit the same cache entry as callers who pass sr/2. Clamp the
+  // same way create_mel_filterbank does, so super-Nyquist requests reuse the
+  // effective-Nyquist entry instead of rebuilding an identical filterbank.
   float fmax = config.fmax > 0.0f ? config.fmax : static_cast<float>(sr) / 2.0f;
+  fmax = std::min(fmax, static_cast<float>(sr) / 2.0f);
   MelFilterbankCacheKey key{sr, n_fft, config.n_mels, config.fmin, fmax, config.htk, config.norm};
 
   // Cache shared_ptrs to immutable filterbanks: create_mel_filterbank is the

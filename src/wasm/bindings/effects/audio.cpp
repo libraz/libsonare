@@ -215,6 +215,18 @@ val js_note_stretch(val samples, int sample_rate, int onset_sample, int offset_s
   return vectorToFloat32Array(out_vec);
 }
 
+val js_note_move(val samples, int sample_rate, int onset_sample, int offset_sample,
+                 int target_onset_sample) {
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  editing::pitch_editor::NoteRegion region;
+  region.onset_sample = onset_sample;
+  region.offset_sample = offset_sample;
+  editing::pitch_editor::NoteEditor editor;
+  Audio result = editor.move_note(audio, region, target_onset_sample);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return vectorToFloat32Array(out_vec);
+}
+
 val js_voice_change(val samples, int sample_rate, float pitch_semitones, float formant_factor) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   editing::voice_changer::VoiceChangerConfig config;
@@ -224,6 +236,22 @@ val js_voice_change(val samples, int sample_rate, float pitch_semitones, float f
   Audio result = changer.process(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
+}
+
+val js_voice_change_realtime(val samples, int sample_rate, std::string preset, int channels) {
+  std::vector<float> input = float32ArrayToVector(samples);
+  float* output = nullptr;
+  size_t output_length = 0;
+  const SonareError err = sonare_voice_change_realtime(
+      input.data(), input.size(), sample_rate, preset.c_str(), channels, &output, &output_length);
+  if (err != SONARE_OK) {
+    sonare_free_floats(output);
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string("voiceChangeRealtime failed: ") + sonare_error_message(err));
+  }
+  std::vector<float> result(output, output + output_length);
+  sonare_free_floats(output);
+  return vectorToFloat32Array(result);
 }
 
 // NMF decomposition of a non-negative spectrogram. Mirrors the C ABI
@@ -508,7 +536,9 @@ void registerEffectsAudioBindings() {
   function("pitchCorrectToMidiTimevarying", &js_pitch_correct_to_midi_timevarying);
   function("pitchCorrectTimevarying", &js_pitch_correct_timevarying);
   function("noteStretch", &js_note_stretch);
+  function("noteMove", &js_note_move);
   function("voiceChange", &js_voice_change);
+  function("voiceChangeRealtime", &js_voice_change_realtime);
   function("decompose", &js_decompose);
   function("decomposeWithInit", &js_decompose_with_init);
   function("nnFilter", &js_nn_filter);

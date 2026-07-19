@@ -74,6 +74,9 @@ from .analyzer import (
     normalize as _normalize,
 )
 from .analyzer import (
+    note_move as _note_move,
+)
+from .analyzer import (
     note_stretch as _note_stretch,
 )
 from .analyzer import (
@@ -599,6 +602,14 @@ class Audio:
             self.data, self.sample_rate, onset_sample, offset_sample, stretch_ratio
         )
 
+    def note_move(
+        self, onset_sample: int = 0, offset_sample: int = 0, target_onset_sample: int = 0
+    ) -> list[float]:
+        """Move a note region to a new onset without changing its duration."""
+        return _note_move(
+            self.data, self.sample_rate, onset_sample, offset_sample, target_onset_sample
+        )
+
     def voice_change(
         self, pitch_semitones: float = 0.0, formant_factor: float = 1.0
     ) -> list[float]:
@@ -609,7 +620,7 @@ class Audio:
         """Apply the integrated realtime voice changer chain offline."""
         return _voice_change_realtime(self.data, self.sample_rate, preset)
 
-    def normalize(self, target_db: float = -3.0) -> list[float]:
+    def normalize(self, target_db: float = 0.0) -> list[float]:
         """Normalize audio to a target dB level."""
         return _normalize(self.data, self.sample_rate, target_db)
 

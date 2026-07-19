@@ -274,7 +274,12 @@ def main() -> None:
         "resample", parents=[common], help="Resample audio to a target sample rate"
     )
     resample_p.add_argument(
-        "--target-rate", type=int, required=True, help="Target sample rate in Hz"
+        "--target-rate",
+        "--target-sr",
+        dest="target_rate",
+        type=int,
+        required=True,
+        help="Target sample rate in Hz",
     )
     voice_change_p = sub.add_parser(
         "voice-change", parents=[common], help="Apply a voice-change effect"
@@ -500,11 +505,24 @@ def main() -> None:
     # Project / MIDI commands
     project_p = sub.add_parser("project", parents=[common], help="Headless project / SMF commands")
     project_sub = project_p.add_subparsers(dest="project_command", required=True)
-    project_sub.add_parser("abi", parents=[common], help="Print the project ABI version")
-    pnew = project_sub.add_parser("new", parents=[common], help="Create an empty project JSON")
+    # The project-level parser owns the common defaults.  Child parsers must
+    # accept the same flags without installing their own defaults, otherwise a
+    # value before the project subcommand (for example `project --json abi`)
+    # is overwritten by the child parser's false/empty default.
+    project_common = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
+    project_common.add_argument("--json", action="store_true")
+    project_common.add_argument("--n-fft", type=int)
+    project_common.add_argument("--hop-length", type=int)
+    project_common.add_argument("--n-mels", type=int)
+    project_common.add_argument("-o", "--output", type=str)
+
+    project_sub.add_parser("abi", parents=[project_common], help="Print the project ABI version")
+    pnew = project_sub.add_parser(
+        "new", parents=[project_common], help="Create an empty project JSON"
+    )
     pnew.add_argument("--sample-rate", type=int, default=0, help="Project sample rate")
     for pname in ("validate", "compile"):
-        pp = project_sub.add_parser(pname, parents=[common], help=f"Project {pname}")
+        pp = project_sub.add_parser(pname, parents=[project_common], help=f"Project {pname}")
         pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
     sf2_cli_note = (
         "SF2 / SoundFont and per-destination synth JSON are not wired through this CLI command; "
@@ -512,7 +530,7 @@ def main() -> None:
     )
     pbounce = project_sub.add_parser(
         "bounce",
-        parents=[common],
+        parents=[project_common],
         help="Render project to WAV",
         description=sf2_cli_note,
     )
@@ -532,19 +550,21 @@ def main() -> None:
             "no --sf2 or --synth-json CLI wiring"
         ),
     )
-    pexport_smf = project_sub.add_parser("export-smf", parents=[common], help="Export SMF")
+    pexport_smf = project_sub.add_parser("export-smf", parents=[project_common], help="Export SMF")
     pexport_smf.add_argument("--in", dest="input", required=True, help="Input project JSON")
-    pimport_smf = project_sub.add_parser("import-smf", parents=[common], help="Import SMF")
+    pimport_smf = project_sub.add_parser("import-smf", parents=[project_common], help="Import SMF")
     pimport_smf.add_argument("--smf", required=True, help="Input Standard MIDI File")
     pexport_midi2 = project_sub.add_parser(
-        "export-midi2", parents=[common], help="Export MIDI 2.0 Clip File"
+        "export-midi2", parents=[project_common], help="Export MIDI 2.0 Clip File"
     )
     pexport_midi2.add_argument("--in", dest="input", required=True, help="Input project JSON")
     pimport_midi2 = project_sub.add_parser(
-        "import-midi2", parents=[common], help="Import MIDI 2.0 Clip File"
+        "import-midi2", parents=[project_common], help="Import MIDI 2.0 Clip File"
     )
     pimport_midi2.add_argument("--midi2", required=True, help="Input MIDI 2.0 Clip File")
-    project_sub.add_parser("synth-presets", parents=[common], help="List NativeSynth presets")
+    project_sub.add_parser(
+        "synth-presets", parents=[project_common], help="List NativeSynth presets"
+    )
 
     midi_render_p = sub.add_parser(
         "midi-render",
@@ -719,6 +739,34 @@ def main() -> None:
         sys.exit(1 if _legacy_exit_codes() else EXIT_USAGE)
 
     try:
+        # `common` supplies -o to every parser for a uniform CLI shape, but an
+        # analysis result has no audio artifact to write.  Rejecting it here
+        # prevents a successful-looking invocation from silently discarding a
+        # requested destination.
+        output_capable_commands = {
+            "hpss",
+            "pitch-correct",
+            "note-stretch",
+            "pitch-shift",
+            "time-stretch",
+            "normalize",
+            "trim-silence",
+            "resample",
+            "voice-change",
+            "synthesize-rir",
+            "room-morph",
+            "mastering",
+            "eq",
+            "mastering-processor",
+            "mastering-chain",
+            "master",
+            "declip",
+            "midi-render",
+            "mix",
+            "project",
+        }
+        if getattr(args, "output", "") and args.command not in output_capable_commands:
+            raise ValueError(f"{args.command} does not produce an audio file; remove --output")
         sys.exit(handler(args))
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

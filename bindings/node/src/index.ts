@@ -94,6 +94,7 @@ export type {
   MixMeterSnapshot,
   MixOptions,
   MixResult,
+  NoteMoveOptions,
   NoteStretchOptions,
   PanLaw,
   PanMode,

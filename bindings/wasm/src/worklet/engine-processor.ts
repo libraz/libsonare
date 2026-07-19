@@ -70,6 +70,8 @@ export class SonareRealtimeEngineWorkletProcessor {
   // arrays on both heaps every block, an RT-safety hazard).
   private channelBuffers: Float32Array[];
   private readonly liveClips = new Map<number, EngineClip>();
+  private readonly pagedClipProviders = new Map<number, number>();
+  private readonly pendingPagedClips = new Map<number, EngineClip>();
 
   constructor(
     options: SonareRealtimeEngineWorkletProcessorOptions = {},
@@ -208,11 +210,10 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
-  // Applies an out-of-band control-plane sync message. Runs on the AudioWorklet
-  // global scope but OUTSIDE process() (the message-port callback), so the
-  // bulk/allocating engine setters (setClips/setMarkers) are safe here — they
-  // never run on the realtime render path. This is the audio-thread equivalent
-  // of the engine's control-thread RtPublisher setters.
+  // Applies an out-of-band control-plane sync message on the AudioWorklet
+  // thread. These handlers must remain bounded: expensive clip transforms are
+  // performed on the main-thread mirror, and long pre-baked PCM arrives in
+  // small pages before the final lightweight clip schedule is committed.
   receiveSync(message: SonareEngineSyncMessage): void {
     if (this.closed) {
       return;
@@ -238,6 +239,33 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         this.engine.setClips(Array.from(this.liveClips.values()));
         break;
+      case 'syncClipPageProvider': {
+        const provider = this.engine.createClipPageProvider(
+          message.numChannels,
+          message.numSamples,
+          message.pageFrames,
+        );
+        this.pagedClipProviders.set(message.clipId, provider.id);
+        this.pendingPagedClips.set(message.clipId, message.clip);
+        break;
+      }
+      case 'syncClipPage': {
+        const providerId = this.pagedClipProviders.get(message.clipId);
+        if (providerId !== undefined) {
+          this.engine.supplyClipPage(providerId, message.pageIndex, message.channels);
+        }
+        break;
+      }
+      case 'syncClipPageCommit': {
+        const providerId = this.pagedClipProviders.get(message.clipId);
+        const clip = this.pendingPagedClips.get(message.clipId);
+        if (providerId !== undefined && clip) {
+          this.liveClips.set(message.clipId, { ...clip, pageProvider: providerId });
+          this.pendingPagedClips.delete(message.clipId);
+          this.engine.setClips(Array.from(this.liveClips.values()));
+        }
+        break;
+      }
       case 'syncMidiClips':
         this.engine.setMidiClips(message.clips);
         break;

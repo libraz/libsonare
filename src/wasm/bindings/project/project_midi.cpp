@@ -120,20 +120,50 @@ val ProjectWasm::validateMidiNotes(uint32_t clip_id) {
   return out;
 }
 
-float ProjectWasm::autoTempo(val audio, int sample_rate) {
+val ProjectWasm::analyzeTempo(val audio, int sample_rate) {
+  std::vector<float> samples = float32ArrayToVector(audio);
+  SonareProjectTempoCandidate candidates[3]{};
+  size_t count = 0;
+  const SonareError err =
+      sonare_project_analyze_tempo(project_.get(), samples.data(), samples.size(), sample_rate,
+                                   candidates, std::size(candidates), &count);
+  if (err != SONARE_OK) {
+    throwCError(err, "failed to analyze project tempo");
+  }
+  val output = val::array();
+  const char* labels[] = {"primary", "half", "double"};
+  for (size_t i = 0; i < count && i < std::size(candidates); ++i) {
+    const SonareProjectTempoCandidate& candidate = candidates[i];
+    val item = val::object();
+    item.set("bpm", candidate.bpm);
+    item.set("confidence", candidate.confidence);
+    item.set("label", labels[candidate.kind <= SONARE_TEMPO_CANDIDATE_DOUBLE ? candidate.kind : 0]);
+    item.set("timeSignatureCount", candidate.time_signature_count);
+    val time_signature = val::object();
+    time_signature.set("startPpq", candidate.first_time_signature.start_ppq);
+    time_signature.set("numerator", candidate.first_time_signature.numerator);
+    time_signature.set("denominator", candidate.first_time_signature.denominator);
+    item.set("timeSignature", time_signature);
+    output.call<void>("push", item);
+  }
+  return output;
+}
+
+float ProjectWasm::autoTempo(val audio, int sample_rate, int candidate_index,
+                             bool apply_time_signatures) {
   std::vector<float> samples = float32ArrayToVector(audio);
   float bpm = 0.0f;
-  const SonareError err =
-      sonare_project_auto_tempo(project_.get(), samples.data(), samples.size(), sample_rate, &bpm);
-  if (err != SONARE_OK) {
-    throwCError(err, "failed to detect project tempo");
-  }
+  const SonareError err = sonare_project_auto_tempo_ex(
+      project_.get(), samples.data(), samples.size(), sample_rate,
+      static_cast<size_t>(std::max(candidate_index, 0)), apply_time_signatures ? 1 : 0, &bpm);
+  if (err != SONARE_OK) throwCError(err, "failed to detect project tempo");
   return bpm;
 }
 
-double ProjectWasm::snapToGrid(double ppq, double strength) {
+double ProjectWasm::snapToGrid(double ppq, double strength, int division) {
   double out = 0.0;
-  const SonareError err = sonare_project_snap_to_grid(project_.get(), ppq, strength, &out);
+  const SonareError err =
+      sonare_project_snap_to_grid_ex(project_.get(), ppq, strength, division, &out);
   if (err != SONARE_OK) {
     throwCError(err, "failed to snap to grid");
   }
@@ -379,6 +409,7 @@ void registerProjectMidi(class_<ProjectWasm>& cls) {
       .function("bakeMidiFx", &ProjectWasm::bakeMidiFx)
       .function("setMidiFx", &ProjectWasm::setMidiFx)
       .function("validateMidiNotes", &ProjectWasm::validateMidiNotes)
+      .function("analyzeTempo", &ProjectWasm::analyzeTempo)
       .function("autoTempo", &ProjectWasm::autoTempo)
       .function("snapToGrid", &ProjectWasm::snapToGrid);
 }

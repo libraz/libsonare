@@ -419,6 +419,15 @@ export interface ProjectTimeSignatureSegment {
   denominator: number;
 }
 
+/** A ranked primary/half/double tempo hypothesis returned by {@link Project.analyzeTempo}. */
+export interface ProjectTempoCandidate {
+  bpm: number;
+  confidence: number;
+  label: 'primary' | 'half' | 'double';
+  timeSignatureCount: number;
+  timeSignature: ProjectTimeSignatureSegment;
+}
+
 /** Key segment for {@link Project.annotateKeys}. */
 export interface ProjectKeySegment {
   startPpq: number;

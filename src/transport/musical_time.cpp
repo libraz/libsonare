@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace sonare::transport {
 
@@ -19,8 +20,18 @@ double note_length_ppq(int denominator, NoteModifier modifier) noexcept {
 }
 
 int64_t ppq_duration_to_samples(double ppq, double bpm, double sample_rate) noexcept {
-  if (bpm <= 0.0 || sample_rate <= 0.0 || !std::isfinite(ppq)) return 0;
-  return static_cast<int64_t>(std::llround(ppq * sample_rate * 60.0 / bpm));
+  if (bpm <= 0.0 || sample_rate <= 0.0 || !std::isfinite(ppq) || !std::isfinite(bpm) ||
+      !std::isfinite(sample_rate)) {
+    return 0;
+  }
+  const long double samples = static_cast<long double>(ppq) *
+                              static_cast<long double>(sample_rate) * 60.0L /
+                              static_cast<long double>(bpm);
+  constexpr long double kMin = static_cast<long double>(std::numeric_limits<int64_t>::min());
+  constexpr long double kMax = static_cast<long double>(std::numeric_limits<int64_t>::max());
+  if (samples <= kMin) return std::numeric_limits<int64_t>::min();
+  if (samples >= kMax) return std::numeric_limits<int64_t>::max();
+  return static_cast<int64_t>(std::llround(samples));
 }
 
 double samples_to_ppq_duration(int64_t samples, double bpm, double sample_rate) noexcept {

@@ -15,6 +15,7 @@
 #include "effects/pitch_shift.h"
 #include "effects/time_stretch.h"
 #include "mastering/api/chain.h"
+#include "mastering/api/internal_processor_runner.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/assistant/suggester.h"
@@ -118,9 +119,9 @@ template <typename Processor>
 std::vector<float> run_dynamics_offline(Processor& processor, const float* samples, size_t length,
                                         int sample_rate, int& latency_samples_out) {
   std::vector<float> buffer(samples, samples + length);
-  processor.prepare(static_cast<double>(sample_rate), static_cast<int>(buffer.size()));
-  float* channels[] = {buffer.data()};
-  processor.process(channels, 1, static_cast<int>(buffer.size()));
+  // Mirror C-ABI/Python: drain processor lookahead before returning the
+  // one-shot result so users receive a time-aligned buffer on every surface.
+  sonare::mastering::api::internal::run_processor_mono(processor, buffer, sample_rate);
   latency_samples_out = processor.latency_samples();
   return buffer;
 }

@@ -143,6 +143,10 @@ void RealtimeEngineWasm::setClips(val clips) {
   new_ptrs.reserve(static_cast<size_t>(count));
   std::vector<sonare::engine::ClipSchedule> schedules;
   schedules.reserve(static_cast<size_t>(count));
+  std::vector<uint32_t> new_clip_ids;
+  std::vector<uint8_t> new_clip_tempo_baked;
+  new_clip_ids.reserve(static_cast<size_t>(count));
+  new_clip_tempo_baked.reserve(static_cast<size_t>(count));
 
   for (int i = 0; i < count; ++i) {
     val clip_val = clips[i];
@@ -279,7 +283,8 @@ void RealtimeEngineWasm::setClips(val clips) {
         schedule.warp_anchors = std::move(anchors);
       }
     }
-    if (schedule.warp_mode == sonare::engine::WarpMode::kTempoSync) {
+    const bool tempo_sync_baked = schedule.warp_mode == sonare::engine::WarpMode::kTempoSync;
+    if (tempo_sync_baked) {
       if (has_page_provider) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "tempo-sync paged clips are not supported");
@@ -371,10 +376,31 @@ void RealtimeEngineWasm::setClips(val clips) {
                                     "repitch warped clips do not support loop=true yet");
     }
     schedules.push_back(schedule);
+    new_clip_ids.push_back(schedule.id);
+    new_clip_tempo_baked.push_back(tempo_sync_baked ? 1u : 0u);
   }
   clip_storage_ = std::move(new_storage);
   clip_ptrs_ = std::move(new_ptrs);
+  clip_ids_ = std::move(new_clip_ids);
+  clip_tempo_baked_ = std::move(new_clip_tempo_baked);
   engine_.set_clips(std::move(schedules));
+}
+
+val RealtimeEngineWasm::prebakedClipChannels(uint32_t clip_id) const {
+  const auto it = std::find(clip_ids_.begin(), clip_ids_.end(), clip_id);
+  if (it == clip_ids_.end()) return val::null();
+  const size_t index = static_cast<size_t>(std::distance(clip_ids_.begin(), it));
+  if (index >= clip_tempo_baked_.size() || clip_tempo_baked_[index] == 0 ||
+      index >= clip_storage_.size()) {
+    return val::null();
+  }
+  val channels = val::array();
+  for (const auto& channel : clip_storage_[index]) {
+    val copied = val::global("Float32Array").new_(channel.size());
+    copied.call<void>("set", val(typed_memory_view(channel.size(), channel.data())));
+    channels.call<void>("push", copied);
+  }
+  return channels;
 }
 
 int RealtimeEngineWasm::clipCount() const { return static_cast<int>(engine_.clip_count()); }
@@ -423,6 +449,7 @@ val RealtimeEngineWasm::popClipPageRequest() {
 
 void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
   cls.function("setClips", &RealtimeEngineWasm::setClips)
+      .function("prebakedClipChannels", &RealtimeEngineWasm::prebakedClipChannels)
       .function("clipCount", &RealtimeEngineWasm::clipCount)
       .function("createClipPageProvider", &RealtimeEngineWasm::createClipPageProvider)
       .function("supplyClipPage", &RealtimeEngineWasm::supplyClipPage)

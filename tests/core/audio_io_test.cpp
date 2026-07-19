@@ -187,6 +187,42 @@ TEST_CASE("load_buffer auto-detect WAV", "[audio_io]") {
   REQUIRE(loaded.size() == samples);
 }
 
+TEST_CASE("load_buffer_mp3 rejects an oversized declared PCM stream before decode allocation",
+          "[audio_io]") {
+  // A Xing/Info VBR tag supplies frame count before PCM decode. Mutate a tiny
+  // valid MP3 to claim billions of frames: the streaming decoder must reject
+  // that declaration instead of using mp3dec_load_buf, which would allocate
+  // the entire decoded int16 pool before our resource check runs.
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found");
+  }
+  const std::string path = "test_mp3_declared_limit.mp3";
+  const std::string command =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "sine=frequency=440:duration=0.25:sample_rate=22050 "
+      "-ac 1 -c:a libmp3lame -b:a 32k -y " +
+      path;
+  REQUIRE(std::system(command.c_str()) == 0);
+
+  std::ifstream input(path, std::ios::binary);
+  REQUIRE(input.is_open());
+  std::vector<uint8_t> mp3((std::istreambuf_iterator<char>(input)), {});
+  input.close();
+
+  const std::array<uint8_t, 4> info_tag = {'I', 'n', 'f', 'o'};
+  const auto tag = std::search(mp3.begin(), mp3.end(), info_tag.begin(), info_tag.end());
+  REQUIRE(tag != mp3.end());
+  const size_t tag_offset = static_cast<size_t>(tag - mp3.begin());
+  REQUIRE(tag_offset + 12 <= mp3.size());
+  // `Info` + big-endian flags (FRAMES_FLAG is set by libmp3lame) + frames.
+  REQUIRE((mp3[tag_offset + 7] & 0x01) != 0);
+  std::fill_n(mp3.begin() + static_cast<std::ptrdiff_t>(tag_offset + 8), 4, 0xFF);
+
+  REQUIRE_THROWS_WITH(load_buffer_mp3(mp3.data(), mp3.size()),
+                      Catch::Matchers::ContainsSubstring("offline decode limit"));
+  std::remove(path.c_str());
+}
+
 TEST_CASE("AudioLoadOptions defaults", "[audio_io]") {
   SECTION("default max_file_size is 500MB") {
     AudioLoadOptions opts;

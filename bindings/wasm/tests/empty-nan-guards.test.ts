@@ -16,7 +16,12 @@ import {
   meteringRmsDb,
   meteringStereoCorrelation,
   meteringTruePeakDb,
+  pcen,
   pitchYin,
+  plp,
+  resample,
+  StreamingEqualizer,
+  tempogram,
   voiceChange,
   voiceChangeRealtime,
 } from '../src/index';
@@ -105,6 +110,21 @@ describe('empty-sample guards (WASM)', () => {
 });
 
 describe('NaN/Inf guards (WASM)', () => {
+  it('resample rejects invalid source/target sample rates before allocation', () => {
+    expect(() => resample(sine(), 0, SR)).toThrow();
+    expect(() => resample(sine(), SR, 2_000_000_000)).toThrow();
+  });
+  it('feature-core wrappers reject NaN and inconsistent matrix dimensions', () => {
+    expect(() => pcen(new Float32Array([1, Number.NaN, 3, 4]), 2, 2)).toThrow();
+    expect(() => pcen(new Float32Array([1, 2, 3]), 2, 2)).toThrow();
+    expect(() => tempogram(withNaN(), SR)).toThrow();
+    expect(() => plp(withNaN(), SR)).toThrow();
+  });
+  it('StreamingEqualizer.match rejects non-finite reference audio', () => {
+    const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
+    expect(() => equalizer.match(sine(), withNaN(), { maxBands: 4 })).toThrow();
+    equalizer.delete();
+  });
   it('lufs rejects NaN with index', () => {
     expect(() => lufs(withNaN(), SR)).toThrow(/lufs: samples contains NaN or Inf at index 100/);
   });

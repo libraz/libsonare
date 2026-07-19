@@ -23,6 +23,7 @@ import type {
   ProjectMidiEvent,
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
+  ProjectTempoCandidate,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrackDesc,
@@ -708,17 +709,28 @@ export class Project {
 
   // -- MIR --
 
-  /** Detect tempo from a mono buffer and install it (undoable); returns the primary BPM. */
-  autoTempo(audio: Float32Array, sampleRate: number): number {
-    return this.native.autoTempo(audio, sampleRate);
+  /** Return ranked tempo-octave and detected-meter candidates without editing the project. */
+  analyzeTempo(audio: Float32Array, sampleRate: number): ProjectTempoCandidate[] {
+    return this.native.analyzeTempo(audio, sampleRate);
+  }
+
+  /** Detect and install a ranked tempo candidate; optionally apply its detected meter. */
+  autoTempo(
+    audio: Float32Array,
+    sampleRate: number,
+    candidateIndex = 0,
+    applyTimeSignatures = false,
+  ): number {
+    return this.native.autoTempo(audio, sampleRate, candidateIndex, applyTimeSignatures);
   }
 
   /**
-   * Snap a PPQ coordinate to the nearest beat of the project grid. `strength`
-   * in `[0, 1]` (0 = no snap, 1 = exact grid line).
+   * Snap a PPQ coordinate to the project grid. `division` is `0` for bars,
+   * `1` for beats, or the number of subdivisions per beat. `strength` is in
+   * `[0, 1]` (0 = no snap, 1 = exact grid line).
    */
-  snapToGrid(ppq: number, strength = 1.0): number {
-    return this.native.snapToGrid(ppq, strength);
+  snapToGrid(ppq: number, strength = 1.0, division = 1): number {
+    return this.native.snapToGrid(ppq, strength, division);
   }
 
   /**

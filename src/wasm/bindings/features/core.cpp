@@ -5,6 +5,40 @@
 
 #include "wasm/bindings/common/common.h"
 
+namespace {
+
+void validateFiniteVector(const std::vector<float>& values, const char* function) {
+  if (values.size() > kMaxAudioBufferSize) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(function) + ": input buffer is too large");
+  }
+  for (float value : values) {
+    if (!std::isfinite(value)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(function) + ": input contains NaN or Inf");
+    }
+  }
+}
+
+void validateMatrix(const std::vector<float>& values, int rows, int columns, const char* function) {
+  if (rows <= 0 || columns <= 0 ||
+      static_cast<size_t>(rows) > kMaxAudioBufferSize / static_cast<size_t>(columns) ||
+      values.size() != static_cast<size_t>(rows) * static_cast<size_t>(columns)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(function) + ": matrix dimensions do not match input");
+  }
+  validateFiniteVector(values, function);
+}
+
+void validateSampleRate(const char* function, int sample_rate) {
+  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(function) + ": sample rate is out of range");
+  }
+}
+
+}  // namespace
+
 // ============================================================================
 // Core - Conversion
 // ============================================================================
@@ -30,21 +64,25 @@ int js_samples_to_frames(int samples, int hop_length, int n_fft) {
 
 val js_power_to_db(val values, float ref, float amin, float top_db) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateFiniteVector(data, "powerToDb");
   return vectorToFloat32Array(power_to_db(data, ref, amin, top_db));
 }
 
 val js_amplitude_to_db(val values, float ref, float amin, float top_db) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateFiniteVector(data, "amplitudeToDb");
   return vectorToFloat32Array(amplitude_to_db(data, ref, amin, top_db));
 }
 
 val js_db_to_power(val values, float ref) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateFiniteVector(data, "dbToPower");
   return vectorToFloat32Array(db_to_power(data, ref));
 }
 
 val js_db_to_amplitude(val values, float ref) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateFiniteVector(data, "dbToAmplitude");
   return vectorToFloat32Array(db_to_amplitude(data, ref));
 }
 
@@ -120,11 +158,13 @@ val js_fix_frames(val frames, int x_min, int x_max, bool pad) {
 val js_peak_pick(val values, int pre_max, int post_max, int pre_avg, int post_avg, float delta,
                  int wait) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateFiniteVector(data, "peakPick");
   return vectorToInt32Array(peak_pick(data, pre_max, post_max, pre_avg, post_avg, delta, wait));
 }
 
 val js_vector_normalize(val values, int norm_type, float threshold) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateFiniteVector(data, "vectorNormalize");
   NormType norm = NormType::Inf;
   if (norm_type == 1) norm = NormType::L1;
   if (norm_type == 2) norm = NormType::L2;
@@ -134,6 +174,7 @@ val js_vector_normalize(val values, int norm_type, float threshold) {
 
 val js_pcen(val values, int n_bins, int n_frames, val options) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateMatrix(data, n_bins, n_frames, "pcen");
   PcenConfig config;
   if (!options.isUndefined() && !options.isNull()) {
     config.sr = intProperty(options, "sampleRate", config.sr);
@@ -149,6 +190,7 @@ val js_pcen(val values, int n_bins, int n_frames, val options) {
 
 val js_tonnetz(val chromagram, int n_chroma, int n_frames) {
   std::vector<float> data = float32ArrayToVector(chromagram);
+  validateMatrix(data, n_chroma, n_frames, "tonnetz");
   return vectorToFloat32Array(tonnetz(data.data(), n_chroma, n_frames));
 }
 
@@ -172,6 +214,8 @@ TempogramMode tempogramModeFromValue(val mode) {
 
 val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length, val mode) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
+  validateFiniteVector(data, "tempogram");
+  validateSampleRate("tempogram", sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -203,6 +247,8 @@ val js_cyclic_tempogram(val onset_envelope, int sample_rate, int hop_length, int
 val js_plp(val onset_envelope, int sample_rate, int hop_length, float tempo_min, float tempo_max,
            int win_length) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
+  validateFiniteVector(data, "plp");
+  validateSampleRate("plp", sample_rate);
   PlpConfig config;
   config.sr = sample_rate;
   config.hop_length = hop_length;

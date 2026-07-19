@@ -111,10 +111,11 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
   }
   std::vector<sonare::transport::TempoSegment> out;
   out.reserve(segment_count);
+  double previous_start_ppq = -1.0;
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTempoSegment& in = segments[i];
     if (!finite_non_negative(in.start_ppq) || !finite_positive(in.bpm) ||
-        !std::isfinite(in.end_bpm) || in.end_bpm < 0.0) {
+        !std::isfinite(in.end_bpm) || in.end_bpm < 0.0 || in.start_ppq <= previous_start_ppq) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     sonare::transport::TempoSegment seg;
@@ -123,6 +124,7 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
     seg.start_sample = 0.0;
     seg.end_bpm = in.end_bpm;
     out.push_back(seg);
+    previous_start_ppq = in.start_ppq;
   }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTempoSegment>(std::move(out));

@@ -44,6 +44,11 @@ void create_test_wav(const std::string& path, float duration = 3.0f, float frequ
   save_wav(path, samples, sample_rate);
 }
 
+void create_test_stereo_wav(const std::string& path, int sample_rate = 22050) {
+  std::vector<float> samples = {0.25f, -0.25f, 0.5f, -0.5f};
+  save_wav_multichannel(path, samples.data(), 2, 2, ChannelLayout::Stereo, sample_rate);
+}
+
 /// @brief Custom deleter for FILE* using pclose.
 struct PipeDeleter {
   void operator()(FILE* fp) const {
@@ -297,6 +302,21 @@ TEST_CASE("CLI info command", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"duration\""));
     REQUIRE_THAT(output, ContainsSubstring("\"sample_rate\""));
   }
+}
+
+TEST_CASE("CLI identifies and warns about downmixed stereo input", "[cli]") {
+  const std::string path = unique_temp_path("_stereo.wav");
+  create_test_stereo_wav(path);
+
+  const std::string cli = get_cli_path();
+  auto [info_code, info_output] = exec_command(cli + " info " + path + " --json -q");
+  REQUIRE(info_code == 0);
+  REQUIRE_THAT(info_output, ContainsSubstring("\"channels\": 2"));
+
+  auto [lufs_code, lufs_output] = exec_command(cli + " lufs " + path + " --json -q");
+  REQUIRE(lufs_code == 0);
+  REQUIRE_THAT(lufs_output, ContainsSubstring("downmixed to mono"));
+  std::remove(path.c_str());
 }
 
 TEST_CASE("CLI bpm command", "[cli]") {
@@ -655,6 +675,12 @@ TEST_CASE("CLI pitch command", "[cli]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("yin"));
   }
+
+  SECTION("rejects unknown algorithm") {
+    auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --algorithm typo -q");
+    REQUIRE(code != 0);
+    REQUIRE_THAT(output, ContainsSubstring("--algorithm must be 'yin' or 'pyin'"));
+  }
 }
 
 TEST_CASE("CLI onset-env command", "[cli]") {
@@ -735,14 +761,14 @@ TEST_CASE("CLI pitch-shift command", "[cli]") {
 
   SECTION("missing output file") {
     auto [code, output] = exec_command(CLI + " pitch-shift --semitones 3 " + TEST_WAV + " -q");
-    REQUIRE(code == 1);
+    REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("requires output file"));
   }
 
   SECTION("missing semitones") {
     auto [code, output] =
         exec_command(CLI + " pitch-shift " + TEST_WAV + " -o " + TEST_OUT + " -q");
-    REQUIRE(code == 1);
+    REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("--semitones required"));
   }
 }
@@ -771,14 +797,14 @@ TEST_CASE("CLI time-stretch command", "[cli]") {
 
   SECTION("missing output file") {
     auto [code, output] = exec_command(CLI + " time-stretch --rate 0.8 " + TEST_WAV + " -q");
-    REQUIRE(code == 1);
+    REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("requires output file"));
   }
 
   SECTION("missing rate") {
     auto [code, output] =
         exec_command(CLI + " time-stretch " + TEST_WAV + " -o " + TEST_OUT + " -q");
-    REQUIRE(code == 1);
+    REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("--rate required"));
   }
 }
@@ -858,7 +884,7 @@ TEST_CASE("CLI hpss command", "[cli]") {
 
   SECTION("missing output file") {
     auto [code, output] = exec_command(CLI + " hpss " + TEST_WAV + " -q");
-    REQUIRE(code == 1);
+    REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("requires output"));
   }
 }
@@ -953,6 +979,13 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
   }
 
+  SECTION("rejects malformed parameter entries") {
+    auto [code, output] = exec_command(CLI + " mastering-processor " + TEST_WAV +
+                                       " --processor dynamics.compressor --params ratio-2 -q");
+    REQUIRE(code != 0);
+    REQUIRE_THAT(output, ContainsSubstring("expected key=value"));
+  }
+
   SECTION("runs unified equalizer shortcut") {
     auto [code, output] = exec_command(CLI + " eq " + TEST_WAV +
                                        " --frequency-hz 440 --gain-db 3 --q 1 --coeff-mode 1"
@@ -1040,18 +1073,33 @@ TEST_CASE("CLI mixing command", "[cli][mixing]") {
 TEST_CASE("CLI error handling", "[cli]") {
   SECTION("unknown command") {
     auto [code, output] = exec_command(CLI + " unknown-command");
-    REQUIRE(code == 1);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Unknown command"));
   }
 
   SECTION("missing audio file") {
     auto [code, output] = exec_command(CLI + " bpm");
-    REQUIRE(code == 1);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("Missing audio file"));
   }
 
   SECTION("nonexistent file") {
     auto [code, output] = exec_command(CLI + " bpm /nonexistent/file.wav -q");
+    REQUIRE(code == 4);
+    REQUIRE_THAT(output, ContainsSubstring("Error"));
+  }
+
+  SECTION("handler parameter failure") {
+    create_test_wav(TEST_WAV);
+    auto [code, output] =
+        exec_command(CLI + " pitch-shift " + TEST_WAV + " -o " + TEST_OUT + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--semitones required"));
+  }
+
+  SECTION("legacy mode folds runtime failures") {
+    auto [code, output] =
+        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " bpm /nonexistent/file.wav -q");
     REQUIRE(code == 1);
     REQUIRE_THAT(output, ContainsSubstring("Error"));
   }
@@ -1065,6 +1113,12 @@ TEST_CASE("CLI global options", "[cli]") {
     REQUIRE(code == 0);
   }
 
+  SECTION("key respects an explicitly requested default n-fft") {
+    auto [code, output] = exec_command(CLI + " key " + TEST_WAV + " --n-fft 2048 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"root\""));
+  }
+
   SECTION("custom hop-length") {
     auto [code, output] = exec_command(CLI + " mel " + TEST_WAV + " --hop-length 256 -q");
     REQUIRE(code == 0);
@@ -1074,6 +1128,38 @@ TEST_CASE("CLI global options", "[cli]") {
     auto [code, output] = exec_command(CLI + " mel " + TEST_WAV + " --n-mels 64 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"n_mels\": 64"));
+  }
+
+  SECTION("equals syntax for global and command options") {
+    auto [code, output] =
+        exec_command(CLI + " mel " + TEST_WAV + " --n-mels=64 --fmin=20 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"n_mels\": 64"));
+  }
+
+  SECTION("rejects numeric suffixes with the option name") {
+    auto [code, output] = exec_command(CLI + " key " + TEST_WAV + " --candidates 3junk -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--candidates"));
+
+    auto [global_code, global_output] =
+        exec_command(CLI + " mel " + TEST_WAV + " --n-mels=64junk -q");
+    REQUIRE(global_code == 3);
+    REQUIRE_THAT(global_output, ContainsSubstring("--n-mels"));
+  }
+
+  SECTION("global n-fft and hop-length reach frame conversion handlers") {
+    auto [code, output] = exec_command(
+        CLI + " frames-to-samples --frames 10 --n-fft 2048 --hop-length 512 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"samples\": 6144"));
+  }
+
+  SECTION("project bounce rejects an unknown NativeSynth preset") {
+    auto [code, output] = exec_command(
+        CLI + " project bounce --in missing.json -o ignored.wav --synth not-a-preset -q");
+    REQUIRE(code == 9);
+    REQUIRE_THAT(output, ContainsSubstring("unknown synth preset"));
   }
 }
 

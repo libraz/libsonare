@@ -37,6 +37,9 @@ export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMe
   return (
     value.type === 'syncClips' ||
     value.type === 'syncClipsDelta' ||
+    value.type === 'syncClipPageProvider' ||
+    value.type === 'syncClipPage' ||
+    value.type === 'syncClipPageCommit' ||
     value.type === 'syncMidiClips' ||
     value.type === 'syncMarkers' ||
     value.type === 'syncMetronome' ||

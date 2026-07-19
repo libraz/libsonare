@@ -380,6 +380,37 @@ TEST_CASE("MidiFx arpeggiator expands a held note into gated steps", "[midi]") {
   REQUIRE(out.events[4].ump.note_number() == 67);
 }
 
+TEST_CASE("MidiFx humanize keeps each arpeggiated gate's note-on before its note-off", "[midi]") {
+  // A timing range wider than the one-frame gate reproduced the prior bug:
+  // independently jittered on/off events could sort into off/on order. Check a
+  // seed range so the pairing contract is independent of PRNG output.
+  for (uint32_t seed = 0; seed < 64; ++seed) {
+    MidiFxChain fx;
+    fx.prepare();
+    ArpeggiatorConfig arp;
+    arp.enabled = true;
+    arp.steps = 1;
+    arp.intervals = {0};
+    arp.step_frames = 100;
+    arp.gate_frames = 1;
+    fx.set_arpeggiator(arp);
+    HumanizeConfig humanize;
+    humanize.enabled = true;
+    humanize.seed = seed;
+    humanize.timing_frames = 64;
+    fx.set_humanize(humanize);
+
+    const MidiEvent input[] = {note_on(100, 60, 100)};
+    MidiFxBuffer out;
+    fx.process(input, 1, &out);
+
+    REQUIRE(out.size == 2);
+    REQUIRE(out.events[0].ump.is_note_on());
+    REQUIRE(out.events[1].ump.is_note_off());
+    REQUIRE(out.events[1].render_frame - out.events[0].render_frame == 1);
+  }
+}
+
 TEST_CASE("MidiFx output is render-frame ordered after chord + arpeggiator fan-out", "[midi]") {
   // Chord fan-out emits note-major (all arp steps of chord note 0, then all of
   // note 1, ...), so the per-step render frames restart from the onset for each

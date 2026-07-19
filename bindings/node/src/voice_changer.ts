@@ -120,41 +120,6 @@ export interface VoiceChangeRealtimeRequest extends VoiceChangeRealtimeOptions {
   preset?: RealtimeVoiceChangerConfigInput;
 }
 
-function latencyCompensatedVoiceChange(
-  changer: RealtimeVoiceChanger,
-  samples: Float32Array,
-  channels: 1 | 2,
-  blockFrames: number,
-): Float32Array {
-  const latencyFrames = Math.max(0, changer.latencySamples());
-  if (channels === 1) {
-    const total = samples.length + latencyFrames;
-    const input = new Float32Array(total);
-    input.set(samples);
-    const processed = new Float32Array(total);
-    for (let pos = 0; pos < total; pos += blockFrames) {
-      const inputBlock = input.subarray(pos, Math.min(total, pos + blockFrames));
-      const outputBlock = processed.subarray(pos, pos + inputBlock.length);
-      changer.processMonoInto(inputBlock, outputBlock);
-    }
-    return processed.slice(latencyFrames, latencyFrames + samples.length);
-  }
-
-  const frames = samples.length / 2;
-  const totalFrames = frames + latencyFrames;
-  const input = new Float32Array(totalFrames * 2);
-  input.set(samples);
-  const processed = new Float32Array(totalFrames * 2);
-  const frameStride = blockFrames * 2;
-  for (let pos = 0; pos < input.length; pos += frameStride) {
-    const inputBlock = input.subarray(pos, Math.min(input.length, pos + frameStride));
-    const outputBlock = processed.subarray(pos, pos + inputBlock.length);
-    changer.processInterleavedInto(inputBlock, 2, outputBlock);
-  }
-  const offset = latencyFrames * 2;
-  return processed.slice(offset, offset + samples.length);
-}
-
 export function voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array;
 export function voiceChangeRealtime(
   samples: Float32Array,
@@ -179,18 +144,13 @@ export function voiceChangeRealtime(
   if (channels === 2 && request.samples.length % 2 !== 0) {
     throw new Error('voiceChangeRealtime: stereo input length must be a multiple of 2.');
   }
-  const block = 512;
-  const changer = new RealtimeVoiceChanger({
-    sampleRate: request.sampleRate ?? 48000,
-    maxBlockSize: block,
+  const presetConfig = request.preset ?? 'neutral-monitor';
+  return addon.voiceChangeRealtime(
+    request.samples,
+    request.sampleRate ?? 48000,
+    typeof presetConfig === 'string' ? presetConfig : JSON.stringify(presetConfig),
     channels,
-    preset: request.preset ?? 'neutral-monitor',
-  });
-  try {
-    return latencyCompensatedVoiceChange(changer, request.samples, channels, block);
-  } finally {
-    changer.destroy();
-  }
+  );
 }
 
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {

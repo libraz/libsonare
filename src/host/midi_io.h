@@ -346,6 +346,13 @@ class FixedMidiInputSource final : public MidiInputSource {
 
   uint32_t dropped_count() const noexcept { return dropped_count_.load(std::memory_order_relaxed); }
 
+  /// HOST lifecycle thread: discard queued events after the producer has been
+  /// stopped (for example before reopening a MIDI device on a new timeline).
+  void clear() noexcept {
+    const size_t write = write_index_.load(std::memory_order_acquire);
+    read_index_.store(write, std::memory_order_release);
+  }
+
   void reset_telemetry() noexcept { dropped_count_.store(0, std::memory_order_relaxed); }
 
  private:
@@ -424,6 +431,12 @@ class FixedMidiOutputSink final : public MidiOutputSink {
   }
 
   uint32_t dropped_count() const noexcept { return dropped_count_.load(std::memory_order_relaxed); }
+
+  /// HOST lifecycle thread: discard queued events after the producer stopped.
+  void clear() noexcept {
+    const size_t write = write_index_.load(std::memory_order_acquire);
+    read_index_.store(write, std::memory_order_release);
+  }
 
   void reset_telemetry() noexcept { dropped_count_.store(0, std::memory_order_relaxed); }
 

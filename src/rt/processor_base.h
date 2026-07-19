@@ -62,6 +62,18 @@ class ProcessorBase {
   }
 
   virtual void prepare(double sample_rate, int max_block_size) = 0;
+  /// @brief Prepare with the maximum number of channels the caller will pass to
+  /// process().
+  ///
+  /// Most processors only need a block-size bound, so retaining the two
+  /// argument prepare() implementation keeps their realtime contract intact.
+  /// Channel-aware processors may override this overload to avoid allocating
+  /// per-channel scratch state for all realtime-supported channels when an
+  /// offline caller knows it will process mono or stereo material.
+  virtual void prepare(double sample_rate, int max_block_size, int max_channels) {
+    (void)max_channels;
+    prepare(sample_rate, max_block_size);
+  }
   virtual void process(float* const* channels, int num_channels, int num_samples) = 0;
   virtual void reset() = 0;
   virtual int latency_samples() const noexcept { return 0; }

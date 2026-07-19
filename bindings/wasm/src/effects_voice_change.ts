@@ -1,6 +1,5 @@
 import { getSonareModule } from './module_state';
 import type { RealtimeVoiceChangerConfigInput } from './public_types';
-import { RealtimeVoiceChanger } from './streaming_mixing';
 import type { ValidateOptions } from './validation';
 import { assertSamples } from './validation';
 
@@ -55,7 +54,7 @@ export function voiceChange(
 export interface VoiceChangeRealtimeOptions extends ValidateOptions {
   /** Channel count (1 = mono, 2 = interleaved stereo). */
   channels?: 1 | 2;
-  /** Block size for the internal render loop (default 512). */
+  /** @deprecated The shared C-ABI renderer uses a fixed cross-surface block size. */
   blockSize?: number;
 }
 
@@ -66,46 +65,12 @@ export interface VoiceChangeRealtimeRequest extends VoiceChangeRealtimeOptions {
   preset?: RealtimeVoiceChangerConfigInput;
 }
 
-function latencyCompensatedVoiceChange(
-  changer: RealtimeVoiceChanger,
-  samples: Float32Array,
-  channels: 1 | 2,
-  blockFrames: number,
-): Float32Array {
-  const latencyFrames = Math.max(0, changer.latencySamples());
-  if (channels === 1) {
-    const total = samples.length + latencyFrames;
-    const input = new Float32Array(total);
-    input.set(samples);
-    const processed = new Float32Array(total);
-    for (let offset = 0; offset < total; offset += blockFrames) {
-      const block = input.subarray(offset, Math.min(offset + blockFrames, total));
-      processed.set(changer.processMono(block), offset);
-    }
-    return processed.slice(latencyFrames, latencyFrames + samples.length);
-  }
-
-  const frames = samples.length / 2;
-  const totalFrames = frames + latencyFrames;
-  const input = new Float32Array(totalFrames * 2);
-  input.set(samples);
-  const processed = new Float32Array(totalFrames * 2);
-  const frameStride = blockFrames * 2;
-  for (let offset = 0; offset < input.length; offset += frameStride) {
-    const block = input.subarray(offset, Math.min(offset + frameStride, input.length));
-    processed.set(changer.processInterleaved(block, 2), offset);
-  }
-  const start = latencyFrames * 2;
-  return processed.slice(start, start + samples.length);
-}
-
 /**
  * Applies the realtime voice-changer chain to a whole buffer in one call.
  *
- * Constructs and prepares a {@link RealtimeVoiceChanger}, runs the block loop
- * for the caller, then disposes it — matching the Python `voice_change_realtime`
- * and Node `voiceChangeRealtime` convenience wrappers. For mono, `samples` is a
- * plain mono buffer; for stereo, `samples` is interleaved (L0,R0,L1,R1,...).
+ * Uses the shared C-ABI renderer, so Python, Node, and WASM use the same
+ * fixed block size and latency compensation. For mono, `samples` is a plain
+ * buffer; for stereo, it is interleaved (L0,R0,L1,R1,...).
  *
  * @param samples - Audio samples (mono, or interleaved stereo when channels=2)
  * @param sampleRate - Sample rate in Hz (default 48000, matching Python/Node)
@@ -136,12 +101,11 @@ export function voiceChangeRealtime(
   if (channels === 2 && request.samples.length % 2 !== 0) {
     throw new Error('voiceChangeRealtime: stereo input length must be a multiple of 2.');
   }
-  const blockSize = Math.max(1, Math.floor(request.blockSize ?? 512));
-  const changer = new RealtimeVoiceChanger(request.preset ?? 'neutral-monitor');
-  try {
-    changer.prepare(request.sampleRate ?? 48000, blockSize, channels);
-    return latencyCompensatedVoiceChange(changer, request.samples, channels, blockSize);
-  } finally {
-    changer.delete();
-  }
+  const presetConfig = request.preset ?? 'neutral-monitor';
+  return requireModule().voiceChangeRealtime(
+    request.samples,
+    request.sampleRate ?? 48000,
+    typeof presetConfig === 'string' ? presetConfig : JSON.stringify(presetConfig),
+    channels,
+  );
 }

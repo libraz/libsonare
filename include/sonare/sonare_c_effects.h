@@ -100,6 +100,10 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
 SonareError sonare_note_stretch(const float* samples, size_t length, int sample_rate,
                                 int onset_sample, int offset_sample, float stretch_ratio,
                                 float** out, size_t* out_length);
+/// Move a note region to a new onset sample while preserving its duration.
+SonareError sonare_note_move(const float* samples, size_t length, int sample_rate, int onset_sample,
+                             int offset_sample, int target_onset_sample, float** out,
+                             size_t* out_length);
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length);

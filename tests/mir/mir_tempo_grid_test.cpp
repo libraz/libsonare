@@ -187,6 +187,11 @@ TEST_CASE("mir bridge emits a ramp boundary on a tempo change", "[mir]") {
     if (seg.end_bpm > 0.0 && std::abs(seg.end_bpm - seg.bpm) > 1e-6) has_ramp = true;
   }
   REQUIRE(has_ramp);
+  for (size_t i = 0; i + 1 < primary.segments.size(); ++i) {
+    if (primary.segments[i].end_bpm > 0.0) {
+      REQUIRE(primary.segments[i].end_bpm == Catch::Approx(primary.segments[i + 1].bpm));
+    }
+  }
   // Tempo increased overall.
   REQUIRE(last_bpm > first_bpm);
 }

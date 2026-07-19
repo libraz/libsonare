@@ -24,6 +24,7 @@ from libsonare import (
     metering_true_peak_db,
 )
 from libsonare._effects import voice_change, voice_change_realtime
+from libsonare._runtime import SonareError
 
 SR = 22050
 
@@ -126,22 +127,16 @@ class TestNanInfGuards:
             metering_peak_db(_with_nan())
 
 
-class TestValidateFalseSkipsNan:
+class TestValidateFalseStillHasCAbiBackstop:
     def test_lufs_validate_false(self):
-        # Should NOT raise the Python-side NaN/Inf guard error. The C layer
-        # may still reject NaN input with its own SonareException (surfaced as
-        # RuntimeError), which is acceptable — we only assert that the
-        # Python-side guard message did not fire.
-        try:
+        # validate=False skips only the Python preflight; C-ABI validation is
+        # mandatory and must still reject NaN input.
+        with pytest.raises((ValueError, SonareError)):
             lufs(_with_nan(), SR, validate=False)
-        except (ValueError, RuntimeError) as e:
-            assert "contains NaN or Inf" not in str(e)
 
     def test_mastering_dynamics_compressor_validate_false(self):
-        try:
+        with pytest.raises((ValueError, SonareError)):
             mastering_dynamics_compressor(_with_nan(), SR, validate=False)
-        except (ValueError, RuntimeError) as e:
-            assert "contains NaN or Inf" not in str(e)
 
 
 class TestPositiveSmoke:

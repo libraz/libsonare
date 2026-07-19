@@ -41,29 +41,18 @@ Ump make_midi1(uint8_t group, UmpStatus status, uint8_t channel, uint8_t data1,
 
 namespace {
 
-// MIDI-Association "min-center-max" up-scaling (UMP spec, section on
-// downscaling/upscaling). Maps a `src_bits`-wide value to `dst_bits`-wide:
-// below center it is a left shift; at/above center it interpolates so the
-// center maps to the destination center and the max maps to the destination
-// max. The DOWN-scale is always a plain top-bit truncation (right shift), which
-// guarantees a lossless src->dst->src round-trip of the top `src_bits` bits.
+// MIDI-CI/UMP bit replication up-scaling. Repeat the source bit pattern until
+// it covers the destination width, then trim the low excess bits. This maps
+// both zero and the source maximum exactly to the destination extrema; plain
+// top-bit truncation on the reverse path therefore round-trips the source.
 uint32_t scale_up(uint32_t value, uint32_t src_bits, uint32_t dst_bits) noexcept {
-  const uint32_t scale_bits = dst_bits - src_bits;
-  const uint32_t left = value << scale_bits;
-  const uint32_t src_center = 1u << (src_bits - 1u);
-  if (value <= src_center) {
-    return left;
+  uint64_t repeated = value & ((uint64_t{1} << src_bits) - 1u);
+  uint32_t bits = src_bits;
+  while (bits < dst_bits) {
+    repeated = (repeated << src_bits) | value;
+    bits += src_bits;
   }
-  const uint32_t repeat_bits = src_bits - 1u;
-  const uint32_t repeat_mask = (1u << repeat_bits) - 1u;
-  const uint32_t bit_repeat = value & repeat_mask;
-  uint32_t extra = bit_repeat;
-  if (scale_bits >= repeat_bits) {
-    extra <<= (scale_bits - repeat_bits);
-  } else {
-    extra >>= (repeat_bits - scale_bits);
-  }
-  return left | extra;
+  return static_cast<uint32_t>(repeated >> (bits - dst_bits));
 }
 
 }  // namespace

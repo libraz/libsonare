@@ -52,6 +52,52 @@ std::string key_signature_name(int8_t fifths, bool minor) {
 constexpr double kMicrosPerMinute = 60000000.0;
 constexpr double kDefaultBpm = sonare::constants::kDefaultBpm;
 
+// SMF text meta events are byte strings and older files often contain a local
+// code page rather than UTF-8. Project serialization exposes these values as
+// JSON strings on every binding, so normalize once at import rather than
+// leaking invalid bytes into a surface-specific JSON encoder.
+std::string utf8_with_replacement(const uint8_t* bytes, size_t size) {
+  constexpr char kReplacement[] = "\xEF\xBF\xBD";
+  std::string out;
+  out.reserve(size);
+  for (size_t i = 0; i < size;) {
+    const uint8_t first = bytes[i];
+    size_t width = 0;
+    if (first <= 0x7Fu) {
+      out.push_back(static_cast<char>(first));
+      ++i;
+      continue;
+    }
+    if (first >= 0xC2u && first <= 0xDFu) {
+      width = 2;
+    } else if (first >= 0xE0u && first <= 0xEFu) {
+      width = 3;
+    } else if (first >= 0xF0u && first <= 0xF4u) {
+      width = 4;
+    }
+
+    bool valid = width != 0 && i + width <= size;
+    if (valid) {
+      const uint8_t second = bytes[i + 1];
+      valid = (second & 0xC0u) == 0x80u;
+      if (width >= 3) valid = valid && (bytes[i + 2] & 0xC0u) == 0x80u;
+      if (width == 4) valid = valid && (bytes[i + 3] & 0xC0u) == 0x80u;
+      if (valid && first == 0xE0u) valid = second >= 0xA0u;
+      if (valid && first == 0xEDu) valid = second <= 0x9Fu;
+      if (valid && first == 0xF0u) valid = second >= 0x90u;
+      if (valid && first == 0xF4u) valid = second <= 0x8Fu;
+    }
+    if (valid) {
+      out.append(reinterpret_cast<const char*>(bytes + i), width);
+      i += width;
+    } else {
+      out.append(kReplacement);
+      ++i;
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Byte-buffer reader with bounds checking. All reads validate remaining length
 // and set `overflow` (never read out of bounds). Control-thread only.
@@ -332,7 +378,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
             *resource_exceeded = true;
             return false;
           }
-          track->name.assign(reinterpret_cast<const char*>(payload), meta_len);
+          track->name = utf8_with_replacement(payload, meta_len);
           break;
         }
         case kMetaMarker:
@@ -346,7 +392,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
           }
           SmfMarker marker;
           marker.ppq = ppq;
-          marker.text.assign(reinterpret_cast<const char*>(payload), meta_len);
+          marker.text = utf8_with_replacement(payload, meta_len);
           marker.kind = meta_type == kMetaText       ? SmfMarkerKind::kText
                         : meta_type == kMetaLyric    ? SmfMarkerKind::kLyric
                         : meta_type == kMetaCuePoint ? SmfMarkerKind::kCuePoint

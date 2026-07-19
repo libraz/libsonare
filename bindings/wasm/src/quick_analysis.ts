@@ -57,7 +57,8 @@ export interface DetectChordsRequest extends ChordDetectionOptions, SamplesReque
 /** Canonical request form for functional chord analysis. */
 export interface ChordFunctionalAnalysisRequest extends DetectChordsRequest {
   keyRoot: PitchClass;
-  keyMode: Mode;
+  /** Musical mode; defaults to {@link Mode.Major}. */
+  keyMode?: Mode;
 }
 
 /** Canonical request form for impulse-response analysis. */
@@ -321,7 +322,7 @@ export function chordFunctionalAnalysis(request: ChordFunctionalAnalysisRequest)
 export function chordFunctionalAnalysis(
   samples: Float32Array,
   keyRoot: PitchClass,
-  keyMode: Mode,
+  keyMode?: Mode,
   sampleRate?: number,
   options?: ChordDetectionOptions,
 ): string[];
@@ -345,7 +346,7 @@ export function chordFunctionalAnalysis(
   return requireModule().chordFunctionalAnalysis(
     request.samples,
     request.keyRoot as PitchClass,
-    request.keyMode as Mode,
+    request.keyMode ?? Mode.Major,
     request.sampleRate ?? 22050,
     request.minDuration ?? 0.3,
     request.smoothingWindow ?? 2.0,

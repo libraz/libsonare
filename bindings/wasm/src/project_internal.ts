@@ -1,6 +1,7 @@
 import { getSonareModule } from './module_state';
 import type {
   BuiltinSynthBinding,
+  ProjectAssistSidecar,
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
@@ -20,6 +21,7 @@ import type {
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
+  ProjectTempoCandidate,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrackKind,
@@ -75,8 +77,14 @@ export interface WasmProject {
   bakeMidiFx: (clipId: number, configJson: string) => void;
   setMidiFx: (clipId: number, configJson: string) => void;
   validateMidiNotes: (clipId: number) => ProjectNotePairValidation;
-  autoTempo: (audio: Float32Array, sampleRate: number) => number;
-  snapToGrid: (ppq: number, strength: number) => number;
+  analyzeTempo: (audio: Float32Array, sampleRate: number) => ProjectTempoCandidate[];
+  autoTempo: (
+    audio: Float32Array,
+    sampleRate: number,
+    candidateIndex: number,
+    applyTimeSignatures: boolean,
+  ) => number;
+  snapToGrid: (ppq: number, strength: number, division: number) => number;
   compile: () => ProjectCompileResult;
   bounce: (options: ProjectBounceOptions) => Float32Array;
   bounceWithBuiltinInstrument: (

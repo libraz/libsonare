@@ -848,6 +848,7 @@ export interface WasmRealtimeEngine {
   graphNodeCount: () => number;
   graphConnectionCount: () => number;
   setClips: (clips: WasmEngineClip[]) => void;
+  prebakedClipChannels: (clipId: number) => Float32Array[] | null;
   clipCount: () => number;
   setTrackLanes: (lanes: Array<number | WasmEngineTrackLane>) => void;
   setLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => void;
@@ -1412,11 +1413,24 @@ export interface SonareModule {
     offsetSample: number,
     stretchRatio: number,
   ) => Float32Array;
+  noteMove: (
+    samples: Float32Array,
+    sampleRate: number,
+    onsetSample: number,
+    offsetSample: number,
+    targetOnsetSample: number,
+  ) => Float32Array;
   voiceChange: (
     samples: Float32Array,
     sampleRate: number,
     pitchSemitones: number,
     formantFactor: number,
+  ) => Float32Array;
+  voiceChangeRealtime: (
+    samples: Float32Array,
+    sampleRate: number,
+    preset: string,
+    channels: number,
   ) => Float32Array;
   normalize: (samples: Float32Array, sampleRate: number, targetDb: number) => Float32Array;
   mastering: (

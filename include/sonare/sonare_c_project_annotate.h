@@ -167,17 +167,65 @@ void sonare_project_free_assist_sidecar(SonareProjectAssistSidecar* sidecar);
 // MIR (offline analysis -> edit commands; deterministic)
 // ============================================================================
 
+/// Labels for ranked tempo-octave hypotheses returned by
+/// @ref sonare_project_analyze_tempo.
+typedef enum {
+  SONARE_TEMPO_CANDIDATE_PRIMARY = 0,
+  SONARE_TEMPO_CANDIDATE_HALF = 1,
+  SONARE_TEMPO_CANDIDATE_DOUBLE = 2,
+} SonareProjectTempoCandidateKind;
+
+/// A ranked tempo hypothesis. The full detected time-signature sequence is
+/// applied by @ref sonare_project_auto_tempo_ex; this preview exposes its
+/// first segment and total segment count for selection UI.
+typedef struct {
+  float bpm;
+  float confidence;
+  uint32_t kind;  ///< @ref SonareProjectTempoCandidateKind
+  uint32_t time_signature_count;
+  SonareProjectTimeSignatureSegment first_time_signature;
+} SonareProjectTempoCandidate;
+
 /// @brief Detects tempo from a mono audio buffer and installs the primary
 ///        tempo-segment estimate via an edit command (undoable). Uses the
 ///        beat analysis -> tempo bridge. @p out_bpm (optional) receives the
-///        primary BPM.
+///        primary BPM. This compatibility entry point does not modify the
+///        project's time signatures; use @ref sonare_project_auto_tempo_ex to
+///        select a ranked candidate and apply detected meter.
 SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio, size_t len,
                                       int sample_rate, float* out_bpm);
+
+/// @brief Returns ranked primary/half/double tempo candidates without mutating
+///        the project. Set @p candidates to NULL with @p capacity 0 to query
+///        @p out_count. At most three candidates are emitted.
+SonareError sonare_project_analyze_tempo(const SonareProject* project, const float* audio,
+                                         size_t len, int sample_rate,
+                                         SonareProjectTempoCandidate* candidates, size_t capacity,
+                                         size_t* out_count);
+
+/// @brief Installs the requested ranked tempo candidate via undoable edits.
+/// @p candidate_index is the index returned by
+///        @ref sonare_project_analyze_tempo. When @p apply_time_signatures is
+///        nonzero, the candidate's complete detected meter sequence is also
+///        installed. @p out_bpm (optional) receives the selected BPM.
+SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* audio, size_t len,
+                                         int sample_rate, size_t candidate_index,
+                                         uint8_t apply_time_signatures, float* out_bpm);
 
 /// @brief Snaps a PPQ coordinate to the nearest beat of the project's grid at
 ///        that position. @p strength in [0,1] (0 = no snap, 1 = exact line).
 SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq, double strength,
                                         double* out_ppq);
+
+/// @brief Snaps a PPQ coordinate to a bar, beat, or beat subdivision.
+///
+/// @p division selects the target grid: 0 snaps to bar lines, 1 to beat
+/// lines, and values >= 2 to that many equal subdivisions per beat (for
+/// example, 4 is a sixteenth-note grid in 4/4). @p strength is in [0,1].
+/// This versioned extension leaves @ref sonare_project_snap_to_grid's
+/// beat-only ABI contract intact.
+SonareError sonare_project_snap_to_grid_ex(const SonareProject* project, double ppq,
+                                           double strength, int division, double* out_ppq);
 
 /// @brief Replaces the project's key annotation stream via an undoable command.
 ///

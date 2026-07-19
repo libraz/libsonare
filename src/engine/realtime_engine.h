@@ -260,7 +260,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // RT contract: the engine never allocates for the instrument on the audio
   // thread; the per-block scratch buffer is sized in prepare(). The instrument's
   // own prepare()/process()/on_event() must honor the rt::ProcessorBase contract.
-  void set_midi_instrument(midi::MidiInstrument* instrument) noexcept;
+  void set_midi_instrument(midi::MidiInstrument* instrument);
   // Per-destination registration: bind (or clear, with nullptr) the host
   // instrument that renders MIDI routed to `destination_id` (the compiler stamps
   // each MidiClipSchedule with its track's Track.midi_destination_id). The
@@ -270,7 +270,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // only; swapping/clearing first releases notes sounding on that destination so
   // the outgoing instrument does not hang. May prepare() the instrument
   // (allocates) when the engine is already prepared.
-  bool set_midi_instrument(uint32_t destination_id, midi::MidiInstrument* instrument) noexcept;
+  bool set_midi_instrument(uint32_t destination_id, midi::MidiInstrument* instrument);
   midi::MidiInstrument* midi_instrument() const noexcept { return instrument_rack_.get(0); }
   midi::MidiInstrument* midi_instrument(uint32_t destination_id) const noexcept {
     return instrument_rack_.get(destination_id);
@@ -483,7 +483,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // CONTROL thread: refresh the PDC delays from the current instrument rack and
   // report the resulting graph latency. Called from prepare() and whenever an
   // instrument binding changes.
-  void recompute_pdc() noexcept;
+  void recompute_pdc();
   // AUDIO thread: flush the PDC delay lines on a transport discontinuity so no
   // stale clip/instrument audio rings out across a stop/seek/loop.
   void flush_pdc_delays() noexcept;
@@ -706,7 +706,7 @@ class RealtimeEngine : private ClipPageRequestSink {
 #if defined(SONARE_WITH_MIXING)
   MeterTelemetryTap meter_tap_{};
   ScopeTelemetryTap scope_tap_{};
-  int scope_interval_frames_ = 0;
+  std::atomic<int> scope_interval_frames_{0};
   uint32_t scope_band_count_ = 48;
 #endif
   automation::AutomationEngine automation_{};

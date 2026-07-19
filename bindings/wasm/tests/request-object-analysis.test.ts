@@ -109,6 +109,13 @@ describe('WASM basic analysis request objects', () => {
     ).toEqual(chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, sampleRate));
   });
 
+  it('defaults functional chord analysis to major mode', () => {
+    const request = chordFunctionalAnalysis({ samples, sampleRate, keyRoot: PitchClass.C });
+    const explicit = chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, sampleRate);
+
+    expect(request).toEqual(explicit);
+  });
+
   it('keeps acoustic-analysis request objects equivalent', () => {
     const impulse = new Float32Array(4000);
     impulse[0] = 1;

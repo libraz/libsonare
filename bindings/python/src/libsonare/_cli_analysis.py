@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
 from ._cli_common import (
@@ -15,6 +14,7 @@ from ._cli_common import (
     _parse_mode,
     _parse_modes,
     _parse_pitch_class,
+    _strict_json_dumps,
 )
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
@@ -26,7 +26,7 @@ def cmd_version(args: argparse.Namespace) -> int:
 
     v = version()
     if args.json:
-        print(json.dumps({"lib_version": v, "cli": "python"}))
+        print(_strict_json_dumps({"lib_version": v, "cli": "python"}))
     else:
         print(f"libsonare {v} (Python CLI)")
     return 0
@@ -42,7 +42,7 @@ def cmd_info(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "duration": round(dur, 3),
                     "sample_rate": sr,
@@ -63,7 +63,7 @@ def cmd_bpm(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     bpm = detect_bpm(samples, sample_rate=sr)
     if args.json:
-        print(json.dumps({"bpm": round(bpm, 2)}))
+        print(_strict_json_dumps({"bpm": round(bpm, 2)}))
     else:
         print(f"  BPM: {bpm:.2f}")
     return 0
@@ -117,7 +117,7 @@ def cmd_key(args: argparse.Namespace) -> int:
                 }
                 for candidate in candidates
             ]
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print(f"  Key: {name} (confidence: {key.confidence:.1%})")
         if candidates:
@@ -141,7 +141,7 @@ def cmd_beats(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     beats = detect_beats(samples, sample_rate=sr)
     if args.json:
-        print(json.dumps([round(b, 4) for b in beats]))
+        print(_strict_json_dumps([round(b, 4) for b in beats]))
     else:
         print(f"  Beat times ({len(beats)} beats):")
         for i, b in enumerate(beats[:20]):
@@ -157,7 +157,7 @@ def cmd_downbeats(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     downbeats = detect_downbeats(samples, sample_rate=sr)
     if args.json:
-        print(json.dumps([round(d, 4) for d in downbeats]))
+        print(_strict_json_dumps([round(d, 4) for d in downbeats]))
     else:
         print(f"  Downbeat times ({len(downbeats)} downbeats):")
         for i, d in enumerate(downbeats[:20]):
@@ -173,7 +173,7 @@ def cmd_onsets(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     onsets = detect_onsets(samples, sample_rate=sr)
     if args.json:
-        print(json.dumps([round(o, 4) for o in onsets]))
+        print(_strict_json_dumps([round(o, 4) for o in onsets]))
     else:
         print(f"  Onset times ({len(onsets)} onsets):")
         for i, o in enumerate(onsets[:20]):
@@ -207,7 +207,7 @@ def cmd_chords(args: argparse.Namespace) -> int:
     )
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "count": len(result.chords),
                     "chords": [
@@ -249,7 +249,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "bpm": round(r.bpm, 2),
                     "bpm_confidence": round(r.bpm_confidence, 4),
@@ -297,7 +297,7 @@ def cmd_mel(args: argparse.Namespace) -> int:
     )
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "n_mels": result.n_mels,
                     "n_frames": result.n_frames,
@@ -319,7 +319,7 @@ def cmd_chroma(args: argparse.Namespace) -> int:
     result = chroma(samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length)
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "n_chroma": result.n_chroma,
                     "n_frames": result.n_frames,
@@ -364,7 +364,7 @@ def cmd_spectral(args: argparse.Namespace) -> int:
     }
 
     if args.json:
-        print(json.dumps({"features": features}))
+        print(_strict_json_dumps({"features": features}))
     else:
         print("  Spectral Features:")
         print(f"  {'Feature':<15s} {'Mean':>10s} {'Std':>10s} {'Min':>10s} {'Max':>10s}")
@@ -389,7 +389,7 @@ def cmd_pitch(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "algorithm": algo,
                     "n_frames": result.n_frames,

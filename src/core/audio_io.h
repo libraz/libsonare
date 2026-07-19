@@ -74,6 +74,13 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size);
 AudioLoadResult load_audio(const std::string& path,
                            const AudioLoadOptions& options = kDefaultLoadOptions);
 
+/// @brief Returns the source channel count without converting the signal to mono.
+/// @return A positive channel count for built-in WAV/MP3 decoders, or 0 when
+///         the container is not inspectable by the built-in decoder.
+/// @throws SonareException when a recognized built-in container is malformed.
+int audio_channel_count(const std::string& path,
+                        const AudioLoadOptions& options = kDefaultLoadOptions);
+
 /// @brief Loads audio from memory buffer (auto-detect format).
 /// @param data Pointer to audio data
 /// @param size Size of data in bytes

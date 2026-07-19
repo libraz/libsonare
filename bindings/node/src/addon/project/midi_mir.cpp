@@ -192,17 +192,59 @@ Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
   Napi::Float32Array audio = info[0].As<Napi::Float32Array>();
   const int sample_rate = static_cast<int>(NumberArg(info, 1, 0.0));
   float out_bpm = 0.0f;
-  ThrowIfError(env, sonare_project_auto_tempo(project_, audio.Data(), audio.ElementLength(),
-                                              sample_rate, &out_bpm));
+  const size_t candidate_index = static_cast<size_t>(NumberArg(info, 2, 0.0));
+  const bool apply_time_signatures = info.Length() > 3 && info[3].ToBoolean().Value();
+  ThrowIfError(
+      env, sonare_project_auto_tempo_ex(project_, audio.Data(), audio.ElementLength(), sample_rate,
+                                        candidate_index, apply_time_signatures ? 1 : 0, &out_bpm));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_bpm);
+}
+
+Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !sonare_node::IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "analyzeTempo expects a Float32Array of mono audio")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Float32Array audio = info[0].As<Napi::Float32Array>();
+  SonareProjectTempoCandidate candidates[3]{};
+  size_t count = 0;
+  ThrowIfError(env, sonare_project_analyze_tempo(project_, audio.Data(), audio.ElementLength(),
+                                                 static_cast<int>(NumberArg(info, 1, 0.0)),
+                                                 candidates, std::size(candidates), &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Array output =
+      Napi::Array::New(env, static_cast<uint32_t>(std::min(count, std::size(candidates))));
+  const char* labels[] = {"primary", "half", "double"};
+  for (size_t i = 0; i < count && i < std::size(candidates); ++i) {
+    const auto& candidate = candidates[i];
+    Napi::Object value = Napi::Object::New(env);
+    value.Set("bpm", Napi::Number::New(env, candidate.bpm));
+    value.Set("confidence", Napi::Number::New(env, candidate.confidence));
+    value.Set("label",
+              labels[candidate.kind <= SONARE_TEMPO_CANDIDATE_DOUBLE ? candidate.kind : 0]);
+    value.Set("timeSignatureCount", Napi::Number::New(env, candidate.time_signature_count));
+    Napi::Object time_signature = Napi::Object::New(env);
+    time_signature.Set("startPpq",
+                       Napi::Number::New(env, candidate.first_time_signature.start_ppq));
+    time_signature.Set("numerator",
+                       Napi::Number::New(env, candidate.first_time_signature.numerator));
+    time_signature.Set("denominator",
+                       Napi::Number::New(env, candidate.first_time_signature.denominator));
+    value.Set("timeSignature", time_signature);
+    output.Set(static_cast<uint32_t>(i), value);
+  }
+  return output;
 }
 
 Napi::Value ProjectWrap::SnapToGrid(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   double out_ppq = 0.0;
-  ThrowIfError(env, sonare_project_snap_to_grid(project_, NumberArg(info, 0, 0.0),
-                                                NumberArg(info, 1, 1.0), &out_ppq));
+  ThrowIfError(env, sonare_project_snap_to_grid_ex(
+                        project_, NumberArg(info, 0, 0.0), NumberArg(info, 1, 1.0),
+                        static_cast<int>(NumberArg(info, 2, 1.0)), &out_ppq));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_ppq);
 }

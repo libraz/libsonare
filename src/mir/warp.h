@@ -24,6 +24,10 @@
 /// Same input -> byte-identical output. No clocks, no std::rand, no
 /// floating non-determinism beyond IEEE arithmetic. DTW and the multiscale
 /// refinement are deterministic dynamic programs.
+///
+/// @note Internal composition/editing primitive. This header is intentionally
+/// not part of the stable C ABI or language-binding API; hosts consume stored
+/// WarpMap metadata through the project-editing surface instead.
 
 #include <cstddef>
 #include <utility>

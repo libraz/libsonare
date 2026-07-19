@@ -190,6 +190,15 @@ export interface ProjectTimeSignatureSegment {
   denominator: number;
 }
 
+/** A ranked primary/half/double tempo hypothesis from {@link Project.analyzeTempo}. */
+export interface ProjectTempoCandidate {
+  bpm: number;
+  confidence: number;
+  label: 'primary' | 'half' | 'double';
+  timeSignatureCount: number;
+  timeSignature: ProjectTimeSignatureSegment;
+}
+
 /** Options for {@link Project.bounce}. Zero / omitted fields take native defaults. */
 export interface ProjectBounceOptions {
   /**

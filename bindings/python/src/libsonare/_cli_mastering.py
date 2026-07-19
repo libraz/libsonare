@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
 from ._cli_common import (
@@ -12,6 +11,7 @@ from ._cli_common import (
     _parse_json_list,
     _parse_kv_params,
     _resample,
+    _strict_json_dumps,
     _write_wav,
     _write_wav_stereo,
 )
@@ -36,12 +36,14 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             "input_lufs": round(result.input_lufs, 4),
             "output_lufs": round(result.output_lufs, 4),
             "applied_gain_db": round(result.applied_gain_db, 4),
+            "target_lufs": args.target_lufs,
+            "ceiling_db": args.ceiling_db,
+            "true_peak_oversample": 4,
             "latency_samples": result.latency_samples,
             "sample_rate": result.sample_rate,
+            "output": args.output or "",
         }
-        if args.output:
-            payload["output"] = args.output
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print("  Mastering:")
         print(f"    Input LUFS:  {result.input_lufs:.2f}")
@@ -53,25 +55,11 @@ def cmd_mastering(args: argparse.Namespace) -> int:
 
 
 def cmd_mastering_processor(args: argparse.Namespace) -> int:
-    from . import mastering_process, mastering_process_stereo
+    from . import mastering_process, mastering_process_stereo, mastering_processor_catalog
 
     samples, sr = _load_audio(args.file)
     params = _parse_kv_params(args.params) if args.params else {}
-    stereo_only = {
-        "eq.midSide",
-        "multiband.compressor",
-        "multiband.dynamicEq",
-        "multiband.expander",
-        "multiband.imager",
-        "multiband.limiter",
-        "multiband.saturation",
-        "stereo.autoPan",
-        "stereo.haasEnhancer",
-        "stereo.imager",
-        "stereo.monoMaker",
-        "stereo.phaseAlign",
-        "stereo.stereoBalance",
-    }
+    stereo_only = {entry["id"] for entry in mastering_processor_catalog() if entry["stereoOnly"]}
     if args.processor in stereo_only:
         print(
             "warning: stereo-only processor preview duplicates the mono input on left/right; "
@@ -108,7 +96,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
         }
         if args.output:
             payload["output"] = args.output
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print(f"  Mastering processor: {args.processor}")
         print(f"    Input LUFS:   {result.input_lufs:.2f}")
@@ -169,7 +157,7 @@ def cmd_eq(args: argparse.Namespace) -> int:
         }
         if args.output:
             payload["output"] = args.output
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print("  Equalizer")
         print(f"    Input LUFS:   {result.input_lufs:.2f}")
@@ -185,7 +173,7 @@ def cmd_mastering_processors(args: argparse.Namespace) -> int:
 
     names = mastering_processor_names()
     if args.json:
-        print(json.dumps(names))
+        print(_strict_json_dumps(names))
     else:
         print("  Mastering processors:")
         for name in names:
@@ -198,7 +186,7 @@ def cmd_mastering_pair_processors(args: argparse.Namespace) -> int:
 
     names = mastering_pair_processor_names()
     if args.json:
-        print(json.dumps(names))
+        print(_strict_json_dumps(names))
     else:
         print("  Mastering pair processors:")
         for name in names:
@@ -211,7 +199,7 @@ def cmd_mastering_pair_analyses(args: argparse.Namespace) -> int:
 
     names = mastering_pair_analysis_names()
     if args.json:
-        print(json.dumps(names))
+        print(_strict_json_dumps(names))
     else:
         print("  Mastering pair analyses:")
         for name in names:
@@ -254,7 +242,7 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
         }
         if args.output:
             payload["output"] = args.output
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print("  Mastering chain:")
         print(f"    Stages:      {', '.join(result.stages) if result.stages else '(none)'}")
@@ -288,7 +276,7 @@ def cmd_master(args: argparse.Namespace) -> int:
         }
         if args.output:
             payload["output"] = args.output
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print(f"  Master preset: {args.preset}")
         print(f"    Stages:      {', '.join(result.stages) if result.stages else '(none)'}")
@@ -337,7 +325,7 @@ def cmd_declip(args: argparse.Namespace) -> int:
         }
         if args.output:
             payload["output"] = args.output
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print("  Declip:")
         print(f"    Samples: {len(repaired)}")
@@ -350,7 +338,7 @@ def cmd_mastering_presets(args: argparse.Namespace) -> int:
     from . import mastering_preset_names
 
     names = mastering_preset_names()
-    print(json.dumps({"presets": names}) if args.json else "\n".join(names))
+    print(_strict_json_dumps({"presets": names}) if args.json else "\n".join(names))
     return 0
 
 
@@ -376,7 +364,7 @@ def cmd_mixing_presets(args: argparse.Namespace) -> int:
     from . import mixing_scene_preset_names
 
     names = mixing_scene_preset_names()
-    print(json.dumps({"presets": names}) if args.json else "\n".join(names))
+    print(_strict_json_dumps({"presets": names}) if args.json else "\n".join(names))
     return 0
 
 
@@ -389,6 +377,9 @@ def cmd_mixing_preset(args: argparse.Namespace) -> int:
 
 def cmd_mix(args: argparse.Namespace) -> int:
     from . import Mixer, mixing_scene_preset_json
+
+    if args.input and not args.output:
+        raise ValueError("mix with --input requires --output")
 
     # Resolve the scene JSON from either a file or a built-in preset.
     if args.scene:
@@ -447,7 +438,7 @@ def cmd_mix(args: argparse.Namespace) -> int:
                 payload["rendered_samples"] = len(out_left)
                 if args.output:
                     payload["output"] = args.output
-            print(json.dumps(payload))
+            print(_strict_json_dumps(payload))
         else:
             print("  Mixer:")
             print(f"    Strips:      {strip_count}")

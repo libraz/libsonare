@@ -340,7 +340,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                          int num_samples) noexcept;
   bool any_lane_solo(const std::vector<TrackLaneConfig>& lanes) const noexcept;
   void prepare_lanes_from_snapshot(const std::vector<TrackLaneConfig>& lanes) noexcept;
-  void recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept;
+  void recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes);
   void configure_lane_sends(const std::vector<TrackLaneConfig>& lanes);
   void process_lane_strip(size_t lane_index, int num_channels, int num_samples,
                           int64_t timeline_sample) noexcept;

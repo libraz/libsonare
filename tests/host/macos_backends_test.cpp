@@ -38,6 +38,31 @@ TEST_CASE("CoreMIDI input buffers and drains UMP records", "[host][coremidi]") {
   REQUIRE(input.pending_count() == 0);
 }
 
+TEST_CASE("CoreMIDI input reassembles SysEx7 into a host-store handle", "[host][coremidi]") {
+  using sonare::host::backends::CoreMidiInput;
+  CoreMidiInput input;
+  sonare::midi::Ump start{};
+  start.word_count = 2;
+  start.group = 3;
+  start.words[0] = (0x3u << 28u) | (3u << 24u) | (1u << 20u) | (2u << 16u) | (0x01u << 8u) | 0x02u;
+  sonare::midi::Ump end{};
+  end.word_count = 2;
+  end.group = 3;
+  end.words[0] = (0x3u << 28u) | (3u << 24u) | (3u << 20u) | (1u << 16u) | (0x03u << 8u);
+
+  REQUIRE(input.push_event(start, 0));
+  REQUIRE(input.pending_count() == 0);
+  REQUIRE(input.push_event(end, 0));
+  std::array<sonare::midi::MidiEvent, 2> out{};
+  REQUIRE(input.drain(out.data(), out.size(), 0) == 1);
+  REQUIRE(out[0].ump.sysex_handle != 0);
+  const auto* payload = input.sysex_store()->lookup(out[0].ump.sysex_handle);
+  REQUIRE(payload != nullptr);
+  REQUIRE(*payload == std::vector<uint8_t>{0xF0u, 0x01u, 0x02u, 0x03u, 0xF7u});
+  REQUIRE(input.sysex_overflow_count() == 0);
+  REQUIRE(input.sysex_interleave_count() == 0);
+}
+
 TEST_CASE("CoreMIDI input maps host timestamps onto absolute render frames", "[host][coremidi]") {
   sonare::host::MidiHostTimeMapper mapper;
   mapper.publish_anchor(/*host_time_ns=*/2'000'000'000u, /*render_frame=*/1000,

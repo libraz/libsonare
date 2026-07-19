@@ -418,7 +418,7 @@ SonareError sonare_project_add_midi_clip(SonareProject* project, double start_pp
   clip.source_id = source_id;
   clip.start_ppq = start_ppq;
   clip.length_ppq = length_ppq;
-  clip.gain = 0.0f;
+  clip.gain = 1.0f;
   auto add_clip = std::make_unique<arr::AddClip>(std::move(clip));
   commands.push_back(std::move(add_clip));
 

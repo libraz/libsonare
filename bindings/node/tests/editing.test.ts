@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
+  noteMove,
   noteStretch,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
@@ -112,6 +113,16 @@ describe('editing effects', () => {
     expect(result.length).toBeGreaterThan(0);
   });
 
+  it('noteMove preserves output length', () => {
+    const result = noteMove(tone, SR, {
+      onsetSample: 100,
+      offsetSample: 1000,
+      targetOnsetSample: 500,
+    });
+    expect(result).toBeInstanceOf(Float32Array);
+    expect(result.length).toBe(tone.length);
+  });
+
   it('voiceChange returns a non-empty Float32Array', () => {
     const result = voiceChange(tone, SR, { pitchSemitones: 2, formantFactor: 1.1 });
     expect(result).toBeInstanceOf(Float32Array);
@@ -137,6 +148,7 @@ describe('editing effects', () => {
     const offline = voiceChangeRealtime(tone.subarray(0, 512), SR, 'soft-whisper');
     expect(offline).toBeInstanceOf(Float32Array);
     expect(offline.length).toBe(512);
+    expect(voiceChangeRealtime(tone.subarray(0, 512), SR, 'soft-whisper')).toEqual(offline);
 
     const uncompensated = new RealtimeVoiceChanger({
       sampleRate: SR,

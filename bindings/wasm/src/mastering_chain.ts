@@ -12,6 +12,11 @@ function requireModule() {
   return getSonareModule();
 }
 
+/** Internal envelope selecting the core dotted-param parser in the embind layer. */
+function canonicalChainConfig(config: MasteringChainConfig): Record<string, unknown> {
+  return { __flatParams: flattenChainConfig(config) };
+}
+
 export interface MasteringChainRequest {
   samples: Float32Array;
   sampleRate?: number;
@@ -99,25 +104,28 @@ export function masteringChain(
   samples: Float32Array,
   sampleRate?: number,
   config?: MasteringChainConfig,
+  onProgress?: ProgressCallback,
 ): MasteringChainResult;
 export function masteringChain(
   samples: Float32Array | MasteringChainRequest,
   sampleRate = 22050,
   config: MasteringChainConfig = {},
+  onProgress?: ProgressCallback,
 ): MasteringChainResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, config } : samples;
+  const request =
+    samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
   if (request.onProgress) {
     return requireModule().masteringChainWithProgress(
       request.samples,
       request.sampleRate ?? 22050,
-      (request.config ?? {}) as Record<string, unknown>,
+      canonicalChainConfig(request.config ?? {}),
       request.onProgress,
     );
   }
   return requireModule().masteringChain(
     request.samples,
     request.sampleRate ?? 22050,
-    (request.config ?? {}) as Record<string, unknown>,
+    canonicalChainConfig(request.config ?? {}),
   );
 }
 
@@ -138,16 +146,18 @@ export function masteringChainStereo(
   right: Float32Array,
   sampleRate?: number,
   config?: MasteringChainConfig,
+  onProgress?: ProgressCallback,
 ): MasteringStereoChainResult;
 export function masteringChainStereo(
   left: Float32Array | MasteringChainStereoRequest,
   right?: Float32Array,
   sampleRate = 22050,
   config: MasteringChainConfig = {},
+  onProgress?: ProgressCallback,
 ): MasteringStereoChainResult {
   const request =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, config }
+      ? { left, right: right as Float32Array, sampleRate, config, onProgress }
       : left;
   if (request.left.length !== request.right.length) {
     throw new Error('Stereo channel lengths must match.');
@@ -157,7 +167,7 @@ export function masteringChainStereo(
       request.left,
       request.right,
       request.sampleRate ?? 22050,
-      (request.config ?? {}) as Record<string, unknown>,
+      canonicalChainConfig(request.config ?? {}),
       request.onProgress,
     );
   }
@@ -165,7 +175,7 @@ export function masteringChainStereo(
     request.left,
     request.right,
     request.sampleRate ?? 22050,
-    (request.config ?? {}) as Record<string, unknown>,
+    canonicalChainConfig(request.config ?? {}),
   );
 }
 
@@ -201,7 +211,7 @@ export function masteringChainWithProgress(
   return requireModule().masteringChainWithProgress(
     request.samples,
     request.sampleRate ?? 22050,
-    (request.config ?? {}) as Record<string, unknown>,
+    canonicalChainConfig(request.config ?? {}),
     request.onProgress,
   );
 }
@@ -247,7 +257,7 @@ export function masteringChainStereoWithProgress(
     request.left,
     request.right,
     request.sampleRate ?? 22050,
-    (request.config ?? {}) as Record<string, unknown>,
+    canonicalChainConfig(request.config ?? {}),
     request.onProgress,
   );
 }
@@ -375,15 +385,15 @@ export function masterAudioWithProgress(
   samples: Float32Array,
   sampleRate?: number,
   presetName?: MasteringPreset,
-  onProgress?: ProgressCallback,
   overrides?: MasteringChainConfig | null,
+  onProgress?: ProgressCallback,
 ): MasteringChainResult;
 export function masterAudioWithProgress(
   samples: MasterAudioRequest | Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
-  onProgress?: ProgressCallback,
   overrides: MasteringChainConfig | null = null,
+  onProgress?: ProgressCallback,
 ): MasteringChainResult {
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
   if (!request.onProgress) {
@@ -409,16 +419,16 @@ export function masterAudioStereoWithProgress(
   right: Float32Array,
   sampleRate?: number,
   presetName?: MasteringPreset,
-  onProgress?: ProgressCallback,
   overrides?: MasteringChainConfig | null,
+  onProgress?: ProgressCallback,
 ): MasteringStereoChainResult;
 export function masterAudioStereoWithProgress(
   left: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined = undefined,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
-  onProgress?: ProgressCallback,
   overrides: MasteringChainConfig | null = null,
+  onProgress?: ProgressCallback,
 ): MasteringStereoChainResult {
   const request = masterAudioStereoRequest(
     left,

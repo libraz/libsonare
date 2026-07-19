@@ -120,6 +120,13 @@ export interface NoteStretchOptions {
   stretchRatio?: number;
 }
 
+/** Options for {@link noteMove}. */
+export interface NoteMoveOptions {
+  onsetSample?: number;
+  offsetSample?: number;
+  targetOnsetSample?: number;
+}
+
 export interface LufsResult {
   integratedLufs: number;
   momentaryLufs: number;

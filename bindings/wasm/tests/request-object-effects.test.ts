@@ -77,6 +77,9 @@ describe('effects request-object compatibility (WASM)', () => {
         blockSize: 256,
       }),
     ).toEqual(voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', { blockSize: 256 }));
+    expect(voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', { blockSize: 64 })).toEqual(
+      voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', { blockSize: 256 }),
+    );
   });
 
   it('preserves positional results for one-shot stereo mix requests', () => {

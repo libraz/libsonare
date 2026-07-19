@@ -78,6 +78,40 @@ TEST_CASE("snap_to_grid snaps a near-beat coordinate to the beat line", "[projec
   REQUIRE(sonare_project_snap_to_grid(project, 1.02, 1.0, &snapped) == SONARE_OK);
   REQUIRE(snapped == 1.0);
 
+  REQUIRE(sonare_project_snap_to_grid_ex(project, 0.27, 1.0, 4, &snapped) == SONARE_OK);
+  REQUIRE(snapped == 0.25);
+  REQUIRE(sonare_project_snap_to_grid_ex(project, 4.02, 1.0, 0, &snapped) == SONARE_OK);
+  REQUIRE(snapped == 4.0);
+  REQUIRE(sonare_project_snap_to_grid_ex(project, 1.0, 1.0, -1, &snapped) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project tempo analysis exposes ranked candidates and applies detected meter",
+          "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  constexpr int kSampleRate = 48000;
+  std::vector<float> audio(kSampleRate * 2, 0.0f);
+  for (size_t beat = 0; beat < audio.size(); beat += static_cast<size_t>(kSampleRate / 2)) {
+    audio[beat] = 1.0f;
+  }
+
+  SonareProjectTempoCandidate candidates[3]{};
+  size_t count = 0;
+  REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kSampleRate, candidates,
+                                       std::size(candidates), &count) == SONARE_OK);
+  REQUIRE(count > 0);
+  REQUIRE(candidates[0].bpm > 0.0f);
+  REQUIRE(candidates[0].confidence >= 0.0f);
+  REQUIRE(candidates[0].first_time_signature.numerator > 0);
+  REQUIRE(candidates[0].first_time_signature.denominator > 0);
+
+  float applied_bpm = 0.0f;
+  REQUIRE(sonare_project_auto_tempo_ex(project, audio.data(), audio.size(), kSampleRate, 0, 1,
+                                       &applied_bpm) == SONARE_OK);
+  REQUIRE(applied_bpm == candidates[0].bpm);
   sonare_project_destroy(project);
 }
 

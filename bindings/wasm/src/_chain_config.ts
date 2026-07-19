@@ -21,5 +21,26 @@ export function flattenChainConfig(config: MasteringChainConfig): Record<string,
     }
   };
   walk(config as ChainSection, '');
+
+  // Compatibility aliases for the original WASM-only shorthand. Normalize at
+  // this boundary so every native entry point receives the core parser's one
+  // canonical vocabulary; public types can migrate to the nested spelling
+  // without preserving a second C++ parser indefinitely.
+  const aliases: Record<string, string> = {
+    'repair.denoise': 'repair.denoise.enabled',
+    'repair.nFft': 'repair.denoise.nFft',
+    'repair.hopLength': 'repair.denoise.hopLength',
+    'repair.ddAlpha': 'repair.denoise.ddAlpha',
+    'repair.gainFloor': 'repair.denoise.gainFloor',
+    'eq.tiltDb': 'eq.tilt.tiltDb',
+    'eq.pivotHz': 'eq.tilt.pivotHz',
+  };
+  for (const [legacy, canonical] of Object.entries(aliases)) {
+    const value = out[legacy];
+    if (value !== undefined) {
+      out[canonical] = value;
+      delete out[legacy];
+    }
+  }
   return out;
 }

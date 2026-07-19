@@ -1406,6 +1406,21 @@ describe('Sonare WASM Module', () => {
       expect(result.outputLufs).toBeCloseTo(-18.0, 1);
     });
 
+    it('treats truePeakOversample: 0 as the library default', () => {
+      const sampleRate = 22050;
+      const input = new Float32Array(4096);
+      for (let i = 0; i < input.length; i++) {
+        input[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+      }
+      const implicit = mastering(input, sampleRate, { targetLufs: -18, ceilingDb: -1 });
+      const sentinel = mastering(input, sampleRate, {
+        targetLufs: -18,
+        ceilingDb: -1,
+        truePeakOversample: 0,
+      });
+      expect(sentinel.samples).toEqual(implicit.samples);
+    });
+
     it('should run a configurable mastering chain in WASM', () => {
       const sampleRate = 22050;
       const samples = new Float32Array(sampleRate);
@@ -1562,6 +1577,18 @@ describe('Sonare WASM Module', () => {
       expect(result.samples.length).toBe(samples.length);
     });
 
+    it('should invoke progress callback for positional masteringChain', () => {
+      const samples = new Float32Array(22050).fill(0.1);
+      const stages: string[] = [];
+
+      const result = masteringChain(samples, 22050, { eq: { tiltDb: 1 } }, (_, stage) => {
+        stages.push(stage);
+      });
+
+      expect(result.stages).toEqual(['eq.tilt']);
+      expect(stages).toEqual(['eq.tilt']);
+    });
+
     it('should invoke progress callback for masteringChainStereoWithProgress', () => {
       const sampleRate = 22050;
       const left = new Float32Array(sampleRate);
@@ -1595,6 +1622,19 @@ describe('Sonare WASM Module', () => {
       expect(result.right).toBeInstanceOf(Float32Array);
       expect(result.left.length).toBe(left.length);
       expect(result.right.length).toBe(right.length);
+    });
+
+    it('should invoke progress callback for positional masteringChainStereo', () => {
+      const left = new Float32Array(22050).fill(0.1);
+      const right = new Float32Array(22050).fill(0.08);
+      const stages: string[] = [];
+
+      const result = masteringChainStereo(left, right, 22050, { eq: { tiltDb: 1 } }, (_, stage) => {
+        stages.push(stage);
+      });
+
+      expect(result.stages).toEqual(['eq.tilt']);
+      expect(stages).toEqual(['eq.tilt']);
     });
 
     it('should expose named mastering processors in WASM', () => {

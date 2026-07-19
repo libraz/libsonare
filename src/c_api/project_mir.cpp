@@ -6,6 +6,68 @@
 
 SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio, size_t len,
                                       int sample_rate, float* out_bpm) {
+  return sonare_project_auto_tempo_ex(project, audio, len, sample_rate, 0, 0, out_bpm);
+}
+
+namespace {
+
+SonareProjectTempoCandidateKind tempo_candidate_kind(const char* label) noexcept {
+  if (label != nullptr && std::strcmp(label, "half") == 0) return SONARE_TEMPO_CANDIDATE_HALF;
+  if (label != nullptr && std::strcmp(label, "double") == 0) return SONARE_TEMPO_CANDIDATE_DOUBLE;
+  return SONARE_TEMPO_CANDIDATE_PRIMARY;
+}
+
+void fill_tempo_candidate(const sonare::mir::TempoEstimate& estimate,
+                          SonareProjectTempoCandidate* out) noexcept {
+  *out = {};
+  out->bpm = estimate.segments.empty() ? 0.0f : static_cast<float>(estimate.segments.front().bpm);
+  out->confidence = estimate.confidence;
+  out->kind = tempo_candidate_kind(estimate.label);
+  out->time_signature_count = static_cast<uint32_t>(estimate.time_sigs.size());
+  if (!estimate.time_sigs.empty()) {
+    const auto& time_sig = estimate.time_sigs.front();
+    out->first_time_signature = {time_sig.start_ppq, time_sig.time_sig.numerator,
+                                 time_sig.time_sig.denominator};
+  }
+}
+
+std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(const float* audio, size_t len,
+                                                                 int sample_rate) {
+  sonare::Audio wrapped = sonare::Audio::from_buffer(audio, len, sample_rate);
+  sonare::BeatAnalyzer analyzer(wrapped);
+  return sonare::mir::estimate_tempo(sonare::mir::make_input_from_analyzer(analyzer));
+}
+
+}  // namespace
+
+SonareError sonare_project_analyze_tempo(const SonareProject* project, const float* audio,
+                                         size_t len, int sample_rate,
+                                         SonareProjectTempoCandidate* candidates, size_t capacity,
+                                         size_t* out_count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_count) *out_count = 0;
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  if (capacity > 0 && !candidates) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(audio, len, sample_rate);
+  if (err != SONARE_OK) return err;
+  SONARE_C_TRY
+  const std::vector<sonare::mir::TempoEstimate> estimates =
+      analyze_tempo_candidates(audio, len, sample_rate);
+  if (estimates.empty()) return SONARE_ERROR_INVALID_STATE;
+  if (out_count) *out_count = estimates.size();
+  const size_t emitted = std::min(capacity, estimates.size());
+  for (size_t i = 0; i < emitted; ++i) fill_tempo_candidate(estimates[i], &candidates[i]);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, candidates, capacity, out_count);
+#endif
+}
+
+SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* audio, size_t len,
+                                         int sample_rate, size_t candidate_index,
+                                         uint8_t apply_time_signatures, float* out_bpm) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_bpm) *out_bpm = 0.0f;
@@ -13,42 +75,58 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
   SonareError err = validate_audio_params(audio, len, sample_rate);
   if (err != SONARE_OK) return err;
   SONARE_C_TRY
-  sonare::Audio wrapped = sonare::Audio::from_buffer(audio, len, sample_rate);
-  sonare::BeatAnalyzer analyzer(wrapped);
-  sonare::mir::BeatAnalysisInput input = sonare::mir::make_input_from_analyzer(analyzer);
-  std::vector<sonare::mir::TempoEstimate> estimates = sonare::mir::estimate_tempo(input);
-  if (estimates.empty() || estimates.front().segments.empty()) {
-    return SONARE_ERROR_INVALID_STATE;
+  const std::vector<sonare::mir::TempoEstimate> estimates =
+      analyze_tempo_candidates(audio, len, sample_rate);
+  if (candidate_index >= estimates.size() || estimates[candidate_index].segments.empty()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const sonare::mir::TempoEstimate& primary = estimates.front();
-  auto command = std::make_unique<arr::SetTempoSegment>(primary.segments);
+  const sonare::mir::TempoEstimate& selected = estimates[candidate_index];
+  auto command = std::make_unique<arr::SetTempoSegment>(selected.segments);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  if (out_bpm) *out_bpm = static_cast<float>(primary.segments.front().bpm);
+  if (apply_time_signatures != 0 && !selected.time_sigs.empty()) {
+    auto time_signature_command =
+        std::make_unique<arr::SetTimeSignatureSegment>(selected.time_sigs);
+    if (!project->history.apply(std::move(time_signature_command)))
+      return SONARE_ERROR_INVALID_STATE;
+  }
+  if (out_bpm) *out_bpm = static_cast<float>(selected.segments.front().bpm);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, out_bpm);
+  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, candidate_index,
+                              apply_time_signatures, out_bpm);
 #endif
 }
 
 SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq, double strength,
                                         double* out_ppq) {
+  return sonare_project_snap_to_grid_ex(project, ppq, strength, 1, out_ppq);
+}
+
+SonareError sonare_project_snap_to_grid_ex(const SonareProject* project, double ppq,
+                                           double strength, int division, double* out_ppq) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_ppq) *out_ppq = ppq;
   if (!project || !out_ppq || !finite_non_negative(ppq) || !std::isfinite(strength) ||
-      strength < 0.0 || strength > 1.0) {
+      strength < 0.0 || strength > 1.0 || division < 0 || division > 1024) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   sonare::transport::TempoMap map;
   fill_project_tempo_map(project->history.project(), &map);
   const sonare::mir::SnapGrid grid = sonare::mir::make_grid(map, ppq);
-  *out_ppq = sonare::mir::snap_to_beat(grid, ppq, strength);
+  if (division == 0) {
+    *out_ppq = sonare::mir::snap_to_bar(grid, ppq, strength);
+  } else if (division == 1) {
+    *out_ppq = sonare::mir::snap_to_beat(grid, ppq, strength);
+  } else {
+    *out_ppq = sonare::mir::snap_to_subdivision(grid, ppq, division, strength);
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, ppq, strength, out_ppq);
+  SONARE_C_STUB_NOT_SUPPORTED(project, ppq, strength, division, out_ppq);
 #endif
 }
 

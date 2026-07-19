@@ -514,7 +514,7 @@ def master_audio(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     preset_name: str = "pop",
-    overrides: dict[str, float | int | bool] | None = None,
+    overrides: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
 ) -> MasteringChainResult:
     """Apply a named mastering preset chain to mono audio.
@@ -582,7 +582,7 @@ def master_audio_stereo(
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
     preset_name: str = "pop",
-    overrides: dict[str, float | int | bool] | None = None,
+    overrides: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
 ) -> MasteringChainStereoResult:
     """Apply a named mastering preset chain to stereo audio.

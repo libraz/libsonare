@@ -904,6 +904,11 @@ export function hpssWithResidual(
  */
 export function lufsInterleaved(request: FeatureSamplesRequest & { channels: number }): LufsResult;
 export function lufsInterleaved(
+  samples: Float32Array,
+  channels: number,
+  sampleRate?: number,
+): LufsResult;
+export function lufsInterleaved(
   samples: Float32Array | (FeatureSamplesRequest & { channels: number }),
   channels = 0,
   sampleRate = 22050,
@@ -1035,6 +1040,7 @@ export function pitchYin(
     samples instanceof Float32Array
       ? { samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa }
       : samples;
+  assertSamples('pitchYin', request.samples, true);
   return addon.pitchYin(
     request.samples,
     request.sampleRate ?? 22050,

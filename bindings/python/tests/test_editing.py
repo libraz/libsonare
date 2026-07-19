@@ -121,6 +121,16 @@ def test_note_stretch_function() -> None:
     assert all(math.isfinite(x) for x in result)
 
 
+def test_note_move_function() -> None:
+    sr = 22050
+    samples = _tone(sr)
+    result = libsonare.note_move(
+        samples, sample_rate=sr, onset_sample=2000, offset_sample=6000, target_onset_sample=4000
+    )
+    assert len(result) == len(samples)
+    assert all(math.isfinite(x) for x in result)
+
+
 def test_voice_change_function() -> None:
     sr = 22050
     samples = _tone(sr)

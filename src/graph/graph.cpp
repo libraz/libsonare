@@ -299,10 +299,9 @@ void Graph::process_block(int num_samples) noexcept {
 
   for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {
     Node* current = topo_order_[topo_position];
-    // Edges are grouped by dest_port (stable). The first edge into each port
-    // overwrites (establishing the buffer and clearing last block's contents);
-    // every subsequent edge into the same port adds. This makes the per-port
-    // result an order-independent sum regardless of each edge's mix flag.
+    // Edges are grouped by destination port and retain their connection order.
+    // The first edge initializes a port; later Replace edges explicitly reset
+    // it, while Add edges accumulate.
     int prev_dest_port = -1;
     for (const int connection_index : incoming_by_topo_[topo_position]) {
       RuntimeConnection& runtime_connection =
@@ -330,7 +329,7 @@ void Graph::process_block(int num_samples) noexcept {
         } else if (delay_line != nullptr) {
           value = delay_line->process(value);
         }
-        if (first_for_port) {
+        if (first_for_port || runtime_connection.connection.mix == Connection::Mix::Replace) {
           dest[i] = value;
         } else {
           dest[i] += value;

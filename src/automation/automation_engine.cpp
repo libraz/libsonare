@@ -48,9 +48,18 @@ void AutomationEngine::set_parameter_metadata(std::vector<ParameterInfo> paramet
 }
 
 void AutomationEngine::set_lanes(std::vector<AutomationLane> lanes) {
-  std::sort(lanes.begin(), lanes.end(), [](const AutomationLane& a, const AutomationLane& b) {
-    return a.target_param_id() < b.target_param_id();
-  });
+  // One lane owns a target parameter. Keeping the first caller-supplied lane
+  // gives a deterministic result and prevents the audio thread from applying
+  // multiple conflicting values with accidental last-wins behavior.
+  std::stable_sort(lanes.begin(), lanes.end(),
+                   [](const AutomationLane& a, const AutomationLane& b) {
+                     return a.target_param_id() < b.target_param_id();
+                   });
+  lanes.erase(std::unique(lanes.begin(), lanes.end(),
+                          [](const AutomationLane& a, const AutomationLane& b) {
+                            return a.target_param_id() == b.target_param_id();
+                          }),
+              lanes.end());
   lane_count_.store(lanes.size(), std::memory_order_relaxed);
   lanes_.publish(std::make_shared<const std::vector<AutomationLane>>(std::move(lanes)));
 }

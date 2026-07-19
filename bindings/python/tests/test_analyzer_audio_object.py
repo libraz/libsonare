@@ -309,6 +309,11 @@ def test_audio_effects() -> None:
     n = audio.normalize()
     assert len(n) == len(samples)
 
+    # Method and module forms share the cross-surface 0 dB default.
+    from libsonare import normalize
+
+    assert n == pytest.approx(normalize(samples, sample_rate=22050))
+
     stretched = audio.time_stretch(rate=1.5)
     assert len(stretched) > 0
     assert len(stretched) < len(samples)

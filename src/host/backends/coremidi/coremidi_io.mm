@@ -22,6 +22,7 @@ namespace {
 constexpr size_t kInputCapacity = 1024;
 constexpr size_t kOutputCapacity = 1024;
 constexpr size_t kDrainScratch = 256;
+constexpr size_t kMaxInputSysExBytes = 64 * 1024;
 
 /// Active 32-bit word count for a UMP message-type nibble (UMP spec §2.1.4).
 uint8_t words_for_message_type(uint8_t mt) noexcept {
@@ -88,15 +89,126 @@ bool ns_to_host_ticks(uint64_t nanoseconds, const mach_timebase_info_data_t& tim
 // ===========================================================================
 
 struct CoreMidiInput::Impl {
+  struct SysExAssembly {
+    std::vector<uint8_t> bytes;
+    bool active = false;
+  };
+
   MIDIClientRef client = 0;
   MIDIPortRef port = 0;
   MIDIEndpointRef source = 0;
   FixedMidiInputSource<kInputCapacity> buffer;
   const MidiHostTimeMapper* time_mapper = nullptr;
   mach_timebase_info_data_t timebase{};
+  midi::SysExStore sysex_store;
+  std::array<SysExAssembly, 16> sysex_assemblies{};
+  uint32_t sysex_overflow_count = 0;
+  uint32_t sysex_interleave_count = 0;
 
   static void read_trampoline(const MIDIEventList* list, void* ref, void* /*srcRef*/) {
     static_cast<Impl*>(ref)->on_event_list(list);
+  }
+
+  bool enqueue_ump(const midi::Ump& ump, const MIDIEventPacket* packet) noexcept {
+    uint64_t host_time_ns = 0;
+    int64_t render_frame = 0;
+    if (packet != nullptr && packet->timeStamp != 0 && time_mapper != nullptr &&
+        host_ticks_to_ns(packet->timeStamp, timebase, &host_time_ns) &&
+        time_mapper->host_time_to_render_frame(host_time_ns, &render_frame)) {
+      return buffer.push_event_at_render_frame(ump, render_frame);
+    }
+    return buffer.push_event(ump, 0);
+  }
+
+  bool append_sysex_bytes(SysExAssembly* assembly, const midi::Ump& ump) noexcept {
+    const uint8_t count = static_cast<uint8_t>((ump.words[0] >> 16u) & 0x0Fu);
+    if (count > 6 || assembly->bytes.size() + count + 1 > kMaxInputSysExBytes) {
+      ++sysex_overflow_count;
+      assembly->bytes.clear();
+      assembly->active = false;
+      return false;
+    }
+    const uint8_t bytes[6] = {
+        static_cast<uint8_t>((ump.words[0] >> 8u) & 0xFFu),
+        static_cast<uint8_t>(ump.words[0] & 0xFFu),
+        static_cast<uint8_t>((ump.words[1] >> 24u) & 0xFFu),
+        static_cast<uint8_t>((ump.words[1] >> 16u) & 0xFFu),
+        static_cast<uint8_t>((ump.words[1] >> 8u) & 0xFFu),
+        static_cast<uint8_t>(ump.words[1] & 0xFFu),
+    };
+    for (uint8_t i = 0; i < count; ++i) {
+      if (bytes[i] > 0x7Fu) {
+        ++sysex_overflow_count;
+        assembly->bytes.clear();
+        assembly->active = false;
+        return false;
+      }
+      assembly->bytes.push_back(bytes[i]);
+    }
+    return true;
+  }
+
+  void emit_completed_sysex(uint8_t group, SysExAssembly* assembly,
+                            const MIDIEventPacket* packet) noexcept {
+    assembly->bytes.push_back(0xF7u);
+    const midi::SysExHandle handle = sysex_store.add(assembly->bytes);
+    assembly->bytes.clear();
+    assembly->active = false;
+    if (handle == 0) {
+      ++sysex_overflow_count;
+      return;
+    }
+    enqueue_ump(midi::make_sysex_handle(group, handle), packet);
+  }
+
+  /// Returns true if this UMP was a SysEx7 Data64 packet and was consumed.
+  bool consume_sysex7(const midi::Ump& ump, const MIDIEventPacket* packet) noexcept {
+    if (((ump.words[0] >> 28u) & 0x0Fu) != 0x3u) return false;
+    const uint8_t group = ump.group;
+    const uint8_t status = static_cast<uint8_t>((ump.words[0] >> 20u) & 0x0Fu);
+    SysExAssembly& assembly = sysex_assemblies[group];
+    try {
+      switch (status) {
+        case 0:  // Complete.
+          if (assembly.active) {
+            ++sysex_interleave_count;
+            assembly.bytes.clear();
+            assembly.active = false;
+          }
+          assembly.bytes = {0xF0u};
+          assembly.active = true;
+          if (append_sysex_bytes(&assembly, ump)) emit_completed_sysex(group, &assembly, packet);
+          return true;
+        case 1:  // Start.
+          if (assembly.active) ++sysex_interleave_count;
+          assembly.bytes = {0xF0u};
+          assembly.active = true;
+          append_sysex_bytes(&assembly, ump);
+          return true;
+        case 2:  // Continue.
+          if (!assembly.active) {
+            ++sysex_interleave_count;
+            return true;
+          }
+          append_sysex_bytes(&assembly, ump);
+          return true;
+        case 3:  // End.
+          if (!assembly.active) {
+            ++sysex_interleave_count;
+            return true;
+          }
+          if (append_sysex_bytes(&assembly, ump)) emit_completed_sysex(group, &assembly, packet);
+          return true;
+        default:
+          ++sysex_interleave_count;
+          return true;
+      }
+    } catch (...) {
+      ++sysex_overflow_count;
+      assembly.bytes.clear();
+      assembly.active = false;
+      return true;
+    }
   }
 
   void on_event_list(const MIDIEventList* list) noexcept {
@@ -109,17 +221,7 @@ struct CoreMidiInput::Impl {
         midi::Ump ump;
         const size_t consumed = ump_from_words(&packet->words[i], n - i, ump);
         if (consumed == 0) break;
-        if (ump.word_count > 0) {
-          uint64_t host_time_ns = 0;
-          int64_t render_frame = 0;
-          if (packet->timeStamp != 0 && time_mapper != nullptr &&
-              host_ticks_to_ns(packet->timeStamp, timebase, &host_time_ns) &&
-              time_mapper->host_time_to_render_frame(host_time_ns, &render_frame)) {
-            buffer.push_event_at_render_frame(ump, render_frame);
-          } else {
-            buffer.push_event(ump, 0);
-          }
-        }
+        if (ump.word_count > 0 && !consume_sysex7(ump, packet)) enqueue_ump(ump, packet);
         i += consumed;
       }
       packet = MIDIEventPacketNext(packet);
@@ -160,6 +262,8 @@ void CoreMidiInput::set_time_mapper(const MidiHostTimeMapper* mapper) noexcept {
   impl_->time_mapper = mapper;
 }
 
+const midi::SysExStore* CoreMidiInput::sysex_store() const noexcept { return &impl_->sysex_store; }
+
 bool CoreMidiInput::push_event_at_host_time(const midi::Ump& ump, uint64_t host_time_ns) noexcept {
   int64_t render_frame = 0;
   if (impl_->time_mapper != nullptr &&
@@ -176,9 +280,13 @@ void CoreMidiInput::close() noexcept {
   impl_->port = 0;
   impl_->client = 0;
   impl_->source = 0;
+  impl_->buffer.clear();
+  impl_->sysex_store.clear();
+  for (auto& assembly : impl_->sysex_assemblies) assembly = {};
 }
 
 bool CoreMidiInput::push_event(const midi::Ump& ump, int64_t port_time_samples) noexcept {
+  if (impl_->consume_sysex7(ump, nullptr)) return true;
   return impl_->buffer.push_event(ump, port_time_samples);
 }
 
@@ -193,6 +301,14 @@ size_t CoreMidiInput::drain_block(midi::MidiEvent* out, size_t capacity, int64_t
 }
 
 size_t CoreMidiInput::pending_count() const noexcept { return impl_->buffer.pending_count(); }
+
+uint32_t CoreMidiInput::sysex_overflow_count() const noexcept {
+  return impl_->sysex_overflow_count;
+}
+
+uint32_t CoreMidiInput::sysex_interleave_count() const noexcept {
+  return impl_->sysex_interleave_count;
+}
 
 // ===========================================================================
 // CoreMidiOutput
@@ -251,6 +367,9 @@ void CoreMidiOutput::close() noexcept {
   impl_->port = 0;
   impl_->client = 0;
   impl_->destination = 0;
+  impl_->queue.clear();
+  impl_->pending_count.store(0, std::memory_order_release);
+  for (auto& pending : impl_->pending) pending = {};
 }
 
 size_t CoreMidiOutput::flush_output() noexcept {
@@ -284,7 +403,11 @@ size_t CoreMidiOutput::flush_output() noexcept {
     impl_->pending_count.store(remaining, std::memory_order_release);
   };
 
-  std::array<uint8_t, sizeof(MIDIEventList) + kDrainScratch * sizeof(MIDIEventPacket)> storage{};
+  struct alignas(MIDIEventList) MidiEventListStorage {
+    std::array<uint8_t, sizeof(MIDIEventList) + kDrainScratch * sizeof(MIDIEventPacket)> bytes{};
+    MIDIEventList* list() noexcept { return reinterpret_cast<MIDIEventList*>(bytes.data()); }
+    size_t size() const noexcept { return bytes.size(); }
+  } storage;
   size_t sent = 0;
   size_t completed = 0;
   while (completed < impl_->pending_count.load(std::memory_order_relaxed)) {
@@ -302,7 +425,7 @@ size_t CoreMidiOutput::flush_output() noexcept {
           payload != nullptr ? payload->data() : nullptr, payload != nullptr ? payload->size() : 0,
           ump.group, &pending.sysex_packet_position, impl_->sysex_packets.data(),
           impl_->sysex_packets.size(), [&](const midi::Ump* packets, size_t count) noexcept {
-            auto* list = reinterpret_cast<MIDIEventList*>(storage.data());
+            auto* list = storage.list();
             MIDIEventPacket* packet = MIDIEventListInit(list, kMIDIProtocol_2_0);
             const MIDITimeStamp timestamp = timestamp_for(pending.event);
             for (size_t i = 0; i < count; ++i) {
@@ -329,7 +452,7 @@ size_t CoreMidiOutput::flush_output() noexcept {
 
     // Batch adjacent fixed-size events into one EventList. Advance/remove them
     // only after CoreMIDI accepts the whole list, so a failure is retryable.
-    auto* list = reinterpret_cast<MIDIEventList*>(storage.data());
+    auto* list = storage.list();
     MIDIEventPacket* packet = MIDIEventListInit(list, kMIDIProtocol_2_0);
     size_t batch_count = 0;
     while (completed + batch_count < impl_->pending_count.load(std::memory_order_relaxed)) {

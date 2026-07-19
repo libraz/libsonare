@@ -7,7 +7,9 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
   std::string item;
   while (std::getline(stream, item, ',')) {
     const auto eq = item.find('=');
-    if (eq == std::string::npos) continue;
+    if (eq == std::string::npos || eq == 0 || eq + 1 == item.size()) {
+      throw std::invalid_argument("invalid parameter entry: '" + item + "' (expected key=value)");
+    }
     // Locale-independent parse: std::stod follows LC_NUMERIC, which DAW plugin
     // hosts sometimes set to e.g. de_DE (comma as decimal separator). Imbue the
     // classic locale so "1.5" always parses as 1.5 regardless of host locale.
@@ -141,6 +143,8 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
         .kv("target_lufs", config.target_lufs)
         .kv("ceiling_db", config.ceiling_db)
         .kv("true_peak_oversample", config.true_peak_oversample)
+        .kv("latency_samples", result.latency_samples)
+        .kv("sample_rate", result.audio.sample_rate())
         .kv("output", args.output_file)
         .end_object()
         .print();

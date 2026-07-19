@@ -6,7 +6,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <stdexcept>
 #include <thread>
@@ -80,7 +82,7 @@ JsonBuilder& JsonBuilder::value(float v) {
   // does) so a non-finite reading -- e.g. a -inf LUFS/true-peak for a fully
   // silent input -- yields valid JSON that json.loads/jq/JSON.parse can read.
   if (std::isfinite(v)) {
-    ss_ << v;
+    ss_ << std::setprecision(std::numeric_limits<float>::max_digits10) << v;
   } else {
     ss_ << "null";
   }
@@ -92,7 +94,7 @@ JsonBuilder& JsonBuilder::value(double v) {
   append_separator();
   // See value(float): non-finite numbers serialize as JSON null, not "nan"/"inf".
   if (std::isfinite(v)) {
-    ss_ << v;
+    ss_ << std::setprecision(std::numeric_limits<double>::max_digits10) << v;
   } else {
     ss_ << "null";
   }
@@ -141,7 +143,7 @@ void JsonBuilder::append_separator() {
 std::string JsonBuilder::escape(const std::string& s) {
   std::string result;
   result.reserve(s.size());
-  for (char c : s) {
+  for (unsigned char c : s) {
     switch (c) {
       case '"':
         result += "\\\"";
@@ -159,20 +161,49 @@ std::string JsonBuilder::escape(const std::string& s) {
         result += "\\t";
         break;
       default:
-        result += c;
+        if (c < 0x20u) {
+          constexpr char kHex[] = "0123456789abcdef";
+          result += "\\u00";
+          result += kHex[(c >> 4u) & 0x0Fu];
+          result += kHex[c & 0x0Fu];
+        } else {
+          result += static_cast<char>(c);
+        }
     }
   }
   return result;
 }
 
+namespace {
+
+float parse_float_strict(const std::string& option, const std::string& value) {
+  size_t consumed = 0;
+  const float parsed = std::stof(value, &consumed);
+  if (consumed != value.size()) {
+    throw std::invalid_argument("invalid numeric value for --" + option + ": " + value);
+  }
+  return parsed;
+}
+
+int parse_int_strict(const std::string& option, const std::string& value) {
+  size_t consumed = 0;
+  const int parsed = std::stoi(value, &consumed);
+  if (consumed != value.size()) {
+    throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
+  }
+  return parsed;
+}
+
+}  // namespace
+
 float CliArgs::get_float(const std::string& k, float def) const {
   auto it = options.find(k);
-  return it != options.end() ? std::stof(it->second) : def;
+  return it != options.end() ? parse_float_strict(k, it->second) : def;
 }
 
 int CliArgs::get_int(const std::string& k, int def) const {
   auto it = options.find(k);
-  return it != options.end() ? std::stoi(it->second) : def;
+  return it != options.end() ? parse_int_strict(k, it->second) : def;
 }
 
 bool CliArgs::has(const std::string& k) const { return options.count(k) > 0; }
@@ -200,7 +231,14 @@ CliArgs ArgParser::parse(int argc, char* argv[]) {
     } else if (!end_of_options && try_parse_global_option(args, arg, argv, i, argc)) {
       // Handled
     } else if (!end_of_options && arg.size() > 2 && arg.substr(0, 2) == "--") {
-      parse_option(args, arg.substr(2), argv, i, argc);
+      const size_t equals = arg.find('=');
+      if (equals == std::string::npos) {
+        parse_option(args, arg.substr(2), argv, i, argc);
+      } else {
+        const std::string key = arg.substr(2, equals - 2);
+        const std::string value = arg.substr(equals + 1);
+        parse_option(args, key, argv, i, argc, &value);
+      }
     } else if (!end_of_options && arg.size() > 1 && arg[0] == '-') {
       args.options[arg] = "true";
     } else if (args.command.empty()) {
@@ -218,19 +256,44 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
                                         int argc) {
   static const std::map<std::string, std::function<void(CliArgs&, const std::string&)>>
       global_opts = {
-          {"--n-fft", [](CliArgs& a, const std::string& v) { a.n_fft = std::stoi(v); }},
-          {"--hop-length", [](CliArgs& a, const std::string& v) { a.hop_length = std::stoi(v); }},
-          {"--n-mels", [](CliArgs& a, const std::string& v) { a.n_mels = std::stoi(v); }},
-          {"--fmin", [](CliArgs& a, const std::string& v) { a.fmin = std::stof(v); }},
-          {"--fmax", [](CliArgs& a, const std::string& v) { a.fmax = std::stof(v); }},
+          {"--n-fft",
+           [](CliArgs& a, const std::string& v) {
+             a.n_fft = parse_int_strict("n-fft", v);
+             a.n_fft_explicit = true;
+           }},
+          {"--hop-length",
+           [](CliArgs& a, const std::string& v) {
+             a.hop_length = parse_int_strict("hop-length", v);
+           }},
+          {"--n-mels",
+           [](CliArgs& a, const std::string& v) { a.n_mels = parse_int_strict("n-mels", v); }},
+          {"--fmin",
+           [](CliArgs& a, const std::string& v) { a.fmin = parse_float_strict("fmin", v); }},
+          {"--fmax",
+           [](CliArgs& a, const std::string& v) { a.fmax = parse_float_strict("fmax", v); }},
           {"-o", [](CliArgs& a, const std::string& v) { a.output_file = v; }},
           {"--output", [](CliArgs& a, const std::string& v) { a.output_file = v; }},
       };
 
-  auto it = global_opts.find(arg);
+  const size_t equals = arg.find('=');
+  const std::string option = equals == std::string::npos ? arg : arg.substr(0, equals);
+  auto it = global_opts.find(option);
   if (it == global_opts.end()) return false;
+  if (equals != std::string::npos) {
+    const std::string value = arg.substr(equals + 1);
+    try {
+      it->second(args, value);
+    } catch (const std::invalid_argument&) {
+      std::cerr << "Error: Invalid value for " << option << ": " << value << std::endl;
+      std::exit(1);
+    } catch (const std::out_of_range&) {
+      std::cerr << "Error: Value out of range for " << option << ": " << value << std::endl;
+      std::exit(1);
+    }
+    return true;
+  }
   if (i + 1 >= argc) {
-    args.missing_value_options.push_back(arg);
+    args.missing_value_options.push_back(option);
     return true;
   }
   const std::string next = argv[i + 1];
@@ -241,25 +304,25 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
       (std::isdigit(static_cast<unsigned char>(next[1])) || next[1] == '.' ||
        (end != next.c_str() && end != nullptr && *end == '\0'));
   if (next.size() > 1 && next[0] == '-' && !negative_number) {
-    args.missing_value_options.push_back(arg);
+    args.missing_value_options.push_back(option);
     return true;
   }
   {
     try {
       it->second(args, argv[++i]);
     } catch (const std::invalid_argument&) {
-      std::cerr << "Error: Invalid value for " << arg << ": " << argv[i] << std::endl;
+      std::cerr << "Error: Invalid value for " << option << ": " << argv[i] << std::endl;
       std::exit(1);
     } catch (const std::out_of_range&) {
-      std::cerr << "Error: Value out of range for " << arg << ": " << argv[i] << std::endl;
+      std::cerr << "Error: Value out of range for " << option << ": " << argv[i] << std::endl;
       std::exit(1);
     }
     return true;
   }
 }
 
-void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[], int& i,
-                             int argc) {
+void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[], int& i, int argc,
+                             const std::string* inline_value) {
   enum class Arity { Unknown, Flag, RequiredValue, OptionalValue };
   static const std::map<std::string, Arity> arities = {
       {"assistant", Arity::Flag},      {"auto-gain", Arity::Flag},
@@ -282,6 +345,16 @@ void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[]
   const Arity arity = found == arities.end() ? Arity::RequiredValue : found->second;
   if (arity == Arity::Flag) {
     args.options[key] = "true";
+    return;
+  }
+
+  if (inline_value != nullptr) {
+    if (inline_value->empty() && arity == Arity::RequiredValue) {
+      args.options[key] = "";
+      args.missing_value_options.push_back("--" + key);
+    } else {
+      args.options[key] = *inline_value;
+    }
     return;
   }
 
@@ -348,13 +421,13 @@ const std::map<std::string, CommandOptionSchema>& command_option_schemas() {
         {}}},
       {"preemphasis", {{"coef"}, {}, {}}},
       {"deemphasis", {{"coef"}, {}, {}}},
-      {"trim-silence", {{"top-db"}, {}, {}}},
+      {"trim-silence", {{"threshold-db", "top-db"}, {}, {}}},
       {"split-silence", {{"top-db"}, {}, {}}},
       {"normalize", {{"mode", "target-db"}, {}, {}}},
       {"gain", {{"gain-db"}, {}, {}}},
       {"fade", {{"fade-in", "fade-out"}, {}, {}}},
       {"filter", {{"type", "order", "cutoff", "center", "bandwidth"}, {"zero-phase"}, {}}},
-      {"resample", {{"target-sr"}, {}, {}}},
+      {"resample", {{"target-rate", "target-sr"}, {}, {}}},
       {"tone", {{"frequency", "sr", "duration", "phase", "amplitude"}, {}, {}}},
       {"chirp", {{"sr", "duration"}, {"exponential"}, {}}},
       {"clicks", {{"times", "sr", "length", "frequency", "click-duration"}, {}, {}}},

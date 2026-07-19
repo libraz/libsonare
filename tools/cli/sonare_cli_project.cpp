@@ -200,28 +200,30 @@ int cmd_project_compile(const CliArgs& args) {
   return has_timeline ? 0 : 1;
 }
 
-// Maps a `--synth` waveform name to the built-in synth waveform ordinal. An
-// empty / unrecognized name (including the bare flag value "true") falls back to
-// sine, matching the C ABI's out-of-range -> sine sanitization.
-int parse_synth_waveform(const std::string& name) {
-  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
-  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
-  if (name == "triangle" || name == "tri") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
-  return SONARE_SYNTH_WAVEFORM_SINE;
-}
-
 // `project bounce --in in.json -o out.wav` — compile + render the project
-// offline to an interleaved WAV file. With `--synth [waveform]` MIDI tracks are
-// rendered through the built-in oscillator synth so a MIDI-only arrangement is
-// audible; without it MIDI tracks render silently (the default). The waveform is
-// an optional space-separated value (`--synth` alone => sine, or
-// `--synth saw|square|triangle`).
+// offline to an interleaved WAV file. With `--synth [preset]` MIDI tracks are
+// rendered through the same NativeSynth preset catalog used by Python; without
+// it MIDI tracks render silently (the default). The bare flag selects `sine`.
 int cmd_project_bounce(const CliArgs& args) {
   if (args.output_file.empty()) {
     std::cerr << color::red << "Error: project bounce requires output file (-o out.wav)"
               << color::reset << "\n";
     return 1;
   }
+  const bool use_synth = args.has("synth");
+  SonareSynthInstrumentBinding synth_binding{};
+  if (use_synth) {
+    const std::string requested = args.get_string("synth");
+    const std::string preset = (requested.empty() || requested == "true") ? "sine" : requested;
+    const SonareError patch_error = sonare_synth_preset_patch(preset.c_str(), &synth_binding.patch);
+    if (patch_error != SONARE_OK) {
+      std::cerr << color::red << "Error: unknown synth preset '" << preset << "'" << color::reset
+                << "\n";
+      return 1;
+    }
+    synth_binding.destination_id = 0;
+  }
+
   ProjectHandle handle;
   if (!load_project_from_args(args, &handle)) return 1;
 
@@ -239,23 +241,11 @@ int cmd_project_bounce(const CliArgs& args) {
   const int render_sample_rate = args.get_int("sample-rate", 48000);
   options.sample_rate = render_sample_rate;
 
-  // `--synth` (optionally `--synth saw|square|triangle|sine`) routes MIDI tracks
-  // through the built-in synth; absent, MIDI renders silently. The bare flag
-  // (no value, or followed by another option) yields the value "true" from the
-  // arg parser, which parse_synth_waveform() sanitizes to sine.
-  const bool use_builtin_synth = args.has("synth");
-  SonareBuiltinSynthConfig synth_config{};  // zero-init => sanitized sine patch.
-  synth_config.waveform = parse_synth_waveform(args.get_string("synth"));
-  SonareBuiltinInstrumentBinding binding{};
-  binding.destination_id = 0;  // default MIDI destination.
-  binding.config = synth_config;
-
   float* interleaved = nullptr;
   size_t total = 0;
-  SonareError err = use_builtin_synth
-                        ? sonare_project_bounce_with_builtin_instruments(
-                              handle.ptr, &options, &binding, 1, &interleaved, &total)
-                        : sonare_project_bounce(handle.ptr, &options, &interleaved, &total);
+  SonareError err = use_synth ? sonare_project_bounce_with_synth_instruments(
+                                    handle.ptr, &options, &synth_binding, 1, &interleaved, &total)
+                              : sonare_project_bounce(handle.ptr, &options, &interleaved, &total);
   if (err != SONARE_OK) {
     project_report_error("bounce project", err);
     return 1;
@@ -285,12 +275,12 @@ int cmd_project_bounce(const CliArgs& args) {
         .kv("frames", frames)
         .kv("channels", channels)
         .kv("sample_rate", sample_rate)
-        .kv("builtin_synth", use_builtin_synth)
+        .kv("synth", use_synth)
         .end_object()
         .print();
   } else if (!args.quiet) {
     std::cerr << color::green << "Bounced " << frames << " frames (" << channels << " ch @ "
-              << sample_rate << " Hz" << (use_builtin_synth ? ", built-in synth" : "") << ") to "
+              << sample_rate << " Hz" << (use_synth ? ", NativeSynth" : "") << ") to "
               << args.output_file << color::reset << "\n";
   }
   return 0;

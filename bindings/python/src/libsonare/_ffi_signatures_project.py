@@ -508,12 +508,40 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(ctypes.c_float),
         ]
+        lib.sonare_project_analyze_tempo.restype = ctypes.c_int32
+        lib.sonare_project_analyze_tempo.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareProjectTempoCandidate),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_project_auto_tempo_ex.restype = ctypes.c_int32
+        lib.sonare_project_auto_tempo_ex.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_size_t,
+            ctypes.c_uint8,
+            ctypes.POINTER(ctypes.c_float),
+        ]
 
         lib.sonare_project_snap_to_grid.restype = ctypes.c_int32
         lib.sonare_project_snap_to_grid.argtypes = [
             ctypes.c_void_p,
             ctypes.c_double,
             ctypes.c_double,
+            ctypes.POINTER(ctypes.c_double),
+        ]
+        lib.sonare_project_snap_to_grid_ex.restype = ctypes.c_int32
+        lib.sonare_project_snap_to_grid_ex.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_double,
+            ctypes.c_double,
+            ctypes.c_int,
             ctypes.POINTER(ctypes.c_double),
         ]
 

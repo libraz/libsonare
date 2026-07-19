@@ -9,6 +9,7 @@ undo/redo, MIR snap-to-grid, and malformed-input handling.
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -655,6 +656,8 @@ def test_snap_to_grid_snaps_near_beat_to_line() -> None:
     try:
         project.set_sample_rate(48000.0)
         assert project.snap_to_grid(1.02, 1.0) == 1.0
+        assert project.snap_to_grid(0.27, 1.0, division=4) == 0.25
+        assert project.snap_to_grid(4.02, 1.0, division=0) == 4.0
     finally:
         project.close()
 
@@ -668,7 +671,12 @@ def test_auto_tempo_returns_positive_bpm() -> None:
         audio = np.zeros(sr * 2, dtype=np.float32)
         for beat in range(0, len(audio), sr // 2):  # 120 BPM
             audio[beat : beat + 64] = 1.0
-        bpm = project.auto_tempo(audio, sr)
+        candidates = project.analyze_tempo(audio, sr)
+        assert candidates
+        assert candidates[0]["bpm"] > 0.0
+        assert candidates[0]["label"] in {"primary", "half", "double"}
+        assert candidates[0]["time_signature"]["numerator"] > 0
+        bpm = project.auto_tempo(audio, sr, candidate_index=0, apply_time_signatures=True)
         assert bpm > 0.0
     finally:
         project.close()
@@ -991,6 +999,50 @@ def test_project_import_smf_surfaces_key_signature_marker() -> None:
         )
         assert key.key_fifths == 1
         assert key.key_minor is False
+    finally:
+        project.close()
+
+
+def test_project_import_smf_replaces_invalid_utf8_before_json_serialization() -> None:
+    """Imported legacy text metadata remains valid JSON through the Python facade."""
+    body = bytes(
+        [
+            0x00,
+            0xFF,
+            0x03,
+            0x03,
+            ord("A"),
+            0xFF,
+            ord("B"),  # Invalid UTF-8 track name byte.
+            0x00,
+            0xFF,
+            0x06,
+            0x03,
+            ord("M"),
+            0xC3,
+            ord("N"),  # Unterminated UTF-8 marker byte.
+            0x00,
+            0x90,
+            0x3C,
+            0x64,
+            0x83,
+            0x60,
+            0x80,
+            0x3C,
+            0x00,
+            0x00,
+            0xFF,
+            0x2F,
+            0x00,
+        ]
+    )
+    smf = b"MThd\x00\x00\x00\x06\x00\x00\x00\x01\x01\xe0MTrk" + len(body).to_bytes(4, "big") + body
+    project = Project()
+    try:
+        project.import_smf(smf)
+        payload = project.to_json()
+        assert "\ufffd" in payload
+        assert json.loads(payload)["markers"][0]["name"] == "M\ufffdN"
     finally:
         project.close()
 

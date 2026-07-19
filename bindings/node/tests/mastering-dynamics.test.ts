@@ -110,4 +110,16 @@ describe('masteringDynamicsTransientShaper (Node)', () => {
     }
     expect(differ).toBeGreaterThan(0);
   });
+
+  it('compensates lookahead so a leading impulse stays at frame zero', () => {
+    const x = new Float32Array(4096);
+    x[0] = 0.5;
+    const r = masteringDynamicsTransientShaper(x, SR, {
+      attackGainDb: 0,
+      sustainGainDb: 0,
+      lookaheadMs: 5,
+    });
+    expect(r.latencySamples).toBeGreaterThan(0);
+    expect(r.samples[0]).toBeCloseTo(0.5, 6);
+  });
 });

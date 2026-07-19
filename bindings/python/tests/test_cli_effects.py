@@ -83,6 +83,102 @@ def test_normalize_cli_reports_target_db_end_to_end() -> None:
         assert payload["length"] > 0
 
 
+def test_hpss_cli_writes_harmonic_and_percussive_stems() -> None:
+    """HPSS output paths produce the two documented stem WAVs (M-4)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "tone.wav")
+        output_path = os.path.join(tmpdir, "separated.wav")
+        _write_test_wav(wav_path, _generate_sine(440, 22050, 0.25), 22050)
+
+        result = _run_cli(["hpss", wav_path, "--output", output_path, "--json"])
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["harmonic"] == os.path.join(tmpdir, "separated_harmonic.wav")
+        assert payload["percussive"] == os.path.join(tmpdir, "separated_percussive.wav")
+        assert os.path.exists(payload["harmonic"])
+        assert os.path.exists(payload["percussive"])
+
+
+def test_analysis_only_cli_rejects_output_path() -> None:
+    """Analysis commands must not silently accept an output path (M-4)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "tone.wav")
+        output_path = os.path.join(tmpdir, "ignored.wav")
+        _write_test_wav(wav_path, _generate_sine(440, 22050, 0.25), 22050)
+
+        result = _run_cli(["bpm", wav_path, "--output", output_path])
+
+        assert result.returncode != 0
+        assert "bpm does not produce an audio file" in result.stderr
+        assert not os.path.exists(output_path)
+
+
+def test_lufs_cli_emits_strict_json_for_silence() -> None:
+    """Non-finite loudness measurements are JSON null, never NaN/-Infinity (M-1)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "silence.wav")
+        _write_test_wav(wav_path, [0.0] * 4096, 22050)
+
+        result = _run_cli(["lufs", wav_path, "--json"])
+
+        assert result.returncode == 0, result.stderr
+        assert "Infinity" not in result.stdout
+        assert "NaN" not in result.stdout
+        payload = json.loads(result.stdout)
+        assert payload["integrated"] is None
+
+
+def test_project_cli_preserves_common_options_before_subcommand() -> None:
+    """Project-level --json/-o survive parsing a project child command (M-3)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "empty-project.json")
+        created = _run_cli(["project", "--json", "-o", output_path, "new"])
+
+        assert created.returncode == 0, created.stderr
+        assert json.loads(created.stdout)["output"] == output_path
+        assert os.path.exists(output_path)
+
+    abi = _run_cli(["project", "--json", "abi"])
+    assert abi.returncode == 0, abi.stderr
+    assert isinstance(json.loads(abi.stdout)["abi_version"], int)
+
+
+def test_mastering_processor_cli_uses_the_runtime_stereo_catalog(monkeypatch) -> None:
+    """Stereo routing follows the core catalog instead of a duplicated ID set (L-1)."""
+    import libsonare
+    from libsonare import cli
+
+    monkeypatch.setattr(cli, "_load_audio", lambda _path: ([0.1, -0.1], 22050))
+    monkeypatch.setattr(
+        libsonare,
+        "mastering_processor_catalog",
+        lambda: [{"id": "custom.stereo", "stereoOnly": True}],
+    )
+
+    called: list[str] = []
+
+    def stereo(name, left, right, **_kwargs):
+        called.append(name)
+        return argparse.Namespace(
+            left=left,
+            right=right,
+            sample_rate=22050,
+            input_lufs=-20.0,
+            output_lufs=-19.0,
+            applied_gain_db=1.0,
+            latency_samples=0,
+        )
+
+    monkeypatch.setattr(libsonare, "mastering_process_stereo", stereo)
+    args = argparse.Namespace(
+        processor="custom.stereo", file="tone.wav", params="", output="", json=True
+    )
+
+    assert cli.cmd_mastering_processor(args) == 0
+    assert called == ["custom.stereo"]
+
+
 def test_effect_cli_commands_appear_in_help() -> None:
     """The new offline effect subcommands are advertised in --help."""
     result = _run_cli(["--help"])
@@ -122,12 +218,13 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch) -> None:
 
     monkeypatch.setattr(libsonare, "Mixer", FakeMixer)
     monkeypatch.setattr(libsonare, "mixing_scene_preset_json", lambda name: "{}")
+    monkeypatch.setattr(cli, "_write_wav_stereo", lambda *args: None)
 
     args = argparse.Namespace(
         scene="",
         preset="demo",
         input=["stem.wav"],
-        output="",
+        output="out.wav",
         sample_rate=48000,
         block_size=512,
         json=True,
@@ -188,11 +285,11 @@ def test_rir_and_morph_missing_output_raise_value_error() -> None:
 
 
 def test_synthesize_rir_missing_output_uses_error_exit_code() -> None:
-    """The missing-arg failure maps to EXIT_ERROR, consistent with other subcommands."""
-    from libsonare.cli import EXIT_ERROR
+    """The missing-arg failure maps to EXIT_INVALID_PARAMETER."""
+    from libsonare.cli import EXIT_INVALID_PARAMETER
 
     result = _run_cli(["synthesize-rir"])
-    assert result.returncode == EXIT_ERROR
+    assert result.returncode == EXIT_INVALID_PARAMETER
     assert "requires --output" in result.stderr
 
 
@@ -393,3 +490,15 @@ def test_voice_preset_validate_normalizes_a_preset_file() -> None:
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
         assert isinstance(payload, dict)
+
+
+def test_voice_preset_validate_rejects_an_invalid_preset_file() -> None:
+    """Validation failure is a CI-visible invalid-format exit, not success."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        preset_path = os.path.join(tmpdir, "invalid-preset.json")
+        with open(preset_path, "w", encoding="utf-8") as fh:
+            fh.write('{"not": "a voice changer preset"}')
+        result = _run_cli(["voice-preset-validate", preset_path, "--json"])
+        assert result.returncode == 5, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["ok"] is False

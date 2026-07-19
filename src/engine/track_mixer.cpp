@@ -552,7 +552,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
   applied_lane_snapshot_ = &lanes;
 }
 
-void TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept {
+void TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) {
   int max_latency_q8 = 0;
   for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
     const mixing::ChannelStrip* strip = lane_states_[lane_index].strip;

@@ -51,7 +51,7 @@ export interface StreamingMasteringChainConfig extends Record<string, unknown> {
  *
  * @example
  * ```typescript
- * const chain = new StreamingMasteringChain({ eq: { tiltDb: 1.0 } });
+ * const chain = new StreamingMasteringChain({ eq: { tilt: { tiltDb: 1.0 } } });
  * chain.prepare(44100, 512, 1);
  * const out = chain.processMono(blockSamples);
  * chain.reset();

@@ -7,6 +7,7 @@
 #include <limits>
 #include <vector>
 
+#include "mastering/api/internal_processor_runner.h"
 #include "mastering/maximizer/adaptive_release.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/soft_knee_max.h"
@@ -31,7 +32,85 @@ Audio sine_audio(float amplitude, int sample_rate = 48000, float duration_sec = 
                             sample_rate);
 }
 
+class OfflineChunkTrackingProcessor final : public rt::ProcessorBase {
+ public:
+  void prepare(double, int max_block_size) override {
+    largest_prepared_block = std::max(largest_prepared_block, max_block_size);
+  }
+  void prepare(double sample_rate, int max_block_size, int max_channels) override {
+    largest_requested_channels = std::max(largest_requested_channels, max_channels);
+    prepare(sample_rate, max_block_size);
+  }
+  void process(float* const*, int num_channels, int num_samples) override {
+    largest_processed_block = std::max(largest_processed_block, num_samples);
+    largest_processed_channels = std::max(largest_processed_channels, num_channels);
+  }
+  void reset() override {}
+
+  int largest_prepared_block = 0;
+  int largest_processed_block = 0;
+  int largest_requested_channels = 0;
+  int largest_processed_channels = 0;
+};
+
 }  // namespace
+
+TEST_CASE("offline processor runner bounds work blocks and passes channel capacity",
+          "[mastering][maximizer]") {
+  using sonare::mastering::api::internal::kOfflineProcessorBlockSize;
+  constexpr int kSamples = 2 * kOfflineProcessorBlockSize + 17;
+
+  std::vector<float> mono(static_cast<size_t>(kSamples), 0.25f);
+  OfflineChunkTrackingProcessor mono_processor;
+  sonare::mastering::api::internal::run_processor_mono(mono_processor, mono, 48000);
+  REQUIRE(mono_processor.largest_prepared_block == kOfflineProcessorBlockSize);
+  REQUIRE(mono_processor.largest_processed_block == kOfflineProcessorBlockSize);
+  REQUIRE(mono_processor.largest_requested_channels == 1);
+  REQUIRE(mono_processor.largest_processed_channels == 1);
+
+  std::vector<float> left(static_cast<size_t>(kSamples), 0.25f);
+  std::vector<float> right(static_cast<size_t>(kSamples), -0.25f);
+  OfflineChunkTrackingProcessor stereo_processor;
+  sonare::mastering::api::internal::run_processor_stereo(stereo_processor, left, right, 48000);
+  REQUIRE(stereo_processor.largest_prepared_block == kOfflineProcessorBlockSize);
+  REQUIRE(stereo_processor.largest_processed_block == kOfflineProcessorBlockSize);
+  REQUIRE(stereo_processor.largest_requested_channels == 2);
+  REQUIRE(stereo_processor.largest_processed_channels == 2);
+}
+
+TEST_CASE("TruePeakLimiter supports bounded offline mono and stereo scratch capacity",
+          "[mastering][maximizer]") {
+  using sonare::mastering::api::internal::kOfflineProcessorBlockSize;
+  TruePeakLimiter limiter({-1.0f, 1.0f, 20.0f, 4});
+  limiter.prepare(48000.0, kOfflineProcessorBlockSize, 2);
+
+  std::vector<float> left(kOfflineProcessorBlockSize, 0.25f);
+  std::vector<float> right(kOfflineProcessorBlockSize, -0.25f);
+  float* stereo[] = {left.data(), right.data()};
+  REQUIRE_NOTHROW(limiter.process(stereo, 2, kOfflineProcessorBlockSize));
+
+  float* too_many_channels[] = {left.data(), right.data(), left.data()};
+  REQUIRE_THROWS_AS(limiter.process(too_many_channels, 3, 1), SonareException);
+}
+
+TEST_CASE("TruePeakLimiter processes a three-minute stereo master within bounded work buffers",
+          "[.][slow][memory][mastering][maximizer]") {
+  constexpr int kSampleRate = 44100;
+  constexpr int kDurationSeconds = 3 * 60;
+  constexpr int kSamples = kSampleRate * kDurationSeconds;
+  std::vector<float> left = generate_sine_samples(440.0f, kSampleRate, kSamples, 0.75f);
+  std::vector<float> right = generate_sine_samples(880.0f, kSampleRate, kSamples, 0.65f);
+
+  TruePeakLimiter limiter({-1.0f, 1.0f, 50.0f, 4});
+  sonare::mastering::api::internal::run_processor_stereo(limiter, left, right, kSampleRate);
+
+  REQUIRE(left.size() == static_cast<size_t>(kSamples));
+  REQUIRE(right.size() == static_cast<size_t>(kSamples));
+  REQUIRE(
+      std::all_of(left.begin(), left.end(), [](float sample) { return std::isfinite(sample); }));
+  REQUIRE(
+      std::all_of(right.begin(), right.end(), [](float sample) { return std::isfinite(sample); }));
+}
 
 TEST_CASE("Maximizer applies input gain and respects ceiling", "[mastering][maximizer]") {
   Maximizer maximizer({12.0f, -6.0f, 0.0f, 0.0f});

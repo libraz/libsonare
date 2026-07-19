@@ -149,6 +149,20 @@ describe('effects', () => {
     }
   });
 
+  it('treats truePeakOversample: 0 as the library default', () => {
+    const input = Float32Array.from(
+      { length: 4096 },
+      (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / SR),
+    );
+    const implicit = mastering(input, SR, { targetLufs: -18, ceilingDb: -1 });
+    const sentinel = mastering(input, SR, {
+      targetLufs: -18,
+      ceilingDb: -1,
+      truePeakOversample: 0,
+    });
+    expect(sentinel.samples).toEqual(implicit.samples);
+  });
+
   it('named mastering processors are available', () => {
     const quiet = new Float32Array(SR / 2);
     for (let i = 0; i < quiet.length; i++) {

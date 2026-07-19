@@ -89,6 +89,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 
   // -- MIR --
   Napi::Value AutoTempo(const Napi::CallbackInfo& info);
+  Napi::Value AnalyzeTempo(const Napi::CallbackInfo& info);
   Napi::Value SnapToGrid(const Napi::CallbackInfo& info);
   Napi::Value AnnotateKeys(const Napi::CallbackInfo& info);
   Napi::Value AnnotateChords(const Napi::CallbackInfo& info);

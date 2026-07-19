@@ -189,6 +189,10 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
   config.hop_length = args.hop_length;
 
   std::string algo = args.get_string("algorithm", "pyin");
+  if (algo != "yin" && algo != "pyin") {
+    std::cerr << color::red << "Error: --algorithm must be 'yin' or 'pyin'" << color::reset << "\n";
+    return 1;
+  }
   PitchResult result = (algo == "yin") ? yin_track(audio, config) : pyin(audio, config);
 
   int voiced = std::count(result.voiced_flag.begin(), result.voiced_flag.end(), true);

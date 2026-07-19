@@ -59,8 +59,12 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -14.0f;
   config.ceiling_db =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : -1.0f;
-  config.true_peak_oversample =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 4;
+  // 0 is the C-ABI sentinel for the library default; only a positive explicit
+  // value overrides the configured default.
+  if (info.Length() >= 5 && info[4].IsNumber()) {
+    const int oversample = info[4].As<Napi::Number>().Int32Value();
+    if (oversample > 0) config.true_peak_oversample = oversample;
+  }
   // release_ms: only a positive value overrides the library default (50 ms), so
   // 0 (or an omitted arg) keeps the previous fixed-release behavior.
   if (info.Length() >= 6 && info[5].IsNumber()) {

@@ -977,6 +977,7 @@ if(BUILD_WASM)
     wasm/bindings.cpp
     wasm/bindings/common/common.cpp
     wasm/bindings/effects/audio.cpp
+    c_api/sonare_c_voice_changer.cpp
     wasm/bindings/features/core.cpp
     wasm/bindings/features/music.cpp
     wasm/bindings/features/pitch.cpp
@@ -1024,6 +1025,7 @@ if(BUILD_WASM)
   endif()
   if(BUILD_VOICE_CHANGER)
     target_link_libraries(sonare PRIVATE sonare_voice_changer)
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_VOICE_CHANGER=1)
   endif()
   if(BUILD_MASTERING)
     target_link_libraries(sonare PRIVATE sonare_mastering)

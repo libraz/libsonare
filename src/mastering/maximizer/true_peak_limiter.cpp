@@ -36,12 +36,23 @@ TruePeakLimiter::TruePeakLimiter(TruePeakLimiterConfig config)
 }
 
 void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void TruePeakLimiter::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0))
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "max_channels exceeds TruePeakLimiter capacity");
+  }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  max_working_channels_ = max_channels;
   lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
   update_time_constants();
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
@@ -52,21 +63,21 @@ void TruePeakLimiter::prepare(double sample_rate, int max_block_size) {
       static_cast<size_t>(std::max(1, lookahead_samples_ + 1) * true_peak_filter_.factor()));
   const size_t max_oversampled_samples = static_cast<size_t>(std::max(0, max_block_size_)) *
                                          static_cast<size_t>(true_peak_filter_.factor());
-  // Preallocate every per-channel working buffer up to kRealtimePreparedChannels
-  // so process() never resizes on the audio thread (matches Limiter /
-  // BrickwallLimiter); a block wider than that throws instead, in
-  // prepare_buffers().
-  input_ptrs_.assign(dynamics::kRealtimePreparedChannels, nullptr);
-  oversampled_ptrs_.assign(dynamics::kRealtimePreparedChannels, nullptr);
-  oversampled_buffers_.assign(dynamics::kRealtimePreparedChannels,
-                              std::vector<float>(max_oversampled_samples, 0.0f));
-  limited_oversampled_buffers_.assign(dynamics::kRealtimePreparedChannels,
+  // Scratch buffers scale with the caller's actual channel bound. Offline
+  // mastering is mono/stereo, while the two-argument prepare() above keeps the
+  // 64-channel realtime capacity. Lookahead remains sized to the realtime
+  // channel ceiling because its per-channel state must survive live routing
+  // changes without allocation on the audio thread.
+  const size_t working_channels = static_cast<size_t>(max_working_channels_);
+  input_ptrs_.assign(working_channels, nullptr);
+  oversampled_ptrs_.assign(working_channels, nullptr);
+  oversampled_buffers_.assign(working_channels, std::vector<float>(max_oversampled_samples, 0.0f));
+  limited_oversampled_buffers_.assign(working_channels,
                                       std::vector<float>(max_oversampled_samples, 0.0f));
-  true_peak_scratch_.assign(dynamics::kRealtimePreparedChannels, {});
+  true_peak_scratch_.assign(working_channels, {});
   const size_t true_peak_history_size =
       static_cast<size_t>(std::max(0, true_peak_filter_.latency_samples() * 2));
-  true_peak_history_.assign(dynamics::kRealtimePreparedChannels,
-                            std::vector<float>(true_peak_history_size, 0.0f));
+  true_peak_history_.assign(working_channels, std::vector<float>(true_peak_history_size, 0.0f));
   for (auto& scratch : true_peak_scratch_) {
     scratch.assign(true_peak_history_size + static_cast<size_t>(std::max(0, max_block_size_)),
                    0.0f);
@@ -291,7 +302,7 @@ void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
   config_ = config;
   if (!prepared_) return;
   if (structural) {
-    prepare(sample_rate_, max_block_size_);
+    prepare(sample_rate_, max_block_size_, max_working_channels_);
     return;
   }
   update_time_constants();
@@ -369,10 +380,9 @@ int TruePeakLimiter::latency_samples() const noexcept {
 }
 
 void TruePeakLimiter::prepare_buffers(int num_channels) {
-  // Every per-channel buffer/state is preallocated to kRealtimePreparedChannels
-  // in prepare(). Never resize on the audio thread; reject blocks wider than
-  // the prepared state (matches Limiter::prepare_buffers).
-  if (static_cast<size_t>(num_channels) <= dynamics::kRealtimePreparedChannels) {
+  // Every scratch buffer is preallocated in prepare(). Never resize on the
+  // audio thread; reject a route wider than the requested working capacity.
+  if (num_channels <= max_working_channels_) {
     return;
   }
   throw SonareException(ErrorCode::InvalidParameter,

@@ -41,6 +41,21 @@ def test_metering_basic_meters_agree() -> None:
     assert abs(dc) < 1e-2
 
 
+def test_pitch_and_dc_offset_reject_nonfinite_samples_and_invalid_rates() -> None:
+    """Pitch and metering inherit the shared C-ABI input guards (L-17)."""
+    invalid = _sine(440.0, 0.1)
+    invalid[10] = np.nan
+
+    with pytest.raises(ValueError):
+        libsonare.pitch_yin(invalid, SR)
+    with pytest.raises(ValueError):
+        libsonare.metering_dc_offset(invalid, SR)
+    with pytest.raises(RuntimeError):
+        libsonare.pitch_yin(_sine(440.0, 0.1), 0)
+    with pytest.raises(RuntimeError):
+        libsonare.metering_dc_offset(_sine(440.0, 0.1), 0)
+
+
 def test_metering_true_peak_db_default_oversample() -> None:
     samples = _sine(440.0, 1.0)
     tp = libsonare.metering_true_peak_db(samples, SR)

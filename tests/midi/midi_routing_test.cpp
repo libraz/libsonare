@@ -407,6 +407,32 @@ TEST_CASE("CcMap observe_live_cc routes RPN/NRPN Data Entry to the selected bind
   }
 }
 
+TEST_CASE("CcMap binding snapshot copy preserves live decode state", "[midi][rt]") {
+  CcMap current;
+  CcBinding binding;
+  binding.cc_number = 6;
+  binding.channel = 3;
+  binding.param_id = 90;
+  binding.kind = sonare::midi::CcBindingKind::kRpn;
+  binding.selector_msb = 0;
+  binding.selector_lsb = 1;
+  REQUIRE(current.bind(binding));
+
+  uint32_t param = 0;
+  float unit = 0.0f;
+  REQUIRE_FALSE(current.observe_live_cc(make_midi1_control_change(0, 3, 101, 0), &param, &unit));
+  REQUIRE_FALSE(current.observe_live_cc(make_midi1_control_change(0, 3, 100, 1), &param, &unit));
+  REQUIRE(current.observe_live_cc(make_midi1_control_change(0, 3, 6, 64), &param, &unit));
+
+  CcMap revised;
+  revised.copy_bindings_from(current);
+  // The LSB arrives after a control-thread binding update. It must complete the
+  // in-flight RPN value instead of losing the selected RPN/Data Entry MSB.
+  REQUIRE(revised.observe_live_cc(make_midi1_control_change(0, 3, 38, 10), &param, &unit));
+  REQUIRE(param == 90);
+  REQUIRE(std::abs(unit - static_cast<float>((64 << 7) | 10) / 16383.0f) < 1e-5f);
+}
+
 TEST_CASE("CcMap observe_live_cc keeps plain 7-bit and MIDI 2.0 CC working", "[midi]") {
   CcMap map;
   map.bind(CcBinding{74, 4, 200, 0.0f, 1.0f});
@@ -420,6 +446,27 @@ TEST_CASE("CcMap observe_live_cc keeps plain 7-bit and MIDI 2.0 CC working", "[m
   REQUIRE(map.observe_live_cc(make_midi2_control_change(0, 4, 74, 0xFFFFFFFFu), &param, &unit));
   REQUIRE(param == 200);
   REQUIRE(std::abs(unit - 1.0f) < 1e-4f);
+}
+
+TEST_CASE("CcMap live decode preserves plain bindings on reserved CC numbers", "[midi]") {
+  CcMap map;
+  map.bind(CcBinding{6, 4, 201, 0.0f, 1.0f});
+  map.bind(CcBinding{38, 4, 202, 0.0f, 1.0f});
+  map.bind(CcBinding{98, 4, 203, 0.0f, 1.0f});
+  map.bind(CcBinding{99, 4, 204, 0.0f, 1.0f});
+  map.bind(CcBinding{100, 4, 205, 0.0f, 1.0f});
+  map.bind(CcBinding{101, 4, 206, 0.0f, 1.0f});
+  uint32_t param = 0;
+  float unit = 0.0f;
+  for (const auto [cc, expected] : {std::pair<uint8_t, uint32_t>{6, 201},
+                                    {38, 202},
+                                    {98, 203},
+                                    {99, 204},
+                                    {100, 205},
+                                    {101, 206}}) {
+    REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 4, cc, 64), &param, &unit));
+    REQUIRE(param == expected);
+  }
 }
 
 TEST_CASE("CcMap param_to_cc round-trips value", "[midi]") {

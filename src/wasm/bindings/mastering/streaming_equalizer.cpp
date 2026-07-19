@@ -236,6 +236,12 @@ class EqualizerWrapper {
     const int sample_rate =
         intProperty(options, "sampleRate", static_cast<int>(std::lround(sample_rate_)));
     const int max_bands = intProperty(options, "maxBands", 8);
+    validate_offline_audio_input(src.data(), src.size(), sample_rate);
+    validate_offline_audio_input(ref.data(), ref.size(), sample_rate);
+    if (max_bands <= 0) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "StreamingEqualizer.match: maxBands must be positive");
+    }
     Audio src_audio = Audio::from_buffer(src.data(), src.size(), sample_rate);
     Audio ref_audio = Audio::from_buffer(ref.data(), ref.size(), sample_rate);
     mastering::match::MatchEqConfig match_config;

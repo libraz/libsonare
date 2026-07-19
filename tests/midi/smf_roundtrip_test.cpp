@@ -343,6 +343,28 @@ TEST_CASE("SMF import parses tempo, time-signature, names, markers and notes", "
   REQUIRE(cc_count == 2);
 }
 
+TEST_CASE("SMF import normalizes invalid UTF-8 text metadata", "[midi]") {
+  std::vector<uint8_t> smf = make_known_smf();
+  const auto track_name = std::find(smf.begin(), smf.end(), static_cast<uint8_t>('l'));
+  const auto marker = std::find(smf.begin(), smf.end(), static_cast<uint8_t>('v'));
+  REQUIRE(track_name != smf.end());
+  REQUIRE(marker != smf.end());
+  *track_name = 0xFFu;
+  *marker = 0xC3u;  // An unterminated two-byte UTF-8 sequence.
+
+  const SmfImportResult result = import_smf(smf);
+
+  REQUIRE(result.ok());
+  REQUIRE(result.clip_names.size() == 1);
+  REQUIRE(result.clip_names[0] ==
+          "\xEF\xBF\xBD"
+          "ead");
+  REQUIRE(result.markers.size() == 1);
+  REQUIRE(result.markers[0].text ==
+          "\xEF\xBF\xBD"
+          "erse");
+}
+
 TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
   const std::vector<uint8_t> smf = make_known_smf();
   const SmfImportResult imported = import_smf(smf);

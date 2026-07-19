@@ -128,10 +128,10 @@ std::vector<float> apply_biquad_filtfilt(const float* input, size_t size,
                                          const BiquadCoeffs& coeffs) {
   SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);
 
-  // Seed each pass with scipy.signal.lfilter_zi-style steady-state initial
-  // conditions scaled by the boundary sample, matching scipy.signal.filtfilt.
-  // This suppresses the ~2*order edge transient that zero initial conditions
-  // would otherwise inject at the start of each direction.
+  // Seed each pass with lfilter_zi-style steady-state initial conditions scaled
+  // by the boundary sample. This implementation does not use scipy's extended
+  // edge padding; it suppresses the leading transient without claiming exact
+  // scipy.signal.filtfilt parity at the boundaries.
   const BiquadZi zi = lfilter_zi(coeffs);
 
   // Forward pass seeded at the leading edge.
@@ -200,7 +200,7 @@ std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
   return result;
 }
 
-std::vector<float> preemphasis(const float* input, size_t size, float coeff) {
+std::vector<float> preemphasis_zero_initial_state(const float* input, size_t size, float coeff) {
   return sonare::preemphasis(input, size, coeff, 0.0f);
 }
 

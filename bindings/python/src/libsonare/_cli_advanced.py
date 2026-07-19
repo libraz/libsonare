@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 
 from ._cli_common import (
     PITCH_NAMES,
@@ -23,7 +22,7 @@ def cmd_rhythm(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "bpm": round(r.bpm, 2),
                     "time_signature": {
@@ -60,7 +59,7 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "dynamic_range_db": round(r.dynamic_range_db, 4),
                     "peak_db": round(r.peak_db, 4),
@@ -93,7 +92,7 @@ def cmd_timbre(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "brightness": round(r.brightness, 4),
                     "warmth": round(r.warmth, 4),
@@ -160,7 +159,9 @@ def cmd_onset_envelope(args: argparse.Namespace) -> int:
     )
 
     if args.json:
-        print(json.dumps({"stats": _array_stats(env), "values": [round(v, 6) for v in env]}))
+        print(
+            _strict_json_dumps({"stats": _array_stats(env), "values": [round(v, 6) for v in env]})
+        )
     else:
         stats = _array_stats(env)
         print("  Onset envelope:")
@@ -185,7 +186,7 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "n_chroma": n_chroma,
                     "n_frames": n_frames,
@@ -215,7 +216,7 @@ def cmd_tempogram(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "win_length": win_length,
                     "n_frames": n_frames,
@@ -243,7 +244,7 @@ def cmd_plp(args: argparse.Namespace) -> int:
     pulse = plp(env, sample_rate=sr, hop_length=args.hop_length)
 
     if args.json:
-        print(json.dumps({"stats": _array_stats(pulse)}))
+        print(_strict_json_dumps({"stats": _array_stats(pulse)}))
     else:
         stats = _array_stats(pulse)
         print("  Predominant local pulse (PLP):")

@@ -25,6 +25,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "automation/automation_lane.h"
@@ -102,6 +103,12 @@ class CcMap {
 
   size_t binding_count() const noexcept { return count_; }
   const CcBinding& binding_at(size_t index) const noexcept { return bindings_[index]; }
+
+  /// Copy only the immutable binding table from @p source. The audio-thread
+  /// live-decode accumulator is deliberately shared, rather than read or
+  /// reset, so publishing a revised binding map cannot race with a live MIDI
+  /// decode or discard a partially received 14-bit/RPN/NRPN gesture.
+  void copy_bindings_from(const CcMap& source) noexcept;
 
   /// Arm MIDI learn: a CC seen by observe_for_learn() binds `param_id` over
   /// [min_value, max_value]. Re-arming overrides any pending learn.
@@ -231,7 +238,14 @@ class CcMap {
     // 14-bit Data Entry value.
     uint8_t data_msb = 0;
   };
-  mutable std::array<LiveChannelState, 16> live_{};
+  struct LiveDecodeState {
+    std::array<LiveChannelState, 16> channels{};
+  };
+  // The published binding snapshots share this audio-thread-owned state across
+  // revisions. The shared_ptr itself is immutable after construction/copy, so
+  // control-thread snapshot construction never reads concurrently-mutated
+  // channel state.
+  std::shared_ptr<LiveDecodeState> live_ = std::make_shared<LiveDecodeState>();
 
   // Kind-aware binding lookup for the live-decode path: finds a binding by an
   // arbitrary predicate, preferring an exact-channel match over kCcAnyChannel.

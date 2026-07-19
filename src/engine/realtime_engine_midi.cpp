@@ -15,7 +15,7 @@ bool RealtimeEngine::bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t 
   try {
     auto next = std::make_shared<midi::CcMap>();
     if (const std::shared_ptr<const midi::CcMap>& current = midi_cc_maps_.control_current()) {
-      *next = *current;
+      next->copy_bindings_from(*current);
     }
     midi::CcBinding binding{};
     binding.cc_number = controller;
@@ -24,7 +24,6 @@ bool RealtimeEngine::bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t 
     binding.min_value = min_value;
     binding.max_value = max_value;
     if (!next->bind(binding)) return false;
-    next->reset_live_decode();
     return midi_cc_maps_.publish(std::shared_ptr<const midi::CcMap>(std::move(next)));
   } catch (...) {
     return false;
@@ -167,12 +166,12 @@ void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int nu
   }
 }
 
-void RealtimeEngine::set_midi_instrument(midi::MidiInstrument* instrument) noexcept {
+void RealtimeEngine::set_midi_instrument(midi::MidiInstrument* instrument) {
   set_midi_instrument(0, instrument);
 }
 
 bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
-                                         midi::MidiInstrument* instrument) noexcept {
+                                         midi::MidiInstrument* instrument) {
   // Hang-note safety on swap/clear: if this destination currently has a bound
   // instrument that is about to be replaced or removed, release every note
   // sounding on it first. The note-offs route through the rack to the OUTGOING
@@ -200,7 +199,7 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   return true;
 }
 
-void RealtimeEngine::recompute_pdc() noexcept {
+void RealtimeEngine::recompute_pdc() {
   // The whole project's reported latency is the slowest bound instrument: every
   // source must be delayed to meet it. Clip audio (zero latency) is delayed by
   // the full total; an instrument that already self-delays by L_i needs only the

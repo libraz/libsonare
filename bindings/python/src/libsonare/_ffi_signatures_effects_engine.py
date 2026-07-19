@@ -140,6 +140,19 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    # sonare_note_move
+    lib.sonare_note_move.restype = ctypes.c_int32
+    lib.sonare_note_move.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     # sonare_voice_change
     lib.sonare_voice_change.restype = ctypes.c_int32
     lib.sonare_voice_change.argtypes = [

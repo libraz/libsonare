@@ -164,58 +164,111 @@ void print_usage(const char* prog) {
 // Main
 // ============================================================================
 
+namespace {
+
+constexpr int kExitUsage = 2;
+constexpr int kExitInvalidParameter = 3;
+constexpr int kExitFileNotFound = 4;
+constexpr int kExitInvalidFormat = 5;
+constexpr int kExitDecodeFailed = 6;
+constexpr int kExitOutOfMemory = 7;
+constexpr int kExitNotSupported = 8;
+constexpr int kExitInvalidState = 9;
+constexpr int kExitError = 10;
+
+bool legacy_exit_codes() noexcept {
+  const char* value = std::getenv("SONARE_LEGACY_EXIT");
+  return value != nullptr && std::string(value) == "1";
+}
+
+int normalize_handler_exit(const CommandInfo& command, int status) noexcept {
+  if (status == 0) return 0;
+  if (legacy_exit_codes()) return 1;
+  // Handlers historically used `1` for argument/validation failures. Keep
+  // their implementation shape while publishing the same structured contract
+  // as the Python CLI. Project operations report a failed compilation/load as
+  // an invalid state rather than an invalid DSP parameter.
+  if (status == 1) return command.name == "project" ? kExitInvalidState : kExitInvalidParameter;
+  return status;
+}
+
+int exit_code_for(const sonare::SonareException& error) noexcept {
+  if (legacy_exit_codes()) return 1;
+  switch (error.code()) {
+    case sonare::ErrorCode::FileNotFound:
+      return kExitFileNotFound;
+    case sonare::ErrorCode::InvalidFormat:
+      return kExitInvalidFormat;
+    case sonare::ErrorCode::DecodeFailed:
+      return kExitDecodeFailed;
+    case sonare::ErrorCode::InvalidParameter:
+      return kExitInvalidParameter;
+    case sonare::ErrorCode::OutOfMemory:
+      return kExitOutOfMemory;
+    case sonare::ErrorCode::NotImplemented:
+      return kExitNotSupported;
+    case sonare::ErrorCode::InvalidState:
+      return kExitInvalidState;
+    case sonare::ErrorCode::Ok:
+    default:
+      return kExitError;
+  }
+}
+
+}  // namespace
+
 int main(int argc, char* argv[]) {
   if (argc < 2) {
     print_usage(argv[0]);
-    return 1;
-  }
-
-  CliArgs args = ArgParser::parse(argc, argv);
-
-  if (args.help) {
-    print_usage(argv[0]);
-    return 0;
-  }
-
-  if (args.command.empty()) {
-    std::cerr << color::red << "Error: No command specified" << color::reset << "\n\n";
-    print_usage(argv[0]);
-    return 1;
-  }
-
-  // Find command
-  const CommandInfo* cmd = find_command(args.command);
-  const bool built_in_command = args.command == "version" || args.command == "system-info";
-  if (!cmd && !built_in_command) {
-    std::cerr << color::red << "Error: Unknown command '" << args.command << "'" << color::reset
-              << "\n\n";
-    print_usage(argv[0]);
-    return 1;
-  }
-
-  const std::string argument_error =
-      validate_cli_arguments(args, cmd ? cmd->requires_audio : false);
-  if (!argument_error.empty()) {
-    std::cerr << color::red << "Error: " << argument_error << color::reset << "\n\n";
-    print_usage(argv[0]);
-    return 1;
-  }
-
-  // Version/system-info have no audio and are dispatched only after their
-  // empty command schemas and positional arity have been validated.
-  if (args.command == "version") return cmd_version(args);
-  if (args.command == "system-info") return cmd_system_info(args);
-
-  // Check for audio file
-  if (cmd->requires_audio && args.input_file.empty()) {
-    std::cerr << color::red << "Error: Missing audio file" << color::reset << "\n\n";
-    print_usage(argv[0]);
-    return 1;
+    return kExitUsage;
   }
 
   try {
+    CliArgs args = ArgParser::parse(argc, argv);
+
+    if (args.help) {
+      print_usage(argv[0]);
+      return 0;
+    }
+
+    if (args.command.empty()) {
+      std::cerr << color::red << "Error: No command specified" << color::reset << "\n\n";
+      print_usage(argv[0]);
+      return kExitUsage;
+    }
+
+    // Find command
+    const CommandInfo* cmd = find_command(args.command);
+    const bool built_in_command = args.command == "version" || args.command == "system-info";
+    if (!cmd && !built_in_command) {
+      std::cerr << color::red << "Error: Unknown command '" << args.command << "'" << color::reset
+                << "\n\n";
+      print_usage(argv[0]);
+      return kExitUsage;
+    }
+
+    const std::string argument_error =
+        validate_cli_arguments(args, cmd ? cmd->requires_audio : false);
+    if (!argument_error.empty()) {
+      std::cerr << color::red << "Error: " << argument_error << color::reset << "\n\n";
+      print_usage(argv[0]);
+      return kExitUsage;
+    }
+
+    // Version/system-info have no audio and are dispatched only after their
+    // empty command schemas and positional arity have been validated.
+    if (args.command == "version") return cmd_version(args);
+    if (args.command == "system-info") return cmd_system_info(args);
+
+    // Check for audio file
+    if (cmd->requires_audio && args.input_file.empty()) {
+      std::cerr << color::red << "Error: Missing audio file" << color::reset << "\n\n";
+      print_usage(argv[0]);
+      return kExitUsage;
+    }
+
     if (!cmd->requires_audio) {
-      return cmd->handler(args, Audio{});
+      return normalize_handler_exit(*cmd, cmd->handler(args, Audio{}));
     }
 
     if (!args.quiet && !args.json_output) {
@@ -226,10 +279,26 @@ int main(int argc, char* argv[]) {
     auto [samples, sample_rate] = load_audio(args.input_file);
     if (samples.empty()) {
       std::cerr << "\n" << color::red << "Error: Failed to load audio file" << color::reset << "\n";
-      return 1;
+      return kExitInvalidFormat;
     }
 
     Audio audio = Audio::from_vector(std::move(samples), sample_rate);
+
+    int source_channels = 0;
+    try {
+      source_channels = audio_channel_count(args.input_file);
+    } catch (const sonare::SonareException&) {
+      // The successful decoder remains authoritative; channel inspection is
+      // advisory for containers handled by an optional external decoder.
+    }
+    const bool downmix_sensitive_command = cmd->name == "lufs" || cmd->name == "meter" ||
+                                           cmd->name == "mastering" ||
+                                           cmd->name == "mastering-processor";
+    if (source_channels > 1 && downmix_sensitive_command) {
+      std::cerr << "warning: " << source_channels
+                << "-channel input is downmixed to mono by this CLI command; use the stereo "
+                   "library API for channel-preserving metering/mastering\n";
+    }
 
     if (!args.quiet && !args.json_output) {
       std::cerr << "\r" << color::green << "Loaded " << std::fixed << std::setprecision(1)
@@ -237,10 +306,16 @@ int main(int argc, char* argv[]) {
                 << "                    \n";
     }
 
-    return cmd->handler(args, audio);
+    return normalize_handler_exit(*cmd, cmd->handler(args, audio));
 
+  } catch (const sonare::SonareException& e) {
+    std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
+    return exit_code_for(e);
+  } catch (const std::invalid_argument& e) {
+    std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
+    return legacy_exit_codes() ? 1 : kExitInvalidParameter;
   } catch (const std::exception& e) {
     std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
-    return 1;
+    return legacy_exit_codes() ? 1 : kExitError;
   }
 }

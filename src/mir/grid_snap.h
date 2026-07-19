@@ -9,6 +9,10 @@
 /// command; they do NOT emit commands and do NOT change command semantics.
 ///
 /// All functions are deterministic and free of side effects.
+///
+/// The stable C ABI exposes these modes through
+/// `sonare_project_snap_to_grid_ex`; callers that only need beat snapping can
+/// retain the original `sonare_project_snap_to_grid` entry point.
 
 #include <vector>
 

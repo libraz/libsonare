@@ -257,8 +257,9 @@ std::pair<EditClip, bool> Project::remove_clip(ClipId id) {
   return {EditClip{}, false};
 }
 
-bool Project::insert_clip_raw(EditClip clip, size_t index) {
-  if (clip.id == 0 || clip.id == std::numeric_limits<ClipId>::max() || has_clip(clip.id)) {
+bool Project::insert_clip_raw(EditClip clip, size_t index, bool known_unique) {
+  if (clip.id == 0 || clip.id == std::numeric_limits<ClipId>::max() ||
+      (!known_unique && has_clip(clip.id))) {
     return false;
   }
   if (index >= clips_.size()) {
@@ -269,8 +270,9 @@ bool Project::insert_clip_raw(EditClip clip, size_t index) {
   return true;
 }
 
-bool Project::insert_track_raw(Track track, size_t index) {
-  if (track.id == 0 || track.id == std::numeric_limits<TrackId>::max() || has_track(track.id)) {
+bool Project::insert_track_raw(Track track, size_t index, bool known_unique) {
+  if (track.id == 0 || track.id == std::numeric_limits<TrackId>::max() ||
+      (!known_unique && has_track(track.id))) {
     return false;
   }
   if (index >= tracks_.size()) {
@@ -293,9 +295,9 @@ ClipSource* Project::find_source_mutable(SourceId id) noexcept {
   return nullptr;
 }
 
-bool Project::insert_source_raw(ClipSource source, size_t index) {
+bool Project::insert_source_raw(ClipSource source, size_t index, bool known_unique) {
   const SourceId id = source_id(source);
-  if (id == 0 || id == std::numeric_limits<SourceId>::max() || has_source(id)) {
+  if (id == 0 || id == std::numeric_limits<SourceId>::max() || (!known_unique && has_source(id))) {
     return false;
   }
   if (index >= sources_.size()) {

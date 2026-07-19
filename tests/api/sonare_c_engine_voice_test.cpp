@@ -1458,6 +1458,14 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
 
   out = nullptr;
   out_length = 0;
+  REQUIRE(sonare_note_move(samples.data(), samples.size(), 22050, 100, 1000, 500, &out,
+                           &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == samples.size());
+  sonare_free_floats(out);
+
+  out = nullptr;
+  out_length = 0;
   REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, 5.0f, 1.1f, &out,
                               &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);

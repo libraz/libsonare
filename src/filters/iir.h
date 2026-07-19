@@ -90,12 +90,14 @@ CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr);
 std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
                                           const CascadedBiquad& cascade);
 
-/// @brief Applies pre-emphasis filter to audio signal.
-/// @details Enhances high frequencies: y[n] = x[n] - coeff * x[n-1]
+/// @brief Applies a zero-initial-state pre-emphasis filter to audio signal.
+/// @details Internal legacy helper. Unlike effects/preemphasis.h this starts
+/// at zero state, so its distinct name prevents accidental overload selection.
 /// @param input Input signal
 /// @param size Signal length
 /// @param coeff Pre-emphasis coefficient (default 0.97)
 /// @return Filtered signal
-std::vector<float> preemphasis(const float* input, size_t size, float coeff = 0.97f);
+std::vector<float> preemphasis_zero_initial_state(const float* input, size_t size,
+                                                  float coeff = 0.97f);
 
 }  // namespace sonare

@@ -341,7 +341,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #if defined(SONARE_WITH_MIXING)
   // Gate spectrum/vectorscope capture for this block; the per-target taps inside
   // the mixer + the master tap below self-skip when this block is not due.
-  scope_tap_.begin_block(scope_interval_frames_, num_frames);
+  scope_tap_.begin_block(scope_interval_frames_.load(std::memory_order_relaxed), num_frames);
 #endif
   if (monitor_out && num_frames > 0 && offset >= 0) {
     for (int ch = 0; ch < scratch_channels; ++ch) {

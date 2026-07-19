@@ -467,25 +467,25 @@ TEST_CASE("MIDI 1.0 -> 2.0 -> 1.0 channel-voice round-trips losslessly (top bits
   REQUIRE((bend_back.words[0] & 0x7Fu) == 0x24u);
 }
 
-TEST_CASE("MIDI 1.0 -> 2.0 velocity/CC up-scale pins the min-center-max values", "[midi]") {
-  // Velocity 7->16: documented MIDI-Association min-center-max bit scaling.
+TEST_CASE("MIDI 1.0 -> 2.0 velocity/CC up-scale replicates source bits", "[midi]") {
+  // Velocity 7->16 repeats the seven source bits to fill the destination.
   REQUIRE(sonare::midi::scale_velocity_7_to_16(0) == 0u);
-  REQUIRE(sonare::midi::scale_velocity_7_to_16(1) == 512u);      // 1 << 9.
-  REQUIRE(sonare::midi::scale_velocity_7_to_16(64) == 0x8000u);  // center maps to 32768.
-  REQUIRE(sonare::midi::scale_velocity_7_to_16(100) == 51488u);
-  REQUIRE(sonare::midi::scale_velocity_7_to_16(127) == 65528u);  // max, not 65535.
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(1) == 516u);
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(64) == 33026u);
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(100) == 51603u);
+  REQUIRE(sonare::midi::scale_velocity_7_to_16(127) == 65535u);
 
   // CC 7->32.
-  REQUIRE(sonare::midi::scale_cc_7_to_32(64) == 0x80000000u);  // 2147483648, center.
-  REQUIRE(sonare::midi::scale_cc_7_to_32(100) == 3374317568u);
-  REQUIRE(sonare::midi::scale_cc_7_to_32(127) == 4294443008u);  // max, not 0xFFFFFFFF.
+  REQUIRE(sonare::midi::scale_cc_7_to_32(64) == 0x81020408u);
+  REQUIRE(sonare::midi::scale_cc_7_to_32(100) == 0xC993264Cu);
+  REQUIRE(sonare::midi::scale_cc_7_to_32(127) == 0xFFFFFFFFu);
 
   // The note-on path embeds the up-scaled 16-bit velocity in word[1].
   const Ump m2 = sonare::midi::midi1_to_midi2(sonare::midi::make_midi1_note_on(0, 0, 60, 127));
-  REQUIRE(static_cast<uint16_t>(m2.words[1] >> 16) == 65528u);
+  REQUIRE(static_cast<uint16_t>(m2.words[1] >> 16) == 65535u);
   const Ump cc2 =
       sonare::midi::midi1_to_midi2(sonare::midi::make_midi1_control_change(0, 0, 7, 127));
-  REQUIRE(cc2.words[1] == 4294443008u);
+  REQUIRE(cc2.words[1] == 0xFFFFFFFFu);
 }
 
 TEST_CASE("MIDI 2.0 -> 1.0 velocity/CC down-scale is the top-7-bit truncation", "[midi]") {

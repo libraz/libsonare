@@ -204,6 +204,8 @@ TEST_CASE("Musical time helpers convert note values", "[transport]") {
   REQUIRE_THAT(sonare::transport::note_length_ppq(4, NoteModifier::kTriplet),
                WithinAbs(2.0 / 3.0, 1.0e-9));
   REQUIRE(sonare::transport::ppq_duration_to_samples(1.0, 120.0, 48000.0) == 24000);
+  REQUIRE(sonare::transport::ppq_duration_to_samples(1e300, 1.0, 192000.0) ==
+          std::numeric_limits<int64_t>::max());
   REQUIRE_THAT(sonare::transport::samples_to_ppq_duration(24000, 120.0, 48000.0),
                WithinAbs(1.0, 1.0e-9));
 }

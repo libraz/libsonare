@@ -24,6 +24,7 @@ from ._runtime import (
     _out_float_array,
     _out_int_array,
     _to_c_float_array,
+    _validate_samples,
 )
 from .types import (
     ChromaResult,
@@ -752,7 +753,8 @@ def pitch_yin(
         PitchResult with f0, voiced probabilities, and statistics.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
+    sample_buf = _validate_samples("pitch_yin", samples)
+    c_array, length = _to_c_float_array(sample_buf)
     out = SonarePitchResult()
     rc = lib.sonare_pitch_yin(
         c_array,

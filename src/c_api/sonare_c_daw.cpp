@@ -201,3 +201,24 @@ SonareError sonare_note_stretch(const float* samples, size_t length, int sample_
                               stretch_ratio, out, out_length);
 #endif
 }
+
+SonareError sonare_note_move(const float* samples, size_t length, int sample_rate, int onset_sample,
+                             int offset_sample, int target_onset_sample, float** out,
+                             size_t* out_length) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    editing::pitch_editor::NoteRegion region;
+    region.onset_sample = onset_sample;
+    region.offset_sample = offset_sample;
+    editing::pitch_editor::NoteEditor editor;
+    Audio result = editor.move_note(audio, region, target_onset_sample);
+    return copy_audio_result(result, out, out_length);
+  });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, onset_sample, offset_sample,
+                              target_onset_sample, out, out_length);
+#endif
+}

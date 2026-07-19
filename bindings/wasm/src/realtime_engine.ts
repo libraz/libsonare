@@ -587,6 +587,14 @@ export class RealtimeEngine {
     );
   }
 
+  /**
+   * Returns the PCM generated for a tempo-sync clip by the control-thread
+   * setter, or `null` when the clip did not require a tempo-sync bake.
+   */
+  prebakedClipChannels(clipId: number): Float32Array[] | null {
+    return this.native.prebakedClipChannels(clipId);
+  }
+
   clipCount(): number {
     return this.native.clipCount();
   }

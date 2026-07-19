@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 from typing import Any, cast
 
 from ._cli_common import (
+    EXIT_INVALID_STATE,
+    _legacy_exit_codes,
+    _strict_json_dumps,
     _write_project_bounce_wav,
 )
 
@@ -25,9 +27,11 @@ def _write_project_json(project: object, path: str) -> int:
     return len(data)
 
 
-def _project_bounce(args: argparse.Namespace, *, force_synth: bool = False) -> int:
+def _project_bounce(
+    args: argparse.Namespace, *, force_synth: bool = False, command_name: str = "project bounce"
+) -> int:
     if not args.output:
-        raise ValueError("project bounce requires --output")
+        raise ValueError(f"{command_name} requires --output")
     project = _load_project(args.input)
     try:
         kwargs = {
@@ -45,7 +49,7 @@ def _project_bounce(args: argparse.Namespace, *, force_synth: bool = False) -> i
         frames, channels = _write_project_bounce_wav(args.output, audio, args.sample_rate)
         if args.json:
             print(
-                json.dumps(
+                _strict_json_dumps(
                     {
                         "output": args.output,
                         "frames": frames,
@@ -68,7 +72,7 @@ def cmd_project(args: argparse.Namespace) -> int:
     subcommand = args.project_command
     if subcommand == "abi":
         version = project_abi_version()
-        print(json.dumps({"abi_version": version}) if args.json else version)
+        print(_strict_json_dumps({"abi_version": version}) if args.json else version)
         return 0
     if subcommand == "new":
         if not args.output:
@@ -81,7 +85,7 @@ def cmd_project(args: argparse.Namespace) -> int:
         finally:
             project.close()
         if args.json:
-            print(json.dumps({"output": args.output, "bytes": bytes_written}))
+            print(_strict_json_dumps({"output": args.output, "bytes": bytes_written}))
         else:
             print(f"  Wrote empty project: {args.output}")
         return 0
@@ -96,7 +100,7 @@ def cmd_project(args: argparse.Namespace) -> int:
         finally:
             cast(Any, project).close()
         if args.json:
-            print(json.dumps({"valid": True, "bytes": bytes_written}))
+            print(_strict_json_dumps({"valid": True, "bytes": bytes_written}))
         else:
             print(f"  Project JSON is valid ({bytes_written} bytes canonical)")
         return 0
@@ -106,7 +110,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             result = cast(Any, project).compile()
             if args.json:
                 print(
-                    json.dumps(
+                    _strict_json_dumps(
                         {
                             "has_timeline": result.has_timeline,
                             "diagnostic_count": result.diagnostic_count,
@@ -129,7 +133,9 @@ def cmd_project(args: argparse.Namespace) -> int:
                     if result.has_timeline
                     else f"  Compiled with errors ({result.diagnostic_count} diagnostics)"
                 )
-            return 0 if result.has_timeline else 1
+            if result.has_timeline:
+                return 0
+            return 1 if _legacy_exit_codes() else EXIT_INVALID_STATE
         finally:
             cast(Any, project).close()
     if subcommand == "bounce":
@@ -144,7 +150,11 @@ def cmd_project(args: argparse.Namespace) -> int:
             cast(Any, project).close()
         with open(args.output, "wb") as fh:
             fh.write(data)
-        print(json.dumps({"output": args.output, "bytes": len(data)}) if args.json else args.output)
+        print(
+            _strict_json_dumps({"output": args.output, "bytes": len(data)})
+            if args.json
+            else args.output
+        )
         return 0
     if subcommand == "import-smf":
         if not args.output:
@@ -159,7 +169,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             project.close()
         if args.json:
             print(
-                json.dumps(
+                _strict_json_dumps(
                     {"output": args.output, "first_clip_id": first_clip, "bytes": bytes_written}
                 )
             )
@@ -176,7 +186,11 @@ def cmd_project(args: argparse.Namespace) -> int:
             cast(Any, project).close()
         with open(args.output, "wb") as fh:
             fh.write(data)
-        print(json.dumps({"output": args.output, "bytes": len(data)}) if args.json else args.output)
+        print(
+            _strict_json_dumps({"output": args.output, "bytes": len(data)})
+            if args.json
+            else args.output
+        )
         return 0
     if subcommand == "import-midi2":
         if not args.output:
@@ -191,7 +205,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             project.close()
         if args.json:
             print(
-                json.dumps(
+                _strict_json_dumps(
                     {"output": args.output, "first_clip_id": first_clip, "bytes": bytes_written}
                 )
             )
@@ -200,10 +214,10 @@ def cmd_project(args: argparse.Namespace) -> int:
         return 0
     if subcommand == "synth-presets":
         names = synth_preset_names()
-        print(json.dumps({"presets": names}) if args.json else "\n".join(names))
+        print(_strict_json_dumps({"presets": names}) if args.json else "\n".join(names))
         return 0
     raise ValueError(f"unknown project subcommand: {subcommand}")
 
 
 def cmd_midi_render(args: argparse.Namespace) -> int:
-    return _project_bounce(args, force_synth=True)
+    return _project_bounce(args, force_synth=True, command_name="midi-render")

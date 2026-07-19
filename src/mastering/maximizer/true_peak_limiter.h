@@ -54,6 +54,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
  public:
   explicit TruePeakLimiter(TruePeakLimiterConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   void set_config(const TruePeakLimiterConfig& config);
@@ -113,6 +114,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
   sonare::rt::SlidingMax<float> oversampled_peak_window_{1};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
+  int max_working_channels_ = 0;
   int lookahead_samples_ = 0;
   bool prepared_ = false;
   float fast_gain_ = 1.0f;

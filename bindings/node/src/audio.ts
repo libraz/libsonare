@@ -12,6 +12,7 @@ import {
   masterAudio as masterAudioFn,
   masteringChain as masteringChainFn,
   mastering as masteringFn,
+  noteMove as noteMoveFn,
   noteStretch as noteStretchFn,
   voiceChange as voiceChangeFn,
 } from './effects_mastering.js';
@@ -208,6 +209,10 @@ export class Audio {
 
   noteStretch(options: NoteStretchOptions = {}): Float32Array {
     return noteStretchFn(this.getData(), this.getSampleRate(), options);
+  }
+
+  noteMove(options: import('./types_mastering.js').NoteMoveOptions = {}): Float32Array {
+    return noteMoveFn(this.getData(), this.getSampleRate(), options);
   }
 
   voiceChange(options: VoiceChangeOptions = {}): Float32Array {

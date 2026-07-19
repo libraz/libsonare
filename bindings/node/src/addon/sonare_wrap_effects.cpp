@@ -388,6 +388,34 @@ Napi::Value SonareWrap::NoteStretch(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::NoteMove(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 5 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
+      !info[3].IsNumber() || !info[4].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array, sampleRate, onsetSample, offsetSample, "
+                         "targetOnsetSample)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  const size_t length = typed.ElementLength();
+  const int sr = info[1].As<Napi::Number>().Int32Value();
+  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
+  sonare::editing::pitch_editor::NoteRegion region;
+  region.onset_sample = info[2].As<Napi::Number>().Int32Value();
+  region.offset_sample = info[3].As<Napi::Number>().Int32Value();
+  sonare::editing::pitch_editor::NoteEditor editor;
+  sonare::Audio result = editor.move_note(audio, region, info[4].As<Napi::Number>().Int32Value());
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
@@ -417,6 +445,34 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsString() ||
+      !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, preset, channels)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto samples = info[0].As<Napi::Float32Array>();
+  const int sample_rate = info[1].As<Napi::Number>().Int32Value();
+  const std::string preset = info[2].As<Napi::String>().Utf8Value();
+  const int channels = info[3].As<Napi::Number>().Int32Value();
+  float* output = nullptr;
+  size_t output_length = 0;
+  const SonareError err =
+      sonare_voice_change_realtime(samples.Data(), samples.ElementLength(), sample_rate,
+                                   preset.c_str(), channels, &output, &output_length);
+  if (err != SONARE_OK) {
+    sonare_free_floats(output);
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+  std::vector<float> result(output, output + output_length);
+  sonare_free_floats(output);
+  return VecToFloat32(env, result);
 }
 
 Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {

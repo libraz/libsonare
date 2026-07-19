@@ -163,6 +163,21 @@ TEST_CASE("synthesize_rir honours mixing-time and crossfade overrides", "[acoust
   bool differs = false;
   for (size_t i = 0; i < res.rir.size() && !differs; ++i) differs = (res.rir[i] != b[i]);
   REQUIRE(differs);
+
+  // Explicit values use the documented public range rather than the narrower
+  // auto-estimate clamp (150 ms). A 250 ms request must not collapse to 150.
+  RirSynthConfig at_auto_limit = cfg;
+  at_auto_limit.mixing_time_ms = 150.0f;
+  const Audio at_150 = synthesize_rir(room, pl, sr, at_auto_limit).rir;
+  RirSynthConfig beyond_auto_limit = cfg;
+  beyond_auto_limit.mixing_time_ms = 250.0f;
+  const Audio at_250 = synthesize_rir(room, pl, sr, beyond_auto_limit).rir;
+  REQUIRE(at_150.size() == at_250.size());
+  bool explicit_time_differs = false;
+  for (size_t i = 0; i < at_150.size() && !explicit_time_differs; ++i) {
+    explicit_time_differs = at_150[i] != at_250[i];
+  }
+  REQUIRE(explicit_time_differs);
 }
 
 TEST_CASE("synthesized RIR round-trips RT60 within 10%", "[acoustic][rir]") {

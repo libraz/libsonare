@@ -10,9 +10,8 @@
 
 namespace sonare {
 
-/// @brief Complex Morlet (or, for `is_cqt=false`, scipy.signal.morlet2) wavelet
-///        kernels at @p freqs.
-/// @details Mirrors `librosa.filters.wavelet`. By default returns the
+/// @brief Complex Hann-windowed sinusoid kernels at @p freqs.
+/// @details Mirrors `librosa.filters.wavelet` sizing and normalization. By default returns the
 /// concatenation of kernel arrays (lengths given by @ref wavelet_lengths).
 /// When @p pad_fft is true the kernels are zero-padded (centered) to a
 /// common length `n_fft = next_pow2(max(lengths))` and the result is a flat

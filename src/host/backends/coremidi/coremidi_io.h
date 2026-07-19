@@ -51,6 +51,11 @@ class CoreMidiInput final : public MidiInputSource {
   /// this input while connected.
   void set_time_mapper(const MidiHostTimeMapper* mapper) noexcept;
 
+  /// CONTROL thread: resolves handles emitted for reassembled incoming SysEx.
+  /// The store is owned by this input and is cleared on close(); consumers must
+  /// resolve it off the audio thread before closing the input.
+  const midi::SysExStore* sysex_store() const noexcept;
+
   /// HOST callback thread: enqueue a UMP tagged with a monotonic host time in
   /// nanoseconds. When a mapper is attached the event is converted to an
   /// absolute render frame before entering the RT queue; otherwise it falls
@@ -66,6 +71,12 @@ class CoreMidiInput final : public MidiInputSource {
   size_t drain_block(midi::MidiEvent* out, size_t capacity, int64_t block_start_frame,
                      int num_frames) noexcept override;
   size_t pending_count() const noexcept override;
+
+  /// Cumulative callback-thread telemetry for malformed/oversized SysEx7
+  /// streams. An interleave is a Continue/End without an active Start, or a
+  /// new Start that abandons an unfinished message in the same group.
+  uint32_t sysex_overflow_count() const noexcept;
+  uint32_t sysex_interleave_count() const noexcept;
 
  private:
   struct Impl;

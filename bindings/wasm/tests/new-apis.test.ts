@@ -27,6 +27,7 @@ import {
   mixingScenePresetJson,
   momentaryLufs,
   nnlsChroma,
+  noteMove,
   noteStretch,
   onsetEnvelope,
   onsetStrengthMulti,
@@ -328,6 +329,17 @@ describe('v1.2 feature additions (WASM)', () => {
       const peak = peakAmplitude(out);
       expect(peak).toBeGreaterThan(0.05);
       expect(peak).toBeLessThanOrEqual(1.0);
+    });
+
+    it('noteMove preserves length while relocating a note region', () => {
+      const out = noteMove(signal, SR, {
+        onsetSample: 100,
+        offsetSample: 1000,
+        targetOnsetSample: 500,
+      });
+      expect(out).toBeInstanceOf(Float32Array);
+      expect(out.length).toBe(signal.length);
+      expect(allFinite(out)).toBe(true);
     });
 
     it('voiceChange preserves length and amplitude range', () => {

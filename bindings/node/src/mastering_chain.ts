@@ -587,6 +587,13 @@ export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
  */
 export function masteringPairProcess(request: MasteringPairProcessRequest): MasteringResult;
 export function masteringPairProcess(
+  processorName: PairProcessor,
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): MasteringResult;
+export function masteringPairProcess(
   processorName: PairProcessor | MasteringPairProcessRequest,
   source?: Float32Array,
   reference?: Float32Array,
@@ -618,6 +625,13 @@ export function masteringPairProcess(
  */
 export function masteringPairAnalyze(request: MasteringPairAnalyzeRequest): string;
 export function masteringPairAnalyze(
+  analysisName: PairAnalysis,
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): string;
+export function masteringPairAnalyze(
   analysisName: PairAnalysis | MasteringPairAnalyzeRequest,
   source?: Float32Array,
   reference?: Float32Array,
@@ -644,6 +658,13 @@ export function masteringPairAnalyze(
 }
 
 export function masteringStereoAnalyze(request: MasteringStereoAnalyzeRequest): string;
+export function masteringStereoAnalyze(
+  analysisName: StereoAnalysis,
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): string;
 export function masteringStereoAnalyze(
   analysisName: StereoAnalysis | MasteringStereoAnalyzeRequest,
   left?: Float32Array,
@@ -672,6 +693,11 @@ export function masteringStereoAnalyze(
 
 export function masteringAssistantSuggest(request: MasteringAssistantSuggestRequest): string;
 export function masteringAssistantSuggest(
+  samples: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): string;
+export function masteringAssistantSuggest(
   samples: Float32Array | MasteringAssistantSuggestRequest,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
@@ -686,6 +712,11 @@ export function masteringAssistantSuggest(
 
 export function masteringAudioProfile(request: MasteringAudioProfileRequest): string;
 export function masteringAudioProfile(
+  samples: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): string;
+export function masteringAudioProfile(
   samples: Float32Array | MasteringAudioProfileRequest,
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
@@ -699,6 +730,11 @@ export function masteringAudioProfile(
 }
 
 export function masteringStreamingPreview(request: MasteringStreamingPreviewRequest): string;
+export function masteringStreamingPreview(
+  samples: Float32Array,
+  sampleRate?: number,
+  platforms?: StreamingPlatform[],
+): string;
 export function masteringStreamingPreview(
   samples: Float32Array | MasteringStreamingPreviewRequest,
   sampleRate = 22050,

@@ -175,6 +175,44 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('adopts pre-baked PCM pages before scheduling a long clip', () => {
+      const blockSize = 128;
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 1 },
+        { postMessage: () => undefined },
+      );
+      try {
+        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveSync({
+          type: 'syncClipPageProvider',
+          clipId: 88,
+          clip: { id: 88, trackId: 10, startPpq: 0, lengthSamples: 256, warpMode: 'off' },
+          numChannels: 1,
+          numSamples: 256,
+          pageFrames: 128,
+        });
+        processor.receiveSync({
+          type: 'syncClipPage',
+          clipId: 88,
+          pageIndex: 0,
+          channels: [new Float32Array(128).fill(0.25)],
+        });
+        processor.receiveSync({
+          type: 'syncClipPage',
+          clipId: 88,
+          pageIndex: 1,
+          channels: [new Float32Array(128).fill(0.5)],
+        });
+        processor.receiveSync({ type: 'syncClipPageCommit', clipId: 88 });
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+        const output = new Float32Array(blockSize);
+        expect(processor.process([[]], [[output]])).toBe(true);
+        expect(output[0]).toBeCloseTo(0.25, 4);
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('applies mixer lane sync and lane parameter commands', () => {
       const blockSize = 128;
       const processor = new SonareRealtimeEngineWorkletProcessor(

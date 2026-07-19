@@ -301,9 +301,8 @@ TEST_CASE("Graph supports replace and add connection mixing", "[graph]") {
 }
 
 TEST_CASE("Graph port mixing is independent of connection insertion order", "[graph]") {
-  // Regression: the first edge into a port overwrites and the rest add, so the
-  // mixed result is a port-wise sum regardless of insertion order or mix flags.
-  // Connecting the Add edge before the Replace edge must not wipe the sum.
+  // Replace is intentionally order-sensitive: it clears the accumulated value
+  // at its position, while Add contributes after it.
   auto build = [](bool add_first) {
     auto graph = std::make_unique<sonare::graph::Graph>();
     REQUIRE(graph->add_node("a", pass(), 1));
@@ -330,7 +329,7 @@ TEST_CASE("Graph port mixing is independent of connection insertion order", "[gr
   };
 
   REQUIRE_THAT(build(false), WithinAbs(3.0f, 0.0001f));
-  REQUIRE_THAT(build(true), WithinAbs(3.0f, 0.0001f));
+  REQUIRE_THAT(build(true), WithinAbs(1.0f, 0.0001f));
 }
 
 TEST_CASE("Graph latency compensation aligns parallel paths", "[graph]") {

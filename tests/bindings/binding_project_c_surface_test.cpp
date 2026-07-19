@@ -93,6 +93,10 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(sonare_project_set_tempo_segments(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
   tempos[0].bpm = 0.0;
   CHECK(sonare_project_set_tempo_segments(project, tempos, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTempoSegment non_monotonic[] = {{8.0, 120.0, 0.0, 0.0},
+                                                     {4.0, 120.0, 0.0, 0.0}};
+  CHECK(sonare_project_set_tempo_segments(project, non_monotonic, 2) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_set_time_signatures(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
   sig.denominator = 0;
   CHECK(sonare_project_set_time_signatures(project, &sig, 1) == SONARE_ERROR_INVALID_PARAMETER);
@@ -105,6 +109,7 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(json.find("\"denominator\":8") != std::string::npos);
   CHECK(json.find("\"name\":\"Chorus\"") != std::string::npos);
   CHECK(json.find("\"id\":\"lead\"") != std::string::npos);
+  CHECK(json.find("\"gain\":1") != std::string::npos);
 
   sonare_project_destroy(project);
 }

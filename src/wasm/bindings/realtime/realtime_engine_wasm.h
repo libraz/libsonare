@@ -172,6 +172,7 @@ class RealtimeEngineWasm {
 
   // ---- Clips & paged providers (realtime_engine_clips.cpp) -------------
   void setClips(emscripten::val clips);
+  emscripten::val prebakedClipChannels(uint32_t clip_id) const;
   int clipCount() const;
   int createClipPageProvider(int num_channels, int64_t num_samples, int64_t page_frames);
   void supplyClipPage(int provider_id, int64_t page_index, emscripten::val channels);
@@ -252,6 +253,8 @@ class RealtimeEngineWasm {
   std::vector<std::shared_ptr<WasmClipPageProvider>> clip_page_providers_;
   std::vector<std::vector<std::vector<float>>> clip_storage_;
   std::vector<std::vector<const float*>> clip_ptrs_;
+  std::vector<uint32_t> clip_ids_;
+  std::vector<uint8_t> clip_tempo_baked_;
   std::vector<std::vector<float>> capture_storage_;
   std::vector<float*> capture_ptrs_;
   // Persistent per-channel scratch for the zero-copy prepared process() path.

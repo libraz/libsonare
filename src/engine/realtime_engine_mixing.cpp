@@ -284,7 +284,7 @@ bool RealtimeEngine::set_master_eq_band(size_t band_index,
 
 uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames,
                                                    uint32_t band_count) noexcept {
-  scope_interval_frames_ = std::max(0, interval_frames);
+  scope_interval_frames_.store(std::max(0, interval_frames), std::memory_order_relaxed);
   const uint32_t clamped = std::clamp<uint32_t>(band_count, 1, ScopeTelemetryRecord::kMaxBands);
   if (clamped != scope_band_count_) {
     scope_band_count_ = clamped;

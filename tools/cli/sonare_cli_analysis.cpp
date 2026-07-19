@@ -16,7 +16,9 @@ int cmd_bpm(const CliArgs& args, const Audio& audio) {
 
 int cmd_key(const CliArgs& args, const Audio& audio) {
   KeyConfig config;
-  config.n_fft = args.n_fft == 2048 ? 4096 : args.n_fft;
+  // Keep the historical 4096-sample key-analysis default, but never rewrite
+  // an explicitly requested global --n-fft value (including 2048).
+  config.n_fft = args.n_fft_explicit ? args.n_fft : 4096;
   config.hop_length = args.hop_length;
   config.use_hpss = args.has("use-hpss") || args.has("hpss");
   config.loudness_weighted = args.has("loudness-weighted");
@@ -38,7 +40,7 @@ int cmd_key(const CliArgs& args, const Audio& audio) {
   int candidate_count = 0;
   if (args.has("candidates")) {
     const std::string value = args.get_string("candidates");
-    candidate_count = (value == "true") ? 5 : std::max(0, std::stoi(value));
+    candidate_count = (value == "true") ? 5 : std::max(0, args.get_int("candidates", 0));
     candidate_count = std::min(candidate_count, static_cast<int>(candidates.size()));
   }
 

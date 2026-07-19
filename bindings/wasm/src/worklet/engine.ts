@@ -787,11 +787,15 @@ export class SonareEngine {
   // Posts an out-of-band control-sync message to the worklet engine processor.
   // Sync messages use a string `type` so the worklet's message handler routes
   // them to receiveSync() (numeric `type` is reserved for SonareEngineCommandRecord).
-  private postSync(message: SonareEngineSyncMessage): void {
+  private postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void {
     if (this.destroyed) {
       return;
     }
-    this.realtimeNode.node.port.postMessage(message);
+    if (transfer && transfer.length > 0) {
+      this.realtimeNode.node.port.postMessage(message, transfer);
+    } else {
+      this.realtimeNode.node.port.postMessage(message);
+    }
   }
 
   // Collaborator surface handed to the mixer/routing free functions so they can
@@ -916,7 +920,7 @@ export class SonareEngine {
       clips: this.clips,
       midiClips: this.midiClips,
       allocateClipId: () => this.nextClipId++,
-      postSync: (message) => this.postSync(message),
+      postSync: (message, transfer) => this.postSync(message, transfer),
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       resolveTargetId: (target) => this.resolveTargetId(target),
     };

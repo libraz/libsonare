@@ -935,7 +935,9 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
   CHECK(result.project->tracks()[0].pan == -0.25f);
   CHECK(result.project->tracks()[0].automation_lanes[0].points()[0].value ==
         std::numeric_limits<float>::max());
-  CHECK(result.project->clips()[0].gain == std::numeric_limits<float>::lowest());
+  CHECK(result.project->clips()[0].gain == 0.0f);
+  REQUIRE_FALSE(result.diagnostics.empty());
+  CHECK(result.diagnostics[0].code == "clip_gain_clamped");
   CHECK(result.project->annotation().tempo_confidence == 0.8f);
   CHECK(result.project->annotation().onsets[0].confidence == 0.6f);
   REQUIRE(result.project->scene().strips.size() == 1);
@@ -954,6 +956,32 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
             .as_array()[0]["points"]
             .as_array()[0]["value"]
             .is_number());
+}
+
+TEST_CASE("project deserialize warns for raw clip PPQ outside the edit contract", "[serialize]") {
+  const auto result = project_from_json(
+      R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"start_ppq":-1,"length_ppq":0,"source_offset_ppq":-2}]})");
+  REQUIRE(result.ok());
+  REQUIRE(result.project->clips().size() == 1);
+  REQUIRE_FALSE(result.diagnostics.empty());
+  CHECK(result.diagnostics[0].code == "invalid_clip_ppq");
+}
+
+TEST_CASE("project deserialize bounds dangling-reference diagnostics", "[serialize]") {
+  std::string document = R"({"version":1,"clips":[)";
+  for (uint32_t id = 1; id <= 130; ++id) {
+    if (id > 1) document += ',';
+    document +=
+        "{\"id\":" + std::to_string(id) + ",\"track_id\":999,\"source_id\":999,\"length_ppq\":1}";
+  }
+  document += "]}";
+  const auto result = project_from_json(document);
+  REQUIRE(result.ok());
+  // 128 retained details plus one count-preserving summary, rather than two
+  // growing strings per malformed clip.
+  REQUIRE(result.diagnostics.size() == 129);
+  CHECK(result.diagnostics.back().code == "referential_diagnostics_truncated");
+  CHECK(result.diagnostics.back().message.find("132") != std::string::npos);
 }
 
 TEST_CASE("wrong-typed scene enum fields fall back instead of aborting the load", "[serialize]") {

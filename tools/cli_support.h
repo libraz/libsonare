@@ -49,6 +49,7 @@ struct CliArgs {
   bool help = false;
 
   int n_fft = 2048;
+  bool n_fft_explicit = false;
   int hop_length = 512;
   int n_mels = 128;
   float fmin = 0.0f;
@@ -75,7 +76,8 @@ class ArgParser {
  private:
   static bool try_parse_global_option(CliArgs& args, const std::string& arg, char* argv[], int& i,
                                       int argc);
-  static void parse_option(CliArgs& args, const std::string& key, char* argv[], int& i, int argc);
+  static void parse_option(CliArgs& args, const std::string& key, char* argv[], int& i, int argc,
+                           const std::string* inline_value = nullptr);
 };
 
 struct Stats {

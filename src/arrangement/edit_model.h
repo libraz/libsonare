@@ -476,13 +476,13 @@ class Project {
   /// across undo/redo so deep equality round-trips. Use the default (npos) to
   /// append.
   static constexpr size_t kAppend = static_cast<size_t>(-1);
-  bool insert_clip_raw(EditClip clip, size_t index = kAppend);
+  bool insert_clip_raw(EditClip clip, size_t index = kAppend, bool known_unique = false);
 
   /// Inserts a track verbatim, preserving its id and bypassing id allocation.
   /// Used by invert() to restore a removed track. Returns false if a track with
   /// the same id already exists. `index` restores the original ordering (see
   /// insert_clip_raw).
-  bool insert_track_raw(Track track, size_t index = kAppend);
+  bool insert_track_raw(Track track, size_t index = kAppend, bool known_unique = false);
 
   /// Returns the mutable source variant with `id`, or nullptr if absent. Used by
   /// ReplaceSource to swap a source ref in place (id is preserved by the caller).
@@ -492,7 +492,7 @@ class Project {
   /// allocation. Used by invert() to restore a previously registered source.
   /// Returns false if a source with the same id already exists. `index` restores
   /// the original ordering (see insert_clip_raw).
-  bool insert_source_raw(ClipSource source, size_t index = kAppend);
+  bool insert_source_raw(ClipSource source, size_t index = kAppend, bool known_unique = false);
 
   /// Returns the index of the track / clip / source with the given id, or kAppend
   /// when absent. Used by invert() to restore removed entries at their original

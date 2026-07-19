@@ -8,12 +8,14 @@ import sys
 from typing import Any
 
 from ._cli_common import (
+    EXIT_INVALID_FORMAT,
     EXIT_INVALID_PARAMETER,
     _apply_voice_sets,
     _emit_effect_result,
     _legacy_exit_codes,
     _load_voice_preset_pack,
     _resample,
+    _strict_json_dumps,
     _write_wav,
 )
 from ._cli_common import (
@@ -30,21 +32,32 @@ def cmd_hpss(args: argparse.Namespace) -> int:
     h_energy = sum(abs(x) for x in result.harmonic) / len(result.harmonic)
     p_energy = sum(abs(x) for x in result.percussive) / len(result.percussive)
 
+    harmonic_path = ""
+    percussive_path = ""
+    if args.output:
+        base = args.output[:-4] if args.output.lower().endswith(".wav") else args.output
+        harmonic_path = f"{base}_harmonic.wav"
+        percussive_path = f"{base}_percussive.wav"
+        _write_wav(harmonic_path, result.harmonic, result.sample_rate)
+        _write_wav(percussive_path, result.percussive, result.sample_rate)
+
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "length": result.length,
-                    "sample_rate": result.sample_rate,
-                    "harmonic_energy": round(h_energy, 6),
-                    "percussive_energy": round(p_energy, 6),
-                }
-            )
-        )
+        payload: dict[str, object] = {
+            "length": result.length,
+            "sample_rate": result.sample_rate,
+            "harmonic_energy": round(h_energy, 6),
+            "percussive_energy": round(p_energy, 6),
+        }
+        if harmonic_path:
+            payload["harmonic"] = harmonic_path
+            payload["percussive"] = percussive_path
+        print(_strict_json_dumps(payload))
     else:
         print(f"  HPSS: {result.length} samples")
         print(f"  Harmonic energy:   {h_energy:.6f}")
         print(f"  Percussive energy: {p_energy:.6f}")
+        if harmonic_path:
+            print(f"  Wrote: {harmonic_path}, {percussive_path}")
     return 0
 
 
@@ -152,7 +165,7 @@ def cmd_resample(args: argparse.Namespace) -> int:
         }
         if args.output:
             payload["output"] = args.output
-        print(json.dumps(payload))
+        print(_strict_json_dumps(payload))
     else:
         print(f"  Resample ({sr} -> {args.target_rate} Hz): {len(result)} samples")
         if args.output:
@@ -198,7 +211,7 @@ def cmd_voice_presets(args: argparse.Namespace) -> int:
 
     names = realtime_voice_changer_preset_names()
     if args.json:
-        print(json.dumps({"presets": names}))
+        print(_strict_json_dumps({"presets": names}))
     else:
         for name in names:
             print(name)
@@ -225,8 +238,15 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
         text_or_preset = _apply_voice_sets(text, args.set)
         text = json.dumps(text_or_preset) if isinstance(text_or_preset, dict) else text_or_preset
     result = validate_realtime_voice_changer_preset_json(text)
+    if not result.get("ok") or not result.get("normalizedJson"):
+        print(
+            _strict_json_dumps(result) if args.json else result.get("error", "invalid voice preset")
+        )
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_FORMAT
     print(
-        json.dumps(result) if args.json else result.get("normalizedJson", result.get("error", ""))
+        _strict_json_dumps(result)
+        if args.json
+        else result.get("normalizedJson", result.get("error", ""))
     )
     return 0
 
@@ -242,7 +262,7 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
 
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "rt60": round(result.rt60, 4),
                     "edt": round(result.edt, 4),
@@ -251,6 +271,10 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
                     "d50": result.d50,
                     "confidence": round(result.confidence, 4),
                     "is_blind": result.is_blind,
+                    "rt60_bands": [float(value) for value in result.rt60_bands],
+                    "edt_bands": [float(value) for value in result.edt_bands],
+                    "c50_bands": [float(value) for value in result.c50_bands],
+                    "c80_bands": [float(value) for value in result.c80_bands],
                 }
             )
         )
@@ -282,7 +306,7 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
     )
     if args.json:
         print(
-            json.dumps(
+            _strict_json_dumps(
                 {
                     "volume": round(est.volume, 3),
                     "length": round(est.length, 3),
@@ -326,7 +350,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
     _write_wav(args.output, result.rir, result.sample_rate)
     if args.json:
-        print(json.dumps({"output": args.output, "samples": len(result.rir)}))
+        print(_strict_json_dumps({"output": args.output, "samples": len(result.rir)}))
     else:
         print(f"  Saved RIR ({len(result.rir)} samples) to {args.output}")
     return 0
@@ -355,7 +379,7 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
     )
     _write_wav(args.output, result, sr)
     if args.json:
-        print(json.dumps({"output": args.output, "samples": len(result)}))
+        print(_strict_json_dumps({"output": args.output, "samples": len(result)}))
     else:
         print(f"  Saved morphed audio ({len(result)} samples) to {args.output}")
     return 0

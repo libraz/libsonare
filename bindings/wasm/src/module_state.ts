@@ -149,7 +149,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
       },
       construct(t, args, newTarget) {
         try {
-          return wrapNativeObject(Reflect.construct(t, args as unknown[], newTarget));
+          return wrapNativeObject(Reflect.construct(t, args as unknown[], newTarget)) as object;
         } catch (error) {
           return convert(error) as object;
         }

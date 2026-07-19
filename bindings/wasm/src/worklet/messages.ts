@@ -219,6 +219,30 @@ export interface SonareEngineSyncClipsDeltaMessage {
   removeIds: number[];
 }
 
+/** Begins a paged, pre-baked clip transfer. PCM pages follow in FIFO order. */
+export interface SonareEngineSyncClipPageProviderMessage {
+  type: 'syncClipPageProvider';
+  clipId: number;
+  clip: EngineClip;
+  numChannels: number;
+  numSamples: number;
+  pageFrames: number;
+}
+
+/** Supplies one bounded PCM page for a pending pre-baked clip transfer. */
+export interface SonareEngineSyncClipPageMessage {
+  type: 'syncClipPage';
+  clipId: number;
+  pageIndex: number;
+  channels: Float32Array[];
+}
+
+/** Makes a fully supplied paged clip visible to the audio engine. */
+export interface SonareEngineSyncClipPageCommitMessage {
+  type: 'syncClipPageCommit';
+  clipId: number;
+}
+
 export interface SonareEngineSyncMidiClipsMessage {
   type: 'syncMidiClips';
   clips: EngineMidiClipSchedule[];
@@ -433,6 +457,9 @@ export type SonareEngineInstrumentSyncMessage =
 export type SonareEngineSyncMessage =
   | SonareEngineSyncClipsMessage
   | SonareEngineSyncClipsDeltaMessage
+  | SonareEngineSyncClipPageProviderMessage
+  | SonareEngineSyncClipPageMessage
+  | SonareEngineSyncClipPageCommitMessage
   | SonareEngineSyncMidiClipsMessage
   | SonareEngineSyncMarkersMessage
   | SonareEngineSyncMetronomeMessage

@@ -237,6 +237,29 @@ TEST_CASE("all 25 presets process a deterministic fixture with valid output",
   }
 }
 
+TEST_CASE("all presets master a three-minute stereo fixture with bounded memory",
+          "[.][slow][memory][mastering][preset]") {
+  constexpr int sample_rate = 44100;
+  const auto left = create_preset_fixture(sample_rate, 3.0f * 60.0f);
+  std::vector<float> right = left;
+  for (size_t index = 0; index < right.size(); ++index) right[index] *= 0.83f;
+
+  const auto names = preset_names();
+  REQUIRE(names.size() == 25);
+  for (const auto& name : names) {
+    CAPTURE(name);
+    const auto result = master_audio_stereo(preset_from_string(name), left.data(), right.data(),
+                                            left.size(), sample_rate);
+    REQUIRE(result.left.size() == left.size());
+    REQUIRE(result.right.size() == right.size());
+    REQUIRE(std::isfinite(result.output_lufs));
+    REQUIRE(std::all_of(result.left.begin(), result.left.end(),
+                        [](float sample) { return std::isfinite(sample); }));
+    REQUIRE(std::all_of(result.right.begin(), result.right.end(),
+                        [](float sample) { return std::isfinite(sample); }));
+  }
+}
+
 TEST_CASE("preset_config(Streaming) is an intentional alias of Pop", "[mastering][preset]") {
   // make_streaming() deliberately returns make_pop() (see presets.cpp). This
   // test documents that contract: the two configs must be byte-for-byte equal

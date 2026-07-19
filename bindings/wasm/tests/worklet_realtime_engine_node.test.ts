@@ -508,6 +508,122 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    it('pre-bakes tempo-synced clips before posting them to the AudioWorklet', async () => {
+      const posted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(48000, 128);
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineChannelCount: 1,
+        nodeFactory: () =>
+          ({
+            port: {
+              postMessage: (message: unknown) => posted.push(message),
+              onmessage: undefined,
+            },
+            disconnect: () => undefined,
+          }) as unknown as AudioWorkletNode,
+      });
+      try {
+        engine.setTrackLanes([1]);
+        const source = new Float32Array(4096);
+        for (let i = 0; i < source.length; i++) {
+          source[i] = Math.sin(i * 0.02);
+        }
+        const clipId = engine.addClip(1, [source], 0, {
+          lengthSamples: 8192,
+          warpMode: 'tempo-sync',
+          warpAnchors: [
+            { warpSample: 0, sourceSample: 0 },
+            { warpSample: 2048, sourceSample: 1024 },
+            { warpSample: 8192, sourceSample: 4096 },
+          ],
+        });
+        const message = posted.find(
+          (
+            candidate,
+          ): candidate is {
+            type: 'syncClipsDelta';
+            upserts: Array<Record<string, unknown>>;
+          } =>
+            typeof candidate === 'object' &&
+            candidate !== null &&
+            (candidate as { type?: unknown }).type === 'syncClipsDelta',
+        );
+        const clip = message?.upserts.find((candidate) => candidate.id === clipId);
+        expect(clip).toMatchObject({
+          id: clipId,
+          warpMode: 'off',
+          clipOffsetSamples: 0,
+          lengthSamples: 8192,
+          loop: false,
+        });
+        expect(clip?.warpAnchors).toBeUndefined();
+        expect(clip?.channels).toHaveLength(1);
+        expect(clip?.channels?.[0]).toBeInstanceOf(Float32Array);
+        expect(clip?.channels?.[0]).toHaveLength(8192);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('sends long pre-baked clips as bounded transferable PCM pages', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineChannelCount: 1,
+        nodeFactory: () =>
+          ({
+            port: { postMessage: (message: unknown) => posted.push(message), onmessage: undefined },
+            disconnect: () => undefined,
+          }) as unknown as AudioWorkletNode,
+      });
+      try {
+        engine.setTrackLanes([1]);
+        const source = new Float32Array(8192).fill(0.25);
+        const clipId = engine.addClip(1, [source], 0, {
+          lengthSamples: 16_385,
+          warpMode: 'tempo-sync',
+          warpAnchors: [
+            { warpSample: 0, sourceSample: 0 },
+            { warpSample: 16_385, sourceSample: 8192 },
+          ],
+        });
+        const providerIndex = posted.findIndex(
+          (message) =>
+            typeof message === 'object' &&
+            message !== null &&
+            (message as { type?: unknown }).type === 'syncClipPageProvider',
+        );
+        const pages = posted.filter(
+          (
+            message,
+          ): message is { type: 'syncClipPage'; clipId: number; channels: Float32Array[] } =>
+            typeof message === 'object' &&
+            message !== null &&
+            (message as { type?: unknown }).type === 'syncClipPage',
+        );
+        const commitIndex = posted.findIndex(
+          (message) =>
+            typeof message === 'object' &&
+            message !== null &&
+            (message as { type?: unknown }).type === 'syncClipPageCommit',
+        );
+        expect(posted[providerIndex]).toMatchObject({
+          clipId,
+          numSamples: 16_385,
+          pageFrames: 4096,
+          clip: { warpMode: 'off', channels: undefined },
+        });
+        expect(pages).toHaveLength(5);
+        expect(pages.every((page) => page.clipId === clipId)).toBe(true);
+        expect(pages.every((page) => page.channels[0].length <= 4096)).toBe(true);
+        expect(commitIndex).toBeGreaterThan(providerIndex);
+      } finally {
+        engine.destroy();
+      }
+    });
+
     it('declares mixer lanes in explicit order via setTrackLanes', async () => {
       const posted: unknown[] = [];
       const engine = await SonareEngine.create(fakeContext(), {

@@ -280,6 +280,14 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
     seg.bpm = std::max(0.5 * (lo_b + hi_b), 1.0);
   }
 
+  // Re-anchoring changes the next segment's start BPM. Refresh every preceding
+  // ramp target afterwards so the two segments meet at exactly the same tempo.
+  for (size_t i = 0; i + 1 < segments.size(); ++i) {
+    if (segments[i].end_bpm > 0.0) {
+      segments[i].end_bpm = segments[i + 1].bpm;
+    }
+  }
+
   if (!segments.empty()) segments.front().start_sample = 0.0;
   return segments;
 }

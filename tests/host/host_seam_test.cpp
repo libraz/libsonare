@@ -617,6 +617,19 @@ TEST_CASE("fixed MIDI I/O implementations preserve order and telemetry", "[host]
   REQUIRE(output.dropped_count() == 0);
 }
 
+TEST_CASE("fixed MIDI I/O clear discards a prior session's queued events", "[host]") {
+  const Ump on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  FixedMidiInputSource<2> input;
+  REQUIRE(input.push_event_at_render_frame(on, 99999));
+  input.clear();
+  REQUIRE(input.pending_count() == 0);
+
+  FixedMidiOutputSink<2> output;
+  REQUIRE(output.send(MidiEvent{99999, on}));
+  output.clear();
+  REQUIRE(output.queued_count() == 0);
+}
+
 TEST_CASE("destination-tagged MIDI output queue preserves order, tags, and telemetry", "[host]") {
   using sonare::host::ExternalMidiRecord;
   using sonare::host::FixedExternalMidiOutputQueue;

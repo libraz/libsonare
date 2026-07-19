@@ -7,6 +7,7 @@ import {
   masteringChain,
   masteringProcess,
   normalize,
+  noteMove,
   noteStretch,
   percussive,
   pitchCorrectToMidi,
@@ -330,6 +331,10 @@ export class Audio {
 
   noteStretch(options: NoteStretchOptions = {}): Float32Array {
     return noteStretch(this._samples, this._sampleRate, options);
+  }
+
+  noteMove(options: import('./public_types.js').NoteMoveOptions = {}): Float32Array {
+    return noteMove(this._samples, this._sampleRate, options);
   }
 
   voiceChange(options: VoiceChangeOptions = {}): Float32Array {

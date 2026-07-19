@@ -1,6 +1,7 @@
 import { getSonareModule } from './module_state';
 import type {
   HpssResult,
+  NoteMoveOptions,
   NoteStretchOptions,
   PitchCorrectOptions,
   SpectralEditOptions,
@@ -68,6 +69,10 @@ export interface PitchCorrectTimevaryingRequest extends PitchCorrectOptions {
 }
 
 export interface NoteStretchRequest extends NoteStretchOptions, ValidateOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+export interface NoteMoveRequest extends NoteMoveOptions, ValidateOptions {
   samples: Float32Array;
   sampleRate?: number;
 }
@@ -424,6 +429,29 @@ export function noteStretch(
     request.onsetSample ?? 0,
     request.offsetSample ?? 0,
     request.stretchRatio ?? 1.0,
+  );
+}
+
+/** Move a note region to a new onset without changing its duration. */
+export function noteMove(request: NoteMoveRequest): Float32Array;
+export function noteMove(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: NoteMoveOptions & ValidateOptions,
+): Float32Array;
+export function noteMove(
+  samples: Float32Array | NoteMoveRequest,
+  sampleRate = 22050,
+  options: NoteMoveOptions & ValidateOptions = {},
+): Float32Array {
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  assertSamples('noteMove', request.samples, request.validate !== false);
+  return requireModule().noteMove(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.onsetSample ?? 0,
+    request.offsetSample ?? 0,
+    request.targetOnsetSample ?? 0,
   );
 }
 
