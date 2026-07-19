@@ -3,6 +3,7 @@
 /// @file tempo_map.h
 /// @brief Piecewise tempo (constant or linearly-ramped) and time-signature map.
 
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -21,6 +22,8 @@ inline constexpr double kMaxPublicPpq = 1.0e12;
 
 inline bool valid_public_ppq(double ppq) noexcept { return ppq >= 0.0 && ppq <= kMaxPublicPpq; }
 
+inline bool valid_public_tempo(double bpm) noexcept { return std::isfinite(bpm) && bpm > 0.0; }
+
 struct TempoSegment {
   double start_ppq = 0.0;
   double bpm = constants::kDefaultBpm;
@@ -35,6 +38,12 @@ struct TempoSegment {
   double end_ppq = 0.0;
 };
 
+inline bool valid_public_tempo_segment(const TempoSegment& segment) noexcept {
+  return std::isfinite(segment.start_ppq) && valid_public_ppq(segment.start_ppq) &&
+         valid_public_tempo(segment.bpm) && std::isfinite(segment.end_bpm) &&
+         segment.end_bpm >= 0.0;
+}
+
 struct TimeSignature {
   int numerator = 4;
   int denominator = 4;
@@ -46,6 +55,11 @@ struct TimeSignatureSegment {
   uint8_t clocks_per_metronome_click = 24;
   uint8_t thirty_seconds_per_quarter = 8;
 };
+
+inline bool valid_public_time_signature_segment(const TimeSignatureSegment& segment) noexcept {
+  return std::isfinite(segment.start_ppq) && valid_public_ppq(segment.start_ppq) &&
+         segment.time_sig.numerator > 0 && segment.time_sig.denominator > 0;
+}
 
 struct BarBeat {
   int64_t bar = 0;

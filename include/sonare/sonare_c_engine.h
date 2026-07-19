@@ -133,6 +133,11 @@ SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint
                                               const SonareAutomationPoint* points,
                                               size_t point_count);
 SonareError sonare_engine_automation_lane_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Atomically replaces all realtime-engine markers.
+/// @details Marker ids must be positive and unique, and PPQ positions must be
+///   finite and non-negative. An empty list clears the marker map. Any invalid
+///   entry rejects the whole list and leaves the previous markers byte-for-byte
+///   unchanged.
 SonareError sonare_engine_set_markers(SonareRealtimeEngine* engine,
                                       const SonareEngineMarker* markers, size_t marker_count);
 SonareError sonare_engine_marker_count(SonareRealtimeEngine* engine, size_t* out_count);

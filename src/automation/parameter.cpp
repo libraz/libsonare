@@ -10,7 +10,6 @@ bool ParameterRegistry::add(ParameterInfo info) {
   const auto found = std::find_if(parameters_.begin(), parameters_.end(),
                                   [&](const ParameterInfo& item) { return item.id == info.id; });
   if (found != parameters_.end()) {
-    *found = info;
     return false;
   }
   parameters_.push_back(info);

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,23 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
 
 uint32_t OptionalUint32(const Napi::Object& obj, const char* key, uint32_t fallback) {
   return obj.Has(key) ? obj.Get(key).As<Napi::Number>().Uint32Value() : fallback;
+}
+
+bool ReadPositiveUint32(Napi::Env env, const Napi::Value& value, const char* label, uint32_t* out) {
+  if (out == nullptr || !value.IsNumber()) {
+    Napi::TypeError::New(env, std::string(label) + " must be a number")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || number <= 0.0 || std::floor(number) != number ||
+      number > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+    Napi::RangeError::New(env, std::string(label) + " must be a positive uint32 integer")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = static_cast<uint32_t>(number);
+  return true;
 }
 
 // Reads a MIDI byte argument, rejecting a value that would silently wrap through
@@ -506,9 +524,15 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
   std::vector<SonareEngineMarker> markers;
   markers.reserve(input.Length());
   for (uint32_t i = 0; i < input.Length(); ++i) {
+    if (!input.Get(i).IsObject()) {
+      Napi::TypeError::New(env, "marker must be an object").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
     Napi::Object obj = input.Get(i).As<Napi::Object>();
     SonareEngineMarker marker{};
-    marker.id = obj.Get("id").As<Napi::Number>().Uint32Value();
+    if (!ReadPositiveUint32(env, obj.Get("id"), "marker id", &marker.id)) {
+      return env.Undefined();
+    }
     marker.kind = static_cast<uint8_t>(IntProperty(obj, "kind", SONARE_MARKER_KIND_MARKER));
     marker.key_fifths = static_cast<int8_t>(IntProperty(obj, "keyFifths", 0));
     marker.key_minor = BoolProperty(obj, "keyMinor", false) ? 1 : 0;

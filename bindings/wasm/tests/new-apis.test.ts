@@ -698,6 +698,9 @@ describe('v1.2 feature additions (WASM)', () => {
 
     it('rejects non-finite automation breakpoints like the C ABI oracle', () => {
       const engine = new RealtimeEngine(48000, 128);
+      // Seed a valid lane so failed replacements must leave published state intact.
+      engine.setAutomationLane(0x4d580001, [{ ppq: 0, value: -6, curveToNext: 0 }]);
+      expect(engine.automationLaneCount()).toBe(1);
       // Non-finite ppq is rejected.
       expect(() =>
         engine.setAutomationLane(0x4d580001, [{ ppq: Number.NaN, value: -6, curveToNext: 0 }]),
@@ -708,10 +711,7 @@ describe('v1.2 feature additions (WASM)', () => {
           { ppq: 0, value: Number.POSITIVE_INFINITY, curveToNext: 0 },
         ]),
       ).toThrow();
-      // A finite lane is accepted.
-      expect(() =>
-        engine.setAutomationLane(0x4d580001, [{ ppq: 0, value: -6, curveToNext: 0 }]),
-      ).not.toThrow();
+      expect(engine.automationLaneCount()).toBe(1);
       engine.destroy();
     });
 
@@ -735,6 +735,65 @@ describe('v1.2 feature additions (WASM)', () => {
           defaultCurve: 5,
         }),
       ).toThrow();
+      engine.destroy();
+    });
+
+    it('preserves parameters and markers after transactional setter failures', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      const parameter = {
+        id: 17,
+        name: 'original gain',
+        unit: 'dB',
+        minValue: -60,
+        maxValue: 12,
+        defaultValue: -3,
+        rtSafe: true,
+        defaultCurve: 0,
+      };
+      engine.addParameter(parameter);
+      expect(() =>
+        engine.addParameter({
+          ...parameter,
+          name: 'replacement mode',
+          unit: 'steps',
+          minValue: 0,
+          maxValue: 3,
+          defaultValue: 2,
+          rtSafe: false,
+          defaultCurve: 2,
+        }),
+      ).toThrow();
+      expect(engine.parameterInfo(17)).toEqual(parameter);
+
+      engine.setMarkers([
+        { id: 11, ppq: 1, name: 'intro' },
+        { id: 12, ppq: 2, name: 'chorus' },
+      ]);
+      expect(() =>
+        engine.setMarkers([
+          { id: 21, ppq: 0.5, name: 'verse' },
+          { id: 22, ppq: Number.NaN, name: 'bridge' },
+        ]),
+      ).toThrow();
+      expect(engine.markerCount()).toBe(2);
+      expect(engine.markerByIndex(0)).toEqual({
+        id: 11,
+        ppq: 1,
+        name: 'intro',
+        kind: 0,
+        keyFifths: 0,
+        keyMinor: false,
+      });
+      expect(engine.marker(12).name).toBe('chorus');
+      expect(() => engine.setMarkers([{ id: 0, ppq: 3, name: 'invalid id' }])).toThrow();
+      expect(() =>
+        engine.setMarkers([
+          { id: 31, ppq: 3, name: 'duplicate a' },
+          { id: 31, ppq: 4, name: 'duplicate b' },
+        ]),
+      ).toThrow();
+      expect(engine.markerCount()).toBe(2);
+      expect(engine.marker(11).name).toBe('intro');
       engine.destroy();
     });
 
@@ -802,6 +861,19 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.process([new Float32Array(128), new Float32Array(128)]);
       const state = engine.getTransportState();
       expect(state.samplePosition).toBe(192000 + 128);
+      engine.destroy();
+    });
+
+    it('rejects invalid tempo without replacing the active tempo map', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setTempo(60);
+      expect(engine.sampleAtPpq(1)).toBe(48000);
+      for (const invalid of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(() => engine.setTempo(invalid)).toThrow();
+        expect(engine.sampleAtPpq(1)).toBe(48000);
+      }
+      expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: Number.NaN }])).toThrow();
+      expect(engine.sampleAtPpq(1)).toBe(48000);
       engine.destroy();
     });
 

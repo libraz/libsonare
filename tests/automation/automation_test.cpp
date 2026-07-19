@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -7,6 +8,7 @@
 #include "automation/parameter.h"
 #include "mixing/automation_lane.h"
 #include "util/automation_curve.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -92,6 +94,25 @@ TEST_CASE("AutomationLane set_points keeps the first of duplicate-ppq points det
                    {0.0, 0.1f, sonare::automation::CurveType::Linear}});
   REQUIRE(lane.points().size() == 3);
   REQUIRE_THAT(lane.value_at(1.0), WithinAbs(0.25f, 1.0e-6f));
+}
+
+TEST_CASE("AutomationLane rejects invalid breakpoints without replacing its points",
+          "[automation][numeric]") {
+  sonare::automation::AutomationLane lane(1);
+  const std::vector<sonare::automation::Breakpoint> original{
+      {0.0, 0.25f, sonare::automation::CurveType::Hold},
+      {1.0, 0.75f, sonare::automation::CurveType::Linear}};
+  lane.set_points(original);
+
+  REQUIRE_THROWS_AS(lane.set_points({{std::numeric_limits<double>::quiet_NaN(), 0.5f,
+                                      sonare::automation::CurveType::Linear}}),
+                    sonare::SonareException);
+  REQUIRE(lane.points() == original);
+
+  REQUIRE_THROWS_AS(lane.set_points({{0.0, std::numeric_limits<float>::infinity(),
+                                      sonare::automation::CurveType::Linear}}),
+                    sonare::SonareException);
+  REQUIRE(lane.points() == original);
 }
 
 TEST_CASE("Engine and mixer automation lanes share identical curve shapes", "[automation]") {
@@ -425,4 +446,23 @@ TEST_CASE("ParameterRegistry enumerates stable metadata", "[automation]") {
   REQUIRE(info.name == std::string("gain"));
   REQUIRE(registry.parameter_is_realtime_safe(20));
   REQUIRE_FALSE(registry.parameter_is_realtime_safe(10));
+}
+
+TEST_CASE("ParameterRegistry duplicate add leaves existing metadata unchanged", "[automation]") {
+  sonare::automation::ParameterRegistry registry;
+  REQUIRE(registry.add(
+      {20, "gain", "dB", -60.0f, 12.0f, 0.0f, true, sonare::automation::CurveType::Linear}));
+
+  REQUIRE_FALSE(
+      registry.add({20, "mode", "", 0.0f, 3.0f, 2.0f, false, sonare::automation::CurveType::Hold}));
+
+  sonare::automation::ParameterInfo info{};
+  REQUIRE(registry.parameter_info(20, &info));
+  CHECK(info.name == std::string("gain"));
+  CHECK(info.unit == std::string("dB"));
+  CHECK(info.min_value == -60.0f);
+  CHECK(info.max_value == 12.0f);
+  CHECK(info.default_value == 0.0f);
+  CHECK(info.rt_safe);
+  CHECK(info.default_curve == sonare::automation::CurveType::Linear);
 }

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <limits>
 
+#include "util/exception.h"
+
 namespace sonare::automation {
 namespace {
 
@@ -18,6 +20,10 @@ float interpolate(const Breakpoint& a, const Breakpoint& b, double ppq) noexcept
 AutomationLane::AutomationLane(uint32_t target_param_id) : target_param_id_(target_param_id) {}
 
 void AutomationLane::set_points(std::vector<Breakpoint> points) {
+  for (const Breakpoint& point : points) {
+    SONARE_CHECK_MSG(valid_public_breakpoint(point), ErrorCode::InvalidParameter,
+                     "automation breakpoint values must be finite and curve must be valid");
+  }
   // stable_sort so the duplicate-ppq policy below ("first occurrence in the
   // supplied list wins") is deterministic; std::sort leaves the relative order
   // of equal-ppq points unspecified.

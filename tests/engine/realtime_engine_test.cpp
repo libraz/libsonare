@@ -5,12 +5,14 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <vector>
 
 #include "engine/clip_player.h"
 #include "engine/engine_controller.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -471,6 +473,20 @@ TEST_CASE("RealtimeEngine schedules clips from the latest tempo snapshot", "[eng
   REQUIRE(left[1] == 0.5f);
   REQUIRE(left[2] == 0.25f);
   REQUIRE(left[3] == 0.125f);
+}
+
+TEST_CASE("RealtimeEngine rejects invalid tempo without replacing the active map",
+          "[engine][realtime][numeric]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128);
+  engine.set_tempo(60.0);
+  REQUIRE(engine.sample_at_ppq(1.0) == 48000);
+
+  for (double invalid : {0.0, -1.0, std::numeric_limits<double>::quiet_NaN(),
+                         std::numeric_limits<double>::infinity()}) {
+    REQUIRE_THROWS_AS(engine.set_tempo(invalid), sonare::SonareException);
+    REQUIRE(engine.sample_at_ppq(1.0) == 48000);
+  }
 }
 
 #if defined(SONARE_WITH_MIXING)

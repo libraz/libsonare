@@ -9,6 +9,7 @@
 
 #include "c_api/sonare_c_engine_internal.h"
 #include "sonare_c_test_helpers.h"
+#include "util/resource_limits.h"
 
 namespace {
 
@@ -230,6 +231,46 @@ TEST_CASE("sonare_engine_bounce_offline validates the channel count against a la
   REQUIRE(sonare_engine_bounce_offline(engine, &options, &ok) == SONARE_OK);
   REQUIRE(ok.num_channels == 6);
   sonare_free_bounce_result(&ok);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("engine-owned offline results reject shapes above the allocation budget",
+          "[c_api][engine]") {
+  const sonare::resource::EngineOfflineLimits tiny_limits{/*max_total_samples=*/100,
+                                                          /*max_peak_bytes=*/3000};
+  REQUIRE(sonare::resource::engine_offline_shape_fits(10, 2, 3, tiny_limits));
+  REQUIRE_FALSE(sonare::resource::engine_offline_shape_fits(51, 2, 1, tiny_limits));
+  REQUIRE(sonare::resource::engine_bounce_shape_fits(20, 2, 10, 20, tiny_limits));
+  REQUIRE_FALSE(sonare::resource::engine_bounce_shape_fits(60, 2, 10, 20, tiny_limits));
+
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareEngineBounceOptions bounce{};
+  REQUIRE(sonare_engine_bounce_options_default(&bounce) == SONARE_OK);
+  bounce.total_frames = std::numeric_limits<int64_t>::max();
+  SonareEngineBounceResult bounce_result{};
+  bounce_result.interleaved = reinterpret_cast<float*>(0x1);
+  bounce_result.sample_count = 123;
+  REQUIRE(sonare_engine_bounce_offline(engine, &bounce, &bounce_result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_result.interleaved == nullptr);
+  REQUIRE(bounce_result.sample_count == 0u);
+
+  SonareEngineFreezeOptions freeze{};
+  freeze.total_frames = std::numeric_limits<int64_t>::max();
+  freeze.block_size = 128;
+  freeze.num_channels = 2;
+  freeze.gain = 1.0f;
+  SonareEngineFreezeResult freeze_result{};
+  freeze_result.clip_id = 123;
+  REQUIRE(sonare_engine_freeze_offline(engine, &freeze, &freeze_result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(freeze_result.clip_id == 0u);
+  REQUIRE(freeze_result.frames == 0);
 
   sonare_engine_destroy(engine);
 }
@@ -1788,6 +1829,46 @@ TEST_CASE("sonare_engine_set_markers rejects an invalid list without dangling th
   REQUIRE(std::strcmp(marker_out.name, "intro") == 0);
   REQUIRE(sonare_engine_marker(engine, 12, &marker_out) == SONARE_OK);
   REQUIRE(std::strcmp(marker_out.name, "chorus") == 0);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine duplicate parameter rejection preserves the original metadata",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareParameterInfo original{};
+  original.id = 17;
+  std::strncpy(original.name, "original gain", sizeof(original.name) - 1);
+  std::strncpy(original.unit, "dB", sizeof(original.unit) - 1);
+  original.min_value = -60.0f;
+  original.max_value = 12.0f;
+  original.default_value = -3.0f;
+  original.rt_safe = 1;
+  original.default_curve = 0;
+  REQUIRE(sonare_engine_add_parameter(engine, &original) == SONARE_OK);
+
+  SonareParameterInfo duplicate{};
+  duplicate.id = original.id;
+  std::strncpy(duplicate.name, "replacement mode", sizeof(duplicate.name) - 1);
+  std::strncpy(duplicate.unit, "steps", sizeof(duplicate.unit) - 1);
+  duplicate.min_value = 0.0f;
+  duplicate.max_value = 3.0f;
+  duplicate.default_value = 2.0f;
+  duplicate.default_curve = 2;
+  REQUIRE(sonare_engine_add_parameter(engine, &duplicate) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareParameterInfo out{};
+  REQUIRE(sonare_engine_parameter_info(engine, original.id, &out) == SONARE_OK);
+  CHECK(std::strcmp(out.name, "original gain") == 0);
+  CHECK(std::strcmp(out.unit, "dB") == 0);
+  CHECK(out.min_value == original.min_value);
+  CHECK(out.max_value == original.max_value);
+  CHECK(out.default_value == original.default_value);
+  CHECK(out.rt_safe == original.rt_safe);
+  CHECK(out.default_curve == original.default_curve);
 
   sonare_engine_destroy(engine);
 }

@@ -3,6 +3,7 @@
 /// @file automation_lane.h
 /// @brief Persistent PPQ breakpoint automation lane.
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -20,6 +21,14 @@ struct Breakpoint {
   }
   bool operator!=(const Breakpoint& o) const noexcept { return !(*this == o); }
 };
+
+inline bool valid_public_breakpoint(double ppq, float value, int curve_ordinal) noexcept {
+  return std::isfinite(ppq) && std::isfinite(value) && curve_ordinal >= 0 && curve_ordinal <= 3;
+}
+
+inline bool valid_public_breakpoint(const Breakpoint& point) noexcept {
+  return valid_public_breakpoint(point.ppq, point.value, static_cast<int>(point.curve_to_next));
+}
 
 class AutomationLane {
  public:

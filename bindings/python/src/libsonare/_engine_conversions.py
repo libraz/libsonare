@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import operator
 from collections.abc import Mapping, Sequence
 
 from ._runtime import (
@@ -95,8 +96,14 @@ def _parameter_from_c(raw: SonareParameterInfo) -> ParameterInfo:
 
 
 def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
+    try:
+        marker_id = operator.index(marker.id)
+    except TypeError as exc:
+        raise ValueError("marker id must be a positive uint32 integer") from exc
+    if marker_id <= 0 or marker_id > 0xFFFFFFFF:
+        raise ValueError("marker id must be a positive uint32 integer")
     raw = SonareEngineMarker()
-    raw.id = int(marker.id)
+    raw.id = marker_id
     raw.kind = int(marker.kind) & 0xFF
     raw.key_fifths = int(marker.key_fifths)
     raw.key_minor = 1 if marker.key_minor else 0

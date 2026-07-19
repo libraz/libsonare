@@ -29,18 +29,27 @@ void RealtimeEngineWasm::addParameter(val info) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter id is reserved by the engine");
   }
-  parameter_strings_.push_back(stringProperty(info, "name", ""));
-  parameter_strings_.push_back(stringProperty(info, "unit", ""));
+  const std::string name = stringProperty(info, "name", "");
+  const std::string unit = stringProperty(info, "unit", "");
   sonare::automation::ParameterInfo parameter{};
   parameter.id = id;
-  parameter.name = parameter_strings_[parameter_strings_.size() - 2].c_str();
-  parameter.unit = parameter_strings_[parameter_strings_.size() - 1].c_str();
   parameter.min_value = floatProperty(info, "minValue", 0.0f);
   parameter.max_value = floatProperty(info, "maxValue", 1.0f);
   parameter.default_value = floatProperty(info, "defaultValue", 0.0f);
   parameter.rt_safe = boolProperty(info, "rtSafe", true);
   parameter.default_curve = automationCurveFromInt(intProperty(info, "defaultCurve", 1));
+  sonare::automation::ParameterInfo existing{};
+  if (parameters_.parameter_info(id, &existing)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "duplicate parameter id");
+  }
+
+  parameter_strings_.push_back(name);
+  parameter_strings_.push_back(unit);
+  parameter.name = parameter_strings_[parameter_strings_.size() - 2].c_str();
+  parameter.unit = parameter_strings_[parameter_strings_.size() - 1].c_str();
   if (!parameters_.add(parameter)) {
+    parameter_strings_.pop_back();
+    parameter_strings_.pop_back();
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "duplicate parameter id");
   }
   publishParameterMetadata();
@@ -90,12 +99,12 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
     const double ppq = objectProperty(point, "ppq").as<double>();
     const float value = floatProperty(point, "value", 0.0f);
     // Match the C ABI: reject non-finite automation breakpoints (WASM bypasses the C-ABI guard).
-    if (!std::isfinite(ppq) || !std::isfinite(value)) {
+    const int curve = intProperty(point, "curveToNext", 0);
+    if (!sonare::automation::valid_public_breakpoint(ppq, value, curve)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "automation breakpoint ppq and value must be finite");
     }
-    breakpoints.push_back(
-        {ppq, value, automationCurveFromInt(intProperty(point, "curveToNext", 0))});
+    breakpoints.push_back({ppq, value, automationCurveFromInt(curve)});
   }
   lane.set_points(std::move(breakpoints));
   bool replaced = false;

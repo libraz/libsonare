@@ -3,6 +3,10 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
 #include "realtime_engine_wasm.h"
 
 void RealtimeEngineWasm::play(int64_t render_frame) {
@@ -69,9 +73,7 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
       segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       segment.bpm = doubleProperty(entry, "bpm", 0.0);
       segment.end_bpm = doubleProperty(entry, "endBpm", 0.0);
-      if (!std::isfinite(segment.start_ppq) || segment.start_ppq < 0.0 ||
-          !std::isfinite(segment.bpm) || segment.bpm <= 0.0 ||
-          (segment.end_bpm != 0.0 && (!std::isfinite(segment.end_bpm) || segment.end_bpm <= 0.0))) {
+      if (!sonare::transport::valid_public_tempo_segment(segment)) {
         throw sonare::SonareException(
             sonare::ErrorCode::InvalidParameter,
             "setTempoSegments: segments require finite startPpq and positive bpm/endBpm");
@@ -102,8 +104,7 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
       segment.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       segment.time_sig.numerator = intProperty(entry, "numerator", 0);
       segment.time_sig.denominator = intProperty(entry, "denominator", 0);
-      if (!std::isfinite(segment.start_ppq) || segment.start_ppq < 0.0 ||
-          segment.time_sig.numerator <= 0 || segment.time_sig.denominator <= 0) {
+      if (!sonare::transport::valid_public_time_signature_segment(segment)) {
         throw sonare::SonareException(
             sonare::ErrorCode::InvalidParameter,
             "setTimeSignatureSegments: segments require finite startPpq and positive signature");
@@ -133,21 +134,46 @@ void RealtimeEngineWasm::setLoop(double start_ppq, double end_ppq, bool enabled)
 }
 
 void RealtimeEngineWasm::setMarkers(val markers) {
-  marker_strings_.clear();
+  std::deque<std::string> staged_strings;
+  static_assert(noexcept(marker_strings_.swap(staged_strings)),
+                "marker backing-store commit must not throw");
   std::vector<sonare::transport::Marker> prepared;
   const int count = markers["length"].as<int>();
   prepared.reserve(static_cast<size_t>(count));
+  std::vector<uint32_t> ids;
+  ids.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {
     val marker = markers[i];
-    marker_strings_.push_back(stringProperty(marker, "name", ""));
-    prepared.push_back({objectProperty(marker, "ppq").as<double>(),
-                        static_cast<uint32_t>(intProperty(marker, "id", i + 1)),
-                        marker_strings_.back().c_str(),
+    const double ppq = objectProperty(marker, "ppq").as<double>();
+    const double id_value = doubleProperty(marker, "id", static_cast<double>(i + 1));
+    if (!std::isfinite(ppq) || ppq < 0.0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setMarkers: marker ppq must be finite and non-negative");
+    }
+    if (!std::isfinite(id_value) || id_value <= 0.0 || std::trunc(id_value) != id_value ||
+        id_value > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setMarkers: marker id must be a positive uint32 integer");
+    }
+    const uint32_t id = static_cast<uint32_t>(id_value);
+    if (std::find(ids.begin(), ids.end(), id) != ids.end()) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setMarkers: marker ids must be unique");
+    }
+    ids.push_back(id);
+    staged_strings.push_back(stringProperty(marker, "name", ""));
+    prepared.push_back({ppq, id, staged_strings.back().c_str(),
                         static_cast<uint8_t>(intProperty(marker, "kind", 0)),
                         static_cast<int8_t>(intProperty(marker, "keyFifths", 0)),
                         boolProperty(marker, "keyMinor", false)});
   }
+  // Publish while both the old backing store and the staged strings are alive.
+  // If snapshot allocation throws, the engine still references the untouched
+  // old store. Once publication succeeds, deque::swap is noexcept and preserves
+  // all pointers/references to its elements, so the published Marker::name
+  // pointers remain valid as ownership moves into marker_strings_.
   engine_.set_markers(std::move(prepared));
+  marker_strings_.swap(staged_strings);
 }
 
 int RealtimeEngineWasm::markerCount() const { return static_cast<int>(engine_.marker_count()); }

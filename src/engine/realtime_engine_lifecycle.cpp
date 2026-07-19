@@ -5,6 +5,7 @@
 
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
+#include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare::engine {
@@ -214,22 +215,35 @@ transport::TransportState RealtimeEngine::transport_state_control() const noexce
 }
 
 void RealtimeEngine::set_tempo(double bpm) {
+  SONARE_CHECK_MSG(transport::valid_public_tempo(bpm), ErrorCode::InvalidParameter,
+                   "tempo must be finite and positive");
   control_tempo_segments_ = {{0.0, bpm, 0.0}};
   publish_tempo_map_snapshot();
 }
 
 void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> segments) {
+  for (const transport::TempoSegment& segment : segments) {
+    SONARE_CHECK_MSG(transport::valid_public_tempo_segment(segment), ErrorCode::InvalidParameter,
+                     "tempo segments contain invalid timeline or BPM values");
+  }
   control_tempo_segments_ = std::move(segments);
   publish_tempo_map_snapshot();
 }
 
 void RealtimeEngine::set_time_signature(int numerator, int denominator) {
+  SONARE_CHECK_MSG(numerator > 0 && denominator > 0, ErrorCode::InvalidParameter,
+                   "time signature values must be positive");
   control_time_signatures_ = {{0.0, {numerator, denominator}}};
   publish_tempo_map_snapshot();
 }
 
 void RealtimeEngine::set_time_signature_segments(
     std::vector<transport::TimeSignatureSegment> segments) {
+  for (const transport::TimeSignatureSegment& segment : segments) {
+    SONARE_CHECK_MSG(transport::valid_public_time_signature_segment(segment),
+                     ErrorCode::InvalidParameter,
+                     "time signature segments contain invalid timeline or signature values");
+  }
   control_time_signatures_ = std::move(segments);
   publish_tempo_map_snapshot();
 }
