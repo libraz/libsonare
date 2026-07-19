@@ -861,6 +861,101 @@ TEST_CASE("present invalid project integer and enum fields report invalid_format
   CHECK(edge.project->time_signatures()[0].time_sig.numerator == std::numeric_limits<int>::max());
 }
 
+TEST_CASE("project deserialize rejects float narrowing overflow with a field path", "[serialize]") {
+  struct InvalidFloatField {
+    const char* document;
+    const char* field_path;
+  };
+  const std::vector<InvalidFloatField> documents = {
+      {R"({"version":1,"tracks":[{"id":1,"gain":1e39}]})", "tracks[].gain"},
+      {R"({"version":1,"tracks":[{"id":1,"pan":-1e39}]})", "tracks[].pan"},
+      {R"({"version":1,"tracks":[{"id":1,"automation_lanes":[{"points":[{"value":1e39}]}]}]})",
+       "tracks[].automation_lanes[].points[].value"},
+      {R"({"version":1,"clips":[{"id":1,"gain":-1e39}]})", "clips[].gain"},
+      {R"({"version":1,"annotation":{"tempo_confidence":1e39}})", "annotation.tempo_confidence"},
+      {R"({"version":1,"annotation":{"onsets":[{"confidence":-1e39}]}})",
+       "annotation.onsets[].confidence"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"inputTrimDb":1e39}]}})",
+       "scene.strips[].inputTrimDb"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"faderDb":-1e39}]}})",
+       "scene.strips[].faderDb"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"vcaOffsetDb":1e39}]}})",
+       "scene.strips[].vcaOffsetDb"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"pan":-1e39}]}})", "scene.strips[].pan"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"width":1e39}]}})", "scene.strips[].width"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"dualPanLeft":-1e39}]}})",
+       "scene.strips[].dualPanLeft"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"dualPanRight":1e39}]}})",
+       "scene.strips[].dualPanRight"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"surroundPan":{"azimuth":1e39}}]}})",
+       "scene.strips[].surroundPan.azimuth"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"surroundPan":{"elevation":-1e39}}]}})",
+       "scene.strips[].surroundPan.elevation"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"surroundPan":{"divergence":1e39}}]}})",
+       "scene.strips[].surroundPan.divergence"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"surroundPan":{"lfe":-1e39}}]}})",
+       "scene.strips[].surroundPan.lfe"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"surroundPan":{"distance":1e39}}]}})",
+       "scene.strips[].surroundPan.distance"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"sends":[{"sendDb":-1e39}]}]}})",
+       "scene.strips[].sends[].sendDb"},
+      {R"({"version":1,"scene":{"version":1,"buses":[{"inputTrimDb":1e39}]}})",
+       "scene.buses[].inputTrimDb"},
+      {R"({"version":1,"scene":{"version":1,"buses":[{"width":-1e39}]}})", "scene.buses[].width"},
+      {R"({"version":1,"scene":{"version":1,"vcaGroups":[{"gainDb":1e39}]}})",
+       "scene.vcaGroups[].gainDb"},
+  };
+
+  for (const auto& test : documents) {
+    INFO(test.document);
+    const auto result = project_from_json(test.document);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
+    CHECK(result.diagnostics.back().message.find(test.field_path) != std::string::npos);
+  }
+}
+
+TEST_CASE("project deserialize accepts finite float boundaries and ordinary values",
+          "[serialize]") {
+  constexpr const char* kFloatMax = "3.4028234663852886e38";
+  const std::string document =
+      std::string(
+          R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":0.75,"pan":-0.25,"automation_lanes":[{"points":[{"value":)") +
+      kFloatMax + R"(}]}]}],"clips":[{"id":1,"track_id":1,"source_id":1,"gain":-)" + kFloatMax +
+      R"(}],"annotation":{"tempo_confidence":0.8,"onsets":[{"confidence":0.6}]},"scene":{"version":1,"strips":[{"id":"s","inputTrimDb":-3.5,"faderDb":2.25,"vcaOffsetDb":0.5,"pan":0.1,"width":1.2,"dualPanLeft":-0.8,"dualPanRight":0.7,"surroundPan":{"azimuth":45,"elevation":-12,"divergence":0.4,"lfe":0.2,"distance":2},"sends":[{"sendDb":-6}]}],"buses":[{"id":"b","inputTrimDb":1.5,"width":0.9}],"vcaGroups":[{"id":"v","gainDb":-2}]}})";
+
+  const auto result = project_from_json(document);
+  REQUIRE(result.ok());
+  REQUIRE(result.project->tracks().size() == 1);
+  REQUIRE(result.project->clips().size() == 1);
+  REQUIRE(result.project->tracks()[0].automation_lanes.size() == 1);
+  REQUIRE(result.project->tracks()[0].automation_lanes[0].points().size() == 1);
+  CHECK(result.project->tracks()[0].gain == 0.75f);
+  CHECK(result.project->tracks()[0].pan == -0.25f);
+  CHECK(result.project->tracks()[0].automation_lanes[0].points()[0].value ==
+        std::numeric_limits<float>::max());
+  CHECK(result.project->clips()[0].gain == std::numeric_limits<float>::lowest());
+  CHECK(result.project->annotation().tempo_confidence == 0.8f);
+  CHECK(result.project->annotation().onsets[0].confidence == 0.6f);
+  REQUIRE(result.project->scene().strips.size() == 1);
+  REQUIRE(result.project->scene().buses.size() == 1);
+  REQUIRE(result.project->scene().vca_groups.size() == 1);
+  CHECK(result.project->scene().strips[0].fader_db == 2.25f);
+  CHECK(result.project->scene().strips[0].surround_pan.distance == 2.0f);
+  CHECK(result.project->scene().strips[0].sends[0].send_db == -6.0f);
+  CHECK(result.project->scene().buses[0].input_trim_db == 1.5f);
+  CHECK(result.project->scene().vca_groups[0].gain_db == -2.0f);
+
+  const auto serialized = util::json::parse(project_to_json(*result.project, result.midi));
+  CHECK(serialized["clips"].as_array()[0]["gain"].is_number());
+  CHECK(serialized["tracks"]
+            .as_array()[0]["automation_lanes"]
+            .as_array()[0]["points"]
+            .as_array()[0]["value"]
+            .is_number());
+}
+
 TEST_CASE("wrong-typed scene enum fields fall back instead of aborting the load", "[serialize]") {
   // int_or_any now matches num_or_any/str_or_any/bool_or_any: a present-but-
   // wrong-typed (non-numeric) panMode/panLaw/channelDelaySamples falls back to the

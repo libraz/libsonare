@@ -41,6 +41,7 @@
 #include "midi/midi_clip.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
+#include "util/resource_limits.h"
 
 namespace sonare::midi {
 
@@ -95,11 +96,18 @@ struct Smf2ImportResult {
 /// malformed or truncated input: a diagnostic status is returned instead. A
 /// null `data` with non-zero `size`, or a buffer shorter than the 8-byte file
 /// header, yields an error status.
-Smf2ImportResult import_clip_file(const uint8_t* data, size_t size);
+Smf2ImportResult import_clip_file(
+    const uint8_t* data, size_t size,
+    const resource::MidiImportResourceLimits& limits = resource::kDefaultMidiImportResourceLimits);
 
 /// Convenience overload taking a byte vector.
 inline Smf2ImportResult import_clip_file(const std::vector<uint8_t>& data) {
   return import_clip_file(data.data(), data.size());
+}
+
+inline Smf2ImportResult import_clip_file(const std::vector<uint8_t>& data,
+                                         const resource::MidiImportResourceLimits& limits) {
+  return import_clip_file(data.data(), data.size(), limits);
 }
 
 /// Options controlling MIDI Clip File export.

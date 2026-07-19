@@ -16,6 +16,7 @@
 #include "midi/smf2.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
+#include "util/resource_limits.h"
 
 namespace {
 
@@ -252,6 +253,61 @@ TEST_CASE("SMF import keeps cumulative ticks beyond uint32 without wrapping", "[
   REQUIRE(imported.clips[0].events().back().ppq == Catch::Approx(expected_ticks / 480.0));
   REQUIRE(imported.clips[0].events().back().ppq >
           static_cast<double>(std::numeric_limits<uint32_t>::max()) / 480.0);
+}
+
+TEST_CASE("SMF import enforces track event metadata and SysEx budgets before expansion",
+          "[midi][resource_limit]") {
+  auto limits = sonare::resource::kDefaultMidiImportResourceLimits;
+
+  std::vector<uint8_t> two_events = {0x00, 0x90, 0x3C, 0x40, 0x00, 0x80,
+                                     0x3C, 0x00, 0x00, 0xFF, 0x2F, 0x00};
+  limits.max_events = 1;
+  auto imported = import_smf(wrap_format0_track(two_events), limits);
+  REQUIRE_FALSE(imported.ok());
+  REQUIRE(imported.status == sonare::midi::SmfStatus::kInvalidArgument);
+  REQUIRE(imported.diagnostic.find("resource limit") != std::string::npos);
+
+  limits = sonare::resource::kDefaultMidiImportResourceLimits;
+  limits.max_tracks = 0;
+  imported = import_smf(wrap_format0_track({0x00, 0xFF, 0x2F, 0x00}), limits);
+  REQUIRE_FALSE(imported.ok());
+  REQUIRE(imported.status == sonare::midi::SmfStatus::kInvalidArgument);
+
+  limits = sonare::resource::kDefaultMidiImportResourceLimits;
+  limits.max_metadata_bytes = 1;
+  imported = import_smf(
+      wrap_format0_track({0x00, 0xFF, 0x03, 0x02, 'a', 'b', 0x00, 0xFF, 0x2F, 0x00}), limits);
+  REQUIRE_FALSE(imported.ok());
+  REQUIRE(imported.status == sonare::midi::SmfStatus::kInvalidArgument);
+
+  limits = sonare::resource::kDefaultMidiImportResourceLimits;
+  limits.max_sysex_bytes = 2;
+  imported = import_smf(
+      wrap_format0_track({0x00, 0xF0, 0x03, 0x01, 0x02, 0xF7, 0x00, 0xFF, 0x2F, 0x00}), limits);
+  REQUIRE_FALSE(imported.ok());
+  REQUIRE(imported.status == sonare::midi::SmfStatus::kInvalidArgument);
+}
+
+TEST_CASE("SMF2 import enforces file and event budgets before normalized allocation",
+          "[midi][smf2][resource_limit]") {
+  MidiClip clip;
+  clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  clip.add_event(ev(1.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  const auto exported = export_clip_file(clip, {}, {}, {});
+  REQUIRE(exported.ok());
+
+  auto limits = sonare::resource::kDefaultMidiImportResourceLimits;
+  limits.max_file_bytes = exported.bytes.size() - 1u;
+  auto imported = import_clip_file(exported.bytes, limits);
+  REQUIRE_FALSE(imported.ok());
+  REQUIRE(imported.status == sonare::midi::Smf2Status::kInvalidArgument);
+
+  limits = sonare::resource::kDefaultMidiImportResourceLimits;
+  limits.max_events = 1;
+  imported = import_clip_file(exported.bytes, limits);
+  REQUIRE_FALSE(imported.ok());
+  REQUIRE(imported.status == sonare::midi::Smf2Status::kInvalidArgument);
+  REQUIRE(imported.diagnostic.find("resource limit") != std::string::npos);
 }
 
 TEST_CASE("SMF export enforces the 16-bit track-count boundary", "[midi][smf_track_count][slow]") {

@@ -135,6 +135,26 @@ void append_flex_text(const std::array<uint32_t, 4>& words, std::string* out) {
   }
 }
 
+size_t flex_text_bytes(const std::array<uint32_t, 4>& words) noexcept {
+  size_t count = 0;
+  for (int w = 1; w < 4; ++w) {
+    for (int b = 3; b >= 0; --b) {
+      if (((words[static_cast<size_t>(w)] >> (b * 8)) & 0xFFu) == 0u) return count;
+      ++count;
+    }
+  }
+  return count;
+}
+
+size_t sysex7_data_bytes(uint32_t word0) noexcept {
+  return std::min<size_t>(static_cast<size_t>((word0 >> 16) & 0x0Fu), 6u);
+}
+
+size_t sysex8_data_bytes(uint32_t word0) noexcept {
+  const uint8_t count = static_cast<uint8_t>((word0 >> 16) & 0x0Fu);
+  return count <= 1u ? 0u : std::min<size_t>(static_cast<size_t>(count - 1u), 13u);
+}
+
 // Extracts the SysEx7 data bytes (0..6) carried by a 2-word MT=0x3 packet.
 void append_sysex7_bytes(uint32_t word0, uint32_t word1, std::vector<uint8_t>* out) {
   const uint8_t num_bytes = static_cast<uint8_t>((word0 >> 16) & 0x0Fu);
@@ -281,12 +301,18 @@ uint64_t ppq_to_tick(double ppq, uint16_t dctpq) noexcept {
 // Import
 // ===========================================================================
 
-Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
+Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
+                                  const resource::MidiImportResourceLimits& limits) {
   Smf2ImportResult result;
 
   if (data == nullptr || size == 0) {
     result.status = Smf2Status::kInvalidArgument;
     result.diagnostic = "null or empty MIDI Clip File buffer";
+    return result;
+  }
+  if (size > limits.max_file_bytes) {
+    result.status = Smf2Status::kInvalidArgument;
+    result.diagnostic = "MIDI Clip File import resource limit exceeded: file bytes";
     return result;
   }
   if (size < sizeof(kFileHeader) || std::memcmp(data, kFileHeader, sizeof(kFileHeader)) != 0) {
@@ -319,13 +345,26 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
   uint8_t pending_sysex_group = 0;
   bool pending_sysex_active = false;
 
+  size_t event_count = 0;
+  size_t metadata_bytes = 0;
+  size_t sysex_bytes = 0;
+  const auto consume_event = [&]() {
+    if (!resource::bounded_accumulate(1u, limits.max_events, &event_count)) {
+      result.status = Smf2Status::kInvalidArgument;
+      result.diagnostic = "MIDI Clip File import resource limit exceeded: events";
+      return false;
+    }
+    return true;
+  };
+
   auto store_pending_sysex = [&](uint8_t group) {
+    if (!consume_event()) return false;
     const SysExHandle handle = result.sysex_store.add(pending_sysex);
     pending_sysex.clear();
     pending_sysex_active = false;
     if (handle == 0) {
       ++result.skipped_events;
-      return;
+      return true;
     }
     MidiClipEvent ev;
     ev.ppq = pending_sysex_ppq;
@@ -333,6 +372,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
     clip.add_event(ev);
     has_events = true;
     last_event_ppq = std::max(last_event_ppq, pending_sysex_ppq);
+    return true;
   };
 
   while (reader.remaining_words() > 0 && !saw_end_of_clip) {
@@ -393,6 +433,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
       const uint8_t bank = static_cast<uint8_t>((word0 >> 8) & 0xFFu);
       const uint8_t status = static_cast<uint8_t>(word0 & 0xFFu);
       if (bank == kFlexBankSetupPerformance && status == kFlexStatusSetTempo) {
+        if (!consume_event()) break;
         const uint32_t tempo10ns = words[1];
         transport::TempoSegment seg;
         seg.start_ppq = ppq;
@@ -404,6 +445,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
         const uint8_t denominator = static_cast<uint8_t>((words[1] >> 16) & 0xFFu);
         const uint8_t n32 = static_cast<uint8_t>((words[1] >> 8) & 0xFFu);
         if (numerator > 0 && denominator > 0) {
+          if (!consume_event()) break;
           transport::TimeSignatureSegment seg;
           seg.start_ppq = ppq;
           seg.time_sig.numerator = static_cast<int>(numerator);
@@ -414,6 +456,12 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
           ++result.skipped_events;
         }
       } else if (bank == kFlexBankMetadataText && status == kFlexStatusSongName) {
+        const size_t text_bytes = flex_text_bytes(words);
+        if (!resource::bounded_accumulate(text_bytes, limits.max_metadata_bytes, &metadata_bytes)) {
+          result.status = Smf2Status::kInvalidArgument;
+          result.diagnostic = "MIDI Clip File import resource limit exceeded: metadata";
+          break;
+        }
         append_flex_text(words, &name);
       } else {
         // Key signature, copyright, lyrics, and other Flex Data forms have no
@@ -424,6 +472,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
     }
 
     if (mt == kMtMidi1 || mt == kMtMidi2) {
+      if (!consume_event()) break;
       Ump ump;
       ump.words[0] = words[0];
       ump.words[1] = words[1];
@@ -441,11 +490,17 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
     if (mt == kMtData64) {
       const uint8_t packet_status = static_cast<uint8_t>((word0 >> 20) & 0x0Fu);
       const uint8_t group = static_cast<uint8_t>((word0 >> 24) & 0x0Fu);
+      if (!resource::bounded_accumulate(sysex7_data_bytes(word0), limits.max_sysex_bytes,
+                                        &sysex_bytes)) {
+        result.status = Smf2Status::kInvalidArgument;
+        result.diagnostic = "MIDI Clip File import resource limit exceeded: SysEx";
+        break;
+      }
       if (packet_status == kSysex7Complete) {
         pending_sysex.clear();
         pending_sysex_ppq = ppq;
         append_sysex7_bytes(words[0], words[1], &pending_sysex);
-        store_pending_sysex(group);
+        if (!store_pending_sysex(group)) break;
         continue;
       }
       if (packet_status == kSysex7Start) {
@@ -471,7 +526,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
           continue;
         }
         append_sysex7_bytes(words[0], words[1], &pending_sysex);
-        store_pending_sysex(pending_sysex_group);
+        if (!store_pending_sysex(pending_sysex_group)) break;
         continue;
       }
       ++result.skipped_events;
@@ -483,11 +538,17 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
       // continue/end) in word0 bits 20..23.
       const uint8_t packet_status = static_cast<uint8_t>((word0 >> 20) & 0x0Fu);
       const uint8_t group = static_cast<uint8_t>((word0 >> 24) & 0x0Fu);
+      if (!resource::bounded_accumulate(sysex8_data_bytes(word0), limits.max_sysex_bytes,
+                                        &sysex_bytes)) {
+        result.status = Smf2Status::kInvalidArgument;
+        result.diagnostic = "MIDI Clip File import resource limit exceeded: SysEx";
+        break;
+      }
       if (packet_status == kSysex7Complete) {
         pending_sysex.clear();
         pending_sysex_ppq = ppq;
         append_sysex8_bytes(words, &pending_sysex);
-        store_pending_sysex(group);
+        if (!store_pending_sysex(group)) break;
         continue;
       }
       if (packet_status == kSysex7Start) {
@@ -513,7 +574,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size) {
           continue;
         }
         append_sysex8_bytes(words, &pending_sysex);
-        store_pending_sysex(pending_sysex_group);
+        if (!store_pending_sysex(pending_sysex_group)) break;
         continue;
       }
       ++result.skipped_events;

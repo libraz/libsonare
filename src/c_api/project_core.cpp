@@ -1,4 +1,5 @@
 #include "c_api/project_internal.h"
+#include "util/resource_limits.h"
 
 // ============================================================================
 // ABI version
@@ -88,6 +89,9 @@ SonareError sonare_project_deserialize(const char* json, size_t len, SonareProje
   if (!json || !out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
   if (out_diag) *out_diag = nullptr;
+  if (len > sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes) {
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
   SONARE_C_TRY
   sonare::serialize::DeserializeResult result =
       sonare::serialize::project_from_json(std::string(json, len));

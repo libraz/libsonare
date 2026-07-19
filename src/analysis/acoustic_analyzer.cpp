@@ -6,6 +6,7 @@
 
 #include "analysis/acoustic/internal.h"
 #include "util/exception.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
@@ -43,7 +44,9 @@ AcousticAnalyzer::AcousticAnalyzer(const Audio& audio, const AcousticConfig& con
     : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(audio.sample_rate() > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config_.n_octave_bands >= 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(
+      resource::acoustic_band_counts_fit(config_.n_octave_bands, config_.n_third_octave_subbands),
+      ErrorCode::InvalidParameter);
   SONARE_CHECK(config_.min_decay_db > 0.0f, ErrorCode::InvalidParameter);
   SONARE_CHECK(config_.noise_floor_margin_db >= 0.0f, ErrorCode::InvalidParameter);
 

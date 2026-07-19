@@ -89,8 +89,15 @@ class Audio {
   float operator[](size_t index) const;
 
   /// @brief Iterator support.
-  const float* begin() const { return data(); }
-  const float* end() const { return data() + size(); }
+  /// @details A default-constructed Audio has data()==nullptr, but its iterator
+  ///          pair uses a stable non-null sentinel so pointer arithmetic and
+  ///          subtraction on the empty range remain defined.
+  const float* begin() const {
+    static constexpr float kEmptySentinel = 0.0f;
+    const float* samples = data();
+    return samples != nullptr ? samples : &kEmptySentinel;
+  }
+  const float* end() const { return begin() + size(); }
 
  private:
   /// @brief Private constructor for creating slices.

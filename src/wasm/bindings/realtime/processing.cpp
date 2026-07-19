@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include "realtime_engine_wasm.h"
+#include "util/resource_limits.h"
 
 namespace {
 
@@ -273,7 +274,9 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // SONARE_ERROR_INVALID_PARAMETER) instead of being silently clamped to 16.
   const int dither_bits = intProperty(options_val, "ditherBits", 16);
   if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 || source_sample_rate <= 0 ||
-      target_sample_rate <= 0 || dither_bits < 0) {
+      target_sample_rate <= 0 || dither_bits < 0 ||
+      !sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
+                                                  target_sample_rate)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bounce options");
   }
   // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
@@ -352,7 +355,8 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   const int64_t total_frames = objectProperty(options_val, "totalFrames").as<int64_t>();
   const int block_size = intProperty(options_val, "blockSize", 128);
   const int num_channels = intProperty(options_val, "numChannels", 2);
-  if (total_frames <= 0 || block_size <= 0 || num_channels <= 0) {
+  if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 ||
+      !sonare::resource::engine_offline_shape_fits(total_frames, num_channels, 1)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid freeze options");
   }
   // Mirror the C-ABI oracle (sonare_engine_freeze_offline): freezing a

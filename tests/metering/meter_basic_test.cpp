@@ -18,6 +18,7 @@
 #include "metering/waveform.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/resource_limits.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -504,6 +505,15 @@ TEST_CASE("spectrum identifies dominant sine frequency", "[meter]") {
   REQUIRE(result.frequencies.size() == result.magnitude.size());
   REQUIRE_THAT(result.frequencies[peak_index], WithinAbs(440.0f, 20.0f));
   REQUIRE(std::isfinite(result.db[peak_index]));
+}
+
+TEST_CASE("spectrum rejects an oversized FFT before allocating for a short input", "[meter]") {
+  const float sample = 0.25f;
+  const Audio audio = Audio::from_buffer(&sample, 1, 48000);
+  metering::SpectrumConfig config;
+  config.n_fft = static_cast<int>(resource::kDefaultSpectrumResourceLimits.max_fft_size + 1u);
+  REQUIRE_THROWS_AS(metering::spectrum(audio, config), SonareException);
+  REQUIRE_THROWS_AS(metering::spectrum_frame(audio, 0, config), SonareException);
 }
 
 TEST_CASE("fractional octave smoothing spreads isolated bins", "[meter]") {

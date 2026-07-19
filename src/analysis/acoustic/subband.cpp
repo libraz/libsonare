@@ -21,15 +21,24 @@ double mean_square_energy(const std::vector<float>& samples) {
 
 std::vector<float> third_octave_centers(int count, int sample_rate) {
   std::vector<float> centers;
-  centers.reserve(static_cast<size_t>(std::max(0, count)));
   const float nyquist = static_cast<float>(sample_rate) * 0.5f;
+  const float edge_ratio = std::pow(2.0f, 1.0f / 6.0f);
+  const float step_ratio = std::pow(2.0f, 1.0f / 3.0f);
+  std::size_t reachable = 0;
+  float reserve_center = 125.0f;
+  while (reachable < static_cast<std::size_t>(std::max(0, count)) &&
+         reserve_center * edge_ratio < nyquist) {
+    ++reachable;
+    reserve_center *= step_ratio;
+  }
+  centers.reserve(reachable);
   float center = 125.0f;
   for (int i = 0; i < count; ++i) {
-    if (center * std::pow(2.0f, 1.0f / 6.0f) >= nyquist) {
+    if (center * edge_ratio >= nyquist) {
       break;
     }
     centers.push_back(center);
-    center *= std::pow(2.0f, 1.0f / 3.0f);
+    center *= step_ratio;
   }
   return centers;
 }

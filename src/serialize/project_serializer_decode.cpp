@@ -39,6 +39,27 @@ uint8_t pitch_class_or(const Value& value, const char* key) {
   return static_cast<uint8_t>(pitch_class);
 }
 
+float float_or(const Value& value, const char* key, float fallback, const char* field_path) {
+  float converted = 0.0f;
+  if (!numeric::checked_float_cast(num_or(value, key, fallback), &converted)) {
+    throw SonareException(
+        ErrorCode::InvalidFormat,
+        std::string("floating-point field is non-finite or out of float range: ") + field_path);
+  }
+  return converted;
+}
+
+float float_or_any(const Value& value, const char* primary, const char* legacy, float fallback,
+                   const char* field_path) {
+  float converted = 0.0f;
+  if (!numeric::checked_float_cast(num_or_any(value, primary, legacy, fallback), &converted)) {
+    throw SonareException(
+        ErrorCode::InvalidFormat,
+        std::string("floating-point field is non-finite or out of float range: ") + field_path);
+  }
+  return converted;
+}
+
 }  // namespace
 
 // ===========================================================================
@@ -70,7 +91,7 @@ automation::AutomationLane automation_lane_from_json(const Value& v) {
       if (!pv.is_object()) continue;
       automation::Breakpoint bp;
       bp.ppq = num_or(pv, "ppq", 0.0);
-      bp.value = static_cast<float>(num_or(pv, "value", 0.0));
+      bp.value = float_or(pv, "value", 0.0f, "tracks[].automation_lanes[].points[].value");
       bp.curve_to_next = enum_or(pv, "curve_to_next", automation::CurveType::Linear, 3);
       points.push_back(bp);
     }
@@ -84,10 +105,10 @@ arrangement::Track track_from_json(const Value& v) {
   t.id = uint_or(v, "id", 0);
   t.name = str_or(v, "name", "");
   t.kind = enum_or(v, "kind", arrangement::Track::Kind::kAudio, 2);
-  t.gain = std::max(0.0f, static_cast<float>(num_or(v, "gain", 1.0)));
+  t.gain = std::max(0.0f, float_or(v, "gain", 1.0f, "tracks[].gain"));
   t.mute = bool_or(v, "mute", false);
   t.solo = bool_or(v, "solo", false);
-  t.pan = std::clamp(static_cast<float>(num_or(v, "pan", 0.0)), -1.0f, 1.0f);
+  t.pan = std::clamp(float_or(v, "pan", 0.0f, "tracks[].pan"), -1.0f, 1.0f);
   t.channel_strip_ref = str_or(v, "channel_strip_ref", "");
   t.output_target = str_or(v, "output_target", "");
   t.midi_destination_id = uint_or(v, "midi_destination_id", 0);
@@ -131,7 +152,7 @@ arrangement::EditClip clip_from_json(const Value& v) {
   c.start_ppq = num_or(v, "start_ppq", 0.0);
   c.length_ppq = num_or(v, "length_ppq", 0.0);
   c.source_offset_ppq = num_or(v, "source_offset_ppq", 0.0);
-  c.gain = static_cast<float>(num_or(v, "gain", 1.0));
+  c.gain = float_or(v, "gain", 1.0f, "clips[].gain");
   if (const auto* fi = object_at(v, "fade_in")) c.fade_in = fade_from_json(Value(*fi));
   if (const auto* fo = object_at(v, "fade_out")) c.fade_out = fade_from_json(Value(*fo));
   c.loop_mode = enum_or(v, "loop_mode", arrangement::LoopMode::kOff, 1);
@@ -222,7 +243,7 @@ arrangement::KeySegment key_segment_from_json(const Value& v) {
 }
 
 void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
-  a->tempo_confidence = static_cast<float>(num_or(v, "tempo_confidence", 0.0));
+  a->tempo_confidence = float_or(v, "tempo_confidence", 0.0f, "annotation.tempo_confidence");
   if (const auto* arr = array_at(v, "keys")) {
     for (const auto& kv : *arr) {
       if (kv.is_object()) a->keys.push_back(key_segment_from_json(kv));
@@ -248,7 +269,7 @@ void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
       if (!ov.is_object()) continue;
       arrangement::OnsetMarker on;
       on.ppq = num_or(ov, "ppq", 0.0);
-      on.confidence = static_cast<float>(num_or(ov, "confidence", 0.0));
+      on.confidence = float_or(ov, "confidence", 0.0f, "annotation.onsets[].confidence");
       a->onsets.push_back(on);
     }
   }
@@ -257,14 +278,14 @@ void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
 // Returns false (with the sidecar left untouched) when the payload base64 is
 // malformed; the caller records a diagnostic. module_id / schema_version are
 // preserved verbatim even for unregistered modules / unknown schema versions.
-bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out) {
+bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out, size_t max_payload_bytes) {
   out->module_id = str_or(v, "module_id", "");
   out->schema_version = uint_or(v, "schema_version", 0);
   out->target_track_id = uint_or(v, "target_track_id", 0);
   out->region_start_ppq = num_or(v, "region_start_ppq", 0.0);
   out->region_end_ppq = num_or(v, "region_end_ppq", 0.0);
   const std::string b64 = str_or(v, "payload_b64", "");
-  return base64_decode(b64, &out->payload);
+  return base64_decode(b64, &out->payload, max_payload_bytes);
 }
 
 mixing::api::Insert insert_from_json(const Value& v) {
@@ -291,11 +312,13 @@ mixing::api::Scene scene_from_value(const Value& v) {
       if (!sv.is_object()) continue;
       mixing::api::Strip s;
       s.id = str_or(sv, "id", "");
-      s.input_trim_db = static_cast<float>(num_or_any(sv, "inputTrimDb", "input_trim_db", 0.0));
-      s.fader_db = static_cast<float>(num_or_any(sv, "faderDb", "fader_db", 0.0));
-      s.vca_offset_db = static_cast<float>(num_or_any(sv, "vcaOffsetDb", "vca_offset_db", 0.0));
-      s.pan = static_cast<float>(num_or(sv, "pan", 0.0));
-      s.width = static_cast<float>(num_or(sv, "width", 1.0));
+      s.input_trim_db =
+          float_or_any(sv, "inputTrimDb", "input_trim_db", 0.0f, "scene.strips[].inputTrimDb");
+      s.fader_db = float_or_any(sv, "faderDb", "fader_db", 0.0f, "scene.strips[].faderDb");
+      s.vca_offset_db =
+          float_or_any(sv, "vcaOffsetDb", "vca_offset_db", 0.0f, "scene.strips[].vcaOffsetDb");
+      s.pan = float_or(sv, "pan", 0.0f, "scene.strips[].pan");
+      s.width = float_or(sv, "width", 1.0f, "scene.strips[].width");
       s.muted = bool_or(sv, "muted", false);
       s.soloed = bool_or(sv, "soloed", false);
       s.solo_safe = bool_or_any(sv, "soloSafe", "solo_safe", false);
@@ -303,8 +326,10 @@ mixing::api::Scene scene_from_value(const Value& v) {
       if (s.pan_mode < 0 || s.pan_mode > 2) {
         throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
       }
-      s.dual_pan_left = static_cast<float>(num_or_any(sv, "dualPanLeft", "dual_pan_left", -1.0));
-      s.dual_pan_right = static_cast<float>(num_or_any(sv, "dualPanRight", "dual_pan_right", 1.0));
+      s.dual_pan_left =
+          float_or_any(sv, "dualPanLeft", "dual_pan_left", -1.0f, "scene.strips[].dualPanLeft");
+      s.dual_pan_right =
+          float_or_any(sv, "dualPanRight", "dual_pan_right", 1.0f, "scene.strips[].dualPanRight");
       s.polarity_invert_left = bool_or_any(sv, "polarityInvertLeft", "polarity_invert_left", false);
       s.polarity_invert_right =
           bool_or_any(sv, "polarityInvertRight", "polarity_invert_right", false);
@@ -322,11 +347,15 @@ mixing::api::Scene scene_from_value(const Value& v) {
       }
       if (const auto* sp = object_at(sv, "surroundPan")) {
         const Value spv(*sp);
-        s.surround_pan.azimuth = static_cast<float>(num_or(spv, "azimuth", 0.0));
-        s.surround_pan.elevation = static_cast<float>(num_or(spv, "elevation", 0.0));
-        s.surround_pan.divergence = static_cast<float>(num_or(spv, "divergence", 0.0));
-        s.surround_pan.lfe = static_cast<float>(num_or(spv, "lfe", 0.0));
-        s.surround_pan.distance = static_cast<float>(num_or(spv, "distance", 1.0));
+        s.surround_pan.azimuth =
+            float_or(spv, "azimuth", 0.0f, "scene.strips[].surroundPan.azimuth");
+        s.surround_pan.elevation =
+            float_or(spv, "elevation", 0.0f, "scene.strips[].surroundPan.elevation");
+        s.surround_pan.divergence =
+            float_or(spv, "divergence", 0.0f, "scene.strips[].surroundPan.divergence");
+        s.surround_pan.lfe = float_or(spv, "lfe", 0.0f, "scene.strips[].surroundPan.lfe");
+        s.surround_pan.distance =
+            float_or(spv, "distance", 1.0f, "scene.strips[].surroundPan.distance");
       }
       if (const auto* iarr = array_at(sv, "inserts")) {
         for (const auto& iv : *iarr) {
@@ -339,7 +368,7 @@ mixing::api::Scene scene_from_value(const Value& v) {
           mixing::api::Send sd;
           sd.id = str_or(dv, "id", "");
           sd.destination_bus_id = str_or_any(dv, "destinationBusId", "destination_bus_id", "");
-          sd.send_db = static_cast<float>(num_or_any(dv, "sendDb", "send_db", 0.0));
+          sd.send_db = float_or_any(dv, "sendDb", "send_db", 0.0f, "scene.strips[].sends[].sendDb");
           sd.timing = str_or(dv, "timing", "post") == "pre" ? mixing::api::SendTiming::PreFader
                                                             : mixing::api::SendTiming::PostFader;
           s.sends.push_back(std::move(sd));
@@ -358,8 +387,9 @@ mixing::api::Scene scene_from_value(const Value& v) {
         ChannelLayout parsed = ChannelLayout::Stereo;
         if (channel_layout_from_string(layout, parsed)) b.layout = parsed;
       }
-      b.input_trim_db = static_cast<float>(num_or_any(bv, "inputTrimDb", "input_trim_db", 0.0));
-      b.width = static_cast<float>(num_or(bv, "width", 1.0));
+      b.input_trim_db =
+          float_or_any(bv, "inputTrimDb", "input_trim_db", 0.0f, "scene.buses[].inputTrimDb");
+      b.width = float_or(bv, "width", 1.0f, "scene.buses[].width");
       b.polarity_invert_left = bool_or_any(bv, "polarityInvertLeft", "polarity_invert_left", false);
       b.polarity_invert_right =
           bool_or_any(bv, "polarityInvertRight", "polarity_invert_right", false);
@@ -378,7 +408,7 @@ mixing::api::Scene scene_from_value(const Value& v) {
       if (!vv.is_object()) continue;
       mixing::api::VcaGroup g;
       g.id = str_or(vv, "id", "");
-      g.gain_db = static_cast<float>(num_or_any(vv, "gainDb", "gain_db", 0.0));
+      g.gain_db = float_or_any(vv, "gainDb", "gain_db", 0.0f, "scene.vcaGroups[].gainDb");
       if (const auto* marr = array_at(vv, "members")) {
         for (const auto& mv : *marr) {
           if (mv.is_string()) g.members.push_back(mv.as_string());

@@ -16,6 +16,7 @@
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/numeric_validation.h"
+#include "util/resource_limits.h"
 
 namespace sonare::serialize {
 namespace {
@@ -29,6 +30,28 @@ using namespace detail;
 
 constexpr double kMinProjectSampleRate = 8000.0;
 constexpr double kMaxProjectSampleRate = 384000.0;
+
+bool count_array_entities(const Value& value, std::size_t limit, std::size_t* total) {
+  if (value.is_array()) {
+    if (!resource::bounded_accumulate(value.as_array().size(), limit, total)) return false;
+    for (const auto& child : value.as_array()) {
+      if (!count_array_entities(child, limit, total)) return false;
+    }
+  } else if (value.is_object()) {
+    for (const auto& [key, child] : value.as_object()) {
+      (void)key;
+      if (!count_array_entities(child, limit, total)) return false;
+    }
+  }
+  return true;
+}
+
+std::size_t base64_decoded_upper_bound(const std::string& text) noexcept {
+  std::size_t decoded_size = (text.size() / 4u) * 3u;
+  if (!text.empty() && text.back() == '=') --decoded_size;
+  if (text.size() >= 2u && text[text.size() - 2u] == '=') --decoded_size;
+  return decoded_size;
+}
 
 }  // namespace
 
@@ -97,9 +120,20 @@ std::string project_to_json(const arrangement::Project& project,
 DeserializeResult project_from_json(const std::string& json_text) {
   DeserializeResult result;
 
+  const auto& import_limits = resource::kDefaultProjectImportResourceLimits;
+  if (json_text.size() > import_limits.max_json_bytes) {
+    result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
+                                  "project JSON byte limit exceeded"});
+    return result;
+  }
+
   Value root;
   try {
-    root = json::parse(json_text);
+    root = json::parse_with_limits(json_text, 128,
+                                   {import_limits.max_json_nodes, import_limits.max_string_bytes});
+  } catch (const json::JsonResourceError& e) {
+    result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded", e.what()});
+    return result;
   } catch (const json::JsonError& e) {
     result.diagnostics.push_back({DiagnosticSeverity::kError, "malformed_json", e.what()});
     return result;
@@ -114,6 +148,13 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (!root.is_object()) {
       result.diagnostics.push_back(
           {DiagnosticSeverity::kError, "not_an_object", "top-level JSON value is not an object"});
+      return result;
+    }
+
+    std::size_t entity_count = 0;
+    if (!count_array_entities(root, import_limits.max_entities, &entity_count)) {
+      result.diagnostics.push_back(
+          {DiagnosticSeverity::kError, "resource_limit_exceeded", "project entity limit exceeded"});
       return result;
     }
 
@@ -420,13 +461,29 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
 
     // Assist sidecars (lossless, even for unregistered modules).
+    std::size_t decoded_payload_bytes = 0;
     if (const auto* arr = array_at(root, "assist_sidecars")) {
       for (const auto& sv : *arr) {
         if (!sv.is_object()) continue;
+        const std::string encoded_payload = str_or(sv, "payload_b64", "");
+        const std::size_t remaining_payload_bytes =
+            import_limits.max_decoded_payload_bytes - decoded_payload_bytes;
+        if (base64_decoded_upper_bound(encoded_payload) > remaining_payload_bytes) {
+          result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
+                                        "project decoded payload limit exceeded"});
+          return result;
+        }
         arrangement::AssistSidecar sidecar;
-        if (!sidecar_from_json(sv, &sidecar)) {
+        if (!sidecar_from_json(sv, &sidecar, remaining_payload_bytes)) {
           result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sidecar_payload",
                                         "assist sidecar payload base64 is malformed"});
+          return result;
+        }
+        if (!resource::bounded_accumulate(sidecar.payload.size(),
+                                          import_limits.max_decoded_payload_bytes,
+                                          &decoded_payload_bytes)) {
+          result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
+                                        "project decoded payload limit exceeded"});
           return result;
         }
         project.add_assist_sidecar(std::move(sidecar));
@@ -447,10 +504,24 @@ DeserializeResult project_from_json(const std::string& json_text) {
                                                 "\" is outside uint32 range; entry ignored"});
               continue;
             }
+            const std::size_t remaining_payload_bytes =
+                import_limits.max_decoded_payload_bytes - decoded_payload_bytes;
+            if (base64_decoded_upper_bound(payload_value.as_string()) > remaining_payload_bytes) {
+              result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
+                                            "project decoded payload limit exceeded"});
+              return result;
+            }
             std::vector<uint8_t> payload;
-            if (!base64_decode(payload_value.as_string(), &payload)) {
+            if (!base64_decode(payload_value.as_string(), &payload, remaining_payload_bytes)) {
               result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sysex_payload",
                                             "MIDI SysEx payload base64 is malformed"});
+              return result;
+            }
+            if (!resource::bounded_accumulate(payload.size(),
+                                              import_limits.max_decoded_payload_bytes,
+                                              &decoded_payload_bytes)) {
+              result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
+                                            "project decoded payload limit exceeded"});
               return result;
             }
             result.midi.sysex_payloads[handle] = std::move(payload);

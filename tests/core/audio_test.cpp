@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <iterator>
 #include <vector>
 
 #include "support/audio_fixtures.h"
@@ -28,6 +29,18 @@ TEST_CASE("Audio from_buffer", "[audio]") {
   REQUIRE(audio.channels() == 1);
   REQUIRE_FALSE(audio.empty());
   REQUIRE_THAT(audio.duration(), WithinRel(1000.0f / 22050.0f, 0.001f));
+}
+
+TEST_CASE("default Audio exposes a valid empty iterator range", "[audio][iterator]") {
+  const Audio audio;
+  REQUIRE(audio.data() == nullptr);
+  REQUIRE(audio.begin() != nullptr);
+  REQUIRE(audio.begin() == audio.end());
+  REQUIRE(std::distance(audio.begin(), audio.end()) == 0);
+
+  size_t visited = 0;
+  for ([[maybe_unused]] float sample : audio) ++visited;
+  REQUIRE(visited == 0);
 }
 
 TEST_CASE("Audio from_buffer null safety", "[audio]") {

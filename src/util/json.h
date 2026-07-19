@@ -35,6 +35,17 @@ class JsonError : public std::runtime_error {
   std::size_t position_ = 0;
 };
 
+class JsonResourceError : public JsonError {
+ public:
+  JsonResourceError(std::string message, std::size_t position)
+      : JsonError(std::move(message), position) {}
+};
+
+struct ParseResourceLimits {
+  std::size_t max_nodes = std::numeric_limits<std::size_t>::max();
+  std::size_t max_string_bytes = std::numeric_limits<std::size_t>::max();
+};
+
 class Value;
 using Array = std::vector<Value>;
 using Object = std::map<std::string, Value>;
@@ -157,8 +168,12 @@ inline std::string escape_string(const std::string& value) {
 class Parser {
  public:
   explicit Parser(const std::string& text, std::size_t max_depth = 128,
-                  bool reject_duplicate_keys = false)
-      : text_(text), max_depth_(max_depth), reject_duplicate_keys_(reject_duplicate_keys) {}
+                  bool reject_duplicate_keys = false,
+                  ParseResourceLimits resource_limits = ParseResourceLimits())
+      : text_(text),
+        max_depth_(max_depth),
+        reject_duplicate_keys_(reject_duplicate_keys),
+        resource_limits_(resource_limits) {}
 
   Value parse_document() {
     // Tolerate a UTF-8 BOM at the start. Windows editors and a few external
@@ -179,6 +194,10 @@ class Parser {
  private:
   Value parse_value(std::size_t depth) {
     if (depth > max_depth_) fail("JSON nesting depth exceeded");
+    if (node_count_ >= resource_limits_.max_nodes) {
+      fail_resource("JSON node limit exceeded");
+    }
+    ++node_count_;
     skip_ws();
     if (pos_ >= text_.size()) fail("unexpected end of JSON");
     const char c = text_[pos_];
@@ -239,7 +258,7 @@ class Parser {
       if (c == '"') return out;
       if (static_cast<unsigned char>(c) < 0x20) fail("control character in JSON string");
       if (c != '\\') {
-        out.push_back(c);
+        append_string_char(&out, c);
         continue;
       }
       if (pos_ >= text_.size()) fail("unterminated JSON escape");
@@ -248,22 +267,22 @@ class Parser {
         case '"':
         case '\\':
         case '/':
-          out.push_back(escaped);
+          append_string_char(&out, escaped);
           break;
         case 'b':
-          out.push_back('\b');
+          append_string_char(&out, '\b');
           break;
         case 'f':
-          out.push_back('\f');
+          append_string_char(&out, '\f');
           break;
         case 'n':
-          out.push_back('\n');
+          append_string_char(&out, '\n');
           break;
         case 'r':
-          out.push_back('\r');
+          append_string_char(&out, '\r');
           break;
         case 't':
-          out.push_back('\t');
+          append_string_char(&out, '\t');
           break;
         case 'u': {
           std::uint32_t cp = parse_hex4();
@@ -278,7 +297,7 @@ class Parser {
           } else if (cp >= 0xDC00 && cp <= 0xDFFF) {
             fail("unexpected low surrogate in JSON string");
           }
-          append_utf8(out, cp);
+          append_string_codepoint(&out, cp);
           break;
         }
         default:
@@ -374,12 +393,39 @@ class Parser {
 
   static bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
+  void consume_string_bytes(std::size_t count) {
+    if (count > resource_limits_.max_string_bytes - string_bytes_) {
+      fail_resource("JSON string-byte limit exceeded");
+    }
+    string_bytes_ += count;
+  }
+
+  void append_string_char(std::string* out, char value) {
+    consume_string_bytes(1);
+    out->push_back(value);
+  }
+
+  void append_string_codepoint(std::string* out, std::uint32_t cp) {
+    const std::size_t encoded_bytes = cp <= 0x7Fu     ? 1u
+                                      : cp <= 0x7FFu  ? 2u
+                                      : cp <= 0xFFFFu ? 3u
+                                                      : 4u;
+    consume_string_bytes(encoded_bytes);
+    append_utf8(*out, cp);
+  }
+
   [[noreturn]] void fail(const std::string& message) const { throw JsonError(message, pos_); }
+  [[noreturn]] void fail_resource(const std::string& message) const {
+    throw JsonResourceError(message, pos_);
+  }
 
   const std::string& text_;
   std::size_t pos_ = 0;
   std::size_t max_depth_ = 128;
   bool reject_duplicate_keys_ = false;
+  ParseResourceLimits resource_limits_;
+  std::size_t node_count_ = 0;
+  std::size_t string_bytes_ = 0;
 };
 
 inline Value parse(const std::string& text, std::size_t max_depth = 128) {
@@ -393,6 +439,11 @@ inline Value parse(const std::string& text, std::size_t max_depth = 128) {
 ///          taking the last value).
 inline Value parse_strict(const std::string& text, std::size_t max_depth = 128) {
   return Parser(text, max_depth, /*reject_duplicate_keys=*/true).parse_document();
+}
+
+inline Value parse_with_limits(const std::string& text, std::size_t max_depth,
+                               const ParseResourceLimits& resource_limits) {
+  return Parser(text, max_depth, /*reject_duplicate_keys=*/false, resource_limits).parse_document();
 }
 
 inline void dump_value(const Value& value, std::ostringstream& out) {

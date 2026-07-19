@@ -52,6 +52,7 @@
 
 #include "midi/midi_clip.h"
 #include "transport/tempo_map.h"
+#include "util/resource_limits.h"
 
 namespace sonare::midi {
 
@@ -139,11 +140,18 @@ struct SmfImportResult {
 /// malformed or truncated input: a diagnostic status is returned instead. A
 /// null `data` with non-zero `size`, or a header shorter than a valid MThd
 /// chunk, yields an error status.
-SmfImportResult import_smf(const uint8_t* data, size_t size);
+SmfImportResult import_smf(
+    const uint8_t* data, size_t size,
+    const resource::MidiImportResourceLimits& limits = resource::kDefaultMidiImportResourceLimits);
 
 /// Convenience overload taking a byte vector.
 inline SmfImportResult import_smf(const std::vector<uint8_t>& data) {
   return import_smf(data.data(), data.size());
+}
+
+inline SmfImportResult import_smf(const std::vector<uint8_t>& data,
+                                  const resource::MidiImportResourceLimits& limits) {
+  return import_smf(data.data(), data.size(), limits);
 }
 
 /// Options controlling SMF export.

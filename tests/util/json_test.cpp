@@ -5,6 +5,8 @@
 #include <limits>
 #include <string>
 
+#include "util/base64.h"
+
 TEST_CASE("util json parses and serializes nested values", "[json]") {
   const auto value = sonare::util::json::parse(
       "{\"name\":\"voice\",\"items\":[1,true,null,{\"x\":-2.5e1}],\"text\":\"a\\n"
@@ -58,6 +60,29 @@ TEST_CASE("util json rejects nesting beyond max_depth", "[json]") {
   REQUIRE_THROWS_AS(sonare::util::json::parse("[[[[[]]]]]", 3), sonare::util::json::JsonError);
   // A shallow document must still succeed under the same limit.
   REQUIRE_NOTHROW(sonare::util::json::parse("[[1]]", 3));
+}
+
+TEST_CASE("util json resource limits reject before unbounded tree and string growth", "[json]") {
+  using sonare::util::json::JsonResourceError;
+  using sonare::util::json::ParseResourceLimits;
+
+  REQUIRE_NOTHROW(sonare::util::json::parse_with_limits("[1,2]", 128, {3u, 0u}));
+  REQUIRE_THROWS_AS(sonare::util::json::parse_with_limits("[1,2,3]", 128, {3u, 0u}),
+                    JsonResourceError);
+
+  REQUIRE_NOTHROW(
+      sonare::util::json::parse_with_limits(R"({"a":"bc"})", 128, ParseResourceLimits{3u, 3u}));
+  REQUIRE_THROWS_AS(
+      sonare::util::json::parse_with_limits(R"({"a":"bcd"})", 128, ParseResourceLimits{3u, 3u}),
+      JsonResourceError);
+}
+
+TEST_CASE("base64 decode enforces its output budget before reserve", "[json][resource_limit]") {
+  std::vector<uint8_t> decoded;
+  REQUIRE(sonare::base64_decode("AQI=", &decoded, 2u));
+  REQUIRE(decoded == std::vector<uint8_t>{1u, 2u});
+  REQUIRE_FALSE(sonare::base64_decode("AQI=", &decoded, 1u));
+  REQUIRE(decoded.empty());
 }
 
 TEST_CASE("util json round-trips small and large numbers", "[json]") {

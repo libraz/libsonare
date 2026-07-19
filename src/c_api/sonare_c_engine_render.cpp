@@ -13,6 +13,7 @@
 #include "metering/normalize.h"
 #include "sonare_c_internal.h"
 #include "util/constants.h"
+#include "util/resource_limits.h"
 #if defined(SONARE_WITH_MASTERING)
 #include "mastering/final/dither.h"
 #endif
@@ -127,7 +128,10 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   }
   if (!engine || !options || !out || options->total_frames <= 0 || options->block_size <= 0 ||
       options->num_channels <= 0 || options->target_sample_rate <= 0 ||
-      options->source_sample_rate <= 0 || options->dither_bits < 0) {
+      options->source_sample_rate <= 0 || options->dither_bits < 0 ||
+      !resource::engine_bounce_shape_fits(options->total_frames, options->num_channels,
+                                          options->source_sample_rate,
+                                          options->target_sample_rate)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
@@ -209,9 +213,11 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineFreezeOptions* options,
                                          SonareEngineFreezeResult* out) {
   SONARE_C_API_ENTRY;
+  if (out) *out = {};
   if (!engine || !options || !out || options->total_frames <= 0 || options->block_size <= 0 ||
       options->num_channels <= 0 || !std::isfinite(options->start_ppq) ||
-      options->start_ppq < 0.0 || !(std::isfinite(options->gain) && options->gain >= 0.0f)) {
+      options->start_ppq < 0.0 || !(std::isfinite(options->gain) && options->gain >= 0.0f) ||
+      !resource::engine_offline_shape_fits(options->total_frames, options->num_channels, 1)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Freezing a never-prepared engine would capture pure silence with no error
@@ -220,7 +226,6 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
     return SONARE_ERROR_INVALID_STATE;
   }
   SONARE_C_TRY
-  *out = {};
   auto owned = std::make_shared<engine::ClipAudioStorage>();
   owned->channels.assign(static_cast<size_t>(options->num_channels),
                          std::vector<float>(static_cast<size_t>(options->total_frames), 0.0f));

@@ -2,6 +2,20 @@
 /// @brief Project MIDI parity tests.
 
 #include "binding_project_parity_test_helpers.h"
+#include "util/resource_limits.h"
+
+TEST_CASE("project MIDI imports reject oversized buffers before reading caller bytes",
+          "[project][resource_limit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const uint8_t prefix = 0;
+  const size_t oversized = sonare::resource::kDefaultMidiImportResourceLimits.max_file_bytes + 1u;
+  REQUIRE(sonare_project_import_smf(project, &prefix, oversized, nullptr) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(sonare_project_import_clip_file(project, &prefix, oversized, nullptr) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  sonare_project_destroy(project);
+}
 
 TEST_CASE("project C surface exports MIDI events to SMF", "[project]") {
   SonareProject* project = nullptr;

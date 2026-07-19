@@ -2,6 +2,7 @@
 /// @brief Project editing and compile parity tests.
 
 #include "binding_project_parity_test_helpers.h"
+#include "util/resource_limits.h"
 
 TEST_CASE("undo restores the serialized bytes through the C surface", "[project]") {
   const std::vector<float> audio = make_stereo_sine(4800);
@@ -54,6 +55,18 @@ TEST_CASE("malformed deserialize returns an error without crashing", "[project]"
   SonareProject* empty = reinterpret_cast<SonareProject*>(0x1);
   REQUIRE(sonare_project_deserialize("", 0, &empty, nullptr) != SONARE_OK);
   REQUIRE(empty == nullptr);
+}
+
+TEST_CASE("project C deserialize rejects oversized JSON before copying caller bytes", "[project]") {
+  const char prefix = '{';
+  SonareProject* project = reinterpret_cast<SonareProject*>(0x1);
+  char* diag = reinterpret_cast<char*>(0x1);
+  const size_t oversized =
+      sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes + 1u;
+  REQUIRE(sonare_project_deserialize(&prefix, oversized, &project, &diag) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(project == nullptr);
+  REQUIRE(diag == nullptr);
 }
 
 TEST_CASE("snap_to_grid snaps a near-beat coordinate to the beat line", "[project]") {

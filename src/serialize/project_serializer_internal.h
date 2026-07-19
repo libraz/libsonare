@@ -13,7 +13,9 @@
 /// public symbol export) instead of the prior anonymous-namespace internal
 /// linkage; behaviour is unchanged.
 
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -39,7 +41,8 @@ using json::Value;
 
 std::string base64_encode(const std::vector<uint8_t>& bytes);
 uint8_t base64_value(char c);
-bool base64_decode(const std::string& text, std::vector<uint8_t>* out);
+bool base64_decode(const std::string& text, std::vector<uint8_t>* out,
+                   size_t max_output_bytes = std::numeric_limits<size_t>::max());
 
 // ===========================================================================
 // Small read helpers (forward-compatible: missing / wrong-typed fields fall
@@ -105,7 +108,8 @@ arrangement::ClipSource source_from_json(const Value& v);
 arrangement::ChordSymbol chord_from_json(const Value& v);
 arrangement::KeySegment key_segment_from_json(const Value& v);
 void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a);
-bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out);
+bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out,
+                       size_t max_payload_bytes = std::numeric_limits<size_t>::max());
 mixing::api::Insert insert_from_json(const Value& v);
 mixing::api::Scene scene_from_value(const Value& v);
 

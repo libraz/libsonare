@@ -15,6 +15,7 @@
 #include "core/audio.h"
 #include "util/math_utils.h"
 #include "util/numeric_validation.h"
+#include "util/resource_limits.h"
 
 using namespace sonare;
 
@@ -75,6 +76,41 @@ TEST_CASE("checked ceil ratios enforce iteration limits at the exact boundary",
   REQUIRE_FALSE(
       numeric::checked_ceil_ratio(4.0, std::numeric_limits<double>::min(), size_t{4}, &iterations));
   REQUIRE_FALSE(numeric::checked_ceil_ratio(4.0, 0.0, size_t{4}, &iterations));
+}
+
+TEST_CASE("offline import resource helpers enforce exact custom-budget boundaries",
+          "[numeric][resource_limit]") {
+  const resource::SpectrumResourceLimits spectrum_limits{16u, 9u, 800u};
+  REQUIRE(resource::spectrum_shape_fits(15, spectrum_limits));
+  REQUIRE(resource::spectrum_shape_fits(16, spectrum_limits));
+  REQUIRE_FALSE(resource::spectrum_shape_fits(17, spectrum_limits));
+  auto tight_spectrum_limits = spectrum_limits;
+  tight_spectrum_limits.max_peak_bytes = 799u;
+  REQUIRE_FALSE(resource::spectrum_shape_fits(16, tight_spectrum_limits));
+
+  const resource::AcousticBandResourceLimits acoustic_limits{6u, 24u};
+  REQUIRE(resource::acoustic_band_counts_fit(5, 23, acoustic_limits));
+  REQUIRE(resource::acoustic_band_counts_fit(6, 24, acoustic_limits));
+  REQUIRE_FALSE(resource::acoustic_band_counts_fit(7, 24, acoustic_limits));
+  REQUIRE_FALSE(resource::acoustic_band_counts_fit(6, 25, acoustic_limits));
+
+  const resource::ProjectImportResourceLimits project_limits{10u, 20u, 30u, 40u, 50u};
+  REQUIRE(resource::project_document_fits(9, 19, 29, 39, 49, project_limits));
+  REQUIRE(resource::project_document_fits(10, 20, 30, 40, 50, project_limits));
+  REQUIRE_FALSE(resource::project_document_fits(11, 20, 30, 40, 50, project_limits));
+  REQUIRE_FALSE(resource::project_document_fits(10, 21, 30, 40, 50, project_limits));
+  REQUIRE_FALSE(resource::project_document_fits(10, 20, 31, 40, 50, project_limits));
+  REQUIRE_FALSE(resource::project_document_fits(10, 20, 30, 41, 50, project_limits));
+  REQUIRE_FALSE(resource::project_document_fits(10, 20, 30, 40, 51, project_limits));
+
+  const resource::MidiImportResourceLimits midi_limits{10u, 20u, 30u, 40u, 50u};
+  REQUIRE(resource::midi_import_shape_fits(9, 19, 29, 39, 49, midi_limits));
+  REQUIRE(resource::midi_import_shape_fits(10, 20, 30, 40, 50, midi_limits));
+  REQUIRE_FALSE(resource::midi_import_shape_fits(11, 20, 30, 40, 50, midi_limits));
+  REQUIRE_FALSE(resource::midi_import_shape_fits(10, 21, 30, 40, 50, midi_limits));
+  REQUIRE_FALSE(resource::midi_import_shape_fits(10, 20, 31, 40, 50, midi_limits));
+  REQUIRE_FALSE(resource::midi_import_shape_fits(10, 20, 30, 41, 50, midi_limits));
+  REQUIRE_FALSE(resource::midi_import_shape_fits(10, 20, 30, 40, 51, midi_limits));
 }
 
 TEST_CASE("next_power_of_2(int) saturates for huge inputs without hanging",

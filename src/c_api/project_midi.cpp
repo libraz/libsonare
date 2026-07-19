@@ -515,7 +515,12 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_first_clip_id) *out_first_clip_id = 0;
-  if (!project || len == 0 || !bytes || len > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || len == 0 || !bytes || len > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (len > sonare::resource::kDefaultMidiImportResourceLimits.max_file_bytes) {
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
   SONARE_C_TRY
   sonare::midi::SmfImportResult result = sonare::midi::import_smf(bytes, len);
   if (!result.ok()) return SONARE_ERROR_INVALID_FORMAT;
@@ -539,7 +544,12 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_first_clip_id) *out_first_clip_id = 0;
-  if (!project || len == 0 || !bytes || len > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || len == 0 || !bytes || len > kMaxBufferSize) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (len > sonare::resource::kDefaultMidiImportResourceLimits.max_file_bytes) {
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
   SONARE_C_TRY
   sonare::midi::Smf2ImportResult result = sonare::midi::import_clip_file(bytes, len);
   if (!result.ok()) return SONARE_ERROR_INVALID_FORMAT;

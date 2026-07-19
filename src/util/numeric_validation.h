@@ -37,6 +37,22 @@ inline bool finite_ordered_range(Float minimum, Float maximum) noexcept {
   return finite(minimum) && finite(maximum) && minimum < maximum;
 }
 
+/// Checked floating-point narrowing. Non-finite and target-range-exceeding
+/// values are rejected before the cast; ordinary rounding within the target
+/// type's finite range is permitted.
+template <typename To, typename From>
+inline bool checked_float_cast(From value, To* out) noexcept {
+  static_assert(std::is_floating_point_v<To> && std::is_floating_point_v<From>);
+  if (out == nullptr || !finite(value)) return false;
+  const long double wide = static_cast<long double>(value);
+  if (wide < static_cast<long double>(std::numeric_limits<To>::lowest()) ||
+      wide > static_cast<long double>(std::numeric_limits<To>::max())) {
+    return false;
+  }
+  *out = static_cast<To>(value);
+  return true;
+}
+
 /// Exact floating-point to integral conversion. Fractional, non-finite and
 /// out-of-representation-range values are rejected before any cast occurs.
 template <typename Int, typename Float>

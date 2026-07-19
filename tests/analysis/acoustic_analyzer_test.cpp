@@ -9,6 +9,8 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
+#include "util/resource_limits.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -213,6 +215,23 @@ TEST_CASE("AcousticAnalyzer returns octave-band vectors for IR mode", "[acoustic
     REQUIRE(std::isfinite(params.c50_bands[i]));
     REQUIRE(std::isfinite(params.c80_bands[i]));
   }
+}
+
+TEST_CASE("AcousticAnalyzer rejects excessive caller-controlled band counts before reserve",
+          "[acoustic_analyzer]") {
+  const float sample = 1.0f;
+  const Audio audio = Audio::from_buffer(&sample, 1, 48000);
+
+  AcousticConfig config;
+  config.n_octave_bands =
+      static_cast<int>(resource::kDefaultAcousticBandResourceLimits.max_octave_bands + 1u);
+  REQUIRE_THROWS_AS(AcousticAnalyzer::from_impulse_response(audio, config), SonareException);
+
+  config = {};
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_third_octave_subbands =
+      static_cast<int>(resource::kDefaultAcousticBandResourceLimits.max_third_octave_bands + 1u);
+  REQUIRE_THROWS_AS(AcousticAnalyzer(audio, config), SonareException);
 }
 
 TEST_CASE("AcousticAnalyzer estimates blind RT60 from synthetic free decay",

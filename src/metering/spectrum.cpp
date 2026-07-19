@@ -13,13 +13,14 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/fractional_octave.h"
+#include "util/resource_limits.h"
 
 namespace sonare::metering {
 
 namespace {
 
 void validate_spectrum_config(const SpectrumConfig& config) {
-  SONARE_CHECK(config.n_fft > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(resource::spectrum_shape_fits(config.n_fft), ErrorCode::InvalidParameter);
   SONARE_CHECK(config.octave_fraction > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.db_ref > 0.0f && config.db_amin > 0.0f, ErrorCode::InvalidParameter);
 }

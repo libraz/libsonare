@@ -217,7 +217,9 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
                  std::vector<transport::TempoSegment>* tempos,
                  std::vector<transport::TimeSignatureSegment>* time_sigs,
                  std::vector<SmfMarker>* markers, SysExStore* sysex_store, uint32_t* skipped,
-                 bool* timing_overflow) {
+                 bool* timing_overflow, const resource::MidiImportResourceLimits& limits,
+                 size_t* event_count, size_t* metadata_bytes, size_t* sysex_bytes,
+                 bool* resource_exceeded) {
   const size_t end_pos = reader->pos() + length;
   if (length > reader->remaining()) return false;
 
@@ -244,6 +246,13 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       pending_sysex_active = false;
       ++(*skipped);
     }
+  };
+  const auto consume_event = [&]() {
+    if (!resource::bounded_accumulate(1u, limits.max_events, event_count)) {
+      *resource_exceeded = true;
+      return false;
+    }
+    return true;
   };
 
   while (reader->pos() < end_pos && !reader->overflow()) {
@@ -276,6 +285,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       switch (meta_type) {
         case kMetaSetTempo: {
           if (meta_len == 3) {
+            if (!consume_event()) return false;
             const uint32_t us_per_quarter = (static_cast<uint32_t>(payload[0]) << 16) |
                                             (static_cast<uint32_t>(payload[1]) << 8) |
                                             static_cast<uint32_t>(payload[2]);
@@ -293,6 +303,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
         }
         case kMetaTimeSignature: {
           if (meta_len >= 2) {
+            if (!consume_event()) return false;
             transport::TimeSignatureSegment seg;
             seg.start_ppq = ppq;
             seg.time_sig.numerator = static_cast<int>(payload[0]);
@@ -317,6 +328,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
           break;
         }
         case kMetaTrackName: {
+          if (!resource::bounded_accumulate(meta_len, limits.max_metadata_bytes, metadata_bytes)) {
+            *resource_exceeded = true;
+            return false;
+          }
           track->name.assign(reinterpret_cast<const char*>(payload), meta_len);
           break;
         }
@@ -324,6 +339,11 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
         case kMetaText:
         case kMetaLyric:
         case kMetaCuePoint: {
+          if (!consume_event() ||
+              !resource::bounded_accumulate(meta_len, limits.max_metadata_bytes, metadata_bytes)) {
+            *resource_exceeded = true;
+            return false;
+          }
           SmfMarker marker;
           marker.ppq = ppq;
           marker.text.assign(reinterpret_cast<const char*>(payload), meta_len);
@@ -336,6 +356,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
         }
         case kMetaKeySignature: {
           if (meta_len >= 2) {
+            if (!consume_event()) return false;
             SmfMarker marker;
             marker.ppq = ppq;
             marker.kind = SmfMarkerKind::kKeySignature;
@@ -368,6 +389,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       if (reader->pos() > end_pos || sysex_len > track_remaining()) break;
       const uint8_t* payload = reader->take(sysex_len);
       if (payload == nullptr) return false;
+      if (!resource::bounded_accumulate(sysex_len, limits.max_sysex_bytes, sysex_bytes)) {
+        *resource_exceeded = true;
+        return false;
+      }
 
       bool complete = false;
       if (status == kSysExStart) {
@@ -395,6 +420,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       }
       pending_sysex_active = false;
 
+      if (!consume_event()) return false;
       const SysExHandle handle =
           sysex_store != nullptr ? sysex_store->add(pending_sysex) : SysExHandle{0};
       pending_sysex.clear();
@@ -473,6 +499,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       continue;
     }
     MidiClipEvent ev;
+    if (!consume_event()) return false;
     ev.ppq = ppq;
     ev.ump = ump;
     track->clip.add_event(ev);
@@ -504,11 +531,17 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
 
 }  // namespace
 
-SmfImportResult import_smf(const uint8_t* data, size_t size) {
+SmfImportResult import_smf(const uint8_t* data, size_t size,
+                           const resource::MidiImportResourceLimits& limits) {
   SmfImportResult result;
   if (data == nullptr || size == 0) {
     result.status = SmfStatus::kInvalidArgument;
     result.diagnostic = "empty input";
+    return result;
+  }
+  if (size > limits.max_file_bytes) {
+    result.status = SmfStatus::kInvalidArgument;
+    result.diagnostic = "SMF import resource limit exceeded: file bytes";
     return result;
   }
 
@@ -530,6 +563,11 @@ SmfImportResult import_smf(const uint8_t* data, size_t size) {
   if (reader.overflow()) {
     result.status = SmfStatus::kTruncated;
     result.diagnostic = "truncated MThd fields";
+    return result;
+  }
+  if (num_tracks > limits.max_tracks) {
+    result.status = SmfStatus::kInvalidArgument;
+    result.diagnostic = "SMF import resource limit exceeded: track count";
     return result;
   }
   // Skip any extra header bytes beyond the standard 6.
@@ -561,6 +599,9 @@ SmfImportResult import_smf(const uint8_t* data, size_t size) {
   result.format = format;
   result.ticks_per_quarter = division;
 
+  size_t event_count = 0;
+  size_t metadata_bytes = 0;
+  size_t sysex_bytes = 0;
   for (uint16_t t = 0; t < num_tracks; ++t) {
     if (reader.remaining() == 0) {
       // Fewer track chunks than the header claimed: stop gracefully.
@@ -580,9 +621,16 @@ SmfImportResult import_smf(const uint8_t* data, size_t size) {
 
     TrackParseState track;
     bool timing_overflow = false;
+    bool resource_exceeded = false;
     if (!parse_track(&reader, track_len, division, &track, &result.tempo_segments,
                      &result.time_signatures, &result.markers, &result.sysex_store,
-                     &result.skipped_events, &timing_overflow)) {
+                     &result.skipped_events, &timing_overflow, limits, &event_count,
+                     &metadata_bytes, &sysex_bytes, &resource_exceeded)) {
+      if (resource_exceeded) {
+        result.status = SmfStatus::kInvalidArgument;
+        result.diagnostic = "SMF import resource limit exceeded";
+        return result;
+      }
       result.status = timing_overflow ? SmfStatus::kBadTrack : SmfStatus::kTruncated;
       result.diagnostic = timing_overflow ? "cumulative SMF tick exceeds uint64 range"
                                           : "malformed or truncated track data";

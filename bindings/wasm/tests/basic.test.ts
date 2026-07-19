@@ -602,6 +602,28 @@ describe('Sonare WASM Module', () => {
           }),
         ).toThrow();
       }
+      // wasm32 narrows allocation sizes to 32-bit size_t. Reject before
+      // allocation instead of wrapping the buffer and rendering the original
+      // 64-bit frame count past its end.
+      for (const totalFrames of [2 ** 32 + 1, Number.MAX_SAFE_INTEGER]) {
+        expect(() =>
+          engine.bounceOffline({
+            totalFrames,
+            blockSize: 128,
+            numChannels: 2,
+            sourceSampleRate: 48000,
+            targetSampleRate: 48000,
+          }),
+        ).toThrow();
+        expect(() =>
+          engine.freezeOffline({
+            totalFrames,
+            blockSize: 128,
+            numChannels: 2,
+            clipId: 80,
+          }),
+        ).toThrow();
+      }
       engine.destroy();
     });
 

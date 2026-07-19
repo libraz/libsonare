@@ -62,8 +62,8 @@ std::string base64_encode(const std::vector<uint8_t>& bytes) {
 // single decoder implementation.
 uint8_t base64_value(char c) { return sonare::base64_char_value(c); }
 
-bool base64_decode(const std::string& text, std::vector<uint8_t>* out) {
-  return sonare::base64_decode(text, out);
+bool base64_decode(const std::string& text, std::vector<uint8_t>* out, size_t max_output_bytes) {
+  return sonare::base64_decode(text, out, max_output_bytes);
 }
 
 // ===========================================================================

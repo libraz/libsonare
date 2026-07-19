@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -24,10 +25,17 @@ inline uint8_t base64_char_value(char c) {
 /// leaves *out empty) on any malformed length, character, or padding so callers
 /// can fail gracefully. Padding may only appear in the final quad, as '=' alone
 /// or '==' together.
-inline bool base64_decode(const std::string& text, std::vector<uint8_t>* out) {
+inline bool base64_decode(const std::string& text, std::vector<uint8_t>* out,
+                          size_t max_output_bytes = std::numeric_limits<size_t>::max()) {
+  if (out == nullptr) return false;
   out->clear();
   if (text.size() % 4 != 0) return false;
-  out->reserve((text.size() / 4) * 3);
+  const size_t quads = text.size() / 4;
+  size_t decoded_size = quads * 3;
+  if (!text.empty() && text.back() == '=') --decoded_size;
+  if (text.size() >= 2 && text[text.size() - 2] == '=') --decoded_size;
+  if (decoded_size > max_output_bytes) return false;
+  out->reserve(decoded_size);
   for (size_t i = 0; i < text.size(); i += 4) {
     const char c0 = text[i];
     const char c1 = text[i + 1];
