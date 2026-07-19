@@ -5305,9 +5305,21 @@
         "name": "chord_confidence",
         "offset": 80,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "feature_flags",
+        "offset": 88,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_chroma",
+        "offset": 92,
+        "size": 4
       }
     ],
-    "size": 88
+    "size": 96
   },
   "SonareStreamFramesI16": {
     "align": 8,
@@ -5365,9 +5377,21 @@
         "name": "spectral_flatness",
         "offset": 56,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "feature_flags",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_chroma",
+        "offset": 68,
+        "size": 4
       }
     ],
-    "size": 64
+    "size": 72
   },
   "SonareStreamFramesU8": {
     "align": 8,
@@ -5425,9 +5449,21 @@
         "name": "spectral_flatness",
         "offset": 56,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "feature_flags",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_chroma",
+        "offset": 68,
+        "size": 4
       }
     ],
-    "size": 64
+    "size": 72
   },
   "SonareStreamPatternScore": {
     "align": 4,

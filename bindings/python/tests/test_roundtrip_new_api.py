@@ -282,6 +282,42 @@ def test_stream_analyzer_quantized_python_api():
         assert all(-32768 <= value <= 32767 for value in frames16.chroma)
 
 
+def test_stream_analyzer_feature_shape_contract_all_combinations_and_read_types():
+    input_samples = [0.0] * 32
+    input_samples[8] = 0.5
+    for mask in range(16):
+        cfg = ls.StreamConfig(
+            sample_rate=8000,
+            n_fft=32,
+            hop_length=32,
+            n_mels=8,
+            compute_mel=bool(mask & 1),
+            compute_chroma=bool(mask & 2),
+            compute_onset=bool(mask & 4),
+            compute_spectral=bool(mask & 8),
+        )
+        for method_name in ("read_frames", "read_frames_u8", "read_frames_i16"):
+            with ls.StreamAnalyzer(cfg) as analyzer:
+                analyzer.process(input_samples)
+                frames = getattr(analyzer, method_name)(1)
+                assert frames.n_frames == 1
+                assert frames.feature_flags == mask
+                assert frames.n_mels == (8 if mask & 1 else 0)
+                assert frames.n_chroma == (12 if mask & 2 else 0)
+                assert len(frames.mel) == (8 if mask & 1 else 0)
+                assert len(frames.chroma) == (12 if mask & 2 else 0)
+                assert len(frames.onset_strength) == (1 if mask & 4 else 0)
+                assert len(frames.rms_energy) == 1
+                assert len(frames.spectral_centroid) == (1 if mask & 8 else 0)
+                assert len(frames.spectral_flatness) == (1 if mask & 8 else 0)
+
+
+@pytest.mark.parametrize("output_format", [1, 2])
+def test_stream_analyzer_rejects_legacy_output_format(output_format):
+    with pytest.raises(ls.SonareError):
+        ls.StreamAnalyzer(ls.StreamConfig(output_format=output_format))
+
+
 def test_stream_analyzer_quantize_config_override():
     sr = 22050
     cfg = ls.StreamConfig(sample_rate=sr, n_fft=1024, hop_length=256, n_mels=32, window=1)
@@ -334,3 +370,31 @@ def test_stream_analyzer_external_offsets_preserve_buffered_timestamps_and_rejec
             analyzer.process_with_offset(audio[128:256], 1129)
         analyzer.reset(5000)
         analyzer.process_with_offset(audio[:128], 5000)
+
+
+def test_stream_analyzer_rejects_invalid_size_arguments_without_wrapping():
+    size_t_max = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
+    invalid_values = (-1, 1.5, float("nan"), float("inf"), size_t_max + 1, True)
+
+    with ls.StreamAnalyzer(
+        ls.StreamConfig(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8)
+    ) as analyzer:
+        operations = (
+            lambda value: analyzer.process_with_offset([0.0], value),
+            analyzer.read_frames,
+            analyzer.read_frames_u8,
+            analyzer.read_frames_i16,
+            analyzer.reset,
+        )
+        for value in invalid_values:
+            for operation in operations:
+                with pytest.raises(ValueError, match="non-negative integer"):
+                    operation(value)
+
+        analyzer.reset(size_t_max)
+        assert analyzer.read_frames(size_t_max).n_frames == 0
+        assert analyzer.read_frames_u8(size_t_max).n_frames == 0
+        assert analyzer.read_frames_i16(size_t_max).n_frames == 0
+
+        analyzer.reset()
+        analyzer.process_with_offset([0.0], 0)

@@ -39,6 +39,16 @@ export function streamAnalyzerConfigDefaults(): StreamConfigDefaults {
  * console.log('Key:', stats.estimate.key);
  * console.log('Chord progression:', stats.estimate.chordProgression);
  * ```
+ *
+ * The native analyzer supports one serialized producer (`process`,
+ * `processWithOffset`, or `finalize`) concurrently with one serialized consumer
+ * (`availableFrames`, a `readFrames*` method, `stats`, `frameCount`, or
+ * `currentTime`) when a threaded WASM host shares the native instance.
+ * Publication is allocation-free release/acquire. `reset`, setters, and
+ * deletion require both roles to be stopped. A full pending ring drops the
+ * newly produced output frame while analysis totals keep advancing. Ordinary
+ * browser builds remain single-threaded unless the host explicitly provisions
+ * shared-memory worker support.
  */
 export class StreamAnalyzer {
   private analyzer: WasmStreamAnalyzer;
@@ -53,6 +63,15 @@ export class StreamAnalyzer {
       throw new Error(
         'computeMagnitude is not supported because magnitude frames are not exposed by StreamAnalyzer read paths.',
       );
+    }
+    if (
+      config.outputFormat !== undefined &&
+      (typeof config.outputFormat !== 'number' ||
+        !Number.isFinite(config.outputFormat) ||
+        !Number.isInteger(config.outputFormat) ||
+        config.outputFormat !== 0)
+    ) {
+      throw new TypeError('outputFormat must be the integer 0 (Float32)');
     }
     const module = getSonareModule();
     const defaults = streamAnalyzerConfigDefaults();
@@ -101,7 +120,7 @@ export class StreamAnalyzer {
   }
 
   /**
-   * Flush the final partial frame with zero-padding.
+   * Drain any high-rate resampler tail, then zero-pad the final partial frame.
    */
   finalize(): void {
     this.analyzer.finalize();

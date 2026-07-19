@@ -137,9 +137,11 @@ class StreamAnalyzerWrapper {
       throw SonareException(ErrorCode::InvalidParameter,
                             "maxProgressionEntries must be a non-negative integer");
     }
-    config.output_format = output_format == 1   ? OutputFormat::Int16
-                           : output_format == 2 ? OutputFormat::Uint8
-                                                : OutputFormat::Float32;
+    if (output_format != 0) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "outputFormat is deprecated; use readFramesU8/readFramesI16");
+    }
+    config.output_format = OutputFormat::Float32;
     config.key_update_interval_sec = key_update_interval_sec;
     config.bpm_update_interval_sec = bpm_update_interval_sec;
     config_ = config;
@@ -170,10 +172,9 @@ class StreamAnalyzerWrapper {
 
     val out = val::object();
     out.set("nFrames", buffer.n_frames);
-    // 0 (not the configured n_mels) when mel computation is disabled,
-    // matching the empty mel array so nMels * nFrames == mel.length always
-    // holds.
-    out.set("nMels", config_.compute_mel ? config_.n_mels : 0);
+    out.set("nMels", buffer.n_mels);
+    out.set("nChroma", buffer.n_chroma);
+    out.set("featureFlags", buffer.feature_flags);
     out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
     out.set("mel", vectorToFloat32Array(buffer.mel));
     out.set("chroma", vectorToFloat32Array(buffer.chroma));
@@ -198,6 +199,8 @@ class StreamAnalyzerWrapper {
     val out = val::object();
     out.set("nFrames", buffer.n_frames);
     out.set("nMels", buffer.n_mels);
+    out.set("nChroma", buffer.n_chroma);
+    out.set("featureFlags", buffer.feature_flags);
     out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
     out.set("mel", vectorToUint8Array(buffer.mel));
     out.set("chroma", vectorToUint8Array(buffer.chroma));
@@ -219,6 +222,8 @@ class StreamAnalyzerWrapper {
     val out = val::object();
     out.set("nFrames", buffer.n_frames);
     out.set("nMels", buffer.n_mels);
+    out.set("nChroma", buffer.n_chroma);
+    out.set("featureFlags", buffer.feature_flags);
     out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
     out.set("mel", vectorToInt16Array(buffer.mel));
     out.set("chroma", vectorToInt16Array(buffer.chroma));

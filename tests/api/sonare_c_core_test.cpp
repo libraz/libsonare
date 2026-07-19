@@ -393,7 +393,90 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
   config.hop_length = 256;
   config.n_mels = 32;
   config.window = SONARE_WINDOW_HAMMING;
-  config.output_format = SONARE_STREAM_OUTPUT_UINT8;
+  config.output_format = SONARE_STREAM_OUTPUT_FLOAT32;
+
+  SECTION("rejects legacy config output formats") {
+    for (const int format : {SONARE_STREAM_OUTPUT_INT16, SONARE_STREAM_OUTPUT_UINT8}) {
+      SonareStreamConfig bad = config;
+      bad.output_format = format;
+      SonareStreamAnalyzer* analyzer = nullptr;
+      REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(analyzer == nullptr);
+    }
+  }
+
+  SECTION("feature flags define every C SOA read shape") {
+    std::array<float, 32> samples{};
+    samples[8] = 0.5f;
+    for (uint32_t mask = 0; mask < 16; ++mask) {
+      CAPTURE(mask);
+      SonareStreamConfig shaped = config;
+      shaped.sample_rate = 8000;
+      shaped.n_fft = 32;
+      shaped.hop_length = 32;
+      shaped.n_mels = 8;
+      shaped.compute_mel = (mask & SONARE_STREAM_FEATURE_MEL) != 0;
+      shaped.compute_chroma = (mask & SONARE_STREAM_FEATURE_CHROMA) != 0;
+      shaped.compute_onset = (mask & SONARE_STREAM_FEATURE_ONSET) != 0;
+      shaped.compute_spectral = (mask & SONARE_STREAM_FEATURE_SPECTRAL) != 0;
+
+      SonareStreamAnalyzer* analyzer = nullptr;
+      REQUIRE(sonare_stream_analyzer_create(&shaped, &analyzer) == SONARE_OK);
+      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) ==
+              SONARE_OK);
+      SonareStreamFrames floats{};
+      REQUIRE(sonare_stream_analyzer_read_frames(analyzer, 1, &floats) == SONARE_OK);
+      REQUIRE(floats.n_frames == 1);
+      REQUIRE(floats.feature_flags == mask);
+      REQUIRE(floats.n_mels == ((mask & SONARE_STREAM_FEATURE_MEL) ? 8 : 0));
+      REQUIRE(floats.n_chroma == ((mask & SONARE_STREAM_FEATURE_CHROMA) ? 12 : 0));
+      REQUIRE((floats.mel != nullptr) == ((mask & SONARE_STREAM_FEATURE_MEL) != 0));
+      REQUIRE((floats.chroma != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
+      REQUIRE((floats.chord_root != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
+      REQUIRE((floats.onset_strength != nullptr) == ((mask & SONARE_STREAM_FEATURE_ONSET) != 0));
+      REQUIRE((floats.spectral_centroid != nullptr) ==
+              ((mask & SONARE_STREAM_FEATURE_SPECTRAL) != 0));
+      REQUIRE(floats.rms_energy != nullptr);
+      sonare_free_stream_frames(&floats);
+      sonare_stream_analyzer_destroy(analyzer);
+
+      analyzer = nullptr;
+      REQUIRE(sonare_stream_analyzer_create(&shaped, &analyzer) == SONARE_OK);
+      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) ==
+              SONARE_OK);
+      SonareStreamFramesU8 u8{};
+      REQUIRE(sonare_stream_analyzer_read_frames_u8(analyzer, 1, &u8) == SONARE_OK);
+      REQUIRE(u8.n_frames == 1);
+      REQUIRE(u8.feature_flags == mask);
+      REQUIRE(u8.n_mels == ((mask & SONARE_STREAM_FEATURE_MEL) ? 8 : 0));
+      REQUIRE(u8.n_chroma == ((mask & SONARE_STREAM_FEATURE_CHROMA) ? 12 : 0));
+      REQUIRE((u8.mel != nullptr) == ((mask & SONARE_STREAM_FEATURE_MEL) != 0));
+      REQUIRE((u8.chroma != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
+      REQUIRE((u8.onset_strength != nullptr) == ((mask & SONARE_STREAM_FEATURE_ONSET) != 0));
+      REQUIRE((u8.spectral_centroid != nullptr) == ((mask & SONARE_STREAM_FEATURE_SPECTRAL) != 0));
+      REQUIRE(u8.rms_energy != nullptr);
+      sonare_free_stream_frames_u8(&u8);
+      sonare_stream_analyzer_destroy(analyzer);
+
+      analyzer = nullptr;
+      REQUIRE(sonare_stream_analyzer_create(&shaped, &analyzer) == SONARE_OK);
+      REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) ==
+              SONARE_OK);
+      SonareStreamFramesI16 i16{};
+      REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, 1, &i16) == SONARE_OK);
+      REQUIRE(i16.n_frames == 1);
+      REQUIRE(i16.feature_flags == mask);
+      REQUIRE(i16.n_mels == ((mask & SONARE_STREAM_FEATURE_MEL) ? 8 : 0));
+      REQUIRE(i16.n_chroma == ((mask & SONARE_STREAM_FEATURE_CHROMA) ? 12 : 0));
+      REQUIRE((i16.mel != nullptr) == ((mask & SONARE_STREAM_FEATURE_MEL) != 0));
+      REQUIRE((i16.chroma != nullptr) == ((mask & SONARE_STREAM_FEATURE_CHROMA) != 0));
+      REQUIRE((i16.onset_strength != nullptr) == ((mask & SONARE_STREAM_FEATURE_ONSET) != 0));
+      REQUIRE((i16.spectral_centroid != nullptr) == ((mask & SONARE_STREAM_FEATURE_SPECTRAL) != 0));
+      REQUIRE(i16.rms_energy != nullptr);
+      sonare_free_stream_frames_i16(&i16);
+      sonare_stream_analyzer_destroy(analyzer);
+    }
+  }
 
   SECTION("rejects impossible overlap") {
     SonareStreamConfig bad = config;
@@ -461,6 +544,9 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(u8.n_frames > 0);
     REQUIRE(u8.n_frames <= 4);
     REQUIRE(u8.n_mels == config.n_mels);
+    REQUIRE(u8.n_chroma == 12);
+    REQUIRE(u8.feature_flags == (SONARE_STREAM_FEATURE_MEL | SONARE_STREAM_FEATURE_CHROMA |
+                                 SONARE_STREAM_FEATURE_ONSET | SONARE_STREAM_FEATURE_SPECTRAL));
     REQUIRE(u8.timestamps != nullptr);
     REQUIRE(u8.mel != nullptr);
     REQUIRE(u8.chroma != nullptr);
@@ -471,6 +557,9 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_read_frames_i16(analyzer, 4, &i16) == SONARE_OK);
     REQUIRE(i16.n_frames > 0);
     REQUIRE(i16.n_mels == config.n_mels);
+    REQUIRE(i16.n_chroma == 12);
+    REQUIRE(i16.feature_flags == (SONARE_STREAM_FEATURE_MEL | SONARE_STREAM_FEATURE_CHROMA |
+                                  SONARE_STREAM_FEATURE_ONSET | SONARE_STREAM_FEATURE_SPECTRAL));
     REQUIRE(i16.mel != nullptr);
     REQUIRE(i16.chroma != nullptr);
     sonare_free_stream_frames_i16(&i16);

@@ -10,6 +10,11 @@
 
 namespace sonare {
 
+inline constexpr uint32_t kStreamFeatureMel = 1u << 0;
+inline constexpr uint32_t kStreamFeatureChroma = 1u << 1;
+inline constexpr uint32_t kStreamFeatureOnset = 1u << 2;
+inline constexpr uint32_t kStreamFeatureSpectral = 1u << 3;
+
 /// @brief A detected chord change in the progression.
 struct ChordChange {
   int root = -1;            ///< Chord root (0-11 for C-B, -1 = unknown)
@@ -109,7 +114,7 @@ struct AnalyzerStats {
   size_t total_samples = 0;          ///< Total samples processed
   float duration_seconds = 0.0f;     ///< Total duration processed
   size_t pending_frames = 0;         ///< Unread output frames currently retained
-  size_t dropped_output_frames = 0;  ///< Oldest frames dropped at the pending-frame limit
+  size_t dropped_output_frames = 0;  ///< New output frames dropped at the pending-frame limit
   size_t dropped_chord_progression_entries = 0;  ///< Chord changes dropped at the history cap
   size_t dropped_bar_progression_entries = 0;    ///< Bar chords dropped at the history cap
   ProgressiveEstimate estimate;                  ///< Current progressive estimate
@@ -119,6 +124,9 @@ struct AnalyzerStats {
 /// @details More efficient for postMessage transfer (contiguous arrays).
 struct FrameBuffer {
   size_t n_frames = 0;  ///< Number of frames in buffer
+  int n_mels = 0;       ///< Mel stride; 0 when mel output is disabled
+  int n_chroma = 0;     ///< Chroma stride; 0 when chroma output is disabled
+  uint32_t feature_flags = 0;
 
   std::vector<float> timestamps;  ///< [n_frames]
   /// [n_frames * n_mels] (row-major). LINEAR mel power, not dB — the raw
@@ -126,18 +134,21 @@ struct FrameBuffer {
   /// QuantizedFrameBufferU8 / @ref QuantizedFrameBufferI16) convert this to dB
   /// before packing, so their `mel` is dB-scaled; this float buffer is not.
   std::vector<float> mel;
-  std::vector<float> chroma;             ///< [n_frames * 12] (row-major)
-  std::vector<float> onset_strength;     ///< [n_frames]
+  std::vector<float> chroma;             ///< [n_frames * n_chroma] or empty
+  std::vector<float> onset_strength;     ///< [n_frames] when enabled, else empty
   std::vector<float> rms_energy;         ///< [n_frames]
-  std::vector<float> spectral_centroid;  ///< [n_frames]
-  std::vector<float> spectral_flatness;  ///< [n_frames]
-  std::vector<int> chord_root;           ///< [n_frames] chord root per frame
-  std::vector<int> chord_quality;        ///< [n_frames] chord quality per frame
-  std::vector<float> chord_confidence;   ///< [n_frames] chord confidence per frame
+  std::vector<float> spectral_centroid;  ///< [n_frames] when enabled, else empty
+  std::vector<float> spectral_flatness;  ///< [n_frames] when enabled, else empty
+  std::vector<int> chord_root;           ///< [n_frames] when chroma enabled, else empty
+  std::vector<int> chord_quality;        ///< [n_frames] when chroma enabled, else empty
+  std::vector<float> chord_confidence;   ///< [n_frames] when chroma enabled, else empty
 
   /// @brief Clears all data.
   void clear() {
     n_frames = 0;
+    n_mels = 0;
+    n_chroma = 0;
+    feature_flags = 0;
     timestamps.clear();
     mel.clear();
     chroma.clear();
@@ -151,10 +162,13 @@ struct FrameBuffer {
   }
 
   /// @brief Reserves capacity for n frames.
-  void reserve(size_t n, int n_mels) {
+  void reserve(size_t n, int mels, int chroma, uint32_t features) {
+    n_mels = mels;
+    n_chroma = chroma;
+    feature_flags = features;
     timestamps.reserve(n);
-    mel.reserve(n * n_mels);
-    chroma.reserve(n * 12);
+    mel.reserve(n * static_cast<size_t>(mels));
+    this->chroma.reserve(n * static_cast<size_t>(chroma));
     onset_strength.reserve(n);
     rms_energy.reserve(n);
     spectral_centroid.reserve(n);
@@ -192,6 +206,8 @@ struct QuantizeConfig {
 struct QuantizedFrameBufferU8 {
   size_t n_frames = 0;  ///< Number of frames in buffer
   int n_mels = 0;       ///< Number of mel bands per frame
+  int n_chroma = 0;     ///< Number of chroma bins per frame
+  uint32_t feature_flags = 0;
 
   std::vector<float> timestamps;           ///< [n_frames] (kept as float for precision)
   std::vector<uint8_t> mel;                ///< [n_frames * n_mels] quantized mel (dB scaled)
@@ -205,6 +221,8 @@ struct QuantizedFrameBufferU8 {
   void clear() {
     n_frames = 0;
     n_mels = 0;
+    n_chroma = 0;
+    feature_flags = 0;
     timestamps.clear();
     mel.clear();
     chroma.clear();
@@ -215,11 +233,13 @@ struct QuantizedFrameBufferU8 {
   }
 
   /// @brief Reserves capacity for n frames.
-  void reserve(size_t n, int mels) {
+  void reserve(size_t n, int mels, int chroma_bins, uint32_t features) {
     n_mels = mels;
+    n_chroma = chroma_bins;
+    feature_flags = features;
     timestamps.reserve(n);
     mel.reserve(n * mels);
-    chroma.reserve(n * 12);
+    chroma.reserve(n * static_cast<size_t>(chroma_bins));
     onset_strength.reserve(n);
     rms_energy.reserve(n);
     spectral_centroid.reserve(n);
@@ -232,6 +252,8 @@ struct QuantizedFrameBufferU8 {
 struct QuantizedFrameBufferI16 {
   size_t n_frames = 0;  ///< Number of frames in buffer
   int n_mels = 0;       ///< Number of mel bands per frame
+  int n_chroma = 0;     ///< Number of chroma bins per frame
+  uint32_t feature_flags = 0;
 
   std::vector<float> timestamps;           ///< [n_frames] (kept as float for precision)
   std::vector<int16_t> mel;                ///< [n_frames * n_mels] quantized mel
@@ -245,6 +267,8 @@ struct QuantizedFrameBufferI16 {
   void clear() {
     n_frames = 0;
     n_mels = 0;
+    n_chroma = 0;
+    feature_flags = 0;
     timestamps.clear();
     mel.clear();
     chroma.clear();
@@ -255,11 +279,13 @@ struct QuantizedFrameBufferI16 {
   }
 
   /// @brief Reserves capacity for n frames.
-  void reserve(size_t n, int mels) {
+  void reserve(size_t n, int mels, int chroma_bins, uint32_t features) {
     n_mels = mels;
+    n_chroma = chroma_bins;
+    feature_flags = features;
     timestamps.reserve(n);
     mel.reserve(n * mels);
-    chroma.reserve(n * 12);
+    chroma.reserve(n * static_cast<size_t>(chroma_bins));
     onset_strength.reserve(n);
     rms_energy.reserve(n);
     spectral_centroid.reserve(n);

@@ -68,7 +68,7 @@ describe('StreamAnalyzer', () => {
       expect(() => new StreamAnalyzer({ sampleRate: 22050, maxProgressionEntries: 0 })).toThrow();
     });
 
-    it('bounds unread frames and reports drop-oldest telemetry', () => {
+    it('bounds unread frames and reports drop-newest telemetry', () => {
       const analyzer = new StreamAnalyzer({
         sampleRate: 8000,
         nFft: 32,
@@ -958,6 +958,55 @@ describe('StreamAnalyzer', () => {
   });
 
   describe('quantize-config override', () => {
+    it('uses feature flags and empty arrays for every disabled-feature combination and read type', () => {
+      const input = new Float32Array(32);
+      input[8] = 0.5;
+      for (let mask = 0; mask < 16; mask += 1) {
+        const config = {
+          sampleRate: 8000,
+          nFft: 32,
+          hopLength: 32,
+          nMels: 8,
+          computeMel: (mask & 1) !== 0,
+          computeChroma: (mask & 2) !== 0,
+          computeOnset: (mask & 4) !== 0,
+          computeSpectral: (mask & 8) !== 0,
+        };
+        for (let readType = 0; readType < 3; readType += 1) {
+          const analyzer = new StreamAnalyzer(config);
+          try {
+            analyzer.process(input);
+            const frames =
+              readType === 0
+                ? analyzer.readFrames(1)
+                : readType === 1
+                  ? analyzer.readFramesU8(1)
+                  : analyzer.readFramesI16(1);
+            expect(frames.nFrames).toBe(1);
+            expect(frames.featureFlags).toBe(mask);
+            expect(frames.nMels).toBe(mask & 1 ? 8 : 0);
+            expect(frames.nChroma).toBe(mask & 2 ? 12 : 0);
+            expect(frames.mel.length).toBe(mask & 1 ? 8 : 0);
+            expect(frames.chroma.length).toBe(mask & 2 ? 12 : 0);
+            expect(frames.onsetStrength.length).toBe(mask & 4 ? 1 : 0);
+            expect(frames.rmsEnergy.length).toBe(1);
+            expect(frames.spectralCentroid.length).toBe(mask & 8 ? 1 : 0);
+            expect(frames.spectralFlatness.length).toBe(mask & 8 ? 1 : 0);
+          } finally {
+            analyzer.dispose();
+          }
+        }
+      }
+    });
+
+    it('rejects legacy outputFormat selectors', () => {
+      expect(() => new StreamAnalyzer({ outputFormat: 1 })).toThrow();
+      expect(() => new StreamAnalyzer({ outputFormat: 2 })).toThrow();
+      for (const value of [0.5, Number.NaN, Number.POSITIVE_INFINITY, '0']) {
+        expect(() => new StreamAnalyzer({ outputFormat: value as unknown as number })).toThrow();
+      }
+    });
+
     it('widens the saturating quantization range', () => {
       const sampleRate = 22050;
       const config = { sampleRate, nFft: 1024, hopLength: 256, nMels: 32 };

@@ -75,12 +75,12 @@ class StreamConfig:
     compute_spectral: bool = True
     emit_every_n_frames: int = 1
     magnitude_downsample: int = 1
-    max_pending_frames: int = 4096
+    max_pending_frames: int = 4096  # Overflow drops the newly produced frame.
     max_progression_entries: int = 4096
     key_update_interval_sec: float = 5.0
     bpm_update_interval_sec: float = 10.0
     window: int = 0
-    output_format: int = 0
+    output_format: int = 0  # Deprecated: must be 0; choose an explicit read method.
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +88,9 @@ class StreamFrames:
     """Structure-of-arrays batch of analyzed frames from :class:`StreamAnalyzer`.
 
     Matrix fields are flattened row-major ``[n_frames x stride]`` lists
-    (``mel`` stride is ``n_mels``, ``chroma`` stride is 12).
+    (``mel`` stride is ``n_mels``, ``chroma`` stride is ``n_chroma``). A
+    disabled feature has a zero stride or empty scalar array; ``feature_flags``
+    uses MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8.
 
     ``mel`` here is LINEAR mel power (not dB) — the raw per-frame mel energies.
     The quantized read paths (:class:`StreamFramesU8` / :class:`StreamFramesI16`)
@@ -98,6 +100,8 @@ class StreamFrames:
 
     n_frames: int
     n_mels: int
+    n_chroma: int
+    feature_flags: int
     timestamps: list[float]
     mel: list[float]
     chroma: list[float]
@@ -118,6 +122,8 @@ class StreamFramesU8:
 
     n_frames: int
     n_mels: int
+    n_chroma: int
+    feature_flags: int
     timestamps: list[float]
     mel: list[int]
     chroma: list[int]
@@ -135,6 +141,8 @@ class StreamFramesI16:
 
     n_frames: int
     n_mels: int
+    n_chroma: int
+    feature_flags: int
     timestamps: list[float]
     mel: list[int]
     chroma: list[int]

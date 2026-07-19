@@ -8,6 +8,7 @@
 #include "core/window.h"
 #include "filters/chroma.h"
 #include "filters/mel.h"
+#include "streaming/stream_analyzer_publication.h"
 #include "streaming/stream_analyzer_utils.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -39,11 +40,10 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// opposed to the degenerate-but-safe sizing params clamped below). The flat C
   /// ABI rejects these before construction; mirror the same relationship and
   /// positive-value contract here so direct C++/Node/WASM construction fails
-  /// identically instead of producing garbage spectra. Note compute_magnitude,
-  /// window and output_format are validated at the binding layer (the C++ enums
-  /// are intrinsically valid and compute_magnitude is a real core feature the
-  /// SOA read paths simply don't surface), so they are intentionally not
-  /// re-checked here.
+  /// identically instead of producing garbage spectra. Note compute_magnitude
+  /// is a real core feature (although SOA bindings do not surface it) and window
+  /// is an enum, so those two are intentionally not re-checked here. The legacy
+  /// output_format selector is checked separately below.
   const auto finite_positive = [](float v) { return std::isfinite(v) && v > 0.0f; };
   const auto finite_non_negative = [](float v) { return std::isfinite(v) && v >= 0.0f; };
   if (config_.sample_rate <= 0)
@@ -98,16 +98,16 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
                           "StreamConfig: max_progression_entries is outside supported bounds");
   }
 
-  /// Onset strength (and therefore progressive BPM) is derived from the
-  /// frame-to-frame difference of the log-mel spectrum (see compute_onset()).
-  /// If a caller requests onset/BPM but disables the mel path, onset would be
-  /// identically 0 forever and BPM would never leave its initial 0 / confidence
-  /// 0 state — a silent failure. Enforce the dependency by auto-enabling mel
-  /// whenever onset is requested. This coercion is observable through config()
-  /// so the caller can see that mel was turned on for them.
-  if (config_.compute_onset && !config_.compute_mel) {
-    config_.compute_mel = true;
+  if (config_.output_format != OutputFormat::Float32) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "StreamConfig: output_format is deprecated; use an explicit quantized read method");
   }
+
+  // Onset is derived from log-mel flux. Keep that dependency internal so
+  // compute_onset=true/compute_mel=false produces onset output without falsely
+  // advertising or populating the disabled mel output array.
+  needs_mel_analysis_ = config_.compute_mel || config_.compute_onset;
 
   /// Determine if resampling is needed for high sample rates
   if (config_.sample_rate > kMaxDirectSampleRate) {
@@ -164,7 +164,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   window_ = get_window_cached(config_.window, config_.n_fft);
 
   /// Pre-compute mel filterbank (use internal sample rate)
-  if (config_.compute_mel) {
+  if (needs_mel_analysis_) {
     MelFilterConfig mel_config;
     mel_config.n_mels = config_.n_mels;
     mel_config.fmin = config_.fmin;
@@ -200,7 +200,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   magnitude_.resize(n_bins);
   power_.resize(n_bins);
 
-  if (config_.compute_mel) {
+  if (needs_mel_analysis_) {
     mel_buffer_.resize(config_.n_mels);
     mel_log_.resize(config_.n_mels);
     prev_mel_log_.resize(config_.n_mels, 0.0f);
@@ -230,6 +230,9 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   }
   prepare_output_frame(scratch_frame_);
   prepare_progressive_estimate();
+  publication_ = std::make_unique<StreamAnalyzerPublication>();
+  initialize_stats_publication();
+  publish_stats_snapshot();
 }
 
 StreamAnalyzer::~StreamAnalyzer() = default;
@@ -246,6 +249,7 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples) {
     offset_tracking_mode_ = OffsetTrackingMode::Internal;
   }
   process_internal(samples, n_samples);
+  publish_stats_snapshot();
 }
 
 }  // namespace sonare

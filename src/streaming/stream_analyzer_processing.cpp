@@ -17,6 +17,7 @@ using namespace streaming_detail;
 void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t sample_offset) {
   if (samples == nullptr || n_samples == 0) {
     process_internal(samples, n_samples);
+    publish_stats_snapshot();
     return;
   }
   if (n_samples > std::numeric_limits<size_t>::max() - sample_offset) {
@@ -49,6 +50,7 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t samp
   }
   process_internal(samples, n_samples);
   next_external_sample_offset_ = sample_offset + n_samples;
+  publish_stats_snapshot();
 }
 
 void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
@@ -78,7 +80,7 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
     process_samples = resample_buffer_.data();
     process_n_samples = resample_buffer_.size();
     /// The stateful resampler can return 0 samples for a short first chunk
-    /// (start-up filter latency). Nothing to append yet in that case.
+    /// (start-up filter latency). finalize() will drain that delayed tail.
     if (process_n_samples == 0) {
       return;
     }
@@ -96,7 +98,11 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
               overlap_buffer_.begin() + prev_size);
   }
 
-  /// Process complete frames
+  process_complete_frames();
+}
+
+void StreamAnalyzer::process_complete_frames() {
+  /// Process complete frames.
   int n_fft = config_.n_fft;
   int hop_length = config_.hop_length;
 
@@ -153,28 +159,29 @@ void StreamAnalyzer::finalize() {
   }
   finalized_ = true;
 
-  // NOTE: when internal resampling is active the persistent StreamResampler still
-  // holds a constant filter-latency tail (a handful of ms) inside its poly-phase
-  // state that has not yet emerged as output. We intentionally do NOT drain it
-  // here: StreamResampler deliberately never fabricates zero-padded samples (see
-  // its header), and flushing would either inject zeros or restart phase. For a
-  // real-time visualization/analysis stream the final few ms of the filter tail
-  // therefore do not reach frame analysis; at high source rates (e.g. 96 kHz)
-  // that tail is proportionally larger but remains a benign, bounded stream-end
-  // truncation rather than a mid-stream gap.
-
-  // Emit the chord that is still being held at end-of-stream. The live
-  // progression path (update_progressive_estimate) only appends an entry when
-  // a chord changes, so the final held chord — including the only chord of a
-  // single-chord stream — would otherwise never reach chord_progression.
-  flush_pending_chord();
-
-  if (overlap_read_pos_ > 0) {
-    overlap_buffer_.erase(overlap_buffer_.begin(),
-                          overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(overlap_read_pos_));
-    overlap_read_pos_ = 0;
+  // Advance the persistent high-rate resampler through its filter latency and
+  // append exactly the analytic rounded output length. This happens only at
+  // end-of-stream, so the zero input used to advance the filter cannot create a
+  // discontinuity between live chunks.
+  if (needs_resampling_) {
+    resample_buffer_.clear();
+    stream_resampler_->finalize(resample_buffer_);
+    const size_t previous_size = overlap_buffer_.size();
+    overlap_buffer_.resize(previous_size + resample_buffer_.size());
+    if (normalization_gain_ != 1.0f) {
+      for (size_t i = 0; i < resample_buffer_.size(); ++i) {
+        overlap_buffer_[previous_size + i] = resample_buffer_[i] * normalization_gain_;
+      }
+    } else {
+      std::copy(resample_buffer_.begin(), resample_buffer_.end(),
+                overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(previous_size));
+    }
+    process_complete_frames();
   }
+
   if (overlap_buffer_.empty()) {
+    flush_pending_chord();
+    publish_stats_snapshot();
     return;
   }
 
@@ -190,6 +197,12 @@ void StreamAnalyzer::finalize() {
   ++frame_count_;
   update_progressive_estimate(static_cast<float>(cumulative_samples_) / config_.sample_rate);
   overlap_buffer_.clear();
+
+  // Emit the chord still held after every terminal frame has been analyzed.
+  // The live path only appends when the chord changes, so the last held chord
+  // otherwise never reaches chord_progression.
+  flush_pending_chord();
+  publish_stats_snapshot();
 }
 
 void StreamAnalyzer::emit_frame(const float* frame_start, size_t frame_sample_offset,
@@ -199,20 +212,13 @@ void StreamAnalyzer::emit_frame(const float* frame_start, size_t frame_sample_of
   if (will_emit) {
     emitted_frame_count_ = 0;
     size_t write_index = 0;
-    if (output_size_ >= output_buffer_.size()) {
-      // Overwrite the oldest slot and advance the logical front. All slot
-      // vectors retain their constructor-prepared capacity.
-      write_index = output_read_index_;
-      output_read_index_ = (output_read_index_ + 1) % output_buffer_.size();
-      ++dropped_output_frames_;
-    } else {
-      write_index = (output_read_index_ + output_size_) % output_buffer_.size();
-      ++output_size_;
+    if (try_begin_output_write(&write_index)) {
+      process_single_frame(frame_start, frame_sample_offset, output_buffer_[write_index]);
+      publish_output_write();
+      return;
     }
-    process_single_frame(frame_start, frame_sample_offset, output_buffer_[write_index]);
-  } else {
-    process_single_frame(frame_start, frame_sample_offset, scratch_frame_);
   }
+  process_single_frame(frame_start, frame_sample_offset, scratch_frame_);
 }
 
 void StreamAnalyzer::append_onset(float value) {
@@ -304,8 +310,10 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
   }
 
   /// Compute mel spectrogram
-  if (config_.compute_mel) {
+  if (needs_mel_analysis_) {
     compute_mel();
+  }
+  if (config_.compute_mel) {
     frame.mel = mel_buffer_;
   }
 

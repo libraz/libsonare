@@ -343,6 +343,51 @@ describe('onset, tempogram, NNLS chroma, and LUFS', () => {
 });
 
 describe('StreamAnalyzer quantize-config override', () => {
+  it('uses feature flags and empty arrays for every disabled-feature combination and read type', () => {
+    const input = new Float32Array(32);
+    input[8] = 0.5;
+    for (let mask = 0; mask < 16; mask += 1) {
+      const config = {
+        sampleRate: 8000,
+        nFft: 32,
+        hopLength: 32,
+        nMels: 8,
+        computeMel: (mask & 1) !== 0,
+        computeChroma: (mask & 2) !== 0,
+        computeOnset: (mask & 4) !== 0,
+        computeSpectral: (mask & 8) !== 0,
+      };
+      for (let readType = 0; readType < 3; readType += 1) {
+        const analyzer = new StreamAnalyzer(config);
+        analyzer.process(input);
+        const frames =
+          readType === 0
+            ? analyzer.readFrames(1)
+            : readType === 1
+              ? analyzer.readFramesU8(1)
+              : analyzer.readFramesI16(1);
+        expect(frames.nFrames).toBe(1);
+        expect(frames.featureFlags).toBe(mask);
+        expect(frames.nMels).toBe(mask & 1 ? 8 : 0);
+        expect(frames.nChroma).toBe(mask & 2 ? 12 : 0);
+        expect(frames.mel.length).toBe(mask & 1 ? 8 : 0);
+        expect(frames.chroma.length).toBe(mask & 2 ? 12 : 0);
+        expect(frames.onsetStrength.length).toBe(mask & 4 ? 1 : 0);
+        expect(frames.rmsEnergy.length).toBe(1);
+        expect(frames.spectralCentroid.length).toBe(mask & 8 ? 1 : 0);
+        expect(frames.spectralFlatness.length).toBe(mask & 8 ? 1 : 0);
+      }
+    }
+  });
+
+  it('rejects legacy outputFormat selectors', () => {
+    expect(() => new StreamAnalyzer({ outputFormat: 1 })).toThrow();
+    expect(() => new StreamAnalyzer({ outputFormat: 2 })).toThrow();
+    for (const value of [0.5, Number.NaN, Number.POSITIVE_INFINITY, '0']) {
+      expect(() => new StreamAnalyzer({ outputFormat: value as unknown as number })).toThrow();
+    }
+  });
+
   it('widens the saturating quantization range', () => {
     const config = { sampleRate: SR, nFft: 1024, hopLength: 256, nMels: 32, window: 1 };
 
@@ -380,7 +425,7 @@ describe('StreamAnalyzer quantize-config override', () => {
     expect(() => new StreamAnalyzer({ sampleRate: SR, maxProgressionEntries: 0 })).toThrow();
   });
 
-  it('bounds unread frames and reports drop-oldest telemetry', () => {
+  it('bounds unread frames and reports drop-newest telemetry', () => {
     const analyzer = new StreamAnalyzer({
       sampleRate: 8000,
       nFft: 32,
@@ -417,5 +462,35 @@ describe('StreamAnalyzer external offsets', () => {
     expect(() => analyzer.processWithOffset(audio.subarray(128, 256), 1129)).toThrow();
     analyzer.reset(5000);
     expect(() => analyzer.processWithOffset(audio.subarray(0, 128), 5000)).not.toThrow();
+  });
+
+  it('rejects invalid size arguments without integer truncation or wrapping', () => {
+    const analyzer = new StreamAnalyzer({ sampleRate: 8000, nFft: 32, hopLength: 32, nMels: 8 });
+    const invalidValues = [
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.POSITIVE_INFINITY,
+      Number.NaN,
+    ];
+
+    for (const value of invalidValues) {
+      expect(() => analyzer.processWithOffset(new Float32Array([0]), value)).toThrow(
+        /safe integer/,
+      );
+      expect(() => analyzer.readFramesSoa(value)).toThrow(/safe integer/);
+      expect(() => analyzer.readFrames(value)).toThrow(/safe integer/);
+      expect(() => analyzer.readFramesU8(value)).toThrow(/safe integer/);
+      expect(() => analyzer.readFramesI16(value)).toThrow(/safe integer/);
+      expect(() => analyzer.reset(value)).toThrow(/safe integer/);
+    }
+
+    analyzer.reset(Number.MAX_SAFE_INTEGER);
+    expect(() =>
+      analyzer.processWithOffset(new Float32Array([0]), Number.MAX_SAFE_INTEGER),
+    ).not.toThrow();
+    expect(() => analyzer.readFramesSoa(Number.MAX_SAFE_INTEGER)).not.toThrow();
+    expect(() => analyzer.readFramesU8(Number.MAX_SAFE_INTEGER)).not.toThrow();
+    expect(() => analyzer.readFramesI16(Number.MAX_SAFE_INTEGER)).not.toThrow();
   });
 });

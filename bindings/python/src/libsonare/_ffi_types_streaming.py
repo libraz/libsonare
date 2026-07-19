@@ -292,6 +292,8 @@ class SonareStreamFrames(ctypes.Structure):
         ("chord_root", ctypes.POINTER(ctypes.c_int32)),
         ("chord_quality", ctypes.POINTER(ctypes.c_int32)),
         ("chord_confidence", ctypes.POINTER(ctypes.c_float)),
+        ("feature_flags", ctypes.c_uint32),
+        ("n_chroma", ctypes.c_int32),
     ]
 
 
@@ -306,6 +308,8 @@ class SonareStreamFramesU8(ctypes.Structure):
         ("rms_energy", ctypes.POINTER(ctypes.c_uint8)),
         ("spectral_centroid", ctypes.POINTER(ctypes.c_uint8)),
         ("spectral_flatness", ctypes.POINTER(ctypes.c_uint8)),
+        ("feature_flags", ctypes.c_uint32),
+        ("n_chroma", ctypes.c_int32),
     ]
 
 
@@ -320,6 +324,8 @@ class SonareStreamFramesI16(ctypes.Structure):
         ("rms_energy", ctypes.POINTER(ctypes.c_int16)),
         ("spectral_centroid", ctypes.POINTER(ctypes.c_int16)),
         ("spectral_flatness", ctypes.POINTER(ctypes.c_int16)),
+        ("feature_flags", ctypes.c_uint32),
+        ("n_chroma", ctypes.c_int32),
     ]
 
 

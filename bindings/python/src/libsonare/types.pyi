@@ -1440,12 +1440,12 @@ class StreamConfig:
     compute_spectral: bool
     emit_every_n_frames: int
     magnitude_downsample: int
-    max_pending_frames: int
+    max_pending_frames: int  # Overflow drops the newly produced frame.
     max_progression_entries: int
     key_update_interval_sec: float
     bpm_update_interval_sec: float
     window: int
-    output_format: int
+    output_format: int  # Deprecated compatibility field; must be 0 (Float32).
     def __init__(
         self,
         sample_rate: int = 44100,
@@ -1473,6 +1473,8 @@ class StreamConfig:
 class StreamFrames:
     n_frames: int
     n_mels: int
+    n_chroma: int
+    feature_flags: int
     timestamps: list[float]
     mel: list[float]
     chroma: list[float]
@@ -1487,6 +1489,8 @@ class StreamFrames:
         self,
         n_frames: int,
         n_mels: int,
+        n_chroma: int,
+        feature_flags: int,
         timestamps: list[float],
         mel: list[float],
         chroma: list[float],
@@ -1502,6 +1506,8 @@ class StreamFrames:
 class StreamFramesU8:
     n_frames: int
     n_mels: int
+    n_chroma: int
+    feature_flags: int
     timestamps: list[float]
     mel: list[int]
     chroma: list[int]
@@ -1513,6 +1519,8 @@ class StreamFramesU8:
         self,
         n_frames: int,
         n_mels: int,
+        n_chroma: int,
+        feature_flags: int,
         timestamps: list[float],
         mel: list[int],
         chroma: list[int],

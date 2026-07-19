@@ -52,7 +52,7 @@ export interface StreamAnalyzerConfig {
   computeSpectral?: boolean;
   emitEveryNFrames?: number;
   magnitudeDownsample?: number;
-  /** Maximum unread frames; overflow drops the oldest frame. */
+  /** Maximum unread frames; overflow drops the newly produced frame. */
   maxPendingFrames?: number;
   /** Maximum retained chord and bar progression entries; overflow drops oldest. */
   maxProgressionEntries?: number;
@@ -60,7 +60,7 @@ export interface StreamAnalyzerConfig {
   bpmUpdateIntervalSec?: number;
   /** Window type: 0 Hann, 1 Hamming, 2 Blackman, 3 Rectangular. */
   window?: number;
-  /** Output format: 0 Float32, 1 Int16, 2 Uint8. */
+  /** @deprecated Must be 0 (Float32). Use readFramesU8/readFramesI16 explicitly. */
   outputFormat?: number;
 }
 
@@ -68,6 +68,10 @@ export interface StreamAnalyzerConfig {
 export interface StreamFramesSoa {
   nFrames: number;
   nMels: number;
+  /** Chroma stride: 12 when enabled, otherwise 0. */
+  nChroma: number;
+  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
+  featureFlags: number;
   timestamps: Float32Array;
   /**
    * Row-major `[nFrames * nMels]` mel spectrogram in LINEAR power (not dB) — the
@@ -108,6 +112,9 @@ export interface StreamQuantizeConfig {
 export interface StreamFramesU8 {
   nFrames: number;
   nMels: number;
+  nChroma: number;
+  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
+  featureFlags: number;
   timestamps: Float32Array;
   /** Row-major `[nFrames * nMels]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
   mel: Uint8Array;
@@ -122,6 +129,9 @@ export interface StreamFramesU8 {
 export interface StreamFramesI16 {
   nFrames: number;
   nMels: number;
+  nChroma: number;
+  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
+  featureFlags: number;
   timestamps: Float32Array;
   /** Row-major `[nFrames * nMels]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
   mel: Int16Array;

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import operator
 from collections.abc import Sequence
 from typing import Any, cast
 
@@ -31,6 +32,21 @@ from ._runtime import (
     _to_c_float_array,
 )
 
+_SIZE_T_MAX = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
+
+
+def _checked_size_t(value: int, name: str) -> ctypes.c_size_t:
+    """Convert an integer to ``size_t`` without truncation or modulo wrapping."""
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a non-negative integer within size_t range")
+    try:
+        integer = operator.index(value)
+    except TypeError:
+        raise ValueError(f"{name} must be a non-negative integer within size_t range") from None
+    if integer < 0 or integer > _SIZE_T_MAX:
+        raise ValueError(f"{name} must be a non-negative integer within size_t range")
+    return ctypes.c_size_t(integer)
+
 
 def _quantize_config_to_c(
     config: QuantizeConfig | None,
@@ -56,6 +72,15 @@ class StreamAnalyzer:
 
     Feed audio chunks with :meth:`process`, then drain analyzed frames with
     :meth:`read_frames`. Query running estimates via :meth:`stats`.
+
+    One serialized producer thread may call :meth:`process`,
+    :meth:`process_with_offset`, or :meth:`finalize` concurrently with one
+    serialized consumer thread calling ``available_frames``, a ``read_frames*``
+    method, :meth:`stats`, ``frame_count``, or ``current_time``. Native frame and
+    stats publication is an allocation-free release/acquire handoff. Do not call
+    :meth:`reset`, setters, :meth:`close`, or transfer ownership until both roles
+    are stopped. If the pending ring is full, the newly produced output frame is
+    dropped while analysis totals continue advancing.
     """
 
     def __init__(self, config: StreamConfig | None = None) -> None:
@@ -139,18 +164,19 @@ class StreamAnalyzer:
         :meth:`reset` first to discard the buffered partial frame and anchor a
         new timeline segment.
         """
+        offset = _checked_size_t(sample_offset, "sample_offset")
         c_array, length = _to_c_float_array(samples)
         _check(
             _get_lib().sonare_stream_analyzer_process_with_offset(
                 self._require_handle(),
                 c_array,
                 ctypes.c_size_t(length),
-                ctypes.c_size_t(int(sample_offset)),
+                offset,
             )
         )
 
     def finalize(self) -> None:
-        """Flush the final partial frame with zero-padding."""
+        """Drain any high-rate resampler tail, then zero-pad the final frame."""
         lib = _get_lib()
         if not hasattr(lib, "sonare_stream_analyzer_finalize"):
             raise RuntimeError("libsonare was built without StreamAnalyzer.finalize support")
@@ -172,7 +198,7 @@ class StreamAnalyzer:
         raw = SonareStreamFrames()
         _check(
             lib.sonare_stream_analyzer_read_frames(
-                self._require_handle(), ctypes.c_size_t(int(max_frames)), ctypes.byref(raw)
+                self._require_handle(), _checked_size_t(max_frames, "max_frames"), ctypes.byref(raw)
             )
         )
         try:
@@ -195,7 +221,7 @@ class StreamAnalyzer:
             lib.sonare_stream_analyzer_read_frames_u8_ex(
                 self._require_handle(),
                 ctypes.byref(qconfig) if qconfig is not None else None,
-                ctypes.c_size_t(int(max_frames)),
+                _checked_size_t(max_frames, "max_frames"),
                 ctypes.byref(raw),
             )
         )
@@ -219,7 +245,7 @@ class StreamAnalyzer:
             lib.sonare_stream_analyzer_read_frames_i16_ex(
                 self._require_handle(),
                 ctypes.byref(qconfig) if qconfig is not None else None,
-                ctypes.c_size_t(int(max_frames)),
+                _checked_size_t(max_frames, "max_frames"),
                 ctypes.byref(raw),
             )
         )
@@ -232,7 +258,7 @@ class StreamAnalyzer:
         """Reset analyzer state for a new stream."""
         _check(
             _get_lib().sonare_stream_analyzer_reset(
-                self._require_handle(), ctypes.c_size_t(int(base_sample_offset))
+                self._require_handle(), _checked_size_t(base_sample_offset, "base_sample_offset")
             )
         )
 
@@ -385,9 +411,11 @@ def _stream_frames_from_c(raw: SonareStreamFrames) -> StreamFrames:
     return StreamFrames(
         n_frames=n,
         n_mels=n_mels,
+        n_chroma=int(raw.n_chroma),
+        feature_flags=int(raw.feature_flags),
         timestamps=_floats(raw.timestamps, n),
         mel=_floats(raw.mel, n * n_mels),
-        chroma=_floats(raw.chroma, n * 12),
+        chroma=_floats(raw.chroma, n * int(raw.n_chroma)),
         onset_strength=_floats(raw.onset_strength, n),
         rms_energy=_floats(raw.rms_energy, n),
         spectral_centroid=_floats(raw.spectral_centroid, n),
@@ -404,9 +432,11 @@ def _stream_frames_u8_from_c(raw: SonareStreamFramesU8) -> StreamFramesU8:
     return StreamFramesU8(
         n_frames=n,
         n_mels=n_mels,
+        n_chroma=int(raw.n_chroma),
+        feature_flags=int(raw.feature_flags),
         timestamps=_floats(raw.timestamps, n),
         mel=_u8s(raw.mel, n * n_mels),
-        chroma=_u8s(raw.chroma, n * 12),
+        chroma=_u8s(raw.chroma, n * int(raw.n_chroma)),
         onset_strength=_u8s(raw.onset_strength, n),
         rms_energy=_u8s(raw.rms_energy, n),
         spectral_centroid=_u8s(raw.spectral_centroid, n),
@@ -420,9 +450,11 @@ def _stream_frames_i16_from_c(raw: SonareStreamFramesI16) -> StreamFramesI16:
     return StreamFramesI16(
         n_frames=n,
         n_mels=n_mels,
+        n_chroma=int(raw.n_chroma),
+        feature_flags=int(raw.feature_flags),
         timestamps=_floats(raw.timestamps, n),
         mel=_i16s(raw.mel, n * n_mels),
-        chroma=_i16s(raw.chroma, n * 12),
+        chroma=_i16s(raw.chroma, n * int(raw.n_chroma)),
         onset_strength=_i16s(raw.onset_strength, n),
         rms_energy=_i16s(raw.rms_energy, n),
         spectral_centroid=_i16s(raw.spectral_centroid, n),

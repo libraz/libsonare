@@ -26,8 +26,8 @@ namespace sonare::streaming_detail {
 ///          state is preserved between process() calls. Output samples are
 ///          appended as they emerge; the constant start-up filter latency means
 ///          the first call may return fewer samples than the steady-state ratio
-///          would suggest, but no samples are ever fabricated with zero-padding
-///          and no discontinuity is introduced at chunk boundaries.
+///          would suggest. finalize() drains that latency once, at end-of-stream,
+///          and trims the result to the analytic resampled length.
 class StreamResampler {
  public:
   /// @brief Constructs a continuous resampler.
@@ -51,6 +51,13 @@ class StreamResampler {
   ///          are NOT sanitized here; the caller sanitizes before/after as
   ///          appropriate for its pipeline.
   void process(const float* samples, size_t n_samples, std::vector<float>& out);
+
+  /// @brief Drains the end-of-stream filter latency into @p out.
+  /// @details Appends only enough samples to make the resampler's total output
+  ///          equal round(total_input * dst_sr / src_sr). Trailing zeros are
+  ///          supplied solely to advance the filter; they are not counted as
+  ///          stream input. Calling finalize() again appends nothing.
+  void finalize(std::vector<float>& out);
 
   /// @brief Resets filter state, e.g. when the analyzer is reset for a new
   ///        stream. After this the next process() call restarts from the

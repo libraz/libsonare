@@ -34,11 +34,12 @@ typedef struct {
   int compute_spectral;      /* Non-zero to compute spectral scalar features */
   int emit_every_n_frames;   /* Emit every N frames (>=1, for throttling) */
   int magnitude_downsample;  /* Downsample factor for magnitude output */
-  size_t max_pending_frames; /* Unread-frame cap; overflow drops oldest (default 4096) */
+  size_t max_pending_frames; /* Unread-frame cap; overflow drops newest (default 4096) */
   float key_update_interval_sec;
   float bpm_update_interval_sec;
   int window;                     /* SonareWindowType value (default Hann) */
-  int output_format;              /* SonareStreamOutputFormat value (default Float32) */
+  int output_format;              /* Deprecated; must be SONARE_STREAM_OUTPUT_FLOAT32.
+                                     Use an explicit U8/I16 read function instead. */
   size_t max_progression_entries; /* Per chord/bar progression cap; drops oldest (default 4096) */
 } SonareStreamConfig;
 
@@ -51,9 +52,18 @@ typedef enum {
 
 typedef enum {
   SONARE_STREAM_OUTPUT_FLOAT32 = 0,
-  SONARE_STREAM_OUTPUT_INT16 = 1,
-  SONARE_STREAM_OUTPUT_UINT8 = 2,
+  SONARE_STREAM_OUTPUT_INT16 = 1, /* Legacy value; analyzer creation rejects it. */
+  SONARE_STREAM_OUTPUT_UINT8 = 2, /* Legacy value; analyzer creation rejects it. */
 } SonareStreamOutputFormat;
+
+/* Feature arrays physically present in a SonareStreamFrames* result. RMS and
+   timestamps are always present and therefore need no flag. */
+typedef enum {
+  SONARE_STREAM_FEATURE_MEL = 1u << 0,
+  SONARE_STREAM_FEATURE_CHROMA = 1u << 1,
+  SONARE_STREAM_FEATURE_ONSET = 1u << 2,
+  SONARE_STREAM_FEATURE_SPECTRAL = 1u << 3,
+} SonareStreamFeatureFlags;
 
 typedef struct {
   int root;
@@ -80,18 +90,20 @@ typedef struct {
    sonare_free_stream_frames. Matrix layouts are row-major [n_frames x stride]. */
 typedef struct {
   int n_frames;             /* Number of frames in this batch */
-  int n_mels;               /* Mel bands per frame (mel stride) */
+  int n_mels;               /* Mel stride; 0 when MEL is absent */
   float* timestamps;        /* [n_frames] */
   float* mel;               /* [n_frames * n_mels] linear mel power (NOT dB; the
                                U8/I16 quantized variants pack dB instead) */
-  float* chroma;            /* [n_frames * 12] */
-  float* onset_strength;    /* [n_frames] */
+  float* chroma;            /* [n_frames * n_chroma], NULL when CHROMA is absent */
+  float* onset_strength;    /* [n_frames], NULL when ONSET is absent */
   float* rms_energy;        /* [n_frames] */
-  float* spectral_centroid; /* [n_frames] */
-  float* spectral_flatness; /* [n_frames] */
-  int* chord_root;          /* [n_frames] */
-  int* chord_quality;       /* [n_frames] */
-  float* chord_confidence;  /* [n_frames] */
+  float* spectral_centroid; /* [n_frames], NULL when SPECTRAL is absent */
+  float* spectral_flatness; /* [n_frames], NULL when SPECTRAL is absent */
+  int* chord_root;          /* [n_frames], NULL when CHROMA is absent */
+  int* chord_quality;       /* [n_frames], NULL when CHROMA is absent */
+  float* chord_confidence;  /* [n_frames], NULL when CHROMA is absent */
+  uint32_t feature_flags;   /* Bitwise SonareStreamFeatureFlags for populated arrays */
+  int n_chroma;             /* Chroma bins per frame; 0 when chroma is disabled */
 } SonareStreamFrames;
 
 typedef struct {
@@ -104,6 +116,8 @@ typedef struct {
   uint8_t* rms_energy;
   uint8_t* spectral_centroid;
   uint8_t* spectral_flatness;
+  uint32_t feature_flags; /* Bitwise SonareStreamFeatureFlags for populated arrays */
+  int n_chroma;           /* Chroma bins per frame; 0 when chroma is disabled */
 } SonareStreamFramesU8;
 
 typedef struct {
@@ -116,6 +130,8 @@ typedef struct {
   int16_t* rms_energy;
   int16_t* spectral_centroid;
   int16_t* spectral_flatness;
+  uint32_t feature_flags; /* Bitwise SonareStreamFeatureFlags for populated arrays */
+  int n_chroma;           /* Chroma bins per frame; 0 when chroma is disabled */
 } SonareStreamFramesI16;
 
 /* Quantization ranges for the u8/i16 bandwidth-reduction read paths. Mirrors
@@ -139,7 +155,7 @@ typedef struct {
   size_t total_samples;         /* Total samples processed */
   float duration_seconds;       /* Total audio processed (s) */
   size_t pending_frames;        /* Unread frames currently retained */
-  size_t dropped_output_frames; /* Oldest unread frames dropped at the configured cap */
+  size_t dropped_output_frames; /* New output frames dropped at the configured cap */
   float bpm;                    /* Estimated BPM (0 if not yet estimated) */
   float bpm_confidence;         /* BPM confidence (0-1) */
   int bpm_candidate_count;      /* Number of BPM candidates considered */
@@ -173,6 +189,16 @@ typedef struct {
 /// @brief Fills @p config with real-time defaults (44100 Hz, n_fft 2048, etc.).
 SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config);
 
+/// @par Threading and lifecycle
+/// A handle supports one producer thread calling process, process_with_offset,
+/// or finalize concurrently with one consumer thread calling available_frames,
+/// a read_frames variant, stats, frame_count, or current_time. Calls within
+/// either role must be serialized. Completed frames and stats snapshots use an
+/// allocation-free release/acquire handoff; when the pending ring is full the
+/// newly produced output frame is dropped, while analysis totals still advance.
+/// reset, all set_* functions, destroy, and ownership transfer require both
+/// roles to be stopped. sample_rate reads immutable construction state.
+
 /// @brief Creates a streaming analyzer from the given config.
 /// @param config Construction config (must be non-null).
 /// @param out Receives the new handle (caller destroys with
@@ -196,7 +222,8 @@ SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* ana
                                                        const float* samples, size_t n_samples,
                                                        size_t sample_offset);
 
-/// @brief Flushes the final partial frame with zero-padding.
+/// @brief Drains any high-rate resampler tail, then flushes the final partial
+///        analysis frame with zero-padding.
 SonareError sonare_stream_analyzer_finalize(SonareStreamAnalyzer* analyzer);
 
 /// @brief Returns the number of frames available to read.

@@ -115,11 +115,29 @@ export class StreamingMasteringChain {
  * const frames = analyzer.readFramesSoa(analyzer.availableFrames());
  * const { estimate } = analyzer.stats();
  * ```
+ *
+ * The native handle supports one serialized producer (`process`,
+ * `processWithOffset`, or `finalize`) concurrently with one serialized consumer
+ * (`availableFrames`, a `readFrames*` method, `stats`, `frameCount`, or
+ * `currentTime`). Completed values use an allocation-free release/acquire
+ * handoff. `reset`, setters, and `destroy` require both roles to be stopped.
+ * JavaScript runtimes must still arrange ownership so the same native wrapper
+ * is not invoked by multiple threads within either role. A full pending ring
+ * drops the newly produced output frame while analysis totals keep advancing.
  */
 export class StreamAnalyzer {
   private native: InstanceType<typeof addon.StreamAnalyzer>;
 
   constructor(config: StreamAnalyzerConfig = {}) {
+    if (
+      config.outputFormat !== undefined &&
+      (typeof config.outputFormat !== 'number' ||
+        !Number.isFinite(config.outputFormat) ||
+        !Number.isInteger(config.outputFormat) ||
+        config.outputFormat !== 0)
+    ) {
+      throw new TypeError('outputFormat must be the integer 0 (Float32)');
+    }
     this.native = new addon.StreamAnalyzer(config);
   }
 
@@ -136,7 +154,7 @@ export class StreamAnalyzer {
     this.native.processWithOffset(samples, sampleOffset);
   }
 
-  /** Flush the final partial frame with zero-padding. */
+  /** Drain any high-rate resampler tail, then zero-pad the final partial frame. */
   finalize(): void {
     this.native.finalize();
   }

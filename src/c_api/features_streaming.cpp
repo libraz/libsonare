@@ -22,10 +22,6 @@ bool valid_window(int value) {
   return value >= SONARE_WINDOW_HANN && value <= SONARE_WINDOW_RECTANGULAR;
 }
 
-bool valid_output_format(int value) {
-  return value >= SONARE_STREAM_OUTPUT_FLOAT32 && value <= SONARE_STREAM_OUTPUT_UINT8;
-}
-
 WindowType to_window_type(int value) {
   switch (static_cast<SonareWindowType>(value)) {
     case SONARE_WINDOW_HAMMING:
@@ -37,18 +33,6 @@ WindowType to_window_type(int value) {
     case SONARE_WINDOW_HANN:
     default:
       return WindowType::Hann;
-  }
-}
-
-OutputFormat to_output_format(int value) {
-  switch (static_cast<SonareStreamOutputFormat>(value)) {
-    case SONARE_STREAM_OUTPUT_INT16:
-      return OutputFormat::Int16;
-    case SONARE_STREAM_OUTPUT_UINT8:
-      return OutputFormat::Uint8;
-    case SONARE_STREAM_OUTPUT_FLOAT32:
-    default:
-      return OutputFormat::Float32;
   }
 }
 
@@ -126,7 +110,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       !finite_positive(config->tuning_ref_hz) ||
       !finite_positive(config->key_update_interval_sec) ||
       !finite_positive(config->bpm_update_interval_sec) || !valid_window(config->window) ||
-      !valid_output_format(config->output_format)) {
+      config->output_format != SONARE_STREAM_OUTPUT_FLOAT32) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Magnitude readout is not surfaced by any SOA read path, so honestly reject
@@ -156,7 +140,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.magnitude_downsample = config->magnitude_downsample;
   cfg.max_pending_frames = config->max_pending_frames;
   cfg.max_progression_entries = config->max_progression_entries;
-  cfg.output_format = to_output_format(config->output_format);
+  cfg.output_format = OutputFormat::Float32;
   cfg.key_update_interval_sec = config->key_update_interval_sec;
   cfg.bpm_update_interval_sec = config->bpm_update_interval_sec;
 
@@ -225,9 +209,7 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
   analyzer->analyzer->read_frames_soa(max_frames, buffer);
 
   out->n_frames = static_cast<int>(buffer.n_frames);
-  // 0 (not the configured n_mels) when mel computation is disabled, matching
-  // the empty mel array so n_mels * n_frames == mel length always holds.
-  out->n_mels = analyzer->analyzer->config().compute_mel ? analyzer->analyzer->config().n_mels : 0;
+  out->n_mels = buffer.n_mels;
   out->timestamps = copy_vector(buffer.timestamps);
   out->mel = copy_vector(buffer.mel);
   out->chroma = copy_vector(buffer.chroma);
@@ -238,6 +220,8 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
   out->chord_root = copy_vector(buffer.chord_root);
   out->chord_quality = copy_vector(buffer.chord_quality);
   out->chord_confidence = copy_vector(buffer.chord_confidence);
+  out->feature_flags = buffer.feature_flags;
+  out->n_chroma = buffer.n_chroma;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -299,6 +283,8 @@ SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analy
   out->rms_energy = copy_vector(buffer.rms_energy);
   out->spectral_centroid = copy_vector(buffer.spectral_centroid);
   out->spectral_flatness = copy_vector(buffer.spectral_flatness);
+  out->feature_flags = buffer.feature_flags;
+  out->n_chroma = buffer.n_chroma;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -331,6 +317,8 @@ SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* anal
   out->rms_energy = copy_vector(buffer.rms_energy);
   out->spectral_centroid = copy_vector(buffer.spectral_centroid);
   out->spectral_flatness = copy_vector(buffer.spectral_flatness);
+  out->feature_flags = buffer.feature_flags;
+  out->n_chroma = buffer.n_chroma;
   return SONARE_OK;
   SONARE_C_CATCH
 }

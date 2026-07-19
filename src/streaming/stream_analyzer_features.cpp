@@ -76,7 +76,7 @@ void StreamAnalyzer::compute_chroma() {
 }
 
 float StreamAnalyzer::compute_onset() {
-  if (!config_.compute_mel) {
+  if (!needs_mel_analysis_) {
     return 0.0f;
   }
 

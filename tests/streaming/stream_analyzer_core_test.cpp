@@ -1,8 +1,11 @@
 /// @file stream_analyzer_core_test.cpp
 /// @brief StreamAnalyzer core behavior tests.
 
+#include <atomic>
 #include <limits>
+#include <thread>
 
+#include "core/resample.h"
 #include "stream_analyzer_test_helpers.h"
 #include "support/alloc_guard.h"
 #include "util/exception.h"
@@ -93,6 +96,46 @@ TEST_CASE("StreamAnalyzer finalize flushes a partial tail frame", "[streaming]")
   analyzer.finalize();
   REQUIRE(analyzer.available_frames() == 1);
   REQUIRE(analyzer.frame_count() == 1);
+}
+
+TEST_CASE("StreamAnalyzer finalize preserves short high-rate terminal impulses",
+          "[streaming][resample][contract]") {
+  constexpr int kInputSamples = 128;
+  constexpr int kFftSize = 256;
+  std::vector<float> input(kInputSamples, 0.0f);
+  input.back() = 1.0f;
+
+  for (const int sample_rate : {48000, 96000, 192000}) {
+    CAPTURE(sample_rate);
+    StreamConfig high_config;
+    high_config.sample_rate = sample_rate;
+    high_config.n_fft = kFftSize;
+    high_config.hop_length = 64;
+    high_config.n_mels = 8;
+    high_config.compute_mel = false;
+    high_config.compute_chroma = false;
+    high_config.compute_onset = false;
+    high_config.compute_spectral = false;
+
+    StreamAnalyzer high_rate(high_config);
+    high_rate.process(input.data(), input.size());
+    REQUIRE(high_rate.available_frames() == 0);
+    high_rate.finalize();
+    const auto actual = high_rate.read_frames(1);
+    REQUIRE(actual.size() == 1);
+    REQUIRE(actual.front().rms_energy > 0.0f);
+
+    const std::vector<float> offline = resample(input.data(), input.size(), sample_rate, 44100);
+    REQUIRE_FALSE(offline.empty());
+    StreamConfig reference_config = high_config;
+    reference_config.sample_rate = 44100;
+    StreamAnalyzer reference(reference_config);
+    reference.process(offline.data(), offline.size());
+    reference.finalize();
+    const auto expected = reference.read_frames(1);
+    REQUIRE(expected.size() == 1);
+    REQUIRE_THAT(actual.front().rms_energy, WithinAbs(expected.front().rms_energy, 1.0e-7f));
+  }
 }
 
 TEST_CASE("StreamAnalyzer overlap handling", "[streaming]") {
@@ -486,7 +529,7 @@ TEST_CASE("StreamAnalyzer SOA read", "[streaming]") {
   REQUIRE(buffer.chroma.size() == buffer.n_frames * 12);
 }
 
-TEST_CASE("StreamAnalyzer pending output is bounded with drop-oldest telemetry",
+TEST_CASE("StreamAnalyzer pending output is bounded with drop-newest telemetry",
           "[streaming][long]") {
   StreamConfig config;
   config.sample_rate = 8000;
@@ -508,9 +551,74 @@ TEST_CASE("StreamAnalyzer pending output is bounded with drop-oldest telemetry",
   REQUIRE(stats.pending_frames + stats.dropped_output_frames ==
           static_cast<size_t>(stats.total_frames));
 
+  const auto retained = analyzer.read_frames(4);
+  REQUIRE(retained.size() == 4);
+  for (size_t i = 0; i < retained.size(); ++i) {
+    REQUIRE(retained[i].frame_index == static_cast<int>(i));
+  }
+
   analyzer.reset();
   REQUIRE(analyzer.stats().pending_frames == 0);
   REQUIRE(analyzer.stats().dropped_output_frames == 0);
+}
+
+TEST_CASE("StreamAnalyzer publishes frames and stats to one concurrent consumer",
+          "[streaming][concurrency]") {
+  StreamConfig config;
+  config.sample_rate = 8000;
+  config.n_fft = 32;
+  config.hop_length = 32;
+  config.n_mels = 8;
+  config.compute_magnitude = false;
+  config.compute_mel = false;
+  config.compute_chroma = false;
+  config.compute_onset = false;
+  config.compute_spectral = false;
+  config.max_pending_frames = 8;
+  config.max_progression_entries = 4;
+  StreamAnalyzer analyzer(config);
+
+  constexpr int kBlocks = 2000;
+  std::array<float, 32> block{};
+  std::atomic<bool> start{false};
+  std::atomic<bool> producer_done{false};
+  std::atomic<bool> valid{true};
+
+  std::thread producer([&] {
+    while (!start.load(std::memory_order_acquire)) std::this_thread::yield();
+    for (int i = 0; i < kBlocks; ++i) analyzer.process(block.data(), block.size());
+    producer_done.store(true, std::memory_order_release);
+  });
+
+  int last_frame_index = -1;
+  int last_total_frames = 0;
+  start.store(true, std::memory_order_release);
+  while (!producer_done.load(std::memory_order_acquire) || analyzer.available_frames() > 0) {
+    const AnalyzerStats snapshot = analyzer.stats();
+    if (snapshot.total_frames < last_total_frames ||
+        snapshot.pending_frames > config.max_pending_frames ||
+        snapshot.estimate.used_frames > snapshot.total_frames) {
+      valid.store(false, std::memory_order_relaxed);
+    }
+    last_total_frames = snapshot.total_frames;
+
+    const auto frames = analyzer.read_frames(1);
+    if (!frames.empty()) {
+      if (frames.front().frame_index <= last_frame_index) {
+        valid.store(false, std::memory_order_relaxed);
+      }
+      last_frame_index = frames.front().frame_index;
+    } else {
+      std::this_thread::yield();
+    }
+  }
+  producer.join();
+
+  const AnalyzerStats final_stats = analyzer.stats();
+  REQUIRE(valid.load(std::memory_order_relaxed));
+  REQUIRE(final_stats.total_frames == kBlocks);
+  REQUIRE(final_stats.pending_frames == 0);
+  REQUIRE(final_stats.dropped_output_frames < static_cast<size_t>(kBlocks));
 }
 
 TEST_CASE("StreamAnalyzer realtime process path remains allocation free across bounded histories",

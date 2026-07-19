@@ -68,24 +68,26 @@ TEST_CASE("StreamAnalyzer onset accumulator is bounded over a long stream", "[st
 // H8 regression: compute_onset without compute_mel must not silently break BPM
 // ============================================================================
 
-TEST_CASE("StreamAnalyzer onset auto-enables mel so BPM is not silently zero", "[streaming][bpm]") {
+TEST_CASE("StreamAnalyzer onset uses internal mel without advertising mel output",
+          "[streaming][bpm]") {
   // Before the fix, requesting compute_onset=true with compute_mel=false caused
   // compute_onset() to early-return 0 before marking has_prev_frame_, so onset
   // strength was always 0, onset_valid never became true, the accumulator
   // stayed empty, and BPM was stuck at 0/confidence 0 forever — with no
-  // diagnostic. The constructor now force-enables mel when onset is requested.
+  // diagnostic. Onset now enables the internal mel dependency without changing
+  // the caller-visible compute_mel/output contract.
   StreamConfig config;
   config.sample_rate = 22050;
   config.n_fft = 2048;
   config.hop_length = 512;
   config.compute_onset = true;
-  config.compute_mel = false;  // Intentionally off — must be coerced on.
+  config.compute_mel = false;  // Intentionally off; onset still uses internal mel.
   config.bpm_update_interval_sec = 5.0f;
 
   StreamAnalyzer analyzer(config);
 
-  SECTION("constructor coerces compute_mel on and it is observable") {
-    REQUIRE(analyzer.config().compute_mel);
+  SECTION("constructor preserves the disabled mel output contract") {
+    REQUIRE_FALSE(analyzer.config().compute_mel);
   }
 
   SECTION("onset becomes valid and BPM is computed on a rhythmic signal") {

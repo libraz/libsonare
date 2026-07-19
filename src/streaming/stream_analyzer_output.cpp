@@ -4,6 +4,7 @@
 #include "analysis/progression_patterns.h"
 #include "filters/chroma.h"
 #include "streaming/stream_analyzer.h"
+#include "streaming/stream_analyzer_publication.h"
 #include "streaming/stream_analyzer_utils.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -20,6 +21,45 @@ void validate_quantize_config(const QuantizeConfig& config) {
       !numeric::finite_positive(config.centroid_max)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid stream quantization range");
   }
+}
+
+uint32_t output_feature_flags(const StreamConfig& config) noexcept {
+  uint32_t flags = 0;
+  if (config.compute_mel) flags |= kStreamFeatureMel;
+  if (config.compute_chroma) flags |= kStreamFeatureChroma;
+  if (config.compute_onset) flags |= kStreamFeatureOnset;
+  if (config.compute_spectral) flags |= kStreamFeatureSpectral;
+  return flags;
+}
+
+void copy_progressive_scalars(const ProgressiveEstimate& source, ProgressiveEstimate& target) {
+  target.bpm = source.bpm;
+  target.bpm_confidence = source.bpm_confidence;
+  target.bpm_candidate_count = source.bpm_candidate_count;
+  target.key = source.key;
+  target.key_minor = source.key_minor;
+  target.key_confidence = source.key_confidence;
+  target.chord_root = source.chord_root;
+  target.chord_quality = source.chord_quality;
+  target.chord_confidence = source.chord_confidence;
+  target.chord_start_time = source.chord_start_time;
+  target.current_bar = source.current_bar;
+  target.bar_duration = source.bar_duration;
+  target.pattern_length = source.pattern_length;
+  target.detected_pattern_score = source.detected_pattern_score;
+  target.accumulated_seconds = source.accumulated_seconds;
+  target.used_frames = source.used_frames;
+  target.updated = source.updated;
+}
+
+template <typename T>
+void copy_append_only_history(const std::vector<T>& source, std::vector<T>& storage,
+                              size_t& stored_size, size_t source_drops,
+                              size_t previous_source_drops) noexcept {
+  size_t begin = stored_size;
+  if (source_drops != previous_source_drops || stored_size > source.size()) begin = 0;
+  for (size_t i = begin; i < source.size(); ++i) storage[i] = source[i];
+  stored_size = source.size();
 }
 
 }  // namespace
@@ -44,22 +84,133 @@ void StreamAnalyzer::prepare_progressive_estimate() {
   current_estimate_.detected_pattern_name.reserve(64);
 }
 
+void StreamAnalyzer::initialize_stats_publication() {
+  const size_t pattern_count = known_progression_patterns().size();
+  for (auto& slot : publication_->stats_slots) {
+    auto& estimate = slot.storage.estimate;
+    estimate.chord_progression.resize(config_.max_progression_entries);
+    estimate.bar_chord_progression.resize(config_.max_progression_entries);
+    estimate.voted_pattern.resize(4);
+    estimate.all_pattern_scores.resize(pattern_count);
+    estimate.detected_pattern_name.reserve(64);
+    for (auto& score : estimate.all_pattern_scores) score.first.reserve(64);
+  }
+}
+
+bool StreamAnalyzer::try_begin_output_write(size_t* write_index) noexcept {
+  if (write_index == nullptr || output_buffer_.empty()) return false;
+  const uint64_t read = publication_->output_read_sequence.load(std::memory_order_acquire);
+  const uint64_t write = publication_->producer_write_sequence;
+  if (write - read >= output_buffer_.size()) {
+    ++publication_->producer_dropped_frames;
+    return false;
+  }
+  *write_index = static_cast<size_t>(write % output_buffer_.size());
+  return true;
+}
+
+void StreamAnalyzer::publish_output_write() noexcept {
+  ++publication_->producer_write_sequence;
+  publication_->output_write_sequence.store(publication_->producer_write_sequence,
+                                            std::memory_order_release);
+}
+
+void StreamAnalyzer::reset_publication() noexcept {
+  publication_->output_read_sequence.store(0, std::memory_order_relaxed);
+  publication_->output_write_sequence.store(0, std::memory_order_relaxed);
+  publication_->producer_write_sequence = 0;
+  publication_->producer_dropped_frames = 0;
+  publication_->published_stats_slot.store(0, std::memory_order_relaxed);
+  for (unsigned i = 0; i < StreamAnalyzerPublication::kStatsSlotCount; ++i) {
+    publication_->stats_slot_states[i].store(
+        i == 0 ? StreamAnalyzerPublication::StatsSlotState::kPublished
+               : StreamAnalyzerPublication::StatsSlotState::kFree,
+        std::memory_order_relaxed);
+    auto& slot = publication_->stats_slots[i];
+    slot.chord_progression_size = 0;
+    slot.bar_chord_progression_size = 0;
+    slot.voted_pattern_size = 0;
+    slot.all_pattern_scores_size = 0;
+    slot.storage.dropped_chord_progression_entries = 0;
+    slot.storage.dropped_bar_progression_entries = 0;
+  }
+}
+
+void StreamAnalyzer::publish_stats_snapshot() noexcept {
+  const unsigned current = publication_->published_stats_slot.load(std::memory_order_relaxed);
+  unsigned target = StreamAnalyzerPublication::kStatsSlotCount;
+  for (unsigned i = 0; i < StreamAnalyzerPublication::kStatsSlotCount; ++i) {
+    if (i == current) continue;
+    auto expected = StreamAnalyzerPublication::StatsSlotState::kFree;
+    if (publication_->stats_slot_states[i].compare_exchange_strong(
+            expected, StreamAnalyzerPublication::StatsSlotState::kWriting,
+            std::memory_order_acquire, std::memory_order_relaxed)) {
+      target = i;
+      break;
+    }
+  }
+  // Under the documented one-producer/one-consumer contract, three slots
+  // guarantee a free target. Keep the RT path non-blocking if the contract is
+  // violated: retain the previous coherent snapshot instead of waiting.
+  if (target == StreamAnalyzerPublication::kStatsSlotCount) return;
+
+  auto& slot = publication_->stats_slots[target];
+  AnalyzerStats& snapshot = slot.storage;
+  snapshot.total_frames = frame_count_;
+  snapshot.total_samples = cumulative_samples_;
+  snapshot.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
+  snapshot.pending_frames = available_frames();
+  snapshot.dropped_output_frames = publication_->producer_dropped_frames;
+
+  copy_progressive_scalars(current_estimate_, snapshot.estimate);
+  const size_t previous_chord_drops = snapshot.dropped_chord_progression_entries;
+  const size_t previous_bar_drops = snapshot.dropped_bar_progression_entries;
+  copy_append_only_history(current_estimate_.chord_progression, snapshot.estimate.chord_progression,
+                           slot.chord_progression_size, dropped_chord_progression_entries_,
+                           previous_chord_drops);
+  copy_append_only_history(current_estimate_.bar_chord_progression,
+                           snapshot.estimate.bar_chord_progression, slot.bar_chord_progression_size,
+                           dropped_bar_progression_entries_, previous_bar_drops);
+  snapshot.dropped_chord_progression_entries = dropped_chord_progression_entries_;
+  snapshot.dropped_bar_progression_entries = dropped_bar_progression_entries_;
+
+  slot.voted_pattern_size = current_estimate_.voted_pattern.size();
+  for (size_t i = 0; i < slot.voted_pattern_size; ++i) {
+    snapshot.estimate.voted_pattern[i] = current_estimate_.voted_pattern[i];
+  }
+  snapshot.estimate.detected_pattern_name = current_estimate_.detected_pattern_name;
+  slot.all_pattern_scores_size = current_estimate_.all_pattern_scores.size();
+  for (size_t i = 0; i < slot.all_pattern_scores_size; ++i) {
+    snapshot.estimate.all_pattern_scores[i] = current_estimate_.all_pattern_scores[i];
+  }
+
+  publication_->stats_slot_states[target].store(
+      StreamAnalyzerPublication::StatsSlotState::kPublished, std::memory_order_release);
+  publication_->published_stats_slot.store(target, std::memory_order_release);
+  auto expected = StreamAnalyzerPublication::StatsSlotState::kPublished;
+  publication_->stats_slot_states[current].compare_exchange_strong(
+      expected, StreamAnalyzerPublication::StatsSlotState::kFree, std::memory_order_release,
+      std::memory_order_relaxed);
+}
+
 const StreamFrame& StreamAnalyzer::output_front() const {
-  return output_buffer_[output_read_index_];
+  const uint64_t sequence = publication_->output_read_sequence.load(std::memory_order_relaxed);
+  return output_buffer_[static_cast<size_t>(sequence % output_buffer_.size())];
 }
 
 void StreamAnalyzer::pop_output_front() {
-  if (output_size_ == 0) {
-    return;
-  }
-  output_read_index_ = (output_read_index_ + 1) % output_buffer_.size();
-  --output_size_;
+  const uint64_t read = publication_->output_read_sequence.load(std::memory_order_relaxed);
+  publication_->output_read_sequence.store(read + 1, std::memory_order_release);
 }
 
-size_t StreamAnalyzer::available_frames() const { return output_size_; }
+size_t StreamAnalyzer::available_frames() const {
+  const uint64_t write = publication_->output_write_sequence.load(std::memory_order_acquire);
+  const uint64_t read = publication_->output_read_sequence.load(std::memory_order_relaxed);
+  return static_cast<size_t>(write - read);
+}
 
 std::vector<StreamFrame> StreamAnalyzer::read_frames(size_t max_frames) {
-  size_t count = std::min(max_frames, output_size_);
+  size_t count = std::min(max_frames, available_frames());
   std::vector<StreamFrame> result;
   result.reserve(count);
 
@@ -74,28 +225,30 @@ std::vector<StreamFrame> StreamAnalyzer::read_frames(size_t max_frames) {
 void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
   buffer.clear();
 
-  size_t count = std::min(max_frames, output_size_);
+  size_t count = std::min(max_frames, available_frames());
   buffer.n_frames = count;
+  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0, config_.compute_chroma ? 12 : 0,
+                 output_feature_flags(config_));
 
   if (count == 0) {
     return;
   }
 
-  // Skip reserving mel capacity when mel computation is disabled, mirroring
-  // the empty frame.mel that per-frame processing leaves in that case.
-  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0);
-
   for (size_t i = 0; i < count; ++i) {
     const StreamFrame& frame = output_front();
 
     buffer.timestamps.push_back(frame.timestamp);
-    buffer.onset_strength.push_back(frame.onset_strength);
+    if (config_.compute_onset) buffer.onset_strength.push_back(frame.onset_strength);
     buffer.rms_energy.push_back(frame.rms_energy);
-    buffer.spectral_centroid.push_back(frame.spectral_centroid);
-    buffer.spectral_flatness.push_back(frame.spectral_flatness);
-    buffer.chord_root.push_back(frame.chord_root);
-    buffer.chord_quality.push_back(frame.chord_quality);
-    buffer.chord_confidence.push_back(frame.chord_confidence);
+    if (config_.compute_spectral) {
+      buffer.spectral_centroid.push_back(frame.spectral_centroid);
+      buffer.spectral_flatness.push_back(frame.spectral_flatness);
+    }
+    if (config_.compute_chroma) {
+      buffer.chord_root.push_back(frame.chord_root);
+      buffer.chord_quality.push_back(frame.chord_quality);
+      buffer.chord_confidence.push_back(frame.chord_confidence);
+    }
 
     buffer.mel.insert(buffer.mel.end(), frame.mel.begin(), frame.mel.end());
     buffer.chroma.insert(buffer.chroma.end(), frame.chroma.begin(), frame.chroma.end());
@@ -109,17 +262,14 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
   validate_quantize_config(qconfig);
   buffer.clear();
 
-  size_t count = std::min(max_frames, output_size_);
+  size_t count = std::min(max_frames, available_frames());
   buffer.n_frames = count;
+  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0, config_.compute_chroma ? 12 : 0,
+                 output_feature_flags(config_));
 
   if (count == 0) {
     return;
   }
-
-  // Report 0 mel bands (not the configured n_mels) when mel computation is
-  // disabled, so n_mels * n_frames always matches the actual (empty) mel
-  // array length instead of implying a non-empty buffer that never fills.
-  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0);
 
   for (size_t i = 0; i < count; ++i) {
     const StreamFrame& frame = output_front();
@@ -135,11 +285,16 @@ void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameB
       buffer.chroma.push_back(quantize_to_u8(c, 0.0f, 1.0f));
     }
 
-    buffer.onset_strength.push_back(quantize_to_u8(frame.onset_strength, 0.0f, qconfig.onset_max));
+    if (config_.compute_onset) {
+      buffer.onset_strength.push_back(
+          quantize_to_u8(frame.onset_strength, 0.0f, qconfig.onset_max));
+    }
     buffer.rms_energy.push_back(quantize_to_u8(frame.rms_energy, 0.0f, qconfig.rms_max));
-    buffer.spectral_centroid.push_back(
-        quantize_to_u8(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
-    buffer.spectral_flatness.push_back(quantize_to_u8(frame.spectral_flatness, 0.0f, 1.0f));
+    if (config_.compute_spectral) {
+      buffer.spectral_centroid.push_back(
+          quantize_to_u8(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
+      buffer.spectral_flatness.push_back(quantize_to_u8(frame.spectral_flatness, 0.0f, 1.0f));
+    }
 
     pop_output_front();
   }
@@ -150,17 +305,14 @@ void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrame
   validate_quantize_config(qconfig);
   buffer.clear();
 
-  size_t count = std::min(max_frames, output_size_);
+  size_t count = std::min(max_frames, available_frames());
   buffer.n_frames = count;
+  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0, config_.compute_chroma ? 12 : 0,
+                 output_feature_flags(config_));
 
   if (count == 0) {
     return;
   }
-
-  // Report 0 mel bands (not the configured n_mels) when mel computation is
-  // disabled, so n_mels * n_frames always matches the actual (empty) mel
-  // array length instead of implying a non-empty buffer that never fills.
-  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0);
 
   for (size_t i = 0; i < count; ++i) {
     const StreamFrame& frame = output_front();
@@ -176,11 +328,16 @@ void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrame
       buffer.chroma.push_back(quantize_to_i16(c, 0.0f, 1.0f));
     }
 
-    buffer.onset_strength.push_back(quantize_to_i16(frame.onset_strength, 0.0f, qconfig.onset_max));
+    if (config_.compute_onset) {
+      buffer.onset_strength.push_back(
+          quantize_to_i16(frame.onset_strength, 0.0f, qconfig.onset_max));
+    }
     buffer.rms_energy.push_back(quantize_to_i16(frame.rms_energy, 0.0f, qconfig.rms_max));
-    buffer.spectral_centroid.push_back(
-        quantize_to_i16(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
-    buffer.spectral_flatness.push_back(quantize_to_i16(frame.spectral_flatness, 0.0f, 1.0f));
+    if (config_.compute_spectral) {
+      buffer.spectral_centroid.push_back(
+          quantize_to_i16(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
+      buffer.spectral_flatness.push_back(quantize_to_i16(frame.spectral_flatness, 0.0f, 1.0f));
+    }
 
     pop_output_front();
   }
@@ -196,12 +353,10 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   finalized_ = false;
 
   overlap_buffer_.clear();
-  dropped_output_frames_ = 0;
   overlap_read_pos_ = 0;
-  output_read_index_ = 0;
-  output_size_ = 0;
+  reset_publication();
 
-  if (config_.compute_mel) {
+  if (needs_mel_analysis_) {
     std::fill(prev_mel_log_.begin(), prev_mel_log_.end(), 0.0f);
   }
   has_prev_frame_ = false;
@@ -239,6 +394,7 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   bar_vote_count_ = 0;
 
   pattern_locked_ = false;
+  publish_stats_snapshot();
 }
 
 void StreamAnalyzer::set_expected_duration(float duration_seconds) {
@@ -277,21 +433,64 @@ void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
 }
 
 AnalyzerStats StreamAnalyzer::stats() const {
-  AnalyzerStats stats;
-  stats.total_frames = frame_count_;
-  stats.total_samples = cumulative_samples_;
-  stats.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
-  stats.pending_frames = output_size_;
-  stats.dropped_output_frames = dropped_output_frames_;
-  stats.dropped_chord_progression_entries = dropped_chord_progression_entries_;
-  stats.dropped_bar_progression_entries = dropped_bar_progression_entries_;
-  stats.estimate = current_estimate_;
+  unsigned index = 0;
+  for (;;) {
+    index = publication_->published_stats_slot.load(std::memory_order_acquire);
+    auto expected = StreamAnalyzerPublication::StatsSlotState::kPublished;
+    if (publication_->stats_slot_states[index].compare_exchange_strong(
+            expected, StreamAnalyzerPublication::StatsSlotState::kReading,
+            std::memory_order_acquire, std::memory_order_relaxed)) {
+      break;
+    }
+  }
 
-  return stats;
+  struct ReaderPin {
+    StreamAnalyzerPublication* publication;
+    unsigned index;
+    ~ReaderPin() {
+      publication->stats_slot_states[index].store(
+          StreamAnalyzerPublication::StatsSlotState::kPublished, std::memory_order_release);
+      if (publication->published_stats_slot.load(std::memory_order_acquire) != index) {
+        auto expected = StreamAnalyzerPublication::StatsSlotState::kPublished;
+        publication->stats_slot_states[index].compare_exchange_strong(
+            expected, StreamAnalyzerPublication::StatsSlotState::kFree, std::memory_order_release,
+            std::memory_order_relaxed);
+      }
+    }
+  } pin{publication_.get(), index};
+
+  const auto& slot = publication_->stats_slots[index];
+  const AnalyzerStats& snapshot = slot.storage;
+  AnalyzerStats result;
+  result.total_frames = snapshot.total_frames;
+  result.total_samples = snapshot.total_samples;
+  result.duration_seconds = snapshot.duration_seconds;
+  result.pending_frames = available_frames();
+  result.dropped_output_frames = snapshot.dropped_output_frames;
+  result.dropped_chord_progression_entries = snapshot.dropped_chord_progression_entries;
+  result.dropped_bar_progression_entries = snapshot.dropped_bar_progression_entries;
+  copy_progressive_scalars(snapshot.estimate, result.estimate);
+  result.estimate.chord_progression.assign(
+      snapshot.estimate.chord_progression.begin(),
+      snapshot.estimate.chord_progression.begin() +
+          static_cast<std::ptrdiff_t>(slot.chord_progression_size));
+  result.estimate.bar_chord_progression.assign(
+      snapshot.estimate.bar_chord_progression.begin(),
+      snapshot.estimate.bar_chord_progression.begin() +
+          static_cast<std::ptrdiff_t>(slot.bar_chord_progression_size));
+  result.estimate.voted_pattern.assign(snapshot.estimate.voted_pattern.begin(),
+                                       snapshot.estimate.voted_pattern.begin() +
+                                           static_cast<std::ptrdiff_t>(slot.voted_pattern_size));
+  result.estimate.detected_pattern_name = snapshot.estimate.detected_pattern_name;
+  result.estimate.all_pattern_scores.assign(
+      snapshot.estimate.all_pattern_scores.begin(),
+      snapshot.estimate.all_pattern_scores.begin() +
+          static_cast<std::ptrdiff_t>(slot.all_pattern_scores_size));
+  return result;
 }
 
-float StreamAnalyzer::current_time() const {
-  return static_cast<float>(cumulative_samples_) / static_cast<float>(config_.sample_rate);
-}
+int StreamAnalyzer::frame_count() const { return stats().total_frames; }
+
+float StreamAnalyzer::current_time() const { return stats().duration_seconds; }
 
 }  // namespace sonare

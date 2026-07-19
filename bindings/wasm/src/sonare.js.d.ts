@@ -2336,6 +2336,8 @@ export interface WasmFrameBuffer {
   nFrames: number;
   /** Number of mel bands; flat `mel` is `[nFrames * nMels]` row-major. */
   nMels: number;
+  nChroma: number;
+  featureFlags: number;
   timestamps: Float32Array;
   mel: Float32Array;
   chroma: Float32Array;
@@ -2351,6 +2353,8 @@ export interface WasmFrameBuffer {
 export interface WasmStreamFramesU8 {
   nFrames: number;
   nMels: number;
+  nChroma: number;
+  featureFlags: number;
   timestamps: Float32Array;
   mel: Uint8Array;
   chroma: Uint8Array;
@@ -2363,6 +2367,8 @@ export interface WasmStreamFramesU8 {
 export interface WasmStreamFramesI16 {
   nFrames: number;
   nMels: number;
+  nChroma: number;
+  featureFlags: number;
   timestamps: Float32Array;
   mel: Int16Array;
   chroma: Int16Array;

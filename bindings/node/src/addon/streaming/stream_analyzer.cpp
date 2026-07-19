@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -71,6 +72,27 @@ Napi::Int16Array Int16FromVec(Napi::Env env, const std::vector<int16_t>& vec) {
     std::memcpy(out.Data(), vec.data(), vec.size() * sizeof(int16_t));
   }
   return out;
+}
+
+bool SafeSizeTFromValue(const Napi::Value& value, const char* name, size_t* out) {
+  Napi::Env env = value.Env();
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+
+  constexpr double kMaxSafeInteger = 9007199254740991.0;  // Number.MAX_SAFE_INTEGER
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || number < 0.0 || std::floor(number) != number ||
+      number > kMaxSafeInteger ||
+      number > static_cast<double>(std::numeric_limits<size_t>::max())) {
+    Napi::RangeError::New(env, std::string(name) + " must be a non-negative safe integer")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+
+  *out = static_cast<size_t>(number);
+  return true;
 }
 
 }  // namespace
@@ -152,11 +174,16 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
                     : window == 2 ? sonare::WindowType::Blackman
                     : window == 3 ? sonare::WindowType::Rectangular
                                   : sonare::WindowType::Hann;
-    const int output_format = static_cast<int>(
-        node_double_option(opts, "outputFormat", static_cast<int>(config.output_format)));
-    config.output_format = output_format == 1   ? sonare::OutputFormat::Int16
-                           : output_format == 2 ? sonare::OutputFormat::Uint8
-                                                : sonare::OutputFormat::Float32;
+    const Napi::Value output_format_value = opts.Get("outputFormat");
+    if (!output_format_value.IsUndefined() && !output_format_value.IsNull() &&
+        (!output_format_value.IsNumber() ||
+         !std::isfinite(output_format_value.As<Napi::Number>().DoubleValue()) ||
+         output_format_value.As<Napi::Number>().DoubleValue() != 0.0)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "outputFormat must be the integer 0 (Float32); use an explicit "
+                                    "quantized read method");
+    }
+    config.output_format = sonare::OutputFormat::Float32;
   }
 
   config_ = config;
@@ -193,13 +220,14 @@ Napi::Value StreamAnalyzerWrap::ProcessWithOffset(const Napi::CallbackInfo& info
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+  if (info.Length() < 2 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleOffset)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  size_t offset = 0;
+  if (!SafeSizeTFromValue(info[1], "sampleOffset", &offset)) return env.Undefined();
   SONARE_NODE_TRY
   Napi::Float32Array typed = info[0].As<Napi::Float32Array>();
-  size_t offset = static_cast<size_t>(info[1].As<Napi::Number>().Int64Value());
   analyzer_->process(typed.Data(), typed.ElementLength(), offset);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -232,21 +260,21 @@ Napi::Value StreamAnalyzerWrap::ReadFramesSoa(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (info.Length() < 1 || !info[0].IsNumber()) {
+  if (info.Length() < 1) {
     Napi::TypeError::New(env, "Expected (maxFrames)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  size_t max_frames = 0;
+  if (!SafeSizeTFromValue(info[0], "maxFrames", &max_frames)) return env.Undefined();
   SONARE_NODE_TRY
-  size_t max_frames = static_cast<size_t>(info[0].As<Napi::Number>().Int64Value());
   sonare::FrameBuffer buffer;
   analyzer_->read_frames_soa(max_frames, buffer);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("nFrames", Napi::Number::New(env, static_cast<double>(buffer.n_frames)));
-  // 0 (not the configured n_mels) when mel computation is disabled, matching
-  // the empty mel array so nMels * nFrames == mel.length always holds.
-  out.Set("nMels",
-          Napi::Number::New(env, analyzer_->config().compute_mel ? analyzer_->config().n_mels : 0));
+  out.Set("nMels", Napi::Number::New(env, buffer.n_mels));
+  out.Set("nChroma", Napi::Number::New(env, buffer.n_chroma));
+  out.Set("featureFlags", Napi::Number::New(env, buffer.feature_flags));
   out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
   out.Set("mel", Float32FromVec(env, buffer.mel));
   out.Set("chroma", Float32FromVec(env, buffer.chroma));
@@ -267,12 +295,13 @@ Napi::Value StreamAnalyzerWrap::ReadFramesU8(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (info.Length() < 1 || !info[0].IsNumber()) {
+  if (info.Length() < 1) {
     Napi::TypeError::New(env, "Expected (maxFrames)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  size_t max_frames = 0;
+  if (!SafeSizeTFromValue(info[0], "maxFrames", &max_frames)) return env.Undefined();
   SONARE_NODE_TRY
-  size_t max_frames = static_cast<size_t>(info[0].As<Napi::Number>().Int64Value());
   sonare::QuantizedFrameBufferU8 buffer;
   sonare::QuantizeConfig qconfig =
       QuantizeConfigFromValue(info.Length() > 1 ? info[1] : env.Null());
@@ -281,6 +310,8 @@ Napi::Value StreamAnalyzerWrap::ReadFramesU8(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("nFrames", Napi::Number::New(env, static_cast<double>(buffer.n_frames)));
   out.Set("nMels", Napi::Number::New(env, buffer.n_mels));
+  out.Set("nChroma", Napi::Number::New(env, buffer.n_chroma));
+  out.Set("featureFlags", Napi::Number::New(env, buffer.feature_flags));
   out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
   out.Set("mel", Uint8FromVec(env, buffer.mel));
   out.Set("chroma", Uint8FromVec(env, buffer.chroma));
@@ -298,12 +329,13 @@ Napi::Value StreamAnalyzerWrap::ReadFramesI16(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (info.Length() < 1 || !info[0].IsNumber()) {
+  if (info.Length() < 1) {
     Napi::TypeError::New(env, "Expected (maxFrames)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  size_t max_frames = 0;
+  if (!SafeSizeTFromValue(info[0], "maxFrames", &max_frames)) return env.Undefined();
   SONARE_NODE_TRY
-  size_t max_frames = static_cast<size_t>(info[0].As<Napi::Number>().Int64Value());
   sonare::QuantizedFrameBufferI16 buffer;
   sonare::QuantizeConfig qconfig =
       QuantizeConfigFromValue(info.Length() > 1 ? info[1] : env.Null());
@@ -312,6 +344,8 @@ Napi::Value StreamAnalyzerWrap::ReadFramesI16(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("nFrames", Napi::Number::New(env, static_cast<double>(buffer.n_frames)));
   out.Set("nMels", Napi::Number::New(env, buffer.n_mels));
+  out.Set("nChroma", Napi::Number::New(env, buffer.n_chroma));
+  out.Set("featureFlags", Napi::Number::New(env, buffer.feature_flags));
   out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
   out.Set("mel", Int16FromVec(env, buffer.mel));
   out.Set("chroma", Int16FromVec(env, buffer.chroma));
@@ -329,10 +363,12 @@ Napi::Value StreamAnalyzerWrap::Reset(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  size_t base_offset = 0;
+  if (info.Length() >= 1 && !info[0].IsUndefined() &&
+      !SafeSizeTFromValue(info[0], "baseOffset", &base_offset)) {
+    return env.Undefined();
+  }
   SONARE_NODE_TRY
-  size_t base_offset = info.Length() >= 1 && info[0].IsNumber()
-                           ? static_cast<size_t>(info[0].As<Napi::Number>().Int64Value())
-                           : 0;
   analyzer_->reset(base_offset);
   return env.Undefined();
   SONARE_NODE_CATCH(env)

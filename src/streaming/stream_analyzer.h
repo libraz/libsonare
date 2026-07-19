@@ -17,6 +17,7 @@ namespace sonare {
 
 // Forward declarations
 class FFT;
+struct StreamAnalyzerPublication;
 
 /// @brief Number of enumerators in ChordQuality.
 /// @details Companion constant for the ChordQuality enum in util/types.h. The
@@ -82,18 +83,17 @@ inline constexpr int kNumChordQualities = 17;
 /// @endcode
 ///
 /// @par Thread-safety
-/// StreamAnalyzer is not internally synchronized: process() and the read/pop
-/// output accessors (read_frames(), read_frames_soa(), the quantized
-/// variants, available_frames(), stats()) must all be called from a single
-/// thread (or otherwise fully serialized by the caller — no two of these
-/// calls may run concurrently). In particular, calling process() from an
-/// audio-rendering thread while reading frames from a different thread
-/// without your own synchronization is a data race on the internal output
-/// ring. Callers that need an audio thread producing frames and a separate
-/// thread consuming them must marshal the data across that boundary
-/// themselves (e.g. copy out StreamFrame values under a lock, or hand off
-/// through a caller-owned queue) rather than sharing one StreamAnalyzer
-/// instance across threads.
+/// One producer thread may call process(), process(..., sample_offset), or
+/// finalize() while one consumer thread concurrently calls available_frames(),
+/// one of the read_frames*() methods, stats(), frame_count(), or current_time().
+/// Completed frames and immutable statistics snapshots are published with
+/// release/acquire ordering; the producer never locks or allocates for this
+/// handoff. Producer entry points must not overlap each other, consumer entry
+/// points must not overlap each other, and there may be at most one thread in
+/// each role. reset(), the set_* configuration methods, move, and destruction
+/// require both roles to be stopped. When the pending ring is full, a new output
+/// frame is dropped rather than overwriting a slot the consumer may be reading;
+/// analysis state and total_frames still advance.
 class StreamAnalyzer {
  public:
   /// @brief Constructs analyzer with configuration.
@@ -133,17 +133,9 @@ class StreamAnalyzer {
   ///          frame. Calling finalize() more than once is idempotent. Call
   ///          reset() before reusing the analyzer for another stream.
   ///
-  /// @note At sample rates above @ref kMaxDirectSampleRate, input is routed
-  ///       through a persistent, phase-continuous resampler that needs its
-  ///       startup filter latency (a few ms of input) before it emits any
-  ///       samples. finalize() intentionally does not drain that resampler
-  ///       tail (draining would either fabricate zero-padded samples or
-  ///       restart its phase — see StreamResampler). A clip shorter than the
-  ///       resampler's startup latency (e.g. a 96 kHz stream of only a few
-  ///       hundred samples) can therefore yield zero analysis frames even
-  ///       after finalize(). This is a bounded, stream-end-only trade-off;
-  ///       continuous realtime use (chunks pushed well past the startup
-  ///       latency) is unaffected.
+  /// @note At sample rates above @ref kMaxDirectSampleRate, finalize() first
+  ///       drains the persistent resampler to the exact rounded output length,
+  ///       so even clips shorter than its startup latency retain their tail.
   void finalize();
 
   /// @brief Returns number of frames available to read.
@@ -187,6 +179,7 @@ class StreamAnalyzer {
   /// after reset() if the next stream needs different values. This is why it is
   /// NOT equivalent to constructing a fresh analyzer.
   /// @param base_sample_offset Starting sample offset (default 0)
+  /// @note Both SPSC roles must be stopped while reset() runs.
   void reset(size_t base_sample_offset = 0);
 
   /// @brief Sets expected total duration of the audio.
@@ -217,7 +210,7 @@ class StreamAnalyzer {
   const StreamConfig& config() const { return config_; }
 
   /// @brief Returns total frames processed.
-  int frame_count() const { return frame_count_; }
+  int frame_count() const;
 
   /// @brief Returns current time position (seconds).
   float current_time() const;
@@ -255,6 +248,7 @@ class StreamAnalyzer {
   static constexpr int kMaxDirectSampleRate = 44100;  // Resample anything above 44100 Hz
   int internal_sample_rate_;                          // Actual rate used for analysis
   bool needs_resampling_ = false;
+  bool needs_mel_analysis_ = false;
   float resample_ratio_ = 1.0f;
   std::vector<float> resample_buffer_;  // Buffer for resampled audio
   std::vector<float> sanitize_buffer_;  // Scratch for NaN/Inf-sanitized input
@@ -286,18 +280,18 @@ class StreamAnalyzer {
   std::vector<float> overlap_buffer_;
   size_t overlap_read_pos_ = 0;
 
-  // Fixed output ring. Every StreamFrame and its fixed-shape feature vectors
+  // Fixed SPSC output ring. Every StreamFrame and its fixed-shape feature vectors
   // are prepared by the constructor so emit_frame never allocates, including
   // when a consumer drains the queue between every callback.
-  //
-  // Plain size_t, not atomic: process() (writer) and the read/pop accessors
-  // (reader) are required to run on a single thread — see the class-level
-  // "Thread-safety" doc above. This is not a wait-free SPSC ring.
   std::vector<StreamFrame> output_buffer_;
-  size_t output_read_index_ = 0;
-  size_t output_size_ = 0;
-  size_t dropped_output_frames_ = 0;
+  std::unique_ptr<StreamAnalyzerPublication> publication_;
   StreamFrame scratch_frame_;  // Reused for throttled (non-emitted) frames
+
+  bool try_begin_output_write(size_t* write_index) noexcept;
+  void publish_output_write() noexcept;
+  void initialize_stats_publication();
+  void publish_stats_snapshot() noexcept;
+  void reset_publication() noexcept;
 
   // FFT processor (reusable)
   std::unique_ptr<FFT> fft_;
@@ -423,6 +417,7 @@ class StreamAnalyzer {
   void correct_voted_pattern_by_known_patterns();
   void detect_progression_pattern();
   void process_internal(const float* samples, size_t n_samples);
+  void process_complete_frames();
   void emit_frame(const float* frame_start, size_t frame_sample_offset, bool force_emit);
   /// @brief Copies @p n_samples from @p src into @p dst, replacing any NaN/Inf
   ///        with 0. Returns dst.data(). Used to keep one bad input sample from

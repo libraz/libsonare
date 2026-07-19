@@ -2,6 +2,7 @@
 /// @brief StreamAnalyzer progressive and quantized output tests.
 
 #include "stream_analyzer_test_helpers.h"
+#include "util/exception.h"
 
 TEST_CASE("StreamAnalyzer progressive BPM estimation", "[streaming]") {
   StreamConfig config;
@@ -186,6 +187,71 @@ TEST_CASE("StreamAnalyzer quantized output I16", "[streaming]") {
       REQUIRE(v >= -32768);
       REQUIRE(v <= 32767);
     }
+  }
+}
+
+TEST_CASE("StreamAnalyzer feature flags define every SOA read shape", "[streaming][contract]") {
+  const std::array<float, 32> audio = [] {
+    std::array<float, 32> samples{};
+    samples[8] = 0.5f;
+    return samples;
+  }();
+
+  for (uint32_t mask = 0; mask < 16; ++mask) {
+    CAPTURE(mask);
+    StreamConfig config;
+    config.sample_rate = 8000;
+    config.n_fft = 32;
+    config.hop_length = 32;
+    config.n_mels = 8;
+    config.compute_magnitude = false;
+    config.compute_mel = (mask & kStreamFeatureMel) != 0;
+    config.compute_chroma = (mask & kStreamFeatureChroma) != 0;
+    config.compute_onset = (mask & kStreamFeatureOnset) != 0;
+    config.compute_spectral = (mask & kStreamFeatureSpectral) != 0;
+
+    const auto verify_common = [&](const auto& buffer) {
+      REQUIRE(buffer.n_frames == 1);
+      REQUIRE(buffer.feature_flags == mask);
+      REQUIRE(buffer.n_mels == (config.compute_mel ? config.n_mels : 0));
+      REQUIRE(buffer.n_chroma == (config.compute_chroma ? 12 : 0));
+      REQUIRE(buffer.timestamps.size() == 1);
+      REQUIRE(buffer.mel.size() == (config.compute_mel ? static_cast<size_t>(config.n_mels) : 0));
+      REQUIRE(buffer.chroma.size() == (config.compute_chroma ? 12 : 0));
+      REQUIRE(buffer.onset_strength.size() == (config.compute_onset ? 1 : 0));
+      REQUIRE(buffer.rms_energy.size() == 1);
+      REQUIRE(buffer.spectral_centroid.size() == (config.compute_spectral ? 1 : 0));
+      REQUIRE(buffer.spectral_flatness.size() == (config.compute_spectral ? 1 : 0));
+    };
+
+    StreamAnalyzer float_analyzer(config);
+    float_analyzer.process(audio.data(), audio.size());
+    FrameBuffer floats;
+    float_analyzer.read_frames_soa(1, floats);
+    verify_common(floats);
+    REQUIRE(floats.chord_root.size() == (config.compute_chroma ? 1 : 0));
+    REQUIRE(floats.chord_quality.size() == (config.compute_chroma ? 1 : 0));
+    REQUIRE(floats.chord_confidence.size() == (config.compute_chroma ? 1 : 0));
+
+    StreamAnalyzer u8_analyzer(config);
+    u8_analyzer.process(audio.data(), audio.size());
+    QuantizedFrameBufferU8 u8;
+    u8_analyzer.read_frames_quantized_u8(1, u8);
+    verify_common(u8);
+
+    StreamAnalyzer i16_analyzer(config);
+    i16_analyzer.process(audio.data(), audio.size());
+    QuantizedFrameBufferI16 i16;
+    i16_analyzer.read_frames_quantized_i16(1, i16);
+    verify_common(i16);
+  }
+}
+
+TEST_CASE("StreamAnalyzer rejects legacy config output formats", "[streaming][contract]") {
+  for (const OutputFormat format : {OutputFormat::Int16, OutputFormat::Uint8}) {
+    StreamConfig config;
+    config.output_format = format;
+    REQUIRE_THROWS_AS(StreamAnalyzer(config), SonareException);
   }
 }
 

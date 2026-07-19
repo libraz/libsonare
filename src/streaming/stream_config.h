@@ -12,9 +12,9 @@ namespace sonare {
 
 /// @brief Output format for streaming data.
 enum class OutputFormat {
-  Float32,  ///< Full precision float
-  Int16,    ///< 16-bit signed integer (for bandwidth reduction)
-  Uint8,    ///< 8-bit unsigned integer (for visualization)
+  Float32 = 0,  ///< Full precision float
+  Int16 = 1,    ///< 16-bit signed integer (for bandwidth reduction)
+  Uint8 = 2,    ///< 8-bit unsigned integer (for visualization)
 };
 
 inline constexpr size_t kDefaultStreamMaxPendingFrames = 4096;
@@ -51,10 +51,9 @@ struct StreamConfig {
   bool compute_chroma = true;      ///< Compute chromagram
   /// @brief Compute onset strength (spectral flux of the log-mel spectrum).
   /// @details Onset strength — and the progressive BPM estimate built on top of
-  ///          it — is derived from the mel path. When @c compute_onset is true
-  ///          the StreamAnalyzer constructor force-enables @c compute_mel (the
-  ///          coercion is visible via StreamAnalyzer::config()); otherwise onset
-  ///          would be identically 0 and BPM would never converge.
+  ///          it — is derived from an internal mel path. compute_onset may be
+  ///          enabled while compute_mel is false; in that case mel is computed
+  ///          internally but is not included in output feature arrays.
   bool compute_onset = true;
   bool compute_spectral = true;  ///< Compute spectral features
 
@@ -67,11 +66,13 @@ struct StreamConfig {
   float tuning_ref_hz = constants::kA4Hz;  ///< Reference frequency for A4
 
   // Output configuration
+  /// @deprecated Generic reads have a fixed Float32 type. Must remain Float32;
+  /// use the explicit U8/I16 read methods for quantized output.
   OutputFormat output_format = OutputFormat::Float32;
   int emit_every_n_frames = 1;   ///< Emit every N frames (for throttling)
   int magnitude_downsample = 1;  ///< Downsample factor for magnitude
-  /// Maximum unread output frames. On overflow the oldest frame is dropped,
-  /// keeping live analysis current and memory bounded.
+  /// Maximum unread output frames. On overflow the newly produced frame is
+  /// dropped, keeping a concurrent SPSC consumer's current slot immutable.
   size_t max_pending_frames = kDefaultStreamMaxPendingFrames;
   /// Maximum retained entries in each chord/bar progression. On overflow the
   /// oldest entry is dropped and the matching AnalyzerStats counter advances.
