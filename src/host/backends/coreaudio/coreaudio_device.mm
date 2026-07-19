@@ -2,12 +2,17 @@
 /// @brief AUHAL implementation of host::AudioDevice. See coreaudio_device.h.
 
 #include "host/backends/coreaudio/coreaudio_device.h"
+#include "host/backends/coreaudio/coreaudio_render_utils.h"
 
 #include <AudioToolbox/AudioToolbox.h>
 #include <AudioUnit/AudioUnit.h>
 #include <CoreAudio/CoreAudio.h>
+#include <mach/mach_time.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cstring>
+#include <limits>
 #include <vector>
 
 namespace sonare::host::backends {
@@ -26,6 +31,17 @@ UInt32 read_device_uint32(AudioObjectID device, AudioObjectPropertySelector sele
   UInt32 size = sizeof(value);
   if (!ok(AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &value))) return 0;
   return value;
+}
+
+bool host_ticks_to_ns(uint64_t ticks, const mach_timebase_info_data_t& timebase,
+                      uint64_t* out) noexcept {
+  if (out == nullptr || timebase.denom == 0) return false;
+  const unsigned __int128 scaled = static_cast<unsigned __int128>(ticks) *
+                                   static_cast<unsigned __int128>(timebase.numer) /
+                                   static_cast<unsigned __int128>(timebase.denom);
+  if (scaled > std::numeric_limits<uint64_t>::max()) return false;
+  *out = static_cast<uint64_t>(scaled);
+  return true;
 }
 
 }  // namespace
@@ -52,6 +68,8 @@ struct CoreAudioDevice::Impl {
   int reported_output_latency = 0;
   int reported_input_latency = 0;
   int64_t frame_counter = 0;
+  mach_timebase_info_data_t timebase{};
+  MidiHostTimeMapper midi_time_mapper;
   // Device sample time expected at the start of the next render callback (the
   // previous call's mSampleTime + its frame count). -1 until the first callback.
   // A callback whose mSampleTime jumps past this expected value means the HAL
@@ -70,17 +88,22 @@ struct CoreAudioDevice::Impl {
     if (callback == nullptr || data == nullptr || frames == 0) {
       return noErr;
     }
-    const int n = static_cast<int>(frames);
     // Guard against a device handing us a larger block than negotiated; never
-    // overrun the pre-sized scratch.
-    const int clamped = n > config.max_block_size ? config.max_block_size : n;
+    // overrun the pre-sized scratch. The unrendered device-buffer tail is
+    // explicitly zeroed below, while clock accounting still advances by the
+    // full hardware frame count.
+    auto frame_plan = detail::plan_coreaudio_callback(frames, config.max_block_size, frame_counter);
+    uint32_t callback_xruns = frame_plan.xrun_delta;
+    if (frame_plan.xrun_delta != 0) {
+      xruns.fetch_add(frame_plan.xrun_delta, std::memory_order_relaxed);
+    }
 
     AudioBufferView view;
     view.outputs = output_ptrs.data();
     view.num_output_channels = num_out;
     view.inputs = nullptr;
     view.num_input_channels = 0;
-    view.num_frames = clamped;
+    view.num_frames = frame_plan.render_frames;
     view.time.sample_time = frame_counter;
     if (ts != nullptr && (ts->mFlags & kAudioTimeStampSampleTimeValid)) {
       const int64_t current = static_cast<int64_t>(ts->mSampleTime);
@@ -91,37 +114,49 @@ struct CoreAudioDevice::Impl {
       // exact/behind timestamp (steady state) never count.
       if (expected_next_sample_time >= 0 && current > expected_next_sample_time) {
         xruns.fetch_add(1, std::memory_order_relaxed);
+        ++callback_xruns;
       }
-      expected_next_sample_time = current + static_cast<int64_t>(frames);
+      frame_plan = detail::plan_coreaudio_callback(frames, config.max_block_size, current);
+      expected_next_sample_time = frame_plan.next_sample_time;
+    }
+    if (ts != nullptr && (ts->mFlags & kAudioTimeStampHostTimeValid)) {
+      host_ticks_to_ns(ts->mHostTime, timebase, &view.time.host_time_ns);
+    }
+    if (view.time.host_time_ns != 0) {
+      midi_time_mapper.publish_anchor(view.time.host_time_ns, view.time.sample_time,
+                                      config.sample_rate);
     }
     view.time.stream_time_seconds =
         config.sample_rate > 0.0 ? static_cast<double>(view.time.sample_time) / config.sample_rate
                                  : 0.0;
-    view.time.input_xruns = 0;
+    view.time.input_xruns = callback_xruns;
 
     callback->render(view);
 
     // Interleave the planar engine output back into CoreAudio's buffers.
-    // CoreAudio HAL output is canonical interleaved float32 by default.
+    // CoreAudio HAL output is canonical interleaved float32 by default. The
+    // SDK-free helpers zero the entire device buffer, including an oversize
+    // callback tail that the bounded engine request did not render.
     if (data->mNumberBuffers == 1) {
       auto* dst = static_cast<float*>(data->mBuffers[0].mData);
       const int dst_channels = static_cast<int>(data->mBuffers[0].mNumberChannels);
-      for (int f = 0; f < clamped; ++f) {
-        for (int c = 0; c < dst_channels; ++c) {
-          const float sample = c < num_out ? output_ptrs[c][f] : 0.0f;
-          dst[f * dst_channels + c] = sample;
-        }
-      }
+      const size_t capacity = dst_channels > 0
+                                  ? data->mBuffers[0].mDataByteSize /
+                                        (sizeof(float) * static_cast<size_t>(dst_channels))
+                                  : 0;
+      detail::copy_coreaudio_interleaved(dst, capacity, dst_channels, output_ptrs.data(), num_out,
+                                         frame_plan.render_frames);
     } else {
       // Non-interleaved device layout: one buffer per channel.
       const int buffers = static_cast<int>(data->mNumberBuffers);
       for (int c = 0; c < buffers; ++c) {
         auto* dst = static_cast<float*>(data->mBuffers[c].mData);
         const float* src = c < num_out ? output_ptrs[c] : nullptr;
-        for (int f = 0; f < clamped; ++f) dst[f] = src != nullptr ? src[f] : 0.0f;
+        const size_t capacity = data->mBuffers[c].mDataByteSize / sizeof(float);
+        detail::copy_coreaudio_planar_channel(dst, capacity, src, frame_plan.render_frames);
       }
     }
-    frame_counter += clamped;
+    frame_counter = frame_plan.next_sample_time;
     return noErr;
   }
 };
@@ -131,9 +166,13 @@ CoreAudioDevice::CoreAudioDevice() : impl_(std::make_unique<Impl>()) {}
 CoreAudioDevice::~CoreAudioDevice() { close(); }
 
 bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback* callback) {
-  if (callback == nullptr || impl_->unit != nullptr) return false;
+  if (callback == nullptr || impl_->unit != nullptr || config.sample_rate <= 0.0 ||
+      config.max_block_size <= 0 || config.num_output_channels <= 0) {
+    return false;
+  }
   impl_->config = config;
   impl_->callback = callback;
+  mach_timebase_info(&impl_->timebase);
 
   // Instantiate the default-output AUHAL unit.
   AudioComponentDescription desc{};
@@ -175,8 +214,11 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
 
   // Request the negotiated maximum block size.
   auto max_frames = static_cast<UInt32>(config.max_block_size);
-  AudioUnitSetProperty(impl_->unit, kAudioUnitProperty_MaximumFramesPerSlice,
-                       kAudioUnitScope_Global, 0, &max_frames, sizeof(max_frames));
+  if (!ok(AudioUnitSetProperty(impl_->unit, kAudioUnitProperty_MaximumFramesPerSlice,
+                               kAudioUnitScope_Global, 0, &max_frames, sizeof(max_frames)))) {
+    close();
+    return false;
+  }
 
   // Wire the render callback.
   AURenderCallbackStruct cb{};
@@ -188,18 +230,30 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
     return false;
   }
 
-  // Size the planar scratch the render callback writes into.
+  if (!ok(AudioUnitInitialize(impl_->unit))) {
+    close();
+    return false;
+  }
+
+  // The AU may round MaximumFramesPerSlice during initialization. Query the
+  // actual value and make that negotiated maximum authoritative for both the
+  // callback contract and the RT scratch allocation.
+  UInt32 negotiated_frames = 0;
+  UInt32 negotiated_size = sizeof(negotiated_frames);
+  if (!ok(AudioUnitGetProperty(impl_->unit, kAudioUnitProperty_MaximumFramesPerSlice,
+                               kAudioUnitScope_Global, 0, &negotiated_frames, &negotiated_size)) ||
+      negotiated_frames == 0 ||
+      negotiated_frames > static_cast<UInt32>(std::numeric_limits<int>::max())) {
+    close();
+    return false;
+  }
+  impl_->config.max_block_size = static_cast<int>(negotiated_frames);
   const size_t out_ch = static_cast<size_t>(config.num_output_channels);
-  const size_t block = static_cast<size_t>(config.max_block_size);
+  const size_t block = static_cast<size_t>(impl_->config.max_block_size);
   impl_->output_scratch.assign(out_ch * block, 0.0f);
   impl_->output_ptrs.resize(out_ch);
   for (size_t c = 0; c < out_ch; ++c) {
     impl_->output_ptrs[c] = impl_->output_scratch.data() + c * block;
-  }
-
-  if (!ok(AudioUnitInitialize(impl_->unit))) {
-    close();
-    return false;
   }
 
   // Query the driver's actual latency now that the unit is initialized. Total
@@ -226,6 +280,7 @@ bool CoreAudioDevice::start() {
   if (impl_->unit == nullptr || impl_->running.load()) return false;
   impl_->frame_counter = 0;
   impl_->expected_next_sample_time = -1;  // no baseline until the first callback
+  impl_->midi_time_mapper.reset();
   impl_->xruns.store(0, std::memory_order_relaxed);
   if (!ok(AudioOutputUnitStart(impl_->unit))) return false;
   impl_->running.store(true);
@@ -260,5 +315,7 @@ int CoreAudioDevice::output_latency_samples() const noexcept {
 }
 
 uint32_t CoreAudioDevice::xrun_count() const noexcept { return impl_->xruns.load(); }
+
+MidiHostTimeMapper& CoreAudioDevice::midi_time_mapper() noexcept { return impl_->midi_time_mapper; }
 
 }  // namespace sonare::host::backends

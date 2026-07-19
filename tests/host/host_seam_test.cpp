@@ -23,6 +23,8 @@
 
 #include "engine/realtime_engine.h"
 #include "host/audio_device.h"
+#include "host/backends/coreaudio/coreaudio_render_utils.h"
+#include "host/backends/coremidi/coremidi_output_state.h"
 #include "host/midi_io.h"
 #include "host/plugin_host.h"
 #include "midi/instrument.h"
@@ -694,6 +696,158 @@ TEST_CASE("fixed MIDI input drain_block clamps offsets to block bounds", "[host]
   REQUIRE(drained[1].ump.note_number() == 62);
   REQUIRE(drained[2].render_frame == 2015);
   REQUIRE(drained[2].ump.note_number() == 64);
+}
+
+TEST_CASE("MIDI host-time mapper round-trips sample-accurate frame offsets", "[host]") {
+  sonare::host::MidiHostTimeMapper mapper;
+  int64_t frame = 0;
+  uint64_t host_time_ns = 0;
+  REQUIRE_FALSE(mapper.host_time_to_render_frame(1'000'000'000u, &frame));
+
+  mapper.publish_anchor(/*host_time_ns=*/1'000'000'000u, /*render_frame=*/48'000,
+                        /*sample_rate=*/48'000.0);
+  REQUIRE(mapper.host_time_to_render_frame(1'005'000'000u, &frame));
+  REQUIRE(frame == 48'240);  // 5 ms at 48 kHz
+  REQUIRE(mapper.render_frame_to_host_time(48'240, &host_time_ns));
+  REQUIRE(host_time_ns == 1'005'000'000u);
+
+  mapper.reset();
+  REQUIRE_FALSE(mapper.render_frame_to_host_time(48'240, &host_time_ns));
+}
+
+TEST_CASE("CoreAudio oversize callback plan bounds render and zeros device tail", "[host]") {
+  namespace ca_detail = sonare::host::backends::detail;
+  constexpr uint32_t kDeviceFrames = 7;
+  constexpr int kNegotiatedMax = 4;
+  constexpr int64_t kSampleTime = 12'000;
+
+  const auto plan = ca_detail::plan_coreaudio_callback(kDeviceFrames, kNegotiatedMax, kSampleTime);
+  REQUIRE(plan.render_frames == kNegotiatedMax);
+  REQUIRE(plan.xrun_delta == 1);
+  REQUIRE(plan.next_sample_time == kSampleTime + kDeviceFrames);
+
+  std::array<float, kNegotiatedMax> left{1.0f, 2.0f, 3.0f, 4.0f};
+  std::array<float, kNegotiatedMax> right{5.0f, 6.0f, 7.0f, 8.0f};
+  const std::array<const float*, 2> source{left.data(), right.data()};
+  std::array<float, kDeviceFrames * 2> device_output{};
+  device_output.fill(99.0f);
+
+  ca_detail::copy_coreaudio_interleaved(device_output.data(), kDeviceFrames, 2, source.data(), 2,
+                                        plan.render_frames);
+  for (int frame = 0; frame < kNegotiatedMax; ++frame) {
+    REQUIRE(device_output[static_cast<size_t>(frame) * 2] == left[frame]);
+    REQUIRE(device_output[static_cast<size_t>(frame) * 2 + 1] == right[frame]);
+  }
+  for (uint32_t frame = kNegotiatedMax; frame < kDeviceFrames; ++frame) {
+    REQUIRE(device_output[static_cast<size_t>(frame) * 2] == 0.0f);
+    REQUIRE(device_output[static_cast<size_t>(frame) * 2 + 1] == 0.0f);
+  }
+
+  // Exercise the HAL's non-interleaved branch independently of CoreAudio.
+  // Only the safely rendered prefix is copied; the oversize tail and a missing
+  // source channel are deterministically silent.
+  std::array<float, kDeviceFrames> planar_left{};
+  std::array<float, kDeviceFrames> planar_missing{};
+  planar_left.fill(99.0f);
+  planar_missing.fill(99.0f);
+  ca_detail::copy_coreaudio_planar_channel(planar_left.data(), planar_left.size(), left.data(),
+                                           plan.render_frames);
+  ca_detail::copy_coreaudio_planar_channel(planar_missing.data(), planar_missing.size(), nullptr,
+                                           plan.render_frames);
+  for (int frame = 0; frame < kNegotiatedMax; ++frame) {
+    REQUIRE(planar_left[static_cast<size_t>(frame)] == left[static_cast<size_t>(frame)]);
+  }
+  for (uint32_t frame = kNegotiatedMax; frame < kDeviceFrames; ++frame) {
+    REQUIRE(planar_left[frame] == 0.0f);
+  }
+  for (float sample : planar_missing) REQUIRE(sample == 0.0f);
+}
+
+TEST_CASE("CoreMIDI scripted SysEx sender retries without duplicating accepted packets",
+          "[host][coremidi]") {
+  namespace midi_detail = sonare::host::backends::detail;
+  constexpr size_t kBatchCapacity = 256;
+  std::vector<uint8_t> payload(4097);
+  for (size_t i = 0; i < payload.size(); ++i) {
+    payload[i] = static_cast<uint8_t>((i + 1u) % 0x80u);
+  }
+
+  std::array<Ump, kBatchCapacity> scratch{};
+  std::vector<uint8_t> accepted;
+  size_t packet_position = 0;
+  size_t send_calls = 0;
+  uint32_t send_error_count = 0;
+  const auto append_batch = [&accepted](const Ump* packets, size_t count) {
+    for (size_t packet_index = 0; packet_index < count; ++packet_index) {
+      const Ump& packet = packets[packet_index];
+      const uint8_t num_bytes = static_cast<uint8_t>((packet.words[0] >> 16u) & 0x0Fu);
+      const uint8_t bytes[6] = {
+          static_cast<uint8_t>((packet.words[0] >> 8u) & 0xFFu),
+          static_cast<uint8_t>(packet.words[0] & 0xFFu),
+          static_cast<uint8_t>((packet.words[1] >> 24u) & 0xFFu),
+          static_cast<uint8_t>((packet.words[1] >> 16u) & 0xFFu),
+          static_cast<uint8_t>((packet.words[1] >> 8u) & 0xFFu),
+          static_cast<uint8_t>(packet.words[1] & 0xFFu),
+      };
+      for (uint8_t byte_index = 0; byte_index < num_bytes; ++byte_index) {
+        accepted.push_back(bytes[byte_index]);
+      }
+    }
+  };
+
+  const auto first_status = midi_detail::flush_sysex7_payload(
+      payload.data(), payload.size(), /*group=*/2, &packet_position, scratch.data(), scratch.size(),
+      [&](const Ump* packets, size_t count) {
+        ++send_calls;
+        if (send_calls == 2) return false;
+        append_batch(packets, count);
+        return true;
+      });
+  if (first_status == midi_detail::SysExFlushStatus::kRetry) ++send_error_count;
+  REQUIRE(first_status == midi_detail::SysExFlushStatus::kRetry);
+  REQUIRE(send_error_count == 1);
+  REQUIRE(send_calls == 2);
+  REQUIRE(packet_position == kBatchCapacity);
+  REQUIRE(accepted.size() == kBatchCapacity * 6u);
+
+  const auto retry_status = midi_detail::flush_sysex7_payload(
+      payload.data(), payload.size(), /*group=*/2, &packet_position, scratch.data(), scratch.size(),
+      [&](const Ump* packets, size_t count) {
+        ++send_calls;
+        append_batch(packets, count);
+        return true;
+      });
+  REQUIRE(retry_status == midi_detail::SysExFlushStatus::kComplete);
+  REQUIRE(packet_position == 683);
+  REQUIRE(send_calls == 4);
+  REQUIRE(send_error_count == 1);
+  REQUIRE(accepted == payload);
+
+  uint32_t invalid_sysex_count = 0;
+  packet_position = 0;
+  const auto invalid_status =
+      midi_detail::flush_sysex7_payload(nullptr, 0, /*group=*/0, &packet_position, scratch.data(),
+                                        scratch.size(), [](const Ump*, size_t) { return true; });
+  if (invalid_status == midi_detail::SysExFlushStatus::kInvalid) ++invalid_sysex_count;
+  REQUIRE(invalid_status == midi_detail::SysExFlushStatus::kInvalid);
+  REQUIRE(invalid_sysex_count == 1);
+}
+
+TEST_CASE("fixed MIDI input retains absolute future-frame events", "[host]") {
+  FixedMidiInputSource<4> input;
+  const Ump first = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  const Ump future = sonare::midi::make_midi1_note_on(0, 0, 64, 100);
+  REQUIRE(input.push_event_at_render_frame(first, 2010));
+  REQUIRE(input.push_event_at_render_frame(future, 2020));
+
+  std::array<MidiEvent, 4> drained{};
+  REQUIRE(input.drain_block(drained.data(), drained.size(), 2000, 16) == 1);
+  REQUIRE(drained[0].render_frame == 2010);
+  REQUIRE(input.pending_count() == 1);
+
+  REQUIRE(input.drain_block(drained.data(), drained.size(), 2016, 16) == 1);
+  REQUIRE(drained[0].render_frame == 2020);
+  REQUIRE(input.pending_count() == 0);
 }
 
 // ===========================================================================

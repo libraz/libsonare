@@ -54,6 +54,11 @@ struct AudioStreamConfig {
 /// stream started. Both are advisory (for sync / capture timestamping); a
 /// backend that cannot provide them leaves them at 0.
 ///
+/// `host_time_ns` is the monotonic host clock at that same first frame, in
+/// nanoseconds. It lets SDK-free consumers correlate the audio sample timeline
+/// with timestamped device I/O such as MIDI. A backend that cannot expose a
+/// monotonic host clock leaves it at 0.
+///
 /// `input_xruns` reports xruns/underruns (dropped output / overflowed input
 /// buffers) the backend detected SINCE the previous render() callback — i.e. a
 /// discontinuity occurred before this buffer's first frame. It is a per-callback
@@ -64,6 +69,7 @@ struct AudioStreamConfig {
 struct AudioCallbackTime {
   double stream_time_seconds = 0.0;
   int64_t sample_time = 0;
+  uint64_t host_time_ns = 0;
   uint32_t input_xruns = 0;
 };
 

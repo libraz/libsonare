@@ -15,6 +15,7 @@
 #include <memory>
 
 #include "host/audio_device.h"
+#include "host/midi_io.h"
 
 namespace sonare::host::backends {
 
@@ -42,6 +43,11 @@ class CoreAudioDevice final : public AudioDevice {
   int input_latency_samples() const noexcept override;
   int output_latency_samples() const noexcept override;
   uint32_t xrun_count() const noexcept override;
+
+  /// Shared audio-clock correlation for CoreMIDI input/output. Attach this
+  /// mapper to CoreMidiInput/CoreMidiOutput before streaming; the render
+  /// callback refreshes it from CoreAudio's sample/host timestamps.
+  MidiHostTimeMapper& midi_time_mapper() noexcept;
 
  private:
   struct Impl;

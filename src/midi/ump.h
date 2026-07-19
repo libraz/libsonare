@@ -177,6 +177,36 @@ Ump make_midi2_assignable_controller(uint8_t group, uint8_t channel, uint8_t ban
 /// length for diagnostics only.
 Ump make_sysex_handle(uint8_t group, SysExHandle handle) noexcept;
 
+/// Stateful, allocation-free SysEx7 packetizer. Unlike the one-shot helper
+/// below, read() may be called repeatedly with a bounded scratch buffer, so
+/// control-thread backends can stream arbitrarily long payloads across
+/// multiple OS packet lists without truncation.
+class SysEx7Packetizer {
+ public:
+  SysEx7Packetizer(const uint8_t* data, size_t size, uint8_t group) noexcept;
+
+  bool valid() const noexcept { return valid_; }
+  size_t packet_count() const noexcept { return packet_count_; }
+  size_t packet_position() const noexcept { return packet_position_; }
+  size_t remaining_packets() const noexcept { return packet_count_ - packet_position_; }
+
+  /// Writes the next at most @p cap packets and advances the cursor. Returns 0
+  /// for invalid/exhausted input or a null/zero-capacity destination.
+  size_t read(Ump* out, size_t cap) noexcept;
+
+  /// Positions the cursor for retry/resume. Returns false when out of range.
+  bool seek_packet(size_t packet_position) noexcept;
+
+ private:
+  const uint8_t* data_ = nullptr;
+  size_t begin_ = 0;
+  size_t end_ = 0;
+  size_t packet_count_ = 0;
+  size_t packet_position_ = 0;
+  uint8_t group_ = 0;
+  bool valid_ = false;
+};
+
 /// Packetizes a resolved SysEx payload into a sequence of SysEx7 (message type
 /// 0x3, 64-bit) UMP data messages on `group`. A leading 0xF0 / trailing 0xF7
 /// MIDI 1.0 frame is stripped (UMP SysEx7 carries only the inner data). Each UMP

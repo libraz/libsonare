@@ -23,6 +23,21 @@
 
 namespace sonare::host::backends {
 
+namespace detail {
+
+/// Deterministic result from the fake-AudioUnit render-path call spy.
+struct AuProcessCallSpyResult {
+  bool instrument_controls_unchanged = false;
+  bool effect_controls_unchanged = false;
+  unsigned render_calls = 0;
+};
+
+/// Exercises the actual instrument/effect process implementations with a fake
+/// AudioUnit call table. No SDK object or installed plugin is required.
+AuProcessCallSpyResult run_au_process_call_spy();
+
+}  // namespace detail
+
 /// Factory over the system's Audio Units. Control-thread only; instantiation
 /// allocates. A single provider can create both instruments and effects.
 class AuInstrumentProvider final : public InstrumentProvider {

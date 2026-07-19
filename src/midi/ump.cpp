@@ -255,50 +255,58 @@ Ump make_sysex_handle(uint8_t group, SysExHandle handle) noexcept {
   return ump;
 }
 
-size_t sysex7_payload_to_umps(const uint8_t* data, size_t size, uint8_t group, Ump* out,
-                              size_t cap) noexcept {
-  if (data == nullptr || out == nullptr) return 0;
+SysEx7Packetizer::SysEx7Packetizer(const uint8_t* data, size_t size, uint8_t group) noexcept
+    : data_(data), end_(size), group_(static_cast<uint8_t>(group & 0x0Fu)) {
+  if (data_ == nullptr) return;
   // Strip MIDI 1.0 framing: UMP SysEx7 carries the inner data only.
-  size_t begin = 0;
-  size_t end = size;
-  if (begin < end && data[begin] == 0xF0u) ++begin;
-  if (end > begin && data[end - 1] == 0xF7u) --end;
-  const size_t total = end - begin;
-  if (total == 0) return 0;
+  if (begin_ < end_ && data_[begin_] == 0xF0u) ++begin_;
+  if (end_ > begin_ && data_[end_ - 1] == 0xF7u) --end_;
+  const size_t total = end_ - begin_;
+  if (total == 0) return;
 
   // SysEx7 data bytes must be 7-bit; an 8-bit byte requires SysEx8.
-  for (size_t i = begin; i < end; ++i) {
-    if (data[i] > 0x7Fu) return 0;
+  for (size_t i = begin_; i < end_; ++i) {
+    if (data_[i] > 0x7Fu) return;
   }
+  packet_count_ = total / 6u + (total % 6u != 0u ? 1u : 0u);
+  valid_ = true;
+}
 
-  // A payload of N bytes needs ceil(N / 6) packets; bail before writing if the
-  // caller's buffer cannot hold them all (partial SysEx would be malformed).
-  const size_t needed = (total + 5u) / 6u;
-  if (needed > cap) return 0;
+bool SysEx7Packetizer::seek_packet(size_t packet_position) noexcept {
+  if (!valid_ || packet_position > packet_count_) return false;
+  packet_position_ = packet_position;
+  return true;
+}
+
+size_t SysEx7Packetizer::read(Ump* out, size_t cap) noexcept {
+  if (!valid_ || out == nullptr || cap == 0 || packet_position_ >= packet_count_) return 0;
+
+  const size_t total = end_ - begin_;
+  const size_t to_write = std::min(cap, packet_count_ - packet_position_);
 
   constexpr uint8_t kSysex7Complete = 0x0u;
   constexpr uint8_t kSysex7Start = 0x1u;
   constexpr uint8_t kSysex7Continue = 0x2u;
   constexpr uint8_t kSysex7End = 0x3u;
 
-  const uint32_t group_bits = static_cast<uint32_t>(group & 0x0Fu) << 24u;
-  size_t offset = 0;
+  const uint32_t group_bits = static_cast<uint32_t>(group_) << 24u;
   size_t produced = 0;
-  bool first = true;
-  do {
+  while (produced < to_write) {
+    const size_t packet_index = packet_position_;
+    const size_t offset = packet_index * 6u;
     const size_t chunk = std::min<size_t>(6u, total - offset);
     uint8_t status;
-    if (total <= 6u) {
+    if (packet_count_ == 1u) {
       status = kSysex7Complete;
-    } else if (first) {
+    } else if (packet_index == 0u) {
       status = kSysex7Start;
-    } else if (offset + chunk >= total) {
+    } else if (packet_index + 1u == packet_count_) {
       status = kSysex7End;
     } else {
       status = kSysex7Continue;
     }
     std::array<uint8_t, 6> bytes{};
-    for (size_t i = 0; i < chunk; ++i) bytes[i] = data[begin + offset + i];
+    for (size_t i = 0; i < chunk; ++i) bytes[i] = data_[begin_ + offset + i];
 
     Ump ump;
     ump.words[0] = (static_cast<uint32_t>(UmpMessageType::kData64) << kTypeShift) | group_bits |
@@ -308,12 +316,18 @@ size_t sysex7_payload_to_umps(const uint8_t* data, size_t size, uint8_t group, U
                    (static_cast<uint32_t>(bytes[3]) << 16u) |
                    (static_cast<uint32_t>(bytes[4]) << 8u) | static_cast<uint32_t>(bytes[5]);
     ump.word_count = 2;
-    ump.group = static_cast<uint8_t>(group & 0x0Fu);
+    ump.group = group_;
     out[produced++] = ump;
-    offset += chunk;
-    first = false;
-  } while (offset < total);
+    ++packet_position_;
+  }
   return produced;
+}
+
+size_t sysex7_payload_to_umps(const uint8_t* data, size_t size, uint8_t group, Ump* out,
+                              size_t cap) noexcept {
+  SysEx7Packetizer packetizer(data, size, group);
+  if (!packetizer.valid() || packetizer.packet_count() > cap) return 0;
+  return packetizer.read(out, cap);
 }
 
 SysExHandle SysExStore::allocate_handle() noexcept {

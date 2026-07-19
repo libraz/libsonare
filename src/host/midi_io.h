@@ -81,13 +81,111 @@
 
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
 
 namespace sonare::host {
+
+/// Lock-free correlation between a monotonic host clock and the engine's
+/// absolute render-frame timeline. A device backend publishes an anchor at the
+/// first frame of each audio callback; timestamped MIDI backends read the latest
+/// complete anchor to map both input host times and output render frames.
+///
+/// The mapper is single-writer/multi-reader. publish_anchor() is RT-safe and
+/// performs only bounded arithmetic plus atomic stores. Readers never observe a
+/// partially-published tuple.
+class MidiHostTimeMapper {
+ public:
+  void reset() noexcept {
+    sequence_.fetch_add(1u, std::memory_order_acq_rel);
+    host_time_ns_.store(0, std::memory_order_relaxed);
+    render_frame_.store(0, std::memory_order_relaxed);
+    sample_rate_millihz_.store(0, std::memory_order_relaxed);
+    sequence_.fetch_add(1u, std::memory_order_release);
+  }
+
+  void publish_anchor(uint64_t host_time_ns, int64_t render_frame, double sample_rate) noexcept {
+    if (host_time_ns == 0 || !std::isfinite(sample_rate) || sample_rate <= 0.0) return;
+    const long double scaled_rate = static_cast<long double>(sample_rate) * 1000.0L;
+    if (scaled_rate > static_cast<long double>(std::numeric_limits<uint64_t>::max())) return;
+    const uint64_t rate_millihz = static_cast<uint64_t>(scaled_rate + 0.5L);
+    if (rate_millihz == 0) return;
+
+    sequence_.fetch_add(1u, std::memory_order_acq_rel);
+    host_time_ns_.store(host_time_ns, std::memory_order_relaxed);
+    render_frame_.store(render_frame, std::memory_order_relaxed);
+    sample_rate_millihz_.store(rate_millihz, std::memory_order_relaxed);
+    sequence_.fetch_add(1u, std::memory_order_release);
+  }
+
+  bool host_time_to_render_frame(uint64_t host_time_ns, int64_t* out) const noexcept {
+    if (out == nullptr) return false;
+    Snapshot snapshot;
+    if (!read_snapshot(&snapshot)) return false;
+    const long double delta_ns =
+        static_cast<long double>(host_time_ns) - static_cast<long double>(snapshot.host_time_ns);
+    const long double delta_frames =
+        delta_ns * static_cast<long double>(snapshot.sample_rate_millihz) / 1.0e12L;
+    const long double frame = static_cast<long double>(snapshot.render_frame) + delta_frames;
+    if (frame < static_cast<long double>(std::numeric_limits<int64_t>::min()) ||
+        frame > static_cast<long double>(std::numeric_limits<int64_t>::max())) {
+      return false;
+    }
+    *out = static_cast<int64_t>(std::llround(frame));
+    return true;
+  }
+
+  bool render_frame_to_host_time(int64_t render_frame, uint64_t* out) const noexcept {
+    if (out == nullptr) return false;
+    Snapshot snapshot;
+    if (!read_snapshot(&snapshot)) return false;
+    const long double delta_frames =
+        static_cast<long double>(render_frame) - static_cast<long double>(snapshot.render_frame);
+    const long double delta_ns =
+        delta_frames * 1.0e12L / static_cast<long double>(snapshot.sample_rate_millihz);
+    const long double host_time = static_cast<long double>(snapshot.host_time_ns) + delta_ns;
+    if (host_time <= 0.0L ||
+        host_time > static_cast<long double>(std::numeric_limits<uint64_t>::max())) {
+      return false;
+    }
+    *out = static_cast<uint64_t>(host_time + 0.5L);
+    return true;
+  }
+
+ private:
+  struct Snapshot {
+    uint64_t host_time_ns = 0;
+    int64_t render_frame = 0;
+    uint64_t sample_rate_millihz = 0;
+  };
+
+  bool read_snapshot(Snapshot* out) const noexcept {
+    for (int attempt = 0; attempt < 4; ++attempt) {
+      const uint32_t begin = sequence_.load(std::memory_order_acquire);
+      if ((begin & 1u) != 0u) continue;
+      Snapshot snapshot;
+      snapshot.host_time_ns = host_time_ns_.load(std::memory_order_relaxed);
+      snapshot.render_frame = render_frame_.load(std::memory_order_relaxed);
+      snapshot.sample_rate_millihz = sample_rate_millihz_.load(std::memory_order_relaxed);
+      const uint32_t end = sequence_.load(std::memory_order_acquire);
+      if (begin == end && snapshot.host_time_ns != 0 && snapshot.sample_rate_millihz != 0) {
+        *out = snapshot;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  std::atomic<uint32_t> sequence_{0};
+  std::atomic<uint64_t> host_time_ns_{0};
+  std::atomic<int64_t> render_frame_{0};
+  std::atomic<uint64_t> sample_rate_millihz_{0};
+};
 
 /// Live MIDI INPUT seam. A host port implementation buffers incoming UMP from
 /// the device and the runtime drains it as fixed midi::MidiEvent records,
@@ -164,15 +262,13 @@ class FixedMidiInputSource final : public MidiInputSource {
   static_assert(Capacity > 0, "FixedMidiInputSource capacity must be positive");
 
   bool push_event(const midi::Ump& ump, int64_t port_time_samples) noexcept override {
-    const size_t write = write_index_.load(std::memory_order_relaxed);
-    const size_t next = increment(write);
-    if (next == read_index_.load(std::memory_order_acquire)) {
-      dropped_count_.fetch_add(1, std::memory_order_relaxed);
-      return false;
-    }
-    buffer_[write] = Slot{ump, port_time_samples};
-    write_index_.store(next, std::memory_order_release);
-    return true;
+    return enqueue(ump, port_time_samples, false);
+  }
+
+  /// HOST callback thread: enqueue an event whose timestamp is already mapped
+  /// to the engine's absolute render-frame timeline.
+  bool push_event_at_render_frame(const midi::Ump& ump, int64_t render_frame) noexcept {
+    return enqueue(ump, render_frame, true);
   }
 
   size_t drain(midi::MidiEvent* out, size_t capacity, int64_t block_start_frame) noexcept override {
@@ -183,10 +279,50 @@ class FixedMidiInputSource final : public MidiInputSource {
     const size_t write = write_index_.load(std::memory_order_acquire);
     size_t n = 0;
     while (read != write && n < capacity) {
-      const int64_t offset =
-          buffer_[read].port_time_samples < 0 ? 0 : buffer_[read].port_time_samples;
-      out[n].render_frame = block_start_frame + offset;
-      out[n].ump = buffer_[read].ump;
+      const Slot& slot = buffer_[read];
+      const int64_t offset = slot.time_samples < 0 ? 0 : slot.time_samples;
+      out[n].render_frame =
+          slot.absolute_render_frame ? slot.time_samples : block_start_frame + offset;
+      out[n].ump = slot.ump;
+      read = increment(read);
+      ++n;
+    }
+    read_index_.store(read, std::memory_order_release);
+    for (size_t i = 1; i < n; ++i) {
+      midi::MidiEvent value = out[i];
+      size_t j = i;
+      while (j > 0 && out[j - 1].render_frame > value.render_frame) {
+        out[j] = out[j - 1];
+        --j;
+      }
+      out[j] = value;
+    }
+    return n;
+  }
+
+  size_t drain_block(midi::MidiEvent* out, size_t capacity, int64_t block_start_frame,
+                     int num_frames) noexcept override {
+    if (out == nullptr || capacity == 0 || num_frames <= 0) return 0;
+    const int64_t block_end_frame = block_start_frame + num_frames;
+    size_t read = read_index_.load(std::memory_order_relaxed);
+    const size_t write = write_index_.load(std::memory_order_acquire);
+    size_t n = 0;
+    while (read != write && n < capacity) {
+      const Slot& slot = buffer_[read];
+      if (slot.absolute_render_frame && slot.time_samples >= block_end_frame) {
+        // CoreMIDI delivers timestamp-ordered packets. Leave a future event and
+        // everything after it queued until the block containing its frame.
+        break;
+      }
+      if (slot.absolute_render_frame) {
+        out[n].render_frame =
+            slot.time_samples < block_start_frame ? block_start_frame : slot.time_samples;
+      } else {
+        const int64_t offset = slot.time_samples < 0 ? 0 : slot.time_samples;
+        out[n].render_frame = block_start_frame + offset;
+        if (out[n].render_frame >= block_end_frame) out[n].render_frame = block_end_frame - 1;
+      }
+      out[n].ump = slot.ump;
       read = increment(read);
       ++n;
     }
@@ -213,11 +349,23 @@ class FixedMidiInputSource final : public MidiInputSource {
   void reset_telemetry() noexcept { dropped_count_.store(0, std::memory_order_relaxed); }
 
  private:
+  bool enqueue(const midi::Ump& ump, int64_t time_samples, bool absolute_render_frame) noexcept {
+    const size_t write = write_index_.load(std::memory_order_relaxed);
+    const size_t next = increment(write);
+    if (next == read_index_.load(std::memory_order_acquire)) {
+      dropped_count_.fetch_add(1, std::memory_order_relaxed);
+      return false;
+    }
+    buffer_[write] = Slot{ump, time_samples, absolute_render_frame};
+    write_index_.store(next, std::memory_order_release);
+    return true;
+  }
   static constexpr size_t kSlots = Capacity + 1;
 
   struct Slot {
     midi::Ump ump{};
-    int64_t port_time_samples = 0;
+    int64_t time_samples = 0;
+    bool absolute_render_frame = false;
   };
 
   static constexpr size_t increment(size_t index) noexcept { return (index + 1) % kSlots; }

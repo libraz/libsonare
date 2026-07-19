@@ -9,18 +9,42 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <vector>
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
+#include "util/exception.h"
 
 namespace sonare::host::backends {
 namespace {
 
 constexpr size_t kMaxChannels = 32;
 constexpr size_t kEventQueueDepth = 512;
+
+struct AuRuntimeApi {
+  OSStatus (*set_property)(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement,
+                           const void*, UInt32);
+  OSStatus (*get_property)(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement, void*,
+                           UInt32*);
+  OSStatus (*initialize)(AudioUnit);
+  OSStatus (*uninitialize)(AudioUnit);
+  OSStatus (*render)(AudioUnit, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32,
+                     AudioBufferList*);
+  OSStatus (*reset)(AudioUnit, AudioUnitScope, AudioUnitElement);
+  OSStatus (*midi_event)(MusicDeviceComponent, UInt32, UInt32, UInt32, UInt32);
+  OSStatus (*dispose)(AudioComponentInstance);
+};
+
+const AuRuntimeApi kSystemAuRuntimeApi{
+    &AudioUnitSetProperty, &AudioUnitGetProperty,
+    &AudioUnitInitialize,  &AudioUnitUninitialize,
+    &AudioUnitRender,      &AudioUnitReset,
+    &MusicDeviceMIDIEvent, &AudioComponentInstanceDispose,
+};
 
 /// Encode an AudioComponentDescription into the descriptor id string.
 std::string encode_id(const AudioComponentDescription& desc) {
@@ -60,8 +84,8 @@ bool midi1_ump_to_bytes(const midi::Ump& ump, uint8_t& status, uint8_t& data1, u
 
 /// Negotiate non-interleaved float32 on a scope so render can point the buffer
 /// list straight at the engine's planar channel arrays (zero copy).
-bool set_planar_float_format(AudioUnit unit, AudioUnitScope scope, double sample_rate,
-                             int channels) {
+bool set_planar_float_format(const AuRuntimeApi& api, AudioUnit unit, AudioUnitScope scope,
+                             double sample_rate, int channels) {
   AudioStreamBasicDescription fmt{};
   fmt.mSampleRate = sample_rate;
   fmt.mFormatID = kAudioFormatLinearPCM;
@@ -72,15 +96,15 @@ bool set_planar_float_format(AudioUnit unit, AudioUnitScope scope, double sample
   fmt.mFramesPerPacket = 1;
   fmt.mBytesPerFrame = sizeof(float);  // per (non-interleaved) buffer
   fmt.mBytesPerPacket = sizeof(float);
-  return AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, scope, 0, &fmt, sizeof(fmt)) ==
+  return api.set_property(unit, kAudioUnitProperty_StreamFormat, scope, 0, &fmt, sizeof(fmt)) ==
          noErr;
 }
 
-int query_latency_samples(AudioUnit unit, double sample_rate) {
+int query_latency_samples(const AuRuntimeApi& api, AudioUnit unit, double sample_rate) {
   Float64 seconds = 0.0;
   UInt32 size = sizeof(seconds);
-  if (AudioUnitGetProperty(unit, kAudioUnitProperty_Latency, kAudioUnitScope_Global, 0, &seconds,
-                           &size) != noErr) {
+  if (api.get_property(unit, kAudioUnitProperty_Latency, kAudioUnitScope_Global, 0, &seconds,
+                       &size) != noErr) {
     return 0;
   }
   return static_cast<int>(seconds * sample_rate + 0.5);
@@ -102,35 +126,54 @@ namespace {
 
 class AuMidiInstrument final : public midi::MidiInstrument {
  public:
-  explicit AuMidiInstrument(AudioUnit unit) : unit_(unit) {}
+  explicit AuMidiInstrument(AudioUnit unit, const AuRuntimeApi* api = &kSystemAuRuntimeApi)
+      : unit_(unit), api_(api) {}
   ~AuMidiInstrument() override {
     if (unit_ != nullptr) {
-      AudioUnitUninitialize(unit_);
-      AudioComponentInstanceDispose(unit_);
+      if (initialized_) api_->uninitialize(unit_);
+      api_->dispose(unit_);
     }
   }
 
   void prepare(double sample_rate, int max_block_size) override {
+    if (unit_ == nullptr || !std::isfinite(sample_rate) || sample_rate <= 0.0 ||
+        max_block_size <= 0) {
+      throw SonareException(ErrorCode::InvalidParameter, "invalid Audio Unit prepare config");
+    }
+    if (initialized_) {
+      api_->uninitialize(unit_);
+      initialized_ = false;
+    }
     sample_rate_ = sample_rate;
     max_block_ = max_block_size;
     // Scratch backing for channels the host does not supply, so process() never
     // allocates. One row per possible channel, each max_block_size long.
     scratch_.assign(kMaxChannels * static_cast<size_t>(max_block_size), 0.0f);
     auto frames = static_cast<UInt32>(max_block_size);
-    AudioUnitSetProperty(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
-                         &frames, sizeof(frames));
+    if (api_->set_property(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global,
+                           0, &frames, sizeof(frames)) != noErr ||
+        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Output, sample_rate_, 2) ||
+        api_->initialize(unit_) != noErr) {
+      throw SonareException(ErrorCode::InvalidState, "failed to prepare Audio Unit instrument");
+    }
+    initialized_ = true;
     // The MidiInstrument::prepare seam carries no channel count, so default to
-    // stereo here and let process() re-negotiate the stream format if the host
-    // actually renders a different channel count (mono / surround).
-    configure_output_channels(2);
+    // stereo here. process() adapts mismatched host buffers without changing AU
+    // properties on the audio thread.
+    output_channels_ = 2;
+    latency_ = query_latency_samples(*api_, unit_, sample_rate_);
     position_ = 0;
     event_count_ = 0;
   }
 
   void process(float* const* channels, int num_channels, int num_samples) override {
-    if (unit_ == nullptr || num_channels <= 0) return;
+    if (unit_ == nullptr || !initialized_ || channels == nullptr || num_channels <= 0 ||
+        num_samples <= 0) {
+      return;
+    }
     const int chans = num_channels > static_cast<int>(kMaxChannels) ? static_cast<int>(kMaxChannels)
                                                                     : num_channels;
+    const int render_samples = std::min(num_samples, max_block_);
     // Do NOT renegotiate the AU stream format here: an AU format change requires
     // AudioUnitUninitialize/Initialize, and running those on the audio thread
     // violates the process() no-allocation/no-I-O contract (midi/instrument.h).
@@ -158,9 +201,9 @@ class AuMidiInstrument final : public midi::MidiInstrument {
     // Flush queued events at their intra-block sample offset before rendering.
     for (size_t i = 0; i < event_count_; ++i) {
       const int64_t offset = events_[i].render_frame - position_;
-      const UInt32 frame = offset < 0              ? 0
-                           : offset >= num_samples ? static_cast<UInt32>(num_samples - 1)
-                                                   : static_cast<UInt32>(offset);
+      const UInt32 frame = offset < 0                 ? 0
+                           : offset >= render_samples ? static_cast<UInt32>(render_samples - 1)
+                                                      : static_cast<UInt32>(offset);
       // Lower MIDI 2.0 to one or more MIDI 1.0 messages at the same frame. A
       // bank-valid program change expands to CC#0, CC#32, then Program Change so
       // the AU selects the intended bank/patch instead of dropping the bank.
@@ -168,7 +211,7 @@ class AuMidiInstrument final : public midi::MidiInstrument {
       for (size_t m = 0; m < lowered.count; ++m) {
         uint8_t status = 0, d1 = 0, d2 = 0;
         if (midi1_ump_to_bytes(lowered.messages[m], status, d1, d2)) {
-          MusicDeviceMIDIEvent(unit_, status, d1, d2, frame);
+          api_->midi_event(unit_, status, d1, d2, frame);
         }
       }
     }
@@ -181,25 +224,47 @@ class AuMidiInstrument final : public midi::MidiInstrument {
     const int render_chans = output_channels_;
     list->mNumberBuffers = static_cast<UInt32>(render_chans);
     for (int c = 0; c < render_chans; ++c) {
-      float* dst = c < chans ? channels[c] : scratch_.data() + static_cast<size_t>(c) * max_block_;
+      float* dst = c < chans && channels[c] != nullptr
+                       ? channels[c]
+                       : scratch_.data() + static_cast<size_t>(c) * max_block_;
       list->mBuffers[c].mNumberChannels = 1;
-      list->mBuffers[c].mDataByteSize = static_cast<UInt32>(num_samples * sizeof(float));
+      list->mBuffers[c].mDataByteSize = static_cast<UInt32>(render_samples * sizeof(float));
       list->mBuffers[c].mData = dst;
     }
     AudioUnitRenderActionFlags flags = 0;
     AudioTimeStamp ts{};
     ts.mFlags = kAudioTimeStampSampleTimeValid;
     ts.mSampleTime = static_cast<Float64>(position_);
-    AudioUnitRender(unit_, &flags, &ts, 0, static_cast<UInt32>(num_samples), list);
+    const OSStatus status =
+        api_->render(unit_, &flags, &ts, 0, static_cast<UInt32>(render_samples), list);
+    if (status != noErr) {
+      for (int c = 0; c < chans; ++c) {
+        if (channels[c] != nullptr) {
+          std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
+        }
+      }
+    }
     // Silence host channels the AU did not fill (host supplied more than the AU renders).
-    for (int c = render_chans; c < chans; ++c) {
-      std::memset(channels[c], 0, static_cast<size_t>(num_samples) * sizeof(float));
+    for (int c = render_chans; c < num_channels; ++c) {
+      if (channels[c] != nullptr) {
+        std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
+      }
+    }
+    // A caller violating the negotiated maximum gets a silent tail, never a
+    // scratch overrun or an AU property change on the render thread.
+    if (render_samples < num_samples) {
+      for (int c = 0; c < num_channels; ++c) {
+        if (channels[c] != nullptr) {
+          std::memset(channels[c] + render_samples, 0,
+                      static_cast<size_t>(num_samples - render_samples) * sizeof(float));
+        }
+      }
     }
     position_ += num_samples;
   }
 
   void reset() override {
-    if (unit_ != nullptr) AudioUnitReset(unit_, kAudioUnitScope_Global, 0);
+    if (unit_ != nullptr) api_->reset(unit_, kAudioUnitScope_Global, 0);
     event_count_ = 0;
     position_ = 0;
   }
@@ -211,19 +276,8 @@ class AuMidiInstrument final : public midi::MidiInstrument {
   }
 
  private:
-  /// (Re)negotiate the AU output stream format for @p chans channels. An AU's
-  /// format is immutable while initialised, so uninitialise first when already
-  /// running; then re-query latency, which can change with the channel count.
-  void configure_output_channels(int chans) {
-    if (initialized_) AudioUnitUninitialize(unit_);
-    set_planar_float_format(unit_, kAudioUnitScope_Output, sample_rate_, chans);
-    AudioUnitInitialize(unit_);
-    initialized_ = true;
-    output_channels_ = chans;
-    latency_ = query_latency_samples(unit_, sample_rate_);
-  }
-
   AudioUnit unit_ = nullptr;
+  const AuRuntimeApi* api_ = &kSystemAuRuntimeApi;
   double sample_rate_ = 48000.0;
   int max_block_ = 512;
   int latency_ = 0;
@@ -238,41 +292,64 @@ class AuMidiInstrument final : public midi::MidiInstrument {
 
 class AuEffectProcessor final : public rt::ProcessorBase {
  public:
-  explicit AuEffectProcessor(AudioUnit unit) : unit_(unit) {}
+  explicit AuEffectProcessor(AudioUnit unit, const AuRuntimeApi* api = &kSystemAuRuntimeApi)
+      : unit_(unit), api_(api) {}
   ~AuEffectProcessor() override {
     if (unit_ != nullptr) {
-      AudioUnitUninitialize(unit_);
-      AudioComponentInstanceDispose(unit_);
+      if (initialized_) api_->uninitialize(unit_);
+      api_->dispose(unit_);
     }
   }
 
   void prepare(double sample_rate, int max_block_size) override {
+    if (unit_ == nullptr || !std::isfinite(sample_rate) || sample_rate <= 0.0 ||
+        max_block_size <= 0) {
+      throw SonareException(ErrorCode::InvalidParameter, "invalid Audio Unit prepare config");
+    }
+    if (initialized_) {
+      api_->uninitialize(unit_);
+      initialized_ = false;
+    }
     sample_rate_ = sample_rate;
     max_block_ = max_block_size;
     // Scratch backing for channels the host does not supply, so process() never
     // allocates. One row per possible channel, each max_block_size long.
     scratch_.assign(kMaxChannels * static_cast<size_t>(max_block_size), 0.0f);
     auto frames = static_cast<UInt32>(max_block_size);
-    AudioUnitSetProperty(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
-                         &frames, sizeof(frames));
+    if (api_->set_property(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global,
+                           0, &frames, sizeof(frames)) != noErr) {
+      throw SonareException(ErrorCode::InvalidState,
+                            "failed to set Audio Unit maximum render frames");
+    }
     // Supply input via a render callback that copies the host's in-place buffer.
     // The callback is a property that survives format re-negotiation, so it is
     // set once here rather than on every configure_channels().
     AURenderCallbackStruct cb{};
     cb.inputProc = &AuEffectProcessor::input_trampoline;
     cb.inputProcRefCon = this;
-    AudioUnitSetProperty(unit_, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cb,
-                         sizeof(cb));
-    // Default to stereo; process() re-negotiates if the host's channel count
-    // differs (the ProcessorBase::prepare seam carries no channel count).
-    configure_channels(2);
+    if (api_->set_property(unit_, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0,
+                           &cb, sizeof(cb)) != noErr ||
+        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Input, sample_rate_, 2) ||
+        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Output, sample_rate_, 2) ||
+        api_->initialize(unit_) != noErr) {
+      throw SonareException(ErrorCode::InvalidState, "failed to prepare Audio Unit effect");
+    }
+    initialized_ = true;
+    // ProcessorBase::prepare carries no channel count, so negotiate stereo once
+    // on this control-thread seam and adapt mismatched process buffers safely.
+    channels_ = 2;
+    latency_ = query_latency_samples(*api_, unit_, sample_rate_);
     position_ = 0;
   }
 
   void process(float* const* channels, int num_channels, int num_samples) override {
-    if (unit_ == nullptr || num_channels <= 0) return;
+    if (unit_ == nullptr || !initialized_ || channels == nullptr || num_channels <= 0 ||
+        num_samples <= 0) {
+      return;
+    }
     const int chans = num_channels > static_cast<int>(kMaxChannels) ? static_cast<int>(kMaxChannels)
                                                                     : num_channels;
+    const int render_samples = std::min(num_samples, max_block_);
     // Do NOT renegotiate the AU format here: uninitialising/reinitialising the AU
     // on the audio thread violates the process() no-allocation/no-I-O contract
     // (midi/instrument.h). Keep the channel count negotiated in prepare() and
@@ -287,45 +364,52 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     const int render_chans = channels_;
     list->mNumberBuffers = static_cast<UInt32>(render_chans);
     for (int c = 0; c < render_chans; ++c) {
-      float* dst = c < chans ? channels[c] : scratch_.data() + static_cast<size_t>(c) * max_block_;
+      float* dst = c < chans && channels[c] != nullptr
+                       ? channels[c]
+                       : scratch_.data() + static_cast<size_t>(c) * max_block_;
       list->mBuffers[c].mNumberChannels = 1;
-      list->mBuffers[c].mDataByteSize = static_cast<UInt32>(num_samples * sizeof(float));
+      list->mBuffers[c].mDataByteSize = static_cast<UInt32>(render_samples * sizeof(float));
       list->mBuffers[c].mData = dst;
     }
     AudioUnitRenderActionFlags flags = 0;
     AudioTimeStamp ts{};
     ts.mFlags = kAudioTimeStampSampleTimeValid;
     ts.mSampleTime = static_cast<Float64>(position_);
-    AudioUnitRender(unit_, &flags, &ts, 0, static_cast<UInt32>(num_samples), list);
+    const OSStatus status =
+        api_->render(unit_, &flags, &ts, 0, static_cast<UInt32>(render_samples), list);
+    if (status != noErr) {
+      for (int c = 0; c < chans; ++c) {
+        if (channels[c] != nullptr) {
+          std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
+        }
+      }
+    }
     // Silence host channels the AU did not fill (host supplied more than the AU renders).
-    for (int c = render_chans; c < chans; ++c) {
-      std::memset(channels[c], 0, static_cast<size_t>(num_samples) * sizeof(float));
+    for (int c = render_chans; c < num_channels; ++c) {
+      if (channels[c] != nullptr) {
+        std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
+      }
+    }
+    if (render_samples < num_samples) {
+      for (int c = 0; c < num_channels; ++c) {
+        if (channels[c] != nullptr) {
+          std::memset(channels[c] + render_samples, 0,
+                      static_cast<size_t>(num_samples - render_samples) * sizeof(float));
+        }
+      }
     }
     position_ += num_samples;
     in_channels_ = nullptr;
   }
 
   void reset() override {
-    if (unit_ != nullptr) AudioUnitReset(unit_, kAudioUnitScope_Global, 0);
+    if (unit_ != nullptr) api_->reset(unit_, kAudioUnitScope_Global, 0);
     position_ = 0;
   }
 
   int latency_samples() const noexcept override { return latency_; }
 
  private:
-  /// (Re)negotiate the AU input+output stream format for @p chans channels.
-  /// An AU's format is immutable while initialised, so uninitialise first when
-  /// already running; the render callback set in prepare() persists across this.
-  void configure_channels(int chans) {
-    if (initialized_) AudioUnitUninitialize(unit_);
-    set_planar_float_format(unit_, kAudioUnitScope_Input, sample_rate_, chans);
-    set_planar_float_format(unit_, kAudioUnitScope_Output, sample_rate_, chans);
-    AudioUnitInitialize(unit_);
-    initialized_ = true;
-    channels_ = chans;
-    latency_ = query_latency_samples(unit_, sample_rate_);
-  }
-
   static OSStatus input_trampoline(void* ref, AudioUnitRenderActionFlags* /*flags*/,
                                    const AudioTimeStamp* /*ts*/, UInt32 /*bus*/, UInt32 frames,
                                    AudioBufferList* data) noexcept {
@@ -346,6 +430,7 @@ class AuEffectProcessor final : public rt::ProcessorBase {
   }
 
   AudioUnit unit_ = nullptr;
+  const AuRuntimeApi* api_ = &kSystemAuRuntimeApi;
   double sample_rate_ = 48000.0;
   int max_block_ = 512;
   int latency_ = 0;
@@ -356,6 +441,56 @@ class AuEffectProcessor final : public rt::ProcessorBase {
   std::vector<float> scratch_{};
   float* const* in_channels_ = nullptr;
   int in_count_ = 0;
+};
+
+struct AuCallSpyState {
+  unsigned set_property_calls = 0;
+  unsigned initialize_calls = 0;
+  unsigned uninitialize_calls = 0;
+  unsigned render_calls = 0;
+};
+
+thread_local AuCallSpyState* g_au_call_spy = nullptr;
+
+OSStatus spy_set_property(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement,
+                          const void*, UInt32) {
+  ++g_au_call_spy->set_property_calls;
+  return noErr;
+}
+
+OSStatus spy_get_property(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement,
+                          void* value, UInt32* size) {
+  if (value != nullptr && size != nullptr && *size >= sizeof(Float64)) {
+    *static_cast<Float64*>(value) = 0.0;
+  }
+  return noErr;
+}
+
+OSStatus spy_initialize(AudioUnit) {
+  ++g_au_call_spy->initialize_calls;
+  return noErr;
+}
+
+OSStatus spy_uninitialize(AudioUnit) {
+  ++g_au_call_spy->uninitialize_calls;
+  return noErr;
+}
+
+OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32,
+                    AudioBufferList*) {
+  ++g_au_call_spy->render_calls;
+  return noErr;
+}
+
+OSStatus spy_reset(AudioUnit, AudioUnitScope, AudioUnitElement) { return noErr; }
+
+OSStatus spy_midi_event(MusicDeviceComponent, UInt32, UInt32, UInt32, UInt32) { return noErr; }
+
+OSStatus spy_dispose(AudioComponentInstance) { return noErr; }
+
+const AuRuntimeApi kSpyAuRuntimeApi{
+    &spy_set_property, &spy_get_property, &spy_initialize, &spy_uninitialize,
+    &spy_render,       &spy_reset,        &spy_midi_event, &spy_dispose,
 };
 
 /// Instantiate the AU named by `descriptor`, or nullptr.
@@ -393,6 +528,46 @@ AudioUnit cached_param_unit(void** cache_unit, std::string* cache_id,
 }
 
 }  // namespace
+
+detail::AuProcessCallSpyResult detail::run_au_process_call_spy() {
+  AuCallSpyState state;
+  g_au_call_spy = &state;
+  detail::AuProcessCallSpyResult result;
+  auto fake_unit = reinterpret_cast<AudioUnit>(static_cast<uintptr_t>(1));
+
+  const auto control_calls = [&state] {
+    return state.set_property_calls + state.initialize_calls + state.uninitialize_calls;
+  };
+  {
+    AuMidiInstrument instrument(fake_unit, &kSpyAuRuntimeApi);
+    instrument.prepare(48000.0, 4);
+    const unsigned before = control_calls();
+    std::array<float, 7> left{};
+    std::array<float, 7> right{};
+    std::array<float*, 1> mono{left.data()};
+    std::array<float*, 2> stereo{left.data(), right.data()};
+    instrument.process(mono.data(), 1, 4);
+    instrument.process(stereo.data(), 2, 4);
+    instrument.process(stereo.data(), 2, 7);
+    result.instrument_controls_unchanged = control_calls() == before;
+  }
+  {
+    AuEffectProcessor effect(fake_unit, &kSpyAuRuntimeApi);
+    effect.prepare(48000.0, 4);
+    const unsigned before = control_calls();
+    std::array<float, 7> left{};
+    std::array<float, 7> right{};
+    std::array<float*, 1> mono{left.data()};
+    std::array<float*, 2> stereo{left.data(), right.data()};
+    effect.process(mono.data(), 1, 4);
+    effect.process(stereo.data(), 2, 4);
+    effect.process(stereo.data(), 2, 7);
+    result.effect_controls_unchanged = control_calls() == before;
+  }
+  result.render_calls = state.render_calls;
+  g_au_call_spy = nullptr;
+  return result;
+}
 
 // ===========================================================================
 // AuInstrumentProvider
@@ -447,7 +622,10 @@ std::unique_ptr<midi::MidiInstrument> AuInstrumentProvider::create_instrument(
 
 std::unique_ptr<rt::ProcessorBase> AuInstrumentProvider::create_effect(
     const PluginDescriptor& descriptor) {
-  if (!can_create(descriptor)) return nullptr;
+  if (descriptor.kind != PluginKind::kEffect || descriptor.format != "au") return nullptr;
+  AudioComponentDescription desc{};
+  if (!decode_id(descriptor.id, desc) || desc.componentType != kAudioUnitType_Effect)
+    return nullptr;
   AudioUnit unit = instantiate(descriptor);
   if (unit == nullptr) return nullptr;
   return std::make_unique<AuEffectProcessor>(unit);

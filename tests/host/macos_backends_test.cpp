@@ -38,6 +38,22 @@ TEST_CASE("CoreMIDI input buffers and drains UMP records", "[host][coremidi]") {
   REQUIRE(input.pending_count() == 0);
 }
 
+TEST_CASE("CoreMIDI input maps host timestamps onto absolute render frames", "[host][coremidi]") {
+  sonare::host::MidiHostTimeMapper mapper;
+  mapper.publish_anchor(/*host_time_ns=*/2'000'000'000u, /*render_frame=*/1000,
+                        /*sample_rate=*/48'000.0);
+
+  sonare::host::backends::CoreMidiInput input;
+  input.set_time_mapper(&mapper);
+  const sonare::midi::Ump note = sonare::midi::make_midi1_note_on(0, 0, 67, 100);
+  REQUIRE(input.push_event_at_host_time(note, 2'002'500'000u));
+
+  std::array<sonare::midi::MidiEvent, 4> out{};
+  REQUIRE(input.drain_block(out.data(), out.size(), 1000, 256) == 1);
+  REQUIRE(out[0].render_frame == 1120);  // 2.5 ms at 48 kHz
+  REQUIRE(out[0].ump.note_number() == 67);
+}
+
 TEST_CASE("CoreMIDI output queues RT-safe and holds without a device", "[host][coremidi]") {
   using sonare::host::backends::CoreMidiOutput;
   CoreMidiOutput output;  // not opened: flush must be a no-op, queue retained
@@ -97,6 +113,37 @@ TEST_CASE("CoreMIDI live endpoint round-trip", "[host][coremidi][.]") {
 
 #if defined(SONARE_HOST_TEST_AU)
 #include "host/backends/plughost/au_instrument_provider.h"
+
+TEST_CASE("AU effect factory rejects mismatched descriptor kind and component type", "[host][au]") {
+  using sonare::host::PluginDescriptor;
+  using sonare::host::PluginKind;
+  using sonare::host::backends::AuInstrumentProvider;
+
+  AuInstrumentProvider provider;
+  PluginDescriptor descriptor;
+  descriptor.format = "au";
+
+  // A validly encoded effect component must still be rejected when persisted
+  // metadata labels it as an instrument.
+  descriptor.kind = PluginKind::kInstrument;
+  descriptor.id = "61756678:00000000:00000000";  // 'aufx'
+  REQUIRE(provider.can_create(descriptor));
+  REQUIRE(provider.create_effect(descriptor) == nullptr);
+
+  // Conversely, kEffect metadata cannot turn a MusicDevice component into an
+  // effect. Reject before AudioComponent lookup/instantiation.
+  descriptor.kind = PluginKind::kEffect;
+  descriptor.id = "61756d75:00000000:00000000";  // 'aumu'
+  REQUIRE(provider.can_create(descriptor));
+  REQUIRE(provider.create_effect(descriptor) == nullptr);
+}
+
+TEST_CASE("AU process paths make render calls without control-plane calls", "[host][au]") {
+  const auto result = sonare::host::backends::detail::run_au_process_call_spy();
+  REQUIRE(result.instrument_controls_unchanged);
+  REQUIRE(result.effect_controls_unchanged);
+  REQUIRE(result.render_calls == 6);
+}
 
 TEST_CASE("AU host enumerates and renders a system instrument", "[host][au][.]") {
   using sonare::host::backends::AuInstrumentProvider;
@@ -215,6 +262,12 @@ class SineCallback final : public sonare::host::AudioDeviceCallback {
   }
   void render(const sonare::host::AudioBufferView& buffers) noexcept override {
     callbacks_.fetch_add(1, std::memory_order_relaxed);
+    last_sample_time_.store(buffers.time.sample_time, std::memory_order_relaxed);
+    if (buffers.time.host_time_ns != 0) host_timestamps_.fetch_add(1, std::memory_order_relaxed);
+    int seen = max_frames_seen_.load(std::memory_order_relaxed);
+    while (buffers.num_frames > seen && !max_frames_seen_.compare_exchange_weak(
+                                            seen, buffers.num_frames, std::memory_order_relaxed)) {
+    }
     for (int c = 0; c < buffers.num_output_channels; ++c) {
       for (int i = 0; i < buffers.num_frames; ++i) {
         phase_ += 0.01f;
@@ -226,6 +279,9 @@ class SineCallback final : public sonare::host::AudioDeviceCallback {
 
   sonare::host::AudioStreamConfig config_{};
   std::atomic<int> callbacks_{0};
+  std::atomic<int> max_frames_seen_{0};
+  std::atomic<int> host_timestamps_{0};
+  std::atomic<int64_t> last_sample_time_{0};
   float phase_ = 0.0f;
 };
 }  // namespace
@@ -255,6 +311,13 @@ TEST_CASE("CoreAudio opens the default output device", "[host][coreaudio][.]") {
   const uint32_t xruns = device.xrun_count();
   const int callbacks = callback.callbacks_.load();
   REQUIRE(callbacks > 0);
+  REQUIRE(callback.config_.max_block_size > 0);
+  REQUIRE(callback.max_frames_seen_.load() <= callback.config_.max_block_size);
+  REQUIRE(callback.host_timestamps_.load() > 0);
+  uint64_t mapped_host_time = 0;
+  REQUIRE(device.midi_time_mapper().render_frame_to_host_time(callback.last_sample_time_.load(),
+                                                              &mapped_host_time));
+  REQUIRE(mapped_host_time > 0);
   REQUIRE(xruns <= static_cast<uint32_t>(callbacks) / 4u + 1u);
 
   device.close();

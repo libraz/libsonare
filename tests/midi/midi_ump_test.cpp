@@ -303,6 +303,44 @@ TEST_CASE("SysEx7 packetizer rejects empty, 8-bit, and over-capacity payloads", 
                                                tiny.size()) == 0);
 }
 
+TEST_CASE("stateful SysEx7 packetizer streams beyond the 1536-byte backend boundary", "[midi]") {
+  std::array<Ump, 256> scratch{};
+
+  std::vector<uint8_t> boundary(1536);
+  for (size_t i = 0; i < boundary.size(); ++i) boundary[i] = static_cast<uint8_t>(i % 0x80u);
+  REQUIRE(sonare::midi::sysex7_payload_to_umps(boundary.data(), boundary.size(), 2, scratch.data(),
+                                               scratch.size()) == 256);
+
+  std::vector<uint8_t> payload(4097);
+  for (size_t i = 0; i < payload.size(); ++i) payload[i] = static_cast<uint8_t>((i + 1u) % 0x80u);
+  REQUIRE(sonare::midi::sysex7_payload_to_umps(payload.data(), payload.size(), 2, scratch.data(),
+                                               scratch.size()) == 0);
+
+  sonare::midi::SysEx7Packetizer packetizer(payload.data(), payload.size(), /*group=*/2);
+  REQUIRE(packetizer.valid());
+  REQUIRE(packetizer.packet_count() == 683);
+  std::vector<uint8_t> decoded;
+  size_t batches = 0;
+  size_t last_batch_count = 0;
+  while (packetizer.remaining_packets() > 0) {
+    const size_t count = packetizer.read(scratch.data(), scratch.size());
+    REQUIRE(count > 0);
+    for (size_t i = 0; i < count; ++i) append_sysex7(scratch[i], &decoded);
+    last_batch_count = count;
+    ++batches;
+  }
+  REQUIRE(batches == 3);
+  REQUIRE(decoded == payload);
+  REQUIRE(last_batch_count > 0);
+  REQUIRE(sysex7_status(scratch[last_batch_count - 1u]) == 0x3u);
+
+  REQUIRE(packetizer.seek_packet(256));
+  REQUIRE(packetizer.packet_position() == 256);
+  REQUIRE(packetizer.read(scratch.data(), 1) == 1);
+  REQUIRE(sysex7_status(scratch[0]) == 0x2u);
+  REQUIRE_FALSE(packetizer.seek_packet(packetizer.packet_count() + 1u));
+}
+
 TEST_CASE("MIDI 1.0 byte-stream <-> UMP adapter round-trips channel-voice", "[midi]") {
   uint8_t running = 0;
   // Note-on, channel 5, note 60, velocity 100.
