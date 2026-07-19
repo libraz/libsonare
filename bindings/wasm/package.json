@@ -35,6 +35,7 @@
     "format": "biome format --write src/ tests/",
     "test": "vitest run",
     "test:browser": "node scripts/audio-worklet-smoke.mjs",
+    "test:browser:audit": "node scripts/audit-boundary-smoke.mjs",
     "test:watch": "vitest",
     "prepublishOnly": "yarn clean && cp ../../LICENSE LICENSE && yarn build && yarn lint && yarn test"
   },
