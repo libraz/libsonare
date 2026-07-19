@@ -224,6 +224,10 @@ class RealtimeVoiceChanger {
   void apply_channel_config(ChannelState& state, int channel_index,
                             const RealtimeVoiceChangerConfig& config);
   void reset_channel(ChannelState& state);
+  /// @brief Mirrors the resolved retune grain size into @c config_ so config()
+  ///        reports the effective (prepared) grain rather than the requested
+  ///        one. No-op before prepare(). Control-thread only.
+  void sync_effective_grain_size() noexcept;
   float process_input_stage(ChannelState& state, const RealtimeVoiceChangerConfig& config,
                             float input) noexcept;
   float process_output_stage(ChannelState& state, const RealtimeVoiceChangerConfig& config,

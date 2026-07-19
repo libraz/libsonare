@@ -174,7 +174,18 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     if (channels[ch] == nullptr) continue;
     auto& channel = channels_[static_cast<std::size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
-      scratch_[i] = process_input_stage(channel, config, channels[ch][i]);
+      // Sanitize non-finite (NaN/Inf) input to silence before it can enter any
+      // IIR state. A single upstream NaN would otherwise poison the HPF/EQ
+      // biquads, the retune history ring, the formant filter, and the reverb
+      // permanently (until reset()), because each recirculates its own output
+      // as state. This must be RT-safe (no throw/alloc), so we flush the sample
+      // to 0 rather than rejecting the block. The cleaned value is written back
+      // in place so the dry read in the mix loop below stays finite too. Finite
+      // samples pass through bit-identically (same value, same bits).
+      const float raw = channels[ch][i];
+      const float clean = std::isfinite(raw) ? raw : 0.0f;
+      channels[ch][i] = clean;
+      scratch_[i] = process_input_stage(channel, config, clean);
     }
     channel.retune.process_block(scratch_.data(), scratch_.data(), num_samples);
     channel.formant.process_block(scratch_.data(), scratch_.data(), num_samples);

@@ -496,6 +496,180 @@ TEST_CASE("RealtimeVoiceChanger long-run soak stays finite", "[voice_changer][ds
 }
 
 // ===================================================================
+// config() reports the resolved (effective) retune grain, not the requested
+// one, so UI/latency displays synced to the round-trip config agree with
+// latency_samples() and the DSP.
+// ===================================================================
+TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
+          "[voice_changer][config][grain]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+
+  // Requested grain 0 => derive from sample rate. Before prepare() config()
+  // still reports the request; after prepare() it reports the effective grain.
+  RealtimeVoiceChangerConfig cfg;
+  cfg.retune = {0.0f, 1.0f, 0};
+  cfg.limiter.enable_isp_limiter = false;  // isolate grain as the only latency term
+  RealtimeVoiceChanger changer(cfg);
+  REQUIRE(changer.config().retune.grain_size == 0);
+
+  changer.prepare(sample_rate, block, 1);
+  const int effective = changer.config().retune.grain_size;
+  REQUIRE(effective > 0);
+  REQUIRE(effective % 4 == 0);  // resolve_grain_size rounds up to a multiple of 4
+  // Full wet: latency_samples() == round(wet_mix * grain) == grain, so the
+  // reported grain and the reported latency must agree.
+  REQUIRE(changer.latency_samples() == effective);
+
+  // set_config() with a *different* requested grain must not change the report:
+  // grain is structural and only re-resolves at the next prepare().
+  RealtimeVoiceChangerConfig cfg2 = cfg;
+  cfg2.retune.grain_size = 777;
+  changer.set_config(cfg2);
+  REQUIRE(changer.config().retune.grain_size == effective);
+
+  // An explicit grain honored at prepare() is reported verbatim (500 is already
+  // a multiple of 4, so resolve_grain_size leaves it unchanged).
+  RealtimeVoiceChangerConfig cfg3;
+  cfg3.retune = {0.0f, 1.0f, 500};
+  RealtimeVoiceChanger changer3(cfg3);
+  changer3.prepare(sample_rate, block, 1);
+  REQUIRE(changer3.config().retune.grain_size == 500);
+}
+
+// ===================================================================
+// Non-finite (NaN/Inf) input is flushed to silence at the block entry, so it
+// never poisons the IIR state and never escapes to the caller. Flushing to 0
+// means a poisoned run is bit-identical to the same input with the non-finite
+// samples pre-replaced by 0 — proving the state was not corrupted.
+// ===================================================================
+TEST_CASE("RealtimeVoiceChanger sanitizes non-finite input and recovers (mono)",
+          "[voice_changer][dsp][safety][nan]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+  constexpr int total = sample_rate / 4;  // 0.25 s
+
+  auto make_config = [](bool enable_isp, float wet_mix) {
+    auto cfg = realtime_voice_changer_preset(VoiceCharacterPreset::BrightIdol);
+    cfg.wet_mix = wet_mix;
+    cfg.limiter.enable_isp_limiter = enable_isp;
+    return cfg;
+  };
+
+  auto make_sine = [&]() {
+    std::vector<float> input(static_cast<std::size_t>(total));
+    const float amp = std::pow(10.0f, -12.0f / 20.0f);
+    for (int i = 0; i < total; ++i) {
+      input[static_cast<std::size_t>(i)] =
+          amp * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 440.0 * i / sample_rate));
+    }
+    return input;
+  };
+
+  auto run_mono = [&](const RealtimeVoiceChangerConfig& cfg, const std::vector<float>& input) {
+    RealtimeVoiceChanger changer(cfg);
+    changer.prepare(sample_rate, block, 1);
+    std::vector<float> output(static_cast<std::size_t>(total), 0.0f);
+    for (int pos = 0; pos < total; pos += block) {
+      const int n = std::min(block, total - pos);
+      changer.process_block(input.data() + pos, output.data() + pos, n);
+    }
+    return output;
+  };
+
+  const std::array<std::pair<bool, float>, 4> combos = {{
+      {true, 1.0f},   // ISP on,  fully wet
+      {false, 1.0f},  // ISP off (raw NaN would otherwise reach the caller), wet
+      {true, 0.0f},   // ISP skipped at wet_mix==0, dry passthrough
+      {false, 0.0f},  // ISP off + dry passthrough: no limiter clamp at all
+  }};
+
+  const std::array<float, 3> bad = {
+      std::numeric_limits<float>::quiet_NaN(),
+      std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(),
+  };
+
+  for (const auto& [enable_isp, wet_mix] : combos) {
+    INFO("enable_isp=" << enable_isp << " wet_mix=" << wet_mix);
+    const auto cfg = make_config(enable_isp, wet_mix);
+
+    // Poisoned input: scatter NaN/+Inf/-Inf across the first block. Sanitized
+    // twin: identical, but the non-finite samples pre-replaced by 0.
+    std::vector<float> poisoned = make_sine();
+    std::vector<float> sanitized = poisoned;
+    for (int i = 0; i < block; i += 8) {
+      poisoned[static_cast<std::size_t>(i)] = bad[static_cast<std::size_t>((i / 8) % 3)];
+      sanitized[static_cast<std::size_t>(i)] = 0.0f;
+    }
+
+    const auto out_poisoned = run_mono(cfg, poisoned);
+    const auto out_sanitized = run_mono(cfg, sanitized);
+
+    // (1) No non-finite value escapes to the caller's buffer.
+    for (float s : out_poisoned) REQUIRE(std::isfinite(s));
+
+    // (2) Flushing NaN/Inf to 0 leaves the processor in exactly the same state
+    // as feeding 0 directly: the two runs are bit-identical. A single stuck
+    // NaN in any IIR state would diverge the two runs forever.
+    REQUIRE(out_poisoned.size() == out_sanitized.size());
+    for (std::size_t i = 0; i < out_poisoned.size(); ++i) {
+      REQUIRE(out_poisoned[i] == out_sanitized[i]);
+    }
+
+    // (3) The processor recovers: after the poisoned first block the steady
+    // sine passes through, so the tail still carries real signal energy.
+    const std::size_t tail_start = static_cast<std::size_t>(sample_rate / 8);  // 125 ms
+    REQUIRE(block_rms(out_poisoned, tail_start, out_poisoned.size()) > 1e-3f);
+  }
+}
+
+TEST_CASE("RealtimeVoiceChanger sanitizes non-finite input on planar stereo path",
+          "[voice_changer][dsp][safety][nan]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 256;
+  const auto cfg = realtime_voice_changer_preset(VoiceCharacterPreset::BrightIdol);
+
+  RealtimeVoiceChanger poisoned(cfg);
+  RealtimeVoiceChanger sanitized(cfg);
+  poisoned.prepare(sample_rate, block, 2);
+  sanitized.prepare(sample_rate, block, 2);
+
+  const float amp = std::pow(10.0f, -12.0f / 20.0f);
+  auto make_channel = [&](float bad_value) {
+    std::vector<float> ch(static_cast<std::size_t>(block));
+    for (int i = 0; i < block; ++i) {
+      ch[static_cast<std::size_t>(i)] =
+          amp * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 440.0 * i / sample_rate));
+    }
+    ch[10] = bad_value;
+    ch[100] = bad_value;
+    return ch;
+  };
+
+  auto left_p = make_channel(std::numeric_limits<float>::quiet_NaN());
+  auto right_p = make_channel(std::numeric_limits<float>::infinity());
+  auto left_s = left_p;
+  auto right_s = right_p;
+  left_s[10] = left_s[100] = 0.0f;
+  right_s[10] = right_s[100] = 0.0f;
+
+  float* p_ch[2] = {left_p.data(), right_p.data()};
+  float* s_ch[2] = {left_s.data(), right_s.data()};
+  poisoned.process_block(p_ch, 2, block);
+  sanitized.process_block(s_ch, 2, block);
+
+  for (int i = 0; i < block; ++i) {
+    const auto idx = static_cast<std::size_t>(i);
+    REQUIRE(std::isfinite(left_p[idx]));
+    REQUIRE(std::isfinite(right_p[idx]));
+    // Per-channel NaN/Inf flushed to 0 => identical to the zero-seeded twin.
+    REQUIRE(left_p[idx] == left_s[idx]);
+    REQUIRE(right_p[idx] == right_s[idx]);
+  }
+}
+
+// ===================================================================
 // Silent input + aggressive gate: output must settle to true silence,
 // not envelope-follower-driven flutter.
 // ===================================================================

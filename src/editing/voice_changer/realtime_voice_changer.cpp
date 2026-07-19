@@ -57,6 +57,11 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   for (std::size_t ch = 0; ch < channels_.size(); ++ch) {
     apply_channel_config(channels_[ch], static_cast<int>(ch), config_);
   }
+  // Report the resolved (effective) retune grain through config() rather than
+  // the requested value: grain size is structural and fixed at prepare() time
+  // (0 means "derive from sample rate"), so latency_samples() already uses the
+  // resolved grain. Mirror it into config_ so the two never disagree.
+  sync_effective_grain_size();
   reset();
   // Re-publish so the audio thread sees the same (post-prepare) snapshot and
   // does NOT re-apply coefficients on its first block (they are already
@@ -82,7 +87,21 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
   // thread inside adopt_snapshot_for_block() so set_config() can race safely
   // with process_block().
   config_ = normalize_realtime_voice_changer_config(config);
+  // Keep config() reporting the effective grain: grain size is structural and
+  // cannot change after prepare(), so a newly-requested grain in `config` has
+  // no effect until the next prepare(). Overwrite it with the resolved value so
+  // config() never advertises a size that is not actually in use.
+  sync_effective_grain_size();
   config_publisher_.publish(std::make_shared<const RealtimeVoiceChangerConfig>(config_));
+}
+
+void RealtimeVoiceChanger::sync_effective_grain_size() noexcept {
+  // Only meaningful once prepare() has allocated the per-channel retune stages;
+  // before that the requested value stands. All channels share the same
+  // resolved grain, so channel 0 is representative.
+  if (!channels_.empty()) {
+    config_.retune.grain_size = channels_[0].retune.grain_size();
+  }
 }
 
 void RealtimeVoiceChanger::update_derived(const RealtimeVoiceChangerConfig& config) {
@@ -105,6 +124,14 @@ void RealtimeVoiceChanger::update_derived(const RealtimeVoiceChangerConfig& conf
 void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   // Sub-component allocations: streaming retune/formant/reverb own their
   // internal buffers and resize them inside their own prepare() entry points.
+  // Seed the retune config BEFORE prepare() so the requested grain size is the
+  // one actually resolved/allocated. StreamingRetune::prepare() reads its own
+  // config_.grain_size to size the grain/ring buffers, and its set_config()
+  // treats grain size as structural (kept once prepared) — so if we relied on
+  // the post-prepare apply_channel_config() to deliver the grain, prepare()
+  // would have already locked in the default (auto) grain and the request would
+  // be silently ignored.
+  state.retune.set_config(config_.retune);
   state.retune.prepare(sample_rate_, max_block_size_);
   state.formant.prepare(sample_rate_, max_block_size_);
   state.reverb.prepare(sample_rate_, max_block_size_);
