@@ -1,20 +1,24 @@
 .PHONY: all build release test test-slow test-optional-fixtures test-librosa-live clean rebuild format lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity abi-layout abi-layout-check check-abi-version ci-local
+       test-python test-python-slow test-node test-wasm parity conformance abi-layout abi-layout-check check-abi-version ci-local \
+       test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
 RYE ?= rye
 CMAKE ?= cmake
+HARDENING_JOBS ?= 2
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 PYTHON_PKG_DIR := bindings/python/src/libsonare
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 SHARED_LIB := $(BUILD_DIR)/lib/libsonare.dylib
 PYTHON_SHARED_LIB := $(PYTHON_PKG_DIR)/libsonare.dylib
+HARDENING_ASAN_OPTIONS := strict_string_checks=1
 else
 SHARED_LIB := $(BUILD_DIR)/lib/libsonare.so
 PYTHON_SHARED_LIB := $(PYTHON_PKG_DIR)/libsonare.so
+HARDENING_ASAN_OPTIONS := detect_leaks=1:strict_string_checks=1
 endif
 
 all: build
@@ -112,10 +116,41 @@ test-node: build-node
 test-wasm: build-wasm-binding
 	cd bindings/wasm && yarn test
 
+# Focused security-hardening gates. Each test command writes its complete log
+# under the matching build directory, and --no-tests=error prevents a renamed
+# or accidentally undiscovered regression test from passing silently.
+test-hardening-asan:
+	CC=clang CXX=clang++ $(CMAKE) -B build-hardening-asan -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+	$(CMAKE) --build build-hardening-asan --target sonare_tests --parallel $(HARDENING_JOBS)
+	ASAN_OPTIONS=$(HARDENING_ASAN_OPTIONS) UBSAN_OPTIONS=print_stacktrace=1 ctest --test-dir build-hardening-asan --output-on-failure --no-tests=error --output-log build-hardening-asan/test-hardening.log -R "public input corpus|set_markers rejects an invalid list|duplicate parameter rejection|offline results reject shapes|default Audio exposes a valid empty iterator"
+
+test-hardening-tsan:
+	CC=clang CXX=clang++ $(CMAKE) -B build-hardening-tsan -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
+	$(CMAKE) --build build-hardening-tsan --target sonare_tests --parallel $(HARDENING_JOBS)
+	TSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-hardening-tsan --output-on-failure --no-tests=error --output-log build-hardening-tsan/test-hardening.log -R "^StreamAnalyzer publishes frames and stats to one concurrent consumer$$"
+
+test-hardening-host:
+ifeq ($(UNAME_S),Darwin)
+	$(CMAKE) -B build-hardening-host -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF -DBUILD_COREAUDIO=ON -DBUILD_COREMIDI=ON -DBUILD_AU_HOST=ON
+	$(CMAKE) --build build-hardening-host --target sonare_tests --parallel $(HARDENING_JOBS)
+	ctest --test-dir build-hardening-host --output-on-failure --no-tests=error --output-log build-hardening-host/test-hardening.log -R "CoreAudio oversize callback|CoreMIDI (input|output|scripted)|AU (effect factory|process paths)"
+else
+	@echo "test-hardening-host: skipped (Darwin only)"
+endif
+
+test-hardening-wasm: build-wasm-binding
+	cd bindings/wasm && yarn vitest run tests/basic.test.ts tests/public-input-conformance.test.ts -t "processes realtime engine clips|keeps marker transactions conformant" --reporter=verbose > build-wasm/test-hardening.log
+
+test-hardening: test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm
+
 # Cross-binding parity gate (C API is canonical). Stdlib-only, no build needed:
 # it reads the binding sources directly and exits non-zero on active drift.
-parity:
+parity: conformance
 	python3 tools/parity/check_parity.py
+
+# Shared public-input schema plus public streaming field/flag/default snapshot.
+conformance:
+	python3 tools/conformance/check_public_contracts.py
 
 # Regenerate the authoritative C-ABI struct layout snapshot. Compiles a tiny
 # probe (needs a C++ compiler, not a full build) that reports sizeof/alignof/

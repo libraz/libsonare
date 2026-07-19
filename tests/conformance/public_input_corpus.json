@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "marker_transaction": {
+    "initial": [
+      { "id": 11, "ppq": 1.0, "name": "intro" },
+      { "id": 12, "ppq": 2.0, "name": "chorus" }
+    ],
+    "cases": [
+      {
+        "id": "empty_commit",
+        "accepted": true,
+        "c_representable": true,
+        "markers": []
+      },
+      {
+        "id": "uint32_upper_commit",
+        "accepted": true,
+        "c_representable": true,
+        "markers": [{ "id": "uint32_max", "ppq": 4.0, "name": "upper" }]
+      },
+      {
+        "id": "zero_id",
+        "accepted": false,
+        "c_representable": true,
+        "markers": [{ "id": 0, "ppq": 3.0, "name": "zero" }]
+      },
+      {
+        "id": "negative_ppq",
+        "accepted": false,
+        "c_representable": true,
+        "markers": [{ "id": 21, "ppq": -1.0, "name": "negative" }]
+      },
+      {
+        "id": "nan_ppq",
+        "accepted": false,
+        "c_representable": true,
+        "markers": [{ "id": 22, "ppq": "nan", "name": "nan" }]
+      },
+      {
+        "id": "infinite_ppq",
+        "accepted": false,
+        "c_representable": true,
+        "markers": [{ "id": 23, "ppq": "inf", "name": "infinite" }]
+      },
+      {
+        "id": "negative_id",
+        "accepted": false,
+        "c_representable": false,
+        "markers": [{ "id": -1, "ppq": 3.0, "name": "negative id" }]
+      },
+      {
+        "id": "fractional_id",
+        "accepted": false,
+        "c_representable": false,
+        "markers": [{ "id": 1.5, "ppq": 3.0, "name": "fractional id" }]
+      },
+      {
+        "id": "oversize_id",
+        "accepted": false,
+        "c_representable": false,
+        "markers": [{ "id": 4294967296, "ppq": 3.0, "name": "oversize id" }]
+      },
+      {
+        "id": "partial_failure",
+        "accepted": false,
+        "c_representable": true,
+        "markers": [
+          { "id": 31, "ppq": 0.5, "name": "staged replacement" },
+          { "id": 32, "ppq": "nan", "name": "invalid tail" }
+        ]
+      }
+    ]
+  },
+  "streaming_contract": {
+    "feature_flags": { "mel": 1, "chroma": 2, "onset": 4, "spectral": 8 },
+    "frame_fields": [
+      "n_frames",
+      "n_mels",
+      "n_chroma",
+      "feature_flags",
+      "timestamps",
+      "mel",
+      "chroma",
+      "onset_strength",
+      "rms_energy",
+      "spectral_centroid",
+      "spectral_flatness"
+    ],
+    "output_format_default": 0,
+    "legacy_output_formats_rejected": [1, 2],
+    "disabled_feature_shape": "empty",
+    "overflow_policy": "drop_newest"
+  }
+}
