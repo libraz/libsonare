@@ -591,6 +591,7 @@ def test_synthesize_rir_invalid_geometry_maps_invalid_parameter(monkeypatch) -> 
         ism_order=3,
         seed=1,
         max_seconds=0.0,
+        sabine=False,
         json=False,
     )
     assert cli.cmd_synthesize_rir(args) == EXIT_INVALID_PARAMETER

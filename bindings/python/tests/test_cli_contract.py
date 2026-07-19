@@ -5,12 +5,36 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import math
+import struct
 import subprocess
 import sys
 import wave
 from pathlib import Path
 
 import pytest
+
+
+def _write_tone_wav(
+    path: Path, *, seconds: float = 0.6, sample_rate: int = 22050, freq: float = 220.0
+) -> None:
+    """Write a short mono PCM16 tone so command wiring runs on decodable audio.
+
+    A missing-file invocation fails inside ``_load_audio`` before the parser
+    wiring is ever exercised, so parser-configuration regressions only surface
+    when a command receives valid audio.
+    """
+    frame_count = int(seconds * sample_rate)
+    frames = bytearray()
+    for index in range(frame_count):
+        value = int(0.3 * 32767 * math.sin(2.0 * math.pi * freq * index / sample_rate))
+        frames += struct.pack("<h", value)
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(bytes(frames))
+
 
 TOP_LEVEL_ROUTES = (
     "version",
@@ -86,9 +110,11 @@ PROJECT_ROUTES = (
 
 FFT_OPTION_CONSUMERS = {
     "key": ("cmd_key", ("n_fft", "hop_length")),
+    "chords": ("cmd_chords", ("n_fft", "hop_length")),
     "mel": ("cmd_mel", ("n_fft", "hop_length", "n_mels")),
     "chroma": ("cmd_chroma", ("n_fft", "hop_length")),
     "spectral": ("cmd_spectral", ("n_fft", "hop_length")),
+    "timbre": ("cmd_timbre", ("n_fft", "hop_length", "n_mels")),
     "onset-envelope": ("cmd_onset_envelope", ("n_fft", "hop_length", "n_mels")),
     "tempogram": ("cmd_tempogram", ("n_fft", "hop_length", "n_mels")),
     "plp": ("cmd_plp", ("n_fft", "hop_length", "n_mels")),
@@ -204,6 +230,83 @@ def test_fft_option_manifest_reaches_each_consuming_handler() -> None:
             cli_spelling = f"--{option_name.replace('_', '-')}"
             assert cli_spelling in help_result.stdout
             assert f"args.{option_name}" in handler_source
+
+
+@pytest.mark.parametrize("command", ["chords", "timbre"])
+def test_fft_consumer_commands_run_end_to_end(tmp_path, command) -> None:
+    """FFT/mel-consuming commands must parse and run on real audio.
+
+    Regression guard: ``chords``/``timbre`` previously inherited only the shared
+    parser (no ``--n-fft``/``--hop-length``/``--n-mels``) and crashed with an
+    ``AttributeError`` on any valid input. A hand-built ``Namespace`` bypasses
+    the parser and cannot catch this, so drive the installed console script.
+    """
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+    result = _run_console(command, "--json", str(source))
+    assert result.returncode == 0, result.stderr
+    json.loads(result.stdout)
+
+
+def test_key_default_n_fft_resolves_to_4096(tmp_path) -> None:
+    """``key`` keeps the 4096 analysis default when ``--n-fft`` is omitted.
+
+    The command warns only when an explicit sub-4096 value is supplied, so the
+    absence/presence of the warning is an observable proxy for the sentinel
+    (``default=None`` -> 4096) resolution and matches the native CLI.
+    """
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+
+    default_run = _run_console("key", "--json", str(source))
+    assert default_run.returncode == 0, default_run.stderr
+    assert "prefers --n-fft >= 4096" not in default_run.stderr
+
+    explicit_run = _run_console("key", "--n-fft", "2048", "--json", str(source))
+    assert explicit_run.returncode == 0, explicit_run.stderr
+    assert "prefers --n-fft >= 4096" in explicit_run.stderr
+
+
+def test_key_default_matches_library_detect_key(tmp_path) -> None:
+    """The default ``key`` CLI result matches ``detect_key`` (library default 4096)."""
+    from libsonare import cli, detect_key
+
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+
+    result = _run_console("key", "--json", str(source))
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+
+    # Load through the same facade the CLI uses so the samples are identical.
+    samples, sr = cli._load_audio(str(source))
+    key = detect_key(samples, sample_rate=sr)
+    assert payload["root"] == key.root.value
+    assert payload["mode"] == key.mode.value
+
+
+@pytest.mark.parametrize("needs_audio", [False, True])
+def test_rir_sabine_flag_is_wired(tmp_path, needs_audio) -> None:
+    """``synthesize-rir``/``room-morph`` expose the Sabine late-reverb model.
+
+    Both routes previously offered no model choice (Eyring only). A ``--sabine``
+    run must succeed and produce a different tail than the default Eyring run.
+    """
+    default_out = tmp_path / "default.wav"
+    sabine_out = tmp_path / "sabine.wav"
+    if needs_audio:
+        source = tmp_path / "tone.wav"
+        _write_tone_wav(source, seconds=0.4)
+        base = ["room-morph", str(source)]
+    else:
+        base = ["synthesize-rir"]
+
+    default_run = _run_console(*base, "-o", str(default_out))
+    assert default_run.returncode == 0, default_run.stderr
+    sabine_run = _run_console(*base, "-o", str(sabine_out), "--sabine")
+    assert sabine_run.returncode == 0, sabine_run.stderr
+
+    assert default_out.read_bytes() != sabine_out.read_bytes()
 
 
 def test_readme_project_synth_presets_route_is_installed_smoke() -> None:

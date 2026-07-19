@@ -344,6 +344,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
         ism_order=args.ism_order,
         seed=args.seed,
         max_seconds=args.max_seconds,
+        prefer_eyring=not args.sabine,
     )
     if result.has_error:
         print("Error: invalid room geometry (source/listener outside the room)", file=sys.stderr)
@@ -376,6 +377,7 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
         ism_order=args.ism_order,
         seed=args.seed,
         max_seconds=args.max_seconds,
+        prefer_eyring=not args.sabine,
     )
     _write_wav(args.output, result, sr)
     if args.json:

@@ -5,9 +5,10 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import dataclasses
+import functools
 import json
-from collections.abc import Mapping, Sequence
-from typing import cast
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, cast
 
 import numpy as np
 
@@ -393,52 +394,116 @@ def voice_character_preset_id(preset: int) -> str | None:
     return cast(str, raw.decode("utf-8"))
 
 
+@functools.lru_cache(maxsize=1)
+def _neutral_monitor_defaults() -> dict[str, float]:
+    """Field values of the built-in ``neutral-monitor`` preset.
+
+    These are the single source of truth for the default-constructed
+    :class:`RealtimeVoiceChangerConfig`, so that ``RealtimeVoiceChangerConfig()``
+    followed by :func:`RealtimeVoiceChanger.set_config_pod` reproduces the same
+    neutral voice as the C++ ``realtime_voice_changer_preset(NeutralMonitor)``
+    idiom instead of a bypassed-gate / flat-EQ configuration.
+    """
+    pod = SonareRealtimeVoiceChangerConfig()
+    _check(
+        _get_lib().sonare_realtime_voice_changer_preset_config(
+            ctypes.c_int(SONARE_VC_PRESET_NEUTRAL_MONITOR), ctypes.byref(pod)
+        )
+    )
+    return {name: getattr(pod, name) for name, *_ in pod._fields_}
+
+
+def _neutral_default(name: str) -> Callable[[], Any]:
+    """Return a zero-arg factory yielding the preset default for ``name``.
+
+    The return type is ``Any`` because the same helper seeds both float and int
+    fields; the concrete POD value carries the correct numeric type.
+    """
+    return lambda: _neutral_monitor_defaults()[name]
+
+
 @dataclasses.dataclass
 class RealtimeVoiceChangerConfig:
     """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig` (36 fields).
 
-    Field order matches the C POD struct in ``sonare_c.h``. Values are
-    normalised on the C side after :func:`RealtimeVoiceChanger.set_config_pod`,
-    so out-of-range entries are clamped rather than rejected.
+    Field order matches the C POD struct in ``sonare_c.h``. The default value of
+    every field is seeded from the built-in ``neutral-monitor`` preset (fetched
+    from the library once and cached), so a default-constructed instance is a
+    usable neutral voice rather than a bypassed-gate / flat-EQ configuration.
+    Values are normalised on the C side after
+    :func:`RealtimeVoiceChanger.set_config_pod`, so out-of-range entries are
+    clamped rather than rejected.
     """
 
-    input_gain_db: float = 0.0
-    output_gain_db: float = 0.0
-    wet_mix: float = 1.0
-    retune_semitones: float = 0.0
-    retune_mix: float = 0.0
-    retune_grain_size: int = 1024
-    formant_factor: float = 1.0
-    formant_amount: float = 0.0
-    formant_body: float = 0.0
-    formant_brightness: float = 0.0
-    formant_nasal: float = 0.0
-    eq_highpass_hz: float = 0.0
-    eq_body_db: float = 0.0
-    eq_presence_db: float = 0.0
-    eq_air_db: float = 0.0
-    gate_threshold_db: float = -60.0
-    gate_attack_ms: float = 5.0
-    gate_release_ms: float = 50.0
-    gate_range_db: float = 0.0
-    compressor_threshold_db: float = 0.0
-    compressor_ratio: float = 1.0
-    compressor_attack_ms: float = 10.0
-    compressor_release_ms: float = 100.0
-    compressor_makeup_gain_db: float = 0.0
-    deesser_frequency_hz: float = 6000.0
-    deesser_threshold_db: float = 0.0
-    deesser_ratio: float = 1.0
-    deesser_range_db: float = 0.0
-    reverb_mix: float = 0.0
-    reverb_time_ms: float = 0.0
-    reverb_damping: float = 0.0
-    reverb_seed: int = 0
-    limiter_ceiling_db: float = 0.0
-    limiter_release_ms: float = 50.0
+    input_gain_db: float = dataclasses.field(default_factory=_neutral_default("input_gain_db"))
+    output_gain_db: float = dataclasses.field(default_factory=_neutral_default("output_gain_db"))
+    wet_mix: float = dataclasses.field(default_factory=_neutral_default("wet_mix"))
+    retune_semitones: float = dataclasses.field(
+        default_factory=_neutral_default("retune_semitones")
+    )
+    retune_mix: float = dataclasses.field(default_factory=_neutral_default("retune_mix"))
+    retune_grain_size: int = dataclasses.field(
+        default_factory=_neutral_default("retune_grain_size")
+    )
+    formant_factor: float = dataclasses.field(default_factory=_neutral_default("formant_factor"))
+    formant_amount: float = dataclasses.field(default_factory=_neutral_default("formant_amount"))
+    formant_body: float = dataclasses.field(default_factory=_neutral_default("formant_body"))
+    formant_brightness: float = dataclasses.field(
+        default_factory=_neutral_default("formant_brightness")
+    )
+    formant_nasal: float = dataclasses.field(default_factory=_neutral_default("formant_nasal"))
+    eq_highpass_hz: float = dataclasses.field(default_factory=_neutral_default("eq_highpass_hz"))
+    eq_body_db: float = dataclasses.field(default_factory=_neutral_default("eq_body_db"))
+    eq_presence_db: float = dataclasses.field(default_factory=_neutral_default("eq_presence_db"))
+    eq_air_db: float = dataclasses.field(default_factory=_neutral_default("eq_air_db"))
+    gate_threshold_db: float = dataclasses.field(
+        default_factory=_neutral_default("gate_threshold_db")
+    )
+    gate_attack_ms: float = dataclasses.field(default_factory=_neutral_default("gate_attack_ms"))
+    gate_release_ms: float = dataclasses.field(default_factory=_neutral_default("gate_release_ms"))
+    gate_range_db: float = dataclasses.field(default_factory=_neutral_default("gate_range_db"))
+    compressor_threshold_db: float = dataclasses.field(
+        default_factory=_neutral_default("compressor_threshold_db")
+    )
+    compressor_ratio: float = dataclasses.field(
+        default_factory=_neutral_default("compressor_ratio")
+    )
+    compressor_attack_ms: float = dataclasses.field(
+        default_factory=_neutral_default("compressor_attack_ms")
+    )
+    compressor_release_ms: float = dataclasses.field(
+        default_factory=_neutral_default("compressor_release_ms")
+    )
+    compressor_makeup_gain_db: float = dataclasses.field(
+        default_factory=_neutral_default("compressor_makeup_gain_db")
+    )
+    deesser_frequency_hz: float = dataclasses.field(
+        default_factory=_neutral_default("deesser_frequency_hz")
+    )
+    deesser_threshold_db: float = dataclasses.field(
+        default_factory=_neutral_default("deesser_threshold_db")
+    )
+    deesser_ratio: float = dataclasses.field(default_factory=_neutral_default("deesser_ratio"))
+    deesser_range_db: float = dataclasses.field(
+        default_factory=_neutral_default("deesser_range_db")
+    )
+    reverb_mix: float = dataclasses.field(default_factory=_neutral_default("reverb_mix"))
+    reverb_time_ms: float = dataclasses.field(default_factory=_neutral_default("reverb_time_ms"))
+    reverb_damping: float = dataclasses.field(default_factory=_neutral_default("reverb_damping"))
+    reverb_seed: int = dataclasses.field(default_factory=_neutral_default("reverb_seed"))
+    limiter_ceiling_db: float = dataclasses.field(
+        default_factory=_neutral_default("limiter_ceiling_db")
+    )
+    limiter_release_ms: float = dataclasses.field(
+        default_factory=_neutral_default("limiter_release_ms")
+    )
     # Appended in ABI version 2 (kept at the END to match the C POD layout).
-    limiter_enable_isp_limiter: int = 1
-    limiter_isp_ceiling_dbtp: float = -1.0
+    limiter_enable_isp_limiter: int = dataclasses.field(
+        default_factory=_neutral_default("limiter_enable_isp_limiter")
+    )
+    limiter_isp_ceiling_dbtp: float = dataclasses.field(
+        default_factory=_neutral_default("limiter_isp_ceiling_dbtp")
+    )
 
     @classmethod
     def from_pod(cls, pod: SonareRealtimeVoiceChangerConfig) -> RealtimeVoiceChangerConfig:

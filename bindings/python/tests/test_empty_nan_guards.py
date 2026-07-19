@@ -14,19 +14,68 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    ebur128_loudness_range,
+    harmonic,
     lufs,
+    lufs_interleaved,
     mastering_dynamics_compressor,
     mastering_dynamics_gate,
     mastering_dynamics_transient_shaper,
+    metering_detect_clipping,
+    metering_dynamic_range,
     metering_peak_db,
     metering_rms_db,
+    metering_spectrum,
+    metering_spectrum_frame,
     metering_stereo_correlation,
     metering_true_peak_db,
+    momentary_lufs,
+    normalize,
+    percussive,
+    phase_vocoder,
+    pitch_shift,
+    pitch_yin,
+    short_term_lufs,
+    time_stretch,
+    waveform_peak_pyramid,
+    waveform_peaks,
 )
 from libsonare._effects import voice_change, voice_change_realtime
 from libsonare._runtime import SonareError
 
 SR = 22050
+
+# Every public wrapper that routes its primary buffer through
+# ``_validate_samples`` (arg ``samples``). Keeping this list aligned with the
+# Node/WASM guard suites ensures a Python-only regression in the finite/empty
+# preflight fails a test rather than propagating NaN downstream. Each entry maps
+# a wrapper name to an invoker taking the validated buffer as its first argument.
+_SAMPLE_WRAPPERS = {
+    "lufs": lambda buf: lufs(buf, SR),
+    "momentary_lufs": lambda buf: momentary_lufs(buf, SR),
+    "short_term_lufs": lambda buf: short_term_lufs(buf, SR),
+    "lufs_interleaved": lambda buf: lufs_interleaved(buf, 1, SR),
+    "ebur128_loudness_range": lambda buf: ebur128_loudness_range(buf, SR),
+    "metering_true_peak_db": lambda buf: metering_true_peak_db(buf, SR),
+    "metering_detect_clipping": lambda buf: metering_detect_clipping(buf, SR),
+    "metering_dynamic_range": lambda buf: metering_dynamic_range(buf, SR),
+    "metering_spectrum": lambda buf: metering_spectrum(buf, SR),
+    "metering_spectrum_frame": lambda buf: metering_spectrum_frame(buf, SR),
+    "waveform_peaks": lambda buf: waveform_peaks(buf, 1),
+    "waveform_peak_pyramid": lambda buf: waveform_peak_pyramid(buf, 1),
+    "harmonic": lambda buf: harmonic(buf, SR),
+    "percussive": lambda buf: percussive(buf, SR),
+    "normalize": lambda buf: normalize(buf, SR),
+    "time_stretch": lambda buf: time_stretch(buf, SR),
+    "pitch_shift": lambda buf: pitch_shift(buf, SR),
+    "phase_vocoder": lambda buf: phase_vocoder(buf, SR),
+    "pitch_yin": lambda buf: pitch_yin(buf, SR),
+    "voice_change": lambda buf: voice_change(buf),
+    "voice_change_realtime": lambda buf: voice_change_realtime(buf),
+    "mastering_dynamics_compressor": lambda buf: mastering_dynamics_compressor(buf, SR),
+    "mastering_dynamics_gate": lambda buf: mastering_dynamics_gate(buf, SR),
+    "mastering_dynamics_transient_shaper": lambda buf: mastering_dynamics_transient_shaper(buf, SR),
+}
 
 
 def _sine(n: int = 1024, freq: float = 440.0, amp: float = 0.5) -> np.ndarray:
@@ -137,6 +186,25 @@ class TestValidateFalseStillHasCAbiBackstop:
     def test_mastering_dynamics_compressor_validate_false(self):
         with pytest.raises((ValueError, SonareError)):
             mastering_dynamics_compressor(_with_nan(), SR, validate=False)
+
+
+class TestSampleWrapperGuardCoverage:
+    """Parametrized empty / NaN / Inf coverage across every ``samples`` wrapper."""
+
+    @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
+    def test_rejects_empty(self, name):
+        with pytest.raises(ValueError, match=rf"{name}: samples must not be empty"):
+            _SAMPLE_WRAPPERS[name](np.empty(0, dtype=np.float32))
+
+    @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
+    def test_rejects_nan_with_index(self, name):
+        with pytest.raises(ValueError, match=rf"{name}: samples contains NaN or Inf at index 100"):
+            _SAMPLE_WRAPPERS[name](_with_nan())
+
+    @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
+    def test_rejects_inf_with_index(self, name):
+        with pytest.raises(ValueError, match=rf"{name}: samples contains NaN or Inf at index 200"):
+            _SAMPLE_WRAPPERS[name](_with_inf())
 
 
 class TestPositiveSmoke:

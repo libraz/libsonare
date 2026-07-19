@@ -172,7 +172,18 @@ def main() -> None:
     sub.add_parser("version", parents=[common], help="Show version")
     sub.add_parser("info", parents=[common], help="Show audio file information")
     sub.add_parser("bpm", parents=[common], help="Detect BPM")
-    key_p = sub.add_parser("key", parents=[fft_options], help="Detect musical key")
+    key_p = sub.add_parser("key", parents=[common], help="Detect musical key")
+    # Key detection keeps a 4096-sample analysis default (better low-frequency
+    # resolution) rather than the shared 2048. A None sentinel distinguishes
+    # "left at the default" from an explicit value, matching the native CLI and
+    # the detect_key() library default. These FFT options are declared here
+    # instead of inherited from fft_options: parents= shares the actual argument
+    # objects, so a set_defaults override would mutate the shared --n-fft used by
+    # the other analysis commands.
+    key_p.add_argument(
+        "--n-fft", type=int, default=None, help="FFT size (default: 4096 for key analysis)"
+    )
+    key_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
     key_p.add_argument(
         "--candidates",
         type=int,
@@ -208,7 +219,7 @@ def main() -> None:
     sub.add_parser("beats", parents=[common], help="Detect beat times")
     sub.add_parser("downbeats", parents=[common], help="Detect downbeat times")
     sub.add_parser("onsets", parents=[common], help="Detect onset times")
-    chords_p = sub.add_parser("chords", parents=[common], help="Detect chord progression")
+    chords_p = sub.add_parser("chords", parents=[fft_options], help="Detect chord progression")
     chords_p.add_argument("--min-duration", type=float, default=0.3)
     chords_p.add_argument("--smoothing-window", type=float, default=2.0)
     chords_p.add_argument("--threshold", type=float, default=0.5)
@@ -360,6 +371,11 @@ def main() -> None:
             default=0.0,
             help="Hard cap on RIR/tail length in seconds (0 = natural length)",
         )
+        p.add_argument(
+            "--sabine",
+            action="store_true",
+            help="Use the Sabine late-reverb model (default Eyring)",
+        )
 
     estimate_room_p = sub.add_parser(
         "estimate-room", parents=[common], help="Estimate equivalent room from a recording"
@@ -396,7 +412,7 @@ def main() -> None:
 
     sub.add_parser("rhythm", parents=[common], help="Analyze rhythm primitives")
     sub.add_parser("dynamics", parents=[common], help="Analyze dynamics/loudness")
-    sub.add_parser("timbre", parents=[common], help="Analyze timbre/spectral shape")
+    sub.add_parser("timbre", parents=[mel_options], help="Analyze timbre/spectral shape")
     lufs_p = sub.add_parser("lufs", parents=[common], help="Compute LUFS loudness")
     lufs_p.add_argument(
         "--series", action="store_true", help="Also emit momentary/short-term LUFS series"

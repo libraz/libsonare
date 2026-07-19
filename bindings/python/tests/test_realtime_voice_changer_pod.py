@@ -43,6 +43,19 @@ def test_preset_pod_returns_dataclass_for_known_name() -> None:
     assert cfg.formant_factor == pytest.approx(1.0, abs=1e-6)
 
 
+def test_default_constructed_config_matches_neutral_monitor_preset() -> None:
+    """A default-constructed config is the neutral-monitor preset (single source).
+
+    Regression guard: previously the dataclass carried hand-written literals that
+    matched neither the C POD defaults nor any preset, so
+    ``RealtimeVoiceChangerConfig()`` -> ``set_config_pod`` produced a
+    bypassed-gate / flat-EQ voice instead of a usable neutral one.
+    """
+    default = libsonare.RealtimeVoiceChangerConfig()
+    preset = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+    assert default == preset
+
+
 def test_preset_config_is_canonical_alias_of_preset_pod() -> None:
     # realtime_voice_changer_preset_config is the canonical name (matching the
     # other bindings); realtime_voice_changer_preset_pod is the deprecated alias.
@@ -87,12 +100,21 @@ def test_config_pod_returns_live_normalized_config() -> None:
         cfg = changer.config_pod()
         assert isinstance(cfg, libsonare.RealtimeVoiceChangerConfig)
         # The handle was created from the neutral preset, so its live config
-        # must agree with realtime_voice_changer_preset_pod("neutral-monitor").
+        # must agree with realtime_voice_changer_preset_pod("neutral-monitor")
+        # on every field except the retune grain size. Grain size is structural
+        # and resolved at prepare() time, so config() reports the effective grain
+        # rather than the requested value (0 = "library default") in the preset.
         preset = libsonare.realtime_voice_changer_preset_pod("neutral-monitor")
         for f in dataclasses.fields(libsonare.RealtimeVoiceChangerConfig):
+            if f.name == "retune_grain_size":
+                continue
             assert getattr(cfg, f.name) == pytest.approx(getattr(preset, f.name), abs=1e-6), (
                 f"live config drift on {f.name}"
             )
+        # The preset requests the library default (0); the live config reports
+        # the resolved, non-zero grain that fixes latency for the session.
+        assert preset.retune_grain_size == 0
+        assert cfg.retune_grain_size > 0
     finally:
         changer.close()
 
