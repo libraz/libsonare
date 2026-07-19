@@ -195,7 +195,7 @@ class MixerWasm {
 
   // Drains delayed/tail audio by processing a zero-input block of num_samples
   // frames. Returns { left, right, sampleRate } mirroring processStereo.
-  val drainTailStereo(size_t num_samples);
+  val drainTailStereo(double num_samples);
 
  private:
   static void checkStripError(SonareError err, const char* what);

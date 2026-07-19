@@ -103,11 +103,24 @@ val js_pitch_correct_to_midi(val samples, int sample_rate, float current_midi, f
 // as Float32Array (voiced uses 0.0/1.0) so a single conversion path suffices.
 val js_pitch_correct_to_midi_timevarying(val samples, int sample_rate, val f0_hz, float target_midi,
                                          int hop_length, val voiced, val voiced_prob) {
+  const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
+  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  std::size_t cumulative_count = 0;
+  accumulateWasmFloat32ArrayLength(samples, "samples", "pitchCorrectToMidiTimevarying input",
+                                   &cumulative_count);
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "pitchCorrectToMidiTimevarying input",
+                                   &cumulative_count);
+  if (has_voiced) {
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", "pitchCorrectToMidiTimevarying input",
+                                     &cumulative_count);
+  }
+  if (has_prob) {
+    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb",
+                                     "pitchCorrectToMidiTimevarying input", &cumulative_count);
+  }
   std::vector<float> data = float32ArrayToVector(samples);
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   const size_t n_frames = f0.size();
-  const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
-  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
   std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
   std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
   if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
@@ -137,6 +150,29 @@ val js_pitch_correct_to_midi_timevarying(val samples, int sample_rate, val f0_hz
 
 val js_pitch_correct_timevarying(val samples, int sample_rate, val f0_hz, int hop_length,
                                  val options) {
+  val voiced = val::undefined();
+  val voiced_prob = val::undefined();
+  bool has_voiced = false;
+  bool has_prob = false;
+  if (!options.isUndefined() && !options.isNull()) {
+    voiced = options["voiced"];
+    voiced_prob = options["voicedProb"];
+    has_voiced = !voiced.isUndefined() && !voiced.isNull();
+    has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  }
+  std::size_t cumulative_count = 0;
+  accumulateWasmFloat32ArrayLength(samples, "samples", "pitchCorrectTimevarying input",
+                                   &cumulative_count);
+  accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "pitchCorrectTimevarying input",
+                                   &cumulative_count);
+  if (has_voiced) {
+    accumulateWasmFloat32ArrayLength(voiced, "voiced", "pitchCorrectTimevarying input",
+                                     &cumulative_count);
+  }
+  if (has_prob) {
+    accumulateWasmFloat32ArrayLength(voiced_prob, "voicedProb", "pitchCorrectTimevarying input",
+                                     &cumulative_count);
+  }
   std::vector<float> data = float32ArrayToVector(samples);
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   const size_t n_frames = f0.size();
@@ -144,8 +180,6 @@ val js_pitch_correct_timevarying(val samples, int sample_rate, val f0_hz, int ho
   editing::pitch_editor::PitchCorrectionConfig config{};
   bool scale_mode = false;
   float target_midi = constants::kMidiA4;
-  bool has_voiced = false;
-  bool has_prob = false;
   std::vector<float> voiced_vec;
   std::vector<float> prob_vec;
   if (!options.isUndefined() && !options.isNull()) {
@@ -163,10 +197,6 @@ val js_pitch_correct_timevarying(val samples, int sample_rate, val f0_hz, int ho
     config.retune_speed_ms = floatProperty(options, "retuneSpeedMs", config.retune_speed_ms);
     config.vibrato_threshold_cents =
         floatProperty(options, "vibratoThresholdCents", config.vibrato_threshold_cents);
-    val voiced = options["voiced"];
-    val voiced_prob = options["voicedProb"];
-    has_voiced = !voiced.isUndefined() && !voiced.isNull();
-    has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
     if (has_voiced) voiced_vec = float32ArrayToVector(voiced);
     if (has_prob) prob_vec = float32ArrayToVector(voiced_prob);
   }

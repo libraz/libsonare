@@ -205,13 +205,17 @@ mixing::PanMode panModeFromVal(val value) {
     return mixing::PanMode::Balance;
   }
   if (value.typeOf().as<std::string>() == "number") {
-    const int mode = value.as<int>();
+    const double raw = value.as<double>();
+    if (!std::isfinite(raw) || std::floor(raw) != raw || raw < 0.0 || raw > 2.0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    }
+    const int mode = static_cast<int>(raw);
     if (mode == 1) return mixing::PanMode::StereoPan;
     if (mode == 2) return mixing::PanMode::DualPan;
     return mixing::PanMode::Balance;
   }
   if (value.typeOf().as<std::string>() != "string") {
-    return mixing::PanMode::Balance;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
   }
   std::string mode = value.as<std::string>();
   for (char& ch : mode) {
@@ -224,7 +228,9 @@ mixing::PanMode panModeFromVal(val value) {
   if (mode == "dual-pan" || mode == "dualpan") {
     return mixing::PanMode::DualPan;
   }
-  return mixing::PanMode::Balance;
+  if (mode == "balance") return mixing::PanMode::Balance;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown mixing pan mode: " + mode);
 }
 
 val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
@@ -261,10 +267,15 @@ int panModeOrdinalFromVal(val value) {
     return SONARE_PAN_MODE_BALANCE;
   }
   if (value.typeOf().as<std::string>() == "number") {
-    return value.as<int>();
+    const double raw = value.as<double>();
+    if (!std::isfinite(raw) || std::floor(raw) != raw || raw < SONARE_PAN_MODE_BALANCE ||
+        raw > SONARE_PAN_MODE_DUAL_PAN) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    }
+    return static_cast<int>(raw);
   }
   if (value.typeOf().as<std::string>() != "string") {
-    return SONARE_PAN_MODE_BALANCE;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
   }
   std::string mode = value.as<std::string>();
   for (char& ch : mode) {
@@ -277,7 +288,16 @@ int panModeOrdinalFromVal(val value) {
   if (mode == "dual-pan" || mode == "dualpan") {
     return SONARE_PAN_MODE_DUAL_PAN;
   }
-  return SONARE_PAN_MODE_BALANCE;
+  if (mode == "balance") return SONARE_PAN_MODE_BALANCE;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown mixing pan mode: " + mode);
+}
+
+void checkOneShotSetter(SonareError err, const char* what) {
+  if (err != SONARE_OK) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(what) + ": " + sonare_error_message(err));
+  }
 }
 
 // Converts a C-ABI mix-meter snapshot to the JS meter object (same shape as
@@ -319,19 +339,34 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
   right_inputs.reserve(static_cast<size_t>(count));
 
   size_t length = 0;
+  size_t total_input_elements = 0;
   for (int index = 0; index < count; ++index) {
-    left_inputs.push_back(float32ArrayToVector(left_channels[index]));
-    right_inputs.push_back(float32ArrayToVector(right_channels[index]));
-    if (left_inputs.back().size() != right_inputs.back().size()) {
+    const size_t left_length = wasmFloat32ArrayLength(left_channels[index], "left channel");
+    const size_t right_length = wasmFloat32ArrayLength(right_channels[index], "right channel");
+    if (left_length != right_length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "left and right channel lengths must match");
     }
     if (index == 0) {
-      length = left_inputs.back().size();
-    } else if (left_inputs.back().size() != length) {
+      length = left_length;
+    } else if (left_length != length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "all strips must have the same length");
     }
+    if (left_length > kMaxWasmFloat32Elements - total_input_elements) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "mixStereo inputs exceed the WASM Float32 input budget");
+    }
+    total_input_elements += left_length;
+    if (right_length > kMaxWasmFloat32Elements - total_input_elements) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "mixStereo inputs exceed the WASM Float32 input budget");
+    }
+    total_input_elements += right_length;
+  }
+  for (int index = 0; index < count; ++index) {
+    left_inputs.push_back(float32ArrayToVector(left_channels[index]));
+    right_inputs.push_back(float32ArrayToVector(right_channels[index]));
   }
 
   std::vector<float> out_left(length, 0.0f);
@@ -362,19 +397,22 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
       strips.push_back(strip);
 
       if (auto v = optionalNumber(optionAt(options, "inputTrimDb", index))) {
-        sonare_strip_set_input_trim_db(strip, *v);
+        checkOneShotSetter(sonare_strip_set_input_trim_db(strip, *v), "failed to set input trim");
       }
       if (auto v = optionalNumber(optionAt(options, "faderDb", index))) {
-        sonare_strip_set_fader_db(strip, *v);
+        checkOneShotSetter(sonare_strip_set_fader_db(strip, *v), "failed to set fader");
       }
       if (auto v = optionalNumber(optionAt(options, "pan", index))) {
-        sonare_strip_set_pan(strip, *v, panModeOrdinalFromVal(optionAt(options, "panMode", index)));
+        checkOneShotSetter(
+            sonare_strip_set_pan(strip, *v,
+                                 panModeOrdinalFromVal(optionAt(options, "panMode", index))),
+            "failed to set pan");
       }
       if (auto v = optionalNumber(optionAt(options, "width", index))) {
-        sonare_strip_set_width(strip, *v);
+        checkOneShotSetter(sonare_strip_set_width(strip, *v), "failed to set width");
       }
       if (auto v = optionalBool(optionAt(options, "muted", index))) {
-        sonare_strip_set_muted(strip, *v ? 1 : 0);
+        checkOneShotSetter(sonare_strip_set_muted(strip, *v ? 1 : 0), "failed to set mute");
       }
 
       left_ptrs[static_cast<size_t>(index)] = left_inputs[static_cast<size_t>(index)].data();

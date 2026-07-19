@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <deque>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -132,6 +133,29 @@ using namespace sonare;
 val vectorToFloat32Array(const std::vector<float>& vec);
 val vectorToInt32Array(const std::vector<int>& vec);
 val vectorToUint8Array(const std::vector<uint8_t>& vec);
+/// Conservative wasm32 budget for caller-owned Float32Array data copied into
+/// the linear-memory heap. Keeping this below the native offline ceiling leaves
+/// room for the input copy, DSP work buffers, and output arrays.
+inline constexpr std::size_t kMaxWasmFloat32Elements = 64u * 1024u * 1024u;
+/// Reads and validates an array-like object's JS `.length` without narrowing a
+/// non-finite, fractional, or unsafe Number to wasm32 size_t.
+std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject = "Float32Array");
+/// Checks a cumulative caller-controlled Float32 element count before any
+/// associated vectors are allocated.
+void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts,
+                                      const char* subject);
+/// Reads one array length and adds it to a caller-maintained cumulative input
+/// count. Use this for entry points with optional or variable numbers of input
+/// buffers so every length is budgeted before the first vector copy.
+std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_subject,
+                                             const char* budget_subject,
+                                             std::size_t* cumulative_count);
+/// Preflights both members of an offline pair before either is copied. When
+/// @p require_matching_lengths is true, mismatched stereo planes are rejected
+/// at the same pre-allocation boundary.
+void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, const val& second,
+                                  const char* second_subject, const char* budget_subject,
+                                  bool require_matching_lengths);
 std::vector<float> float32ArrayToVector(val arr);
 /// @brief Loads a JS Float32Array into an Audio after the shared offline-input
 /// validation (rejects null/empty, an out-of-range sampleRate, an oversized

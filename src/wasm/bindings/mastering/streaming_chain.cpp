@@ -40,9 +40,12 @@ class StreamingMasteringChainWrapper {
 
   void prepare(double sample_rate, int max_block_size, int num_channels) {
     chain_.prepare(sample_rate, max_block_size, num_channels);
+    max_block_size_ = max_block_size;
   }
 
   val processMono(val samples) {
+    const std::size_t length = wasmFloat32ArrayLength(samples, "mono process block");
+    validateBlockLength(length);
     std::vector<float> block = float32ArrayToVector(samples);
     if (!block.empty()) {
       float* channels[] = {block.data()};
@@ -52,12 +55,12 @@ class StreamingMasteringChainWrapper {
   }
 
   val processStereo(val left_samples, val right_samples) {
+    validateWasmFloat32ArrayPair(left_samples, "left process block", right_samples,
+                                 "right process block", "streaming mastering stereo block", true);
+    const std::size_t length = wasmFloat32ArrayLength(left_samples, "left process block");
+    validateBlockLength(length);
     std::vector<float> left = float32ArrayToVector(left_samples);
     std::vector<float> right = float32ArrayToVector(right_samples);
-    if (left.size() != right.size()) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "stereo channel lengths must match");
-    }
     if (!left.empty()) {
       float* channels[] = {left.data(), right.data()};
       chain_.process_block(channels, 2, static_cast<int>(left.size()));
@@ -81,7 +84,15 @@ class StreamingMasteringChainWrapper {
   }
 
  private:
+  void validateBlockLength(std::size_t length) const {
+    if (max_block_size_ > 0 && length > static_cast<std::size_t>(max_block_size_)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "process block exceeds prepared maxBlockSize");
+    }
+  }
+
   mastering::api::StreamingMasteringChain chain_;
+  int max_block_size_ = 0;
 };
 
 StreamingMasteringChainWrapper* createStreamingMasteringChain(val config) {

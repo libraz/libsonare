@@ -271,12 +271,10 @@ val js_mastering_chain(val samples, int sample_rate, val config) {
 }
 
 val js_mastering_chain_stereo(val left_samples, val right_samples, int sample_rate, val config) {
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringChainStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
 
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
   auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
@@ -325,12 +323,10 @@ val js_mastering_chain_with_progress(val samples, int sample_rate, val config,
 // Mastering chain (stereo) with progress callback
 val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples, int sample_rate,
                                             val config, val progress_callback) {
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringChainStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
 
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {

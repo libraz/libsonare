@@ -94,12 +94,10 @@ val js_master_audio(std::string preset_name, val samples, int sample_rate, val o
 
 val js_master_audio_stereo(std::string preset_name, val left_samples, val right_samples,
                            int sample_rate, val overrides) {
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masterAudioStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
   auto preset = mastering::api::preset_from_string(preset_name);
   auto overrides_vec = masteringParamsFromObject(overrides);
   auto result = mastering::api::master_audio_stereo(
@@ -156,12 +154,10 @@ val js_master_audio_with_progress(std::string preset_name, val samples, int samp
 val js_master_audio_stereo_with_progress(std::string preset_name, val left_samples,
                                          val right_samples, int sample_rate, val overrides,
                                          val progress_callback) {
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masterAudioStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
   auto preset = mastering::api::preset_from_string(preset_name);
   auto config = mastering::api::preset_config(preset);
   auto overrides_vec = masteringParamsFromObject(overrides);
@@ -236,12 +232,10 @@ val js_mastering_process(std::string processor_name, val samples, int sample_rat
 
 val js_mastering_process_stereo(std::string processor_name, val left_samples, val right_samples,
                                 int sample_rate, val params) {
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringProcessStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
   validate_offline_audio_input(left.data(), left.size(), sample_rate);
   validate_offline_audio_input(right.data(), right.size(), sample_rate);
   auto result = mastering::api::apply_named_processor_stereo(processor_name, left.data(),
@@ -260,6 +254,8 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
 
 val js_mastering_pair_process(std::string processor_name, val source_samples, val reference_samples,
                               int sample_rate, val params) {
+  validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
+                               "reference samples", "masteringPairProcess input", false);
   std::vector<float> source = float32ArrayToVector(source_samples);
   std::vector<float> reference = float32ArrayToVector(reference_samples);
   // source and reference may have independent lengths.
@@ -280,6 +276,8 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
 
 std::string js_mastering_pair_analyze(std::string analysis_name, val source_samples,
                                       val reference_samples, int sample_rate, val params) {
+  validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
+                               "reference samples", "masteringPairAnalyze input", false);
   std::vector<float> source = float32ArrayToVector(source_samples);
   std::vector<float> reference = float32ArrayToVector(reference_samples);
   // source and reference may have independent lengths.
@@ -292,12 +290,10 @@ std::string js_mastering_pair_analyze(std::string analysis_name, val source_samp
 
 std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samples,
                                         val right_samples, int sample_rate, val params) {
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringStereoAnalyze input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
-  if (left.size() != right.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "stereo channel lengths must match");
-  }
   validate_offline_audio_input(left.data(), left.size(), sample_rate);
   validate_offline_audio_input(right.data(), right.size(), sample_rate);
   return mastering::api::analyze_named_stereo(analysis_name, left.data(), right.data(), left.size(),

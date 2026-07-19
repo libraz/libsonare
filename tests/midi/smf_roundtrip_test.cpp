@@ -2,6 +2,7 @@
 /// @brief MIDI core: Standard MIDI File import / export round-trip,
 ///        running-status + meta-event coverage and malformed-input safety.
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>

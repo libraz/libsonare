@@ -20,16 +20,19 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
   right_inputs.reserve(static_cast<size_t>(count));
 
   size_t length = 0;
+  size_t cumulative_count = 0;
   for (int index = 0; index < count; ++index) {
-    left_inputs.push_back(float32ArrayToVector(left_channels[index]));
-    right_inputs.push_back(float32ArrayToVector(right_channels[index]));
-    if (left_inputs.back().size() != right_inputs.back().size()) {
+    const size_t left_length = accumulateWasmFloat32ArrayLength(
+        left_channels[index], "left channel", "mixer process input", &cumulative_count);
+    const size_t right_length = accumulateWasmFloat32ArrayLength(
+        right_channels[index], "right channel", "mixer process input", &cumulative_count);
+    if (left_length != right_length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "left and right channel lengths must match");
     }
     if (index == 0) {
-      length = left_inputs.back().size();
-    } else if (left_inputs.back().size() != length) {
+      length = left_length;
+    } else if (left_length != length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "all strips must have the same length");
     }
@@ -37,6 +40,10 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
   if (length > static_cast<size_t>(block_size_)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "block length exceeds the mixer's configured block size");
+  }
+  for (int index = 0; index < count; ++index) {
+    left_inputs.push_back(float32ArrayToVector(left_channels[index]));
+    right_inputs.push_back(float32ArrayToVector(right_channels[index]));
   }
 
   std::vector<const float*> left_ptrs(static_cast<size_t>(count));
@@ -180,11 +187,18 @@ int MixerWasm::latencySamples() {
 
 // Drains delayed/tail audio by processing a zero-input block of num_samples
 // frames. Returns { left, right, sampleRate } mirroring processStereo.
-val MixerWasm::drainTailStereo(size_t num_samples) {
-  std::vector<float> out_left(num_samples, 0.0f);
-  std::vector<float> out_right(num_samples, 0.0f);
+val MixerWasm::drainTailStereo(double num_samples) {
+  if (!std::isfinite(num_samples) || std::floor(num_samples) != num_samples || num_samples <= 0.0 ||
+      num_samples > static_cast<double>(block_size_)) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "mixer drain numSamples must be an integer in [1, prepared block size]");
+  }
+  const auto count = static_cast<size_t>(num_samples);
+  std::vector<float> out_left(count, 0.0f);
+  std::vector<float> out_right(count, 0.0f);
   SonareError err =
-      sonare_mixer_drain_tail_stereo(mixer_, out_left.data(), out_right.data(), num_samples);
+      sonare_mixer_drain_tail_stereo(mixer_, out_left.data(), out_right.data(), count);
   if (err != SONARE_OK) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidState,

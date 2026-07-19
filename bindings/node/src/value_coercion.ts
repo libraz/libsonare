@@ -190,7 +190,10 @@ export function panModeValue(panMode: PanMode): number {
   if (mode === 'dual-pan' || mode === 'dualpan') {
     return 2; // SONARE_PAN_MODE_DUAL_PAN
   }
-  return 0; // SONARE_PAN_MODE_BALANCE
+  if (mode === 'balance') {
+    return 0; // SONARE_PAN_MODE_BALANCE
+  }
+  throw new Error(`Invalid pan mode: ${panMode}`);
 }
 
 export function meterTapValue(tap: MeterTap | number): number {

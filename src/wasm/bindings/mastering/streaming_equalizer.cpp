@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <array>
 #include <cmath>
 
 #include "wasm/bindings/common/common.h"
@@ -116,6 +117,7 @@ class EqualizerWrapper {
     const int max_block_size = intProperty(config, "maxBlockSize", 512);
     processor_.prepare(sample_rate, max_block_size);
     sample_rate_ = sample_rate;
+    max_block_size_ = max_block_size;
   }
 
   void setBand(int index, val band) {
@@ -138,36 +140,49 @@ class EqualizerWrapper {
   // DynamicParams::external_sidechain. The samples are copied into an owned
   // buffer so they remain valid until the next set/clear call.
   void setSidechainMono(val samples) {
-    sidechain_left_ = float32ArrayToVector(samples);
+    const std::size_t length = wasmFloat32ArrayLength(samples, "mono sidechain");
+    validateBlockLength(length, "sidechain");
+    std::vector<float> staged_left = float32ArrayToVector(samples);
+    if (staged_left.empty()) return clearSidechain();
+    validateSidechainBuffer(staged_left);
+
+    // The wrapper preflight covers every core rejection condition. Commit the
+    // owned storage first, then lend the core only the member pointer array.
+    sidechain_left_.swap(staged_left);
     sidechain_right_.clear();
-    if (sidechain_left_.empty()) {
-      processor_.clear_sidechain();
-      return;
-    }
-    const float* channels[] = {sidechain_left_.data()};
-    processor_.set_sidechain(channels, 1, static_cast<int>(sidechain_left_.size()));
+    sidechain_channels_ = {sidechain_left_.data(), nullptr};
+    processor_.set_sidechain(sidechain_channels_.data(), 1,
+                             static_cast<int>(sidechain_left_.size()));
   }
 
   // Borrows a stereo external sidechain key. Both channels must match in length.
   void setSidechainStereo(val left_samples, val right_samples) {
-    sidechain_left_ = float32ArrayToVector(left_samples);
-    sidechain_right_ = float32ArrayToVector(right_samples);
-    if (sidechain_left_.size() != sidechain_right_.size()) {
+    const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left sidechain");
+    const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right sidechain");
+    validateWasmFloat32ElementBudget({left_length, right_length}, "stereo sidechain");
+    if (left_length != right_length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "sidechain channel lengths must match");
     }
-    if (sidechain_left_.empty()) {
-      processor_.clear_sidechain();
-      return;
-    }
-    const float* channels[] = {sidechain_left_.data(), sidechain_right_.data()};
-    processor_.set_sidechain(channels, 2, static_cast<int>(sidechain_left_.size()));
+    if (left_length == 0) return clearSidechain();
+    validateBlockLength(left_length, "sidechain");
+
+    std::vector<float> staged_left = float32ArrayToVector(left_samples);
+    std::vector<float> staged_right = float32ArrayToVector(right_samples);
+    validateSidechainBuffer(staged_left);
+    validateSidechainBuffer(staged_right);
+    sidechain_left_.swap(staged_left);
+    sidechain_right_.swap(staged_right);
+    sidechain_channels_ = {sidechain_left_.data(), sidechain_right_.data()};
+    processor_.set_sidechain(sidechain_channels_.data(), 2,
+                             static_cast<int>(sidechain_left_.size()));
   }
 
   void clearSidechain() {
     processor_.clear_sidechain();
     sidechain_left_.clear();
     sidechain_right_.clear();
+    sidechain_channels_ = {};
   }
 
   float lastAutoGainDb() const { return processor_.last_auto_gain_db(); }
@@ -175,6 +190,8 @@ class EqualizerWrapper {
   int latencySamples() const { return processor_.latency_samples(); }
 
   val processMono(val samples) {
+    const std::size_t length = wasmFloat32ArrayLength(samples, "mono process block");
+    validateBlockLength(length, "process block");
     std::vector<float> block = float32ArrayToVector(samples);
     if (!block.empty()) {
       float* channels[] = {block.data()};
@@ -184,12 +201,16 @@ class EqualizerWrapper {
   }
 
   val processStereo(val left_samples, val right_samples) {
-    std::vector<float> left = float32ArrayToVector(left_samples);
-    std::vector<float> right = float32ArrayToVector(right_samples);
-    if (left.size() != right.size()) {
+    const std::size_t left_length = wasmFloat32ArrayLength(left_samples, "left process block");
+    const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right process block");
+    validateWasmFloat32ElementBudget({left_length, right_length}, "stereo process block");
+    if (left_length != right_length) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "stereo channel lengths must match");
     }
+    validateBlockLength(left_length, "process block");
+    std::vector<float> left = float32ArrayToVector(left_samples);
+    std::vector<float> right = float32ArrayToVector(right_samples);
     if (!left.empty()) {
       float* channels[] = {left.data(), right.data()};
       processor_.process(channels, 2, static_cast<int>(left.size()));
@@ -231,6 +252,8 @@ class EqualizerWrapper {
   }
 
   void match(val source, val reference, val options) {
+    validateWasmFloat32ArrayPair(source, "source samples", reference, "reference samples",
+                                 "StreamingEqualizer.match input", false);
     std::vector<float> src = float32ArrayToVector(source);
     std::vector<float> ref = float32ArrayToVector(reference);
     const int sample_rate =
@@ -252,6 +275,18 @@ class EqualizerWrapper {
   }
 
  private:
+  void validateBlockLength(std::size_t length, const char* subject) const {
+    if (length > static_cast<std::size_t>(max_block_size_)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    std::string(subject) + " exceeds prepared maxBlockSize");
+    }
+  }
+
+  void validateSidechainBuffer(const std::vector<float>& samples) const {
+    validate_offline_audio_input(samples.data(), samples.size(),
+                                 static_cast<int>(std::lround(sample_rate_)));
+  }
+
   static mastering::eq::EqualizerProcessorConfig makeConfig() {
     mastering::eq::EqualizerProcessorConfig config;
     config.max_channels = 2;
@@ -260,8 +295,10 @@ class EqualizerWrapper {
 
   mastering::eq::EqualizerProcessor processor_;
   double sample_rate_ = 48000.0;
+  int max_block_size_ = 512;
   std::vector<float> sidechain_left_;
   std::vector<float> sidechain_right_;
+  std::array<const float*, 2> sidechain_channels_{};
 };
 
 EqualizerWrapper* createEqualizer(val config) { return new EqualizerWrapper(config); }

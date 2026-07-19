@@ -5,6 +5,8 @@
 
 #include "common.h"
 
+#include "util/numeric_validation.h"
+
 // ============================================================================
 // Helper functions
 // ============================================================================
@@ -60,8 +62,73 @@ val vectorToUint8Array(const std::vector<uint8_t>& vec) {
 // a freshly-allocated std::vector<float>. The single boundary crossing is
 // `view.set(arr)` inside JS land; the typed_memory_view wraps the destination
 // vector's storage so no intermediate buffer is allocated.
+std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject) {
+  if (arr.isNull() || arr.isUndefined()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " must be an array-like object");
+  }
+  const val length_value = arr["length"];
+  if (length_value.isUndefined() || length_value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " length must be a number");
+  }
+  const double length = length_value.as<double>();
+  constexpr double kMaxSafeInteger = 9007199254740991.0;
+  if (!std::isfinite(length) || length < 0.0 || std::floor(length) != length ||
+      length > kMaxSafeInteger) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " length must be a non-negative safe integer");
+  }
+  if (length > static_cast<double>(kMaxWasmFloat32Elements)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " exceeds the WASM Float32 input budget");
+  }
+  return static_cast<std::size_t>(length);
+}
+
+void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts,
+                                      const char* subject) {
+  std::size_t total = 0;
+  for (const std::size_t count : counts) {
+    if (!sonare::numeric::checked_add(total, count, &total) || total > kMaxWasmFloat32Elements) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(subject) + " exceeds the WASM Float32 input budget");
+    }
+  }
+}
+
+std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_subject,
+                                             const char* budget_subject,
+                                             std::size_t* cumulative_count) {
+  if (cumulative_count == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(budget_subject) + " has no cumulative budget counter");
+  }
+  const std::size_t count = wasmFloat32ArrayLength(arr, array_subject);
+  if (!sonare::numeric::checked_add(*cumulative_count, count, cumulative_count) ||
+      *cumulative_count > kMaxWasmFloat32Elements) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(budget_subject) + " exceeds the WASM Float32 input budget");
+  }
+  return count;
+}
+
+void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, const val& second,
+                                  const char* second_subject, const char* budget_subject,
+                                  bool require_matching_lengths) {
+  std::size_t cumulative_count = 0;
+  const std::size_t first_count =
+      accumulateWasmFloat32ArrayLength(first, first_subject, budget_subject, &cumulative_count);
+  const std::size_t second_count =
+      accumulateWasmFloat32ArrayLength(second, second_subject, budget_subject, &cumulative_count);
+  if (require_matching_lengths && first_count != second_count) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(budget_subject) + " channel lengths must match");
+  }
+}
+
 std::vector<float> float32ArrayToVector(val arr) {
-  const size_t n = arr["length"].as<size_t>();
+  const size_t n = wasmFloat32ArrayLength(arr);
   std::vector<float> result(n);
   if (n == 0) return result;
   // Build a Float32Array view onto the destination vector's storage. The view

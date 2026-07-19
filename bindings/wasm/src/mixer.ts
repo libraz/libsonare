@@ -55,9 +55,11 @@ export interface MixerRealtimeBuffer {
  */
 export class Mixer {
   private mixer: import('./sonare.js').WasmMixer;
+  private readonly blockSize: number;
 
-  private constructor(mixer: import('./sonare.js').WasmMixer) {
+  private constructor(mixer: import('./sonare.js').WasmMixer, blockSize: number) {
     this.mixer = mixer;
+    this.blockSize = blockSize;
   }
 
   /**
@@ -69,7 +71,7 @@ export class Mixer {
    */
   static fromSceneJson(json: string, sampleRate = 48000, blockSize = 512): Mixer {
     const module = getSonareModule();
-    return new Mixer(module.createMixerFromSceneJson(json, sampleRate, blockSize));
+    return new Mixer(module.createMixerFromSceneJson(json, sampleRate, blockSize), blockSize);
   }
 
   /** Rebuild and compile the routing graph from the current scene topology. */
@@ -536,6 +538,11 @@ export class Mixer {
    * master (`left`, `right`, `sampleRate`).
    */
   drainTailStereo(numSamples: number): MixerProcessResult {
+    if (!Number.isSafeInteger(numSamples) || numSamples <= 0 || numSamples > this.blockSize) {
+      throw new RangeError(
+        `Mixer.drainTailStereo: numSamples must be an integer in [1, ${this.blockSize}]`,
+      );
+    }
     return this.mixer.drainTailStereo(numSamples);
   }
 

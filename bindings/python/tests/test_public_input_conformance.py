@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from libsonare import EngineMarker, RealtimeEngine
+from libsonare import EngineMarker, RealtimeEngine, mix_stereo
 
 _CORPUS = json.loads(
     (Path(__file__).resolve().parents[3] / "tests/conformance/public_input_corpus.json").read_text()
@@ -39,6 +39,14 @@ def _snapshot(engine: RealtimeEngine) -> bytes:
     return json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode()
 
 
+def _mix_option_value(raw: object) -> object:
+    return {
+        "nan": math.nan,
+        "inf": math.inf,
+        "neg_inf": -math.inf,
+    }.get(raw, raw)
+
+
 @pytest.mark.parametrize(
     "case", _CORPUS["marker_transaction"]["cases"], ids=lambda case: case["id"]
 )
@@ -62,3 +70,21 @@ def test_shared_marker_transaction_corpus(case: dict[str, Any]) -> None:
             with pytest.raises((ValueError, OverflowError, TypeError, RuntimeError)):
                 engine.set_markers(candidate)
             assert _snapshot(engine) == before
+
+
+@pytest.mark.parametrize("case", _CORPUS["mix_options"]["cases"], ids=lambda case: case["id"])
+def test_shared_mix_option_corpus_rejects_and_recovers(case: dict[str, Any]) -> None:
+    value = _mix_option_value(case["value"])
+    options = (
+        {"pan": [0.0], "pan_mode": value}
+        if case["field"] == "pan_mode"
+        else {case["field"]: [value]}
+    )
+    strips = [([0.25, -0.25], [0.25, -0.25])]
+
+    with pytest.raises((ValueError, OverflowError, TypeError, RuntimeError)):
+        mix_stereo(strips, sample_rate=48000, **options)
+
+    recovered = mix_stereo(strips, sample_rate=48000)
+    assert len(recovered.left) == 2
+    assert len(recovered.right) == 2

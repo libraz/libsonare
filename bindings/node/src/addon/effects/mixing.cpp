@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -40,10 +41,15 @@ namespace {
 
 int PanModeValue(const Napi::Value& value) {
   if (value.IsNumber()) {
-    return value.As<Napi::Number>().Int32Value();
+    const double raw = value.As<Napi::Number>().DoubleValue();
+    if (!std::isfinite(raw) || std::floor(raw) != raw || raw < SONARE_PAN_MODE_BALANCE ||
+        raw > SONARE_PAN_MODE_DUAL_PAN) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    }
+    return static_cast<int>(raw);
   }
   if (!value.IsString()) {
-    return SONARE_PAN_MODE_BALANCE;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
   }
   std::string mode = value.As<Napi::String>().Utf8Value();
   for (char& ch : mode) {
@@ -56,7 +62,9 @@ int PanModeValue(const Napi::Value& value) {
   if (mode == "dual-pan" || mode == "dualpan") {
     return SONARE_PAN_MODE_DUAL_PAN;
   }
-  return SONARE_PAN_MODE_BALANCE;
+  if (mode == "balance") return SONARE_PAN_MODE_BALANCE;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown mixing pan mode: " + mode);
 }
 
 Napi::Value OptionAt(Napi::Env env, const Napi::Object& options, const char* key, size_t index) {

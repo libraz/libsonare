@@ -139,17 +139,22 @@ namespace {
 
 void ensureStereoPair(const val& left, const val& right, int sample_rate, const char* fn_label,
                       std::vector<float>* out_left, std::vector<float>* out_right) {
-  if (sample_rate <= 0) {
+  if (sample_rate < 8000 || sample_rate > 384000) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(fn_label) + ": sampleRate must be positive");
+                                  std::string(fn_label) + ": sampleRate is out of range");
   }
-  *out_left = float32ArrayToVector(left);
-  *out_right = float32ArrayToVector(right);
-  if (out_left->size() != out_right->size()) {
+  const std::size_t left_length = wasmFloat32ArrayLength(left, "left channel");
+  const std::size_t right_length = wasmFloat32ArrayLength(right, "right channel");
+  validateWasmFloat32ElementBudget({left_length, right_length}, "stereo meter input");
+  if (left_length != right_length) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidParameter,
         std::string(fn_label) + ": left and right must have the same length");
   }
+  *out_left = float32ArrayToVector(left);
+  *out_right = float32ArrayToVector(right);
+  validate_offline_audio_input(out_left->data(), out_left->size(), sample_rate);
+  validate_offline_audio_input(out_right->data(), out_right->size(), sample_rate);
 }
 
 }  // namespace

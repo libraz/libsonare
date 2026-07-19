@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "util/numeric_validation.h"
 #include "util/resource_limits.h"
 #include "wasm/bindings/common/common.h"
 
@@ -34,21 +35,29 @@ void validate_mel_range(const char* fn_name, float fmin, float fmax, int sample_
   }
 }
 
-void validate_matrix(const char* fn_name, const std::vector<float>& data, int rows, int frames,
-                     const char* data_name, const char* rows_name) {
+std::vector<float> load_validated_matrix(const char* fn_name, val input, int rows, int frames,
+                                         const char* data_name, const char* rows_name) {
   validate_positive(fn_name, rows, rows_name);
   validate_positive(fn_name, frames, "n_frames");
 
-  const auto expected = static_cast<size_t>(rows) * static_cast<size_t>(frames);
-  if (expected != data.size()) {
+  std::size_t expected = 0;
+  if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
+                                             static_cast<std::size_t>(frames),
+                                             kMaxWasmFloat32Elements, &expected)) {
+    throw std::invalid_argument(std::string(fn_name) + ": matrix shape exceeds WASM budget");
+  }
+  const std::size_t actual = wasmFloat32ArrayLength(input, data_name);
+  if (expected != actual) {
     throw std::invalid_argument(std::string(fn_name) + ": " + data_name +
                                 " length must equal rows * n_frames");
   }
+  std::vector<float> data = float32ArrayToVector(input);
   for (size_t i = 0; i < data.size(); ++i) {
     if (!std::isfinite(data[i])) {
       throw std::invalid_argument(std::string(fn_name) + ": " + data_name + " contains NaN or Inf");
     }
   }
+  return data;
 }
 
 }  // namespace
@@ -158,9 +167,9 @@ val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
 // hop_length is intentionally absent: feature::mel_to_stft does not consume it.
 val js_mel_to_stft(val mel_power, int n_mels, int n_frames, int sample_rate, int n_fft, float fmin,
                    float fmax, bool htk) {
-  std::vector<float> data = float32ArrayToVector(mel_power);
   validate_sample_rate("melToStft", sample_rate);
-  validate_matrix("melToStft", data, n_mels, n_frames, "melPower", "n_mels");
+  std::vector<float> data =
+      load_validated_matrix("melToStft", mel_power, n_mels, n_frames, "melPower", "n_mels");
   validate_positive("melToStft", n_fft, "n_fft");
   validate_mel_range("melToStft", fmin, fmax, sample_rate);
 
@@ -184,9 +193,9 @@ val js_mel_to_stft(val mel_power, int n_mels, int n_frames, int sample_rate, int
 // feature::mel_to_audio.
 val js_mel_to_audio(val mel_power, int n_mels, int n_frames, int sample_rate, int n_fft,
                     int hop_length, float fmin, float fmax, int n_iter, bool htk) {
-  std::vector<float> data = float32ArrayToVector(mel_power);
   validate_sample_rate("melToAudio", sample_rate);
-  validate_matrix("melToAudio", data, n_mels, n_frames, "melPower", "n_mels");
+  std::vector<float> data =
+      load_validated_matrix("melToAudio", mel_power, n_mels, n_frames, "melPower", "n_mels");
   validate_positive("melToAudio", n_fft, "n_fft");
   validate_positive("melToAudio", hop_length, "hop_length");
   validate_positive("melToAudio", n_iter, "n_iter");
@@ -208,8 +217,8 @@ val js_mel_to_audio(val mel_power, int n_mels, int n_frames, int sample_rate, in
 // Inverse: MFCC matrix [n_mfcc x n_frames] -> Mel power spectrogram.
 // Mirrors feature::mfcc_to_mel.
 val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels) {
-  std::vector<float> data = float32ArrayToVector(mfcc);
-  validate_matrix("mfccToMel", data, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
+  std::vector<float> data =
+      load_validated_matrix("mfccToMel", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
   validate_positive("mfccToMel", n_mels, "n_mels");
 
   std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels);
@@ -224,9 +233,9 @@ val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels) {
 // Inverse: MFCC matrix -> audio via Griffin-Lim. Mirrors feature::mfcc_to_audio.
 val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_rate, int n_fft,
                      int hop_length, float fmin, float fmax, int n_iter, bool htk) {
-  std::vector<float> data = float32ArrayToVector(mfcc);
   validate_sample_rate("mfccToAudio", sample_rate);
-  validate_matrix("mfccToAudio", data, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
+  std::vector<float> data =
+      load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
   validate_positive("mfccToAudio", n_mels, "n_mels");
   validate_positive("mfccToAudio", n_fft, "n_fft");
   validate_positive("mfccToAudio", hop_length, "hop_length");
@@ -248,9 +257,9 @@ val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_
 
 val js_cqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, int hop_length,
                     float fmin, int bins_per_octave, int n_iter) {
-  std::vector<float> data = float32ArrayToVector(magnitude);
   validate_sample_rate("cqtToAudio", sample_rate);
-  validate_matrix("cqtToAudio", data, n_bins, n_frames, "magnitude", "n_bins");
+  std::vector<float> data =
+      load_validated_matrix("cqtToAudio", magnitude, n_bins, n_frames, "magnitude", "n_bins");
   validate_positive("cqtToAudio", hop_length, "hop_length");
   validate_positive("cqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("cqtToAudio", n_iter, "n_iter");
@@ -268,9 +277,9 @@ val js_cqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, in
 
 val js_vqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, int hop_length,
                     float fmin, int bins_per_octave, float gamma, int n_iter) {
-  std::vector<float> data = float32ArrayToVector(magnitude);
   validate_sample_rate("vqtToAudio", sample_rate);
-  validate_matrix("vqtToAudio", data, n_bins, n_frames, "magnitude", "n_bins");
+  std::vector<float> data =
+      load_validated_matrix("vqtToAudio", magnitude, n_bins, n_frames, "magnitude", "n_bins");
   validate_positive("vqtToAudio", hop_length, "hop_length");
   validate_positive("vqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("vqtToAudio", n_iter, "n_iter");

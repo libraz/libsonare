@@ -71,6 +71,52 @@
       }
     ]
   },
+  "mix_options": {
+    "cases": [
+      {
+        "id": "input_trim_positive_infinity",
+        "field": "input_trim_db",
+        "value": "inf",
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "fader_nan",
+        "field": "fader_db",
+        "value": "nan",
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "pan_nan",
+        "field": "pan",
+        "value": "nan",
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "width_negative_infinity",
+        "field": "width",
+        "value": "neg_inf",
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "pan_mode_invalid_ordinal",
+        "field": "pan_mode",
+        "value": 99,
+        "accepted": false,
+        "c_representable": true
+      },
+      {
+        "id": "pan_mode_unknown_string",
+        "field": "pan_mode",
+        "value": "unknown",
+        "accepted": false,
+        "c_representable": false
+      }
+    ]
+  },
   "streaming_contract": {
     "feature_flags": { "mel": 1, "chroma": 2, "onset": 4, "spectral": 8 },
     "frame_fields": [
