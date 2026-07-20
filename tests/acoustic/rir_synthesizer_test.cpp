@@ -289,3 +289,56 @@ TEST_CASE("fully-rigid room yields an early-only RIR, not abrupt silence", "[aco
   }
   REQUIRE(matches_early);
 }
+
+TEST_CASE("synthesize_rir bounds the RIR length to max_seconds", "[acoustic][rir]") {
+  const int sr = 48000;
+  const ShoeboxRoom room = uniform_room(12.0f, 9.0f, 4.0f, 0.1f);
+  const SourceListener pl{{2.0f, 2.0f, 1.2f}, {9.0f, 7.0f, 1.7f}};
+
+  RirSynthConfig cfg;
+  cfg.max_seconds = 0.25f;
+  const RirSynthResult res = synthesize_rir(room, pl, sr, cfg);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  // The synthesized RIR must never exceed the requested cap, and every early and
+  // late buffer feeding it is now sized to that same cap up front.
+  const auto cap = static_cast<size_t>(std::ceil(cfg.max_seconds * static_cast<float>(sr)));
+  REQUIRE(res.rir.size() <= cap);
+  for (float v : res.rir) REQUIRE(std::isfinite(v));
+}
+
+TEST_CASE("synthesize_rir preserves early reflections past the late tail", "[acoustic][rir]") {
+  // A large, highly absorptive room has a short RT60 (short late tail) while a
+  // high image-source order keeps producing early reflections well past that
+  // tail. Those late-arriving early reflections must survive instead of being
+  // crossfaded toward the (already ended) diffuse field and silenced.
+  const int sr = 48000;
+  const ShoeboxRoom room = uniform_room(40.0f, 30.0f, 15.0f, 0.9f);
+  const SourceListener pl{{5.0f, 5.0f, 2.0f}, {35.0f, 25.0f, 2.0f}};
+  RirSynthConfig cfg;
+  cfg.ism_order = 10;
+
+  const RirSynthResult res = synthesize_rir(room, pl, sr, cfg);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  for (float v : res.rir) REQUIRE(std::isfinite(v));
+
+  const std::vector<ImageSource> images = shoebox_image_sources(room, pl, cfg.ism_order);
+  const Audio early = synthesize_early_ir(images, sr);
+  const ReverbTime rt = shoebox_reverb_time(room, cfg.late_model);
+  const Audio late = synthesize_late_tail(rt, sr, {});
+  const size_t late_n = late.size();
+  const size_t early_n = early.size();
+
+  // This configuration must exercise the regressed region (early extends past
+  // the late tail); otherwise the test would silently prove nothing.
+  REQUIRE(early_n > late_n);
+  REQUIRE(res.rir.size() > late_n);
+
+  // Some real early-reflection energy must remain in [late_n, early_n): before
+  // the fix this whole span was zeroed by an equal-power crossfade into a tail
+  // that had already ended.
+  float max_beyond_tail = 0.0f;
+  for (size_t i = late_n; i < std::min(res.rir.size(), early_n); ++i) {
+    max_beyond_tail = std::max(max_beyond_tail, std::fabs(res.rir[i]));
+  }
+  REQUIRE(max_beyond_tail > 0.0f);
+}

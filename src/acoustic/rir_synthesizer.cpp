@@ -82,9 +82,18 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
                                   "ism_order exceeded the safe maximum and was clamped"});
   }
 
+  // A max_seconds cap bounds every synthesized buffer. Compute it once here so
+  // the early image-source IR is sized to the cap up front instead of allocating
+  // to the farthest image arrival and discarding the excess after the fact.
+  const int cap = config.max_seconds > 0.0f
+                      ? std::max(1, static_cast<int>(std::ceil(config.max_seconds * sr)))
+                      : 0;  // 0 = no cap
+
   // Early reflections (image-source) and the per-band reverberation time.
   const std::vector<ImageSource> images = shoebox_image_sources(room, placement, ism_order);
-  const Audio early_audio = synthesize_early_ir(images, sample_rate);
+  EarlyIrConfig early_cfg;
+  early_cfg.max_samples = cap;  // 0 leaves synthesize_early_ir's auto sizing in place
+  const Audio early_audio = synthesize_early_ir(images, sample_rate, early_cfg);
   const ReverbTime rt = shoebox_reverb_time(room, config.late_model);
 
   // Decide the cap up front so we can both avoid over-allocating the late tail
@@ -115,9 +124,7 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
 
   LateReverbConfig late_cfg;
   late_cfg.seed = config.seed;
-  int cap = 0;  // 0 = no cap
-  if (config.max_seconds > 0.0f) {
-    cap = std::max(1, static_cast<int>(std::ceil(config.max_seconds * sr)));
+  if (cap > 0) {
     late_cfg.max_samples = cap;  // avoid synthesizing tail past the cap
   }
   const Audio late_audio = synthesize_late_tail(rt, sample_rate, late_cfg);
@@ -231,7 +238,16 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
       rir[static_cast<size_t>(i)] = e;  // early-only: never fade toward silence
       continue;
     }
-    const float l = (i < late_n ? late[static_cast<size_t>(i)] : 0.0f) * scale;
+    if (i >= late_n) {
+      // Past the end of the late tail (late_n < early_n in a large, highly
+      // absorptive room whose RT60 tail ends before the last image reflection):
+      // no diffuse field remains to cross into, so preserve the real early
+      // reflection instead of crossfading it toward a zero tail (which would
+      // silence it).
+      rir[static_cast<size_t>(i)] = e;
+      continue;
+    }
+    const float l = late[static_cast<size_t>(i)] * scale;
     float x;
     if (i <= t0) {
       x = 0.0f;
