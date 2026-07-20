@@ -283,13 +283,12 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
     const std::string value = arg.substr(equals + 1);
     try {
       it->second(args, value);
-    } catch (const std::invalid_argument&) {
-      std::cerr << "Error: Invalid value for " << option << ": " << value << std::endl;
-      std::exit(1);
     } catch (const std::out_of_range&) {
-      std::cerr << "Error: Value out of range for " << option << ": " << value << std::endl;
-      std::exit(1);
+      throw std::invalid_argument("value out of range for " + option + ": " + value);
     }
+    // A parse failure (std::invalid_argument, already naming the option)
+    // propagates to main and maps to the structured invalid-parameter exit,
+    // matching the command-level option path.
     return true;
   }
   if (i + 1 >= argc) {
@@ -308,14 +307,11 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
     return true;
   }
   {
+    const std::string value = argv[++i];
     try {
-      it->second(args, argv[++i]);
-    } catch (const std::invalid_argument&) {
-      std::cerr << "Error: Invalid value for " << option << ": " << argv[i] << std::endl;
-      std::exit(1);
+      it->second(args, value);
     } catch (const std::out_of_range&) {
-      std::cerr << "Error: Value out of range for " << option << ": " << argv[i] << std::endl;
-      std::exit(1);
+      throw std::invalid_argument("value out of range for " + option + ": " + value);
     }
     return true;
   }
