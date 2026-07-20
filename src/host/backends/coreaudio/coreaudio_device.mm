@@ -267,7 +267,9 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
   }
 
   // Query the driver's actual latency now that the unit is initialized. Total
-  // output latency = device latency + safety offset + the unit's own latency.
+  // output latency = device latency + safety offset + the buffer frame size.
+  // (The output AudioUnit's own kAudioUnitProperty_Latency is not added here; on
+  // the default HAL output unit it is typically negligible.)
   const UInt32 device_latency = read_device_uint32(impl_->device_id, kAudioDevicePropertyLatency,
                                                    kAudioDevicePropertyScopeOutput);
   const UInt32 safety_offset = read_device_uint32(

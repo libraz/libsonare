@@ -381,7 +381,10 @@ size_t CoreMidiOutput::flush_output() noexcept {
                      [](const midi::MidiEvent& a, const midi::MidiEvent& b) {
                        return a.render_frame < b.render_frame;
                      });
-    for (size_t i = 0; i < n; ++i) impl_->pending[i].event = impl_->scratch[i];
+    // Reset the SysEx packet cursor for every slot: a slot reused across flush
+    // cycles must start a fresh payload from packet 0, otherwise a stale cursor
+    // from a previous SysEx drops, truncates, or zero-sends the new message.
+    for (size_t i = 0; i < n; ++i) impl_->pending[i] = PendingEvent{impl_->scratch[i], 0};
     impl_->pending_count.store(n, std::memory_order_release);
   }
 

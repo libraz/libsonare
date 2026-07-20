@@ -243,6 +243,16 @@ class AuMidiInstrument final : public midi::MidiInstrument {
           std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
         }
       }
+    } else {
+      // A misbehaving AU can return noErr while emitting NaN/Inf; scrub the
+      // rendered host channels so a non-finite sample cannot circulate through a
+      // downstream feedback effect (delay/reverb) and silence the whole session.
+      for (int c = 0; c < render_chans && c < chans; ++c) {
+        if (channels[c] == nullptr) continue;
+        for (int s = 0; s < static_cast<int>(render_samples); ++s) {
+          if (!std::isfinite(channels[c][s])) channels[c][s] = 0.0f;
+        }
+      }
     }
     // Silence host channels the AU did not fill (host supplied more than the AU renders).
     for (int c = render_chans; c < num_channels; ++c) {
@@ -381,6 +391,16 @@ class AuEffectProcessor final : public rt::ProcessorBase {
       for (int c = 0; c < chans; ++c) {
         if (channels[c] != nullptr) {
           std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
+        }
+      }
+    } else {
+      // A misbehaving AU can return noErr while emitting NaN/Inf; scrub the
+      // rendered host channels so a non-finite sample cannot circulate through a
+      // downstream feedback effect (delay/reverb) and silence the whole session.
+      for (int c = 0; c < render_chans && c < chans; ++c) {
+        if (channels[c] == nullptr) continue;
+        for (int s = 0; s < static_cast<int>(render_samples); ++s) {
+          if (!std::isfinite(channels[c][s])) channels[c][s] = 0.0f;
         }
       }
     }
