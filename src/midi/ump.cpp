@@ -55,6 +55,30 @@ uint32_t scale_up(uint32_t value, uint32_t src_bits, uint32_t dst_bits) noexcept
   return static_cast<uint32_t>(repeated >> (bits - dst_bits));
 }
 
+// MIDI 2.0 "min-center-max" up-scaling (M2-104-UM). Unlike plain bit
+// replication this maps the source center exactly to the destination center in
+// addition to the extrema, which pitch bend requires: an unbent (center) MIDI
+// 1.0 value must stay unbent after up-conversion. Values at or below center are
+// a pure left shift; values above center replicate the upper bits so the
+// maximum still saturates. Top-bit truncation on the reverse path round-trips.
+uint32_t scale_up_center(uint32_t value, uint32_t src_bits, uint32_t dst_bits) noexcept {
+  const uint32_t scale_bits = dst_bits - src_bits;
+  uint32_t shifted = value << scale_bits;
+  const uint32_t src_center = uint32_t{1} << (src_bits - 1u);
+  if (value <= src_center) {
+    return shifted;
+  }
+  const uint32_t repeat_bits = src_bits - 1u;
+  uint32_t repeat = value & ((uint32_t{1} << repeat_bits) - 1u);
+  repeat = scale_bits > repeat_bits ? repeat << (scale_bits - repeat_bits)
+                                    : repeat >> (repeat_bits - scale_bits);
+  while (repeat != 0u) {
+    shifted |= repeat;
+    repeat >>= repeat_bits;
+  }
+  return shifted;
+}
+
 }  // namespace
 
 uint16_t scale_velocity_7_to_16(uint8_t velocity7) noexcept {
@@ -75,7 +99,7 @@ uint32_t scale_cc_7_to_32(uint8_t value7) noexcept { return scale_up(value7 & 0x
 uint8_t scale_cc_32_to_7(uint32_t value32) noexcept { return static_cast<uint8_t>(value32 >> 25u); }
 
 uint32_t scale_bend_14_to_32(uint16_t bend14) noexcept {
-  return scale_up(bend14 & 0x3FFFu, 14u, 32u);
+  return scale_up_center(bend14 & 0x3FFFu, 14u, 32u);
 }
 
 uint16_t scale_bend_32_to_14(uint32_t bend32) noexcept {
