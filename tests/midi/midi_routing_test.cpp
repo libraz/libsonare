@@ -458,12 +458,12 @@ TEST_CASE("CcMap live decode preserves plain bindings on reserved CC numbers", "
   map.bind(CcBinding{101, 4, 206, 0.0f, 1.0f});
   uint32_t param = 0;
   float unit = 0.0f;
-  for (const auto [cc, expected] : {std::pair<uint8_t, uint32_t>{6, 201},
-                                    {38, 202},
-                                    {98, 203},
-                                    {99, 204},
-                                    {100, 205},
-                                    {101, 206}}) {
+  for (const auto& [cc, expected] : {std::pair<uint8_t, uint32_t>{6, 201},
+                                     {38, 202},
+                                     {98, 203},
+                                     {99, 204},
+                                     {100, 205},
+                                     {101, 206}}) {
     REQUIRE(map.observe_live_cc(make_midi1_control_change(0, 4, cc, 64), &param, &unit));
     REQUIRE(param == expected);
   }

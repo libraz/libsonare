@@ -203,6 +203,12 @@ struct QuantizeConfig {
 /// @brief Frame buffer with 8-bit quantized data.
 /// @details Reduces bandwidth for postMessage transfer.
 /// Mel values are quantized from dB scale, chroma from 0-1.
+/// @note Intentionally omits the per-frame chord fields (chord_root /
+/// chord_quality / chord_confidence) that @ref FrameBuffer carries: this buffer
+/// exists purely to shrink the mel/chroma spectral payload for transfer. Callers
+/// that need per-frame chord detection read the float @ref FrameBuffer instead
+/// (or the progressive chord estimate). This is a deliberate scope limit, not an
+/// oversight — the same omission applies to @ref QuantizedFrameBufferI16.
 struct QuantizedFrameBufferU8 {
   size_t n_frames = 0;  ///< Number of frames in buffer
   int n_mels = 0;       ///< Number of mel bands per frame
