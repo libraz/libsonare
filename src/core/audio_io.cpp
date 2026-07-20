@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <string>
 
 // File-path I/O is unavailable in WebAssembly builds; the core exposes only the
 // buffer-based loaders there (see the load_buffer_* functions below).
@@ -11,6 +13,9 @@
 #include <fstream>
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 #endif
 
@@ -369,6 +374,37 @@ int32_t float_to_pcm24(float sample) {
   return static_cast<int32_t>(std::max<long>(-8388608, std::min<long>(8388607, v)));
 }
 
+#ifndef __EMSCRIPTEN__
+// Sibling temp-file path for an atomic write: content is written here first and
+// only renamed over the destination once complete, so an interrupted or failed
+// write can never truncate an existing file.
+std::string atomic_tmp_path(const std::string& path) { return path + ".sonare-tmp"; }
+
+// Removes the temp file unless the write committed, so a failed write leaves the
+// destination untouched and no stray temp file behind.
+struct TmpFileGuard {
+  std::string tmp;
+  bool committed = false;
+  ~TmpFileGuard() {
+    if (!committed) std::remove(tmp.c_str());
+  }
+};
+
+// fsyncs the completed temp file (best-effort durability) then atomically renames
+// it over the destination.
+void finalize_atomic(const std::string& tmp, const std::string& path) {
+#ifndef _WIN32
+  const int fd = ::open(tmp.c_str(), O_RDONLY);
+  if (fd >= 0) {
+    ::fsync(fd);
+    ::close(fd);
+  }
+#endif
+  SONARE_CHECK_MSG(std::rename(tmp.c_str(), path.c_str()) == 0, ErrorCode::DecodeFailed,
+                   "Failed to finalize file: " + path);
+}
+#endif  // !__EMSCRIPTEN__
+
 }  // namespace
 
 void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
@@ -386,8 +422,10 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
   format.sampleRate = static_cast<drwav_uint32>(sample_rate);
   format.bitsPerSample = static_cast<drwav_uint32>(bits_per_sample);
 
+  const std::string tmp = atomic_tmp_path(path);
+  TmpFileGuard guard{tmp};
   drwav wav;
-  drwav_bool32 ok = drwav_init_file_write(&wav, path.c_str(), &format, nullptr);
+  drwav_bool32 ok = drwav_init_file_write(&wav, tmp.c_str(), &format, nullptr);
   SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to create WAV file: " + path);
 
   if (bits_per_sample == 16) {
@@ -415,6 +453,8 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
     drwav_uninit(&wav);
     SONARE_CHECK_MSG(written == n_samples, ErrorCode::DecodeFailed, "Failed to write all samples");
   }
+  finalize_atomic(tmp, path);
+  guard.committed = true;
 }
 
 void save_wav(const std::string& path, const std::vector<float>& samples, int sample_rate,
@@ -480,7 +520,9 @@ void write_wav_extensible(const std::string& path, const float* interleaved, siz
   static const uint8_t kPcmSubFormat[16] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
                                             0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71};
 
-  std::ofstream os(path, std::ios::binary);
+  const std::string tmp = atomic_tmp_path(path);
+  TmpFileGuard guard{tmp};
+  std::ofstream os(tmp, std::ios::binary);
   SONARE_CHECK_MSG(os.is_open(), ErrorCode::DecodeFailed, "Failed to create WAV file: " + path);
 
   os.write("RIFF", 4);
@@ -505,6 +547,9 @@ void write_wav_extensible(const std::string& path, const float* interleaved, siz
   os.write(reinterpret_cast<const char*>(pcm.data()), static_cast<std::streamsize>(pcm.size()));
   os.flush();
   SONARE_CHECK_MSG(os.good(), ErrorCode::DecodeFailed, "Failed to write WAV file: " + path);
+  os.close();
+  finalize_atomic(tmp, path);
+  guard.committed = true;
 }
 
 }  // namespace
@@ -530,8 +575,10 @@ void save_wav_multichannel(const std::string& path, const float* interleaved, si
     format.sampleRate = static_cast<drwav_uint32>(sample_rate);
     format.bitsPerSample = static_cast<drwav_uint32>(bits_per_sample);
 
+    const std::string tmp = atomic_tmp_path(path);
+    TmpFileGuard guard{tmp};
     drwav wav;
-    drwav_bool32 ok = drwav_init_file_write(&wav, path.c_str(), &format, nullptr);
+    drwav_bool32 ok = drwav_init_file_write(&wav, tmp.c_str(), &format, nullptr);
     SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to create WAV file: " + path);
 
     const std::vector<uint8_t> pcm =
@@ -539,6 +586,8 @@ void save_wav_multichannel(const std::string& path, const float* interleaved, si
     drwav_uint64 written = drwav_write_pcm_frames(&wav, n_frames, pcm.data());
     drwav_uninit(&wav);
     SONARE_CHECK_MSG(written == n_frames, ErrorCode::DecodeFailed, "Failed to write all frames");
+    finalize_atomic(tmp, path);
+    guard.committed = true;
     return;
   }
 

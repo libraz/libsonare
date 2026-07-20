@@ -29,11 +29,27 @@ bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
   return true;
 }
 
+// Writes atomically: the payload lands in a sibling temp file that only replaces
+// the destination once fully written, so an interrupted or failed export never
+// truncates an existing project file.
 bool write_binary_file(const std::string& path, const uint8_t* data, size_t len) {
-  std::ofstream file(path, std::ios::binary);
-  if (!file.is_open()) return false;
-  if (len > 0) file.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(len));
-  return file.good();
+  const std::string tmp = path + ".sonare-tmp";
+  {
+    std::ofstream file(tmp, std::ios::binary);
+    if (!file.is_open()) return false;
+    if (len > 0) file.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(len));
+    file.flush();
+    if (!file.good()) {
+      file.close();
+      std::remove(tmp.c_str());
+      return false;
+    }
+  }
+  if (std::rename(tmp.c_str(), path.c_str()) != 0) {
+    std::remove(tmp.c_str());
+    return false;
+  }
+  return true;
 }
 
 // Loads a project JSON file from --in (or the second positional) into a fresh

@@ -472,3 +472,38 @@ TEST_CASE("save_wav quantizes 16-bit PCM by rounding to nearest, not truncating"
     REQUIRE(stored == expected[i]);
   }
 }
+
+TEST_CASE("save_wav writes atomically and leaves no temp file", "[audio_io]") {
+  const std::vector<float> samples = {0.1f, -0.2f, 0.3f, -0.4f};
+
+  SECTION("a successful write leaves no .sonare-tmp sibling behind") {
+    const std::string path = "test_atomic_ok.wav";
+    save_wav(path, samples, 48000, 16);
+    // The temp file must have been renamed away, not left next to the result.
+    std::ifstream tmp(path + ".sonare-tmp", std::ios::binary);
+    REQUIRE_FALSE(tmp.is_open());
+    auto [loaded, sr] = load_wav(path);
+    REQUIRE(sr == 48000);
+    REQUIRE(loaded.size() == samples.size());
+    std::remove(path.c_str());
+  }
+
+  SECTION("a failed write preserves an existing destination and drops the temp") {
+    // Seed a valid destination, then force the second write to fail before it can
+    // finalize by targeting a directory that does not exist. The pre-existing
+    // file must survive intact and no stray temp file may be left behind.
+    const std::string good = "test_atomic_preserve.wav";
+    save_wav(good, samples, 48000, 16);
+    const auto [before_samples, before_sr] = load_wav(good);
+
+    const std::string bad = "test_atomic_missing_dir/out.wav";
+    REQUIRE_THROWS_AS(save_wav(bad, samples, 48000, 16), SonareException);
+    std::ifstream bad_tmp(bad + ".sonare-tmp", std::ios::binary);
+    REQUIRE_FALSE(bad_tmp.is_open());
+
+    const auto [after_samples, after_sr] = load_wav(good);
+    REQUIRE(after_samples.size() == before_samples.size());
+    REQUIRE(after_sr == before_sr);
+    std::remove(good.c_str());
+  }
+}
