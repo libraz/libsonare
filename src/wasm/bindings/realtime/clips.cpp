@@ -228,12 +228,20 @@ void RealtimeEngineWasm::setClips(val clips) {
     }
     schedule.loop = boolProperty(clip_val, "loop", false);
     schedule.gain = floatProperty(clip_val, "gain", 1.0f);
+    if (!(std::isfinite(schedule.gain) && schedule.gain >= 0.0f)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "clip gain must be a finite non-negative number");
+    }
     schedule.fade_in_samples = hasProperty(clip_val, "fadeInSamples")
                                    ? objectProperty(clip_val, "fadeInSamples").as<int64_t>()
                                    : 0;
     schedule.fade_out_samples = hasProperty(clip_val, "fadeOutSamples")
                                     ? objectProperty(clip_val, "fadeOutSamples").as<int64_t>()
                                     : 0;
+    if (schedule.fade_in_samples < 0 || schedule.fade_out_samples < 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "clip fade lengths must be non-negative");
+    }
     if (hasProperty(clip_val, "warpMode")) {
       val mode_val = objectProperty(clip_val, "warpMode");
       if (mode_val.typeOf().as<std::string>() == "string") {

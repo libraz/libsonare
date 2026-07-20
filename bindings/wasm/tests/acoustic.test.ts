@@ -69,14 +69,18 @@ describe('geometric room acoustics', () => {
   it('rejects the same invalid room/material inputs the C ABI refuses', () => {
     // Over the 64-band material cap.
     expect(() => synthesizeRir({ bandAbsorption: new Float32Array(65).fill(0.2) })).toThrow();
-    // Absorption / scattering outside [0, 1] are rejected, not silently clamped.
-    expect(() => synthesizeRir({ bandAbsorption: new Float32Array([0.2, 1.5, 0.3]) })).toThrow();
+    // Per-band absorption/scattering outside range are clamped (to [0, 0.999] /
+    // [0, 1]) to match the C-ABI oracle, not rejected.
+    expect(() =>
+      synthesizeRir({ bandAbsorption: new Float32Array([0.2, 1.5, 0.3]) }),
+    ).not.toThrow();
     expect(() =>
       synthesizeRir({
         bandAbsorption: new Float32Array([0.2, 0.3]),
         bandScattering: new Float32Array([0, -0.5]),
       }),
-    ).toThrow();
+    ).not.toThrow();
+    // The scalar absorption path is still rejected out of [0, 1] (both surfaces).
     expect(() => synthesizeRir({ absorption: 2 })).toThrow();
     // Non-finite geometry and timing.
     expect(() => synthesizeRir({ lengthM: Number.NaN })).toThrow();
@@ -176,5 +180,18 @@ describe('geometric room acoustics', () => {
     const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
     const est = estimateRoom(rir.rir, 48000);
     expect(est.absorptionBands.length).toBe(est.rt60Bands.length);
+  });
+
+  // Cross-surface parity fixes: these paths previously diverged from the C ABI.
+  it('rejects a negative ISM order instead of clamping it to zero', () => {
+    expect(() =>
+      synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15, ismOrder: -1 }),
+    ).toThrow();
+  });
+
+  it('treats an explicit zero aspect hint as the default, matching the C ABI', () => {
+    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const est = estimateRoom(rir.rir, 48000, { aspectHintLw: 0, aspectHintLh: 0 });
+    expect(est.rt60Bands.length).toBeGreaterThanOrEqual(4);
   });
 });

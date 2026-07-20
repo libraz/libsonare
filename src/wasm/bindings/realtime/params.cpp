@@ -35,6 +35,12 @@ void RealtimeEngineWasm::addParameter(val info) {
   parameter.id = id;
   parameter.min_value = floatProperty(info, "minValue", 0.0f);
   parameter.max_value = floatProperty(info, "maxValue", 1.0f);
+  // Match the C ABI: reject an inverted range instead of registering it (WASM
+  // bypasses the C-ABI guard), so normalization/automation scaling stays defined.
+  if (parameter.max_value < parameter.min_value) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "parameter maxValue must be >= minValue");
+  }
   parameter.default_value = floatProperty(info, "defaultValue", 0.0f);
   parameter.rt_safe = boolProperty(info, "rtSafe", true);
   parameter.default_curve = automationCurveFromInt(intProperty(info, "defaultCurve", 1));
@@ -126,6 +132,11 @@ int RealtimeEngineWasm::automationLaneCount() const {
 }
 
 void RealtimeEngineWasm::setParameter(double param_id, float value, int64_t render_frame) {
+  // Match the C ABI: reject a non-finite value (WASM bypasses the C-ABI guard).
+  if (!std::isfinite(value)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "parameter value must be finite");
+  }
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter is not realtime safe");
@@ -142,6 +153,11 @@ void RealtimeEngineWasm::setParameter(double param_id, float value, int64_t rend
 }
 
 void RealtimeEngineWasm::setParameterSmoothed(double param_id, float value, int64_t render_frame) {
+  // Match the C ABI: reject a non-finite value (WASM bypasses the C-ABI guard).
+  if (!std::isfinite(value)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "parameter value must be finite");
+  }
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter is not realtime safe");

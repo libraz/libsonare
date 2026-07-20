@@ -51,3 +51,95 @@ describe('RealtimeVoiceChanger legacy block-size guard', () => {
     expect(() => vc.processMono(new Float32Array(256))).toThrow();
   });
 });
+
+describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () => {
+  const validClip = () => ({
+    id: 1,
+    channels: [new Float32Array(128).fill(0.1)],
+    startPpq: 0,
+    lengthSamples: 128,
+  });
+
+  it('rejects a non-finite or negative clip gain', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setClips([{ ...validClip(), gain: Number.NaN }])).toThrow();
+    expect(() => engine.setClips([{ ...validClip(), gain: -1 }])).toThrow();
+    // A valid non-negative gain is accepted.
+    expect(() => engine.setClips([{ ...validClip(), gain: 0.5 }])).not.toThrow();
+  });
+
+  it('rejects negative clip fade lengths', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setClips([{ ...validClip(), fadeInSamples: -1 }])).toThrow();
+    expect(() => engine.setClips([{ ...validClip(), fadeOutSamples: -1 }])).toThrow();
+  });
+
+  it('rejects a non-finite setParameter / setParameterSmoothed value', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setParameter(7, Number.NaN, 0)).toThrow();
+    expect(() => engine.setParameter(7, Number.POSITIVE_INFINITY, 0)).toThrow();
+    expect(() => engine.setParameterSmoothed(7, Number.NaN, 0)).toThrow();
+  });
+
+  it('rejects an inverted addParameter range', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() =>
+      engine.addParameter({
+        id: 7,
+        name: 'gain',
+        unit: 'dB',
+        minValue: 1,
+        maxValue: 0,
+        defaultValue: 0,
+        rtSafe: true,
+        defaultCurve: 1,
+      }),
+    ).toThrow();
+  });
+
+  it('rejects negative metronome gains or click length', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setMetronome({ enabled: true, beatGain: -1 })).toThrow();
+    expect(() => engine.setMetronome({ enabled: true, clickSamples: -1 })).toThrow();
+    expect(() => engine.setMetronome({ enabled: true, beatGain: 0.3 })).not.toThrow();
+  });
+
+  it('rejects a non-finite MIDI clip startPpq', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+    expect(() =>
+      engine.setMidiClips([
+        {
+          id: 1,
+          trackId: 5,
+          destinationId: 5,
+          lengthSamples: 8192,
+          startPpq: Number.NaN,
+          events: [],
+        },
+      ]),
+    ).toThrow();
+  });
+
+  it('rejects a non-positive renderOffline block size', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.renderOffline([new Float32Array(128)], 0)).toThrow();
+    expect(() => engine.renderOffline([new Float32Array(128)], -1)).toThrow();
+  });
+});
+
+describe('StreamingRetune sanitizes non-finite input', () => {
+  it('does not propagate NaN into the grain history', async () => {
+    const { StreamingRetune } = await import('../dist/index.js');
+    const retune = new StreamingRetune({ semitones: 2 });
+    retune.prepare(48000, 256);
+    const bad = new Float32Array(256).fill(0.1);
+    bad[10] = Number.NaN;
+    bad[20] = Number.POSITIVE_INFINITY;
+    const first = retune.processMono(bad);
+    expect(Array.from(first).every((v) => Number.isFinite(v))).toBe(true);
+    // A subsequent clean block must also stay finite (no poisoned ring state).
+    const clean = retune.processMono(new Float32Array(256).fill(0.1));
+    expect(Array.from(clean).every((v) => Number.isFinite(v))).toBe(true);
+  });
+});

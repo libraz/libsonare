@@ -86,6 +86,33 @@ describe('RealtimeEngine native binding', () => {
     ).toThrow();
   });
 
+  it('rejects a malformed parameter object without registering a bogus parameter', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    const before = engine.parameterCount();
+    // A non-number id must be rejected outright (previously it coerced to 0 and
+    // still registered a zero-value parameter).
+    expect(() =>
+      // biome-ignore lint/suspicious/noExplicitAny: intentionally malformed input
+      engine.addParameter({ name: 'bad', unit: '', defaultCurve: 0 } as any),
+    ).toThrow();
+    // A wrong-typed numeric field must also be rejected, not silently defaulted.
+    expect(() =>
+      engine.addParameter({
+        id: 42,
+        name: 'gain',
+        unit: 'dB',
+        // biome-ignore lint/suspicious/noExplicitAny: intentionally malformed input
+        minValue: 'loud' as any,
+        maxValue: 1,
+        defaultValue: 0,
+        rtSafe: true,
+        defaultCurve: 0,
+      }),
+    ).toThrow();
+    // Neither malformed call may have leaked a registration.
+    expect(engine.parameterCount()).toBe(before);
+  });
+
   it('processes a block and drains telemetry', () => {
     const engine = new RealtimeEngine(48000, 128);
     engine.setTempo(60);

@@ -257,6 +257,13 @@ val RealtimeEngineWasm::renderOffline(val channels_val, int block_size) {
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
+  // Match the C-ABI oracle (sonare_engine_render_offline): a non-positive block
+  // size is an error, not silently clamped to 1 as the core would do (WASM
+  // bypasses the C-ABI guard, and the sibling bounce/freeze paths reject it).
+  if (block_size <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "renderOffline block size must be positive");
+  }
   ChannelBlock block = readChannels(channels_val);
   engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
                          block.frames, block_size);

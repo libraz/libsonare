@@ -94,11 +94,13 @@ describe('geometric room acoustics', () => {
   it('rejects the same invalid room/material inputs the C ABI refuses', () => {
     // Over the 64-band material cap.
     expect(() => synthesizeRir({ bandAbsorption: new Array(65).fill(0.2) })).toThrow();
-    // Absorption / scattering outside [0, 1] are rejected, not silently clamped.
-    expect(() => synthesizeRir({ bandAbsorption: [0.2, 1.5, 0.3] })).toThrow();
+    // Per-band absorption/scattering outside range are clamped (to [0, 0.999] /
+    // [0, 1]) to match the C-ABI oracle, not rejected.
+    expect(() => synthesizeRir({ bandAbsorption: [0.2, 1.5, 0.3] })).not.toThrow();
     expect(() =>
       synthesizeRir({ bandAbsorption: [0.2, 0.3], bandScattering: [0, -0.5] }),
-    ).toThrow();
+    ).not.toThrow();
+    // The scalar absorption path is still rejected out of [0, 1] (both surfaces).
     expect(() => synthesizeRir({ absorption: 2 })).toThrow();
     // Non-finite geometry and timing.
     expect(() => synthesizeRir({ lengthM: Number.NaN })).toThrow();
@@ -163,5 +165,34 @@ describe('geometric room acoustics', () => {
     const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
     const est = estimateRoom(rir.rir, 48000);
     expect(est.absorptionBands.length).toBe(est.rt60Bands.length);
+  });
+
+  // Cross-surface parity fixes: these paths previously diverged from the C ABI.
+  it('clamps out-of-range band absorption to match the C ABI (does not reject)', () => {
+    // The C ABI clamps per-band absorption to [0, 0.999]; the Node facade now
+    // clamps too instead of throwing, so a raw >1 value yields a valid RIR.
+    const result = synthesizeRir({
+      lengthM: 7,
+      widthM: 5,
+      heightM: 3,
+      bandAbsorption: [1.5, 1.5, 1.5, 1.5],
+    });
+    expect(result.hasError).toBe(false);
+    expect(result.rir.length).toBeGreaterThan(0);
+  });
+
+  it('rejects a negative ISM order instead of clamping it to zero', () => {
+    // The C ABI rejects a negative ismOrder; Node must too (it used to clamp).
+    expect(() =>
+      synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15, ismOrder: -1 }),
+    ).toThrow();
+  });
+
+  it('treats an explicit zero aspect hint as the default, matching the C ABI', () => {
+    // aspectHint == 0 means "use the default 1.0" on the C ABI/Python; Node now
+    // remaps it the same way instead of letting the core reject a zero hint.
+    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const est = estimateRoom(rir.rir, 48000, { aspectHintLw: 0, aspectHintLh: 0 });
+    expect(est.rt60Bands.length).toBeGreaterThanOrEqual(4);
   });
 });

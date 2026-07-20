@@ -251,6 +251,12 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     clip.track_id = uintProperty(clip_val, "trackId", 0);
     clip.start_sample = int64Property(clip_val, "startSample", 0);
     clip.start_ppq = doubleProperty(clip_val, "startPpq", 0.0);
+    // Match the C ABI: reject a non-finite clip start (WASM bypasses the C-ABI
+    // guard), otherwise ppq->sample placement is undefined in the sequencer.
+    if (!std::isfinite(clip.start_ppq)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setMidiClips: clip startPpq must be finite");
+    }
     clip.length_samples = int64Property(clip_val, "lengthSamples", 0);
     clip.loop_mode = boolProperty(clip_val, "loop", false) ? sonare::midi::MidiLoopMode::kLoop
                                                            : sonare::midi::MidiLoopMode::kOneShot;

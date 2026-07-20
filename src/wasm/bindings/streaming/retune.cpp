@@ -48,6 +48,12 @@ class StreamingRetuneWrapper {
 
   val processMono(val samples) {
     std::vector<float> block = float32ArrayToVector(samples);
+    // Sanitize non-finite input before it enters the overlap-add grain history,
+    // matching the synthesis realtime path: a NaN/Inf sample would otherwise
+    // persist in the ring and poison every subsequent block.
+    for (float& sample : block) {
+      if (!std::isfinite(sample)) sample = 0.0f;
+    }
     std::vector<float> out(block.size());
     retune_.process_block(block.data(), out.data(), static_cast<int>(block.size()));
     return vectorToFloat32Array(out);

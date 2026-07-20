@@ -68,14 +68,36 @@ inline bool ReadParameter(const Napi::CallbackInfo& info, size_t index, SonarePa
   }
   Napi::Object obj = info[index].As<Napi::Object>();
   std::memset(out, 0, sizeof(*out));
-  out->id = obj.Get("id").As<Napi::Number>().Uint32Value();
-  CopyString(out->name, sizeof(out->name), obj.Get("name").As<Napi::String>().Utf8Value());
-  CopyString(out->unit, sizeof(out->unit), obj.Get("unit").As<Napi::String>().Utf8Value());
-  out->min_value = obj.Get("minValue").As<Napi::Number>().FloatValue();
-  out->max_value = obj.Get("maxValue").As<Napi::Number>().FloatValue();
-  out->default_value = obj.Get("defaultValue").As<Napi::Number>().FloatValue();
-  out->rt_safe = obj.Get("rtSafe").As<Napi::Boolean>().Value() ? 1 : 0;
-  out->default_curve = obj.Get("defaultCurve").As<Napi::Number>().Int32Value();
+  // id is required and must be a number: under NAPI_DISABLE_CPP_EXCEPTIONS an
+  // untyped `.As<Number>()` on a missing field coerces to 0 while leaving a
+  // pending exception, which previously still registered a bogus zero-value
+  // parameter. Validate it explicitly instead.
+  const Napi::Value id_val = obj.Get("id");
+  if (!id_val.IsNumber()) {
+    Napi::TypeError::New(env, "parameter id must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+  out->id = id_val.As<Napi::Number>().Uint32Value();
+  // Optional name/unit: only copy when present as strings; a non-string leaves
+  // the zero-initialized empty string.
+  const Napi::Value name = obj.Get("name");
+  if (name.IsString()) {
+    CopyString(out->name, sizeof(out->name), name.As<Napi::String>().Utf8Value());
+  }
+  const Napi::Value unit = obj.Get("unit");
+  if (unit.IsString()) {
+    CopyString(out->unit, sizeof(out->unit), unit.As<Napi::String>().Utf8Value());
+  }
+  // Numeric/bool fields go through the presence-checked *Property helpers so a
+  // missing field falls back cleanly instead of coercing `undefined`.
+  out->min_value = sonare_node::FloatProperty(obj, "minValue", 0.0f);
+  out->max_value = sonare_node::FloatProperty(obj, "maxValue", 1.0f);
+  out->default_value = sonare_node::FloatProperty(obj, "defaultValue", 0.0f);
+  out->rt_safe = sonare_node::BoolProperty(obj, "rtSafe", true) ? 1 : 0;
+  out->default_curve = sonare_node::IntProperty(obj, "defaultCurve", 1);
+  // A wrong-typed field left a pending JS exception; bail out before the caller
+  // hands this to sonare_engine_add_parameter so no bogus parameter is registered.
+  if (env.IsExceptionPending()) return false;
   return true;
 }
 

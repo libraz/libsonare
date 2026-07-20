@@ -245,6 +245,12 @@ void RealtimeEngineWasm::setMetronome(val config) {
   metronome.beat_gain = floatProperty(config, "beatGain", 0.35f);
   metronome.accent_gain = floatProperty(config, "accentGain", 0.7f);
   metronome.click_samples = intProperty(config, "clickSamples", 96);
+  // Match the C ABI: reject negative gains or click length (WASM bypasses the
+  // C-ABI guard). click_samples == 0 stays the sample-rate-derived default.
+  if (metronome.beat_gain < 0.0f || metronome.accent_gain < 0.0f || metronome.click_samples < 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "metronome gains and click length must be non-negative");
+  }
   // clickSeconds is optional: a value > 0 overrides the engine's 2 ms default
   // click length (parity with the C-ABI/Python/Node click_seconds field). A
   // missing or 0 value leaves the struct default in place.

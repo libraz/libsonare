@@ -74,6 +74,13 @@ bool ValidateAcousticInput(const Napi::Env& env, const float* data, size_t lengt
     Napi::RangeError::New(env, "input buffer is empty").ThrowAsJavaScriptException();
     return false;
   }
+  // Match the C ABI's validate_offline_audio_input upper bound so an oversized
+  // buffer is rejected instead of driving an unbounded allocation (OOM).
+  if (length > sonare::kMaxAudioBufferSize) {
+    Napi::RangeError::New(env, "input buffer exceeds the maximum offline length")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
   for (size_t i = 0; i < length; ++i) {
     if (!std::isfinite(data[i])) {
       Napi::RangeError::New(env, "input contains NaN or Inf samples").ThrowAsJavaScriptException();
@@ -162,21 +169,17 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
     room.dims = dims;
     Material wall;
     wall.absorption.reserve(bands.size());
+    // Clamp per-band absorption to [0, 0.999] and scattering to [0, 1], matching
+    // the C-ABI oracle exactly so the same band table yields the same reflection
+    // energy on every surface (a raw 1.0 gives beta=0 here but 0.0316 in the C
+    // ABI, diverging the RIR early reflections).
     for (float a : bands) {
-      if (!IsUnitCoefficient(a)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "bandAbsorption values must be within [0, 1]");
-      }
-      wall.absorption.push_back(a);
+      wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
     }
     wall.scattering.reserve(bands.size());
     for (size_t i = 0; i < bands.size(); ++i) {
       const float scattering = i < scattering_bands.size() ? scattering_bands[i] : 0.0f;
-      if (!IsUnitCoefficient(scattering)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "bandScattering values must be within [0, 1]");
-      }
-      wall.scattering.push_back(scattering);
+      wall.scattering.push_back(std::clamp(scattering, 0.0f, 1.0f));
     }
     for (Material& w : room.walls) w = wall;
     return room;
@@ -216,7 +219,13 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   const int sample_rate = node_int_option(opts, "sampleRate", 48000);
   if (!ValidateAcousticSampleRate(env, sample_rate)) return env.Undefined();
   sonare::acoustic::RirSynthConfig cfg;
-  cfg.ism_order = std::max(0, node_int_option(opts, "ismOrder", cfg.ism_order));
+  // Match the C ABI: reject a negative ISM order instead of clamping it to 0, so
+  // the same invalid input fails identically on every surface.
+  cfg.ism_order = node_int_option(opts, "ismOrder", cfg.ism_order);
+  if (cfg.ism_order < 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "ismOrder must be non-negative");
+  }
   cfg.late_model = node_bool_option(opts, "preferEyring", true)
                        ? sonare::acoustic::ReverbModel::Eyring
                        : sonare::acoustic::ReverbModel::Sabine;
@@ -266,8 +275,13 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
                                                                : Napi::Object::New(env);
 
   sonare::RoomEstimateConfig cfg;
+  // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
+  // the same input is accepted identically on every surface (raw 0 would be
+  // rejected by the core's finite-positive check).
   cfg.aspect_hint_lw = node_float_option(opts, "aspectHintLw", cfg.aspect_hint_lw);
+  if (cfg.aspect_hint_lw == 0.0f) cfg.aspect_hint_lw = 1.0f;
   cfg.aspect_hint_lh = node_float_option(opts, "aspectHintLh", cfg.aspect_hint_lh);
+  if (cfg.aspect_hint_lh == 0.0f) cfg.aspect_hint_lh = 1.0f;
   cfg.reference_absorption =
       node_float_option(opts, "referenceAbsorption", cfg.reference_absorption);
   cfg.prefer_eyring = node_bool_option(opts, "preferEyring", true);

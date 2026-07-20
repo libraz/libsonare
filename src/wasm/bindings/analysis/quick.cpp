@@ -553,21 +553,16 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
       room.dims = dims;
       Material wall;
       wall.absorption.reserve(bands.size());
+      // Clamp per-band absorption to [0, 0.999] and scattering to [0, 1], matching
+      // the C-ABI oracle exactly so the same band table yields the same reflection
+      // energy on every surface (a raw 1.0 gives beta=0 here but 0.0316 in the C ABI).
       for (float a : bands) {
-        if (!isUnitCoefficient(a)) {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                        "bandAbsorption values must be within [0, 1]");
-        }
-        wall.absorption.push_back(a);
+        wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
       }
       wall.scattering.reserve(bands.size());
       for (size_t i = 0; i < bands.size(); ++i) {
         const float scattering = i < scattering_bands.size() ? scattering_bands[i] : 0.0f;
-        if (!isUnitCoefficient(scattering)) {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                        "bandScattering values must be within [0, 1]");
-        }
-        wall.scattering.push_back(scattering);
+        wall.scattering.push_back(std::clamp(scattering, 0.0f, 1.0f));
       }
       for (Material& w : room.walls) w = wall;
       return room;
@@ -642,7 +637,12 @@ val js_synthesize_rir(val opts) {
   const int sample_rate = intProperty(opts, "sampleRate", 48000);
   validateAcousticSampleRate(sample_rate);
   sonare::acoustic::RirSynthConfig config;
-  config.ism_order = std::max(0, intProperty(opts, "ismOrder", config.ism_order));
+  // Match the C ABI: reject a negative ISM order instead of clamping it to 0.
+  config.ism_order = intProperty(opts, "ismOrder", config.ism_order);
+  if (config.ism_order < 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "ismOrder must be non-negative");
+  }
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
@@ -678,8 +678,13 @@ val js_estimate_room(val samples, int sample_rate, val opts) {
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
   sonare::RoomEstimateConfig config;
+  // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
+  // the same input is accepted identically on every surface (raw 0 would be
+  // rejected by the core's finite-positive check).
   config.aspect_hint_lw = floatProperty(opts, "aspectHintLw", config.aspect_hint_lw);
+  if (config.aspect_hint_lw == 0.0f) config.aspect_hint_lw = 1.0f;
   config.aspect_hint_lh = floatProperty(opts, "aspectHintLh", config.aspect_hint_lh);
+  if (config.aspect_hint_lh == 0.0f) config.aspect_hint_lh = 1.0f;
   config.reference_absorption =
       floatProperty(opts, "referenceAbsorption", config.reference_absorption);
   config.prefer_eyring = boolProperty(opts, "preferEyring", true);

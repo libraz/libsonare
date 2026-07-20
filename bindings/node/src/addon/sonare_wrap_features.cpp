@@ -35,6 +35,7 @@ Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   int n_fft = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
   config.n_fft = n_fft;
@@ -70,6 +71,7 @@ Napi::Value SonareWrap::StftDb(const Napi::CallbackInfo& info) {
   int n_fft = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
   config.n_fft = n_fft;
@@ -109,6 +111,7 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
   float fmax = node_arg_float(info, 6, 0.0f);
   bool htk = node_arg_bool(info, 7, false);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::MelConfig config;
   config.n_fft = n_fft;
@@ -158,6 +161,7 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   bool htk = node_arg_bool(info, 8, false);
   float lifter = node_arg_float(info, 9, 0.0f);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::MelConfig config;
   config.n_fft = n_fft;
@@ -198,6 +202,7 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
   int n_fft = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::ChromaConfig config;
   config.n_fft = n_fft;
@@ -303,6 +308,7 @@ Napi::Value SonareWrap::SpectralCentroid(const Napi::CallbackInfo& info) {
   int n_fft = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
   config.n_fft = n_fft;
@@ -330,6 +336,7 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   int n_fft = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
   config.n_fft = n_fft;
@@ -358,6 +365,7 @@ Napi::Value SonareWrap::SpectralRolloff(const Napi::CallbackInfo& info) {
   int hop_length = node_arg_int(info, 3, 512);
   float roll_percent = node_arg_float(info, 4, 0.85f);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
   config.n_fft = n_fft;
@@ -385,6 +393,7 @@ Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
   int n_fft = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::StftConfig config;
   config.n_fft = n_fft;
@@ -412,6 +421,7 @@ Napi::Value SonareWrap::ZeroCrossingRate(const Napi::CallbackInfo& info) {
   int frame_length = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   std::vector<float> zcr = sonare::zero_crossing_rate(audio, frame_length, hop_length);
 
@@ -434,6 +444,7 @@ Napi::Value SonareWrap::RmsEnergy(const Napi::CallbackInfo& info) {
   int frame_length = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   std::vector<float> rms = sonare::rms_energy(audio, frame_length, hop_length);
 
@@ -464,6 +475,7 @@ Napi::Value SonareWrap::PitchYin(const Napi::CallbackInfo& info) {
   float threshold = node_arg_float(info, 6, 0.3f);
   bool fill_na = node_arg_bool(info, 7, false);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::PitchConfig config;
   config.frame_length = frame_length;
@@ -514,6 +526,7 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   float threshold = node_arg_float(info, 6, 0.3f);
   bool fill_na = node_arg_bool(info, 7, false);
 
+  sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::PitchConfig config;
   config.frame_length = frame_length;
