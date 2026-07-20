@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstring>
+#include <utility>
 
 #include "midi/synth/gm_fallback_map.h"
 
@@ -10,7 +11,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 66;
+constexpr size_t kPresetCount = 69;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -34,6 +35,19 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   sine.amp_env.sustain = 0.8f;
   sine.amp_env.release_ms = 150.0f;
   t[i++] = {"sine", from_patch(clamp_synth_patch(sine))};
+
+  // Bare single-oscillator waveforms, the simplest "make MIDI audible" choices
+  // the CLI documents ([saw|square|triangle|sine]). They share sine's envelope
+  // and open filter; the richer named leads (saw-lead/square-lead) stack unison
+  // and voicing on top.
+  for (const auto& [preset_name, wave] :
+       {std::pair<const char*, VaWaveform>{"saw", VaWaveform::kSaw},
+        {"square", VaWaveform::kSquare},
+        {"triangle", VaWaveform::kTriangle}}) {
+    NativeSynthPatch bare = sine;
+    bare.waveform = wave;
+    t[i++] = {preset_name, from_patch(clamp_synth_patch(bare))};
+  }
 
   t[i++] = {"saw-lead", from_patch(gm_fallback_patch(0, 80))};
 

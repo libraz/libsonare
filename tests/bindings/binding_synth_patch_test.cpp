@@ -5,6 +5,7 @@
 ///        and the realtime engine entry (sonare_engine_set_synth_instrument).
 
 #include <cstring>
+#include <utility>
 
 #include "binding_project_parity_test_helpers.h"
 #include "c_api/synth_patch_common.h"
@@ -87,6 +88,19 @@ TEST_CASE("synth preset patches round-trip through the versioned struct",
   REQUIRE(patch.waveform == SONARE_SYNTH_OSC_SAW);
   REQUIRE(patch.unison == 7);
   REQUIRE(patch.stereo_spread > 0.0f);
+  // The bare single-oscillator waveforms the CLI documents each resolve to a
+  // one-voice subtractive patch on their named waveform (the richer -lead
+  // variants stack unison on top).
+  for (const auto& [name, osc] :
+       {std::pair<const char*, SonareSynthOscWaveform>{"saw", SONARE_SYNTH_OSC_SAW},
+        {"square", SONARE_SYNTH_OSC_SQUARE},
+        {"triangle", SONARE_SYNTH_OSC_TRIANGLE}}) {
+    INFO(name);
+    REQUIRE(sonare_synth_preset_patch(name, &patch) == SONARE_OK);
+    REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_SUBTRACTIVE);
+    REQUIRE(patch.waveform == osc);
+    REQUIRE(patch.unison == 1);
+  }
   // e-piano selects the FM engine; electric-guitar the KS engine.
   REQUIRE(sonare_synth_preset_patch("e-piano", &patch) == SONARE_OK);
   REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_FM);
