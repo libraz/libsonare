@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.5.3 (2026-07-21)
+
+This release is a cross-surface input-validation and realtime-safety hardening pass over the offline, streaming, CLI and macOS-host paths, rounded out by a request-object call form for the one-shot JS facades and a handful of additive analysis, engine and mastering surfaces.
+
+### New surfaces
+
+- The top-level one-shot analysis, effects, mastering, metering, feature and mixer/voice-changer functions accept a request object as their canonical call form, so each input is named and optional settings can grow without disturbing argument order. Positional signatures remain as compatibility overloads and normalize through the same path, keeping defaults, validation, errors, results and progress behaviour identical between both forms. Mirrored on Node and WASM with matching field names and defaults; the embind and N-API calls underneath stay positional, and Python keeps its idiomatic keyword arguments.
+- Every mastering result now reports the chain output true peak (dBTP, at the chain's configured oversample factor), the output loudness range (LRA) and per-stage gain reductions, surfaced as a `StageGainReduction` type on Node, Python and WASM so callers can confirm a preset ceiling was met without a second oversampled scan.
+- The realtime engine gained `sonare_engine_set_tempo_segments` / `sonare_engine_set_time_signature_segments` (Node `setTempoSegments` / `setTimeSignatureSegments`, Python `set_tempo_segments` / `set_time_signature_segments`, and the WASM equivalents), letting callers install a piecewise tempo / time-signature map instead of a single value; an empty list clears the map back to the single value.
+- Streaming frame results expose `feature_flags` and `n_chroma` so consumers can tell which arrays are physically present; disabled features emit empty arrays with zero strides instead of implied full widths, across the C ABI, Node, Python and WASM.
+
+### Hardening and bug fixes
+
+- Public audio input is validated and bounded uniformly across the C ABI, Node and WASM direct-call paths — finite, non-empty samples within the supported sample-rate and size limits — so an invalid call fails the same way on every surface instead of copying bad data into the core. The mastering, metering, room and voice-changer configs, the realtime tempo / marker / parameter input, and CLI arguments and imports are validated on the same footing.
+- Realtime-thread safety is tightened across the synth, engine and acoustic paths, and the macOS device and plugin-host backends are hardened against RT-thread and lifecycle hazards, including per-slot SysEx cursor resets and non-finite AU-output scrubbing.
+- Offline resource use is bounded against resource-exhausting and degenerate inputs; RIR length is capped while early reflections past the tail are preserved; every GM program-override patch is bounded; and MIDI 2.0 pitch bend is center-scaled correctly on up-conversion.
+- Silent-failure paths in serialization, MIDI, mastering and decode are replaced with explicit errors, and audio and project files are written atomically.
+- The CLI propagates invalid global option values into its exit-code mapping, plumbs global `fmin` / `fmax` and warns on ignored flags, keeps its JSON output valid, and writes artifacts atomically; the Python CLI corrects option inheritance and neutral voice-changer defaults.
+- Streaming flushes the final held chord and reports zero mel bands when mel is disabled; the WASM `masterAudio` path flattens nested overrides and wires progress callbacks; and the bare saw, square and triangle synth presets are restored.
+
 ## v1.5.2 (2026-07-16)
 
 This release adds a spectral-reconstruction path and a handful of additive analysis, project and streaming surfaces, and continues the v1.5.1 hardening pass across the mastering, mixing, MIDI-import and realtime-thread paths.
