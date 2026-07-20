@@ -399,10 +399,14 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
 
   if (args.json_output) {
     JsonBuilder json;
-    json.begin_object()
-        .kv("length", result.size())
-        .kv("sample_rate", audio.sample_rate())
-        .kv("threshold_db", threshold_db);
+    json.begin_object().kv("length", result.size()).kv("sample_rate", audio.sample_rate());
+    // Report the parameter that actually drove the trim: the relative top_db for
+    // the legacy algorithm, the absolute threshold_db otherwise.
+    if (use_legacy_top_db) {
+      json.kv("top_db", args.get_float("top-db", 60.0f));
+    } else {
+      json.kv("threshold_db", threshold_db);
+    }
     if (!args.output_file.empty()) json.kv("output", args.output_file);
     json.end_object().print();
   } else {

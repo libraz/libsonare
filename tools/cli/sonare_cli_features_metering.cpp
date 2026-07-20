@@ -183,8 +183,8 @@ int cmd_spectral(const CliArgs& args, const Audio& audio) {
 
 int cmd_pitch(const CliArgs& args, const Audio& audio) {
   PitchConfig config;
-  config.fmin = args.get_float("fmin", 65.0f);
-  config.fmax = args.get_float("fmax", 2093.0f);
+  config.fmin = args.fmin > 0.0f ? args.fmin : 65.0f;
+  config.fmax = args.fmax > 0.0f ? args.fmax : 2093.0f;
   config.threshold = args.get_float("threshold", 0.3f);
   config.hop_length = args.hop_length;
 
@@ -325,7 +325,7 @@ int cmd_plp(const CliArgs& args, const Audio& audio) {
 int cmd_cqt(const CliArgs& args, const Audio& audio) {
   CqtConfig config;
   config.hop_length = args.hop_length;
-  config.fmin = args.get_float("fmin", 32.7f);
+  config.fmin = args.fmin > 0.0f ? args.fmin : 32.7f;
   config.n_bins = args.get_int("n-bins", 84);
   config.bins_per_octave = args.get_int("bins-per-octave", 12);
 
@@ -546,6 +546,10 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
   cfg.seed = static_cast<unsigned>(std::max(0, args.get_int("seed", static_cast<int>(cfg.seed))));
   cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
+  // --sabine selects the Sabine late-reverb model (default Eyring), matching the
+  // core/C-ABI/Python-CLI selection so every surface exposes the same choice.
+  cfg.late_model = args.has("sabine") ? sonare::acoustic::ReverbModel::Sabine
+                                      : sonare::acoustic::ReverbModel::Eyring;
 
   const auto result =
       sonare::acoustic::synthesize_rir(cli_room(args, 0.2f), cli_placement(args), sample_rate, cfg);
@@ -572,8 +576,11 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
 
 int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
   sonare::RoomEstimateConfig cfg;
+  // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0".
   cfg.aspect_hint_lw = args.get_float("aspect-lw", cfg.aspect_hint_lw);
+  if (cfg.aspect_hint_lw == 0.0f) cfg.aspect_hint_lw = 1.0f;
   cfg.aspect_hint_lh = args.get_float("aspect-lh", cfg.aspect_hint_lh);
+  if (cfg.aspect_hint_lh == 0.0f) cfg.aspect_hint_lh = 1.0f;
   cfg.reference_absorption = args.get_float("reference-absorption", cfg.reference_absorption);
   cfg.prefer_eyring = !args.has("sabine");
   cfg.acoustic.n_octave_bands = args.get_int("n-bands", cfg.acoustic.n_octave_bands);
@@ -622,6 +629,10 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
   cfg.seed = static_cast<unsigned>(std::max(0, args.get_int("seed", static_cast<int>(cfg.seed))));
   cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
+  // --sabine selects the Sabine late-reverb model (default Eyring), matching the
+  // core/C-ABI/Python-CLI selection so every surface exposes the same choice.
+  cfg.late_model = args.has("sabine") ? sonare::acoustic::ReverbModel::Sabine
+                                      : sonare::acoustic::ReverbModel::Eyring;
 
   const Audio result = sonare::effects::acoustic::room_morph(audio, cfg);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());

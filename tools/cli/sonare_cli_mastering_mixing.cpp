@@ -87,6 +87,19 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       mode = "preset";
     }
 
+    // The preset/config chain is driven entirely by its config (or --params
+    // overrides); the standalone loudness flags only apply to the maximizer
+    // path and the assistant. Warn instead of silently ignoring them here.
+    if (mode == "preset" || mode == "config") {
+      for (const char* loudness_flag : {"target-lufs", "ceiling-db", "true-peak-oversample"}) {
+        if (args.has(loudness_flag)) {
+          std::cerr << "warning: --" << loudness_flag
+                    << " is ignored for a preset/config mastering chain; use --params to override "
+                       "chain parameters\n";
+        }
+      }
+    }
+
     const auto overrides = parse_mastering_params(args.get_string("params"));
     if (!overrides.empty()) {
       mastering::api::apply_chain_config_overrides(chain_config, overrides.data(),
@@ -270,6 +283,20 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
 
 int cmd_eq(const CliArgs& args, const Audio& audio) {
   std::vector<mastering::api::Param> params = parse_mastering_params(args.get_string("params"));
+  if (!args.get_string("params").empty()) {
+    // --params fully specifies the EQ, so the individual band shortcut flags are
+    // ignored. Warn instead of silently dropping them.
+    for (const char* shortcut :
+         {"type",         "frequency-hz", "gain-db",        "q",          "coeff-mode",
+          "slope-db-oct", "placement",    "proportional-q", "dynamic",    "threshold-db",
+          "ratio",        "range-db",     "attack-ms",      "release-ms", "lookahead-ms",
+          "phase-mode",   "resolution",   "auto-gain",      "gain-scale", "output-gain-db",
+          "output-pan"}) {
+      if (args.has(shortcut)) {
+        std::cerr << "warning: --" << shortcut << " is ignored when --params is given\n";
+      }
+    }
+  }
   if (args.get_string("params").empty()) {
     params.push_back({"band0.enabled", 1.0});
     params.push_back({"band0.type", static_cast<double>(args.get_int("type", 0))});

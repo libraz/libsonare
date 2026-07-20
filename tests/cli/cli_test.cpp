@@ -715,6 +715,19 @@ TEST_CASE("CLI cqt command", "[.][slow][cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"n_bins\""));
     REQUIRE_THAT(output, ContainsSubstring("\"n_frames\""));
   }
+
+  SECTION("global --fmin reaches the cqt handler") {
+    // Regression: cqt (like pitch/melody) read the global --fmin/--fmax through
+    // args.options, which never receives them, so the flag was silently ignored
+    // and the hardcoded default (32.7 Hz) was used regardless.
+    auto [code, output] = exec_command(CLI + " cqt " + TEST_WAV + " --fmin 100 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"fmin\": 100"));
+    // The default still applies when the flag is absent.
+    auto [defCode, defOutput] = exec_command(CLI + " cqt " + TEST_WAV + " --json -q");
+    REQUIRE(defCode == 0);
+    REQUIRE_THAT(defOutput, ContainsSubstring("\"fmin\": 32.7"));
+  }
 }
 
 TEST_CASE("CLI analyze command", "[.][slow][cli]") {

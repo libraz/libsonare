@@ -291,13 +291,14 @@ int main(int argc, char* argv[]) {
       // The successful decoder remains authoritative; channel inspection is
       // advisory for containers handled by an optional external decoder.
     }
-    const bool downmix_sensitive_command = cmd->name == "lufs" || cmd->name == "meter" ||
-                                           cmd->name == "mastering" ||
-                                           cmd->name == "mastering-processor";
-    if (source_channels > 1 && downmix_sensitive_command) {
+    // Every requires_audio command loads through the mono downmix in
+    // load_audio, so any multi-channel input silently loses its channels
+    // (metering skews, and an audio-producing command like `eq` writes a mono
+    // file). Warn uniformly instead of only for a hand-picked few commands.
+    if (source_channels > 1) {
       std::cerr << "warning: " << source_channels
                 << "-channel input is downmixed to mono by this CLI command; use the stereo "
-                   "library API for channel-preserving metering/mastering\n";
+                   "library API for channel-preserving processing\n";
     }
 
     if (!args.quiet && !args.json_output) {
