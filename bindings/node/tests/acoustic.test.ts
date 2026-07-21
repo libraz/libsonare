@@ -94,12 +94,13 @@ describe('geometric room acoustics', () => {
   it('rejects the same invalid room/material inputs the C ABI refuses', () => {
     // Over the 64-band material cap.
     expect(() => synthesizeRir({ bandAbsorption: new Array(65).fill(0.2) })).toThrow();
-    // Per-band absorption/scattering outside range are clamped (to [0, 0.999] /
-    // [0, 1]) to match the C-ABI oracle, not rejected.
-    expect(() => synthesizeRir({ bandAbsorption: [0.2, 1.5, 0.3] })).not.toThrow();
+    // Per-band absorption/scattering outside [0, 1] are rejected, matching the
+    // C-ABI oracle's `unit` predicate (they used to be silently clamped here).
+    expect(() => synthesizeRir({ bandAbsorption: [0.2, 1.5, 0.3] })).toThrow();
+    expect(() => synthesizeRir({ bandAbsorption: [0.1, 0.3, 0.5] })).not.toThrow();
     expect(() =>
       synthesizeRir({ bandAbsorption: [0.2, 0.3], bandScattering: [0, -0.5] }),
-    ).not.toThrow();
+    ).toThrow();
     // The scalar absorption path is still rejected out of [0, 1] (both surfaces).
     expect(() => synthesizeRir({ absorption: 2 })).toThrow();
     // Non-finite geometry and timing.
@@ -168,17 +169,27 @@ describe('geometric room acoustics', () => {
   });
 
   // Cross-surface parity fixes: these paths previously diverged from the C ABI.
-  it('clamps out-of-range band absorption to match the C ABI (does not reject)', () => {
-    // The C ABI clamps per-band absorption to [0, 0.999]; the Node facade now
-    // clamps too instead of throwing, so a raw >1 value yields a valid RIR.
-    const result = synthesizeRir({
+  it('rejects out-of-range band absorption to match the C ABI (does not clamp)', () => {
+    // The C ABI rejects any per-band coefficient outside [0, 1]; the Node facade
+    // now rejects too instead of silently clamping (which diverged the RIR).
+    expect(() =>
+      synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, bandAbsorption: [1.5, 1.5, 1.5, 1.5] }),
+    ).toThrow();
+    expect(() =>
+      synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, bandAbsorption: [0.1, -0.2, 0.3] }),
+    ).toThrow();
+    expect(() =>
+      synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, bandAbsorption: [0.1, Number.NaN, 0.3] }),
+    ).toThrow();
+    // An in-range band table is still accepted and produces a valid RIR.
+    const ok = synthesizeRir({
       lengthM: 7,
       widthM: 5,
       heightM: 3,
-      bandAbsorption: [1.5, 1.5, 1.5, 1.5],
+      bandAbsorption: [0.1, 0.3, 0.5],
     });
-    expect(result.hasError).toBe(false);
-    expect(result.rir.length).toBeGreaterThan(0);
+    expect(ok.hasError).toBe(false);
+    expect(ok.rir.length).toBeGreaterThan(0);
   });
 
   it('rejects a negative ISM order instead of clamping it to zero', () => {

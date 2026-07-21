@@ -165,21 +165,36 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "material band count exceeds the maximum of 64");
     }
+    // Reject any non-finite or out-of-[0, 1] per-band coefficient, matching the C
+    // ABI's `unit` predicate so the same invalid band table fails identically on
+    // every surface (rather than being silently clamped only here).
+    for (float a : bands) {
+      if (!IsUnitCoefficient(a)) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "bandAbsorption values must be within [0, 1]");
+      }
+    }
+    for (float s : scattering_bands) {
+      if (!IsUnitCoefficient(s)) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "bandScattering values must be within [0, 1]");
+      }
+    }
     ShoeboxRoom room;
     room.dims = dims;
     Material wall;
     wall.absorption.reserve(bands.size());
-    // Clamp per-band absorption to [0, 0.999] and scattering to [0, 1], matching
-    // the C-ABI oracle exactly so the same band table yields the same reflection
-    // energy on every surface (a raw 1.0 gives beta=0 here but 0.0316 in the C
-    // ABI, diverging the RIR early reflections).
+    // Clamp the accepted in-range per-band absorption to [0, 0.999], matching the
+    // C-ABI oracle's make_room clamp so the same band table yields the same
+    // reflection energy on every surface (a raw 1.0 gives beta=0 here but 0.0316
+    // in the C ABI, diverging the RIR early reflections).
     for (float a : bands) {
       wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
     }
     wall.scattering.reserve(bands.size());
     for (size_t i = 0; i < bands.size(); ++i) {
       const float scattering = i < scattering_bands.size() ? scattering_bands[i] : 0.0f;
-      wall.scattering.push_back(std::clamp(scattering, 0.0f, 1.0f));
+      wall.scattering.push_back(scattering);
     }
     for (Material& w : room.walls) w = wall;
     return room;
