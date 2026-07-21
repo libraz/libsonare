@@ -1162,6 +1162,12 @@ export function powerToDb(
   request: ValuesRequest & { ref?: number; amin?: number; topDb?: number },
 ): Float32Array;
 export function powerToDb(
+  values: Float32Array,
+  ref?: number,
+  amin?: number,
+  topDb?: number,
+): Float32Array;
+export function powerToDb(
   values: Float32Array | (ValuesRequest & { ref?: number; amin?: number; topDb?: number }),
   ref = 1.0,
   amin = 1e-10,
@@ -1178,6 +1184,12 @@ export function powerToDb(
 
 export function amplitudeToDb(
   request: ValuesRequest & { ref?: number; amin?: number; topDb?: number },
+): Float32Array;
+export function amplitudeToDb(
+  values: Float32Array,
+  ref?: number,
+  amin?: number,
+  topDb?: number,
 ): Float32Array;
 export function amplitudeToDb(
   values: Float32Array | (ValuesRequest & { ref?: number; amin?: number; topDb?: number }),
@@ -1234,6 +1246,12 @@ export function trimSilence(request: TrimSilenceRequest): {
   endSample: number;
 };
 export function trimSilence(
+  samples: Float32Array,
+  topDb?: number,
+  frameLength?: number,
+  hopLength?: number,
+): { audio: Float32Array; startSample: number; endSample: number };
+export function trimSilence(
   samples: Float32Array | TrimSilenceRequest,
   topDb = 60.0,
   frameLength = 2048,
@@ -1251,6 +1269,12 @@ export function trimSilence(
 
 export function splitSilence(request: TrimSilenceRequest): Int32Array;
 export function splitSilence(
+  samples: Float32Array,
+  topDb?: number,
+  frameLength?: number,
+  hopLength?: number,
+): Int32Array;
+export function splitSilence(
   samples: Float32Array | TrimSilenceRequest,
   topDb = 60.0,
   frameLength = 2048,
@@ -1267,6 +1291,11 @@ export function splitSilence(
 }
 
 export function frameSignal(request: FrameSignalRequest): { nFrames: number; frames: Float32Array };
+export function frameSignal(
+  samples: Float32Array,
+  frameLength?: number,
+  hopLength?: number,
+): { nFrames: number; frames: Float32Array };
 export function frameSignal(
   samples: Float32Array | FrameSignalRequest,
   frameLength = 0,
@@ -1317,6 +1346,12 @@ export function fixFrames(request: {
   pad?: boolean;
 }): Int32Array;
 export function fixFrames(
+  frames: Int32Array | number[],
+  xMin?: number,
+  xMax?: number,
+  pad?: boolean,
+): Int32Array;
+export function fixFrames(
   frames:
     | Int32Array
     | number[]
@@ -1344,6 +1379,15 @@ export function peakPick(
     delta: number;
     wait: number;
   },
+): Int32Array;
+export function peakPick(
+  values: Float32Array,
+  preMax?: number,
+  postMax?: number,
+  preAvg?: number,
+  postAvg?: number,
+  delta?: number,
+  wait?: number,
 ): Int32Array;
 export function peakPick(
   values:
@@ -1420,6 +1464,12 @@ export function pcen(
   request: ValuesRequest & { nBins: number; nFrames: number } & PcenOptions,
 ): Float32Array;
 export function pcen(
+  values: Float32Array,
+  nBins?: number,
+  nFrames?: number,
+  options?: PcenOptions,
+): Float32Array;
+export function pcen(
   values: Float32Array | (ValuesRequest & { nBins: number; nFrames: number } & PcenOptions),
   nBins = 0,
   nFrames = 0,
@@ -1457,6 +1507,13 @@ export function tempogram(request: TempogramRequest): {
   data: Float32Array;
 };
 export function tempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  winLength?: number,
+  mode?: TempogramMode,
+): { nFrames: number; winLength: number; data: Float32Array };
+export function tempogram(
   onsetEnvelope: Float32Array | TempogramRequest,
   sampleRate = 22050,
   hopLength = 512,
@@ -1482,6 +1539,14 @@ export function cyclicTempogram(request: CyclicTempogramRequest): {
   data: Float32Array;
 };
 export function cyclicTempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  winLength?: number,
+  bpmMin?: number,
+  nBins?: number,
+): { nFrames: number; nBins: number; data: Float32Array };
+export function cyclicTempogram(
   onsetEnvelope: Float32Array | CyclicTempogramRequest,
   sampleRate = 22050,
   hopLength = 512,
@@ -1504,6 +1569,14 @@ export function cyclicTempogram(
 }
 
 export function plp(request: PlpRequest): Float32Array;
+export function plp(
+  onsetEnvelope: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  tempoMin?: number,
+  tempoMax?: number,
+  winLength?: number,
+): Float32Array;
 export function plp(
   onsetEnvelope: Float32Array | PlpRequest,
   sampleRate = 22050,

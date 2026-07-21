@@ -1,4 +1,5 @@
 import {
+  amplitudeToDb,
   analyzeImpulseResponse,
   cyclicTempogram,
   detectAcoustic,
@@ -7,10 +8,19 @@ import {
   detectKey,
   detectKeyCandidates,
   estimateRoom,
+  fixFrames,
+  frameSignal,
   masterAudio,
   masteringPresetNames,
+  pcen,
+  peakPick,
+  plp,
+  powerToDb,
   roomMorph,
+  splitSilence,
   synthesizeRir,
+  tempogram,
+  trimSilence,
 } from '../../bindings/node/src/index.js';
 import type {
   AcousticResult,
@@ -64,6 +74,21 @@ const chords: ChordAnalysisResult = detectChords(
   'nnls',
 );
 const cyclic = cyclicTempogram(samples, 22050);
+
+// Positional compatibility overloads for the request-object-migrated feature
+// functions must stay callable (mirrors the WASM surface).
+const onset = new Float32Array([0.0, 0.5, 1.0, 0.5, 0.0]);
+const frameIndices = new Int32Array([0, 2, 4]);
+tempogram(onset, 22050).data satisfies Float32Array;
+plp(onset, 22050) satisfies Float32Array;
+powerToDb(onset, 1.0, 1e-10, 80.0) satisfies Float32Array;
+amplitudeToDb(onset, 1.0, 1e-5, 80.0) satisfies Float32Array;
+trimSilence(samples, 60.0, 2048, 512).audio satisfies Float32Array;
+splitSilence(samples, 60.0, 2048, 512) satisfies Int32Array;
+frameSignal(samples, 2, 1).frames satisfies Float32Array;
+peakPick(onset, 1, 1, 1, 1, 0.1, 1) satisfies Int32Array;
+pcen(onset, 1, onset.length) satisfies Float32Array;
+fixFrames(frameIndices, 0, -1, true) satisfies Int32Array;
 const key = detectKey(samples, 22050, {
   highPassHz: 80.0,
   useHpss: false,
