@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import os
+import sys
 import tempfile
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager, suppress
@@ -349,6 +350,7 @@ def _emit_effect_result(
     *,
     extra: dict[str, object] | None = None,
     label: str,
+    requires_output: bool = True,
 ) -> int:
     """Write the optional output WAV and print an offline-effect result.
 
@@ -357,7 +359,16 @@ def _emit_effect_result(
     ``length, sample_rate, <extra...>, output`` and the human-readable form
     prints ``<label>: <n> samples`` followed by an optional ``Wrote:`` line,
     matching each command's historical output exactly.
+
+    A command that renders audio requires an output destination (``requires_output``),
+    so running it without ``-o`` is a parameter error (exit ``EXIT_INVALID_PARAMETER``)
+    rather than silently discarding the render, matching the native CLI. Commands
+    that double as analysis (e.g. ``trim-silence`` reporting the trimmed length)
+    pass ``requires_output=False`` to keep the destination optional.
     """
+    if requires_output and not args.output:
+        print(f"Error: {label} requires an output file (-o/--output)", file=sys.stderr)
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
     if args.output:
         _write_wav(args.output, result, sr)
 

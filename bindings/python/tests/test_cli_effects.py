@@ -63,8 +63,9 @@ def test_pitch_shift_cli_reports_semitones_end_to_end() -> None:
     """pitch-shift emits the requested shift and a non-empty result."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "tone.wav")
+        out_path = os.path.join(tmpdir, "shifted.wav")
         _write_test_wav(wav_path, _generate_sine(440, 22050, 0.5), 22050)
-        result = _run_cli(["pitch-shift", wav_path, "--semitones", "3", "--json"])
+        result = _run_cli(["pitch-shift", wav_path, "-o", out_path, "--semitones", "3", "--json"])
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
         assert payload["semitones"] == 3.0
@@ -76,8 +77,9 @@ def test_normalize_cli_reports_target_db_end_to_end() -> None:
     """normalize emits the requested target level and a non-empty result."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "tone.wav")
+        out_path = os.path.join(tmpdir, "normalized.wav")
         _write_test_wav(wav_path, [0.25 * s for s in _generate_sine(440, 22050, 0.5)], 22050)
-        result = _run_cli(["normalize", wav_path, "--target-db", "-6", "--json"])
+        result = _run_cli(["normalize", wav_path, "-o", out_path, "--target-db", "-6", "--json"])
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
         assert payload["target_db"] == -6.0
@@ -461,11 +463,14 @@ def test_resample_uses_native_antialiased_resampler(monkeypatch) -> None:
 
     samples = _generate_sine(440, 44100, 0.02)
     monkeypatch.setattr(cli, "_load_audio", lambda path: (samples, 44100))
+    monkeypatch.setattr(cli, "_write_wav", lambda *a, **k: None)
 
+    # resample renders audio, so it requires an output destination (matching the
+    # native CLI); the write itself is stubbed above.
     args = argparse.Namespace(
         file="tone.wav",
         target_rate=48000,
-        output="",
+        output="resampled.wav",
         json=True,
     )
 

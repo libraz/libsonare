@@ -248,6 +248,32 @@ def test_fft_consumer_commands_run_end_to_end(tmp_path, command) -> None:
     json.loads(result.stdout)
 
 
+@pytest.mark.parametrize("command", ["pitch-shift", "time-stretch", "hpss"])
+def test_effect_commands_require_output(tmp_path, command) -> None:
+    """Audio-rendering effect commands require -o, matching the native CLI.
+
+    Running one without an output destination is a parameter error (exit 3), not
+    a silent no-op, so the same argv fails identically on the native and Python
+    surfaces.
+    """
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+    missing = _run_console(command, str(source))
+    assert missing.returncode == 3, missing.stderr
+    out = tmp_path / "out.wav"
+    ok = _run_console(command, str(source), "-o", str(out))
+    assert ok.returncode == 0, ok.stderr
+
+
+def test_trim_silence_output_is_optional(tmp_path) -> None:
+    """trim-silence doubles as analysis (it reports the trimmed length), so its
+    output stays optional and it exits 0 without -o, matching the native CLI."""
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+    result = _run_console("trim-silence", str(source), "--json")
+    assert result.returncode == 0, result.stderr
+
+
 def test_key_default_n_fft_resolves_to_4096(tmp_path) -> None:
     """``key`` keeps the 4096 analysis default when ``--n-fft`` is omitted.
 

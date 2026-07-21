@@ -26,6 +26,10 @@ from ._cli_common import (
 def cmd_hpss(args: argparse.Namespace) -> int:
     from . import hpss
 
+    if not args.output:
+        print("Error: hpss requires an output file (-o/--output)", file=sys.stderr)
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+
     samples, sr = _load_audio(args.file)
     result = hpss(samples, sample_rate=sr)
 
@@ -147,10 +151,17 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
         sr,
         extra={"threshold_db": args.threshold_db},
         label=f"Trim silence (threshold {args.threshold_db:.1f} dB)",
+        # trim-silence doubles as analysis (it reports the trimmed length), so an
+        # output file is optional here, matching the native CLI.
+        requires_output=False,
     )
 
 
 def cmd_resample(args: argparse.Namespace) -> int:
+    if not args.output:
+        print("Error: resample requires an output file (-o/--output)", file=sys.stderr)
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+
     samples, sr = _load_audio(args.file)
     result = _resample(samples, sr, args.target_rate)
 
