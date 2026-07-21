@@ -383,8 +383,10 @@ export function meteringStereoCorrelation(
 }
 
 /**
- * Side / mid energy ratio, clamped to `[0, 2]`: 0 = pure mono, ~1 = wide
- * stereo, 2 = fully decorrelated / out-of-phase.
+ * Side / mid energy ratio in `[0, +Infinity)`: 0 = pure mono, ~1 = wide stereo,
+ * larger = increasingly decorrelated / out-of-phase. The value is unbounded and
+ * returns `Infinity` when the mid channel is silent (a mono-collapsed / fully
+ * out-of-phase signal).
  */
 export function meteringStereoWidth(request: MeteringStereoRequest): number;
 export function meteringStereoWidth(

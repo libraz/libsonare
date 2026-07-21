@@ -92,6 +92,21 @@ describe('effects transform request-object compatibility', () => {
   });
 });
 
+describe('spectralEdit requires an explicit sample rate', () => {
+  const ops = [{ lowHz: 2000, highHz: 6000, gainDb: -6, mode: 'attenuate' as const }];
+
+  it('throws when sampleRate is omitted instead of silently applying 22050', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: exercising the runtime guard with the required field omitted
+    expect(captureThrow(() => spectralEdit({ samples, ops } as any)).threw).toBe(true);
+    // biome-ignore lint/suspicious/noExplicitAny: positional form with an undefined sample rate
+    expect(captureThrow(() => spectralEdit(samples, undefined as any, ops)).threw).toBe(true);
+  });
+
+  it('accepts an explicit sample rate', () => {
+    expect(spectralEdit({ samples, sampleRate, ops })).toBeInstanceOf(Float32Array);
+  });
+});
+
 function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
   try {
     fn();

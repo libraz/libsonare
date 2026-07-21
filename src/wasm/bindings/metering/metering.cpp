@@ -363,7 +363,14 @@ val emit_waveform_peaks_result(const metering::WaveformPeaksResult& result) {
 
 val js_waveform_peaks(val samples, int channels, size_t samples_per_bucket) {
   std::vector<float> data = float32ArrayToVector(samples);
-  const size_t frames = channels > 0 ? data.size() / static_cast<size_t>(channels) : 0;
+  // Reject a length that is not a whole number of interleaved frames instead of
+  // silently dropping a trailing partial frame (matches the Node/Python facades,
+  // which throw on the same input).
+  if (channels <= 0 || data.size() % static_cast<size_t>(channels) != 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "waveformPeaks: samples length must be a multiple of channels");
+  }
+  const size_t frames = data.size() / static_cast<size_t>(channels);
   return emit_waveform_peaks_result(
       metering::waveform_peaks(data.data(), frames, channels, samples_per_bucket));
 }
@@ -376,7 +383,14 @@ val js_waveform_peak_pyramid(val samples, int channels, val js_levels) {
   for (uint32_t i = 0; i < n; ++i) {
     levels.push_back(js_levels[i].as<size_t>());
   }
-  const size_t frames = channels > 0 ? data.size() / static_cast<size_t>(channels) : 0;
+  // Reject a length that is not a whole number of interleaved frames instead of
+  // silently dropping a trailing partial frame (matches the Node/Python facades,
+  // which throw on the same input).
+  if (channels <= 0 || data.size() % static_cast<size_t>(channels) != 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "waveformPeakPyramid: samples length must be a multiple of channels");
+  }
+  const size_t frames = data.size() / static_cast<size_t>(channels);
   const auto pyramid = metering::waveform_peak_pyramid(data.data(), frames, channels, levels);
   val out = val::array();
   for (size_t i = 0; i < pyramid.size(); ++i) {

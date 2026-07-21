@@ -7,6 +7,7 @@ import type {
   SpectralEditOptions,
   SpectralRegionOp,
 } from './types.js';
+import { assertSampleRate } from './validation.js';
 
 /** Common audio input fields for stateless effect requests. */
 export interface EffectSamplesRequest {
@@ -24,6 +25,12 @@ export interface TimeStretchRequest extends EffectSamplesRequest {
 }
 
 export interface SpectralEditRequest extends EffectSamplesRequest, SpectralEditOptions {
+  /**
+   * Sample rate in Hz. Required: region frequency boundaries are mapped to STFT
+   * bins using this rate, so a wrong/omitted value silently corrupts the edit
+   * (unlike the other effects, this has no safe default).
+   */
+  sampleRate: number;
   ops?: SpectralRegionOp[];
 }
 
@@ -132,7 +139,9 @@ export function timeStretch(
  * `sonare_spectral_edit`.
  *
  * @param samples - Mono input audio.
- * @param sampleRate - Sample rate in Hz.
+ * @param sampleRate - Sample rate in Hz (required; region frequency boundaries
+ *   are mapped to STFT bins using this rate, so a wrong/omitted value silently
+ *   corrupts the edit).
  * @param ops - Region ops applied in order.
  * @param options - Optional STFT + heal configuration.
  * @returns The edited audio (same length as `samples`).
@@ -140,7 +149,7 @@ export function timeStretch(
 export function spectralEdit(request: SpectralEditRequest): Float32Array;
 export function spectralEdit(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   ops?: SpectralRegionOp[],
   options?: SpectralEditOptions,
 ): Float32Array;
@@ -158,7 +167,8 @@ export function spectralEdit(
     ops: requestOps = [],
     ...requestOptions
   } = request;
-  return addon.spectralEdit(input, requestSampleRate ?? 22050, requestOps, requestOptions);
+  assertSampleRate('spectralEdit', requestSampleRate as number);
+  return addon.spectralEdit(input, requestSampleRate as number, requestOps, requestOptions);
 }
 
 /**

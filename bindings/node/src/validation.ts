@@ -52,6 +52,27 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
   }
 }
 
+/**
+ * Offline-analysis sample-rate bounds, mirroring the C++ core limits
+ * (`sonare::kMinAudioSampleRate` / `kMaxAudioSampleRate` in `core/audio.h`) and
+ * the WASM/Python surfaces. Used where a wrong `sampleRate` would corrupt the
+ * result rather than merely pick a default, so it must be supplied explicitly.
+ */
+export const MIN_AUDIO_SAMPLE_RATE = 8000;
+export const MAX_AUDIO_SAMPLE_RATE = 384000;
+
+export function assertSampleRate(fnName: string, sampleRate: number): void {
+  if (
+    !Number.isInteger(sampleRate) ||
+    sampleRate < MIN_AUDIO_SAMPLE_RATE ||
+    sampleRate > MAX_AUDIO_SAMPLE_RATE
+  ) {
+    throw new RangeError(
+      `${fnName}: sampleRate out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,
+    );
+  }
+}
+
 export function assertU7(fnName: string, value: number, argName: string): number {
   if (!Number.isInteger(value) || value < 0 || value > 127) {
     throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 127]`);

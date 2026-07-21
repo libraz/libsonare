@@ -1,8 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { meterTapCode, panLawCode, panModeCode } from '../src/codes';
 import {
+  analyzeMelody,
   harmonic,
   hpss,
   init,
+  isSonareError,
   mixStereo,
   normalize,
   pitchCorrectTimevarying,
@@ -112,6 +115,51 @@ describe('effects request-object compatibility (WASM)', () => {
     expect(posNorm.threw).toBe(true);
     expect(reqNorm.threw).toBe(true);
     expect(reqNorm.message).toBe(posNorm.message);
+  });
+});
+
+describe('transform sampleRate defaults to 22050 (WASM parity with Node/Python)', () => {
+  it('pitchShift / timeStretch / normalize accept an omitted sampleRate', () => {
+    const samples = sine();
+    expect(pitchShift({ samples, semitones: 2 })).toEqual(
+      pitchShift({ samples, sampleRate, semitones: 2 }),
+    );
+    expect(timeStretch({ samples, rate: 1.1 })).toEqual(
+      timeStretch({ samples, sampleRate, rate: 1.1 }),
+    );
+    expect(normalize({ samples, targetDb: -3 })).toEqual(
+      normalize({ samples, sampleRate, targetDb: -3 }),
+    );
+  });
+});
+
+describe('analyzeMelody reports invalid params as a branded SonareError (WASM)', () => {
+  it('throws a SonareError (not a bare RangeError) for a non-positive fmin', () => {
+    const samples = sine();
+    let caught: unknown;
+    try {
+      analyzeMelody(samples, sampleRate, { fmin: 0 });
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+  });
+});
+
+describe('enum-code helpers reject unknown strings instead of silently defaulting', () => {
+  it('throws for an invalid pan law / pan mode / meter tap', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: exercising the runtime guard with an invalid enum string
+    expect(() => panLawCode('bogus' as any)).toThrow();
+    // biome-ignore lint/suspicious/noExplicitAny: same
+    expect(() => panModeCode('bogus' as any)).toThrow();
+    // biome-ignore lint/suspicious/noExplicitAny: same
+    expect(() => meterTapCode('bogus' as any)).toThrow();
+  });
+
+  it('still maps valid strings', () => {
+    expect(panLawCode('const6dB')).toBe(2);
+    expect(panModeCode('balance')).toBe(0);
+    expect(meterTapCode('postFader')).toBe(1);
   });
 });
 

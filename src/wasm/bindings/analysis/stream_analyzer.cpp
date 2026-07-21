@@ -156,9 +156,21 @@ class StreamAnalyzerWrapper {
     analyzer_->process(data.data(), data.size());
   }
 
-  void processWithOffset(val samples, size_t sample_offset) {
+  void processWithOffset(val samples, double sample_offset) {
+    // Validate the offset before narrowing to size_t. Embind would otherwise
+    // wrap a negative or fractional JS number into a 32-bit size_t in a release
+    // build; mirror Node's SafeSizeTFromValue (non-negative, integral, within
+    // Number.MAX_SAFE_INTEGER) so a bad offset throws instead of corrupting the
+    // initial timestamp base.
+    constexpr double kMaxSafeInteger = 9007199254740991.0;  // Number.MAX_SAFE_INTEGER
+    size_t offset = 0;
+    if (!numeric::checked_integral_cast(sample_offset, &offset) ||
+        sample_offset > kMaxSafeInteger) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "sampleOffset must be a non-negative safe integer");
+    }
     std::vector<float> data = float32ArrayToVector(samples);
-    analyzer_->process(data.data(), data.size(), sample_offset);
+    analyzer_->process(data.data(), data.size(), offset);
   }
 
   void finalize() { analyzer_->finalize(); }

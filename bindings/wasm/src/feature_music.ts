@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type {
   AnalyzeSectionsOptions,
@@ -614,10 +615,15 @@ export function analyzeMelody(
   const fmax = options.fmax ?? 2093.0;
   validateFrequencyBounds('analyzeMelody', fmin, fmax);
   // The melody tracker's fmin is a YIN pitch floor: 0 is meaningless, and the
-  // flat C ABI (sonare_analyze_melody) rejects it. validateFrequencyBounds only
-  // guards fmin >= 0, so enforce strict positivity here for parity.
+  // flat C ABI (sonare_analyze_melody) rejects it with InvalidParameter.
+  // validateFrequencyBounds only guards fmin >= 0, so enforce strict positivity
+  // here and report the same branded error the Node/Python surfaces raise.
   if (fmin <= 0) {
-    throw new RangeError('analyzeMelody: fmin must be positive');
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      'analyzeMelody: fmin must be positive',
+    );
   }
   validatePositiveIntegers('analyzeMelody', {
     frameLength: options.frameLength ?? 2048,
@@ -626,7 +632,11 @@ export function analyzeMelody(
   const threshold = options.threshold ?? 0.1;
   assertFiniteScalar('analyzeMelody', threshold, 'threshold');
   if (threshold <= 0) {
-    throw new RangeError('analyzeMelody: threshold must be positive');
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      'analyzeMelody: threshold must be positive',
+    );
   }
   return requireModule().analyzeMelody(
     samples,

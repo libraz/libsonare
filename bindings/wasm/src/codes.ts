@@ -20,6 +20,8 @@ export function panLawCode(panLaw: PanLaw | number): number {
     return panLaw;
   }
   switch (panLaw) {
+    case 'const3dB':
+      return 0;
     case 'const4.5dB':
       return 1;
     case 'const6dB':
@@ -27,7 +29,7 @@ export function panLawCode(panLaw: PanLaw | number): number {
     case 'linear0dB':
       return 3;
     default:
-      return 0;
+      throw new Error(`Invalid pan law: ${panLaw}`);
   }
 }
 
@@ -36,6 +38,8 @@ export function panModeCode(panMode: PanMode | number): number {
     return panMode;
   }
   switch (panMode) {
+    case 'balance':
+      return 0;
     case 'stereoPan':
     case 'stereo-pan':
       return 1;
@@ -43,12 +47,22 @@ export function panModeCode(panMode: PanMode | number): number {
     case 'dual-pan':
       return 2;
     default:
-      return 0;
+      throw new Error(`Invalid pan mode: ${panMode}`);
   }
 }
 
 export function meterTapCode(tap: MeterTap | number): number {
-  return tap === 'preFader' || tap === 0 ? 0 : 1;
+  if (typeof tap === 'number') {
+    return tap;
+  }
+  switch (tap) {
+    case 'preFader':
+      return 0;
+    case 'postFader':
+      return 1;
+    default:
+      throw new Error(`Invalid meter tap: ${tap}`);
+  }
 }
 
 export function sendTimingCode(timing: SendTiming | number): number {

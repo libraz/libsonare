@@ -34,13 +34,13 @@ export interface PercussiveRequest extends ValidateOptions {
 
 export interface TimeStretchRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
   rate: number;
 }
 
 export interface PitchShiftRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
   semitones: number;
 }
 
@@ -79,7 +79,7 @@ export interface NoteMoveRequest extends NoteMoveOptions, ValidateOptions {
 
 export interface NormalizeRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
   targetDb?: number;
 }
 
@@ -177,7 +177,7 @@ export function percussive(
  * Time-stretch audio without changing pitch.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param rate - Time stretch rate (0.5 = double duration, 2.0 = half duration)
  * @returns Time-stretched audio
  */
@@ -196,17 +196,17 @@ export function timeStretch(
 ): Float32Array {
   const request: TimeStretchRequest =
     samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, rate: rate as number, ...options }
+      ? { samples, sampleRate, rate: rate as number, ...options }
       : samples;
   assertSamples('timeStretch', request.samples, request.validate !== false);
-  return requireModule().timeStretch(request.samples, request.sampleRate, request.rate);
+  return requireModule().timeStretch(request.samples, request.sampleRate ?? 22050, request.rate);
 }
 
 /**
  * Pitch-shift audio without changing duration.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param semitones - Pitch shift in semitones (+12 = one octave up, -12 = one octave down)
  * @returns Pitch-shifted audio
  */
@@ -225,10 +225,14 @@ export function pitchShift(
 ): Float32Array {
   const request: PitchShiftRequest =
     samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, semitones: semitones as number, ...options }
+      ? { samples, sampleRate, semitones: semitones as number, ...options }
       : samples;
   assertSamples('pitchShift', request.samples, request.validate !== false);
-  return requireModule().pitchShift(request.samples, request.sampleRate, request.semitones);
+  return requireModule().pitchShift(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.semitones,
+  );
 }
 
 /**
@@ -459,7 +463,7 @@ export function noteMove(
  * Normalize audio to target peak level.
  *
  * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param targetDb - Target peak level in dB (default: 0 dB = full scale)
  * @returns Normalized audio
  */
@@ -477,11 +481,13 @@ export function normalize(
   options: ValidateOptions = {},
 ): Float32Array {
   const request: NormalizeRequest =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, targetDb, ...options }
-      : samples;
+    samples instanceof Float32Array ? { samples, sampleRate, targetDb, ...options } : samples;
   assertSamples('normalize', request.samples, request.validate !== false);
-  return requireModule().normalize(request.samples, request.sampleRate, request.targetDb ?? 0.0);
+  return requireModule().normalize(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.targetDb ?? 0.0,
+  );
 }
 
 /**
