@@ -409,8 +409,13 @@ SonareError sonare_engine_set_markers(SonareRealtimeEngine* engine,
     prepared_marker.key_minor = markers[i].key_minor != 0;
     prepared.push_back(prepared_marker);
   }
-  engine->marker_strings = std::move(staged_strings);
+  // Publish the new marker snapshot BEFORE replacing the backing string storage.
+  // The prepared markers' `name` pointers reference nodes in `staged_strings`
+  // (a deque, so the move preserves element addresses). Replacing
+  // `engine->marker_strings` first would free the old storage while its snapshot
+  // is still the published one, dangling any audio-thread reader's `.name`.
   engine->engine.set_markers(std::move(prepared));
+  engine->marker_strings = std::move(staged_strings);
   return SONARE_OK;
   SONARE_C_CATCH
 }

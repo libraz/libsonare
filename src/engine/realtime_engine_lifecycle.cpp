@@ -138,9 +138,15 @@ void RealtimeEngine::publish_tempo_map_snapshot() {
   map->prepare(sample_rate_);
   if (!control_tempo_segments_.empty()) {
     map->set_segments(control_tempo_segments_);
+  } else {
+    // Empty map: fall back to the last single tempo (default 120 BPM), not a
+    // hardcoded default that would discard an earlier set_tempo().
+    map->set_segments({{0.0, control_single_tempo_bpm_, 0.0}});
   }
   if (!control_time_signatures_.empty()) {
     map->set_time_signatures(control_time_signatures_);
+  } else {
+    map->set_time_signatures({{0.0, control_single_time_sig_}});
   }
   tempo_map_snapshot_.publish(std::move(map));
 }
@@ -217,6 +223,7 @@ transport::TransportState RealtimeEngine::transport_state_control() const noexce
 void RealtimeEngine::set_tempo(double bpm) {
   SONARE_CHECK_MSG(transport::valid_public_tempo(bpm), ErrorCode::InvalidParameter,
                    "tempo must be finite and positive");
+  control_single_tempo_bpm_ = bpm;
   control_tempo_segments_ = {{0.0, bpm, 0.0}};
   publish_tempo_map_snapshot();
 }
@@ -233,6 +240,7 @@ void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> seg
 void RealtimeEngine::set_time_signature(int numerator, int denominator) {
   SONARE_CHECK_MSG(numerator > 0 && denominator > 0, ErrorCode::InvalidParameter,
                    "time signature values must be positive");
+  control_single_time_sig_ = {numerator, denominator};
   control_time_signatures_ = {{0.0, {numerator, denominator}}};
   publish_tempo_map_snapshot();
 }

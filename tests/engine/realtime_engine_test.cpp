@@ -489,6 +489,21 @@ TEST_CASE("RealtimeEngine rejects invalid tempo without replacing the active map
   }
 }
 
+TEST_CASE("RealtimeEngine clearing a tempo map reverts to the last single tempo",
+          "[engine][realtime]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128);
+  engine.set_tempo(60.0);
+  REQUIRE(engine.sample_at_ppq(1.0) == 48000);  // 60 bpm: 1 quarter = 48000 samples
+
+  // Install a piecewise tempo map, then clear it with an empty segment list.
+  engine.set_tempo_segments({{0.0, 120.0, 0.0}, {4.0, 90.0, 0.0}});
+  engine.set_tempo_segments({});
+  // Clearing reverts to the last single tempo (60 -> 48000), not a hardcoded
+  // default of 120 bpm (which would give 24000).
+  REQUIRE(engine.sample_at_ppq(1.0) == 48000);
+}
+
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("RealtimeEngine track lanes are opt-in for clip routing", "[engine][realtime]") {
   constexpr int kBlock = 64;

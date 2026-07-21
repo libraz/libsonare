@@ -505,6 +505,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   const transport::TempoMap* active_tempo_map_ = &tempo_map_;
   std::vector<transport::TempoSegment> control_tempo_segments_{};
   std::vector<transport::TimeSignatureSegment> control_time_signatures_{};
+  // The single-value tempo / time signature last set via set_tempo() /
+  // set_time_signature(). Clearing a piecewise map with an empty segment list
+  // reverts to these (as documented) rather than the hardcoded default.
+  double control_single_tempo_bpm_ = sonare::constants::kDefaultBpm;
+  transport::TimeSignature control_single_time_sig_{};
   transport::Transport transport_{};
   transport::MarkerMap markers_{};
   ClipPlayer clip_player_{};
