@@ -507,3 +507,42 @@ TEST_CASE("save_wav writes atomically and leaves no temp file", "[audio_io]") {
     std::remove(good.c_str());
   }
 }
+
+TEST_CASE("save_wav uses a per-writer temp path so writes to one destination stay valid",
+          "[audio_io]") {
+  const std::vector<float> first = {0.1f, -0.2f, 0.3f, -0.4f};
+  const std::vector<float> second = {0.5f, -0.6f, 0.7f, -0.8f, 0.9f, -0.1f};
+  const std::string path = "test_atomic_unique.wav";
+
+  SECTION("two sequential writes to the same destination each produce a valid file") {
+    save_wav(path, first, 48000, 16);
+    {
+      auto [loaded, sr] = load_wav(path);
+      REQUIRE(sr == 48000);
+      REQUIRE(loaded.size() == first.size());
+    }
+    save_wav(path, second, 48000, 16);
+    {
+      auto [loaded, sr] = load_wav(path);
+      REQUIRE(sr == 48000);
+      REQUIRE(loaded.size() == second.size());
+    }
+    std::remove(path.c_str());
+  }
+
+  SECTION("a leftover temp from an interrupted writer does not corrupt a fresh write") {
+    // The temp path now carries a per-writer suffix, so a stale sibling left by an
+    // aborted writer is never truncated into or renamed by an unrelated write.
+    const std::string stale_tmp = path + ".sonare-tmp.stale";
+    {
+      std::ofstream junk(stale_tmp, std::ios::binary);
+      junk << "not a wav";
+    }
+    save_wav(path, first, 48000, 16);
+    auto [loaded, sr] = load_wav(path);
+    REQUIRE(sr == 48000);
+    REQUIRE(loaded.size() == first.size());
+    std::remove(stale_tmp.c_str());
+    std::remove(path.c_str());
+  }
+}

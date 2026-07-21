@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -375,10 +377,24 @@ int32_t float_to_pcm24(float sample) {
 }
 
 #ifndef __EMSCRIPTEN__
-// Sibling temp-file path for an atomic write: content is written here first and
-// only renamed over the destination once complete, so an interrupted or failed
-// write can never truncate an existing file.
-std::string atomic_tmp_path(const std::string& path) { return path + ".sonare-tmp"; }
+// Per-writer-unique sibling temp-file path for an atomic write: content is
+// written here first and only renamed over the destination once complete, so an
+// interrupted or failed write can never truncate an existing file. The process
+// id plus a monotonic counter keep concurrent writers to the same destination on
+// distinct temp files; a fixed name would let two writers open and interleave
+// into the same temp before either renames, leaving a corrupt result. The same
+// scheme is duplicated in tools/cli/sonare_cli_project.cpp (the CLI reaches this
+// only through the C ABI and cannot share this internal helper).
+std::string atomic_tmp_path(const std::string& path) {
+  static std::atomic<uint64_t> counter{0};
+#ifdef _WIN32
+  const unsigned long pid = ::GetCurrentProcessId();
+#else
+  const unsigned long pid = static_cast<unsigned long>(::getpid());
+#endif
+  const uint64_t seq = counter.fetch_add(1, std::memory_order_relaxed);
+  return path + ".sonare-tmp." + std::to_string(pid) + "." + std::to_string(seq);
+}
 
 // Removes the temp file unless the write committed, so a failed write leaves the
 // destination untouched and no stray temp file behind.

@@ -2,6 +2,14 @@
 
 #ifdef SONARE_WITH_ARRANGEMENT
 
+#include <atomic>
+#include <cstdint>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 // Usage exit code, mirroring kExitUsage in tools/sonare_cli.cpp. A missing or
 // blank `project` subcommand is a usage error; without this the handler's plain
 // `1` would be remapped to the project invalid-state code (9) by main().
@@ -48,11 +56,28 @@ bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
   return true;
 }
 
+// Per-writer-unique sibling temp path for an atomic write. The process id plus a
+// monotonic counter keep concurrent writers to the same destination on distinct
+// temp files, so a fixed name cannot let two writers interleave into the same
+// temp before either renames. Mirrors atomic_tmp_path() in
+// src/core/audio_io.cpp (the CLI reaches the core only through the C ABI and
+// cannot share that internal helper).
+std::string project_atomic_tmp_path(const std::string& path) {
+  static std::atomic<uint64_t> counter{0};
+#ifdef _WIN32
+  const unsigned long pid = ::GetCurrentProcessId();
+#else
+  const unsigned long pid = static_cast<unsigned long>(::getpid());
+#endif
+  const uint64_t seq = counter.fetch_add(1, std::memory_order_relaxed);
+  return path + ".sonare-tmp." + std::to_string(pid) + "." + std::to_string(seq);
+}
+
 // Writes atomically: the payload lands in a sibling temp file that only replaces
 // the destination once fully written, so an interrupted or failed export never
 // truncates an existing project file.
 bool write_binary_file(const std::string& path, const uint8_t* data, size_t len) {
-  const std::string tmp = path + ".sonare-tmp";
+  const std::string tmp = project_atomic_tmp_path(path);
   {
     std::ofstream file(tmp, std::ios::binary);
     if (!file.is_open()) return false;
