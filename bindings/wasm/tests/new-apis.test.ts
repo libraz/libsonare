@@ -889,6 +889,18 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
+    it('rejects an oversized segment/marker list before allocating', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      // A crafted length past the shared buffer cap (500e6) must be rejected up
+      // front, matching the C ABI, instead of driving an unbounded reserve. Use a
+      // fake array-like so no real 500M-element allocation is attempted.
+      const oversized = { length: 500_000_001 } as unknown as [];
+      expect(() => engine.setTempoSegments(oversized)).toThrow();
+      expect(() => engine.setTimeSignatureSegments(oversized)).toThrow();
+      expect(() => engine.setMarkers(oversized)).toThrow();
+      engine.destroy();
+    });
+
     it('round-trips marker kind and key signature through setMarkers/markerByIndex', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setMarkers([

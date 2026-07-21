@@ -69,16 +69,23 @@ describe('geometric room acoustics', () => {
   it('rejects the same invalid room/material inputs the C ABI refuses', () => {
     // Over the 64-band material cap.
     expect(() => synthesizeRir({ bandAbsorption: new Float32Array(65).fill(0.2) })).toThrow();
-    // Per-band absorption/scattering outside range are clamped (to [0, 0.999] /
-    // [0, 1]) to match the C-ABI oracle, not rejected.
+    // Per-band absorption/scattering outside [0, 1] (or non-finite) are rejected,
+    // matching the C-ABI oracle's `unit` predicate rather than being silently
+    // clamped only on this surface.
+    expect(() => synthesizeRir({ bandAbsorption: new Float32Array([0.2, 1.5, 0.3]) })).toThrow();
+    expect(() => synthesizeRir({ bandAbsorption: new Float32Array([0.2, -0.2, 0.3]) })).toThrow();
     expect(() =>
-      synthesizeRir({ bandAbsorption: new Float32Array([0.2, 1.5, 0.3]) }),
-    ).not.toThrow();
+      synthesizeRir({ bandAbsorption: new Float32Array([0.1, Number.NaN, 0.3]) }),
+    ).toThrow();
     expect(() =>
       synthesizeRir({
         bandAbsorption: new Float32Array([0.2, 0.3]),
         bandScattering: new Float32Array([0, -0.5]),
       }),
+    ).toThrow();
+    // An in-range per-band table is accepted.
+    expect(() =>
+      synthesizeRir({ bandAbsorption: new Float32Array([0.1, 0.3, 0.5]), maxSeconds: 0.1 }),
     ).not.toThrow();
     // The scalar absorption path is still rejected out of [0, 1] (both surfaces).
     expect(() => synthesizeRir({ absorption: 2 })).toThrow();

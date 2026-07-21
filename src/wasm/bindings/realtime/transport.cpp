@@ -66,6 +66,13 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
   std::vector<sonare::transport::TempoSegment> parsed;
   if (!segments.isUndefined() && !segments.isNull()) {
     const unsigned count = segments["length"].as<unsigned>();
+    // Mirror the C-ABI guard (sonare_engine_set_tempo_segments): reject an
+    // oversized list before reserving so a crafted length cannot drive an
+    // unbounded allocation.
+    if (count > sonare::kMaxAudioBufferSize) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setTempoSegments: segment count exceeds the maximum");
+    }
     parsed.reserve(count);
     for (unsigned i = 0; i < count; ++i) {
       val entry = segments[i];
@@ -97,6 +104,13 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
   std::vector<sonare::transport::TimeSignatureSegment> parsed;
   if (!segments.isUndefined() && !segments.isNull()) {
     const unsigned count = segments["length"].as<unsigned>();
+    // Mirror the C-ABI guard (sonare_engine_set_time_signature_segments): reject
+    // an oversized list before reserving so a crafted length cannot drive an
+    // unbounded allocation.
+    if (count > sonare::kMaxAudioBufferSize) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "setTimeSignatureSegments: segment count exceeds the maximum");
+    }
     parsed.reserve(count);
     for (unsigned i = 0; i < count; ++i) {
       val entry = segments[i];
@@ -139,6 +153,13 @@ void RealtimeEngineWasm::setMarkers(val markers) {
                 "marker backing-store commit must not throw");
   std::vector<sonare::transport::Marker> prepared;
   const int count = markers["length"].as<int>();
+  // Bound the list before reserving, matching the shared kMaxBufferSize cap the
+  // C-ABI segment setters enforce, so a crafted length cannot drive an unbounded
+  // allocation.
+  if (count < 0 || static_cast<size_t>(count) > sonare::kMaxAudioBufferSize) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "setMarkers: marker count exceeds the maximum");
+  }
   prepared.reserve(static_cast<size_t>(count));
   std::vector<uint32_t> ids;
   ids.reserve(static_cast<size_t>(count));

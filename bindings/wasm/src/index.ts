@@ -135,12 +135,46 @@ export {
   voiceChange,
   voiceChangeRealtime,
 } from './effects_mastering';
+export type {
+  HarmonicRequest,
+  HpssRequest,
+  NormalizeRequest,
+  NoteMoveRequest,
+  NoteStretchRequest,
+  PercussiveRequest,
+  PitchCorrectTimevaryingRequest,
+  PitchCorrectToMidiRequest,
+  PitchCorrectToMidiTimevaryingRequest,
+  PitchShiftRequest,
+  SpectralEditRequest,
+  TimeStretchRequest,
+} from './effects_transform';
 export { ErrorCode, isSonareError, SonareError } from './errors';
 export type {
+  CyclicTempogramRequest,
+  DbConversionRequest,
+  EmphasisRequest,
+  FixFramesRequest,
+  FixLengthRequest,
+  FrameSignalRequest,
+  PadCenterRequest,
+  PcenRequest,
+  PeakPickRequest,
+  PlpRequest,
+  SilenceRequest,
+  TempogramRequest,
+  TonnetzRequest,
+  VectorNormalizeRequest,
+} from './feature_core';
+export type {
+  AnalyzeMelodyRequest,
+  AnalyzeSectionsRequest,
   CqtRequest,
   CqtToAudioRequest,
   FourierTempogramRequest,
+  LufsRequest,
   MelodyOptions,
+  NnlsChromaRequest,
   OnsetEnvelopeRequest,
   OnsetStrengthMultiRequest,
   TempogramRatioRequest,
@@ -152,9 +186,20 @@ export type { ResampleRequest } from './feature_resample';
 export type {
   DecomposeRequest,
   DecomposeWithInitRequest,
+  Ebur128LoudnessRangeRequest,
+  EstimateTuningRequest,
+  HpssWithResidualRequest,
+  LufsInterleavedRequest,
+  NnFilterRequest,
+  PhaseVocoderRequest,
+  PitchTuningRequest,
+  PolyFeaturesRequest,
+  RemixRequest,
+  SpectralContrastRequest,
   SpectralFrameRequest,
   SpectralRolloffRequest,
   ZeroCrossingRateRequest,
+  ZeroCrossingsRequest,
 } from './feature_spectral';
 export type {
   ChromaSpectrogramRequest,
@@ -165,6 +210,7 @@ export type {
   MfccToAudioRequest,
   MfccToMelRequest,
   SpectrogramRequest,
+  TrimRequest,
 } from './feature_spectrogram';
 export {
   amplitudeToDb,
@@ -250,6 +296,13 @@ export {
 } from './features';
 export type { BindMicrophoneInputOptions, MicrophoneInputBinding } from './live_audio';
 export { bindMicrophoneInput } from './live_audio';
+export type {
+  MasterAudioRequest,
+  MasterAudioStereoRequest,
+  MasteringChainRequest,
+  MasteringChainStereoRequest,
+} from './mastering_chain';
+export type { MasteringRequest } from './mastering_core';
 export type {
   ClippingRegion,
   ClippingReport,
@@ -455,12 +508,22 @@ export {
   SectionType,
 } from './public_types';
 export type {
+  AnalyzeBpmRequest,
+  AnalyzeDynamicsRequest,
+  AnalyzeImpulseResponseRequest,
+  AnalyzeRhythmRequest,
+  AnalyzeTimbreRequest,
   AnalyzeWithProgressRequest,
   BpmAnalysisResult,
   BpmCandidate,
+  ChordFunctionalAnalysisRequest,
+  DetectAcousticRequest,
+  DetectChordsRequest,
   DetectKeyRequest,
   DynamicsAnalysisResult,
+  EstimateRoomRequest,
   RhythmAnalysisResult,
+  RoomMorphRequest,
   SamplesRequest,
   TimbreAnalysisResult,
   TimbreFrame,
@@ -488,6 +551,7 @@ export {
   synthesizeRir,
 } from './quick_analysis';
 export type {
+  ClipPageRequest,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
