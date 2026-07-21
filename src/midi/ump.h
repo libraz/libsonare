@@ -230,6 +230,19 @@ class SysExStore {
   SysExHandle add(const uint8_t* data, size_t size);
   SysExHandle add(const std::vector<uint8_t>& data) { return add(data.data(), data.size()); }
 
+  /// Stores `size` bytes under the explicit, non-zero `handle`, replacing any
+  /// existing payload for it. Returns false for a zero handle or a null/empty
+  /// buffer. Lets a producer that must assign a handle before the payload reaches
+  /// the store (e.g. a realtime MIDI reader staging completed SysEx for a control
+  /// thread) commit the bytes later under the pre-assigned handle.
+  bool add_with_handle(SysExHandle handle, const uint8_t* data, size_t size) {
+    if (handle == 0 || data == nullptr || size == 0) {
+      return false;
+    }
+    payloads_[handle] = std::vector<uint8_t>(data, data + size);
+    return true;
+  }
+
   /// Returns the payload for `handle`, or nullptr if unknown / zero.
   const std::vector<uint8_t>* lookup(SysExHandle handle) const noexcept;
 

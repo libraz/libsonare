@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -115,6 +116,49 @@ struct alignas(AudioBufferList) BufferListStorage {
   std::array<uint8_t, sizeof(AudioBufferList) + kMaxChannels * sizeof(AudioBuffer)> bytes{};
   AudioBufferList* list() noexcept { return reinterpret_cast<AudioBufferList*>(bytes.data()); }
 };
+
+/// Finalize the host channels after an AU render call so the instrument and
+/// effect render paths behave identically (a fix on one must not drift from the
+/// other). On a failed render the AU-targeted host channels are silenced; on
+/// success any non-finite sample the AU emitted is scrubbed to zero so it cannot
+/// circulate through a downstream feedback effect (delay/reverb) and silence the
+/// whole session. Host channels beyond the AU's negotiated count are silenced,
+/// and any tail past the AU's maximum block size is zeroed so a caller violating
+/// the negotiated maximum gets a silent tail rather than a scratch overrun or an
+/// AU property change on the render thread. `render_chans` is the AU's negotiated
+/// channel count, `chans` the clamped host channel count, `num_channels` the
+/// caller's channel count.
+void finalize_au_output(float* const* channels, int num_channels, int chans, int render_chans,
+                        int render_samples, int num_samples, bool render_ok) noexcept {
+  if (!render_ok) {
+    for (int c = 0; c < chans; ++c) {
+      if (channels[c] != nullptr) {
+        std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
+      }
+    }
+  } else {
+    for (int c = 0; c < render_chans && c < chans; ++c) {
+      if (channels[c] == nullptr) continue;
+      for (int s = 0; s < render_samples; ++s) {
+        if (!std::isfinite(channels[c][s])) channels[c][s] = 0.0f;
+      }
+    }
+  }
+  // Silence host channels the AU did not fill (host supplied more than the AU renders).
+  for (int c = render_chans; c < num_channels; ++c) {
+    if (channels[c] != nullptr) {
+      std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
+    }
+  }
+  if (render_samples < num_samples) {
+    for (int c = 0; c < num_channels; ++c) {
+      if (channels[c] != nullptr) {
+        std::memset(channels[c] + render_samples, 0,
+                    static_cast<size_t>(num_samples - render_samples) * sizeof(float));
+      }
+    }
+  }
+}
 
 }  // namespace
 
@@ -237,39 +281,8 @@ class AuMidiInstrument final : public midi::MidiInstrument {
     ts.mSampleTime = static_cast<Float64>(position_);
     const OSStatus status =
         api_->render(unit_, &flags, &ts, 0, static_cast<UInt32>(render_samples), list);
-    if (status != noErr) {
-      for (int c = 0; c < chans; ++c) {
-        if (channels[c] != nullptr) {
-          std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
-        }
-      }
-    } else {
-      // A misbehaving AU can return noErr while emitting NaN/Inf; scrub the
-      // rendered host channels so a non-finite sample cannot circulate through a
-      // downstream feedback effect (delay/reverb) and silence the whole session.
-      for (int c = 0; c < render_chans && c < chans; ++c) {
-        if (channels[c] == nullptr) continue;
-        for (int s = 0; s < static_cast<int>(render_samples); ++s) {
-          if (!std::isfinite(channels[c][s])) channels[c][s] = 0.0f;
-        }
-      }
-    }
-    // Silence host channels the AU did not fill (host supplied more than the AU renders).
-    for (int c = render_chans; c < num_channels; ++c) {
-      if (channels[c] != nullptr) {
-        std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
-      }
-    }
-    // A caller violating the negotiated maximum gets a silent tail, never a
-    // scratch overrun or an AU property change on the render thread.
-    if (render_samples < num_samples) {
-      for (int c = 0; c < num_channels; ++c) {
-        if (channels[c] != nullptr) {
-          std::memset(channels[c] + render_samples, 0,
-                      static_cast<size_t>(num_samples - render_samples) * sizeof(float));
-        }
-      }
-    }
+    finalize_au_output(channels, num_channels, chans, render_chans, render_samples, num_samples,
+                       status == noErr);
     position_ += num_samples;
   }
 
@@ -282,7 +295,19 @@ class AuMidiInstrument final : public midi::MidiInstrument {
   int latency_samples() const noexcept override { return latency_; }
 
   void on_event(uint32_t /*destination_id*/, const midi::MidiEvent& event) noexcept override {
-    if (event_count_ < events_.size()) events_[event_count_++] = event;
+    if (event_count_ < events_.size()) {
+      events_[event_count_++] = event;
+    } else {
+      // Mirror the fixed MIDI queues' telemetry: a full block-local event buffer
+      // drops the event, but the drop is counted rather than silent.
+      dropped_events_.fetch_add(1, std::memory_order_relaxed);
+    }
+  }
+
+  /// Cumulative count of events dropped because the block-local event buffer was
+  /// full when on_event() was called. Mirrors FixedMidiInputSource::dropped_count.
+  uint32_t dropped_count() const noexcept {
+    return dropped_events_.load(std::memory_order_relaxed);
   }
 
  private:
@@ -298,6 +323,7 @@ class AuMidiInstrument final : public midi::MidiInstrument {
   std::vector<float> scratch_{};
   std::array<midi::MidiEvent, kEventQueueDepth> events_{};
   size_t event_count_ = 0;
+  std::atomic<uint32_t> dropped_events_{0};
 };
 
 class AuEffectProcessor final : public rt::ProcessorBase {
@@ -387,37 +413,8 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     ts.mSampleTime = static_cast<Float64>(position_);
     const OSStatus status =
         api_->render(unit_, &flags, &ts, 0, static_cast<UInt32>(render_samples), list);
-    if (status != noErr) {
-      for (int c = 0; c < chans; ++c) {
-        if (channels[c] != nullptr) {
-          std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
-        }
-      }
-    } else {
-      // A misbehaving AU can return noErr while emitting NaN/Inf; scrub the
-      // rendered host channels so a non-finite sample cannot circulate through a
-      // downstream feedback effect (delay/reverb) and silence the whole session.
-      for (int c = 0; c < render_chans && c < chans; ++c) {
-        if (channels[c] == nullptr) continue;
-        for (int s = 0; s < static_cast<int>(render_samples); ++s) {
-          if (!std::isfinite(channels[c][s])) channels[c][s] = 0.0f;
-        }
-      }
-    }
-    // Silence host channels the AU did not fill (host supplied more than the AU renders).
-    for (int c = render_chans; c < num_channels; ++c) {
-      if (channels[c] != nullptr) {
-        std::memset(channels[c], 0, static_cast<size_t>(render_samples) * sizeof(float));
-      }
-    }
-    if (render_samples < num_samples) {
-      for (int c = 0; c < num_channels; ++c) {
-        if (channels[c] != nullptr) {
-          std::memset(channels[c] + render_samples, 0,
-                      static_cast<size_t>(num_samples - render_samples) * sizeof(float));
-        }
-      }
-    }
+    finalize_au_output(channels, num_channels, chans, render_chans, render_samples, num_samples,
+                       status == noErr);
     position_ += num_samples;
     in_channels_ = nullptr;
   }
@@ -435,8 +432,8 @@ class AuEffectProcessor final : public rt::ProcessorBase {
                                    AudioBufferList* data) noexcept {
     auto* self = static_cast<AuEffectProcessor*>(ref);
     if (self->in_channels_ == nullptr || data == nullptr) return noErr;
-    const size_t requested = std::min(static_cast<size_t>(frames),
-                                      static_cast<size_t>(std::max(self->max_block_, 0)));
+    const size_t requested =
+        std::min(static_cast<size_t>(frames), static_cast<size_t>(std::max(self->max_block_, 0)));
     const int buffers = static_cast<int>(data->mNumberBuffers);
     for (int c = 0; c < buffers; ++c) {
       auto* dst = static_cast<float*>(data->mBuffers[c].mData);
@@ -617,18 +614,18 @@ std::vector<PluginDescriptor> AuInstrumentProvider::enumerate(PluginKind kind) {
     query.componentType = type;
     AudioComponent comp = nullptr;
     while ((comp = AudioComponentFindNext(comp, &query)) != nullptr) {
-    AudioComponentDescription desc{};
-    if (AudioComponentGetDescription(comp, &desc) != noErr) continue;
-    CFStringRef name = nullptr;
-    PluginDescriptor pd;
-    pd.format = "au";
-    pd.kind = kind;
-    pd.id = encode_id(desc);
-    if (AudioComponentCopyName(comp, &name) == noErr && name != nullptr) {
-      char nbuf[256];
-      if (CFStringGetCString(name, nbuf, sizeof(nbuf), kCFStringEncodingUTF8)) pd.name = nbuf;
-      CFRelease(name);
-    }
+      AudioComponentDescription desc{};
+      if (AudioComponentGetDescription(comp, &desc) != noErr) continue;
+      CFStringRef name = nullptr;
+      PluginDescriptor pd;
+      pd.format = "au";
+      pd.kind = kind;
+      pd.id = encode_id(desc);
+      if (AudioComponentCopyName(comp, &name) == noErr && name != nullptr) {
+        char nbuf[256];
+        if (CFStringGetCString(name, nbuf, sizeof(nbuf), kCFStringEncodingUTF8)) pd.name = nbuf;
+        CFRelease(name);
+      }
       out.push_back(std::move(pd));
     }
   }
@@ -653,8 +650,8 @@ std::unique_ptr<rt::ProcessorBase> AuInstrumentProvider::create_effect(
     const PluginDescriptor& descriptor) {
   if (descriptor.kind != PluginKind::kEffect || descriptor.format != "au") return nullptr;
   AudioComponentDescription desc{};
-  if (!decode_id(descriptor.id, desc) ||
-      (desc.componentType != kAudioUnitType_Effect && desc.componentType != kAudioUnitType_MusicEffect))
+  if (!decode_id(descriptor.id, desc) || (desc.componentType != kAudioUnitType_Effect &&
+                                          desc.componentType != kAudioUnitType_MusicEffect))
     return nullptr;
   AudioUnit unit = instantiate(descriptor);
   if (unit == nullptr) return nullptr;
