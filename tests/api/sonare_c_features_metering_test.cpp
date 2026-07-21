@@ -712,4 +712,16 @@ TEST_CASE("sonare_scale_quantize_midi", "[c_api]") {
     REQUIRE(sonare_scale_pitch_class_enabled(0, 0xFFFFu, 0, &enabled) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("rejects non-finite midi instead of reaching an undefined int cast") {
+    float out = 0.0f;
+    for (float bad :
+         {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+          -std::numeric_limits<float>::infinity()}) {
+      REQUIRE(sonare_scale_quantize_midi(0, kCMajorMask, 0.0f, bad, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(sonare_scale_correction_semitones(0, kCMajorMask, 0.0f, bad, &out) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
 }

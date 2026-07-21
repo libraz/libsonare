@@ -8,6 +8,18 @@ namespace sonare::editing::pitch_editor {
 ScaleQuantizer::ScaleQuantizer(ScaleQuantizerConfig config) : config_(config) {}
 
 float ScaleQuantizer::quantize_midi(float midi) const noexcept {
+  // Non-finite input has no meaningful quantization and would make the int cast
+  // below undefined; pass it through unchanged.
+  if (!std::isfinite(midi)) {
+    return midi;
+  }
+  // Beyond the representable MIDI range the candidate loop's int cast would
+  // overflow. No scale context exists that far out, so snap chromatically.
+  constexpr float kMaxQuantizableMidi = 2048.0f;
+  if (std::abs(midi) > kMaxQuantizableMidi) {
+    return std::round(midi);
+  }
+
   // An empty scale (no pitch class enabled) is treated as an explicit chromatic
   // pass-through: snap to the nearest semitone. Documented here so the fallback
   // is intentional rather than a silent side effect of the candidate loop never

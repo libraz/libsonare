@@ -519,7 +519,9 @@ SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float refer
                                        float midi, float* out_quantized_midi) {
   SONARE_C_API_ENTRY;
   if (!out_quantized_midi) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!valid_scale_args(root, mode_mask)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_scale_args(root, mode_mask) || !std::isfinite(midi)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, reference_midi));
   *out_quantized_midi = q.quantize_midi(midi);
@@ -531,7 +533,9 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, floa
                                               float midi, float* out_semitones) {
   SONARE_C_API_ENTRY;
   if (!out_semitones) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!valid_scale_args(root, mode_mask)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_scale_args(root, mode_mask) || !std::isfinite(midi)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   editing::pitch_editor::ScaleQuantizer q(make_scale_config(root, mode_mask, reference_midi));
   *out_semitones = q.correction_semitones(midi);
