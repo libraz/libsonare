@@ -46,18 +46,27 @@ PhaseScopeResult phase_scope(const float* left, const float* right, size_t lengt
   // Summary stats are computed over the full-resolution signal regardless of the
   // requested point budget, so decimation only affects the returned point cloud.
   double abs_angle_sum = 0.0;
+
+  if (max_points == 0 || length <= max_points) {
+    // Full-resolution path: fill the point cloud and accumulate the summary
+    // stats in a single pass so atan2/sqrt are evaluated once per sample.
+    result.points.resize(length);
+    for (size_t i = 0; i < length; ++i) {
+      const PhaseScopePoint point = make_point(left, right, i);
+      result.points[i] = point;
+      abs_angle_sum += std::abs(point.angle_rad);
+      result.max_radius = std::max(result.max_radius, point.radius);
+    }
+    result.average_abs_angle_rad = static_cast<float>(abs_angle_sum / static_cast<double>(length));
+    return result;
+  }
+
   for (size_t i = 0; i < length; ++i) {
     const PhaseScopePoint point = make_point(left, right, i);
     abs_angle_sum += std::abs(point.angle_rad);
     result.max_radius = std::max(result.max_radius, point.radius);
   }
   result.average_abs_angle_rad = static_cast<float>(abs_angle_sum / static_cast<double>(length));
-
-  if (max_points == 0 || length <= max_points) {
-    result.points.resize(length);
-    for (size_t i = 0; i < length; ++i) result.points[i] = make_point(left, right, i);
-    return result;
-  }
 
   // Deterministic decimation into max_points contiguous buckets, keeping the
   // largest-radius sample of each bucket so transient peaks are preserved. Shared

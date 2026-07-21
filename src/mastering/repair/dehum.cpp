@@ -121,6 +121,13 @@ Audio dehum(const Audio& audio, const DehumConfig& config) {
       notches[static_cast<size_t>(harmonic - 1)] = make_notch(
           fundamental * static_cast<float>(harmonic), static_cast<float>(sample_rate), config.q);
     }
+    // The PLL fundamental drifts slowly (pll_bandwidth is small), so recomputing
+    // the RBJ notch coefficients (sin/cos/division per harmonic) on every sample
+    // is wasteful. Refresh them only when the tracked fundamental has moved by
+    // more than a small relative amount since the last refresh; the filter state
+    // carries across untouched, so the adaptive tracking behavior is preserved.
+    constexpr float kCoeffRefreshRatio = 1e-3f;
+    float last_coeff_fundamental = 0.0f;
     for (size_t begin = 0; begin < samples.size();
          begin += static_cast<size_t>(config.frame_size)) {
       const size_t end = std::min(samples.size(), begin + static_cast<size_t>(config.frame_size));
@@ -128,12 +135,20 @@ Audio dehum(const Audio& audio, const DehumConfig& config) {
           estimate_fundamental(samples, begin, end, sample_rate, config, target_fundamental);
       for (size_t i = begin; i < end; ++i) {
         fundamental = tracker.process(samples[i], target_fundamental, sample_rate, config);
+        if (std::abs(fundamental - last_coeff_fundamental) >
+            kCoeffRefreshRatio * last_coeff_fundamental) {
+          for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
+            const float frequency = fundamental * static_cast<float>(harmonic);
+            if (frequency >= static_cast<float>(sample_rate) * 0.5f) break;
+            notches[static_cast<size_t>(harmonic - 1)].set_coefficients(
+                frequency, static_cast<float>(sample_rate), config.q);
+          }
+          last_coeff_fundamental = fundamental;
+        }
         for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
           const float frequency = fundamental * static_cast<float>(harmonic);
           if (frequency >= static_cast<float>(sample_rate) * 0.5f) break;
-          auto& notch = notches[static_cast<size_t>(harmonic - 1)];
-          notch.set_coefficients(frequency, static_cast<float>(sample_rate), config.q);
-          samples[i] = notch.process(samples[i]);
+          samples[i] = notches[static_cast<size_t>(harmonic - 1)].process(samples[i]);
         }
       }
     }

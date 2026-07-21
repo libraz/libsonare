@@ -226,6 +226,45 @@ TEST_CASE("phase scope detects anti-phase stereo", "[meter]") {
                WithinAbs(static_cast<float>(sonare::constants::kPiD) / 2.0f, 0.001f));
 }
 
+TEST_CASE("phase scope full-resolution path matches exact per-sample values", "[meter]") {
+  // Regression guard for the single-pass full-resolution refactor: the returned
+  // point cloud and the summary stats must equal the hand-computed values.
+  const std::vector<float> left = {1.0f, 0.0f, -0.5f};
+  const std::vector<float> right = {0.0f, 1.0f, 0.5f};
+
+  const auto result = metering::phase_scope(left.data(), right.data(), left.size());
+
+  REQUIRE(result.points.size() == left.size());
+
+  const float inv_sqrt2 = static_cast<float>(sonare::constants::kInvSqrt2);
+  const float quarter_pi = static_cast<float>(sonare::constants::kPiD) / 4.0f;
+  const float half_pi = static_cast<float>(sonare::constants::kPiD) / 2.0f;
+
+  // Sample 0: mid = side = 1/sqrt(2), radius = 1, angle = +pi/4.
+  REQUIRE_THAT(result.points[0].mid, WithinAbs(inv_sqrt2, 1e-6f));
+  REQUIRE_THAT(result.points[0].side, WithinAbs(inv_sqrt2, 1e-6f));
+  REQUIRE_THAT(result.points[0].radius, WithinAbs(1.0f, 1e-6f));
+  REQUIRE_THAT(result.points[0].angle_rad, WithinAbs(quarter_pi, 1e-6f));
+
+  // Sample 1: mid = 1/sqrt(2), side = -1/sqrt(2), radius = 1, angle = -pi/4.
+  REQUIRE_THAT(result.points[1].mid, WithinAbs(inv_sqrt2, 1e-6f));
+  REQUIRE_THAT(result.points[1].side, WithinAbs(-inv_sqrt2, 1e-6f));
+  REQUIRE_THAT(result.points[1].radius, WithinAbs(1.0f, 1e-6f));
+  REQUIRE_THAT(result.points[1].angle_rad, WithinAbs(-quarter_pi, 1e-6f));
+
+  // Sample 2: mid = 0, side = -1/sqrt(2), radius = 1/sqrt(2), angle = -pi/2.
+  REQUIRE_THAT(result.points[2].mid, WithinAbs(0.0f, 1e-6f));
+  REQUIRE_THAT(result.points[2].side, WithinAbs(-inv_sqrt2, 1e-6f));
+  REQUIRE_THAT(result.points[2].radius, WithinAbs(inv_sqrt2, 1e-6f));
+  REQUIRE_THAT(result.points[2].angle_rad, WithinAbs(-half_pi, 1e-6f));
+
+  // max_radius is the largest per-sample radius; abs-angle mean = (pi/4 + pi/4 +
+  // pi/2) / 3 = pi/3.
+  REQUIRE_THAT(result.max_radius, WithinAbs(1.0f, 1e-6f));
+  REQUIRE_THAT(result.average_abs_angle_rad,
+               WithinAbs(static_cast<float>(sonare::constants::kPiD) / 3.0f, 1e-6f));
+}
+
 TEST_CASE("LUFS returns silence for silent audio", "[meter]") {
   const std::vector<float> samples(48000, 0.0f);
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);

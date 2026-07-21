@@ -4,6 +4,7 @@
 #include <cmath>
 #include <complex>
 #include <limits>
+#include <memory>
 
 #include "core/convert.h"
 #include "core/fft.h"
@@ -77,6 +78,97 @@ std::vector<float> librosa_yin_cmndf(const float* frame, int frame_length, int m
   return cmndf;
 }
 
+/// @brief Reusable scratch for the FFT-based YIN difference function.
+///
+/// Holds the FFT plan and all working buffers so that a per-frame pitch track
+/// (yin_track) constructs the plan and allocations ONCE and reuses them across
+/// frames instead of rebuilding an FFT plan and six vectors per frame. All
+/// derived sizes (window, comparison length, n_fft) are constant across the
+/// frames of a single track, so the plan is built on the first frame and reused
+/// thereafter. The computation is bit-identical to constructing fresh buffers
+/// each call: reused buffers are re-zeroed exactly where the fresh vectors were
+/// zero-initialized, and reusing a deterministic FFT plan of the same size
+/// yields identical output.
+struct YinDiffContext {
+  int n_fft = -1;
+  std::unique_ptr<FFT> fft;
+  std::vector<float> reference;
+  std::vector<float> comparison;
+  std::vector<float> correlation;
+  std::vector<std::complex<float>> ref_spectrum;
+  std::vector<std::complex<float>> cmp_spectrum;
+  std::vector<double> squared_prefix;
+
+  /// @brief Fill @p diff (resized to max_lag) with d(tau), reusing buffers.
+  void compute(const float* frame, int frame_length, int max_lag, std::vector<float>& diff) {
+    diff.assign(static_cast<size_t>(std::max(max_lag, 0)), 0.0f);
+    if (frame_length <= 0 || max_lag <= 0) {
+      return;
+    }
+
+    // d(tau) = sum_{j=0}^{W-1} (x[j] - x[j+tau])^2 with a constant window W =
+    // frame_length / 2 for all tau (YIN paper), ensuring consistent
+    // normalization.
+    const int window = frame_length / 2;
+    if (window <= 0) {
+      return;
+    }
+
+    const int available_lags = std::min(max_lag, frame_length - window + 1);
+    if (available_lags <= 0) {
+      return;
+    }
+
+    const int comparison_length = std::min(frame_length, window + available_lags - 1);
+    const int required_n_fft = next_power_of_2(window + comparison_length - 1);
+    if (required_n_fft != n_fft) {
+      n_fft = required_n_fft;
+      fft = std::make_unique<FFT>(n_fft);
+      reference.assign(static_cast<size_t>(n_fft), 0.0f);
+      comparison.assign(static_cast<size_t>(n_fft), 0.0f);
+      correlation.assign(static_cast<size_t>(n_fft), 0.0f);
+      ref_spectrum.assign(static_cast<size_t>(fft->n_bins()), {});
+      cmp_spectrum.assign(static_cast<size_t>(fft->n_bins()), {});
+    } else {
+      std::fill(reference.begin(), reference.end(), 0.0f);
+      std::fill(comparison.begin(), comparison.end(), 0.0f);
+    }
+
+    // Cross-correlation r[tau] = sum_j x[j] * x[j + tau] via convolution of the
+    // reversed reference window and the comparison span.
+    double reference_energy = 0.0;
+    for (int j = 0; j < window; ++j) {
+      reference[static_cast<size_t>(window - 1 - j)] = frame[j];
+      reference_energy += static_cast<double>(frame[j]) * frame[j];
+    }
+    for (int j = 0; j < comparison_length; ++j) {
+      comparison[static_cast<size_t>(j)] = frame[j];
+    }
+
+    fft->forward(reference.data(), ref_spectrum.data());
+    fft->forward(comparison.data(), cmp_spectrum.data());
+    for (size_t bin = 0; bin < ref_spectrum.size(); ++bin) {
+      ref_spectrum[bin] *= cmp_spectrum[bin];
+    }
+    fft->inverse(ref_spectrum.data(), correlation.data());
+
+    squared_prefix.assign(static_cast<size_t>(comparison_length) + 1, 0.0);
+    for (int j = 0; j < comparison_length; ++j) {
+      squared_prefix[static_cast<size_t>(j + 1)] =
+          squared_prefix[static_cast<size_t>(j)] + static_cast<double>(frame[j]) * frame[j];
+    }
+
+    for (int tau = 0; tau < available_lags; ++tau) {
+      const double shifted_energy = squared_prefix[static_cast<size_t>(tau + window)] -
+                                    squared_prefix[static_cast<size_t>(tau)];
+      const double cross = correlation[static_cast<size_t>(window - 1 + tau)];
+      const double value = reference_energy + shifted_energy - 2.0 * cross;
+      diff[static_cast<size_t>(tau)] = value <= 0.0 ? 0.0f : static_cast<float>(value);
+    }
+    diff[0] = 0.0f;
+  }
+};
+
 }  // namespace
 
 float PitchResult::median_f0() const {
@@ -110,66 +202,9 @@ float PitchResult::mean_f0() const {
 }
 
 std::vector<float> yin_difference(const float* frame, int frame_length, int max_lag) {
-  std::vector<float> diff(max_lag, 0.0f);
-  if (frame_length <= 0 || max_lag <= 0) {
-    return diff;
-  }
-
-  // d(tau) = sum_{j=0}^{W-1} (x[j] - x[j+tau])^2
-  // Per the YIN paper, the summation window W is constant (frame_length / 2)
-  // for all tau values, ensuring consistent normalization.
-  const int window = frame_length / 2;
-  if (window <= 0) {
-    return diff;
-  }
-
-  const int available_lags = std::min(max_lag, frame_length - window + 1);
-  if (available_lags <= 0) {
-    return diff;
-  }
-
-  const int comparison_length = std::min(frame_length, window + available_lags - 1);
-  const int n_fft = next_power_of_2(window + comparison_length - 1);
-  std::vector<float> reference(static_cast<size_t>(n_fft), 0.0f);
-  std::vector<float> comparison(static_cast<size_t>(n_fft), 0.0f);
-
-  // Cross-correlation r[tau] = sum_j x[j] * x[j + tau] via convolution of the
-  // reversed reference window and the comparison span.
-  double reference_energy = 0.0;
-  for (int j = 0; j < window; ++j) {
-    reference[static_cast<size_t>(window - 1 - j)] = frame[j];
-    reference_energy += static_cast<double>(frame[j]) * frame[j];
-  }
-  for (int j = 0; j < comparison_length; ++j) {
-    comparison[static_cast<size_t>(j)] = frame[j];
-  }
-
-  FFT fft(n_fft);
-  std::vector<std::complex<float>> ref_spectrum(static_cast<size_t>(fft.n_bins()));
-  std::vector<std::complex<float>> cmp_spectrum(static_cast<size_t>(fft.n_bins()));
-  fft.forward(reference.data(), ref_spectrum.data());
-  fft.forward(comparison.data(), cmp_spectrum.data());
-  for (size_t bin = 0; bin < ref_spectrum.size(); ++bin) {
-    ref_spectrum[bin] *= cmp_spectrum[bin];
-  }
-  std::vector<float> correlation(static_cast<size_t>(n_fft), 0.0f);
-  fft.inverse(ref_spectrum.data(), correlation.data());
-
-  std::vector<double> squared_prefix(static_cast<size_t>(comparison_length) + 1, 0.0);
-  for (int j = 0; j < comparison_length; ++j) {
-    squared_prefix[static_cast<size_t>(j + 1)] =
-        squared_prefix[static_cast<size_t>(j)] + static_cast<double>(frame[j]) * frame[j];
-  }
-
-  for (int tau = 0; tau < available_lags; ++tau) {
-    const double shifted_energy = squared_prefix[static_cast<size_t>(tau + window)] -
-                                  squared_prefix[static_cast<size_t>(tau)];
-    const double cross = correlation[static_cast<size_t>(window - 1 + tau)];
-    const double value = reference_energy + shifted_energy - 2.0 * cross;
-    diff[static_cast<size_t>(tau)] = value <= 0.0 ? 0.0f : static_cast<float>(value);
-  }
-  diff[0] = 0.0f;
-
+  YinDiffContext ctx;
+  std::vector<float> diff;
+  ctx.compute(frame, frame_length, max_lag, diff);
   return diff;
 }
 
@@ -225,13 +260,17 @@ float yin_find_pitch(const std::vector<float>& cmndf, float threshold, int min_p
   return static_cast<float>(best_tau) + offset;
 }
 
-float yin(const float* frame, int frame_length, int sr, float fmin, float fmax, float threshold) {
-  float confidence;
-  return yin_with_confidence(frame, frame_length, sr, fmin, fmax, threshold, &confidence);
-}
+namespace {
 
-float yin_with_confidence(const float* frame, int frame_length, int sr, float fmin, float fmax,
-                          float threshold, float* out_confidence) {
+/// @brief yin_with_confidence body sharing a reusable YIN difference context.
+///
+/// Identical math to the public yin_with_confidence; the only difference is that
+/// the FFT plan and working buffers come from @p ctx (reused across frames by
+/// yin_track) instead of being allocated per call. @p diff and @p cmndf are
+/// caller-owned scratch reused across frames.
+float yin_with_confidence_ctx(YinDiffContext& ctx, std::vector<float>& diff, const float* frame,
+                              int frame_length, int sr, float fmin, float fmax, float threshold,
+                              float* out_confidence) {
   // Convert frequency to period (in samples)
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / fmax));
   int max_period = static_cast<int>(std::ceil(static_cast<float>(sr) / fmin));
@@ -245,7 +284,7 @@ float yin_with_confidence(const float* frame, int frame_length, int sr, float fm
   }
 
   // Compute YIN
-  std::vector<float> diff = yin_difference(frame, frame_length, max_period + 1);
+  ctx.compute(frame, frame_length, max_period + 1, diff);
   std::vector<float> cmndf = yin_cmndf(diff);
 
   float period = yin_find_pitch(cmndf, threshold, min_period, max_period);
@@ -258,7 +297,7 @@ float yin_with_confidence(const float* frame, int frame_length, int sr, float fm
   // Confidence is 1 - cmndf at the detected period
   int tau = static_cast<int>(std::round(period));
   tau = std::max(0, std::min(tau, static_cast<int>(cmndf.size()) - 1));
-  *out_confidence = 1.0f - cmndf[tau];
+  *out_confidence = 1.0f - cmndf[static_cast<size_t>(tau)];
   *out_confidence = std::max(0.0f, std::min(1.0f, *out_confidence));
 
   // Convert period to frequency
@@ -271,6 +310,21 @@ float yin_with_confidence(const float* frame, int frame_length, int sr, float fm
   }
 
   return freq;
+}
+
+}  // namespace
+
+float yin(const float* frame, int frame_length, int sr, float fmin, float fmax, float threshold) {
+  float confidence;
+  return yin_with_confidence(frame, frame_length, sr, fmin, fmax, threshold, &confidence);
+}
+
+float yin_with_confidence(const float* frame, int frame_length, int sr, float fmin, float fmax,
+                          float threshold, float* out_confidence) {
+  YinDiffContext ctx;
+  std::vector<float> diff;
+  return yin_with_confidence_ctx(ctx, diff, frame, frame_length, sr, fmin, fmax, threshold,
+                                 out_confidence);
 }
 
 PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
@@ -304,12 +358,17 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   result.voiced_prob.resize(n_frames);
   result.voiced_flag.resize(n_frames);
 
+  // Build the FFT plan and difference buffers once and reuse them across every
+  // frame: all derived sizes are constant for a fixed frame_length/fmin/fmax/sr.
+  YinDiffContext yin_ctx;
+  std::vector<float> yin_diff;
+
   for (int i = 0; i < n_frames; ++i) {
     int start = i * config.hop_length;
     float confidence = 0.0f;
 
-    float freq = yin_with_confidence(data + start, config.frame_length, sr, config.fmin,
-                                     config.fmax, config.threshold, &confidence);
+    float freq = yin_with_confidence_ctx(yin_ctx, yin_diff, data + start, config.frame_length, sr,
+                                         config.fmin, config.fmax, config.threshold, &confidence);
 
     result.f0[i] = freq;
     result.voiced_prob[i] = confidence;

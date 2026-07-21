@@ -221,15 +221,20 @@ struct CoreMidiInput::Impl {
   // lock, so the store — and its allocation — stays entirely on this thread and
   // the callback never waits on a store operation.
   void commit_staged_sysex() noexcept {
+    // Reserve the drain scratch up front, off the lock, so the per-payload copy
+    // under sysex_mutex stays within capacity and never allocates. Holding the
+    // lock across a heap allocation would let the MIDI callback's
+    // stage_completed_sysex() block behind this thread's malloc.
+    std::vector<uint8_t> bytes;
+    bytes.reserve(kMaxInputSysExBytes);
     for (;;) {
       midi::SysExHandle handle = 0;
-      std::vector<uint8_t> bytes;
       {
         std::lock_guard<std::mutex> guard(sysex_mutex);
         if (sysex_stage_read == sysex_stage_write) return;
         StagedSysEx& slot = sysex_stage[sysex_stage_read % kSysExStageDepth];
         handle = slot.handle;
-        bytes.assign(slot.bytes.begin(), slot.bytes.end());
+        bytes.assign(slot.bytes.begin(), slot.bytes.end());  // within reserved capacity: no alloc
         ++sysex_stage_read;
       }
       bool stored = false;
