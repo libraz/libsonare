@@ -2,6 +2,11 @@
 
 /// @file f0_provider.h
 /// @brief F0 provider abstraction for monophonic pitch editing.
+///
+/// Core-internal: the F0 provider (and its pYIN implementation) backs the
+/// pitch-editing pipeline and is not exposed on any public surface (C ABI /
+/// Node / Python / WASM). Callers reach it indirectly through the pitch-shift /
+/// pitch-correction entry points.
 
 #include <vector>
 
