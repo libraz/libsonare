@@ -54,6 +54,33 @@ float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
   return common::measure_lufs(samples.data(), samples.size(), sample_rate);
 }
 
+// Coerces an oversample factor to one the true-peak meter implements
+// (1, 2, 4, 8, 16), rounding down to the nearest supported factor. A supported
+// factor is returned unchanged, so a normal chain keeps its exact reported dBTP;
+// an odd/unsupported request (3, 5, 6, ...) still yields a valid measurement
+// instead of the meter throwing at the very end of the chain.
+int supported_true_peak_oversample(int oversample_factor) {
+  if (oversample_factor >= 16) return 16;
+  if (oversample_factor >= 8) return 8;
+  if (oversample_factor >= 4) return 4;
+  if (oversample_factor >= 2) return 2;
+  return 1;
+}
+
+// Oversample factor at which the chain's reported output true peak is measured.
+// It follows the peak-limiting stage the chain actually applied — the loudness
+// limiter when loudness is enabled, otherwise the maximizer true-peak limiter
+// when that ran — decoupled from a disabled loudness stage's configured factor,
+// and coerced to a factor the meter supports so the final measurement never
+// throws for an unsupported configured value.
+int reported_true_peak_oversample(const MasteringChainConfig& config) {
+  int factor = config.loudness.true_peak_oversample;
+  if (!config.loudness.enabled && config.maximizer.true_peak_limiter.enabled) {
+    factor = config.maximizer.true_peak_limiter.config.oversample_factor;
+  }
+  return supported_true_peak_oversample(factor);
+}
+
 // ---------------------------------------------------------------------------
 // Count of enabled stages for progress callback denominator.
 // ---------------------------------------------------------------------------
@@ -270,7 +297,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   {
     Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
     result.output_true_peak_dbtp =
-        common::measure_true_peak_dbtp(audio, config_.loudness.true_peak_oversample);
+        common::measure_true_peak_dbtp(audio, reported_true_peak_oversample(config_));
     result.output_lra = common::measure_lra(audio);
   }
   result.samples = std::move(data);
@@ -464,12 +491,15 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   {
     Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
     Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    result.output_true_peak_dbtp = std::max(
-        common::measure_true_peak_dbtp(left_audio, config_.loudness.true_peak_oversample),
-        common::measure_true_peak_dbtp(right_audio, config_.loudness.true_peak_oversample));
-    std::vector<float> mono = detail::mono_mix(left, right);
-    Audio mono_audio = Audio::from_buffer(mono.data(), mono.size(), sample_rate);
-    result.output_lra = common::measure_lra(mono_audio);
+    const int tp_oversample = reported_true_peak_oversample(config_);
+    result.output_true_peak_dbtp =
+        std::max(common::measure_true_peak_dbtp(left_audio, tp_oversample),
+                 common::measure_true_peak_dbtp(right_audio, tp_oversample));
+    // LRA is measured with BS.1770 channel summing (matching output_lufs), not a
+    // 0.5*(L+R) mono downmix, which would phase-cancel wide / out-of-phase stereo.
+    const std::vector<float> interleaved = detail::interleave_stereo(left, right);
+    result.output_lra =
+        common::measure_lra_interleaved(interleaved.data(), left.size(), 2, sample_rate);
   }
   result.left = std::move(left);
   result.right = std::move(right);

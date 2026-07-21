@@ -11,6 +11,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/common/loudness_measure.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
@@ -64,6 +65,44 @@ TEST_CASE("MasteringChain reports enabled stage names in result", "[mastering][c
   auto result = chain.process_mono(samples.data(), samples.size(), 44100);
   REQUIRE_FALSE(result.stages.empty());
   REQUIRE(result.stages.front() == "eq.tilt");
+}
+
+TEST_CASE("MasteringChain stereo LRA uses channel summing, not a phase-cancelling mono downmix",
+          "[mastering][chain]") {
+  // Anti-phase stereo (R = -L) with a real quiet->loud loudness range. A
+  // 0.5*(L+R) mono downmix collapses to silence and would report ~0 LRA; the
+  // channel-summed measurement (matching output_lufs) must preserve the range.
+  const int sr = 44100;
+  const std::size_t half = static_cast<std::size_t>(sr) * 4;  // 4 s quiet + 4 s loud
+  std::vector<float> left(half * 2);
+  std::vector<float> right(half * 2);
+  const double w = sonare::constants::kTwoPiD * 220.0 / static_cast<double>(sr);
+  for (std::size_t i = 0; i < left.size(); ++i) {
+    const float amp = i < half ? 0.10f : 0.30f;  // ~9.5 dB range, both above the gate
+    const float s = amp * static_cast<float>(std::sin(w * static_cast<double>(i)));
+    left[i] = s;
+    right[i] = -s;  // anti-phase: mono downmix cancels to zero
+  }
+
+  MasteringChain chain(MasteringChainConfig{});
+  auto result = chain.process_stereo(left.data(), right.data(), left.size(), sr);
+  REQUIRE(result.output_lra > 1.0f);
+}
+
+TEST_CASE(
+    "MasteringChain reports a finite true peak for an unsupported oversample with loudness off",
+    "[mastering][chain]") {
+  // With loudness disabled, an unsupported true-peak oversample factor (not
+  // 1/2/4/8/16) must not reach the meter and throw at the end of the chain; the
+  // reported true peak is measured at a coerced supported factor instead.
+  MasteringChainConfig config;
+  config.loudness.enabled = false;
+  config.loudness.true_peak_oversample = 3;  // unsupported
+  MasteringChain chain(config);
+  std::vector<float> samples(4096, 0.1f);
+  MonoChainResult result;
+  REQUIRE_NOTHROW(result = chain.process_mono(samples.data(), samples.size(), 44100));
+  REQUIRE(std::isfinite(result.output_true_peak_dbtp));
 }
 
 TEST_CASE("parse_chain_config_params builds nested config from flat params", "[mastering][chain]") {
