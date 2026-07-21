@@ -18,6 +18,7 @@
 
 #include "core/audio.h"
 #include "core/audio_io.h"
+#include "sonare.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -122,6 +123,18 @@ TEST_CASE("CLI version command", "[cli]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"cli_version\""));
     REQUIRE_THAT(output, ContainsSubstring("\"lib_version\""));
+  }
+
+  SECTION("cli_version tracks the compiled library version") {
+    // The CLI version must be derived from the build, not a stale literal, so
+    // it always matches the library version it ships with.
+    const std::string expected_cli = std::string("\"cli_version\": \"") + version() + "\"";
+    const std::string expected_lib = std::string("\"lib_version\": \"") + version() + "\"";
+    auto [code, output] = exec_command(CLI + " version --json");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring(expected_cli));
+    REQUIRE_THAT(output, ContainsSubstring(expected_lib));
+    REQUIRE_THAT(output, !ContainsSubstring("1.0.0"));
   }
 }
 
@@ -284,6 +297,100 @@ TEST_CASE("CLI rejects extra positionals and preserves flag and negative-value p
   }
 #endif
 }
+
+TEST_CASE("CLI honors --flag=false to disable a boolean flag", "[cli][argument-contract]") {
+  // A presence-only flag given `=false`/`=0`/`=no`/`=off` must be treated as
+  // absent, not enabled. fix-frames pads by default; `--no-pad` disables padding.
+  auto [on_code, on_output] = exec_command(CLI + " fix-frames --values 1,2,3,4,5 --no-pad --json");
+  REQUIRE(on_code == 0);
+  REQUIRE_THAT(on_output, ContainsSubstring("[1, 2, 3, 4, 5]"));
+
+  // `--no-pad=false` disables the flag, so padding is applied (leading 0), the
+  // same as omitting the flag entirely.
+  auto [off_code, off_output] =
+      exec_command(CLI + " fix-frames --values 1,2,3,4,5 --no-pad=false --json");
+  REQUIRE(off_code == 0);
+  REQUIRE_THAT(off_output, ContainsSubstring("[0, 1, 2, 3, 4, 5]"));
+
+  // `--no-pad=true` enables it, matching the bare flag.
+  auto [true_code, true_output] =
+      exec_command(CLI + " fix-frames --values 1,2,3,4,5 --no-pad=true --json");
+  REQUIRE(true_code == 0);
+  REQUIRE_THAT(true_output, ContainsSubstring("[1, 2, 3, 4, 5]"));
+}
+
+TEST_CASE("CLI applies every repeated --set assignment, not just the last",
+          "[cli][argument-contract]") {
+  // Regression: the native --set was stored in a std::map keyed on the option
+  // name, so `--set a --set b` silently kept only b. A repeated --set must apply
+  // every assignment, matching the Python CLI's argparse action="append".
+  const std::string preset_path = unique_temp_path("_preset.json");
+  auto [gen_code, gen_output] = exec_command(CLI + " voice-preset > " + preset_path);
+  REQUIRE(gen_code == 0);
+
+  auto [code, output] =
+      exec_command(CLI + " voice-preset-validate " + preset_path +
+                   " --set dsp.retune.semitones=-9.375 --set dsp.formant.factor=1.5");
+  std::remove(preset_path.c_str());
+  REQUIRE(code == 0);
+  // Both assignments must land in the normalized config. The first (-9.375) is the
+  // discriminator: before the fix it was dropped and semitones kept its default.
+  REQUIRE_THAT(output, ContainsSubstring("-9.375"));
+  REQUIRE_THAT(output, ContainsSubstring("1.5"));
+}
+
+TEST_CASE("CLI rejects -o for commands that produce no file output", "[cli][argument-contract]") {
+  // A pure-analysis command has no artifact to write, so accepting -o would
+  // exit 0 while silently discarding the requested destination. It must fail
+  // before dispatch and never create the file.
+  create_test_wav(TEST_WAV);
+  const std::string out = unique_temp_path("_rejected.json");
+  std::remove(out.c_str());
+
+  auto [code, output] = exec_command(CLI + " bpm " + TEST_WAV + " -o " + out + " -q");
+  REQUIRE(code != 0);
+  REQUIRE_THAT(output, ContainsSubstring("does not produce a file output"));
+  std::ifstream f(out);
+  REQUIRE_FALSE(f.good());
+
+  // The long-form spelling is rejected identically.
+  auto [long_code, long_output] =
+      exec_command(CLI + " lufs " + TEST_WAV + " --output " + out + " -q");
+  REQUIRE(long_code != 0);
+  REQUIRE_THAT(long_output, ContainsSubstring("does not produce a file output"));
+}
+
+TEST_CASE("CLI effect commands require an output destination", "[cli]") {
+  // Offline-effect output contract: commands that render audio require -o and
+  // report the same invalid-parameter exit code when it is missing.
+  create_test_wav(TEST_WAV);
+
+  SECTION("normalize") {
+    auto [code, output] = exec_command(CLI + " normalize " + TEST_WAV + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("requires output file"));
+  }
+
+  SECTION("resample") {
+    auto [code, output] = exec_command(CLI + " resample --target-rate 16000 " + TEST_WAV + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("requires output file"));
+  }
+}
+
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+TEST_CASE("CLI estimate-room accepts both band-count spellings", "[cli][argument-contract]") {
+  // Native historically spelled the flag --n-bands; the Python CLI uses
+  // --n-octave-bands. Both must be recognized so scripts against either surface
+  // keep working. Argument validation runs before audio loading, so a missing
+  // input file (usage error) still proves the option itself was accepted.
+  auto [native_code, native_output] = exec_command(CLI + " estimate-room --n-bands 6 -q");
+  REQUIRE_THAT(native_output, !ContainsSubstring("Unknown option"));
+
+  auto [alias_code, alias_output] = exec_command(CLI + " estimate-room --n-octave-bands 6 -q");
+  REQUIRE_THAT(alias_output, !ContainsSubstring("Unknown option"));
+}
+#endif
 
 TEST_CASE("CLI info command", "[cli]") {
   create_test_wav(TEST_WAV);
@@ -1294,6 +1401,29 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("--sf2"));
     REQUIRE_THAT(output, ContainsSubstring("--synth-json"));
     REQUIRE_THAT(output, ContainsSubstring("SoundFont-backed bounces"));
+  }
+
+  SECTION("missing subcommand is a usage error, not an invalid state") {
+    // A bare `project` with no subcommand prints usage and exits with the usage
+    // code (2), not the project invalid-state code (9).
+    auto [code, output] = exec_command(CLI + " project");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("PROJECT SUBCOMMANDS"));
+  }
+
+  SECTION("oversized import is rejected before allocation") {
+    // A project/MIDI file above the byte cap is refused with a clear diagnostic
+    // (invalid-parameter exit) instead of an unbounded allocation.
+    const std::string big = unique_temp_path("_oversized.json");
+    {
+      std::ofstream f(big, std::ios::binary);
+      f.seekp((64LL * 1024 * 1024) + 1);
+      f.put('\0');
+    }
+    auto [code, output] = exec_command(CLI + " project validate --in " + big + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("exceeds"));
+    std::remove(big.c_str());
   }
 }
 #endif  // SONARE_WITH_ARRANGEMENT

@@ -273,15 +273,17 @@ std::vector<int> require_int_values(const CliArgs& args) {
 // ============================================================================
 
 int cmd_version(const CliArgs& args) {
+  // The CLI ships in lockstep with the library, so both report the same compiled
+  // version (SONARE_VERSION_STRING via version()) rather than a stale literal.
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
-        .kv("cli_version", "1.0.0")
+        .kv("cli_version", version())
         .kv("lib_version", version())
         .end_object()
         .print();
   } else {
-    std::cout << "sonare-cli version 1.0.0\n";
+    std::cout << "sonare-cli version " << version() << "\n";
     std::cout << "libsonare version " << version() << "\n";
   }
   return 0;

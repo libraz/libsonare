@@ -2,6 +2,16 @@
 
 #ifdef SONARE_WITH_ARRANGEMENT
 
+// Usage exit code, mirroring kExitUsage in tools/sonare_cli.cpp. A missing or
+// blank `project` subcommand is a usage error; without this the handler's plain
+// `1` would be remapped to the project invalid-state code (9) by main().
+constexpr int kExitUsage = 2;
+
+// Upper bound on a project JSON / SMF / MIDI 2.0 file loaded into memory, mirrored
+// from the Python CLI's _MAX_PROJECT_OR_MIDI_BYTES. Bounds the allocation so an
+// oversized (or hostile) input is rejected instead of exhausting memory.
+constexpr size_t kMaxProjectOrMidiBytes = 64ull * 1024ull * 1024ull;
+
 struct ProjectHandle {
   SonareProject* ptr = nullptr;
   ~ProjectHandle() { sonare_project_destroy(ptr); }
@@ -21,10 +31,19 @@ void project_report_error(const std::string& what, SonareError err) {
 }
 
 // Reads an arbitrary file into a byte buffer (binary-safe). The CLI owns file
-// I/O; the core / C ABI exchange in-memory buffers only.
+// I/O; the core / C ABI exchange in-memory buffers only. An input larger than
+// kMaxProjectOrMidiBytes is rejected before allocation with a clear diagnostic
+// (mapped to the invalid-parameter exit code by main()).
 bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
   std::ifstream file(path, std::ios::binary);
   if (!file.is_open()) return false;
+  file.seekg(0, std::ios::end);
+  const std::streamoff size = file.tellg();
+  if (size > static_cast<std::streamoff>(kMaxProjectOrMidiBytes)) {
+    throw std::invalid_argument("input file exceeds " + std::to_string(kMaxProjectOrMidiBytes) +
+                                " byte limit: " + path);
+  }
+  file.seekg(0, std::ios::beg);
   out->assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
   return true;
 }
@@ -533,7 +552,7 @@ int cmd_project(const CliArgs& args, const Audio&) {
   const std::string& sub = args.input_file;
   if (args.help || sub.empty() || sub == "help") {
     print_project_usage(sub.empty() && !args.help ? std::cerr : std::cout);
-    return (sub.empty() && !args.help) ? 1 : 0;
+    return (sub.empty() && !args.help) ? kExitUsage : 0;
   }
   if (sub == "abi") return cmd_project_abi(args);
   if (sub == "new") return cmd_project_new(args);

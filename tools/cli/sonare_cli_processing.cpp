@@ -1,5 +1,12 @@
 #include "sonare_cli.h"
 
+// Offline-effect output contract: a command that renders an audio buffer
+// requires -o/--output. Running it without a destination has no useful result
+// (the render would be computed and thrown away), so the missing-output case is
+// a hard error mapped to the invalid-parameter exit code, not a silent no-op.
+// trim-silence is the deliberate exception: it doubles as an analysis command
+// (it reports the trimmed length), so its output stays optional.
+
 int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
   if (args.output_file.empty()) {
     std::cerr << color::red << "Error: pitch-shift requires output file (-o)" << color::reset

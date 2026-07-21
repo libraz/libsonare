@@ -583,7 +583,10 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
   if (cfg.aspect_hint_lh == 0.0f) cfg.aspect_hint_lh = 1.0f;
   cfg.reference_absorption = args.get_float("reference-absorption", cfg.reference_absorption);
   cfg.prefer_eyring = !args.has("sabine");
-  cfg.acoustic.n_octave_bands = args.get_int("n-bands", cfg.acoustic.n_octave_bands);
+  // Accept both --n-bands (native spelling) and --n-octave-bands (Python CLI
+  // spelling) so scripts written against either surface keep working.
+  cfg.acoustic.n_octave_bands =
+      args.get_int("n-bands", args.get_int("n-octave-bands", cfg.acoustic.n_octave_bands));
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
   if (args.json_output) {

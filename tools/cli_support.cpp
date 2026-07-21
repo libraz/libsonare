@@ -317,6 +317,37 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
   }
 }
 
+namespace {
+// True for the falsey inline spellings of a boolean flag (`--flag=false`,
+// `=0`, `=no`, `=off`), case-insensitively. Used so `--triads-only=false`
+// disables the flag instead of enabling it — a presence-only flag would
+// otherwise treat any `=value` as "present" and invert the caller's intent.
+bool is_false_flag_literal(const std::string& value) {
+  std::string lowered;
+  lowered.reserve(value.size());
+  for (char c : value)
+    lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  return lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off";
+}
+
+// Options that may be supplied more than once accumulate their values as a
+// comma-joined list instead of overwriting, so the consumer (which splits on
+// ',') applies every occurrence. Mirrors the Python CLI's argparse
+// action="append" for --set; without it a repeated --set silently kept only the
+// last assignment.
+void assign_option_value(CliArgs& args, const std::string& key, const std::string& value) {
+  if (key == "set") {
+    auto it = args.options.find(key);
+    if (it != args.options.end() && !it->second.empty()) {
+      it->second += ',';
+      it->second += value;
+      return;
+    }
+  }
+  args.options[key] = value;
+}
+}  // namespace
+
 void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[], int& i, int argc,
                              const std::string* inline_value) {
   enum class Arity { Unknown, Flag, RequiredValue, OptionalValue };
@@ -340,7 +371,14 @@ void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[]
   const auto found = arities.find(key);
   const Arity arity = found == arities.end() ? Arity::RequiredValue : found->second;
   if (arity == Arity::Flag) {
-    args.options[key] = "true";
+    // `--flag=false` (and 0/no/off) disables the flag; any other spelling (or a
+    // bare `--flag`) enables it. `has()` is presence-only, so a disabled flag
+    // must not leave the key in the map.
+    if (inline_value != nullptr && is_false_flag_literal(*inline_value)) {
+      args.options.erase(key);
+    } else {
+      args.options[key] = "true";
+    }
     return;
   }
 
@@ -349,7 +387,7 @@ void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[]
       args.options[key] = "";
       args.missing_value_options.push_back("--" + key);
     } else {
-      args.options[key] = *inline_value;
+      assign_option_value(args, key, *inline_value);
     }
     return;
   }
@@ -365,7 +403,7 @@ void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[]
     const bool is_option = next.size() > 1 && next[0] == '-' && !is_negative_num;
 
     if (!is_option) {
-      args.options[key] = argv[++i];
+      assign_option_value(args, key, argv[++i]);
       return;
     }
   }
@@ -462,7 +500,9 @@ const std::map<std::string, CommandOptionSchema>& command_option_schemas() {
         {"sabine"},
         {}}},
       {"estimate-room",
-       {{"aspect-lw", "aspect-lh", "reference-absorption", "n-bands"}, {"sabine"}, {}}},
+       {{"aspect-lw", "aspect-lh", "reference-absorption", "n-bands", "n-octave-bands"},
+        {"sabine"},
+        {}}},
       {"room-morph",
        {{"length", "width", "height", "absorption", "source-x", "source-y", "source-z",
          "listener-x", "listener-y", "listener-z", "suppression", "wet", "ism-order", "seed",
@@ -506,6 +546,50 @@ bool contains(const std::vector<std::string>& values, const std::string& value) 
   return std::find(values.begin(), values.end(), value) != values.end();
 }
 
+// Commands that render a file artifact and therefore legitimately consume the
+// global -o/--output. Every other command prints its result to stdout, so an
+// -o given to them would be silently discarded. Mirrors the Python CLI's
+// output-capable command set (bindings/python/src/libsonare/cli.py), extended
+// with the native-only file-writing commands (gain/fade/filter/tone/chirp/
+// clicks/pre- & de-emphasis/mel- & mfcc-to-audio/mastering-pair-processor).
+bool command_produces_output(const std::string& command) {
+  static const std::vector<std::string> output_capable = {
+      // Offline effects / DSP renders.
+      "pitch-shift",
+      "time-stretch",
+      "pitch-correct",
+      "note-stretch",
+      "voice-change",
+      "hpss",
+      "preemphasis",
+      "deemphasis",
+      "trim-silence",
+      "normalize",
+      "gain",
+      "fade",
+      "filter",
+      "resample",
+      "tone",
+      "chirp",
+      "clicks",
+      // Feature inversion renders.
+      "mel-to-audio",
+      "mfcc-to-audio",
+      // Acoustic-simulation renders.
+      "synthesize-rir",
+      "room-morph",
+      // Mastering / mixing renders (output optional but supported).
+      "mastering",
+      "mastering-processor",
+      "mastering-pair-processor",
+      "eq",
+      "mix",
+      // Headless project: new/validate/bounce/import/export write files.
+      "project",
+  };
+  return contains(output_capable, command);
+}
+
 }  // namespace
 
 std::string validate_cli_arguments(const CliArgs& args, bool requires_audio) {
@@ -524,6 +608,14 @@ std::string validate_cli_arguments(const CliArgs& args, bool requires_audio) {
   }
   if (!args.missing_value_options.empty()) {
     return "Missing value for option '" + args.missing_value_options.front() + "'";
+  }
+
+  // The global -o/--output is accepted by every command for a uniform CLI shape,
+  // but a pure-analysis command has no artifact to write. Reject it there so a
+  // requested destination is never silently discarded (exit 0 while producing
+  // no file). Output-capable commands consume it in their handlers.
+  if (!args.output_file.empty() && !command_produces_output(args.command)) {
+    return "Command '" + args.command + "' does not produce a file output; remove -o/--output";
   }
 
   size_t max_positionals = requires_audio ? 1u : 0u;
