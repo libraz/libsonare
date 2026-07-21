@@ -1185,11 +1185,13 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
         assert left_rms > right_rms
 
 
-def test_engine_track_lane_send_timing_defaults_to_post_fader() -> None:
+def test_engine_track_lane_accepts_send_timing_aliases() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
-        # An explicit timing value and the camelCase / snake_case aliases are
-        # all accepted; omitting it keeps the prior post-fader behavior.
+        # A string timing, the snake_case ``send_timing`` alias, and an omitted
+        # timing key are all accepted without error. The engine exposes no
+        # readback for the effective send timing, so this only asserts that the
+        # three input variants are configured successfully.
         engine.set_track_lanes(
             [
                 {
