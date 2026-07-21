@@ -829,6 +829,21 @@ TEST_CASE("invalid time signature is rejected with a diagnostic", "[serialize]")
   CHECK(found);
 }
 
+TEST_CASE("duplicate marker id is rejected with a diagnostic", "[serialize]") {
+  // The loader deduplicates marker ids through a hash set (O(n) overall); a
+  // repeated id must still be rejected rather than silently merged.
+  auto result = project_from_json(
+      "{\"version\": 1, \"markers\": [{\"id\": 5, \"ppq\": 0.0}, "
+      "{\"id\": 5, \"ppq\": 100.0}]}");
+  CHECK_FALSE(result.ok());
+  REQUIRE(result.has_error());
+  bool found = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "duplicate_entity_id") found = true;
+  }
+  CHECK(found);
+}
+
 TEST_CASE("present invalid project integer and enum fields report invalid_format", "[serialize]") {
   const std::vector<std::string> documents = {
       // Finite-but-unrepresentable values must never reach a floating-to-int cast.

@@ -149,17 +149,17 @@ bool bool_or(const Value& obj, const char* key, bool fallback) {
 // to 0 / 0xFFFFFFFF and recorded as a warning, instead of being silently zeroed.
 // Absent / non-numeric (the forward-compatible default) stays a silent 0.
 uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
-                           std::vector<Diagnostic>* diagnostics) {
+                           BoundedDiagnostics* diagnostics) {
   const auto* v = obj.find(key);
   if (!v || !v->is_number()) return 0;
   const double d = v->as_number();
   constexpr double kMaxWord = 4294967295.0;  // 2^32 - 1
   if (!std::isfinite(d) || d < 0.0 || d > kMaxWord) {
     const uint32_t clamped = (!std::isfinite(d) || d < 0.0) ? 0u : static_cast<uint32_t>(kMaxWord);
-    diagnostics->push_back({DiagnosticSeverity::kWarning, "midi_word_out_of_range",
-                            "MIDI event field \"" + std::string(key) + "\" on clip " +
-                                std::to_string(clip_id) + " is out of range; clamped to " +
-                                std::to_string(clamped)});
+    diagnostics->warn("midi_word_out_of_range", "MIDI event field \"" + std::string(key) +
+                                                    "\" on clip " + std::to_string(clip_id) +
+                                                    " is out of range; clamped to " +
+                                                    std::to_string(clamped));
     return clamped;
   }
   uint32_t converted = 0;

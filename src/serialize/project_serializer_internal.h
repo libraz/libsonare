@@ -45,6 +45,56 @@ bool base64_decode(const std::string& text, std::vector<uint8_t>* out,
                    size_t max_output_bytes = std::numeric_limits<size_t>::max());
 
 // ===========================================================================
+// Bounded decode-path diagnostics.
+// ===========================================================================
+
+// Upper bound on the number of decode-path warning diagnostics retained. A
+// malformed document can carry millions of out-of-range clips or MIDI events;
+// emitting one diagnostic string per entry would make reporting a far larger
+// allocation than the input itself. Past the cap warnings are counted, not
+// stored, and finalize() appends a single summary. Matches the referential
+// integrity cap in the deserialize driver.
+constexpr std::size_t kMaxDecodeDiagnostics = 128;
+
+// Bounded sink for decode-path warning diagnostics. Wraps the result diagnostic
+// vector and drops (but counts) warnings once the cap is reached; call
+// finalize() once after decoding to append the suppression summary. Error
+// diagnostics are appended to the vector directly and are never bounded.
+class BoundedDiagnostics {
+ public:
+  explicit BoundedDiagnostics(std::vector<Diagnostic>* out, std::size_t cap = kMaxDecodeDiagnostics)
+      : out_(out), cap_(cap) {}
+
+  // Appends a warning, or counts it toward the suppressed total once the cap is
+  // reached.
+  void warn(std::string code, std::string message) {
+    if (emitted_ < cap_) {
+      out_->push_back({DiagnosticSeverity::kWarning, std::move(code), std::move(message)});
+      ++emitted_;
+    } else {
+      ++suppressed_;
+    }
+  }
+
+  // Appends a single summary diagnostic if any warnings were suppressed.
+  void finalize() {
+    if (suppressed_ > 0) {
+      out_->push_back(
+          {DiagnosticSeverity::kWarning, "decode_diagnostics_truncated",
+           std::to_string(suppressed_) + " additional decode diagnostics were suppressed"});
+    }
+  }
+
+  std::size_t suppressed() const noexcept { return suppressed_; }
+
+ private:
+  std::vector<Diagnostic>* out_;
+  std::size_t cap_;
+  std::size_t emitted_ = 0;
+  std::size_t suppressed_ = 0;
+};
+
+// ===========================================================================
 // Small read helpers (forward-compatible: missing / wrong-typed fields fall
 // back to the default).
 // ===========================================================================
@@ -57,7 +107,7 @@ bool parse_uint32_key(const std::string& key, uint32_t* out);
 std::string str_or(const Value& obj, const char* key, const std::string& fallback);
 bool bool_or(const Value& obj, const char* key, bool fallback);
 uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
-                           std::vector<Diagnostic>* diagnostics);
+                           BoundedDiagnostics* diagnostics);
 const Array* array_at(const Value& obj, const char* key);
 const Object* object_at(const Value& obj, const char* key);
 double num_or_any(const Value& obj, const char* primary, const char* legacy, double fallback);

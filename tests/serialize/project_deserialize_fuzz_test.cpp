@@ -83,6 +83,41 @@ TEST_CASE("malformed and garbage input never crashes and yields diagnostics", "[
   }
 }
 
+TEST_CASE("decode-path warning diagnostics are bounded for a hostile document", "[serialize]") {
+  // A document with far more malformed clips than the decode diagnostic cap must
+  // not emit one warning per clip: the retained count is bounded and a single
+  // suppression summary is appended, so reporting cannot dwarf the input.
+  constexpr int kClipCount = 4000;
+  std::string json =
+      "{\"version\": 1, \"sample_rate\": 48000, "
+      "\"sources\": [{\"id\": 1, \"kind\": 0, \"uri\": \"file://x.wav\"}], "
+      "\"tracks\": [{\"id\": 1, \"kind\": 0, \"name\": \"T\"}], "
+      "\"clips\": [";
+  for (int i = 0; i < kClipCount; ++i) {
+    if (i > 0) json += ",";
+    // Negative gain triggers a clip_gain_clamped warning; every other field is
+    // valid so the source/track references never add referential warnings.
+    json += "{\"id\": " + std::to_string(i + 1) +
+            ", \"track_id\": 1, \"source_id\": 1, \"start_ppq\": 0, "
+            "\"length_ppq\": 960, \"gain\": -1}";
+  }
+  json += "]}";
+
+  const auto result = safe_parse(json);
+  REQUIRE(result.ok());
+
+  size_t clamp_warnings = 0;
+  bool has_summary = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "clip_gain_clamped") ++clamp_warnings;
+    if (d.code == "decode_diagnostics_truncated") has_summary = true;
+  }
+  // Bounded well below the clip count, with the suppression summary present.
+  CHECK(clamp_warnings <= 128);
+  CHECK(has_summary);
+  CHECK(result.diagnostics.size() < static_cast<size_t>(kClipCount));
+}
+
 TEST_CASE("deeply nested input is rejected without stack overflow", "[serialize]") {
   std::string deep;
   for (int i = 0; i < 5000; ++i) deep += "[";

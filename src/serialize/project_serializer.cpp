@@ -50,8 +50,11 @@ bool count_array_entities(const Value& value, std::size_t limit, std::size_t* to
 
 std::size_t base64_decoded_upper_bound(const std::string& text) noexcept {
   std::size_t decoded_size = (text.size() / 4u) * 3u;
-  if (!text.empty() && text.back() == '=') --decoded_size;
-  if (text.size() >= 2u && text[text.size() - 2u] == '=') --decoded_size;
+  // Guard each decrement: a malformed short payload (e.g. "==") has a zero base
+  // estimate, and an unguarded `--` would wrap to SIZE_MAX and misclassify the
+  // rejection as a resource-limit overflow instead of a plain format error.
+  if (decoded_size > 0u && !text.empty() && text.back() == '=') --decoded_size;
+  if (decoded_size > 0u && text.size() >= 2u && text[text.size() - 2u] == '=') --decoded_size;
   return decoded_size;
 }
 
@@ -339,6 +342,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
     if (max_track_id > 0) project.ensure_next_track_id(max_track_id);
 
+    // Per-entry decode warnings (malformed clips / MIDI events) are bounded by a
+    // shared sink so a hostile document cannot make diagnostic reporting a far
+    // larger allocation than the input; finalized just before the successful
+    // return. Fatal errors bypass this and abort the load directly.
+    BoundedDiagnostics decode_diagnostics(&result.diagnostics);
+
     // Clips (insert verbatim; bypasses overlap validation to preserve the saved
     // arrangement exactly, including comp lanes that intentionally overlap).
     uint32_t max_clip_id = 0;
@@ -355,16 +364,15 @@ DeserializeResult project_from_json(const std::string& json_text) {
         const uint32_t id = c.id;
         if (c.gain < 0.0f) {
           c.gain = 0.0f;
-          result.diagnostics.push_back(
-              {DiagnosticSeverity::kWarning, "clip_gain_clamped",
-               "clip " + std::to_string(id) + " had a negative gain; clamped to zero"});
+          decode_diagnostics.warn("clip_gain_clamped", "clip " + std::to_string(id) +
+                                                           " had a negative gain; clamped to zero");
         }
         if (!std::isfinite(c.start_ppq) || !std::isfinite(c.length_ppq) ||
             !std::isfinite(c.source_offset_ppq) || c.start_ppq < 0.0 || c.length_ppq <= 0.0 ||
             c.source_offset_ppq < 0.0) {
-          result.diagnostics.push_back(
-              {DiagnosticSeverity::kWarning, "invalid_clip_ppq",
-               "clip " + std::to_string(id) + " has PPQ values outside the public edit contract"});
+          decode_diagnostics.warn(
+              "invalid_clip_ppq",
+              "clip " + std::to_string(id) + " has PPQ values outside the public edit contract");
         }
         if (!clip_ids.insert(id).second ||
             !project.insert_clip_raw(std::move(c), arrangement::Project::kAppend, true)) {
@@ -467,6 +475,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     // Markers.
     uint32_t max_marker_id = 0;
+    std::unordered_set<uint32_t> marker_ids;
     if (const auto* arr = array_at(root, "markers")) {
       for (const auto& mv : *arr) {
         if (!mv.is_object()) continue;
@@ -493,9 +502,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
           reject_entity_id("marker", m.id, false);
           return result;
         }
-        if (std::any_of(
-                project.markers().begin(), project.markers().end(),
-                [&](const arrangement::ProjectMarker& existing) { return existing.id == m.id; })) {
+        if (!marker_ids.insert(m.id).second) {
           reject_entity_id("marker", m.id, true);
           return result;
         }
@@ -596,8 +603,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
           if (!ev.is_object()) continue;
           arrangement::MidiClipEvent e;
           e.ppq = num_or(ev, "ppq", 0.0);
-          e.data0 = midi_word_or_warn(ev, "data0", clip_id, &result.diagnostics);
-          e.data1 = midi_word_or_warn(ev, "data1", clip_id, &result.diagnostics);
+          e.data0 = midi_word_or_warn(ev, "data0", clip_id, &decode_diagnostics);
+          e.data1 = midi_word_or_warn(ev, "data1", clip_id, &decode_diagnostics);
           e.sysex_handle = uint_or(ev, "sysex_handle", 0);
           events.push_back(e);
         }
@@ -605,6 +612,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
       }
     }
 
+    decode_diagnostics.finalize();
     result.project = std::move(project);
     return result;
   } catch (const SonareException& e) {
