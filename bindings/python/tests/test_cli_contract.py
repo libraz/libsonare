@@ -335,11 +335,10 @@ def test_rir_sabine_flag_is_wired(tmp_path, needs_audio) -> None:
     assert default_out.read_bytes() != sabine_out.read_bytes()
 
 
-def test_readme_project_synth_presets_route_is_installed_smoke() -> None:
-    readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
-    assert "sonare project synth-presets" in readme
-    assert "sonare synth-presets" not in readme
-
+def test_project_synth_presets_route_is_installed_smoke() -> None:
+    # CLI reference lives on the docs site rather than the package README, so this
+    # only smoke-tests that the `sonare project synth-presets` route is installed
+    # and returns a preset list.
     result = _run_console("project", "synth-presets", "--json")
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
