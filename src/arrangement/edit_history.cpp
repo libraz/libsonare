@@ -36,6 +36,16 @@ class EditCommandGroup final : public EditCommand {
 
 }  // namespace
 
+void EditHistory::push_undo(Entry entry) {
+  undo_stack_.push_back(std::move(entry));
+  // Bound resident memory: evict the oldest entries once the depth cap is
+  // exceeded. max_undo_depth_ >= 1 by construction, so at least the most recent
+  // edit is always retained.
+  while (undo_stack_.size() > max_undo_depth_) {
+    undo_stack_.pop_front();
+  }
+}
+
 bool EditHistory::apply(EditCommandPtr command) {
   if (command == nullptr) {
     return false;
@@ -65,7 +75,7 @@ bool EditHistory::apply(EditCommandPtr command) {
   Entry entry;
   entry.forward = std::move(command);
   entry.inverse = std::move(inverse);
-  undo_stack_.push_back(std::move(entry));
+  push_undo(std::move(entry));
   redo_stack_.clear();
   return true;
 }
@@ -113,7 +123,7 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
   Entry entry;
   entry.forward = std::make_unique<EditCommandGroup>(std::move(forward));
   entry.inverse = std::make_unique<EditCommandGroup>(std::move(inverse));
-  undo_stack_.push_back(std::move(entry));
+  push_undo(std::move(entry));
   redo_stack_.clear();
   return true;
 }
@@ -167,7 +177,9 @@ bool EditHistory::redo() {
   if (inverse != nullptr) {
     entry.inverse = std::move(inverse);
   }
-  undo_stack_.push_back(std::move(entry));
+  // Total entries (undo + redo) are conserved across undo/redo, so this never
+  // exceeds the cap; routed through push_undo for uniformity.
+  push_undo(std::move(entry));
   return true;
 }
 

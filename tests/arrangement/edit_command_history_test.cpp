@@ -1097,6 +1097,27 @@ TEST_CASE("Deterministic replay of a seeded command sequence", "[arrangement]") 
   CHECK(project_equal(a, b));
 }
 
+TEST_CASE("EditHistory bounds the undo stack to a maximum depth", "[arrangement]") {
+  Fixture f;
+  EditHistory h{f.project};
+  // Apply well past the default cap (512); each apply pushes one undo entry and
+  // deep-copies the affected clip/MIDI state, so an unbounded stack would grow
+  // resident memory without limit.
+  constexpr int kApplied = 700;
+  for (int i = 0; i < kApplied; ++i) {
+    REQUIRE(h.apply(std::make_unique<RenameTrack>(f.audio_track, "n" + std::to_string(i))));
+  }
+  // The oldest entries are evicted so the stack never exceeds the cap.
+  REQUIRE(h.undo_depth() == 512);
+  // Undo still works across the entire retained window.
+  int undone = 0;
+  while (h.can_undo()) {
+    REQUIRE(h.undo());
+    ++undone;
+  }
+  REQUIRE(undone == 512);
+}
+
 TEST_CASE("Full undo of a seeded sequence returns to the initial state", "[arrangement]") {
   Fixture f;
   EditHistory h{f.project};

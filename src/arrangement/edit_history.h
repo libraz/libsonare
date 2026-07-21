@@ -12,6 +12,8 @@
 /// value-oriented. Replaying the same command sequence on a fresh history yields
 /// an identical Project (deterministic ids via the model's monotonic counters).
 
+#include <cstddef>
+#include <deque>
 #include <vector>
 
 #include "arrangement/edit_command.h"
@@ -70,10 +72,23 @@ class EditHistory {
     EditCommandPtr inverse;
   };
 
+  // Upper bound on retained undo entries. Each entry deep-copies the affected
+  // clip events / SysEx payloads, so an unbounded stack grows resident memory
+  // without limit across a long editing session. When the bound is exceeded the
+  // OLDEST entries are evicted (a ring over a deque) so a generous, practical
+  // undo window is preserved while memory stays bounded. The redo stack is
+  // bounded implicitly: it never holds more entries than have been undone.
+  static constexpr std::size_t kDefaultMaxUndoDepth = 512;
+
+  // Pushes an entry onto the undo stack, evicting the oldest entries so the
+  // stack never exceeds max_undo_depth_.
+  void push_undo(Entry entry);
+
   Project project_;
   MidiContentStore midi_content_;
-  std::vector<Entry> undo_stack_;
-  std::vector<Entry> redo_stack_;
+  std::deque<Entry> undo_stack_;
+  std::deque<Entry> redo_stack_;
+  std::size_t max_undo_depth_ = kDefaultMaxUndoDepth;
 };
 
 }  // namespace sonare::arrangement
