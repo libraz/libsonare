@@ -1,7 +1,7 @@
 {
   "name": "@libraz/libsonare-native",
   "version": "1.5.3",
-  "description": "Audio analysis library - Node.js binding (native N-API)",
+  "description": "Audio analysis, mastering, mixing, and MIDI synthesis — native Node.js (N-API)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,6 +20,36 @@
     "test:watch": "vitest"
   },
   "license": "Apache-2.0",
+  "keywords": [
+    "audio",
+    "music",
+    "analysis",
+    "mir",
+    "bpm",
+    "key",
+    "tempo",
+    "chords",
+    "audio-processing",
+    "dsp",
+    "mastering",
+    "mixing",
+    "loudness",
+    "lufs",
+    "midi",
+    "synthesizer",
+    "soundfont",
+    "room-acoustics",
+    "napi",
+    "native-addon"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/libraz/libsonare.git"
+  },
+  "bugs": {
+    "url": "https://github.com/libraz/libsonare/issues"
+  },
+  "homepage": "https://libsonare.libraz.net",
   "engines": {
     "node": ">=22"
   },

@@ -5,14 +5,33 @@ build-backend = "hatchling.build"
 [project]
 name = "libsonare"
 version = "1.5.3"
-description = "Fast audio analysis library with C++ and Python bindings"
+description = "Audio analysis, mastering, mixing, and MIDI synthesis for Python (fast C++ core)"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [
     { name = "libraz", email = "libraz@libraz.net" },
 ]
 readme = "README.md"
-keywords = ["audio", "music", "analysis", "mir", "bpm", "key", "tempo", "dsp"]
+keywords = [
+    "audio",
+    "music",
+    "analysis",
+    "mir",
+    "bpm",
+    "key",
+    "tempo",
+    "chords",
+    "audio-processing",
+    "dsp",
+    "mastering",
+    "mixing",
+    "loudness",
+    "lufs",
+    "midi",
+    "synthesizer",
+    "soundfont",
+    "room-acoustics",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -25,6 +44,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Multimedia :: Sound/Audio :: Editors",
+    "Topic :: Multimedia :: Sound/Audio :: Mixers",
+    "Topic :: Multimedia :: Sound/Audio :: Sound Synthesis",
     "Topic :: Scientific/Engineering",
     "Typing :: Typed",
 ]
@@ -47,7 +69,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/libraz/libsonare"
+Homepage = "https://libsonare.libraz.net"
+Documentation = "https://libsonare.libraz.net"
 Repository = "https://github.com/libraz/libsonare"
 Issues = "https://github.com/libraz/libsonare/issues"
 

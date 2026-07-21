@@ -1,587 +1,86 @@
 # libsonare (Node native)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libsonare/ci.yml?branch=main&label=CI)](https://github.com/libraz/libsonare/actions)
-[![npm](https://img.shields.io/npm/v/@libraz/libsonare-native)](https://www.npmjs.com/package/@libraz/libsonare-native)
-[![npm downloads](https://img.shields.io/npm/dm/@libraz/libsonare-native)](https://www.npmjs.com/package/@libraz/libsonare-native)
-[![types](https://img.shields.io/npm/types/@libraz/libsonare-native)](https://www.npmjs.com/package/@libraz/libsonare-native)
-[![Node](https://img.shields.io/node/v/@libraz/libsonare-native)](https://www.npmjs.com/package/@libraz/libsonare-native)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://github.com/libraz/libsonare/tree/main/bindings/node)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
 [![PyPI](https://img.shields.io/pypi/v/libsonare?label=PyPI)](https://pypi.org/project/libsonare/)
 
 **Turn audio into data and back, natively in Node.js.** Analyze songs (BPM, key,
 chords, loudness), master and mix to broadcast loudness, and render MIDI through
 built-in instruments — a native N-API addon on the libsonare C++ core. Mastering
-ships 66 named DSP processors implemented against published references (ITU-R
+ships 76 named DSP processors implemented against published references (ITU-R
 BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers, Vicanek matched-Z
 biquads, ADAA-antialiased saturation); analysis defaults match librosa where the
 two overlap. Apache-2.0, no model weights.
 
-Unlike the WebAssembly package (`@libraz/libsonare`), this binding can decode
-audio files directly from disk or memory (WAV / MP3 out of the box, plus
+Unlike the WebAssembly package (`@libraz/libsonare`), this binding decodes audio
+files directly from disk or memory (WAV / MP3 out of the box, plus
 M4A / AAC / FLAC / OGG / Opus when built with FFmpeg). The analysis, mastering,
-mixing, and editing APIs are exposed, matching the C, Python, CLI, and WASM
-surfaces. Beyond core BPM/key detection, the analysis surface includes chord
-(`detectChords`), downbeat (`detectDownbeats`), section (`analyzeSections`), and
-melody (`analyzeMelody`) extraction, plus a metering suite
-(`meteringTruePeakDb`, `meteringStereoCorrelation`, `meteringVectorscope`,
-`waveformPeaks`, ...).
+mixing, and editing APIs match the C, Python, CLI, and WASM surfaces.
+
+📖 **Full API reference and guides: [libsonare.libraz.net](https://libsonare.libraz.net)**
 
 ## Installation
 
-```bash
-yarn add @libraz/libsonare-native
-```
-
-Or build locally from the repository:
+This binding is distributed as source (it is **not published to npm**); build it
+from the repository and consume it as a local / workspace dependency. `yarn build`
+runs `cmake-js compile` then `tsc`, auto-detecting FFmpeg via pkg-config.
 
 ```bash
 git clone https://github.com/libraz/libsonare
 cd libsonare/bindings/node
 yarn install
-yarn build  # auto-detects FFmpeg via pkg-config
+yarn build
 ```
 
-`yarn build` runs `cmake-js compile` followed by `tsc`. The native build
-honours `SONARE_FFMPEG`:
+For a browser-friendly, npm-published runtime use the WebAssembly package
+[`@libraz/libsonare`](https://www.npmjs.com/package/@libraz/libsonare); for Python
+use [`libsonare`](https://pypi.org/project/libsonare/).
 
-```bash
-SONARE_FFMPEG=auto yarn build  # default: detect via pkg-config
-SONARE_FFMPEG=1    yarn build  # require FFmpeg (fail if dev libs missing)
-SONARE_FFMPEG=0    yarn build  # explicitly disable FFmpeg
-```
-
-System FFmpeg dev libraries are needed for the `=1` mode
-(`brew install ffmpeg` on macOS,
-`apt install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev`
-on Debian/Ubuntu).
+The native build honours `SONARE_FFMPEG`: `auto` (default, detect via pkg-config),
+`1` (require FFmpeg — fail if dev libs are missing), `0` (disable). FFmpeg dev
+libraries are needed for `=1` (`brew install ffmpeg`, or
+`apt install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev`).
 
 ## Quick Start
 
-`Audio` is the recommended entry point. The top-level `detectBpm` /
-`detectKey` / `analyze` functions are thin wrappers around `Audio` for
-one-shot calls and are kept for convenience.
-
-### Request-object calls
-
-For top-level one-shot analysis, effects, mastering, metering, and feature APIs, pass one request object. This is the documented form because each input has a name and optional settings can grow without changing argument order. Existing positional calls remain supported for compatibility and produce the same results; stateful `Audio` methods and small scalar conversions retain their natural positional forms.
+`Audio` is the recommended entry point: it decodes files and caches samples.
+Top-level one-shot functions accept a request object (recommended) or positional
+arguments.
 
 ```typescript
-// Recommended
-detectBpm({ samples, sampleRate: 48_000 });
+import { Audio, masterAudio } from '@libraz/libsonare-native';
 
-// Still supported for existing applications
-detectBpm(samples, 48_000);
-```
-
-### Analysis
-
-```typescript
-import { Audio, analyze, detectBpm, detectKey } from '@libraz/libsonare-native';
-
-const audio = Audio.fromFile('song.mp3');     // or 'song.wav'
-console.log(`BPM: ${audio.detectBpm().toFixed(1)}`);
-console.log(`Key: ${audio.detectKey().name}`);
-
+// Decode straight from disk (WAV/MP3 always; more with FFmpeg)
+const audio = Audio.fromFile('song.mp3');
 const result = audio.analyze();               // BPM + key + time signature + beats
 console.log(`BPM: ${result.bpm.toFixed(1)}  Key: ${result.key.name}`);
 
-// Or call the standalone functions on Float32Array samples
-const samples: Float32Array = audio.getData();
-const bpm = detectBpm({ samples, sampleRate: audio.getSampleRate() });
-const key = detectKey({ samples, sampleRate: audio.getSampleRate() });
-
-// Advanced key options are opt-in; defaults preserve existing behavior.
-const keyWithOptions = detectKey({
-  samples,
+// Master toward a target loudness with a named preset
+const mastered = masterAudio({
+  samples: audio.getData(),
   sampleRate: audio.getSampleRate(),
-  useHpss: true,
-  loudnessWeighted: true,
-  highPassHz: 80,
-  nFft: 4096,
-  hopLength: 512,
+  preset: 'streaming',
 });
-const audioKeyWithOptions = audio.detectKey({ useHpss: true, highPassHz: 80 });
+console.log(mastered.outputLufs, mastered.appliedGainDb);
 ```
 
-### Pitch, timbre, and spectral APIs
-
-Pitch tracking keeps unvoiced `f0` frames as `NaN` by default. Pass
-`fillNa: true` when downstream code needs finite values and should treat
-unvoiced frames as `0`. Timbre analysis returns aggregate metrics plus
-`timbreOverTime`.
-
-```typescript
-import {
-  analyzeTimbre,
-  decompose,
-  ebur128LoudnessRange,
-  estimateTuning,
-  hpssWithResidual,
-  lufsInterleaved,
-  nnFilter,
-  phaseVocoder,
-  pitchPyin,
-  pitchTuning,
-  pitchYin,
-  polyFeatures,
-  remix,
-  spectralContrast,
-  zeroCrossings,
-} from '@libraz/libsonare-native';
-
-const yin = pitchYin(samples, sampleRate, 2048, 512, 65, 2093, 0.3, true);
-const pyin = pitchPyin(samples, sampleRate, 2048, 512, 65, 2093, 0.3, true);
-
-const timbre = analyzeTimbre(samples, sampleRate);
-console.log(timbre.brightness, timbre.timbreOverTime[0]?.brightness);
-
-const contrast = spectralContrast(samples, sampleRate); // Matrix2D
-const poly = polyFeatures(samples, sampleRate);         // Matrix2D
-const crossings = zeroCrossings(samples);               // Int32Array
-const tuning = estimateTuning(samples, sampleRate);
-const offset = pitchTuning(yin.f0);
-
-const { w, h } = decompose(spectrogram, nFeatures, nFrames, 8);
-const filtered = nnFilter(spectrogram, nFeatures, nFrames);
-const remixed = remix(samples, Int32Array.from([0, sampleRate, sampleRate, 2 * sampleRate]));
-const stretched = phaseVocoder(samples, 1.5, sampleRate);
-const hpss = hpssWithResidual(samples, sampleRate);
-
-const multi = lufsInterleaved(interleaved, 2, sampleRate);
-const lra = ebur128LoudnessRange(samples, sampleRate);
-```
-
-### Room acoustics
-
-Use `detectAcoustic` for blind RT60/EDT estimation from ordinary audio.
-Use `analyzeImpulseResponse` when you have a measured impulse response and need
-clarity metrics (`c50`, `c80`, `d50`). Blind mode returns `NaN` for clarity
-metrics because they are not reliable without an impulse response.
-
-```typescript
-import { Audio, analyzeImpulseResponse, detectAcoustic } from '@libraz/libsonare-native';
-
-const audio = Audio.fromFile('recording.wav');
-// Blind estimation from ordinary audio; tuning options (nOctaveBands, …) are optional.
-const blind = audio.detectAcoustic();
-console.log(blind.rt60, blind.edt, blind.isBlind);
-
-const ir = Audio.fromFile('room_ir.wav');
-const params = analyzeImpulseResponse(ir.getData(), ir.getSampleRate());
-console.log(params.rt60, params.c50, params.c80, params.d50);
-```
-
-`synthesizeRir` renders a room impulse response from shoebox geometry,
-`estimateRoom` infers an equivalent room (volume / dimensions / absorption / DRR)
-from a recording or IR, and `roomMorph` re-reverberates a signal toward a target
-room as a creative effect (not dereverberation).
-
-```typescript
-import { estimateRoom, roomMorph, synthesizeRir } from '@libraz/libsonare-native';
-
-const { rir, sampleRate, hasError } = synthesizeRir({
-  lengthM: 8,
-  widthM: 5,
-  heightM: 3,
-  absorption: 0.2,
-  sampleRate: 48000,
-});
-
-const room = estimateRoom(samples, 48000, { referenceAbsorption: 0.2 });
-console.log(room.volume, room.drrDb, room.confidence);
-
-const morphed = roomMorph(samples, 48000, {
-  lengthM: 20,
-  widthM: 15,
-  heightM: 8,
-  wet: 0.5,
-});
-```
-
-### Mastering
-
-```typescript
-import {
-  Audio,
-  mastering,
-  masteringPairAnalyze,
-  masteringPairProcess,
-  masteringPairProcessorNames,
-  masteringProcess,
-  masteringProcessStereo,
-  masteringProcessorNames,
-  masteringStereoAnalyze,
-} from '@libraz/libsonare-native';
-
-const audio = Audio.fromFile('song.wav');
-const sampleRate = audio.getSampleRate();
-const samples = audio.getData();
-
-// Full mastering chain (loudness optimizer toward a target LUFS / true-peak ceiling).
-// Returns MasteringResult(samples, sampleRate, inputLufs, outputLufs,
-// appliedGainDb, latencySamples).
-const mastered = mastering({
-  samples,
-  sampleRate,
-  targetLufs: -14.0,
-  ceilingDb: -1.0,
-  truePeakOversample: 4,
-});
-console.log(
-  `${mastered.inputLufs.toFixed(1)} LUFS -> ${mastered.outputLufs.toFixed(1)} LUFS ` +
-    `(gain ${mastered.appliedGainDb.toFixed(2)} dB)`,
-);
-
-// Audio class shortcut
-const masteredViaAudio = audio.mastering({ targetLufs: -14.0, ceilingDb: -1.0 });
-
-// Apply a single named processor
-const compressed = masteringProcess({
-  processorName: 'dynamics.compressor',
-  samples,
-  sampleRate,
-  params: {
-  thresholdDb: -24,
-  ratio: 1.5,
-  },
-});
-
-// Stereo processor
-const widened = masteringProcessStereo({
-  processorName: 'stereo.imager',
-  left,
-  right,
-  sampleRate,
-  params: { width: 1.1 },
-});
-
-// Reference-based mastering (source + reference)
-const matched = masteringPairProcess('match.abCrossfade', source, reference, sampleRate, {
-  mix: 0.25,
-});
-const loudnessJson = masteringPairAnalyze(
-  'match.referenceLoudness',
-  source,
-  reference,
-  sampleRate,
-);
-const monoCompatJson = masteringStereoAnalyze(
-  'stereo.monoCompatCheck',
-  left,
-  right,
-  sampleRate,
-);
-```
-
-#### Discover available processors
-
-The native addon exposes the same named-processor registry as the C / Python /
-WASM bindings. Use these to enumerate what is available at runtime:
-
-```typescript
-import {
-  masteringPairAnalysisNames,
-  masteringPairProcessorNames,
-  masteringProcessorNames,
-  masteringStereoAnalysisNames,
-} from '@libraz/libsonare-native';
-
-masteringProcessorNames();        // e.g. ['dynamics.compressor', 'eq.parametric', ...]
-masteringPairProcessorNames();    // e.g. ['match.abCrossfade', ...]
-masteringPairAnalysisNames();     // e.g. ['match.referenceLoudness', ...]
-masteringStereoAnalysisNames();   // e.g. ['stereo.monoCompatCheck', ...]
-```
-
-### Mastering chain
-
-`masteringChain` runs the full configurable mastering pipeline (EQ, dynamics,
-saturation, repair, stereo, loudness, ...). The Node binding uses **flat
-dot-notation keys** for the config object — addressing any module parameter
-directly — and accepts an optional `onProgress(progress, stage)` callback that
-is invoked after each stage (progress in `[0, 1]`).
-
-```typescript
-import { masteringChain, masteringChainStereo } from '@libraz/libsonare-native';
-
-// Config is a tree of processor sections; set only what you want to change.
-const mastered = masteringChain(samples, sampleRate, {
-  dynamics: { compressor: { thresholdDb: -24, ratio: 1.5 } },
-  loudness: { targetLufs: -14, ceilingDb: -1 },
-});
-
-const stereo = masteringChainStereo(left, right, sampleRate, {
-  stereo: { imager: { width: 1.1 } },
-  loudness: { targetLufs: -14 },
-}, (progress, stage) => {
-  console.log(`[${(progress * 100).toFixed(0)}%] ${stage}`);
-});
-```
-
-`MasteringChainResult` contains the rendered samples (`samples` for mono,
-`left`/`right` for stereo) plus loudness telemetry
-(`inputLufs`, `outputLufs`, `appliedGainDb`, `latencySamples`).
-
-### Mastering presets
-
-Named presets ship sensible defaults for common targets. `masterAudio` applies
-a preset and lets you override any individual parameter with the same flat
-dot-notation keys as `masteringChain`.
-
-```typescript
-import { masterAudio, masteringPresetNames, Audio } from '@libraz/libsonare-native';
-
-masteringPresetNames(); // ['pop', 'edm', 'acoustic', 'hipHop', 'aiMusic', 'speech', 'streaming', 'youtube', 'broadcast', 'podcast', 'audiobook', 'cinema', 'jpop', 'ambient', 'lofi', 'classical', 'drumAndBass', 'techno', 'metal', 'trap', 'rnb', 'jazz', 'kpop', 'trance', 'gameOst']
-
-const result = masterAudio({
-  samples,
-  sampleRate,
-  preset: 'aiMusic',
-  overrides: {
-    loudness: { targetLufs: -13 },
-    dynamics: { multibandComp: { enabled: true } },
-  },
-});
-
-// Audio class shortcut
-const audio = Audio.fromFile('song.wav');
-const popMastered = audio.masterAudio('pop');
-```
-
-### Mixing
-
-```typescript
-import {
-  Mixer,
-  mixStereo,
-  mixingScenePresetJson,
-  mixingScenePresetNames,
-} from '@libraz/libsonare-native';
-
-mixingScenePresetNames(); // ['vocalReverbSend', ...]
-const sceneJson = mixingScenePresetJson('vocalReverbSend');
-
-const offline = mixStereo([vocalL, musicL], [vocalR, musicR], sampleRate, {
-  inputTrimDb: [3, 0],
-  faderDb: [-3, -12],
-  pan: [0, -0.2],
-  width: [1, 0.9],
-});
-
-const mixer = Mixer.fromSceneJson(sceneJson, sampleRate, 512);
-const block = mixer.processStereo([vocalBlockL, returnBlockL], [vocalBlockR, returnBlockR]);
-console.log(offline.meters[0].maxTruePeakDb, block.left.length);
-mixer.destroy();
-```
-
-### Streaming mastering chain
-
-`StreamingMasteringChain` runs the same pipeline block-by-block for real-time
-or chunked workflows. The constructor takes the same flat dot-notation config
-as `masteringChain`; non-streamable stages (`repair.denoise`, `loudness`) cause
-the constructor to throw, so omit those keys for streaming use.
-
-```typescript
-import { StreamingMasteringChain } from '@libraz/libsonare-native';
-
-const chain = new StreamingMasteringChain({
-  'eq.tilt.tiltDb': 0.5,
-  'dynamics.compressor.thresholdDb': -20,
-  'dynamics.transientShaper.attackGainDb': 1.5,
-});
-
-chain.prepare(48000, 512, 1);   // sampleRate, maxBlockSize, numChannels
-console.log(chain.stageNames());
-console.log(`latency = ${chain.latencySamples()} samples`);
-
-const out = chain.processMono(new Float32Array(512));
-// Or for stereo:
-chain.prepare(48000, 512, 2);
-const { left: outL, right: outR } = chain.processStereo(left, right);
-
-chain.reset();
-```
-
-### Real-time voice changer
-
-`RealtimeVoiceChanger` applies a low-latency pitch / formant / character
-transform block-by-block, driven by a named voice-character preset.
-`realtimeVoiceChangerPresetNames()` lists the presets. For a one-shot offline
-transform, `voiceChange` (constant pitch/formant) and `voiceChangeRealtime`
-(latency-compensated preset pass) operate on a whole buffer.
-
-```typescript
-import {
-  RealtimeVoiceChanger,
-  realtimeVoiceChangerPresetNames,
-} from '@libraz/libsonare-native';
-
-realtimeVoiceChangerPresetNames();   // ['neutral-monitor', 'bright-idol', 'soft-whisper', ...]
-
-const changer = new RealtimeVoiceChanger({
-  sampleRate: 48000,
-  maxBlockSize: 128,
-  channels: 1,
-  preset: 'bright-idol',
-});
-const out = changer.processMono(new Float32Array(128));
-changer.destroy();
-```
-
-### Headless DAW project
-
-`Project` is a headless arrangement model: audio & MIDI tracks and clips, MIDI
-sequencing, SMF / MIDI 2.0 Clip File I/O, deterministic JSON save/load, and an
-offline `bounce`. Every mutation routes through an undoable history, and musical
-positions are PPQ (quarter notes). Call `destroy()` to release the native handle.
+Render a MIDI arrangement through a built-in instrument with the headless
+`Project`. Call `destroy()` to release the native handle.
 
 ```typescript
 import { Project } from '@libraz/libsonare-native';
 
 const project = Project.create();
-project.setSampleRate(48000);
-
-const { clipId } = project.addMidiClip(0, 4);          // { trackId, clipId }
-project.setMidiEvents(clipId, [
-  Project.midiNoteOn(0, 0, 0, 60, 100),                // ppq, group, channel, note, velocity
-  Project.midiNoteOff(1, 0, 0, 60),
-]);
-
-const json = project.toJson();                         // deterministic, byte-stable within a build
-const smf = project.exportSmf();                       // Buffer — Standard MIDI File
-const midi2 = project.exportClipFile();                // Buffer — MIDI 2.0 Clip File (lossless)
-
-const { hasTimeline, diagnostics } = project.compile();
-const audio = project.bounce({ numChannels: 2 });      // interleaved Float32Array
-
-project.destroy();
-```
-
-### Instruments and synthesis
-
-A plain `bounce` renders MIDI tracks as silence (no instrument is bound). To
-audition a MIDI arrangement, bounce it through an instrument: the built-in
-oscillator synth (`bounceWithBuiltinInstrument(s)`), the patch-driven
-NativeSynth (`bounceWithSynthInstrument(s)`), or a loaded SoundFont 2 player
-(`bounceWithSf2Instrument(s)`). `synthPresetNames()` lists NativeSynth presets
-and `synthPresetPatch(name)` returns one as a tweakable `SynthPatch`.
-
-The NativeSynth spans 12 synthesis engines — subtractive, FM, additive, plus
-physically-modeled piano, bowed strings, reeds, brass, flute, pipe organ, and
-percussion. The physical-model voices are usable today and being refined over
-time as tuning continues.
-
-```typescript
-import { Project, synthPresetNames, synthPresetPatch } from '@libraz/libsonare-native';
-
-const project = Project.create();
-project.setSampleRate(48000);
 const { clipId } = project.addMidiClip(0, 4);
 project.setMidiEvents(clipId, [
-  Project.midiNoteOn(0, 0, 0, 60, 100),
+  Project.midiNoteOn(0, 0, 0, 60, 100),       // ppq, group, channel, note, velocity
   Project.midiNoteOff(1, 0, 0, 60),
 ]);
-project.compile();
-
-synthPresetNames();                       // ['sine', 'saw-lead', 'e-piano', 'drum-kit', ...]
-const patch = synthPresetPatch('saw-lead');
-
-// Render the MIDI through the NativeSynth (preset name or a SynthPatch object)
 const audio = project.bounceWithSynthInstrument('saw-lead', { numChannels: 2 });
-
-// Built-in oscillator synth (waveform name or BuiltinInstrumentConfig)
-const simple = project.bounceWithBuiltinInstrument({ waveform: 'saw', gain: 0.2 });
-
-// SoundFont 2 player (load the SF2 first; uncovered programs fall back to the synth)
-project.loadSoundFont(sf2Bytes);
-const sf2Audio = project.bounceWithSf2Instrument({ gain: 0.5 });
-
 project.destroy();
 ```
-
-### RealtimeEngine
-
-`RealtimeEngine` is the lock-free real-time host: a transport + timeline,
-clip/page streaming, MIDI-driven instruments, an audio graph, capture, and a
-telemetry ring buffer. Audio is processed block-by-block via `process` (or
-rendered in one shot offline with `renderOffline` / `bounceOffline`). MIDI can
-be scheduled or pushed live, and bound instruments are the same synth / SF2
-backends used by `Project`. Call `destroy()` to release the native handle.
-
-```typescript
-import { RealtimeEngine } from '@libraz/libsonare-native';
-
-const engine = new RealtimeEngine(48000, 128);          // sampleRate, maxBlockSize
-engine.setTempo(120);
-engine.setSynthInstrument('saw-lead', 0);               // bind NativeSynth to destination 0
-engine.setMidiInputSource(0);                           // route live MIDI input to it
-
-engine.play();
-engine.pushMidiInputNoteOn(0, 0, 60, 100);              // group, channel, note, velocity
-const output = engine.process([new Float32Array(128)]); // one block per channel
-
-const telemetry = engine.drainTelemetry();
-engine.destroy();
-```
-
-Capability areas (see the type definitions for the full method list):
-
-- Transport: `play` / `stop` / `seekSample` / `seekPpq` / `setTempo` / `setLoop`
-- Instrument binding: `setBuiltinInstrument` / `setSynthInstrument` / `setSf2Instrument` / `loadSoundFont`
-- Live MIDI: `pushMidiInputNoteOn` / `pushMidiInputNoteOff` / `pushMidiInputCc` (and scheduled `pushMidi*`)
-- Rendering: `process` / `processWithMonitor` / `renderOffline` / `bounceOffline` / `freezeOffline`
-- Telemetry: `drainTelemetry` / `drainMeterTelemetry` / `getTransportState`
-- Clips / capture: clip-page providers, `setClips`, `armCapture`, `capturedAudio`
-
-### Error handling
-
-C-ABI failures throw a standard `Error` whose `name` is `'SonareError'`,
-augmented with a numeric `code` (an `ErrorCode` value) and its canonical
-`codeName`. Narrow a caught value with the `isSonareError` type guard.
-
-```typescript
-import { Audio, ErrorCode, isSonareError } from '@libraz/libsonare-native';
-
-try {
-  Audio.fromFile('missing.wav');
-} catch (err) {
-  if (isSonareError(err) && err.code === ErrorCode.FileNotFound) {
-    console.error(`${err.codeName}: ${err.message}`);
-  }
-}
-```
-
-### Audio class
-
-`Audio` caches the decoded samples and is the only way to load files, so it is
-the recommended entry point when you do more than a single computation on the
-same signal.
-
-```typescript
-import { Audio } from '@libraz/libsonare-native';
-
-// From a file on disk (WAV/MP3 always; M4A/AAC/FLAC/OGG when built with FFmpeg)
-const fromFile = Audio.fromFile('song.mp3');
-
-// From an in-memory encoded buffer (Node Buffer or Uint8Array)
-import { readFile } from 'node:fs/promises';
-const bytes = await readFile('song.mp3');
-const fromMemory = Audio.fromMemory(bytes);
-
-// From decoded mono Float32Array samples
-const fromBuffer = Audio.fromBuffer(samples, 22050);
-
-console.log(fromFile.getSampleRate(), fromFile.getDuration(), fromFile.getLength());
-
-// Mastering / effects / features are available as methods too
-const stretched = fromFile.timeStretch(0.9);
-const shifted = fromFile.pitchShift(2);              // +2 semitones
-const { harmonic, percussive } = fromFile.hpss();
-const mel = fromFile.melSpectrogram();
-```
-
-`Audio.fromMemory` accepts either a Node `Buffer` or a `Uint8Array`; both are
-zero-copy into the native decoder. Stereo files are automatically downmixed to
-mono on load.
 
 ## Supported audio formats
 
@@ -591,27 +90,36 @@ mono on load.
 | MP3                                        | yes           | yes                 |
 | M4A / AAC / FLAC / OGG / Opus / WMA / ...  | no            | yes                 |
 
-If `Audio.fromFile()` is given an unsupported format you will see a clear
-error such as:
+`Audio.fromFile()` reports a clear error for unsupported formats. Check at runtime
+whether the loaded binding was compiled against FFmpeg with `hasFfmpegSupport()`.
+`Audio.fromMemory` accepts a Node `Buffer` or `Uint8Array` (zero-copy); stereo
+files are downmixed to mono on load.
 
-```
-Error: Unsupported audio format: '.m4a'. Supported: WAV, MP3.
-Rebuild with -DSONARE_WITH_FFMPEG=ON for M4A/AAC/FLAC/OGG,
-or convert via: ffmpeg -i "song.m4a" output.wav
-```
+## Capabilities
 
-To check at runtime whether the loaded binding was compiled against FFmpeg:
+Every area below has runnable examples and the full API in the
+[documentation](https://libsonare.libraz.net/docs/native-bindings).
 
-```typescript
-import { hasFfmpegSupport } from '@libraz/libsonare-native';
-console.log(hasFfmpegSupport()); // true if M4A/AAC/FLAC/OGG/Opus are available
-```
+- **Analysis** — BPM, key (+ candidates), chords, downbeats, sections, melody, tuning; pitch (YIN / pYIN), timbre, and the full spectral feature set (STFT, mel, MFCC, chroma, CQT/VQT, spectral contrast); metering (true-peak, LUFS, correlation, vectorscope, waveform peaks). → [Python/JS API](https://libsonare.libraz.net/docs/native-bindings)
+- **Mastering** — 76 named DSP processors, the configurable `masteringChain`, 25 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mixing** — offline `mixStereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
+- **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
+- **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, RIR synthesis, room estimation and morphing. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
+- **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render / capture), `StreamingMasteringChain`, `RealtimeVoiceChanger`. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
+- **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (15 synthesis engines, incl. physically-modeled piano / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [API](https://libsonare.libraz.net/docs/native-bindings)
+- **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, clip warp, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [API](https://libsonare.libraz.net/docs/native-bindings)
+- **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 
-`SONARE_FFMPEG=auto` (the default) detects FFmpeg via pkg-config at build
-time: if FFmpeg dev libraries are present they are enabled, otherwise the
-addon falls back to WAV/MP3 only. Set `SONARE_FFMPEG=1` to require FFmpeg
-(build fails if dev libs are missing) or `SONARE_FFMPEG=0` to force it off so
-the binary never links libavformat.
+C-ABI failures throw a `SonareError` (`name` `'SonareError'`) carrying a numeric
+`code` (an `ErrorCode` value) and its `codeName`; narrow with the `isSonareError`
+type guard.
+
+## Documentation
+
+Full API reference and guides live at
+**[libsonare.libraz.net](https://libsonare.libraz.net)**
+([getting started](https://libsonare.libraz.net/docs/getting-started) ·
+[Node.js native API](https://libsonare.libraz.net/docs/native-bindings)).
 
 ## Also available
 

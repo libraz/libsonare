@@ -3,7 +3,7 @@
   "version": "1.5.3",
   "type": "module",
   "packageManager": "yarn@4.15.0",
-  "description": "Audio analysis library for music information retrieval",
+  "description": "Audio analysis, mastering, mixing, and MIDI synthesis in WebAssembly",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -47,6 +47,17 @@
     "bpm",
     "key",
     "tempo",
+    "chords",
+    "audio-processing",
+    "dsp",
+    "mastering",
+    "mixing",
+    "loudness",
+    "lufs",
+    "midi",
+    "synthesizer",
+    "soundfont",
+    "room-acoustics",
     "wasm",
     "webassembly"
   ],
@@ -59,7 +70,7 @@
   "bugs": {
     "url": "https://github.com/libraz/libsonare/issues"
   },
-  "homepage": "https://github.com/libraz/libsonare#readme",
+  "homepage": "https://libsonare.libraz.net",
   "engines": {
     "node": ">=18.0.0"
   },
