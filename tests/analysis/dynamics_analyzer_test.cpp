@@ -227,6 +227,39 @@ TEST_CASE("DynamicsAnalyzer handles degenerate sub-sample window", "[dynamics_an
   }
 }
 
+TEST_CASE("DynamicsAnalyzer short transient is not forced compressed", "[dynamics_analyzer]") {
+  // A buffer shorter than one full analysis window (0.4 s by default) used to
+  // yield an empty loudness curve, forcing dynamic_range_db to 0 and
+  // is_compressed to true regardless of the real crest factor. A short decaying
+  // transient (drum hit / one-shot) has a high crest factor and a wide loudness
+  // envelope, so it must not be reported as compressed.
+  constexpr int sr = 22050;
+  constexpr float duration = 0.1f;  // 2205 samples, well under one 0.4 s window
+  const int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+
+  // Sharp attack decaying to silence: loud onset followed by near-silent tail.
+  const int attack_len = n_samples / 5;
+  for (int i = 0; i < attack_len; ++i) {
+    const float env = std::exp(-6.0f * static_cast<float>(i) / static_cast<float>(attack_len));
+    samples[i] = 0.9f * env *
+                 std::sin(2.0f * sonare::constants::kPiD * 440.0f * static_cast<float>(i) /
+                          static_cast<float>(sr));
+  }
+
+  Audio audio = Audio::from_vector(std::move(samples), sr);
+  DynamicsAnalyzer analyzer(audio);
+
+  // A real crest factor is measured for the transient (peak far above RMS).
+  REQUIRE(analyzer.crest_factor() > 8.0f);
+  // The loudness envelope now spans several sub-windows, so a genuine (non-zero)
+  // dynamic range is reported instead of the degenerate 0.
+  REQUIRE(analyzer.dynamic_range_db() > 0.0f);
+  // With a high crest factor and a wide dynamic range, the clip is not compressed.
+  REQUIRE_FALSE(analyzer.is_compressed());
+  REQUIRE(!analyzer.loudness_curve().rms_db.empty());
+}
+
 TEST_CASE("DynamicsAnalyzer accessors", "[dynamics_analyzer]") {
   Audio audio = create_constant_sine(0.7f);
 

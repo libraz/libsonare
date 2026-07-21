@@ -259,6 +259,39 @@ TEST_CASE("TimbreAnalyzer audio and prefeatured ctors agree", "[timbre_analyzer]
   REQUIRE(from_audio.timbre_over_time().size() == from_features.timbre_over_time().size());
 }
 
+TEST_CASE("TimbreAnalyzer warmth is independent of brightness", "[timbre_analyzer]") {
+  // Warmth is the fraction of low-frequency energy, not a linear inverse of
+  // brightness. Two signals engineered to share a similar spectral centroid
+  // (brightness) but differ in low-band energy must report clearly different
+  // warmth. Under the old warmth = 1 - 0.7*brightness map both would have been
+  // identical, so a warmth gap larger than 0.7 * (brightness gap) proves the
+  // measures are now independent.
+  constexpr int sr = 22050;
+  constexpr float duration = 2.0f;
+  const int n = static_cast<int>(sr * duration);
+  std::vector<float> split(n), mid(n);
+  for (int i = 0; i < n; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    // Equal-power low (100 Hz) + high (8000 Hz) tone: centroid ~4050 Hz with half
+    // its energy in the low band.
+    split[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 100.0f * t) +
+               0.5f * std::sin(2.0f * sonare::constants::kPiD * 8000.0f * t);
+    // Single mid tone at the same centroid, with no low-frequency energy.
+    mid[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 4050.0f * t);
+  }
+
+  TimbreAnalyzer split_analyzer(Audio::from_vector(std::move(split), sr));
+  TimbreAnalyzer mid_analyzer(Audio::from_vector(std::move(mid), sr));
+
+  // Brightness (centroid based) is comparable between the two signals.
+  const float brightness_gap = std::abs(split_analyzer.brightness() - mid_analyzer.brightness());
+  REQUIRE(brightness_gap < 0.2f);
+
+  // Yet the low-band-heavy signal is markedly warmer. The gap exceeds the maximum
+  // warmth difference the old affine map could have produced (0.7 * 0.2 = 0.14).
+  REQUIRE(split_analyzer.warmth() > mid_analyzer.warmth() + 0.2f);
+}
+
 TEST_CASE("TimbreAnalyzer complexity comparison", "[timbre_analyzer]") {
   // Pure sine has low complexity
   Audio sine = create_sine(440.0f);

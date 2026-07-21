@@ -37,20 +37,27 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
   // filterbank `[n_mels x n_freq]`. We mirror that with our own active-set
   // solver. A is W (n_mels x n_freq), B is M (n_mels x n_frames), X is S
   // (n_freq x n_frames).
-  return nnls(filterbank->data(), n_mels, n_freq, M, n_frames);
+  std::vector<float> stft_power = nnls(filterbank->data(), n_mels, n_freq, M, n_frames);
+
+  // Return a magnitude spectrogram, matching librosa: mel_to_stft defaults to
+  // `power=2.0` and undoes it via `np.power(S, 1 / power)`, i.e. a square root of
+  // the non-negative NNLS result. Callers feeding this into Griffin-Lim /
+  // plotting / comparison expect magnitude, not squared magnitude.
+  for (float& v : stft_power) v = std::sqrt(std::max(0.0f, v));
+  return stft_power;
 }
 
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
                    int n_iter, int sr) {
-  std::vector<float> power = mel_to_stft(M, n_mels, n_frames, mel_config, sr);
+  // mel_to_stft already returns a magnitude spectrogram (librosa-compatible), so
+  // no additional square root is applied here before Griffin-Lim.
+  std::vector<float> magnitude = mel_to_stft(M, n_mels, n_frames, mel_config, sr);
   const int n_freq = mel_config.n_fft / 2 + 1;
-  // Convert power -> magnitude before Griffin-Lim.
-  for (float& v : power) v = std::sqrt(std::max(0.0f, v));
 
   GriffinLimConfig gcfg;
   gcfg.n_iter = n_iter;
-  return griffin_lim(power.data(), n_freq, n_frames, mel_config.n_fft, mel_config.hop_length, sr,
-                     gcfg);
+  return griffin_lim(magnitude.data(), n_freq, n_frames, mel_config.n_fft, mel_config.hop_length,
+                     sr, gcfg);
 }
 
 std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels,

@@ -524,9 +524,18 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
         corrected_common && correction_ratio < 0.75f && rep_bpm >= 80.0f && rep_bpm <= 180.0f;
     bpm_ =
         (corrected_common && octave_related && !correction_downshifts_common) ? corrected : rep_bpm;
-    if (bpm_ < 80.0f && !top_bins.empty()) {
+    if (bpm_ < 80.0f && bpm_ > 0.0f && !top_bins.empty()) {
       const float strongest_peak = top_bins.front().bpm_center;
-      if (strongest_peak >= 80.0f && strongest_peak <= 180.0f) {
+      // Only promote the strongest common-range bin when it is octave/harmonic
+      // related to the detected tempo, matching the relationship gate used by the
+      // middle-octave correction above. Without this check a genuinely slow tempo
+      // (ballad/downtempo) whose strongest bin is unrelated would be blindly
+      // doubled to that unrelated value.
+      const float peak_ratio = strongest_peak / bpm_;
+      const bool peak_octave_related = std::abs(peak_ratio - 0.5f) <= 0.04f ||
+                                       std::abs(peak_ratio - 1.0f) <= 0.04f ||
+                                       std::abs(peak_ratio - 2.0f) <= 0.08f;
+      if (strongest_peak >= 80.0f && strongest_peak <= 180.0f && peak_octave_related) {
         bpm_ = strongest_peak;
       }
     }

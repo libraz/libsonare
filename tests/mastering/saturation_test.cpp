@@ -268,6 +268,26 @@ TEST_CASE("Tube exposes voltage-domain bias control", "[mastering][saturation]")
   REQUIRE_THROWS(Tube({18.0f, 0.0f, 1.0f, 1, -1.6f, 1.1f}));
 }
 
+TEST_CASE("Tube rejects non-finite grid bias and keeps output finite", "[mastering][saturation]") {
+  // A non-finite grid bias feeds plate_current_ma() and would otherwise turn the
+  // whole render into silent NaN, so both construction and set_parameter must
+  // reject it.
+  REQUIRE_THROWS(Tube({18.0f, std::numeric_limits<float>::infinity(), 1.0f, 1}));
+  REQUIRE_THROWS(Tube({18.0f, std::numeric_limits<float>::quiet_NaN(), 1.0f, 1}));
+
+  Tube tube({18.0f, 0.25f, 1.0f, 1});
+  tube.prepare(48000.0, 16);
+
+  // param_id 1 is the grid bias: non-finite requests must be rejected and must
+  // leave the previously valid configuration in place.
+  REQUIRE_FALSE(tube.set_parameter(1, std::numeric_limits<float>::quiet_NaN()));
+  REQUIRE_FALSE(tube.set_parameter(1, std::numeric_limits<float>::infinity()));
+
+  std::vector<float> signal = {-0.5f, -0.1f, 0.0f, 0.2f, 0.6f};
+  process(tube, signal);
+  for (float sample : signal) REQUIRE(std::isfinite(sample));
+}
+
 TEST_CASE("Tape saturation changes driven signal and keeps state resettable",
           "[mastering][saturation]") {
   auto signal = generate_sine_samples(1000.0f, 48000, 48000, 0.8f);

@@ -23,7 +23,10 @@ namespace sonare {
 /// @param sr Sample rate of the audio that produced @p M (Hz). The Mel
 ///        filterbank frequency mapping depends on it; passing the wrong value
 ///        skews the reconstructed spectrum.
-/// @return STFT power spectrogram [(n_fft/2 + 1) x n_frames] row-major.
+/// @return STFT magnitude spectrogram [(n_fft/2 + 1) x n_frames] row-major.
+///         Matches `librosa.feature.inverse.mel_to_stft` (default `power=2.0`),
+///         which square-roots the non-negative least-squares result so the
+///         output is magnitude, not squared magnitude.
 std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
                                const MelConfig& mel_config, int sr = constants::kDefaultSampleRate);
 

@@ -61,6 +61,18 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   int window_samples = std::max(1, static_cast<int>(config_.window_sec * sr));
   int hop_length = std::max(1, config_.hop_length);
 
+  // When the configured window is longer than the whole signal (short one-shots,
+  // drum hits, brief SFX), fall back to sub-windows that fit inside the buffer so
+  // the loudness curve still reflects the signal's amplitude envelope. Emitting a
+  // single whole-buffer window would collapse the percentile spread to zero,
+  // forcing dynamic_range_db to 0 and is_compressed to true regardless of the
+  // true crest factor. Long-audio inputs keep the configured window untouched, so
+  // their per-window RMS values are byte-identical.
+  if (window_samples > static_cast<int>(n_samples)) {
+    window_samples = std::max(1, static_cast<int>(n_samples) / 4);
+    hop_length = std::min(hop_length, std::max(1, window_samples / 2));
+  }
+
   // Build prefix sum of squared samples: prefix_sum[i] = sum(data[0..i-1]^2)
   std::vector<double> prefix_sum(n_samples + 1);
   prefix_sum[0] = 0.0;

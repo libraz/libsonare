@@ -317,6 +317,33 @@ TEST_CASE("BpmAnalyzer detects a tempo at the bpm_max boundary", "[bpm_analyzer]
   REQUIRE(detected <= config.bpm_max + 1.0f);
 }
 
+TEST_CASE("BpmAnalyzer does not double an unrelated slow tempo", "[bpm_analyzer]") {
+  // A genuine slow tempo (< 80 BPM) must not be reported as an unrelated value in
+  // the 80-180 common range. The <80 octave-preference override now only adopts
+  // the strongest common-range bin when it is octave/harmonic related to the
+  // detected tempo, so a ballad tempo stays near its true value (or a true octave
+  // multiple) instead of being blindly promoted to an unrelated bin.
+  Audio audio = create_click_track(63.0f, 22050, 8.0f);
+
+  BpmConfig config;
+  config.bpm_min = 40.0f;
+  config.bpm_max = 180.0f;
+  config.start_bpm = 63.0f;
+
+  BpmAnalyzer analyzer(audio, config);
+  const float detected = analyzer.bpm();
+  CAPTURE(detected);
+
+  // Detection must land on the true tempo or a genuine octave multiple, never an
+  // unrelated in-between value (e.g. ~95-110) adopted purely by the strongest-bin
+  // override. This guards the user-facing invariant; fully isolating the override
+  // branch at the integration level would require a fragile hand-tuned envelope.
+  const bool octave_related = std::abs(detected - 63.0f) <= 0.06f * 63.0f ||
+                              std::abs(detected - 126.0f) <= 0.06f * 126.0f ||
+                              std::abs(detected - 31.5f) <= 0.06f * 31.5f;
+  REQUIRE(octave_related);
+}
+
 TEST_CASE("detect_bpm quick function", "[bpm_analyzer]") {
   Audio audio = create_click_track(120.0f);
 

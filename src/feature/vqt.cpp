@@ -138,14 +138,49 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
                                   float gamma) {
   SONARE_CHECK(bins_per_octave > 0 && numeric::finite_non_negative(gamma),
                ErrorCode::InvalidParameter);
-  std::vector<float> bandwidths(frequencies.size());
+  const size_t n = frequencies.size();
+  std::vector<float> bandwidths(n);
 
-  // alpha = 2^(1/bins_per_octave) - 1
-  float alpha = std::pow(2.0f, 1.0f / bins_per_octave) - 1.0f;
+  // Relative bandwidth per bin, matching librosa.filters._relative_bandwidth and
+  // the CQT filter geometry in filters/wavelet.cpp (wavelet_lengths with Q=0).
+  // The local bins-per-octave is derived from the actual frequency spacing
+  // rather than the nominal bins_per_octave argument, so that the gamma=0 VQT
+  // bandwidth reproduces the CQT bandwidth exactly and the filter lengths
+  // (filter_scale * sr / bandwidth) stay continuous with the CQT path as
+  // gamma -> 0. librosa's VQT filter length is
+  //   Q = filter_scale / alpha;  length = Q * sr / (freq + gamma / alpha)
+  //                                     = filter_scale * sr / (alpha * freq + gamma),
+  // so the bandwidth returned here is the denominator `alpha * freq + gamma`.
+  // The previously-used simplified closed form `2^(1/bpo) - 1` disagrees with
+  // this relative-bandwidth alpha by ~3% at bins_per_octave=12 (0.05946 vs the
+  // correct 0.05770) and is discontinuous with this library's own CQT.
+  //
+  // The small `1e-9`/`1e-6` guards mirror filters/wavelet.cpp exactly; matching
+  // them bit-for-bit is what keeps the gamma->0 limit continuous with CQT, so
+  // they are intentionally the same raw literals used there rather than a
+  // general-purpose epsilon constant.
+  std::vector<float> alpha(n, 1.0f);
+  if (n >= 2) {
+    std::vector<float> logf(n);
+    for (size_t i = 0; i < n; ++i) {
+      logf[i] = std::log2(std::max(frequencies[i], 1e-9f));
+    }
+    std::vector<float> bpo(n);
+    bpo[0] = 1.0f / std::max(logf[1] - logf[0], 1e-9f);
+    bpo[n - 1] = 1.0f / std::max(logf[n - 1] - logf[n - 2], 1e-9f);
+    for (size_t k = 1; k + 1 < n; ++k) {
+      bpo[k] = 2.0f / std::max(logf[k + 1] - logf[k - 1], 1e-9f);
+    }
+    for (size_t k = 0; k < n; ++k) {
+      const float t = std::pow(2.0f, 2.0f / bpo[k]);
+      alpha[k] = (t - 1.0f) / (t + 1.0f);
+    }
+  }
 
-  for (size_t k = 0; k < frequencies.size(); ++k) {
-    // VQT bandwidth: alpha * f_k + gamma
-    bandwidths[k] = alpha * frequencies[k] + gamma;
+  for (size_t k = 0; k < n; ++k) {
+    // VQT bandwidth: alpha * f_k + gamma (with wavelet.cpp's alpha floor).
+    const float a = std::max(alpha[k], 1e-6f);
+    bandwidths[k] = a * frequencies[k] + gamma;
   }
 
   return bandwidths;

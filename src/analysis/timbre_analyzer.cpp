@@ -23,6 +23,11 @@ constexpr float kRoughnessFluxRef = 100.0f;
 /// @brief Reference MFCC standard deviation mapped to maximum complexity (1.0).
 /// @details The RMS spread of MFCC variances at or above this value saturates complexity.
 constexpr float kComplexityMfccStdRef = 50.0f;
+/// @brief Upper edge (Hz) of the low-frequency band used to measure warmth.
+/// @details Warmth is the fraction of spectral energy below this frequency; ~500 Hz
+///          captures the low-frequency body that is perceived as warmth, independent
+///          of the overall spectral centroid (brightness).
+constexpr float kWarmthCutoffHz = 500.0f;
 
 }  // namespace
 
@@ -62,6 +67,37 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   spectral_flatness_ = sonare::spectral_flatness(spec);
   spectral_rolloff_ = sonare::spectral_rolloff(spec, sr_, 0.85f);
   spectral_flux_ = sonare::spectral_flux(spec);
+
+  // Precompute the per-frame low-frequency energy ratio here, where the full
+  // magnitude spectrogram is in scope, so warmth can be derived from actual
+  // low-band energy rather than a linear inverse of brightness. The ratio is the
+  // fraction of spectral power below kWarmthCutoffHz for each frame.
+  low_band_ratio_.assign(static_cast<size_t>(n_frames_), 0.0f);
+  {
+    const std::vector<float>& mag = spec.magnitude();
+    const int n_bins = spec.n_bins();
+    const int n_fft = spec.n_fft();
+    // Bins strictly below the cutoff frequency: bin b maps to b * sr / n_fft Hz.
+    const int cutoff_bin =
+        (n_fft > 0)
+            ? std::clamp(static_cast<int>(std::ceil(kWarmthCutoffHz * static_cast<float>(n_fft) /
+                                                    static_cast<float>(sr_))),
+                         0, n_bins)
+            : 0;
+    for (int f = 0; f < n_frames_; ++f) {
+      double low = 0.0;
+      double total = 0.0;
+      for (int b = 0; b < n_bins; ++b) {
+        const float m =
+            mag[static_cast<size_t>(b) * static_cast<size_t>(n_frames_) + static_cast<size_t>(f)];
+        const double power = static_cast<double>(m) * static_cast<double>(m);
+        total += power;
+        if (b < cutoff_bin) low += power;
+      }
+      low_band_ratio_[static_cast<size_t>(f)] =
+          total > 0.0 ? static_cast<float>(low / total) : 0.0f;
+    }
+  }
 
   // Retain the per-frame MFCC matrix so timbre complexity can be computed over
   // each analysis window's frame range rather than from a single global figure.
@@ -134,9 +170,18 @@ Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) con
   // Normalize centroid to [0, 1] relative to the brightness reference frequency.
   t.brightness = std::min(1.0f, avg_centroid / kBrightnessCentroidRefHz);
 
-  // Warmth: inverse of brightness + low frequency energy emphasis
-  // Low centroid = warmer sound
-  t.warmth = 1.0f - t.brightness * 0.7f;
+  // Warmth: fraction of spectral energy concentrated in the low band (below
+  // kWarmthCutoffHz), averaged over the window. This is an independent measure of
+  // low-frequency body rather than a linear inverse of brightness, so a signal
+  // can be simultaneously bright (high centroid) and warm (strong low-frequency
+  // energy) or neither.
+  float low_ratio_sum = 0.0f;
+  for (int f = start_frame; f < end_frame; ++f) {
+    if (f < static_cast<int>(low_band_ratio_.size())) {
+      low_ratio_sum += low_band_ratio_[f];
+    }
+  }
+  t.warmth = std::min(1.0f, low_ratio_sum / count);
 
   // Density: based on spectral flatness
   // Higher flatness = more noise-like = denser

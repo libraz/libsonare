@@ -705,8 +705,19 @@ std::vector<float> accumulate_cqt_pitch_classes(const std::vector<float>& mag, i
         ((static_cast<int>(std::lround(hz_to_midi(freqs[0]))) % n_chroma) + n_chroma) % n_chroma;
   }
 
+  // Center each merge window on its target pitch class, mirroring
+  // librosa.filters.cq_to_chroma's np.roll(-(n_merge // 2)) and the matching
+  // shift in chroma.cpp (wrap_cqt_to_chroma) and filters/wavelet.cpp
+  // (cq_to_chroma). With n_merge = bins_per_octave / n_chroma CQT bins per pitch
+  // class, a bin at the low edge of a semitone group must fold onto the correct
+  // class rather than the one below it. With bins_per_octave == n_chroma
+  // (n_merge == 1) the shift is zero, so the common 12-bin path is unchanged.
+  const int n_merge = bins_per_octave / n_chroma;
+  const int merge_half = n_merge / 2;
+
   for (int k = 0; k < n_bins; ++k) {
-    const int within_octave = (k % bins_per_octave) * n_chroma / bins_per_octave;
+    const int shifted = ((k % bins_per_octave) + merge_half) % bins_per_octave;
+    const int within_octave = shifted * n_chroma / bins_per_octave;
     const int chroma_bin = ((within_octave + fmin_pitch_class) % n_chroma + n_chroma) % n_chroma;
     if (counts) (*counts)[chroma_bin] += 1;
     for (int t = 0; t < n_frames; ++t) {

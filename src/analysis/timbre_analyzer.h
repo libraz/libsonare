@@ -89,6 +89,7 @@ class TimbreAnalyzer {
   std::vector<float> spectral_flatness_;
   std::vector<float> spectral_rolloff_;
   std::vector<float> spectral_flux_;
+  std::vector<float> low_band_ratio_;  ///< Per-frame fraction of energy below the warmth cutoff
   std::vector<float> mfcc_;  ///< Per-frame MFCC matrix, row-major [n_mfcc_ * mfcc_frames_]
   int n_mfcc_ = 0;           ///< Number of MFCC coefficients in mfcc_
   int mfcc_frames_ = 0;      ///< Number of frames in mfcc_

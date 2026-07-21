@@ -10,6 +10,7 @@
 #include <limits>
 #include <vector>
 
+#include "filters/wavelet.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -27,6 +28,30 @@ Audio generate_sine(float freq, float duration, int sr = 22050) {
     samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
   }
   return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Reference relative-bandwidth alpha per bin.
+/// @details Mirrors librosa.filters._relative_bandwidth and the CQT filter
+/// geometry in filters/wavelet.cpp: the local bins-per-octave is derived from
+/// the frequency spacing, not a nominal bins_per_octave. This is the alpha the
+/// corrected vqt_bandwidths must use (bandwidth = alpha * f + gamma).
+std::vector<float> reference_relative_bandwidth(const std::vector<float>& freqs) {
+  const size_t n = freqs.size();
+  std::vector<float> alpha(n, 1.0f);
+  if (n >= 2) {
+    std::vector<float> logf(n);
+    for (size_t i = 0; i < n; ++i) logf[i] = std::log2(std::max(freqs[i], 1e-9f));
+    std::vector<float> bpo(n);
+    bpo[0] = 1.0f / std::max(logf[1] - logf[0], 1e-9f);
+    bpo[n - 1] = 1.0f / std::max(logf[n - 1] - logf[n - 2], 1e-9f);
+    for (size_t k = 1; k + 1 < n; ++k) bpo[k] = 2.0f / std::max(logf[k + 1] - logf[k - 1], 1e-9f);
+    for (size_t k = 0; k < n; ++k) {
+      const float t = std::pow(2.0f, 2.0f / bpo[k]);
+      alpha[k] = (t - 1.0f) / (t + 1.0f);
+    }
+  }
+  for (size_t k = 0; k < n; ++k) alpha[k] = std::max(alpha[k], 1e-6f);
+  return alpha;
 }
 
 }  // namespace
@@ -76,10 +101,12 @@ TEST_CASE("vqt_bandwidths with gamma=0", "[vqt]") {
 
   REQUIRE(bw.size() == 3);
 
-  // With gamma=0, bandwidth is proportional to frequency
-  float alpha = std::pow(2.0f, 1.0f / 12.0f) - 1.0f;
-  REQUIRE_THAT(bw[0], WithinRel(alpha * 100.0f, 0.001f));
-  REQUIRE_THAT(bw[1], WithinRel(alpha * 200.0f, 0.001f));
+  // With gamma=0, bandwidth = alpha * f, where alpha is the librosa
+  // relative-bandwidth value derived from the actual frequency spacing (these
+  // freqs are octave-spaced -> local bins_per_octave = 1 -> alpha = 0.6).
+  std::vector<float> alpha = reference_relative_bandwidth(freqs);
+  REQUIRE_THAT(bw[0], WithinRel(alpha[0] * 100.0f, 0.001f));
+  REQUIRE_THAT(bw[1], WithinRel(alpha[1] * 200.0f, 0.001f));
 }
 
 TEST_CASE("vqt_bandwidths with gamma>0", "[vqt]") {
@@ -89,11 +116,11 @@ TEST_CASE("vqt_bandwidths with gamma>0", "[vqt]") {
 
   auto bw = vqt_bandwidths(freqs, bins_per_octave, gamma);
 
-  float alpha = std::pow(2.0f, 1.0f / 12.0f) - 1.0f;
+  std::vector<float> alpha = reference_relative_bandwidth(freqs);
 
-  // With gamma>0, bandwidth = alpha*f + gamma
-  REQUIRE_THAT(bw[0], WithinRel(alpha * 100.0f + gamma, 0.001f));
-  REQUIRE_THAT(bw[1], WithinRel(alpha * 200.0f + gamma, 0.001f));
+  // With gamma>0, bandwidth = alpha*f + gamma (relative-bandwidth alpha).
+  REQUIRE_THAT(bw[0], WithinRel(alpha[0] * 100.0f + gamma, 0.001f));
+  REQUIRE_THAT(bw[1], WithinRel(alpha[1] * 200.0f + gamma, 0.001f));
 }
 
 TEST_CASE("VqtConfig to_cqt_config", "[vqt]") {
@@ -127,11 +154,13 @@ TEST_CASE("VqtKernel creation", "[vqt]") {
   REQUIRE(kernel->frequencies().size() == 24);
   REQUIRE(kernel->bandwidths().size() == 24);
 
-  // Bandwidths should be larger than pure CQT due to gamma
+  // Bandwidths should be larger than pure CQT due to gamma. The per-bin alpha is
+  // the librosa relative-bandwidth (filters._relative_bandwidth), not the
+  // simplified 2^(1/bpo) - 1 closed form.
   const auto& bw = kernel->bandwidths();
-  float alpha = std::pow(2.0f, 1.0f / config.bins_per_octave) - 1.0f;
+  std::vector<float> alpha = reference_relative_bandwidth(kernel->frequencies());
   for (size_t k = 0; k < bw.size(); ++k) {
-    float expected = alpha * kernel->frequencies()[k] + config.gamma;
+    float expected = alpha[k] * kernel->frequencies()[k] + config.gamma;
     REQUIRE_THAT(bw[k], WithinRel(expected, 0.001f));
   }
 }
@@ -575,18 +604,19 @@ TEST_CASE("vqt frequencies match reference formula", "[vqt][reference]") {
 }
 
 TEST_CASE("vqt bandwidth formula matches reference", "[vqt][reference]") {
-  // variable-bandwidth formula: bw = alpha * f + gamma
-  // where alpha = 2^(1/bins_per_octave) - 1
+  // variable-bandwidth formula: bw = alpha * f + gamma, where alpha is the
+  // librosa relative-bandwidth (filters._relative_bandwidth), matching the CQT
+  // filter geometry rather than the simplified 2^(1/bpo) - 1 closed form.
   int bins_per_octave = 12;
-  float alpha = std::pow(2.0f, 1.0f / bins_per_octave) - 1.0f;
 
   // Standard CQT bandwidth (gamma=0)
   SECTION("gamma=0 (standard CQT)") {
     std::vector<float> freqs = {100.0f, 200.0f, 400.0f, 800.0f};
+    std::vector<float> alpha = reference_relative_bandwidth(freqs);
     auto bw = vqt_bandwidths(freqs, bins_per_octave, 0.0f);
 
     for (size_t i = 0; i < freqs.size(); ++i) {
-      float expected = alpha * freqs[i];
+      float expected = alpha[i] * freqs[i];
       REQUIRE_THAT(bw[i], WithinRel(expected, 1e-5f));
     }
   }
@@ -595,19 +625,51 @@ TEST_CASE("vqt bandwidth formula matches reference", "[vqt][reference]") {
   SECTION("gamma=24") {
     float gamma = 24.0f;
     std::vector<float> freqs = {100.0f, 200.0f, 400.0f, 800.0f};
+    std::vector<float> alpha = reference_relative_bandwidth(freqs);
     auto bw = vqt_bandwidths(freqs, bins_per_octave, gamma);
 
     for (size_t i = 0; i < freqs.size(); ++i) {
-      float expected = alpha * freqs[i] + gamma;
+      float expected = alpha[i] * freqs[i] + gamma;
       REQUIRE_THAT(bw[i], WithinRel(expected, 1e-5f));
     }
 
-    // Lower frequencies should have proportionally more gamma influence
-    // bw[0] = 5.95 + 24 = 29.95 (gamma is 80% of bandwidth)
-    // bw[3] = 47.6 + 24 = 71.6 (gamma is 34% of bandwidth)
+    // Lower frequencies have proportionally more gamma influence.
     float gamma_ratio_low = gamma / bw[0];
     float gamma_ratio_high = gamma / bw[3];
     REQUIRE(gamma_ratio_low > gamma_ratio_high);
+  }
+
+  // On a proper bins_per_octave=12 geometric grid the relative-bandwidth alpha
+  // is ~0.05770, not the simplified 2^(1/12) - 1 = 0.05946 (~3% high).
+  SECTION("relative-bandwidth alpha on a 12-per-octave grid") {
+    std::vector<float> freqs = vqt_frequencies(55.0f, 60, 12);
+    std::vector<float> alpha = reference_relative_bandwidth(freqs);
+    auto bw = vqt_bandwidths(freqs, 12, 0.0f);
+
+    // Interior bins land on the librosa relative-bandwidth value.
+    const float simplified = std::pow(2.0f, 1.0f / 12.0f) - 1.0f;  // 0.05946
+    for (size_t i = 1; i + 1 < freqs.size(); ++i) {
+      REQUIRE_THAT(alpha[i], WithinRel(0.057697f, 1e-3f));
+      REQUIRE(alpha[i] < simplified);
+      REQUIRE_THAT(bw[i], WithinRel(alpha[i] * freqs[i], 1e-5f));
+    }
+  }
+
+  // Continuity with the CQT path: the gamma=0 VQT bandwidth reproduces the CQT
+  // filter length exactly, since wavelet_lengths(Q=0) uses the same alpha.
+  //   cqt_length = filter_scale * sr / (alpha * freq) = filter_scale * sr / bw.
+  SECTION("gamma->0 matches the CQT wavelet_lengths path") {
+    const int sr = 22050;
+    const float filter_scale = 1.0f;
+    std::vector<float> freqs = vqt_frequencies(55.0f, 60, 12);
+    auto bw = vqt_bandwidths(freqs, 12, 0.0f);
+    std::vector<float> cqt_lengths = wavelet_lengths(freqs, sr, filter_scale);
+
+    REQUIRE(cqt_lengths.size() == bw.size());
+    for (size_t i = 0; i < freqs.size(); ++i) {
+      const float expected_len = filter_scale * static_cast<float>(sr) / bw[i];
+      REQUIRE_THAT(cqt_lengths[i], WithinRel(expected_len, 1e-4f));
+    }
   }
 }
 

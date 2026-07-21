@@ -184,6 +184,9 @@ bool Tube::set_parameter(unsigned int param_id, float value) {
       tube_config_.drive_db = value;
       return true;
     case 1:
+      // validate_config requires bias to be finite; a non-finite grid bias would
+      // otherwise poison plate_current_ma() and turn the whole render into NaN.
+      if (!std::isfinite(value)) return false;
       tube_config_.bias = value;
       return true;
     case 2:
@@ -208,7 +211,7 @@ std::vector<rt::ParamDescriptor> Tube::parameter_descriptors() const {
 
 void Tube::validate_config(const TubeConfig& config) {
   if (config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.bias_v) ||
-      config.harmonic_drive < 0.0f || config.harmonic_drive > 1.0f ||
+      !std::isfinite(config.bias) || config.harmonic_drive < 0.0f || config.harmonic_drive > 1.0f ||
       config.oversample_factor < 1 ||
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8)) {
