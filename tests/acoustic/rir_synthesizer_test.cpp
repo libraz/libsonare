@@ -342,3 +342,59 @@ TEST_CASE("synthesize_rir preserves early reflections past the late tail", "[aco
   }
   REQUIRE(max_beyond_tail > 0.0f);
 }
+
+TEST_CASE("synthesize_rir treats max_seconds as an upper bound, not an exact length",
+          "[acoustic][rir]") {
+  // A short, absorptive room yields a naturally short RIR. A max_seconds far
+  // larger than that natural length must NOT zero-pad the output out to the cap
+  // (which inflates convolution cost and, near kMaxRirSeconds, is an OOM risk).
+  const int sr = 48000;
+  const ShoeboxRoom room = uniform_room(6.0f, 4.0f, 3.0f, 0.8f);
+  const SourceListener pl{{1.0f, 1.0f, 1.2f}, {5.0f, 3.0f, 1.7f}};
+
+  const RirSynthResult natural = synthesize_rir(room, pl, sr, {/*ism_order=*/3});
+  REQUIRE_FALSE(has_error(natural.diagnostics));
+
+  RirSynthConfig cfg;
+  cfg.ism_order = 3;
+  cfg.max_seconds = 5.0f;  // far larger than the natural length
+  const auto cap = static_cast<size_t>(std::ceil(cfg.max_seconds * static_cast<float>(sr)));
+  REQUIRE(natural.rir.size() < cap);  // precondition: natural is shorter than the cap
+
+  const RirSynthResult capped = synthesize_rir(room, pl, sr, cfg);
+  REQUIRE_FALSE(has_error(capped.diagnostics));
+  // Upper-bound semantics: a cap above the natural length leaves the RIR untouched.
+  REQUIRE(capped.rir.size() == natural.rir.size());
+  REQUIRE(capped.rir.size() < cap);
+  // Nothing was truncated, so the clamp diagnostic must not fire.
+  REQUIRE_FALSE(has_code(capped.diagnostics, "acoustic.rir_length_clamped"));
+}
+
+TEST_CASE("synthesize_rir reports a clamp when max_seconds truncates the early reflections",
+          "[acoustic][rir]") {
+  // Large, highly-absorptive room: early reflections (high ism order) extend well
+  // past the short late tail. A cap between the two truncates the early IR while
+  // leaving the late tail untouched, which must still raise rir_length_clamped.
+  const int sr = 48000;
+  const ShoeboxRoom room = uniform_room(40.0f, 30.0f, 15.0f, 0.9f);
+  const SourceListener pl{{5.0f, 5.0f, 2.0f}, {35.0f, 25.0f, 2.0f}};
+
+  RirSynthConfig probe;
+  probe.ism_order = 10;
+  const std::vector<ImageSource> images = shoebox_image_sources(room, pl, probe.ism_order);
+  const Audio early = synthesize_early_ir(images, sr);
+  const ReverbTime rt = shoebox_reverb_time(room, probe.late_model);
+  const Audio late = synthesize_late_tail(rt, sr, {});
+  REQUIRE(early.size() > late.size());  // exercise early-past-late truncation
+
+  const size_t cap_samples = (early.size() + late.size()) / 2;
+  RirSynthConfig cfg;
+  cfg.ism_order = 10;
+  cfg.max_seconds = static_cast<float>(cap_samples) / static_cast<float>(sr);
+  const RirSynthResult res = synthesize_rir(room, pl, sr, cfg);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  REQUIRE(has_code(res.diagnostics, "acoustic.rir_length_clamped"));
+  const auto cap = static_cast<size_t>(std::ceil(cfg.max_seconds * static_cast<float>(sr)));
+  REQUIRE(res.rir.size() <= cap);
+  for (float v : res.rir) REQUIRE(std::isfinite(v));
+}

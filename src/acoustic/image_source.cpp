@@ -281,19 +281,21 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
   for (const auto& im : images) {
     if (im.distance > 1e-6f) max_delay = std::max(max_delay, im.distance / c * sr);
   }
-  int length;
+  // Auto-size to the farthest image arrival, clamped to the same ceiling
+  // synthesize_late_tail uses (kMaxAutoSamples): without a cap, a pathological
+  // room -- huge dimensions and/or a high reflection order -- would otherwise
+  // size one unbounded allocation, a WASM OOM risk. Computed in double so the
+  // sum cannot overflow int before the clamp is applied.
+  const double raw = std::ceil(static_cast<double>(max_delay)) + static_cast<double>(half) + 2.0;
+  double auto_length = std::min(raw, static_cast<double>(kMaxAutoSamples));
+  // max_samples is an UPPER BOUND, not an exact length: a natural IR shorter than
+  // the cap must not be zero-padded out to it (that inflates the convolution cost
+  // and, at kMaxRirSeconds, is itself an OOM risk). Only truncate when the natural
+  // length actually exceeds the cap.
   if (config.max_samples > 0) {
-    length = config.max_samples;
-  } else {
-    // Clamp the auto-sized length to the same ceiling synthesize_late_tail uses
-    // (kMaxAutoSamples): without an explicit max_samples (and no max_seconds cap
-    // at the synthesize_rir level), a pathological room -- huge dimensions
-    // and/or a high reflection order -- would otherwise size one unbounded
-    // allocation, a WASM OOM risk. Computed in double so the sum cannot
-    // overflow int before the clamp is applied.
-    const double raw = std::ceil(static_cast<double>(max_delay)) + static_cast<double>(half) + 2.0;
-    length = static_cast<int>(std::min(raw, static_cast<double>(kMaxAutoSamples)));
+    auto_length = std::min(auto_length, static_cast<double>(config.max_samples));
   }
+  int length = static_cast<int>(auto_length);
   if (length < 1) length = 1;
   std::vector<float> ir(static_cast<size_t>(length), 0.0f);
 

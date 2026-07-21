@@ -81,7 +81,9 @@ struct EarlyIrConfig {
                         ///< energy-correct collapse; exact for single-band/uniform materials,
                         ///< an approximation for frequency-dependent walls — use band>=0 for
                         ///< per-band fidelity)
-  int max_samples = 0;  ///< 0 = size automatically from the farthest image
+  int max_samples = 0;  ///< upper bound on the rendered length; 0 = size automatically
+                        ///< from the farthest image. A natural IR shorter than this is
+                        ///< NOT padded out to it — the cap only truncates a longer IR.
 };
 
 /// @brief Render the mono early-reflection impulse response.

@@ -92,9 +92,25 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // Early reflections (image-source) and the per-band reverberation time.
   const std::vector<ImageSource> images = shoebox_image_sources(room, placement, ism_order);
   EarlyIrConfig early_cfg;
-  early_cfg.max_samples = cap;  // 0 leaves synthesize_early_ir's auto sizing in place
+  early_cfg.max_samples = cap;  // upper bound only; a shorter natural IR is not padded to it
   const Audio early_audio = synthesize_early_ir(images, sample_rate, early_cfg);
   const ReverbTime rt = shoebox_reverb_time(room, config.late_model);
+
+  // The early IR is now capped to the cap, so early_audio.size() no longer reveals
+  // the natural (uncapped) early length. Mirror synthesize_early_ir's own auto-size
+  // formula here so the rir_length_clamped diagnostic below fires when the cap
+  // truncates the early reflections, not just the late tail.
+  float early_max_delay = 0.0f;
+  for (const auto& im : images) {
+    if (im.distance > 1e-6f) {
+      early_max_delay = std::max(early_max_delay, im.distance / kSoundSpeed * sr);
+    }
+  }
+  const int early_half = (early_cfg.fdl < 1 ? 1 : early_cfg.fdl | 1) / 2;
+  const double early_raw =
+      std::ceil(static_cast<double>(early_max_delay)) + static_cast<double>(early_half) + 2.0;
+  const int early_natural_len =
+      std::max(1, static_cast<int>(std::min(early_raw, static_cast<double>(kMaxAutoSamples))));
 
   // Decide the cap up front so we can both avoid over-allocating the late tail
   // and report when max_seconds actually truncates the natural tail. The natural
@@ -119,8 +135,7 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // claim a clamp that the late tail's own cap (not max_seconds) actually made.
   const double natural_tail_d =
       std::min(std::ceil(static_cast<double>(longest) * 2.0 * sr), kLateTailCeiling);
-  const int natural_len =
-      std::max(static_cast<int>(early_audio.size()), static_cast<int>(natural_tail_d));
+  const int natural_len = std::max(early_natural_len, static_cast<int>(natural_tail_d));
 
   LateReverbConfig late_cfg;
   late_cfg.seed = config.seed;
