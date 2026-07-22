@@ -150,6 +150,14 @@ bool point_inside_mesh(const std::vector<Triangle>& faces, const Vec3& p) noexce
 /// usable by the image-source method.
 std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceListener& placement);
 
+/// @brief Hard upper bound on the polyhedral mesh face count.
+///
+/// The image-source cost (and the acceleration grid / per-face precompute)
+/// scales with the face count, so an absurd mesh is a memory/CPU exhaustion
+/// vector. A watertight room mesh needs orders of magnitude fewer faces than
+/// this; `validate_polyhedral` rejects anything above it.
+inline constexpr size_t kMaxPolyhedralFaces = 100000;
+
 /// @brief Validate polyhedral geometry and placement; never throws.
 std::vector<Diagnostic> validate_polyhedral(const PolyhedralRoom& room,
                                             const SourceListener& placement);

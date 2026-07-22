@@ -403,6 +403,11 @@ std::vector<Diagnostic> validate_polyhedral(const PolyhedralRoom& room,
         {Diagnostic::Severity::Error, "acoustic.empty_mesh", "polyhedral room has no faces"});
     return diags;
   }
+  if (room.faces.size() > kMaxPolyhedralFaces) {
+    diags.push_back({Diagnostic::Severity::Error, "acoustic.too_many_faces",
+                     "polyhedral mesh face count exceeds the safe maximum"});
+    return diags;
+  }
   if (room.face_materials.empty()) {
     diags.push_back({Diagnostic::Severity::Error, "acoustic.no_materials",
                      "polyhedral room has no face materials"});

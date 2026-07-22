@@ -60,6 +60,21 @@ enum class ReverbModel {
   Eyring,  ///< preferred for high mean absorption (alpha-bar above ~0.2)
 };
 
+/// @brief Nominal octave-band centre frequency (Hz) for band index @p band.
+///
+/// Matches the analyzer's split (125 Hz for band 0, rising by octaves). Shared
+/// with the early-reflection colourer so early reflections and the late tail
+/// place identical per-band shaping on the same octave grid.
+float octave_center_hz(int band) noexcept;
+
+/// @brief Zero-phase octave bandpass (forward + backward RBJ biquad at
+///        Q = sqrt(2)), applied to @p x in place.
+///
+/// The same minimal forward/backward biquad the late tail uses to shape each
+/// octave band, exposed so the early-reflection colourer can isolate a band's
+/// material-dependent deviation onto the identical octave grid.
+void octave_bandpass_zero_phase(std::vector<float>& x, float center_hz, int sample_rate);
+
 /// @brief Per-octave-band reverberation time (seconds).
 ///
 /// One entry per octave band, ordered like the materials and the analyzer's

@@ -136,6 +136,23 @@ bool occluded(const VoxelGrid& grid, const Vec3& a, const Vec3& b, int ignore_fa
   return hit.t < 1.0f - 1e-4f;
 }
 
+// Prune @p v to its @p keep highest-reflection-energy candidates (the
+// perceptually dominant paths), dropping the rest. Cheap no-op when already at
+// or below @p keep, so it never touches a frontier that has not yet grown past
+// the cap.
+void prune_frontier_by_energy(std::vector<PendingImage>& v, size_t keep) {
+  if (v.size() <= keep) return;
+  const auto energy = [](const PendingImage& p) {
+    float sum = 0.0f;
+    for (float b : p.reflection) sum += b;
+    return sum;
+  };
+  std::nth_element(
+      v.begin(), v.begin() + static_cast<std::ptrdiff_t>(keep), v.end(),
+      [&](const PendingImage& a, const PendingImage& b) { return energy(a) > energy(b); });
+  v.resize(keep);
+}
+
 // Validate a candidate image by walking listener -> reflection points -> source,
 // checking each reflection point is inside its face and each segment is
 // unoccluded. `partial[k]` is the source reflected across chain[0..k).
@@ -249,21 +266,16 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
         }
         next.push_back(std::move(cand));  // keep exploring even if this order was invalid
       }
+      // Prune incrementally so a dense mesh cannot grow the frontier as
+      // faces^order and exhaust memory before a single end-of-level pass: bound
+      // the peak at ~2x the cap by pruning back to the cap whenever it is
+      // exceeded, rather than materializing every parent x face candidate first.
+      if (next.size() > 2 * kMaxPolyhedralFrontier) {
+        prune_frontier_by_energy(next, kMaxPolyhedralFrontier);
+      }
     }
-    // Cap the breadth-first frontier so a dense mesh cannot grow it as
-    // faces^order and exhaust memory. Keep the highest-reflection-energy
-    // candidates (the perceptually dominant paths) and drop the rest.
-    if (next.size() > kMaxPolyhedralFrontier) {
-      const auto energy = [](const PendingImage& p) {
-        float sum = 0.0f;
-        for (float b : p.reflection) sum += b;
-        return sum;
-      };
-      std::nth_element(
-          next.begin(), next.begin() + kMaxPolyhedralFrontier, next.end(),
-          [&](const PendingImage& a, const PendingImage& b) { return energy(a) > energy(b); });
-      next.resize(kMaxPolyhedralFrontier);
-    }
+    // Final cap: a partial parent pass may leave the frontier above the cap.
+    prune_frontier_by_energy(next, kMaxPolyhedralFrontier);
     frontier.swap(next);
   }
   return out;

@@ -343,6 +343,72 @@ TEST_CASE("synthesize_rir preserves early reflections past the late tail", "[aco
   REQUIRE(max_beyond_tail > 0.0f);
 }
 
+namespace {
+// Energy of `window` after isolating a single octave band, using the same
+// zero-phase octave bandpass the synthesizer shapes bands with.
+double octave_energy(std::vector<float> window, int band, int sample_rate) {
+  octave_bandpass_zero_phase(window, octave_center_hz(band), sample_rate);
+  double e = 0.0;
+  for (float s : window) e += static_cast<double>(s) * s;
+  return e;
+}
+}  // namespace
+
+TEST_CASE("early reflections carry per-band material colour", "[acoustic][rir]") {
+  // Two rooms whose walls have the SAME per-band beta multiset (bright is the
+  // band-reversed absorption of dark), so their broadband RMS reflection gain is
+  // identical. A broadband-scalar early IR would therefore render bit-identical
+  // early reflections for both; the per-band colourer must instead give the
+  // "bright" room more high-octave energy and the "dark" room more low-octave
+  // energy in the early-reflection region.
+  const int sr = 48000;
+  Material dark;  // absorbs highs, reflects lows
+  dark.absorption = {0.05f, 0.05f, 0.10f, 0.20f, 0.50f, 0.70f};
+  dark.scattering = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  Material bright;  // band-reversed: absorbs lows, reflects highs
+  bright.absorption = {0.70f, 0.50f, 0.20f, 0.10f, 0.05f, 0.05f};
+  bright.scattering = dark.scattering;
+
+  ShoeboxRoom dark_room;
+  dark_room.dims = {7.0f, 5.0f, 3.0f};
+  for (Material& w : dark_room.walls) w = dark;
+  ShoeboxRoom bright_room = dark_room;
+  for (Material& w : bright_room.walls) w = bright;
+
+  const SourceListener pl{{1.5f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+  RirSynthConfig cfg;
+  cfg.ism_order = 3;
+  cfg.mixing_time_ms = 40.0f;  // wide pure-early region before the crossover
+  cfg.crossfade_ms = 2.0f;
+  const Audio dark_rir = synthesize_rir(dark_room, pl, sr, cfg).rir;
+  const Audio bright_rir = synthesize_rir(bright_room, pl, sr, cfg).rir;
+
+  // Pure early-reflection window: after the direct arrival, before the crossover
+  // begins (samples there are exactly the coloured early IR, no late tail mixed).
+  const float direct_dist = length(pl.listener - pl.source);
+  const int direct_sample = static_cast<int>(std::lround(direct_dist / kSoundSpeed * sr));
+  const int lo = direct_sample + 2;
+  const int hi = static_cast<int>(std::lround(0.035f * sr));  // < 40 ms crossover start
+  REQUIRE(hi > lo);
+  REQUIRE(static_cast<int>(dark_rir.size()) > hi);
+  REQUIRE(static_cast<int>(bright_rir.size()) > hi);
+
+  std::vector<float> dark_win(dark_rir.data() + lo, dark_rir.data() + hi);
+  std::vector<float> bright_win(bright_rir.data() + lo, bright_rir.data() + hi);
+
+  // Same beta multiset => a broadband-scalar early IR would make these identical.
+  bool differs = false;
+  for (size_t i = 0; i < dark_win.size() && !differs; ++i) differs = dark_win[i] != bright_win[i];
+  REQUIRE(differs);
+
+  // High octave (2-4 kHz, band 5): the bright room reflects highs, the dark room
+  // absorbs them.
+  REQUIRE(octave_energy(bright_win, 5, sr) > octave_energy(dark_win, 5, sr));
+  // Low octave (125 Hz, band 0): the dark room reflects lows, the bright room
+  // absorbs them.
+  REQUIRE(octave_energy(dark_win, 0, sr) > octave_energy(bright_win, 0, sr));
+}
+
 TEST_CASE("synthesize_rir treats max_seconds as an upper bound, not an exact length",
           "[acoustic][rir]") {
   // A short, absorptive room yields a naturally short RIR. A max_seconds far

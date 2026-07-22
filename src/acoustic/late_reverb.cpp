@@ -26,12 +26,6 @@ constexpr double kLn1000 = 6.90775527898213705;
 // uncatchable abort under the WASM allocator).
 constexpr float kMaxRt60Seconds = 60.0f;
 
-// Octave-band centres matching the analyzer's split (kDefaultOctaveBands = 6:
-// 125 .. 4000 Hz); higher band counts continue up by octaves.
-float octave_center_hz(int band) noexcept {
-  return 125.0f * std::pow(2.0f, static_cast<float>(band));
-}
-
 // Deterministic, platform-independent PRNG (SplitMix64) so synthesized tails are
 // bit-reproducible from the seed alone, never relying on std distribution
 // implementations or any platform RNG.
@@ -65,6 +59,14 @@ float gaussian(SplitMix64& rng) noexcept {
   return static_cast<float>(std::sqrt(-2.0 * std::log(u1)) * std::cos(kTwoPiD * u2));
 }
 
+}  // namespace
+
+// Octave-band centres matching the analyzer's split (kDefaultOctaveBands = 6:
+// 125 .. 4000 Hz); higher band counts continue up by octaves.
+float octave_center_hz(int band) noexcept {
+  return 125.0f * std::pow(2.0f, static_cast<float>(band));
+}
+
 // Zero-phase octave bandpass (forward + backward biquad pass), matching the
 // analyzer's RBJ bandpass at Q = sqrt(2) so a tail's measured per-band RT60
 // tracks the design value.
@@ -75,7 +77,7 @@ float gaussian(SplitMix64& rng) noexcept {
 // per-band RMS-normalized and cross-faded, so zero initial conditions are fine
 // and the seeded-vs-zero difference in the late tail is inaudible. Kept separate
 // rather than sharing the filtfilt path (its to_filter_coeffs is file-local).
-void bandpass_zero_phase(std::vector<float>& x, float center_hz, int sample_rate) {
+void octave_bandpass_zero_phase(std::vector<float>& x, float center_hz, int sample_rate) {
   const float w0 = static_cast<float>(kTwoPiD) * center_hz / static_cast<float>(sample_rate);
   const rt::BiquadCoeffs coeffs = rt::rbj_bandpass(w0, kSqrt2);
 
@@ -88,8 +90,6 @@ void bandpass_zero_phase(std::vector<float>& x, float center_hz, int sample_rate
   for (float& s : x) s = state.process(s);
   std::reverse(x.begin(), x.end());
 }
-
-}  // namespace
 
 float sabine_rt60(float volume, float absorption_area) noexcept {
   if (volume <= 0.0f || absorption_area <= 0.0f) return 0.0f;
@@ -190,7 +190,7 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
                    0x9E3779B9ull * (static_cast<std::uint64_t>(b) + 1ull));
     for (int i = 0; i < length; ++i) band[static_cast<size_t>(i)] = gaussian(rng);
 
-    bandpass_zero_phase(band, center, sample_rate);
+    octave_bandpass_zero_phase(band, center, sample_rate);
 
     // Normalize each band to unit RMS so its starting level is independent of
     // the bandpass bandwidth (which grows with centre frequency at fixed Q).

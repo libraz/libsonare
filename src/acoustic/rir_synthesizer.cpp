@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "acoustic/image_source.h"
 #include "acoustic/late_reverb.h"
@@ -44,6 +45,54 @@ float rms_range(const float* x, int n, int lo, int hi) noexcept {
   hi = std::min(n, hi);
   if (hi <= lo) return 0.0f;
   return sonare::rms(x + lo, static_cast<size_t>(hi - lo));
+}
+
+// True if any image carries a frequency-dependent (non-flat across octave bands)
+// reflection product. A spectrally flat room's per-band reflection equals its
+// broadband RMS collapse, so the broadband early IR already carries all of the
+// colour and no per-band correction is needed (the coloured result is identical).
+bool early_reflections_are_colored(const std::vector<ImageSource>& images) noexcept {
+  for (const auto& im : images) {
+    for (size_t b = 1; b < im.reflection.size(); ++b) {
+      if (std::fabs(im.reflection[b] - im.reflection[0]) > 1e-6f) return true;
+    }
+  }
+  return false;
+}
+
+// Colour the early reflections per octave band so material-dependent timbre
+// (a curtain absorbing highs vs glass reflecting them) survives on the first
+// arrivals, mirroring the per-band shaping the late tail already applies on the
+// same octave grid. The broadband IR collapses each image's per-band reflection
+// vector to a single RMS gain; here we add, per octave band, the bandpassed
+// deviation of that band's own early IR from the broadband IR. Out-of-band
+// energy stays at the broadband level, and a spectrally flat room yields a zero
+// correction, so the coloured result reduces exactly to the broadband IR.
+Audio color_early_ir(const std::vector<ImageSource>& images, int sample_rate,
+                     const Audio& broadband, const EarlyIrConfig& base_cfg) {
+  size_t bands = 1;
+  for (const auto& im : images) bands = std::max(bands, im.reflection.size());
+  const int n = static_cast<int>(broadband.size());
+  const float* b = broadband.data();
+  std::vector<float> out(b, b + n);
+
+  const float nyquist = static_cast<float>(sample_rate) * 0.5f;
+  for (size_t band = 0; band < bands; ++band) {
+    const float center = octave_center_hz(static_cast<int>(band));
+    // Skip a band whose octave sits at/above Nyquist, exactly as the late tail
+    // does; its content is not representable and stays at the broadband level.
+    if (center * sonare::constants::kSqrt2 >= nyquist) continue;
+    EarlyIrConfig cfg = base_cfg;
+    cfg.band = static_cast<int>(band);
+    const Audio per_band = synthesize_early_ir(images, sample_rate, cfg);
+    const float* e = per_band.data();
+    const int lim = std::min(n, static_cast<int>(per_band.size()));
+    std::vector<float> dev(static_cast<size_t>(n), 0.0f);
+    for (int i = 0; i < lim; ++i) dev[static_cast<size_t>(i)] = e[i] - b[i];
+    octave_bandpass_zero_phase(dev, center, sample_rate);
+    for (int i = 0; i < n; ++i) out[static_cast<size_t>(i)] += dev[static_cast<size_t>(i)];
+  }
+  return Audio::from_vector(std::move(out), sample_rate);
 }
 
 }  // namespace
@@ -93,7 +142,13 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const std::vector<ImageSource> images = shoebox_image_sources(room, placement, ism_order);
   EarlyIrConfig early_cfg;
   early_cfg.max_samples = cap;  // upper bound only; a shorter natural IR is not padded to it
-  const Audio early_audio = synthesize_early_ir(images, sample_rate, early_cfg);
+  Audio early_audio = synthesize_early_ir(images, sample_rate, early_cfg);
+  // Frequency-dependent walls colour early reflections per octave band; a
+  // spectrally flat room already carries all its colour in the broadband IR, so
+  // the coloured path is skipped and the result is unchanged bit-for-bit.
+  if (early_reflections_are_colored(images)) {
+    early_audio = color_early_ir(images, sample_rate, early_audio, early_cfg);
+  }
   const ReverbTime rt = shoebox_reverb_time(room, config.late_model);
 
   // The early IR is now capped to the cap, so early_audio.size() no longer reveals
