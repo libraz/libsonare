@@ -371,8 +371,9 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
 ///        command. The arrangement compiler folds the track's gain/mute/solo/pan
 ///        into the track's channel strip (synthesizing one when the track is not
 ///        bound to a strip), so the value applies uniformly to the track's audio
-///        and MIDI. @p gain is clamped to >= 0; @p track_id must reference an
-///        existing track.
+///        and MIDI. @p gain must be finite and >= 0; a negative or non-finite
+///        gain is rejected with SONARE_ERROR_INVALID_PARAMETER. @p track_id must
+///        reference an existing track.
 SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track_id, float gain);
 
 /// @brief Sets a track's mute flag via an undoable edit command. A muted track is

@@ -188,6 +188,13 @@ class RealtimeVoiceChanger:
         zero-copy: each ``max_block_size`` block aliases the input/output
         numpy buffers as ``c_float*`` via ``ctypes.from_buffer``, so the
         per-block Python overhead is independent of block size.
+
+        Cross-surface contract note: this Python facade accepts an
+        arbitrarily long buffer and internally chunks it into
+        ``max_block_size`` blocks as a convenience. The Node, WASM, and C ABI
+        surfaces instead REJECT a single block larger than ``max_block_size``
+        (the caller must chunk). Keep this in mind when porting realtime code
+        between surfaces.
         """
         in_buf = _as_float32_buffer(samples)
         total = int(in_buf.shape[0])

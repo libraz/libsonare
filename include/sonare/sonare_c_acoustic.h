@@ -60,9 +60,11 @@ extern "C" {
 ///
 /// NOTE: this C ABI exposes only uniform (single-material) shoebox rooms — one
 /// material on every wall, selected as uniform scalar, per-band, or preset
-/// absorption. Per-wall mesh materials (a different material per surface) are not
-/// reachable through this ABI yet.
-/// TODO(acoustic-c-abi): expose per-wall / polyhedral-mesh materials.
+/// absorption. The core supports arbitrary polyhedral meshes with a distinct
+/// material per surface (see acoustic/image_source.h `polyhedral_image_sources`),
+/// but that is core-internal by design and intentionally not exposed on any
+/// public surface (C ABI / Node / Python / WASM): the shoebox model covers the
+/// supported room-acoustics use cases and keeps the ABI mesh-free.
 typedef struct {
   float length_m;
   float width_m;

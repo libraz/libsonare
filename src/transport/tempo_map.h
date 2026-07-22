@@ -52,6 +52,12 @@ struct TimeSignature {
 struct TimeSignatureSegment {
   double start_ppq = 0.0;
   TimeSignature time_sig{};
+  // SMF FF 58 notation-clock metadata, carried through import/export of a
+  // Standard MIDI File only. These are intentionally NOT part of the realtime
+  // transport API (they do not affect musical timing, only a MIDI file's
+  // metronome-click notation) and are NOT serialized in the project JSON, which
+  // stores only start_ppq + numerator/denominator. They round-trip through SMF,
+  // not through the C-ABI time-signature struct or from_json/to_json.
   uint8_t clocks_per_metronome_click = 24;
   uint8_t thirty_seconds_per_quarter = 8;
 };
