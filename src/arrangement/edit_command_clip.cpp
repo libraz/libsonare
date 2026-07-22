@@ -135,14 +135,22 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
 }
 
 EditCommandPtr SplitClip::invert(const Project& before,
-                                 const MidiContentStore& /*store_before*/) const {
+                                 const MidiContentStore& store_before) const {
   const EditClip* original = before.find_clip(id_);
   if (original == nullptr) {
     return nullptr;
   }
   // Undo a split = remove the new right clip and restore the original clip's
   // length/fade. A small composite is expressed via a dedicated restore command.
-  return std::make_unique<UnsplitClip>(id_, new_clip_id_, split_ppq_, *original);
+  auto cmd = std::make_unique<UnsplitClip>(id_, new_clip_id_, split_ppq_, *original);
+  // Capture the exact pre-split event list so undo restores it verbatim. The
+  // store's per-clip list is not maintained sorted by ppq, so concatenating the
+  // split left/right lists is not an identity round-trip; the captured list is.
+  const auto it = store_before.events.find(id_);
+  if (it != store_before.events.end()) {
+    cmd->set_restore_events(it->second);
+  }
+  return cmd;
 }
 
 bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {

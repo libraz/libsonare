@@ -30,6 +30,16 @@ class EditCommandGroup final : public EditCommand {
 
   const char* type_name() const noexcept override { return "EditCommandGroup"; }
 
+  bool mutates_midi_store() const noexcept override {
+    // The group mutates the store iff any child does; an empty group cannot.
+    for (const auto& command : commands_) {
+      if (command != nullptr && command->mutates_midi_store()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
  private:
   std::vector<EditCommandPtr> commands_;
 };
@@ -52,14 +62,24 @@ bool EditHistory::apply(EditCommandPtr command) {
   }
   // Snapshot the pre-apply state so the inverse can capture prior values. The
   // Project and MidiContentStore are value types, so the copy is a deep clone.
+  // Skip cloning the (potentially large) MIDI store for commands that provably
+  // cannot mutate it; store_before then aliases the live store, which apply()
+  // leaves untouched.
   const Project before = project_;
-  const MidiContentStore store_before = midi_content_;
+  const bool clone_store = command->mutates_midi_store();
+  MidiContentStore store_copy;
+  if (clone_store) {
+    store_copy = midi_content_;
+  }
+  const MidiContentStore& store_before = clone_store ? store_copy : midi_content_;
 
   if (!command->apply(project_, midi_content_)) {
     // Apply failed: leave the project untouched (apply() must not partially
     // mutate on its failure paths) and push nothing.
     project_ = before;
-    midi_content_ = store_before;
+    if (clone_store) {
+      midi_content_ = store_copy;
+    }
     return false;
   }
 
@@ -68,7 +88,9 @@ bool EditHistory::apply(EditCommandPtr command) {
     // No inverse means the command is not safely undoable; revert and reject so
     // the history never holds an irreversible entry.
     project_ = before;
-    midi_content_ = store_before;
+    if (clone_store) {
+      midi_content_ = store_copy;
+    }
     return false;
   }
 
@@ -85,8 +107,28 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
     return false;
   }
 
+  // Clone the transaction-level store snapshot for rollback only when some
+  // command in the batch may mutate the store; a metadata-only batch never
+  // touches it, so the live store is a valid rollback target.
+  bool batch_mutates_store = false;
+  for (const auto& command : commands) {
+    if (command != nullptr && command->mutates_midi_store()) {
+      batch_mutates_store = true;
+      break;
+    }
+  }
+
   const Project transaction_before = project_;
-  const MidiContentStore transaction_store_before = midi_content_;
+  MidiContentStore transaction_store_before;
+  if (batch_mutates_store) {
+    transaction_store_before = midi_content_;
+  }
+  const auto rollback = [&]() {
+    project_ = transaction_before;
+    if (batch_mutates_store) {
+      midi_content_ = transaction_store_before;
+    }
+  };
 
   std::vector<EditCommandPtr> forward;
   std::vector<EditCommandPtr> inverse;
@@ -95,23 +137,25 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
 
   for (auto& command : commands) {
     if (command == nullptr) {
-      project_ = transaction_before;
-      midi_content_ = transaction_store_before;
+      rollback();
       return false;
     }
 
     const Project before = project_;
-    const MidiContentStore store_before = midi_content_;
+    const bool clone_store = command->mutates_midi_store();
+    MidiContentStore store_copy;
+    if (clone_store) {
+      store_copy = midi_content_;
+    }
+    const MidiContentStore& store_before = clone_store ? store_copy : midi_content_;
     if (!command->apply(project_, midi_content_)) {
-      project_ = transaction_before;
-      midi_content_ = transaction_store_before;
+      rollback();
       return false;
     }
 
     EditCommandPtr undo = command->invert(before, store_before);
     if (undo == nullptr) {
-      project_ = transaction_before;
-      midi_content_ = transaction_store_before;
+      rollback();
       return false;
     }
     forward.push_back(std::move(command));
@@ -138,12 +182,18 @@ bool EditHistory::undo() {
   // Snapshot before applying the inverse so we can build a fresh inverse-of-the
   // -inverse, keeping redo exact even for commands whose inverse differs by id.
   const Project before = project_;
-  const MidiContentStore store_before = midi_content_;
+  const bool clone_store = entry.inverse->mutates_midi_store();
+  MidiContentStore store_copy;
+  if (clone_store) {
+    store_copy = midi_content_;
+  }
 
   if (!entry.inverse->apply(project_, midi_content_)) {
     // Should not happen for a well-formed entry; restore and report failure.
     project_ = before;
-    midi_content_ = store_before;
+    if (clone_store) {
+      midi_content_ = store_copy;
+    }
     undo_stack_.push_back(std::move(entry));
     return false;
   }
@@ -162,11 +212,18 @@ bool EditHistory::redo() {
   redo_stack_.pop_back();
 
   const Project before = project_;
-  const MidiContentStore store_before = midi_content_;
+  const bool clone_store = entry.forward->mutates_midi_store();
+  MidiContentStore store_copy;
+  if (clone_store) {
+    store_copy = midi_content_;
+  }
+  const MidiContentStore& store_before = clone_store ? store_copy : midi_content_;
 
   if (!entry.forward->apply(project_, midi_content_)) {
     project_ = before;
-    midi_content_ = store_before;
+    if (clone_store) {
+      midi_content_ = store_copy;
+    }
     redo_stack_.push_back(std::move(entry));
     return false;
   }

@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "arrangement/edit_command.h"
@@ -577,6 +578,80 @@ TEST_CASE("SplitClip partitions MIDI content instead of duplicating it", "[arran
   REQUIRE(undo->apply(f.project, store));
   REQUIRE(project_equal(f.project, before));
   REQUIRE(store.events == store_before.events);
+}
+
+TEST_CASE("SplitClip then undo restores an unsorted event list verbatim", "[arrangement]") {
+  Fixture f;
+  const ClipId clip = f.midi_clip;
+  EditHistory h{std::move(f.project)};
+
+  // The store's per-clip list is NOT maintained sorted by ppq: events straddle
+  // the split boundary out of order and a same-ppq pair pins the tie order. A
+  // left ++ right concatenation on undo would regroup these; undo must instead
+  // restore the exact original list element-for-element.
+  const MidiClipEventList original = {
+      {100.0, 0x0001u, 0u}, {300.0, 0x0002u, 0u}, {50.0, 0x0003u, 0u},
+      {250.0, 0x0004u, 0u}, {150.0, 0x0005u, 0u}, {150.0, 0x0006u, 0u},
+  };
+  h.midi_content().events[clip] = original;
+
+  REQUIRE(h.apply(std::make_unique<SplitClip>(clip, 200.0)));
+
+  // A normal split still moves the events at/after the cut to the new clip and
+  // leaves the earlier events (in their original relative order) on the left.
+  ClipId right_id = 0;
+  for (const EditClip& c : h.project().clips()) {
+    if (c.id != clip && c.start_ppq == 200.0) {
+      right_id = c.id;
+    }
+  }
+  REQUIRE(right_id != 0);
+  const MidiClipEventList expected_left = {
+      {100.0, 0x0001u, 0u},
+      {50.0, 0x0003u, 0u},
+      {150.0, 0x0005u, 0u},
+      {150.0, 0x0006u, 0u},
+  };
+  const MidiClipEventList expected_right = {
+      {300.0, 0x0002u, 0u},
+      {250.0, 0x0004u, 0u},
+  };
+  REQUIRE(h.midi_content().events.at(clip) == expected_left);
+  REQUIRE(h.midi_content().events.at(right_id) == expected_right);
+
+  REQUIRE(h.undo());
+  const MidiClipEventList& restored = h.midi_content().events.at(clip);
+  REQUIRE(restored.size() == original.size());
+  for (size_t i = 0; i < original.size(); ++i) {
+    CHECK(restored[i] == original[i]);
+  }
+  CHECK(h.midi_content().events.find(right_id) == h.midi_content().events.end());
+}
+
+TEST_CASE("Metadata-only edit round-trips without disturbing MIDI content", "[arrangement]") {
+  Fixture f;
+  const ClipId midi_clip = f.midi_clip;
+  const TrackId track = f.audio_track;
+  EditHistory h{std::move(f.project)};
+
+  // Seed MIDI content that a metadata-only edit must never touch. SetTrackGain's
+  // apply() ignores the MidiContentStore, so EditHistory skips cloning it; the
+  // store must be preserved bit-for-bit across apply and undo regardless.
+  const MidiClipEventList events = {{10.0, 0x00A0u, 0u}, {20.0, 0x00B0u, 0u}};
+  h.midi_content().events[midi_clip] = events;
+  const MidiContentStore store_before = h.midi_content();
+
+  const Track* before = h.project().find_track(track);
+  REQUIRE(before != nullptr);
+  const float prior_gain = before->gain;
+
+  REQUIRE(h.apply(std::make_unique<SetTrackGain>(track, prior_gain + 0.5f)));
+  CHECK(h.project().find_track(track)->gain == prior_gain + 0.5f);
+  CHECK(h.midi_content().events == store_before.events);
+
+  REQUIRE(h.undo());
+  CHECK(h.project().find_track(track)->gain == prior_gain);
+  CHECK(h.midi_content() == store_before);
 }
 
 TEST_CASE("SplitClip rebases takes and comp segments for both halves", "[arrangement]") {

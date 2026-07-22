@@ -245,14 +245,23 @@ bool UnsplitClip::apply(Project& project, MidiContentStore& store) {
   if (left == nullptr) {
     return false;
   }
-  auto left_events = store.events.find(original_id_);
-  const auto right_events = store.events.find(new_clip_id_);
-  if (right_events != store.events.end()) {
-    if (left_events == store.events.end()) {
-      left_events = store.events.emplace(original_id_, MidiClipEventList{}).first;
+  if (has_restore_events_) {
+    // Restore the exact pre-split merged list captured by SplitClip::invert. This
+    // preserves the original event order (including same-ppq tie order), which a
+    // left ++ right concatenation cannot for an unsorted store list.
+    store.events[original_id_] = restore_events_;
+  } else {
+    // Fallback for construction paths without a captured payload: reconstruct the
+    // merged list by concatenating the split left/right lists.
+    auto left_events = store.events.find(original_id_);
+    const auto right_events = store.events.find(new_clip_id_);
+    if (right_events != store.events.end()) {
+      if (left_events == store.events.end()) {
+        left_events = store.events.emplace(original_id_, MidiClipEventList{}).first;
+      }
+      left_events->second.insert(left_events->second.end(), right_events->second.begin(),
+                                 right_events->second.end());
     }
-    left_events->second.insert(left_events->second.end(), right_events->second.begin(),
-                               right_events->second.end());
   }
   // Remove the right clip created by the split and restore the original.
   project.remove_clip(new_clip_id_);

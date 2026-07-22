@@ -121,6 +121,14 @@ class EditCommand {
 
   /// Stable command type tag (for diagnostics / serialization later).
   virtual const char* type_name() const noexcept = 0;
+
+  /// Whether this command may mutate the MidiContentStore passed to apply().
+  ///
+  /// Override to return false ONLY when apply()'s MidiContentStore parameter is
+  /// unused (the `/*store*/` convention) — the command then provably cannot
+  /// mutate the MIDI store, so EditHistory may skip cloning it. Default true is
+  /// the safe choice; leave it for any command that names its store parameter.
+  virtual bool mutates_midi_store() const noexcept { return true; }
 };
 
 using EditCommandPtr = std::unique_ptr<EditCommand>;
@@ -138,6 +146,7 @@ class AddTrack final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "AddTrack"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
   TrackId allocated_id() const noexcept { return allocated_id_; }
 
@@ -173,6 +182,7 @@ class RenameTrack final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "RenameTrack"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId id_;
@@ -189,6 +199,7 @@ class SetTrackRoute final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTrackRoute"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId id_;
@@ -203,6 +214,7 @@ class SetTrackKind final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTrackKind"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId id_;
@@ -219,6 +231,7 @@ class SetTrackMidiDestination final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTrackMidiDestination"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId id_;
@@ -234,6 +247,7 @@ class SetTrackGain final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTrackGain"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId id_;
@@ -248,6 +262,7 @@ class SetTrackMute final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTrackMute"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId id_;
@@ -262,6 +277,7 @@ class SetTrackSolo final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTrackSolo"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId id_;
@@ -277,6 +293,7 @@ class SetTrackPan final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTrackPan"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId id_;
@@ -367,6 +384,7 @@ class TrimClip final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "TrimClip"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -383,6 +401,7 @@ class MoveClip final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "MoveClip"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -415,6 +434,7 @@ class SetClipGain final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetClipGain"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -429,6 +449,7 @@ class SetClipFade final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetClipFade"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -447,6 +468,7 @@ class SetClipLoop final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetClipLoop"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -462,6 +484,7 @@ class SetClipWarpRef final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetClipWarpRef"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -475,6 +498,7 @@ class SetClipWarpMode final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetClipWarpMode"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -489,6 +513,7 @@ class SetClipTakes final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetClipTakes"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -504,6 +529,7 @@ class SetClipCompSegments final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetClipCompSegments"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -517,6 +543,7 @@ class SetWarpMap final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetWarpMap"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   WarpMapRef map_;
@@ -529,6 +556,7 @@ class RemoveWarpMap final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "RemoveWarpMap"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   WarpRefId id_;
@@ -541,6 +569,7 @@ class SetClipSource final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetClipSource"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ClipId id_;
@@ -558,6 +587,7 @@ class AttachAudioSource final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "AttachAudioSource"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
   SourceId allocated_id() const noexcept { return allocated_id_; }
 
@@ -581,6 +611,7 @@ class AttachMidiSource final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "AttachMidiSource"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
   SourceId allocated_id() const noexcept { return allocated_id_; }
 
@@ -606,6 +637,7 @@ class ReplaceSource final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "ReplaceSource"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   SourceId id_;
@@ -625,6 +657,7 @@ class SetSampleRate final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetSampleRate"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   double sample_rate_;
@@ -638,6 +671,7 @@ class SetOverlapPolicy final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetOverlapPolicy"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   OverlapPolicy policy_;
@@ -651,6 +685,7 @@ class SetScene final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetScene"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   mixing::api::Scene scene_;
@@ -672,6 +707,7 @@ class SetMarker final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetMarker"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
   uint32_t allocated_id() const noexcept { return allocated_id_; }
 
@@ -694,6 +730,7 @@ class SetAnnotation final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetAnnotation"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   ProjectAnnotation annotation_;
@@ -709,6 +746,7 @@ class SetTempoSegment final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTempoSegment"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   std::vector<transport::TempoSegment> segments_;
@@ -723,6 +761,7 @@ class SetTimeSignatureSegment final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTimeSignatureSegment"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   std::vector<transport::TimeSignatureSegment> segments_;
@@ -736,6 +775,7 @@ class SetHarmonySegment final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetHarmonySegment"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   std::vector<ChordSymbol> chords_;
@@ -753,6 +793,7 @@ class AddAutomationLane final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "AddAutomationLane"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
   /// Index of the appended lane within the track (valid after apply).
   size_t lane_index() const noexcept { return lane_index_; }
@@ -771,6 +812,7 @@ class RemoveAutomationLane final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "RemoveAutomationLane"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId track_id_;
@@ -786,6 +828,7 @@ class EditAutomationLane final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "EditAutomationLane"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId track_id_;
@@ -855,6 +898,7 @@ class SetAssistSidecar final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetAssistSidecar"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   AssistSidecar sidecar_;
@@ -879,6 +923,7 @@ class RemoveSourceInternal final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "RemoveSourceInternal"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   SourceId id_;
@@ -892,6 +937,7 @@ class RemoveMarkerInternal final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "RemoveMarkerInternal"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   uint32_t id_;
@@ -906,6 +952,7 @@ class InsertAutomationLane final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "InsertAutomationLane"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   TrackId track_id_;
@@ -922,6 +969,7 @@ class RemoveAssistSidecarInternal final : public EditCommand {
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "RemoveAssistSidecarInternal"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   AssistSidecar key_;
@@ -943,11 +991,22 @@ class UnsplitClip final : public EditCommand {
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "UnsplitClip"; }
 
+  /// Pre-seeds the exact pre-split merged event list to restore for the original
+  /// clip (used by SplitClip::invert). When set, undo restores this list verbatim
+  /// instead of concatenating the split left/right lists, which is not an
+  /// identity round-trip for a store whose event list is not sorted by ppq.
+  void set_restore_events(MidiClipEventList events) {
+    restore_events_ = std::move(events);
+    has_restore_events_ = true;
+  }
+
  private:
   ClipId original_id_;
   ClipId new_clip_id_;
   double split_ppq_;
   EditClip original_;
+  MidiClipEventList restore_events_;
+  bool has_restore_events_ = false;
 };
 
 }  // namespace sonare::arrangement

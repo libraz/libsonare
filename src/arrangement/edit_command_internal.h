@@ -167,6 +167,7 @@ class RestoreClip final : public EditCommand {
   }
 
   const char* type_name() const noexcept override { return "RestoreClip"; }
+  bool mutates_midi_store() const noexcept override { return false; }
 
  private:
   EditClip clip_;
