@@ -243,6 +243,29 @@ TEST_CASE("Transport play stop seek and render clock are independent", "[transpo
   REQUIRE_FALSE(state.playing);
 }
 
+TEST_CASE("Transport snapshot surfaces the one-based beat and fractional beat", "[transport]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  map.set_time_signatures({{0.0, {4, 4}}});
+
+  sonare::transport::Transport transport;
+  transport.prepare(48000.0, &map);
+
+  // PPQ 5.5 in 4/4 is 1.5 quarters into the second bar: bar 1, beat 2, +0.5.
+  transport.seek_ppq(5.5);
+  const auto state = transport.snapshot();
+  REQUIRE(state.bar_count == 1);
+  REQUIRE(state.beat == 2);
+  REQUIRE_THAT(state.beat_fraction, WithinAbs(0.5, 1.0e-9));
+
+  // The downbeat of a bar reports beat 1 with no fractional remainder.
+  transport.seek_ppq(4.0);
+  const auto downbeat = transport.snapshot();
+  REQUIRE(downbeat.bar_count == 1);
+  REQUIRE(downbeat.beat == 1);
+  REQUIRE_THAT(downbeat.beat_fraction, WithinAbs(0.0, 1.0e-9));
+}
+
 TEST_CASE("Transport without a tempo map advances musical time via the fallback", "[transport]") {
   // No tempo map set: the transport must fall back to a prepared default-tempo
   // map so musical time advances instead of freezing at PPQ 0.

@@ -23,6 +23,11 @@ struct TransportState {
   double loop_start_ppq = 0.0;
   double loop_end_ppq = 0.0;
   double sample_rate = constants::kDefaultDawSampleRate;
+  // Musical beat within the current bar. `beat` is one-based (matching the
+  // BarBeat convention) while `bar_count` above is zero-based; `beat_fraction`
+  // is the fractional position within the current beat, in [0, 1).
+  int beat = 1;
+  double beat_fraction = 0.0;
 };
 
 }  // namespace sonare::transport

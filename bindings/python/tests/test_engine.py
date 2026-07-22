@@ -80,6 +80,11 @@ def test_engine_transport_state_and_live_parameters() -> None:
         assert state.loop_end_ppq == pytest.approx(4.0)
         assert state.sample_rate == pytest.approx(48000.0)
         assert isinstance(state.sample_position, int)
+        # Musical beat readout: `beat` is one-based, `beat_fraction` in [0, 1).
+        assert isinstance(state.beat, int)
+        assert state.beat >= 1
+        assert isinstance(state.beat_fraction, float)
+        assert 0.0 <= state.beat_fraction < 1.0
 
         # Meter telemetry always drains to a list (possibly empty without a
         # configured meter tap).

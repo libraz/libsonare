@@ -6439,9 +6439,21 @@
         "name": "time_signature",
         "offset": 80,
         "size": 12
+      },
+      {
+        "kind": "signed",
+        "name": "beat",
+        "offset": 96,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "beat_fraction",
+        "offset": 104,
+        "size": 8
       }
     ],
-    "size": 96
+    "size": 112
   },
   "SonareTrimSilenceConfig": {
     "align": 8,

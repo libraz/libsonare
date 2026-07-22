@@ -1214,6 +1214,11 @@ describe('RealtimeEngine native binding', () => {
     expect(transport.sampleRate).toBeCloseTo(48000, 1);
     expect(transport.samplePosition).toBeGreaterThanOrEqual(128);
     expect(Number.isFinite(transport.ppq)).toBe(true);
+    // Musical beat readout: `beat` is one-based, `beatFraction` in [0, 1).
+    expect(Number.isInteger(transport.beat)).toBe(true);
+    expect(transport.beat).toBeGreaterThanOrEqual(1);
+    expect(transport.beatFraction).toBeGreaterThanOrEqual(0);
+    expect(transport.beatFraction).toBeLessThan(1);
 
     const meterRecords = engine.drainMeterTelemetry();
     expect(Array.isArray(meterRecords)).toBe(true);

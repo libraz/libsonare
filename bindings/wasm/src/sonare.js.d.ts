@@ -745,6 +745,10 @@ export interface WasmEngineTransportState {
   barCount: number;
   /** Time signature in effect at the current PPQ. */
   timeSignature: { numerator: number; denominator: number; confidence: number };
+  /** One-based beat within the current bar (`barCount` is zero-based). */
+  beat: number;
+  /** Fractional position within the current beat, in [0, 1). */
+  beatFraction: number;
 }
 
 export interface WasmEngineBounceOptions {

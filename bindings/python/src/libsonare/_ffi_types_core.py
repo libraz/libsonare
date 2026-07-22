@@ -191,6 +191,10 @@ class SonareTransportState(ctypes.Structure):
         ("bar_start_ppq", ctypes.c_double),
         ("bar_count", ctypes.c_int64),
         ("time_signature", SonareTimeSignature),
+        # One-based beat within the bar plus the fractional beat position; see
+        # SonareTransportState in sonare_c_types_engine.h.
+        ("beat", ctypes.c_int64),
+        ("beat_fraction", ctypes.c_double),
     ]
 
 

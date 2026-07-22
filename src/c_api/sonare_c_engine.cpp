@@ -580,5 +580,7 @@ SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
   out->time_signature.numerator = state.time_sig.numerator;
   out->time_signature.denominator = state.time_sig.denominator;
   out->time_signature.confidence = 1.0f;
+  out->beat = state.beat;
+  out->beat_fraction = state.beat_fraction;
   return SONARE_OK;
 }

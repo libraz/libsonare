@@ -1055,6 +1055,8 @@ Napi::Value RealtimeEngineWrap::GetTransportState(const Napi::CallbackInfo& info
   time_signature.Set("confidence",
                      Napi::Number::New(env, static_cast<double>(state.time_signature.confidence)));
   out.Set("timeSignature", time_signature);
+  out.Set("beat", Napi::Number::New(env, static_cast<double>(state.beat)));
+  out.Set("beatFraction", Napi::Number::New(env, state.beat_fraction));
   return out;
 }
 

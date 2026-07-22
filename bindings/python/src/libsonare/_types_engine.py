@@ -445,6 +445,10 @@ class TransportState:
     bar_start_ppq: float
     bar_count: int
     time_signature: TimeSignature
+    # One-based beat within the current bar; ``bar_count`` above is zero-based.
+    beat: int
+    # Fractional position within the current beat, in [0, 1).
+    beat_fraction: float
 
 
 @dataclass(frozen=True, slots=True)

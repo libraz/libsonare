@@ -181,6 +181,10 @@ export interface EngineTransportState {
   barCount: number;
   /** Time signature in effect at the current PPQ. */
   timeSignature: TimeSignature;
+  /** One-based beat within the current bar (`barCount` is zero-based). */
+  beat: number;
+  /** Fractional position within the current beat, in [0, 1). */
+  beatFraction: number;
 }
 
 /**

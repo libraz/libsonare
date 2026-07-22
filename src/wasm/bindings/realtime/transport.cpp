@@ -250,6 +250,8 @@ val RealtimeEngineWasm::getTransportState() const {
   out.set("loopStartPpq", state.loop_start_ppq);
   out.set("loopEndPpq", state.loop_end_ppq);
   out.set("sampleRate", state.sample_rate);
+  out.set("beat", static_cast<double>(state.beat));
+  out.set("beatFraction", state.beat_fraction);
   return out;
 }
 

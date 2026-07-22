@@ -33,6 +33,7 @@ TransportState make_snapshot(const TempoMap& map, double sample_rate, bool playi
                              double loop_end_ppq) noexcept {
   const double ppq = map.sample_to_ppq(sample_position);
   const TimeSignature sig = map.time_signature_at_ppq(ppq);
+  const BarBeat bar_beat = map.ppq_to_bar_beat(ppq);
   return {playing,
           looping,
           render_frame,
@@ -40,11 +41,13 @@ TransportState make_snapshot(const TempoMap& map, double sample_rate, bool playi
           ppq,
           map.bpm_at_sample(sample_position),
           map.bar_start_ppq(ppq),
-          map.ppq_to_bar_beat(ppq).bar,
+          bar_beat.bar,
           sig,
           loop_start_ppq,
           loop_end_ppq,
-          sample_rate};
+          sample_rate,
+          bar_beat.beat,
+          bar_beat.beat_fraction};
 }
 
 }  // namespace

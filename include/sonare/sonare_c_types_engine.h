@@ -119,6 +119,11 @@ typedef struct {
   double bar_start_ppq;               /* PPQ of the current bar's downbeat. */
   int64_t bar_count;                  /* Zero-based index of the current bar. */
   SonareTimeSignature time_signature; /* Time signature in effect at this PPQ. */
+  /* Musical beat within the current bar. `beat` is one-based (bar_count above
+     is zero-based); `beat_fraction` is the fractional position within the
+     current beat, in [0, 1). Appended to preserve the earlier field offsets. */
+  int64_t beat;
+  double beat_fraction;
 } SonareTransportState;
 
 typedef struct {
@@ -395,7 +400,7 @@ static_assert(offsetof(SonareMeterTelemetryRecordWide, peak_db) == 28u,
 static_assert(offsetof(SonareMeterTelemetryRecordWide, dropped_records) == 152u,
               "SonareMeterTelemetryRecordWide dropped_records offset changed");
 
-static_assert(sizeof(SonareTransportState) == 96u, "SonareTransportState layout changed");
+static_assert(sizeof(SonareTransportState) == 112u, "SonareTransportState layout changed");
 static_assert(offsetof(SonareTransportState, render_frame) == 8u,
               "SonareTransportState render_frame offset changed");
 static_assert(offsetof(SonareTransportState, ppq_position) == 24u,
@@ -404,6 +409,10 @@ static_assert(offsetof(SonareTransportState, bar_start_ppq) == 64u,
               "SonareTransportState bar_start_ppq offset changed");
 static_assert(offsetof(SonareTransportState, time_signature) == 80u,
               "SonareTransportState time_signature offset changed");
+static_assert(offsetof(SonareTransportState, beat) == 96u,
+              "SonareTransportState beat offset changed");
+static_assert(offsetof(SonareTransportState, beat_fraction) == 104u,
+              "SonareTransportState beat_fraction offset changed");
 
 static_assert(sizeof(SonareEngineBounceResult) ==
                   ((offsetof(SonareEngineBounceResult, integrated_lufs) + sizeof(float) +

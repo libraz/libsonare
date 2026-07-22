@@ -654,6 +654,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 denominator=int(raw.time_signature.denominator),
                 confidence=float(raw.time_signature.confidence),
             ),
+            beat=int(raw.beat),
+            beat_fraction=float(raw.beat_fraction),
         )
 
 

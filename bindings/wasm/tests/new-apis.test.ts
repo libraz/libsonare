@@ -654,6 +654,11 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(state.sampleRate).toBe(48000);
       expect(state.bpm).toBe(120);
       expect(state.samplePosition).toBe(128);
+      // Musical beat readout: `beat` is one-based, `beatFraction` in [0, 1).
+      expect(Number.isInteger(state.beat)).toBe(true);
+      expect(state.beat).toBeGreaterThanOrEqual(1);
+      expect(state.beatFraction).toBeGreaterThanOrEqual(0);
+      expect(state.beatFraction).toBeLessThan(1);
       engine.destroy();
     });
 

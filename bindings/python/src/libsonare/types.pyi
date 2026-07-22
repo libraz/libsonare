@@ -1352,6 +1352,8 @@ class TransportState:
     bar_start_ppq: float
     bar_count: int
     time_signature: TimeSignature
+    beat: int
+    beat_fraction: float
     def __init__(
         self,
         playing: bool,
@@ -1366,6 +1368,8 @@ class TransportState:
         bar_start_ppq: float,
         bar_count: int,
         time_signature: TimeSignature,
+        beat: int,
+        beat_fraction: float,
     ) -> None: ...
 
 class Section:
