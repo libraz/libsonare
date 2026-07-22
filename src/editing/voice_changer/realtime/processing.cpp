@@ -219,15 +219,18 @@ int RealtimeVoiceChanger::latency_samples() const noexcept {
   // host should align to is therefore the amplitude-weighted mean of dry (0) and
   // wet, and the wet contribution scales with BOTH wet_mix and retune.mix.
   // Biquad / formant group delays (<= 8 samples combined) are intentionally not
-  // added so this stays a stable, host-compensable integer. See header.
-  const float wet_mix = std::clamp(config_.wet_mix, 0.0f, 1.0f);
-  const float retune_mix = std::clamp(config_.retune.mix, 0.0f, 1.0f);
+  // added so this stays a stable, host-compensable integer. See header. The
+  // wet_mix / retune.mix / ISP-enabled scalars are read from atomic mirrors so a
+  // host can poll latency from a different thread than the one calling
+  // set_config() without a torn read of config_ (see update_latency_mirrors()).
+  const float wet_mix = latency_wet_mix_.load(std::memory_order_relaxed);
+  const float retune_mix = latency_retune_mix_.load(std::memory_order_relaxed);
   const int grain = channels_[0].retune.grain_size();
   int latency = static_cast<int>(std::lround(wet_mix * retune_mix * static_cast<float>(grain)));
   // The optional inter-sample-peak limiter runs on the already-mixed output and
   // only when wet_mix > 0 (see process_block), so it delays the whole signal —
   // both dry and wet contributions — by its fixed FIR group delay.
-  if (config_.limiter.enable_isp_limiter && wet_mix > 0.0f) {
+  if (latency_isp_enabled_.load(std::memory_order_relaxed) && wet_mix > 0.0f) {
     latency += channels_[0].isp_limiter.latency_samples();
   }
   return latency;

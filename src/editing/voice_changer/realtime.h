@@ -3,6 +3,7 @@
 /// @file realtime_voice_changer.h
 /// @brief Integrated realtime DSP chain for character voice changing.
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -232,6 +233,9 @@ class RealtimeVoiceChanger {
   ///        reports the effective (prepared) grain rather than the requested
   ///        one. No-op before prepare(). Control-thread only.
   void sync_effective_grain_size() noexcept;
+  /// @brief Publishes the latency-report atomic mirrors from @c config_.
+  ///        Control-thread only (constructor / prepare / set_config).
+  void update_latency_mirrors() noexcept;
   float process_input_stage(ChannelState& state, const RealtimeVoiceChangerConfig& config,
                             float input) noexcept;
   float process_output_stage(ChannelState& state, const RealtimeVoiceChangerConfig& config,
@@ -262,6 +266,14 @@ class RealtimeVoiceChanger {
   int num_channels_ = 1;
   std::vector<ChannelState> channels_;
   std::vector<float> scratch_;
+
+  /// Latency-report mirrors. latency_samples() may be polled by a host from a
+  /// thread other than the one calling set_config(), so the scalars it needs
+  /// are mirrored into atomics that set_config()/prepare() publish and
+  /// latency_samples() reads — avoiding a torn read of the plain config_ member.
+  std::atomic<float> latency_wet_mix_{1.0f};
+  std::atomic<float> latency_retune_mix_{1.0f};
+  std::atomic<bool> latency_isp_enabled_{false};
 
   float input_gain_ = 1.0f;
   float output_gain_ = 1.0f;

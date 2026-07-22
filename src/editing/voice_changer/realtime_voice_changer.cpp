@@ -30,6 +30,7 @@ RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
   // consistent state even before prepare() is called. The sample-rate-dependent
   // branch inside update_derived() is guarded and will be re-run by prepare().
   update_derived(config_);
+  update_latency_mirrors();
   // Publish the initial snapshot so the audio thread can adopt it on the first
   // process_block() call even if set_config() is never invoked.
   config_publisher_.publish(std::make_shared<const RealtimeVoiceChangerConfig>(config_));
@@ -62,6 +63,7 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   // (0 means "derive from sample rate"), so latency_samples() already uses the
   // resolved grain. Mirror it into config_ so the two never disagree.
   sync_effective_grain_size();
+  update_latency_mirrors();
   reset();
   // Re-publish so the audio thread sees the same (post-prepare) snapshot and
   // does NOT re-apply coefficients on its first block (they are already
@@ -92,7 +94,14 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
   // no effect until the next prepare(). Overwrite it with the resolved value so
   // config() never advertises a size that is not actually in use.
   sync_effective_grain_size();
+  update_latency_mirrors();
   config_publisher_.publish(std::make_shared<const RealtimeVoiceChangerConfig>(config_));
+}
+
+void RealtimeVoiceChanger::update_latency_mirrors() noexcept {
+  latency_wet_mix_.store(std::clamp(config_.wet_mix, 0.0f, 1.0f), std::memory_order_relaxed);
+  latency_retune_mix_.store(std::clamp(config_.retune.mix, 0.0f, 1.0f), std::memory_order_relaxed);
+  latency_isp_enabled_.store(config_.limiter.enable_isp_limiter, std::memory_order_relaxed);
 }
 
 void RealtimeVoiceChanger::sync_effective_grain_size() noexcept {

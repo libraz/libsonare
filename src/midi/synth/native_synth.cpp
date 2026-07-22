@@ -646,6 +646,12 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
       mix_l = std::tanh(bus_drive_gain_ * mix_l) / bus_drive_gain_;
       mix_r = std::tanh(bus_drive_gain_ * mix_r) / bus_drive_gain_;
     }
+    // Scrub any non-finite bus sample before it reaches the DC blocker: a single
+    // NaN/Inf reaching dc_x1_/dc_y1_ would persist in the IIR state and poison
+    // every subsequent sample for the whole render. Bit-identical for finite
+    // input. Mirrors the host-side scrub in au_instrument_provider.
+    if (!std::isfinite(mix_l)) mix_l = 0.0f;
+    if (!std::isfinite(mix_r)) mix_r = 0.0f;
     if (config_.dc_block) {
       const float l = mix_l - dc_x1_[0] + dc_r_ * dc_y1_[0];
       dc_x1_[0] = mix_l;
