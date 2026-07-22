@@ -1,6 +1,28 @@
 # Changelog
 
-## v1.5.3 (2026-07-21)
+## v1.5.4 (2026-07-22)
+
+This is a follow-up release to v1.5.3, adding a musical-beat playhead and configurable undo history to the realtime and project surfaces, a physically motivated air-absorption term for large-hall reverberation, and a round of realtime-safety, voice-changer and CLI/binding correctness fixes.
+
+### New surfaces
+
+- The engine transport snapshot now reports the musical `beat` (one-based) and `beat_fraction` (in `[0, 1)`) alongside the existing bar index, so hosts can render a bar:beat:tick playhead. The C `SonareTransportState` grows the two fields (appended after the time signature to preserve existing offsets) and the Node, Python and WASM readers plus their type declarations surface them.
+- The project edit history exposes a configurable undo depth and an explicit history reset across every surface: `sonare_project_set_max_undo_depth` / `sonare_project_clear_history` on the C ABI, mirrored as `setMaxUndoDepth` / `clearHistory` (Node, WASM) and `set_max_undo_depth` / `clear_history` (Python). Shrinking the depth evicts the oldest entries immediately (clamped to at least one), letting callers trade undo history for resident memory or reset it between sessions.
+
+### Acoustic model
+
+- Reverberation time gains an optional atmospheric-absorption term: an ISO 9613-1 pure-tone air-absorption coefficient feeds the `4mV` denominator of the Sabine/Eyring `shoebox_reverb_time`, shortening the high bands of large halls the most to match the physical air roll-off. The parameter is opt-in and defaults off, so the geometry-only reverberation tail is byte-identical.
+- Early reflections are coloured per octave band and the polyhedral image-source search is bounded, so non-shoebox rooms render more accurately without unbounded reflection enumeration.
+
+### Bug fixes
+
+- Realtime audio output is hardened against non-finite state and torn reads, and hot-path scratch buffers are reused to remove a realtime allocation on the render path.
+- The voice changer applies a flat configuration POD through `setConfig` on Node and WASM, accepts a narrower interleaved channel count on WASM, folds `retune.mix` into its reported realtime latency, and matches the C-ABI error contract on the WASM path.
+- Section analysis runs on the shared analysis-rate signal, and a handful of DSP / analysis parity and edge-case bugs are corrected in the core.
+- The realtime engine seeds its fallback tempo map, and the embedded-scene version mismatch is classified as an explicit error.
+- Arrangement editing restores split-MIDI order exactly and skips redundant store clones on undo; the composition assistant budgets its iterations by consumed count rather than slot count.
+- Direct-call bindings require an explicit sample rate and validate WASM inputs, and the Python CLI corrects its output handling and surfaces project diagnostics.
+- Streaming computes the per-frame smoothed chord once per frame.
 
 This release is a cross-surface input-validation and realtime-safety hardening pass over the offline, streaming, CLI and macOS-host paths, rounded out by a request-object call form for the one-shot JS facades and a handful of additive analysis, engine and mastering surfaces.
 
