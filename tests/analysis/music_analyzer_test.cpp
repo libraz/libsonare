@@ -132,6 +132,40 @@ TEST_CASE("MusicAnalyzer form", "[music_analyzer]") {
   REQUIRE(!form.empty());
 }
 
+TEST_CASE("MusicAnalyzer native-rate section path", "[music_analyzer]") {
+  // A source above the 22050 Hz analysis rate is downsampled internally; section
+  // analysis must run on that shared analysis-rate signal (same rate the
+  // boundaries were detected on) and still yield a valid, non-empty form whose
+  // characters are legal section labels.
+  Audio audio = create_test_audio(44100, 8.0f);
+
+  MusicAnalyzer analyzer(audio);
+
+  REQUIRE(analyzer.boundary_detector().sample_rate() == 22050);
+
+  std::string form = analyzer.form();
+  REQUIRE(!form.empty());
+  for (char c : form) {
+    const bool is_valid =
+        (c == 'I' || c == 'A' || c == 'P' || c == 'B' || c == 'C' || c == 'S' || c == 'O');
+    REQUIRE(is_valid);
+  }
+
+  const auto& sections = analyzer.section_analyzer().sections();
+  REQUIRE(!sections.empty());
+  float prev_end = 0.0f;
+  for (const auto& section : sections) {
+    REQUIRE(section.end > section.start);
+    REQUIRE(section.energy_level >= 0.0f);
+    REQUIRE(section.energy_level <= 1.0f);
+    // Sections stay ordered and within the native track duration despite the
+    // internal resample to the analysis rate.
+    REQUIRE(section.start >= prev_end - 0.1f);
+    REQUIRE(section.end <= audio.duration() + 0.1f);
+    prev_end = section.end;
+  }
+}
+
 TEST_CASE("MusicAnalyzer analyzer access", "[.][slow][music_analyzer]") {
   Audio audio = create_test_audio();
 

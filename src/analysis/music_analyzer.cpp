@@ -201,9 +201,13 @@ SectionAnalyzer& MusicAnalyzer::section_analyzer() {
     SectionConfig section_config;
     section_config.n_fft = config_.n_fft;
     section_config.hop_length = config_.hop_length;
-    // Use cached boundary_detector's boundaries to avoid recomputation
+    // Run section descriptors on the same analysis-rate signal the boundaries
+    // were detected on (analysis_audio_ at kAnalysisSampleRate), not the native
+    // input. This keeps the whole music-analysis pipeline on one sample rate and
+    // makes the per-section STFT/chroma an analysis-rate recompute rather than a
+    // redundant native-rate one.
     section_analyzer_ = std::make_unique<SectionAnalyzer>(
-        audio_, boundary_detector().boundary_times(), section_config);
+        analysis_audio_, boundary_detector().boundary_times(), section_config);
   });
   return *section_analyzer_;
 }
