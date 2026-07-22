@@ -272,13 +272,19 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             )
         )
     else:
+        # Only emit ANSI color when writing to a terminal; piping or redirecting
+        # the human-readable output must stay free of control bytes.
+        use_color = sys.stdout.isatty()
+        bpm_style = "\033[32m\033[1m" if use_color else ""
+        key_style = "\033[35m\033[1m" if use_color else ""
+        reset = "\033[0m" if use_color else ""
         print(
-            f"\n  \033[32m\033[1m> Estimated BPM : {r.bpm:.2f} BPM  "
-            f"(conf {r.bpm_confidence * 100:.1f}%)\033[0m"
+            f"\n  {bpm_style}> Estimated BPM : {r.bpm:.2f} BPM  "
+            f"(conf {r.bpm_confidence * 100:.1f}%){reset}"
         )
         print(
-            f"  \033[35m\033[1m> Estimated Key : {key_name}  "
-            f"(conf {r.key.confidence * 100:.1f}%)\033[0m"
+            f"  {key_style}> Estimated Key : {key_name}  "
+            f"(conf {r.key.confidence * 100:.1f}%){reset}"
         )
         print(f"  > Time Signature: {r.time_signature.numerator}/{r.time_signature.denominator}")
         print(f"  > Beats: {len(r.beat_times)}")

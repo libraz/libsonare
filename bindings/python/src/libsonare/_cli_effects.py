@@ -232,6 +232,7 @@ def cmd_voice_presets(args: argparse.Namespace) -> int:
 def cmd_voice_preset(args: argparse.Namespace) -> int:
     from . import realtime_voice_changer_preset_json
 
+    # The library returns a JSON preset regardless of --json; print it as-is.
     print(realtime_voice_changer_preset_json(args.preset))
     return 0
 

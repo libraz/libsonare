@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from typing import Any, cast
 
 from ._cli_common import (
@@ -16,12 +17,23 @@ from ._cli_common import (
 
 _MAX_PROJECT_OR_MIDI_BYTES = 64 * 1024 * 1024
 
+# Subcommands whose result goes to stdout only; accepting -o would silently
+# discard the requested destination, so it is rejected instead.
+_PROJECT_NO_OUTPUT = frozenset({"abi", "compile", "synth-presets"})
+
 
 def _load_project(path: str) -> object:
     from . import Project
 
     data = _read_bounded(path, _MAX_PROJECT_OR_MIDI_BYTES)
-    return Project.from_json(data.decode("utf-8"))
+    return Project.from_json(data)
+
+
+def _load_project_with_diagnostics(path: str) -> object:
+    from . import Project
+
+    data = _read_bounded(path, _MAX_PROJECT_OR_MIDI_BYTES)
+    return Project.from_json_with_diagnostics(data)
 
 
 def _write_project_json(project: object, path: str) -> int:
@@ -73,6 +85,8 @@ def cmd_project(args: argparse.Namespace) -> int:
     from . import Project, project_abi_version, synth_preset_names
 
     subcommand = args.project_command
+    if subcommand in _PROJECT_NO_OUTPUT and getattr(args, "output", None):
+        raise ValueError(f"project {subcommand} does not write an output file; remove --output")
     if subcommand == "abi":
         version = project_abi_version()
         print(_strict_json_dumps({"abi_version": version}) if args.json else version)
@@ -93,19 +107,32 @@ def cmd_project(args: argparse.Namespace) -> int:
             print(f"  Wrote empty project: {args.output}")
         return 0
     if subcommand == "validate":
-        project = _load_project(args.input)
+        loaded = cast(Any, _load_project_with_diagnostics(args.input))
+        project = loaded.project
+        # The native loader joins repair diagnostics (dangling clip sources,
+        # source-kind mismatches, invalid warp maps, ...) newline-separated.
+        diagnostics = [line for line in loaded.diagnostics.split("\n") if line]
         try:
-            bytes_written = 0
             if args.output:
                 bytes_written = _write_project_json(project, args.output)
             else:
                 bytes_written = len(cast(Any, project).to_json_bytes())
         finally:
             cast(Any, project).close()
+        strict = getattr(args, "strict", False)
+        valid = not (strict and diagnostics)
         if args.json:
-            print(_strict_json_dumps({"valid": True, "bytes": bytes_written}))
+            print(
+                _strict_json_dumps(
+                    {"valid": valid, "bytes": bytes_written, "diagnostics": diagnostics}
+                )
+            )
         else:
             print(f"  Project JSON is valid ({bytes_written} bytes canonical)")
+            for entry in diagnostics:
+                print(f"  warning: {entry}", file=sys.stderr)
+        if not valid:
+            return 1 if _legacy_exit_codes() else EXIT_INVALID_STATE
         return 0
     if subcommand == "compile":
         project = _load_project(args.input)

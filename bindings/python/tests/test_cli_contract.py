@@ -374,3 +374,51 @@ def test_mix_input_output_contract(tmp_path, has_input, has_output, expected_cod
         with wave.open(str(output), "rb") as wav:
             assert wav.getnchannels() == 2
             assert wav.getnframes() >= 513
+
+
+def test_analyze_human_output_has_no_ansi_when_not_a_tty(tmp_path) -> None:
+    """The human-readable analyze output must not emit ANSI color codes when
+    stdout is a pipe (a subprocess is not a TTY), so redirected output stays free
+    of control bytes."""
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+    result = _run_console("analyze", str(source))
+    assert result.returncode == 0, result.stderr
+    assert "\x1b" not in result.stdout
+
+
+@pytest.mark.parametrize("command", ["abi", "synth-presets"])
+def test_project_stdout_only_subcommands_reject_output(tmp_path, command) -> None:
+    """project abi / synth-presets / compile write their result to stdout only.
+    Passing -o would silently discard the destination, so it fails loudly and
+    writes nothing rather than exiting 0 without a file."""
+    dest = tmp_path / "unwanted.txt"
+    result = _run_console("project", command, "-o", str(dest))
+    assert result.returncode != 0
+    assert not dest.exists()
+
+
+def test_voice_preset_json_flag_is_accepted_noop(tmp_path) -> None:
+    """voice-preset always prints JSON; the --json flag is an accepted no-op and
+    the output is identical with or without it."""
+    without = _run_console("voice-preset", "--preset", "neutral-monitor")
+    assert without.returncode == 0, without.stderr
+    json.loads(without.stdout)
+    with_flag = _run_console("voice-preset", "--preset", "neutral-monitor", "--json")
+    assert with_flag.returncode == 0, with_flag.stderr
+    assert with_flag.stdout == without.stdout
+
+
+def test_project_validate_surfaces_diagnostics_field(tmp_path) -> None:
+    """validate reports the loader's repair diagnostics; a clean project yields an
+    empty diagnostics list and stays valid, including under --strict."""
+    proj = tmp_path / "clean.sonare"
+    created = _run_console("project", "new", "-o", str(proj))
+    assert created.returncode == 0, created.stderr
+    result = _run_console("project", "validate", "--in", str(proj), "--json")
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["valid"] is True
+    assert payload["diagnostics"] == []
+    strict = _run_console("project", "validate", "--in", str(proj), "--strict", "--json")
+    assert strict.returncode == 0, strict.stderr

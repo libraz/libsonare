@@ -220,23 +220,49 @@ def main() -> None:
     sub.add_parser("downbeats", parents=[common], help="Detect downbeat times")
     sub.add_parser("onsets", parents=[common], help="Detect onset times")
     chords_p = sub.add_parser("chords", parents=[fft_options], help="Detect chord progression")
-    chords_p.add_argument("--min-duration", type=float, default=0.3)
-    chords_p.add_argument("--smoothing-window", type=float, default=2.0)
-    chords_p.add_argument("--threshold", type=float, default=0.5)
-    chords_p.add_argument("--triads-only", action="store_true")
-    chords_p.add_argument("--nnls", action="store_true")
-    chords_p.add_argument("--no-beat-sync", action="store_true")
-    chords_p.add_argument("--use-hmm", action="store_true")
-    chords_p.add_argument("--hmm-beam-width", type=int, default=24)
-    chords_p.add_argument("--key-context", action="store_true")
-    chords_p.add_argument("--key-root", default="C")
-    chords_p.add_argument("--key-mode", default="major")
-    chords_p.add_argument("--detect-inversions", action="store_true")
+    chords_p.add_argument(
+        "--min-duration", type=float, default=0.3, help="Minimum chord duration in seconds"
+    )
+    chords_p.add_argument(
+        "--smoothing-window", type=float, default=2.0, help="Chroma smoothing window in seconds"
+    )
+    chords_p.add_argument(
+        "--threshold", type=float, default=0.5, help="Chord detection confidence threshold"
+    )
+    chords_p.add_argument(
+        "--triads-only", action="store_true", help="Restrict output to triad qualities"
+    )
+    chords_p.add_argument(
+        "--nnls", action="store_true", help="Use NNLS chroma instead of the STFT chroma"
+    )
+    chords_p.add_argument(
+        "--no-beat-sync", action="store_true", help="Disable beat-synchronous chroma pooling"
+    )
+    chords_p.add_argument(
+        "--use-hmm", action="store_true", help="Decode the chord sequence with an HMM"
+    )
+    chords_p.add_argument("--hmm-beam-width", type=int, default=24, help="HMM decoder beam width")
+    chords_p.add_argument(
+        "--key-context", action="store_true", help="Bias detection with a key context"
+    )
+    chords_p.add_argument(
+        "--key-root", default="C", help="Key-context root pitch class (e.g. C, F#)"
+    )
+    chords_p.add_argument(
+        "--key-mode", default="major", help="Key-context mode (e.g. major, minor)"
+    )
+    chords_p.add_argument(
+        "--detect-inversions", action="store_true", help="Report chord inversions (bass note)"
+    )
     sub.add_parser("analyze", parents=[common], help="Full music analysis")
     mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
-    mel_p.add_argument("--fmin", type=float, default=0.0)
-    mel_p.add_argument("--fmax", type=float, default=0.0)
-    mel_p.add_argument("--htk", action="store_true")
+    mel_p.add_argument("--fmin", type=float, default=0.0, help="Lowest mel band frequency in Hz")
+    mel_p.add_argument(
+        "--fmax", type=float, default=0.0, help="Highest mel band frequency in Hz (0 = Nyquist)"
+    )
+    mel_p.add_argument(
+        "--htk", action="store_true", help="Use the HTK mel formula instead of Slaney"
+    )
     sub.add_parser("chroma", parents=[fft_options], help="Compute chromagram")
     sub.add_parser("spectral", parents=[fft_options], help="Compute spectral features")
     pitch_p = sub.add_parser("pitch", parents=[common], help="Track pitch")
@@ -326,9 +352,13 @@ def main() -> None:
     )
     voice_presets_p = sub.add_parser("voice-presets", help="List realtime voice changer presets")
     voice_presets_p.add_argument("--json", action="store_true", help="Emit JSON")
-    voice_preset_p = sub.add_parser("voice-preset", help="Print a realtime voice changer preset")
+    voice_preset_p = sub.add_parser(
+        "voice-preset", help="Print a realtime voice changer preset (always JSON)"
+    )
     voice_preset_p.add_argument("--preset", default="neutral-monitor", help="Preset id")
-    voice_preset_p.add_argument("--json", action="store_true", help="Emit JSON")
+    voice_preset_p.add_argument(
+        "--json", action="store_true", help="No-op; a preset is always printed as JSON"
+    )
     # Not a parents=[common] subcommand: it consumes a JSON preset, not audio,
     # so the analysis flags (--n-fft/--hop-length/--n-mels) do not apply and the
     # positional argument is a preset file rather than an audio file.
@@ -490,7 +520,9 @@ def main() -> None:
         help="List two-input mastering analysis names",
     )
     mpa_p = sub.add_parser(
-        "mastering-pair-analyze", parents=[common], help="Run a two-input mastering analysis"
+        "mastering-pair-analyze",
+        parents=[common],
+        help="Run a two-input mastering analysis (always JSON output)",
     )
     mpa_p.add_argument("--reference", required=True, help="Reference audio file")
     mpa_p.add_argument("--analysis", required=True, help="Analysis name")
@@ -550,6 +582,12 @@ def main() -> None:
     for pname in ("validate", "compile"):
         pp = project_sub.add_parser(pname, parents=[project_common], help=f"Project {pname}")
         pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
+        if pname == "validate":
+            pp.add_argument(
+                "--strict",
+                action="store_true",
+                help="Fail (non-zero exit) when the project loads with diagnostics",
+            )
     sf2_cli_note = (
         "SF2 / SoundFont and per-destination synth JSON are not wired through this CLI command; "
         "use the Project API for SoundFont-backed bounces."
