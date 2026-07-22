@@ -405,6 +405,57 @@ TEST_CASE("StreamAnalyzer features are invariant to chunk size at 48kHz", "[stre
   }
 }
 
+TEST_CASE("StreamAnalyzer external-offset timestamps track the resampled timeline at 48kHz",
+          "[streaming][offset]") {
+  // At 48 kHz the analyzer resamples internally. The streaming resampler
+  // compensates its whole-sample filter latency (r8brain CDSPResampler reports
+  // getLatency() == 0), so an external sample offset applied on top of the
+  // resampled frame positions stays a pure constant shift -- accurate to within
+  // about one input sample rather than drifting by the filter length. Compare
+  // the external-offset path against the offset-less (internal) path plus a
+  // constant offset; a filter-length drift would blow the tolerance.
+  StreamConfig config;
+  config.sample_rate = 48000;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.compute_spectral = true;
+  config.max_pending_frames = 256;
+
+  std::vector<float> audio(16384, 0.0f);
+  for (size_t i = 0; i < audio.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(config.sample_rate);
+    audio[i] = 0.5f * std::sin(2.0f * 3.14159265f * 220.0f * t) +
+               0.3f * std::sin(2.0f * 3.14159265f * 440.0f * t);
+  }
+
+  StreamAnalyzer internal(config);
+  internal.process(audio.data(), audio.size());
+  const auto internal_frames = internal.read_frames(256);
+  REQUIRE_FALSE(internal_frames.empty());
+
+  constexpr size_t kOffset = 96000;  // 2 s at 48 kHz, in the external sample domain.
+  StreamAnalyzer external(config);
+  const size_t chunk = 4096;
+  for (size_t off = 0; off < audio.size(); off += chunk) {
+    const size_t count = std::min(chunk, audio.size() - off);
+    external.process(audio.data() + off, count, kOffset + off);
+  }
+  const auto external_frames = external.read_frames(256);
+  REQUIRE(external_frames.size() == internal_frames.size());
+
+  const float offset_sec = static_cast<float>(kOffset) / static_cast<float>(config.sample_rate);
+  const float sample_sec = 1.0f / static_cast<float>(config.sample_rate);
+  for (size_t f = 0; f < external_frames.size(); ++f) {
+    CAPTURE(f);
+    // Timestamp is a constant offset of the internal timeline (no drift), and
+    // the frame content is identical -- the offset only relabels timestamps.
+    REQUIRE_THAT(external_frames[f].timestamp,
+                 WithinAbs(internal_frames[f].timestamp + offset_sec, 2.0f * sample_sec));
+    REQUIRE_THAT(external_frames[f].spectral_centroid,
+                 WithinAbs(internal_frames[f].spectral_centroid, 1.0e-4f));
+  }
+}
+
 TEST_CASE("StreamAnalyzer external offset discontinuities require reset", "[streaming][offset]") {
   StreamConfig config;
   config.sample_rate = 22050;

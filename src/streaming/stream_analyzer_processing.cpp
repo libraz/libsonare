@@ -36,13 +36,14 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t samp
 
   /// Seed the buffered frame-start position once. Re-seeding it for every
   /// chunk would relabel a partial frame with the final chunk's offset.
-  /// NOTE: this overload is only exact when no internal resampling is active.
-  /// When the input sample rate exceeds kMaxDirectSampleRate the analyzer
-  /// resamples (introducing filter latency and a changed sample count), so the
-  /// re-seeded offset cannot account for the resampler's delay — frame-sample
-  /// offsets derived from it are then best-effort/approximate. Use the
-  /// offset-less process() overload (which advances a continuous internal
-  /// position) when resampling is in play.
+  /// NOTE: when the input sample rate exceeds kMaxDirectSampleRate the analyzer
+  /// resamples, so frame offsets are advanced by hop_length / resample_ratio_
+  /// to stay in the original (external) sample domain. The streaming resampler
+  /// fully compensates its whole-sample filter latency (r8brain CDSPResampler
+  /// reports getLatency() == 0); only a sub-sample fractional latency plus the
+  /// float resample_ratio_ rounding remain, so an external offset derived from
+  /// this seed stays accurate to within about one input sample rather than
+  /// drifting by the filter length.
   if (offset_tracking_mode_ == OffsetTrackingMode::Unset) {
     cumulative_samples_ = sample_offset;
     cumulative_samples_exact_ = static_cast<double>(sample_offset);
