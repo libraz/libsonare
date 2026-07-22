@@ -329,17 +329,19 @@ class RealtimeVoiceChangerWrapper {
     }
   }
 
-  /// Reject a channel count that differs from the prepared layout. The voice
-  /// changer is configured for prepared_channels_ at prepare() time, so feeding
-  /// a different count would grow the scratch buffers and call process_block
-  /// with a count the changer never allocated state for. This mirrors the planar
-  /// path's per-channel range check (getPlanarChannelBuffer) so every interleaved
-  /// entry point rejects a runtime channel-count mismatch identically.
+  /// Accept any channel count in [1, prepared_channels_], matching the C-ABI
+  /// oracle (sonare_realtime_voice_changer_process_interleaved rejects only
+  /// num_channels < 1 || num_channels > handle->num_channels) and the Node and
+  /// Python surfaces. The changer is prepared for prepared_channels_, and the
+  /// grow-only scratch is already sized for that maximum, so processing a
+  /// narrower layout (e.g. a mono block on a stereo-prepared instance) is safe.
+  /// A count above the prepared maximum is rejected: it would exceed the
+  /// allocated planar state the changer was configured for.
   void require_prepared_channels(int channels) const {
-    if (channels != prepared_channels_) {
+    if (channels < 1 || channels > prepared_channels_) {
       throw sonare::SonareException(
           sonare::ErrorCode::InvalidParameter,
-          "RealtimeVoiceChanger: channel count must match the prepared layout");
+          "RealtimeVoiceChanger: channel count must be between 1 and the prepared layout");
     }
   }
 

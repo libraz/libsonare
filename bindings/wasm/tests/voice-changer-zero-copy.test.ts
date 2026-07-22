@@ -76,11 +76,12 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     changer.delete();
   });
 
-  it('rejects an interleaved channel count that differs from the prepared layout', () => {
-    // The changer is prepared for 1 channel; feeding 2 interleaved channels must
-    // be rejected (symmetric with the planar path's channel range check) instead
-    // of silently growing the scratch buffers and processing a layout the
-    // changer was never prepared for.
+  it('rejects an interleaved channel count above the prepared layout', () => {
+    // The changer is prepared for 1 channel; feeding 2 interleaved channels
+    // exceeds the prepared maximum and must be rejected (matching the C-ABI
+    // oracle, which rejects num_channels > handle->num_channels) instead of
+    // silently growing the scratch buffers and processing a layout the changer
+    // was never prepared for.
     const changer = new RealtimeVoiceChanger('bright-idol');
     changer.prepare(SR, BLOCK, 1);
     const stereo = new Float32Array(BLOCK * 2);
@@ -91,6 +92,29 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     expect(() => changer.processPreparedInterleaved(BLOCK, 2)).toThrow();
     // The prepared count still works.
     expect(() => changer.processInterleaved(new Float32Array(BLOCK), 1)).not.toThrow();
+    changer.delete();
+  });
+
+  it('accepts a narrower interleaved channel count than the prepared layout', () => {
+    // Prepared for stereo, but a mono block (channels=1) must be accepted, just
+    // like the C ABI / Node / Python surfaces (which accept 1 <= channels <=
+    // prepared). Porting code that calls processInterleaved(buf, 1) on a
+    // stereo-prepared instance must not throw only on WASM.
+    const changer = new RealtimeVoiceChanger('bright-idol');
+    changer.prepare(SR, BLOCK, 2);
+    const mono = new Float32Array(BLOCK);
+    expect(() => changer.processInterleaved(mono, 1)).not.toThrow();
+    expect(() => changer.processInterleavedInto(mono, 1, new Float32Array(BLOCK))).not.toThrow();
+    expect(() => changer.getInterleavedInputBuffer(BLOCK, 1)).not.toThrow();
+    expect(() => changer.getInterleavedOutputBuffer(BLOCK, 1)).not.toThrow();
+    expect(() => changer.processPreparedInterleaved(BLOCK, 1)).not.toThrow();
+    // The full prepared width still works too.
+    expect(() => changer.processInterleaved(new Float32Array(BLOCK * 2), 2)).not.toThrow();
+    // A count above the prepared maximum is still rejected.
+    const wide = new Float32Array(BLOCK * 3);
+    expect(() => changer.processInterleaved(wide, 3)).toThrow();
+    // A non-positive count is still rejected.
+    expect(() => changer.processInterleaved(mono, 0)).toThrow();
     changer.delete();
   });
 
