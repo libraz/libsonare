@@ -347,6 +347,64 @@ TEST_CASE("StreamAnalyzer features are invariant to chunk size", "[streaming][ch
   }
 }
 
+TEST_CASE("StreamAnalyzer features are invariant to chunk size at 48kHz", "[streaming][chunk]") {
+  // The 22050 Hz sibling above never exercises the resampler (input <=
+  // kMaxDirectSampleRate). 48000 Hz is the dominant production input rate and
+  // forces the persistent, phase-continuous resampler onto the hot path. Feed
+  // the same signal one-shot and in several chunk sizes and assert element-wise
+  // feature equality, so a cross-chunk resampler phase-continuity regression at
+  // a chunk boundary cannot pass unnoticed.
+  StreamConfig config;
+  config.sample_rate = 48000;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.compute_magnitude = true;
+  config.compute_mel = true;
+  config.compute_chroma = true;
+  config.compute_spectral = true;
+  config.max_pending_frames = 256;
+
+  // ~0.34 s of a deterministic non-trivial signal (two partials + slow
+  // amplitude drift) so every feature has real structure to compare.
+  std::vector<float> audio(16384, 0.0f);
+  for (size_t i = 0; i < audio.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(config.sample_rate);
+    audio[i] = 0.5f * std::sin(2.0f * 3.14159265f * 220.0f * t) +
+               0.3f * std::sin(2.0f * 3.14159265f * 440.0f * t) * (0.5f + 0.5f * t);
+  }
+
+  StreamAnalyzer reference(config);
+  reference.process(audio.data(), audio.size());
+  const auto expected = reference.read_frames(256);
+  REQUIRE_FALSE(expected.empty());
+
+  for (const size_t chunk_size : {size_t{100}, size_t{256}, size_t{512}, size_t{4096}}) {
+    CAPTURE(chunk_size);
+    StreamAnalyzer analyzer(config);
+    for (size_t offset = 0; offset < audio.size(); offset += chunk_size) {
+      const size_t count = std::min(chunk_size, audio.size() - offset);
+      analyzer.process(audio.data() + offset, count);
+    }
+    const auto actual = analyzer.read_frames(256);
+    REQUIRE(actual.size() == expected.size());
+    for (size_t f = 0; f < actual.size(); ++f) {
+      CAPTURE(f);
+      REQUIRE_THAT(actual[f].spectral_centroid, WithinAbs(expected[f].spectral_centroid, 1.0e-4f));
+      REQUIRE_THAT(actual[f].spectral_flatness, WithinAbs(expected[f].spectral_flatness, 1.0e-5f));
+      REQUIRE_THAT(actual[f].rms_energy, WithinAbs(expected[f].rms_energy, 1.0e-5f));
+      REQUIRE_THAT(actual[f].onset_strength, WithinAbs(expected[f].onset_strength, 1.0e-4f));
+      REQUIRE(actual[f].mel.size() == expected[f].mel.size());
+      for (size_t k = 0; k < actual[f].mel.size(); ++k) {
+        REQUIRE_THAT(actual[f].mel[k], WithinAbs(expected[f].mel[k], 1.0e-4f));
+      }
+      REQUIRE(actual[f].chroma.size() == expected[f].chroma.size());
+      for (size_t k = 0; k < actual[f].chroma.size(); ++k) {
+        REQUIRE_THAT(actual[f].chroma[k], WithinAbs(expected[f].chroma[k], 1.0e-4f));
+      }
+    }
+  }
+}
+
 TEST_CASE("StreamAnalyzer external offset discontinuities require reset", "[streaming][offset]") {
   StreamConfig config;
   config.sample_rate = 22050;
