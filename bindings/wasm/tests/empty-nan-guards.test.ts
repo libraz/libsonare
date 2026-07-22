@@ -4,6 +4,7 @@ import {
   analyzeDynamics,
   analyzeRhythm,
   analyzeTimbre,
+  cyclicTempogram,
   detectBpm,
   init,
   lufs,
@@ -22,6 +23,7 @@ import {
   resample,
   StreamingEqualizer,
   tempogram,
+  tempogramRatio,
   voiceChange,
   voiceChangeRealtime,
 } from '../src/index';
@@ -119,6 +121,10 @@ describe('NaN/Inf guards (WASM)', () => {
     expect(() => pcen(new Float32Array([1, 2, 3]), 2, 2)).toThrow();
     expect(() => tempogram(withNaN(), SR)).toThrow();
     expect(() => plp(withNaN(), SR)).toThrow();
+    // The cyclic and ratio tempogram wrappers previously skipped finiteness
+    // validation and silently returned NaN-filled arrays (unlike the C ABI).
+    expect(() => cyclicTempogram(withNaN(), SR)).toThrow(/NaN|Inf/);
+    expect(() => tempogramRatio(withNaN(), 64, SR)).toThrow(/NaN|Inf/);
   });
   it('StreamingEqualizer.match rejects non-finite reference audio', () => {
     const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });

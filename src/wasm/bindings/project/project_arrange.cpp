@@ -29,7 +29,7 @@ uint32_t ProjectWasm::addTrack(val desc) {
   uint32_t out = 0;
   const SonareError err = sonare_project_add_track(project_.get(), &d, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to add track");
+    throwCError(err, "failed to add track");
   }
   return out;
 }
@@ -114,7 +114,7 @@ val ProjectWasm::addMidiClip(double start_ppq, double length_ppq) {
   const SonareError err =
       sonare_project_add_midi_clip(project_.get(), start_ppq, length_ppq, &track, &clip);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to add MIDI clip");
+    throwCError(err, "failed to add MIDI clip");
   }
   val out = val::object();
   out.set("trackId", track);
@@ -126,7 +126,7 @@ uint32_t ProjectWasm::splitClip(uint32_t clip_id, double split_ppq) {
   uint32_t out = 0;
   const SonareError err = sonare_project_split_clip(project_.get(), clip_id, split_ppq, &out);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to split clip");
+    throwCError(err, "failed to split clip");
   }
   return out;
 }
@@ -134,29 +134,28 @@ uint32_t ProjectWasm::splitClip(uint32_t clip_id, double split_ppq) {
 void ProjectWasm::trimClip(uint32_t clip_id, double start_ppq, double length_ppq) {
   const SonareError err = sonare_project_trim_clip(project_.get(), clip_id, start_ppq, length_ppq);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to trim clip");
+    throwCError(err, "failed to trim clip");
   }
 }
 
 void ProjectWasm::moveClip(uint32_t clip_id, double start_ppq, uint32_t track_id) {
   const SonareError err = sonare_project_move_clip(project_.get(), clip_id, start_ppq, track_id);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to move clip");
+    throwCError(err, "failed to move clip");
   }
 }
 
 void ProjectWasm::setTrackKind(uint32_t track_id, uint32_t kind) {
   const SonareError err = sonare_project_set_track_kind(project_.get(), track_id, kind);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set track kind");
+    throwCError(err, "failed to set track kind");
   }
 }
 
 void ProjectWasm::setClipWarpRef(uint32_t clip_id, uint32_t warp_ref_id) {
   const SonareError err = sonare_project_set_clip_warp_ref(project_.get(), clip_id, warp_ref_id);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set clip warp reference");
+    throwCError(err, "failed to set clip warp reference");
   }
 }
 
@@ -182,8 +181,7 @@ void ProjectWasm::setClipWarpMode(uint32_t clip_id, val mode_val) {
   }
   const SonareError err = sonare_project_set_clip_warp_mode(project_.get(), clip_id, mode);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set clip warp mode");
+    throwCError(err, "failed to set clip warp mode");
   }
 }
 
@@ -207,14 +205,14 @@ void ProjectWasm::setWarpMap(val desc) {
   cdesc.anchor_count = anchors.size();
   const SonareError err = sonare_project_set_warp_map(project_.get(), &cdesc);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set warp map");
+    throwCError(err, "failed to set warp map");
   }
 }
 
 void ProjectWasm::removeWarpMap(uint32_t warp_ref_id) {
   const SonareError err = sonare_project_remove_warp_map(project_.get(), warp_ref_id);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to remove warp map");
+    throwCError(err, "failed to remove warp map");
   }
 }
 
@@ -222,36 +220,35 @@ void ProjectWasm::setTrackMidiDestination(uint32_t track_id, uint32_t destinatio
   const SonareError err =
       sonare_project_set_track_midi_destination(project_.get(), track_id, destination_id);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "failed to set track MIDI destination");
+    throwCError(err, "failed to set track MIDI destination");
   }
 }
 
 void ProjectWasm::setTrackGain(uint32_t track_id, float gain) {
   const SonareError err = sonare_project_set_track_gain(project_.get(), track_id, gain);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set track gain");
+    throwCError(err, "failed to set track gain");
   }
 }
 
 void ProjectWasm::setTrackMute(uint32_t track_id, bool mute) {
   const SonareError err = sonare_project_set_track_mute(project_.get(), track_id, mute ? 1 : 0);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set track mute");
+    throwCError(err, "failed to set track mute");
   }
 }
 
 void ProjectWasm::setTrackSolo(uint32_t track_id, bool solo) {
   const SonareError err = sonare_project_set_track_solo(project_.get(), track_id, solo ? 1 : 0);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set track solo");
+    throwCError(err, "failed to set track solo");
   }
 }
 
 void ProjectWasm::setTrackPan(uint32_t track_id, float pan) {
   const SonareError err = sonare_project_set_track_pan(project_.get(), track_id, pan);
   if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to set track pan");
+    throwCError(err, "failed to set track pan");
   }
 }
 

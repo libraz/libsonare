@@ -68,8 +68,17 @@ export function meterTapCode(tap: MeterTap | number): number {
 export function sendTimingCode(timing: SendTiming | number): number {
   // Mirrors SonareSendTiming: post-fader is 0 (so an omitted/zeroed value is
   // post-fader), pre-fader is 1. A raw number is passed through as the C ABI int.
+  // An unknown string is rejected rather than silently routed to post-fader,
+  // matching the sibling enum-code helpers and Node's sendTimingValue.
   if (typeof timing === 'number') {
     return timing;
   }
-  return timing === 'preFader' ? 1 : 0;
+  switch (timing) {
+    case 'postFader':
+      return 0;
+    case 'preFader':
+      return 1;
+    default:
+      throw new Error(`Invalid send timing: ${timing}`);
+  }
 }

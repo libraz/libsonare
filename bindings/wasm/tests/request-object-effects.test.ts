@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { meterTapCode, panLawCode, panModeCode } from '../src/codes';
+import { meterTapCode, panLawCode, panModeCode, sendTimingCode } from '../src/codes';
 import {
   analyzeMelody,
   harmonic,
@@ -160,6 +160,14 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     expect(panLawCode('const6dB')).toBe(2);
     expect(panModeCode('balance')).toBe(0);
     expect(meterTapCode('postFader')).toBe(1);
+  });
+
+  it('sendTimingCode rejects an unknown string instead of defaulting to post-fader', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: exercising the runtime guard with an invalid enum string
+    expect(() => sendTimingCode('bogus' as any)).toThrow();
+    expect(sendTimingCode('postFader')).toBe(0);
+    expect(sendTimingCode('preFader')).toBe(1);
+    expect(sendTimingCode(7)).toBe(7); // raw number passes through
   });
 });
 

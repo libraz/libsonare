@@ -474,6 +474,21 @@ TEST_CASE("sonare_voice_change_realtime neutral-monitor preserves short signals"
   REQUIRE(out_energy < 4.0 * in_energy);
 }
 
+TEST_CASE("sonare_realtime_voice_changer_preset_config rejects an out-of-range preset",
+          "[voice_changer][c-api]") {
+  // An out-of-range preset ordinal must be rejected, not silently substituted
+  // with NeutralMonitor. This keeps preset_config consistent with the id lookup
+  // (which returns nullptr for the same input) and with the other surfaces.
+  SonareRealtimeVoiceChangerConfig pod{};
+  const auto bad = static_cast<SonareVoiceCharacterPreset>(999);
+  REQUIRE(sonare_realtime_voice_changer_preset_config(bad, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_voice_character_preset_id(bad) == nullptr);
+
+  // A valid preset still succeeds.
+  REQUIRE(sonare_realtime_voice_changer_preset_config(SONARE_VC_PRESET_BRIGHT_IDOL, &pod) ==
+          SONARE_OK);
+}
+
 TEST_CASE("sonare_voice_changer_abi_version is non-zero and stable", "[voice_changer][c-api]") {
   // The runtime function and the compile-time constant must agree. Bindings
   // call the runtime function at attach time and compare against the

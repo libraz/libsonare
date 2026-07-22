@@ -37,6 +37,17 @@ void validateSampleRate(const char* function, int sample_rate) {
   }
 }
 
+// The tempogram / PLP family takes an onset envelope (not raw audio); its
+// sample_rate is only a BPM-scaling factor, so — matching the C ABI oracle,
+// which does not band-limit it — we require it to be positive rather than
+// inside the [kMin,kMax]AudioSampleRate audio band.
+void validatePositiveSampleRate(const char* function, int sample_rate) {
+  if (sample_rate <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(function) + ": sample rate must be positive");
+  }
+}
+
 }  // namespace
 
 // ============================================================================
@@ -215,7 +226,7 @@ TempogramMode tempogramModeFromValue(val mode) {
 val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length, val mode) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "tempogram");
-  validateSampleRate("tempogram", sample_rate);
+  validatePositiveSampleRate("tempogram", sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -231,6 +242,8 @@ val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_le
 val js_cyclic_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length,
                         float bpm_min, int n_bins) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
+  validateFiniteVector(data, "cyclicTempogram");
+  validatePositiveSampleRate("cyclicTempogram", sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -248,7 +261,7 @@ val js_plp(val onset_envelope, int sample_rate, int hop_length, float tempo_min,
            int win_length) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "plp");
-  validateSampleRate("plp", sample_rate);
+  validatePositiveSampleRate("plp", sample_rate);
   PlpConfig config;
   config.sr = sample_rate;
   config.hop_length = hop_length;
@@ -286,6 +299,8 @@ val js_onset_strength_multi(val samples, int sample_rate, int n_fft, int hop_len
 
 val js_fourier_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
+  validateFiniteVector(data, "fourierTempogram");
+  validatePositiveSampleRate("fourierTempogram", sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
@@ -305,6 +320,8 @@ val js_tempogram_ratio(val tempogram_data, int win_length, int sample_rate, int 
                                  "tempogramRatio input", false);
   }
   std::vector<float> data = float32ArrayToVector(tempogram_data);
+  validateFiniteVector(data, "tempogramRatio");
+  validatePositiveSampleRate("tempogramRatio", sample_rate);
   // An undefined/null/empty factors argument falls back to the library default
   // {0.5, 1, 2, 3, 4}, matching the C and Node behaviour.
   if (!has_factors) {

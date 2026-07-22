@@ -245,6 +245,13 @@ editing::voice_changer::VoiceCharacterPreset vc_preset_from_c(SonareVoiceCharact
   return editing::voice_changer::VoiceCharacterPreset::NeutralMonitor;
 }
 
+bool vc_preset_is_valid(SonareVoiceCharacterPreset preset) {
+  for (const auto& row : kVcPresetMapping) {
+    if (row.c_enum == preset) return true;
+  }
+  return false;
+}
+
 }  // namespace
 #endif
 
@@ -253,6 +260,10 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Reject an out-of-range preset ordinal instead of silently substituting
+  // NeutralMonitor. This matches sonare_voice_character_preset_id, which returns
+  // nullptr for the same input, and every other surface's strict handling.
+  if (!vc_preset_is_valid(preset)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   const auto config =
       editing::voice_changer::realtime_voice_changer_preset(vc_preset_from_c(preset));

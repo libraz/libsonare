@@ -11,28 +11,33 @@ namespace {
 
 void validate_positive(const char* fn_name, int value, const char* arg_name) {
   if (value <= 0) {
-    throw std::invalid_argument(std::string(fn_name) + ": " + arg_name + " must be positive");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(fn_name) + ": " + arg_name + " must be positive");
   }
 }
 
 void validate_sample_rate(const char* fn_name, int sample_rate) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    throw std::invalid_argument(std::string(fn_name) + ": sample_rate out of supported range [" +
-                                std::to_string(sonare::kMinAudioSampleRate) + ", " +
-                                std::to_string(sonare::kMaxAudioSampleRate) + "]");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(fn_name) + ": sample_rate out of supported range [" +
+                              std::to_string(sonare::kMinAudioSampleRate) + ", " +
+                              std::to_string(sonare::kMaxAudioSampleRate) + "]");
   }
 }
 
 void validate_mel_range(const char* fn_name, float fmin, float fmax, int sample_rate) {
   if (!std::isfinite(fmin) || !std::isfinite(fmax)) {
-    throw std::invalid_argument(std::string(fn_name) + ": fmin/fmax must be finite");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(fn_name) + ": fmin/fmax must be finite");
   }
   if (fmin < 0.0f || fmax < 0.0f) {
-    throw std::invalid_argument(std::string(fn_name) + ": fmin/fmax must be non-negative");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(fn_name) + ": fmin/fmax must be non-negative");
   }
   const float effective_fmax = fmax == 0.0f ? static_cast<float>(sample_rate) * 0.5f : fmax;
   if (effective_fmax <= fmin) {
-    throw std::invalid_argument(std::string(fn_name) + ": fmax must be greater than fmin");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(fn_name) + ": fmax must be greater than fmin");
   }
 }
 
@@ -45,17 +50,19 @@ std::vector<float> load_validated_matrix(const char* fn_name, val input, int row
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(frames),
                                              kMaxWasmFloat32Elements, &expected)) {
-    throw std::invalid_argument(std::string(fn_name) + ": matrix shape exceeds WASM budget");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(fn_name) + ": matrix shape exceeds WASM budget");
   }
   const std::size_t actual = wasmFloat32ArrayLength(input, data_name);
   if (expected != actual) {
-    throw std::invalid_argument(std::string(fn_name) + ": " + data_name +
-                                " length must equal rows * n_frames");
+    throw SonareException(ErrorCode::InvalidParameter, std::string(fn_name) + ": " + data_name +
+                                                           " length must equal rows * n_frames");
   }
   std::vector<float> data = float32ArrayToVector(input);
   for (size_t i = 0; i < data.size(); ++i) {
     if (!std::isfinite(data[i])) {
-      throw std::invalid_argument(std::string(fn_name) + ": " + data_name + " contains NaN or Inf");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(fn_name) + ": " + data_name + " contains NaN or Inf");
     }
   }
   return data;
@@ -265,7 +272,7 @@ val js_cqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, in
   validate_positive("cqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("cqtToAudio", n_iter, "n_iter");
   if (!std::isfinite(fmin) || fmin <= 0.0f || n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw std::invalid_argument("cqtToAudio: invalid fmin or n_iter");
+    throw SonareException(ErrorCode::InvalidParameter, "cqtToAudio: invalid fmin or n_iter");
   }
   CqtConfig config;
   config.hop_length = hop_length;
@@ -286,7 +293,8 @@ val js_vqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, in
   validate_positive("vqtToAudio", n_iter, "n_iter");
   if (!std::isfinite(fmin) || fmin <= 0.0f || !std::isfinite(gamma) || gamma < 0.0f ||
       n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw std::invalid_argument("vqtToAudio: invalid fmin, gamma, or n_iter");
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "vqtToAudio: invalid fmin, gamma, or n_iter");
   }
   VqtConfig config;
   config.hop_length = hop_length;
