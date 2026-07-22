@@ -53,6 +53,40 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('setMaxUndoDepth caps how far undo can rewind, clearHistory empties it', () => {
+    const { project, clipId } = buildAudioProject();
+    try {
+      // Apply several undoable edits.
+      for (let i = 0; i < 5; i++) {
+        project.setClipGain(clipId, 0.1 * (i + 1));
+      }
+      // Cap the history at two entries; older edits are evicted.
+      project.setMaxUndoDepth(2);
+      let undoCount = 0;
+      for (;;) {
+        try {
+          project.undo();
+          undoCount++;
+        } catch {
+          break;
+        }
+      }
+      expect(undoCount).toBe(2);
+
+      // A fresh batch of edits, then clearHistory leaves nothing to undo.
+      project.setClipGain(clipId, 0.3);
+      project.setClipGain(clipId, 0.6);
+      project.clearHistory();
+      expect(() => project.undo()).toThrow();
+
+      // Guard rail: depth must be an integer >= 1.
+      expect(() => project.setMaxUndoDepth(0)).toThrow();
+      expect(() => project.setMaxUndoDepth(1.5)).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
   it('setClipGain / setClipFade / setClipLoop apply without throwing', () => {
     const { project, clipId } = buildAudioProject();
     try {

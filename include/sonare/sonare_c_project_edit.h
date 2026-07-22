@@ -482,6 +482,15 @@ SonareError sonare_project_undo(SonareProject* project);
 ///        SONARE_ERROR_INVALID_STATE when the redo stack is empty.
 SonareError sonare_project_redo(SonareProject* project);
 
+/// @brief Clears the undo and redo history without touching project state.
+///        Always succeeds for a valid @p project.
+SonareError sonare_project_clear_history(SonareProject* project);
+
+/// @brief Sets the maximum retained undo depth. @p depth is clamped to at least
+///        1 (the most recent edit is always retained); if the current history is
+///        deeper than @p depth the oldest entries are evicted immediately.
+SonareError sonare_project_set_max_undo_depth(SonareProject* project, size_t depth);
+
 #ifdef __cplusplus
 }
 #endif

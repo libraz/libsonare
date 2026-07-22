@@ -116,6 +116,29 @@ def test_set_track_gain_mute_solo_pan_undo() -> None:
         p.set_track_gain(999999, 1.0)
 
 
+def test_set_max_undo_depth_limits_history() -> None:
+    p, track, _clip = _audio_project()
+    for gain in (0.1, 0.2, 0.3, 0.4, 0.5):
+        p.set_track_gain(track, gain)
+    # Retain only the two most recent edits; older history is evicted.
+    p.set_max_undo_depth(2)
+    p.undo()
+    p.undo()
+    with pytest.raises(SonareError):
+        p.undo()
+
+
+def test_clear_history_discards_undo_stack() -> None:
+    p, track, _clip = _audio_project()
+    p.set_track_gain(track, 0.25)
+    after = p.to_json()
+    p.clear_history()
+    # Project state is untouched, but there is nothing left to undo.
+    assert p.to_json() == after
+    with pytest.raises(SonareError):
+        p.undo()
+
+
 def test_automation_lane_add_edit_remove() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()

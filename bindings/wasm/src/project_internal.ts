@@ -58,6 +58,8 @@ export interface WasmProject {
   setTrackPan: (trackId: number, pan: number) => void;
   undo: () => void;
   redo: () => void;
+  clearHistory: () => void;
+  setMaxUndoDepth: (depth: number) => void;
   setMidiEvents: (
     clipId: number,
     events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,

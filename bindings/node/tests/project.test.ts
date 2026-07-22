@@ -133,6 +133,37 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('setMaxUndoDepth caps how far undo can rewind', () => {
+    const project = Project.create();
+    for (let i = 0; i < 5; i++) {
+      project.addTrack({ kind: 'midi', name: `t${i}` });
+    }
+    expect(project.trackCount()).toBe(5);
+
+    // Keep only the two most-recent edits in history.
+    project.setMaxUndoDepth(2);
+    project.undo();
+    project.undo();
+    expect(project.trackCount()).toBe(3);
+    // The third undo has no surviving history entry to rewind.
+    expect(() => project.undo()).toThrow();
+
+    project.destroy();
+  });
+
+  it('clearHistory leaves nothing to undo', () => {
+    const project = Project.create();
+    project.addTrack({ kind: 'midi', name: 'a' });
+    project.addTrack({ kind: 'midi', name: 'b' });
+    expect(project.trackCount()).toBe(2);
+
+    project.clearHistory();
+    expect(project.trackCount()).toBe(2);
+    expect(() => project.undo()).toThrow();
+
+    project.destroy();
+  });
+
   it('addMidiClip undoes and redoes track, source, and clip as one edit', () => {
     const project = Project.create();
     const before = project.toJson();

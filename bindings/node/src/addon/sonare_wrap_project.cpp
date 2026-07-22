@@ -52,6 +52,8 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::RemoveAutomationLane>("removeAutomationLane"),
           InstanceMethod<&ProjectWrap::Undo>("undo"),
           InstanceMethod<&ProjectWrap::Redo>("redo"),
+          InstanceMethod<&ProjectWrap::ClearHistory>("clearHistory"),
+          InstanceMethod<&ProjectWrap::SetMaxUndoDepth>("setMaxUndoDepth"),
           InstanceMethod<&ProjectWrap::SetMidiEvents>("setMidiEvents"),
           InstanceMethod<&ProjectWrap::ImportSmf>("importSmf"),
           InstanceMethod<&ProjectWrap::ExportSmf>("exportSmf"),

@@ -583,4 +583,17 @@ class _ProjectEditMixin:
         """Redo the most recently undone edit (raises when the redo stack is empty)."""
         _check(_get_lib().sonare_project_redo(self._require_handle()))
 
+    def clear_history(self) -> None:
+        """Empty the undo and redo stacks without altering project state."""
+        _check(_get_lib().sonare_project_clear_history(self._require_handle()))
+
+    def set_max_undo_depth(self, depth: int) -> None:
+        """Clamp the undo history to ``depth`` entries (minimum 1), evicting the oldest."""
+        _check(
+            _get_lib().sonare_project_set_max_undo_depth(
+                self._require_handle(),
+                ctypes.c_size_t(int(depth)),
+            )
+        )
+
     # -- MIDI ---------------------------------------------------------------

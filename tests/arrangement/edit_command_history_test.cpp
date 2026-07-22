@@ -1193,6 +1193,41 @@ TEST_CASE("EditHistory bounds the undo stack to a maximum depth", "[arrangement]
   REQUIRE(undone == 512);
 }
 
+TEST_CASE("EditHistory honors a configured maximum undo depth", "[arrangement]") {
+  Fixture f;
+  EditHistory h{f.project};
+  REQUIRE(h.max_undo_depth() == 512);
+
+  for (int i = 0; i < 10; ++i) {
+    REQUIRE(h.apply(std::make_unique<RenameTrack>(f.audio_track, "n" + std::to_string(i))));
+  }
+  REQUIRE(h.undo_depth() == 10);
+
+  // Shrinking the cap below the current depth evicts the oldest entries at once.
+  h.set_max_undo_depth(3);
+  REQUIRE(h.max_undo_depth() == 3);
+  REQUIRE(h.undo_depth() == 3);
+
+  // Later edits stay bounded at the new cap.
+  for (int i = 0; i < 5; ++i) {
+    REQUIRE(h.apply(std::make_unique<RenameTrack>(f.audio_track, "m" + std::to_string(i))));
+  }
+  REQUIRE(h.undo_depth() == 3);
+
+  // A depth of 0 is clamped to 1 (the most recent edit is always retained).
+  h.set_max_undo_depth(0);
+  REQUIRE(h.max_undo_depth() == 1);
+  REQUIRE(h.undo_depth() == 1);
+
+  // clear_history empties both stacks without touching project state.
+  const std::string name_before = h.project().find_track(f.audio_track)->name;
+  h.clear_history();
+  REQUIRE(h.undo_depth() == 0);
+  REQUIRE_FALSE(h.can_undo());
+  REQUIRE_FALSE(h.can_redo());
+  REQUIRE(h.project().find_track(f.audio_track)->name == name_before);
+}
+
 TEST_CASE("Full undo of a seeded sequence returns to the initial state", "[arrangement]") {
   Fixture f;
   EditHistory h{f.project};

@@ -522,3 +522,29 @@ SonareError sonare_project_redo(SonareProject* project) {
   SONARE_C_STUB_NOT_SUPPORTED(project);
 #endif
 }
+
+SonareError sonare_project_clear_history(SonareProject* project) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  project->history.clear_history();
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project);
+#endif
+}
+
+SonareError sonare_project_set_max_undo_depth(SonareProject* project, size_t depth) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  project->history.set_max_undo_depth(depth);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, depth);
+#endif
+}

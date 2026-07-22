@@ -74,6 +74,8 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value RemoveAutomationLane(const Napi::CallbackInfo& info);
   Napi::Value Undo(const Napi::CallbackInfo& info);
   Napi::Value Redo(const Napi::CallbackInfo& info);
+  Napi::Value ClearHistory(const Napi::CallbackInfo& info);
+  Napi::Value SetMaxUndoDepth(const Napi::CallbackInfo& info);
 
   // -- MIDI --
   Napi::Value SetMidiEvents(const Napi::CallbackInfo& info);

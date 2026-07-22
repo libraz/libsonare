@@ -599,3 +599,16 @@ Napi::Value ProjectWrap::Redo(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_redo(project_));
   return env.Undefined();
 }
+
+Napi::Value ProjectWrap::ClearHistory(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_clear_history(project_));
+  return env.Undefined();
+}
+
+Napi::Value ProjectWrap::SetMaxUndoDepth(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_project_set_max_undo_depth(
+                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0))));
+  return env.Undefined();
+}

@@ -266,6 +266,20 @@ void ProjectWasm::redo() {
   }
 }
 
+void ProjectWasm::clearHistory() {
+  const SonareError err = sonare_project_clear_history(project_.get());
+  if (err != SONARE_OK) {
+    throwCError(err, "failed to clear history");
+  }
+}
+
+void ProjectWasm::setMaxUndoDepth(size_t depth) {
+  const SonareError err = sonare_project_set_max_undo_depth(project_.get(), depth);
+  if (err != SONARE_OK) {
+    throwCError(err, "failed to set max undo depth");
+  }
+}
+
 void registerProjectArrange(class_<ProjectWasm>& cls) {
   cls.function("addTrack", &ProjectWasm::addTrack)
       .function("addClip", &ProjectWasm::addClip)
@@ -285,7 +299,9 @@ void registerProjectArrange(class_<ProjectWasm>& cls) {
       .function("setTrackSolo", &ProjectWasm::setTrackSolo)
       .function("setTrackPan", &ProjectWasm::setTrackPan)
       .function("undo", &ProjectWasm::undo)
-      .function("redo", &ProjectWasm::redo);
+      .function("redo", &ProjectWasm::redo)
+      .function("clearHistory", &ProjectWasm::clearHistory)
+      .function("setMaxUndoDepth", &ProjectWasm::setMaxUndoDepth);
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

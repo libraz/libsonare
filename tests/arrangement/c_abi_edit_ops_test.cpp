@@ -189,6 +189,35 @@ TEST_CASE("C-ABI add_midi_clip creates track source and clip as one transaction"
   sonare_project_destroy(project);
 }
 
+TEST_CASE("C-ABI clear_history and set_max_undo_depth manage the undo stack",
+          "[project][c-abi-edit]") {
+  REQUIRE(sonare_project_clear_history(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_max_undo_depth(nullptr, 4) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  // Cap the retained undo depth, then apply more edits than the cap.
+  REQUIRE(sonare_project_set_max_undo_depth(project, 3) == SONARE_OK);
+  for (int i = 0; i < 6; ++i) {
+    uint32_t track_id = 0;
+    uint32_t clip_id = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, i * 4.0, 4.0, &track_id, &clip_id) == SONARE_OK);
+  }
+  // Only the last three edits remain undoable; the rest were evicted.
+  int undone = 0;
+  while (sonare_project_undo(project) == SONARE_OK) ++undone;
+  REQUIRE(undone == 3);
+
+  // clear_history drops both stacks, so neither undo nor redo has anything left.
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(sonare_project_clear_history(project) == SONARE_OK);
+  REQUIRE(sonare_project_undo(project) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_project_redo(project) == SONARE_ERROR_INVALID_STATE);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C-ABI remove_clip removes and undo restores", "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

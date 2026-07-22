@@ -240,6 +240,15 @@ bool EditHistory::redo() {
   return true;
 }
 
+void EditHistory::set_max_undo_depth(size_t depth) {
+  max_undo_depth_ = std::max<size_t>(1, depth);
+  // Evict immediately when shrinking below the current depth so the memory is
+  // released now, not deferred to the next push_undo().
+  while (undo_stack_.size() > max_undo_depth_) {
+    undo_stack_.pop_front();
+  }
+}
+
 void EditHistory::clear_history() {
   undo_stack_.clear();
   redo_stack_.clear();

@@ -427,6 +427,19 @@ export class Project {
     this.native.redo();
   }
 
+  /** Clear the undo/redo history without changing the current project state. */
+  clearHistory(): void {
+    this.native.clearHistory();
+  }
+
+  /** Cap the undo history depth (clamped to >= 1); evicts oldest entries beyond the cap. */
+  setMaxUndoDepth(depth: number): void {
+    if (!Number.isInteger(depth) || depth < 1) {
+      throw new RangeError('Project.setMaxUndoDepth: depth must be an integer >= 1');
+    }
+    this.native.setMaxUndoDepth(depth);
+  }
+
   /** Replace a MIDI clip's entire event list. */
   setMidiEvents(
     clipId: number,

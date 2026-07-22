@@ -62,6 +62,15 @@ class EditHistory {
   size_t undo_depth() const noexcept { return undo_stack_.size(); }
   size_t redo_depth() const noexcept { return redo_stack_.size(); }
 
+  /// The maximum number of undo entries retained before the oldest are evicted.
+  size_t max_undo_depth() const noexcept { return max_undo_depth_; }
+
+  /// Sets the maximum retained undo depth. A value of 0 is treated as 1 (at
+  /// least the most recent edit is always kept). If the current undo stack is
+  /// deeper than the new bound, the oldest entries are evicted immediately so
+  /// resident memory drops right away rather than only on the next edit.
+  void set_max_undo_depth(size_t depth);
+
   /// Clears both stacks (does not touch the project state).
   void clear_history();
 

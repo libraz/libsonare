@@ -368,6 +368,17 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_project_redo.restype = ctypes.c_int32
         lib.sonare_project_redo.argtypes = [ctypes.c_void_p]
 
+        if hasattr(lib, "sonare_project_clear_history"):
+            lib.sonare_project_clear_history.restype = ctypes.c_int32
+            lib.sonare_project_clear_history.argtypes = [ctypes.c_void_p]
+
+        if hasattr(lib, "sonare_project_set_max_undo_depth"):
+            lib.sonare_project_set_max_undo_depth.restype = ctypes.c_int32
+            lib.sonare_project_set_max_undo_depth.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+            ]
+
         # MIDI.
         lib.sonare_project_set_midi_events.restype = ctypes.c_int32
         lib.sonare_project_set_midi_events.argtypes = [

@@ -136,6 +136,8 @@ struct ProjectWasm {
   void setTrackPan(uint32_t track_id, float pan);
   void undo();
   void redo();
+  void clearHistory();
+  void setMaxUndoDepth(size_t depth);
 
   void setMidiEvents(uint32_t clip_id, val events);
   uint32_t importSmf(val data);

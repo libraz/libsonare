@@ -616,6 +616,19 @@ export class Project {
     this.native.redo();
   }
 
+  /** Clear the undo + redo stacks without changing the current project state. */
+  clearHistory(): void {
+    this.native.clearHistory();
+  }
+
+  /**
+   * Cap the undo history to `depth` most-recent edits (clamped to >= 1); older
+   * entries beyond the cap are discarded immediately.
+   */
+  setMaxUndoDepth(depth: number): void {
+    this.native.setMaxUndoDepth(depth);
+  }
+
   // -- MIDI --
 
   /**
