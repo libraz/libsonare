@@ -51,6 +51,7 @@ node = [
   # have no C counterpart by design. (assert_samples / assert_finite_scalar /
   # assert_non_empty_samples / assert_finite_samples are covered by the shared
   # `any` list above; the rest are Node-specific MIDI helpers.)
+  "assert_sample_rate",     # Node facade sample-rate validation helper; no C counterpart by design
   "assert_u7",
   "assert_nibble",
   "assert_u32",
