@@ -123,7 +123,10 @@ TEST_CASE("RealtimeVoiceChanger set_config does not reallocate after prepare", "
   std::vector<float> in(max_block, 0.0f);
   std::vector<float> out(max_block, 0.0f);
   changer.process_block(in.data(), out.data(), max_block);
-  const int latency_before = changer.latency_samples();
+  // The resolved retune grain size is the buffer-footprint determinant (fixed at
+  // prepare()); assert on it rather than latency_samples(), which now legitimately
+  // varies with each preset's wet_mix and retune.mix.
+  const int grain_before = changer.config().retune.grain_size;
 
   // Switching to another preset must not change retune grain size or reverb
   // buffer layout, because reverb delay-line sizes are sample-rate dependent
@@ -133,7 +136,7 @@ TEST_CASE("RealtimeVoiceChanger set_config does not reallocate after prepare", "
                       VoiceCharacterPreset::RobotMascot, VoiceCharacterPreset::DarkVillain,
                       VoiceCharacterPreset::SoftWhisper, VoiceCharacterPreset::NeutralMonitor}) {
     changer.set_config(realtime_voice_changer_preset(preset));
-    REQUIRE(changer.latency_samples() == latency_before);
+    REQUIRE(changer.config().retune.grain_size == grain_before);
     // Process to confirm we still produce finite output (no buffer mismatch).
     changer.process_block(in.data(), out.data(), max_block);
     for (float sample : out) REQUIRE(std::isfinite(sample));

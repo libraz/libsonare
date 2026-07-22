@@ -89,7 +89,10 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
 SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVoiceChanger* handle,
                                                                 float* left, float* right,
                                                                 size_t num_frames);
-/// @brief Reports the chain's processing latency in samples (= retune grain).
+/// @brief Reports the chain's processing latency in samples. This is the
+///        amplitude-weighted wet-path delay round(wet_mix * retune.mix * grain)
+///        (+ ISP-limiter group delay when enabled), not a fixed grain: it is 0
+///        when wet_mix or retune.mix is 0 (e.g. the neutral-monitor preset).
 SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVoiceChanger* handle,
                                                           int* out_latency_samples);
 /// @brief Returns the live (normalized) configuration of the handle as a JSON

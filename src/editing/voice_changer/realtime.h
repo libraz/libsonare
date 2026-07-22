@@ -170,11 +170,15 @@ class RealtimeVoiceChanger {
   /// @brief Reports the effective processing latency in samples.
   /// @details The output mixes a zero-latency dry path with the wet path, which
   ///          is delayed by the retune grain size (typically 256-1024 samples,
-  ///          the dominant term). Because the dry contribution has no delay, the
-  ///          reported latency is the amplitude-weighted mean of the two paths —
-  ///          @c round(wet_mix * grain) — so it scales with @ref
-  ///          RealtimeVoiceChangerConfig::wet_mix rather than staying fixed:
-  ///          full at wet_mix == 1, zero at wet_mix == 0 (pure passthrough).
+  ///          the dominant term) — but the retune stage cross-fades that
+  ///          grain-delayed output by its own @c retune.mix, so at retune.mix ==
+  ///          0 it is a zero-delay passthrough despite a non-zero grain. Because
+  ///          the dry contribution has no delay, the reported latency is the
+  ///          amplitude-weighted mean of the two paths — @c round(wet_mix *
+  ///          retune.mix * grain) — so it scales with BOTH @ref
+  ///          RealtimeVoiceChangerConfig::wet_mix and @c retune.mix rather than
+  ///          staying fixed: full at wet_mix == retune.mix == 1, zero when either
+  ///          is 0 (e.g. the neutral-monitor preset with retune.mix == 0).
   ///          When the ISP limiter is enabled and wet_mix > 0 it runs on the
   ///          mixed output, adding its fixed 6-sample group delay (the
   ///          BS.1770-style 4x upsampler) to the whole signal. Other stages

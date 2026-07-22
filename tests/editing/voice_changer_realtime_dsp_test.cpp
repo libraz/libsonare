@@ -538,6 +538,51 @@ TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
 }
 
 // ===================================================================
+// The retune stage cross-fades its grain-delayed output by retune.mix, so at
+// retune.mix == 0 it is a zero-delay passthrough even though grain_size() is
+// non-zero. latency_samples() must reflect that (round(wet_mix * retune.mix *
+// grain) == 0), otherwise the one-shot latency-compensation wrapper drops the
+// leading real samples and pads the tail with silence. Regression for the
+// neutral-monitor silence bug.
+// ===================================================================
+TEST_CASE("RealtimeVoiceChanger latency is zero when retune.mix is zero",
+          "[voice_changer][latency][retune]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+
+  RealtimeVoiceChangerConfig cfg;
+  cfg.wet_mix = 1.0f;                      // fully wet path...
+  cfg.retune = {0.0f, 0.0f, 0};            // ...but retune fully bypassed (mix=0)
+  cfg.limiter.enable_isp_limiter = false;  // isolate the retune term
+  RealtimeVoiceChanger changer(cfg);
+  changer.prepare(sample_rate, block, 1);
+
+  // grain_size() is non-zero (a grain is still resolved) but the effective
+  // latency is 0 because the grain-delayed output is scaled out by retune.mix.
+  REQUIRE(changer.config().retune.grain_size > 0);
+  REQUIRE(changer.latency_samples() == 0);
+
+  // Impulse propagates with no bulk delay: the peak lands at (or very near) 0.
+  constexpr int total = block * 4;
+  std::vector<float> input(static_cast<std::size_t>(total), 0.0f);
+  input[0] = 1.0f;
+  std::vector<float> output(static_cast<std::size_t>(total), 0.0f);
+  for (int pos = 0; pos < total; pos += block) {
+    changer.process_block(input.data() + pos, output.data() + pos, block);
+  }
+  int peak_pos = 0;
+  float peak_val = 0.0f;
+  for (int i = 0; i < total; ++i) {
+    if (std::abs(output[static_cast<std::size_t>(i)]) > peak_val) {
+      peak_val = std::abs(output[static_cast<std::size_t>(i)]);
+      peak_pos = i;
+    }
+  }
+  REQUIRE(peak_val > 1e-4f);
+  REQUIRE(peak_pos < block);  // no ~grain-sized bulk delay
+}
+
+// ===================================================================
 // Non-finite (NaN/Inf) input is flushed to silence at the block entry, so it
 // never poisons the IIR state and never escapes to the caller. Flushing to 0
 // means a poisoned run is bit-identical to the same input with the non-finite

@@ -434,6 +434,46 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
   sonare_realtime_voice_changer_destroy(handle);
 }
 
+TEST_CASE("sonare_voice_change_realtime neutral-monitor preserves short signals",
+          "[voice_changer][c-api][regression]") {
+  // Regression: latency_samples() reported the full retune grain even for the
+  // neutral-monitor preset, which bypasses retune (retune.mix == 0). The
+  // one-shot latency-compensation wrapper then dropped the leading ~grain real
+  // samples and padded the tail with silence; for an input shorter than the
+  // grain this silenced the whole output. Now that latency is 0 when
+  // retune.mix == 0, the signal must survive.
+  constexpr int sample_rate = 48000;
+  constexpr size_t length = 1024;  // shorter than the old ~2238-sample grain latency
+  std::vector<float> input(length);
+  double in_energy = 0.0;
+  for (size_t i = 0; i < length; ++i) {
+    input[i] = 0.3f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 220.0 *
+                                                  static_cast<double>(i) / sample_rate));
+    in_energy += static_cast<double>(input[i]) * input[i];
+  }
+  REQUIRE(in_energy > 0.0);
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_voice_change_realtime(input.data(), length, sample_rate, "neutral-monitor", 1,
+                                       &out, &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == length);
+
+  double out_energy = 0.0;
+  for (size_t i = 0; i < out_length; ++i) {
+    REQUIRE(std::isfinite(out[i]));
+    out_energy += static_cast<double>(out[i]) * out[i];
+  }
+  sonare_free_floats(out);
+
+  // Core regression: the output is NOT silenced. neutral-monitor is a near-unity
+  // monitoring path, so its energy must be a substantial fraction of the input's
+  // (broad band tolerates the preset's mild EQ/limiting).
+  REQUIRE(out_energy > 0.25 * in_energy);
+  REQUIRE(out_energy < 4.0 * in_energy);
+}
+
 TEST_CASE("sonare_voice_changer_abi_version is non-zero and stable", "[voice_changer][c-api]") {
   // The runtime function and the compile-time constant must agree. Bindings
   // call the runtime function at attach time and compare against the
