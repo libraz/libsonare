@@ -301,11 +301,14 @@ mixing::api::Insert insert_from_json(const Value& v) {
 mixing::api::Scene scene_from_value(const Value& v) {
   mixing::api::Scene scene;
   scene.version = int_or(v, "version", 1);
-  // Mirror the standalone scene_from_json guard: reject an embedded mixer scene
-  // whose version exceeds what this build understands instead of silently
-  // mis-reading a future schema. Version 1 is the only supported value today.
+  // Reject an embedded mixer scene whose version exceeds what this build
+  // understands instead of silently mis-reading a future schema. Version 1 is
+  // the only supported value today. Use InvalidFormat (not InvalidParameter) so
+  // the deserialize diagnostic surfaces as a distinct "invalid_format" rather
+  // than the generic "deserialize_failed", staying symmetric with the top-level
+  // unsupported_schema_version handling.
   if (scene.version != 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "unsupported embedded mixer scene version");
+    throw SonareException(ErrorCode::InvalidFormat, "unsupported embedded mixer scene version");
   }
   if (const auto* arr = array_at(v, "strips")) {
     for (const auto& sv : *arr) {

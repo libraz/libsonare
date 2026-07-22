@@ -243,6 +243,19 @@ TEST_CASE("Transport play stop seek and render clock are independent", "[transpo
   REQUIRE_FALSE(state.playing);
 }
 
+TEST_CASE("Transport without a tempo map advances musical time via the fallback", "[transport]") {
+  // No tempo map set: the transport must fall back to a prepared default-tempo
+  // map so musical time advances instead of freezing at PPQ 0.
+  sonare::transport::Transport transport;
+  transport.prepare(48000.0, nullptr);
+  transport.play();
+  transport.advance(48000);  // one second of playback
+  const auto state = transport.snapshot();
+  REQUIRE(state.sample_position == 48000);
+  REQUIRE(state.ppq_position > 0.0);
+  REQUIRE(state.bpm > 0.0);
+}
+
 TEST_CASE("Transport loop boundaries and wrap are sample accurate", "[transport]") {
   sonare::transport::TempoMap map;
   map.prepare(48000.0);

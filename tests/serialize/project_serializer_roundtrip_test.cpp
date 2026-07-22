@@ -483,6 +483,16 @@ TEST_CASE("project deserialize rejects an unsupported embedded scene version", "
   auto result = project_from_json(s);
   CHECK_FALSE(result.ok());
   CHECK(result.has_error());
+  // The guard surfaces the distinct invalid_format diagnostic, not the generic
+  // deserialize_failed, staying symmetric with top-level schema-version handling.
+  bool saw_invalid_format = false;
+  bool saw_generic_failure = false;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "invalid_format") saw_invalid_format = true;
+    if (d.code == "deserialize_failed") saw_generic_failure = true;
+  }
+  CHECK(saw_invalid_format);
+  CHECK_FALSE(saw_generic_failure);
 
   // A version-1 scene still round-trips cleanly.
   f.project.scene().version = 1;

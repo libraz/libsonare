@@ -9,7 +9,18 @@ namespace sonare::transport {
 namespace {
 
 const TempoMap& fallback_tempo_map() noexcept {
+  // Used when no tempo map is set. A default-constructed TempoMap has no
+  // segments, so sample_to_ppq() would freeze musical time at PPQ 0. prepare()
+  // seeds the default single 120 BPM segment; a standard 48 kHz rate is fine
+  // here because this is only a degenerate fallback (a real transport supplies
+  // its own prepared map at the actual rate). Prepared exactly once via
+  // thread-safe static initialization.
   static TempoMap map;
+  static const bool prepared = [] {
+    map.prepare(48000.0);
+    return true;
+  }();
+  (void)prepared;
   return map;
 }
 
