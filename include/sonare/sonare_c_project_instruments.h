@@ -113,7 +113,9 @@ typedef enum {
 /// Every numeric field uses "0 (or non-positive) => default", so a zero-init
 /// config is the default sine patch and callers override only what they need.
 typedef struct {
-  int waveform;     /* SonareSynthWaveform; 0 = sine */
+  int waveform;     /* SonareSynthWaveform; 0 = sine. NOTE: a distinct enum from
+                       SonareSynthOscWaveform (sonare_c_types_analysis.h), whose 0
+                       means "keep base preset", not sine. Do not mix the two. */
   float gain;       /* master output gain (linear); 0 => 0.2 */
   float attack_ms;  /* ADSR attack in ms; 0 => 5 */
   float decay_ms;   /* ADSR decay in ms; 0 => 60 */

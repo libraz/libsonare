@@ -373,7 +373,9 @@ typedef struct {
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
   /* --- oscillator section (subtractive mode) --- */
-  int waveform;       /* SonareSynthOscWaveform; 0 => base */
+  int waveform;       /* SonareSynthOscWaveform; 0 => base preset. NOTE: a distinct
+                         enum from SonareSynthWaveform (sonare_c_project_instruments.h),
+                         whose 0 means sine, not "keep base". Do not mix the two. */
   int unison;         /* detuned-stack width [1,7]; 0 => base */
   float detune_cents; /* unison spread; 0 => base */
   float drift_cents;  /* per-voice slow pitch drift depth; 0 => base */

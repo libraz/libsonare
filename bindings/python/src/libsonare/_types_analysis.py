@@ -380,6 +380,13 @@ class AnalysisResult:
     time_signature: TimeSignature
     beat_times: list[float]
     # Extended fields (populated when sonare_analyze_json is available).
+    # timbre/dynamics/rhythm/melody are intentionally Optional here, unlike the
+    # Node/WASM surfaces which type them as required: Python keeps a legacy
+    # fallback to the older flat sonare_analyze struct (for builds without
+    # sonare_analyze_json) that returns only bpm/key/time-signature/beats and
+    # leaves these four unset. The compiled bindings always ship the JSON path,
+    # so they can guarantee presence; Python cannot without dropping the
+    # fallback. Guard with `is not None` before use.
     beat_strengths: list[float] = dataclasses.field(default_factory=list)
     chords: list[Chord] = dataclasses.field(default_factory=list)
     sections: list[Section] = dataclasses.field(default_factory=list)
