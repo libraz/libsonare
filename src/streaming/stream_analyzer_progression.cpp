@@ -104,12 +104,23 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
 
     /// Update chord estimate (every frame, using smoothed chroma)
     if (!chord_templates_.empty() && chroma_history_size_ > 0) {
-      /// Compute median-filtered chroma (more robust to noise than averaging)
-      std::array<float, 12> smoothed_chroma = median_recent_chroma();
-
-      auto [best_chord, chord_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
-      int new_root = static_cast<int>(best_chord.root);
-      int new_quality = static_cast<int>(best_chord.quality);
+      /// Reuse the smoothed-chord detection process_single_frame() already
+      /// computed for this frame over the same chroma_history_; recompute only
+      /// if that block was skipped (see frame_chord_cache_valid_).
+      int new_root;
+      int new_quality;
+      float chord_corr;
+      if (frame_chord_cache_valid_) {
+        new_root = frame_chord_root_;
+        new_quality = frame_chord_quality_;
+        chord_corr = frame_chord_corr_;
+      } else {
+        std::array<float, 12> smoothed_chroma = median_recent_chroma();
+        auto [best_chord, corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
+        new_root = static_cast<int>(best_chord.root);
+        new_quality = static_cast<int>(best_chord.quality);
+        chord_corr = corr;
+      }
       float new_confidence = std::max(0.0f, chord_corr);
 
       /// Only update if confidence is above threshold
@@ -268,17 +279,25 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
   /// Vote for chord using current frame's smoothed chroma (from chroma_history_)
   /// This uses the same smoothed detection as per-frame chord output
   if (!chord_templates_.empty() && chroma_history_size_ > 0) {
-    /// Compute median-filtered chroma (more robust to noise than averaging)
-    std::array<float, 12> smoothed_chroma = median_recent_chroma();
-
-    /// Detect chord for this frame
-    auto [frame_chord, frame_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
+    /// Reuse the smoothed-chord detection computed once per frame in
+    /// process_single_frame(); recompute only if that block was skipped.
+    int root;
+    int quality;
+    float frame_corr;
+    if (frame_chord_cache_valid_) {
+      root = frame_chord_root_;
+      quality = frame_chord_quality_;
+      frame_corr = frame_chord_corr_;
+    } else {
+      std::array<float, 12> smoothed_chroma = median_recent_chroma();
+      auto [frame_chord, corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
+      root = static_cast<int>(frame_chord.root);
+      quality = static_cast<int>(frame_chord.quality);
+      frame_corr = corr;
+    }
 
     /// Only vote if confidence is above threshold
     if (frame_corr >= kChordConfidenceThreshold) {
-      int root = static_cast<int>(frame_chord.root);
-      int quality = static_cast<int>(frame_chord.quality);
-
       /// Index: root * kNumChordQualities + quality.
       /// Sized to cover every ChordQuality enumerator so 7ths / sus / extended
       /// chords are no longer silently dropped when the underlying template

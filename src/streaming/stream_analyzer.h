@@ -379,6 +379,20 @@ class StreamAnalyzer {
   size_t chroma_history_size_ = 0;
   std::array<float, kChordSmoothingFrames> median_chroma_scratch_ = {};
 
+  // Per-frame smoothed-chord cache. The smoothed chroma + best-chord detection
+  // over chroma_history_ is identical across process_single_frame(),
+  // update_progressive_estimate(), and update_bar_chord_tracking(), which run
+  // back-to-back for the same frame without mutating chroma_history_ in between.
+  // process_single_frame() computes it once and stores the result here; the two
+  // progressive consumers read it instead of recomputing the same median +
+  // find_best_chord(). frame_chord_cache_valid_ is cleared at the start of every
+  // frame, so a consumer that runs when the producing block was skipped falls
+  // back to recomputing (identical to the un-cached path).
+  bool frame_chord_cache_valid_ = false;
+  int frame_chord_root_ = 0;
+  int frame_chord_quality_ = 0;
+  float frame_chord_corr_ = 0.0f;
+
   // Bar-synchronized chord tracking (requires stable BPM)
   static constexpr float kBpmConfidenceThreshold = 0.3f;  ///< Min BPM confidence for bar sync
   static constexpr int kBeatsPerBar = 4;                  ///< Beats per bar (4/4 time signature)

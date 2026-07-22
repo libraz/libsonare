@@ -292,6 +292,11 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
   frame.chord_quality = 0;
   frame.chord_confidence = 0.0f;
 
+  /// Invalidate the per-frame smoothed-chord cache. It is repopulated below only
+  /// when this frame actually runs chord detection, so the progressive consumers
+  /// fall back to recomputing whenever that block is skipped.
+  frame_chord_cache_valid_ = false;
+
   /// Calculate timestamp
   frame.timestamp = static_cast<float>(sample_offset) / static_cast<float>(config_.sample_rate);
   frame.frame_index = frame_count_;
@@ -344,6 +349,15 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
 
       /// Find best chord using smoothed chroma
       auto [best_chord, chord_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
+
+      /// Cache this frame's detection so update_progressive_estimate() and
+      /// update_bar_chord_tracking() — which run next over the same, unmodified
+      /// chroma_history_ — reuse it instead of recomputing the same median and
+      /// find_best_chord().
+      frame_chord_root_ = static_cast<int>(best_chord.root);
+      frame_chord_quality_ = static_cast<int>(best_chord.quality);
+      frame_chord_corr_ = chord_corr;
+      frame_chord_cache_valid_ = true;
 
       /// Only report chord if confidence is above threshold
       if (chord_corr >= kChordConfidenceThreshold) {
