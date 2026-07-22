@@ -60,6 +60,26 @@ enum class ReverbModel {
   Eyring,  ///< preferred for high mean absorption (alpha-bar above ~0.2)
 };
 
+/// @brief Atmospheric conditions for the optional air-absorption term.
+///
+/// Defaults are the ISO reference climate (20 degC, 50 % relative humidity) at
+/// sea-level pressure. Only used when explicitly passed to
+/// `shoebox_reverb_time`; the geometry-only path ignores air absorption.
+struct AirAbsorption {
+  float temperature_c = 20.0f;     ///< air temperature in degrees Celsius
+  float humidity_percent = 50.0f;  ///< relative humidity in percent [0, 100]
+};
+
+/// @brief Pure-tone atmospheric absorption coefficient (energy, nepers/m).
+///
+/// ISO 9613-1 model at sea-level ambient pressure. Returns the energy
+/// attenuation exponent m such that intensity decays as exp(-m * distance);
+/// this is the coefficient used by the Sabine/Eyring `4 m V` air term. Grows
+/// steeply with frequency, so it mainly shortens the high-band reverberation
+/// time of large rooms. Returns 0 for a non-positive or non-finite frequency.
+float air_absorption_m_per_meter(float freq_hz, float temperature_c,
+                                 float humidity_percent) noexcept;
+
 /// @brief Nominal octave-band centre frequency (Hz) for band index @p band.
 ///
 /// Matches the analyzer's split (125 Hz for band 0, rising by octaves). Shared
@@ -92,7 +112,12 @@ struct ReverbTime {
 /// wall material (or `kDefaultOctaveBands` when every wall is rigid/empty);
 /// bands past a material's length reuse its last coefficient. Rigid (empty)
 /// walls contribute zero absorption, giving an RT60 of 0 for that band.
-ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model = ReverbModel::Eyring);
+/// When @p air is non-null, the per-band absorption gains the classic `4 m V`
+/// atmospheric term (m from `air_absorption_m_per_meter`), which curbs the
+/// high-frequency RT60 over-prediction of large rooms. Passing nullptr (the
+/// default) reproduces the geometry-only result exactly.
+ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model = ReverbModel::Eyring,
+                               const AirAbsorption* air = nullptr);
 
 /// @brief Configuration for late-tail synthesis.
 struct LateReverbConfig {

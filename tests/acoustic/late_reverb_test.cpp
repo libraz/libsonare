@@ -86,6 +86,46 @@ TEST_CASE("shoebox reverberation time from geometry and materials", "[acoustic][
   }
 }
 
+TEST_CASE("optional air absorption curbs high-band RT60 of large rooms",
+          "[acoustic][late_reverb]") {
+  // A large, live hall: geometry alone over-predicts the high-frequency tail.
+  const ShoeboxRoom hall = uniform_room(30.0f, 24.0f, 15.0f, 0.08f);
+  const ReverbTime dry = shoebox_reverb_time(hall, ReverbModel::Sabine);
+  const AirAbsorption air{20.0f, 50.0f};
+  const ReverbTime wet = shoebox_reverb_time(hall, ReverbModel::Sabine, &air);
+
+  REQUIRE(wet.rt60_bands.size() == dry.rt60_bands.size());
+
+  SECTION("air absorption never lengthens any band and shortens high bands") {
+    for (size_t b = 0; b < dry.rt60_bands.size(); ++b) {
+      // Adding an absorption term can only shorten (or leave) the decay.
+      REQUIRE(wet.rt60_bands[b] <= dry.rt60_bands[b] + 1e-4f);
+    }
+    // The effect is strongly frequency-dependent: the top band loses a much
+    // larger fraction of its RT60 than the bottom band.
+    const float low_ratio = wet.rt60_bands.front() / dry.rt60_bands.front();
+    const float high_ratio = wet.rt60_bands.back() / dry.rt60_bands.back();
+    REQUIRE(high_ratio < low_ratio);
+    REQUIRE(high_ratio < 0.95f);  // measurable high-band shortening
+  }
+
+  SECTION("the geometry-only default is unchanged by the null air pointer") {
+    const ReverbTime again = shoebox_reverb_time(hall, ReverbModel::Sabine, nullptr);
+    for (size_t b = 0; b < dry.rt60_bands.size(); ++b) {
+      REQUIRE(again.rt60_bands[b] == dry.rt60_bands[b]);
+    }
+  }
+}
+
+TEST_CASE("air absorption coefficient grows with frequency", "[acoustic][late_reverb]") {
+  REQUIRE(air_absorption_m_per_meter(0.0f, 20.0f, 50.0f) == 0.0f);
+  REQUIRE(air_absorption_m_per_meter(-100.0f, 20.0f, 50.0f) == 0.0f);
+  const float m_low = air_absorption_m_per_meter(125.0f, 20.0f, 50.0f);
+  const float m_high = air_absorption_m_per_meter(4000.0f, 20.0f, 50.0f);
+  REQUIRE(m_low >= 0.0f);
+  REQUIRE(m_high > m_low);  // absorption rises steeply toward high frequencies
+}
+
 TEST_CASE("late tail is empty when no band has finite decay", "[acoustic][late_reverb]") {
   ReverbTime rt;
   rt.rt60_bands = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};

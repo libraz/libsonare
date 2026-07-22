@@ -104,7 +104,47 @@ float eyring_rt60(float volume, float surface_area, float mean_absorption) noexc
   return kSabineCoeff * volume / denom;
 }
 
-ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model) {
+float air_absorption_m_per_meter(float freq_hz, float temperature_c,
+                                 float humidity_percent) noexcept {
+  if (!std::isfinite(freq_hz) || freq_hz <= 0.0f) return 0.0f;
+
+  // ISO 9613-1 pure-tone atmospheric absorption at sea-level pressure
+  // (pa == reference pressure, so the pressure ratios drop out). Computed in
+  // double for the exponentials, returned as the energy attenuation exponent m
+  // (nepers/m) used by the Sabine/Eyring 4 m V air term.
+  const double f = static_cast<double>(freq_hz);
+  const double t = static_cast<double>(temperature_c) + 273.15;  // Kelvin
+  const double hr = std::clamp(static_cast<double>(humidity_percent), 0.0, 100.0);
+  constexpr double kT0 = 293.15;   // reference air temperature (20 degC)
+  constexpr double kT01 = 273.16;  // triple-point isotherm
+
+  // Molar concentration of water vapour (%), with pa == pr.
+  const double psat_ratio = std::pow(10.0, -6.8346 * std::pow(kT01 / t, 1.261) + 4.6151);
+  const double h = hr * psat_ratio;
+
+  // Oxygen and nitrogen relaxation frequencies (Hz).
+  const double fr_o = 24.0 + 4.04e4 * h * (0.02 + h) / (0.391 + h);
+  const double fr_n = std::pow(t / kT0, -0.5) *
+                      (9.0 + 280.0 * h * std::exp(-4.170 * (std::pow(t / kT0, -1.0 / 3.0) - 1.0)));
+  if (!(fr_o > 0.0) || !(fr_n > 0.0)) return 0.0f;
+
+  const double f2 = f * f;
+  // Absorption in dB/m (the 8.686 = 20 log10(e) pressure-level factor).
+  const double alpha_db =
+      8.686 * f2 *
+      (1.84e-11 * std::pow(t / kT0, 0.5) +
+       std::pow(t / kT0, -2.5) * (0.01275 * std::exp(-2239.1 / t) / (fr_o + f2 / fr_o) +
+                                  0.1068 * std::exp(-3352.0 / t) / (fr_n + f2 / fr_n)));
+  if (!std::isfinite(alpha_db) || alpha_db <= 0.0) return 0.0f;
+
+  // Convert pressure-level dB/m to the energy attenuation exponent (nepers/m):
+  // I/I0 = 10^(-alpha_db * d / 10) = exp(-(alpha_db * ln10 / 10) * d).
+  constexpr double kDbToNeperEnergy = 2.302585092994046 / 10.0;  // ln(10) / 10
+  return static_cast<float>(alpha_db * kDbToNeperEnergy);
+}
+
+ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model,
+                               const AirAbsorption* air) {
   const RoomDimensions& d = room.dims;
   // Per-wall areas, indexed by ShoeboxWall.
   const std::array<float, kShoeboxWallCount> wall_area{{
@@ -137,11 +177,30 @@ ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model) {
       const float alpha = material_alpha_at(room.walls[w], b);
       absorption_area += wall_area[w] * alpha;
     }
+    if (air == nullptr) {
+      // Geometry-only path: byte-identical to the pre-air-absorption result.
+      if (model == ReverbModel::Sabine) {
+        rt.rt60_bands[b] = sabine_rt60(volume, absorption_area);
+      } else {
+        const float mean_alpha = surface > 0.0f ? absorption_area / surface : 0.0f;
+        rt.rt60_bands[b] = eyring_rt60(volume, surface, mean_alpha);
+      }
+      continue;
+    }
+
+    // Add the classic 4 m V atmospheric absorption term to the denominator so
+    // high bands in large rooms stop over-predicting RT60.
+    const float m = air_absorption_m_per_meter(octave_center_hz(static_cast<int>(b)),
+                                               air->temperature_c, air->humidity_percent);
+    const float air_term = 4.0f * m * volume;
     if (model == ReverbModel::Sabine) {
-      rt.rt60_bands[b] = sabine_rt60(volume, absorption_area);
+      rt.rt60_bands[b] = sabine_rt60(volume, absorption_area + air_term);
     } else {
       const float mean_alpha = surface > 0.0f ? absorption_area / surface : 0.0f;
-      rt.rt60_bands[b] = eyring_rt60(volume, surface, mean_alpha);
+      const float alpha = std::min(mean_alpha, 0.999f);
+      const float denom = -surface * std::log(1.0f - alpha) + air_term;
+      rt.rt60_bands[b] =
+          (volume > 0.0f && surface > 0.0f && denom > 0.0f) ? kSabineCoeff * volume / denom : 0.0f;
     }
   }
   return rt;
