@@ -1,5 +1,77 @@
 import { getSonareModule } from './module_state';
-import type { RealtimeVoiceChangerConfigInput, VoicePresetId } from './public_types';
+import type {
+  RealtimeVoiceChangerConfigInput,
+  RealtimeVoiceChangerPodConfig,
+  VoicePresetId,
+} from './public_types';
+
+/**
+ * True when `config` is a flat POD (the shape `realtimeVoiceChangerPresetConfig`
+ * returns) rather than a preset name or a nested preset. `retuneSemitones` only
+ * exists on the flat POD; the nested form spells it `retune.semitones`.
+ */
+function isFlatVoiceChangerPod(config: unknown): config is RealtimeVoiceChangerPodConfig {
+  return typeof config === 'object' && config !== null && 'retuneSemitones' in config;
+}
+
+/**
+ * Rewrite the flat 36-field POD into the nested shape the native config parser
+ * reads. Passing the flat POD straight to `setConfig` would leave every nested
+ * field at its default (only the three root fields are read flat), silently
+ * discarding retune/EQ/reverb/etc.
+ */
+function flatVoiceChangerPodToNested(pod: RealtimeVoiceChangerPodConfig): Record<string, unknown> {
+  return {
+    inputGainDb: pod.inputGainDb,
+    outputGainDb: pod.outputGainDb,
+    wetMix: pod.wetMix,
+    retune: { semitones: pod.retuneSemitones, mix: pod.retuneMix, grainSize: pod.retuneGrainSize },
+    formant: {
+      factor: pod.formantFactor,
+      amount: pod.formantAmount,
+      body: pod.formantBody,
+      brightness: pod.formantBrightness,
+      nasal: pod.formantNasal,
+    },
+    eq: {
+      highpassHz: pod.eqHighpassHz,
+      bodyDb: pod.eqBodyDb,
+      presenceDb: pod.eqPresenceDb,
+      airDb: pod.eqAirDb,
+    },
+    gate: {
+      thresholdDb: pod.gateThresholdDb,
+      attackMs: pod.gateAttackMs,
+      releaseMs: pod.gateReleaseMs,
+      rangeDb: pod.gateRangeDb,
+    },
+    compressor: {
+      thresholdDb: pod.compressorThresholdDb,
+      ratio: pod.compressorRatio,
+      attackMs: pod.compressorAttackMs,
+      releaseMs: pod.compressorReleaseMs,
+      makeupGainDb: pod.compressorMakeupGainDb,
+    },
+    deesser: {
+      frequencyHz: pod.deesserFrequencyHz,
+      thresholdDb: pod.deesserThresholdDb,
+      ratio: pod.deesserRatio,
+      rangeDb: pod.deesserRangeDb,
+    },
+    reverb: {
+      mix: pod.reverbMix,
+      timeMs: pod.reverbTimeMs,
+      damping: pod.reverbDamping,
+      seed: pod.reverbSeed,
+    },
+    limiter: {
+      ceilingDb: pod.limiterCeilingDb,
+      releaseMs: pod.limiterReleaseMs,
+      enableIspLimiter: pod.limiterEnableIspLimiter,
+      ispCeilingDbtp: pod.limiterIspCeilingDbtp,
+    },
+  };
+}
 
 /**
  * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} mono
@@ -58,8 +130,12 @@ export class RealtimeVoiceChanger {
     this.changer.reset();
   }
 
-  setConfig(config: RealtimeVoiceChangerConfigInput): void {
-    this.changer.setConfig(config as Record<string, unknown> | string);
+  setConfig(config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig): void {
+    // A flat POD (from realtimeVoiceChangerPresetConfig) is rewritten to the
+    // nested shape the native parser reads; a preset name or nested preset is
+    // passed through unchanged.
+    const resolved = isFlatVoiceChangerPod(config) ? flatVoiceChangerPodToNested(config) : config;
+    this.changer.setConfig(resolved as Record<string, unknown> | string);
   }
 
   configJson(): string {
