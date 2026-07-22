@@ -89,6 +89,71 @@ def exemption(path: Path, name: str) -> str | None:
     return None
 
 
+REQUEST = re.compile(r"\w+Request")
+STAR_REEXPORT = re.compile(r"export\s+\*\s+from\s+['\"]\./([\w/]+?)(?:\.js)?['\"]")
+NAMED_REEXPORT = re.compile(
+    r"export\s+(?:type\s+)?\{(.*?)\}\s*from\s*['\"]\./([\w/]+?)(?:\.js)?['\"]", re.S
+)
+NAMED_TYPE_EXPORT = re.compile(r"export\s+type\s*\{(.*?)\}", re.S)
+EXPORTED_REQUEST_DEF = re.compile(r"export (?:interface|type) (\w+Request)\b")
+EXPORTED_FUNCTION_PARAMS = re.compile(r"export function \w+\s*\(([^;{]*?)\)\s*:", re.S)
+
+
+def _module_request_exports(mod_path: Path, visited: set[Path]) -> set[str]:
+    # Every *Request name a module surfaces, following `export * from` chains so
+    # a barrel that re-exports a sub-barrel (Node's style) is fully resolved.
+    if not mod_path.exists() or mod_path in visited:
+        return set()
+    visited.add(mod_path)
+    text = mod_path.read_text()
+    names = set(EXPORTED_REQUEST_DEF.findall(text))
+    for block, _module in NAMED_REEXPORT.findall(text):
+        names.update(REQUEST.findall(block))
+    for module in STAR_REEXPORT.findall(text):
+        names |= _module_request_exports(mod_path.parent / f"{module}.ts", visited)
+    return names
+
+
+def entry_exported_requests(surface_dir: Path, index_path: Path) -> set[str]:
+    # The *Request types reachable through the package entry (index.ts): explicit
+    # `export type { ... }` lists plus everything pulled in by `export *` chains.
+    text = index_path.read_text()
+    names: set[str] = set()
+    for block in NAMED_TYPE_EXPORT.findall(text):
+        names.update(REQUEST.findall(block))
+    for module in STAR_REEXPORT.findall(text):
+        names |= _module_request_exports(surface_dir / f"{module}.ts", set())
+    return names
+
+
+def param_request_types(surface_dir: Path) -> set[str]:
+    # The *Request types used as a parameter of an exported one-shot function —
+    # the types a caller must be able to import to call the public API.
+    names: set[str] = set()
+    for path in sorted(surface_dir.glob("*.ts")):
+        if path.name == "index.ts":
+            continue
+        text = path.read_text()
+        for params in EXPORTED_FUNCTION_PARAMS.findall(text):
+            names.update(REQUEST.findall(params))
+    return names
+
+
+def unexported_from_entry() -> list[str]:
+    # A request type accepted by an exported function but not re-exported from the
+    # package entry is unusable by consumers (they cannot name the argument type).
+    # This drift is invisible to the C-ABI parity checker, so guard it here.
+    markers: list[str] = []
+    for surface, directory in SURFACES.items():
+        index_path = directory / "index.ts"
+        if not index_path.exists():
+            continue
+        entry = entry_exported_requests(directory, index_path)
+        for name in sorted(param_request_types(directory) - entry):
+            markers.append(f"{surface}:{name}")
+    return markers
+
+
 def main() -> int:
     missing: list[str] = []
     covered: list[str] = []
@@ -113,7 +178,13 @@ def main() -> int:
     )
     for marker in missing:
         print(f"MISSING {marker}")
-    return 1 if missing else 0
+
+    unexported = unexported_from_entry()
+    print(f"entry-export coverage: {len(unexported)} request types unexported from entry")
+    for marker in unexported:
+        print(f"UNEXPORTED {marker}")
+
+    return 1 if (missing or unexported) else 0
 
 
 if __name__ == "__main__":

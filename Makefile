@@ -149,8 +149,12 @@ parity: conformance
 	python3 tools/parity/check_parity.py
 
 # Shared public-input schema plus public streaming field/flag/default snapshot.
+# Also gates request-object coverage: every one-shot facade export keeps a
+# *Request overload, and every *Request a public function accepts stays exported
+# from the package entry (both are invisible to the C-ABI parity checker).
 conformance:
 	python3 tools/conformance/check_public_contracts.py
+	python3 tools/api/check_request_object_coverage.py
 
 # Regenerate the authoritative C-ABI struct layout snapshot. Compiles a tiny
 # probe (needs a C++ compiler, not a full build) that reports sizeof/alignof/
