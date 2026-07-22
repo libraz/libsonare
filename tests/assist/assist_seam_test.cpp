@@ -294,6 +294,21 @@ class QueryAwareCounterpoint final : public ICounterpointEngine {
   }
 };
 
+// Reports a fixed iteration count larger than any test's cap, ignoring the
+// cooperative budget, so a single dispatched slot can exhaust the driver's
+// iteration budget on its own.
+class HeavyGenerator final : public INoteGenerator {
+ public:
+  const char* module_id() const noexcept override { return "heavy"; }
+  AssistResult generate(const ProjectView&, const AssistRequest&) override {
+    AssistResult result;
+    result.candidate_payload = "heavy";
+    result.diagnostics.iterations_consumed = 5;
+    result.diagnostics.status = AssistStatus::kOk;
+    return result;
+  }
+};
+
 class DummyHarmonyContext final : public IHarmonyContext {
  public:
   sonare::arrangement::ChordSymbol chord_at(const ProjectView&, double) const override {
@@ -620,6 +635,32 @@ TEST_CASE("assist time budget stops dispatching later slots", "[assist]") {
   REQUIRE(result.diagnostics.reason == "time budget exhausted");
   REQUIRE(result.candidate_payloads.size() == 1);
   REQUIRE(result.candidate_payloads[0] == "slow");
+  REQUIRE_FALSE(counterpoint.saw_queries);
+}
+
+TEST_CASE("assist iteration budget gates later slots on consumed iterations, not slot count",
+          "[assist]") {
+  Fixture f = make_fixture();
+
+  HeavyGenerator gen;
+  QueryAwareCounterpoint counterpoint;
+  AssistRegistry registry;
+  registry.register_generator(&gen);
+  registry.register_counterpoint(&counterpoint);
+  CompositionAssist assist(registry);
+  ProjectView view(f.history.project(), f.history.midi_content(), "heavy");
+
+  AssistRequest req;
+  // The generator alone consumes 5 iterations in its single slot, over this cap.
+  // A driver that gated on the slot count (dispatched == 1 < 3) would still
+  // dispatch the counterpoint slot; gating on consumed iterations must not.
+  req.budget.max_iterations = 3;
+  AssistResult result = assist.run(view, req);
+
+  REQUIRE(result.diagnostics.status == AssistStatus::kBudgetTruncated);
+  REQUIRE(result.diagnostics.reason == "iteration budget exhausted");
+  REQUIRE(result.candidate_payloads.size() == 1);
+  REQUIRE(result.candidate_payloads[0] == "heavy");
   REQUIRE_FALSE(counterpoint.saw_queries);
 }
 

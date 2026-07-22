@@ -177,12 +177,15 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
   result.diagnostics.status = AssistStatus::kEmpty;
   const auto start_time = std::chrono::steady_clock::now();
 
-  // Iteration budget: count slots dispatched against the cap (cooperative — the
-  // driver stops dispatching further slots once the cap is reached, and modules
-  // additionally self-truncate via request.budget).
+  // Iteration budget: the driver stops dispatching further slots once the total
+  // iterations consumed so far (accumulated across dispatched slots into
+  // result.diagnostics.iterations_consumed) reaches the cap. Gating on the
+  // consumed-iteration count — not on the number of slots dispatched — is what
+  // makes max_iterations a real budget: a single slot that burns many
+  // iterations must be able to exhaust it. Modules additionally self-truncate
+  // via request.budget.
   const bool has_iter_cap = request.budget.has_iteration_cap();
   const bool has_time_cap = request.budget.has_time_cap();
-  uint32_t dispatched = 0;
   bool truncated = false;
   bool any_discarded = false;
   bool any_ran = false;
@@ -195,7 +198,7 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
   // A budget check helper: returns false (and marks truncated) when dispatching
   // another slot would exceed the iteration cap.
   const auto budget_ok = [&]() -> bool {
-    if (has_iter_cap && dispatched >= request.budget.max_iterations) {
+    if (has_iter_cap && result.diagnostics.iterations_consumed >= request.budget.max_iterations) {
       truncated = true;
       return false;
     }
@@ -214,7 +217,6 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
   // Fixed dispatch order: generator -> counterpoint -> rhythm. Query slots
   // (harmony/dissonance/judge) are consulted by modules, not by the driver.
   if (auto* gen = registry_.generator(); gen != nullptr && budget_ok()) {
-    ++dispatched;
     any_ran = true;
     bool discarded = false;
     dispatch_slot(
@@ -225,7 +227,6 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
   }
 
   if (auto* cp = registry_.counterpoint(); cp != nullptr && budget_ok()) {
-    ++dispatched;
     any_ran = true;
     bool discarded = false;
     dispatch_slot(
@@ -236,7 +237,6 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
   }
 
   if (auto* rhythm = registry_.rhythm(); rhythm != nullptr && budget_ok()) {
-    ++dispatched;
     any_ran = true;
     bool discarded = false;
     dispatch_slot(
@@ -249,9 +249,10 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
   // Compose the final status from what happened.
   if (truncated) {
     result.diagnostics.status = AssistStatus::kBudgetTruncated;
-    result.diagnostics.reason = has_iter_cap && dispatched >= request.budget.max_iterations
-                                    ? "iteration budget exhausted"
-                                    : "time budget exhausted";
+    result.diagnostics.reason =
+        has_iter_cap && result.diagnostics.iterations_consumed >= request.budget.max_iterations
+            ? "iteration budget exhausted"
+            : "time budget exhausted";
   } else if (any_discarded && result.commands.empty()) {
     result.diagnostics.status = AssistStatus::kDiscarded;
     result.diagnostics.reason = "module threw or returned an invalid patch";
