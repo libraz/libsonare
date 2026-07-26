@@ -60,7 +60,7 @@ describe('remaining feature request-object compatibility', () => {
       nnFilter(new Float32Array(12).fill(1), 3, 4),
     );
     expect(phaseVocoder({ samples, rate: 1.1, sampleRate, nFft: 512, hopLength: 128 })).toEqual(
-      phaseVocoder(samples, 1.1, sampleRate, 512, 128),
+      phaseVocoder(samples, sampleRate, 1.1, 512, 128),
     );
     expect(hpssWithResidual({ samples, sampleRate })).toEqual(
       hpssWithResidual(samples, sampleRate),
@@ -140,7 +140,7 @@ describe('remaining feature request-object compatibility', () => {
   // must fail identically either way — the positive-path equivalence above does
   // not prove the error path stays in lockstep.
   it('throws identically on invalid input in both call forms', () => {
-    const posRate = captureThrow(() => phaseVocoder(samples, 0, sampleRate, 512, 128));
+    const posRate = captureThrow(() => phaseVocoder(samples, sampleRate, 0, 512, 128));
     const reqRate = captureThrow(() =>
       phaseVocoder({ samples, rate: 0, sampleRate, nFft: 512, hopLength: 128 }),
     );

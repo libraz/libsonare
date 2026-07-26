@@ -449,7 +449,11 @@ export class Project {
     this.native.setMidiEvents(clipId, events);
   }
 
-  /** Import an in-memory SMF buffer; returns the first added clip id. */
+  /**
+   * Import an in-memory SMF buffer; returns the first added clip id.
+   * Malformed or partially truncated tracks are rejected instead of installing
+   * a silently shortened clip.
+   */
   importSmf(data: Uint8Array): number {
     return this.native.importSmf(data);
   }
@@ -498,7 +502,10 @@ export class Project {
     this.native.setProgramOnChannel(clipId, group, channel, program, bank);
   }
 
-  /** Destructively bake a MIDI-FX chain into a clip's stored MIDI events. */
+  /**
+   * Destructively bake a MIDI-FX chain into all stored events. Large clips are
+   * drained without truncation; failure leaves the original clip unchanged.
+   */
   bakeMidiFx(clipId: number, configJson: string): void {
     this.native.bakeMidiFx(clipId, configJson);
   }
@@ -510,9 +517,9 @@ export class Project {
 
   /**
    * Pre-flight check for hanging / unmatched notes in a MIDI clip: reports
-   * whether every note-on has a matching note-off (FIFO per channel+note).
-   * Useful before bouncing to catch a stuck note. Throws if `clipId` is unknown
-   * or not a MIDI clip.
+   * whether every note-on in the exported half-open playback window has a
+   * matching note-off (FIFO per group+channel+note). Useful before bouncing to
+   * catch a stuck note. Throws if `clipId` is unknown or not a MIDI clip.
    */
   validateMidiNotes(clipId: number): ProjectNotePairValidation {
     return this.native.validateMidiNotes(clipId);

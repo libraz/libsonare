@@ -458,6 +458,8 @@ export interface WasmLufsResult {
   integratedLufs: number;
   momentaryLufs: number;
   shortTermLufs: number;
+  maxMomentaryLufs: number;
+  maxShortTermLufs: number;
   loudnessRange: number;
 }
 
@@ -467,6 +469,7 @@ export interface WasmMasteringResult {
   inputLufs: number;
   outputLufs: number;
   appliedGainDb: number;
+  loudnessTargetLimited?: boolean;
   latencySamples?: number;
 }
 
@@ -479,6 +482,7 @@ export interface WasmMasteringChainResult extends WasmMasteringResult {
   stages: string[];
   outputTruePeakDbtp: number;
   outputLra: number;
+  loudnessTargetLimited: boolean;
   stageGainReductions: WasmStageGainReduction[];
 }
 
@@ -492,6 +496,7 @@ export interface WasmMasteringStereoChainResult {
   stages: string[];
   outputTruePeakDbtp: number;
   outputLra: number;
+  loudnessTargetLimited: boolean;
   stageGainReductions: WasmStageGainReduction[];
 }
 
@@ -624,8 +629,9 @@ export interface WasmEngineMetronomeConfig {
   enabled: boolean;
   beatGain?: number;
   accentGain?: number;
+  /** Explicit click length in samples (0..384000). The engine caps it to one second at its sample rate. */
   clickSamples?: number;
-  /** Optional click length in seconds; > 0 overrides the engine 2 ms default. */
+  /** Optional click length in seconds (0..1); > 0 overrides the engine 2 ms default. */
   clickSeconds?: number;
 }
 
@@ -943,6 +949,7 @@ export interface WasmRealtimeEngine {
     minValue: number,
     maxValue: number,
   ) => void;
+  bindMidiCcBinding: (binding: import('./project_types').ProjectMidiCcBinding) => void;
   clearMidiCcBindings: () => void;
   midiCcBindingCount: () => number;
   setMidiFx: (destinationId: number, configJson: string) => void;
@@ -1100,7 +1107,7 @@ export interface SonareModule {
     detectInversions: boolean,
     chromaMethod: number,
   ) => string[];
-  analyze: (samples: Float32Array, sampleRate: number) => WasmAnalysisResult;
+  analyze: (samples: Float32Array, sampleRate: number, options: object) => WasmAnalysisResult;
   _synthEnumTables: () => WasmSynthEnumTables;
   _synthPatchRoundTrip: (patch: unknown) => unknown;
   _analysisResultSchemaPaths: () => string[];
@@ -1182,6 +1189,13 @@ export interface SonareModule {
 
   meteringPeakDb: (samples: Float32Array, sampleRate: number) => number;
   meteringRmsDb: (samples: Float32Array, sampleRate: number) => number;
+  meteringSilenceRatio: (
+    samples: Float32Array,
+    sampleRate: number,
+    thresholdDb: number,
+    frameLength: number,
+    hopLength: number,
+  ) => number;
   meteringCrestFactorDb: (samples: Float32Array, sampleRate: number) => number;
   meteringDcOffset: (samples: Float32Array, sampleRate: number) => number;
   meteringTruePeakDb: (
@@ -1695,6 +1709,7 @@ export interface SonareModule {
     nMfcc: number,
     nFrames: number,
     nMels: number,
+    lifter: number,
   ) => WasmMelPowerResult;
   mfccToAudio: (
     mfcc: Float32Array,
@@ -1708,6 +1723,7 @@ export interface SonareModule {
     fmax: number,
     nIter: number,
     htk: boolean,
+    lifter: number,
   ) => Float32Array;
 
   // Features - Chroma
@@ -1889,12 +1905,14 @@ export interface SonareModule {
     sampleRate: number,
     hopLength: number,
     nChroma: number,
+    binsPerOctave: number,
   ) => WasmChromaResult;
   chromaCqt: (
     samples: Float32Array,
     sampleRate: number,
     hopLength: number,
     nChroma: number,
+    binsPerOctave: number,
   ) => WasmChromaResult;
   bassChroma: (
     samples: Float32Array,
@@ -1902,7 +1920,13 @@ export interface SonareModule {
     hopLength: number,
     nChroma: number,
   ) => WasmChromaResult;
-  nnlsChroma: (samples: Float32Array, sampleRate: number) => WasmNnlsChromaResult;
+  nnlsChroma: (
+    samples: Float32Array,
+    sampleRate: number,
+    enableStftBlend: boolean,
+    stftBlendWeight: number,
+    stftBlendNFft: number,
+  ) => WasmNnlsChromaResult;
   cqt: (
     samples: Float32Array,
     sampleRate: number,
@@ -2255,6 +2279,7 @@ export interface WasmMixer {
   removeSend: (stripIndex: number, sendIndex: number) => void;
   meterTap: (stripIndex: number, tap: number) => WasmMixMeterSnapshot;
   stripMeter: (stripIndex: number) => WasmMixMeterSnapshot;
+  busMeter: (busId: string) => WasmMixMeterSnapshot;
   scheduleFaderAutomation: (
     stripIndex: number,
     samplePos: number,
@@ -2286,6 +2311,7 @@ export interface WasmMixer {
   busCount: () => number;
   addVcaGroup: (id: string, gainDb: number, members: string[]) => void;
   setVcaGroupGainDb: (id: string, gainDb: number) => void;
+  setVcaGroupMembers: (id: string, members: string[]) => void;
   removeVcaGroup: (id: string) => void;
   vcaGroupCount: () => number;
   toSceneJson: () => string;

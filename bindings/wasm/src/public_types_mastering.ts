@@ -138,6 +138,8 @@ export interface MasteringResult {
   inputLufs: number;
   outputLufs: number;
   appliedGainDb: number;
+  /** True when peak headroom prevented the requested LUFS target. */
+  loudnessTargetLimited?: boolean;
   latencySamples?: number;
 }
 
@@ -329,6 +331,7 @@ export interface MasteringChainConfig {
     monoMaker?: {
       enabled?: boolean;
       amount?: number;
+      frequencyHz?: number;
     };
   };
   maximizer?: {
@@ -407,6 +410,8 @@ export interface MasteringChainResult {
   outputTruePeakDbtp: number;
   /** EBU Tech 3342 Loudness Range of the output (LU). */
   outputLra: number;
+  /** True when peak headroom prevented the requested LUFS target. */
+  loudnessTargetLimited: boolean;
   /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
 }
@@ -422,6 +427,7 @@ export interface MasteringChainStereoResult {
   /** See {@link MasteringChainResult} for field semantics. */
   outputTruePeakDbtp: number;
   outputLra: number;
+  loudnessTargetLimited: boolean;
   stageGainReductions: StageGainReduction[];
 }
 

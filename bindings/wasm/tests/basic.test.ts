@@ -117,6 +117,8 @@ describe('Sonare WASM Module', () => {
       engine.setLoopFromMarkers(11, 12);
       engine.setMetronome({ enabled: true, beatGain: 0.25, accentGain: 0.75, clickSamples: 16 });
       expect(engine.metronome().enabled).toBe(true);
+      engine.setMetronome({ enabled: true });
+      expect(engine.metronome().clickSamples).toBe(0);
       expect(engine.countInEndSample(0, 2)).toBe(288000);
       expect(engine.sampleAtPpq(1.5)).toBe(72000);
       engine.setTempoSegments([
@@ -1403,7 +1405,15 @@ describe('Sonare WASM Module', () => {
       expect(Number.isFinite(result.inputLufs)).toBe(true);
       expect(Number.isFinite(result.outputLufs)).toBe(true);
       expect(Number.isFinite(result.appliedGainDb)).toBe(true);
+      expect(typeof result.loudnessTargetLimited).toBe('boolean');
       expect(result.outputLufs).toBeCloseTo(-18.0, 1);
+
+      const ceilingLimited = mastering(samples, sampleRate, {
+        targetLufs: -2.0,
+        ceilingDb: -1.0,
+        truePeakOversample: 4,
+      });
+      expect(ceilingLimited.loudnessTargetLimited).toBe(true);
     });
 
     it('treats truePeakOversample: 0 as the library default', () => {
@@ -1887,6 +1897,19 @@ describe('Sonare WASM Module', () => {
         // tilt EQ should modify the constant signal at least somewhere
         const stages = chain.stageNames();
         expect(stages).toContain('eq.tilt');
+      } finally {
+        chain.delete();
+      }
+    });
+
+    it('uses the canonical flat parser for nested streaming-chain configuration', () => {
+      const chain = new StreamingMasteringChain({
+        repair: { denoise: { enabled: false } },
+        eq: { tilt: { enabled: true, tiltDb: 2.0, pivotHz: 1500 } },
+      });
+      try {
+        chain.prepare(44100, 512, 1);
+        expect(chain.stageNames()).toEqual(['eq.tilt']);
       } finally {
         chain.delete();
       }

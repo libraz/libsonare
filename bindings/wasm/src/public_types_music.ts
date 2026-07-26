@@ -233,6 +233,10 @@ export interface Beat {
 export interface Chord {
   root: PitchClass;
   bass: PitchClass;
+  /** Canonical core spelling; stable across all language bindings. */
+  rootName: string;
+  /** Canonical core spelling; stable across all language bindings. */
+  bassName: string;
   quality: ChordQuality;
   start: number;
   end: number;

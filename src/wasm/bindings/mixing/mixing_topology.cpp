@@ -82,6 +82,23 @@ void MixerWasm::setVcaGroupGainDb(std::string id, float gain_db) {
   }
 }
 
+void MixerWasm::setVcaGroupMembers(std::string id, val members) {
+  std::vector<std::string> member_storage;
+  std::vector<const char*> member_ptrs;
+  const int count = members["length"].as<int>();
+  member_storage.reserve(static_cast<size_t>(count));
+  member_ptrs.reserve(static_cast<size_t>(count));
+  for (int i = 0; i < count; ++i) member_storage.push_back(members[i].as<std::string>());
+  for (const auto& member : member_storage) member_ptrs.push_back(member.c_str());
+  const SonareError err = sonare_mixer_set_vca_group_members(
+      mixer_, id.c_str(), member_ptrs.empty() ? nullptr : member_ptrs.data(), member_ptrs.size());
+  if (err != SONARE_OK) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidState,
+        std::string("failed to set VCA group members: ") + sonare_error_message(err));
+  }
+}
+
 size_t MixerWasm::vcaGroupCount() const {
   size_t count = 0;
   SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
@@ -112,6 +129,7 @@ void registerMixerTopology(class_<MixerWasm>& cls) {
       .function("busCount", &MixerWasm::busCount)
       .function("addVcaGroup", &MixerWasm::addVcaGroup)
       .function("setVcaGroupGainDb", &MixerWasm::setVcaGroupGainDb)
+      .function("setVcaGroupMembers", &MixerWasm::setVcaGroupMembers)
       .function("removeVcaGroup", &MixerWasm::removeVcaGroup)
       .function("vcaGroupCount", &MixerWasm::vcaGroupCount)
       .function("toSceneJson", &MixerWasm::toSceneJson);

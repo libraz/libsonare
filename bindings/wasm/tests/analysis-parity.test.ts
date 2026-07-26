@@ -102,6 +102,10 @@ describe('WASM wave3 analysis parity', () => {
     it('succeeds on valid input', () => {
       const result = detectChords(samples, SR);
       expect(Array.isArray(result.chords)).toBe(true);
+      for (const chord of result.chords) {
+        expect(typeof chord.rootName).toBe('string');
+        expect(typeof chord.bassName).toBe('string');
+      }
     });
 
     it('uses threshold to emit a continuous N.C. segment', () => {

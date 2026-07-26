@@ -1,7 +1,7 @@
 import { panLawCode, panModeCode, sendTimingCode } from './codes';
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
-import type { SynthPatch } from './project';
+import type { ProjectMidiCcBinding, SynthPatch } from './project';
 import type { EqBand, PanLaw, PanMode, SendTiming } from './public_types';
 import type {
   WasmClipPageRequest,
@@ -290,6 +290,11 @@ export class RealtimeEngine {
     );
   }
 
+  /** Bind a 7/14-bit CC, RPN, or NRPN descriptor to a live parameter. */
+  bindMidiCcBinding(binding: ProjectMidiCcBinding): void {
+    this.native.bindMidiCcBinding(binding);
+  }
+
   clearMidiCcBindings(): void {
     this.native.clearMidiCcBindings();
   }
@@ -479,6 +484,7 @@ export class RealtimeEngine {
     this.native.seekPpq(ppq, renderFrame);
   }
 
+  /** Set a finite tempo in the range (0, 100000] BPM. */
   setTempo(bpm: number): void {
     this.native.setTempo(bpm);
   }
@@ -551,6 +557,7 @@ export class RealtimeEngine {
     this.native.setLoopFromMarkers(startMarkerId, endMarkerId);
   }
 
+  /** Set a metronome config; click lengths are limited to one second. */
   setMetronome(config: EngineMetronomeConfig): void {
     this.native.setMetronome(config);
   }
@@ -833,6 +840,7 @@ export class RealtimeEngine {
     this.native.setCaptureSource(source);
   }
 
+  /** Positive values delay capture relative to the punch window. */
   setRecordOffsetSamples(offsetSamples: number): void {
     this.native.setRecordOffsetSamples(offsetSamples);
   }

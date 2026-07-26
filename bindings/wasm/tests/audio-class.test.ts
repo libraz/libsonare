@@ -88,6 +88,17 @@ describe('Audio class', () => {
       expect(audio).toBeInstanceOf(Audio);
     });
 
+    it('validates and copies the source buffer in fromBuffer', () => {
+      expect(() => Audio.fromBuffer(new Float32Array(), SR)).toThrow();
+      expect(() => Audio.fromBuffer(new Float32Array([Number.NaN]), SR)).toThrow();
+      expect(() => Audio.fromBuffer(new Float32Array([0]), 1)).toThrow();
+
+      const source = new Float32Array([0.25, -0.5]);
+      const audio = Audio.fromBuffer(source, SR);
+      source[0] = 1;
+      expect(audio.data[0]).toBe(0.25);
+    });
+
     it('should create an Audio instance by decoding bytes from memory', () => {
       const bytes = pcm16Wav(new Int16Array([0, 8192, -8192, 16384]), 8000);
       const audio = Audio.fromMemory(bytes);
@@ -174,7 +185,8 @@ describe('Audio class', () => {
     it('should return correct data', () => {
       const samples = sine();
       const audio = Audio.fromBuffer(samples, SR);
-      expect(audio.data).toBe(samples);
+      expect(audio.data).toStrictEqual(samples);
+      expect(audio.data).not.toBe(samples);
     });
 
     it('should return correct length', () => {

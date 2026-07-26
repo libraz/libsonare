@@ -191,15 +191,29 @@ export interface ResolvedMetronomeConfig {
 export const DEFAULT_METRONOME_CONFIG: ResolvedMetronomeConfig = {
   beatGain: 0.35,
   accentGain: 0.7,
-  clickSamples: 96,
+  clickSamples: 0,
 };
 
 export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedMetronomeConfig {
-  return {
+  const resolved = {
     beatGain: config.beatGain ?? DEFAULT_METRONOME_CONFIG.beatGain,
     accentGain: config.accentGain ?? DEFAULT_METRONOME_CONFIG.accentGain,
     clickSamples: config.clickSamples ?? DEFAULT_METRONOME_CONFIG.clickSamples,
   };
+  if (
+    !Number.isFinite(resolved.beatGain) ||
+    resolved.beatGain < 0 ||
+    !Number.isFinite(resolved.accentGain) ||
+    resolved.accentGain < 0 ||
+    !Number.isInteger(resolved.clickSamples) ||
+    resolved.clickSamples < 0 ||
+    resolved.clickSamples > 384000 ||
+    (config.clickSeconds !== undefined &&
+      (!Number.isFinite(config.clickSeconds) || config.clickSeconds < 0 || config.clickSeconds > 1))
+  ) {
+    throw new RangeError('invalid metronome gains or click length');
+  }
+  return resolved;
 }
 
 // Out-of-band control messages posted from the main-thread SonareEngine facade

@@ -224,12 +224,12 @@ val js_mel_to_audio(val mel_power, int n_mels, int n_frames, int sample_rate, in
 
 // Inverse: MFCC matrix [n_mfcc x n_frames] -> Mel power spectrogram.
 // Mirrors feature::mfcc_to_mel.
-val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels) {
+val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels, float lifter) {
   std::vector<float> data =
       load_validated_matrix("mfccToMel", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
   validate_positive("mfccToMel", n_mels, "n_mels");
 
-  std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels);
+  std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels, lifter);
 
   val out = val::object();
   out.set("nMels", n_mels);
@@ -240,7 +240,7 @@ val js_mfcc_to_mel(val mfcc, int n_mfcc, int n_frames, int n_mels) {
 
 // Inverse: MFCC matrix -> audio via Griffin-Lim. Mirrors feature::mfcc_to_audio.
 val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_rate, int n_fft,
-                     int hop_length, float fmin, float fmax, int n_iter, bool htk) {
+                     int hop_length, float fmin, float fmax, int n_iter, bool htk, float lifter) {
   validate_sample_rate("mfccToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
@@ -258,7 +258,7 @@ val js_mfcc_to_audio(val mfcc, int n_mfcc, int n_frames, int n_mels, int sample_
   config.fmax = fmax;
   config.htk = htk;
 
-  Audio result = mfcc_to_audio(data.data(), n_mfcc, n_frames, config, n_iter, sample_rate);
+  Audio result = mfcc_to_audio(data.data(), n_mfcc, n_frames, config, n_iter, sample_rate, lifter);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }
@@ -291,7 +291,7 @@ val js_vqt_to_audio(val magnitude, int n_bins, int n_frames, int sample_rate, in
   validate_positive("vqtToAudio", hop_length, "hop_length");
   validate_positive("vqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("vqtToAudio", n_iter, "n_iter");
-  if (!std::isfinite(fmin) || fmin <= 0.0f || !std::isfinite(gamma) || gamma < 0.0f ||
+  if (!std::isfinite(fmin) || fmin <= 0.0f || std::isinf(gamma) ||
       n_iter > sonare::resource::kMaxGriffinLimIterations) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "vqtToAudio: invalid fmin, gamma, or n_iter");

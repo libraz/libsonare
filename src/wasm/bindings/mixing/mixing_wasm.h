@@ -127,6 +127,7 @@ class MixerWasm {
   // the Node/Python stripMeter contract which calls sonare_strip_meter; the
   // tap-selectable variant is meterTap.
   val stripMeter(unsigned int strip_index);
+  val busMeter(std::string bus_id);
 
   // Schedules sample-accurate fader automation on a strip. sample_pos uses the
   // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential.
@@ -166,6 +167,8 @@ class MixerWasm {
   void removeVcaGroup(std::string id);
 
   void setVcaGroupGainDb(std::string id, float gain_db);
+
+  void setVcaGroupMembers(std::string id, val members);
 
   size_t vcaGroupCount() const;
 

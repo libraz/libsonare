@@ -48,6 +48,13 @@ val MixerWasm::stripMeter(unsigned int strip_index) {
   return mixMeterSnapshotToVal(snapshot);
 }
 
+val MixerWasm::busMeter(std::string bus_id) {
+  SonareMixMeterSnapshot snapshot{};
+  checkStripError(sonare_mixer_bus_meter(mixer_, bus_id.c_str(), &snapshot),
+                  "failed to read bus meter");
+  return mixMeterSnapshotToVal(snapshot);
+}
+
 // Schedules sample-accurate fader automation on a strip. sample_pos uses the
 // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential, 2 = Hold,
 // 3 = SCurve.
@@ -104,6 +111,7 @@ void registerMixerAutomationMeters(class_<MixerWasm>& cls) {
   cls.function("scheduleInsertAutomation", &MixerWasm::scheduleInsertAutomation)
       .function("meterTap", &MixerWasm::meterTap)
       .function("stripMeter", &MixerWasm::stripMeter)
+      .function("busMeter", &MixerWasm::busMeter)
       .function("scheduleFaderAutomation", &MixerWasm::scheduleFaderAutomation)
       .function("schedulePanAutomation", &MixerWasm::schedulePanAutomation)
       .function("scheduleWidthAutomation", &MixerWasm::scheduleWidthAutomation)

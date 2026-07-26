@@ -78,6 +78,12 @@ export function assertSampleRate(fnName: string, sampleRate: number): void {
   }
 }
 
+/** Validate and retain the public Audio.fromBuffer construction contract. */
+export function validateAudioBuffer(samples: Float32Array, sampleRate: number): void {
+  assertSamples('Audio.fromBuffer', samples, true);
+  assertSampleRate('Audio.fromBuffer', sampleRate);
+}
+
 export function assertNonNegativeInteger(fnName: string, value: number, argName: string): void {
   if (!Number.isInteger(value) || value < 0) {
     throw new RangeError(`${fnName}: ${argName} must be a non-negative integer`);

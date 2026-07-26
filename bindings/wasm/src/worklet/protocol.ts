@@ -122,6 +122,8 @@ export enum SonareEngineTelemetryError {
   CommandBacklogDeferred = 14,
   ClipPageUnderrun = 15,
   InsertAutomationOverflow = 16,
+  MidiClockOverflow = 17,
+  MetronomeOverflow = 18,
 }
 
 export interface SonareMeterRingBuffer {

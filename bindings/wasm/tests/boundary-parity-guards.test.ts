@@ -38,18 +38,18 @@ beforeAll(async () => {
 
 describe('phaseVocoder rate guard matches the C ABI (no upper cap)', () => {
   it('accepts a fast rate above the former cap of 100 (C ABI has no upper bound)', () => {
-    const out = phaseVocoder(sine(8192), 150, SR);
+    const out = phaseVocoder(sine(8192), SR, 150);
     expect(out.length).toBeGreaterThan(0);
     // rate > 1 compresses the timeline, so the output is much shorter than input.
     expect(out.length).toBeLessThan(8192);
   });
   it('still rejects a non-positive rate', () => {
-    expect(() => phaseVocoder(sine(), 0, SR)).toThrow(/finite positive/);
-    expect(() => phaseVocoder(sine(), -1, SR)).toThrow(/finite positive/);
+    expect(() => phaseVocoder(sine(), SR, 0)).toThrow(/finite positive/);
+    expect(() => phaseVocoder(sine(), SR, -1)).toThrow(/finite positive/);
   });
   it('still rejects a non-finite rate before allocating an enormous buffer', () => {
-    expect(() => phaseVocoder(sine(), Number.NaN, SR)).toThrow(/finite positive/);
-    expect(() => phaseVocoder(sine(), Number.POSITIVE_INFINITY, SR)).toThrow(/finite positive/);
+    expect(() => phaseVocoder(sine(), SR, Number.NaN)).toThrow(/finite positive/);
+    expect(() => phaseVocoder(sine(), SR, Number.POSITIVE_INFINITY)).toThrow(/finite positive/);
   });
 });
 

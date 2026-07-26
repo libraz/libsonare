@@ -17,6 +17,7 @@ inline void setChainMetrics(emscripten::val& out,
                             const sonare::mastering::api::ChainMetrics& metrics) {
   out.set("outputTruePeakDbtp", metrics.output_true_peak_dbtp);
   out.set("outputLra", metrics.output_lra);
+  out.set("loudnessTargetLimited", metrics.loudness_target_limited);
   emscripten::val reductions = emscripten::val::array();
   for (const auto& reduction : metrics.stage_gain_reductions) {
     emscripten::val entry = emscripten::val::object();

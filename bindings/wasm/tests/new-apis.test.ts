@@ -21,6 +21,7 @@ import {
   melSpectrogram,
   melToAudio,
   melToStft,
+  meteringSilenceRatio,
   mfcc,
   mfccToAudio,
   mfccToMel,
@@ -34,6 +35,7 @@ import {
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
+  pitchPyin,
   plp,
   pseudoCqt,
   RealtimeEngine,
@@ -246,6 +248,11 @@ describe('v1.2 feature additions (WASM)', () => {
       // catch obvious blow-ups / silence.
       expect(peak).toBeGreaterThan(0.05);
       expect(peak).toBeLessThanOrEqual(1.0);
+
+      const detected = pitchPyin(out, SR, 2048, 512, 65, 1000);
+      const expectedHz = 220 * 2 ** (3 / 12);
+      const centsError = 1200 * Math.log2(detected.medianF0 / expectedHz);
+      expect(Math.abs(centsError)).toBeLessThan(5);
     });
 
     it('rejects out-of-range MIDI targets', () => {
@@ -269,6 +276,12 @@ describe('v1.2 feature additions (WASM)', () => {
       const voicedProb = new Float32Array(nFrames).fill(1);
       const out2 = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced, voicedProb);
       expect(out2.length).toBe(signal.length);
+
+      // pYIN emits NaN F0 for unvoiced frames by default.
+      f0[0] = Number.NaN;
+      voiced[0] = 0;
+      const pyinOut = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced, voicedProb);
+      expect(allFinite(pyinOut)).toBe(true);
     });
 
     it('pitchCorrectTimevarying supports scale mode and retune-strength knobs', () => {
@@ -312,6 +325,12 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() =>
         pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, undefined, tooShortProb),
       ).toThrow();
+      expect(() =>
+        pitchCorrectTimevarying(signal, f0, SR, hop, { voiced: tooShortVoiced }),
+      ).toThrow();
+      expect(() =>
+        pitchCorrectTimevarying(signal, f0, SR, hop, { voicedProb: tooShortProb }),
+      ).toThrow();
     });
 
     it('noteStretch lengthens the buffer by the stretch ratio', () => {
@@ -329,6 +348,15 @@ describe('v1.2 feature additions (WASM)', () => {
       const peak = peakAmplitude(out);
       expect(peak).toBeGreaterThan(0.05);
       expect(peak).toBeLessThanOrEqual(1.0);
+    });
+
+    it('noteStretch and noteMove default offset to the input length', () => {
+      const stretched = noteStretch(signal, SR);
+      const moved = noteMove(signal, SR);
+      expect(stretched).toBeInstanceOf(Float32Array);
+      expect(stretched.length).toBeGreaterThan(0);
+      expect(moved).toBeInstanceOf(Float32Array);
+      expect(moved.length).toBe(signal.length);
     });
 
     it('noteMove preserves length while relocating a note region', () => {
@@ -407,6 +435,9 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(energies[0]).toBeGreaterThan(1e-6);
       const tail = energies.slice(4).reduce((a, b) => a + b, 0);
       expect(tail).toBeGreaterThan(1e-6);
+      const master = mixer.busMeter('master');
+      expect(master.channelCount).toBe(2);
+      expect(Number.isFinite(master.peakDb[0])).toBe(true);
 
       mixer.delete();
     });
@@ -617,6 +648,18 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(engine.midiCcBindingCount()).toBe(0);
       expect(() => engine.bindMidiCc(0, 74, 5, { minValue: -60, maxValue: 12 })).not.toThrow();
       expect(engine.midiCcBindingCount()).toBe(1);
+      expect(() =>
+        engine.bindMidiCcBinding({
+          ccNumber: 1,
+          ccLsbNumber: 33,
+          channel: 0,
+          kind: 1,
+          paramId: 6,
+          minValue: 0,
+          maxValue: 1,
+        }),
+      ).not.toThrow();
+      expect(engine.midiCcBindingCount()).toBe(2);
       engine.clearMidiCcBindings();
       expect(engine.midiCcBindingCount()).toBe(0);
       expect(() => engine.setMidiFx(0, '{"transpose_semitones":12}')).not.toThrow();
@@ -959,9 +1002,11 @@ describe('v1.2 feature additions (WASM)', () => {
         mixer.addVcaGroup('all', -3, ['vocal']);
         expect(mixer.vcaGroupCount()).toBe(vcasBefore + 1);
         mixer.setVcaGroupGainDb('all', -8);
+        mixer.setVcaGroupMembers('all', []);
         const scene = JSON.parse(mixer.toSceneJson());
         const group = scene.vcaGroups.find((entry: { id: string }) => entry.id === 'all');
         expect(group.gainDb).toBe(-8);
+        expect(group.members).toEqual([]);
         mixer.removeVcaGroup('all');
         expect(mixer.vcaGroupCount()).toBe(vcasBefore);
 
@@ -1069,6 +1114,17 @@ describe('v1.2 feature additions (WASM)', () => {
         nMels,
       });
       expect(requestMel).toEqual(positionalMel);
+
+      const lifted = new Float32Array(5 * 4);
+      for (let coefficient = 0; coefficient < 5; coefficient++) {
+        const lift = 1 + 11 * Math.sin((Math.PI * coefficient) / 22);
+        lifted.fill((0.2 + 0.1 * coefficient) * lift, coefficient * 4, coefficient * 4 + 4);
+      }
+      const restored = mfccToMel(lifted, 5, 4, 8, 22);
+      const untreated = mfccToMel(lifted, 5, 4, 8);
+      expect(
+        restored.power.some((value, index) => Math.abs(value - untreated.power[index]) > 1e-5),
+      ).toBe(true);
 
       const positionalAudio = melToAudio(
         mel.power,
@@ -1206,7 +1262,8 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => cqt(signal, 7999)).toThrow(/sampleRate/);
       expect(() => cqt(signal, SR, 0)).toThrow(/hopLength/);
       expect(() => vqt(signal, SR, 512, 32.7, 24, 12, Number.NaN)).toThrow(/gamma/);
-      expect(() => analyzeSections(signal, SR, { minSectionSec: 0 })).toThrow(/minSectionSec/);
+      expect(() => analyzeSections(signal, SR, { minSectionSec: -1 })).toThrow(/minSectionSec/);
+      expect(() => analyzeSections(signal, SR, { minSectionSec: 0 })).not.toThrow();
       expect(() => analyzeSections(signal, SR, { nFft: 0 })).toThrow(/nFft/);
       expect(() => analyzeMelody(signal, SR, { fmin: 400, fmax: 200 })).toThrow(/fmax/);
       // Strictly-positive parity with the C ABI (sonare_analyze_melody): a zero
@@ -1261,5 +1318,17 @@ describe('v1.2 feature additions (WASM)', () => {
         expect(Number.isFinite(section.confidence)).toBe(true);
       }
     });
+  });
+
+  it('exposes silence ratio metering and optional NNLS STFT blending', () => {
+    const samples = new Float32Array(2048);
+    samples.fill(1, 1024);
+    expect(meteringSilenceRatio(samples, SR, -45, 1024, 1024)).toBeCloseTo(0.5, 6);
+    const chroma = nnlsChroma(generateSine(440, SR, 0.5), SR, {
+      enableStftBlend: false,
+      stftBlendWeight: 0,
+      stftBlendNFft: 2048,
+    });
+    expect(chroma.data.length).toBe(12 * chroma.nFrames);
   });
 });

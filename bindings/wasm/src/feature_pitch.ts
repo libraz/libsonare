@@ -18,8 +18,8 @@ function requireModule() {
  * @param hopLength - Hop length (default: 512)
  * @param fmin - Minimum frequency in Hz (default: 65)
  * @param fmax - Maximum frequency in Hz (default: 2093)
- * @param threshold - YIN threshold (default: 0.3)
- * @param fillNa - If true, return 0 for unvoiced f0 frames; otherwise keep NaN (default: false)
+ * @param threshold - YIN threshold (default: 0.1)
+ * @param fillNa - Retained for compatibility; YIN always returns a finite per-frame estimate.
  * @returns Pitch detection result
  */
 export interface PitchYinRequest {
@@ -51,7 +51,7 @@ export function pitchYin(
   hopLength = 512,
   fmin = 65.0,
   fmax = 2093.0,
-  threshold = 0.3,
+  threshold = 0.1,
   fillNa = false,
 ): PitchResult {
   if (!(samples instanceof Float32Array)) {
@@ -88,7 +88,7 @@ export function pitchYin(
  * @param hopLength - Hop length (default: 512)
  * @param fmin - Minimum frequency in Hz (default: 65)
  * @param fmax - Maximum frequency in Hz (default: 2093)
- * @param threshold - YIN threshold (default: 0.3)
+ * @param threshold - YIN threshold (default: 0.1)
  * @param fillNa - If true, return 0 for unvoiced f0 frames; otherwise keep NaN (default: false)
  * @returns Pitch detection result
  */
@@ -112,7 +112,7 @@ export function pitchPyin(
   hopLength = 512,
   fmin = 65.0,
   fmax = 2093.0,
-  threshold = 0.3,
+  threshold = 0.1,
   fillNa = false,
 ): PitchResult {
   if (!(samples instanceof Float32Array)) {

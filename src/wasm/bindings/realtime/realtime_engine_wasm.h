@@ -113,6 +113,7 @@ class RealtimeEngineWasm {
   void clearMidiInstrument(uint32_t destination_id);
   size_t midiInstrumentCount() const;
   void bindMidiCc(int channel, int controller, uint32_t param_id, float min_value, float max_value);
+  void bindMidiCcBinding(emscripten::val binding);
   void clearMidiCcBindings();
   size_t midiCcBindingCount() const;
   void setMidiFx(uint32_t destination_id, const std::string& config_json);

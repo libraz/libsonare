@@ -81,6 +81,14 @@ export interface PcenRequest {
   values: Float32Array;
   nBins: number;
   nFrames: number;
+  sampleRate?: number;
+  hopLength?: number;
+  timeConstant?: number;
+  gain?: number;
+  bias?: number;
+  power?: number;
+  eps?: number;
+  /** @deprecated Put PCEN fields directly on the request object. */
   options?: Record<string, number>;
 }
 export interface TempogramRequest {
@@ -449,7 +457,17 @@ export function pcen(
 ): Float32Array {
   if (!(values instanceof Float32Array)) {
     const r = values;
-    return pcen(r.values, r.nBins, r.nFrames, r.options);
+    const {
+      values: requestValues,
+      nBins: requestBins,
+      nFrames: requestFrames,
+      options: legacyOptions,
+      ...flatOptions
+    } = r;
+    return pcen(requestValues, requestBins, requestFrames, {
+      ...legacyOptions,
+      ...flatOptions,
+    });
   }
   return requireModule().pcen(values, nBins, nFrames, options);
 }

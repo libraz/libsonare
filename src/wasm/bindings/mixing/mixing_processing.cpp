@@ -8,9 +8,6 @@
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
 val MixerWasm::processStereo(val left_channels, val right_channels) {
-  // Reject empty input to match the free js_mix_stereo contract: a zero-strip
-  // call would derive a zero-length block and produce an empty master, which
-  // is never a useful result. (There is no master-only path here.)
   const int count =
       requireMatchedLength(left_channels, right_channels, "leftChannels and rightChannels");
 
@@ -55,13 +52,15 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
 
   std::vector<float> out_left(length, 0.0f);
   std::vector<float> out_right(length, 0.0f);
-  SonareError err = sonare_mixer_process_stereo(
-      mixer_, count > 0 ? left_ptrs.data() : nullptr, count > 0 ? right_ptrs.data() : nullptr,
-      static_cast<size_t>(count), out_left.data(), out_right.data(), length);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("mixer process failed: ") + sonare_error_message(err));
+  if (count > 0) {
+    SonareError err = sonare_mixer_process_stereo(mixer_, left_ptrs.data(), right_ptrs.data(),
+                                                  static_cast<size_t>(count), out_left.data(),
+                                                  out_right.data(), length);
+    if (err != SONARE_OK) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidState,
+          std::string("mixer process failed: ") + sonare_error_message(err));
+    }
   }
 
   val out = val::object();

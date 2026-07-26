@@ -238,6 +238,10 @@ export function pitchShift(
 /**
  * Pitch-correct audio from a current MIDI note to a target MIDI note.
  *
+ * Applies one constant, immediate transpose with no retune glide and preserves
+ * the input buffer length. Use {@link pitchCorrectToMidiTimevarying} for a
+ * caller-supplied pitch contour.
+ *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
  * @param currentMidi - Detected/current MIDI note number
@@ -279,7 +283,8 @@ export function pitchCorrectToMidi(
  * the caller-supplied per-frame `f0Hz` contour and retunes every voiced frame
  * toward `targetMidi`, so vibrato/drift in the source is tracked rather than
  * flattened. `voiced` (non-zero = voiced) and `voicedProb` ([0,1]) are optional;
- * omitting them treats every frame as voiced.
+ * omitting them treats every frame as voiced. An `f0Hz` NaN is accepted only
+ * when the corresponding `voiced` entry is zero, matching pYIN output.
  *
  * @param samples - Audio samples (mono, float32)
  * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
@@ -354,7 +359,8 @@ export function pitchCorrectToMidiTimevarying(
  * Generalises {@link pitchCorrectToMidiTimevarying}: the same caller-supplied
  * per-frame `f0Hz` contour drives correction, but `options.mode` selects between
  * a fixed-MIDI target (`'midi'`, default) and scale quantisation (`'scale'`),
- * and the retune knobs shape natural-vs-robotic correction.
+ * and the retune knobs shape natural-vs-robotic correction. An `f0Hz` NaN is
+ * accepted only for a frame marked unvoiced.
  *
  * @param samples - Audio samples (mono, float32)
  * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
@@ -411,7 +417,7 @@ export function pitchCorrectTimevarying(
  * @param sampleRate - Sample rate in Hz
  * @param onsetSample - Note onset position in samples
  * @param offsetSample - Note offset position in samples
- * @param stretchRatio - Stretch ratio (0.5 = double duration, 2.0 = half duration)
+ * @param stretchRatio - Stretch ratio (0.5 = half duration, 2.0 = double duration)
  * @returns Audio with the note region stretched
  */
 export function noteStretch(request: NoteStretchRequest): Float32Array;
@@ -431,7 +437,7 @@ export function noteStretch(
     request.samples,
     request.sampleRate ?? 22050,
     request.onsetSample ?? 0,
-    request.offsetSample ?? 0,
+    request.offsetSample ?? request.samples.length,
     request.stretchRatio ?? 1.0,
   );
 }
@@ -454,7 +460,7 @@ export function noteMove(
     request.samples,
     request.sampleRate ?? 22050,
     request.onsetSample ?? 0,
-    request.offsetSample ?? 0,
+    request.offsetSample ?? request.samples.length,
     request.targetOnsetSample ?? 0,
   );
 }
@@ -464,7 +470,7 @@ export function noteMove(
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param targetDb - Target peak level in dB (default: 0 dB = full scale)
+ * @param targetDb - Finite target at or below 0 dBFS (default: 0 dB = full scale)
  * @returns Normalized audio
  */
 export function normalize(request: NormalizeRequest): Float32Array;

@@ -283,9 +283,9 @@ std::optional<bool> optionalBool(const val& v) {
 
 int requireMatchedLength(const val& a, const val& b, const char* subject) {
   const int n = a["length"].as<int>();
-  if (n <= 0 || b["length"].as<int>() != n) {
+  if (n < 0 || b["length"].as<int>() != n) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " must have the same non-zero length");
+                          std::string(subject) + " must have the same length");
   }
   return n;
 }

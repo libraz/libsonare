@@ -76,6 +76,7 @@ import {
   detectOnsets,
 } from './quick_analysis';
 import type { ProgressCallback, WasmNnlsChromaResult } from './sonare.js';
+import { validateAudioBuffer } from './validation';
 
 // ============================================================================
 // Audio Class
@@ -177,7 +178,8 @@ export class Audio {
    *   Node/Python surfaces).
    */
   static fromBuffer(samples: Float32Array, sampleRate = 48000): Audio {
-    return new Audio(samples, sampleRate);
+    validateAudioBuffer(samples, sampleRate);
+    return new Audio(samples.slice(), sampleRate);
   }
 
   /**
@@ -472,7 +474,7 @@ export class Audio {
     hopLength = 512,
     fmin = 65.0,
     fmax = 2093.0,
-    threshold = 0.3,
+    threshold = 0.1,
     fillNa = false,
   ): PitchResult {
     return pitchYin(
@@ -492,7 +494,7 @@ export class Audio {
     hopLength = 512,
     fmin = 65.0,
     fmax = 2093.0,
-    threshold = 0.3,
+    threshold = 0.1,
     fillNa = false,
   ): PitchResult {
     return pitchPyin(

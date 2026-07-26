@@ -30,15 +30,16 @@ export interface PitchCorrectOptions extends ValidateOptions {
 export interface NoteStretchOptions {
   /** Note onset position in samples (selects the region). Default 0. */
   onsetSample?: number;
-  /** Note offset position in samples (selects the region). Default 0. */
+  /** Note offset position in samples (selects the region). Defaults to the input length. */
   offsetSample?: number;
-  /** Stretch ratio (0.5 = double duration, 2.0 = half duration). Default 1. */
+  /** Stretch ratio (0.5 = half duration, 2.0 = double duration). Default 1. */
   stretchRatio?: number;
 }
 
 /** Options for `noteMove`. */
 export interface NoteMoveOptions {
   onsetSample?: number;
+  /** Defaults to the input length. */
   offsetSample?: number;
   targetOnsetSample?: number;
 }
@@ -47,7 +48,7 @@ export interface NoteMoveOptions {
 export type SpectralEditMode = 'gain' | 'attenuate' | 'mute' | 'heal';
 
 /** Analysis/synthesis window used by `spectralEdit`. */
-export type SpectralEditWindow = 'hann' | 'hamming' | 'blackman' | 'rectangular';
+export type SpectralEditWindow = 'hann' | 'hamming' | 'blackman' | 'rectangular' | 'rect';
 
 /** One time x frequency rectangle edit op for `spectralEdit`. */
 export interface SpectralRegionOp {
@@ -186,8 +187,14 @@ export interface PitchResult {
  */
 export interface LufsResult {
   integratedLufs: number;
+  /** Final complete 400 ms window, not Max-M. */
   momentaryLufs: number;
+  /** Final complete 3 s window, not Max-S. */
   shortTermLufs: number;
+  /** Maximum 400 ms window (EBU R128 Max-M). */
+  maxMomentaryLufs: number;
+  /** Maximum 3 s window (EBU R128 Max-S). */
+  maxShortTermLufs: number;
   loudnessRange: number;
 }
 

@@ -6,7 +6,29 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, RealtimeEngine, RealtimeVoiceChanger } from '../dist/index.js';
+import {
+  analyze,
+  deemphasis,
+  detectBeats,
+  detectBpm,
+  detectDownbeats,
+  detectKey,
+  detectKeyCandidates,
+  detectOnsets,
+  fixLength,
+  frameSignal,
+  init,
+  Mixer,
+  masteringChain,
+  meteringDetectClipping,
+  padCenter,
+  pitchCorrectTimevarying,
+  preemphasis,
+  RealtimeEngine,
+  RealtimeVoiceChanger,
+  splitSilence,
+  trimSilence,
+} from '../dist/index.js';
 
 beforeAll(async () => {
   await init();
@@ -30,6 +52,14 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
     expect(() => engine.setTimeSignature(4, 0)).toThrow();
     // A valid signature does not throw.
     expect(() => engine.setTimeSignature(3, 4)).not.toThrow();
+  });
+
+  it('rejects tempos above the realtime-safe public range', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setTempo(100000)).not.toThrow();
+    expect(() => engine.setTempo(100000.1)).toThrow();
+    expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 100000.1 }])).toThrow();
+    expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 120, endBpm: 100000.1 }])).toThrow();
   });
 
   it('rejects an invalid loop range', () => {
@@ -97,10 +127,17 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
     ).toThrow();
   });
 
-  it('rejects negative metronome gains or click length', () => {
+  it('rejects invalid metronome gains or click length', () => {
     const engine = new RealtimeEngine(48000, 128);
     expect(() => engine.setMetronome({ enabled: true, beatGain: -1 })).toThrow();
     expect(() => engine.setMetronome({ enabled: true, clickSamples: -1 })).toThrow();
+    expect(() => engine.setMetronome({ enabled: true, clickSamples: 2_000_000_000 })).toThrow();
+    expect(() =>
+      engine.setMetronome({ enabled: true, clickSamples: 0, clickSeconds: 2 }),
+    ).toThrow();
+    expect(() =>
+      engine.setMetronome({ enabled: true, clickSamples: 0, clickSeconds: Number.NaN }),
+    ).toThrow();
     expect(() => engine.setMetronome({ enabled: true, beatGain: 0.3 })).not.toThrow();
   });
 
@@ -141,5 +178,90 @@ describe('StreamingRetune sanitizes non-finite input', () => {
     // A subsequent clean block must also stay finite (no poisoned ring state).
     const clean = retune.processMono(new Float32Array(256).fill(0.1));
     expect(Array.from(clean).every((v) => Number.isFinite(v))).toBe(true);
+  });
+});
+
+describe('offline boundary validation is enforced by the native WASM layer', () => {
+  it('rejects NaN/Inf in every quick-analysis entry even when the JS scan is disabled', () => {
+    const bad = new Float32Array(2048);
+    bad[17] = Number.NaN;
+    const calls = [
+      () => detectBpm(bad, 22050, { validate: false }),
+      () => detectKey({ samples: bad, sampleRate: 22050, validate: false }),
+      () => detectKeyCandidates({ samples: bad, sampleRate: 22050, validate: false }),
+      () => detectOnsets(bad, 22050, { validate: false }),
+      () => detectBeats(bad, 22050, { validate: false }),
+      () => detectDownbeats(bad, 22050, { validate: false }),
+      () => analyze(bad, 22050, { validate: false }),
+    ];
+    for (const call of calls) {
+      expect(call).toThrow();
+    }
+  });
+
+  it('rejects non-finite values in all signal transforms', () => {
+    const bad = new Float32Array([0, Number.POSITIVE_INFINITY, 1]);
+    const calls = [
+      () => preemphasis(bad),
+      () => deemphasis(bad),
+      () => trimSilence(bad, 20, 2, 1),
+      () => splitSilence(bad, 20, 2, 1),
+      () => frameSignal(bad, 2, 1),
+      () => padCenter(bad, 4),
+      () => fixLength(bad, 4),
+    ];
+    for (const call of calls) {
+      expect(call).toThrow();
+    }
+  });
+
+  it('rejects negative target sizes without attempting an allocation', () => {
+    const values = new Float32Array([1, 2]);
+    expect(() => padCenter(values, -1)).toThrow();
+    expect(() => fixLength(values, -1)).toThrow();
+  });
+
+  it('rejects invalid time-varying pitch tracks and configuration', () => {
+    const samples = new Float32Array(2048).fill(0.1);
+    expect(() => pitchCorrectTimevarying(samples, new Float32Array(), 22050, 256)).toThrow();
+    expect(() => pitchCorrectTimevarying(samples, new Float32Array([440]), 22050, 0)).toThrow();
+    expect(() =>
+      pitchCorrectTimevarying(samples, new Float32Array([440]), 22050, 256, {
+        maxCorrectionSemitones: -1,
+      }),
+    ).toThrow();
+    expect(() =>
+      pitchCorrectTimevarying(samples, new Float32Array([440]), 22050, 256, {
+        retuneSpeedMs: Number.NaN,
+      }),
+    ).toThrow();
+    expect(() =>
+      pitchCorrectTimevarying(samples, new Float32Array([440]), 22050, 256, {
+        scaleModeMask: 0,
+      }),
+    ).toThrow();
+  });
+
+  it('rejects negative clipping-region lengths and mastering oversampling', () => {
+    const samples = new Float32Array(2048).fill(0.1);
+    expect(() =>
+      meteringDetectClipping({ samples, sampleRate: 22050, minRegionSamples: -1 }),
+    ).toThrow();
+    expect(() =>
+      masteringChain(samples, 22050, {
+        loudness: { enabled: false, truePeakOversample: 3 },
+      }),
+    ).toThrow();
+  });
+
+  it('accepts a zero-strip processStereo call and returns an empty master', () => {
+    const mixer = Mixer.fromSceneJson(
+      '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
+      48000,
+      128,
+    );
+    const result = mixer.processStereo([], []);
+    expect(result.left).toHaveLength(0);
+    expect(result.right).toHaveLength(0);
   });
 });

@@ -378,20 +378,38 @@ export function chordFunctionalAnalysis(
  * the UI responsive for long inputs, drive this from a Web Worker and use
  * {@link analyzeWithProgress} to report progress.
  */
-export function analyze(request: SamplesRequest): AnalysisResult;
+export interface MusicAnalyzeOptions {
+  nFft?: number;
+  hopLength?: number;
+  bpmMin?: number;
+  bpmMax?: number;
+  startBpm?: number;
+  useTriadsOnly?: boolean;
+  useHpss?: boolean;
+  chromaHighpassHz?: number;
+  useBassWeighted?: boolean;
+  chromaHopMultiplier?: number;
+  useChordHmm?: boolean;
+  useChordKeyContext?: boolean;
+  chordHmmBeamWidth?: number;
+  detectChordInversions?: boolean;
+}
+export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
+
+export function analyze(request: MusicAnalyzeRequest): AnalysisResult;
 export function analyze(
   samples: Float32Array,
   sampleRate?: number,
-  options?: GuardedOptions,
+  options?: GuardedOptions & MusicAnalyzeOptions,
 ): AnalysisResult;
 export function analyze(
-  samples: Float32Array | SamplesRequest,
+  samples: Float32Array | MusicAnalyzeRequest,
   sampleRate = 22050,
-  options: GuardedOptions = {},
+  options: GuardedOptions & MusicAnalyzeOptions = {},
 ): AnalysisResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   validateAnalysisInput('analyze', request.samples, request.sampleRate ?? 22050, request);
-  const result = requireModule().analyze(request.samples, request.sampleRate ?? 22050);
+  const result = requireModule().analyze(request.samples, request.sampleRate ?? 22050, request);
   return convertAnalysisResult(result);
 }
 

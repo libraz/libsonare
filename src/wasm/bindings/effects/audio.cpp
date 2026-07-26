@@ -87,22 +87,9 @@ val js_pitch_shift(val samples, int sample_rate, float semitones) {
 // unreachable on this surface — adding the guard here would compile the stub and
 // break the binding rather than mirror the C ABI.
 val js_pitch_correct_to_midi(val samples, int sample_rate, float current_midi, float target_midi) {
-  // current_midi is baked into the F0 track below, so the core cannot range-check
-  // it (midi_to_hz(200) is a valid-but-huge frequency). Validate it here exactly
-  // as the C ABI does; target_midi and the F0 track are validated by the core.
-  if (!std::isfinite(current_midi) || current_midi < 0.0f || current_midi > 127.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "currentMidi must be finite and in [0, 127]");
-  }
   Audio audio = loadValidatedAudio(samples, sample_rate);
   editing::pitch_editor::PitchCorrector corrector;
-  editing::pitch_editor::F0Track track;
-  track.sample_rate = sample_rate;
-  track.hop_length = 512;
-  track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
-  track.voiced = {true};
-  track.voiced_prob = {1.0f};
-  Audio result = corrector.correct_to_midi(audio, track, target_midi);
+  Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }
@@ -197,8 +184,13 @@ val js_pitch_correct_timevarying(val samples, int sample_rate, val f0_hz, int ho
     scale_mode = mode == "scale";
     target_midi = floatProperty(options, "targetMidi", target_midi);
     config.scale.root = intProperty(options, "scaleRoot", config.scale.root);
-    config.scale.mode_mask = static_cast<uint16_t>(
-        intProperty(options, "scaleModeMask", static_cast<int>(config.scale.mode_mask)) & 0x0FFF);
+    const int scale_mode_mask =
+        intProperty(options, "scaleModeMask", static_cast<int>(config.scale.mode_mask));
+    if (scale_mode_mask < 0 || scale_mode_mask > 0x0FFF) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "scaleModeMask must be a non-zero 12-bit mask");
+    }
+    config.scale.mode_mask = static_cast<uint16_t>(scale_mode_mask);
     config.scale.reference_midi =
         floatProperty(options, "referenceMidi", config.scale.reference_midi);
     config.retune_amount = floatProperty(options, "retuneAmount", config.retune_amount);
@@ -217,11 +209,6 @@ val js_pitch_correct_timevarying(val samples, int sample_rate, val f0_hz, int ho
   if (!scale_mode && (!std::isfinite(target_midi) || target_midi < 0.0f || target_midi > 127.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "targetMidi must be finite and in [0, 127]");
   }
-  if (config.scale.root < 0 || config.scale.root > 11 || !std::isfinite(config.retune_amount) ||
-      config.retune_amount < 0.0f || config.retune_amount > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "pitch-correction config out of range");
-  }
-
   editing::pitch_editor::F0Track track;
   track.sample_rate = sample_rate;
   track.hop_length = hop_length;
@@ -495,7 +482,7 @@ WindowType parseSpectralEditWindow(val window) {
   if (s == "hann") return WindowType::Hann;
   if (s == "hamming") return WindowType::Hamming;
   if (s == "blackman") return WindowType::Blackman;
-  if (s == "rectangular") return WindowType::Rectangular;
+  if (s == "rectangular" || s == "rect") return WindowType::Rectangular;
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                 "spectralEdit: unknown window: " + s);
 }

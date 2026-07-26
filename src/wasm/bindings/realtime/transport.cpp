@@ -267,12 +267,15 @@ void RealtimeEngineWasm::setMetronome(val config) {
   metronome.enabled = boolProperty(config, "enabled", false);
   metronome.beat_gain = floatProperty(config, "beatGain", 0.35f);
   metronome.accent_gain = floatProperty(config, "accentGain", 0.7f);
-  metronome.click_samples = intProperty(config, "clickSamples", 96);
-  // Match the C ABI: reject negative gains or click length (WASM bypasses the
-  // C-ABI guard). click_samples == 0 stays the sample-rate-derived default.
-  if (metronome.beat_gain < 0.0f || metronome.accent_gain < 0.0f || metronome.click_samples < 0) {
+  metronome.click_samples = intProperty(config, "clickSamples", 0);
+  // Match the C ABI (WASM bypasses that guard). click_samples == 0 stays the
+  // sample-rate-derived default.
+  if (!std::isfinite(metronome.beat_gain) || metronome.beat_gain < 0.0f ||
+      !std::isfinite(metronome.accent_gain) || metronome.accent_gain < 0.0f ||
+      metronome.click_samples < 0 ||
+      metronome.click_samples > sonare::engine::kMaxMetronomeClickSamples) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "metronome gains and click length must be non-negative");
+                                  "metronome gains or click length are invalid");
   }
   // clickSeconds is optional: a value > 0 overrides the engine's 2 ms default
   // click length (parity with the C-ABI/Python/Node click_seconds field). A
@@ -280,6 +283,11 @@ void RealtimeEngineWasm::setMetronome(val config) {
   const double click_seconds = hasProperty(config, "clickSeconds")
                                    ? objectProperty(config, "clickSeconds").as<double>()
                                    : 0.0;
+  if (!std::isfinite(click_seconds) || click_seconds < 0.0 ||
+      click_seconds > sonare::engine::kMaxMetronomeClickSeconds) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "metronome clickSeconds is invalid");
+  }
   if (click_seconds > 0.0) {
     metronome.click_seconds = click_seconds;
   }

@@ -99,6 +99,7 @@ val js_db_to_amplitude(val values, float ref) {
 
 val js_preemphasis(val samples, float coef, val zi) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validateFiniteVector(data, "preemphasis");
   if (zi.isUndefined() || zi.isNull()) {
     return vectorToFloat32Array(preemphasis(data, coef));
   }
@@ -107,6 +108,7 @@ val js_preemphasis(val samples, float coef, val zi) {
 
 val js_deemphasis(val samples, float coef, val zi) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validateFiniteVector(data, "deemphasis");
   if (zi.isUndefined() || zi.isNull()) {
     return vectorToFloat32Array(deemphasis(data, coef));
   }
@@ -115,6 +117,7 @@ val js_deemphasis(val samples, float coef, val zi) {
 
 val js_trim_silence(val samples, float top_db, int frame_length, int hop_length) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validateFiniteVector(data, "trimSilence");
   auto result = trim(data, top_db, frame_length, hop_length);
   val out = val::object();
   out.set("audio", vectorToFloat32Array(result.audio));
@@ -125,6 +128,7 @@ val js_trim_silence(val samples, float top_db, int frame_length, int hop_length)
 
 val js_split_silence(val samples, float top_db, int frame_length, int hop_length) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validateFiniteVector(data, "splitSilence");
   auto ranges = split(data, top_db, frame_length, hop_length);
   std::vector<int> flat;
   flat.reserve(ranges.size() * 2);
@@ -137,6 +141,7 @@ val js_split_silence(val samples, float top_db, int frame_length, int hop_length
 
 val js_frame_signal(val samples, int frame_length, int hop_length) {
   std::vector<float> data = float32ArrayToVector(samples);
+  validateFiniteVector(data, "frameSignal");
   val out = val::object();
   out.set("nFrames", frame_count(data.size(), frame_length, hop_length));
   out.set("frames", vectorToFloat32Array(frame(data, frame_length, hop_length)));
@@ -145,11 +150,19 @@ val js_frame_signal(val samples, int frame_length, int hop_length) {
 
 val js_pad_center(val values, int size, float pad_value) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateFiniteVector(data, "padCenter");
+  if (size < 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "padCenter: size must be non-negative");
+  }
   return vectorToFloat32Array(pad_center(data, static_cast<size_t>(size), pad_value));
 }
 
 val js_fix_length(val values, int size, float pad_value) {
   std::vector<float> data = float32ArrayToVector(values);
+  validateFiniteVector(data, "fixLength");
+  if (size < 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "fixLength: size must be non-negative");
+  }
   return vectorToFloat32Array(fix_length(data, static_cast<size_t>(size), pad_value));
 }
 

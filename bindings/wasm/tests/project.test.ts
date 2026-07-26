@@ -73,6 +73,25 @@ describe('Sonare WASM Project', () => {
     return smf;
   }
 
+  function makeTruncatedSmf(): Uint8Array {
+    const body = new Uint8Array([
+      0x00,
+      0x90,
+      0x3c,
+      0x64, // valid note-on
+      0x00,
+      0xff,
+      0x01,
+      0x7f, // text meta claims 127 missing payload bytes
+    ]);
+    const smf = new Uint8Array(22 + body.length);
+    smf.set([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0], 0);
+    smf.set([0x4d, 0x54, 0x72, 0x6b], 14);
+    new DataView(smf.buffer).setUint32(18, body.length, false);
+    smf.set(body, 22);
+    return smf;
+  }
+
   function danglingSourceJson(): string {
     return '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}';
   }
@@ -446,6 +465,46 @@ describe('Sonare WASM Project', () => {
     }
   });
 
+  it('preserves more than 512 events when baking MIDI FX', () => {
+    const project = new Project();
+    try {
+      const { clipId } = project.addMidiClip(0, 8);
+      const events = Array.from({ length: 600 }, (_, i) =>
+        Project.midiCc(i / 80, 0, 0, i % 128, (i * 3) % 128),
+      );
+      project.setMidiEvents(clipId, events);
+      project.bakeMidiFx(clipId, '{}');
+
+      const payload = JSON.parse(project.toJson()) as {
+        midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
+      };
+      expect(payload.midi_content[String(clipId)]).toEqual(events);
+
+      const roundtrip = new Project();
+      try {
+        const roundClip = roundtrip.importSmf(project.exportSmf());
+        roundtrip.bakeMidiFx(roundClip, '{}');
+        const roundPayload = JSON.parse(roundtrip.toJson()) as {
+          midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
+        };
+        expect(roundPayload.midi_content[String(roundClip)]).toHaveLength(600);
+      } finally {
+        roundtrip.delete();
+      }
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('rejects a salvaged truncated SMF with its native diagnostic', () => {
+    const project = new Project();
+    try {
+      expect(() => project.importSmf(makeTruncatedSmf())).toThrow(/truncated/);
+    } finally {
+      project.delete();
+    }
+  });
+
   it('rejects MIDI loop export that exceeds the expansion budget', () => {
     const project = new Project();
     try {
@@ -539,6 +598,18 @@ describe('Sonare WASM Project', () => {
       expect(crossGroup.ok).toBe(false);
       expect(crossGroup.unmatchedNoteOns).toBe(1);
       expect(crossGroup.unmatchedNoteOffs).toBe(1);
+
+      // Export uses the half-open clip window, so an off at exactly
+      // lengthPpq is excluded and validation must flag the resulting hang.
+      const { clipId: boundaryClip } = project.addMidiClip(0, 1);
+      project.setMidiEvents(boundaryClip, [
+        Project.midiNoteOn(0, 0, 0, 61, 100),
+        Project.midiNoteOff(1, 0, 0, 61, 0),
+      ]);
+      const boundary = project.validateMidiNotes(boundaryClip);
+      expect(boundary.ok).toBe(false);
+      expect(boundary.unmatchedNoteOns).toBe(1);
+      expect(boundary.unmatchedNoteOffs).toBe(0);
     } finally {
       project.delete();
     }

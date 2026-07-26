@@ -438,21 +438,21 @@ export function remix(
 export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
 export function phaseVocoder(
   samples: Float32Array,
+  sampleRate: number,
   rate: number,
-  sampleRate?: number,
   nFft?: number,
   hopLength?: number,
 ): Float32Array;
 export function phaseVocoder(
   samples: Float32Array | PhaseVocoderRequest,
-  rate = 1,
   sampleRate = 22050,
+  rate = 1,
   nFft = 2048,
   hopLength = 512,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
     const r = samples;
-    return phaseVocoder(r.samples, r.rate, r.sampleRate, r.nFft, r.hopLength);
+    return phaseVocoder(r.samples, r.sampleRate ?? 22050, r.rate, r.nFft, r.hopLength);
   }
   return requireModule().phaseVocoder(samples, sampleRate, rate, nFft, hopLength);
 }

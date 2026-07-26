@@ -34,6 +34,7 @@ export interface ChromaSpectrogramRequest extends GuardedOptions {
   sampleRate?: number;
   hopLength?: number;
   nChroma?: number;
+  binsPerOctave?: number;
 }
 
 export interface MelSpectrogramRequest extends SpectrogramRequest {
@@ -53,6 +54,8 @@ export interface MfccToMelRequest extends GuardedOptions {
   nMfcc: number;
   nFrames: number;
   nMels?: number;
+  /** Lifter used by the forward MFCC transform; zero means no liftering. */
+  lifter?: number;
 }
 
 /** Canonical request form for reconstruction from a Mel power spectrogram. */
@@ -262,6 +265,7 @@ export function chromaCens(
   sampleRate?: number,
   hopLength?: number,
   nChroma?: number,
+  binsPerOctave?: number,
   options?: GuardedOptions,
 ): ChromaResult;
 export function chromaCens(
@@ -269,6 +273,7 @@ export function chromaCens(
   sampleRate = 22050,
   hopLength = 512,
   nChroma = 12,
+  binsPerOctave = 36,
   options: GuardedOptions = {},
 ): ChromaResult {
   if (!(samples instanceof Float32Array)) {
@@ -278,12 +283,16 @@ export function chromaCens(
       request.sampleRate,
       request.hopLength,
       request.nChroma,
+      request.binsPerOctave,
       request,
     );
   }
   validateSpectrogramSamples('chromaCens', samples, sampleRate, options);
-  validatePositiveIntegers('chromaCens', { hopLength, nChroma });
-  return requireModule().chromaCens(samples, sampleRate, hopLength, nChroma);
+  validatePositiveIntegers('chromaCens', { hopLength, nChroma, binsPerOctave });
+  if (binsPerOctave % nChroma !== 0) {
+    throw new RangeError('chromaCens: binsPerOctave must be a multiple of nChroma');
+  }
+  return requireModule().chromaCens(samples, sampleRate, hopLength, nChroma, binsPerOctave);
 }
 
 /**
@@ -301,6 +310,7 @@ export function chromaCqt(
   sampleRate?: number,
   hopLength?: number,
   nChroma?: number,
+  binsPerOctave?: number,
   options?: GuardedOptions,
 ): ChromaResult;
 export function chromaCqt(
@@ -308,6 +318,7 @@ export function chromaCqt(
   sampleRate = 22050,
   hopLength = 512,
   nChroma = 12,
+  binsPerOctave = 36,
   options: GuardedOptions = {},
 ): ChromaResult {
   if (!(samples instanceof Float32Array)) {
@@ -317,12 +328,16 @@ export function chromaCqt(
       request.sampleRate,
       request.hopLength,
       request.nChroma,
+      request.binsPerOctave,
       request,
     );
   }
   validateSpectrogramSamples('chromaCqt', samples, sampleRate, options);
-  validatePositiveIntegers('chromaCqt', { hopLength, nChroma });
-  return requireModule().chromaCqt(samples, sampleRate, hopLength, nChroma);
+  validatePositiveIntegers('chromaCqt', { hopLength, nChroma, binsPerOctave });
+  if (binsPerOctave % nChroma !== 0) {
+    throw new RangeError('chromaCqt: binsPerOctave must be a multiple of nChroma');
+  }
+  return requireModule().chromaCqt(samples, sampleRate, hopLength, nChroma, binsPerOctave);
 }
 
 /**
@@ -664,6 +679,7 @@ export function mfccToMel(
   nMfcc: number,
   nFrames: number,
   nMels?: number,
+  lifter?: number,
   options?: GuardedOptions,
 ): MelPowerResult;
 export function mfccToMel(
@@ -671,6 +687,7 @@ export function mfccToMel(
   nMfcc = 0,
   nFrames = 0,
   nMels = 128,
+  lifter = 0,
   options: GuardedOptions = {},
 ): MelPowerResult {
   if (!(mfccCoefficients instanceof Float32Array)) {
@@ -680,6 +697,7 @@ export function mfccToMel(
       request.nMfcc,
       request.nFrames,
       request.nMels,
+      request.lifter,
       request,
     );
   }
@@ -693,7 +711,7 @@ export function mfccToMel(
     options,
   );
   validatePositiveIntegers('mfccToMel', { nMels });
-  return requireModule().mfccToMel(mfccCoefficients, nMfcc, nFrames, nMels);
+  return requireModule().mfccToMel(mfccCoefficients, nMfcc, nFrames, nMels, lifter);
 }
 
 /**
@@ -726,6 +744,7 @@ export function mfccToAudio(
   fmax?: number,
   nIter?: number,
   htk?: boolean,
+  lifter?: number,
   options?: GuardedOptions,
 ): Float32Array;
 export function mfccToAudio(
@@ -740,6 +759,7 @@ export function mfccToAudio(
   fmax = 0,
   nIter = 32,
   htk = false,
+  lifter = 0,
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(mfccCoefficients instanceof Float32Array)) {
@@ -756,6 +776,7 @@ export function mfccToAudio(
       request.fmax,
       request.nIter,
       request.htk,
+      request.lifter,
       request,
     );
   }
@@ -783,6 +804,7 @@ export function mfccToAudio(
     fmax,
     nIter,
     htk,
+    lifter,
   );
 }
 

@@ -1,3 +1,4 @@
+import { flattenChainConfig } from './_chain_config';
 import { getSonareModule } from './module_state';
 import type {
   EqBand,
@@ -64,7 +65,12 @@ export class StreamingMasteringChain {
 
   constructor(config: StreamingMasteringChainConfig) {
     const module = getSonareModule();
-    this.chain = module.createStreamingMasteringChain(config as Record<string, unknown>);
+    const { loudnessStaticGainDb, loudnessStaticGainPeakDb, ...chainConfig } = config;
+    this.chain = module.createStreamingMasteringChain({
+      __flatParams: flattenChainConfig(chainConfig),
+      loudnessStaticGainDb,
+      loudnessStaticGainPeakDb,
+    });
   }
 
   /**

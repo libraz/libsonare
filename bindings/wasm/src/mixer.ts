@@ -74,7 +74,10 @@ export class Mixer {
     return new Mixer(module.createMixerFromSceneJson(json, sampleRate, blockSize), blockSize);
   }
 
-  /** Rebuild and compile the routing graph from the current scene topology. */
+  /**
+   * Rebuild and compile the routing graph without resetting its absolute
+   * automation sample position or queued strip automation.
+   */
   compile(): void {
     this.mixer.compile();
   }
@@ -261,6 +264,11 @@ export class Mixer {
     this.mixer.setVcaGroupGainDb(id, gainDb);
   }
 
+  /** Replace an existing VCA group's strip membership. */
+  setVcaGroupMembers(id: string, members: string[]): void {
+    this.mixer.setVcaGroupMembers(id, members);
+  }
+
   /** Remove a VCA group by id. */
   removeVcaGroup(id: string): void {
     this.mixer.removeVcaGroup(id);
@@ -425,6 +433,11 @@ export class Mixer {
       return this.mixer.stripMeter(stripIndex);
     }
     return this.mixer.meterTap(stripIndex, meterTapCode(tap));
+  }
+
+  /** Read the post-insert meter for a compiled bus, including master. */
+  busMeter(busId: string): MixMeterSnapshot {
+    return this.mixer.busMeter(busId);
   }
 
   /**

@@ -16,6 +16,8 @@ val js_lufs(val samples, int sample_rate) {
   out.set("integratedLufs", result.integrated_lufs);
   out.set("momentaryLufs", result.momentary_lufs);
   out.set("shortTermLufs", result.short_term_lufs);
+  out.set("maxMomentaryLufs", result.max_momentary_lufs);
+  out.set("maxShortTermLufs", result.max_short_term_lufs);
   out.set("loudnessRange", result.loudness_range);
   return out;
 }
@@ -47,6 +49,8 @@ val js_lufs_interleaved(val samples, int channels, int sample_rate) {
   out.set("integratedLufs", result.integrated_lufs);
   out.set("momentaryLufs", result.momentary_lufs);
   out.set("shortTermLufs", result.short_term_lufs);
+  out.set("maxMomentaryLufs", result.max_momentary_lufs);
+  out.set("maxShortTermLufs", result.max_short_term_lufs);
   out.set("loudnessRange", result.loudness_range);
   return out;
 }
@@ -72,6 +76,12 @@ float js_metering_rms_db(val samples, int sample_rate) {
   return metering::rms_db(audio);
 }
 
+float js_metering_silence_ratio(val samples, int sample_rate, float threshold_db, int frame_length,
+                                int hop_length) {
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  return metering::silence_ratio(audio, threshold_db, frame_length, hop_length);
+}
+
 float js_metering_crest_factor_db(val samples, int sample_rate) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   return metering::crest_factor_db(audio);
@@ -95,9 +105,12 @@ float js_metering_true_peak_db(val samples, int sample_rate, int oversample_fact
 val js_metering_detect_clipping(val samples, int sample_rate, float threshold,
                                 int min_region_samples) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
+  if (min_region_samples < 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "minRegionSamples must be non-negative");
+  }
   const float effective_threshold = threshold <= 0.0f ? 0.999f : threshold;
   const size_t effective_min =
-      min_region_samples <= 0 ? 1u : static_cast<size_t>(min_region_samples);
+      min_region_samples == 0 ? 1u : static_cast<size_t>(min_region_samples);
   metering::ClippingResult result =
       metering::detect_clipping(audio, effective_threshold, effective_min);
   val regions = val::array();
@@ -410,6 +423,7 @@ void registerMeteringBindings() {
   // Metering — basic / true-peak / clipping / dynamic range
   function("meteringPeakDb", &js_metering_peak_db);
   function("meteringRmsDb", &js_metering_rms_db);
+  function("meteringSilenceRatio", &js_metering_silence_ratio);
   function("meteringCrestFactorDb", &js_metering_crest_factor_db);
   function("meteringDcOffset", &js_metering_dc_offset);
   function("meteringTruePeakDb", &js_metering_true_peak_db);

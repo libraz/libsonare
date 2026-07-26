@@ -84,6 +84,21 @@ describe('WASM basic analysis request objects', () => {
     expect(analyze({ samples, sampleRate })).toEqual(analyze(samples, sampleRate));
   });
 
+  it('accepts complete analyzer options', () => {
+    const result = analyze({
+      samples,
+      sampleRate,
+      bpmMin: 30,
+      bpmMax: 90,
+      startBpm: 55,
+      useHpss: false,
+      useChordHmm: true,
+      detectChordInversions: true,
+    });
+    expect(result.bpm).toBeGreaterThanOrEqual(30);
+    expect(result.bpm).toBeLessThanOrEqual(90);
+  });
+
   it('accepts the progress callback in the request object', () => {
     const stages: string[] = [];
     const result = analyzeWithProgress({

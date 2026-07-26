@@ -98,6 +98,9 @@ export interface LufsRequest extends ValidateOptions {
 export interface NnlsChromaRequest extends GuardedOptions {
   samples: Float32Array;
   sampleRate?: number;
+  enableStftBlend?: boolean;
+  stftBlendWeight?: number;
+  stftBlendNFft?: number;
 }
 
 function validateMusicSamples(
@@ -140,18 +143,24 @@ export function nnlsChroma(request: NnlsChromaRequest): WasmNnlsChromaResult;
 export function nnlsChroma(
   samples: Float32Array,
   sampleRate?: number,
-  options?: GuardedOptions,
+  options?: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'>,
 ): WasmNnlsChromaResult;
 export function nnlsChroma(
   samples: Float32Array | NnlsChromaRequest,
   sampleRate = 22050,
-  options: GuardedOptions = {},
+  options: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'> = {},
 ): WasmNnlsChromaResult {
   if (!(samples instanceof Float32Array)) {
     return nnlsChroma(samples.samples, samples.sampleRate, samples);
   }
   validateMusicSamples('nnlsChroma', samples, sampleRate, options);
-  return requireModule().nnlsChroma(samples, sampleRate);
+  return requireModule().nnlsChroma(
+    samples,
+    sampleRate,
+    options.enableStftBlend ?? true,
+    options.stftBlendWeight ?? 0.55,
+    options.stftBlendNFft ?? 4096,
+  );
 }
 
 /**
@@ -307,7 +316,8 @@ export function hybridCqt(
  * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
  * @param nBins - Number of frequency bins (default: 84)
  * @param binsPerOctave - Bins per octave (default: 12)
- * @param gamma - Bandwidth offset; 0 is equivalent to CQT (default: 0)
+ * @param gamma - Bandwidth offset; negative selects the automatic ERB-derived
+ *   value, while 0 is equivalent to CQT (default: -1)
  * @returns VQT magnitude result (same shape as CQT)
  */
 export function vqt(request: VqtRequest): CqtResult;
@@ -328,7 +338,7 @@ export function vqt(
   fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
-  gamma = 0,
+  gamma = -1,
   options: GuardedOptions = {},
 ): CqtResult {
   if (!(samples instanceof Float32Array)) {
@@ -348,9 +358,6 @@ export function vqt(
   validatePositiveIntegers('vqt', { hopLength, nBins, binsPerOctave });
   validateFrequencyBounds('vqt', fmin);
   assertFiniteScalar('vqt', gamma, 'gamma');
-  if (gamma < 0) {
-    throw new RangeError('vqt: gamma must be non-negative');
-  }
   return requireModule().vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
 }
 
@@ -465,7 +472,7 @@ export function vqtToAudio(
   hopLength = 512,
   fmin = 32.70319566257483,
   binsPerOctave = 12,
-  gamma = 0,
+  gamma = -1,
   nIter = 32,
   options: GuardedOptions = {},
 ): Float32Array {
@@ -497,9 +504,6 @@ export function vqtToAudio(
     options,
   );
   assertFiniteScalar('vqtToAudio', gamma, 'gamma');
-  if (gamma < 0) {
-    throw new RangeError('vqtToAudio: gamma must be non-negative');
-  }
   return requireModule().vqtToAudio(
     magnitude,
     nBins,
@@ -544,8 +548,8 @@ export function analyzeSections(
     hopLength: options.hopLength ?? 512,
   });
   assertFiniteScalar('analyzeSections', options.minSectionSec ?? 4.0, 'minSectionSec');
-  if ((options.minSectionSec ?? 4.0) <= 0) {
-    throw new RangeError('analyzeSections: minSectionSec must be positive');
+  if ((options.minSectionSec ?? 4.0) < 0) {
+    throw new RangeError('analyzeSections: minSectionSec must be non-negative');
   }
   // The embind value marshalling returns an array whose constructor is not this
   // realm's Array; chaining .map() onto it propagates that constructor via

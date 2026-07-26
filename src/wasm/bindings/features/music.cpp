@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <limits>
+
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -59,20 +61,29 @@ val chromaToVal(const Chroma& chroma) {
   return out;
 }
 
-val js_chroma_cens(val samples, int sample_rate, int hop_length, int n_chroma) {
+val js_chroma_cens(val samples, int sample_rate, int hop_length, int n_chroma,
+                   int bins_per_octave) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
+  SONARE_CHECK(bins_per_octave > 0 && bins_per_octave <= std::numeric_limits<int>::max() / 7,
+               ErrorCode::InvalidParameter);
 
   ChromaCensConfig config;
   config.base.cqt.hop_length = hop_length;
+  config.base.cqt.bins_per_octave = bins_per_octave;
+  config.base.cqt.n_bins = 7 * bins_per_octave;
   config.base.n_chroma = n_chroma;
   return chromaToVal(chroma_cens(audio, config));
 }
 
-val js_chroma_cqt(val samples, int sample_rate, int hop_length, int n_chroma) {
+val js_chroma_cqt(val samples, int sample_rate, int hop_length, int n_chroma, int bins_per_octave) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
+  SONARE_CHECK(bins_per_octave > 0 && bins_per_octave <= std::numeric_limits<int>::max() / 7,
+               ErrorCode::InvalidParameter);
 
   ChromaCqtConfig config;
   config.cqt.hop_length = hop_length;
+  config.cqt.bins_per_octave = bins_per_octave;
+  config.cqt.n_bins = 7 * bins_per_octave;
   config.n_chroma = n_chroma;
   return chromaToVal(chroma_cqt(audio, config));
 }
@@ -86,10 +97,15 @@ val js_bass_chroma(val samples, int sample_rate, int hop_length, int n_chroma) {
   return chromaToVal(bass_chroma(audio, config));
 }
 
-val js_nnls_chroma(val samples, int sample_rate) {
+val js_nnls_chroma(val samples, int sample_rate, bool enable_stft_blend, float stft_blend_weight,
+                   int stft_blend_n_fft) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
-  Chroma chroma = nnls_chroma(audio);
+  NnlsChromaConfig config;
+  config.enable_stft_blend = enable_stft_blend;
+  config.stft_blend_weight = stft_blend_weight;
+  config.stft_blend_n_fft = stft_blend_n_fft;
+  Chroma chroma = nnls_chroma(audio, config);
 
   val out = val::object();
   out.set("nChroma", chroma.n_chroma());

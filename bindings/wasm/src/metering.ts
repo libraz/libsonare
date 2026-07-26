@@ -128,6 +128,43 @@ export function meteringRmsDb(
   return requireModule().meteringRmsDb(request.samples, request.sampleRate ?? 22050);
 }
 
+export interface MeteringSilenceRatioRequest extends MeteringSamplesRequest {
+  thresholdDb?: number;
+  frameLength?: number;
+  hopLength?: number;
+}
+
+export function meteringSilenceRatio(request: MeteringSilenceRatioRequest): number;
+export function meteringSilenceRatio(
+  samples: Float32Array,
+  sampleRate?: number,
+  thresholdDb?: number,
+  frameLength?: number,
+  hopLength?: number,
+  options?: ValidateOptions,
+): number;
+export function meteringSilenceRatio(
+  samples: Float32Array | MeteringSilenceRatioRequest,
+  sampleRate = 22050,
+  thresholdDb = -45,
+  frameLength = 1024,
+  hopLength = 256,
+  options: ValidateOptions = {},
+): number {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, thresholdDb, frameLength, hopLength, ...options }
+      : samples;
+  assertSamples('meteringSilenceRatio', request.samples, request.validate !== false);
+  return requireModule().meteringSilenceRatio(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.thresholdDb ?? -45,
+    request.frameLength ?? 1024,
+    request.hopLength ?? 256,
+  );
+}
+
 export function meteringCrestFactorDb(request: MeteringSamplesRequest): number;
 export function meteringCrestFactorDb(
   samples: Float32Array,
@@ -206,16 +243,20 @@ export function meteringDetectClipping(
 ): ClippingReport {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringDetectClipping', request.samples, request.validate !== false);
+  const minRegionSamples = request.minRegionSamples ?? 1;
+  if (!Number.isInteger(minRegionSamples) || minRegionSamples < 0) {
+    throw new RangeError('meteringDetectClipping: minRegionSamples must be a non-negative integer');
+  }
   return requireModule().meteringDetectClipping(
     request.samples,
     request.sampleRate ?? 22050,
     request.threshold ?? 0.999,
-    request.minRegionSamples ?? 1,
+    minRegionSamples,
   );
 }
 
 /**
- * Sliding-window dynamic range. Pass 0 for window/hop to use the library
+ * Sliding-window dynamic range for mono audio. Pass 0 for window/hop to use the library
  * default (window=3 s, hop=1 s). The percentiles use a NEGATIVE sentinel for
  * "use the library default" (low=0.10, high=0.95) because 0 is a literal 0th
  * percentile; omitted percentiles therefore default to -1.
@@ -354,7 +395,7 @@ export interface WaveformPeaksReport {
   samplesPerBucket: number;
 }
 
-/** Pearson correlation in [-1, 1] between two equal-length channels. */
+/** Uncentered correlation (cosine similarity) in [-1, 1] between equal-length channels. */
 export function meteringStereoCorrelation(request: MeteringStereoRequest): number;
 export function meteringStereoCorrelation(
   left: Float32Array,
@@ -561,7 +602,7 @@ export function meteringPhaseScopeDecimated(
 }
 
 /**
- * Welch-averaged magnitude / power / dB spectrum over the WHOLE signal (split
+ * Welch-averaged magnitude / power / dB spectrum over the WHOLE mono signal (split
  * into Hann-windowed, 50%-overlapping `nFft`-length frames whose power spectra
  * are averaged). For a true single-frame snapshot, use
  * {@link meteringSpectrumFrame}.

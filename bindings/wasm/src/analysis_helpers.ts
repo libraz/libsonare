@@ -16,6 +16,25 @@ import type {
   WasmKeyCandidateResult,
 } from './sonare.js';
 
+const PITCH_CLASS_NAMES = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+] as const;
+
+function pitchClassName(value: number): string {
+  return PITCH_CLASS_NAMES[value] ?? 'C';
+}
+
 export function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate {
   return {
     key: {
@@ -89,6 +108,8 @@ export function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): Chord
     chords: wasm.chords.map((c) => ({
       root: c.root as PitchClass,
       bass: c.bass as PitchClass,
+      rootName: pitchClassName(c.root),
+      bassName: pitchClassName(c.bass),
       quality: c.quality as ChordQuality,
       start: c.start,
       end: c.end,
@@ -129,6 +150,8 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
     chords: wasm.chords.map((c) => ({
       root: c.root as PitchClass,
       bass: c.bass as PitchClass,
+      rootName: pitchClassName(c.root),
+      bassName: pitchClassName(c.bass),
       quality: c.quality as ChordQuality,
       start: c.start,
       end: c.end,

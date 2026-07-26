@@ -3,7 +3,10 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <type_traits>
+
 #include "analysis/analysis_json.h"
+#include "analysis/music_analyzer.h"
 #include "wasm/bindings/common/common.h"
 
 std::vector<Mode> modesFromVal(val modes) {
@@ -219,13 +222,13 @@ val analysisResultToVal(const AnalysisResult& result) {
 // ============================================================================
 
 float js_detect_bpm(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  return quick::detect_bpm(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  return quick::detect_bpm(audio.data(), audio.size(), sample_rate);
 }
 
 val js_detect_key(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  Key key = quick::detect_key(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  Key key = quick::detect_key(audio.data(), audio.size(), sample_rate);
 
   val result = val::object();
   result.set("root", static_cast<int>(key.root));
@@ -239,7 +242,7 @@ val js_detect_key(val samples, int sample_rate) {
 val js_detect_key_with_options(val samples, int sample_rate, int n_fft, int hop_length,
                                bool use_hpss, bool loudness_weighted, float high_pass_hz, val modes,
                                int profile_type, std::string genre_hint) {
-  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   KeyConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -253,7 +256,7 @@ val js_detect_key_with_options(val samples, int sample_rate, int n_fft, int hop_
   if (!genre_hint.empty()) {
     config.genre_hint = genre_hint;
   }
-  Key key = quick::detect_key(data.data(), data.size(), sample_rate, config);
+  Key key = quick::detect_key(audio.data(), audio.size(), sample_rate, config);
 
   val result = val::object();
   result.set("root", static_cast<int>(key.root));
@@ -267,7 +270,7 @@ val js_detect_key_with_options(val samples, int sample_rate, int n_fft, int hop_
 val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_length, bool use_hpss,
                              bool loudness_weighted, float high_pass_hz, val modes,
                              int profile_type, std::string genre_hint) {
-  std::vector<float> data = float32ArrayToVector(samples);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   KeyConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -282,7 +285,7 @@ val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_le
     config.genre_hint = genre_hint;
   }
   const auto candidates =
-      quick::detect_key_candidates(data.data(), data.size(), sample_rate, config);
+      quick::detect_key_candidates(audio.data(), audio.size(), sample_rate, config);
   val out = val::array();
   for (size_t i = 0; i < candidates.size(); ++i) {
     val candidate = val::object();
@@ -300,20 +303,20 @@ val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_le
 }
 
 val js_detect_onsets(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  std::vector<float> onsets = quick::detect_onsets(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  std::vector<float> onsets = quick::detect_onsets(audio.data(), audio.size(), sample_rate);
   return vectorToFloat32Array(onsets);
 }
 
 val js_detect_beats(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  std::vector<float> beats = quick::detect_beats(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(), sample_rate);
   return vectorToFloat32Array(beats);
 }
 
 val js_detect_downbeats(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  std::vector<float> downbeats = quick::detect_downbeats(data.data(), data.size(), sample_rate);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  std::vector<float> downbeats = quick::detect_downbeats(audio.data(), audio.size(), sample_rate);
   return vectorToFloat32Array(downbeats);
 }
 
@@ -393,9 +396,35 @@ val js_chord_functional_analysis(val samples, int key_root, int key_mode, int sa
   return out;
 }
 
-val js_analyze(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
-  AnalysisResult result = quick::analyze(data.data(), data.size(), sample_rate);
+val js_analyze(val samples, int sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  MusicAnalyzerConfig config;
+  auto set_number = [&](const char* key, auto& field) {
+    const val value = options[key];
+    if (!value.isUndefined() && !value.isNull()) {
+      field = static_cast<std::decay_t<decltype(field)>>(value.as<double>());
+    }
+  };
+  auto set_bool = [&](const char* key, bool& field) {
+    const val value = options[key];
+    if (!value.isUndefined() && !value.isNull()) field = value.as<bool>();
+  };
+  set_number("nFft", config.n_fft);
+  set_number("hopLength", config.hop_length);
+  set_number("bpmMin", config.bpm_min);
+  set_number("bpmMax", config.bpm_max);
+  set_number("startBpm", config.start_bpm);
+  set_bool("useTriadsOnly", config.use_triads_only);
+  set_bool("useHpss", config.use_hpss);
+  set_number("chromaHighpassHz", config.chroma_highpass_hz);
+  set_bool("useBassWeighted", config.use_bass_weighted);
+  set_number("chromaHopMultiplier", config.chroma_hop_multiplier);
+  set_bool("useChordHmm", config.use_chord_hmm);
+  set_bool("useChordKeyContext", config.use_chord_key_context);
+  set_number("chordHmmBeamWidth", config.chord_hmm_beam_width);
+  set_bool("detectChordInversions", config.detect_chord_inversions);
+  MusicAnalyzer analyzer(audio, config);
+  AnalysisResult result = analyzer.analyze();
   return analysisResultToVal(result);
 }
 

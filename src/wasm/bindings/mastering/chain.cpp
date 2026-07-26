@@ -28,6 +28,7 @@ val js_mastering(val samples, int sample_rate, float target_lufs, float ceiling_
   out.set("inputLufs", result.input_lufs);
   out.set("outputLufs", result.output_lufs);
   out.set("appliedGainDb", result.applied_gain_db);
+  out.set("loudnessTargetLimited", result.loudness_target_limited);
   return out;
 }
 
