@@ -15,7 +15,7 @@ struct PitchConfig {
   int hop_length = 512;     ///< Hop length in samples
   float fmin = 65.0f;       ///< Minimum frequency in Hz (C2)
   float fmax = 2093.0f;     ///< Maximum frequency in Hz (C7)
-  float threshold = 0.3f;   ///< YIN threshold for voiced/unvoiced
+  float threshold = 0.1f;   ///< YIN threshold for voiced/unvoiced
   bool fill_na = false;     ///< Fill unvoiced frames with 0 (otherwise NaN)
   bool center = true;       ///< Reflect-pad by frame_length/2 before framing
 };
@@ -53,9 +53,11 @@ std::vector<float> yin_cmndf(const std::vector<float>& diff);
 /// @param threshold YIN threshold
 /// @param min_period Minimum period in samples
 /// @param max_period Maximum period in samples
-/// @return Best period in samples (fractional), or 0 if unvoiced
+/// @param out_below_threshold Optional voicing result; false means the returned
+/// period is the global-minimum fallback used by librosa.yin.
+/// @return Best period in samples (fractional), or 0 if the range is empty
 float yin_find_pitch(const std::vector<float>& cmndf, float threshold, int min_period,
-                     int max_period);
+                     int max_period, bool* out_below_threshold = nullptr);
 
 /// @brief Detects pitch for a single frame using YIN algorithm.
 /// @param frame Audio frame
@@ -66,7 +68,7 @@ float yin_find_pitch(const std::vector<float>& cmndf, float threshold, int min_p
 /// @param threshold YIN threshold (0.0 to 1.0)
 /// @return Detected frequency in Hz (0 if unvoiced)
 float yin(const float* frame, int frame_length, int sr, float fmin = 65.0f, float fmax = 2093.0f,
-          float threshold = 0.3f);
+          float threshold = 0.1f);
 
 /// @brief Detects pitch for a single frame with confidence.
 /// @param frame Audio frame

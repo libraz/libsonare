@@ -173,17 +173,15 @@ TEST_CASE("compute_onset_strength detrend", "[onset]") {
   REQUIRE(std::abs(mean_d) < std::abs(mean_nd) + 1.0f);
 }
 
-TEST_CASE("compute_onset_strength large-hop frame offset does not collapse", "[onset]") {
-  // Regression: the centered-frame offset used to be an integer division
-  // n_fft / (2 * hop_length) that truncated to zero whenever 2*hop > n_fft,
-  // dropping the alignment shift entirely (an up-to-half-frame bias). With the
-  // offset rounded in floating point, such a config now shifts by one frame.
+TEST_CASE("compute_onset_strength large-hop frame offset follows librosa floor", "[onset]") {
+  // librosa computes the centered-frame offset with floor division. When
+  // n_fft / (2 * hop_length) is 0.5, the offset is therefore zero.
   Audio audio = create_transient_audio(22050, 1.0f, 4);
 
   MelConfig mel_config;
   mel_config.n_mels = 40;
   mel_config.n_fft = 512;
-  mel_config.hop_length = 512;  // 2*hop (1024) > n_fft (512): quotient 0.5 -> rounds to 1
+  mel_config.hop_length = 512;  // 2*hop (1024) > n_fft (512): floor(0.5) == 0
 
   OnsetConfig onset_config;  // center defaults to true
   onset_config.detrend = false;
@@ -200,18 +198,7 @@ TEST_CASE("compute_onset_strength large-hop frame offset does not collapse", "[o
   REQUIRE(shifted.size() == unshifted.size());
   REQUIRE(shifted.size() > 1);
 
-  // A collapsed (zero) offset would make the two envelopes identical. With a
-  // one-frame right shift, the first frame is zero and each subsequent frame
-  // equals the previous unshifted frame.
-  REQUIRE(shifted[0] == 0.0f);
-  bool matches_one_frame_shift = true;
-  for (size_t i = 1; i < shifted.size(); ++i) {
-    if (shifted[i] != unshifted[i - 1]) {
-      matches_one_frame_shift = false;
-      break;
-    }
-  }
-  REQUIRE(matches_one_frame_shift);
+  REQUIRE(shifted == unshifted);
 }
 
 TEST_CASE("compute_onset_strength default-config frame offset unchanged", "[onset]") {

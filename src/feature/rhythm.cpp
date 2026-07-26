@@ -12,7 +12,6 @@
 #include "feature/onset.h"
 #include "util/constants.h"
 #include "util/exception.h"
-#include "util/reflect_padding.h"
 
 namespace sonare {
 
@@ -20,11 +19,26 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
-/// @brief Center-pad the onset envelope by win_length/2 with NumPy/librosa-style
-///        reflect padding (edge values are not duplicated).
-std::vector<float> pad_envelope(const std::vector<float>& env, int pad, bool center) {
+/// @brief Center-pad an onset envelope with librosa.tempogram's linear ramp.
+std::vector<float> pad_envelope_linear_ramp(const std::vector<float>& env, int pad, bool center) {
   if (!center || pad <= 0) return env;
-  return reflect_center_pad(env.data(), env.size(), pad);
+  std::vector<float> padded(env.size() + static_cast<size_t>(2 * pad), 0.0f);
+  std::copy(env.begin(), env.end(), padded.begin() + pad);
+  for (int index = 0; index < pad; ++index) {
+    padded[static_cast<size_t>(index)] =
+        env.front() * static_cast<float>(index) / static_cast<float>(pad);
+    padded[static_cast<size_t>(pad) + env.size() + static_cast<size_t>(index)] =
+        env.back() * static_cast<float>(pad - index - 1) / static_cast<float>(pad);
+  }
+  return padded;
+}
+
+/// @brief Center-pad with zeros, matching librosa.feature.fourier_tempogram.
+std::vector<float> pad_envelope_constant(const std::vector<float>& env, int pad, bool center) {
+  if (!center || pad <= 0) return env;
+  std::vector<float> padded(env.size() + static_cast<size_t>(2 * pad), 0.0f);
+  std::copy(env.begin(), env.end(), padded.begin() + pad);
+  return padded;
 }
 
 }  // namespace
@@ -45,7 +59,7 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
 
   const int win = config.win_length;
   const int half = win / 2;
-  const auto padded = pad_envelope(onset_envelope, half, config.center);
+  const auto padded = pad_envelope_linear_ramp(onset_envelope, half, config.center);
   const int n_frames = static_cast<int>(onset_envelope.size());
   const auto window = create_window(config.window, win);
 
@@ -124,7 +138,7 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
   const int win = config.win_length;
   const int n_bins = win / 2 + 1;
   const int half = win / 2;
-  const auto padded = pad_envelope(onset_envelope, half, config.center);
+  const auto padded = pad_envelope_constant(onset_envelope, half, config.center);
   const int n_frames = static_cast<int>(onset_envelope.size());
   const auto window = create_window(config.window, win);
 

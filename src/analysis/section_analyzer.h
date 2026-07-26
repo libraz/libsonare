@@ -54,7 +54,8 @@ struct SectionConfig {
 class SectionAnalyzer {
  public:
   /// @brief Constructs section analyzer from audio.
-  /// @param audio Input audio
+  /// @param audio Input audio; rates above 22.05 kHz are analyzed at 22.05 kHz
+  /// so section results are stable across common source rates.
   /// @param config Section analysis configuration
   explicit SectionAnalyzer(const Audio& audio, const SectionConfig& config = SectionConfig());
 
@@ -96,6 +97,7 @@ class SectionAnalyzer {
 
  private:
   void analyze();
+  void merge_short_sections();
   void classify_sections();
   float compute_section_energy(float start, float end) const;
 

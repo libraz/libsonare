@@ -90,6 +90,10 @@ TEST_CASE("CqtKernel creation", "[cqt]") {
   REQUIRE(kernel->n_bins() == 24);
   REQUIRE(kernel->fft_length() > 0);
   REQUIRE(kernel->frequencies().size() == 24);
+  REQUIRE(kernel->kernel().row_offsets.size() == 25);
+  const size_t dense_elements = static_cast<size_t>(kernel->n_bins()) * kernel->fft_length();
+  CAPTURE(kernel->kernel().nonzeros(), dense_elements);
+  REQUIRE(kernel->kernel().nonzeros() * 4 < dense_elements * 3);
 }
 
 TEST_CASE("cqt single sine wave", "[cqt]") {

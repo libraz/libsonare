@@ -12,6 +12,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/padding.h"
 #include "util/reflect_padding.h"
 
 namespace sonare {
@@ -34,48 +35,6 @@ float parabolic_interp(float ym1, float y0, float yp1) {
 double beta_2_18_cdf(double x) {
   x = std::clamp(x, 0.0, 1.0);
   return 1.0 - std::pow(1.0 - x, 18.0) * (1.0 + 18.0 * x);
-}
-
-std::vector<float> librosa_yin_cmndf(const float* frame, int frame_length, int min_period,
-                                     int max_period) {
-  std::vector<double> acf(static_cast<size_t>(max_period) + 1, 0.0);
-  for (int tau = 0; tau <= max_period; ++tau) {
-    double sum = 0.0;
-    for (int index = 0; index + tau < frame_length; ++index) {
-      sum += static_cast<double>(frame[index]) * frame[index + tau];
-    }
-    acf[static_cast<size_t>(tau)] = sum;
-  }
-
-  std::vector<double> cumulative_square(static_cast<size_t>(frame_length), 0.0);
-  double square_sum = 0.0;
-  for (int index = 0; index < frame_length; ++index) {
-    square_sum += static_cast<double>(frame[index]) * frame[index];
-    cumulative_square[static_cast<size_t>(index)] = square_sum;
-  }
-
-  std::vector<double> difference(static_cast<size_t>(max_period) + 1, 0.0);
-  for (int tau = 1; tau <= max_period; ++tau) {
-    difference[static_cast<size_t>(tau)] = 2.0 * (acf[0] - acf[static_cast<size_t>(tau)]) -
-                                           cumulative_square[static_cast<size_t>(tau - 1)];
-  }
-
-  std::vector<double> cumulative_mean(static_cast<size_t>(max_period) + 1, 1.0);
-  double running = 0.0;
-  for (int tau = 1; tau <= max_period; ++tau) {
-    running += difference[static_cast<size_t>(tau)];
-    cumulative_mean[static_cast<size_t>(tau)] = running / tau;
-  }
-
-  std::vector<float> cmndf(static_cast<size_t>(max_period - min_period + 1), 1.0f);
-  for (int tau = min_period; tau <= max_period; ++tau) {
-    const double denominator = cumulative_mean[static_cast<size_t>(tau)];
-    cmndf[static_cast<size_t>(tau - min_period)] =
-        denominator > 1.0e-300
-            ? static_cast<float>(difference[static_cast<size_t>(tau)] / denominator)
-            : 1.0f;
-  }
-  return cmndf;
 }
 
 /// @brief Reusable scratch for the FFT-based YIN difference function.
@@ -106,21 +65,14 @@ struct YinDiffContext {
       return;
     }
 
-    // d(tau) = sum_{j=0}^{W-1} (x[j] - x[j+tau])^2 with a constant window W =
-    // frame_length / 2 for all tau (YIN paper), ensuring consistent
-    // normalization.
-    const int window = frame_length / 2;
-    if (window <= 0) {
-      return;
-    }
-
-    const int available_lags = std::min(max_lag, frame_length - window + 1);
+    // Match librosa's YIN difference while retaining FFT acceleration:
+    // d(tau) = 2 * (acf(0) - acf(tau)) - sum(x[0:tau]^2).
+    const int available_lags = std::min(max_lag, frame_length);
     if (available_lags <= 0) {
       return;
     }
 
-    const int comparison_length = std::min(frame_length, window + available_lags - 1);
-    const int required_n_fft = next_power_of_2(window + comparison_length - 1);
+    const int required_n_fft = next_power_of_2(2 * frame_length - 1);
     if (required_n_fft != n_fft) {
       n_fft = required_n_fft;
       fft = std::make_unique<FFT>(n_fft);
@@ -136,12 +88,8 @@ struct YinDiffContext {
 
     // Cross-correlation r[tau] = sum_j x[j] * x[j + tau] via convolution of the
     // reversed reference window and the comparison span.
-    double reference_energy = 0.0;
-    for (int j = 0; j < window; ++j) {
-      reference[static_cast<size_t>(window - 1 - j)] = frame[j];
-      reference_energy += static_cast<double>(frame[j]) * frame[j];
-    }
-    for (int j = 0; j < comparison_length; ++j) {
+    for (int j = 0; j < frame_length; ++j) {
+      reference[static_cast<size_t>(frame_length - 1 - j)] = frame[j];
       comparison[static_cast<size_t>(j)] = frame[j];
     }
 
@@ -152,17 +100,16 @@ struct YinDiffContext {
     }
     fft->inverse(ref_spectrum.data(), correlation.data());
 
-    squared_prefix.assign(static_cast<size_t>(comparison_length) + 1, 0.0);
-    for (int j = 0; j < comparison_length; ++j) {
+    squared_prefix.assign(static_cast<size_t>(frame_length) + 1, 0.0);
+    for (int j = 0; j < frame_length; ++j) {
       squared_prefix[static_cast<size_t>(j + 1)] =
           squared_prefix[static_cast<size_t>(j)] + static_cast<double>(frame[j]) * frame[j];
     }
 
-    for (int tau = 0; tau < available_lags; ++tau) {
-      const double shifted_energy = squared_prefix[static_cast<size_t>(tau + window)] -
-                                    squared_prefix[static_cast<size_t>(tau)];
-      const double cross = correlation[static_cast<size_t>(window - 1 + tau)];
-      const double value = reference_energy + shifted_energy - 2.0 * cross;
+    const double acf_zero = correlation[static_cast<size_t>(frame_length - 1)];
+    for (int tau = 1; tau < available_lags; ++tau) {
+      const double acf = correlation[static_cast<size_t>(frame_length - 1 + tau)];
+      const double value = 2.0 * (acf_zero - acf) - squared_prefix[static_cast<size_t>(tau)];
       diff[static_cast<size_t>(tau)] = value <= 0.0 ? 0.0f : static_cast<float>(value);
     }
     diff[0] = 0.0f;
@@ -231,17 +178,17 @@ std::vector<float> yin_cmndf(const std::vector<float>& diff) {
 }
 
 float yin_find_pitch(const std::vector<float>& cmndf, float threshold, int min_period,
-                     int max_period) {
+                     int max_period, bool* out_below_threshold) {
   int n = static_cast<int>(cmndf.size());
   min_period = std::max(1, min_period);
   max_period = std::min(max_period, n - 1);
 
   // Find first minimum below threshold
   int best_tau = -1;
-  for (int tau = min_period; tau < max_period; ++tau) {
+  for (int tau = min_period; tau <= max_period; ++tau) {
     if (cmndf[tau] < threshold) {
       // Check if it's a local minimum
-      while (tau + 1 < max_period && cmndf[tau + 1] < cmndf[tau]) {
+      while (tau + 1 <= max_period && cmndf[tau + 1] < cmndf[tau]) {
         ++tau;
       }
       best_tau = tau;
@@ -249,6 +196,15 @@ float yin_find_pitch(const std::vector<float>& cmndf, float threshold, int min_p
     }
   }
 
+  const bool below_threshold = best_tau >= 0;
+  if (best_tau < 0 && min_period <= max_period) {
+    best_tau = static_cast<int>(std::distance(
+        cmndf.begin(),
+        std::min_element(cmndf.begin() + min_period, cmndf.begin() + max_period + 1)));
+  }
+  if (out_below_threshold != nullptr) {
+    *out_below_threshold = below_threshold;
+  }
   if (best_tau < 0) return 0.0f;
 
   if (best_tau <= 0 || best_tau >= n - 1) {
@@ -270,7 +226,7 @@ namespace {
 /// caller-owned scratch reused across frames.
 float yin_with_confidence_ctx(YinDiffContext& ctx, std::vector<float>& diff, const float* frame,
                               int frame_length, int sr, float fmin, float fmax, float threshold,
-                              float* out_confidence) {
+                              float* out_confidence, bool* out_voiced = nullptr) {
   // Convert frequency to period (in samples)
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / fmax));
   int max_period = static_cast<int>(std::ceil(static_cast<float>(sr) / fmin));
@@ -287,7 +243,11 @@ float yin_with_confidence_ctx(YinDiffContext& ctx, std::vector<float>& diff, con
   ctx.compute(frame, frame_length, max_period + 1, diff);
   std::vector<float> cmndf = yin_cmndf(diff);
 
-  float period = yin_find_pitch(cmndf, threshold, min_period, max_period);
+  bool below_threshold = false;
+  float period = yin_find_pitch(cmndf, threshold, min_period, max_period, &below_threshold);
+  if (out_voiced != nullptr) {
+    *out_voiced = below_threshold;
+  }
 
   if (period <= 0.0f) {
     *out_confidence = 0.0f;
@@ -331,13 +291,15 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(config.frame_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.threshold > 0.0f && config.threshold <= 1.0f, ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
   std::vector<float> padded;
   const float* data = audio.data();
   size_t signal_samples = audio.size();
   if (config.center) {
-    padded = reflect_center_pad(audio.data(), audio.size(), config.frame_length / 2);
+    padded = sonare::pad_center(audio.data(), audio.size(),
+                                audio.size() + static_cast<size_t>(config.frame_length));
     data = padded.data();
     signal_samples = padded.size();
   }
@@ -367,16 +329,14 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
     int start = i * config.hop_length;
     float confidence = 0.0f;
 
-    float freq = yin_with_confidence_ctx(yin_ctx, yin_diff, data + start, config.frame_length, sr,
-                                         config.fmin, config.fmax, config.threshold, &confidence);
+    bool voiced = false;
+    float freq =
+        yin_with_confidence_ctx(yin_ctx, yin_diff, data + start, config.frame_length, sr,
+                                config.fmin, config.fmax, config.threshold, &confidence, &voiced);
 
     result.f0[i] = freq;
     result.voiced_prob[i] = confidence;
-    result.voiced_flag[i] = (freq > 0.0f && confidence > 0.0f);
-
-    if (!result.voiced_flag[i] && !config.fill_na) {
-      result.f0[i] = std::numeric_limits<float>::quiet_NaN();
-    }
+    result.voiced_flag[i] = voiced && freq > 0.0f;
   }
 
   return result;
@@ -386,13 +346,15 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(config.frame_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.threshold > 0.0f && config.threshold <= 1.0f, ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
   std::vector<float> padded;
   const float* data = audio.data();
   size_t signal_samples = audio.size();
   if (config.center) {
-    padded = reflect_center_pad(audio.data(), audio.size(), config.frame_length / 2);
+    padded = sonare::pad_center(audio.data(), audio.size(),
+                                audio.size() + static_cast<size_t>(config.frame_length));
     data = padded.data();
     signal_samples = padded.size();
   }
@@ -438,7 +400,8 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
 
   std::vector<double> thresholds(kThresholds + 1);
   for (int index = 0; index <= kThresholds; ++index) {
-    thresholds[static_cast<size_t>(index)] = static_cast<double>(index) / kThresholds;
+    thresholds[static_cast<size_t>(index)] =
+        static_cast<double>(config.threshold) * static_cast<double>(index) / kThresholds;
   }
   std::vector<double> beta_probs(kThresholds);
   for (int index = 0; index < kThresholds; ++index) {
@@ -457,12 +420,15 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   std::vector<double> observation(static_cast<size_t>(n_frames) * static_cast<size_t>(n_states),
                                   0.0);
   std::vector<double> voiced_prob(static_cast<size_t>(n_frames), 0.0);
+  YinDiffContext yin_ctx;
+  std::vector<float> yin_diff;
 
   for (int i = 0; i < n_frames; ++i) {
     int start = i * config.hop_length;
 
-    std::vector<float> cmndf =
-        librosa_yin_cmndf(data + start, config.frame_length, min_period, max_period);
+    yin_ctx.compute(data + start, config.frame_length, max_period + 1, yin_diff);
+    const std::vector<float> full_cmndf = yin_cmndf(yin_diff);
+    std::vector<float> cmndf(full_cmndf.begin() + min_period, full_cmndf.begin() + max_period + 1);
 
     std::vector<int> troughs;
     for (int index = 0; index < static_cast<int>(cmndf.size()); ++index) {
@@ -470,7 +436,9 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
                                 cmndf[index] < cmndf[index + 1];
       const bool is_local_min = index > 0 && index + 1 < static_cast<int>(cmndf.size()) &&
                                 cmndf[index] < cmndf[index - 1] && cmndf[index] <= cmndf[index + 1];
-      if (is_left_edge || is_local_min) {
+      const bool is_right_edge = index > 0 && index + 1 == static_cast<int>(cmndf.size()) &&
+                                 cmndf[index] < cmndf[index - 1];
+      if (is_left_edge || is_local_min || is_right_edge) {
         troughs.push_back(index);
       }
     }

@@ -45,7 +45,7 @@ struct Chord {
   float confidence;                 ///< Detection confidence [0, 1]
   PitchClass bass = PitchClass::C;  ///< Bass pitch class for inversion notation
 
-  /// @brief Returns chord name as string (e.g., "Cmaj", "Am").
+  /// @brief Returns chord name as string (e.g., "C", "Am").
   std::string to_string() const;
 
   /// @brief Returns duration in seconds.

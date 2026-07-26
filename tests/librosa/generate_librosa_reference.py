@@ -532,7 +532,7 @@ def generate_pyin_reference():
         "fmax": 2093,
         "frame_length": 2048,
         "hop_length": 512,
-        "center": False,
+        "center": True,
         "n_thresholds": 100,
         "beta_parameters": [2, 18],
         "boltzmann_parameter": 2,
@@ -546,9 +546,18 @@ def generate_pyin_reference():
     refs = []
     t = np.arange(int(sr * duration), dtype=np.float64) / sr
     chirp = np.sin(2 * np.pi * (200.0 * t + 0.5 * (800.0 - 200.0) * t * t / duration))
+    # Deterministic cross-language LCG noise avoids depending on NumPy's RNG
+    # implementation in the C++ reference test.
+    noise = np.empty_like(chirp)
+    state = 0x12345678
+    for i in range(noise.size):
+        state = (1664525 * state + 1013904223) & 0xFFFFFFFF
+        noise[i] = (((state >> 8) / float(1 << 24)) * 2.0 - 1.0) * 0.05
+    noisy_chirp = 0.8 * chirp + noise
     signals = [
         ("440Hz_tone", librosa.tone(440.0, sr=sr, duration=duration)),
         ("chirp_200_800Hz", chirp),
+        ("noisy_chirp_200_800Hz", noisy_chirp),
     ]
     for name, y in signals:
         f0, voiced_flag, voiced_prob = librosa.pyin(y, sr=sr, **params)
@@ -564,6 +573,8 @@ def generate_pyin_reference():
                 "acceptance": {
                     "f0_cents_tolerance": 10.0,
                     "max_voiced_flag_mismatch_ratio": 0.01,
+                    "max_voiced_prob_mean_abs_error": 0.45,
+                    "min_voiced_prob_correlation": 0.98,
                 },
             }
         )

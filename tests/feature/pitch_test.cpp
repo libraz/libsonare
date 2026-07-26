@@ -47,14 +47,23 @@ Audio generate_sweep(float freq_start, float freq_end, float duration, int sr = 
 
 std::vector<float> naive_yin_difference(const std::vector<float>& frame, int max_lag) {
   std::vector<float> diff(static_cast<size_t>(max_lag), 0.0f);
-  const int window = static_cast<int>(frame.size()) / 2;
-  for (int tau = 0; tau < max_lag; ++tau) {
-    float sum = 0.0f;
-    for (int j = 0; j < window; ++j) {
-      const float delta = frame[static_cast<size_t>(j)] - frame[static_cast<size_t>(j + tau)];
-      sum += delta * delta;
+  double acf_zero = 0.0;
+  for (float sample : frame) {
+    acf_zero += static_cast<double>(sample) * sample;
+  }
+  double prefix_square = 0.0;
+  for (int tau = 0; tau < max_lag && tau < static_cast<int>(frame.size()); ++tau) {
+    double acf = 0.0;
+    for (int j = 0; j + tau < static_cast<int>(frame.size()); ++j) {
+      acf +=
+          static_cast<double>(frame[static_cast<size_t>(j)]) * frame[static_cast<size_t>(j + tau)];
     }
-    diff[static_cast<size_t>(tau)] = sum;
+    if (tau > 0) {
+      const float sample = frame[static_cast<size_t>(tau - 1)];
+      prefix_square += static_cast<double>(sample) * sample;
+    }
+    diff[static_cast<size_t>(tau)] =
+        static_cast<float>(std::max(0.0, 2.0 * (acf_zero - acf) - prefix_square));
   }
   return diff;
 }
@@ -83,7 +92,7 @@ TEST_CASE("yin_difference basic", "[pitch]") {
   REQUIRE(min_val < diff[expected_period / 2]);
 }
 
-TEST_CASE("yin_difference matches naive constant-window definition", "[pitch]") {
+TEST_CASE("yin_difference matches librosa shrinking-window definition", "[pitch]") {
   std::mt19937 rng(1337);
   std::uniform_real_distribution<float> dist(-0.5f, 0.5f);
   std::vector<float> frame(2048);
@@ -167,7 +176,9 @@ TEST_CASE("yin_with_confidence", "[pitch]") {
 TEST_CASE("yin_find_pitch honors the configured voicing threshold", "[pitch]") {
   const std::vector<float> cmndf = {1.0f, 0.9f, 0.7f, 0.4f, 0.45f, 0.8f};
 
-  REQUIRE(yin_find_pitch(cmndf, 0.3f, 1, 6) == 0.0f);
+  bool voiced = true;
+  REQUIRE_THAT(yin_find_pitch(cmndf, 0.3f, 1, 6, &voiced), WithinAbs(3.36f, 0.01f));
+  REQUIRE_FALSE(voiced);
   REQUIRE_THAT(yin_find_pitch(cmndf, 0.5f, 1, 6), WithinAbs(3.36f, 0.01f));
 }
 

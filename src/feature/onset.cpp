@@ -81,13 +81,9 @@ std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& m
   if (onset_config.center && !onset_env.empty() && aligned_mel_config.hop_length > 0) {
     // Frames to right-shift so onset spikes line up with the centered STFT
     // frame times. Computed in floating point and rounded to the nearest whole
-    // frame: plain integer division would truncate the offset to zero whenever
-    // ``2 * hop_length > n_fft`` (a large hop), introducing an up-to-half-frame
-    // alignment bias in non-default configs. The default config
-    // (n_fft=2048, hop=512) yields exactly 2.0 -> 2 frames, and every standard
-    // config produces an integer quotient, so their output is unchanged.
-    int frame_offset = static_cast<int>(std::lround(static_cast<double>(aligned_mel_config.n_fft) /
-                                                    (2.0 * aligned_mel_config.hop_length)));
+    // frame. librosa uses floor division here; rounding shifts non-integral
+    // n_fft/(2*hop) configurations one frame too far to the right.
+    int frame_offset = aligned_mel_config.n_fft / (2 * aligned_mel_config.hop_length);
     if (frame_offset > 0) {
       // Intended contract: the output length is held equal to the mel frame
       // count (librosa parity — downstream beat/tempo/meter analyzers rely on

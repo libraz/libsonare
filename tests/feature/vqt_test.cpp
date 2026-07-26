@@ -69,14 +69,14 @@ TEST_CASE("vqt_frequencies basic", "[vqt]") {
   REQUIRE_THAT(freqs[23], WithinRel(fmin * std::pow(2.0f, 23.0f / 12.0f), 0.01f));
 }
 
-TEST_CASE("vqt rejects non-finite public configuration before kernel construction",
+TEST_CASE("vqt accepts NaN as automatic gamma and rejects other non-finite configuration",
           "[vqt][validation]") {
   Audio audio = generate_sine(440.0f, 0.05f);
   VqtConfig config;
   config.n_bins = 12;
 
   config.gamma = std::numeric_limits<float>::quiet_NaN();
-  REQUIRE_THROWS(vqt(audio, config));
+  REQUIRE_NOTHROW(vqt(audio, config));
   config.gamma = std::numeric_limits<float>::infinity();
   REQUIRE_THROWS(vqt(audio, config));
   config.gamma = 0.0f;
@@ -123,6 +123,26 @@ TEST_CASE("vqt_bandwidths with gamma>0", "[vqt]") {
   REQUIRE_THAT(bw[1], WithinRel(alpha[1] * 200.0f + gamma, 0.001f));
 }
 
+TEST_CASE("vqt negative gamma selects librosa automatic bandwidth", "[vqt]") {
+  const int sr = 22050;
+  Audio audio = generate_sine(440.0f, 0.25f, sr);
+
+  VqtConfig automatic;
+  automatic.n_bins = 24;
+  automatic.gamma = -1.0f;
+
+  VqtConfig explicit_gamma = automatic;
+  const float step = std::pow(2.0f, 2.0f / static_cast<float>(automatic.bins_per_octave));
+  const float alpha = (step - 1.0f) / (step + 1.0f);
+  explicit_gamma.gamma = 24.7f * alpha / 0.108f;
+
+  const VqtResult actual = vqt(audio, automatic);
+  const VqtResult expected = vqt(audio, explicit_gamma);
+  REQUIRE(actual.n_bins() == expected.n_bins());
+  REQUIRE(actual.n_frames() == expected.n_frames());
+  REQUIRE(actual.magnitude() == expected.magnitude());
+}
+
 TEST_CASE("VqtConfig to_cqt_config", "[vqt]") {
   VqtConfig vqt_config;
   vqt_config.hop_length = 256;
@@ -153,6 +173,10 @@ TEST_CASE("VqtKernel creation", "[vqt]") {
   REQUIRE(kernel->fft_length() > 0);
   REQUIRE(kernel->frequencies().size() == 24);
   REQUIRE(kernel->bandwidths().size() == 24);
+  REQUIRE(kernel->kernel().row_offsets.size() == 25);
+  const size_t dense_elements = static_cast<size_t>(kernel->n_bins()) * kernel->fft_length();
+  CAPTURE(kernel->kernel().nonzeros(), dense_elements);
+  REQUIRE(kernel->kernel().nonzeros() * 4 < dense_elements * 3);
 
   // Bandwidths should be larger than pure CQT due to gamma. The per-bin alpha is
   // the librosa relative-bandwidth (filters._relative_bandwidth), not the

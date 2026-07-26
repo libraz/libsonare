@@ -4,6 +4,7 @@
 #include <cmath>
 #include <sstream>
 
+#include "core/resample.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/spectral.h"
@@ -32,6 +33,14 @@ constexpr float kInstrumentalVocalThreshold = 0.40f;
 constexpr float kVocalBandLowHz = 300.0f;
 /// @brief Upper edge of the vocal energy band in Hz.
 constexpr float kVocalBandHighHz = 3400.0f;
+
+Audio section_analysis_audio(const Audio& audio) {
+  constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
+  if (!audio.empty() && audio.sample_rate() > kAnalysisSampleRate) {
+    return resample(audio, kAnalysisSampleRate);
+  }
+  return audio;
+}
 
 void add_fallback_section(std::vector<Section>& sections, float audio_duration) {
   if (!sections.empty() || audio_duration <= 0.0f) {
@@ -96,7 +105,10 @@ std::string section_type_to_string(SectionType type) {
 }
 
 SectionAnalyzer::SectionAnalyzer(const Audio& audio, const SectionConfig& config)
-    : audio_(audio), config_(config), sr_(audio.sample_rate()), hop_length_(config.hop_length) {
+    : audio_(section_analysis_audio(audio)),
+      config_(config),
+      sr_(audio_.sample_rate()),
+      hop_length_(config.hop_length) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   analyze();
@@ -105,9 +117,9 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const SectionConfig& config
 SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
                                  const SectionConfig& config)
     : boundaries_(boundaries),
-      audio_(audio),
+      audio_(section_analysis_audio(audio)),
       config_(config),
-      sr_(audio.sample_rate()),
+      sr_(audio_.sample_rate()),
       hop_length_(config.hop_length) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
@@ -135,12 +147,10 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& b
     section.confidence = 0.5f;          // Will be updated by classification
     section.type = SectionType::Verse;  // Default, will be classified later
 
-    // Only add if section is long enough
-    if (section.duration() >= config_.min_section_sec * 0.5f) {
-      sections_.push_back(section);
-    }
+    sections_.push_back(section);
   }
 
+  merge_short_sections();
   add_fallback_section(sections_, audio_duration);
 
   // Classify sections
@@ -183,16 +193,37 @@ void SectionAnalyzer::analyze() {
     section.confidence = 0.5f;          // Will be updated by classification
     section.type = SectionType::Verse;  // Default, will be classified later
 
-    // Only add if section is long enough
-    if (section.duration() >= config_.min_section_sec * 0.5f) {
-      sections_.push_back(section);
-    }
+    sections_.push_back(section);
   }
 
+  merge_short_sections();
   add_fallback_section(sections_, audio_duration);
 
   // Classify sections
   classify_sections();
+}
+
+void SectionAnalyzer::merge_short_sections() {
+  const float minimum = std::max(0.0f, config_.min_section_sec * 0.5f);
+  if (minimum <= 0.0f) return;
+  size_t index = 0;
+  while (sections_.size() > 1 && index < sections_.size()) {
+    if (sections_[index].duration() >= minimum) {
+      ++index;
+      continue;
+    }
+    if (index == 0) {
+      sections_[1].start = sections_[0].start;
+      sections_.erase(sections_.begin());
+    } else {
+      sections_[index - 1].end = sections_[index].end;
+      sections_.erase(sections_.begin() + static_cast<std::ptrdiff_t>(index));
+      --index;
+    }
+  }
+  for (Section& section : sections_) {
+    section.energy_level = compute_section_energy(section.start, section.end);
+  }
 }
 
 float SectionAnalyzer::compute_section_energy(float start, float end) const {

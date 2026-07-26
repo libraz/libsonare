@@ -3,7 +3,8 @@
 /// @file vqt.h
 /// @brief Variable-Q Transform (VQT) for music signal analysis.
 /// @details VQT extends CQT with variable Q factor controlled by gamma parameter.
-/// When gamma=0, VQT is equivalent to CQT.
+/// When gamma=0, VQT is equivalent to CQT. A negative gamma selects librosa's
+/// ERB-derived automatic gamma.
 
 #include <functional>
 #include <memory>
@@ -23,7 +24,7 @@ struct VqtConfig {
   float fmin = constants::kC1Hz;         ///< Minimum frequency in Hz (C1)
   int n_bins = 84;                       ///< Number of frequency bins
   int bins_per_octave = 12;              ///< Bins per octave
-  float gamma = 0.0f;                    ///< Bandwidth offset (0 = standard CQT)
+  float gamma = -1.0f;                   ///< Bandwidth offset (<0 = automatic, 0 = CQT)
   float filter_scale = 1.0f;             ///< Filter length scale factor
   WindowType window = WindowType::Hann;  ///< Window function for filters
 
@@ -51,8 +52,8 @@ class VqtKernel {
   /// @brief Returns center frequencies for each bin.
   const std::vector<float>& frequencies() const { return frequencies_; }
 
-  /// @brief Returns kernel matrix in frequency domain [n_bins x fft_length].
-  const std::vector<std::complex<float>>& kernel() const { return kernel_; }
+  /// @brief Returns the row-compressed frequency-domain kernel.
+  const SparseComplexKernel& kernel() const { return kernel_; }
 
   /// @brief Returns effective integer filter lengths for each bin.
   const std::vector<int>& lengths() const { return lengths_; }
@@ -74,7 +75,7 @@ class VqtKernel {
   int n_bins_ = 0;
   std::vector<float> frequencies_;
   std::vector<float> bandwidths_;
-  std::vector<std::complex<float>> kernel_;
+  SparseComplexKernel kernel_;
   std::vector<int> lengths_;        ///< Effective integer length per bin
   std::vector<float> raw_lengths_;  ///< Raw fractional length per bin
 };

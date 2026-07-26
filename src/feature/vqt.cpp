@@ -1,6 +1,5 @@
 #include "feature/vqt.h"
 
-#include <Eigen/Dense>
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -8,6 +7,7 @@
 
 #include "core/fft.h"
 #include "core/window.h"
+#include "feature/sparse_kernel.h"
 #include "util/exception.h"
 #include "util/lru_cache.h"
 #include "util/math_utils.h"
@@ -76,22 +76,16 @@ struct VqtKernelCacheKeyHash {
   }
 };
 
-/// @brief Eigen matrix type for VQT kernel
-using EigenKernelMatrix =
-    Eigen::Matrix<std::complex<float>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-
-/// @brief Cached kernel with its pre-computed Eigen matrix.
-/// @details Both members are shared pointers, so callers take ownership of a
-/// snapshot that survives concurrent eviction of the cache entry.
 struct CachedVqtKernel {
   std::shared_ptr<VqtKernel> kernel;
-  std::shared_ptr<EigenKernelMatrix> eigen_matrix;
 };
 
 /// @brief Maximum number of cached VQT kernels
-constexpr size_t kMaxVqtCacheSize = 8;
+constexpr size_t kMaxVqtCacheSize = 2;
+constexpr size_t kMaxVqtKernelElements = 32 * 1024 * 1024;
+constexpr int kMaxVqtFftLength = 131072;
 
-/// @brief Get or create cached VQT kernel with Eigen matrix
+/// @brief Get or create a cached sparse VQT kernel.
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   VqtKernelCacheKey key = make_key(sr, config);
 
@@ -102,18 +96,7 @@ CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   return cache.get_or_build_value(key, [&]() -> CachedVqtKernel {
     auto kernel = VqtKernel::create(sr, config);
 
-    // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
-    int fft_length = kernel->fft_length();
-    int n_bins = kernel->n_bins();
-    const auto& freq_kernels = kernel->kernel();
-
-    auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_length);
-    for (int k = 0; k < n_bins; ++k) {
-      for (int i = 0; i < fft_length; ++i) {
-        (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
-      }
-    }
-    return CachedVqtKernel{std::shared_ptr<VqtKernel>(std::move(kernel)), std::move(eigen_matrix)};
+    return CachedVqtKernel{std::shared_ptr<VqtKernel>(std::move(kernel))};
   });
 }
 
@@ -223,13 +206,23 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
   }
 
   // FFT length is next power of 2 of max filter length
+  SONARE_CHECK(max_length <= kMaxVqtFftLength, ErrorCode::InvalidParameter);
   kernel->fft_length_ = next_power_of_2(max_length);
+  size_t kernel_elements = 0;
+  SONARE_CHECK(kernel->fft_length_ <= kMaxVqtFftLength &&
+                   numeric::checked_size_product(static_cast<size_t>(config.n_bins),
+                                                 static_cast<size_t>(kernel->fft_length_),
+                                                 kMaxVqtKernelElements, &kernel_elements),
+               ErrorCode::InvalidParameter);
 
   // Create FFT processor
   FFT fft(kernel->fft_length_);
 
   // Generate kernels in frequency domain
-  kernel->kernel_.resize(config.n_bins * kernel->fft_length_);
+  kernel->kernel_.rows = config.n_bins;
+  kernel->kernel_.cols = kernel->fft_length_;
+  kernel->kernel_.row_offsets.reserve(static_cast<size_t>(config.n_bins) + 1);
+  kernel->kernel_.row_offsets.push_back(0);
 
   std::vector<std::complex<float>> complex_time_kernel(kernel->fft_length_, {0.0f, 0.0f});
   std::vector<std::complex<float>> complex_freq_kernel(kernel->fft_length_);
@@ -291,10 +284,10 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     // Complex FFT of kernel
     fft.forward_complex(complex_time_kernel.data(), complex_freq_kernel.data());
 
-    // Store conjugate over all fft_length bins (for correlation instead of convolution)
-    for (int i = 0; i < kernel->fft_length_; ++i) {
-      kernel->kernel_[k * kernel->fft_length_ + i] = std::conj(complex_freq_kernel[i]);
-    }
+    // Store a sparsified conjugate row (correlation instead of convolution).
+    for (auto& value : complex_freq_kernel) value = std::conj(value);
+    detail::append_sparsified_kernel_row(kernel->kernel_, complex_freq_kernel.data(),
+                                         kernel->fft_length_);
   }
 
   return kernel;
@@ -306,21 +299,28 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(numeric::finite_positive(config.fmin), ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_non_negative(config.gamma), ErrorCode::InvalidParameter);
   SONARE_CHECK(numeric::finite_positive(config.filter_scale), ErrorCode::InvalidParameter);
 
+  VqtConfig resolved = config;
+  if (config.gamma < 0.0f || std::isnan(config.gamma)) {
+    const float step = std::pow(2.0f, 2.0f / static_cast<float>(config.bins_per_octave));
+    const float alpha = (step - 1.0f) / (step + 1.0f);
+    resolved.gamma = 24.7f * alpha / 0.108f;
+  }
+  SONARE_CHECK(numeric::finite_non_negative(resolved.gamma), ErrorCode::InvalidParameter);
+
   // If gamma is 0, use CQT directly
-  if (config.gamma == 0.0f) {
-    return cqt(audio, config.to_cqt_config(), progress_callback);
+  if (resolved.gamma == 0.0f) {
+    return cqt(audio, resolved.to_cqt_config(), progress_callback);
   }
 
   int sr = audio.sample_rate();
   int n_samples = static_cast<int>(audio.size());
 
-  // Get cached VQT kernel with pre-computed Eigen matrix
-  auto cached = get_cached_vqt_kernel(sr, config);
+  // Get cached row-compressed VQT kernel.
+  auto cached = get_cached_vqt_kernel(sr, resolved);
   auto& kernel = cached.kernel;
-  auto& kernel_matrix = *cached.eigen_matrix;
+  const auto& kernel_matrix = kernel->kernel();
 
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
@@ -332,12 +332,10 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   std::copy(audio.data(), audio.data() + n_samples, padded_signal.begin() + pad_length);
 
   // Calculate number of frames from padded signal
-  int n_frames = 1 + (padded_length - fft_length) / config.hop_length;
+  int n_frames = 1 + (padded_length - fft_length) / resolved.hop_length;
   if (n_frames <= 0) {
     n_frames = 1;
   }
-
-  using VectorXcf = Eigen::Matrix<std::complex<float>, Eigen::Dynamic, 1>;
 
   // Allocate output (promote to size_t before multiplying to avoid int overflow)
   std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames);
@@ -349,7 +347,6 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   std::vector<float> frame(fft_length, 0.0f);
   std::vector<std::complex<float>> complex_frame(fft_length, {0.0f, 0.0f});
   std::vector<std::complex<float>> frame_fft(fft_length);
-  VectorXcf result(n_bins);
 
   const float* data = padded_signal.data();
   // Per-bin 1/sqrt(L) factor for librosa's `scale=True` mode (the default).
@@ -370,9 +367,9 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   // Progress reporting interval
   int progress_interval = std::max(1, n_frames / 20);
 
-  // Process each frame with Eigen SIMD optimization
+  // Process each frame against the sparse kernel.
   for (int t = 0; t < n_frames; ++t) {
-    int start = t * config.hop_length;
+    int start = t * resolved.hop_length;
 
     // Extract frame with zero-padding if needed at boundaries
     std::fill(frame.begin(), frame.end(), 0.0f);
@@ -389,16 +386,10 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
     // Complex FFT of frame (full spectrum)
     fft.forward_complex(complex_frame.data(), frame_fft.data());
 
-    // Compute all correlations at once using cached Eigen matrix.
-    // The basis already absorbs the `lengths/n_fft` factor (see
-    // VqtKernel::create), so no extra `1/n_fft` normalisation is needed here —
-    // mirroring the CQT path.
-    Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_length);
-    result.noalias() = kernel_matrix * frame_vec;
-
     // Copy to output (apply librosa-compatible /sqrt(length) scaling)
     for (int k = 0; k < n_bins; ++k) {
-      output[k * n_frames + t] = result(k) * inv_sqrt_lengths[k];
+      output[k * n_frames + t] =
+          detail::sparse_kernel_row_dot(kernel_matrix, k, frame_fft.data()) * inv_sqrt_lengths[k];
     }
 
     // Report progress
@@ -407,7 +398,7 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
     }
   }
 
-  return CqtResult(std::move(output), n_bins, n_frames, kernel->frequencies(), config.hop_length,
+  return CqtResult(std::move(output), n_bins, n_frames, kernel->frequencies(), resolved.hop_length,
                    sr);
 }
 

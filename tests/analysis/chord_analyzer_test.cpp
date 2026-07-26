@@ -559,8 +559,7 @@ TEST_CASE("ChordAnalyzer Roman numeral case by quality", "[chord_analyzer]") {
 TEST_CASE("ChordAnalyzer borrowed chord Roman numerals", "[chord_analyzer]") {
   SECTION("Bb major in C major key is chromatic") {
     // Bb is interval 10 from C. In C major, this is not a diatonic degree.
-    // The algorithm finds it as a raised VI (9+1=10) → "#VI".
-    // Since Bb major is a major chord, the numeral stays uppercase → "#VI".
+    // Prefer the conventional lowered seventh spelling over the enharmonic #VI.
     Audio audio = create_bb_major(22050, 2.0f);
 
     ChordConfig config;
@@ -571,7 +570,6 @@ TEST_CASE("ChordAnalyzer borrowed chord Roman numerals", "[chord_analyzer]") {
     auto roman = analyzer.functional_analysis(PitchClass::C, Mode::Major);
 
     REQUIRE(!roman.empty());
-    // Bb major in C major → chromatic "#VI" (raised sixth scale degree)
-    REQUIRE(roman[0] == "#VI");
+    REQUIRE(roman[0] == "bVII");
   }
 }

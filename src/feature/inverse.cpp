@@ -12,6 +12,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/nnls.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -26,6 +27,18 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
   }
   if (sr <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: sr must be > 0");
+  }
+  constexpr int kMaxInverseFrames = 4096;
+  if (n_frames > kMaxInverseFrames || mel_config.n_fft > 8192) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mel_to_stft: input exceeds the inverse resource limit");
+  }
+  size_t output_elements = 0;
+  if (!numeric::checked_size_product(static_cast<size_t>(mel_config.n_fft / 2 + 1),
+                                     static_cast<size_t>(n_frames), kMaxAudioBufferSize,
+                                     &output_elements)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mel_to_stft: output exceeds the offline resource limit");
   }
   const int n_freq = mel_config.n_fft / 2 + 1;
   MelFilterConfig fcfg = mel_config.to_mel_filter_config();
@@ -83,12 +96,13 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
   // Inverse DCT of each frame: mel_db [n_mels x n_frames].
   std::vector<float> mel_db(static_cast<size_t>(n_mels) * n_frames, 0.0f);
   std::vector<float> col(n_mfcc);
+  std::vector<float> rec(n_mels);
   for (int t = 0; t < n_frames; ++t) {
     for (int m = 0; m < n_mfcc; ++m) {
       col[m] = mfcc[m * n_frames + t];
       if (lifter > 0.0f) col[m] /= lift[m];
     }
-    std::vector<float> rec = idct_ii(col.data(), n_mfcc, n_mels);
+    idct_ii_into(col.data(), n_mfcc, rec.data(), n_mels);
     for (int m = 0; m < n_mels; ++m) {
       mel_db[m * n_frames + t] = rec[m];
     }

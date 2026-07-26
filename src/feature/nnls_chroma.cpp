@@ -75,15 +75,9 @@ void normalize_chroma_frames(std::vector<float>& chroma, int n_chroma, int n_fra
 std::vector<float> cqt_magnitude_to_chroma(const CqtResult& cqt_result, int bins_per_octave) {
   const int n_bins = cqt_result.n_bins();
   const int n_frames = cqt_result.n_frames();
-  std::vector<float> chroma(12 * n_frames, 0.0f);
-  const auto& magnitude = cqt_result.magnitude();
-
-  for (int bin = 0; bin < n_bins; ++bin) {
-    const int chroma_bin = ((bin % bins_per_octave) * 12) / bins_per_octave;
-    for (int frame = 0; frame < n_frames; ++frame) {
-      chroma[chroma_bin * n_frames + frame] += magnitude[bin * n_frames + frame];
-    }
-  }
+  (void)bins_per_octave;
+  std::vector<float> chroma = accumulate_cqt_pitch_classes(cqt_result.magnitude(), n_bins, n_frames,
+                                                           12, cqt_result.frequencies(), nullptr);
 
   normalize_chroma_frames(chroma, 12, n_frames);
   return chroma;

@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -152,9 +153,14 @@ TEST_CASE("pYIN pitch reference compatibility", "[pitch][pyin][reference]") {
     bool center = entry.contains("center") ? entry["center"].as_bool() : true;
     const auto& ref_f0 = entry["f0"].as_array();
     const auto& ref_voiced = entry["voiced_flag"].as_array();
+    const auto& ref_voiced_prob = entry["voiced_prob"].as_array();
     const double cents_tolerance = entry["acceptance"]["f0_cents_tolerance"].as_number();
     const double max_mismatch_ratio =
         entry["acceptance"]["max_voiced_flag_mismatch_ratio"].as_number();
+    const double max_probability_error =
+        entry["acceptance"]["max_voiced_prob_mean_abs_error"].as_number();
+    const double min_probability_correlation =
+        entry["acceptance"]["min_voiced_prob_correlation"].as_number();
 
     std::vector<float> samples(static_cast<size_t>(sr));
     if (signal_name == "440Hz_tone") {
@@ -162,15 +168,24 @@ TEST_CASE("pYIN pitch reference compatibility", "[pitch][pyin][reference]") {
         float t = static_cast<float>(i) / static_cast<float>(sr);
         samples[i] = std::sin(kTwoPi * 440.0f * t);
       }
-    } else if (signal_name == "chirp_200_800Hz") {
+    } else if (signal_name == "chirp_200_800Hz" || signal_name == "noisy_chirp_200_800Hz") {
       float chirp_fmin = 200.0f;
       float chirp_fmax = 800.0f;
       float duration = 1.0f;
+      uint32_t noise_state = 0x12345678U;
       for (size_t i = 0; i < samples.size(); ++i) {
         float t = static_cast<float>(i) / static_cast<float>(sr);
         float phase =
             kTwoPi * (chirp_fmin * t + 0.5f * (chirp_fmax - chirp_fmin) * t * t / duration);
         samples[i] = std::sin(phase);
+        if (signal_name == "noisy_chirp_200_800Hz") {
+          noise_state = 1664525U * noise_state + 1013904223U;
+          const float noise =
+              (static_cast<float>(noise_state >> 8U) / static_cast<float>(1U << 24U) * 2.0f -
+               1.0f) *
+              0.05f;
+          samples[i] = 0.8f * samples[i] + noise;
+        }
       }
     } else {
       FAIL("unknown pYIN reference signal: " << signal_name);
@@ -193,6 +208,9 @@ TEST_CASE("pYIN pitch reference compatibility", "[pitch][pyin][reference]") {
     int voiced_compared = 0;
     int f0_within_tolerance = 0;
     int voiced_mismatches = 0;
+    double probability_abs_error = 0.0;
+    double probability_sum = 0.0;
+    double reference_probability_sum = 0.0;
     for (int i = 0; i < compare_frames; ++i) {
       const bool expected_voiced = ref_voiced[static_cast<size_t>(i)].as_bool();
       if (result.voiced_flag[static_cast<size_t>(i)] != expected_voiced) {
@@ -206,10 +224,32 @@ TEST_CASE("pYIN pitch reference compatibility", "[pitch][pyin][reference]") {
           ++f0_within_tolerance;
         }
       }
+      probability_abs_error +=
+          std::abs(static_cast<double>(result.voiced_prob[static_cast<size_t>(i)]) -
+                   ref_voiced_prob[static_cast<size_t>(i)].as_number());
+      probability_sum += result.voiced_prob[static_cast<size_t>(i)];
+      reference_probability_sum += ref_voiced_prob[static_cast<size_t>(i)].as_number();
     }
 
     REQUIRE(static_cast<double>(voiced_mismatches) / compare_frames <= max_mismatch_ratio);
     REQUIRE(voiced_compared > 0);
     REQUIRE(static_cast<double>(f0_within_tolerance) / voiced_compared >= 0.99);
+    REQUIRE(probability_abs_error / compare_frames <= max_probability_error);
+    const double probability_mean = probability_sum / compare_frames;
+    const double reference_probability_mean = reference_probability_sum / compare_frames;
+    double covariance = 0.0;
+    double probability_variance = 0.0;
+    double reference_probability_variance = 0.0;
+    for (int i = 0; i < compare_frames; ++i) {
+      const double observed = result.voiced_prob[static_cast<size_t>(i)] - probability_mean;
+      const double expected =
+          ref_voiced_prob[static_cast<size_t>(i)].as_number() - reference_probability_mean;
+      covariance += observed * expected;
+      probability_variance += observed * observed;
+      reference_probability_variance += expected * expected;
+    }
+    const double probability_correlation =
+        covariance / std::sqrt(probability_variance * reference_probability_variance);
+    REQUIRE(probability_correlation >= min_probability_correlation);
   }
 }

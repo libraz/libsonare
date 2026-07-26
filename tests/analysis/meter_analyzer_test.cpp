@@ -37,6 +37,23 @@ TEST_CASE("MeterAnalyzer detects 4/4 from accented beats", "[meter_analyzer]") {
   REQUIRE(analyzer.time_signature().confidence > 0.5f);
 }
 
+TEST_CASE("MeterAnalyzer normalizes onset strengths above unity", "[meter_analyzer]") {
+  const auto beats = make_beats(4, 8);
+  std::vector<float> unit_onsets(400, 0.0f);
+  std::vector<float> scaled_onsets(400, 0.0f);
+  for (const auto& beat : beats) {
+    unit_onsets[static_cast<size_t>(beat.frame)] = beat.strength;
+    scaled_onsets[static_cast<size_t>(beat.frame)] = beat.strength * 20.0f;
+  }
+
+  MeterAnalyzer unit(unit_onsets, beats);
+  MeterAnalyzer scaled(scaled_onsets, beats);
+
+  REQUIRE(scaled.time_signature().numerator == unit.time_signature().numerator);
+  REQUIRE(scaled.time_signature().denominator == unit.time_signature().denominator);
+  REQUIRE(scaled.result().candidate_scores == unit.result().candidate_scores);
+}
+
 TEST_CASE("MeterAnalyzer detects 3/4 from accented beats", "[meter_analyzer]") {
   const auto beats = make_beats(3, 8);
   MeterAnalyzer analyzer({}, beats);

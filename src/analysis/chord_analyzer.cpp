@@ -540,7 +540,7 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
   }
 
   int current_chord = beat_chords[0];
-  float segment_start = beat_times[0];
+  float segment_start = 0.0f;
   float segment_confidence = beat_confidences[0];
   int confidence_count = 1;
 
@@ -550,7 +550,9 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
 
     if (chord_changed || is_last) {
       // End current segment
-      float segment_end = is_last ? (beat_times.back() + 0.5f) : beat_times[i];
+      const float chroma_duration = static_cast<float>(chroma_.n_frames() * chroma_.hop_length()) /
+                                    static_cast<float>(std::max(chroma_.sample_rate(), 1));
+      float segment_end = is_last ? chroma_duration : beat_times[i];
 
       Chord chord;
       const bool no_chord = current_chord < 0;
@@ -721,26 +723,30 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
     // For major mode, check if the chord is on a minor scale degree (lowered)
     const auto& other_degrees = (mode == Mode::Minor) ? major_degrees : minor_degrees;
 
-    for (const auto& deg : scale_degrees) {
-      if ((deg.first + 1) % 12 == interval) {
-        numeral = "#" + deg.second;
-        break;
-      }
-      if ((deg.first - 1 + 12) % 12 == interval) {
-        numeral = "b" + deg.second;
+    // Prefer an exact parallel-mode degree (bIII/bVI/bVII in major) over an
+    // enharmonic sharp spelling relative to the diatonic scale.
+    for (const auto& deg : other_degrees) {
+      if (deg.first == interval) {
+        numeral = (mode == Mode::Minor) ? deg.second : "b" + deg.second;
+        is_chromatic = false;
         break;
       }
     }
 
-    // If still not found, try the other scale for borrowed chords
+    // Otherwise spell accidentals relative to the current scale, preferring
+    // flats before sharps for the conventional Roman-numeral representation.
     if (numeral.empty()) {
-      for (const auto& deg : other_degrees) {
-        if (deg.first == interval) {
-          // Borrowed chord from parallel mode.
-          // In minor key, borrowed major-scale degrees are raised → use as-is.
-          // In major key, borrowed minor-scale degrees are lowered → prefix with "b".
-          numeral = (mode == Mode::Minor) ? deg.second : "b" + deg.second;
-          is_chromatic = false;
+      for (const auto& deg : scale_degrees) {
+        if ((deg.first - 1 + 12) % 12 == interval) {
+          numeral = "b" + deg.second;
+          break;
+        }
+      }
+    }
+    if (numeral.empty()) {
+      for (const auto& deg : scale_degrees) {
+        if ((deg.first + 1) % 12 == interval) {
+          numeral = "#" + deg.second;
           break;
         }
       }

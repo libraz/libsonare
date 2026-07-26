@@ -47,10 +47,15 @@ struct ChromaConfig {
 
 /// @brief Configuration for chroma_cqt / chroma_cens.
 struct ChromaCqtConfig {
-  CqtConfig cqt;
+  CqtConfig cqt = [] {
+    CqtConfig config;
+    config.n_bins = 252;
+    config.bins_per_octave = 36;
+    return config;
+  }();
   int n_chroma = 12;
-  float tuning = 0.0f;     ///< Tuning deviation in fractional semitones/chroma bins.
-  float threshold = 0.0f;  ///< Magnitudes below this fraction of the per-frame max are zeroed.
+  float tuning = 0.0f;           ///< Tuning deviation in fractional semitones/chroma bins.
+  float threshold = 0.0f;        ///< Absolute CQT magnitudes below this value are zeroed.
   bool normalize_frames = true;  ///< L-inf normalize per frame (matches librosa default).
 };
 

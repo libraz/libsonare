@@ -4,6 +4,7 @@
 /// @brief Constant-Q Transform (CQT) for music signal analysis.
 
 #include <complex>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -13,6 +14,17 @@
 #include "util/types.h"
 
 namespace sonare {
+
+/// Row-compressed complex matrix used by CQT/VQT frequency kernels.
+struct SparseComplexKernel {
+  int rows = 0;
+  int cols = 0;
+  std::vector<int> row_offsets;
+  std::vector<int> column_indices;
+  std::vector<std::complex<float>> values;
+
+  size_t nonzeros() const noexcept { return values.size(); }
+};
 
 /// @brief Progress callback for CQT computation.
 using CqtProgressCallback = std::function<void(float progress)>;
@@ -113,8 +125,8 @@ class CqtKernel {
   /// @brief Returns center frequencies for each bin.
   const std::vector<float>& frequencies() const { return frequencies_; }
 
-  /// @brief Returns kernel matrix in frequency domain [n_bins x fft_length].
-  const std::vector<std::complex<float>>& kernel() const { return kernel_; }
+  /// @brief Returns the row-compressed frequency-domain kernel.
+  const SparseComplexKernel& kernel() const { return kernel_; }
 
   /// @brief Returns filter lengths for each bin.
   const std::vector<int>& lengths() const { return lengths_; }
@@ -128,9 +140,9 @@ class CqtKernel {
   int fft_length_ = 0;
   int n_bins_ = 0;
   std::vector<float> frequencies_;
-  std::vector<std::complex<float>> kernel_;  ///< [n_bins * fft_length]
-  std::vector<int> lengths_;                 ///< Effective integer length per bin
-  std::vector<float> raw_lengths_;           ///< Raw fractional lengths (librosa)
+  SparseComplexKernel kernel_;
+  std::vector<int> lengths_;        ///< Effective integer length per bin
+  std::vector<float> raw_lengths_;  ///< Raw fractional lengths (librosa)
 };
 
 /// @brief Computes Constant-Q Transform.
@@ -161,6 +173,12 @@ Audio icqt(const CqtResult& cqt_result, int length = 0);
 /// @param bins_per_octave Bins per octave
 /// @return Vector of center frequencies
 std::vector<float> cqt_frequencies(float fmin, int n_bins, int bins_per_octave);
+
+/// Internal shared CQT-bin to pitch-class fold used by chroma extractors.
+std::vector<float> accumulate_cqt_pitch_classes(const std::vector<float>& magnitude, int n_bins,
+                                                int n_frames, int n_chroma,
+                                                const std::vector<float>& frequencies,
+                                                std::vector<int>* counts = nullptr);
 
 /// @brief Hybrid CQT: uses CQT for high-Q bins and STFT for low-Q bins.
 /// @details Mirrors librosa.hybrid_cqt. Bins whose filter length exceeds the

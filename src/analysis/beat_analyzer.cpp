@@ -169,7 +169,12 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
   onset_strength_ = compute_onset_strength(audio, mel_config, onset_config);
 
   track_beats();
-  refine_downbeats(low_frequency_energy_observations(beats_, audio));
+  const std::vector<float> low_frequency_energy = low_frequency_energy_observations(beats_, audio);
+  // Onset strength is a log-spectral difference, so accents that differ only
+  // in amplitude can disappear after dB normalization. Audio-backed analysis
+  // can recover that evidence from beat-local low-frequency energy.
+  estimate_time_signature(low_frequency_energy);
+  refine_downbeats(low_frequency_energy);
 }
 
 BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int hop_length,
@@ -485,7 +490,7 @@ void BeatAnalyzer::track_beats() {
   estimate_time_signature();
 }
 
-void BeatAnalyzer::estimate_time_signature() {
+void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_strength_observations) {
   if (beats_.size() < 8) {
     time_signature_ = {4, 4, 0.5f};  // Default to 4/4 with low confidence
     downbeat_phase_ = 0;
@@ -495,7 +500,21 @@ void BeatAnalyzer::estimate_time_signature() {
     return;
   }
 
-  MeterResult meter = estimate_meter(onset_strength_, beats_);
+  MeterResult meter;
+  const float observation_max =
+      beat_strength_observations.empty()
+          ? 0.0f
+          : *std::max_element(beat_strength_observations.begin(), beat_strength_observations.end());
+  if (beat_strength_observations.size() == beats_.size() && observation_max > constants::kEpsilon) {
+    std::vector<Beat> observed_beats = beats_;
+    for (size_t i = 0; i < observed_beats.size(); ++i) {
+      observed_beats[i].strength =
+          std::clamp(beat_strength_observations[i] / observation_max, 0.0f, 1.0f);
+    }
+    meter = estimate_meter({}, observed_beats);
+  } else {
+    meter = estimate_meter(onset_strength_, beats_);
+  }
   time_signature_ = meter.time_signature;
   downbeat_phase_ = meter.downbeat_phase;
   DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, downbeat_phase_);

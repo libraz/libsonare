@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "analysis/meter_analyzer.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinRel;
 
@@ -184,11 +186,17 @@ TEST_CASE("BeatAnalyzer time signature 3/4", "[beat_analyzer]") {
   BeatAnalyzer analyzer(audio, config);
 
   TimeSignature ts = analyzer.time_signature();
+  MeterAnalyzer meter(analyzer.onset_strength(), analyzer.beats());
+  std::vector<float> tracked_strengths;
+  for (const auto& beat : analyzer.beats()) {
+    tracked_strengths.push_back(beat.strength);
+  }
 
   // Must detect a triple meter: 3 beats per bar, or 6 as its compound
   // equivalent. Accepting 4 was removed so a detector that always returns 4/4
   // can no longer pass.
-  CAPTURE(ts.numerator, ts.denominator);
+  CAPTURE(ts.numerator, ts.denominator, analyzer.beats().size(), meter.result().candidate_scores,
+          tracked_strengths);
   REQUIRE((ts.numerator == 3 || ts.numerator == 6));
   REQUIRE(ts.denominator == 4);
 }

@@ -94,7 +94,7 @@ class BeatAnalyzer {
 
  private:
   void track_beats();
-  void estimate_time_signature();
+  void estimate_time_signature(const std::vector<float>& beat_strength_observations = {});
   float compute_transition_cost(int from_frame, int to_frame, float period) const;
 
   std::vector<Beat> beats_;

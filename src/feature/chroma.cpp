@@ -279,25 +279,18 @@ Chroma chroma_cqt(const Audio& audio, const ChromaCqtConfig& config) {
   cqt_config.fmin =
       apply_tuning_to_fmin(config.cqt.fmin, config.tuning, config.cqt.bins_per_octave);
   CqtResult result = cqt(audio, cqt_config);
-  const std::vector<float>& mag = result.magnitude();
+  std::vector<float> mag = result.magnitude();
   int n_bins = result.n_bins();
   int n_frames = result.n_frames();
 
-  std::vector<float> chroma = wrap_cqt_to_chroma(
-      mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma, cqt_config.fmin);
-
   if (config.threshold > 0.0f) {
-    for (int t = 0; t < n_frames; ++t) {
-      float maxv = 0.0f;
-      for (int c = 0; c < config.n_chroma; ++c) {
-        maxv = std::max(maxv, chroma[c * n_frames + t]);
-      }
-      float gate = config.threshold * maxv;
-      for (int c = 0; c < config.n_chroma; ++c) {
-        if (chroma[c * n_frames + t] < gate) chroma[c * n_frames + t] = 0.0f;
-      }
+    for (float& value : mag) {
+      if (value < config.threshold) value = 0.0f;
     }
   }
+
+  std::vector<float> chroma = wrap_cqt_to_chroma(
+      mag.data(), n_bins, n_frames, config.cqt.bins_per_octave, config.n_chroma, cqt_config.fmin);
 
   if (config.normalize_frames && n_frames > 0) {
     // L-inf per-frame normalization matches librosa.feature.chroma_cqt's

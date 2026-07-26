@@ -1,6 +1,5 @@
 #include "feature/cqt.h"
 
-#include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -8,10 +7,12 @@
 #include "core/convert.h"
 #include "core/fft.h"
 #include "core/spectrum.h"
+#include "feature/sparse_kernel.h"
 #include "filters/wavelet.h"
 #include "util/exception.h"
 #include "util/lru_cache.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -76,22 +77,20 @@ struct CqtKernelCacheKeyHash {
   }
 };
 
-/// @brief Eigen matrix type for CQT kernel
-using EigenKernelMatrix =
-    Eigen::Matrix<std::complex<float>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-
-/// @brief Cached kernel with its pre-computed Eigen matrix.
-/// @details Both members are shared pointers, so callers take ownership of a
-/// snapshot that survives concurrent eviction of the cache entry.
 struct CachedCqtKernel {
   std::shared_ptr<CqtKernel> kernel;
-  std::shared_ptr<EigenKernelMatrix> eigen_matrix;
 };
 
 /// @brief Maximum number of cached CQT kernels
-constexpr size_t kMaxCqtCacheSize = 8;
+constexpr size_t kMaxCqtCacheSize = 2;
+// The public NNLS-chroma default uses 36 bins/octave over seven octaves. At
+// 44.1 kHz its longest kernel requires 252 * 131072 elements, so the resource
+// ceiling must admit that shipped configuration while still rejecting hostile
+// low-fmin / oversized requests.
+constexpr size_t kMaxCqtKernelElements = 32 * 1024 * 1024;
+constexpr int kMaxCqtFftLength = 131072;
 
-/// @brief Get or create cached CQT kernel with Eigen matrix
+/// @brief Get or create a cached sparse CQT kernel.
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   CqtKernelCacheKey key = make_key(sr, config);
 
@@ -102,18 +101,7 @@ CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   return cache.get_or_build_value(key, [&]() -> CachedCqtKernel {
     std::shared_ptr<CqtKernel> kernel = CqtKernel::create(sr, config);
 
-    // Pre-compute Eigen matrix (full complex FFT: all fft_length bins)
-    int fft_length = kernel->fft_length();
-    int n_bins = kernel->n_bins();
-    const auto& freq_kernels = kernel->kernel();
-
-    auto eigen_matrix = std::make_shared<EigenKernelMatrix>(n_bins, fft_length);
-    for (int k = 0; k < n_bins; ++k) {
-      for (int i = 0; i < fft_length; ++i) {
-        (*eigen_matrix)(k, i) = freq_kernels[k * fft_length + i];
-      }
-    }
-    return CachedCqtKernel{std::move(kernel), std::move(eigen_matrix)};
+    return CachedCqtKernel{std::move(kernel)};
   });
 }
 
@@ -202,6 +190,11 @@ const std::complex<float>& CqtResult::at(int bin, int frame) const {
 
 // CqtKernel implementation
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
+  SONARE_CHECK(sr > 0 && config.hop_length > 0 && config.hop_length <= kMaxCqtFftLength / 2 &&
+                   config.n_bins > 0 && config.bins_per_octave > 0 && std::isfinite(config.fmin) &&
+                   config.fmin > 0.0f && std::isfinite(config.filter_scale) &&
+                   config.filter_scale > 0.0f,
+               ErrorCode::InvalidParameter);
   auto kernel = std::unique_ptr<CqtKernel>(new CqtKernel());
 
   // Center frequencies for all bins.
@@ -210,6 +203,18 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
 
   // Raw fractional lengths from librosa's wavelet_lengths (bpo-based).
   std::vector<float> raw_lengths = wavelet_lengths(kernel->frequencies_, sr, config.filter_scale);
+  const float longest =
+      raw_lengths.empty() ? 0.0f : *std::max_element(raw_lengths.begin(), raw_lengths.end());
+  int predicted_n_fft = next_power_of_2(std::max(2, static_cast<int>(std::ceil(longest))));
+  if (config.hop_length > 0) {
+    predicted_n_fft = std::max(predicted_n_fft, 2 * next_power_of_2(config.hop_length));
+  }
+  size_t predicted_elements = 0;
+  SONARE_CHECK(predicted_n_fft <= kMaxCqtFftLength &&
+                   numeric::checked_size_product(static_cast<size_t>(config.n_bins),
+                                                 static_cast<size_t>(predicted_n_fft),
+                                                 kMaxCqtKernelElements, &predicted_elements),
+               ErrorCode::InvalidParameter);
 
   // Build the time-domain wavelet basis (Hann window * complex sinusoid,
   // L1-normalised, pad-centred to a common length n_fft = next_pow2(ceil(max))).
@@ -258,8 +263,10 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
 
   // FFT each kernel into frequency domain.
   FFT fft(n_fft);
-  kernel->kernel_.assign(static_cast<size_t>(config.n_bins) * n_fft,
-                         std::complex<float>(0.0f, 0.0f));
+  kernel->kernel_.rows = config.n_bins;
+  kernel->kernel_.cols = n_fft;
+  kernel->kernel_.row_offsets.reserve(static_cast<size_t>(config.n_bins) + 1);
+  kernel->kernel_.row_offsets.push_back(0);
   std::vector<std::complex<float>> freq_kernel(n_fft);
   for (int k = 0; k < config.n_bins; ++k) {
     fft.forward_complex(basis.data() + static_cast<size_t>(k) * n_fft, freq_kernel.data());
@@ -269,8 +276,8 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
     // `fft_basis.dot(D)`, which is equivalent only because the wavelet is
     // single-sided in frequency (energy concentrated at +ω). Storing the
     // conjugate keeps our existing matmul path unchanged.
-    auto* dst = kernel->kernel_.data() + static_cast<size_t>(k) * n_fft;
-    for (int i = 0; i < n_fft; ++i) dst[i] = std::conj(freq_kernel[i]);
+    for (auto& value : freq_kernel) value = std::conj(value);
+    detail::append_sparsified_kernel_row(kernel->kernel_, freq_kernel.data(), n_fft);
   }
 
   return kernel;
@@ -289,18 +296,20 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.fmin > 0.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config.fmin) && config.fmin > 0.0f &&
+                   std::isfinite(config.filter_scale) && config.filter_scale > 0.0f,
+               ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
   int n_samples = static_cast<int>(audio.size());
 
-  // Get cached CQT kernel with pre-computed Eigen matrix
+  // Get cached row-compressed CQT kernel.
   auto cached = get_cached_kernel(sr, config);
   auto& kernel = cached.kernel;
-  auto& kernel_matrix = *cached.eigen_matrix;
 
   int fft_length = kernel->fft_length();
   int n_bins = kernel->n_bins();
+  const auto& kernel_matrix = kernel->kernel();
 
   // Center padding: pad signal by fft_length/2 on each side.
   // This ensures the first frame is centered at t=0 and produces the expected number of
@@ -316,10 +325,13 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
     n_frames = 1;
   }
 
-  using VectorXcf = Eigen::Matrix<std::complex<float>, Eigen::Dynamic, 1>;
-
   // Pre-allocate output (promote to size_t before multiplying to avoid int overflow)
-  std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames);
+  size_t output_elements = 0;
+  SONARE_CHECK(
+      numeric::checked_size_product(static_cast<size_t>(n_bins), static_cast<size_t>(n_frames),
+                                    kMaxAudioBufferSize, &output_elements),
+      ErrorCode::InvalidParameter);
+  std::vector<std::complex<float>> output(output_elements);
 
   // Create FFT processor
   FFT fft(fft_length);
@@ -328,7 +340,6 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   std::vector<float> frame(fft_length, 0.0f);
   std::vector<std::complex<float>> complex_frame(fft_length, {0.0f, 0.0f});
   std::vector<std::complex<float>> frame_fft(fft_length);
-  VectorXcf result(n_bins);
 
   const float* data = padded_signal.data();
 
@@ -344,7 +355,7 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
   // Progress reporting interval
   int progress_interval = std::max(1, n_frames / 20);
 
-  // Process each frame with Eigen SIMD optimization
+  // Process each frame against the sparse kernel.
   for (int t = 0; t < n_frames; ++t) {
     int start = t * config.hop_length;
 
@@ -363,15 +374,10 @@ CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback p
     // Complex FFT of frame (full spectrum)
     fft.forward_complex(complex_frame.data(), frame_fft.data());
 
-    // Compute all correlations at once using cached Eigen matrix.
-    // The basis already absorbs the lengths/n_fft factor, so no extra 1/n_fft
-    // normalisation is needed here.
-    Eigen::Map<const VectorXcf> frame_vec(frame_fft.data(), fft_length);
-    result.noalias() = kernel_matrix * frame_vec;
-
     // Apply per-bin /sqrt(length) (librosa.vqt with scale=True).
     for (int k = 0; k < n_bins; ++k) {
-      output[k * n_frames + t] = result(k) * inv_sqrt_len[k];
+      output[k * n_frames + t] =
+          detail::sparse_kernel_row_dot(kernel_matrix, k, frame_fft.data()) * inv_sqrt_len[k];
     }
 
     // Report progress
@@ -428,8 +434,10 @@ Audio icqt(const CqtResult& cqt_result, int length) {
   std::vector<float> freq_power(n_bins, 0.0f);
   for (int k = 0; k < n_bins; ++k) {
     double power = 0.0;
-    for (int b = 0; b < n_fft; ++b) {
-      power += std::norm(basis[static_cast<size_t>(k) * n_fft + b]);
+    const int begin = basis.row_offsets[static_cast<size_t>(k)];
+    const int end = basis.row_offsets[static_cast<size_t>(k + 1)];
+    for (int index = begin; index < end; ++index) {
+      power += std::norm(basis.values[static_cast<size_t>(index)]);
     }
     if (power > 0.0 && lengths[k] > 0.0f) {
       freq_power[k] = static_cast<float>((static_cast<double>(n_fft) / lengths[k]) / power);
@@ -444,13 +452,18 @@ Audio icqt(const CqtResult& cqt_result, int length) {
 
   for (int t = 0; t < n_frames; ++t) {
     std::fill(spectrum.begin(), spectrum.end(), std::complex<float>(0.0f, 0.0f));
-    for (int b = 0; b < n_freq; ++b) {
-      std::complex<float> acc(0.0f, 0.0f);
-      for (int k = 0; k < n_bins; ++k) {
-        const float scale = std::sqrt(std::max(lengths[k], 0.0f)) * freq_power[k];
-        acc += std::conj(basis[static_cast<size_t>(k) * n_fft + b]) * scale * cqt_result.at(k, t);
+    for (int k = 0; k < n_bins; ++k) {
+      const float scale = std::sqrt(std::max(lengths[k], 0.0f)) * freq_power[k];
+      const std::complex<float> coefficient = scale * cqt_result.at(k, t);
+      const int begin = basis.row_offsets[static_cast<size_t>(k)];
+      const int end = basis.row_offsets[static_cast<size_t>(k + 1)];
+      for (int index = begin; index < end; ++index) {
+        const int bin = basis.column_indices[static_cast<size_t>(index)];
+        if (bin < n_freq) {
+          spectrum[static_cast<size_t>(bin)] +=
+              std::conj(basis.values[static_cast<size_t>(index)]) * coefficient;
+        }
       }
-      spectrum[b] = acc;
     }
     fft.inverse(spectrum.data(), frame.data());
 
@@ -550,6 +563,7 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
 
   const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
   std::vector<float> P = build_cqt_projection(freqs, config.bins_per_octave, n_freq, bin_to_hz);
+  const std::vector<float> lengths = wavelet_lengths(freqs, sr, config.filter_scale);
 
   // C = P @ |STFT|. Phase is not estimated (pseudo CQT yields magnitudes only;
   // we store the result in the real part of the CqtResult so magnitude()
@@ -557,12 +571,15 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   std::vector<std::complex<float>> data(static_cast<size_t>(config.n_bins) * n_frames,
                                         std::complex<float>(0.0f, 0.0f));
   for (int k = 0; k < config.n_bins; ++k) {
+    const float scale = lengths[static_cast<size_t>(k)] > 0.0f
+                            ? 1.0f / std::sqrt(lengths[static_cast<size_t>(k)])
+                            : 1.0f;
     for (int t = 0; t < n_frames; ++t) {
       float acc = 0.0f;
       for (int b = 0; b < n_freq; ++b) {
         acc += P[k * n_freq + b] * mag[b * n_frames + t];
       }
-      data[k * n_frames + t] = std::complex<float>(acc, 0.0f);
+      data[k * n_frames + t] = std::complex<float>(acc * scale, 0.0f);
     }
   }
   return CqtResult(std::move(data), config.n_bins, n_frames, std::move(freqs), config.hop_length,
@@ -615,31 +632,14 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
     high.fmin = freqs[n_split];
     CqtResult high_result = pseudo_cqt(audio, high);
 
-    // Amplitude-match the pseudo (high) half to the full-CQT (low) half before
-    // concatenation. Our `pseudo_cqt` returns a row-stochastic Gaussian average
-    // of |STFT| (each projection row sums to 1, with no length scaling), whereas
-    // the full CQT in `cqt()` is on librosa's `scale=True` convention and so
-    // carries a per-bin 1/sqrt(length) factor. Concatenating the two unmatched
-    // halves leaves a magnitude step at the split bin. librosa.hybrid_cqt keeps
-    // both halves on the same scale because its pseudo_cqt applies the very same
-    // scale=True normalisation; we reproduce that here by applying the per-bin
-    // 1/sqrt(length) factor to the pseudo bins. `length` is librosa's
-    // `wavelet_lengths` (bpo-based) evaluated at the full hybrid frequency grid,
-    // so the scaling is continuous across `n_split`.
-    std::vector<float> hybrid_lengths = wavelet_lengths(freqs, sr, config.filter_scale);
-
     if (n_frames == 0) {
       n_frames = high_result.n_frames();
       data.assign(static_cast<size_t>(config.n_bins) * n_frames, std::complex<float>(0.0f, 0.0f));
     }
     const int copy_n = std::min(n_frames, high_result.n_frames());
     for (int k = n_split; k < config.n_bins; ++k) {
-      float scale = 1.0f;
-      if (k < static_cast<int>(hybrid_lengths.size()) && hybrid_lengths[k] > 0.0f) {
-        scale = 1.0f / std::sqrt(hybrid_lengths[k]);
-      }
       for (int t = 0; t < copy_n; ++t) {
-        data[k * n_frames + t] = high_result.at(k - n_split, t) * scale;
+        data[k * n_frames + t] = high_result.at(k - n_split, t);
       }
     }
   }
@@ -677,8 +677,6 @@ Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const Cqt
   gcfg.n_iter = n_iter;
   return griffin_lim(stft_mag.data(), n_freq, n_frames, n_fft, config.hop_length, sr, gcfg);
 }
-
-namespace {
 
 /// @brief Accumulates CQT magnitudes onto pitch classes (the bin -> chroma fold).
 /// @details Shared by the CQT->chroma reductions so the bins-per-octave /
@@ -726,8 +724,6 @@ std::vector<float> accumulate_cqt_pitch_classes(const std::vector<float>& mag, i
   }
   return chroma;
 }
-
-}  // namespace
 
 std::vector<float> cqt_to_chroma(const CqtResult& cqt_result, int n_chroma) {
   if (cqt_result.empty()) {

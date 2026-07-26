@@ -83,8 +83,10 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   std::vector<float> beat_strengths;
   beat_strengths.reserve(beats.size());
   for (const auto& beat : beats) {
-    beat_strengths.push_back(
-        std::max(beat.strength, normalized_strength(onset_strength, beat.frame, onset_max)));
+    const float strength = onset_max <= constants::kEpsilon
+                               ? beat.strength
+                               : normalized_strength(onset_strength, beat.frame, onset_max);
+    beat_strengths.push_back(std::clamp(strength, 0.0f, 1.0f));
   }
 
   float best_score = -1.0f;

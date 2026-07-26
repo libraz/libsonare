@@ -234,3 +234,19 @@ TEST_CASE("SectionAnalyzer section_at out of range", "[section_analyzer]") {
   REQUIRE(section.duration() == 0.0f);
   REQUIRE(section.confidence == 0.0f);
 }
+
+TEST_CASE("SectionAnalyzer is stable across common source rates", "[section_analyzer]") {
+  const std::vector<float> boundaries{4.0f, 8.0f, 12.0f, 16.0f};
+  SectionConfig config;
+  config.min_section_sec = 2.0f;
+
+  const SectionAnalyzer at_44100(create_sectioned_audio(44100), boundaries, config);
+  const SectionAnalyzer at_48000(create_sectioned_audio(48000), boundaries, config);
+
+  REQUIRE(at_44100.form() == at_48000.form());
+  REQUIRE(at_44100.sections().size() == at_48000.sections().size());
+  for (size_t i = 0; i < at_44100.sections().size(); ++i) {
+    REQUIRE_THAT(at_44100.sections()[i].energy_level,
+                 WithinAbs(at_48000.sections()[i].energy_level, 0.01f));
+  }
+}

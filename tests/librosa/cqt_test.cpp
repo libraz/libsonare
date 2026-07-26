@@ -65,13 +65,13 @@ TEST_CASE("CQT reference compatibility", "[.][slow][cqt][reference]") {
 
     // librosa runs CQT iteratively per octave with downsampling + sparsification;
     // we use a single-pass full-rate FFT instead. The residual gap (~0.85%) is
-    // dominated by the long low-frequency filters at native sr — peak magnitude
-    // matches librosa to ~1e-4, only the spread of energy across many low-freq
-    // bins differs slightly.
+    // dominated by the long low-frequency filters at native sr. The sparse
+    // kernel's 1% cumulative-L1 pruning shifts the peak by another ~1.3e-4;
+    // only the spread of energy across many low-frequency bins differs slightly.
     REQUIRE_THAT(static_cast<double>(mag_sum),
                  WithinRel(static_cast<double>(data["magnitude_sum"].as_float()), 9e-3));
     REQUIRE_THAT(static_cast<double>(mag_max),
-                 WithinRel(static_cast<double>(data["magnitude_max"].as_float()), 1e-4));
+                 WithinRel(static_cast<double>(data["magnitude_max"].as_float()), 2e-4));
   }
 
   SECTION("stored frames") {
