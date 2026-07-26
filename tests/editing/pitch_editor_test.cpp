@@ -153,6 +153,15 @@ TEST_CASE("ScaleQuantizer maps all chroma to enabled scale degrees", "[pitch_edi
   REQUIRE_THAT(quantizer.quantize_midi(66.0f), WithinAbs(65.0f, 0.0001f));
 }
 
+TEST_CASE("ScaleQuantizer reference MIDI shifts the tuning grid", "[pitch_editor]") {
+  constexpr uint16_t c_major = 0b101010110101;
+  const ScaleQuantizer concert_pitch({0, c_major, 69.0f});
+  const ScaleQuantizer raised_grid({0, c_major, 69.25f});
+
+  REQUIRE_THAT(concert_pitch.quantize_midi(69.1f), WithinAbs(69.0f, 0.0001f));
+  REQUIRE_THAT(raised_grid.quantize_midi(69.1f), WithinAbs(69.25f, 0.0001f));
+}
+
 TEST_CASE("PyinF0Provider adapts existing pYIN output to F0Track", "[pitch_editor]") {
   constexpr int sample_rate = 22050;
   auto samples = sine(440.0f, sample_rate, sample_rate / 2);
@@ -181,6 +190,33 @@ TEST_CASE("PitchCorrector estimates and limits semitone corrections", "[pitch_ed
 
   REQUIRE_THAT(corrector.estimate_median_midi(track), WithinAbs(69.0f, 0.001f));
   REQUIRE_THAT(corrector.correction_to_midi(track, 70.0f), WithinAbs(0.5f, 0.001f));
+}
+
+TEST_CASE("PitchCorrector uses voiced probability as correction weight", "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  constexpr int hop_length = 256;
+  auto samples = sine(440.0f, sample_rate, sample_rate / 2);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+  F0Track track = constant_track(440.0f, sample_rate, hop_length,
+                                 static_cast<int>(audio.size()) / hop_length + 2);
+
+  PitchCorrectionConfig config;
+  config.retune_speed_ms = 0.0f;
+  config.vibrato_threshold_cents = 0.0f;
+  PitchCorrector corrector(config);
+
+  track.voiced_prob.assign(track.f0_hz.size(), 0.0f);
+  const sonare::Audio unweighted = corrector.correct_to_midi_timevarying(audio, track, 71.0f);
+  track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
+  const sonare::Audio weighted = corrector.correct_to_midi_timevarying(audio, track, 71.0f);
+
+  REQUIRE(unweighted.size() == weighted.size());
+  double mean_abs_delta = 0.0;
+  for (size_t i = 0; i < weighted.size(); ++i) {
+    mean_abs_delta += std::abs(static_cast<double>(weighted[i] - unweighted[i]));
+  }
+  mean_abs_delta /= static_cast<double>(weighted.size());
+  REQUIRE(mean_abs_delta > 0.01);
 }
 
 TEST_CASE("PitchCorrector uses the shared even-sized median for detected MIDI", "[pitch_editor]") {
@@ -245,6 +281,34 @@ TEST_CASE("PitchCorrector applies pYIN-verifiable one semitone correction", "[pi
   REQUIRE_THAT(median_voiced_f0(corrected_track), WithinAbs(median_voiced_f0(target_track), 0.6f));
 }
 
+TEST_CASE("PitchCorrector constant MIDI transpose reaches its target independent of sample rate",
+          "[pitch_editor]") {
+  for (const int sample_rate : {22050, 48000}) {
+    auto samples = sine(440.0f, sample_rate, sample_rate);
+    const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+
+    PitchCorrector corrector;
+    const sonare::Audio corrected = corrector.correct_to_midi(audio, 69.0f, 70.0f);
+
+    sonare::PitchConfig config;
+    config.frame_length = 2048;
+    config.hop_length = 512;
+    config.fmin = 100.0f;
+    config.fmax = 1000.0f;
+    PyinF0Provider provider(config);
+    const float detected_hz = median_voiced_f0(provider.detect(corrected));
+    const float expected_hz = PitchCorrector::midi_to_hz(70.0f);
+    const float cents_error = 1200.0f * std::log2(detected_hz / expected_hz);
+    REQUIRE(std::abs(cents_error) < 5.0f);
+  }
+
+  const int sample_rate = 22050;
+  auto three_seconds = sine(220.0f, sample_rate, sample_rate * 3);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(three_seconds), sample_rate);
+  PitchCorrector corrector;
+  REQUIRE(corrector.correct_to_midi(audio, 57.0f, 60.0f).size() == audio.size());
+}
+
 TEST_CASE("PitchCorrector rejects out-of-range target and invalid F0 in the core",
           "[pitch_editor]") {
   // The validation lives in the core so every surface (C ABI, Node, Python,
@@ -268,8 +332,51 @@ TEST_CASE("PitchCorrector rejects out-of-range target and invalid F0 in the core
   nan_f0.f0_hz[1] = std::numeric_limits<float>::quiet_NaN();
   REQUIRE_THROWS_AS(corrector.correct_to_midi(audio, nan_f0, 69.0f), sonare::SonareException);
 
+  // pYIN represents unvoiced F0 as NaN by default. Those frames are ignored by
+  // correction and must remain valid pipeline input, while the same NaN on a
+  // voiced frame is still rejected.
+  F0Track pyin_track = track;
+  pyin_track.voiced[1] = false;
+  pyin_track.voiced_prob[1] = 0.0f;
+  pyin_track.f0_hz[1] = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_NOTHROW(corrector.correct_to_midi(audio, pyin_track, 69.0f));
+
+  // Frequencies above Nyquist are not representable input pitches. Besides
+  // being invalid, they make the PSOLA analysis epoch advance by less than one
+  // sample and can turn large buffers into an effectively unbounded loop.
+  F0Track above_nyquist = track;
+  above_nyquist.f0_hz[0] = static_cast<float>(sample_rate);
+  REQUIRE_THROWS_AS(corrector.correct_to_midi(audio, above_nyquist, 69.0f),
+                    sonare::SonareException);
+
   // A valid request still succeeds.
   REQUIRE_NOTHROW(corrector.correct_to_midi(audio, track, 69.0f));
+}
+
+TEST_CASE("PitchCorrector validates configuration and time-varying track shape in the core",
+          "[pitch_editor]") {
+  PitchCorrectionConfig config;
+  config.max_correction_semitones = -1.0f;
+  REQUIRE_THROWS_AS(PitchCorrector(config), sonare::SonareException);
+  config = {};
+  config.retune_speed_ms = -50.0f;
+  REQUIRE_THROWS_AS(PitchCorrector(config), sonare::SonareException);
+  config = {};
+  config.retune_speed_ms = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE_THROWS_AS(PitchCorrector(config), sonare::SonareException);
+  config = {};
+  config.scale.mode_mask = 0;
+  REQUIRE_THROWS_AS(PitchCorrector(config), sonare::SonareException);
+
+  constexpr int sample_rate = 22050;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(440.0f, sample_rate, 1024), sample_rate);
+  PitchCorrector corrector;
+  F0Track empty;
+  empty.sample_rate = sample_rate;
+  REQUIRE_THROWS_AS(corrector.correct_to_midi(audio, empty, 69.0f), sonare::SonareException);
+  F0Track bad_hop = constant_track(440.0f, sample_rate, 0, 4);
+  REQUIRE_THROWS_AS(corrector.correct_to_midi(audio, bad_hop, 69.0f), sonare::SonareException);
 }
 
 TEST_CASE("PitchCorrector rejects an F0Track whose sample rate differs from the audio",
@@ -440,6 +547,11 @@ TEST_CASE("NoteEditor moves note region with edge fades", "[pitch_editor]") {
   REQUIRE_THAT(moved[100], WithinAbs(0.0f, 0.0001f));
   REQUIRE(moved[510] > 0.0f);
   REQUIRE(moved[500] < moved[510]);
+  // The moved note must fade down toward its final sample. A reversed tail
+  // fade makes the last sample nearly full-scale and the preceding edge quiet,
+  // producing both a dropout and a click at the note offset.
+  REQUIRE(moved[699] < moved[695]);
+  REQUIRE(moved[699] < 0.1f);
 }
 
 TEST_CASE("NoteEditor stretches note region to requested length ratio", "[pitch_editor]") {

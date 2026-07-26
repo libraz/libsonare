@@ -16,7 +16,8 @@ namespace sonare {
 
 /// @brief Configuration for phase vocoder.
 struct PhaseVocoderConfig {
-  int hop_length = 512;  ///< Hop length for analysis/synthesis
+  /// Analysis/synthesis hop. Zero inherits the input Spectrogram hop.
+  int hop_length = 0;
 };
 
 struct StreamingPhaseVocoderConfig {

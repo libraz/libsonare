@@ -32,9 +32,9 @@ class SvfBandpass {
   /// The bandpass output is scaled to unity peak gain at resonance.
   float process(float input, float cutoff_hz, float q) noexcept {
     const float nyquist = static_cast<float>(sample_rate_ * 0.5);
-    const float fc = std::clamp(cutoff_hz, 10.0f, 0.49f * nyquist * 2.0f);
-    const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) *
-                             std::min(fc, 0.49f * nyquist) / static_cast<float>(sample_rate_));
+    const float fc = std::clamp(cutoff_hz, 10.0f, 0.49f * nyquist);
+    const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) * fc /
+                             static_cast<float>(sample_rate_));
     const float k = 1.0f / std::max(0.5f, q);
     const float a1 = 1.0f / (1.0f + g * (g + k));
     const float a2 = g * a1;

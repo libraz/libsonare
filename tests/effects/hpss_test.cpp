@@ -267,6 +267,21 @@ TEST_CASE("hpss_with_residual audio", "[hpss]") {
   REQUIRE(result.harmonic.sample_rate() == audio.sample_rate());
   REQUIRE(result.percussive.sample_rate() == audio.sample_rate());
   REQUIRE(result.residual.sample_rate() == audio.sample_rate());
+
+  REQUIRE(result.harmonic.size() == audio.size());
+  REQUIRE(result.percussive.size() == audio.size());
+  REQUIRE(result.residual.size() == audio.size());
+  double signal_energy = 0.0;
+  double error_energy = 0.0;
+  for (size_t i = 0; i < audio.size(); ++i) {
+    const double reconstructed =
+        static_cast<double>(result.harmonic[i]) + result.percussive[i] + result.residual[i];
+    const double original = audio[i];
+    signal_energy += original * original;
+    const double error = original - reconstructed;
+    error_energy += error * error;
+  }
+  REQUIRE(error_energy / signal_energy < 1.0e-8);
 }
 
 TEST_CASE("residual helper function", "[hpss]") {

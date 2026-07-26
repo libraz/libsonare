@@ -118,9 +118,8 @@ void NoteEditor::apply_edge_fades(std::vector<float>& samples, int fade_samples)
   for (int i = 0; i < n; ++i) {
     const float phase = static_cast<float>(i + 1) / static_cast<float>(n + 1);
     const float in_gain = 0.5f - 0.5f * std::cos(kPi * phase);
-    const float out_gain = 1.0f - in_gain;
     samples[static_cast<size_t>(i)] *= in_gain;
-    samples[samples.size() - 1U - static_cast<size_t>(i)] *= out_gain;
+    samples[samples.size() - 1U - static_cast<size_t>(i)] *= in_gain;
   }
 }
 

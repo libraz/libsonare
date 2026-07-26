@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <complex>
 #include <cstring>
@@ -14,12 +15,23 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
 using sonare::constants::kEpsilon;
 
 namespace {
+
+size_t checked_spectrogram_size(int n_bins, int n_frames) {
+  size_t size = 0;
+  SONARE_CHECK(n_bins > 0 && n_frames > 0 &&
+                   numeric::checked_size_product(
+                       static_cast<size_t>(n_bins), static_cast<size_t>(n_frames),
+                       std::min(kMaxAudioBufferSize, static_cast<size_t>(INT_MAX)), &size),
+               ErrorCode::InvalidParameter);
+  return size;
+}
 
 /// @brief Sliding window median filter using a sorted flat array.
 /// @details Uses binary search + memmove for O(log k + k) insert/erase.
@@ -135,7 +147,7 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
   SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
 
   int half = kernel_size / 2;
-  std::vector<float> result(n_bins * n_frames);
+  std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
 
   auto process_rows = [&](int row_start, int row_end) {
     SlidingMedian sm(kernel_size);
@@ -198,7 +210,7 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
   SONARE_CHECK(kernel_size > 0 && kernel_size % 2 == 1, ErrorCode::InvalidParameter);
 
   int half = kernel_size / 2;
-  std::vector<float> result(n_bins * n_frames);
+  std::vector<float> result(checked_spectrogram_size(n_bins, n_frames));
 
   auto process_cols = [&](int col_start, int col_end) {
     SlidingMedian sm(kernel_size);
@@ -272,7 +284,7 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
       median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
   /// Compute masks using Eigen for vectorized power and division
-  int total_size = n_bins * n_frames;
+  const int total_size = static_cast<int>(checked_spectrogram_size(n_bins, n_frames));
   std::vector<float> harmonic_mask(total_size);
   std::vector<float> percussive_mask(total_size);
 
@@ -374,7 +386,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
       median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
   /// Compute masks for three-way split using Eigen
-  int total_size = n_bins * n_frames;
+  const int total_size = static_cast<int>(checked_spectrogram_size(n_bins, n_frames));
   std::vector<float> harmonic_mask(total_size);
   std::vector<float> percussive_mask(total_size);
   std::vector<float> residual_mask(total_size);

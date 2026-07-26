@@ -179,13 +179,14 @@ TEST_CASE("StreamingPhaseVocoder prototype is chunk-invariant and matches offlin
   StreamingPhaseVocoderConfig config;
   config.sample_rate = sr;
   config.n_fft = 512;
-  config.hop_length = 128;
+  config.hop_length = 256;  // 2x overlap: exercise the <=3x overlap path.
   config.phase_lock = true;
+  constexpr float rate = 1.5f;
 
   StreamingPhaseVocoder once(config);
   REQUIRE(once.latency_samples() == config.n_fft / 2);
   once.push(audio);
-  Audio one_shot = once.finish(0.75f);
+  Audio one_shot = once.finish(rate);
   REQUIRE(once.pending_input_samples() == 0);
 
   StreamingPhaseVocoder chunked(config);
@@ -194,7 +195,7 @@ TEST_CASE("StreamingPhaseVocoder prototype is chunk-invariant and matches offlin
   chunked.push(audio.data(), split_a);
   chunked.push(audio.data() + split_a, split_b - split_a);
   chunked.push(audio.data() + split_b, audio.size() - split_b);
-  Audio chunked_out = chunked.finish(0.75f);
+  Audio chunked_out = chunked.finish(rate);
 
   StftConfig stft_config;
   stft_config.n_fft = config.n_fft;
@@ -204,8 +205,8 @@ TEST_CASE("StreamingPhaseVocoder prototype is chunk-invariant and matches offlin
   PhaseVocoderConfig pv_config;
   pv_config.hop_length = config.hop_length;
   Audio offline =
-      phase_vocoder_phaselocked(spec, 0.75f, pv_config)
-          .to_audio(static_cast<int>(std::ceil(static_cast<float>(audio.size()) / 0.75f)));
+      phase_vocoder_phaselocked(spec, rate, pv_config)
+          .to_audio(static_cast<int>(std::ceil(static_cast<float>(audio.size()) / rate)));
 
   REQUIRE(one_shot.size() == offline.size());
   REQUIRE(chunked_out.size() == offline.size());

@@ -35,12 +35,40 @@ float hann(float t) noexcept { return 0.5f - 0.5f * std::cos(kTwoPi * t); }
 
 }  // namespace
 
-PitchCorrector::PitchCorrector(PitchCorrectionConfig config) : config_(config) {}
+PitchCorrector::PitchCorrector(PitchCorrectionConfig config) : config_(config) {
+  SONARE_CHECK(
+      valid_scale_args(config_.scale.root, config_.scale.mode_mask) &&
+          std::isfinite(config_.scale.reference_midi) && std::isfinite(config_.retune_amount) &&
+          config_.retune_amount >= 0.0f && config_.retune_amount <= 1.0f &&
+          std::isfinite(config_.max_correction_semitones) &&
+          config_.max_correction_semitones >= 0.0f && std::isfinite(config_.retune_speed_ms) &&
+          config_.retune_speed_ms >= 0.0f && std::isfinite(config_.vibrato_threshold_cents) &&
+          config_.vibrato_threshold_cents >= 0.0f,
+      ErrorCode::InvalidParameter);
+}
 
 Audio PitchCorrector::shift(const Audio& audio, float semitones) const {
   PitchShiftConfig shift_config;
   shift_config.backend = config_.backend;
   return pitch_shift(audio, apply_limits(semitones), shift_config);
+}
+
+Audio PitchCorrector::correct_to_midi(const Audio& audio, float current_midi,
+                                      float target_midi) const {
+  SONARE_CHECK(std::isfinite(current_midi) && current_midi >= 0.0f && current_midi <= 127.0f &&
+                   std::isfinite(target_midi) && target_midi >= 0.0f && target_midi <= 127.0f,
+               ErrorCode::InvalidParameter);
+  const Audio shifted = shift(audio, target_midi - current_midi);
+  if (shifted.size() == audio.size()) {
+    return shifted;
+  }
+
+  // A spectral pitch shift can round the reconstructed extent by one sample for
+  // some buffer sizes. Constant correction is duration-preserving, so normalize
+  // that backend detail at this shared API boundary.
+  std::vector<float> samples(audio.size(), 0.0f);
+  std::copy_n(shifted.begin(), std::min(shifted.size(), samples.size()), samples.begin());
+  return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 
 Audio PitchCorrector::correct_to_midi(const Audio& audio, const F0Track& track,
@@ -112,21 +140,33 @@ float PitchCorrector::apply_limits(float semitones) const noexcept {
 
 Audio PitchCorrector::correct_timevarying(const Audio& audio, const F0Track& track, TargetMode mode,
                                           float fixed_target_midi) const {
-  SONARE_CHECK(track.f0_hz.size() == track.voiced.size(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(!track.f0_hz.empty() && track.hop_length > 0 &&
+                   track.f0_hz.size() == track.voiced.size() &&
+                   (track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size()),
+               ErrorCode::InvalidParameter);
   // hop_length is in samples at the track's rate; a rate mismatch would silently apply
   // the correction curve at the wrong time positions and derive a wrong retune tau.
   SONARE_CHECK(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter);
   // Reject a non-finite or negative F0 (or non-finite voicing probability) so it
   // cannot turn into garbage output. Validated in the core so every surface
   // inherits the contract, not just the C ABI.
+  const float nyquist = 0.5f * static_cast<float>(audio.sample_rate());
   for (size_t i = 0; i < track.f0_hz.size(); ++i) {
-    SONARE_CHECK(std::isfinite(track.f0_hz[i]) && track.f0_hz[i] >= 0.0f,
+    const float f0 = track.f0_hz[i];
+    const bool is_voiced = track.voiced[i];
+    // pYIN uses NaN for unvoiced F0 by default. It is safe to preserve that
+    // representation because all consumers gate F0 reads on `voiced`; infinities
+    // and non-representable voiced pitches remain invalid.
+    const bool valid_unvoiced_nan = !is_voiced && std::isnan(f0);
+    SONARE_CHECK(valid_unvoiced_nan || (std::isfinite(f0) && f0 >= 0.0f && f0 <= nyquist),
                  ErrorCode::InvalidParameter);
   }
   for (size_t i = 0; i < track.voiced_prob.size(); ++i) {
-    SONARE_CHECK(std::isfinite(track.voiced_prob[i]), ErrorCode::InvalidParameter);
+    SONARE_CHECK(std::isfinite(track.voiced_prob[i]) && track.voiced_prob[i] >= 0.0f &&
+                     track.voiced_prob[i] <= 1.0f,
+                 ErrorCode::InvalidParameter);
   }
-  if (audio.empty() || track.n_frames() == 0) {
+  if (audio.empty()) {
     return audio.to_mono();
   }
   const std::vector<float> smooth = compute_smooth_deltas(track, mode, fixed_target_midi);
@@ -149,7 +189,9 @@ std::vector<float> PitchCorrector::compute_smooth_deltas(const F0Track& track, T
     const float current_midi = hz_to_midi(track.f0_hz[static_cast<size_t>(f)]);
     const float target_midi =
         (mode == TargetMode::kScale) ? quantizer.quantize_midi(current_midi) : fixed_target_midi;
-    raw[static_cast<size_t>(f)] = target_midi - current_midi;  // semitones
+    const float voiced_weight =
+        track.voiced_prob.empty() ? 1.0f : track.voiced_prob[static_cast<size_t>(f)];
+    raw[static_cast<size_t>(f)] = (target_midi - current_midi) * voiced_weight;  // semitones
   }
 
   // Phase 2: retune IIR. alpha derived from time constant in frames.
@@ -196,7 +238,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   const float hop = static_cast<float>(std::max(1, track.hop_length));
   const int n_frames = track.n_frames();
 
-  const std::vector<float> input(audio.begin(), audio.end());
+  const float* input = audio.data();
 
   // Helper: frame index (real) for a sample position.
   auto frame_at = [hop](float sample_pos) -> float { return sample_pos / hop; };
@@ -261,7 +303,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       analysis_epoch += hop;
       continue;
     }
-    const float period_in = sr_f / f0;
+    const float period_in = std::max(1.0f, sr_f / f0);
     const float delta = interp_frame(smooth_deltas, analysis_epoch);
 
     // Large shifts: leave to the spectral fallback pass (skip here). Advance
@@ -308,7 +350,7 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       if (next_f0 <= 0.0f) {
         break;  // next epoch is unvoiced: let the outer hop logic re-sync.
       }
-      const float next_period_in = sr_f / next_f0;
+      const float next_period_in = std::max(1.0f, sr_f / next_f0);
       // Map the synthesis epoch to the NEAREST analysis pitch mark, not the
       // floor. Stepping only while the next mark stays at least half a period
       // below the synthesis clock keeps |analysis_epoch - output_epoch| within

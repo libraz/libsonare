@@ -1,6 +1,7 @@
 #include "effects/phase_vocoder.h"
 
 #include <algorithm>
+#include <cassert>
 #include <climits>
 #include <cmath>
 #include <complex>
@@ -12,6 +13,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/phase.h"
 
 namespace sonare {
 
@@ -19,27 +21,6 @@ using sonare::constants::kTwoPi;
 using sonare::constants::kTwoPiD;
 
 namespace {
-
-/// @brief Wraps phase to [-pi, pi] in single precision.
-/// @details Uses std::remainder for O(1) computation without loops.
-///          Returns 0 for NaN/Inf inputs to prevent undefined behavior.
-float wrap_phase(float phase) {
-  if (!std::isfinite(phase)) {
-    return 0.0f;
-  }
-  return std::remainder(phase, kTwoPi);
-}
-
-/// @brief Wraps phase to [-pi, pi] in double precision.
-/// @details Double-precision variant used for the synthesis-phase accumulator so that
-///          per-frame phase advances `2*pi*f*hop/sr` do not accumulate single-precision
-///          rounding error over thousands of frames (long pitch shift / time stretch).
-double wrap_phase(double phase) {
-  if (!std::isfinite(phase)) {
-    return 0.0;
-  }
-  return std::remainder(phase, kTwoPiD);
-}
 
 size_t checked_output_count(size_t input_count, float rate) {
   size_t output_count = 0;
@@ -86,7 +67,7 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
     float phase_diff = phase[k] - prev_phase[k];
 
     /// Phase deviation from expected
-    float phase_deviation = wrap_phase(phase_diff - expected_phase_advance);
+    float phase_deviation = phase::wrap(phase_diff - expected_phase_advance);
 
     /// Instantaneous frequency
     inst_freq[k] = bin_freq + phase_deviation / (kTwoPi * time_step);
@@ -243,8 +224,12 @@ void StreamingPhaseVocoder::synthesize_available_frames(bool final) {
 const std::complex<float>& StreamingPhaseVocoder::analysis_frame_at(int frame,
                                                                     int bin) const noexcept {
   const int n_bins = config_.n_fft / 2 + 1;
-  return analysis_frames_[static_cast<size_t>(frame - analysis_frame_base_) *
-                              static_cast<size_t>(n_bins) +
+  const int local_frame = frame - analysis_frame_base_;
+  assert(local_frame >= 0);
+  assert(bin >= 0 && bin < n_bins);
+  assert(static_cast<size_t>(local_frame + 1) * static_cast<size_t>(n_bins) <=
+         analysis_frames_.size());
+  return analysis_frames_[static_cast<size_t>(local_frame) * static_cast<size_t>(n_bins) +
                           static_cast<size_t>(bin)];
 }
 
@@ -276,76 +261,22 @@ void StreamingPhaseVocoder::synthesize_output_frame(int t_out, float rate) {
 
     const float phase0 = std::arg(frame0);
     const float phase1 = std::arg(frame1);
-    ana_phase_[static_cast<size_t>(k)] = phase0 + frac * wrap_phase(phase1 - phase0);
+    ana_phase_[static_cast<size_t>(k)] = phase0 + frac * phase::wrap(phase1 - phase0);
 
     const float bin_freq = static_cast<float>(k) * static_cast<float>(config_.sample_rate) /
                            static_cast<float>(config_.n_fft);
     const float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
-    const float phase_diff = wrap_phase(phase1 - phase0 - expected_advance);
+    const float phase_diff = phase::wrap(phase1 - phase0 - expected_advance);
     inst_freq_[static_cast<size_t>(k)] =
         bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
   }
 
-  peaks_.clear();
-  if (config_.phase_lock) {
-    for (int k = 1; k < n_bins - 1; ++k) {
-      if (mag_[static_cast<size_t>(k)] > mag_[static_cast<size_t>(k - 1)] &&
-          mag_[static_cast<size_t>(k)] > mag_[static_cast<size_t>(k + 1)]) {
-        peaks_.push_back(k);
-      }
-    }
-  }
-
-  if (!config_.phase_lock || peaks_.empty()) {
-    for (int k = 0; k < n_bins; ++k) {
-      if (t_out == 0) {
-        phase_acc_[static_cast<size_t>(k)] =
-            static_cast<double>(ana_phase_[static_cast<size_t>(k)]);
-      } else {
-        phase_acc_[static_cast<size_t>(k)] = wrap_phase(
-            phase_acc_[static_cast<size_t>(k)] +
-            kTwoPiD * static_cast<double>(inst_freq_[static_cast<size_t>(k)]) * time_step);
-      }
-      frame_spectrum_[static_cast<size_t>(k)] = std::polar(
-          mag_[static_cast<size_t>(k)], static_cast<float>(phase_acc_[static_cast<size_t>(k)]));
-    }
-  } else {
-    int p_idx = 0;
-    for (int k = 0; k < n_bins; ++k) {
-      while (p_idx + 1 < static_cast<int>(peaks_.size())) {
-        const int boundary =
-            (peaks_[static_cast<size_t>(p_idx)] + peaks_[static_cast<size_t>(p_idx + 1)]) / 2;
-        if (k > boundary) {
-          ++p_idx;
-        } else {
-          break;
-        }
-      }
-      nearest_peak_[static_cast<size_t>(k)] = peaks_[static_cast<size_t>(p_idx)];
-    }
-
-    for (int peak_bin : peaks_) {
-      if (t_out == 0) {
-        phase_acc_[static_cast<size_t>(peak_bin)] =
-            static_cast<double>(ana_phase_[static_cast<size_t>(peak_bin)]);
-      } else {
-        phase_acc_[static_cast<size_t>(peak_bin)] = wrap_phase(
-            phase_acc_[static_cast<size_t>(peak_bin)] +
-            kTwoPiD * static_cast<double>(inst_freq_[static_cast<size_t>(peak_bin)]) * time_step);
-      }
-    }
-
-    for (int k = 0; k < n_bins; ++k) {
-      const int k_p = nearest_peak_[static_cast<size_t>(k)];
-      const double synth_phase =
-          k == k_p ? phase_acc_[static_cast<size_t>(k_p)]
-                   : phase_acc_[static_cast<size_t>(k_p)] +
-                         static_cast<double>(ana_phase_[static_cast<size_t>(k)]) -
-                         static_cast<double>(ana_phase_[static_cast<size_t>(k_p)]);
-      phase_acc_[static_cast<size_t>(k)] = wrap_phase(synth_phase);
-      frame_spectrum_[static_cast<size_t>(k)] = std::polar(
-          mag_[static_cast<size_t>(k)], static_cast<float>(phase_acc_[static_cast<size_t>(k)]));
-    }
+  phase::synthesize_locked_frame(mag_.data(), ana_phase_.data(), inst_freq_.data(), n_bins,
+                                 config_.phase_lock, t_out == 0, time_step, phase_acc_, peaks_,
+                                 nearest_peak_);
+  for (int k = 0; k < n_bins; ++k) {
+    frame_spectrum_[static_cast<size_t>(k)] = std::polar(
+        mag_[static_cast<size_t>(k)], static_cast<float>(phase_acc_[static_cast<size_t>(k)]));
   }
 
   fft_->inverse(frame_spectrum_.data(), frame_.data());
@@ -386,8 +317,10 @@ void StreamingPhaseVocoder::compact_buffers() {
     const int next_needed_input_frame = std::max(
         analysis_frame_base_,
         static_cast<int>(std::floor(static_cast<float>(next_output_frame_) * active_rate_)));
-    const int frames_to_drop =
-        std::clamp(next_needed_input_frame - analysis_frame_base_, 0, retained_frames);
+    // Interpolation always reads t_in and t_in + 1. Keep the final two retained
+    // frames even when a fast rate advances past them between drains.
+    const int frames_to_drop = std::clamp(next_needed_input_frame - analysis_frame_base_, 0,
+                                          std::max(0, retained_frames - 2));
     if (frames_to_drop > 0) {
       const size_t bins_to_drop = static_cast<size_t>(frames_to_drop) * static_cast<size_t>(n_bins);
       analysis_frames_.erase(analysis_frames_.begin(),
@@ -586,16 +519,17 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
       float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
 
       /// Phase difference with unwrapping
-      float phase_diff = wrap_phase(phase1 - phase0 - expected_advance);
+      float phase_diff = phase::wrap(phase1 - phase0 - expected_advance);
       float inst_freq = bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
 
       /// Accumulate phase in double precision.
       if (t_out == 0) {
-        phase_acc[k] = static_cast<double>(phase0) +
-                       static_cast<double>(frac) * static_cast<double>(wrap_phase(phase1 - phase0));
+        phase_acc[k] =
+            static_cast<double>(phase0) +
+            static_cast<double>(frac) * static_cast<double>(phase::wrap(phase1 - phase0));
       } else {
         phase_acc[k] += kTwoPiD * static_cast<double>(inst_freq) * time_step;
-        phase_acc[k] = wrap_phase(phase_acc[k]);
+        phase_acc[k] = phase::wrap(phase_acc[k]);
       }
 
       /// Construct output complex value (cast back to float for FFT-domain storage).
@@ -664,72 +598,19 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
 
       float phase0 = std::arg(frame0);
       float phase1 = std::arg(frame1);
-      ana_phase[k] = phase0 + frac * wrap_phase(phase1 - phase0);
+      ana_phase[k] = phase0 + frac * phase::wrap(phase1 - phase0);
 
       float bin_freq =
           static_cast<float>(k) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
       float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
-      float phase_diff = wrap_phase(phase1 - phase0 - expected_advance);
+      float phase_diff = phase::wrap(phase1 - phase0 - expected_advance);
       inst_freq[k] = bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
     }
 
-    /// Detect spectral peaks: local maxima of the (interpolated) magnitude.
-    peaks.clear();
-    for (int k = 1; k < n_bins - 1; ++k) {
-      if (mag[k] > mag[k - 1] && mag[k] > mag[k + 1]) {
-        peaks.push_back(k);
-      }
-    }
-
-    if (peaks.empty()) {
-      /// Silence/DC: fall back to standard per-bin phase accumulation (double precision).
-      for (int k = 0; k < n_bins; ++k) {
-        if (t_out == 0) {
-          phase_acc[k] = static_cast<double>(ana_phase[k]);
-        } else {
-          phase_acc[k] =
-              wrap_phase(phase_acc[k] + kTwoPiD * static_cast<double>(inst_freq[k]) * time_step);
-        }
-        output[k * n_frames_out + t_out] = std::polar(mag[k], static_cast<float>(phase_acc[k]));
-      }
-      continue;
-    }
-
-    /// Assign each bin to its nearest peak (region of influence). The boundary
-    /// between two adjacent peaks is their midpoint bin.
-    {
-      int p_idx = 0;
-      for (int k = 0; k < n_bins; ++k) {
-        /// Advance to the peak whose region contains bin k.
-        while (p_idx + 1 < static_cast<int>(peaks.size())) {
-          int boundary = (peaks[p_idx] + peaks[p_idx + 1]) / 2;
-          if (k > boundary) {
-            ++p_idx;
-          } else {
-            break;
-          }
-        }
-        nearest_peak[k] = peaks[p_idx];
-      }
-    }
-
-    /// Accumulate synthesis phase at peak bins only (double precision).
-    for (int peak_bin : peaks) {
-      if (t_out == 0) {
-        phase_acc[peak_bin] = static_cast<double>(ana_phase[peak_bin]);
-      } else {
-        phase_acc[peak_bin] = wrap_phase(
-            phase_acc[peak_bin] + kTwoPiD * static_cast<double>(inst_freq[peak_bin]) * time_step);
-      }
-    }
-
-    /// Lock every bin (including peaks) and emit output.
+    phase::synthesize_locked_frame(mag.data(), ana_phase.data(), inst_freq.data(), n_bins,
+                                   /*phase_lock=*/true, t_out == 0, time_step, phase_acc, peaks,
+                                   nearest_peak);
     for (int k = 0; k < n_bins; ++k) {
-      int k_p = nearest_peak[k];
-      double synth_phase = (k == k_p) ? phase_acc[k_p]
-                                      : phase_acc[k_p] + static_cast<double>(ana_phase[k]) -
-                                            static_cast<double>(ana_phase[k_p]);
-      phase_acc[k] = wrap_phase(synth_phase);
       output[k * n_frames_out + t_out] = std::polar(mag[k], static_cast<float>(phase_acc[k]));
     }
   }

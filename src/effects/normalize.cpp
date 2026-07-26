@@ -58,6 +58,8 @@ Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
 }
 
 Audio normalize(const Audio& audio, float target_db, bool clip) {
+  SONARE_CHECK(std::isfinite(target_db) && (!clip || target_db <= 0.0f),
+               ErrorCode::InvalidParameter);
   if (audio.empty()) return audio;
 
   float current_peak = audio_peak_db(audio);

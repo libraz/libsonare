@@ -261,6 +261,24 @@ TEST_CASE("spectral_edit applies ops in order (non-commutative)", "[spectral_edi
   REQUIRE(max_diff > 1e-4f);  // order is honored: heal-then-gain != gain-then-heal
 }
 
+TEST_CASE("spectral_edit adjacent regions do not share a boundary frame", "[spectral_edit]") {
+  constexpr int samples = 8192;
+  constexpr int boundary = samples / 2;
+  Audio audio = Audio::from_vector(generate_sine(samples, 1000.0f, 0.3f), kSampleRate);
+
+  SpectralRegionOp first{0, boundary, 800.0f, 1200.0f, -6.0f, SpectralEditMode::Attenuate};
+  SpectralRegionOp second{boundary, samples, 800.0f, 1200.0f, -18.0f, SpectralEditMode::Attenuate};
+  const SpectralRegionOp forward[] = {first, second};
+  const SpectralRegionOp reverse[] = {second, first};
+
+  const Audio a = spectral_edit(audio, default_config(), forward, 2);
+  const Audio b = spectral_edit(audio, default_config(), reverse, 2);
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i] == b[i]);
+  }
+}
+
 TEST_CASE("spectral_edit clamps out-of-range regions without error", "[spectral_edit]") {
   const int samples = kSampleRate / 2;
   std::vector<float> sine = generate_sine(samples, 1000.0f, 0.3f);

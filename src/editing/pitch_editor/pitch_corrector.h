@@ -28,6 +28,8 @@ class PitchCorrector {
 
   Audio shift(const Audio& audio, float semitones) const;
 
+  /// @brief Applies one constant transpose from current MIDI to target MIDI.
+  Audio correct_to_midi(const Audio& audio, float current_midi, float target_midi) const;
   /// @brief Corrects every voiced frame toward a fixed MIDI target (time-varying).
   Audio correct_to_midi(const Audio& audio, const F0Track& track, float target_midi) const;
   /// @brief Corrects every voiced frame toward the nearest scale degree (time-varying).

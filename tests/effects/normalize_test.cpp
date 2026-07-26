@@ -10,6 +10,7 @@
 
 #include "metering/basic.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -121,6 +122,14 @@ TEST_CASE("normalize to -6 dB", "[normalize]") {
   float normalized_peak = peak_db(normalized);
 
   REQUIRE_THAT(normalized_peak, WithinAbs(-6.0f, 0.5f));
+}
+
+TEST_CASE("normalize rejects a positive clipped target", "[normalize]") {
+  Audio audio = create_audio_with_amplitude(0.25f);
+  REQUIRE_THROWS_AS(normalize(audio, 3.0f), SonareException);
+
+  const Audio unclipped = normalize(audio, 3.0f, false);
+  REQUIRE(peak_db(unclipped) > 0.0f);
 }
 
 TEST_CASE("normalize_rms", "[normalize]") {

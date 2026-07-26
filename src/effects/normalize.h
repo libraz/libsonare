@@ -9,8 +9,9 @@ namespace sonare {
 
 /// @brief Normalizes audio to a target peak level.
 /// @details Internally applies a gain via @ref apply_gain. With the default
-///          target of 0 dB this is at full scale and @p clip is harmless, but
-///          a positive @p target_db would clip; see @p clip.
+///          target of 0 dB this is at full scale. Positive targets are rejected
+///          when @p clip is true; pass @p clip = false only when downstream
+///          headroom management is intentional.
 /// @param audio Input audio
 /// @param target_db Target peak level in dB (default 0 dB = full scale)
 /// @param clip If true (default), the output is hard-clipped to [-1, 1]; pass
