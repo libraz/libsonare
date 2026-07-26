@@ -119,7 +119,7 @@ Audio Audio::slice_samples(size_t start_sample, size_t end_sample) const {
     end_sample = length_;
   }
   if (start_sample >= end_sample) {
-    return Audio();
+    return Audio::from_buffer(nullptr, 0, sample_rate_);
   }
 
   size_t new_offset = offset_ + start_sample;

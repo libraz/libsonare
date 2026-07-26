@@ -2,6 +2,8 @@
 
 /// @file iirt.h
 /// @brief Multi-rate time–frequency analysis using a semitone IIR filterbank.
+/// @internal Reference/experimentation primitive; not part of the supported C
+/// ABI or language-binding surface.
 
 #include <vector>
 

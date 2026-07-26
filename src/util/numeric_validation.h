@@ -122,6 +122,16 @@ inline Int saturating_add(Int lhs, Int rhs) noexcept {
   return rhs >= 0 ? std::numeric_limits<Int>::max() : std::numeric_limits<Int>::lowest();
 }
 
+/// Saturating integral subtraction for timeline/sample arithmetic.
+template <typename Int>
+inline Int saturating_sub(Int lhs, Int rhs) noexcept {
+  static_assert(std::is_integral_v<Int> && std::is_signed_v<Int>);
+  if (rhs == std::numeric_limits<Int>::lowest()) {
+    return lhs >= 0 ? std::numeric_limits<Int>::max() : static_cast<Int>(lhs - rhs);
+  }
+  return saturating_add(lhs, static_cast<Int>(-rhs));
+}
+
 /// Computes ceil(input_count / rate) without an undefined floating-point to
 /// integer cast. Non-finite/non-positive rates and results above `limit` are
 /// rejected. `long double` keeps the boundary comparison stable for large

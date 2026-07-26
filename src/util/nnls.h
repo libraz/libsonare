@@ -1,16 +1,14 @@
 #pragma once
 
 /// @file nnls.h
-/// @brief Non-negative least squares solver (Lawson-Hanson).
+/// @brief Batched non-negative least squares solver (projected FISTA).
 
 #include <vector>
 
 namespace sonare {
 
 /// @brief Solves A * X = B subject to X >= 0 column-by-column.
-/// @details Implements the Lawson-Hanson active-set algorithm (the same
-/// underlying routine as `scipy.optimize.nnls`, which is what
-/// `librosa.util.nnls` wraps).
+/// @details Solves all right-hand-side columns together, reusing AtA/AtB.
 /// @param A Coefficient matrix [A_rows x A_cols] row-major.
 /// @param A_rows Number of rows in A.
 /// @param A_cols Number of columns in A.

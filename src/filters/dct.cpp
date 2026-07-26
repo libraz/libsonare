@@ -89,7 +89,13 @@ std::vector<float> idct_ii(const float* input, int n_input, int n_output) {
   }
 
   std::vector<float> output(n_output, 0.0f);
+  idct_ii_into(input, n_input, output.data(), n_output);
+  return output;
+}
 
+void idct_ii_into(const float* input, int n_input, float* output, int n_output) {
+  SONARE_CHECK(input != nullptr && output != nullptr && n_input > 0 && n_output > 0,
+               ErrorCode::InvalidParameter);
   // Inverse DCT-II (DCT-III with orthonormal scaling). The orthonormal inverse
   // is the transpose of the forward matrix, so reuse the cached DCT-II matrix
   // D = create_dct_matrix(n_input, n_output) where
@@ -106,8 +112,6 @@ std::vector<float> idct_ii(const float* input, int n_input, int n_output) {
     }
     output[n] = sum;
   }
-
-  return output;
 }
 
 }  // namespace sonare

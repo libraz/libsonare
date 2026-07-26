@@ -162,6 +162,12 @@ TEST_CASE("Audio slice by samples", "[audio]") {
     // Data pointers should be within the original buffer
     REQUIRE(slice.data() == audio.data());
   }
+
+  SECTION("empty slice preserves sample rate") {
+    Audio slice = audio.slice_samples(500, 500);
+    REQUIRE(slice.empty());
+    REQUIRE(slice.sample_rate() == 22050);
+  }
 }
 
 TEST_CASE("Audio to_mono creates copy", "[audio]") {

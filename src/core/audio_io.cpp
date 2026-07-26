@@ -97,30 +97,6 @@ struct Mp3DecoderGuard {
   }
 };
 
-/// @brief Converts interleaved stereo to mono by averaging channels.
-std::vector<float> stereo_to_mono(const float* data, size_t total_samples, int channels) {
-  size_t frame_count = total_samples / static_cast<size_t>(channels);
-  std::vector<float> mono(frame_count);
-
-  if (channels == 1) {
-    std::copy(data, data + frame_count, mono.begin());
-  } else if (channels == 2) {
-    for (size_t i = 0; i < frame_count; ++i) {
-      mono[i] = (data[i * 2] + data[i * 2 + 1]) * 0.5f;
-    }
-  } else {
-    // Average all channels
-    for (size_t i = 0; i < frame_count; ++i) {
-      float sum = 0.0f;
-      for (int ch = 0; ch < channels; ++ch) {
-        sum += data[i * channels + ch];
-      }
-      mono[i] = sum / static_cast<float>(channels);
-    }
-  }
-  return mono;
-}
-
 #ifndef __EMSCRIPTEN__
 #ifdef _WIN32
 std::wstring utf8_to_wide_path(const std::string& path) {
@@ -209,17 +185,35 @@ AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
                                                  resource::kMaxOfflineAudioSamples, &total_samples),
                    ErrorCode::DecodeFailed,
                    "WAV declares more samples than the offline decode limit");
-  std::vector<float> samples(total_samples);
-
-  drwav_uint64 frames_read =
-      drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, samples.data());
-
+  constexpr size_t kDecodeChunkFrames = 16 * 1024;
+  const size_t frame_capacity = static_cast<size_t>(wav.totalPCMFrameCount);
+  std::vector<float> mono;
+  mono.reserve(frame_capacity);
+  size_t scratch_samples = 0;
+  SONARE_CHECK_MSG(numeric::checked_size_product(
+                       std::min(kDecodeChunkFrames, frame_capacity), static_cast<size_t>(channels),
+                       resource::kMaxOfflineAudioSamples, &scratch_samples),
+                   ErrorCode::DecodeFailed, "WAV channel layout exceeds the decode limit");
+  std::vector<float> scratch(scratch_samples);
+  drwav_uint64 total_frames_read = 0;
+  while (total_frames_read < wav.totalPCMFrameCount) {
+    const drwav_uint64 request =
+        std::min<drwav_uint64>(kDecodeChunkFrames, wav.totalPCMFrameCount - total_frames_read);
+    const drwav_uint64 frames_read = drwav_read_pcm_frames_f32(&wav, request, scratch.data());
+    if (frames_read == 0) break;
+    for (drwav_uint64 frame = 0; frame < frames_read; ++frame) {
+      double sum = 0.0;
+      const size_t base = static_cast<size_t>(frame) * static_cast<size_t>(channels);
+      for (int channel = 0; channel < channels; ++channel) {
+        sum += scratch[base + static_cast<size_t>(channel)];
+      }
+      mono.push_back(static_cast<float>(sum / static_cast<double>(channels)));
+    }
+    total_frames_read += frames_read;
+  }
   drwav_uninit(&wav);
 
-  SONARE_CHECK_MSG(frames_read > 0, ErrorCode::DecodeFailed, "No audio frames in WAV data");
-
-  // Convert to mono
-  std::vector<float> mono = stereo_to_mono(samples.data(), frames_read * channels, channels);
+  SONARE_CHECK_MSG(total_frames_read > 0, ErrorCode::DecodeFailed, "No audio frames in WAV data");
   return {std::move(mono), sample_rate};
 }
 
@@ -250,6 +244,7 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
   constexpr size_t kMp3DecodeChunkSamples = 16 * 1024;
   std::array<mp3d_sample_t, kMp3DecodeChunkSamples> chunk{};
   std::vector<float> mono;
+  mono.reserve(static_cast<size_t>(declared_samples / static_cast<uint64_t>(channels)));
   size_t decoded_samples = 0;
   while (true) {
     const size_t read_samples = mp3dec_ex_read(&decoder_guard.decoder, chunk.data(), chunk.size());
@@ -350,7 +345,11 @@ int audio_channel_count(const std::string& path, const AudioLoadOptions& options
       return decoder_guard.decoder.info.channels;
     }
     case AudioFormat::Unknown:
+#ifdef SONARE_WITH_FFMPEG
+      return probe_channels_ffmpeg(data.data(), data.size());
+#else
       return 0;
+#endif
   }
   return 0;
 }

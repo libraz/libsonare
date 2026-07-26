@@ -44,7 +44,8 @@ struct FFT::Impl {
 };
 
 FFT::FFT(int n_fft) : n_fft_(n_fft) {
-  SONARE_CHECK_MSG(n_fft > 0, ErrorCode::InvalidParameter, "FFT size must be positive");
+  SONARE_CHECK_MSG(n_fft >= 2 && (n_fft % 2) == 0, ErrorCode::InvalidParameter,
+                   "FFT size must be an even integer greater than or equal to 2");
   impl_ = std::make_unique<Impl>(n_fft);
 }
 

@@ -134,56 +134,52 @@ std::vector<BiquadCoeffs> design_butterworth_bandpass(double f0, double band_q, 
   return sos;
 }
 
-/// @brief Applies a cascade of biquad bandpass sections to @p y. Each section keeps its
-///        own state so the chain is a true higher-order filter, not a repeated 2nd order.
-std::vector<double> apply_cascade(const float* y, size_t n, const std::vector<BiquadCoeffs>& sos) {
-  std::vector<double> out(n);
+/// @brief Filters one band and computes framed RMS in a single streaming pass.
+/// @details The ring is bounded by win_length, avoiding the previous full-length
+/// double response allocation for every filterbank row.
+std::vector<float> cascade_frame_rms(const float* y, size_t n, const std::vector<BiquadCoeffs>& sos,
+                                     int win_length, int hop_length, bool center) {
   std::vector<BiquadState> st(sos.size());
-  for (size_t i = 0; i < n; ++i) {
-    double v = static_cast<double>(y[i]);
-    for (size_t s = 0; s < sos.size(); ++s) {
-      const BiquadCoeffs& c = sos[s];
-      BiquadState& z = st[s];
-      const double x0 = v;
-      const double y0 = c.b0 * x0 + c.b1 * z.x1 + c.b2 * z.x2 - c.a1 * z.y1 - c.a2 * z.y2;
-      z.x2 = z.x1;
-      z.x1 = x0;
-      z.y2 = z.y1;
-      z.y1 = y0;
-      v = y0;
-    }
-    out[i] = v;
-  }
-  return out;
-}
-
-/// @brief Computes the RMS of @p band per frame (length @p win_length, hop @p hop_length,
-///        optional center padding).
-std::vector<float> frame_rms(const std::vector<double>& band, int win_length, int hop_length,
-                             bool center) {
-  if (band.empty()) return {};
-  const int n = static_cast<int>(band.size());
   const int half = win_length / 2;
   const int pad_left = center ? half : 0;
   const int pad_right = center ? half : 0;
-  const int total = n + pad_left + pad_right;
+  const int total = static_cast<int>(n) + pad_left + pad_right;
   int n_frames = (total >= win_length) ? 1 + (total - win_length) / hop_length : 1;
-
-  auto sample = [&](int idx) -> double {
-    int j = idx - pad_left;
-    if (j < 0 || j >= n) return 0.0;
-    return band[j];
-  };
-
   std::vector<float> rms(n_frames, 0.0f);
-  for (int f = 0; f < n_frames; ++f) {
-    int start = f * hop_length;
-    double acc = 0.0;
-    for (int i = 0; i < win_length; ++i) {
-      double v = sample(start + i);
-      acc += v * v;
+  std::vector<double> squared_ring(static_cast<size_t>(win_length), 0.0);
+  size_t ring_pos = 0;
+  double square_sum = 0.0;
+  int frame = 0;
+  const int streamed = std::max(total, win_length);
+  for (int padded_index = 0; padded_index < streamed; ++padded_index) {
+    const int input_index = padded_index - pad_left;
+    double v = 0.0;
+    // Padding is applied to the filtered response, matching the former
+    // apply_cascade() -> frame_rms() ordering; it is not fed through the IIR.
+    if (input_index >= 0 && input_index < static_cast<int>(n)) {
+      v = static_cast<double>(y[input_index]);
+      for (size_t s = 0; s < sos.size(); ++s) {
+        const BiquadCoeffs& c = sos[s];
+        BiquadState& z = st[s];
+        const double x0 = v;
+        const double y0 = c.b0 * x0 + c.b1 * z.x1 + c.b2 * z.x2 - c.a1 * z.y1 - c.a2 * z.y2;
+        z.x2 = z.x1;
+        z.x1 = x0;
+        z.y2 = z.y1;
+        z.y1 = y0;
+        v = y0;
+      }
     }
-    rms[f] = static_cast<float>(std::sqrt(acc / static_cast<double>(win_length)));
+    const double square = v * v;
+    square_sum += square - squared_ring[ring_pos];
+    squared_ring[ring_pos] = square;
+    ring_pos = (ring_pos + 1) % squared_ring.size();
+    const int samples_seen = padded_index + 1;
+    if (samples_seen >= win_length && (samples_seen - win_length) % hop_length == 0 &&
+        frame < n_frames) {
+      rms[static_cast<size_t>(frame++)] = static_cast<float>(
+          std::sqrt(std::max(0.0, square_sum) / static_cast<double>(win_length)));
+    }
   }
   return rms;
 }
@@ -254,8 +250,8 @@ std::vector<float> iirt(const float* y, size_t n_samples, const IirtConfig& conf
       // Out of band or numerically unstable design — leave the band unused (zeros).
       row.assign(n_frames_global, 0.0f);
     } else {
-      std::vector<double> band = apply_cascade(y, n_samples, sos);
-      row = frame_rms(band, config.win_length, config.hop_length, config.center);
+      row =
+          cascade_frame_rms(y, n_samples, sos, config.win_length, config.hop_length, config.center);
     }
     if (static_cast<int>(row.size()) != n_frames_global) {
       // Resize zero-filled rows to match (only happens for early skipped bands).

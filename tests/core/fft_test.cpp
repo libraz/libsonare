@@ -227,7 +227,16 @@ TEST_CASE("FFT multiple frequencies detection", "[fft]") {
 }
 
 TEST_CASE("FFT input validation", "[fft]") {
-  SECTION("FFT construction with invalid size") { REQUIRE_THROWS_AS(FFT(0), SonareException); }
+  SECTION("FFT construction rejects non-positive and odd sizes as invalid parameters") {
+    for (int n_fft : {0, 1, 3, 513}) {
+      try {
+        FFT fft(n_fft);
+        FAIL("invalid FFT size was accepted");
+      } catch (const SonareException& error) {
+        REQUIRE(error.code() == ErrorCode::InvalidParameter);
+      }
+    }
+  }
 
   SECTION("FFT forward with null input") {
     FFT fft(1024);

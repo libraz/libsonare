@@ -25,6 +25,10 @@ std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, floa
   if (Q < 0.0f)
     throw SonareException(ErrorCode::InvalidParameter, "wavelet_lengths: Q must be non-negative");
   const bool use_Q = (Q > 0.0f);
+  if (!use_Q && freqs.size() < 2) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "wavelet_lengths: at least two frequencies are required without Q");
+  }
 
   // Pre-compute alpha[k] from the local bins-per-octave (matches
   // librosa.filters._relative_bandwidth). For each interior k:

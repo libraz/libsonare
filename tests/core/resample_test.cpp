@@ -105,6 +105,7 @@ TEST_CASE("resample empty audio", "[resample]") {
   Audio empty;
   Audio result = resample(empty, 22050);
   REQUIRE(result.empty());
+  REQUIRE(result.sample_rate() == 22050);
 }
 
 TEST_CASE("resample preserves DC offset", "[resample]") {

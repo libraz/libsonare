@@ -2,6 +2,8 @@
 
 /// @file harmonic.h
 /// @brief Harmonic-aware spectral helpers (salience, interp_harmonics, f0_harmonics).
+/// @internal Reference primitives; not part of the supported C ABI or
+/// language-binding surface.
 
 #include <vector>
 

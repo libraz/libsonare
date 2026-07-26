@@ -25,4 +25,7 @@ namespace sonare {
 /// @throws SonareException on any FFmpeg or decoding error.
 AudioLoadResult load_buffer_ffmpeg(const uint8_t* data, size_t size);
 
+/// @brief Probes the first audio stream's source channel count without decoding.
+int probe_channels_ffmpeg(const uint8_t* data, size_t size);
+
 }  // namespace sonare

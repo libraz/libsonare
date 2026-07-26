@@ -21,7 +21,7 @@ enum class ChannelLayout : uint8_t {
   Mono = 0,           ///< C
   Stereo = 1,         ///< L R
   FivePointOne = 2,   ///< L R C LFE Ls Rs
-  SevenPointOne = 3,  ///< L R C LFE Lss Rss Ls Rs
+  SevenPointOne = 3,  ///< L R C LFE Ls Rs Lss Rss
 };
 
 /// Per-plane speaker role, in canonical WAVE_FORMAT_EXTENSIBLE order.
@@ -84,7 +84,7 @@ inline const SpeakerRole* speaker_roles(ChannelLayout layout) noexcept {
   static constexpr R kMono[] = {R::C};
   static constexpr R kStereo[] = {R::L, R::R};
   static constexpr R kFiveOne[] = {R::L, R::R, R::C, R::LFE, R::Ls, R::Rs};
-  static constexpr R kSevenOne[] = {R::L, R::R, R::C, R::LFE, R::Lss, R::Rss, R::Ls, R::Rs};
+  static constexpr R kSevenOne[] = {R::L, R::R, R::C, R::LFE, R::Ls, R::Rs, R::Lss, R::Rss};
   switch (layout) {
     case ChannelLayout::Mono:
       return kMono;

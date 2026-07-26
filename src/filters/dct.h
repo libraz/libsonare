@@ -41,5 +41,7 @@ std::vector<float> dct_ii(const std::vector<float>& input, int n_output = 0);
 /// @param n_output Number of output values (0 = same as input)
 /// @return Reconstructed values
 std::vector<float> idct_ii(const float* input, int n_input, int n_output = 0);
+/// Allocation-free inverse DCT-II into a caller-owned output buffer.
+void idct_ii_into(const float* input, int n_input, float* output, int n_output);
 
 }  // namespace sonare

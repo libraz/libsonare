@@ -96,7 +96,7 @@ std::vector<float> resample(const float* samples, size_t size, int src_sr, int t
 
 Audio resample(const Audio& audio, int target_sr) {
   if (audio.empty()) {
-    return Audio();
+    return Audio::from_buffer(nullptr, 0, target_sr);
   }
 
   if (audio.sample_rate() == target_sr) {

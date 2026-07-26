@@ -287,7 +287,7 @@ TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]")
   const std::string gen_wav =
       "ffmpeg -loglevel error -f lavfi -i "
       "sine=frequency=440:duration=0.5:sample_rate=22050 "
-      "-ac 1 -y " +
+      "-ac 2 -y " +
       wav_path;
   const std::string gen_m4a =
       "ffmpeg -loglevel error -i " + wav_path + " -c:a aac -b:a 64k -y " + m4a_path;
@@ -298,8 +298,35 @@ TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]")
   REQUIRE_NOTHROW(loaded = load_audio(m4a_path));
   REQUIRE(std::get<0>(loaded).size() > 1000);
   REQUIRE(std::get<1>(loaded) > 0);
+  REQUIRE(audio_channel_count(m4a_path) == 2);
 
   cleanup();
+}
+
+TEST_CASE("load_audio adopts HE-AAC frame parameters", "[audio_io][ffmpeg][he-aac]") {
+  if (std::system("ffmpeg -hide_banner -h encoder=aac_at >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg AudioToolbox HE-AAC encoder is unavailable");
+  }
+
+  const std::string fixture_path = "test_tone_he_aac.m4a";
+  const std::string generate =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "'sine=frequency=440:duration=1:sample_rate=44100' "
+      "-ac 2 -c:a aac_at -profile:a 4 -b:a 48k -y " +
+      fixture_path;
+  REQUIRE(std::system(generate.c_str()) == 0);
+
+  AudioLoadResult loaded;
+  REQUIRE_NOTHROW(loaded = load_audio(fixture_path));
+  const std::vector<float>& audio = std::get<0>(loaded);
+  const int sample_rate = std::get<1>(loaded);
+  REQUIRE(sample_rate == 44100);
+  REQUIRE(audio_channel_count(fixture_path) == 2);
+  const double duration = static_cast<double>(audio.size()) / sample_rate;
+  REQUIRE(duration > 0.9);
+  REQUIRE(duration < 1.3);
+
+  std::remove(fixture_path.c_str());
 }
 #endif  // SONARE_WITH_FFMPEG
 
@@ -365,6 +392,13 @@ uint32_t le32(const std::vector<uint8_t>& b, size_t off) {
          (static_cast<uint32_t>(b[off + 2]) << 16) | (static_cast<uint32_t>(b[off + 3]) << 24);
 }
 
+int32_t signed_le24(const std::vector<uint8_t>& b, size_t off) {
+  uint32_t value = static_cast<uint32_t>(b[off]) | (static_cast<uint32_t>(b[off + 1]) << 8) |
+                   (static_cast<uint32_t>(b[off + 2]) << 16);
+  if ((value & 0x800000u) != 0) value |= 0xFF000000u;
+  return static_cast<int32_t>(value);
+}
+
 }  // namespace
 
 TEST_CASE("save_wav_multichannel writes WAVE_FORMAT_EXTENSIBLE for 5.1", "[audio_io]") {
@@ -427,7 +461,24 @@ TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "
   const std::string path = "test_surround_71.wav";
   const size_t frames = 2;
   const int channels = 8;
-  std::vector<float> interleaved(frames * channels, 0.0f);
+  // WAVE mask 0x63F enumerates FL FR FC LFE BL BR SL SR. Use a distinct DC
+  // value for every plane so the serialized order is verified independently of
+  // the mask header.
+  const std::array<float, channels> first_frame = {
+      0.1f,  // L / FL
+      0.2f,  // R / FR
+      0.3f,  // C / FC
+      0.4f,  // LFE
+      0.5f,  // Ls / BL
+      0.6f,  // Rs / BR
+      0.7f,  // Lss / SL
+      0.8f,  // Rss / SR
+  };
+  std::vector<float> interleaved(frames * channels);
+  for (size_t frame = 0; frame < frames; ++frame) {
+    std::copy(first_frame.begin(), first_frame.end(),
+              interleaved.begin() + static_cast<std::ptrdiff_t>(frame * channels));
+  }
 
   save_wav_multichannel(path, interleaved.data(), frames, channels, ChannelLayout::SevenPointOne,
                         48000, 24);
@@ -437,6 +488,15 @@ TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "
   REQUIRE(le16(bytes, 34) == 24);                     // 24-bit
   REQUIRE(le32(bytes, 40) == 0x63Fu);                 // 7.1 mask
   REQUIRE(le32(bytes, 64) == frames * channels * 3);  // 24-bit = 3 bytes/sample
+
+  const size_t data_off = 68;
+  for (int plane = 0; plane < channels; ++plane) {
+    const int32_t raw =
+        signed_le24(bytes, data_off + static_cast<size_t>(plane) * static_cast<size_t>(3));
+    const float decoded = static_cast<float>(raw) / 8388607.0f;
+    REQUIRE_THAT(decoded,
+                 Catch::Matchers::WithinAbs(first_frame[static_cast<size_t>(plane)], 1e-6f));
+  }
   std::remove(path.c_str());
 
   // channel_count must match the layout.

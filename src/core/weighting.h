@@ -4,6 +4,8 @@
 /// @brief Perceptual frequency weighting curves (A/B/C/D) and spectrogram
 ///        weighting (librosa.A_weighting / frequency_weighting /
 ///        perceptual_weighting compatible).
+/// @internal Reference primitives; public metering uses its dedicated
+/// BS.1770/IEC weighting paths instead.
 
 #include <cstddef>
 #include <string>

@@ -11,9 +11,10 @@ namespace sonare {
 
 std::vector<int> peak_pick(const float* x, std::size_t n, int pre_max, int post_max, int pre_avg,
                            int post_avg, float delta, int wait) {
-  if (pre_max < 0 || post_max < 0 || pre_avg < 0 || post_avg < 0 || wait < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "peak_pick: negative window or wait parameter");
+  if (pre_max < 0 || post_max <= 0 || pre_avg < 0 || post_avg <= 0 || wait < 0) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "peak_pick: post windows must be positive and other windows non-negative");
   }
   if (n > 0 && x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter,

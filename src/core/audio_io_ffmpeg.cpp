@@ -105,6 +105,11 @@ struct SwrContextDeleter {
 };
 using SwrContextPtr = std::unique_ptr<SwrContext, SwrContextDeleter>;
 
+struct ChannelLayoutGuard {
+  AVChannelLayout layout{};
+  ~ChannelLayoutGuard() { av_channel_layout_uninit(&layout); }
+};
+
 struct AVIOContextDeleter {
   void operator()(AVIOContext* io) const {
     if (io != nullptr) {
@@ -207,35 +212,16 @@ AudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx) {
   SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
                    "FFmpeg: avcodec_open2 failed: " + ff_err(ret));
 
-  int sample_rate = codec_ctx->sample_rate;
-  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed,
-                   "FFmpeg: invalid sample rate from decoder");
-
-  // Configure swresample: any input layout/format -> mono float32 planar.
+  // The stream-level parameters may be provisional (notably implicit HE-AAC).
+  // Adopt the first decoded frame's actual rate and configure swresample from
+  // frame parameters, rebuilding it if a concatenated/renegotiated stream
+  // changes format later.
+  int sample_rate = 0;
   AVChannelLayout out_layout = AV_CHANNEL_LAYOUT_MONO;
-  AVChannelLayout in_layout;
-  // av_channel_layout_copy copies the layout descriptor and any heap state.
-  ret = av_channel_layout_copy(&in_layout, &codec_ctx->ch_layout);
-  SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
-                   "FFmpeg: av_channel_layout_copy failed: " + ff_err(ret));
-  // If the decoder did not advertise a layout, derive a default from the
-  // channel count so swr_alloc_set_opts2 has something usable.
-  if (in_layout.nb_channels == 0 || in_layout.order == AV_CHANNEL_ORDER_UNSPEC) {
-    av_channel_layout_uninit(&in_layout);
-    av_channel_layout_default(
-        &in_layout, codec_ctx->ch_layout.nb_channels > 0 ? codec_ctx->ch_layout.nb_channels : 1);
-  }
-
-  SwrContext* swr_raw = nullptr;
-  ret = swr_alloc_set_opts2(&swr_raw, &out_layout, AV_SAMPLE_FMT_FLT, sample_rate, &in_layout,
-                            codec_ctx->sample_fmt, sample_rate, 0, nullptr);
-  av_channel_layout_uninit(&in_layout);
-  SwrContextPtr swr(swr_raw);
-  SONARE_CHECK_MSG(ret >= 0 && swr != nullptr, ErrorCode::DecodeFailed,
-                   "FFmpeg: swr_alloc_set_opts2 failed: " + ff_err(ret));
-
-  ret = swr_init(swr.get());
-  SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed, "FFmpeg: swr_init failed: " + ff_err(ret));
+  SwrContextPtr swr;
+  ChannelLayoutGuard active_in_layout;
+  int active_input_rate = 0;
+  AVSampleFormat active_input_format = AV_SAMPLE_FMT_NONE;
 
   AVPacketPtr packet(av_packet_alloc());
   SONARE_CHECK_MSG(packet != nullptr, ErrorCode::OutOfMemory,
@@ -245,6 +231,82 @@ AudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx) {
                    "FFmpeg: av_frame_alloc returned null");
 
   std::vector<float> samples;
+
+  auto append_swr_flush = [&]() {
+    if (!swr || sample_rate <= 0 || active_input_rate <= 0) return;
+    while (true) {
+      const int64_t delay = swr_get_delay(swr.get(), active_input_rate);
+      const int max_out =
+          static_cast<int>(av_rescale_rnd(delay, sample_rate, active_input_rate, AV_ROUND_UP));
+      if (max_out <= 0) return;
+      const size_t prev_size = samples.size();
+      SONARE_CHECK_MSG(
+          static_cast<size_t>(max_out) <= resource::kMaxOfflineAudioSamples - prev_size,
+          ErrorCode::DecodeFailed, "FFmpeg flush exceeds the offline decode limit");
+      samples.resize(prev_size + static_cast<size_t>(max_out));
+      uint8_t* out_ptr = reinterpret_cast<uint8_t*>(samples.data() + prev_size);
+      const int converted = swr_convert(swr.get(), &out_ptr, max_out, nullptr, 0);
+      if (converted <= 0) {
+        samples.resize(prev_size);
+        return;
+      }
+      samples.resize(prev_size + static_cast<size_t>(converted));
+    }
+  };
+
+  auto configure_swr_for_frame = [&]() {
+    const int input_rate = frame->sample_rate > 0 ? frame->sample_rate : codec_ctx->sample_rate;
+    SONARE_CHECK_MSG(input_rate > 0, ErrorCode::DecodeFailed,
+                     "FFmpeg: decoded frame has no valid sample rate");
+    const auto input_format = static_cast<AVSampleFormat>(frame->format);
+    SONARE_CHECK_MSG(input_format != AV_SAMPLE_FMT_NONE, ErrorCode::DecodeFailed,
+                     "FFmpeg: decoded frame has no valid sample format");
+
+    AVChannelLayout resolved_layout{};
+    const AVChannelLayout* advertised = &frame->ch_layout;
+    if (advertised->nb_channels <= 0 || advertised->order == AV_CHANNEL_ORDER_UNSPEC) {
+      advertised = &codec_ctx->ch_layout;
+    }
+    if (advertised->nb_channels > 0 && advertised->order != AV_CHANNEL_ORDER_UNSPEC) {
+      ret = av_channel_layout_copy(&resolved_layout, advertised);
+      SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
+                       "FFmpeg: av_channel_layout_copy failed: " + ff_err(ret));
+    } else {
+      const int channels =
+          frame->ch_layout.nb_channels > 0
+              ? frame->ch_layout.nb_channels
+              : (codec_ctx->ch_layout.nb_channels > 0 ? codec_ctx->ch_layout.nb_channels : 1);
+      av_channel_layout_default(&resolved_layout, channels);
+    }
+
+    if (sample_rate == 0) sample_rate = input_rate;
+    const bool unchanged =
+        swr && input_rate == active_input_rate && input_format == active_input_format &&
+        av_channel_layout_compare(&resolved_layout, &active_in_layout.layout) == 0;
+    if (unchanged) {
+      av_channel_layout_uninit(&resolved_layout);
+      return;
+    }
+
+    append_swr_flush();
+    swr.reset();
+    av_channel_layout_uninit(&active_in_layout.layout);
+    ret = av_channel_layout_copy(&active_in_layout.layout, &resolved_layout);
+    av_channel_layout_uninit(&resolved_layout);
+    SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
+                     "FFmpeg: failed to retain decoded frame channel layout: " + ff_err(ret));
+
+    SwrContext* swr_raw = nullptr;
+    ret = swr_alloc_set_opts2(&swr_raw, &out_layout, AV_SAMPLE_FMT_FLT, sample_rate,
+                              &active_in_layout.layout, input_format, input_rate, 0, nullptr);
+    swr.reset(swr_raw);
+    SONARE_CHECK_MSG(ret >= 0 && swr != nullptr, ErrorCode::DecodeFailed,
+                     "FFmpeg: swr_alloc_set_opts2 failed: " + ff_err(ret));
+    ret = swr_init(swr.get());
+    SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed, "FFmpeg: swr_init failed: " + ff_err(ret));
+    active_input_rate = input_rate;
+    active_input_format = input_format;
+  };
 
   auto drain_decoder = [&]() {
     while (true) {
@@ -257,15 +319,19 @@ AudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx) {
                          "FFmpeg: avcodec_receive_frame failed: " + ff_err(recv_ret));
       }
 
+      configure_swr_for_frame();
       // Estimate the worst-case number of output samples for this input frame.
-      int64_t delay = swr_get_delay(swr.get(), sample_rate);
+      int64_t delay = swr_get_delay(swr.get(), active_input_rate);
       int max_out = static_cast<int>(
-          av_rescale_rnd(delay + frame->nb_samples, sample_rate, sample_rate, AV_ROUND_UP));
+          av_rescale_rnd(delay + frame->nb_samples, sample_rate, active_input_rate, AV_ROUND_UP));
       if (max_out <= 0) {
         max_out = frame->nb_samples;
       }
 
       size_t prev_size = samples.size();
+      SONARE_CHECK_MSG(
+          static_cast<size_t>(max_out) <= resource::kMaxOfflineAudioSamples - prev_size,
+          ErrorCode::DecodeFailed, "FFmpeg decoded frame exceeds the offline decode limit");
       samples.resize(prev_size + static_cast<size_t>(max_out));
       uint8_t* out_ptr = reinterpret_cast<uint8_t*>(samples.data() + prev_size);
 
@@ -315,22 +381,7 @@ AudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx) {
                    "FFmpeg: flushing decoder failed: " + ff_err(ret));
   drain_decoder();
 
-  // Flush swresample with a null input to retrieve any remaining samples.
-  while (true) {
-    int max_out = static_cast<int>(swr_get_delay(swr.get(), sample_rate));
-    if (max_out <= 0) {
-      break;
-    }
-    size_t prev_size = samples.size();
-    samples.resize(prev_size + static_cast<size_t>(max_out));
-    uint8_t* out_ptr = reinterpret_cast<uint8_t*>(samples.data() + prev_size);
-    int converted = swr_convert(swr.get(), &out_ptr, max_out, nullptr, 0);
-    if (converted <= 0) {
-      samples.resize(prev_size);
-      break;
-    }
-    samples.resize(prev_size + static_cast<size_t>(converted));
-  }
+  append_swr_flush();
 
   SONARE_CHECK_MSG(!samples.empty(), ErrorCode::DecodeFailed, "FFmpeg: decoded zero audio samples");
 
@@ -381,6 +432,49 @@ AudioLoadResult load_buffer_ffmpeg(const uint8_t* data, size_t size) {
   // After success fmt_raw is unchanged but is now owned by format_ctx.
 
   return decode_first_audio_stream(format_ctx.get());
+}
+
+int probe_channels_ffmpeg(const uint8_t* data, size_t size) {
+  SONARE_CHECK_MSG(data != nullptr && size > 0, ErrorCode::InvalidParameter,
+                   "FFmpeg: empty input buffer");
+
+  constexpr int kIOBufferSize = 32 * 1024;
+  MemoryIOState io_state{data, size, 0};
+  uint8_t* io_buffer = static_cast<uint8_t*>(av_malloc(kIOBufferSize));
+  SONARE_CHECK_MSG(io_buffer != nullptr, ErrorCode::OutOfMemory,
+                   "FFmpeg: av_malloc for AVIO buffer failed");
+  AVIOContextPtr avio(avio_alloc_context(io_buffer, kIOBufferSize, 0, &io_state, &memory_read,
+                                         nullptr, &memory_seek));
+  if (avio == nullptr) {
+    av_free(io_buffer);
+    SONARE_CHECK_MSG(false, ErrorCode::OutOfMemory, "FFmpeg: avio_alloc_context returned null");
+  }
+
+  AVFormatContext* fmt_raw = avformat_alloc_context();
+  SONARE_CHECK_MSG(fmt_raw != nullptr, ErrorCode::OutOfMemory,
+                   "FFmpeg: avformat_alloc_context returned null");
+  fmt_raw->pb = avio.get();
+  fmt_raw->flags |= AVFMT_FLAG_CUSTOM_IO;
+  AVFormatContextPtr format_ctx(fmt_raw);
+
+  int ret = avformat_open_input(&fmt_raw, nullptr, nullptr, nullptr);
+  if (ret < 0) {
+    (void)format_ctx.release();
+    SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
+                     "FFmpeg: avformat_open_input failed: " + ff_err(ret));
+  }
+  ret = avformat_find_stream_info(format_ctx.get(), nullptr);
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
+                   "FFmpeg: avformat_find_stream_info failed: " + ff_err(ret));
+  for (unsigned i = 0; i < format_ctx->nb_streams; ++i) {
+    const AVCodecParameters* params = format_ctx->streams[i]->codecpar;
+    if (params->codec_type == AVMEDIA_TYPE_AUDIO) {
+      SONARE_CHECK_MSG(params->ch_layout.nb_channels > 0, ErrorCode::DecodeFailed,
+                       "FFmpeg: audio stream has no channel layout");
+      return params->ch_layout.nb_channels;
+    }
+  }
+  SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed, "FFmpeg: no audio stream found in input");
 }
 
 }  // namespace sonare

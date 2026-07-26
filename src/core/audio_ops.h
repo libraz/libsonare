@@ -3,6 +3,8 @@
 /// @file audio_ops.h
 /// @brief Time-domain audio operations: mu-law companding, autocorrelation,
 ///        and linear prediction coefficients (LPC via Burg's method).
+/// @internal Reference primitives used to validate shared algorithms; not part
+/// of the supported C ABI or language-binding surface.
 
 #include <cstddef>
 #include <vector>
