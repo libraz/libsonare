@@ -11,7 +11,6 @@
 #include "metering/dynamic_range.h"
 #include "metering/lufs.h"
 #include "metering/phase_scope.h"
-#include "metering/spectrogram.h"
 #include "metering/spectrum.h"
 #include "metering/stereo.h"
 #include "metering/true_peak.h"
@@ -446,6 +445,26 @@ TEST_CASE("LUFS interleaved overlapped short-term path stays finite", "[meter]")
   REQUIRE(result.loudness_range >= 0.0f);
 }
 
+TEST_CASE("LUFS result distinguishes final windows from Max-M and Max-S", "[meter][lufs]") {
+  const int sample_rate = 48000;
+  const int n_samples = sample_rate * 8;
+  std::vector<float> samples(static_cast<size_t>(n_samples));
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float amplitude = i < sample_rate * 4 ? 0.8f : 0.02f;
+    samples[static_cast<size_t>(i)] =
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1000.0f * t);
+  }
+
+  const auto result =
+      metering::lufs_interleaved(samples.data(), static_cast<size_t>(n_samples), 1, sample_rate);
+
+  REQUIRE(std::isfinite(result.max_momentary_lufs));
+  REQUIRE(std::isfinite(result.max_short_term_lufs));
+  REQUIRE(result.max_momentary_lufs > result.momentary_lufs + 20.0f);
+  REQUIRE(result.max_short_term_lufs > result.short_term_lufs + 10.0f);
+}
+
 TEST_CASE("ebur128_loudness_range accepts mono input", "[meter][lufs]") {
   // Mono input is the documented contract. A steady tone should yield a near
   // -zero LRA and no exception.
@@ -564,29 +583,6 @@ TEST_CASE("fractional octave smoothing spreads isolated bins", "[meter]") {
   REQUIRE(smoothed.size() == values.size());
   REQUIRE_THAT(smoothed[2], WithinAbs(3.0f, 0.001f));
   REQUIRE_THAT(smoothed[4], WithinAbs(0.0f, 0.001f));
-}
-
-TEST_CASE("meter spectrogram exposes expected shape and axes", "[meter]") {
-  const Audio audio = make_sine(0.5f, 48000, 0.1f);
-
-  metering::MeterSpectrogramConfig config;
-  config.stft.n_fft = 1024;
-  config.stft.hop_length = 256;
-  config.stft.center = false;
-  const auto result = metering::spectrogram(audio, config);
-
-  REQUIRE(result.n_bins == 513);
-  REQUIRE(result.n_frames > 0);
-  REQUIRE(result.frequencies.size() == static_cast<size_t>(result.n_bins));
-  REQUIRE(result.times.size() == static_cast<size_t>(result.n_frames));
-  REQUIRE(result.magnitude.size() == static_cast<size_t>(result.n_bins * result.n_frames));
-  REQUIRE(result.power.size() == result.magnitude.size());
-  REQUIRE(result.db.size() == result.magnitude.size());
-  REQUIRE_THAT(result.frequencies[0], WithinAbs(0.0f, 0.001f));
-  REQUIRE_THAT(result.frequencies.back(), WithinAbs(24000.0f, 0.001f));
-  if (result.times.size() > 1) {
-    REQUIRE_THAT(result.times[1] - result.times[0], WithinAbs(256.0f / 48000.0f, 0.0001f));
-  }
 }
 
 // ============================================================================
@@ -764,12 +760,35 @@ TEST_CASE("spectrum_frame uses Hann coherent-gain amplitude normalization", "[me
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
 
   const auto result = metering::spectrum_frame(audio, 0, config);
-  REQUIRE_THAT(result.magnitude[static_cast<size_t>(bin)],
-               WithinRel(static_cast<float>(config.n_fft) * 0.5f, 0.01f));
+  REQUIRE_THAT(result.magnitude[static_cast<size_t>(bin)], WithinRel(1.0f, 0.01f));
+  REQUIRE_THAT(result.db[static_cast<size_t>(bin)], WithinAbs(0.0f, 0.1f));
   REQUIRE_THAT(result.power[static_cast<size_t>(bin)],
                WithinRel(result.magnitude[static_cast<size_t>(bin)] *
                              result.magnitude[static_cast<size_t>(bin)],
                          1e-5f));
+}
+
+TEST_CASE("spectrum full-scale sine level is FFT-size independent", "[meter]") {
+  constexpr int sample_rate = 48000;
+  constexpr float frequency = 1500.0f;  // bin-centred for both FFT sizes below
+  std::vector<float> samples(static_cast<size_t>(sample_rate), 0.0f);
+  for (int i = 0; i < sample_rate; ++i) {
+    samples[static_cast<size_t>(i)] =
+        std::sin(2.0 * sonare::constants::kPiD * frequency * i / sample_rate);
+  }
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  metering::SpectrumConfig small;
+  small.n_fft = 1024;
+  metering::SpectrumConfig large;
+  large.n_fft = 4096;
+  const auto a = metering::spectrum(audio, small);
+  const auto b = metering::spectrum(audio, large);
+  const size_t bin_a = static_cast<size_t>(frequency * small.n_fft / sample_rate);
+  const size_t bin_b = static_cast<size_t>(frequency * large.n_fft / sample_rate);
+  REQUIRE_THAT(a.db[bin_a], WithinAbs(0.0f, 0.1f));
+  REQUIRE_THAT(b.db[bin_b], WithinAbs(0.0f, 0.1f));
+  REQUIRE_THAT(a.db[bin_a], WithinAbs(b.db[bin_b], 0.05f));
 }
 
 TEST_CASE("LUFS short-term uses the spec 100 ms hop, not 150 ms", "[meter][lufs][spec]") {
@@ -868,6 +887,17 @@ TEST_CASE("level meters share the finite kFloorDb silence sentinel", "[meter][fl
     REQUIRE(!result.db.empty());
     for (float v : result.db) {
       REQUIRE(std::isfinite(v));
+      REQUIRE_THAT(v, WithinAbs(floor, 1e-4f));
+    }
+  }
+
+  SECTION("spectrum non-empty silence db is kFloorDb") {
+    const std::vector<float> silent(4096, 0.0f);
+    const Audio audio = Audio::from_buffer(silent.data(), silent.size(), 48000);
+    metering::SpectrumConfig config;
+    config.n_fft = 1024;
+    const auto result = metering::spectrum(audio, config);
+    for (float v : result.db) {
       REQUIRE_THAT(v, WithinAbs(floor, 1e-4f));
     }
   }

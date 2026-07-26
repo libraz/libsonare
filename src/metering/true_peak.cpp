@@ -42,7 +42,7 @@ const ::sonare::rt::PolyphaseFir& filter_for(int oversample_factor) {
 float upsampled_peak(const float* data, size_t length, int oversample_factor) {
   const auto& pf = filter_for(oversample_factor);
   float peak = peak_abs(data, length);
-  for (int phase = 1; phase < pf.phases; ++phase) {
+  for (int phase = 0; phase < pf.phases; ++phase) {
     for (size_t i = 0; i < length; ++i) {
       const float sample = ::sonare::rt::interpolate_polyphase_sample(data, length, i, phase, pf);
       peak = std::max(peak, std::abs(sample));

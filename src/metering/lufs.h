@@ -25,8 +25,14 @@ inline constexpr float kLufsShortTermHopSec = 0.1f;
 
 struct LufsResult {
   float integrated_lufs = 0.0f;
+  /// Final complete 400 ms measurement window, not Max-M.
   float momentary_lufs = 0.0f;
+  /// Final complete 3 s measurement window, not Max-S.
   float short_term_lufs = 0.0f;
+  /// Maximum 400 ms measurement (EBU R128 Max-M).
+  float max_momentary_lufs = 0.0f;
+  /// Maximum 3 s measurement (EBU R128 Max-S).
+  float max_short_term_lufs = 0.0f;
   float loudness_range = 0.0f;
 };
 

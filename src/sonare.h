@@ -73,7 +73,6 @@
 #include "metering/dynamic_range.h"
 #include "metering/lufs.h"
 #include "metering/phase_scope.h"
-#include "metering/spectrogram.h"
 #include "metering/spectrum.h"
 #include "metering/stereo.h"
 #include "metering/true_peak.h"

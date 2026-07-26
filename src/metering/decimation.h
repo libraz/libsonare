@@ -44,8 +44,14 @@ struct BucketRange {
 
 inline BucketRange decimation_bucket(size_t bucket, size_t length, size_t max_points) {
   BucketRange range;
-  range.begin = (bucket * length) / max_points;
-  range.end = ((bucket + 1) * length) / max_points;
+  // Multiply in a type wider than wasm32 size_t so ordinary minute-long scope
+  // buffers cannot wrap the bucket boundaries.
+  const auto wide_length = static_cast<unsigned long long>(length);
+  const auto wide_points = static_cast<unsigned long long>(max_points);
+  range.begin =
+      static_cast<size_t>((static_cast<unsigned long long>(bucket) * wide_length) / wide_points);
+  range.end = static_cast<size_t>(((static_cast<unsigned long long>(bucket) + 1ULL) * wide_length) /
+                                  wide_points);
   return range;
 }
 

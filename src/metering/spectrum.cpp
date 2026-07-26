@@ -48,6 +48,11 @@ float window_coherent_norm(const std::vector<float>& window) {
                           : 1.0f;
 }
 
+float one_sided_amplitude_scale(int bin, int n_fft) {
+  const bool edge_bin = bin == 0 || (n_fft % 2 == 0 && bin == n_fft / 2);
+  return (edge_bin ? 1.0f : 2.0f) / static_cast<float>(n_fft);
+}
+
 // Shared post-processing: derive power, optional fractional-octave smoothing, and
 // the dB array from an already-populated magnitude spectrum.
 void finalize_spectrum(SpectrumResult& result, const SpectrumConfig& config) {
@@ -66,7 +71,7 @@ void finalize_spectrum(SpectrumResult& result, const SpectrumConfig& config) {
 
   for (int i = 0; i < n_bins; ++i) {
     const float amplitude = std::max(config.db_amin, result.magnitude[i]);
-    result.db[i] = linear_to_db(amplitude / config.db_ref);
+    result.db[i] = std::max(sonare::constants::kFloorDb, linear_to_db(amplitude / config.db_ref));
   }
 }
 
@@ -118,7 +123,8 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   const float inv_frames = num_frames > 0 ? 1.0f / static_cast<float>(num_frames) : 1.0f;
   for (int i = 0; i < n_bins; ++i) {
     const float avg_power = static_cast<float>(power_accum[static_cast<size_t>(i)]) * inv_frames;
-    result.magnitude[i] = std::sqrt(avg_power) * window_norm;
+    result.magnitude[i] =
+        std::sqrt(avg_power) * window_norm * one_sided_amplitude_scale(i, config.n_fft);
   }
 
   finalize_spectrum(result, config);
@@ -150,7 +156,8 @@ SpectrumResult spectrum_frame(const Audio& audio, size_t frame_offset,
   FFT fft(config.n_fft);
   fft.forward(frame.data(), bins.data());
   for (int i = 0; i < n_bins; ++i) {
-    result.magnitude[i] = std::abs(bins[i]) * window_norm;
+    result.magnitude[i] =
+        std::abs(bins[i]) * window_norm * one_sided_amplitude_scale(i, config.n_fft);
   }
 
   finalize_spectrum(result, config);
