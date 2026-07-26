@@ -185,6 +185,14 @@ _ALIAS_COVERAGE = {
     # explicit Mel range needed to round-trip with mel_to_stft / mel_to_audio).
     "mel_spectrogram_ex": ("mel_spectrogram",),
     "mfcc_ex": ("mfcc",),
+    # Extended one-shot variants folded into their base facade functions. Each
+    # base function exposes the extended fields and routes to this C entry point.
+    "analyze_json_ex": ("analyze",),
+    "chroma_cens_ex": ("chroma_cens",),
+    "chroma_cqt_ex": ("chroma_cqt",),
+    "mfcc_to_audio_ex2": ("mfcc_to_audio",),
+    "mfcc_to_mel_ex": ("mfcc_to_mel",),
+    "nnls_chroma_ex": ("nnls_chroma",),
     # NMF warm-start variant -> the base decompose facade, which exposes the
     # `init` initialiser argument and routes to sonare_decompose_with_init.
     # (Python / WASM expose decompose_with_init by name, matched directly before
@@ -623,6 +631,9 @@ _EXTENDED_FIELD_TAILS = {
     ),
     "mel_spectrogram": ("fmin", "fmax", "htk"),
     "mfcc": ("fmin", "fmax", "htk", "lifter"),
+    "chroma_cens": ("bins_per_octave",),
+    "chroma_cqt": ("bins_per_octave",),
+    "mfcc_to_mel": ("lifter",),
     "decompose": ("init",),
 }
 

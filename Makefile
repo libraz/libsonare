@@ -161,11 +161,11 @@ conformance:
 # offsetof straight from the headers. The JSON is tracked; the Python guard
 # (tests/test_abi_layout.py) and the WASM abi-layout vitest compare against it.
 abi-layout:
-	python3 tools/abi/gen_abi_layout.py
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/abi/gen_abi_layout.py
 
 # Fail if the committed snapshot is stale (regenerate + git-diff style check).
 abi-layout-check:
-	python3 tools/abi/gen_abi_layout.py --check
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/abi/gen_abi_layout.py --check
 
 # Verify the ABI-version mirror literals in every binding match the C source of
 # truth (per-subsystem + packed aggregate). Stdlib-only, read-only.
