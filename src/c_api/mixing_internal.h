@@ -45,8 +45,7 @@ struct SonareMixer {
   bool compiled_dirty = true;
   int latency_samples = 0;
   int tail_samples = 0;
-  std::vector<float> scratch_left;
-  std::vector<float> scratch_right;
+  int64_t timeline_sample_pos = 0;
 };
 
 namespace sonare_c_mixing_detail {

@@ -7,6 +7,7 @@
 // Realtime tempo / time-signature ramps reuse the shared segment descriptors
 // SonareProjectTempoSegment / SonareProjectTimeSignatureSegment.
 #include "sonare_c_project_core.h"
+#include "sonare_c_project_midi.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -89,14 +90,18 @@ SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int
 ///   the first audible block renders at settled values instead of ramping in
 ///   from defaults. Not safe concurrently with a running audio thread.
 SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine);
+/// @brief Sets a finite tempo in the range (0, 100000] BPM.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a non-finite, non-positive,
+///         or greater-than-100000 value.
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm);
 SonareError sonare_engine_set_time_signature(SonareRealtimeEngine* engine, int numerator,
                                              int denominator);
 /// @brief Installs a tempo map from @p segment_count ramp segments (control
 ///   thread only). Each segment needs a finite non-negative @c start_ppq and a
-///   positive @c bpm; a non-zero @c end_bpm ramps to that tempo. Passing zero
-///   segments clears the map back to the single-tempo value. @c start_sample and
-///   @c end_ppq of the descriptor are ignored (derived internally).
+///   @c bpm in (0, 100000]; a non-zero @c end_bpm ramps to a value in the same
+///   range. Passing zero segments clears the map back to the single-tempo
+///   value. @c start_sample and @c end_ppq of the descriptor are ignored
+///   (derived internally).
 SonareError sonare_engine_set_tempo_segments(SonareRealtimeEngine* engine,
                                              const SonareProjectTempoSegment* segments,
                                              size_t segment_count);
@@ -149,6 +154,12 @@ SonareError sonare_engine_seek_marker(SonareRealtimeEngine* engine, uint32_t mar
                                       int64_t render_frame);
 SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
                                                 uint32_t start_marker_id, uint32_t end_marker_id);
+/// @brief Sets the metronome configuration.
+/// @details Explicit click lengths are limited to 384000 samples or one second.
+///          The engine clamps accepted values further to one second at the
+///          prepared sample rate.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for non-finite/negative gains,
+///         negative durations, or durations above the documented limits.
 SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
                                         const SonareEngineMetronomeConfig* config);
 SonareError sonare_engine_metronome(SonareRealtimeEngine* engine, SonareEngineMetronomeConfig* out);
@@ -327,6 +338,8 @@ SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_
                                             int64_t end_sample, int enabled);
 SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
                                              SonareEngineCaptureSource source);
+/** Shift the recording window in timeline samples. A positive value delays
+ * capture: output frame 0 corresponds to punch_start + offset_samples. */
 SonareError sonare_engine_set_record_offset_samples(SonareRealtimeEngine* engine,
                                                     int64_t offset_samples);
 SonareError sonare_engine_set_input_monitor(SonareRealtimeEngine* engine, int enabled, float gain);
@@ -542,6 +555,11 @@ SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, si
 SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t channel,
                                        uint8_t controller, uint32_t param_id, float min_value,
                                        float max_value);
+/// @brief Binds a full 7-bit/14-bit CC, RPN, or NRPN descriptor to the live engine.
+/// @details Uses the same descriptor and validation as project MIDI learn/conversion.
+/// The scalar @ref sonare_engine_bind_midi_cc remains a 7-bit compatibility shim.
+SonareError sonare_engine_bind_midi_cc_binding(SonareRealtimeEngine* engine,
+                                               const SonareMidiCcBinding* binding);
 /// @brief Clears all live MIDI CC to parameter bindings.
 SonareError sonare_engine_clear_midi_cc_bindings(SonareRealtimeEngine* engine);
 /// @brief Returns the number of live MIDI CC bindings.

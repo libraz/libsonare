@@ -69,6 +69,7 @@ inline void set_mastering_result(const sonare::mastering::api::MonoResult& resul
   out->output_lufs = result.output_lufs;
   out->applied_gain_db = result.applied_gain_db;
   out->latency_samples = result.latency_samples;
+  out->loudness_target_limited = 0;
   std::unique_ptr<float[]> processed(new float[out->length]);
   std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
   out->samples = sonare_c_detail::release_array(processed);
@@ -103,6 +104,7 @@ template <typename ChainResultT>
 inline void zero_chain_metrics(ChainResultT* out) {
   out->output_true_peak_dbtp = 0.0f;
   out->output_lra = 0.0f;
+  out->loudness_target_limited = 0;
   out->stage_gain_reduction_stages = nullptr;
   out->stage_gain_reduction_values = nullptr;
   out->stage_gain_reductions_count = 0;
@@ -116,6 +118,7 @@ inline void set_chain_metrics(const sonare::mastering::api::ChainMetrics& metric
                               ChainResultT* out) {
   out->output_true_peak_dbtp = metrics.output_true_peak_dbtp;
   out->output_lra = metrics.output_lra;
+  out->loudness_target_limited = metrics.loudness_target_limited ? 1 : 0;
   const auto& reductions = metrics.stage_gain_reductions;
   out->stage_gain_reductions_count = reductions.size();
   if (reductions.empty()) {

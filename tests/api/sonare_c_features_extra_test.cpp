@@ -254,25 +254,26 @@ TEST_CASE("sonare_estimate_tuning", "[c_api][features]") {
   }
 }
 
-// Silence yields all-unvoiced frames, which is exactly where the fill_na flag
-// changes the f0 output (NaN when off, 0 when on).
+// Like librosa.yin, YIN returns its global-minimum fallback for unvoiced
+// frames. fill_na is retained for ABI compatibility and does not change YIN.
 TEST_CASE("sonare_pitch_yin fill_na", "[c_api][features]") {
   std::vector<float> silence(static_cast<size_t>(kSampleRate), 0.0f);
 
-  SECTION("fill_na = 0 leaves unvoiced frames as NaN") {
+  SECTION("fill_na = 0 returns finite fallback frequencies and unvoiced flags") {
     SonarePitchResult result{};
     REQUIRE(sonare_pitch_yin(silence.data(), silence.size(), kSampleRate, 2048, 512, 65.0f, 2093.0f,
                              0.3f, /*fill_na=*/0, &result) == SONARE_OK);
     REQUIRE(result.n_frames > 0);
-    bool any_nan = false;
+    bool any_unvoiced = false;
     for (int i = 0; i < result.n_frames; ++i) {
-      if (std::isnan(result.f0[i])) any_nan = true;
+      REQUIRE(std::isfinite(result.f0[i]));
+      if (result.voiced_flag[i] == 0) any_unvoiced = true;
     }
-    REQUIRE(any_nan);
+    REQUIRE(any_unvoiced);
     sonare_free_pitch_result(&result);
   }
 
-  SECTION("fill_na = 1 replaces unvoiced frames with finite 0") {
+  SECTION("fill_na = 1 preserves the same finite fallback contract") {
     SonarePitchResult result{};
     REQUIRE(sonare_pitch_yin(silence.data(), silence.size(), kSampleRate, 2048, 512, 65.0f, 2093.0f,
                              0.3f, /*fill_na=*/1, &result) == SONARE_OK);

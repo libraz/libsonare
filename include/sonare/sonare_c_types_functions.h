@@ -88,6 +88,26 @@ typedef void (*SonareAnalyzeProgressCallback)(float progress, const char* stage,
    sonare_free_string. */
 SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
                                 char** out_json);
+typedef struct {
+  int n_fft;
+  int hop_length;
+  float bpm_min;
+  float bpm_max;
+  float start_bpm;
+  int use_triads_only;
+  int use_hpss;
+  float chroma_highpass_hz;
+  int use_bass_weighted;
+  int chroma_hop_multiplier;
+  int use_chord_hmm;
+  int use_chord_key_context;
+  int chord_hmm_beam_width;
+  int detect_chord_inversions;
+} SonareMusicAnalyzeOptions;
+
+SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void);
+SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
+                                   const SonareMusicAnalyzeOptions* options, char** out_json);
 
 /* Same as sonare_analyze_json but reports per-stage progress. A null callback
    runs silently. The callback fires on the calling thread before return. */

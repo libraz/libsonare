@@ -474,11 +474,13 @@ SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
                                         const SonareEngineMetronomeConfig* config) {
   SONARE_C_API_ENTRY;
-  // click_samples == 0 is the documented "use the sample-rate-derived default"
-  // sentinel (the engine derives it from click_seconds and the sample rate).
-  // Only a negative explicit length is invalid.
-  if (!engine || !config || config->beat_gain < 0.0f || config->accent_gain < 0.0f ||
-      config->click_samples < 0) {
+  // Zero keeps the documented default sentinel. Reject hostile values at the
+  // public boundary; the core also clamps direct/internal configurations.
+  if (!engine || !config || !std::isfinite(config->beat_gain) || config->beat_gain < 0.0f ||
+      !std::isfinite(config->accent_gain) || config->accent_gain < 0.0f ||
+      config->click_samples < 0 || config->click_samples > engine::kMaxMetronomeClickSamples ||
+      !std::isfinite(config->click_seconds) || config->click_seconds < 0.0 ||
+      config->click_seconds > engine::kMaxMetronomeClickSeconds) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   engine->engine.set_metronome_config(metronome_from_c(*config));

@@ -124,10 +124,17 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(result.latency_samples == 0);
     REQUIRE(result.output_lufs > -18.2f);
     REQUIRE(result.output_lufs < -17.8f);
+    REQUIRE(result.loudness_target_limited == 0);
 
     sonare_free_mastering_result(&result);
     REQUIRE(result.samples == nullptr);
     REQUIRE(result.length == 0);
+
+    config.target_lufs = -2.0f;
+    REQUIRE(sonare_mastering_process(samples.data(), samples.size(), 22050, &config, &result) ==
+            SONARE_OK);
+    REQUIRE(result.loudness_target_limited == 1);
+    sonare_free_mastering_result(&result);
   }
 
   SECTION("accepts release_ms / apply_gain_at_input_rate and keeps zero-init behavior") {

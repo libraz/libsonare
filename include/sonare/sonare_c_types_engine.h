@@ -185,10 +185,11 @@ typedef struct {
   float accent_gain;
   /* Explicit click length in samples. 0 means "use the sample-rate-derived
      default" (the engine derives the length from click_seconds and the prepared
-     sample rate). A negative value is rejected. */
+     sample rate). Valid range: 0..384000. */
   int click_samples;
   /* Click duration in seconds, used when click_samples is 0 to derive the click
-     length from the prepared sample rate. Defaults to 0.002 (2 ms). */
+     length from the prepared sample rate. Valid range: 0..1; defaults to 0.002
+     (2 ms). */
   double click_seconds;
 } SonareEngineMetronomeConfig;
 
@@ -242,7 +243,7 @@ typedef struct {
 /* Speaker bed layout for a bus or source. Values match sonare::ChannelLayout
    and are part of the ABI / JSON wire format — never renumber.
    Plane order is WAVE_FORMAT_EXTENSIBLE (also ITU-R BS.2051 / SMPTE):
-     5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Lss Rss Ls Rs. */
+     5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss Rss. */
 typedef enum {
   SONARE_CHANNEL_LAYOUT_MONO = 0,
   SONARE_CHANNEL_LAYOUT_STEREO = 1,

@@ -7,17 +7,11 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
                                int max_candidates, SonareBpmAnalysisResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
   if (bpm_min <= 0.0f || bpm_max <= bpm_min || n_fft <= 0 || hop_length <= 0 ||
       max_candidates < 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  out->candidates = nullptr;
-  out->candidate_count = 0;
-  out->autocorrelation = nullptr;
-  out->autocorrelation_count = 0;
-  out->tempogram = nullptr;
-  out->tempogram_count = 0;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     BpmConfig config;

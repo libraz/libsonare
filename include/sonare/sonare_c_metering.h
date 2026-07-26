@@ -21,6 +21,11 @@ SonareError sonare_metering_peak_db(const float* samples, size_t length, int sam
 SonareError sonare_metering_rms_db(const float* samples, size_t length, int sample_rate,
                                    float* out_db);
 
+/// @brief Fraction of analysis frames whose RMS is below @p threshold_db.
+SonareError sonare_metering_silence_ratio(const float* samples, size_t length, int sample_rate,
+                                          float threshold_db, int frame_length, int hop_length,
+                                          float* out_ratio);
+
 /// @brief Crest factor in dB (peak_db - rms_db).
 SonareError sonare_metering_crest_factor_db(const float* samples, size_t length, int sample_rate,
                                             float* out_db);
@@ -29,7 +34,8 @@ SonareError sonare_metering_crest_factor_db(const float* samples, size_t length,
 SonareError sonare_metering_dc_offset(const float* samples, size_t length, int sample_rate,
                                       float* out_value);
 
-/// @brief Inter-sample (true) peak in dBFS. @p oversample_factor must be a
+/// @brief Inter-sample (true) peak in dBFS for a mono buffer. Interleaved
+///        multichannel input is not accepted as channels. @p oversample_factor must be a
 ///        power of two in [1, 16]; pass 0 for the library default (4).
 SonareError sonare_metering_true_peak_db(const float* samples, size_t length, int sample_rate,
                                          int oversample_factor, float* out_db);
@@ -74,7 +80,8 @@ typedef struct {
   size_t window_count;
 } SonareDynamicRangeResult;
 
-/// @brief Sliding-window dynamic range (high_percentile_db - low_percentile_db).
+/// @brief Sliding-window dynamic range (high_percentile_db - low_percentile_db)
+///        for a mono buffer. Interleaved multichannel input is not supported.
 /// @param window_sec Analysis window length in seconds (0.0 = library default 3.0).
 /// @param hop_sec Hop between windows in seconds (0.0 = library default 1.0).
 /// @param low_percentile Lower percentile in [0,1]. Pass a NEGATIVE value (e.g.
@@ -95,8 +102,8 @@ void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result);
 // Metering - stereo / phase-scope / spectrum (offline)
 // ============================================================================
 
-/// @brief Pearson correlation in [-1, 1] between two equal-length mono
-///        channels. Returns 0.0 when both channels are silent.
+/// @brief Uncentered correlation (cosine similarity) in [-1, 1] between two
+///        equal-length mono channels. Returns 0.0 when both channels are silent.
 SonareError sonare_metering_stereo_correlation(const float* left, const float* right, size_t length,
                                                int sample_rate, float* out_value);
 
@@ -189,7 +196,7 @@ typedef struct {
   int sample_rate;
 } SonareSpectrumResult;
 
-/// @brief Welch-averaged magnitude / power / dB spectrum over the WHOLE buffer.
+/// @brief Welch-averaged magnitude / power / dB spectrum over the WHOLE mono buffer.
 /// @details This is NOT a single-frame snapshot. The signal is split into
 ///          Hann-windowed, 50%-overlapping @c n_fft-length frames whose power
 ///          spectra are averaged across the entire input (Welch's method), so the
@@ -208,7 +215,7 @@ SonareError sonare_metering_spectrum(const float* samples, size_t length, int sa
                                      int n_fft, int apply_octave_smoothing, int octave_fraction,
                                      float db_ref, float db_amin, SonareSpectrumResult* out);
 
-/// @brief True single-frame magnitude / power / dB spectrum (one Hann-windowed
+/// @brief True single-frame mono magnitude / power / dB spectrum (one Hann-windowed
 ///        @c n_fft-length FFT), for spectrum-analyzer "moment" snapshots that
 ///        must not be time-averaged like @ref sonare_metering_spectrum.
 /// @param frame_offset Sample index where the analysis frame begins. The frame

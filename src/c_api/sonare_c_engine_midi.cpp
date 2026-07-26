@@ -286,6 +286,38 @@ SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t cha
 #endif
 }
 
+SonareError sonare_engine_bind_midi_cc_binding(SonareRealtimeEngine* engine,
+                                               const SonareMidiCcBinding* binding) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !binding || binding->cc_number > 127 || binding->param_id == 0 ||
+      binding->kind > SONARE_MIDI_CC_NRPN ||
+      (binding->channel != sonare::midi::kCcAnyChannel && binding->channel > 15) ||
+      !std::isfinite(binding->min_value) || !std::isfinite(binding->max_value) ||
+      binding->max_value < binding->min_value ||
+      sonare::engine::RealtimeEngine::parameter_target_reserved(binding->param_id)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  sonare::midi::CcBinding native{};
+  native.cc_number = binding->cc_number;
+  native.channel = binding->channel;
+  native.kind = static_cast<sonare::midi::CcBindingKind>(binding->kind);
+  native.cc_lsb_number = binding->cc_lsb_number;
+  native.selector_msb = binding->selector_msb;
+  native.selector_lsb = binding->selector_lsb;
+  native.param_id = binding->param_id;
+  native.min_value = binding->min_value;
+  native.max_value = binding->max_value;
+  if (native.kind == sonare::midi::CcBindingKind::kControlChange14 &&
+      (native.cc_number > 31 || native.cc_lsb_number != native.cc_number + 32u)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return engine->engine.bind_midi_cc(native) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
 SonareError sonare_engine_clear_midi_cc_bindings(SonareRealtimeEngine* engine) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;

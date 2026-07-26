@@ -46,6 +46,8 @@ typedef struct {
   float output_lufs;
   float applied_gain_db;
   int latency_samples;
+  /// Non-zero when the true-peak ceiling prevented reaching target_lufs.
+  int loudness_target_limited;
 } SonareMasteringResult;
 
 typedef struct {
@@ -92,6 +94,9 @@ typedef struct {
   float output_true_peak_dbtp;
   // EBU Tech 3342 Loudness Range of the output (LU).
   float output_lra;
+  // Non-zero when the requested LUFS gain was reduced to respect the true-peak
+  // ceiling. output_lufs is the achieved value, not the requested target.
+  int loudness_target_limited;
   // Per-stage gain reductions for the dynamics / maximizer stages that report
   // one (a subset of @c stages). @c stage_gain_reduction_stages holds the stage
   // identifiers and @c stage_gain_reduction_values the matching dB values
@@ -120,6 +125,7 @@ typedef struct {
   // @c sonare_free_mastering_chain_stereo_result.
   float output_true_peak_dbtp;
   float output_lra;
+  int loudness_target_limited;
   char** stage_gain_reduction_stages;
   float* stage_gain_reduction_values;
   size_t stage_gain_reductions_count;

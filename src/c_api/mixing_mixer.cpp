@@ -177,6 +177,47 @@ SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* i
   SONARE_C_CATCH
 }
 
+SonareError sonare_mixer_set_vca_group_members(SonareMixer* mixer, const char* id,
+                                               const char* const* members, size_t member_count) {
+  SONARE_C_API_ENTRY;
+  if (!mixer || !id || (member_count > 0 && !members)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const std::string group_id = id;
+  const auto group =
+      std::find_if(mixer->vca_groups.begin(), mixer->vca_groups.end(),
+                   [&](const sonare::mixing::api::VcaGroup& g) { return g.id == group_id; });
+  if (group == mixer->vca_groups.end()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  std::vector<std::string> next_members;
+  next_members.reserve(member_count);
+  for (size_t i = 0; i < member_count; ++i) {
+    if (!members[i]) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    const std::string member = members[i];
+    if (std::find(next_members.begin(), next_members.end(), member) == next_members.end()) {
+      next_members.push_back(member);
+    }
+  }
+
+  for (const auto& strip : mixer->strips) {
+    const bool was_member =
+        std::find(group->members.begin(), group->members.end(), strip->id) != group->members.end();
+    const bool is_member =
+        std::find(next_members.begin(), next_members.end(), strip->id) != next_members.end();
+    if (was_member != is_member) {
+      strip->strip.add_vca_group_offset_db(is_member ? group->gain_db : -group->gain_db);
+    }
+  }
+  group->members = std::move(next_members);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id) {
   SONARE_C_API_ENTRY;
   if (!mixer || !id) {
@@ -266,6 +307,13 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       strip->strip.set_pan_mode(to_pan_mode(scene_strip.pan_mode));
       strip->strip.set_dual_pan(scene_strip.dual_pan_left, scene_strip.dual_pan_right);
       strip->strip.set_pan_law(to_pan_law(scene_strip.pan_law));
+      sonare::mixing::SurroundPanParams surround;
+      surround.azimuth = scene_strip.surround_pan.azimuth;
+      surround.elevation = scene_strip.surround_pan.elevation;
+      surround.divergence = scene_strip.surround_pan.divergence;
+      surround.lfe = scene_strip.surround_pan.lfe;
+      surround.distance = scene_strip.surround_pan.distance;
+      strip->strip.set_surround_pan_params(surround);
       strip->strip.set_polarity_invert(scene_strip.polarity_invert_left,
                                        scene_strip.polarity_invert_right);
       strip->strip.set_channel_delay_samples(scene_strip.channel_delay_samples);
@@ -475,6 +523,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     }
 
     mixer->graph.process_block(n);
+    mixer->timeline_sample_pos += static_cast<int64_t>(num_samples);
 
     const float* master_l = mixer->graph.output(mixer->master_id, 0);
     const float* master_r = mixer->graph.output(mixer->master_id, 1);

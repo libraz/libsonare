@@ -1,5 +1,7 @@
 #include "c_api/mixing_internal.h"
+#include "mixing/gain.h"
 #include "mixing/solo_mute.h"
+#include "mixing/stereo_width.h"
 #include "mixing/tail_utils.h"
 
 namespace sonare_c_mixing_detail {
@@ -16,9 +18,12 @@ class StripNode final : public sonare::rt::ProcessorBase {
     int right_port = 0;
   };
 
-  StripNode(sonare::mixing::ChannelStrip* strip, int num_sends,
+  StripNode(sonare::mixing::ChannelStrip* strip, int num_sends, int64_t sample_pos,
             std::vector<SidechainInput> sidechain_inputs = {})
-      : strip_(strip), num_sends_(num_sends), sidechain_inputs_(std::move(sidechain_inputs)) {}
+      : strip_(strip),
+        num_sends_(num_sends),
+        sidechain_inputs_(std::move(sidechain_inputs)),
+        sample_pos_(sample_pos) {}
 
   void prepare(double, int) override {}  // inner strip prepared via add_strip()
 
@@ -69,32 +74,80 @@ class BusNode final : public sonare::rt::ProcessorBase {
     int right_port = 0;
   };
 
-  BusNode(std::unique_ptr<sonare::mixing::FxBus> bus,
+  BusNode(std::unique_ptr<sonare::mixing::FxBus> bus, float input_trim_db, float width,
+          bool polarity_invert_left, bool polarity_invert_right,
           std::vector<SidechainInput> sidechain_inputs = {})
-      : bus_(std::move(bus)), sidechain_inputs_(std::move(sidechain_inputs)) {}
+      : bus_(std::move(bus)),
+        input_trim_({input_trim_db, 5.0f}),
+        width_(width, 5.0f),
+        polarity_left_(polarity_invert_left ? -1.0f : 1.0f),
+        polarity_right_(polarity_invert_right ? -1.0f : 1.0f),
+        sidechain_inputs_(std::move(sidechain_inputs)) {}
 
   void prepare(double sample_rate, int max_block_size) override {
+    input_trim_.prepare(sample_rate, max_block_size);
     bus_->prepare(sample_rate, max_block_size);
+    width_.prepare(sample_rate, max_block_size);
   }
 
   void process(float* const* channels, int, int num_samples) override {
+    // Match TrackMixerRuntime's scene-bus signal order exactly:
+    // trim -> front-pair polarity -> inserts -> front-pair stereo width.
+    input_trim_.process(channels, 2, num_samples);
+    if (channels[0] != nullptr && polarity_left_ < 0.0f) {
+      for (int i = 0; i < num_samples; ++i) channels[0][i] *= polarity_left_;
+    }
+    if (channels[1] != nullptr && polarity_right_ < 0.0f) {
+      for (int i = 0; i < num_samples; ++i) channels[1][i] *= polarity_right_;
+    }
     bus_->clear_insert_sidechains();
     for (const auto& input : sidechain_inputs_) {
       const float* key[2] = {channels[input.left_port], channels[input.right_port]};
       bus_->set_insert_sidechain(input.insert_index, key, 2, num_samples);
     }
     bus_->process(channels, 2, num_samples);
+    if (width_.width() != 1.0f || width_.current_width() != 1.0f) {
+      width_.process(channels, 2, num_samples);
+    }
   }
 
-  void reset() override { bus_->reset(); }
+  void reset() override {
+    input_trim_.reset();
+    bus_->reset();
+    width_.reset();
+  }
   int latency_samples() const noexcept override { return bus_->latency_samples(); }
   int latency_samples_q8() const noexcept override { return bus_->latency_samples_q8(); }
   int tail_samples() const noexcept override { return bus_->tail_samples(); }
+  sonare::mixing::MeterSnapshot meter_snapshot() const noexcept {
+    return bus_->bus().meter_snapshot();
+  }
 
  private:
   std::unique_ptr<sonare::mixing::FxBus> bus_;
+  sonare::mixing::GainProcessor input_trim_;
+  sonare::mixing::StereoWidthProcessor width_;
+  float polarity_left_;
+  float polarity_right_;
   std::vector<SidechainInput> sidechain_inputs_;
 };
+
+}  // namespace sonare_c_mixing_detail
+
+SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
+                                   SonareMixMeterSnapshot* out) {
+  SONARE_C_API_ENTRY;
+  if (!mixer || !bus_id || bus_id[0] == '\0' || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (mixer->compiled_dirty) return SONARE_ERROR_INVALID_STATE;
+  sonare::graph::Node* node = mixer->graph.node(bus_id);
+  if (!node) return SONARE_ERROR_INVALID_PARAMETER;
+  auto* bus = dynamic_cast<sonare_c_mixing_detail::BusNode*>(&node->processor());
+  if (!bus) return SONARE_ERROR_INVALID_PARAMETER;
+  sonare_c_mixing_detail::copy_meter_snapshot(bus->meter_snapshot(), out);
+  return SONARE_OK;
+}
+
+namespace sonare_c_mixing_detail {
 
 void apply_solo_mutes(SonareMixer* mixer) {
   bool any_solo = false;
@@ -204,7 +257,9 @@ void build_and_compile(SonareMixer* mixer) {
     }
     bus_sidechain_inputs_by_id[bus.id] = sidechain_inputs;
     bus_sidechain_keys_by_id[bus.id] = sidechain_keys;
-    auto node = std::make_unique<BusNode>(std::move(fx_bus), std::move(sidechain_inputs));
+    auto node = std::make_unique<BusNode>(std::move(fx_bus), bus.input_trim_db, bus.width,
+                                          bus.polarity_invert_left, bus.polarity_invert_right,
+                                          std::move(sidechain_inputs));
     if (!graph.add_node(bus.id, std::move(node), next_sidechain_port)) {
       throw SonareException(ErrorCode::InvalidParameter, "duplicate or invalid bus id: " + bus.id);
     }
@@ -243,7 +298,8 @@ void build_and_compile(SonareMixer* mixer) {
     const int num_ports = next_sidechain_port;
     sidechain_inputs_by_id[strip->id] = sidechain_inputs;
     sidechain_keys_by_id[strip->id] = sidechain_keys;
-    auto node = std::make_unique<StripNode>(&strip->strip, num_sends, std::move(sidechain_inputs));
+    auto node = std::make_unique<StripNode>(&strip->strip, num_sends, mixer->timeline_sample_pos,
+                                            std::move(sidechain_inputs));
     if (!graph.add_node(strip->id, std::move(node), num_ports)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "duplicate or invalid strip id: " + strip->id);

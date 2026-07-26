@@ -2272,12 +2272,24 @@
       },
       {
         "kind": "float",
-        "name": "loudness_range",
+        "name": "max_momentary_lufs",
         "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_short_term_lufs",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "loudness_range",
+        "offset": 20,
         "size": 4
       }
     ],
-    "size": 16
+    "size": 24
   },
   "SonareMasteringChainResult": {
     "align": 8,
@@ -2343,25 +2355,31 @@
         "size": 4
       },
       {
+        "kind": "signed",
+        "name": "loudness_target_limited",
+        "offset": 56,
+        "size": 4
+      },
+      {
         "kind": "pointer",
         "name": "stage_gain_reduction_stages",
-        "offset": 56,
+        "offset": 64,
         "size": 8
       },
       {
         "kind": "pointer",
         "name": "stage_gain_reduction_values",
-        "offset": 64,
+        "offset": 72,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "stage_gain_reductions_count",
-        "offset": 72,
+        "offset": 80,
         "size": 8
       }
     ],
-    "size": 80
+    "size": 88
   },
   "SonareMasteringChainStereoResult": {
     "align": 8,
@@ -2433,25 +2451,31 @@
         "size": 4
       },
       {
+        "kind": "signed",
+        "name": "loudness_target_limited",
+        "offset": 64,
+        "size": 4
+      },
+      {
         "kind": "pointer",
         "name": "stage_gain_reduction_stages",
-        "offset": 64,
+        "offset": 72,
         "size": 8
       },
       {
         "kind": "pointer",
         "name": "stage_gain_reduction_values",
-        "offset": 72,
+        "offset": 80,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "stage_gain_reductions_count",
-        "offset": 80,
+        "offset": 88,
         "size": 8
       }
     ],
-    "size": 88
+    "size": 96
   },
   "SonareMasteringConfig": {
     "align": 4,
@@ -2550,6 +2574,12 @@
         "kind": "signed",
         "name": "latency_samples",
         "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "loudness_target_limited",
+        "offset": 36,
         "size": 4
       }
     ],
@@ -3214,6 +3244,96 @@
       }
     ],
     "size": 176
+  },
+  "SonareMusicAnalyzeOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "n_fft",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "bpm_min",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "bpm_max",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "start_bpm",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_triads_only",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_hpss",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "chroma_highpass_hz",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_bass_weighted",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "chroma_hop_multiplier",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_chord_hmm",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_chord_key_context",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "chord_hmm_beam_width",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "detect_chord_inversions",
+        "offset": 52,
+        "size": 4
+      }
+    ],
+    "size": 56
   },
   "SonareNotePairValidation": {
     "align": 4,

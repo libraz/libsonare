@@ -234,25 +234,38 @@ bool apply_midi_fx_to_events(const arr::MidiClipEventList& events, sonare::midi:
     midi_event.ump.sysex_handle = event.sysex_handle;
     in.push_back(midi_event);
   }
-  sonare::midi::MidiFxBuffer out;
-  chain->process(in.data(), in.size(), &out);
+  // A single input can expand to at most 8 chord notes * 16 arpeggiator
+  // steps * an on/off pair. Drain at most two inputs per fixed RT buffer, then
+  // append into a control-thread vector. The ordinal base preserves humanize
+  // determinism as if the entire clip had been processed in one call.
+  constexpr size_t kMaxOutputPerInput =
+      sonare::midi::ChordConfig::kMaxChordNotes * sonare::midi::ArpeggiatorConfig::kMaxArpSteps * 2;
+  constexpr size_t kInputsPerChunk = sonare::midi::MidiFxBuffer::kCapacity / kMaxOutputPerInput;
+  static_assert(kInputsPerChunk > 0);
+
+  chain->reset();
+  std::vector<sonare::midi::MidiEvent> baked;
+  baked.reserve(in.size());
+  sonare::midi::MidiFxBuffer chunk;
+  for (size_t offset = 0; offset < in.size(); offset += kInputsPerChunk) {
+    const size_t count = std::min(kInputsPerChunk, in.size() - offset);
+    chain->process_chunk(in.data() + offset, count, offset, &chunk);
+    if (chain->overflow_count() != 0) return false;
+    baked.insert(baked.end(), chunk.events.begin(), chunk.events.begin() + chunk.size);
+  }
+  sonare::midi::sort_render_events_stable(baked);
 
   transformed->clear();
-  transformed->reserve(out.size);
-  for (size_t i = 0; i < out.size; ++i) {
+  transformed->reserve(baked.size());
+  for (const sonare::midi::MidiEvent& midi_event : baked) {
     arr::MidiClipEvent event;
-    event.ppq = static_cast<double>(out.events[i].render_frame) /
+    event.ppq = static_cast<double>(midi_event.render_frame) /
                 static_cast<double>(sonare::midi::kMidiFxPpqScale);
-    event.data0 = out.events[i].ump.words[0];
-    event.data1 = out.events[i].ump.words[1];
-    event.sysex_handle = out.events[i].ump.sysex_handle;
+    event.data0 = midi_event.ump.words[0];
+    event.data1 = midi_event.ump.words[1];
+    event.sysex_handle = midi_event.ump.sysex_handle;
     transformed->push_back(event);
   }
-  std::stable_sort(transformed->begin(), transformed->end(),
-                   [](const arr::MidiClipEvent& a, const arr::MidiClipEvent& b) {
-                     if (a.ppq != b.ppq) return a.ppq < b.ppq;
-                     return a.data0 < b.data0 || (a.data0 == b.data0 && a.data1 < b.data1);
-                   });
   return true;
 }
 

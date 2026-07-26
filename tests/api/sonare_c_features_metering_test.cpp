@@ -98,6 +98,13 @@ TEST_CASE("sonare chroma_cens and bass_chroma C API", "[.][slow][c_api]") {
   REQUIRE(result.mean_energy != nullptr);
   sonare_free_chroma_result(&result);
 
+  REQUIRE(sonare_chroma_cqt_ex(samples.data(), samples.size(), 22050, 512, 12, 12, &result) ==
+          SONARE_OK);
+  REQUIRE(result.n_chroma == 12);
+  sonare_free_chroma_result(&result);
+  REQUIRE(sonare_chroma_cqt_ex(samples.data(), samples.size(), 22050, 512, 12, 13, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
   REQUIRE(sonare_bass_chroma(samples.data(), samples.size(), 22050, 512, 12, &result) == SONARE_OK);
   REQUIRE(result.n_chroma == 12);
   REQUIRE(result.n_frames > 0);
@@ -271,7 +278,36 @@ TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_nnls_chroma(samples.data(), samples.size(), 22050, &data, &out_length,
                                nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma_ex(samples.data(), samples.size(), 22050, 1, -0.1f, 4096, &data,
+                                  &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_nnls_chroma_ex(samples.data(), samples.size(), 22050, 1, 0.5f, 4095, &data,
+                                  &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("exposes the optional STFT blend") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
+    float* data = nullptr;
+    size_t out_length = 0;
+    int n_frames = 0;
+    REQUIRE(sonare_nnls_chroma_ex(samples.data(), samples.size(), 22050, 0, 0.0f, 2048, &data,
+                                  &out_length, &n_frames) == SONARE_OK);
+    REQUIRE(data != nullptr);
+    REQUIRE(out_length == 12u * static_cast<size_t>(n_frames));
+    sonare_free_floats(data);
+  }
+}
+
+TEST_CASE("sonare_metering_silence_ratio", "[c_api][meter]") {
+  std::vector<float> samples(2048, 0.0f);
+  std::fill(samples.begin() + 1024, samples.end(), 1.0f);
+  float ratio = -1.0f;
+  REQUIRE(sonare_metering_silence_ratio(samples.data(), samples.size(), 48000, -45.0f, 1024, 1024,
+                                        &ratio) == SONARE_OK);
+  REQUIRE(ratio == Catch::Approx(0.5f).margin(0.001f));
+  REQUIRE(sonare_metering_silence_ratio(samples.data(), samples.size(), 48000, -45.0f, 0, 1024,
+                                        &ratio) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_metering_silence_ratio(samples.data(), samples.size(), 48000, -45.0f, 1024, 1024,
+                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare_lufs", "[c_api]") {

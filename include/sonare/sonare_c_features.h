@@ -112,6 +112,8 @@ SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_ra
 SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out);
 /// @brief Computes the Variable-Q Transform magnitude (gamma controls Q).
+/// @param gamma Bandwidth offset in Hz. Negative or NaN selects the
+/// librosa-compatible ERB-derived automatic value; zero selects standard CQT.
 SonareError sonare_vqt(const float* samples, size_t length, int sample_rate, int hop_length,
                        float fmin, int n_bins, int bins_per_octave, float gamma,
                        SonareCqtResult* out);
@@ -257,6 +259,11 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
 /// @param out Receives an [n_mels x n_frames] Mel power matrix.
 SonareError sonare_mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                SonareInverseResult* out);
+/// @brief Lifter-aware sonare_mfcc_to_mel variant.
+/// @param lifter Lifter used by the forward MFCC transform. Zero means no
+///        liftering; positive values undo the matching sinusoidal lift.
+SonareError sonare_mfcc_to_mel_ex(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
+                                  float lifter, SonareInverseResult* out);
 
 /// @brief Reconstructs audio directly from MFCC via Mel inversion + Griffin-Lim.
 /// @param mfcc MFCC matrix [n_mfcc x n_frames] row-major.
@@ -282,6 +289,11 @@ SonareError sonare_mfcc_to_audio_ex(const float* mfcc, int n_mfcc, int n_frames,
                                     int sample_rate, int n_fft, int hop_length, float fmin,
                                     float fmax, int htk, int n_iter, float** out,
                                     size_t* out_length);
+/// @brief HTK- and lifter-aware sonare_mfcc_to_audio variant.
+SonareError sonare_mfcc_to_audio_ex2(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
+                                     int sample_rate, int n_fft, int hop_length, float fmin,
+                                     float fmax, int htk, float lifter, int n_iter, float** out,
+                                     size_t* out_length);
 
 /* ----------------------------------------------------------------------------
    Length-checked inverse variants (recommended)
@@ -351,12 +363,21 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
                           int hop_length, SonareChromaResult* out);
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out);
+/// @brief Extended CENS chromagram with configurable CQT resolution.
+SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sample_rate,
+                                  int hop_length, int n_chroma, int bins_per_octave,
+                                  SonareChromaResult* out);
 /// @brief Constant-Q chromagram (librosa.feature.chroma_cqt).
 /// @details Fixed tuning of 0 (concert A440); no auto-tuning estimation, matching
 ///   the other chroma entry points. Use @ref sonare_estimate_tuning separately if
 ///   a non-A440 reference matters.
 SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               int n_chroma, SonareChromaResult* out);
+/// @brief Extended Constant-Q chromagram with configurable bins per octave.
+/// @details @p bins_per_octave must be a positive multiple of @p n_chroma.
+SonareError sonare_chroma_cqt_ex(const float* samples, size_t length, int sample_rate,
+                                 int hop_length, int n_chroma, int bins_per_octave,
+                                 SonareChromaResult* out);
 SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out);
 
@@ -438,10 +459,14 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
 // Features - Pitch
 // ============================================================================
 
-/// @param fill_na If non-zero, return 0 for unvoiced f0 frames; otherwise keep NaN.
+/// @brief Estimate f0 with YIN.
+/// @details Like librosa.yin, every complete frame receives a finite frequency estimate;
+/// voiced_flag reports whether the threshold was crossed. fill_na is retained for ABI
+/// compatibility and has no effect on YIN output.
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
                              int hop_length, float fmin, float fmax, float threshold, int fill_na,
                              SonarePitchResult* out);
+/// @param fill_na If non-zero, return 0 for unvoiced pYIN f0 frames; otherwise keep NaN.
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float fmin, float fmax,
                               float threshold, int fill_na, SonarePitchResult* out);
@@ -560,6 +585,10 @@ SonareError sonare_tempogram_ratio(const float* tempogram_data, size_t length, i
 /// @brief NNLS chroma from audio (12 x n_frames row-major).
 SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, float** out,
                                size_t* out_length, int* out_n_frames);
+SonareError sonare_nnls_chroma_ex(const float* samples, size_t length, int sr,
+                                  int enable_stft_blend, float stft_blend_weight,
+                                  int stft_blend_n_fft, float** out, size_t* out_length,
+                                  int* out_n_frames);
 
 /// @brief Integrated/momentary/short-term LUFS and loudness range (offline meter).
 SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsResult* out);

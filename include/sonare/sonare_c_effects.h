@@ -25,7 +25,9 @@ SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_r
                                float semitones, float** out, size_t* out_length);
 /// Applies a single CONSTANT transposition: the whole buffer is treated as one
 /// note at @p current_midi and shifted by (target_midi - current_midi). This is
-/// not pitch tracking — it does not follow a time-varying melody. For
+/// an immediate transpose with no retune glide, and the returned buffer has
+/// exactly the input length. This is not pitch tracking — it does not follow a
+/// time-varying melody. For
 /// contour-following correction use @ref sonare_pitch_correct_to_midi_timevarying
 /// with a caller-supplied per-frame F0 track.
 SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,
@@ -38,6 +40,9 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
 ///          and the corrector retunes every voiced frame toward @p target_midi,
 ///          so vibrato/drift in the source is tracked rather than flattened.
 /// @param f0_hz       Per-frame measured F0 in Hz (@p n_frames entries, required).
+///                    A NaN is accepted only when the corresponding @p voiced
+///                    flag is zero (matching pYIN's default unvoiced output).
+///                    Finite values must be in [0, sample_rate/2].
 /// @param voiced_prob Per-frame voicing probability [0,1] (@p n_frames entries),
 ///                    or NULL to derive it from @p voiced (1.0 / 0.0).
 /// @param voiced      Per-frame voiced flags (non-zero = voiced; @p n_frames
@@ -87,6 +92,8 @@ SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* 
 ///          retune-strength / vibrato-preservation knobs. Pass NULL for @p config
 ///          to use the library defaults.
 /// @param f0_hz       Per-frame measured F0 in Hz (@p n_frames entries, required).
+///                    Unvoiced frames may contain NaN when @p voiced is zero;
+///                    finite values must be in [0, sample_rate/2].
 /// @param voiced_prob Per-frame voicing probability [0,1], or NULL.
 /// @param voiced      Per-frame voiced flags (non-zero = voiced), or NULL.
 /// @param hop_length  F0 hop in samples (> 0).
@@ -229,6 +236,8 @@ uint32_t sonare_voice_changer_abi_version(void);
 
 #include "sonare_c_engine.h"
 
+/// @brief Peak-normalize mono audio. @p target_db must be finite and <= 0 dBFS;
+/// positive targets are rejected rather than hard-clipped.
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
                              float** out, size_t* out_length);
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
@@ -350,6 +359,9 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 /// @param hop_length Hop length used for analysis/synthesis.
 /// @param out Receives the time-stretched audio buffer.
 /// @param out_length Receives the output length.
+/// @note Positional facades use the same order after the audio buffer:
+/// sample_rate, rate, n_fft, hop_length. Prefer a request object where the
+/// language binding provides one.
 SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate, float rate,
                                  int n_fft, int hop_length, float** out, size_t* out_length);
 

@@ -374,6 +374,8 @@ SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsR
     out->integrated_lufs = result.integrated_lufs;
     out->momentary_lufs = result.momentary_lufs;
     out->short_term_lufs = result.short_term_lufs;
+    out->max_momentary_lufs = result.max_momentary_lufs;
+    out->max_short_term_lufs = result.max_short_term_lufs;
     out->loudness_range = result.loudness_range;
     return SONARE_OK;
   });
@@ -422,6 +424,8 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
   out->integrated_lufs = result.integrated_lufs;
   out->momentary_lufs = result.momentary_lufs;
   out->short_term_lufs = result.short_term_lufs;
+  out->max_momentary_lufs = result.max_momentary_lufs;
+  out->max_short_term_lufs = result.max_short_term_lufs;
   out->loudness_range = result.loudness_range;
   return SONARE_OK;
   SONARE_C_CATCH

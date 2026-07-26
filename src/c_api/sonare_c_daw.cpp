@@ -15,29 +15,29 @@
 using namespace sonare;
 using namespace sonare_c_detail;
 
+#if defined(SONARE_WITH_PITCH_EDITOR)
+namespace {
+
+bool valid_pitch_track_f0(float f0_hz, bool voiced, int sample_rate) {
+  if (!std::isfinite(f0_hz)) {
+    return !voiced && std::isnan(f0_hz);
+  }
+  return f0_hz >= 0.0f && f0_hz <= 0.5f * static_cast<float>(sample_rate);
+}
+
+}  // namespace
+#endif
+
 SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,
                                          float current_midi, float target_midi, float** out,
                                          size_t* out_length) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  // The caller asserts the source pitch via current_midi; the clip is shifted by
-  // (target_midi - current_midi). Reject non-finite / out-of-range MIDI so a NaN
-  // does not turn into a NaN f0 and produce garbage output.
-  if (!std::isfinite(current_midi) || !std::isfinite(target_midi) || current_midi < 0.0f ||
-      current_midi > 127.0f || target_midi < 0.0f || target_midi > 127.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     editing::pitch_editor::PitchCorrector corrector;
-    editing::pitch_editor::F0Track track;
-    track.sample_rate = sample_rate;
-    track.hop_length = 512;
-    track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
-    track.voiced = {true};
-    track.voiced_prob = {1.0f};
-    Audio result = corrector.correct_to_midi(audio, track, target_midi);
+    Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
     return copy_audio_result(result, out, out_length);
   });
 #else
@@ -60,9 +60,14 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
   if (!std::isfinite(target_midi) || target_midi < 0.0f || target_midi > 127.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  // Reject a non-finite or negative F0 so it cannot turn into garbage output.
+  // pYIN represents unvoiced F0 as NaN. Accept that canonical representation
+  // only when the matching voiced flag is false; reject infinities, negative
+  // frequencies, and pitches above Nyquist.
   for (size_t i = 0; i < n_frames; ++i) {
-    if (!std::isfinite(f0_hz[i]) || f0_hz[i] < 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
+    const bool is_voiced = voiced ? (voiced[i] != 0) : true;
+    if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     if (voiced_prob && (!std::isfinite(voiced_prob[i]))) return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -133,7 +138,9 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                         config->target_midi > 127.0f)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    if (config->scale_root < 0 || config->scale_root > 11 ||
+    if (!editing::pitch_editor::valid_scale_args(config->scale_root,
+                                                 static_cast<uint16_t>(config->scale_mode_mask)) ||
+        (config->scale_mode_mask & ~uint32_t{0x0FFF}) != 0 ||
         !std::isfinite(config->scale_reference_midi) || !std::isfinite(config->retune_amount) ||
         config->retune_amount < 0.0f || config->retune_amount > 1.0f ||
         !std::isfinite(config->max_correction_semitones) ||
@@ -143,7 +150,7 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     core_config.scale.root = config->scale_root;
-    core_config.scale.mode_mask = static_cast<uint16_t>(config->scale_mode_mask & 0x0FFFu);
+    core_config.scale.mode_mask = static_cast<uint16_t>(config->scale_mode_mask);
     core_config.scale.reference_midi = config->scale_reference_midi;
     core_config.retune_amount = config->retune_amount;
     core_config.max_correction_semitones = config->max_correction_semitones;
@@ -152,9 +159,12 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
   }
   const float target_midi = config ? config->target_midi : constants::kMidiA4;
 
-  // Reject a non-finite or negative F0 so it cannot turn into garbage output.
+  // Match the fixed-target entry point's pYIN/Nyquist contract.
   for (size_t i = 0; i < n_frames; ++i) {
-    if (!std::isfinite(f0_hz[i]) || f0_hz[i] < 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
+    const bool is_voiced = voiced ? (voiced[i] != 0) : true;
+    if (!valid_pitch_track_f0(f0_hz[i], is_voiced, sample_rate)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     if (voiced_prob && !std::isfinite(voiced_prob[i])) return SONARE_ERROR_INVALID_PARAMETER;
   }
 

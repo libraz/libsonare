@@ -216,8 +216,9 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
 
 /// @brief Imports an in-memory SMF byte buffer, adding one MIDI track + clip per
 ///        imported channel-voice track. @p out_first_clip_id (optional) receives
-///        the id of the first added clip. Malformed input returns an error
-///        without crashing.
+///        the id of the first added clip. Malformed or partially truncated
+///        tracks return SONARE_ERROR_INVALID_FORMAT without mutating the project;
+///        @ref sonare_last_error_message describes the rejected truncation.
 SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* bytes, size_t len,
                                       uint32_t* out_first_clip_id);
 
@@ -269,7 +270,8 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
 ///
 /// Supported JSON object fields are optional:
 ///   - transpose_semitones: integer
-///   - velocity_scale / velocity_offset / velocity_gamma: numbers
+///   - velocity_scale / velocity_offset / velocity_gamma: numbers, applied in
+///     gamma -> scale -> offset order
 ///   - quantize_ppq: positive PPQ grid, with quantize_strength in [0,1]
 ///   - chord_intervals: array of up to 8 integer semitone offsets
 ///   - arpeggiator_intervals: array of up to 16 integer semitone offsets (one
@@ -279,7 +281,9 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
 ///   - humanize_ppq / humanize_velocity / seed: deterministic jitter controls
 ///
 /// This is an offline/control-plane destructive bake over the clip's event list,
-/// not a live RT insert chain. Malformed JSON returns
+/// not a live RT insert chain. Clips larger than the realtime MIDI-FX buffer are
+/// drained in bounded chunks; either every transformed event is committed in
+/// canonical timestamp order or the original clip remains unchanged. Malformed JSON returns
 /// SONARE_ERROR_INVALID_FORMAT; invalid values return
 /// SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id,
@@ -293,11 +297,12 @@ SonareError sonare_project_set_midi_fx(SonareProject* project, uint32_t clip_id,
 
 /// @brief Pre-flight check for hanging / unmatched notes in a MIDI clip.
 ///
-/// Builds a transient view of the clip's stored events and reports whether every
-/// note-on is matched by a note-off (FIFO per channel+note). Useful before
-/// bouncing to catch a stuck note that would otherwise sustain. Does not mutate
-/// the project. Returns SONARE_ERROR_INVALID_PARAMETER if @p project / @p out is
-/// null or @p clip_id is not a MIDI clip.
+/// Builds the same source-offset / length / loop-expanded, half-open event view
+/// used by SMF export and reports whether every note-on is matched by a note-off
+/// (FIFO per group+channel+note). Useful before bouncing to catch a stuck note
+/// that would otherwise sustain. Does not mutate the project. Returns
+/// SONARE_ERROR_INVALID_PARAMETER if @p project / @p out is null or @p clip_id
+/// is not a MIDI clip.
 SonareError sonare_project_validate_midi_notes(const SonareProject* project, uint32_t clip_id,
                                                SonareNotePairValidation* out);
 

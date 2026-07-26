@@ -523,7 +523,10 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   }
   SONARE_C_TRY
   sonare::midi::SmfImportResult result = sonare::midi::import_smf(bytes, len);
-  if (!result.ok()) return SONARE_ERROR_INVALID_FORMAT;
+  if (!result.ok()) {
+    sonare_c_detail::set_last_error(result.diagnostic.c_str());
+    return SONARE_ERROR_INVALID_FORMAT;
+  }
 
   // The per-event PPQ already comes from the importer in quarter-note units, so
   // the shared installer derives each clip length from the largest event
@@ -746,20 +749,22 @@ SonareError sonare_project_validate_midi_notes(const SonareProject* project, uin
   out->ok = 1;
   out->unmatched_note_ons = 0;
   out->unmatched_note_offs = 0;
-  if (find_midi_clip(project, clip_id) == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  const arr::EditClip* edit_clip = find_midi_clip(project, clip_id);
+  if (edit_clip == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   sonare::midi::MidiClip clip;
   const auto it = project->history.midi_content().events.find(clip_id);
   if (it != project->history.midi_content().events.end()) {
-    for (const arr::MidiClipEvent& event : it->second) {
-      sonare::midi::MidiClipEvent ev;
-      ev.ppq = event.ppq;
-      ev.ump.words[0] = event.data0;
-      ev.ump.words[1] = event.data1;
-      ev.ump.word_count = ump_word_count_from_word0(event.data0);
-      ev.ump.group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
-      clip.add_event(ev);
-    }
+    // Validate the exact event set that export emits, including the clip's
+    // source-offset / half-open length window and loop expansion. Validating the
+    // untrimmed source can otherwise approve a note-off at length_ppq that
+    // export necessarily discards, producing a hanging note.
+    sonare::midi::SysExStore sysex_store;
+    std::map<uint32_t, sonare::midi::SysExHandle> exported_sysex_handles;
+    const SonareError build_error = make_smf_clip_from_events(
+        *edit_clip, it->second, project->history.midi_content(), &sysex_store,
+        &exported_sysex_handles, kMaxProjectMidiExportEvents, &clip);
+    if (build_error != SONARE_OK) return build_error;
   }
   clip.sort_stable();
   const sonare::midi::NotePairValidation v = clip.validate_note_pairs();

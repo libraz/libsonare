@@ -2,6 +2,7 @@
 /// @brief Project MIDI parity tests.
 
 #include "binding_project_parity_test_helpers.h"
+#include "c_api/project_internal.h"
 #include "util/resource_limits.h"
 
 TEST_CASE("project MIDI imports reject oversized buffers before reading caller bytes",
@@ -769,6 +770,131 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface MIDI-FX bake preserves large clips and canonical event order",
+          "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 8.0, &track, &clip) == SONARE_OK);
+
+  constexpr size_t kEventCount = 600;
+  std::vector<SonareMidiEventPod> events(kEventCount);
+  for (size_t i = 0; i < events.size(); ++i) {
+    REQUIRE(sonare_midi_cc(static_cast<double>(i) / 80.0, 0, 0, static_cast<uint8_t>(i % 128),
+                           static_cast<uint8_t>((i * 3) % 128), &events[i]) == SONARE_OK);
+  }
+  REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{}") == SONARE_OK);
+
+  const auto& baked = project->history.midi_content().events.at(clip);
+  REQUIRE(baked.size() == events.size());
+  for (size_t i = 0; i < baked.size(); ++i) {
+    REQUIRE(baked[i].ppq == Catch::Approx(events[i].ppq));
+    REQUIRE(baked[i].data0 == events[i].data0);
+    REQUIRE(baked[i].data1 == events[i].data1);
+  }
+
+  uint8_t* smf_bytes = nullptr;
+  size_t smf_len = 0;
+  REQUIRE(sonare_project_export_smf(project, &smf_bytes, &smf_len) == SONARE_OK);
+  SonareProject* round = nullptr;
+  REQUIRE(sonare_project_create(&round) == SONARE_OK);
+  uint32_t round_clip = 0;
+  REQUIRE(sonare_project_import_smf(round, smf_bytes, smf_len, &round_clip) == SONARE_OK);
+  sonare_free_bytes(smf_bytes);
+  REQUIRE(sonare_project_bake_midi_fx(round, round_clip, "{}") == SONARE_OK);
+  REQUIRE(sonare_project_export_smf(round, &smf_bytes, &smf_len) == SONARE_OK);
+  const auto roundtrip = sonare::midi::import_smf(smf_bytes, smf_len);
+  REQUIRE(roundtrip.ok());
+  REQUIRE(roundtrip.clips.size() == 1);
+  REQUIRE(roundtrip.clips[0].events().size() == kEventCount);
+  sonare_free_bytes(smf_bytes);
+  sonare_project_destroy(round);
+
+  SonareMidiEventPod same_time[4]{};
+  REQUIRE(sonare_midi_note_on(1.0, 0, 0, 60, 100, &same_time[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_program(1.0, 0, 0, 42, &same_time[1]) == SONARE_OK);
+  REQUIRE(sonare_midi_cc(1.0, 0, 0, 32, 3, &same_time[2]) == SONARE_OK);
+  REQUIRE(sonare_midi_cc(1.0, 0, 0, 0, 121, &same_time[3]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, same_time, 4) == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(project, clip, "{}") == SONARE_OK);
+
+  const auto& ordered = project->history.midi_content().events.at(clip);
+  REQUIRE(ordered.size() == 4);
+  const std::array<int, 4> expected_ranks = {1, 2, 3, 5};
+  for (size_t i = 0; i < ordered.size(); ++i) {
+    sonare::midi::Ump ump{};
+    ump.words[0] = ordered[i].data0;
+    ump.words[1] = ordered[i].data1;
+    ump.word_count = ump_word_count_from_word0(ordered[i].data0);
+    ump.group = static_cast<uint8_t>((ordered[i].data0 >> 24u) & 0x0Fu);
+    REQUIRE(sonare::midi::same_time_rank(ump) == expected_ranks[i]);
+  }
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project MIDI-FX quantize bake keeps short notes paired through SMF export",
+          "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  SonareMidiEventPod events[2]{};
+  REQUIRE(sonare_midi_note_on(0.10, 0, 0, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(0.20, 0, 0, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+  REQUIRE(sonare_project_bake_midi_fx(
+              project, clip, "{\"quantize_ppq\":1.0,\"quantize_strength\":1.0}") == SONARE_OK);
+
+  SonareNotePairValidation validation{};
+  REQUIRE(sonare_project_validate_midi_notes(project, clip, &validation) == SONARE_OK);
+  REQUIRE(validation.ok == 1);
+
+  uint8_t* bytes = nullptr;
+  size_t length = 0;
+  REQUIRE(sonare_project_export_smf(project, &bytes, &length) == SONARE_OK);
+  SonareProject* roundtrip = nullptr;
+  REQUIRE(sonare_project_create(&roundtrip) == SONARE_OK);
+  uint32_t roundtrip_clip = 0;
+  REQUIRE(sonare_project_import_smf(roundtrip, bytes, length, &roundtrip_clip) == SONARE_OK);
+  sonare_free_bytes(bytes);
+  REQUIRE(sonare_project_validate_midi_notes(roundtrip, roundtrip_clip, &validation) == SONARE_OK);
+  REQUIRE(validation.ok == 1);
+  REQUIRE(validation.unmatched_note_ons == 0);
+  REQUIRE(validation.unmatched_note_offs == 0);
+
+  sonare_project_destroy(roundtrip);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project C surface rejects a salvaged truncated SMF with a diagnostic", "[project]") {
+  std::vector<uint8_t> body = {
+      0x00, 0x90, 0x3C, 0x64,  // valid note-on
+      0x00, 0xFF, 0x01, 0x7F,  // text meta claims 127 missing payload bytes
+  };
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);
+  push_u16(&smf, 1);
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), nullptr) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(std::string(sonare_last_error_message()).find("truncated") != std::string::npos);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface bakes an arpeggiator into gated steps", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -871,6 +997,46 @@ TEST_CASE("project C surface validates MIDI note pairing", "[project]") {
   REQUIRE(report.unmatched_note_ons == 1);
   REQUIRE(report.unmatched_note_offs == 1);
 
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project MIDI validation matches the exported clip window", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+
+  SonareMidiEventPod events[2]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0, 0, 0, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+
+  // The clip/export interval is half-open: the off at exactly length_ppq is not
+  // serialized, so validation must report the same hanging note before export.
+  SonareNotePairValidation report{};
+  REQUIRE(sonare_project_validate_midi_notes(project, clip, &report) == SONARE_OK);
+  REQUIRE(report.ok == 0);
+  REQUIRE(report.unmatched_note_ons == 1);
+  REQUIRE(report.unmatched_note_offs == 0);
+
+  uint8_t* bytes = nullptr;
+  size_t length = 0;
+  REQUIRE(sonare_project_export_smf(project, &bytes, &length) == SONARE_OK);
+  REQUIRE(bytes != nullptr);
+  REQUIRE(length > 0);
+
+  SonareProject* imported = nullptr;
+  REQUIRE(sonare_project_create(&imported) == SONARE_OK);
+  uint32_t imported_clip = 0;
+  REQUIRE(sonare_project_import_smf(imported, bytes, length, &imported_clip) == SONARE_OK);
+  sonare_free_bytes(bytes);
+  REQUIRE(sonare_project_validate_midi_notes(imported, imported_clip, &report) == SONARE_OK);
+  REQUIRE(report.ok == 0);
+  REQUIRE(report.unmatched_note_ons == 1);
+  REQUIRE(report.unmatched_note_offs == 0);
+
+  sonare_project_destroy(imported);
   sonare_project_destroy(project);
 }
 

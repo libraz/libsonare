@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "analysis/analysis_json.h"
 #include "c_api/core_internal.h"
 
@@ -55,7 +57,7 @@ SonareError sonare_detect_key_with_extended_options(
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key) {
   SONARE_C_API_ENTRY;
   if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (n_fft <= 0 || hop_length <= 0 || high_pass_hz < 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) || high_pass_hz < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -113,7 +115,7 @@ SonareError sonare_detect_key_candidates_with_extended_options(
   if (out_candidates == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_candidates = nullptr;
   *out_count = 0;
-  if (n_fft <= 0 || hop_length <= 0 || high_pass_hz < 0.0f) {
+  if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) || high_pass_hz < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -235,18 +237,66 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
 // sonare_analyze, which only fills the flat bpm/key/beats struct. The schema is
 // the single source of truth in analysis_result_to_json and is mirrored by the
 // WASM native object. *out_json is heap-allocated; free with sonare_free_string.
-SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
-                                char** out_json) {
+SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
+  const MusicAnalyzerConfig config;
+  return {config.n_fft,
+          config.hop_length,
+          config.bpm_min,
+          config.bpm_max,
+          config.start_bpm,
+          config.use_triads_only ? 1 : 0,
+          config.use_hpss ? 1 : 0,
+          config.chroma_highpass_hz,
+          config.use_bass_weighted ? 1 : 0,
+          config.chroma_hop_multiplier,
+          config.use_chord_hmm ? 1 : 0,
+          config.use_chord_key_context ? 1 : 0,
+          config.chord_hmm_beam_width,
+          config.detect_chord_inversions ? 1 : 0};
+}
+
+SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
+                                   const SonareMusicAnalyzeOptions* options, char** out_json) {
   SONARE_C_API_ENTRY;
-  if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (out_json == nullptr || options == nullptr || options->n_fft < 2 ||
+      (options->n_fft & 1) != 0 || options->hop_length <= 0 || !std::isfinite(options->bpm_min) ||
+      !std::isfinite(options->bpm_max) || !std::isfinite(options->start_bpm) ||
+      options->bpm_min <= 0.0f || options->bpm_max < options->bpm_min ||
+      options->start_bpm <= 0.0f || !std::isfinite(options->chroma_highpass_hz) ||
+      options->chroma_highpass_hz < 0.0f || options->chroma_hop_multiplier <= 0 ||
+      options->chord_hmm_beam_width <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   *out_json = nullptr;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    MusicAnalyzer analyzer(audio);
+    MusicAnalyzerConfig config;
+    config.n_fft = options->n_fft;
+    config.hop_length = options->hop_length;
+    config.bpm_min = options->bpm_min;
+    config.bpm_max = options->bpm_max;
+    config.start_bpm = options->start_bpm;
+    config.use_triads_only = options->use_triads_only != 0;
+    config.use_hpss = options->use_hpss != 0;
+    config.chroma_highpass_hz = options->chroma_highpass_hz;
+    config.use_bass_weighted = options->use_bass_weighted != 0;
+    config.chroma_hop_multiplier = options->chroma_hop_multiplier;
+    config.use_chord_hmm = options->use_chord_hmm != 0;
+    config.use_chord_key_context = options->use_chord_key_context != 0;
+    config.chord_hmm_beam_width = options->chord_hmm_beam_width;
+    config.detect_chord_inversions = options->detect_chord_inversions != 0;
+    MusicAnalyzer analyzer(audio, config);
     AnalysisResult result = analyzer.analyze();
     *out_json = copy_string(analysis_result_to_json(result));
     return SONARE_OK;
   });
+}
+
+SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
+                                char** out_json) {
+  SONARE_C_API_ENTRY;
+  const SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+  return sonare_analyze_json_ex(samples, length, sample_rate, &options, out_json);
 }
 
 // Same as sonare_analyze_json but reports per-stage progress through @p callback

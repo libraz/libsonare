@@ -145,6 +145,13 @@ TEST_CASE("sonare_engine tempo and time-signature segments validate their input"
   REQUIRE(sonare_engine_set_tempo_segments(engine, nan_start, 1) == SONARE_ERROR_INVALID_PARAMETER);
   const SonareProjectTempoSegment zero_bpm[] = {{0.0, 0.0, 0.0, 0.0}};
   REQUIRE(sonare_engine_set_tempo_segments(engine, zero_bpm, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTempoSegment huge_bpm[] = {{0.0, 100000.1, 0.0, 0.0}};
+  REQUIRE(sonare_engine_set_tempo_segments(engine, huge_bpm, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTempoSegment huge_end_bpm[] = {{0.0, 120.0, 0.0, 100000.1}};
+  REQUIRE(sonare_engine_set_tempo_segments(engine, huge_end_bpm, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_tempo(engine, 100000.0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_tempo(engine, 100000.1) == SONARE_ERROR_INVALID_PARAMETER);
 
   // Valid time-signature map, then invalid numerator.
   const SonareProjectTimeSignatureSegment sig[] = {{0.0, 4, 4}, {1920.0, 3, 4}};
@@ -1038,6 +1045,24 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   REQUIRE(sonare_engine_clear_midi_cc_bindings(engine) == SONARE_OK);
   REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
   REQUIRE(binding_count == 0);
+
+  SonareMidiCcBinding high_resolution{};
+  high_resolution.cc_number = 1;
+  high_resolution.cc_lsb_number = 33;
+  high_resolution.channel = 0;
+  high_resolution.kind = SONARE_MIDI_CC_CONTROL_CHANGE_14;
+  high_resolution.param_id = 7;
+  high_resolution.min_value = -60.0f;
+  high_resolution.max_value = 0.0f;
+  REQUIRE(sonare_engine_bind_midi_cc_binding(engine, &high_resolution) == SONARE_OK);
+  REQUIRE(sonare_engine_midi_cc_binding_count(engine, &binding_count) == SONARE_OK);
+  REQUIRE(binding_count == 1);
+
+  audio.fill(1.0f);
+  REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 1, 64, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 33, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
+  REQUIRE(std::abs(audio[0] - 0.03163f) < 0.002f);
 #else
   REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -1446,6 +1471,14 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
                                        &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   REQUIRE(out_length == samples.size());
+
+  SonarePitchResult corrected_pitch{};
+  REQUIRE(sonare_pitch_pyin(out, out_length, 22050, 2048, 512, 100.0f, 1000.0f, 0.3f,
+                            /*fill_na=*/0, &corrected_pitch) == SONARE_OK);
+  const float expected_hz = sonare_midi_to_hz(70.0f);
+  const float cents_error = 1200.0f * std::log2(corrected_pitch.median_f0 / expected_hz);
+  REQUIRE(std::abs(cents_error) < 5.0f);
+  sonare_free_pitch_result(&corrected_pitch);
   sonare_free_floats(out);
 
   out = nullptr;
@@ -1510,6 +1543,30 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
                                                    &out_length) == SONARE_OK);
   REQUIRE(out != nullptr);
   sonare_free_floats(out);
+
+  // pYIN's default unvoiced representation (voiced=0, f0=NaN) is accepted,
+  // while the same NaN on a voiced frame and an above-Nyquist F0 are rejected.
+  std::vector<float> pyin_f0 = f0;
+  std::vector<int32_t> pyin_voiced = voiced;
+  pyin_f0[0] = std::numeric_limits<float>::quiet_NaN();
+  pyin_voiced[0] = 0;
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(
+              samples.data(), samples.size(), 22050, pyin_f0.data(), voiced_prob.data(),
+              pyin_voiced.data(), n_frames, hop, 70.0f, &out, &out_length) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  sonare_free_floats(out);
+  pyin_voiced[0] = 1;
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050,
+                                                   pyin_f0.data(), voiced_prob.data(),
+                                                   pyin_voiced.data(), n_frames, hop, 70.0f, &out,
+                                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  pyin_f0[0] = 22050.0f;
+  REQUIRE(sonare_pitch_correct_to_midi_timevarying(samples.data(), samples.size(), 22050,
+                                                   pyin_f0.data(), voiced_prob.data(),
+                                                   pyin_voiced.data(), n_frames, hop, 70.0f, &out,
+                                                   &out_length) == SONARE_ERROR_INVALID_PARAMETER);
 
   // Invalid args are rejected (null f0, zero frames, bad hop, out-of-range target).
   out = nullptr;
@@ -2034,6 +2091,15 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(sonare_engine_metronome(engine, &metronome_out) == SONARE_OK);
   REQUIRE(metronome_out.enabled == 1);
   REQUIRE(metronome_out.click_samples == 16);
+  metronome.click_samples = 2000000000;
+  REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
+  metronome.click_samples = 0;
+  metronome.click_seconds = 2.0;
+  REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
+  metronome.click_seconds = std::numeric_limits<double>::quiet_NaN();
+  REQUIRE(sonare_engine_set_metronome(engine, &metronome) == SONARE_ERROR_INVALID_PARAMETER);
+  metronome.click_samples = 16;
+  metronome.click_seconds = 0.0;
   int64_t count_in_end = 0;
   REQUIRE(sonare_engine_count_in_end_sample(engine, 0, 2, &count_in_end) == SONARE_OK);
   REQUIRE(count_in_end == 288000);
@@ -2269,6 +2335,9 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(capture_left[0] == Catch::Approx(0.25f).margin(0.0001f));
   REQUIRE(capture_right[0] == Catch::Approx(-0.25f).margin(0.0001f));
 
+  // The remainder of this test exercises punch and transport behavior without
+  // an offset. Offset-window semantics have a dedicated regression below.
+  REQUIRE(sonare_engine_set_record_offset_samples(engine, 0) == SONARE_OK);
   REQUIRE(sonare_engine_set_input_monitor(engine, 0, 1.0f) == SONARE_OK);
   REQUIRE(sonare_engine_set_input_monitor(engine, 1, std::numeric_limits<float>::infinity()) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -2340,6 +2409,37 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(capture_left[64] == Catch::Approx(0.75f).margin(0.0001f));
   REQUIRE(capture_right[64] == Catch::Approx(-0.75f).margin(0.0001f));
 
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare engine record offset shifts the punch capture window", "[c_api][capture]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 16, 4, 4) == SONARE_OK);
+
+  std::array<float, 4> captured{};
+  float* capture_channels[] = {captured.data()};
+  SonareEngineCaptureBuffer capture_buffer{};
+  capture_buffer.channels = capture_channels;
+  capture_buffer.num_channels = 1;
+  capture_buffer.capacity_frames = 4;
+  REQUIRE(sonare_engine_set_capture_buffer(engine, &capture_buffer) == SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_source(engine, SONARE_ENGINE_CAPTURE_SOURCE_INPUT) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_capture_punch(engine, 0, 4, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_record_offset_samples(engine, 4) == SONARE_OK);
+  REQUIRE(sonare_engine_arm_capture(engine, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::array<float, 8> input{0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
+  float* channels[] = {input.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 1, 8) == SONARE_OK);
+
+  SonareEngineCaptureStatus status{};
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.captured_frames == 4);
+  REQUIRE(captured[0] == 4.0f);
+  REQUIRE(captured[3] == 7.0f);
   sonare_engine_destroy(engine);
 }
 #endif
@@ -2868,6 +2968,7 @@ TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors
   // which grows allpass buffers); the descriptor must flag it accordingly.
   const std::string dat = sonare_mastering_insert_param_info("effects.reverb.dattorro");
   REQUIRE(dat.find("\"name\":\"modDepthSamples\"") != std::string::npos);
+  REQUIRE(dat.find("\"unit\":\"referenceSamples@29761Hz\"") != std::string::npos);
   REQUIRE(dat.find("\"rtSafe\":false") != std::string::npos);
 }
 

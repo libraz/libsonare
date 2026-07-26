@@ -33,6 +33,38 @@ TEST_CASE("length-checked inverse transforms reject a short input buffer", "[c_a
                                      &bad) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
+TEST_CASE("MFCC inverse C API accepts the forward lifter", "[c_api][abi][inverse_features]") {
+  constexpr int n_mfcc = 5;
+  constexpr int n_frames = 4;
+  constexpr int n_mels = 8;
+  std::vector<float> lifted(static_cast<size_t>(n_mfcc) * n_frames, 0.0f);
+  for (int coefficient = 0; coefficient < n_mfcc; ++coefficient) {
+    const float lift = 1.0f + 11.0f * std::sin(3.14159265358979323846f * coefficient / 22.0f);
+    for (int frame = 0; frame < n_frames; ++frame) {
+      lifted[static_cast<size_t>(coefficient) * n_frames + frame] =
+          (0.2f + 0.1f * coefficient) * lift;
+    }
+  }
+
+  SonareInverseResult with_lifter{};
+  SonareInverseResult without_lifter{};
+  REQUIRE(sonare_mfcc_to_mel_ex(lifted.data(), n_mfcc, n_frames, n_mels, 22.0f, &with_lifter) ==
+          SONARE_OK);
+  REQUIRE(sonare_mfcc_to_mel(lifted.data(), n_mfcc, n_frames, n_mels, &without_lifter) ==
+          SONARE_OK);
+  REQUIRE(with_lifter.rows == without_lifter.rows);
+  REQUIRE(with_lifter.n_frames == without_lifter.n_frames);
+  const size_t length = static_cast<size_t>(with_lifter.rows) * with_lifter.n_frames;
+  bool differs = false;
+  for (size_t i = 0; i < length; ++i) {
+    REQUIRE(std::isfinite(with_lifter.data[i]));
+    differs = differs || std::abs(with_lifter.data[i] - without_lifter.data[i]) > 1.0e-5f;
+  }
+  REQUIRE(differs);
+  sonare_free_inverse_result(&with_lifter);
+  sonare_free_inverse_result(&without_lifter);
+}
+
 TEST_CASE("inverse transforms reject non-finite input uniformly", "[c_api][abi]") {
   const int n_frames = 4;
   const int n_mels = 8;

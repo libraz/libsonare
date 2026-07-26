@@ -75,14 +75,15 @@ TEST_CASE("C pitch shift rejects unsupported expansion before allocating",
   REQUIRE(out_length == 0);
 }
 
-TEST_CASE("C VQT rejects non-finite gamma without touching core casts", "[c_api][vqt]") {
+TEST_CASE("C VQT accepts NaN auto gamma and rejects infinity", "[c_api][vqt]") {
   std::vector<float> samples(2048, 0.0f);
   SonareCqtResult result{};
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float inf = std::numeric_limits<float>::infinity();
 
   REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, nan, &result) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_OK);
+  sonare_free_cqt_result(&result);
   REQUIRE(sonare_vqt(samples.data(), samples.size(), 22050, 512, 32.7f, 12, 12, inf, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(result.magnitude == nullptr);
@@ -884,6 +885,28 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
 
   SECTION("rejects a null out pointer") {
     REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("accepts the complete analyzer configuration") {
+    SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+    options.bpm_min = 30.0f;
+    options.bpm_max = 90.0f;
+    options.start_bpm = 55.0f;
+    options.use_hpss = 0;
+    options.use_chord_hmm = 1;
+    options.detect_chord_inversions = 1;
+    char* json = nullptr;
+    REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+            SONARE_OK);
+    REQUIRE(json != nullptr);
+    const auto root = sonare::util::json::parse(json);
+    REQUIRE(root["bpm"].as_number() >= options.bpm_min);
+    REQUIRE(root["bpm"].as_number() <= options.bpm_max);
+    sonare_free_string(json);
+
+    options.bpm_max = options.bpm_min - 1.0f;
+    REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
 }

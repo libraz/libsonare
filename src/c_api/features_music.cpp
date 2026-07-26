@@ -1,3 +1,5 @@
+#include <limits>
+
 #include "c_api/features_internal.h"
 
 namespace {
@@ -95,15 +97,26 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
 
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out) {
+  return sonare_chroma_cens_ex(samples, length, sample_rate, hop_length, n_chroma, 36, out);
+}
+
+SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sample_rate,
+                                  int hop_length, int n_chroma, int bins_per_octave,
+                                  SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (hop_length <= 0 || n_chroma <= 0 || bins_per_octave <= 0 || bins_per_octave % n_chroma != 0 ||
+      bins_per_octave > std::numeric_limits<int>::max() / 7) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     ChromaCensConfig config;
     config.base.cqt.hop_length = hop_length;
+    config.base.cqt.bins_per_octave = bins_per_octave;
+    config.base.cqt.n_bins = 7 * bins_per_octave;
     config.base.n_chroma = n_chroma;
     Chroma chroma = chroma_cens(audio, config);
     return fill_chroma_result(chroma, out);
@@ -112,15 +125,26 @@ SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_r
 
 SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               int n_chroma, SonareChromaResult* out) {
+  return sonare_chroma_cqt_ex(samples, length, sample_rate, hop_length, n_chroma, 36, out);
+}
+
+SonareError sonare_chroma_cqt_ex(const float* samples, size_t length, int sample_rate,
+                                 int hop_length, int n_chroma, int bins_per_octave,
+                                 SonareChromaResult* out) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
-  if (hop_length <= 0 || n_chroma <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (hop_length <= 0 || n_chroma <= 0 || bins_per_octave <= 0 || bins_per_octave % n_chroma != 0 ||
+      bins_per_octave > std::numeric_limits<int>::max() / 7) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     ChromaCqtConfig config;
     config.cqt.hop_length = hop_length;
+    config.cqt.bins_per_octave = bins_per_octave;
+    config.cqt.n_bins = 7 * bins_per_octave;
     config.n_chroma = n_chroma;
     Chroma chroma = chroma_cqt(audio, config);
     return fill_chroma_result(chroma, out);
@@ -144,15 +168,25 @@ SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_r
   });
 }
 
-SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, float** out,
-                               size_t* out_length, int* out_n_frames) {
+SonareError sonare_nnls_chroma_ex(const float* samples, size_t length, int sr,
+                                  int enable_stft_blend, float stft_blend_weight,
+                                  int stft_blend_n_fft, float** out, size_t* out_length,
+                                  int* out_n_frames) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !out_length || !out_n_frames || !std::isfinite(stft_blend_weight) ||
+      stft_blend_weight < 0.0f || stft_blend_weight > 1.0f || stft_blend_n_fft < 2 ||
+      (stft_blend_n_fft & 1) != 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   *out = nullptr;
 
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
-    Chroma chroma = nnls_chroma(audio, make_fast_nnls_chroma_config());
+    NnlsChromaConfig config = make_fast_nnls_chroma_config();
+    config.enable_stft_blend = enable_stft_blend != 0;
+    config.stft_blend_weight = stft_blend_weight;
+    config.stft_blend_n_fft = stft_blend_n_fft;
+    Chroma chroma = nnls_chroma(audio, config);
 
     *out_n_frames = chroma.n_frames();
     size_t total = static_cast<size_t>(chroma.n_chroma()) * chroma.n_frames();
@@ -163,4 +197,10 @@ SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, floa
     *out = release_array(features);
     return SONARE_OK;
   });
+}
+
+SonareError sonare_nnls_chroma(const float* samples, size_t length, int sr, float** out,
+                               size_t* out_length, int* out_n_frames) {
+  SONARE_C_API_ENTRY;
+  return sonare_nnls_chroma_ex(samples, length, sr, 1, 0.55f, 4096, out, out_length, out_n_frames);
 }

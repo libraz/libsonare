@@ -10,19 +10,23 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
     auto* mixer = new SonareMixer;
     mixer->sample_rate = sample_rate;
     mixer->max_block_size = max_block_size;
-    mixer->scratch_left.assign(static_cast<size_t>(max_block_size), 0.0f);
-    mixer->scratch_right.assign(static_cast<size_t>(max_block_size), 0.0f);
     return mixer;
     SONARE_C_CATCH_RETURN(nullptr)
   }
 
   SonareStrip* sonare_mixer_add_strip(SonareMixer * mixer, const char* id) {
-    if (!mixer) {
+    if (!mixer || !id) {
       return nullptr;
     }
     try {
+      const std::string strip_id = id;
+      for (const auto& existing : mixer->strips) {
+        if (existing->id == strip_id) {
+          return nullptr;
+        }
+      }
       auto strip = std::make_unique<SonareStrip>();
-      strip->id = id != nullptr ? id : "";
+      strip->id = strip_id;
       strip->scene_strip.id = strip->id;
       strip->owner = mixer;
       strip->strip.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
@@ -127,6 +131,13 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       // "keep default" sentinel so such hosts match the Node/Python facades (which
       // inject 1.0) instead of persisting a meaningless distance:0 into the scene.
       strip->scene_strip.surround_pan.distance = pan->distance > 0.0f ? pan->distance : 1.0f;
+      sonare::mixing::SurroundPanParams live;
+      live.azimuth = strip->scene_strip.surround_pan.azimuth;
+      live.elevation = strip->scene_strip.surround_pan.elevation;
+      live.divergence = strip->scene_strip.surround_pan.divergence;
+      live.lfe = strip->scene_strip.surround_pan.lfe;
+      live.distance = strip->scene_strip.surround_pan.distance;
+      strip->strip.set_surround_pan_params(live);
       return SONARE_OK;
       SONARE_C_CATCH
     }
@@ -423,8 +434,12 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       if (!parse_automation_curve(curve, &curve_enum)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
-      // A false return is a full-lane capacity condition, not a bad argument.
-      if (!strip->strip.schedule_fader_automation(sample_pos, fader_db, curve_enum)) {
+      const auto result =
+          strip->strip.schedule_fader_automation_result(sample_pos, fader_db, curve_enum);
+      if (result == sonare::mixing::AutomationPushResult::NonMonotonic) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      if (result == sonare::mixing::AutomationPushResult::Full) {
         return SONARE_ERROR_OUT_OF_MEMORY;
       }
       return SONARE_OK;
@@ -440,8 +455,11 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       if (!parse_automation_curve(curve, &curve_enum)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
-      // A false return is a full-lane capacity condition, not a bad argument.
-      if (!strip->strip.schedule_pan_automation(sample_pos, pan, curve_enum)) {
+      const auto result = strip->strip.schedule_pan_automation_result(sample_pos, pan, curve_enum);
+      if (result == sonare::mixing::AutomationPushResult::NonMonotonic) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      if (result == sonare::mixing::AutomationPushResult::Full) {
         return SONARE_ERROR_OUT_OF_MEMORY;
       }
       return SONARE_OK;
@@ -457,8 +475,12 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       if (!parse_automation_curve(curve, &curve_enum)) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
-      // A false return is a full-lane capacity condition, not a bad argument.
-      if (!strip->strip.schedule_width_automation(sample_pos, width, curve_enum)) {
+      const auto result =
+          strip->strip.schedule_width_automation_result(sample_pos, width, curve_enum);
+      if (result == sonare::mixing::AutomationPushResult::NonMonotonic) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      if (result == sonare::mixing::AutomationPushResult::Full) {
         return SONARE_ERROR_OUT_OF_MEMORY;
       }
       return SONARE_OK;
@@ -479,11 +501,12 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       if (send_index >= strip->strip.num_sends()) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
-      // After the index bound above, a false return is dominated by the capacity
-      // condition (the send lane is full): map it to OUT_OF_MEMORY so callers can
-      // distinguish "lane full" from a bad argument, matching the fader/pan/width
-      // automation functions.
-      if (!strip->strip.schedule_send_automation(send_index, sample_pos, db, curve_enum)) {
+      const auto result =
+          strip->strip.schedule_send_automation_result(send_index, sample_pos, db, curve_enum);
+      if (result == sonare::mixing::AutomationPushResult::NonMonotonic) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      if (result == sonare::mixing::AutomationPushResult::Full) {
         return SONARE_ERROR_OUT_OF_MEMORY;
       }
       return SONARE_OK;

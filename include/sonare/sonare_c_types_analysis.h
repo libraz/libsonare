@@ -114,8 +114,10 @@ typedef struct {
 // LUFS loudness result (no heap pointers; no free function required).
 typedef struct {
   float integrated_lufs;
-  float momentary_lufs;
-  float short_term_lufs;
+  float momentary_lufs;      /* final complete 400 ms window, not Max-M */
+  float short_term_lufs;     /* final complete 3 s window, not Max-S */
+  float max_momentary_lufs;  /* maximum 400 ms window (EBU R128 Max-M) */
+  float max_short_term_lufs; /* maximum 3 s window (EBU R128 Max-S) */
   float loudness_range;
 } SonareLufsResult;
 

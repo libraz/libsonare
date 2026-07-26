@@ -115,9 +115,10 @@ SonareError sonare_strip_set_solo_safe(SonareStrip* strip, int solo_safe);
 // Inverts the polarity of the left and/or right channel. Does not change
 // latency or topology.
 SonareError sonare_strip_set_polarity_invert(SonareStrip* strip, int invert_left, int invert_right);
-// Sets the strip's pan law. @c pan_law: 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB,
-// 3 = linear (0 dB). Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL
-// or pan_law is unknown.
+// Sets the far-channel taper used by the strip's pan law. @c pan_law:
+// 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB, 3 = linear (0 dB). Center gain depends
+// on pan mode (Balance keeps the center at unity). Returns
+// @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or pan_law is unknown.
 SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law);
 // Sets a per-strip channel delay in samples. This changes the strip's reported
 // latency; the routing graph re-runs latency compensation at the next compile.
@@ -140,6 +141,9 @@ SonareError sonare_strip_meter(const SonareStrip* strip, SonareMixMeterSnapshot*
 // 1 = post-fader (see SonareMeterTap). Returns @c SONARE_ERROR_INVALID_PARAMETER
 // if strip or out is NULL, or tap is unknown.
 SonareError sonare_strip_meter_tap(const SonareStrip* strip, int tap, SonareMixMeterSnapshot* out);
+/// @brief Reads the post-insert meter for a compiled bus (including master).
+SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
+                                   SonareMixMeterSnapshot* out);
 size_t sonare_strip_read_goniometer_latest(const SonareStrip* strip, SonareMixGoniometerPoint* out,
                                            size_t max_points);
 
@@ -173,6 +177,10 @@ SonareError sonare_mixer_add_vca_group(SonareMixer* mixer, const char* id, float
 // other VCA-group contributions. The stored scene gain is updated so
 // sonare_mixer_to_scene_json round-trips the new value.
 SonareError sonare_mixer_set_vca_group_gain_db(SonareMixer* mixer, const char* id, float gain_db);
+// Replaces an existing VCA group's strip membership. Removed members lose this
+// group's current gain contribution; added members receive it immediately.
+SonareError sonare_mixer_set_vca_group_members(SonareMixer* mixer, const char* id,
+                                               const char* const* members, size_t member_count);
 // Removes a VCA group by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer
 // or id is NULL or no group with that id exists.
 SonareError sonare_mixer_remove_vca_group(SonareMixer* mixer, const char* id);
@@ -190,7 +198,9 @@ SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id);
 // [pre-inserts... post-inserts...]. @c param_id is processor-specific (see each
 // processor's set_parameter doc). @c sample_pos is in absolute samples from the
 // start of processing: the mixer advances an internal sample position from 0 on
-// the first sonare_mixer_process_stereo call (reset to 0 on recompile).
+// the first sonare_mixer_process_stereo call. Explicit and lazy graph
+// recompilation preserve this absolute timeline position; they do not restart
+// automation at sample 0.
 //
 // AUTOMATION CURVE ORDINALS (canonical, shared across paths):
 //   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve
@@ -246,7 +256,8 @@ SonareError sonare_mixer_to_scene_json(const SonareMixer* mixer, char** json_out
 // (strips, sends, buses, connections). Call after manual topology changes
 // (e.g. sonare_mixer_add_strip / sonare_strip_add_send) before processing.
 // sonare_mixer_process_stereo also compiles lazily as a fallback when the
-// topology is dirty.
+// topology is dirty. Recompilation preserves the mixer's absolute automation
+// sample position and the queued strip automation lanes.
 SonareError sonare_mixer_compile(SonareMixer* mixer);
 // Reports the compiled mixer's latency at the master output. Lazily compiles if
 // the topology is dirty. Returns INVALID_PARAMETER for NULL arguments.
