@@ -140,7 +140,10 @@ class MeterProcessor : public rt::ProcessorBase {
   std::array<rt::BiquadStateD, kLufsChannels> k_state_rlb_{};
 
   // Ring buffer of per-sample combined K-weighted squared energy (sized to the short-term window).
-  std::vector<double> energy_ring_;
+  // Float storage halves the dominant per-tap meter allocation. Running sums
+  // remain double precision, so only the retained sample-energy history is
+  // quantized.
+  std::vector<float> energy_ring_;
   size_t ring_pos_ = 0;
   size_t momentary_len_ = 0;
   size_t short_term_len_ = 0;

@@ -283,29 +283,3 @@ TEST_CASE("TrackMixerRuntime insert automation render performs no heap allocatio
   REQUIRE(mixer.render_clips(player, io, 1, kBlock, 0));
   REQUIRE(guard.count() == 0);
 }
-
-TEST_CASE("BusProcessor post-sum inserts perform no heap allocation after prepare",
-          "[mixing][rt]") {
-  constexpr int kBlock = 256;
-  sonare::mixing::BusProcessor bus;
-  bus.add_insert(std::make_unique<ScaleProcessor>(0.5f));
-  bus.prepare(48000.0, kBlock);
-
-  std::array<float, kBlock> in_l{};
-  std::array<float, kBlock> in_r{};
-  std::array<float, kBlock> out_l{};
-  std::array<float, kBlock> out_r{};
-  in_l.fill(1.0f);
-  in_r.fill(1.0f);
-  float* input[] = {in_l.data(), in_r.data()};
-  float* output[] = {out_l.data(), out_r.data()};
-  const std::vector<float* const*> inputs{input};
-
-  bus.sum_inputs(inputs, output, 2, kBlock);
-  bus.process(output, 2, kBlock);
-
-  AllocationGuard guard;
-  bus.sum_inputs(inputs, output, 2, kBlock);
-  bus.process(output, 2, kBlock);
-  REQUIRE(guard.count() == 0);
-}

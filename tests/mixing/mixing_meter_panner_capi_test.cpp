@@ -1,6 +1,7 @@
 /// @file mixing_meter_panner_capi_test.cpp
 /// @brief Mixing meter, panner, and C API tests.
 
+#include "c_api/mixing_internal.h"
 #include "mixing_test_helpers.h"
 
 TEST_CASE("Const3dB pan law preserves stereo power", "[mixing]") {
@@ -378,6 +379,10 @@ TEST_CASE("Mixing C API preserves surround pan in scene JSON", "[mixing][capi]")
   pan.distance = 1.0f;
   REQUIRE(sonare_strip_set_surround_pan(strip, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_strip_set_surround_pan(strip, &pan) == SONARE_OK);
+  const auto live_pan = strip->strip.surround_pan_params();
+  REQUIRE(live_pan.azimuth == -45.0f);
+  REQUIRE(live_pan.divergence == 0.25f);
+  REQUIRE(live_pan.lfe == 0.5f);
 
   char* json = nullptr;
   REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
@@ -391,6 +396,10 @@ TEST_CASE("Mixing C API preserves surround pan in scene JSON", "[mixing][capi]")
 
   SonareMixer* restored = sonare_mixer_from_scene_json(scene_json.c_str(), 48000, 8);
   REQUIRE(restored != nullptr);
+  REQUIRE(restored->strips.size() == 1);
+  const auto restored_live_pan = restored->strips[0]->strip.surround_pan_params();
+  REQUIRE(restored_live_pan.azimuth == -45.0f);
+  REQUIRE(restored_live_pan.divergence == 0.25f);
   char* restored_json = nullptr;
   REQUIRE(sonare_mixer_to_scene_json(restored, &restored_json) == SONARE_OK);
   REQUIRE(restored_json != nullptr);

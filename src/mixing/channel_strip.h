@@ -98,11 +98,17 @@ class ChannelStrip : public rt::ProcessorBase {
   float width() const noexcept { return width_.width(); }
   bool schedule_width_automation(int64_t sample_pos, float width,
                                  AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+  AutomationPushResult schedule_width_automation_result(
+      int64_t sample_pos, float width,
+      AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
 
   void set_fader_db(float fader_db) noexcept { fader_.set_gain_db(fader_db); }
   float fader_db() const noexcept { return fader_.gain_db(); }
   bool schedule_fader_automation(int64_t sample_pos, float fader_db,
                                  AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+  AutomationPushResult schedule_fader_automation_result(
+      int64_t sample_pos, float fader_db,
+      AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
 
   void set_input_trim_db(float trim_db) noexcept { input_trim_.set_gain_db(trim_db); }
   float input_trim_db() const noexcept { return input_trim_.gain_db(); }
@@ -118,6 +124,9 @@ class ChannelStrip : public rt::ProcessorBase {
   float pan() const noexcept { return panner_.pan(); }
   bool schedule_pan_automation(int64_t sample_pos, float pan,
                                AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+  AutomationPushResult schedule_pan_automation_result(
+      int64_t sample_pos, float pan,
+      AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
 
   void set_pan_law(PanLaw law) noexcept { panner_.set_pan_law(law); }
   PanLaw pan_law() const noexcept { return panner_.pan_law(); }
@@ -237,6 +246,9 @@ class ChannelStrip : public rt::ProcessorBase {
   int send_latency_samples_q8(size_t index) const noexcept;
   bool schedule_send_automation(size_t index, int64_t sample_pos, float db,
                                 AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
+  AutomationPushResult schedule_send_automation_result(
+      size_t index, int64_t sample_pos, float db,
+      AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
 
   /// @brief RT-safe: mixes the requested send's tap (post-gain) additively into @p dest.
   /// Must be called after process() and before the next process() of the same block, since

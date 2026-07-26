@@ -444,6 +444,33 @@ TEST_CASE("Master insert automation slot-table overflow surfaces on the telemetr
   REQUIRE(reported == static_cast<uint32_t>(kTargets) - kMasterSlots);
 }
 
+TEST_CASE("Settled master insert slots serve 65 sequential targets without overflow telemetry",
+          "[mixing][automation]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_master_strip(compressor_strip("master")));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  for (uint32_t target = 0; target < 65; ++target) {
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kSetParam;
+    command.target_id = make_insert_param_id(kInsertStripMaster, target, 0u);
+    command.sample_time = -1;
+    command.arg.f = static_cast<float>(target) / 64.0f;
+    REQUIRE(engine.push_command(command));
+    engine.process(io, 2, kBlock);
+  }
+
+  REQUIRE(engine.insert_automation_overflow_count() == 0u);
+  sonare::engine::Telemetry record{};
+  while (engine.pop_telemetry(record)) {
+    REQUIRE(record.error != sonare::engine::TelemetryErrorCode::kInsertAutomationOverflow);
+  }
+}
+
 TEST_CASE("Master insert automation slot is cleared when the master strip is replaced",
           "[mixing][automation]") {
   constexpr int kBlock = 256;
@@ -663,6 +690,36 @@ TEST_CASE("Insert automation slot table overflow is reported and existing slots 
   // while the table is full: it is not rejected and does not bump the counter.
   REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, 0, 0.3f));
   REQUIRE(mixer.insert_automation_overflow_count() == 2u);
+}
+
+TEST_CASE("Settled insert automation slots retire and serve more than table capacity",
+          "[mixing][automation]") {
+  constexpr int kBlock = 64;
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(std::make_unique<ProbeGainProcessor>());
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+
+  std::array<float, kBlock> source{};
+  source.fill(1.0f);
+  const float* channels[] = {source.data()};
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({dc_clip(1, 10, channels, 1, kBlock)});
+  std::array<float, kBlock> out{};
+  float* io[] = {out.data()};
+
+  // The bank has 64 entries. Sequentially touch 65 distinct targets, allowing
+  // each first value to apply and settle before the next claim.
+  for (unsigned int param_id = 0; param_id < 65; ++param_id) {
+    REQUIRE(mixer.route_lane_insert_param_smoothed(0, 0, param_id,
+                                                   static_cast<float>(param_id) / 64.0f));
+    out.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, io, 1, kBlock, 0));
+  }
+  REQUIRE(mixer.insert_automation_overflow_count() == 0u);
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

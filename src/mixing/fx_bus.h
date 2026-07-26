@@ -45,6 +45,7 @@ class FxBus : public rt::ProcessorBase {
                             int num_channels, int num_samples);
   void clear_insert_sidechains() noexcept;
   BusProcessor& bus() noexcept { return bus_; }
+  const BusProcessor& bus() const noexcept { return bus_; }
 
  private:
   BusProcessor bus_;

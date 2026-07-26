@@ -8,6 +8,93 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+TEST_CASE("C-API mixer rejects null and duplicate strip ids at insertion", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, nullptr) == nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "lead") == nullptr);
+  REQUIRE(sonare_mixer_strip_count(mixer) == 1);
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API scene mixer applies master bus trim polarity and width", "[mixing][capi][scene]") {
+  constexpr int kBlock = 16;
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip source;
+  source.id = "source";
+  scene.strips.push_back(source);
+  sonare::mixing::api::Bus master{"master", "master"};
+  master.input_trim_db = 6.0206f;
+  master.polarity_invert_left = true;
+  master.width = 0.0f;
+  scene.buses.push_back(master);
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), 48000, kBlock);
+  REQUIRE(mixer != nullptr);
+
+  std::vector<float> input_l(kBlock, 1.0f);
+  std::vector<float> input_r(kBlock, 0.0f);
+  const float* inputs_l[] = {input_l.data()};
+  const float* inputs_r[] = {input_r.data()};
+  std::vector<float> output_l(kBlock, 0.0f);
+  std::vector<float> output_r(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, output_l.data(),
+                                      output_r.data(), kBlock) == SONARE_OK);
+  for (int i = 0; i < kBlock; ++i) {
+    // +6.0206 dB doubles the left input, then left polarity inversion and
+    // width=0 collapse the front pair to their common mid value (-1).
+    REQUIRE_THAT(output_l[static_cast<size_t>(i)], WithinAbs(-1.0f, 0.0001f));
+    REQUIRE_THAT(output_r[static_cast<size_t>(i)], WithinAbs(-1.0f, 0.0001f));
+  }
+
+  SonareMixMeterSnapshot meter{};
+  REQUIRE(sonare_mixer_bus_meter(mixer, "master", &meter) == SONARE_OK);
+  REQUIRE(meter.channel_count == 2);
+  REQUIRE(std::isfinite(meter.peak_db[0]));
+  REQUIRE(meter.peak_db[0] > -1.0f);
+  REQUIRE(sonare_mixer_bus_meter(mixer, "missing", &meter) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_bus_meter(mixer, nullptr, &meter) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_bus_meter(mixer, "master", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API mixer recompilation preserves automation timeline and error kinds",
+          "[mixing][capi][automation]") {
+  constexpr int kBlock = 16;
+  SonareMixer* mixer = sonare_mixer_create(48000, kBlock);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "source");
+  REQUIRE(strip != nullptr);
+
+  std::vector<float> input(kBlock, 1.0f);
+  const float* inputs[] = {input.data()};
+  std::vector<float> output_l(kBlock);
+  std::vector<float> output_r(kBlock);
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs, inputs, 1, output_l.data(), output_r.data(),
+                                      kBlock) == SONARE_OK);
+
+  REQUIRE(sonare_strip_schedule_fader_automation(strip, 2 * kBlock, -3.0f, 0) == SONARE_OK);
+  REQUIRE(sonare_mixer_add_bus(mixer, "unused", "aux") == SONARE_OK);
+  REQUIRE(sonare_mixer_compile(mixer) == SONARE_OK);
+  // The rebuilt StripNode resumes at kBlock, so later absolute events remain
+  // schedulable; the graph rebuild does not strand the lane at sample zero.
+  REQUIRE(sonare_strip_schedule_fader_automation(strip, 3 * kBlock, -6.0f, 0) == SONARE_OK);
+  // A decreasing timestamp is a caller error, not lane exhaustion.
+  REQUIRE(sonare_strip_schedule_fader_automation(strip, 3 * kBlock - 1, -9.0f, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs, inputs, 1, output_l.data(), output_r.data(),
+                                      kBlock) == SONARE_OK);
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs, inputs, 1, output_l.data(), output_r.data(),
+                                      kBlock) == SONARE_OK);
+  REQUIRE(output_l.back() < 0.99f);
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("C-API strip runtime setters validate NULL and bad enums", "[mixing][capi]") {
   // NULL strip handle must be rejected by every setter.
   REQUIRE(sonare_strip_set_soloed(nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
@@ -353,6 +440,14 @@ TEST_CASE("C-API VCA group gain setter updates live gain and scene state", "[mix
           SONARE_OK);
   REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(0.251189f, 0.01f));
 
+  REQUIRE(sonare_mixer_set_vca_group_members(mixer, "lead-vca", nullptr, 0) == SONARE_OK);
+  out_l.assign(kBlock, 0.0f);
+  out_r.assign(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in_l, in_r, 1, out_l.data(), out_r.data(), kBlock) ==
+          SONARE_OK);
+  REQUIRE_THAT(out_l[kBlock - 1], WithinAbs(1.0f, 0.01f));
+  REQUIRE(sonare_mixer_set_vca_group_members(mixer, "lead-vca", members, 1) == SONARE_OK);
+
   char* round_trip = nullptr;
   REQUIRE(sonare_mixer_to_scene_json(mixer, &round_trip) == SONARE_OK);
   REQUIRE(round_trip != nullptr);
@@ -361,12 +456,15 @@ TEST_CASE("C-API VCA group gain setter updates live gain and scene state", "[mix
   const auto restored = sonare::mixing::api::scene_from_json(round_trip_json);
   REQUIRE(restored.vca_groups.size() == 1);
   REQUIRE_THAT(restored.vca_groups[0].gain_db, WithinAbs(-12.0f, 0.0001f));
+  REQUIRE(restored.vca_groups[0].members == std::vector<std::string>{"lead"});
 
   REQUIRE(sonare_mixer_set_vca_group_gain_db(mixer, "missing-vca", -3.0f) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_mixer_set_vca_group_gain_db(nullptr, "lead-vca", -3.0f) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_mixer_set_vca_group_gain_db(mixer, nullptr, -3.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_set_vca_group_members(mixer, "missing-vca", members, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_mixer_destroy(mixer);

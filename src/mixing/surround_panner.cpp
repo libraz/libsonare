@@ -121,6 +121,17 @@ SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, Cha
   return result;
 }
 
+bool try_compute_surround_pan_gains(const SurroundPanParams& params, ChannelLayout layout,
+                                    SurroundPanGains* out) noexcept {
+  if (out == nullptr) return false;
+  const int count = channel_count(layout);
+  if (count <= 2 || count > kMaxSurroundPlanes) return false;
+  // With the layout precondition established, the throwing wrapper's guards
+  // cannot fire and the remaining computation is allocation-free.
+  *out = compute_surround_pan_gains(params, layout);
+  return true;
+}
+
 SurroundPannerProcessor::SurroundPannerProcessor(ChannelLayout layout, SurroundPanParams params,
                                                  float smoothing_ms)
     : smoothing_ms_(smoothing_ms),

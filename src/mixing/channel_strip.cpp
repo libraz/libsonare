@@ -560,35 +560,52 @@ void ChannelStrip::set_channel_delay_samples(int delay_samples) {
 
 bool ChannelStrip::schedule_width_automation(int64_t sample_pos, float width,
                                              AutomationCurveType curve) noexcept {
-  if (!std::isfinite(width)) return false;
+  return schedule_width_automation_result(sample_pos, width, curve) ==
+         AutomationPushResult::Success;
+}
+
+AutomationPushResult ChannelStrip::schedule_width_automation_result(
+    int64_t sample_pos, float width, AutomationCurveType curve) noexcept {
+  if (!std::isfinite(width)) return AutomationPushResult::NonMonotonic;
   AutomationEvent event;
   event.sample_pos = sample_pos;
   event.value = width;
   event.curve = curve;
   event.target.kind = AutomationTargetKind::Width;
-  return width_automation_.push(event);
+  return width_automation_.try_push(event);
 }
 
 bool ChannelStrip::schedule_fader_automation(int64_t sample_pos, float fader_db,
                                              AutomationCurveType curve) noexcept {
-  if (!std::isfinite(fader_db)) return false;
+  return schedule_fader_automation_result(sample_pos, fader_db, curve) ==
+         AutomationPushResult::Success;
+}
+
+AutomationPushResult ChannelStrip::schedule_fader_automation_result(
+    int64_t sample_pos, float fader_db, AutomationCurveType curve) noexcept {
+  if (!std::isfinite(fader_db)) return AutomationPushResult::NonMonotonic;
   AutomationEvent event;
   event.sample_pos = sample_pos;
   event.value = fader_db;
   event.curve = curve;
   event.target.kind = AutomationTargetKind::Fader;
-  return fader_automation_.push(event);
+  return fader_automation_.try_push(event);
 }
 
 bool ChannelStrip::schedule_pan_automation(int64_t sample_pos, float pan,
                                            AutomationCurveType curve) noexcept {
-  if (!std::isfinite(pan)) return false;
+  return schedule_pan_automation_result(sample_pos, pan, curve) == AutomationPushResult::Success;
+}
+
+AutomationPushResult ChannelStrip::schedule_pan_automation_result(
+    int64_t sample_pos, float pan, AutomationCurveType curve) noexcept {
+  if (!std::isfinite(pan)) return AutomationPushResult::NonMonotonic;
   AutomationEvent event;
   event.sample_pos = sample_pos;
   event.value = pan;
   event.curve = curve;
   event.target.kind = AutomationTargetKind::Pan;
-  return pan_automation_.push(event);
+  return pan_automation_.try_push(event);
 }
 
 bool ChannelStrip::set_insert_bypassed(unsigned int insert_index, bool bypassed,
@@ -874,11 +891,17 @@ void ChannelStrip::set_send_db(size_t index, float db) {
 
 bool ChannelStrip::schedule_send_automation(size_t index, int64_t sample_pos, float db,
                                             AutomationCurveType curve) noexcept {
+  return schedule_send_automation_result(index, sample_pos, db, curve) ==
+         AutomationPushResult::Success;
+}
+
+AutomationPushResult ChannelStrip::schedule_send_automation_result(
+    size_t index, int64_t sample_pos, float db, AutomationCurveType curve) noexcept {
   if (index >= send_automation_.size() || !std::isfinite(db)) {
-    return false;
+    return AutomationPushResult::NonMonotonic;
   }
   if (!send_automation_[index]) {
-    return false;
+    return AutomationPushResult::NonMonotonic;
   }
   AutomationEvent event;
   event.sample_pos = sample_pos;
@@ -886,7 +909,7 @@ bool ChannelStrip::schedule_send_automation(size_t index, int64_t sample_pos, fl
   event.curve = curve;
   event.target.kind = AutomationTargetKind::Send;
   event.target.param_id = static_cast<uint32_t>(index);
-  return send_automation_[index]->push(event);
+  return send_automation_[index]->try_push(event);
 }
 
 SendTiming ChannelStrip::send_timing(size_t index) const {

@@ -101,12 +101,12 @@ TEST_CASE("surround panner LFE is a raw scalar outside normalization", "[mixing]
 }
 
 TEST_CASE("surround panner handles the 7.1 ring", "[mixing][surround]") {
-  // 7.1 plane order: L(0) R(1) C(2) LFE(3) Lss(4) Rss(5) Ls(6) Rs(7).
+  // 7.1 plane order: L(0) R(1) C(2) LFE(3) Ls(4) Rs(5) Lss(6) Rss(7).
   SurroundPanParams p;
   p.azimuth = 90.0f;  // exactly at Rss
   const SurroundPanGains g = compute_surround_pan_gains(p, ChannelLayout::SevenPointOne);
   REQUIRE(g.count == 8);
-  CHECK_THAT(g.gain[5], WithinAbs(1.0f, 1e-5f));  // Rss
+  CHECK_THAT(g.gain[7], WithinAbs(1.0f, 1e-5f));  // Rss
   CHECK_THAT(non_lfe_power(g, 3), WithinAbs(1.0f, 1e-5f));
 }
 
@@ -114,6 +114,9 @@ TEST_CASE("surround panner rejects non-surround layouts", "[mixing][surround]") 
   SurroundPanParams p;
   CHECK_THROWS_AS(compute_surround_pan_gains(p, ChannelLayout::Stereo), sonare::SonareException);
   CHECK_THROWS_AS(compute_surround_pan_gains(p, ChannelLayout::Mono), sonare::SonareException);
+  SurroundPanGains out;
+  CHECK_FALSE(sonare::mixing::try_compute_surround_pan_gains(p, ChannelLayout::Stereo, &out));
+  CHECK(sonare::mixing::try_compute_surround_pan_gains(p, ChannelLayout::FivePointOne, &out));
 }
 
 TEST_CASE("surround panner scatters a mono lane additively", "[mixing][surround]") {

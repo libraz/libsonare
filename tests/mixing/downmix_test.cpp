@@ -65,8 +65,8 @@ TEST_CASE("downmix drops LFE by default and folds it at -3 dB when requested",
 }
 
 TEST_CASE("downmix 7.1->5.1 folds side+back into the surrounds", "[mixing][downmix]") {
-  // 7.1 order: L R C LFE Lss Rss Ls Rs
-  std::array<float, 8> src = {0.1f, 0.2f, 0.3f, 0.4f, 1.0f, 2.0f, 10.0f, 20.0f};
+  // 7.1 order: L R C LFE Ls Rs Lss Rss
+  std::array<float, 8> src = {0.1f, 0.2f, 0.3f, 0.4f, 10.0f, 20.0f, 1.0f, 2.0f};
   std::array<const float*, 8> in{};
   for (int i = 0; i < 8; ++i) in[i] = &src[static_cast<size_t>(i)];
   std::array<float, 6> dst{};
@@ -85,7 +85,7 @@ TEST_CASE("downmix 7.1->5.1 folds side+back into the surrounds", "[mixing][downm
 TEST_CASE("downmix 7.1->stereo combines side and back surrounds", "[mixing][downmix]") {
   const float k = kMinus3dB;
   // Lss and Ls both feed Lo at -3 dB.
-  std::array<float, 8> src = {0, 0, 0, 0, 1, 0, 1, 0};  // Lss=1, Ls=1
+  std::array<float, 8> src = {0, 0, 0, 0, 1, 0, 1, 0};  // Ls=1, Lss=1
   std::array<const float*, 8> in{};
   for (int i = 0; i < 8; ++i) in[i] = &src[static_cast<size_t>(i)];
   float lo = 0.0f;

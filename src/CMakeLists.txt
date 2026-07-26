@@ -73,7 +73,6 @@ set(SONARE_SOURCES
   metering/lufs.cpp
   metering/phase_scope.cpp
   metering/spectrum.cpp
-  metering/spectrogram.cpp
   metering/stereo.cpp
   metering/true_peak.cpp
   metering/waveform.cpp
@@ -422,12 +421,10 @@ if(BUILD_MIXING)
     mixing/fx_bus.cpp
     mixing/gain.cpp
     mixing/meter.cpp
-    mixing/mixer_controller.cpp
     mixing/panner.cpp
     mixing/send.cpp
     mixing/stereo_width.cpp
     mixing/surround_panner.cpp
-    mixing/vca_group.cpp
   )
   target_include_directories(sonare_mixing PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include

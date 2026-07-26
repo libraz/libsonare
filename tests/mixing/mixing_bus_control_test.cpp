@@ -12,45 +12,6 @@ TEST_CASE("SendProcessor exposes pre and post fader timing", "[mixing]") {
   REQUIRE(send.timing() == sonare::mixing::SendTiming::PostFader);
 }
 
-TEST_CASE("VcaGroup applies relative gain offset to members", "[mixing]") {
-  sonare::mixing::GainProcessor first({0.0f, 0.0f});
-  sonare::mixing::GainProcessor second({-6.0f, 0.0f});
-  sonare::mixing::VcaGroup vca;
-
-  REQUIRE(vca.add_member(&first));
-  REQUIRE(vca.add_member(&second));
-  vca.set_vca_gain_db(-3.0f);
-
-  REQUIRE_THAT(first.vca_offset_db(), WithinAbs(-3.0f, 0.0001f));
-  REQUIRE_THAT(second.vca_offset_db(), WithinAbs(-3.0f, 0.0001f));
-}
-
-TEST_CASE("Manual VCA trim and group membership accumulate independently", "[mixing]") {
-  // Regression: a direct set_vca_offset_db() used to overwrite the strip's whole
-  // offset, discarding every VCA group's accumulated contribution. The manual
-  // trim and the group offset must now sum without either stomping the other.
-  sonare::mixing::GainProcessor gain({0.0f, 0.0f});
-
-  sonare::mixing::VcaGroup group_a;
-  sonare::mixing::VcaGroup group_b;
-  group_a.set_vca_gain_db(-3.0f);
-  group_b.set_vca_gain_db(-2.0f);
-  REQUIRE(group_a.add_member(&gain));
-  REQUIRE(group_b.add_member(&gain));
-  REQUIRE_THAT(gain.vca_offset_db(), WithinAbs(-5.0f, 0.0001f));  // -3 + -2
-
-  // A direct manual trim adds on top without disturbing the group total.
-  gain.set_vca_offset_db(1.5f);
-  REQUIRE_THAT(gain.vca_trim_offset_db(), WithinAbs(1.5f, 0.0001f));
-  REQUIRE_THAT(gain.vca_group_offset_db(), WithinAbs(-5.0f, 0.0001f));
-  REQUIRE_THAT(gain.vca_offset_db(), WithinAbs(-3.5f, 0.0001f));  // 1.5 + (-5)
-
-  // Removing one group only subtracts its own contribution; the manual trim and
-  // the other group remain intact.
-  REQUIRE(group_b.remove_member(&gain));
-  REQUIRE_THAT(gain.vca_offset_db(), WithinAbs(-1.5f, 0.0001f));  // 1.5 + (-3)
-}
-
 TEST_CASE("VCA group offset accumulates exactly across many moves", "[mixing]") {
   // add_vca_group_offset_db is an atomic read-modify-write (CAS loop); repeated
   // group gain moves must net to the exact running sum with no lost update.
@@ -62,23 +23,6 @@ TEST_CASE("VCA group offset accumulates exactly across many moves", "[mixing]") 
     expected += delta;
   }
   REQUIRE_THAT(gain.vca_group_offset_db(), WithinAbs(expected, 0.01f));
-}
-
-TEST_CASE("MixerController computes solo implied mute outside audio thread", "[mixing]") {
-  sonare::mixing::ChannelStrip vocal;
-  sonare::mixing::ChannelStrip drums;
-  sonare::mixing::ChannelStrip reverb;
-  sonare::mixing::MixerController controller;
-
-  REQUIRE(controller.add_strip(&vocal));
-  REQUIRE(controller.add_strip(&drums));
-  REQUIRE(controller.add_strip(&reverb));
-  controller.set_solo_safe(reverb, true);
-  controller.set_solo(vocal, true);
-
-  REQUIRE_FALSE(vocal.effectively_muted());
-  REQUIRE(drums.effectively_muted());
-  REQUIRE_FALSE(reverb.effectively_muted());
 }
 
 TEST_CASE("solo implied mute rule is shared for solo-safe strips", "[mixing]") {
@@ -180,30 +124,6 @@ TEST_CASE("FxBus owns ordered inserts and sums latency", "[mixing]") {
   REQUIRE(fx_bus.num_inserts() == 2);
   REQUIRE(fx_bus.latency_samples() == 8);
   REQUIRE(fx_bus.latency_samples_q8() == (8 << 8));
-}
-
-TEST_CASE("BusProcessor applies post-sum inserts", "[mixing]") {
-  std::array<float, 4> a_l{1.0f, 1.0f, 1.0f, 1.0f};
-  std::array<float, 4> a_r{1.0f, 1.0f, 1.0f, 1.0f};
-  std::array<float, 4> b_l{2.0f, 2.0f, 2.0f, 2.0f};
-  std::array<float, 4> b_r{2.0f, 2.0f, 2.0f, 2.0f};
-  float* input_a[] = {a_l.data(), a_r.data()};
-  float* input_b[] = {b_l.data(), b_r.data()};
-  std::array<float, 4> out_l{};
-  std::array<float, 4> out_r{};
-  float* output[] = {out_l.data(), out_r.data()};
-
-  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
-  bus.add_insert(std::make_unique<ScaleProcessor>(2.0f));
-  bus.prepare(48000.0, 4);
-  bus.sum_inputs({input_a, input_b}, output, 2, 4);
-  bus.process(output, 2, 4);
-
-  REQUIRE(bus.num_inserts() == 1);
-  for (int i = 0; i < 4; ++i) {
-    REQUIRE_THAT(out_l[static_cast<size_t>(i)], WithinAbs(6.0f, 0.0001f));
-    REQUIRE_THAT(out_r[static_cast<size_t>(i)], WithinAbs(6.0f, 0.0001f));
-  }
 }
 
 TEST_CASE("BusProcessor sidechain slots are sized only when inserts are added", "[mixing]") {

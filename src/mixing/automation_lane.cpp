@@ -14,22 +14,22 @@ bool AutomationLane::empty() const noexcept {
   return head_.load(std::memory_order_acquire) == tail_.load(std::memory_order_acquire);
 }
 
-bool AutomationLane::push(const AutomationEvent& event) noexcept {
+AutomationPushResult AutomationLane::try_push(const AutomationEvent& event) noexcept {
   if (has_last_pushed_sample_ && event.sample_pos < last_pushed_sample_) {
-    return false;
+    return AutomationPushResult::NonMonotonic;
   }
 
   const size_t head = head_.load(std::memory_order_relaxed);
   const size_t next_head = increment(head);
   if (next_head == tail_.load(std::memory_order_acquire)) {
-    return false;
+    return AutomationPushResult::Full;
   }
 
   buffer_[head] = event;
   head_.store(next_head, std::memory_order_release);
   last_pushed_sample_ = event.sample_pos;
   has_last_pushed_sample_ = true;
-  return true;
+  return AutomationPushResult::Success;
 }
 
 size_t AutomationLane::discard_before(int64_t sample_pos) noexcept {

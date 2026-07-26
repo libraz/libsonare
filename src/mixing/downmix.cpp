@@ -31,9 +31,9 @@ void downmix(ChannelLayout from, ChannelLayout to, const float* const* in, float
       lo = in[0][i] + kMinus3dB * in[2][i] + kMinus3dB * in[4][i] + lfe * in[3][i];
       ro = in[1][i] + kMinus3dB * in[2][i] + kMinus3dB * in[5][i] + lfe * in[3][i];
     } else {
-      // 7.1: L R C LFE Lss Rss Ls Rs — side+back combined into each surround feed.
-      lo = in[0][i] + kMinus3dB * in[2][i] + kMinus3dB * (in[6][i] + in[4][i]) + lfe * in[3][i];
-      ro = in[1][i] + kMinus3dB * in[2][i] + kMinus3dB * (in[7][i] + in[5][i]) + lfe * in[3][i];
+      // 7.1: L R C LFE Ls Rs Lss Rss — back+side combined into each surround feed.
+      lo = in[0][i] + kMinus3dB * in[2][i] + kMinus3dB * (in[4][i] + in[6][i]) + lfe * in[3][i];
+      ro = in[1][i] + kMinus3dB * in[2][i] + kMinus3dB * (in[5][i] + in[7][i]) + lfe * in[3][i];
     }
   };
 
@@ -57,8 +57,8 @@ void downmix(ChannelLayout from, ChannelLayout to, const float* const* in, float
       out[1][i] = in[1][i];
       out[2][i] = in[2][i];
       out[3][i] = in[3][i];
-      out[4][i] = surround_gain * (in[6][i] + in[4][i]);  // Ls = Ls + Lss
-      out[5][i] = surround_gain * (in[7][i] + in[5][i]);  // Rs = Rs + Rss
+      out[4][i] = surround_gain * (in[4][i] + in[6][i]);  // Ls = Ls + Lss
+      out[5][i] = surround_gain * (in[5][i] + in[7][i]);  // Rs = Rs + Rss
     }
     return;
   }

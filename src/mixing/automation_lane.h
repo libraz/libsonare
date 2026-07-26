@@ -49,6 +49,12 @@ struct AutomationBlockEvent {
   int offset = 0;
 };
 
+enum class AutomationPushResult {
+  Success,
+  NonMonotonic,
+  Full,
+};
+
 inline float interpolate_automation_value(const AutomationEvent& a, const AutomationEvent& b,
                                           double sample_pos) noexcept {
   const double span = static_cast<double>(b.sample_pos - a.sample_pos);
@@ -91,8 +97,12 @@ class AutomationLane {
   size_t capacity() const noexcept { return capacity_; }
   bool empty() const noexcept;
 
-  // Producer-side. Control thread only.
-  bool push(const AutomationEvent& event) noexcept;
+  // Producer-side. Control thread only. try_push() preserves the distinction
+  // between a malformed event order and actual bounded-lane exhaustion.
+  AutomationPushResult try_push(const AutomationEvent& event) noexcept;
+  bool push(const AutomationEvent& event) noexcept {
+    return try_push(event) == AutomationPushResult::Success;
+  }
 
   // Consumer-side. Audio thread only. Must be serialized with consume_block()
   // on the same lane (both write active_event_/has_active_event_).

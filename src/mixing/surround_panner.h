@@ -68,6 +68,9 @@ constexpr float speaker_azimuth_deg(SpeakerRole role) noexcept {
 /// @throws SonareException(InvalidParameter) for non-surround layouts (the mixer
 ///         dispatches mono/stereo to the stereo panner).
 SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, ChannelLayout layout);
+/// No-throw realtime variant. Returns false for a non-surround/unsupported layout.
+bool try_compute_surround_pan_gains(const SurroundPanParams& params, ChannelLayout layout,
+                                    SurroundPanGains* out) noexcept;
 
 /// Realtime surround panner: smooths each output-plane gain with a one-pole and
 /// scatters a (mono-summed) lane signal additively across the destination planes.

@@ -82,7 +82,7 @@ void MeterProcessor::prepare(double sample_rate, int max_block_size) {
     momentary_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(0.400 * sample_rate_)));
     short_term_len_ = std::max<size_t>(1, static_cast<size_t>(std::lround(3.0 * sample_rate_)));
     gate_hop_ = std::max<size_t>(1, static_cast<size_t>(std::lround(0.100 * sample_rate_)));
-    energy_ring_.assign(short_term_len_, 0.0);  // ring sized to the longer window
+    energy_ring_.assign(short_term_len_, 0.0f);  // ring sized to the longer window
   } else {
     energy_ring_.clear();
     momentary_len_ = 0;
@@ -106,7 +106,7 @@ void MeterProcessor::reset() {
   // Clear the true-peak filter's cross-block history so a fresh run does not
   // see stale tail samples from a previous stream (no reallocation).
   true_peak_filter_.reset();
-  std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0);
+  std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0f);
   ring_pos_ = 0;
   filled_ = 0;
   momentary_sum_ = 0.0;
@@ -256,7 +256,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       const double leaving_mom = energy_ring_[out_pos];
       momentary_sum_ += combined - leaving_mom;
 
-      energy_ring_[ring_pos_] = combined;
+      energy_ring_[ring_pos_] = static_cast<float>(combined);
       ring_pos_ = (ring_pos_ + 1 == short_term_len_) ? 0 : ring_pos_ + 1;
       if (filled_ < short_term_len_) ++filled_;
 

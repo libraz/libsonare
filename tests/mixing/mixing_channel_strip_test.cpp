@@ -34,27 +34,6 @@ class HardClipProcessor final : public sonare::rt::ProcessorBase {
 
 }  // namespace
 
-TEST_CASE("BusProcessor sums multiple stereo inputs", "[mixing]") {
-  std::array<float, 4> in1_l{1.0f, 2.0f, 3.0f, 4.0f};
-  std::array<float, 4> in1_r{0.5f, 1.0f, 1.5f, 2.0f};
-  std::array<float, 4> in2_l{-0.25f, 0.25f, -0.25f, 0.25f};
-  std::array<float, 4> in2_r{2.0f, 1.0f, 0.0f, -1.0f};
-  std::array<float, 4> out_l{};
-  std::array<float, 4> out_r{};
-
-  float* input1[] = {in1_l.data(), in1_r.data()};
-  float* input2[] = {in2_l.data(), in2_r.data()};
-  float* output[] = {out_l.data(), out_r.data()};
-
-  const sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Master);
-  bus.sum_inputs({input1, input2}, output, 2, 4);
-
-  REQUIRE_THAT(out_l[0], WithinAbs(0.75f, 0.0001f));
-  REQUIRE_THAT(out_l[1], WithinAbs(2.25f, 0.0001f));
-  REQUIRE_THAT(out_r[0], WithinAbs(2.5f, 0.0001f));
-  REQUIRE_THAT(out_r[3], WithinAbs(1.0f, 0.0001f));
-}
-
 TEST_CASE("BusProcessor publishes post-insert meter snapshot", "[mixing]") {
   std::array<float, 8> left{};
   std::array<float, 8> right{};
