@@ -122,6 +122,10 @@ def test_strip_meter_and_meter_tap_return_snapshots(mixer) -> None:
     assert isinstance(mixer.meter_tap(0, MeterTap.PRE_FADER), MixMeterSnapshot)
     assert isinstance(mixer.strip_meter(0, 0), MixMeterSnapshot)
     assert isinstance(mixer.strip_meter(0, "pre"), MixMeterSnapshot)
+    master = mixer.bus_meter("master")
+    assert isinstance(master, MixMeterSnapshot)
+    assert master.channel_count == 2
+    assert math.isfinite(master.peak_db[0])
 
 
 def test_strip_meter_rejects_invalid_tap(mixer) -> None:
@@ -243,9 +247,11 @@ def test_vca_group_add_remove_and_count(mixer) -> None:
     mixer.add_vca_group("py-vca", gain_db=-3.0, members=["vocal"])
     assert mixer.vca_group_count() == before + 1
     mixer.set_vca_group_gain_db("py-vca", -7.0)
+    mixer.set_vca_group_members("py-vca", ["guest"])
     scene = json.loads(mixer.to_scene_json())
     group = next(group for group in scene["vcaGroups"] if group["id"] == "py-vca")
     assert group["gainDb"] == -7.0
+    assert group["members"] == ["guest"]
     mixer.remove_vca_group("py-vca")
     assert mixer.vca_group_count() == before
 

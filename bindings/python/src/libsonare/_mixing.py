@@ -126,7 +126,7 @@ class Mixer:
         return list(self._scene_warnings)
 
     def compile(self) -> None:
-        """Rebuild and compile the routing graph from the current scene."""
+        """Rebuild the graph while preserving automation position and queued events."""
         self._require()
         _check(_get_lib().sonare_mixer_compile(self._handle))
 
@@ -225,6 +225,29 @@ class Mixer:
                 self._handle,
                 group_id.encode("utf-8"),
                 ctypes.c_float(gain_db),
+            )
+        )
+
+    def set_vca_group_members(self, group_id: str, members: Sequence[str]) -> None:
+        """Replace an existing VCA group's strip membership."""
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_set_vca_group_members"):
+            raise RuntimeError("libsonare was built without mutable mixer VCA support")
+        member_list = list(members)
+        if member_list:
+            member_array = (ctypes.c_char_p * len(member_list))(
+                *[member.encode("utf-8") for member in member_list]
+            )
+            member_ptr = ctypes.cast(member_array, ctypes.POINTER(ctypes.c_char_p))
+        else:
+            member_ptr = None
+        _check(
+            lib.sonare_mixer_set_vca_group_members(
+                self._handle,
+                group_id.encode("utf-8"),
+                member_ptr,
+                ctypes.c_size_t(len(member_list)),
             )
         )
 
@@ -465,6 +488,17 @@ class Mixer:
     ) -> MixMeterSnapshot:
         """Alias of :meth:`strip_meter` matching the C ``meter_tap`` naming."""
         return self.strip_meter(strip, tap)
+
+    def bus_meter(self, bus_id: str) -> MixMeterSnapshot:
+        """Read the post-insert meter for a compiled bus, including master."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_bus_meter"):
+            raise RuntimeError("libsonare was built without bus meter support")
+        snapshot = SonareMixMeterSnapshot()
+        _check(
+            lib.sonare_mixer_bus_meter(self._handle, bus_id.encode("utf-8"), ctypes.byref(snapshot))
+        )
+        return _mix_meter_from_c(snapshot)
 
     def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]:
         """Read up to ``max_points`` of the latest goniometer (vectorscope) data."""

@@ -27,6 +27,13 @@ def test_pitch_correct_to_midi_function() -> None:
     assert len(result) > 0
     assert all(math.isfinite(x) for x in result)
 
+    detected = libsonare.pitch_pyin(
+        result, sample_rate=sr, frame_length=2048, hop_length=512, fmin=100.0, fmax=1000.0
+    )
+    expected_hz = 220.0 * 2 ** (3 / 12)
+    cents_error = 1200.0 * math.log2(detected.median_f0 / expected_hz)
+    assert abs(cents_error) < 5.0
+
 
 def test_pitch_correct_to_midi_rejects_out_of_range() -> None:
     sr = 22050
@@ -60,6 +67,15 @@ def test_pitch_correct_to_midi_timevarying_function() -> None:
         samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=voiced, voiced_prob=voiced_prob
     )
     assert len(result2) == len(samples)
+
+    # pYIN emits NaN F0 for unvoiced frames by default; this canonical track
+    # representation must pass directly into correction.
+    f0[0] = math.nan
+    voiced[0] = 0
+    pyin_result = libsonare.pitch_correct_to_midi_timevarying(
+        samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=voiced, voiced_prob=voiced_prob
+    )
+    assert all(math.isfinite(x) for x in pyin_result)
 
     # Mismatched companion-array lengths are rejected before the native call.
     with pytest.raises(ValueError):
@@ -129,6 +145,15 @@ def test_note_move_function() -> None:
     )
     assert len(result) == len(samples)
     assert all(math.isfinite(x) for x in result)
+
+
+def test_note_editing_defaults_offset_to_input_length() -> None:
+    sr = 22050
+    samples = _tone(sr)
+    stretched = libsonare.note_stretch(samples, sample_rate=sr)
+    moved = libsonare.note_move(samples, sample_rate=sr)
+    assert len(stretched) > 0
+    assert len(moved) == len(samples)
 
 
 def test_voice_change_function() -> None:

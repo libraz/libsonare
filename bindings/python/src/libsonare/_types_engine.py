@@ -168,9 +168,11 @@ class EngineMetronomeConfig:
     enabled: bool = False
     beat_gain: float = 0.35
     accent_gain: float = 0.7
-    click_samples: int = 96
-    # Click duration in seconds; used when click_samples is 0 to derive the click
-    # length from the prepared sample rate. 0.0 selects the engine default (2 ms).
+    # Explicit click length in samples (0..384000). Zero selects the
+    # sample-rate-derived duration below.
+    click_samples: int = 0
+    # Click duration in seconds (0..1); used when click_samples is 0. 0.0 selects
+    # the engine default (2 ms).
     click_seconds: float = 0.0
 
 
@@ -374,8 +376,8 @@ class MeterTelemetryRecordWide:
     """A per-plane meter snapshot for a surround mix target.
 
     ``peak_db``/``rms_db``/``true_peak_db`` carry ``channel_count`` valid planes
-    in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Lss Rss Ls
-    Rs). Use this drain for a surround target; ``MeterTelemetryRecord`` stays the
+    in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss
+    Rss). Use this drain for a surround target; ``MeterTelemetryRecord`` stays the
     stereo fast path.
     """
 
@@ -460,13 +462,16 @@ class Section:
     end: float
     energy_level: float
     confidence: float
+    canonical_name: str = ""
 
     @property
     def name(self) -> str:
+        if self.canonical_name:
+            return self.canonical_name
         names = {
             SectionType.INTRO: "Intro",
             SectionType.VERSE: "Verse",
-            SectionType.PRE_CHORUS: "PreChorus",
+            SectionType.PRE_CHORUS: "Pre-Chorus",
             SectionType.CHORUS: "Chorus",
             SectionType.BRIDGE: "Bridge",
             SectionType.INSTRUMENTAL: "Instrumental",

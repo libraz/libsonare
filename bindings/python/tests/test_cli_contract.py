@@ -36,6 +36,20 @@ def _write_tone_wav(
         wav.writeframes(bytes(frames))
 
 
+def _truncated_smf() -> bytes:
+    body = bytes([0x00, 0x90, 0x3C, 0x64, 0x00, 0xFF, 0x01, 0x7F])
+    return (
+        b"MThd"
+        + (6).to_bytes(4, "big")
+        + (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + (480).to_bytes(2, "big")
+        + b"MTrk"
+        + len(body).to_bytes(4, "big")
+        + body
+    )
+
+
 TOP_LEVEL_ROUTES = (
     "version",
     "info",
@@ -52,6 +66,9 @@ TOP_LEVEL_ROUTES = (
     "pitch",
     "hpss",
     "pitch-correct",
+    "pitch-correct-timevarying",
+    "note-move",
+    "scale-quantize",
     "note-stretch",
     "pitch-shift",
     "time-stretch",
@@ -263,6 +280,49 @@ def test_effect_commands_require_output(tmp_path, command) -> None:
     out = tmp_path / "out.wav"
     ok = _run_console(command, str(source), "-o", str(out))
     assert ok.returncode == 0, ok.stderr
+
+
+def test_pitch_correct_cli_reaches_requested_pitch(tmp_path) -> None:
+    """The CLI must inherit the library's immediate constant-transpose contract."""
+    import libsonare
+
+    source = tmp_path / "tone.wav"
+    output = tmp_path / "corrected.wav"
+    _write_tone_wav(source, seconds=1.0, freq=220.0)
+    result = _run_console(
+        "pitch-correct",
+        str(source),
+        "--current-midi",
+        "57",
+        "--target-midi",
+        "60",
+        "-o",
+        str(output),
+    )
+    assert result.returncode == 0, result.stderr
+
+    with libsonare.Audio.from_file(str(output)) as corrected:
+        detected = libsonare.pitch_pyin(
+            corrected.data,
+            sample_rate=corrected.sample_rate,
+            frame_length=2048,
+            hop_length=512,
+            fmin=100.0,
+            fmax=1000.0,
+        )
+    expected_hz = 220.0 * 2 ** (3 / 12)
+    cents_error = 1200.0 * math.log2(detected.median_f0 / expected_hz)
+    assert abs(cents_error) < 5.0
+
+
+def test_project_import_smf_cli_rejects_salvaged_truncation(tmp_path) -> None:
+    source = tmp_path / "truncated.mid"
+    output = tmp_path / "project.json"
+    source.write_bytes(_truncated_smf())
+    result = _run_console("project", "import-smf", "--smf", str(source), "--output", str(output))
+    assert result.returncode != 0
+    assert "truncated" in result.stderr
+    assert not output.exists()
 
 
 def test_trim_silence_output_is_optional(tmp_path) -> None:

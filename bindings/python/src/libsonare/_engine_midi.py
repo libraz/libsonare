@@ -10,7 +10,14 @@ from __future__ import annotations
 import ctypes
 from typing import TYPE_CHECKING
 
-from ._project import BuiltinSynthConfig, Sf2InstrumentConfig, SynthPatch, _synth_patch_arg
+from ._project import (
+    BuiltinSynthConfig,
+    MidiCcBinding,
+    Sf2InstrumentConfig,
+    SynthPatch,
+    _cc_binding_to_c,
+    _synth_patch_arg,
+)
 from ._runtime import _check, _get_lib
 
 
@@ -221,6 +228,16 @@ class _EngineMidiMixin:
                 float(min_value),
                 float(max_value),
             )
+        )
+
+    def bind_midi_cc_binding(self, binding: MidiCcBinding) -> None:
+        """Bind a full 7/14-bit CC, RPN, or NRPN descriptor to the live engine."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_bind_midi_cc_binding"):
+            raise RuntimeError("libsonare was built without full live-MIDI binding support")
+        c_binding = _cc_binding_to_c(binding)
+        _check(
+            lib.sonare_engine_bind_midi_cc_binding(self._require_handle(), ctypes.byref(c_binding))
         )
 
     def clear_midi_cc_bindings(self) -> None:

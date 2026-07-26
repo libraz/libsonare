@@ -279,6 +279,28 @@ def main() -> None:
     pitch_correct_p.add_argument(
         "--target-midi", type=float, default=69.0, help="Target pitch as a MIDI note number"
     )
+    pitch_tv_p = sub.add_parser(
+        "pitch-correct-timevarying",
+        parents=[common],
+        help="Track pYIN contour and correct toward a note or scale",
+    )
+    pitch_tv_p.add_argument("--mode", choices=["midi", "scale"], default="midi")
+    pitch_tv_p.add_argument("--target-midi", type=float, default=69.0)
+    pitch_tv_p.add_argument("--hop-length", type=int, default=512)
+    pitch_tv_p.add_argument("--scale-root", type=int, default=0)
+    pitch_tv_p.add_argument("--scale-mode-mask", type=lambda value: int(value, 0), default=0xAB5)
+    pitch_tv_p.add_argument("--reference-midi", type=float, default=69.0)
+    note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
+    note_move_p.add_argument("--onset", type=int, default=0)
+    note_move_p.add_argument("--offset", type=int, default=None)
+    note_move_p.add_argument("--target-onset", type=int, required=True)
+    scale_quantize_p = sub.add_parser(
+        "scale-quantize", parents=[common], help="Quantize one MIDI value to a scale"
+    )
+    scale_quantize_p.add_argument("midi", type=float)
+    scale_quantize_p.add_argument("--root", type=int, default=0)
+    scale_quantize_p.add_argument("--mode-mask", type=lambda value: int(value, 0), default=0xAB5)
+    scale_quantize_p.add_argument("--reference-midi", type=float, default=69.0)
     note_stretch_p = sub.add_parser(
         "note-stretch", parents=[common], help="Time-stretch a single note region"
     )
@@ -701,6 +723,8 @@ def main() -> None:
         "pitch",
         "hpss",
         "pitch-correct",
+        "pitch-correct-timevarying",
+        "note-move",
         "note-stretch",
         "pitch-shift",
         "time-stretch",
@@ -754,6 +778,9 @@ def main() -> None:
         "pitch": cmd_pitch,
         "hpss": cmd_hpss,
         "pitch-correct": cmd_pitch_correct,
+        "pitch-correct-timevarying": cmd_pitch_correct_timevarying,
+        "note-move": cmd_note_move,
+        "scale-quantize": cmd_scale_quantize,
         "note-stretch": cmd_note_stretch,
         "pitch-shift": cmd_pitch_shift,
         "time-stretch": cmd_time_stretch,
@@ -810,6 +837,8 @@ def main() -> None:
         output_capable_commands = {
             "hpss",
             "pitch-correct",
+            "pitch-correct-timevarying",
+            "note-move",
             "note-stretch",
             "pitch-shift",
             "time-stretch",

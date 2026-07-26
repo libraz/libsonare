@@ -67,6 +67,8 @@ def lufs(
         integrated_lufs=float(out.integrated_lufs),
         momentary_lufs=float(out.momentary_lufs),
         short_term_lufs=float(out.short_term_lufs),
+        max_momentary_lufs=float(out.max_momentary_lufs),
+        max_short_term_lufs=float(out.max_short_term_lufs),
         loudness_range=float(out.loudness_range),
     )
 
@@ -152,6 +154,8 @@ def lufs_interleaved(
         integrated_lufs=float(out.integrated_lufs),
         momentary_lufs=float(out.momentary_lufs),
         short_term_lufs=float(out.short_term_lufs),
+        max_momentary_lufs=float(out.max_momentary_lufs),
+        max_short_term_lufs=float(out.max_short_term_lufs),
         loudness_range=float(out.loudness_range),
     )
 
@@ -224,6 +228,33 @@ def metering_rms_db(
     return _metering_scalar("sonare_metering_rms_db", samples, sample_rate, validate=validate)
 
 
+def metering_silence_ratio(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    threshold_db: float = -45.0,
+    frame_length: int = 1024,
+    hop_length: int = 256,
+    *,
+    validate: bool = True,
+) -> float:
+    """Fraction of analysis frames whose RMS is below ``threshold_db``."""
+    sample_buf = _validate_samples("metering_silence_ratio", samples, validate=validate)
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(sample_buf)
+    out = ctypes.c_float(0.0)
+    rc = lib.sonare_metering_silence_ratio(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(threshold_db),
+        ctypes.c_int(frame_length),
+        ctypes.c_int(hop_length),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return float(out.value)
+
+
 def metering_crest_factor_db(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -282,6 +313,8 @@ def metering_detect_clipping(
     validate: bool = True,
 ) -> ClippingReport:
     """Detect contiguous runs of clipped samples."""
+    if not isinstance(min_region_samples, int) or min_region_samples < 0:
+        raise ValueError("min_region_samples must be a non-negative integer")
     sample_buf = _validate_samples("metering_detect_clipping", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -349,7 +382,7 @@ def metering_stereo_correlation(
     *,
     validate: bool = True,
 ) -> float:
-    """Pearson correlation in [-1, 1] between two equal-length channels."""
+    """Uncentered correlation (cosine similarity) between equal-length channels."""
     return _stereo_scalar(
         "sonare_metering_stereo_correlation",
         left,
@@ -642,7 +675,7 @@ def metering_spectrum(
     *,
     validate: bool = True,
 ) -> SpectrumReport:
-    """Welch-averaged magnitude / power / dB spectrum over the whole buffer.
+    """Welch-averaged magnitude / power / dB spectrum over a whole mono buffer.
 
     This is NOT a single-frame snapshot: the signal is split into Hann-windowed,
     50%-overlapping ``n_fft``-length frames whose power spectra are averaged
@@ -698,7 +731,7 @@ def metering_spectrum_frame(
     *,
     validate: bool = True,
 ) -> SpectrumReport:
-    """True single-frame magnitude / power / dB spectrum (one Hann-windowed FFT).
+    """True single-frame mono magnitude / power / dB spectrum (one Hann-windowed FFT).
 
     Unlike :func:`metering_spectrum` (Welch-averaged), this is a single
     ``n_fft``-length FFT for spectrum-analyzer "moment" snapshots. The frame
@@ -843,7 +876,7 @@ def metering_dynamic_range(
     *,
     validate: bool = True,
 ) -> DynamicRangeReport:
-    """Sliding-window dynamic range (high_percentile - low_percentile, in dB).
+    """Sliding-window dynamic range for mono audio (high_percentile - low_percentile, in dB).
 
     Pass 0.0 for ``window_sec`` / ``hop_sec`` to use the library default
     (window=3 s, hop=1 s). For ``low_percentile`` / ``high_percentile`` a

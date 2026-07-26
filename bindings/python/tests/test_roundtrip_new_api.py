@@ -120,6 +120,10 @@ def test_mfcc_inverse_roundtrip():
     assert len(mel.data) == n_mels * n_frames
     assert _is_finite_list(mel.data)
 
+    lifted_mel = ls.mfcc_to_mel(mf.coefficients, 20, n_frames, n_mels=n_mels, lifter=22.0)
+    assert _is_finite_list(lifted_mel.data)
+    assert any(abs(a - b) > 1.0e-5 for a, b in zip(lifted_mel.data, mel.data, strict=True))
+
     out = ls.mfcc_to_audio(
         mf.coefficients, 20, n_frames, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels
     )

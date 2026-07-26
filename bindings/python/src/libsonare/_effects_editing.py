@@ -173,6 +173,10 @@ def pitch_correct_to_midi(
 ) -> list[float]:
     """Pitch-correct audio from a current MIDI note to a target MIDI note.
 
+    Applies one constant, immediate transpose with no retune glide and preserves
+    the input buffer length. Use :func:`pitch_correct_to_midi_timevarying` for a
+    caller-supplied pitch contour.
+
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
@@ -210,6 +214,8 @@ def pitch_correct_to_midi_timevarying(
     Args:
         samples: Audio samples.
         f0_hz: Per-frame measured F0 in Hz (one entry per analysis frame).
+            Unvoiced frames may use ``NaN`` when the corresponding ``voiced``
+            flag is zero, matching pYIN's default output.
         target_midi: Desired pitch as a MIDI note number.
         sample_rate: Sample rate in Hz (default 22050).
         hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
@@ -284,6 +290,8 @@ def pitch_correct_timevarying(
     Args:
         samples: Audio samples.
         f0_hz: Per-frame measured F0 in Hz (one entry per analysis frame).
+            Unvoiced frames may use ``NaN`` when the corresponding ``voiced``
+            flag is zero, matching pYIN's default output.
         sample_rate: Sample rate in Hz (default 22050).
         hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
         mode: ``"midi"`` retunes toward ``target_midi``; ``"scale"`` snaps to the key.
@@ -313,7 +321,7 @@ def pitch_correct_timevarying(
     config.target_midi = float(target_midi)
     config.scale_root = int(scale_root)
     if scale_mode_mask is not None:
-        config.scale_mode_mask = int(scale_mode_mask) & 0x0FFF
+        config.scale_mode_mask = int(scale_mode_mask)
     if reference_midi is not None:
         config.scale_reference_midi = float(reference_midi)
     if retune_amount is not None:
@@ -361,7 +369,7 @@ def note_stretch(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     onset_sample: int = 0,
-    offset_sample: int = 0,
+    offset_sample: int | None = None,
     stretch_ratio: float = 1.0,
 ) -> list[float]:
     """Time-stretch a single note region without changing pitch.
@@ -370,18 +378,19 @@ def note_stretch(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         onset_sample: Start sample index of the note region.
-        offset_sample: End sample index of the note region.
+        offset_sample: End sample index of the note region (defaults to the input length).
         stretch_ratio: Stretch factor for the region (>1 lengthens).
 
     Returns:
         List of samples with the note region stretched.
     """
+    resolved_offset = len(samples) if offset_sample is None else offset_sample
     return _call_float_transform(
         "sonare_note_stretch",
         samples,
         ctypes.c_int(sample_rate),
         ctypes.c_int(onset_sample),
-        ctypes.c_int(offset_sample),
+        ctypes.c_int(resolved_offset),
         ctypes.c_float(stretch_ratio),
     )
 
@@ -390,16 +399,17 @@ def note_move(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     onset_sample: int = 0,
-    offset_sample: int = 0,
+    offset_sample: int | None = None,
     target_onset_sample: int = 0,
 ) -> list[float]:
     """Move a note region to a new onset without changing its duration."""
+    resolved_offset = len(samples) if offset_sample is None else offset_sample
     return _call_float_transform(
         "sonare_note_move",
         samples,
         ctypes.c_int(sample_rate),
         ctypes.c_int(onset_sample),
-        ctypes.c_int(offset_sample),
+        ctypes.c_int(resolved_offset),
         ctypes.c_int(target_onset_sample),
     )
 
@@ -416,6 +426,7 @@ _SPECTRAL_EDIT_WINDOW_NAMES: dict[str, int] = {
     "hamming": 1,
     "blackman": 2,
     "rectangular": 3,
+    "rect": 3,
 }
 
 

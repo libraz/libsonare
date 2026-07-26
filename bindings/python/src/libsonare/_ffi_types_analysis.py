@@ -23,6 +23,8 @@ class SonareLufsResult(ctypes.Structure):
         ("integrated_lufs", ctypes.c_float),
         ("momentary_lufs", ctypes.c_float),
         ("short_term_lufs", ctypes.c_float),
+        ("max_momentary_lufs", ctypes.c_float),
+        ("max_short_term_lufs", ctypes.c_float),
         ("loudness_range", ctypes.c_float),
     ]
 
@@ -361,6 +363,27 @@ class SonareWaveformPeakPyramidResult(ctypes.Structure):
     _fields_ = [
         ("levels", ctypes.POINTER(SonareWaveformPeaksResult)),
         ("level_count", ctypes.c_size_t),
+    ]
+
+
+class SonareMusicAnalyzeOptions(ctypes.Structure):
+    """Maps to SonareMusicAnalyzeOptions in sonare_c_types_functions.h."""
+
+    _fields_ = [
+        ("n_fft", ctypes.c_int),
+        ("hop_length", ctypes.c_int),
+        ("bpm_min", ctypes.c_float),
+        ("bpm_max", ctypes.c_float),
+        ("start_bpm", ctypes.c_float),
+        ("use_triads_only", ctypes.c_int),
+        ("use_hpss", ctypes.c_int),
+        ("chroma_highpass_hz", ctypes.c_float),
+        ("use_bass_weighted", ctypes.c_int),
+        ("chroma_hop_multiplier", ctypes.c_int),
+        ("use_chord_hmm", ctypes.c_int),
+        ("use_chord_key_context", ctypes.c_int),
+        ("chord_hmm_beam_width", ctypes.c_int),
+        ("detect_chord_inversions", ctypes.c_int),
     ]
 
 

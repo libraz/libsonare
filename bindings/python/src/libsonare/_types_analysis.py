@@ -9,7 +9,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict
 
 if TYPE_CHECKING:
     import numpy as np
@@ -28,6 +28,7 @@ class MasteringInsertParamInfo(TypedDict):
     name: str
     id: int
     rtSafe: bool
+    unit: NotRequired[str]
 
 
 class MasteringProcessorCatalogEntry(TypedDict):
@@ -131,7 +132,7 @@ class ChannelLayout(IntEnum):
     """Speaker bed layout for a bus or source (mirrors SonareChannelLayout).
 
     Plane order is WAVE_FORMAT_EXTENSIBLE: ``FIVE_POINT_ONE`` = L R C LFE Ls Rs,
-    ``SEVEN_POINT_ONE`` = L R C LFE Lss Rss Ls Rs.
+    ``SEVEN_POINT_ONE`` = L R C LFE Ls Rs Lss Rss.
     """
 
     MONO = 0
@@ -199,6 +200,8 @@ class EngineTelemetryError(IntEnum):
     COMMAND_BACKLOG_DEFERRED = 14
     CLIP_PAGE_UNDERRUN = 15
     INSERT_AUTOMATION_OVERFLOW = 16
+    MIDI_CLOCK_OVERFLOW = 17
+    METRONOME_OVERFLOW = 18
 
 
 class KeyProfile(IntEnum):
@@ -523,11 +526,17 @@ class RoomEstimate:
 
 @dataclass(frozen=True, slots=True)
 class LufsResult:
-    """ITU-R BS.1770 / EBU R128 loudness metrics (offline meter)."""
+    """ITU-R BS.1770 / EBU R128 loudness metrics.
+
+    ``momentary_lufs`` and ``short_term_lufs`` are the final complete windows;
+    the corresponding ``max_*`` fields report EBU R128 Max-M and Max-S.
+    """
 
     integrated_lufs: float
     momentary_lufs: float
     short_term_lufs: float
+    max_momentary_lufs: float
+    max_short_term_lufs: float
     loudness_range: float
 
     @property
@@ -541,6 +550,14 @@ class LufsResult:
     @property
     def shortTermLufs(self) -> float:  # noqa: N802
         return self.short_term_lufs
+
+    @property
+    def maxMomentaryLufs(self) -> float:  # noqa: N802
+        return self.max_momentary_lufs
+
+    @property
+    def maxShortTermLufs(self) -> float:  # noqa: N802
+        return self.max_short_term_lufs
 
     @property
     def loudnessRange(self) -> float:  # noqa: N802
@@ -794,17 +811,38 @@ class Chord:
     end: float
     confidence: float
     bass: PitchClass | None = None
+    canonical_name: str = ""
 
     @property
     def duration(self) -> float:
         return self.end - self.start
 
     @property
+    def root_name(self) -> str:
+        """Canonical core spelling, stable across all language bindings."""
+        return str(self.root)
+
+    @property
+    def bass_name(self) -> str:
+        """Canonical core spelling, stable across all language bindings."""
+        return str(self.root if self.bass is None else self.bass)
+
+    @property
+    def rootName(self) -> str:  # noqa: N802
+        return self.root_name
+
+    @property
+    def bassName(self) -> str:  # noqa: N802
+        return self.bass_name
+
+    @property
     def name(self) -> str:
+        if self.canonical_name:
+            return self.canonical_name
         if self.quality == "unknown":
             return "N.C."
         suffixes = {
-            "major": "maj",
+            "major": "",
             "minor": "m",
             "diminished": "dim",
             "augmented": "aug",
@@ -912,6 +950,7 @@ class MasteringResult:
     output_lufs: float
     applied_gain_db: float
     latency_samples: int = 0
+    loudness_target_limited: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -955,6 +994,8 @@ class MasteringChainResult:
     output_true_peak_dbtp: float = 0.0
     #: EBU Tech 3342 Loudness Range of the output (LU).
     output_lra: float = 0.0
+    #: True when peak headroom prevented the requested LUFS target.
+    loudness_target_limited: bool = False
     #: Per-stage gain reductions for the dynamics/maximizer stages (a subset of
     #: :attr:`stages`).
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
@@ -974,4 +1015,5 @@ class MasteringChainStereoResult:
     #: See :class:`MasteringChainResult` for field semantics.
     output_true_peak_dbtp: float = 0.0
     output_lra: float = 0.0
+    loudness_target_limited: bool = False
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)

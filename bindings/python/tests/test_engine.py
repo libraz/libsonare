@@ -31,6 +31,7 @@ from libsonare import (
     ExternalMidiEvent,
     FileClipPageProvider,
     MarkerKind,
+    MidiCcBinding,
     ParameterInfo,
     RealtimeEngine,
     ScopeTelemetryRecord,
@@ -49,6 +50,29 @@ def test_voice_changer_abi_version() -> None:
     v = voice_changer_abi_version()
     assert isinstance(v, int)
     assert v > 0
+
+
+def test_engine_rejects_hostile_tempo_and_metronome_lengths() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_tempo(100000.0)
+        with pytest.raises(SonareError):
+            engine.set_tempo(100000.1)
+        with pytest.raises(SonareError):
+            engine.set_tempo_segments([{"start_ppq": 0.0, "bpm": 120.0, "end_bpm": 100000.1}])
+        with pytest.raises(SonareError):
+            engine.set_metronome(EngineMetronomeConfig(enabled=True, click_samples=2_000_000_000))
+        with pytest.raises(SonareError):
+            engine.set_metronome(
+                EngineMetronomeConfig(enabled=True, click_samples=0, click_seconds=2.0)
+            )
+        with pytest.raises(SonareError):
+            engine.set_metronome(
+                EngineMetronomeConfig(enabled=True, click_samples=0, click_seconds=math.nan)
+            )
+
+
+def test_metronome_default_click_uses_sample_rate_sentinel() -> None:
+    assert EngineMetronomeConfig(enabled=True).click_samples == 0
 
 
 def test_engine_transport_state_and_live_parameters() -> None:
@@ -1047,7 +1071,20 @@ def test_engine_builtin_instrument_bind_and_clear() -> None:
 def test_engine_midi_cc_bindings() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.bind_midi_cc(0, 1, 42, min_value=0.0, max_value=1.0)
-        assert engine.midi_cc_binding_count() == 1
+        engine.bind_midi_cc_binding(
+            MidiCcBinding(
+                cc_number=2,
+                cc_lsb_number=34,
+                channel=0,
+                kind=1,
+                selector_msb=0,
+                selector_lsb=0,
+                param_id=43,
+                min_value=0.0,
+                max_value=1.0,
+            )
+        )
+        assert engine.midi_cc_binding_count() == 2
         engine.clear_midi_cc_bindings()
         assert engine.midi_cc_binding_count() == 0
 

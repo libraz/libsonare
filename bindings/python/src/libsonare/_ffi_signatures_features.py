@@ -116,11 +116,31 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(SonareChromaResult),
     ]
+    lib.sonare_chroma_cens_ex.restype = ctypes.c_int32
+    lib.sonare_chroma_cens_ex.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChromaResult),
+    ]
 
     lib.sonare_chroma_cqt.restype = ctypes.c_int32
     lib.sonare_chroma_cqt.argtypes = [
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareChromaResult),
+    ]
+    lib.sonare_chroma_cqt_ex.restype = ctypes.c_int32
+    lib.sonare_chroma_cqt_ex.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
@@ -547,6 +567,19 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_int),
     ]
+    if hasattr(lib, "sonare_nnls_chroma_ex"):
+        lib.sonare_nnls_chroma_ex.restype = ctypes.c_int32
+        lib.sonare_nnls_chroma_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_int),
+        ]
 
     # sonare_lufs
     lib.sonare_lufs.restype = ctypes.c_int32
@@ -593,6 +626,16 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(ctypes.c_float),
         ]
+    lib.sonare_metering_silence_ratio.restype = ctypes.c_int32
+    lib.sonare_metering_silence_ratio.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_float),
+    ]
 
     lib.sonare_metering_true_peak_db.restype = ctypes.c_int32
     lib.sonare_metering_true_peak_db.argtypes = [

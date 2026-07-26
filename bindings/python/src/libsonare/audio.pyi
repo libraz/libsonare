@@ -136,13 +136,22 @@ class Audio:
         self, current_midi: float = 69.0, target_midi: float = 69.0
     ) -> list[float]: ...
     def note_stretch(
-        self, onset_sample: int = 0, offset_sample: int = 0, stretch_ratio: float = 1.0
+        self,
+        onset_sample: int = 0,
+        offset_sample: int | None = None,
+        stretch_ratio: float = 1.0,
+    ) -> list[float]: ...
+    def note_move(
+        self,
+        onset_sample: int = 0,
+        offset_sample: int | None = None,
+        target_onset_sample: int = 0,
     ) -> list[float]: ...
     def voice_change(
         self, pitch_semitones: float = 0.0, formant_factor: float = 1.0
     ) -> list[float]: ...
     def voice_change_realtime(self, preset: str = "bright-idol") -> list[float]: ...
-    def normalize(self, target_db: float = -3.0) -> list[float]: ...
+    def normalize(self, target_db: float = 0.0) -> list[float]: ...
     def mastering(
         self,
         target_lufs: float = -14.0,
@@ -198,7 +207,7 @@ class Audio:
         hop_length: int = 512,
         fmin: float = 65.0,
         fmax: float = 2093.0,
-        threshold: float = 0.3,
+        threshold: float = 0.1,
         fill_na: bool = False,
     ) -> PitchResult: ...
     def pitch_pyin(
@@ -207,7 +216,7 @@ class Audio:
         hop_length: int = 512,
         fmin: float = 65.0,
         fmax: float = 2093.0,
-        threshold: float = 0.3,
+        threshold: float = 0.1,
         fill_na: bool = False,
     ) -> PitchResult: ...
     def resample(self, target_sr: int) -> list[float]: ...

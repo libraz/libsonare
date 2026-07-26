@@ -41,6 +41,14 @@ def test_metering_basic_meters_agree() -> None:
     assert abs(dc) < 1e-2
 
 
+def test_metering_silence_ratio() -> None:
+    samples = np.concatenate([np.zeros(1024, dtype=np.float32), np.ones(1024, dtype=np.float32)])
+    ratio = libsonare.metering_silence_ratio(
+        samples, SR, threshold_db=-45.0, frame_length=1024, hop_length=1024
+    )
+    assert ratio == pytest.approx(0.5)
+
+
 def test_pitch_and_dc_offset_reject_nonfinite_samples_and_invalid_rates() -> None:
     """Pitch and metering inherit the shared C-ABI input guards (L-17)."""
     invalid = _sine(440.0, 0.1)
@@ -88,6 +96,11 @@ def test_metering_detect_clipping_clean_signal() -> None:
     report = libsonare.metering_detect_clipping(samples, SR)
     assert report.clipped_samples == 0
     assert report.regions == []
+
+
+def test_metering_detect_clipping_rejects_negative_min_region() -> None:
+    with pytest.raises(ValueError):
+        libsonare.metering_detect_clipping(_sine(440.0, 0.1), SR, min_region_samples=-1)
 
 
 def test_metering_dynamic_range_returns_positive_dr_for_varying_signal() -> None:

@@ -243,6 +243,8 @@ def pad_center(
     pad_value: float = 0.0,
 ) -> list[float]:
     """Pad an array by centering it within target size."""
+    if not isinstance(target_size, int) or target_size < 0:
+        raise ValueError("target_size must be a non-negative integer")
     return _call_float_transform(
         "sonare_pad_center", values, ctypes.c_size_t(target_size), ctypes.c_float(pad_value)
     )
@@ -254,6 +256,8 @@ def fix_length(
     pad_value: float = 0.0,
 ) -> list[float]:
     """Crop or pad an array to exact length."""
+    if not isinstance(target_size, int) or target_size < 0:
+        raise ValueError("target_size must be a non-negative integer")
     return _call_float_transform(
         "sonare_fix_length", values, ctypes.c_size_t(target_size), ctypes.c_float(pad_value)
     )
@@ -576,20 +580,37 @@ def tempogram_ratio(
 def nnls_chroma(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
+    *,
+    enable_stft_blend: bool = True,
+    stft_blend_weight: float = 0.55,
+    stft_blend_n_fft: int = 4096,
 ) -> tuple[int, list[float]]:
     """Compute NNLS chroma. Returns (n_frames, row-major 12 x n_frames matrix)."""
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     n_frames = ctypes.c_int()
     with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_nnls_chroma(
-            c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.byref(out),
-            ctypes.byref(out_length),
-            ctypes.byref(n_frames),
-        )
+        if hasattr(lib, "sonare_nnls_chroma_ex"):
+            rc = lib.sonare_nnls_chroma_ex(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.c_int(int(enable_stft_blend)),
+                ctypes.c_float(stft_blend_weight),
+                ctypes.c_int(stft_blend_n_fft),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+                ctypes.byref(n_frames),
+            )
+        else:
+            rc = lib.sonare_nnls_chroma(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+                ctypes.byref(n_frames),
+            )
         _check(rc)
         return (int(n_frames.value), _float_array_result(out, out_length.value))
 

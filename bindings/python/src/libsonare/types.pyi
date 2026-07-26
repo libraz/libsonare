@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -13,6 +13,7 @@ class MasteringInsertParamInfo(TypedDict):
     name: str
     id: int
     rtSafe: bool
+    unit: NotRequired[str]
 
 class MasteringProcessorCatalogEntry(TypedDict):
     id: str
@@ -113,6 +114,8 @@ class EngineTelemetryError(IntEnum):
     COMMAND_BACKLOG_DEFERRED = 14
     CLIP_PAGE_UNDERRUN = 15
     INSERT_AUTOMATION_OVERFLOW = 16
+    MIDI_CLOCK_OVERFLOW = 17
+    METRONOME_OVERFLOW = 18
 
 class Key:
     root: PitchClass
@@ -371,12 +374,16 @@ class LufsResult:
     integrated_lufs: float
     momentary_lufs: float
     short_term_lufs: float
+    max_momentary_lufs: float
+    max_short_term_lufs: float
     loudness_range: float
     def __init__(
         self,
         integrated_lufs: float,
         momentary_lufs: float,
         short_term_lufs: float,
+        max_momentary_lufs: float,
+        max_short_term_lufs: float,
         loudness_range: float,
     ) -> None: ...
     @property
@@ -385,6 +392,10 @@ class LufsResult:
     def momentaryLufs(self) -> float: ...
     @property
     def shortTermLufs(self) -> float: ...
+    @property
+    def maxMomentaryLufs(self) -> float: ...
+    @property
+    def maxShortTermLufs(self) -> float: ...
     @property
     def loudnessRange(self) -> float: ...
 
@@ -637,6 +648,7 @@ class Chord:
     end: float
     confidence: float
     bass: PitchClass | None
+    canonical_name: str
     def __init__(
         self,
         root: PitchClass,
@@ -645,9 +657,18 @@ class Chord:
         end: float,
         confidence: float,
         bass: PitchClass | None = None,
+        canonical_name: str = "",
     ) -> None: ...
     @property
     def duration(self) -> float: ...
+    @property
+    def root_name(self) -> str: ...
+    @property
+    def bass_name(self) -> str: ...
+    @property
+    def rootName(self) -> str: ...
+    @property
+    def bassName(self) -> str: ...
     @property
     def name(self) -> str: ...
 
@@ -747,6 +768,7 @@ class MasteringResult:
     output_lufs: float
     applied_gain_db: float
     latency_samples: int
+    loudness_target_limited: bool
     def __init__(
         self,
         samples: list[float],
@@ -755,6 +777,7 @@ class MasteringResult:
         output_lufs: float,
         applied_gain_db: float,
         latency_samples: int = 0,
+        loudness_target_limited: bool = False,
     ) -> None: ...
 
 class MasteringStereoResult:
@@ -790,6 +813,7 @@ class MasteringChainResult:
     stages: list[str]
     output_true_peak_dbtp: float
     output_lra: float
+    loudness_target_limited: bool
     stage_gain_reductions: list[StageGainReduction]
     def __init__(
         self,
@@ -801,6 +825,7 @@ class MasteringChainResult:
         stages: list[str],
         output_true_peak_dbtp: float = ...,
         output_lra: float = ...,
+        loudness_target_limited: bool = ...,
         stage_gain_reductions: list[StageGainReduction] = ...,
     ) -> None: ...
 
@@ -814,6 +839,7 @@ class MasteringChainStereoResult:
     stages: list[str]
     output_true_peak_dbtp: float
     output_lra: float
+    loudness_target_limited: bool
     stage_gain_reductions: list[StageGainReduction]
     def __init__(
         self,
@@ -826,6 +852,7 @@ class MasteringChainStereoResult:
         stages: list[str],
         output_true_peak_dbtp: float = ...,
         output_lra: float = ...,
+        loudness_target_limited: bool = ...,
         stage_gain_reductions: list[StageGainReduction] = ...,
     ) -> None: ...
 
@@ -1005,7 +1032,7 @@ class EngineMetronomeConfig:
         enabled: bool = False,
         beat_gain: float = 0.35,
         accent_gain: float = 0.7,
-        click_samples: int = 96,
+        click_samples: int = 0,
         click_seconds: float = 0.0,
     ) -> None: ...
 
@@ -1378,6 +1405,7 @@ class Section:
     end: float
     energy_level: float
     confidence: float
+    canonical_name: str
     def __init__(
         self,
         type: SectionType,
@@ -1385,6 +1413,7 @@ class Section:
         end: float,
         energy_level: float,
         confidence: float,
+        canonical_name: str = "",
     ) -> None: ...
     @property
     def name(self) -> str: ...

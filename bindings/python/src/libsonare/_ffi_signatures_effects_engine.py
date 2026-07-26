@@ -886,6 +886,12 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_float,
             ctypes.c_float,
         ]
+    if hasattr(lib, "sonare_engine_bind_midi_cc_binding"):
+        lib.sonare_engine_bind_midi_cc_binding.restype = ctypes.c_int32
+        lib.sonare_engine_bind_midi_cc_binding.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareMidiCcBinding),
+        ]
     if hasattr(lib, "sonare_engine_clear_midi_cc_bindings"):
         lib.sonare_engine_clear_midi_cc_bindings.restype = ctypes.c_int32
         lib.sonare_engine_clear_midi_cc_bindings.argtypes = [ctypes.c_void_p]

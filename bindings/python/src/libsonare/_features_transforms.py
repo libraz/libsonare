@@ -339,6 +339,7 @@ def mfcc_to_mel(
     n_mfcc: int,
     n_frames: int,
     n_mels: int = 128,
+    lifter: float = 0.0,
 ) -> InverseResult:
     """Invert MFCC coefficients back to a Mel power spectrogram.
 
@@ -358,13 +359,25 @@ def mfcc_to_mel(
     if length != n_mfcc * n_frames:
         raise ValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
     out = SonareInverseResult()
-    rc = lib.sonare_mfcc_to_mel(
-        c_array,
-        ctypes.c_int(n_mfcc),
-        ctypes.c_int(n_frames),
-        ctypes.c_int(n_mels),
-        ctypes.byref(out),
-    )
+    if hasattr(lib, "sonare_mfcc_to_mel_ex"):
+        rc = lib.sonare_mfcc_to_mel_ex(
+            c_array,
+            ctypes.c_int(n_mfcc),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(n_mels),
+            ctypes.c_float(lifter),
+            ctypes.byref(out),
+        )
+    else:
+        if lifter != 0.0:
+            raise RuntimeError("this libsonare build does not support inverse MFCC liftering")
+        rc = lib.sonare_mfcc_to_mel(
+            c_array,
+            ctypes.c_int(n_mfcc),
+            ctypes.c_int(n_frames),
+            ctypes.c_int(n_mels),
+            ctypes.byref(out),
+        )
     _check(rc)
     try:
         total = out.rows * out.n_frames
@@ -389,6 +402,7 @@ def mfcc_to_audio(
     fmax: float = 0.0,
     n_iter: int = 32,
     htk: bool = False,
+    lifter: float = 0.0,
 ) -> list[float]:
     """Reconstruct audio directly from MFCC via Mel inversion + Griffin-Lim.
 
@@ -414,24 +428,50 @@ def mfcc_to_audio(
     c_array, length = _to_c_float_array(mfcc_coeffs)
     if length != n_mfcc * n_frames:
         raise ValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
-    return _inverse_audio(
-        lib,
-        "sonare_mfcc_to_audio",
-        "sonare_mfcc_to_audio_ex",
+    if lifter == 0.0:
+        return _inverse_audio(
+            lib,
+            "sonare_mfcc_to_audio",
+            "sonare_mfcc_to_audio_ex",
+            c_array,
+            (
+                ctypes.c_int(n_mfcc),
+                ctypes.c_int(n_frames),
+                ctypes.c_int(n_mels),
+                ctypes.c_int(sample_rate),
+                ctypes.c_int(n_fft),
+                ctypes.c_int(hop_length),
+                ctypes.c_float(fmin),
+                ctypes.c_float(fmax),
+            ),
+            n_iter,
+            htk,
+        )
+    if not hasattr(lib, "sonare_mfcc_to_audio_ex2"):
+        raise RuntimeError("this libsonare build does not support inverse MFCC liftering")
+    out = ctypes.POINTER(ctypes.c_float)()
+    out_length = ctypes.c_size_t()
+    rc = lib.sonare_mfcc_to_audio_ex2(
         c_array,
-        (
-            ctypes.c_int(n_mfcc),
-            ctypes.c_int(n_frames),
-            ctypes.c_int(n_mels),
-            ctypes.c_int(sample_rate),
-            ctypes.c_int(n_fft),
-            ctypes.c_int(hop_length),
-            ctypes.c_float(fmin),
-            ctypes.c_float(fmax),
-        ),
-        n_iter,
-        htk,
+        ctypes.c_int(n_mfcc),
+        ctypes.c_int(n_frames),
+        ctypes.c_int(n_mels),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_float(fmax),
+        ctypes.c_int(1 if htk else 0),
+        ctypes.c_float(lifter),
+        ctypes.c_int(n_iter),
+        ctypes.byref(out),
+        ctypes.byref(out_length),
     )
+    _check(rc)
+    try:
+        return [float(out[i]) for i in range(out_length.value)]
+    finally:
+        lib.sonare_free_floats(out)
 
 
 def vqt(
@@ -441,7 +481,7 @@ def vqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
-    gamma: float = 0.0,
+    gamma: float = -1.0,
 ) -> CqtResult:
     """Compute the Variable-Q Transform magnitude (``gamma`` controls Q).
 
@@ -452,7 +492,8 @@ def vqt(
         fmin: Lowest center frequency in Hz (default C1).
         n_bins: Total number of frequency bins (default 84).
         bins_per_octave: Bins per octave (default 12).
-        gamma: Bandwidth-offset parameter controlling Q (default 0.0).
+        gamma: Bandwidth offset. Negative selects the automatic ERB-derived
+            value; zero is equivalent to CQT (default -1.0).
 
     Returns:
         A :class:`CqtResult` with the magnitude matrix and bin frequencies.
@@ -488,7 +529,7 @@ def vqt_to_audio(
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
-    gamma: float = 0.0,
+    gamma: float = -1.0,
     n_iter: int = 32,
 ) -> list[float]:
     """Reconstruct mono audio from row-major VQT magnitude via Griffin-Lim."""

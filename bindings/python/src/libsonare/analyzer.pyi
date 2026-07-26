@@ -212,7 +212,25 @@ def detect_key_candidates(
 def detect_beats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
 def detect_downbeats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
 def detect_onsets(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
-def analyze(samples: FloatSamples, sample_rate: int = 22050) -> AnalysisResult: ...
+def analyze(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    bpm_min: float = 60.0,
+    bpm_max: float = 200.0,
+    start_bpm: float = 120.0,
+    use_triads_only: bool = True,
+    use_hpss: bool = True,
+    chroma_highpass_hz: float = 80.0,
+    use_bass_weighted: bool = True,
+    chroma_hop_multiplier: int = 4,
+    use_chord_hmm: bool = False,
+    use_chord_key_context: bool = False,
+    chord_hmm_beam_width: int = 24,
+    detect_chord_inversions: bool = False,
+) -> AnalysisResult: ...
 def analyze_with_progress(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -400,7 +418,7 @@ def vqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
-    gamma: float = 0.0,
+    gamma: float = -1.0,
 ) -> CqtResult: ...
 def version() -> str: ...
 def has_ffmpeg_support() -> bool: ...
@@ -455,8 +473,15 @@ def note_stretch(
     samples: FloatSamples,
     sample_rate: int = 22050,
     onset_sample: int = 0,
-    offset_sample: int = 0,
+    offset_sample: int | None = None,
     stretch_ratio: float = 1.0,
+) -> list[float]: ...
+def note_move(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    onset_sample: int = 0,
+    offset_sample: int | None = None,
+    target_onset_sample: int = 0,
 ) -> list[float]: ...
 def voice_change(
     samples: FloatSamples,
@@ -637,7 +662,9 @@ class Mixer:
     def from_scene_json(
         cls, json: str, sample_rate: int = 48000, block_size: int = 512
     ) -> Mixer: ...
-    def compile(self) -> None: ...
+    def compile(self) -> None:
+        """Rebuild the graph while preserving automation position and queued events."""
+        ...
     def strip_count(self) -> int: ...
     def strip_by_id(self, strip_id: str) -> int: ...
     def add_bus(self, bus_id: str, role: str = "aux") -> None: ...
@@ -647,6 +674,7 @@ class Mixer:
         self, group_id: str, gain_db: float = 0.0, members: Sequence[str] | None = None
     ) -> None: ...
     def set_vca_group_gain_db(self, group_id: str, gain_db: float) -> None: ...
+    def set_vca_group_members(self, group_id: str, members: Sequence[str]) -> None: ...
     def remove_vca_group(self, group_id: str) -> None: ...
     def vca_group_count(self) -> int: ...
     def set_soloed(self, strip: StripRef, soloed: bool) -> None: ...
@@ -876,10 +904,18 @@ def chroma(
     samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
 ) -> ChromaResult: ...
 def chroma_cens(
-    samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    n_chroma: int = 12,
+    bins_per_octave: int = 36,
 ) -> ChromaResult: ...
 def chroma_cqt(
-    samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    hop_length: int = 512,
+    n_chroma: int = 12,
+    bins_per_octave: int = 36,
 ) -> ChromaResult: ...
 def bass_chroma(
     samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
@@ -913,7 +949,7 @@ def pitch_yin(
     hop_length: int = 512,
     fmin: float = 65.0,
     fmax: float = 2093.0,
-    threshold: float = 0.3,
+    threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult: ...
 def pitch_pyin(
@@ -923,7 +959,7 @@ def pitch_pyin(
     hop_length: int = 512,
     fmin: float = 65.0,
     fmax: float = 2093.0,
-    threshold: float = 0.3,
+    threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult: ...
 def spectral_contrast(
@@ -1129,7 +1165,14 @@ def tempogram_ratio(
     hop_length: int = 512,
     factors: FloatSamples | None = None,
 ) -> list[float]: ...
-def nnls_chroma(samples: FloatSamples, sample_rate: int = 22050) -> tuple[int, list[float]]: ...
+def nnls_chroma(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    enable_stft_blend: bool = True,
+    stft_blend_weight: float = 0.55,
+    stft_blend_n_fft: int = 4096,
+) -> tuple[int, list[float]]: ...
 def onset_strength_multi(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -1303,6 +1346,15 @@ def metering_peak_db(
 def metering_rms_db(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
 ) -> float: ...
+def metering_silence_ratio(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    threshold_db: float = -45.0,
+    frame_length: int = 1024,
+    hop_length: int = 256,
+    *,
+    validate: bool = True,
+) -> float: ...
 def metering_crest_factor_db(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
 ) -> float: ...
@@ -1369,7 +1421,7 @@ def vqt_to_audio(
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
-    gamma: float = 0.0,
+    gamma: float = -1.0,
     n_iter: int = 32,
 ) -> list[float]: ...
 def mel_to_audio(
@@ -1389,6 +1441,7 @@ def mfcc_to_mel(
     n_mfcc: int,
     n_frames: int,
     n_mels: int = 128,
+    lifter: float = 0.0,
 ) -> InverseResult: ...
 def mfcc_to_audio(
     mfcc_coeffs: FloatSamples,
@@ -1402,6 +1455,7 @@ def mfcc_to_audio(
     fmax: float = 0.0,
     n_iter: int = 32,
     htk: bool = False,
+    lifter: float = 0.0,
 ) -> list[float]: ...
 def mastering_dynamics_compressor(
     samples: FloatSamples,

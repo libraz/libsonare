@@ -77,6 +77,7 @@ def mastering(
             output_lufs=float(out.output_lufs),
             applied_gain_db=float(out.applied_gain_db),
             latency_samples=int(out.latency_samples),
+            loudness_target_limited=bool(out.loudness_target_limited),
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))
@@ -170,8 +171,9 @@ def mastering_insert_param_info(name: str) -> list[MasteringInsertParamInfo]:
     Each entry describes one parameter the insert reads, with keys ``name``
     (camelCase parameter name), ``id`` (stable numeric parameter id) and
     ``rtSafe`` (whether the parameter can be changed on the realtime audio
-    thread). Returns an empty list for an unknown ``name`` (or one whose
-    insert needs an unavailable build feature, e.g. FX).
+    thread), and optional ``unit`` metadata. Returns an empty list for an
+    unknown ``name`` (or one whose insert needs an unavailable build feature,
+    e.g. FX).
 
     The native layer returns a thread-local JSON array string the caller must
     NOT free (same convention as the other mastering getters).
@@ -250,6 +252,7 @@ def mastering_process(
             output_lufs=float(out.output_lufs),
             applied_gain_db=float(out.applied_gain_db),
             latency_samples=int(out.latency_samples),
+            loudness_target_limited=bool(out.loudness_target_limited),
         )
     finally:
         lib.sonare_free_mastering_result(ctypes.byref(out))
@@ -456,6 +459,7 @@ def mastering_chain(
             stages=_extract_stages(out.stages, int(out.stages_count)),
             output_true_peak_dbtp=float(out.output_true_peak_dbtp),
             output_lra=float(out.output_lra),
+            loudness_target_limited=bool(out.loudness_target_limited),
             stage_gain_reductions=_extract_stage_gain_reductions(
                 out.stage_gain_reduction_stages,
                 out.stage_gain_reduction_values,
@@ -525,6 +529,7 @@ def mastering_chain_stereo(
             stages=_extract_stages(out.stages, int(out.stages_count)),
             output_true_peak_dbtp=float(out.output_true_peak_dbtp),
             output_lra=float(out.output_lra),
+            loudness_target_limited=bool(out.loudness_target_limited),
             stage_gain_reductions=_extract_stage_gain_reductions(
                 out.stage_gain_reduction_stages,
                 out.stage_gain_reduction_values,
@@ -614,6 +619,7 @@ def master_audio(
             stages=_extract_stages(out.stages, int(out.stages_count)),
             output_true_peak_dbtp=float(out.output_true_peak_dbtp),
             output_lra=float(out.output_lra),
+            loudness_target_limited=bool(out.loudness_target_limited),
             stage_gain_reductions=_extract_stage_gain_reductions(
                 out.stage_gain_reduction_stages,
                 out.stage_gain_reduction_values,
@@ -685,6 +691,7 @@ def master_audio_stereo(
             stages=_extract_stages(out.stages, int(out.stages_count)),
             output_true_peak_dbtp=float(out.output_true_peak_dbtp),
             output_lra=float(out.output_lra),
+            loudness_target_limited=bool(out.loudness_target_limited),
             stage_gain_reductions=_extract_stage_gain_reductions(
                 out.stage_gain_reduction_stages,
                 out.stage_gain_reduction_values,

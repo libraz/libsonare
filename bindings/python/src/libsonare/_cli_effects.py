@@ -79,6 +79,54 @@ def cmd_pitch_correct(args: argparse.Namespace) -> int:
     return _emit_effect_result(args, result, sr, label="Pitch correct")
 
 
+def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
+    from . import pitch_correct_timevarying, pitch_pyin
+
+    samples, sr = _load_audio(args.file)
+    track = pitch_pyin(samples, sample_rate=sr, hop_length=args.hop_length)
+    result = pitch_correct_timevarying(
+        samples,
+        track.f0,
+        sample_rate=sr,
+        hop_length=args.hop_length,
+        mode=args.mode,
+        target_midi=args.target_midi,
+        scale_root=args.scale_root,
+        scale_mode_mask=args.scale_mode_mask,
+        reference_midi=args.reference_midi,
+        voiced=[int(value) for value in track.voiced_flag],
+        voiced_prob=track.voiced_prob,
+    )
+    return _emit_effect_result(args, result, sr, label="Time-varying pitch correct")
+
+
+def cmd_note_move(args: argparse.Namespace) -> int:
+    from . import note_move
+
+    samples, sr = _load_audio(args.file)
+    result = note_move(
+        samples,
+        sample_rate=sr,
+        onset_sample=args.onset,
+        offset_sample=args.offset,
+        target_onset_sample=args.target_onset,
+    )
+    return _emit_effect_result(args, result, sr, label="Note move")
+
+
+def cmd_scale_quantize(args: argparse.Namespace) -> int:
+    from . import scale_quantize_midi
+
+    value = scale_quantize_midi(
+        args.root, args.mode_mask, args.midi, reference_midi=args.reference_midi
+    )
+    if args.json:
+        print(_strict_json_dumps({"input_midi": args.midi, "quantized_midi": value}))
+    else:
+        print(f"{value:.6f}")
+    return 0
+
+
 def cmd_note_stretch(args: argparse.Namespace) -> int:
     from . import note_stretch
 

@@ -30,6 +30,7 @@ class SonareMasteringResult(ctypes.Structure):
         ("output_lufs", ctypes.c_float),
         ("applied_gain_db", ctypes.c_float),
         ("latency_samples", ctypes.c_int32),
+        ("loudness_target_limited", ctypes.c_int32),
     ]
 
 
@@ -71,6 +72,7 @@ class SonareMasteringChainResult(ctypes.Structure):
         ("stages_count", ctypes.c_size_t),
         ("output_true_peak_dbtp", ctypes.c_float),
         ("output_lra", ctypes.c_float),
+        ("loudness_target_limited", ctypes.c_int),
         ("stage_gain_reduction_stages", ctypes.POINTER(ctypes.c_char_p)),
         ("stage_gain_reduction_values", ctypes.POINTER(ctypes.c_float)),
         ("stage_gain_reductions_count", ctypes.c_size_t),
@@ -92,6 +94,7 @@ class SonareMasteringChainStereoResult(ctypes.Structure):
         ("stages_count", ctypes.c_size_t),
         ("output_true_peak_dbtp", ctypes.c_float),
         ("output_lra", ctypes.c_float),
+        ("loudness_target_limited", ctypes.c_int),
         ("stage_gain_reduction_stages", ctypes.POINTER(ctypes.c_char_p)),
         ("stage_gain_reduction_values", ctypes.POINTER(ctypes.c_float)),
         ("stage_gain_reductions_count", ctypes.c_size_t),

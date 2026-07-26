@@ -76,6 +76,11 @@ def test_analysis_primitives() -> None:
 
     chords = detect_chords(tone, sample_rate=sr, use_beat_sync=False)
     assert isinstance(chords.chords, list)
+    for chord in chords.chords:
+        assert chord.root_name == str(chord.root)
+        assert chord.bass_name == str(chord.root if chord.bass is None else chord.bass)
+        assert chord.rootName == chord.root_name
+        assert chord.bassName == chord.bass_name
 
     audio = Audio.from_buffer(samples, sample_rate=sr)
     assert audio.analyze_bpm().bpm > 0

@@ -59,7 +59,7 @@ def normalize(
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        target_db: Target peak level in dB (default 0.0 = full scale).
+        target_db: Finite target peak at or below 0 dBFS (default 0.0).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 

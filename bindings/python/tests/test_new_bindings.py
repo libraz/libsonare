@@ -142,13 +142,14 @@ def test_ebur128_loudness_range_is_finite_nonnegative() -> None:
     assert lra >= 0.0
 
 
-def test_pitch_yin_fill_na_controls_unvoiced_value() -> None:
-    # Silence is fully unvoiced, so fill_na decides NaN vs 0 for every frame.
+def test_pitch_yin_returns_librosa_style_estimates_for_unvoiced_frames() -> None:
+    # librosa.yin emits an f0 estimate for every frame and reports voicing separately.
     silence = np.zeros(SR, dtype=np.float32)
 
     nan_res = libsonare.pitch_yin(silence, SR, fill_na=False)
     assert nan_res.n_frames > 0
-    assert any(math.isnan(v) for v in nan_res.f0)
+    assert all(math.isfinite(v) for v in nan_res.f0)
+    assert not any(nan_res.voiced_flag)
 
     filled = libsonare.pitch_yin(silence, SR, fill_na=True)
     assert filled.n_frames > 0

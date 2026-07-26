@@ -58,6 +58,31 @@ def _make_sysex_smf() -> bytes:
     return bytes(smf)
 
 
+def _make_truncated_smf() -> bytes:
+    body = bytes(
+        [
+            0x00,
+            0x90,
+            0x3C,
+            0x64,  # valid note-on
+            0x00,
+            0xFF,
+            0x01,
+            0x7F,  # text meta claims 127 missing payload bytes
+        ]
+    )
+    return (
+        b"MThd"
+        + (6).to_bytes(4, "big")
+        + (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + (480).to_bytes(2, "big")
+        + b"MTrk"
+        + len(body).to_bytes(4, "big")
+        + body
+    )
+
+
 def _make_key_signature_smf() -> bytes:
     """Build a one-track SMF carrying a key-signature meta event (FF 59 02 sf mi).
 
@@ -820,6 +845,22 @@ def test_validate_midi_notes_flags_hanging_note_on() -> None:
         assert hanging.ok is False
         assert hanging.unmatched_note_ons == 1
         assert hanging.unmatched_note_offs == 0
+
+        # Export uses a half-open [source_offset, source_offset + length)
+        # interval, so an off exactly at length_ppq is excluded and must be
+        # reported before export too.
+        _boundary_track, boundary_clip = project.add_midi_clip(0.0, 1.0)
+        project.set_midi_events(
+            boundary_clip,
+            [
+                Project.midi_note_on(0.0, 0, 0, 61, 100),
+                Project.midi_note_off(1.0, 0, 0, 61, 0),
+            ],
+        )
+        boundary = project.validate_midi_notes(boundary_clip)
+        assert boundary.ok is False
+        assert boundary.unmatched_note_ons == 1
+        assert boundary.unmatched_note_offs == 0
     finally:
         project.close()
 
@@ -1062,5 +1103,39 @@ def test_bake_midi_fx_and_last_bounce_compile_result() -> None:
         result = project.last_bounce_compile_result()
         assert result.has_timeline is True
         assert isinstance(result.diagnostics, (list, tuple))
+    finally:
+        project.close()
+
+
+def test_bake_midi_fx_preserves_more_than_512_events() -> None:
+    project = Project()
+    try:
+        _track, clip = project.add_midi_clip(0.0, 8.0)
+        events = [Project.midi_cc(i / 80, 0, 0, i % 128, (i * 3) % 128) for i in range(600)]
+        project.set_midi_events(clip, events)
+        project.bake_midi_fx(clip, "{}")
+        payload = json.loads(project.to_json())
+        baked = payload["midi_content"][str(clip)]
+        assert baked == [
+            {"data0": data0, "data1": data1, "ppq": ppq} for ppq, data0, data1 in events
+        ]
+
+        roundtrip = Project()
+        try:
+            round_clip = roundtrip.import_smf(project.export_smf())
+            roundtrip.bake_midi_fx(round_clip, "{}")
+            round_payload = json.loads(roundtrip.to_json())
+            assert len(round_payload["midi_content"][str(round_clip)]) == 600
+        finally:
+            roundtrip.close()
+    finally:
+        project.close()
+
+
+def test_project_import_smf_rejects_salvaged_truncation_with_diagnostic() -> None:
+    project = Project()
+    try:
+        with pytest.raises(SonareError, match="truncated"):
+            project.import_smf(_make_truncated_smf())
     finally:
         project.close()

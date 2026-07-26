@@ -183,6 +183,10 @@ def test_compat_numeric_and_signal_utilities() -> None:
     assert libsonare.fix_length([1.0, 2.0], target_size=4, pad_value=-1.0) == pytest.approx(
         [1.0, 2.0, -1.0, -1.0]
     )
+    with pytest.raises(ValueError):
+        libsonare.pad_center([1.0, 2.0], target_size=-1)
+    with pytest.raises(ValueError):
+        libsonare.fix_length([1.0, 2.0], target_size=-1)
     assert libsonare.fix_frames([2, 4], x_min=0, x_max=5, pad=True) == [0, 2, 4, 5]
     # Matches librosa.util.peak_pick exactly (index 0 is a peak under its
     # first-frame rule: x[0] >= max/mean of the leading window).

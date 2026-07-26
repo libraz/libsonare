@@ -266,8 +266,9 @@ class Audio:
                 ``-DSONARE_WITH_FFMPEG=ON``).
         """
         lib = _get_lib()
-        length = len(data)
-        c_array = (ctypes.c_uint8 * length).from_buffer_copy(data)
+        encoded = np.frombuffer(data, dtype=np.uint8)
+        length = int(encoded.size)
+        c_array = encoded.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
         handle = ctypes.c_void_p()
         rc = lib.sonare_audio_from_memory(
             c_array,
@@ -595,7 +596,7 @@ class Audio:
         return _pitch_correct_to_midi(self.data, self.sample_rate, current_midi, target_midi)
 
     def note_stretch(
-        self, onset_sample: int = 0, offset_sample: int = 0, stretch_ratio: float = 1.0
+        self, onset_sample: int = 0, offset_sample: int | None = None, stretch_ratio: float = 1.0
     ) -> list[float]:
         """Time-stretch a single note region without changing pitch."""
         return _note_stretch(
@@ -603,7 +604,10 @@ class Audio:
         )
 
     def note_move(
-        self, onset_sample: int = 0, offset_sample: int = 0, target_onset_sample: int = 0
+        self,
+        onset_sample: int = 0,
+        offset_sample: int | None = None,
+        target_onset_sample: int = 0,
     ) -> list[float]:
         """Move a note region to a new onset without changing its duration."""
         return _note_move(
@@ -809,7 +813,7 @@ class Audio:
         hop_length: int = 512,
         fmin: float = 65.0,
         fmax: float = 2093.0,
-        threshold: float = 0.3,
+        threshold: float = 0.1,
         fill_na: bool = False,
     ) -> PitchResult:
         """Estimate fundamental frequency using the YIN algorithm."""
@@ -823,7 +827,7 @@ class Audio:
         hop_length: int = 512,
         fmin: float = 65.0,
         fmax: float = 2093.0,
-        threshold: float = 0.3,
+        threshold: float = 0.1,
         fill_na: bool = False,
     ) -> PitchResult:
         """Estimate fundamental frequency using the pYIN algorithm."""

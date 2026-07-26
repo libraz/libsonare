@@ -302,18 +302,22 @@ def _chroma_variant(
     sample_rate: int,
     hop_length: int,
     n_chroma: int,
+    bins_per_octave: int | None = None,
 ) -> ChromaResult:
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareChromaResult()
-    rc = getattr(lib, fn_name)(
+    args = [
         c_array,
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
         ctypes.c_int(hop_length),
         ctypes.c_int(n_chroma),
-        ctypes.byref(out),
-    )
+    ]
+    if bins_per_octave is not None:
+        args.append(ctypes.c_int(bins_per_octave))
+    args.append(ctypes.byref(out))
+    rc = getattr(lib, fn_name)(*args)
     _check(rc)
     try:
         total = out.n_chroma * out.n_frames
@@ -334,9 +338,17 @@ def chroma_cens(
     sample_rate: int = 22050,
     hop_length: int = 512,
     n_chroma: int = 12,
+    bins_per_octave: int = 36,
 ) -> ChromaResult:
     """Compute CENS chroma features."""
-    return _chroma_variant("sonare_chroma_cens", samples, sample_rate, hop_length, n_chroma)
+    return _chroma_variant(
+        "sonare_chroma_cens_ex",
+        samples,
+        sample_rate,
+        hop_length,
+        n_chroma,
+        bins_per_octave,
+    )
 
 
 def chroma_cqt(
@@ -344,9 +356,17 @@ def chroma_cqt(
     sample_rate: int = 22050,
     hop_length: int = 512,
     n_chroma: int = 12,
+    bins_per_octave: int = 36,
 ) -> ChromaResult:
     """Compute a constant-Q chromagram (librosa.feature.chroma_cqt)."""
-    return _chroma_variant("sonare_chroma_cqt", samples, sample_rate, hop_length, n_chroma)
+    return _chroma_variant(
+        "sonare_chroma_cqt_ex",
+        samples,
+        sample_rate,
+        hop_length,
+        n_chroma,
+        bins_per_octave,
+    )
 
 
 def bass_chroma(
@@ -733,7 +753,7 @@ def pitch_yin(
     hop_length: int = 512,
     fmin: float = 65.0,
     fmax: float = 2093.0,
-    threshold: float = 0.3,
+    threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult:
     """Estimate fundamental frequency using the YIN algorithm.
@@ -745,9 +765,10 @@ def pitch_yin(
         hop_length: Hop length in samples (default 512).
         fmin: Minimum frequency in Hz (default 65.0).
         fmax: Maximum frequency in Hz (default 2093.0).
-        threshold: YIN threshold (default 0.3).
-        fill_na: If True, return 0 for unvoiced f0 frames. If False,
-            keep those frames as NaN to match librosa-style pitch tracks.
+        threshold: YIN threshold (default 0.1).
+        fill_na: Retained for API compatibility. YIN always returns a finite
+            estimate for each complete frame, as librosa.yin does; use
+            ``voiced_flag`` to distinguish threshold crossings.
 
     Returns:
         PitchResult with f0, voiced probabilities, and statistics.
@@ -790,7 +811,7 @@ def pitch_pyin(
     hop_length: int = 512,
     fmin: float = 65.0,
     fmax: float = 2093.0,
-    threshold: float = 0.3,
+    threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult:
     """Estimate fundamental frequency using the pYIN algorithm.
@@ -802,7 +823,7 @@ def pitch_pyin(
         hop_length: Hop length in samples (default 512).
         fmin: Minimum frequency in Hz (default 65.0).
         fmax: Maximum frequency in Hz (default 2093.0).
-        threshold: YIN threshold (default 0.3).
+        threshold: YIN threshold (default 0.1).
         fill_na: If True, return 0 for unvoiced f0 frames. If False,
             keep those frames as NaN to match librosa-style pitch tracks.
 

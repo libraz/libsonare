@@ -147,6 +147,39 @@ def test_analyze_returns_extended_fields(analyze_result) -> None:
         assert isinstance(result.melody, AnalysisMelody)
 
 
+def test_analysis_json_uses_canonical_display_names() -> None:
+    """Names emitted by the core are authoritative; Python must not rebuild them."""
+    from libsonare._analysis_detection import _parse_analysis_json
+
+    result = _parse_analysis_json(
+        {
+            "chords": [
+                {
+                    "root": 0,
+                    "bass": 0,
+                    "quality": 0,
+                    "start": 0,
+                    "end": 1,
+                    "confidence": 1,
+                    "name": "canonical-chord",
+                }
+            ],
+            "sections": [
+                {
+                    "type": 2,
+                    "start": 0,
+                    "end": 1,
+                    "energyLevel": 0.5,
+                    "confidence": 1,
+                    "name": "canonical-section",
+                }
+            ],
+        }
+    )
+    assert result.chords[0].name == "canonical-chord"
+    assert result.sections[0].name == "canonical-section"
+
+
 @requires_json
 def test_analyze_beat_strengths_align_with_beat_times(analyze_result) -> None:
     """beat_strengths has the same length as beat_times (JSON path)."""

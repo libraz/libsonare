@@ -60,7 +60,13 @@ def test_nnls_chroma() -> None:
 
     # 0.5 s keeps the NNLS solve (the dominant cost) fast without losing coverage.
     samples = _generate_sine(440, 22050, 0.5)
-    n_frames, data = nnls_chroma(samples, sample_rate=22050)
+    n_frames, data = nnls_chroma(
+        samples,
+        sample_rate=22050,
+        enable_stft_blend=False,
+        stft_blend_weight=0.0,
+        stft_blend_n_fft=2048,
+    )
     assert n_frames > 0
     assert len(data) == 12 * n_frames
     assert _all_finite(data)

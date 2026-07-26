@@ -104,6 +104,7 @@ class _EngineIoMixin:
         )
 
     def set_record_offset_samples(self, offset_samples: int) -> None:
+        """Shift capture on the timeline; positive values delay the punch window."""
         _check(
             _get_lib().sonare_engine_set_record_offset_samples(
                 self._require_handle(), int(offset_samples)

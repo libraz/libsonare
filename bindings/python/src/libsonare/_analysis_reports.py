@@ -14,6 +14,7 @@ from ._ffi import (
     SonareAnalyzeProgressCallback,
     SonareBpmAnalysisResult,
     SonareDynamicsResult,
+    SonareMusicAnalyzeOptions,
     SonareRhythmResult,
     SonareTimbreResult,
 )
@@ -42,6 +43,21 @@ from .types import (
 def analyze(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
+    *,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    bpm_min: float = 60.0,
+    bpm_max: float = 200.0,
+    start_bpm: float = 120.0,
+    use_triads_only: bool = True,
+    use_hpss: bool = True,
+    chroma_highpass_hz: float = 80.0,
+    use_bass_weighted: bool = True,
+    chroma_hop_multiplier: int = 4,
+    use_chord_hmm: bool = False,
+    use_chord_key_context: bool = False,
+    chord_hmm_beam_width: int = 24,
+    detect_chord_inversions: bool = False,
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
@@ -76,12 +92,37 @@ def analyze(
 
     if hasattr(lib, "sonare_analyze_json"):
         out_json = ctypes.c_char_p()
-        rc = lib.sonare_analyze_json(
-            c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.byref(out_json),
-        )
+        if hasattr(lib, "sonare_analyze_json_ex"):
+            options = SonareMusicAnalyzeOptions(
+                n_fft=n_fft,
+                hop_length=hop_length,
+                bpm_min=bpm_min,
+                bpm_max=bpm_max,
+                start_bpm=start_bpm,
+                use_triads_only=int(use_triads_only),
+                use_hpss=int(use_hpss),
+                chroma_highpass_hz=chroma_highpass_hz,
+                use_bass_weighted=int(use_bass_weighted),
+                chroma_hop_multiplier=chroma_hop_multiplier,
+                use_chord_hmm=int(use_chord_hmm),
+                use_chord_key_context=int(use_chord_key_context),
+                chord_hmm_beam_width=chord_hmm_beam_width,
+                detect_chord_inversions=int(detect_chord_inversions),
+            )
+            rc = lib.sonare_analyze_json_ex(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.byref(options),
+                ctypes.byref(out_json),
+            )
+        else:
+            rc = lib.sonare_analyze_json(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.byref(out_json),
+            )
         _check(rc)
         try:
             raw = out_json.value

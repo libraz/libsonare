@@ -61,6 +61,11 @@ def test_mastering_accepts_release_and_input_rate_knobs() -> None:
         libsonare.mastering(samples, sample_rate=sr, ceiling_db=float("inf"))
     recovered = libsonare.mastering(samples, sample_rate=sr, target_lufs=-14.0, ceiling_db=-1.0)
     assert all(math.isfinite(value) for value in recovered.samples)
+    assert isinstance(recovered.loudness_target_limited, bool)
+    ceiling_limited = libsonare.mastering(
+        samples, sample_rate=sr, target_lufs=-2.0, ceiling_db=-1.0
+    )
+    assert ceiling_limited.loudness_target_limited
 
 
 def test_named_mastering_processors() -> None:
@@ -350,6 +355,7 @@ def test_mastering_chain_reports_output_metrics() -> None:
     assert result.output_true_peak_dbtp <= 0.0
     assert math.isfinite(result.output_lra)
     assert result.output_lra >= 0.0
+    assert isinstance(result.loudness_target_limited, bool)
 
     # A compressor stage ran, so at least one gain-reduction entry is reported.
     gr_stages = [r.stage for r in result.stage_gain_reductions]

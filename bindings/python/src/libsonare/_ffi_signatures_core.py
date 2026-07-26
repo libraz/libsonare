@@ -554,6 +554,16 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(SonareInverseResult),
         ]
+        if hasattr(lib, "sonare_mfcc_to_mel_ex"):
+            lib.sonare_mfcc_to_mel_ex.restype = ctypes.c_int32
+            lib.sonare_mfcc_to_mel_ex.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_float,
+                ctypes.POINTER(SonareInverseResult),
+            ]
         lib.sonare_mfcc_to_audio.restype = ctypes.c_int32
         lib.sonare_mfcc_to_audio.argtypes = [
             ctypes.POINTER(ctypes.c_float),
@@ -582,6 +592,24 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_float,
                 ctypes.c_float,
                 ctypes.c_int,
+                ctypes.c_int,
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+        if hasattr(lib, "sonare_mfcc_to_audio_ex2"):
+            lib.sonare_mfcc_to_audio_ex2.restype = ctypes.c_int32
+            lib.sonare_mfcc_to_audio_ex2.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_float,
+                ctypes.c_float,
+                ctypes.c_int,
+                ctypes.c_float,
                 ctypes.c_int,
                 ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
                 ctypes.POINTER(ctypes.c_size_t),
@@ -797,6 +825,18 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_float),
             ctypes.c_size_t,
             ctypes.c_int,
+            ctypes.POINTER(ctypes.c_char_p),
+        ]
+    if hasattr(lib, "sonare_music_analyze_options_default"):
+        lib.sonare_music_analyze_options_default.restype = SonareMusicAnalyzeOptions
+        lib.sonare_music_analyze_options_default.argtypes = []
+    if hasattr(lib, "sonare_analyze_json_ex"):
+        lib.sonare_analyze_json_ex.restype = ctypes.c_int32
+        lib.sonare_analyze_json_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMusicAnalyzeOptions),
             ctypes.POINTER(ctypes.c_char_p),
         ]
 

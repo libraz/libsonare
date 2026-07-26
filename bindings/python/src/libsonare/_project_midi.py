@@ -71,8 +71,8 @@ class _ProjectMidiMixin:
     def import_smf(self, data: bytes) -> int:
         """Import an in-memory SMF buffer; return the first added clip id.
 
-        Raises ``ValueError`` (via the error code) on malformed input, never
-        crashing.
+        Raises :class:`SonareError` on malformed or partially truncated input
+        instead of installing a silently shortened clip.
         """
         lib = _get_lib()
         raw = bytes(data)
@@ -180,7 +180,7 @@ class _ProjectMidiMixin:
         )
 
     def set_midi_fx(self, clip_id: int, config_json: str) -> None:
-        """Configure and apply a clip's MIDI-FX chain from JSON."""
+        """Backward alias that destructively bakes a clip's MIDI-FX chain."""
         _check(
             _get_lib().sonare_project_set_midi_fx(
                 self._require_handle(),
@@ -192,9 +192,10 @@ class _ProjectMidiMixin:
     def bake_midi_fx(self, clip_id: int, config_json: str) -> None:
         """Destructively bake a clip's MIDI-FX chain from JSON.
 
-        Canonical name matching the Node / WASM ``bakeMidiFx`` surface; unlike
-        :meth:`set_midi_fx` (a non-destructive insert) this rewrites the clip's
-        stored events in place.
+        Canonical name matching the Node / WASM ``bakeMidiFx`` surface. Large
+        clips are drained without truncation; failure leaves the original clip
+        unchanged. :meth:`set_midi_fx` is a backward alias for this same
+        destructive operation.
         """
         _check(
             _get_lib().sonare_project_bake_midi_fx(
@@ -205,7 +206,7 @@ class _ProjectMidiMixin:
         )
 
     def validate_midi_notes(self, clip_id: int) -> NotePairValidation:
-        """Check a MIDI clip for hanging / unmatched notes before bouncing."""
+        """Check the clip's exported playback window for unmatched notes."""
         result = SonareNotePairValidation()
         _check(
             _get_lib().sonare_project_validate_midi_notes(

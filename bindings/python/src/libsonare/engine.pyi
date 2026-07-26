@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping, Sequence
 
-from ._project import BuiltinSynthConfig, Sf2InstrumentConfig, SynthPatch
+from ._project import BuiltinSynthConfig, MidiCcBinding, Sf2InstrumentConfig, SynthPatch
 from .types import (
     AutomationPoint,
     ClipPageRequest,
@@ -239,6 +239,7 @@ class RealtimeEngine:
         min_value: float = 0.0,
         max_value: float = 1.0,
     ) -> None: ...
+    def bind_midi_cc_binding(self, binding: MidiCcBinding) -> None: ...
     def clear_midi_cc_bindings(self) -> None: ...
     def midi_cc_binding_count(self) -> int: ...
     def set_midi_fx(self, destination_id: int, config_json: str) -> None: ...

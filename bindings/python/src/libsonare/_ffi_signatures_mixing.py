@@ -83,6 +83,13 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_int,
                 ctypes.POINTER(SonareMixMeterSnapshot),
             ]
+        if hasattr(lib, "sonare_mixer_bus_meter"):
+            lib.sonare_mixer_bus_meter.restype = ctypes.c_int32
+            lib.sonare_mixer_bus_meter.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_char_p,
+                ctypes.POINTER(SonareMixMeterSnapshot),
+            ]
         lib.sonare_strip_read_goniometer_latest.restype = ctypes.c_size_t
         lib.sonare_strip_read_goniometer_latest.argtypes = [
             ctypes.c_void_p,
@@ -137,6 +144,14 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
                     ctypes.c_void_p,
                     ctypes.c_char_p,
                     ctypes.c_float,
+                ]
+            if hasattr(lib, "sonare_mixer_set_vca_group_members"):
+                lib.sonare_mixer_set_vca_group_members.restype = ctypes.c_int32
+                lib.sonare_mixer_set_vca_group_members.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_char_p,
+                    ctypes.POINTER(ctypes.c_char_p),
+                    ctypes.c_size_t,
                 ]
             lib.sonare_mixer_remove_vca_group.restype = ctypes.c_int32
             lib.sonare_mixer_remove_vca_group.argtypes = [ctypes.c_void_p, ctypes.c_char_p]

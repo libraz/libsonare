@@ -298,6 +298,7 @@ from .analyzer import (
     metering_phase_scope_decimated as metering_phase_scope_decimated,
 )
 from .analyzer import metering_rms_db as metering_rms_db
+from .analyzer import metering_silence_ratio as metering_silence_ratio
 from .analyzer import (
     metering_spectrum as metering_spectrum,
 )
