@@ -30,6 +30,12 @@ namespace sonare::engine {
 template <std::size_t MaxChannels>
 class ChannelDelay {
  public:
+  /// CONTROL thread: limit how many lane buffers subsequent delay changes
+  /// prepare. Call before set_delay_q8() when the host knows its channel width.
+  void set_prepared_channels(int channels) {
+    prepared_channels_ = std::clamp(channels, 1, static_cast<int>(MaxChannels));
+  }
+
   /// CONTROL thread: set the per-lane delay in Q8.8 samples (reallocates lane
   /// storage). Negative requests clamp to 0 (pass-through). When the fractional
   /// part is 0 the exact integer DelayLine path is used; otherwise a Lagrange3
@@ -38,11 +44,12 @@ class ChannelDelay {
     delay_q8_ = std::max(0, delay_q8);
     const int integer_delay = delay_q8_ >> 8;
     fractional_ = (delay_q8_ & 0xFF) != 0;
-    for (rt::DelayLine& lane : lanes_) {
-      lane.prepare(static_cast<std::size_t>(integer_delay));
+    for (int channel = 0; channel < prepared_channels_; ++channel) {
+      lanes_[static_cast<std::size_t>(channel)].prepare(static_cast<std::size_t>(integer_delay));
     }
     const std::size_t frac_size = static_cast<std::size_t>(std::max(8, integer_delay + 8));
-    for (FractionalLane& lane : fractional_lanes_) {
+    for (int channel = 0; channel < prepared_channels_; ++channel) {
+      FractionalLane& lane = fractional_lanes_[static_cast<std::size_t>(channel)];
       lane.buffer.assign(frac_size, 0.0f);
       lane.write_index = 0;
     }
@@ -54,10 +61,11 @@ class ChannelDelay {
   /// AUDIO thread: zero every lane's history (flush stale audio on a transport
   /// discontinuity such as stop/seek/loop). Allocation-free.
   void reset() noexcept {
-    for (rt::DelayLine& lane : lanes_) {
-      lane.reset();
+    for (int channel = 0; channel < prepared_channels_; ++channel) {
+      lanes_[static_cast<std::size_t>(channel)].reset();
     }
-    for (FractionalLane& lane : fractional_lanes_) {
+    for (int channel = 0; channel < prepared_channels_; ++channel) {
+      FractionalLane& lane = fractional_lanes_[static_cast<std::size_t>(channel)];
       std::fill(lane.buffer.begin(), lane.buffer.end(), 0.0f);
       lane.write_index = 0;
     }
@@ -73,7 +81,7 @@ class ChannelDelay {
     if (delay_q8_ == 0 || channels == nullptr || num_frames <= 0) {
       return;
     }
-    const int n = std::min<int>(num_channels, static_cast<int>(MaxChannels));
+    const int n = std::min(num_channels, prepared_channels_);
     for (int ch = 0; ch < n; ++ch) {
       float* buffer = channels[ch];
       if (buffer == nullptr) {
@@ -102,6 +110,7 @@ class ChannelDelay {
   std::array<rt::DelayLine, MaxChannels> lanes_{};
   std::array<FractionalLane, MaxChannels> fractional_lanes_{};
   int delay_q8_ = 0;
+  int prepared_channels_ = static_cast<int>(MaxChannels);
   bool fractional_ = false;
 };
 

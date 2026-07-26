@@ -30,6 +30,7 @@ using sonare::midi::Smf2ExportOptions;
 using sonare::midi::Smf2ImportResult;
 using sonare::midi::SmfExportOptions;
 using sonare::midi::SmfImportResult;
+using sonare::midi::SmfStatus;
 using sonare::midi::Ump;
 
 void push_u32(std::vector<uint8_t>* v, uint32_t x) {
@@ -122,9 +123,13 @@ TEST_CASE("SMF import bounds a corrupt in-track meta length and keeps later trac
   smf.insert(smf.end(), track1.begin(), track1.end());
 
   const SmfImportResult r = import_smf(smf);
-  REQUIRE(r.ok());
+  REQUIRE_FALSE(r.ok());
+  REQUIRE(r.status == SmfStatus::kTruncated);
+  REQUIRE(r.diagnostic.find("truncated") != std::string::npos);
+  REQUIRE(r.skipped_events >= 1);
   // Both tracks yield a clip; the corrupt track keeps only its pre-corruption
-  // note-on, and the second track is fully intact.
+  // note-on, and the second track is fully intact for diagnostics/recovery, but
+  // callers cannot mistake the partial result for a lossless success.
   REQUIRE(r.clips.size() == 2);
 
   bool found_60 = false;
@@ -191,7 +196,10 @@ TEST_CASE("SMF import resyncs after a trailing VLQ overruns a non-final track bo
   smf.insert(smf.end(), track1.begin(), track1.end());
 
   const SmfImportResult r = import_smf(smf);
-  REQUIRE(r.ok());
+  REQUIRE_FALSE(r.ok());
+  REQUIRE(r.status == SmfStatus::kTruncated);
+  REQUIRE(r.diagnostic.find("truncated") != std::string::npos);
+  REQUIRE(r.skipped_events >= 1);
   REQUIRE(r.clips.size() == 2);
 
   bool found_60 = false;

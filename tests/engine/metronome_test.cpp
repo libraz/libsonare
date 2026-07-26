@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <iterator>
 
 TEST_CASE("Metronome collects beat clicks at sample-accurate offsets", "[engine][metronome]") {
@@ -65,6 +66,20 @@ TEST_CASE("Metronome process renders accented and regular clicks", "[engine][met
   // Both clicks decay to exactly zero at their final sample (no tail step).
   REQUIRE(left[3] == 0.0f);
   REQUIRE(left[24003] == 0.0f);
+}
+
+TEST_CASE("Metronome reports fixed event-list overflow", "[engine][metronome]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  tempo.set_segments({{0.0, 100000.0, 0.0}});
+
+  sonare::engine::Metronome metro;
+  metro.prepare(48000.0, &tempo);
+  metro.set_config({true, 0.25f, 0.75f, 384000});
+
+  std::array<float, 128> left{};
+  float* channels[] = {left.data()};
+  REQUIRE_FALSE(metro.process(channels, 1, static_cast<int>(left.size()), 0));
 }
 
 TEST_CASE("Metronome click envelope ramps up and decays to zero", "[engine][metronome]") {
@@ -133,6 +148,25 @@ TEST_CASE("Metronome click is continuous across sub-block boundaries", "[engine]
   // The click genuinely straddled the split point (non-zero on both sides).
   REQUIRE(whole[kSplit - 1] > 0.0f);
   REQUIRE(whole[kSplit + 1] > 0.0f);
+}
+
+TEST_CASE("Metronome bounds hostile click look-back and beat iteration",
+          "[engine][metronome][rt]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  tempo.set_segments({{0.0, sonare::transport::kMaxPublicTempoBpm, 0.0}});
+
+  sonare::engine::Metronome metro;
+  metro.prepare(48000.0, &tempo);
+  metro.set_config({true, 0.25f, 0.75f, 2000000000, 2.0});
+  REQUIRE(metro.config().click_samples == 48000);
+  REQUIRE(metro.config().click_seconds == 1.0);
+
+  std::array<float, 128> left{};
+  float* channels[] = {left.data()};
+  metro.process(channels, 1, static_cast<int>(left.size()), 0);
+  REQUIRE(
+      std::all_of(left.begin(), left.end(), [](float sample) { return std::isfinite(sample); }));
 }
 
 TEST_CASE("Metronome count-in ends at requested bar boundary", "[engine][metronome]") {

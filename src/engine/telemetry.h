@@ -45,6 +45,12 @@ enum class TelemetryErrorCode : uint16_t {
   // dropped (existing slots keep advancing); the value carries the number of
   // drops accrued during the block.
   kInsertAutomationOverflow,
+  // MIDI clock generation reached its fixed per-block realtime budget. The
+  // value is the number of overflow occurrences (normally one per block).
+  kMidiClockOverflow,
+  // Metronome beat collection exceeded its fixed realtime event list. The
+  // value is the number of overflow occurrences.
+  kMetronomeOverflow,
 };
 
 struct Telemetry {

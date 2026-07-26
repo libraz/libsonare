@@ -8,6 +8,7 @@
 #include "engine/realtime_engine_internal.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::engine {
 
@@ -45,6 +46,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   const transport::TempoMap& tempo_map = *(active_tempo_map_ ? active_tempo_map_ : &tempo_map_);
   const auto state = transport_.snapshot();
   clip_page_underrun_reported_this_block_ = false;
+#if defined(SONARE_WITH_MIXING)
+  // Gate scope capture once for the host block. Automation may split this block
+  // into many sub-blocks, but those splits must not accelerate the interval
+  // counter or change whether the block is due.
+  scope_tap_.begin_block(scope_interval_frames_.load(std::memory_order_relaxed), frames);
+#endif
   // Adopt the latest published clip / automation snapshots exactly once at
   // block start. Every per-sub-block read below then sees a stable set, so a
   // control-thread publish can never swap data mid-block.
@@ -218,9 +225,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // granularity. Register each punch edge that falls inside this block.
   const CaptureSink::PunchState punch = capture_sink_.punch_state_rt();
   if (punch.armed && punch.punch_enabled) {
+    const int64_t record_offset = record_offset_samples_.load(std::memory_order_acquire);
     CaptureBoundaryList capture_boundaries;
-    collect_capture_boundaries(state.sample_position, frames, punch.punch_start_sample,
-                               punch.punch_end_sample, &capture_boundaries);
+    collect_capture_boundaries(state.sample_position, frames,
+                               numeric::saturating_add(punch.punch_start_sample, record_offset),
+                               numeric::saturating_add(punch.punch_end_sample, record_offset),
+                               &capture_boundaries);
     for (size_t i = 0; i < capture_boundaries.size; ++i) {
       boundary_splitter_.add_marker(capture_boundaries.offsets[i]);
     }
@@ -269,6 +279,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     transport_.advance(frames - previous_offset);
   }
   clip_player_.end_page_miss_block();
+#if defined(SONARE_WITH_MIXING)
+  // Publish the master scope from the complete host block. Automation and clip
+  // boundaries may have split rendering into 64-sample chunks, but spectrum
+  // resolution must remain tied to the host block, not those control splits.
+  scope_tap_.process(io, num_channels, frames, state.render_frame, 0);
+#endif
 
   const auto end_state = transport_.snapshot();
   const uint32_t unknown_target_delta =
@@ -338,11 +354,6 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   const bool capture_input = capture_source() == CaptureSource::kInput;
   const int scratch_channels =
       std::min<int>(std::max(num_channels, 0), static_cast<int>(sub_channels.size()));
-#if defined(SONARE_WITH_MIXING)
-  // Gate spectrum/vectorscope capture for this block; the per-target taps inside
-  // the mixer + the master tap below self-skip when this block is not due.
-  scope_tap_.begin_block(scope_interval_frames_.load(std::memory_order_relaxed), num_frames);
-#endif
   if (monitor_out && num_frames > 0 && offset >= 0) {
     for (int ch = 0; ch < scratch_channels; ++ch) {
       if (monitor_out[ch]) {
@@ -560,9 +571,6 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
 #endif
     }
 #endif
-    if (transport_rolling) {
-      metronome_.process(sub_channels.data(), channels, num_frames, transport_.sample_position());
-    }
 #if defined(SONARE_WITH_MIXING)
     // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs
     // sample-accurately at the sub-block's timeline position when enabled.
@@ -607,15 +615,22 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   if (channels > 0 && num_frames > 0) {
 #if defined(SONARE_WITH_MIXING)
     meter_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame());
-    // Master target_id 0 mirrors the master meter target so the host can pair a
-    // master spectrum/vectorscope snapshot with its meter record.
-    scope_tap_.process(sub_channels.data(), channels, num_frames, transport_.render_frame(), 0);
 #endif
     const float* const* capture_channels =
         capture_input ? reinterpret_cast<const float* const*>(input_capture_channels_.data())
                       : reinterpret_cast<const float* const*>(sub_channels.data());
     if (!capture_sink_.punch_state_rt().punch_enabled || transport_.playing()) {
-      capture_sink_.process(capture_channels, channels, num_frames, transport_.sample_position());
+      const int64_t record_offset = record_offset_samples_.load(std::memory_order_acquire);
+      capture_sink_.process(capture_channels, channels, num_frames,
+                            numeric::saturating_sub(transport_.sample_position(), record_offset));
+    }
+    // The metronome is a monitor/cue signal: render it after master metering,
+    // scope capture, graph processing, and output capture so it remains audible
+    // to the player without being committed to recorded program audio.
+    if (transport_.playing() && !metronome_.process(sub_channels.data(), channels, num_frames,
+                                                    transport_.sample_position())) {
+      enqueue_error(TelemetryErrorCode::kMetronomeOverflow, transport_.render_frame(),
+                    transport_.sample_position(), 1);
     }
   }
 }

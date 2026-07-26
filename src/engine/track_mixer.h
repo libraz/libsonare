@@ -221,7 +221,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
  private:
   struct LaneState {
     uint32_t track_id = 0;
-    rt::ParamSmoother fader_db{0.0f, 5.0f, 48000.0};
+    // Linear gain, even though the public parameter is dB. Converting once at
+    // control rate matches ChannelStrip's gain ramp and avoids pow() per sample.
+    rt::ParamSmoother fader_gain{1.0f, 5.0f, 48000.0};
     rt::ParamSmoother pan{0.0f, 5.0f, 48000.0};
     rt::ParamSmoother gate{1.0f, 10.0f, 48000.0};
     bool solo = false;
@@ -249,7 +251,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   struct BusState {
     uint32_t bus_id = 0;
-    rt::ParamSmoother gain_db{0.0f, 5.0f, 48000.0};
+    rt::ParamSmoother gain{1.0f, 5.0f, 48000.0};
     // Bus output trim / width / polarity, mirroring a strip. Trim and polarity
     // run before the insert chain, width after it. At their defaults (0 dB /
     // width 1 / no invert) the per-block processing is skipped entirely, so a
@@ -293,6 +295,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // resolves to a no-op rather than dangling after a strip swap / republish.
   struct InsertAutoSlot {
     bool active = false;
+    bool assigned = false;
     bool is_bus = false;
     size_t index = 0;  // lane index (track) or bus index
     unsigned int insert_index = 0;

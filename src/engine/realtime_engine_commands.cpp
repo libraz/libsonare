@@ -454,7 +454,6 @@ void RealtimeEngine::settle_parameters() noexcept {
     automation_.set_parameter(slot.target_id, target);
 #endif
     slot.active = false;
-    slot.target_id = 0;
   }
 #if defined(SONARE_WITH_MIXING)
   track_mixer_runtime_.settle_smoothers();
@@ -476,14 +475,23 @@ void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
   // starts from the slot's current value (its last applied output) so repeated
   // retargets remain continuous.
   SmoothedParam* free_slot = nullptr;
+  SmoothedParam* settled_match = nullptr;
   for (SmoothedParam& slot : smoothed_params_) {
-    if (slot.active && slot.target_id == target_id) {
-      slot.smoother.set_target(value);
-      return;
+    if (slot.assigned && slot.target_id == target_id) {
+      if (slot.active) {
+        slot.smoother.set_target(value);
+        return;
+      }
+      settled_match = &slot;
     }
     if (!slot.active && free_slot == nullptr) {
       free_slot = &slot;
     }
+  }
+  if (settled_match != nullptr) {
+    settled_match->active = true;
+    settled_match->smoother.set_target(value);
+    return;
   }
   if (free_slot == nullptr) {
     enqueue_error(TelemetryErrorCode::kSmoothedParameterCapacity, transport_.render_frame(),
@@ -494,7 +502,12 @@ void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
     return;
   }
   free_slot->active = true;
+  free_slot->assigned = true;
   free_slot->target_id = target_id;
+  // A free slot may have carried an unrelated target previously. The first
+  // value for a newly claimed target is its baseline, not a destination to
+  // glide toward from the former target's last value.
+  free_slot->smoother.reset(value);
   free_slot->smoother.set_target(value);
 }
 
@@ -528,6 +541,7 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
         enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                       transport_.sample_position(), slot.target_id);
         slot.active = false;
+        slot.assigned = false;
         slot.target_id = 0;
         continue;
       }
@@ -542,7 +556,6 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
     if (std::abs(slot.smoother.target() - current) <= kSettleEpsilon) {
       slot.smoother.reset(slot.smoother.target());
       slot.active = false;
-      slot.target_id = 0;
     }
   }
 #if defined(SONARE_WITH_MIXING)

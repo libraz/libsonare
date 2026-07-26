@@ -12,6 +12,26 @@ using sonare::constants::kPiD;
 // Floating-point fuzz for the inclusive PPQ beat-boundary comparison.
 constexpr double kPpqEpsilon = 1.0e-9;
 
+int maximum_click_samples(double sample_rate) noexcept {
+  const double finite_rate =
+      std::isfinite(sample_rate) && sample_rate > 0.0 ? sample_rate : 48000.0;
+  return std::max(1, std::min(kMaxMetronomeClickSamples,
+                              static_cast<int>(std::lround(
+                                  std::min(finite_rate * kMaxMetronomeClickSeconds,
+                                           static_cast<double>(kMaxMetronomeClickSamples))))));
+}
+
+MetronomeConfig normalized_config(MetronomeConfig config, double sample_rate) noexcept {
+  if (!std::isfinite(config.beat_gain) || config.beat_gain < 0.0f) config.beat_gain = 0.0f;
+  if (!std::isfinite(config.accent_gain) || config.accent_gain < 0.0f) config.accent_gain = 0.0f;
+  if (!std::isfinite(config.click_seconds) || config.click_seconds <= 0.0) {
+    config.click_seconds = 0.002;
+  }
+  config.click_seconds = std::min(config.click_seconds, kMaxMetronomeClickSeconds);
+  config.click_samples = std::clamp(config.click_samples, 0, maximum_click_samples(sample_rate));
+  return config;
+}
+
 void MetronomeEventList::clear() noexcept {
   size = 0;
   overflowed = false;
@@ -29,6 +49,11 @@ bool MetronomeEventList::add(MetronomeEvent event) noexcept {
 void Metronome::prepare(double sample_rate, const transport::TempoMap* tempo_map) noexcept {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   tempo_map_ = tempo_map;
+  config_ = normalized_config(config_, sample_rate_);
+}
+
+void Metronome::set_config(MetronomeConfig config) noexcept {
+  config_ = normalized_config(config, sample_rate_);
 }
 
 void Metronome::collect_events(int64_t block_start_sample, int num_frames, MetronomeEventList* out,
@@ -71,7 +96,9 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames, Metro
       const transport::BarBeat beat = tempo_map_->ppq_to_bar_beat(ppq);
       // Offset is relative to the block start and may be negative for a beat
       // that began within the look-back window (its click tail continues here).
-      out->add({static_cast<int>(sample - block_start_sample), beat.beat == 1, sample});
+      if (!out->add({static_cast<int>(sample - block_start_sample), beat.beat == 1, sample})) {
+        break;
+      }
     }
     // If the next beat would cross into a new (shorter-beat) signature segment,
     // re-snap to that segment's bar grid so beats remain grid-aligned.
@@ -90,9 +117,9 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames, Metro
   }
 }
 
-void Metronome::process(float* const* channels, int num_channels, int num_frames,
+bool Metronome::process(float* const* channels, int num_channels, int num_frames,
                         int64_t block_start_sample) const noexcept {
-  if (!channels || num_channels <= 0 || num_frames <= 0) return;
+  if (!channels || num_channels <= 0 || num_frames <= 0) return true;
   const int click_len =
       config_.click_samples > 0
           ? config_.click_samples
@@ -141,6 +168,7 @@ void Metronome::process(float* const* channels, int num_channels, int num_frames
       }
     }
   }
+  return !events.overflowed;
 }
 
 int64_t Metronome::count_in_end_sample(int64_t start_sample, int bars) const noexcept {

@@ -201,6 +201,7 @@ class RealtimeEngine : private ClipPageRequestSink {
                        int64_t render_frame) noexcept;
   bool bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id, float min_value,
                     float max_value) noexcept;
+  bool bind_midi_cc(const midi::CcBinding& binding) noexcept;
   void clear_midi_cc_bindings() noexcept;
   size_t midi_cc_binding_count() const noexcept;
   void set_midi_output_sink(host::MidiOutputSink* sink) noexcept {
@@ -292,6 +293,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   CaptureSource capture_source() const noexcept {
     return capture_source_.load(std::memory_order_acquire);
   }
+  /// Shift the capture window on the engine timeline. A positive offset delays
+  /// capture, so output index 0 corresponds to punch_start + offset.
   void set_record_offset_samples(int64_t offset_samples) noexcept {
     record_offset_samples_.store(offset_samples, std::memory_order_release);
   }
@@ -726,6 +729,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   static constexpr size_t kMaxMasterInsertAutomations = 16;
   struct MasterInsertAutoSlot {
     bool active = false;
+    bool assigned = false;
     unsigned int insert_index = 0;
     unsigned int param_id = 0;
     rt::ParamSmoother smoother{};
@@ -751,6 +755,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   struct SmoothedParam {
     uint32_t target_id = 0;
     bool active = false;
+    bool assigned = false;
     rt::ParamSmoother smoother{};
   };
   std::array<SmoothedParam, kMaxSmoothedParams> smoothed_params_{};

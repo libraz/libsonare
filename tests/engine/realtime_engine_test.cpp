@@ -1265,7 +1265,7 @@ TEST_CASE("RealtimeEngine toggles owned master strip insert bypass", "[engine][r
   REQUIRE(rms(eq_out) > rms(bypassed_out) * 1.5);
 }
 
-TEST_CASE("RealtimeEngine track lane solo does not mute metronome or output capture",
+TEST_CASE("RealtimeEngine metronome stays audible but is excluded from output capture",
           "[engine][realtime]") {
   constexpr int kBlock = 128;
   sonare::engine::RealtimeEngine engine;
@@ -1298,8 +1298,18 @@ TEST_CASE("RealtimeEngine track lane solo does not mute metronome or output capt
     capture_peak = std::max(capture_peak, std::abs(captured_l[static_cast<size_t>(i)]));
   }
   REQUIRE(output_peak > 0.0f);
-  REQUIRE(capture_peak == Catch::Approx(output_peak).margin(0.0001f));
+  REQUIRE(capture_peak == 0.0f);
   REQUIRE(engine.captured_frames() == kBlock);
+
+  sonare::engine::RealtimeEngine offline;
+  offline.prepare(48000.0, kBlock);
+  offline.set_metronome_config(sonare::engine::MetronomeConfig{true, 0.25f, 0.75f, 32, 0.0});
+  std::array<float, kBlock> bounce_l{};
+  std::array<float, kBlock> bounce_r{};
+  float* bounce[] = {bounce_l.data(), bounce_r.data()};
+  offline.render_offline(bounce, 2, kBlock, kBlock);
+  REQUIRE(*std::max_element(bounce_l.begin(), bounce_l.end()) == 0.0f);
+  REQUIRE(offline.metronome_config().enabled);
 }
 #endif
 

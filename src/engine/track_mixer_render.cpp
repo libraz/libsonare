@@ -22,7 +22,7 @@ bool TrackMixerRuntime::render_clips(ClipPlayer& player, float* const* channels,
 
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
-  prepare_lanes_from_snapshot(*lanes);
+  if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   // Advance the insert-parameter smoothers once for this sub-block before any
   // lane/bus chain runs, so an automated insert param reaches its processor at
   // the same cadence as the lane fader smoother (no double advance: the bus
@@ -68,7 +68,7 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
   // Self-contained single-source mix: clear the buses, mix this one source into
   // its lane, then process the buses once -- exactly begin/into-lane/finish for
   // one source (kept bit-identical to the historical inline implementation).
-  prepare_lanes_from_snapshot(*lanes);
+  if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   advance_insert_automations(num_samples);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
@@ -91,7 +91,7 @@ bool TrackMixerRuntime::begin_source_mix(int num_channels, int num_samples) noex
   if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) {
     return false;
   }
-  prepare_lanes_from_snapshot(*lanes);
+  if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   advance_insert_automations(num_samples);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
@@ -296,7 +296,7 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
       bus.width.process(lane_channel_ptrs_.data(), 2, num_samples);
     }
     for (int i = 0; i < num_samples; ++i) {
-      const float gain = std::pow(10.0f, bus.gain_db.process() / 20.0f);
+      const float gain = bus.gain.process();
       for (int ch = 0; ch < bus_channels; ++ch) {
         float* bus_channel_ptr = bus_channel(bus_index, ch);
         if (bus_channel_ptr) bus_channel_ptr[i] *= gain;
@@ -374,7 +374,7 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
     const mixing::PanLaw lane_pan_law =
         lane.strip ? lane.strip->pan_law() : mixing::PanLaw::Linear0dB;
     for (int i = 0; i < num_samples; ++i) {
-      const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
+      const float fader = lane.fader_gain.process();
       const float gate = lane.gate.process();
       const float pan = lane.pan.process();
       float left_gain = fader * gate;
@@ -423,11 +423,7 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
     params = lane.strip->surround_pan_params();
   }
   mixing::SurroundPanGains target;
-  try {
-    target = mixing::compute_surround_pan_gains(params, dest_layout);
-  } catch (...) {
-    return;
-  }
+  if (!mixing::try_compute_surround_pan_gains(params, dest_layout, &target)) return;
   const int planes = std::min(dest_channels, mixing::kMaxSurroundPlanes);
   // First surround block for this lane: snap the carried scatter gains to the
   // target so the block starts at full placement instead of fading in from
@@ -441,7 +437,7 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
   }
   const float inv_n = num_samples > 0 ? 1.0f / static_cast<float>(num_samples) : 0.0f;
   for (int i = 0; i < num_samples; ++i) {
-    const float fader = std::pow(10.0f, lane.fader_db.process() / 20.0f);
+    const float fader = lane.fader_gain.process();
     const float gate = lane.gate.process();
     // Keep the stereo pan smoother advancing so a later stereo render resumes
     // from the right phase; surround placement comes from the panner, not pan.

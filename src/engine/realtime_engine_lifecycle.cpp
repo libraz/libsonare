@@ -113,6 +113,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   applied_param_smoothing_ms_ = param_smoothing_ms_.load(std::memory_order_relaxed);
   for (SmoothedParam& slot : smoothed_params_) {
     slot.active = false;
+    slot.assigned = false;
     slot.target_id = 0;
     slot.smoother.prepare(sample_rate_, applied_param_smoothing_ms_);
     slot.smoother.reset(0.0f);
@@ -120,6 +121,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
 #if defined(SONARE_WITH_MIXING)
   for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
     slot.active = false;
+    slot.assigned = false;
     slot.insert_index = 0;
     slot.param_id = 0;
     slot.smoother.prepare(sample_rate_, 5.0f);
@@ -183,6 +185,12 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   // while the transport is rolling, so roll it for the duration of the render
   // and restore the prior state afterwards.
   const bool was_playing = transport_.playing();
+  const MetronomeConfig metronome_config = metronome_.config();
+  if (metronome_config.enabled) {
+    MetronomeConfig disabled = metronome_config;
+    disabled.enabled = false;
+    metronome_.set_config(disabled);
+  }
   if (!was_playing) {
     transport_.play();
   }
@@ -198,6 +206,9 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   }
   if (!was_playing) {
     transport_.stop();
+  }
+  if (metronome_config.enabled) {
+    metronome_.set_config(metronome_config);
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.all_notes_off(transport_.render_frame());
@@ -222,7 +233,7 @@ transport::TransportState RealtimeEngine::transport_state_control() const noexce
 
 void RealtimeEngine::set_tempo(double bpm) {
   SONARE_CHECK_MSG(transport::valid_public_tempo(bpm), ErrorCode::InvalidParameter,
-                   "tempo must be finite and positive");
+                   "tempo must be finite, positive, and at most 100000 BPM");
   control_single_tempo_bpm_ = bpm;
   control_tempo_segments_ = {{0.0, bpm, 0.0}};
   publish_tempo_map_snapshot();
@@ -231,7 +242,7 @@ void RealtimeEngine::set_tempo(double bpm) {
 void RealtimeEngine::set_tempo_segments(std::vector<transport::TempoSegment> segments) {
   for (const transport::TempoSegment& segment : segments) {
     SONARE_CHECK_MSG(transport::valid_public_tempo_segment(segment), ErrorCode::InvalidParameter,
-                     "tempo segments contain invalid timeline or BPM values");
+                     "tempo segments contain invalid timeline or out-of-range BPM values");
   }
   control_tempo_segments_ = std::move(segments);
   publish_tempo_map_snapshot();

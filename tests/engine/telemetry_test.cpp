@@ -65,6 +65,33 @@ TEST_CASE("RealtimeEngine records unknown command as error telemetry", "[engine]
   REQUIRE(telemetry.error == sonare::engine::TelemetryErrorCode::kUnknownTarget);
 }
 
+TEST_CASE("RealtimeEngine records metronome event overflow", "[engine][telemetry]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128);
+  engine.set_tempo(100000.0);
+  engine.set_metronome_config({true, 0.25f, 0.75f, 384000});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, 128> buffer{};
+  float* io[] = {buffer.data()};
+  engine.process(io, 1, 128);
+
+  bool found = false;
+  sonare::engine::Telemetry telemetry{};
+  while (engine.pop_telemetry(telemetry)) {
+    if (telemetry.type == sonare::engine::TelemetryType::kError &&
+        telemetry.error == sonare::engine::TelemetryErrorCode::kMetronomeOverflow) {
+      found = true;
+      REQUIRE(telemetry.value == 1);
+    }
+  }
+  REQUIRE(found);
+}
+
 TEST_CASE("RealtimeEngine records command queue overflow", "[engine][telemetry]") {
   sonare::engine::RealtimeEngine engine;
   engine.prepare(48000.0, 128, 2);
@@ -295,6 +322,21 @@ TEST_CASE("RealtimeEngine reports smoothed parameter slot saturation without unk
     REQUIRE(engine.automation().bind_target(id, &processors[id - 1]));
   }
 
+  // Establish 64 target histories and let their first values settle.
+  for (uint32_t id = 1; id <= 64; ++id) {
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kSetParamSmoothed;
+    command.sample_time = -1;
+    command.target_id = id;
+    command.arg.f = 0.0f;
+    REQUIRE(engine.push_command(command));
+  }
+  std::array<float, 128> buffer{};
+  float* io[] = {buffer.data()};
+  engine.process(io, 1, 128);
+
+  // Retarget those same 64 slots so they remain in flight, then introduce a
+  // 65th target while the bank is genuinely busy.
   for (uint32_t id = 1; id <= 65; ++id) {
     sonare::rt::Command command{};
     command.type = sonare::rt::CommandType::kSetParamSmoothed;
@@ -304,8 +346,6 @@ TEST_CASE("RealtimeEngine reports smoothed parameter slot saturation without unk
     REQUIRE(engine.push_command(command));
   }
 
-  std::array<float, 128> buffer{};
-  float* io[] = {buffer.data()};
   engine.process(io, 1, 128);
   engine.process(io, 1, 128);
 
@@ -327,4 +367,32 @@ TEST_CASE("RealtimeEngine reports smoothed parameter slot saturation without unk
   REQUIRE_FALSE(found_unknown_for_65);
   REQUIRE(processors.back().last_param == 65);
   REQUIRE(processors.back().last_value == 1.0f);
+}
+
+TEST_CASE("RealtimeEngine newly claimed smoother slot does not leak its previous target",
+          "[engine][telemetry]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128);
+  std::array<TelemetryCaptureProcessor, 2> processors;
+  REQUIRE(engine.automation().bind_target(1, &processors[0]));
+  REQUIRE(engine.automation().bind_target(2, &processors[1]));
+
+  std::array<float, 128> buffer{};
+  float* io[] = {buffer.data()};
+  sonare::rt::Command command{};
+  command.type = sonare::rt::CommandType::kSetParamSmoothed;
+  command.sample_time = -1;
+  command.target_id = 1;
+  command.arg.f = 1.0f;
+  REQUIRE(engine.push_command(command));
+  engine.process(io, 1, 128);
+  REQUIRE(processors[0].last_value == 1.0f);
+
+  // Target 1 has settled and released its slot. Target 2 must start at its own
+  // first value; gliding from target 1's +1.0 would create an audible burst.
+  command.target_id = 2;
+  command.arg.f = -0.75f;
+  REQUIRE(engine.push_command(command));
+  engine.process(io, 1, 128);
+  REQUIRE(processors[1].last_value == -0.75f);
 }

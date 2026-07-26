@@ -166,6 +166,7 @@ void MidiSequencer::acquire_midi_fx(int64_t render_frame) noexcept {
     live.destination_id = 0;
     live.generation = 0;
     live.buffer.clear();
+    live.next_input_ordinal = 0;
   }
   if (snapshot != nullptr) {
     for (size_t i = 0; i < snapshot->destinations.size(); ++i) {
@@ -182,6 +183,7 @@ void MidiSequencer::acquire_midi_fx(int64_t render_frame) noexcept {
       live.chain.set_arpeggiator(config.arpeggiator);
       live.chain.set_humanize(config.humanize);
       live.chain.prepare();
+      live.next_input_ordinal = 0;
     }
   }
   last_midi_fx_snapshot_ = snapshot;
@@ -217,14 +219,22 @@ void MidiSequencer::enqueue_pending(uint32_t destination_id, const MidiEvent& ev
   pending_fx_[pending_fx_count_++] = PendingFxEvent{destination_id, event, clip_id, from_clip};
 }
 
-void MidiSequencer::dispatch_pending(int64_t block_start_frame, int64_t block_end_frame) noexcept {
-  size_t i = 0;
-  while (i < pending_fx_count_) {
-    PendingFxEvent pending = pending_fx_[i];
-    if (pending.event.render_frame >= block_end_frame) {
-      ++i;
-      continue;
+void MidiSequencer::dispatch_pending_through(int64_t block_start_frame, int64_t block_end_frame,
+                                             int64_t through_frame) noexcept {
+  for (;;) {
+    size_t selected = pending_fx_count_;
+    int64_t selected_frame = 0;
+    for (size_t i = 0; i < pending_fx_count_; ++i) {
+      const int64_t frame = std::max(pending_fx_[i].event.render_frame, block_start_frame);
+      if (frame >= block_end_frame || frame > through_frame) continue;
+      if (selected == pending_fx_count_ || frame < selected_frame) {
+        selected = i;
+        selected_frame = frame;
+      }
     }
+    if (selected == pending_fx_count_) return;
+
+    PendingFxEvent pending = pending_fx_[selected];
     // An event carried over from an earlier block still holds that block's
     // render_frame; clamp it to the current block start so sample-accurate
     // consumers never see a timestamp in the past. (BuiltinSynth ignores the
@@ -233,7 +243,7 @@ void MidiSequencer::dispatch_pending(int64_t block_start_frame, int64_t block_en
       pending.event.render_frame = block_start_frame;
     }
     dispatch_transformed(pending.destination_id, pending.event, pending.from_clip, pending.clip_id);
-    pending_fx_[i] = pending_fx_[pending_fx_count_ - 1];
+    pending_fx_[selected] = pending_fx_[pending_fx_count_ - 1];
     --pending_fx_count_;
   }
 }
@@ -325,10 +335,14 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
     dispatch_transformed(destination_id, event, from_clip, clip_id);
     return;
   }
-  fx->chain.process(&event, 1, &fx->buffer);
+  fx->chain.process_chunk(&event, 1, fx->next_input_ordinal++, &fx->buffer);
   for (size_t i = 0; i < fx->buffer.size; ++i) {
     const MidiEvent& transformed = fx->buffer.events[i];
-    if (transformed.render_frame >= block_end_frame) {
+    // Generated future events must rejoin the sequencer's chronological merge
+    // even when they still fall inside this block. Dispatching them immediately
+    // would let an arpeggiator step leapfrog an earlier event from another clip.
+    if (transformed.render_frame > event.render_frame ||
+        transformed.render_frame >= block_end_frame) {
       enqueue_pending(destination_id, transformed, from_clip, clip_id);
       continue;
     }
@@ -350,61 +364,112 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
     release_notes_for_absent_clips(clips, block_start_frame);
     last_clips_ = clips;
   }
-  dispatch_pending(block_start_frame, block_end_frame);
-  if (clips == nullptr) return;
-
-  for (const MidiClipSchedule& clip : *clips) {
-    if (clip.loop_mode == MidiLoopMode::kLoop && clip.loop_length_samples > 0) {
-      const int64_t loop_len = clip.loop_length_samples;
-      const int64_t clip_end_frame =
-          clip.length_samples > 0 ? clip.start_sample + clip.length_samples : block_end_frame;
-      const int64_t scan_start = std::max(block_start_frame, clip.start_sample);
-      const int64_t scan_end = std::min(block_end_frame, clip_end_frame);
-      if (scan_start >= scan_end) continue;
-
-      int64_t iter = (scan_start - clip.start_sample) / loop_len;
-      for (int64_t iter_start = clip.start_sample + iter * loop_len; iter_start < scan_end;
-           ++iter, iter_start += loop_len) {
-        const int64_t iter_end = iter_start + loop_len;
-        for (const MidiEvent& ev : clip.events) {
-          const int64_t local = ev.render_frame - clip.start_sample;
-          if (local < 0) continue;
-          if (local >= loop_len) break;
-          MidiEvent looped = ev;
-          looped.render_frame = iter_start + local;
-          if (looped.render_frame < block_start_frame) continue;
-          if (looped.render_frame >= block_end_frame) break;
-          if (looped.render_frame >= clip_end_frame) break;
-          process_event(clip.destination_id, looped, block_end_frame, /*from_clip=*/true, clip.id);
+  // Visit every clip event and synthetic clip/loop end in the block. The
+  // visitor is allocation-free; process_block uses it first to select the next
+  // render frame, then again to dispatch every item at that frame. This
+  // selection merge is O(events^2), but event counts are bounded by the
+  // compiled clips and fixed MIDI-FX pending table, and it keeps all dispatches
+  // monotonic without an audio-thread sort buffer.
+  auto visit_scheduled = [&](auto&& visitor) noexcept {
+    if (clips == nullptr) return;
+    for (const MidiClipSchedule& clip : *clips) {
+      if (clip.loop_mode == MidiLoopMode::kLoop && clip.loop_length_samples > 0) {
+        const int64_t loop_len = clip.loop_length_samples;
+        const int64_t clip_end_frame =
+            clip.length_samples > 0 ? clip.start_sample + clip.length_samples : block_end_frame;
+        const int64_t scan_start = std::max(block_start_frame, clip.start_sample);
+        const int64_t scan_end = std::min(block_end_frame, clip_end_frame);
+        if (scan_start >= scan_end) continue;
+        int64_t iter = (scan_start - clip.start_sample) / loop_len;
+        for (int64_t iter_start = clip.start_sample + iter * loop_len; iter_start < scan_end;
+             ++iter, iter_start += loop_len) {
+          const int64_t iter_end = iter_start + loop_len;
+          for (const MidiEvent& event : clip.events) {
+            const int64_t local = event.render_frame - clip.start_sample;
+            if (local < 0) continue;
+            if (local >= loop_len) break;
+            const int64_t frame = iter_start + local;
+            if (frame < block_start_frame) continue;
+            if (frame >= block_end_frame || frame >= clip_end_frame) break;
+            visitor(clip, &event, frame, false);
+          }
+          if (iter_end > block_start_frame && iter_end < block_end_frame &&
+              iter_end <= clip_end_frame) {
+            visitor(clip, nullptr, iter_end, false);
+          }
         }
-        if (iter_end > block_start_frame && iter_end <= block_end_frame &&
-            iter_end <= clip_end_frame) {
-          release_notes_for_clip(clip.id, iter_end, /*clear_pending=*/false);
+        if (clip.length_samples > 0 && clip_end_frame > block_start_frame &&
+            clip_end_frame < block_end_frame) {
+          visitor(clip, nullptr, clip_end_frame, true);
         }
+        continue;
       }
-      if (clip.length_samples > 0 && clip_end_frame > block_start_frame &&
-          clip_end_frame <= block_end_frame) {
-        release_notes_for_clip(clip.id, clip_end_frame);
+
+      const bool finite_one_shot =
+          clip.loop_mode == MidiLoopMode::kOneShot && clip.length_samples > 0;
+      const int64_t clip_end_frame = clip.start_sample + clip.length_samples;
+      if (finite_one_shot && clip_end_frame <= block_start_frame) continue;
+      for (const MidiEvent& event : clip.events) {
+        if (event.render_frame < block_start_frame) continue;
+        if (event.render_frame >= block_end_frame) break;
+        if (finite_one_shot && event.render_frame >= clip_end_frame) break;
+        visitor(clip, &event, event.render_frame, false);
       }
-      continue;
+      if (finite_one_shot && clip_end_frame > block_start_frame &&
+          clip_end_frame < block_end_frame) {
+        visitor(clip, nullptr, clip_end_frame, true);
+      }
     }
+  };
 
-    const bool one_shot = clip.loop_mode == MidiLoopMode::kOneShot;
-    const bool finite_one_shot = one_shot && clip.length_samples > 0;
-    const int64_t clip_end_frame = clip.start_sample + clip.length_samples;
-    if (finite_one_shot && clip_end_frame <= block_start_frame) continue;
-
-    // Events are sorted ascending by render_frame; scan the in-block window.
-    for (const MidiEvent& ev : clip.events) {
-      if (ev.render_frame < block_start_frame) continue;
-      if (ev.render_frame >= block_end_frame) break;
-      if (finite_one_shot && ev.render_frame >= clip_end_frame) break;
-      process_event(clip.destination_id, ev, block_end_frame, /*from_clip=*/true, clip.id);
+  int64_t cursor = block_start_frame;
+  while (cursor < block_end_frame) {
+    int64_t next_frame = block_end_frame;
+    for (size_t i = 0; i < pending_fx_count_; ++i) {
+      const int64_t frame = std::max(pending_fx_[i].event.render_frame, block_start_frame);
+      if (frame >= cursor && frame < next_frame) next_frame = frame;
     }
+    visit_scheduled([&](const MidiClipSchedule&, const MidiEvent*, int64_t frame, bool) noexcept {
+      if (frame >= cursor && frame < next_frame) next_frame = frame;
+    });
+    if (next_frame >= block_end_frame) break;
 
-    if (finite_one_shot && clip_end_frame > block_start_frame &&
-        clip_end_frame <= block_end_frame) {
-      release_notes_for_clip(clip.id, clip_end_frame);
+    dispatch_pending_through(block_start_frame, block_end_frame, next_frame);
+    visit_scheduled([&](const MidiClipSchedule& clip, const MidiEvent* event, int64_t frame,
+                        bool clear_pending) noexcept {
+      if (frame != next_frame) return;
+      if (event != nullptr) {
+        MidiEvent scheduled = *event;
+        scheduled.render_frame = frame;
+        process_event(clip.destination_id, scheduled, block_end_frame, /*from_clip=*/true, clip.id);
+      } else {
+        release_notes_for_clip(clip.id, frame, clear_pending);
+      }
+    });
+    cursor = next_frame + 1;
+  }
+
+  // Clip-end note releases historically occur exactly at the exclusive block
+  // boundary. Keep that contract while leaving pending/generated events at the
+  // same frame for the next block.
+  if (clips != nullptr) {
+    for (const MidiClipSchedule& clip : *clips) {
+      if (clip.loop_mode == MidiLoopMode::kLoop && clip.loop_length_samples > 0) {
+        const int64_t loop_len = clip.loop_length_samples;
+        const int64_t clip_end_frame =
+            clip.length_samples > 0 ? clip.start_sample + clip.length_samples : block_end_frame;
+        if (block_end_frame > clip.start_sample &&
+            (block_end_frame - clip.start_sample) % loop_len == 0 &&
+            block_end_frame <= clip_end_frame) {
+          release_notes_for_clip(clip.id, block_end_frame, /*clear_pending=*/false);
+        }
+        if (clip.length_samples > 0 && clip_end_frame == block_end_frame) {
+          release_notes_for_clip(clip.id, block_end_frame);
+        }
+      } else if (clip.loop_mode == MidiLoopMode::kOneShot && clip.length_samples > 0 &&
+                 clip.start_sample + clip.length_samples == block_end_frame) {
+        release_notes_for_clip(clip.id, block_end_frame);
+      }
     }
   }
 }

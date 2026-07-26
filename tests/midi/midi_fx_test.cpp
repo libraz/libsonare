@@ -94,6 +94,37 @@ TEST_CASE("MidiFx quantize snaps render frames to grid", "[midi]") {
   REQUIRE(out.events[0].render_frame == 120);  // 140 + (-40 * 0.5)
 }
 
+TEST_CASE("MidiFx quantize preserves short note gates instead of sorting off before on", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  QuantizeConfig q;
+  q.enabled = true;
+  q.grid_frames = 100;
+  q.strength = 1.0f;
+  fx.set_quantize(q);
+
+  // Independently snapping both endpoints maps 10 and 20 to frame 0, where the
+  // canonical same-time ordering puts note-off first and leaves a hung note.
+  const MidiEvent pair[] = {note_on(10, 60, 100), note_off(20, 60)};
+  MidiFxBuffer out;
+  fx.process(pair, 2, &out);
+  REQUIRE(out.size == 2);
+  REQUIRE(out.events[0].ump.is_note_on());
+  REQUIRE(out.events[0].render_frame == 0);
+  REQUIRE(out.events[1].ump.is_note_off());
+  REQUIRE(out.events[1].render_frame == 10);
+
+  // The live sequencer feeds one event per process call, so pairing state must
+  // persist across calls too.
+  fx.reset();
+  fx.set_quantize(q);
+  fx.process(&pair[0], 1, &out);
+  REQUIRE(out.events[0].render_frame == 0);
+  fx.process(&pair[1], 1, &out);
+  REQUIRE(out.events[0].ump.is_note_off());
+  REQUIRE(out.events[0].render_frame == 10);
+}
+
 TEST_CASE("MidiFx quantize can swing odd grid lines", "[midi]") {
   MidiFxChain fx;
   fx.prepare();

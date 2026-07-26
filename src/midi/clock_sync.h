@@ -16,9 +16,9 @@
 /// -----------------------
 ///  - AUDIO thread: generate_clock_block() emits the 0xF8 clock bytes whose tick
 ///    positions fall in a render-frame block, into a FIXED-capacity output. ZERO
-///    heap allocation, no lock, no I/O. Overflow drops surplus ticks and bumps
-///    an atomic telemetry counter. parse_byte() is a tiny state machine over one
-///    incoming byte and is also alloc-0, so an audio-thread MIDI-in handler may
+///    heap allocation, no lock, no I/O. Overflow drops surplus ticks, stops
+///    scanning the block, and bumps an atomic telemetry counter. parse_byte() is a tiny state
+///    machine over one incoming byte and is also alloc-0, so an audio-thread MIDI-in handler may
 ///    feed it directly (documented audio-safe).
 ///  - CONTROL thread: SPP and MTC full-frame helpers (start-of-transport
 ///    position broadcast) are typically issued on the control thread but are
@@ -143,6 +143,8 @@ class MtcQuarterFrameGenerator {
 /// MIDI clock generator: emits 0xF8 ticks across a render-frame block.
 class ClockGenerator {
  public:
+  using TickSink = void (*)(void* context, int64_t frame) noexcept;
+
   void prepare(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
 
   /// AUDIO thread: append the clock (0xF8) bytes whose tick falls in
@@ -151,6 +153,12 @@ class ClockGenerator {
   /// Overflow drops surplus ticks and bumps overflow_count().
   size_t generate_clock_block(int64_t block_start_frame, int num_frames,
                               ClockByteOutput* out) noexcept;
+
+  /// AUDIO thread: enumerate the same bounded clock block through a caller
+  /// supplied sink. This is the canonical generator used by both the byte-array
+  /// compatibility API and the realtime engine.
+  size_t generate_clock_block(int64_t block_start_frame, int num_frames, void* context,
+                              TickSink sink, bool* overflowed = nullptr) noexcept;
 
   /// The absolute clock tick index of the first tick at/after `frame` (a clock
   /// tick fires every 1/24 quarter note). RT-safe.

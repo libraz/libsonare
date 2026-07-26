@@ -408,16 +408,64 @@ TEST_CASE("MidiSequencer applies live MIDI FX per destination before dispatch", 
   REQUIRE(sink.events[0].event.ump.note_number() == 72);
   REQUIRE(sink.events[1].destination == 7);
   REQUIRE(sink.events[1].event.ump.note_number() == 79);
-  REQUIRE(sink.events[2].destination == 7);
-  REQUIRE(sink.events[2].event.ump.is_note_off());
-  REQUIRE(sink.events[2].event.ump.note_number() == 72);
+  REQUIRE(sink.events[2].destination == 8);
+  REQUIRE(sink.events[2].event.ump.note_number() == 60);
   REQUIRE(sink.events[3].destination == 7);
-  REQUIRE(sink.events[3].event.ump.note_number() == 79);
-  REQUIRE(sink.events[4].destination == 8);
-  REQUIRE(sink.events[4].event.ump.note_number() == 60);
+  REQUIRE(sink.events[3].event.ump.is_note_off());
+  REQUIRE(sink.events[3].event.ump.note_number() == 72);
+  REQUIRE(sink.events[4].destination == 7);
+  REQUIRE(sink.events[4].event.ump.note_number() == 79);
   REQUIRE(sink.events[5].destination == 8);
   REQUIRE(sink.events[5].event.ump.note_number() == 60);
+  for (size_t i = 1; i < sink.events.size(); ++i) {
+    REQUIRE(sink.events[i - 1].event.render_frame <= sink.events[i].event.render_frame);
+  }
   REQUIRE(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer humanize advances ordinals like offline MIDI FX", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain config;
+  sonare::midi::HumanizeConfig humanize;
+  humanize.enabled = true;
+  humanize.seed = 0x12345678u;
+  humanize.timing_frames = 20;
+  config.set_humanize(humanize);
+  REQUIRE(seq.set_midi_fx(7, config));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 7;
+  std::array<MidiEvent, 8> input{};
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = {100 + static_cast<int64_t>(i) * 100,
+                sonare::midi::make_midi1_note_on(0, 0, static_cast<uint8_t>(60 + i), 100)};
+    clip.events.push_back(input[i]);
+  }
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 1024);
+
+  MidiFxChain offline;
+  offline.set_humanize(humanize);
+  offline.prepare();
+  sonare::midi::MidiFxBuffer expected;
+  offline.process(input.data(), input.size(), &expected);
+
+  REQUIRE(sink.events.size() == input.size());
+  REQUIRE(expected.size == input.size());
+  bool varied = false;
+  const int64_t first_jitter = expected.events[0].render_frame - input[0].render_frame;
+  for (size_t i = 0; i < input.size(); ++i) {
+    REQUIRE(sink.events[i].event == expected.events[i]);
+    varied = varied || expected.events[i].render_frame - input[i].render_frame != first_jitter;
+  }
+  REQUIRE(varied);
 }
 
 TEST_CASE("MidiSequencer live MIDI FX keeps future arpeggiator events pending", "[midi]") {
@@ -496,10 +544,10 @@ TEST_CASE("MidiSequencer clamps overdue pending MIDI FX events to block start", 
   seq.process_block(64, 32);
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.render_frame == 64);
-  REQUIRE(sink.events[0].event.ump.is_note_on());
-  REQUIRE(sink.events[0].event.ump.note_number() == 72);
+  REQUIRE(sink.events[0].event.ump.is_note_off());
   REQUIRE(sink.events[1].event.render_frame == 64);
-  REQUIRE(sink.events[1].event.ump.is_note_off());
+  REQUIRE(sink.events[1].event.ump.is_note_on());
+  REQUIRE(sink.events[1].event.ump.note_number() == 72);
 }
 
 TEST_CASE("MidiSequencer keeps arpeggiator pending events across loop wrap", "[midi]") {
@@ -751,12 +799,12 @@ TEST_CASE("MidiSequencer one-shot clip end releases only that clip's sounding no
   REQUIRE(sink.events[0].event.render_frame == 10);
   REQUIRE(sink.events[0].event.ump.is_note_on());
   REQUIRE(sink.events[0].event.ump.note_number() == 60);
-  REQUIRE(sink.events[1].event.render_frame == 50);
-  REQUIRE(sink.events[1].event.ump.is_note_off());
-  REQUIRE(sink.events[1].event.ump.note_number() == 60);
-  REQUIRE(sink.events[2].event.render_frame == 20);
-  REQUIRE(sink.events[2].event.ump.is_note_on());
-  REQUIRE(sink.events[2].event.ump.note_number() == 65);
+  REQUIRE(sink.events[1].event.render_frame == 20);
+  REQUIRE(sink.events[1].event.ump.is_note_on());
+  REQUIRE(sink.events[1].event.ump.note_number() == 65);
+  REQUIRE(sink.events[2].event.render_frame == 50);
+  REQUIRE(sink.events[2].event.ump.is_note_off());
+  REQUIRE(sink.events[2].event.ump.note_number() == 60);
   REQUIRE(seq.active_note_count() == 1);
 
   sink.events.clear();

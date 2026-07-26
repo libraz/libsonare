@@ -93,7 +93,8 @@ struct SmfMarker {
 /// Result of importing an SMF byte buffer into normalized sonare::midi data.
 struct SmfImportResult {
   SmfStatus status = SmfStatus::kOk;
-  /// Human-readable diagnostic (empty when status == kOk).
+  /// Human-readable diagnostic (empty when status == kOk). A truncated track
+  /// yields kTruncated even when valid prefix/later-track data was recovered.
   std::string diagnostic;
 
   /// SMF division: ticks per quarter note (PPQN). 0 when SMPTE division was

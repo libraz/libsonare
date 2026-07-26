@@ -1,6 +1,7 @@
 #include "engine/tempo_sync.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <complex>
 
@@ -10,23 +11,14 @@
 #include "transport/musical_time.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
+#include "util/phase.h"
 
 namespace sonare::engine {
 namespace {
 
 using sonare::constants::kSpectrumEpsilon;
 using sonare::constants::kTwoPi;
-using sonare::constants::kTwoPiD;
-
-float wrap_phase(float phase) {
-  if (!std::isfinite(phase)) return 0.0f;
-  return std::remainder(phase, kTwoPi);
-}
-
-double wrap_phase(double phase) {
-  if (!std::isfinite(phase)) return 0.0;
-  return std::remainder(phase, kTwoPiD);
-}
 
 std::vector<float> stretch_segment(const float* source, size_t source_samples,
                                    size_t target_samples,
@@ -65,9 +57,17 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
   const int input_frames =
       std::max(2, 1 + static_cast<int>((padded_length - static_cast<size_t>(n_fft)) /
                                        static_cast<size_t>(hop)));
-  const int output_frames = std::max(
-      1,
-      static_cast<int>(std::ceil(static_cast<double>(input_frames) / static_cast<double>(rate))));
+  size_t output_frame_count = 0;
+  SONARE_CHECK(
+      numeric::checked_projected_count(static_cast<size_t>(input_frames), rate,
+                                       std::min(kMaxAudioBufferSize, static_cast<size_t>(INT_MAX)),
+                                       &output_frame_count),
+      ErrorCode::InvalidParameter);
+  size_t spectrum_elements = 0;
+  SONARE_CHECK(numeric::checked_size_product(static_cast<size_t>(n_bins), output_frame_count,
+                                             kMaxAudioBufferSize, &spectrum_elements),
+               ErrorCode::InvalidParameter);
+  const int output_frames = std::max(1, static_cast<int>(output_frame_count));
 
   FFT fft(n_fft);
   const std::vector<float>& analysis_win_short = get_window_cached(WindowType::Hann, n_fft, true);
@@ -149,84 +149,23 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
         const float phase0 = std::arg(frame0);
         const float phase1 = std::arg(frame1);
         channel_phase[static_cast<size_t>(ch)][static_cast<size_t>(k)] =
-            phase0 + frac * wrap_phase(phase1 - phase0);
+            phase0 + frac * phase::wrap(phase1 - phase0);
       }
       ref_mag[static_cast<size_t>(k)] = std::abs(ref0) * (1.0f - frac) + std::abs(ref1) * frac;
       const float ref_phase0 = std::arg(ref0);
       const float ref_phase1 = std::arg(ref1);
-      ref_phase[static_cast<size_t>(k)] = ref_phase0 + frac * wrap_phase(ref_phase1 - ref_phase0);
+      ref_phase[static_cast<size_t>(k)] = ref_phase0 + frac * phase::wrap(ref_phase1 - ref_phase0);
       const float bin_freq = static_cast<float>(k) * static_cast<float>(config.sample_rate) /
                              static_cast<float>(n_fft);
       const float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
-      const float phase_diff = wrap_phase(ref_phase1 - ref_phase0 - expected_advance);
+      const float phase_diff = phase::wrap(ref_phase1 - ref_phase0 - expected_advance);
       ref_inst_freq[static_cast<size_t>(k)] =
           bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
     }
 
-    peaks.clear();
-    if (config.phase_lock) {
-      for (int k = 1; k < n_bins - 1; ++k) {
-        if (ref_mag[static_cast<size_t>(k)] > ref_mag[static_cast<size_t>(k - 1)] &&
-            ref_mag[static_cast<size_t>(k)] > ref_mag[static_cast<size_t>(k + 1)]) {
-          peaks.push_back(k);
-        }
-      }
-    }
-    if (!config.phase_lock || peaks.empty()) {
-      for (int k = 0; k < n_bins; ++k) {
-        if (t_out == 0) {
-          phase_acc[static_cast<size_t>(k)] =
-              static_cast<double>(ref_phase[static_cast<size_t>(k)]);
-        } else {
-          phase_acc[static_cast<size_t>(k)] = wrap_phase(
-              phase_acc[static_cast<size_t>(k)] +
-              kTwoPiD * static_cast<double>(ref_inst_freq[static_cast<size_t>(k)]) * time_step);
-        }
-      }
-      for (int k = 0; k < n_bins; ++k) {
-        nearest_peak[static_cast<size_t>(k)] = k;
-      }
-    } else {
-      int p_idx = 0;
-      for (int k = 0; k < n_bins; ++k) {
-        while (p_idx + 1 < static_cast<int>(peaks.size())) {
-          const int boundary =
-              (peaks[static_cast<size_t>(p_idx)] + peaks[static_cast<size_t>(p_idx + 1)]) / 2;
-          if (k > boundary) {
-            ++p_idx;
-          } else {
-            break;
-          }
-        }
-        nearest_peak[static_cast<size_t>(k)] = peaks[static_cast<size_t>(p_idx)];
-      }
-      for (const int peak_bin : peaks) {
-        if (t_out == 0) {
-          phase_acc[static_cast<size_t>(peak_bin)] =
-              static_cast<double>(ref_phase[static_cast<size_t>(peak_bin)]);
-        } else {
-          phase_acc[static_cast<size_t>(peak_bin)] = wrap_phase(
-              phase_acc[static_cast<size_t>(peak_bin)] +
-              kTwoPiD * static_cast<double>(ref_inst_freq[static_cast<size_t>(peak_bin)]) *
-                  time_step);
-        }
-      }
-      /// Re-lock every bin (including peaks) into the reference-domain accumulator so
-      /// that a bin transitioning from non-peak to peak in a later frame resumes its
-      /// synthesis phase from the coherent locked value rather than a stale one. This
-      /// mirrors the mono StreamingPhaseVocoder / phase_vocoder_phaselocked() carry
-      /// (see effects/phase_vocoder.cpp), which is what keeps the multichannel tail from
-      /// diverging from the mono path when the spectral peak set moves.
-      for (int k = 0; k < n_bins; ++k) {
-        const int k_p = nearest_peak[static_cast<size_t>(k)];
-        const double synth_phase =
-            k == k_p ? phase_acc[static_cast<size_t>(k_p)]
-                     : phase_acc[static_cast<size_t>(k_p)] +
-                           static_cast<double>(ref_phase[static_cast<size_t>(k)]) -
-                           static_cast<double>(ref_phase[static_cast<size_t>(k_p)]);
-        phase_acc[static_cast<size_t>(k)] = wrap_phase(synth_phase);
-      }
-    }
+    phase::synthesize_locked_frame(ref_mag.data(), ref_phase.data(), ref_inst_freq.data(), n_bins,
+                                   config.phase_lock, t_out == 0, time_step, phase_acc, peaks,
+                                   nearest_peak);
 
     const size_t start = static_cast<size_t>(t_out) * static_cast<size_t>(hop);
     for (int ch = 0; ch < channels; ++ch) {
@@ -239,7 +178,7 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
         /// bit-identically to the mono path.
         const double rotation = phase_acc[static_cast<size_t>(k)] -
                                 static_cast<double>(ref_phase[static_cast<size_t>(k)]);
-        const float synth_phase = static_cast<float>(wrap_phase(
+        const float synth_phase = static_cast<float>(phase::wrap(
             static_cast<double>(channel_phase[static_cast<size_t>(ch)][static_cast<size_t>(k)]) +
             rotation));
         synth_bins[static_cast<size_t>(k)] =

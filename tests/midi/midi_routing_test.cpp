@@ -554,6 +554,20 @@ TEST_CASE("ClockGenerator emits 24 PPQN clock and parser counts ticks", "[midi]"
   REQUIRE(parser.position_ppq() == 1.0);
 }
 
+TEST_CASE("ClockGenerator stops scanning when its fixed block budget overflows", "[midi][rt]") {
+  TempoMap map;
+  configure_tempo_map(&map, 1.0e9);
+  ClockGenerator gen;
+  gen.prepare(&map);
+
+  ClockByteOutput out;
+  const size_t ticks = gen.generate_clock_block(0, 512, &out);
+  REQUIRE(ticks == ClockByteOutput::kCapacity);
+  REQUIRE(out.size == ClockByteOutput::kCapacity);
+  REQUIRE(out.overflowed);
+  REQUIRE(gen.overflow_count() == 1);
+}
+
 TEST_CASE("SPP generate and parse round-trip", "[midi]") {
   // 4 quarter notes == 16 sixteenth notes == SPP beat value 16.
   const uint16_t beats = sonare::midi::ppq_to_spp_beats(4.0);

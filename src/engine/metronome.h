@@ -24,6 +24,12 @@ struct MetronomeConfig {
   double click_seconds = 0.002;
 };
 
+/// Public/configuration limits. One second is already much longer than a
+/// musical click; the sample limit also bounds callers that configure the
+/// metronome before a sample rate is prepared.
+inline constexpr double kMaxMetronomeClickSeconds = 1.0;
+inline constexpr int kMaxMetronomeClickSamples = 384000;
+
 struct MetronomeEvent {
   int offset = 0;
   bool accent = false;
@@ -44,7 +50,7 @@ class Metronome {
  public:
   void prepare(double sample_rate, const transport::TempoMap* tempo_map) noexcept;
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
-  void set_config(MetronomeConfig config) noexcept { config_ = config; }
+  void set_config(MetronomeConfig config) noexcept;
   const MetronomeConfig& config() const noexcept { return config_; }
 
   // Collects beat events whose click could sound inside this block. Beats are
@@ -54,7 +60,8 @@ class Metronome {
   // the plain in-block behavior.
   void collect_events(int64_t block_start_sample, int num_frames, MetronomeEventList* out,
                       int lookback_samples = 0) const noexcept;
-  void process(float* const* channels, int num_channels, int num_frames,
+  /// Renders the click and returns false when the fixed event list overflowed.
+  bool process(float* const* channels, int num_channels, int num_frames,
                int64_t block_start_sample) const noexcept;
 
   int64_t count_in_end_sample(int64_t start_sample, int bars) const noexcept;

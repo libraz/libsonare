@@ -11,18 +11,22 @@ namespace sonare::engine {
 
 bool RealtimeEngine::bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id,
                                   float min_value, float max_value) noexcept {
-  if (parameter_target_reserved(param_id)) return false;
+  midi::CcBinding binding{};
+  binding.cc_number = controller;
+  binding.channel = channel;
+  binding.param_id = param_id;
+  binding.min_value = min_value;
+  binding.max_value = max_value;
+  return bind_midi_cc(binding);
+}
+
+bool RealtimeEngine::bind_midi_cc(const midi::CcBinding& binding) noexcept {
+  if (parameter_target_reserved(binding.param_id)) return false;
   try {
     auto next = std::make_shared<midi::CcMap>();
     if (const std::shared_ptr<const midi::CcMap>& current = midi_cc_maps_.control_current()) {
       next->copy_bindings_from(*current);
     }
-    midi::CcBinding binding{};
-    binding.cc_number = controller;
-    binding.channel = channel;
-    binding.param_id = param_id;
-    binding.min_value = min_value;
-    binding.max_value = max_value;
     if (!next->bind(binding)) return false;
     return midi_cc_maps_.publish(std::shared_ptr<const midi::CcMap>(std::move(next)));
   } catch (...) {
@@ -119,13 +123,22 @@ void RealtimeEngine::emit_midi_clock_block(int64_t timeline_start_sample,
                                            int64_t render_start_frame, int num_frames) noexcept {
   MidiSyncSink* sync_sink = midi_sync_sink_.load(std::memory_order_acquire);
   if (sync_sink == nullptr || num_frames <= 0) return;
-  const int64_t block_end_sample = timeline_start_sample + num_frames;
-  for (int64_t tick = midi_clock_.first_tick_at_or_after(timeline_start_sample);
-       midi_clock_.frame_of_tick(tick) < block_end_sample; ++tick) {
-    const int64_t timeline_tick_frame = midi_clock_.frame_of_tick(tick);
-    if (timeline_tick_frame < timeline_start_sample) continue;
-    const int64_t render_frame = render_start_frame + (timeline_tick_frame - timeline_start_sample);
-    sync_sink->on_midi_sync_byte(render_frame, midi::kStatusClock);
+  struct SinkContext {
+    MidiSyncSink* sink;
+    int64_t timeline_start;
+    int64_t render_start;
+  } context{sync_sink, timeline_start_sample, render_start_frame};
+  const auto emit = [](void* opaque, int64_t timeline_tick_frame) noexcept {
+    auto* state = static_cast<SinkContext*>(opaque);
+    const int64_t render_frame =
+        state->render_start + (timeline_tick_frame - state->timeline_start);
+    state->sink->on_midi_sync_byte(render_frame, midi::kStatusClock);
+  };
+  bool overflowed = false;
+  midi_clock_.generate_clock_block(timeline_start_sample, num_frames, &context, emit, &overflowed);
+  if (overflowed) {
+    enqueue_error(TelemetryErrorCode::kMidiClockOverflow, render_start_frame, timeline_start_sample,
+                  1);
   }
 }
 

@@ -265,7 +265,7 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
                  std::vector<SmfMarker>* markers, SysExStore* sysex_store, uint32_t* skipped,
                  bool* timing_overflow, const resource::MidiImportResourceLimits& limits,
                  size_t* event_count, size_t* metadata_bytes, size_t* sysex_bytes,
-                 bool* resource_exceeded) {
+                 bool* resource_exceeded, bool* track_truncated) {
   const size_t end_pos = reader->pos() + length;
   if (length > reader->remaining()) return false;
 
@@ -300,11 +300,20 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     }
     return true;
   };
+  const auto mark_truncated = [&]() {
+    if (!*track_truncated) {
+      *track_truncated = true;
+      ++(*skipped);
+    }
+  };
 
   while (reader->pos() < end_pos && !reader->overflow()) {
     const uint32_t delta = reader->vlq();
     if (reader->overflow()) return false;
-    if (reader->pos() > end_pos) break;  // A VLQ delta ran past the track end.
+    if (reader->pos() > end_pos) {
+      mark_truncated();  // A VLQ delta ran past the track end.
+      break;
+    }
     if (tick > std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(delta)) {
       *timing_overflow = true;
       return false;
@@ -312,19 +321,28 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     tick += static_cast<uint64_t>(delta);
     const double ppq = smf_ticks_to_ppq(tick, ppqn);
 
-    if (track_remaining() == 0) break;  // No room for a status byte.
+    if (track_remaining() == 0) {
+      mark_truncated();  // No room for a status byte.
+      break;
+    }
     uint8_t status = reader->u8();
     if (reader->overflow()) return false;
 
     if (status == kMetaPrefix) {
       running_status = 0;
       discard_pending_sysex();
-      if (track_remaining() < 1) break;  // No room for the meta type byte.
+      if (track_remaining() < 1) {
+        mark_truncated();  // No room for the meta type byte.
+        break;
+      }
       const uint8_t meta_type = reader->u8();
       const uint32_t meta_len = reader->vlq();
       if (reader->overflow()) return false;
       // Reject a meta payload whose declared length overruns the track boundary.
-      if (reader->pos() > end_pos || meta_len > track_remaining()) break;
+      if (reader->pos() > end_pos || meta_len > track_remaining()) {
+        mark_truncated();
+        break;
+      }
       const uint8_t* payload = reader->take(meta_len);
       if (payload == nullptr) return false;
 
@@ -432,7 +450,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       const uint32_t sysex_len = reader->vlq();
       if (reader->overflow()) return false;
       // Reject a SysEx payload whose declared length overruns the track boundary.
-      if (reader->pos() > end_pos || sysex_len > track_remaining()) break;
+      if (reader->pos() > end_pos || sysex_len > track_remaining()) {
+        mark_truncated();
+        break;
+      }
       const uint8_t* payload = reader->take(sysex_len);
       if (payload == nullptr) return false;
       if (!resource::bounded_accumulate(sysex_len, limits.max_sysex_bytes, sysex_bytes)) {
@@ -485,7 +506,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
     if ((status & 0xF0u) == 0xF0u) {
       const int system_data = system_common_data_count(status);
       if (system_data > 0) {
-        if (static_cast<size_t>(system_data) > track_remaining()) break;
+        if (static_cast<size_t>(system_data) > track_remaining()) {
+          mark_truncated();
+          break;
+        }
         if (reader->take(static_cast<size_t>(system_data)) == nullptr) return false;
         running_status = 0;
         discard_pending_sysex();
@@ -531,7 +555,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
       raw[raw_len++] = first_data;
       --remaining_data;
     }
-    if (static_cast<size_t>(remaining_data) > track_remaining()) break;
+    if (static_cast<size_t>(remaining_data) > track_remaining()) {
+      mark_truncated();
+      break;
+    }
     for (int i = 0; i < remaining_data; ++i) {
       raw[raw_len++] = reader->u8();
     }
@@ -555,6 +582,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   if (reader->overflow()) return false;
   if (!pending_sysex.empty()) {
     ++(*skipped);
+    *track_truncated = true;
+  }
+  if (!saw_end_of_track && !*track_truncated) {
+    mark_truncated();
   }
   if (!saw_end_of_track) {
     track->length_ppq = smf_ticks_to_ppq(tick, ppqn);
@@ -648,6 +679,7 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
   size_t event_count = 0;
   size_t metadata_bytes = 0;
   size_t sysex_bytes = 0;
+  bool any_track_truncated = false;
   for (uint16_t t = 0; t < num_tracks; ++t) {
     if (reader.remaining() == 0) {
       // Fewer track chunks than the header claimed: stop gracefully.
@@ -668,10 +700,11 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
     TrackParseState track;
     bool timing_overflow = false;
     bool resource_exceeded = false;
+    bool track_truncated = false;
     if (!parse_track(&reader, track_len, division, &track, &result.tempo_segments,
                      &result.time_signatures, &result.markers, &result.sysex_store,
                      &result.skipped_events, &timing_overflow, limits, &event_count,
-                     &metadata_bytes, &sysex_bytes, &resource_exceeded)) {
+                     &metadata_bytes, &sysex_bytes, &resource_exceeded, &track_truncated)) {
       if (resource_exceeded) {
         result.status = SmfStatus::kInvalidArgument;
         result.diagnostic = "SMF import resource limit exceeded";
@@ -682,6 +715,7 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
                                           : "malformed or truncated track data";
       return result;
     }
+    any_track_truncated = any_track_truncated || track_truncated;
 
     if (track.has_midi_events) {
       track.clip.sort_stable();
@@ -718,7 +752,12 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
         return a.start_ppq < b.start_ppq;
       });
 
-  result.status = SmfStatus::kOk;
+  if (any_track_truncated) {
+    result.status = SmfStatus::kTruncated;
+    result.diagnostic = "one or more SMF tracks were truncated";
+  } else {
+    result.status = SmfStatus::kOk;
+  }
   return result;
 }
 

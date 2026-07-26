@@ -346,20 +346,30 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
                                                         float value) noexcept {
   if (!std::isfinite(value)) return false;
   MasterInsertAutoSlot* free_slot = nullptr;
+  MasterInsertAutoSlot* settled_match = nullptr;
   for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
-    if (slot.active && slot.insert_index == insert_index && slot.param_id == param_id) {
-      slot.smoother.set_target(value);
-      return true;
+    if (slot.assigned && slot.insert_index == insert_index && slot.param_id == param_id) {
+      if (slot.active) {
+        slot.smoother.set_target(value);
+        return true;
+      }
+      settled_match = &slot;
     }
     if (!slot.active && free_slot == nullptr) {
       free_slot = &slot;
     }
+  }
+  if (settled_match != nullptr) {
+    settled_match->active = true;
+    settled_match->smoother.set_target(value);
+    return true;
   }
   if (free_slot == nullptr) {
     ++master_insert_automation_overflow_count_;
     return false;
   }
   free_slot->active = true;
+  free_slot->assigned = true;
   free_slot->insert_index = insert_index;
   free_slot->param_id = param_id;
   // Snap to the first observed value so the smoother does not glide up from 0.
@@ -371,10 +381,15 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
 
 void RealtimeEngine::advance_master_insert_automations(int num_steps) noexcept {
   if (num_steps <= 0 || owned_master_strip_ == nullptr) return;
+  constexpr float kSettleEpsilon = 1.0e-6f;
   for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
     if (!slot.active) continue;
     const float value = slot.smoother.advance(num_steps);
     owned_master_strip_->apply_insert_parameter(slot.insert_index, slot.param_id, value);
+    if (std::abs(slot.smoother.target() - value) <= kSettleEpsilon) {
+      slot.smoother.reset(slot.smoother.target());
+      slot.active = false;
+    }
   }
 }
 
@@ -386,12 +401,14 @@ void RealtimeEngine::settle_master_insert_automations() noexcept {
     if (owned_master_strip_ != nullptr) {
       owned_master_strip_->apply_insert_parameter(slot.insert_index, slot.param_id, target);
     }
+    slot.active = false;
   }
 }
 
 void RealtimeEngine::clear_master_insert_automations() noexcept {
   for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
     slot.active = false;
+    slot.assigned = false;
   }
 }
 

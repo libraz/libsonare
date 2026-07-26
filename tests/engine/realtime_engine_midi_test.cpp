@@ -4,6 +4,7 @@
 ///        renders no instrument audio). Covers brush-up findings H-1, H-2.
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -661,6 +662,28 @@ TEST_CASE("RealtimeEngine forwards MIDI clock/transport to the external output q
   std::fill(right.begin(), right.end(), 0.0f);
   engine.process(channels, 2, 24000);
   REQUIRE(engine.drain_external_midi(drained.data(), drained.size()) == 0);
+}
+
+TEST_CASE("RealtimeEngine caps MIDI-clock work and reports overflow telemetry",
+          "[engine][midi][rt]") {
+  RealtimeEngine engine;
+  engine.prepare(8000.0, 512);
+  engine.set_tempo(sonare::transport::kMaxPublicTempoBpm);
+  engine.set_external_midi_clock_enabled(true);
+  push_play(engine);
+
+  std::array<float, 512> left{};
+  std::array<float, 512> right{};
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 512);
+
+  bool reported = false;
+  sonare::engine::Telemetry telemetry{};
+  while (engine.pop_telemetry(telemetry)) {
+    reported =
+        reported || telemetry.error == sonare::engine::TelemetryErrorCode::kMidiClockOverflow;
+  }
+  REQUIRE(reported);
 }
 
 TEST_CASE("seek releases sounding notes (no hang)", "[engine][midi]") {

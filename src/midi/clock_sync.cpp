@@ -213,6 +213,22 @@ size_t ClockGenerator::generate_clock_block(int64_t block_start_frame, int num_f
     return 0;
   }
   out->clear();
+  const auto append_byte = [](void* context, int64_t) noexcept {
+    auto* output = static_cast<ClockByteOutput*>(context);
+    output->bytes[output->size++] = kStatusClock;
+  };
+  bool overflowed = false;
+  const size_t emitted =
+      generate_clock_block(block_start_frame, num_frames, out, append_byte, &overflowed);
+  out->overflowed = overflowed;
+  return emitted;
+}
+
+size_t ClockGenerator::generate_clock_block(int64_t block_start_frame, int num_frames,
+                                            void* context, TickSink sink,
+                                            bool* overflowed) noexcept {
+  if (overflowed != nullptr) *overflowed = false;
+  if (sink == nullptr) return 0;
   if (tempo_map_ == nullptr || num_frames <= 0) {
     return 0;
   }
@@ -220,13 +236,15 @@ size_t ClockGenerator::generate_clock_block(int64_t block_start_frame, int num_f
   size_t ticks_emitted = 0;
   for (int64_t tick = first_tick_at_or_after(block_start_frame);
        frame_of_tick(tick) < block_end_frame; ++tick) {
-    if (out->size >= ClockByteOutput::kCapacity) {
-      out->overflowed = true;
+    if (ticks_emitted >= ClockByteOutput::kCapacity) {
+      if (overflowed != nullptr) *overflowed = true;
       overflow_count_.bump();
-      // Keep scanning so overflow_count reflects every dropped tick.
-      continue;
+      // A hostile/internal tempo map must not turn fixed-output overflow into
+      // unbounded audio-thread work. The counter records the overflow
+      // occurrence; surplus ticks in this block are intentionally dropped.
+      break;
     }
-    out->bytes[out->size++] = kStatusClock;
+    sink(context, frame_of_tick(tick));
     ++ticks_emitted;
   }
   return ticks_emitted;

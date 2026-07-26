@@ -115,8 +115,8 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     BusState& state = bus_states_[index];
     if (index < bus_configs_.size()) {
       state.bus_id = bus_configs_[index].bus_id;
-      state.gain_db.prepare(sample_rate_, 5.0f);
-      state.gain_db.reset(bus_configs_[index].gain_db);
+      state.gain.prepare(sample_rate_, 5.0f);
+      state.gain.reset(db_to_linear(bus_configs_[index].gain_db));
       // Re-prepare the trim/width smoothers for the current rate without
       // disturbing any value a prior set_bus_strip already applied.
       state.input_trim_gain.prepare(sample_rate_, 5.0f);
@@ -131,7 +131,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       }
     } else {
       state.bus_id = 0;
-      state.gain_db.reset(0.0f);
+      state.gain.reset(1.0f);
       state.input_trim_gain.reset(1.0f);
       state.width.set_width(1.0f);
       state.polarity_left.store(1.0f, std::memory_order_relaxed);
@@ -284,8 +284,9 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   state->polarity_left.store(bus.polarity_invert_left ? -1.0f : 1.0f, std::memory_order_relaxed);
   state->polarity_right.store(bus.polarity_invert_right ? -1.0f : 1.0f, std::memory_order_relaxed);
   for (InsertAutoSlot& slot : insert_auto_slots_) {
-    if (slot.active && slot.is_bus && slot.index == bus_index) {
+    if (slot.assigned && slot.is_bus && slot.index == bus_index) {
       slot.active = false;
+      slot.assigned = false;
     }
   }
   state->bus = std::move(fx);
@@ -300,10 +301,10 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   key_scratch_.assign(kMaxTrackLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_),
                       0.0f);
   for (LaneState& lane : lane_states_) {
-    lane.fader_db.prepare(sample_rate_, 5.0f);
+    lane.fader_gain.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
     lane.gate.prepare(sample_rate_, 10.0f);
-    lane.fader_db.reset(0.0f);
+    lane.fader_gain.reset(1.0f);
     lane.pan.reset(0.0f);
     lane.gate.reset(1.0f);
     lane.solo = false;
@@ -313,7 +314,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     }
   }
   for (BusState& bus : bus_states_) {
-    bus.gain_db.prepare(sample_rate_, 5.0f);
+    bus.gain.prepare(sample_rate_, 5.0f);
     bus.input_trim_gain.prepare(sample_rate_, 5.0f);
     bus.width.prepare(sample_rate_, max_block_size_);
     if (bus.bus) {
@@ -328,6 +329,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     slot.smoother.prepare(sample_rate_, 5.0f);
     slot.smoother.reset(0.0f);
     slot.active = false;
+    slot.assigned = false;
     slot.is_bus = false;
     slot.index = 0;
     slot.insert_index = 0;
@@ -352,7 +354,7 @@ void TrackMixerRuntime::process(float* const* channels, int num_channels, int nu
 
 void TrackMixerRuntime::reset() {
   for (LaneState& lane : lane_states_) {
-    lane.fader_db.reset(0.0f);
+    lane.fader_gain.reset(1.0f);
     lane.pan.reset(0.0f);
     lane.gate.reset(1.0f);
     lane.solo = false;
@@ -363,7 +365,7 @@ void TrackMixerRuntime::reset() {
 
 void TrackMixerRuntime::settle_smoothers() noexcept {
   for (LaneState& lane : lane_states_) {
-    lane.fader_db.reset(lane.fader_db.target());
+    lane.fader_gain.reset(lane.fader_gain.target());
     lane.pan.reset(lane.pan.target());
     lane.gate.reset(lane.gate.target());
     // Quiesce the lane's channel-strip gain stages too so the first rendered
@@ -371,7 +373,7 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
     if (lane.strip != nullptr) lane.strip->settle();
   }
   for (BusState& bus : bus_states_) {
-    bus.gain_db.reset(bus.gain_db.target());
+    bus.gain.reset(bus.gain.target());
     bus.input_trim_gain.reset(bus.input_trim_gain.target());
     // Seed the width smoother from its target too; set_width() only stores the
     // target, so without this an offline pre-roll glides width from 1.0 over the
@@ -390,6 +392,7 @@ void TrackMixerRuntime::settle_smoothers() noexcept {
     } else {
       apply_lane_insert_parameter(slot.index, slot.insert_index, slot.param_id, target);
     }
+    slot.active = false;
   }
 }
 
@@ -510,10 +513,10 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
 
   const auto reset_state = [this](LaneState& lane, uint32_t track_id) noexcept {
     lane.track_id = track_id;
-    lane.fader_db.prepare(sample_rate_, 5.0f);
+    lane.fader_gain.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
     lane.gate.prepare(sample_rate_, 10.0f);
-    lane.fader_db.reset(0.0f);
+    lane.fader_gain.reset(1.0f);
     lane.pan.reset(0.0f);
     lane.gate.reset(1.0f);
     lane.solo = false;

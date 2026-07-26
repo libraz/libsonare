@@ -165,6 +165,7 @@ class MidiSequencer {
     bool active = false;
     MidiFxChain chain;
     MidiFxBuffer buffer;
+    size_t next_input_ordinal = 0;
   };
   struct DestinationFxConfig {
     uint32_t destination_id = 0;
@@ -215,7 +216,8 @@ class MidiSequencer {
                             uint32_t clip_id) noexcept;
   void enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
                        uint32_t clip_id) noexcept;
-  void dispatch_pending(int64_t block_start_frame, int64_t block_end_frame) noexcept;
+  void dispatch_pending_through(int64_t block_start_frame, int64_t block_end_frame,
+                                int64_t through_frame) noexcept;
   void clear_pending_for_destination(uint32_t destination_id) noexcept;
   void clear_pending_for_clip(uint32_t clip_id) noexcept;
   void release_notes_for_clip(uint32_t clip_id, int64_t render_frame,

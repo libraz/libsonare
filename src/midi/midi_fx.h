@@ -102,9 +102,9 @@ struct QuantizeConfig {
   std::array<float, kMaxGrooveSteps> groove_offsets{};
 };
 
-/// Velocity remap for note-on events. The 7-bit input velocity is scaled and
-/// offset, then optionally gamma-shaped, and clamped to [1, 127] (a note-on
-/// keeps a velocity of at least 1 so it never silently becomes a note-off).
+/// Velocity remap for note-on events. The normalized input velocity is
+/// gamma-shaped, then scaled, offset, and clamped to the valid note-on range
+/// (a note-on keeps a non-zero velocity so it never silently becomes a note-off).
 struct VelocityCurveConfig {
   bool enabled = false;
   /// Linear gain applied to velocity.
@@ -164,8 +164,14 @@ struct HumanizeConfig {
 /// humanize act on the final event set.)
 class MidiFxChain {
  public:
-  void prepare() noexcept { overflow_count_.reset(); }
-  void reset() noexcept { overflow_count_.reset(); }
+  void prepare() noexcept {
+    overflow_count_.reset();
+    clear_note_timings();
+  }
+  void reset() noexcept {
+    overflow_count_.reset();
+    clear_note_timings();
+  }
 
   void set_transpose(const TransposeConfig& c) noexcept { transpose_ = c; }
   void set_quantize(const QuantizeConfig& c) noexcept { quantize_ = c; }
@@ -186,13 +192,32 @@ class MidiFxChain {
   /// the overflow counter is bumped.
   void process(const MidiEvent* in, size_t count, MidiFxBuffer* out) noexcept;
 
+  /// RT-safe chunk variant whose first input keeps its ordinal from a larger
+  /// logical batch. Control-thread callers use this to drain large clips through
+  /// fixed-capacity buffers without changing deterministic humanize seeds.
+  void process_chunk(const MidiEvent* in, size_t count, size_t input_ordinal_base,
+                     MidiFxBuffer* out) noexcept;
+
   /// Telemetry: number of output events dropped because the buffer was full.
   uint32_t overflow_count() const noexcept { return overflow_count_.load(); }
 
  private:
+  struct ActiveNoteTiming {
+    uint8_t group = 0;
+    uint8_t channel = 0;
+    uint8_t note = 0;
+    int64_t frame_shift = 0;
+    int64_t shaped_on_frame = 0;
+    uint64_t order = 0;
+  };
+  static constexpr size_t kMaxActiveNoteTimings = 256;
+
   // Stage helpers. Each reads `out` in place? No: stages that fan out write into
   // `out`; pure transforms mutate the single event before it is pushed.
   void push_or_overflow(const MidiEvent& ev, MidiFxBuffer* out) noexcept;
+  void clear_note_timings() noexcept;
+  void push_note_timing(const Ump& ump, int64_t frame_shift, int64_t shaped_on_frame) noexcept;
+  bool pop_note_timing(const Ump& ump, ActiveNoteTiming* out) noexcept;
 
   TransposeConfig transpose_{};
   QuantizeConfig quantize_{};
@@ -200,6 +225,9 @@ class MidiFxChain {
   ChordConfig chord_{};
   ArpeggiatorConfig arpeggiator_{};
   HumanizeConfig humanize_{};
+  std::array<ActiveNoteTiming, kMaxActiveNoteTimings> active_note_timings_{};
+  size_t active_note_timing_count_ = 0;
+  uint64_t next_note_timing_order_ = 0;
 
   rt::OverflowCounter overflow_count_{};
 };

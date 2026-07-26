@@ -3,6 +3,7 @@
 
 #include "engine/track_mixer.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::engine {
 
@@ -22,7 +23,7 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
   switch (param_id) {
     case kFaderDb:
       if (!std::isfinite(value)) return false;
-      lane.fader_db.set_target(std::clamp(value, kFloorDb, 24.0f));
+      lane.fader_gain.set_target(db_to_linear(std::clamp(value, kFloorDb, 24.0f)));
       return true;
     case kPan:
       if (!std::isfinite(value)) return false;
@@ -130,20 +131,27 @@ TrackMixerRuntime::InsertAutoSlot* TrackMixerRuntime::find_or_claim_insert_slot(
     bool is_bus, size_t index, unsigned int insert_index, unsigned int param_id,
     float value) noexcept {
   InsertAutoSlot* free_slot = nullptr;
+  InsertAutoSlot* settled_match = nullptr;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
-    if (slot.active && slot.is_bus == is_bus && slot.index == index &&
+    if (slot.assigned && slot.is_bus == is_bus && slot.index == index &&
         slot.insert_index == insert_index && slot.param_id == param_id) {
-      return &slot;
+      if (slot.active) return &slot;
+      settled_match = &slot;
     }
     if (!slot.active && free_slot == nullptr) {
       free_slot = &slot;
     }
+  }
+  if (settled_match != nullptr) {
+    settled_match->active = true;
+    return settled_match;
   }
   if (free_slot == nullptr) {
     ++insert_automation_overflow_count_;
     return nullptr;
   }
   free_slot->active = true;
+  free_slot->assigned = true;
   free_slot->is_bus = is_bus;
   free_slot->index = index;
   free_slot->insert_index = insert_index;
@@ -184,6 +192,7 @@ bool TrackMixerRuntime::route_bus_insert_param_smoothed(size_t bus_index, unsign
 
 void TrackMixerRuntime::advance_insert_automations(int num_samples) noexcept {
   if (num_samples <= 0) return;
+  constexpr float kSettleEpsilon = 1.0e-6f;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     if (!slot.active) continue;
     const float value = slot.smoother.advance(num_samples);
@@ -192,29 +201,36 @@ void TrackMixerRuntime::advance_insert_automations(int num_samples) noexcept {
     } else {
       apply_lane_insert_parameter(slot.index, slot.insert_index, slot.param_id, value);
     }
+    if (std::abs(slot.smoother.target() - value) <= kSettleEpsilon) {
+      slot.smoother.reset(slot.smoother.target());
+      slot.active = false;
+    }
   }
 }
 
 void TrackMixerRuntime::clear_insert_automation_for_lane(size_t lane_index) noexcept {
   for (InsertAutoSlot& slot : insert_auto_slots_) {
-    if (slot.active && !slot.is_bus && slot.index == lane_index) {
+    if (slot.assigned && !slot.is_bus && slot.index == lane_index) {
       slot.active = false;
+      slot.assigned = false;
     }
   }
 }
 
 void TrackMixerRuntime::clear_lane_insert_automations() noexcept {
   for (InsertAutoSlot& slot : insert_auto_slots_) {
-    if (slot.active && !slot.is_bus) {
+    if (slot.assigned && !slot.is_bus) {
       slot.active = false;
+      slot.assigned = false;
     }
   }
 }
 
 void TrackMixerRuntime::clear_bus_insert_automations() noexcept {
   for (InsertAutoSlot& slot : insert_auto_slots_) {
-    if (slot.active && slot.is_bus) {
+    if (slot.assigned && slot.is_bus) {
       slot.active = false;
+      slot.assigned = false;
     }
   }
 }
@@ -222,6 +238,7 @@ void TrackMixerRuntime::clear_bus_insert_automations() noexcept {
 void TrackMixerRuntime::clear_insert_automations() noexcept {
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     slot.active = false;
+    slot.assigned = false;
   }
 }
 
@@ -306,13 +323,13 @@ bool TrackMixerRuntime::set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept
   if (!std::isfinite(gain_db)) return false;
   BusState* state = bus_state_for(bus_id);
   if (!state) return false;
-  state->gain_db.set_target(std::clamp(gain_db, kFloorDb, 24.0f));
+  state->gain.set_target(db_to_linear(std::clamp(gain_db, kFloorDb, 24.0f)));
   return true;
 }
 
 bool TrackMixerRuntime::set_bus_gain_db_by_index(size_t bus_index, float gain_db) noexcept {
   if (!std::isfinite(gain_db) || bus_index >= bus_configs_.size()) return false;
-  bus_states_[bus_index].gain_db.set_target(std::clamp(gain_db, kFloorDb, 24.0f));
+  bus_states_[bus_index].gain.set_target(db_to_linear(std::clamp(gain_db, kFloorDb, 24.0f)));
   return true;
 }
 

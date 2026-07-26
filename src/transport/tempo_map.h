@@ -19,10 +19,16 @@ namespace sonare::transport {
 /// arithmetic. TempoMap itself still saturates any larger finite value because
 /// it is also used by internal/offline code.
 inline constexpr double kMaxPublicPpq = 1.0e12;
+/// Highest tempo accepted by public control-plane APIs. This is intentionally
+/// far above a musical tempo while keeping MIDI-clock and beat-grid work
+/// bounded enough for realtime code to enforce a small per-block budget.
+inline constexpr double kMaxPublicTempoBpm = 100000.0;
 
 inline bool valid_public_ppq(double ppq) noexcept { return ppq >= 0.0 && ppq <= kMaxPublicPpq; }
 
-inline bool valid_public_tempo(double bpm) noexcept { return std::isfinite(bpm) && bpm > 0.0; }
+inline bool valid_public_tempo(double bpm) noexcept {
+  return std::isfinite(bpm) && bpm > 0.0 && bpm <= kMaxPublicTempoBpm;
+}
 
 struct TempoSegment {
   double start_ppq = 0.0;
@@ -41,7 +47,7 @@ struct TempoSegment {
 inline bool valid_public_tempo_segment(const TempoSegment& segment) noexcept {
   return std::isfinite(segment.start_ppq) && valid_public_ppq(segment.start_ppq) &&
          valid_public_tempo(segment.bpm) && std::isfinite(segment.end_bpm) &&
-         segment.end_bpm >= 0.0;
+         segment.end_bpm >= 0.0 && (segment.end_bpm == 0.0 || valid_public_tempo(segment.end_bpm));
 }
 
 struct TimeSignature {

@@ -208,11 +208,56 @@ void MidiFxChain::push_or_overflow(const MidiEvent& ev, MidiFxBuffer* out) noexc
   }
 }
 
+void MidiFxChain::clear_note_timings() noexcept {
+  active_note_timing_count_ = 0;
+  next_note_timing_order_ = 0;
+}
+
+void MidiFxChain::push_note_timing(const Ump& ump, int64_t frame_shift,
+                                   int64_t shaped_on_frame) noexcept {
+  if (active_note_timing_count_ >= active_note_timings_.size()) {
+    overflow_count_.bump();
+    return;
+  }
+  ActiveNoteTiming& timing = active_note_timings_[active_note_timing_count_++];
+  timing.group = ump.group;
+  timing.channel = ump.channel();
+  timing.note = ump.note_number();
+  timing.frame_shift = frame_shift;
+  timing.shaped_on_frame = shaped_on_frame;
+  timing.order = next_note_timing_order_++;
+}
+
+bool MidiFxChain::pop_note_timing(const Ump& ump, ActiveNoteTiming* out) noexcept {
+  if (out == nullptr) return false;
+  size_t match = active_note_timing_count_;
+  uint64_t earliest = UINT64_MAX;
+  for (size_t i = 0; i < active_note_timing_count_; ++i) {
+    const ActiveNoteTiming& timing = active_note_timings_[i];
+    if (timing.group == ump.group && timing.channel == ump.channel() &&
+        timing.note == ump.note_number() && timing.order < earliest) {
+      match = i;
+      earliest = timing.order;
+    }
+  }
+  if (match == active_note_timing_count_) return false;
+  *out = active_note_timings_[match];
+  active_note_timings_[match] = active_note_timings_[active_note_timing_count_ - 1];
+  --active_note_timing_count_;
+  return true;
+}
+
 void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) noexcept {
+  process_chunk(in, count, 0, out);
+}
+
+void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_ordinal_base,
+                                MidiFxBuffer* out) noexcept {
   if (in == nullptr || out == nullptr) return;
   out->clear();
 
   for (size_t i = 0; i < count; ++i) {
+    const size_t input_ordinal = input_ordinal_base + i;
     MidiEvent ev = in[i];
     const bool channel_voice = is_midi_channel_voice(ev.ump);
     const bool note_on = channel_voice && ev.ump.is_note_on();
@@ -273,8 +318,21 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
     }
 
     auto shape_and_push = [&](MidiEvent shaped, size_t ordinal) noexcept {
+      const int64_t original_frame = shaped.render_frame;
+      ActiveNoteTiming paired_timing{};
+      const bool paired_note_off = shaped.ump.is_note_off() && active_note_timing_count_ > 0 &&
+                                   pop_note_timing(shaped.ump, &paired_timing);
       // ---- 5. Quantize (render frame) ----
-      if (quantize_.enabled && quantize_.grid_frames > 0) {
+      if (paired_note_off) {
+        // A note's gate is a duration, not a second grid event. Apply the exact
+        // shift chosen for its note-on so a short note cannot quantize to
+        // off-before-on (or off/on at the same frame after sorting).
+        shaped.render_frame = original_frame + paired_timing.frame_shift;
+        if (shaped.render_frame <= paired_timing.shaped_on_frame &&
+            paired_timing.shaped_on_frame < INT64_MAX) {
+          shaped.render_frame = paired_timing.shaped_on_frame + 1;
+        }
+      } else if (quantize_.enabled && quantize_.grid_frames > 0) {
         const int64_t grid = quantize_.grid_frames;
         const int64_t f = shaped.render_frame;
         const int64_t snapped = nearest_quantized_frame(f, grid, quantize_);
@@ -286,7 +344,7 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
       // ---- 6. Humanize (timing + velocity), deterministic from seed ----
       if (humanize_.enabled) {
         SplitMix64 rng(seed_for(humanize_.seed, ordinal));
-        if (humanize_.timing_frames > 0) {
+        if (!paired_note_off && humanize_.timing_frames > 0) {
           // Apply the deterministic timing jitter, but never move an event to a
           // negative render frame. A hard clamp-to-0 would collapse several
           // distinct source frames onto 0 and could reorder events (e.g. a
@@ -319,6 +377,11 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
           }
         }
       }
+      const bool moves_time = (quantize_.enabled && quantize_.grid_frames > 0) ||
+                              (humanize_.enabled && humanize_.timing_frames > 0);
+      if (shaped.ump.is_note_on() && moves_time) {
+        push_note_timing(shaped.ump, shaped.render_frame - original_frame, shaped.render_frame);
+      }
       push_or_overflow(shaped, out);
     };
 
@@ -330,7 +393,7 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
           arpeggiator_.gate_frames > 0 && arpeggiator_.gate_frames <= arpeggiator_.step_frames
               ? arpeggiator_.gate_frames
               : arpeggiator_.step_frames;
-      size_t ordinal = i;
+      size_t ordinal = input_ordinal;
       for (size_t n = 0; n < note_count; ++n) {
         for (size_t s = 0; s < arpeggiator_.steps && s < ArpeggiatorConfig::kMaxArpSteps; ++s) {
           const int arp_note = clamp_note(static_cast<int>(notes[n]) + arpeggiator_.intervals[s]);
@@ -370,12 +433,12 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
           // for MIDI 2.0) instead of round-tripping through 7 bits.
           note_ev.ump = make_note_preserving_velocity(ev.ump, note_on, notes[n]);
         }
-        shape_and_push(note_ev, i);
+        shape_and_push(note_ev, input_ordinal);
       }
     } else {
       // Non-note channel-voice / non-channel-voice events pass through with only
       // time shaping applied.
-      shape_and_push(ev, i);
+      shape_and_push(ev, input_ordinal);
     }
   }
 
