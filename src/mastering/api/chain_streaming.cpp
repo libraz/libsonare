@@ -74,6 +74,7 @@ struct StreamingMasteringChain::Impl {
 
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
     : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
+  validate_mastering_chain_config(config_);
   reject_non_streaming_repair(config_);
   if (config_.loudness.enabled) {
     throw SonareException(
@@ -87,6 +88,7 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config)
 StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
                                                  StreamingMasteringChainOptions options)
     : impl_(std::make_unique<Impl>()), config_(std::move(config)) {
+  validate_mastering_chain_config(config_);
   reject_non_streaming_repair(config_);
   if (config_.loudness.enabled) {
     if (!std::isfinite(options.loudness_static_gain_db)) {
@@ -213,11 +215,10 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   // matches the offline render.
   impl_->loudness_limiter.reset();
   if (config_.loudness.enabled) {
-    mastering::maximizer::TruePeakLimiterConfig limiter_config;
-    limiter_config.ceiling_db = config_.loudness.ceiling_db;
-    limiter_config.oversample_factor = config_.loudness.true_peak_oversample;
-    limiter_config.release_ms = config_.loudness.release_ms;
-    limiter_config.apply_gain_at_input_rate = config_.loudness.apply_gain_at_input_rate;
+    const mastering::maximizer::TruePeakLimiterConfig limiter_config =
+        mastering::maximizer::loudness_limiter_config(
+            config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
+            config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
     limiter->prepare(sample_rate, max_block_size);
     impl_->loudness_limiter = std::move(limiter);

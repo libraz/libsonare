@@ -253,19 +253,43 @@ TEST_CASE("LookaheadBuffer drops expired peak values", "[mastering]") {
   REQUIRE_THAT(buffer.peak(), WithinAbs(0.5f, 0.0001f));
 }
 
-TEST_CASE("Oversampler preserves source samples while FIR-interpolating intermediate samples",
+TEST_CASE("Oversampler filters every phase while interpolating intermediate samples",
           "[mastering]") {
   Oversampler oversampler(4);
-  const std::vector<float> input = {0.0f, 1.0f, 0.0f};
+  std::vector<float> input(64, 0.0f);
+  input[32] = 1.0f;
 
   const auto upsampled = oversampler.upsample(input);
 
   REQUIRE(upsampled.size() == input.size() * 4);
-  REQUIRE_THAT(upsampled[0], WithinAbs(0.0f, 0.0001f));
-  REQUIRE_THAT(upsampled[4], WithinAbs(1.0f, 0.0001f));
-  REQUIRE_THAT(upsampled[8], WithinAbs(0.0f, 0.0001f));
-  REQUIRE(std::abs(upsampled[2]) > 0.01f);
+  REQUIRE(std::abs(upsampled[32 * 4]) > 0.9f);
+  REQUIRE(std::abs(upsampled[32 * 4]) < 1.0f);
+  REQUIRE(std::abs(upsampled[32 * 4 + 1]) > 0.01f);
+  REQUIRE(std::abs(upsampled[32 * 4 + 2]) > 0.01f);
+  REQUIRE(std::abs(upsampled[32 * 4 + 3]) > 0.01f);
   REQUIRE(oversampler.latency_samples() == 6);
+}
+
+TEST_CASE("Oversampler round trip preserves a mid-band sine", "[mastering]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr double kFrequency = 6000.0;
+  constexpr size_t kLength = 4096;
+  constexpr size_t kEdge = 32;
+  Oversampler oversampler(4);
+  std::vector<float> input(kLength, 0.0f);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = 0.5f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * kFrequency *
+                                                  static_cast<double>(i) / kSampleRate));
+  }
+
+  const auto round_trip = oversampler.downsample(oversampler.upsample(input));
+  float max_error = 0.0f;
+  for (size_t i = kEdge; i < input.size() - kEdge; ++i) {
+    max_error = std::max(max_error, std::abs(round_trip[i] - input[i]));
+  }
+
+  CAPTURE(max_error);
+  REQUIRE(max_error < 1.0e-3f);
 }
 
 TEST_CASE("Oversampler downsample uses FIR decimation", "[mastering]") {
@@ -312,7 +336,8 @@ TEST_CASE("TruePeakFilter returns sample peak and interpolated output", "[master
   REQUIRE(filter.factor() == 4);
   REQUIRE(filter.latency_samples() == 6);
   REQUIRE_THAT(filter.process(channels, 1, static_cast<int>(input.size())), WithinAbs(0.8f, 0.3f));
-  REQUIRE_THAT(output[4], WithinAbs(0.8f, 0.0001f));
+  REQUIRE(output[4] > 0.7f);
+  REQUIRE(output[4] < 0.8f);
   REQUIRE(std::abs(output[5]) > 0.01f);
 
   TruePeakFilter fallback(1, 2);
@@ -321,7 +346,8 @@ TEST_CASE("TruePeakFilter returns sample peak and interpolated output", "[master
   fallback.upsample(channels, output_2x_channels, 1, static_cast<int>(input.size()));
   REQUIRE(fallback.factor() == 2);
   REQUIRE(fallback.latency_samples() == 6);
-  REQUIRE_THAT(output_2x[2], WithinAbs(0.8f, 0.0001f));
+  REQUIRE(output_2x[2] > 0.7f);
+  REQUIRE(output_2x[2] < 0.8f);
   TruePeakFilter eightx(1, 8);
   REQUIRE(eightx.factor() == 8);
   REQUIRE_THROWS(TruePeakFilter(1, 3));

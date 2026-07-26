@@ -197,6 +197,22 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     }
   }
 
+  // FIR decimation can ring above the bounded oversampled samples. Measure the
+  // reconstructed base-rate block with the same all-phase interpolator and
+  // apply one linked correction so the public true-peak ceiling remains a hard
+  // output invariant after downsampling as well.
+  const float reconstructed_peak =
+      true_peak_filter_.process(input_ptrs_.data(), num_channels, num_samples);
+  if (reconstructed_peak > ceiling && reconstructed_peak > 0.0f) {
+    const float reconstruction_gain = ceiling / reconstructed_peak;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] *= reconstruction_gain;
+      }
+    }
+    min_gain = std::min(min_gain, reconstruction_gain);
+  }
+
   last_gain_reduction_db_ = std::min(0.0f, linear_to_db(min_gain));
 }
 
@@ -281,6 +297,8 @@ void TruePeakLimiter::reset() {
   slow_gain_ = 1.0f;
   crest_peak_ = 0.0f;
   crest_rms_ = 0.0f;
+  adaptive_release_coeff_ = release_coeff_;
+  adaptive_release_counter_ = 0;
   oversampled_peak_window_.reset();
   for (auto& history : true_peak_history_) {
     std::fill(history.begin(), history.end(), 0.0f);
@@ -326,6 +344,8 @@ void TruePeakLimiter::set_release_ms_in_place(float release_ms) noexcept {
   // allocation. set_config / the published snapshot are left untouched.
   config_.release_ms = std::max(0.0f, release_ms);
   release_coeff_ = time_to_coefficient(smoother_sample_rate(), config_.release_ms);
+  adaptive_release_coeff_ = release_coeff_;
+  adaptive_release_counter_ = 0;
   limiter_.set_release_ms_in_place(config_.release_ms);
 }
 
@@ -405,6 +425,8 @@ void TruePeakLimiter::update_time_constants() {
   slow_attack_coeff_ = time_to_coefficient(sample_rate_, kSlowAttackMs);
   release_coeff_ = time_to_coefficient(release_rate, config_.release_ms);
   crest_coeff_ = time_to_coefficient(release_rate, 200.0f);
+  adaptive_release_coeff_ = release_coeff_;
+  adaptive_release_counter_ = 0;
 }
 
 float TruePeakLimiter::adaptive_release_coeff(float linked_peak) {
@@ -419,12 +441,17 @@ float TruePeakLimiter::adaptive_release_coeff(float linked_peak) {
   constexpr float kCrestTransientRange = 8.0f;
   // Maximum fraction by which the release is shortened for full transients.
   constexpr float kMaxReleaseShorten = 0.75f;
-  const float rms = std::sqrt(std::max(crest_rms_, kCrestRmsFloor));
-  const float crest = crest_peak_ / rms;
-  const float transient =
-      std::clamp((crest - kCrestTransientOffset) / kCrestTransientRange, 0.0f, 1.0f);
-  const float release_scale = 1.0f - kMaxReleaseShorten * transient;
-  return time_to_coefficient(smoother_sample_rate(), config_.release_ms * release_scale);
+  if (adaptive_release_counter_ == 0) {
+    const float rms = std::sqrt(std::max(crest_rms_, kCrestRmsFloor));
+    const float crest = crest_peak_ / rms;
+    const float transient =
+        std::clamp((crest - kCrestTransientOffset) / kCrestTransientRange, 0.0f, 1.0f);
+    const float release_scale = 1.0f - kMaxReleaseShorten * transient;
+    adaptive_release_coeff_ =
+        time_to_coefficient(smoother_sample_rate(), config_.release_ms * release_scale);
+  }
+  adaptive_release_counter_ = (adaptive_release_counter_ + 1) % kReleaseControlInterval;
+  return adaptive_release_coeff_;
 }
 
 }  // namespace sonare::mastering::maximizer

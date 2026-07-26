@@ -850,6 +850,10 @@ std::string insert_param_info_json(const std::string& name) {
       out += std::to_string(descriptors[index].id);
       out += ",\"rtSafe\":";
       out += processor->parameter_is_realtime_safe(descriptors[index].id) ? "true" : "false";
+      if ((name == "effects.reverb.plate" || name == "effects.reverb.dattorro") &&
+          descriptors[index].key == "modDepthSamples") {
+        out += ",\"unit\":\"referenceSamples@29761Hz\"";
+      }
       out += '}';
     }
   }

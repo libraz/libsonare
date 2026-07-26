@@ -47,6 +47,21 @@ float stereo_rms_tail(const std::vector<float>& left, const std::vector<float>& 
   return count == 0 ? 0.0f : static_cast<float>(std::sqrt(sum / static_cast<double>(count)));
 }
 
+float projected_amplitude(const std::vector<float>& samples, float frequency_hz, int sample_rate) {
+  double sin_sum = 0.0;
+  double cos_sum = 0.0;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double phase =
+        2.0 * static_cast<double>(kPi) * frequency_hz * static_cast<double>(i) / sample_rate;
+    sin_sum += static_cast<double>(samples[i]) * std::sin(phase);
+    cos_sum += static_cast<double>(samples[i]) * std::cos(phase);
+  }
+  return samples.empty()
+             ? 0.0f
+             : static_cast<float>(2.0 * std::sqrt(sin_sum * sin_sum + cos_sum * cos_sum) /
+                                  static_cast<double>(samples.size()));
+}
+
 }  // namespace
 
 TEST_CASE("MidSide encode and decode round-trips stereo buffers", "[mastering][stereo]") {
@@ -164,7 +179,7 @@ TEST_CASE("MidSide preserves loudness when side gain is applied", "[mastering][s
 
 TEST_CASE("Imager increases and collapses stereo width", "[mastering][stereo]") {
   auto mid = generate_sine_samples(1000.0f, 48000, 48000, 0.25f);
-  auto side = generate_sine_samples(1500.0f, 48000, 48000, 0.05f);
+  auto side = generate_sine_samples(1500.0f, 48000, 48000, 0.25f);
   auto left = mid;
   auto right = mid;
   for (size_t i = 0; i < left.size(); ++i) {
@@ -177,7 +192,7 @@ TEST_CASE("Imager increases and collapses stereo width", "[mastering][stereo]") 
   Imager wide({2.0f, 0.0f});
   wide.prepare(48000.0, 1024);
   process_stereo(wide, left, right);
-  REQUIRE(rms_tail(side_signal(left, right), 4096) > side_before * 1.7f);
+  REQUIRE(rms_tail(side_signal(left, right), 4096) > side_before * 1.25f);
   REQUIRE(stereo_rms_tail(left, right, 4096) > energy_before * 0.98f);
   REQUIRE(stereo_rms_tail(left, right, 4096) < energy_before * 1.02f);
 
@@ -191,8 +206,8 @@ TEST_CASE("Imager preserves energy when narrowing", "[mastering][stereo]") {
   // preserve_energy used to gate on width > 1 only, so narrowing (width < 1)
   // shrank the side and dropped total energy uncompensated. It must now hold
   // total energy roughly constant for any width != 1.
-  auto mid = generate_sine_samples(1000.0f, 48000, 48000, 0.25f);
-  auto side = generate_sine_samples(1500.0f, 48000, 48000, 0.15f);
+  auto mid = generate_sine_samples(1000.0f, 48000, 48000, 0.2f);
+  auto side = generate_sine_samples(1500.0f, 48000, 48000, 0.2f);
   auto left = mid;
   auto right = mid;
   for (size_t i = 0; i < left.size(); ++i) {
@@ -210,6 +225,36 @@ TEST_CASE("Imager preserves energy when narrowing", "[mastering][stereo]") {
   REQUIRE(rms_tail(side_signal(left, right), 4096) < side_before);
   REQUIRE(stereo_rms_tail(left, right, 4096) > energy_before * 0.97f);
   REQUIRE(stereo_rms_tail(left, right, 4096) < energy_before * 1.03f);
+}
+
+TEST_CASE("Imager constant-power compensation does not create two-tone intermodulation",
+          "[mastering][stereo]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 96000;
+  auto mid = generate_sine_samples(1000.0f, kSampleRate, kSamples, 0.25f);
+  auto side = generate_sine_samples(1500.0f, kSampleRate, kSamples, 0.2f);
+  auto left = mid;
+  auto right = mid;
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] += side[i];
+    right[i] -= side[i];
+  }
+
+  Imager imager({1.3f, 0.0f, 0.0f, true});
+  imager.prepare(kSampleRate, kSamples);
+  process_stereo(imager, left, right);
+
+  const float fundamental = std::max(projected_amplitude(left, 1000.0f, kSampleRate),
+                                     projected_amplitude(left, 1500.0f, kSampleRate));
+  float largest_im_product = 0.0f;
+  for (const float frequency_hz : {500.0f, 2000.0f, 3000.0f, 3500.0f, 4000.0f, 4500.0f}) {
+    largest_im_product =
+        std::max(largest_im_product, projected_amplitude(left, frequency_hz, kSampleRate));
+  }
+  const float imd_db = 20.0f * std::log10(largest_im_product / fundamental);
+
+  CAPTURE(fundamental, largest_im_product, imd_db);
+  REQUIRE(imd_db < -80.0f);
 }
 
 TEST_CASE("Imager decorrelates widened side signal", "[mastering][stereo]") {
@@ -257,23 +302,33 @@ TEST_CASE("Imager decorrelator stays stable across sample rates", "[mastering][s
 
 TEST_CASE("Imager validates width", "[mastering][stereo]") {
   REQUIRE_THROWS(Imager({-1.0f, 0.0f}));
+  REQUIRE_THROWS(Imager({std::numeric_limits<float>::quiet_NaN(), 0.0f}));
   REQUIRE_THROWS(Imager({1.0f, 0.0f, 1.1f}));
 }
 
-TEST_CASE("MonoMaker collapses stereo to identical channels", "[mastering][stereo]") {
-  auto left = generate_sine_samples(100.0f, 48000, 48000, 0.3f);
-  auto right = generate_sine_samples(100.0f, 48000, 48000, 0.1f);
+TEST_CASE("MonoMaker collapses low-frequency side while preserving high-frequency width",
+          "[mastering][stereo]") {
+  auto left = generate_sine_samples(20.0f, 48000, 48000, 0.3f);
+  auto right = generate_sine_samples(20.0f, 48000, 48000, 0.1f);
 
   MonoMaker mono_maker({1.0f});
   mono_maker.prepare(48000.0, 1024);
   process_stereo(mono_maker, left, right);
 
-  REQUIRE(rms_tail(side_signal(left, right), 4096) < 0.000001f);
+  REQUIRE(rms_tail(side_signal(left, right), 4096) < 0.005f);
+
+  left = generate_sine_samples(2000.0f, 48000, 48000, 0.3f);
+  right = generate_sine_samples(2000.0f, 48000, 48000, 0.1f);
+  const float side_before = rms_tail(side_signal(left, right), 4096);
+  mono_maker.reset();
+  process_stereo(mono_maker, left, right);
+  REQUIRE(rms_tail(side_signal(left, right), 4096) > side_before * 0.9f);
 }
 
 TEST_CASE("MonoMaker validates amount", "[mastering][stereo]") {
   REQUIRE_THROWS(MonoMaker({-0.1f}));
   REQUIRE_THROWS(MonoMaker({1.1f}));
+  REQUIRE_THROWS(MonoMaker({1.0f, 0.0f}));
 }
 
 TEST_CASE("StereoBalance attenuates the opposite side", "[mastering][stereo]") {

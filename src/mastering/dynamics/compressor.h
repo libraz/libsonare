@@ -3,6 +3,7 @@
 /// @file compressor.h
 /// @brief Feed-forward compressor with soft knee and makeup gain.
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -91,6 +92,7 @@ class Compressor : public rt::ProcessorBase,
   ///          from the audio thread when a new configuration snapshot is
   ///          adopted between blocks.
   void update_coefficients(const CompressorConfig& config);
+  void update_release_table(const CompressorConfig& config) noexcept;
 
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
@@ -114,6 +116,8 @@ class Compressor : public rt::ProcessorBase,
   std::vector<float> hpf_y1_;
   float pdr_state_db_ = 0.0f;
   float pdr_coeff_ = 0.0f;
+  static constexpr size_t kReleaseTableSteps = 256;
+  std::array<float, kReleaseTableSteps + 1> release_coeff_table_{};
   // Log-domain attack/release smoothing on the gain-reduction signal (in dB).
   sonare::rt::EnvelopeFollower reduction_smoother_;
   float last_gain_reduction_db_ = 0.0f;

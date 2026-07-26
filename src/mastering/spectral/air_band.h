@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "rt/biquad_design.h"
+#include "rt/oversampler.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::spectral {
@@ -23,8 +24,8 @@ class AirBand : public rt::ProcessorBase {
   void set_config(const AirBandConfig& config);
 
   // Automatable parameters (RT-safe: updates config in place; the shelf gain is
-  // recomputed every sample in process(), so the change takes effect on the
-  // next block without resetting filter or envelope state). Ids follow the
+  // refreshed at a short control interval and coefficient-interpolated, so the
+  // change takes effect on the next block without resetting filter/envelope state). Ids follow the
   // AirBandConfig declaration order:
   //   0 = amount (clamped to [0, 1])
   //   1 = shelf_frequency_hz (clamped to > 0; rebuilds the detector highpass)
@@ -44,10 +45,19 @@ class AirBand : public rt::ProcessorBase {
   AirBandConfig config_{};
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
-  std::vector<float> previous_;
+  int max_block_size_ = 0;
+  static constexpr int kHarmonicOversampleFactor = 4;
+  static constexpr int kHarmonicTapsPerPhase = 24;
+  static constexpr int kShelfControlInterval = 8;
+  sonare::rt::Oversampler harmonic_oversampler_{kHarmonicOversampleFactor, kHarmonicTapsPerPhase};
+  std::vector<float> band_scratch_;
+  std::vector<float> oversampled_scratch_;
+  std::vector<float> harmonic_scratch_;
   std::vector<float> envelope_;
+  std::vector<float> shelf_gain_db_;
   std::vector<Biquad> shelf_;
   std::vector<Biquad> detector_;
+  std::vector<Biquad> harmonic_filter_;
 };
 
 }  // namespace sonare::mastering::spectral

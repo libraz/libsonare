@@ -27,10 +27,14 @@ void Exciter::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   prepared_ = true;
   compute_coeffs();
+  constexpr double kEvenDcCutoffHz = 20.0;
+  even_dc_coefficient_ =
+      static_cast<float>(1.0 - std::exp(-2.0 * kPiD * kEvenDcCutoffHz / sample_rate_));
   // Preallocate per-channel filter state so process() never resizes on the
   // audio thread (matches Tube/AmpSim).
   bandpass_.assign(dynamics::kRealtimePreparedChannels, bandpass_coeffs_);
   allpass_.assign(dynamics::kRealtimePreparedChannels, allpass_coeffs_);
+  even_dc_.assign(dynamics::kRealtimePreparedChannels, 0.0f);
   reset();
 }
 
@@ -49,21 +53,26 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     auto& bandpass = bandpass_[static_cast<size_t>(ch)];
     auto& allpass = allpass_[static_cast<size_t>(ch)];
+    float even_dc = even_dc_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
       const float band = bandpass.process(channels[ch][i]);
       const float aligned = allpass.process(band);
-      const float even = (band * band) * (band < 0.0f ? -1.0f : 1.0f);
+      const float even_raw = band * band;
+      even_dc += even_dc_coefficient_ * (even_raw - even_dc);
+      const float even = even_raw - even_dc;
       const float odd = std::tanh(band * drive);
       const float harmonic =
           (1.0f - config_.even_odd_mix) * even * drive + config_.even_odd_mix * odd;
       channels[ch][i] += aligned * 0.05f * config_.amount + harmonic * config_.amount;
     }
+    even_dc_[static_cast<size_t>(ch)] = even_dc;
   }
 }
 
 void Exciter::reset() {
   for (auto& filter : bandpass_) filter.reset();
   for (auto& filter : allpass_) filter.reset();
+  std::fill(even_dc_.begin(), even_dc_.end(), 0.0f);
 }
 
 void Exciter::set_config(const ExciterConfig& config) {
@@ -151,6 +160,7 @@ void Exciter::ensure_state(int num_channels) {
   if (bandpass_.size() < static_cast<size_t>(num_channels)) {
     bandpass_.resize(static_cast<size_t>(num_channels), bandpass_coeffs_);
     allpass_.resize(static_cast<size_t>(num_channels), allpass_coeffs_);
+    even_dc_.resize(static_cast<size_t>(num_channels), 0.0f);
   }
 }
 

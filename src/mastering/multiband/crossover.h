@@ -155,6 +155,7 @@ class Crossover {
   // coeffs_dirty_ is set) and reused on every steady-state block to keep the
   // audio-thread split path allocation-free.
   size_t cached_section_count_ = 0;
+  size_t cached_compensation_section_count_ = 0;
   std::vector<std::vector<SplitChannelState>> states_;
   std::vector<std::vector<CompensationChannelState>> compensation_states_;
   std::vector<std::vector<float>> fir_kernels_;

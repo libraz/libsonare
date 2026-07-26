@@ -55,6 +55,10 @@ const char* preset_to_string(Preset preset) noexcept;
 /// Callers may inspect or further mutate the returned config.
 MasteringChainConfig preset_config(Preset preset);
 
+/// @brief Enable the chain's canonical loudness stage without a duplicate
+/// standalone limiter.
+void enable_loudness(MasteringChainConfig& config, float target_lufs, float ceiling_db);
+
 /// @brief High-level: build preset config, apply optional overrides, run mono chain.
 /// @param overrides Optional flat-params (same dot-notation as parse_chain_config_params)
 /// applied on top of preset config. Pass nullptr / 0 for preset defaults only.

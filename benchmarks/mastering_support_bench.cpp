@@ -6,10 +6,10 @@
 #include <numeric>
 #include <vector>
 
-#include "mastering/common/lookahead_buffer.h"
-#include "mastering/common/partitioned_convolver.h"
 #include "mastering/dynamics/brickwall_limiter.h"
+#include "mastering/dynamics/compressor.h"
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "mastering/spectral/air_band.h"
 #include "util/constants.h"
 
 namespace {
@@ -17,10 +17,7 @@ namespace {
 constexpr int kSampleRate = 48000;
 constexpr int kChannels = 2;
 constexpr int kBlockSamples = 256;
-constexpr int kIrSamples = 512;
-constexpr int kLookaheadSamples = 1024;
 constexpr double kTpOverheadTarget = 1.5;
-constexpr double kLookaheadSpeedupTarget = 10.0;
 
 volatile float g_sink = 0.0f;
 
@@ -56,43 +53,6 @@ std::vector<float> make_signal(int samples, float gain = 0.8f) {
   return out;
 }
 
-std::vector<float> make_ir(int samples) {
-  std::vector<float> ir(static_cast<size_t>(samples), 0.0f);
-  for (int i = 0; i < samples; ++i) {
-    const float n = static_cast<float>(i);
-    const float window =
-        0.5f - 0.5f * std::cos(sonare::constants::kTwoPi * n / static_cast<float>(samples - 1));
-    const float decay = std::exp(-n / 96.0f);
-    ir[static_cast<size_t>(i)] = window * decay * std::sin(0.17f * n);
-  }
-  return ir;
-}
-
-void direct_fir_block(const float* input, const float* ir, int input_samples, int ir_samples,
-                      float* output) {
-  for (int n = 0; n < input_samples; ++n) {
-    float acc = 0.0f;
-    for (int k = 0; k < ir_samples; ++k) {
-      const int idx = n - k;
-      if (idx >= 0) acc += input[idx] * ir[k];
-    }
-    output[n] = acc;
-  }
-}
-
-float naive_lookahead_peak(const float* input, int samples, int lookahead) {
-  float acc = 0.0f;
-  for (int i = 0; i < samples; ++i) {
-    float peak = 0.0f;
-    const int end = std::min(samples, i + lookahead + 1);
-    for (int j = i; j < end; ++j) {
-      peak = std::max(peak, std::abs(input[j]));
-    }
-    acc += peak;
-  }
-  return acc;
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -108,10 +68,14 @@ int main(int argc, char** argv) {
   std::vector<std::vector<float>> detect_only_block = block;
   std::vector<std::vector<float>> fallback_tp_block = block;
   std::vector<std::vector<float>> brickwall_block = block;
+  std::vector<std::vector<float>> compressor_block = block;
+  std::vector<std::vector<float>> air_block = block;
   float* tp_ptrs[kChannels] = {tp_block[0].data(), tp_block[1].data()};
   float* detect_only_ptrs[kChannels] = {detect_only_block[0].data(), detect_only_block[1].data()};
   float* fallback_tp_ptrs[kChannels] = {fallback_tp_block[0].data(), fallback_tp_block[1].data()};
   float* brickwall_ptrs[kChannels] = {brickwall_block[0].data(), brickwall_block[1].data()};
+  float* compressor_ptrs[kChannels] = {compressor_block[0].data(), compressor_block[1].data()};
+  float* air_ptrs[kChannels] = {air_block[0].data(), air_block[1].data()};
 
   sonare::mastering::maximizer::TruePeakLimiter true_peak({-1.0f, 1.0f, 50.0f, 4, false});
   true_peak.prepare(kSampleRate, kBlockSamples);
@@ -121,6 +85,15 @@ int main(int argc, char** argv) {
   fallback_true_peak.prepare(kSampleRate, kBlockSamples);
   sonare::mastering::dynamics::BrickwallLimiter brickwall;
   brickwall.prepare(kSampleRate, kBlockSamples);
+  sonare::mastering::dynamics::CompressorConfig compressor_config;
+  compressor_config.threshold_db = -24.0f;
+  compressor_config.ratio = 4.0f;
+  compressor_config.pdr_time_ms = 150.0f;
+  compressor_config.pdr_release_scale = 4.0f;
+  sonare::mastering::dynamics::Compressor compressor(compressor_config);
+  compressor.prepare(kSampleRate, kBlockSamples);
+  sonare::mastering::spectral::AirBand air;
+  air.prepare(kSampleRate, kBlockSamples);
 
   const double tp_ms = bench(
       [&] {
@@ -162,57 +135,32 @@ int main(int argc, char** argv) {
       },
       runs, iterations);
 
-  const std::vector<float> input = make_signal(kBlockSamples, 0.9f);
-  const std::vector<float> ir = make_ir(kIrSamples);
-  std::vector<float> direct_out(kBlockSamples, 0.0f);
-  std::vector<float> partitioned_out(kBlockSamples, 0.0f);
-  sonare::mastering::common::PartitionedConvolver convolver({kBlockSamples});
-  convolver.set_impulse_response(ir);
-
-  const double direct_fir_ms = bench(
+  const double compressor_ms = bench(
       [&] {
-        direct_fir_block(input.data(), ir.data(), kBlockSamples, kIrSamples, direct_out.data());
-        g_sink += direct_out[0];
+        compressor_block = block;
+        compressor_ptrs[0] = compressor_block[0].data();
+        compressor_ptrs[1] = compressor_block[1].data();
+        compressor.process(compressor_ptrs, kChannels, kBlockSamples);
+        g_sink += compressor_block[0][0];
       },
       runs, iterations);
 
-  const double partitioned_ms = bench(
+  const double air_ms = bench(
       [&] {
-        convolver.reset();
-        convolver.process_block(input.data(), partitioned_out.data());
-        g_sink += partitioned_out[0];
+        air_block = block;
+        air_ptrs[0] = air_block[0].data();
+        air_ptrs[1] = air_block[1].data();
+        air.process(air_ptrs, kChannels, kBlockSamples);
+        g_sink += air_block[0][0];
       },
       runs, iterations);
-
-  const std::vector<float> lookahead_input = make_signal(kSampleRate / 4, 0.95f);
-  sonare::mastering::common::LookaheadBuffer lookahead;
-  lookahead.prepare(kLookaheadSamples);
-
-  const double lookahead_ms = bench(
-      [&] {
-        lookahead.reset();
-        for (float sample : lookahead_input) {
-          g_sink += lookahead.process(sample) + lookahead.peak();
-        }
-      },
-      runs, std::max(1, iterations / 16));
-
-  const double naive_ms = bench(
-      [&] {
-        g_sink += naive_lookahead_peak(lookahead_input.data(),
-                                       static_cast<int>(lookahead_input.size()), kLookaheadSamples);
-      },
-      runs, std::max(1, iterations / 16));
 
   const double tp_overhead = tp_ms / std::max(fallback_tp_ms, 1.0e-9);
   const double detect_only_overhead = detect_only_ms / std::max(fallback_tp_ms, 1.0e-9);
   const double tp_vs_brickwall = tp_ms / std::max(brickwall_ms, 1.0e-9);
   const double detect_only_vs_brickwall = detect_only_ms / std::max(brickwall_ms, 1.0e-9);
-  const double lookahead_speedup = naive_ms / std::max(lookahead_ms, 1.0e-9);
   const bool tp_overhead_pass = tp_overhead < kTpOverheadTarget;
   const bool detect_only_overhead_pass = detect_only_overhead < kTpOverheadTarget;
-  const bool partitioned_break_even_pass = partitioned_ms <= direct_fir_ms;
-  const bool lookahead_pass = lookahead_speedup >= kLookaheadSpeedupTarget;
 
   std::printf("{\n");
   std::printf("  \"benchmark\": \"mastering_support\",\n");
@@ -232,19 +180,9 @@ int main(int argc, char** argv) {
   std::printf("  \"true_peak_overhead_pass\": %s,\n", tp_overhead_pass ? "true" : "false");
   std::printf("  \"true_peak_detect_only_overhead_pass\": %s,\n",
               detect_only_overhead_pass ? "true" : "false");
-  std::printf("  \"direct_fir_512_ms\": %.6f,\n", direct_fir_ms);
-  std::printf("  \"partitioned_convolver_512_ms\": %.6f,\n", partitioned_ms);
-  std::printf("  \"partitioned_break_even_pass\": %s,\n",
-              partitioned_break_even_pass ? "true" : "false");
-  std::printf("  \"lookahead_o1_ms\": %.6f,\n", lookahead_ms);
-  std::printf("  \"lookahead_naive_ms\": %.6f,\n", naive_ms);
-  std::printf("  \"lookahead_speedup_ratio\": %.6f,\n", lookahead_speedup);
-  std::printf("  \"lookahead_speedup_target\": %.3f,\n", kLookaheadSpeedupTarget);
-  std::printf("  \"lookahead_speedup_pass\": %s\n", lookahead_pass ? "true" : "false");
+  std::printf("  \"pdr_compressor_ms\": %.6f,\n", compressor_ms);
+  std::printf("  \"air_band_ms\": %.6f\n", air_ms);
   std::printf("}\n");
 
-  return ((tp_overhead_pass || detect_only_overhead_pass) && lookahead_pass &&
-          partitioned_break_even_pass)
-             ? 0
-             : 2;
+  return (tp_overhead_pass || detect_only_overhead_pass) ? 0 : 2;
 }

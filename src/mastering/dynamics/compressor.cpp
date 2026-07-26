@@ -182,9 +182,13 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     const float pdr_amount = cfg.pdr_time_ms > 0.0f
                                  ? std::clamp(-pdr_state_db_ / kPdrNormalizationDb, 0.0f, 1.0f)
                                  : 0.0f;
-    const float release_coeff = time_to_coefficient(
-        sample_rate_,
-        cfg.release_ms * (1.0f + pdr_amount * std::max(cfg.pdr_release_scale - 1.0f, 0.0f)));
+    const float release_position = pdr_amount * static_cast<float>(kReleaseTableSteps);
+    const size_t release_index =
+        std::min(static_cast<size_t>(release_position), kReleaseTableSteps - 1);
+    const float release_fraction = release_position - static_cast<float>(release_index);
+    const float release_coeff = release_coeff_table_[release_index] +
+                                release_fraction * (release_coeff_table_[release_index + 1] -
+                                                    release_coeff_table_[release_index]);
     const float reduction_state_db =
         reduction_smoother_.smooth_bidirectional(target_db, release_coeff, true);
 
@@ -309,12 +313,22 @@ void Compressor::update_coefficients(const CompressorConfig& config) {
   rms_coeff_ = time_to_coefficient(sample_rate_, kRmsWindowMs);
   log_rms_coeff_ = time_to_coefficient(sample_rate_, kLogRmsWindowMs);
   pdr_coeff_ = time_to_coefficient(sample_rate_, config.pdr_time_ms);
+  update_release_table(config);
   // Bilinear-transformed 1st-order highpass with frequency prewarping. Same
   // 6 dB/oct slope as a 1-pole RC, but the cutoff is frequency-accurate.
   const auto hpf = sonare::rt::onepole_highpass_coeffs(static_cast<double>(config.sidechain_hpf_hz),
                                                        sample_rate_);
   hpf_b0_ = hpf.b0;
   hpf_a1_ = hpf.a1;
+}
+
+void Compressor::update_release_table(const CompressorConfig& config) noexcept {
+  const float scale_range = std::max(config.pdr_release_scale - 1.0f, 0.0f);
+  for (size_t index = 0; index <= kReleaseTableSteps; ++index) {
+    const float amount = static_cast<float>(index) / static_cast<float>(kReleaseTableSteps);
+    release_coeff_table_[index] =
+        time_to_coefficient(sample_rate_, config.release_ms * (1.0f + amount * scale_range));
+  }
 }
 
 }  // namespace sonare::mastering::dynamics

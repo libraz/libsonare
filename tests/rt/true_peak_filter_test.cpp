@@ -3,12 +3,17 @@
 
 #include "rt/true_peak_filter.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <vector>
 
+#include "metering/true_peak.h"
+#include "rt/polyphase_fir.h"
 #include "util/constants.h"
 
+using Catch::Matchers::WithinAbs;
 using sonare::constants::kTwoPi;
 using sonare::rt::TruePeakFilter;
 
@@ -22,6 +27,20 @@ float raw_sample_peak(const std::vector<float>& x) {
 }
 
 }  // namespace
+
+TEST_CASE("Polyphase interpolation matches centered convolution for every phase",
+          "[rt][truepeak]") {
+  sonare::rt::PolyphaseFir fir;
+  fir.phases = 2;
+  fir.taps_per_phase = 3;
+  fir.phase_taps = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
+  const std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
+
+  REQUIRE_THAT(sonare::rt::interpolate_polyphase_sample(data.data(), data.size(), 3, 0, fir),
+               WithinAbs(22.0f, 1.0e-6f));
+  REQUIRE_THAT(sonare::rt::interpolate_polyphase_sample(data.data(), data.size(), 3, 1, fir),
+               WithinAbs(58.0f, 1.0e-6f));
+}
 
 TEST_CASE("TruePeakFilter resolves inter-sample peaks of a 997 Hz tone", "[rt][truepeak]") {
   constexpr float kSr = 48000.0f;
@@ -75,4 +94,30 @@ TEST_CASE("TruePeakFilter handles empty input and rejects bad factors", "[rt][tr
   REQUIRE(filter.process(mono, 1, 0) == 0.0f);
 
   REQUIRE_THROWS(TruePeakFilter(1, 3));
+}
+
+TEST_CASE("Four-times true peak stays flat across 12 kHz sample phases", "[rt][truepeak]") {
+  constexpr float kSr = 48000.0f;
+  constexpr float kFreq = 12000.0f;
+  constexpr int kN = 4096;
+  constexpr int kPhaseSteps = 32;
+  constexpr int kFadeSamples = 64;
+
+  for (int phase_step = 0; phase_step < kPhaseSteps; ++phase_step) {
+    const float phase = kTwoPi * static_cast<float>(phase_step) / static_cast<float>(kPhaseSteps);
+    std::vector<float> tone(kN, 0.0f);
+    for (int n = 0; n < kN; ++n) {
+      const float fade_in =
+          std::min(1.0f, static_cast<float>(n) / static_cast<float>(kFadeSamples));
+      const float fade_out =
+          std::min(1.0f, static_cast<float>(kN - 1 - n) / static_cast<float>(kFadeSamples));
+      tone[static_cast<size_t>(n)] = std::min(fade_in, fade_out) *
+                                     std::sin(kTwoPi * kFreq * static_cast<float>(n) / kSr + phase);
+    }
+
+    const float true_peak = sonare::metering::true_peak(tone.data(), tone.size(), 4);
+    const float true_peak_db = 20.0f * std::log10(true_peak);
+    CAPTURE(phase_step, true_peak, true_peak_db);
+    REQUIRE_THAT(true_peak_db, WithinAbs(0.0f, 0.2f));
+  }
 }

@@ -292,7 +292,9 @@ inline void assign_field(Enum& dst, double value) {
   X("decorrelationAmount", decorrelation_amount) \
   X("preserveEnergy", preserve_energy)
 
-#define SONARE_FIELDS_MONO_MAKER(X) X("amount", amount)
+#define SONARE_FIELDS_MONO_MAKER(X) \
+  X("amount", amount)               \
+  X("frequencyHz", frequency_hz)
 
 #define SONARE_FIELDS_PHASE_ALIGN(X) \
   X("delaySamples", delay_samples)   \

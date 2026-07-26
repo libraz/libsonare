@@ -17,12 +17,6 @@
 #include "util/exception.h"
 
 namespace sonare::mastering::api {
-namespace {
-
-// ---------------------------------------------------------------------------
-// Per-preset factories. Each starts from a default MasteringChainConfig and
-// flips on / configures the stages relevant to the preset.
-// ---------------------------------------------------------------------------
 
 void enable_loudness(MasteringChainConfig& cfg, float target_lufs, float ceiling_db) {
   // The loudness stage runs its own true-peak limiter at this same ceiling after
@@ -36,6 +30,13 @@ void enable_loudness(MasteringChainConfig& cfg, float target_lufs, float ceiling
   cfg.loudness.ceiling_db = ceiling_db;
   cfg.loudness.true_peak_oversample = 4;
 }
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// Per-preset factories. Each starts from a default MasteringChainConfig and
+// flips on / configures the stages relevant to the preset.
+// ---------------------------------------------------------------------------
 
 MasteringChainConfig make_pop() {
   MasteringChainConfig cfg;

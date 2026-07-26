@@ -61,18 +61,6 @@ api::Preset preset_for_genre(const std::string& genre) {
   return api::Preset::Pop;
 }
 
-void set_loudness(api::MasteringChainConfig& chain, float target_lufs, float ceiling_db) {
-  chain.maximizer.true_peak_limiter.enabled = true;
-  chain.maximizer.true_peak_limiter.config.ceiling_db = ceiling_db;
-  chain.loudness.enabled = true;
-  chain.loudness.target_lufs = target_lufs;
-  chain.loudness.ceiling_db = ceiling_db;
-  // Match api::enable_loudness (presets.cpp): keep 4x true-peak oversampling
-  // explicit so the suggester and preset loudness configs stay in lock-step even
-  // if the struct default ever changes.
-  chain.loudness.true_peak_oversample = 4;
-}
-
 void explain(std::vector<std::string>& out, std::string text) { out.push_back(std::move(text)); }
 
 void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs,
@@ -125,7 +113,7 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
   float target_lufs = config.target_lufs;
   float ceiling_db = config.ceiling_db;
   resolve_platform_loudness(config, &target_lufs, &ceiling_db);
-  set_loudness(result.config, target_lufs, ceiling_db);
+  api::enable_loudness(result.config, target_lufs, ceiling_db);
   explain(result.explanation, "target loudness and ceiling applied from AssistantConfig");
 
   const bool dark = profile.spectral.centroid_hz > 0.0f && profile.spectral.centroid_hz < 1500.0f;

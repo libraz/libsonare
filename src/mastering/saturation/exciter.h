@@ -54,9 +54,11 @@ class Exciter : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   Biquad bandpass_coeffs_;
   Biquad allpass_coeffs_;
+  float even_dc_coefficient_ = 0.0f;
   bool prepared_ = false;
   std::vector<Biquad> bandpass_;
   std::vector<Biquad> allpass_;
+  std::vector<float> even_dc_;
 };
 
 }  // namespace sonare::mastering::saturation

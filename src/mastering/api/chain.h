@@ -182,6 +182,9 @@ struct MasteringChainConfig {
   LoudnessStage loudness{};
 };
 
+/// @brief Validates cross-stage invariants before any audio stage executes.
+void validate_mastering_chain_config(const MasteringChainConfig& config);
+
 // ---------------------------------------------------------------------------
 // Chain results
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -183,6 +184,58 @@ TEST_CASE("Crossover LR8 recombines three-way tones with flat projected amplitud
     const auto reconstructed = reconstruct_mono(output);
     const float gain = projected_tone_amplitude(reconstructed, frequency_hz, 48000, 8192) / 0.25f;
 
+    REQUIRE(gain > 0.985f);
+    REQUIRE(gain < 1.015f);
+    crossover.reset();
+  }
+}
+
+TEST_CASE("Crossover recombines near every close Linkwitz-Riley cutoff without notches",
+          "[mastering][multiband]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 32768;
+  constexpr float kAmplitude = 0.25f;
+  const std::vector<float> frequencies_hz = {140.0f, 200.0f, 280.0f, 400.0f, 560.0f};
+
+  for (const CrossoverSlope slope :
+       {CrossoverSlope::LR2, CrossoverSlope::LR4, CrossoverSlope::LR8}) {
+    Crossover crossover({{200.0f, 400.0f}, slope, CrossoverMode::LinkwitzRiley});
+    crossover.prepare(kSampleRate, kSamples);
+
+    for (const float frequency_hz : frequencies_hz) {
+      auto signal = sine(frequency_hz, kSampleRate, kSamples, kAmplitude);
+      float* channels[] = {signal.data()};
+      const auto reconstructed =
+          reconstruct_mono(crossover.split(channels, 1, static_cast<int>(signal.size())));
+      const float gain =
+          projected_tone_amplitude(reconstructed, frequency_hz, kSampleRate, 8192) / kAmplitude;
+
+      CAPTURE(static_cast<int>(slope), frequency_hz, gain);
+      REQUIRE(gain > 0.985f);
+      REQUIRE(gain < 1.015f);
+      crossover.reset();
+    }
+  }
+}
+
+TEST_CASE("Four-way Linkwitz-Riley recombination stays flat around every cutoff",
+          "[mastering][multiband]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 32768;
+  constexpr float kAmplitude = 0.25f;
+  Crossover crossover(
+      {{200.0f, 400.0f, 800.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley});
+  crossover.prepare(kSampleRate, kSamples);
+
+  for (const float frequency_hz : {140.0f, 200.0f, 280.0f, 400.0f, 560.0f, 800.0f, 1120.0f}) {
+    auto signal = sine(frequency_hz, kSampleRate, kSamples, kAmplitude);
+    float* channels[] = {signal.data()};
+    const auto reconstructed =
+        reconstruct_mono(crossover.split(channels, 1, static_cast<int>(signal.size())));
+    const float gain =
+        projected_tone_amplitude(reconstructed, frequency_hz, kSampleRate, 8192) / kAmplitude;
+
+    CAPTURE(frequency_hz, gain);
     REQUIRE(gain > 0.985f);
     REQUIRE(gain < 1.015f);
     crossover.reset();
@@ -956,6 +1009,39 @@ TEST_CASE("MultibandImager neutral bands preserve stereo tone amplitudes",
   require_four_tone_amplitudes_near(right, 0.015f);
 }
 
+TEST_CASE("MultibandImager constant-power compensation avoids two-tone intermodulation",
+          "[mastering][multiband]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 96000;
+  MultibandImagerConfig config;
+  config.crossover.cutoffs_hz.clear();
+  config.bands = {{1.3f, true, 0.0f, true}};
+  MultibandImager imager(config);
+  imager.prepare(kSampleRate, kSamples);
+
+  auto mid = sine(1000.0f, kSampleRate, kSamples, 0.25f);
+  auto side = sine(1500.0f, kSampleRate, kSamples, 0.2f);
+  auto left = mid;
+  auto right = mid;
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] += side[i];
+    right[i] -= side[i];
+  }
+  process_stereo(imager, left, right);
+
+  const float fundamental = std::max(projected_tone_amplitude(left, 1000.0f, kSampleRate, 0),
+                                     projected_tone_amplitude(left, 1500.0f, kSampleRate, 0));
+  float largest_im_product = 0.0f;
+  for (const float frequency_hz : {500.0f, 2000.0f, 3000.0f, 3500.0f, 4000.0f, 4500.0f}) {
+    largest_im_product =
+        std::max(largest_im_product, projected_tone_amplitude(left, frequency_hz, kSampleRate, 0));
+  }
+  const float imd_db = 20.0f * std::log10(largest_im_product / fundamental);
+
+  CAPTURE(fundamental, largest_im_product, imd_db);
+  REQUIRE(imd_db < -80.0f);
+}
+
 TEST_CASE("MultibandImager validates configuration", "[mastering][multiband]") {
   MultibandImagerConfig config;
   config.crossover = {{1000.0f, 4000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
@@ -964,6 +1050,9 @@ TEST_CASE("MultibandImager validates configuration", "[mastering][multiband]") {
 
   config.crossover = {{1000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
   config.bands = {{1.0f, true}, {-1.0f, true}};
+  REQUIRE_THROWS(MultibandImager(config));
+
+  config.bands = {{1.0f, true}, {std::numeric_limits<float>::quiet_NaN(), true}};
   REQUIRE_THROWS(MultibandImager(config));
 
   config.bands = {{1.0f, true}, {1.0f, true, 1.1f}};

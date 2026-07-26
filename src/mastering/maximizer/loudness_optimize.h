@@ -26,6 +26,8 @@ struct LoudnessOptimizeResult {
   /// Static gain applied before the true-peak limiter. This deliberately does
   /// not include limiter gain reduction.
   float applied_gain_db = 0.0f;
+  /// True when peak headroom clamped the requested LUFS normalization gain.
+  bool loudness_target_limited = false;
   /// Always 0: the returned audio is time-aligned because this helper
   /// compensates the internal true-peak limiter's look-ahead latency itself.
   int latency_samples = 0;
@@ -35,7 +37,8 @@ struct LoudnessOptimizeResult {
 /// @details The helper computes one static gain from input LUFS and true peak,
 /// then limits residual overs. It does not iterate after limiting, so clipped or
 /// very peaky material may finish below target LUFS while respecting the
-/// ceiling.
+/// ceiling. Inspect LoudnessOptimizeResult::loudness_target_limited to
+/// distinguish that ceiling-limited outcome from a reached target.
 LoudnessOptimizeResult loudness_optimize(const Audio& audio,
                                          const LoudnessOptimizeConfig& config = {});
 

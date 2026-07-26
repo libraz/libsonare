@@ -111,11 +111,11 @@ inline PolyphaseFir design_polyphase_lowpass(int oversample_factor, int total_ta
 
 inline float interpolate_polyphase_sample(const float* data, size_t length, size_t index, int phase,
                                           const PolyphaseFir& fir) {
-  if (data == nullptr || length == 0 || phase < 0 || phase >= fir.phases ||
+  if (data == nullptr || length == 0 || index >= length || phase < 0 || phase >= fir.phases ||
       fir.taps_per_phase <= 0) {
     return 0.0f;
   }
-  if (phase == 0) {
+  if (fir.phases == 1) {
     return data[index];
   }
 
@@ -123,7 +123,7 @@ inline float interpolate_polyphase_sample(const float* data, size_t length, size
   const int half = fir.taps_per_phase / 2;
   double accum = 0.0;
   for (int tap = 0; tap < fir.taps_per_phase; ++tap) {
-    const long src = static_cast<long>(index) + static_cast<long>(tap) - static_cast<long>(half);
+    const long src = static_cast<long>(index) - static_cast<long>(tap) + static_cast<long>(half);
     if (src < 0 || src >= static_cast<long>(length)) {
       continue;
     }

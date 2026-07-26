@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/stereo/constant_power_width.h"
 #include "mastering/stereo/mid_side.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -74,9 +75,10 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
   }
 
   const float output = db_to_linear(config_.output_gain_db);
+  const float energy_scale =
+      config_.preserve_energy ? constant_power_width_gain(config_.width) : 1.0f;
   for (int i = 0; i < num_samples; ++i) {
     auto ms = encode_sample(channels[0][i], channels[1][i]);
-    const float original_energy = ms.mid * ms.mid + ms.side * ms.side;
     float decorated_side = ms.side;
     for (auto& stage : allpass_) {
       decorated_side = stage.process(decorated_side);
@@ -87,17 +89,11 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
       const float mix = config_.decorrelation_amount * extra_width;
       ms.side = (1.0f - mix) * ms.side + mix * decorated_side * config_.width;
     }
-    // Preserve energy for any width change, not just widening: narrowing
-    // (width < 1) also alters the mid/side energy and should be compensated.
-    // (Matches MultibandImager and the documented intent.)
-    if (config_.preserve_energy && config_.width != 1.0f) {
-      const float widened_energy = ms.mid * ms.mid + ms.side * ms.side;
-      if (widened_energy > 0.0f && original_energy > 0.0f) {
-        const float scale = std::sqrt(original_energy / widened_energy);
-        ms.mid *= scale;
-        ms.side *= scale;
-      }
-    }
+    // Signal-independent constant-power compensation keeps this operation
+    // linear. An instantaneous original/widened energy ratio amplitude-modulates
+    // every sample and creates intermodulation products.
+    ms.mid *= energy_scale;
+    ms.side *= energy_scale;
     const auto lr = decode_sample(ms.mid, ms.side);
     channels[0][i] = lr.mid * output;
     channels[1][i] = lr.side * output;
@@ -136,7 +132,7 @@ std::vector<rt::ParamDescriptor> Imager::parameter_descriptors() const {
 }
 
 void Imager::validate_config(const ImagerConfig& config) {
-  if (config.width < 0.0f || config.decorrelation_amount < 0.0f ||
+  if (!std::isfinite(config.width) || config.width < 0.0f || config.decorrelation_amount < 0.0f ||
       config.decorrelation_amount > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "imager width must be non-negative");
   }

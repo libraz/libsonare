@@ -66,6 +66,9 @@ struct ChainMetrics {
   float output_true_peak_dbtp = 0.0f;
   /// EBU Tech 3342 Loudness Range (LU).
   float output_lra = 0.0f;
+  /// True when the loudness stage could not apply target-input LUFS gain
+  /// because doing so would exceed its true-peak ceiling.
+  bool loudness_target_limited = false;
   /// Ordered list of stages that ran (e.g. "dynamics.compressor").
   std::vector<std::string> stages;
   /// Per-stage gain reductions for the dynamics / maximizer stages.

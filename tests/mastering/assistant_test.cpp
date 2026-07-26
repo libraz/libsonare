@@ -168,7 +168,8 @@ TEST_CASE("Assistant suggest_chain returns deterministic config and explanations
 
   REQUIRE(result.config.loudness.enabled);
   REQUIRE(result.config.loudness.target_lufs == -13.0f);
-  REQUIRE(result.config.maximizer.true_peak_limiter.config.ceiling_db == -0.8f);
+  REQUIRE(result.config.loudness.ceiling_db == -0.8f);
+  REQUIRE_FALSE(result.config.maximizer.true_peak_limiter.enabled);
   REQUIRE(result.config.spectral.air_band.enabled);
   REQUIRE(result.config.dynamics.compressor.enabled);
   REQUIRE(result.config.dynamics.transient_shaper.enabled);

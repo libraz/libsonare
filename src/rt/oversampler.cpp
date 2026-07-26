@@ -13,7 +13,10 @@ bool is_supported_factor(int factor) {
 
 }  // namespace
 
-Oversampler::Oversampler(int factor) { set_factor(factor); }
+Oversampler::Oversampler(int factor, int taps_per_phase) : taps_per_phase_(taps_per_phase) {
+  SONARE_CHECK(taps_per_phase_ > 0, ErrorCode::InvalidParameter);
+  set_factor(factor);
+}
 
 void Oversampler::set_factor(int factor) {
   SONARE_CHECK(is_supported_factor(factor), ErrorCode::InvalidParameter);
@@ -23,7 +26,8 @@ void Oversampler::set_factor(int factor) {
     fir_ = {};
     return;
   }
-  decimation_taps_ = design_windowed_sinc_lowpass(12 * factor_, factor_, 7.85726, true);
+  decimation_taps_ =
+      design_windowed_sinc_lowpass(taps_per_phase_ * factor_, factor_, 7.85726, true);
   fir_ = build_polyphase(decimation_taps_, factor_);
 }
 

@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 
+#include "mastering/stereo/constant_power_width.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -102,12 +103,15 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
       // subtly alter the signal, so skip it entirely.
       const bool use_decorrelation =
           band_config.decorrelation_amount > 0.0f && band_config.width > 1.0f;
+      const float energy_scale =
+          band_config.preserve_energy
+              ? sonare::mastering::stereo::constant_power_width_gain(band_config.width)
+              : 1.0f;
       auto& stages = allpass_[static_cast<size_t>(band)];
       for (int i = 0; i < num_samples; ++i) {
         const size_t index = static_cast<size_t>(i);
         const float mid = 0.5f * (left[index] + right[index]);
         const float input_side = 0.5f * (left[index] - right[index]);
-        const float original_energy = mid * mid + input_side * input_side;
         float side = input_side * band_config.width;
         if (use_decorrelation) {
           float decorated_side = input_side;
@@ -118,17 +122,10 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
           const float mix = band_config.decorrelation_amount * extra_width;
           side = (1.0f - mix) * side + mix * decorated_side * band_config.width;
         }
-        float out_mid = mid;
-        // Preserve total M/S energy for both widening and narrowing so the
-        // perceived loudness stays consistent across width settings.
-        if (band_config.preserve_energy && band_config.width != 1.0f) {
-          const float adjusted_energy = out_mid * out_mid + side * side;
-          if (adjusted_energy > 0.0f && original_energy > 0.0f) {
-            const float scale = std::sqrt(original_energy / adjusted_energy);
-            out_mid *= scale;
-            side *= scale;
-          }
-        }
+        // Match the full-band imager's signal-independent constant-power
+        // compensation. A per-sample energy ratio is a nonlinear modulator.
+        const float out_mid = mid * energy_scale;
+        side *= energy_scale;
         left[index] = out_mid + side;
         right[index] = out_mid - side;
       }
@@ -211,7 +208,8 @@ void MultibandImager::validate_config(const MultibandImagerConfig& config) {
                           "multiband imager band count must match crossover");
   }
   for (const auto& band : config.bands) {
-    if (band.width < 0.0f || band.decorrelation_amount < 0.0f || band.decorrelation_amount > 1.0f) {
+    if (!std::isfinite(band.width) || band.width < 0.0f || band.decorrelation_amount < 0.0f ||
+        band.decorrelation_amount > 1.0f) {
       throw SonareException(ErrorCode::InvalidParameter, "imager width must be non-negative");
     }
   }

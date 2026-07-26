@@ -71,6 +71,20 @@ struct StageFlagsSet {
   StageFlags loudness;
 };
 
+const std::string& canonical_chain_param_key(const std::string& key, std::string* storage) {
+  const char* canonical = nullptr;
+  if (key == "repair.denoise") canonical = "repair.denoise.enabled";
+  if (key == "repair.nFft") canonical = "repair.denoise.nFft";
+  if (key == "repair.hopLength") canonical = "repair.denoise.hopLength";
+  if (key == "repair.ddAlpha") canonical = "repair.denoise.ddAlpha";
+  if (key == "repair.gainFloor") canonical = "repair.denoise.gainFloor";
+  if (key == "eq.tiltDb") canonical = "eq.tilt.tiltDb";
+  if (key == "eq.pivotHz") canonical = "eq.tilt.pivotHz";
+  if (canonical == nullptr) return key;
+  *storage = canonical;
+  return *storage;
+}
+
 // Each per-stage helper handles one cluster of keys and returns true if the key
 // was recognized (and applied). A flat sequence of independent early-return
 // `if` blocks keeps the block-nesting depth at 1, which avoids MSVC error
@@ -632,11 +646,13 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
   float validated = 0.0f;
   detail::assign_field(validated, v);
   (void)validated;
-  if (apply_repair_param(cfg, key, v, flags)) return;
-  if (apply_eq_dynamics_param(cfg, key, v, flags)) return;
-  if (apply_saturation_param(cfg, key, v, flags)) return;
-  if (apply_spectral_stereo_param(cfg, key, v, flags)) return;
-  if (apply_maximizer_loudness_param(cfg, key, v, flags)) return;
+  std::string canonical_storage;
+  const std::string& canonical = canonical_chain_param_key(key, &canonical_storage);
+  if (apply_repair_param(cfg, canonical, v, flags)) return;
+  if (apply_eq_dynamics_param(cfg, canonical, v, flags)) return;
+  if (apply_saturation_param(cfg, canonical, v, flags)) return;
+  if (apply_spectral_stereo_param(cfg, canonical, v, flags)) return;
+  if (apply_maximizer_loudness_param(cfg, canonical, v, flags)) return;
   throw SonareException(ErrorCode::InvalidParameter, "unknown chain config key: " + key);
 }
 
@@ -676,6 +692,7 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
   cfg.maximizer.true_peak_limiter.enabled = resolve_enabled(flags.true_peak);
   cfg.loudness.enabled = resolve_enabled(flags.loudness);
 
+  validate_mastering_chain_config(cfg);
   return cfg;
 }
 

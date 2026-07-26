@@ -78,6 +78,7 @@ float TruePeakFilter::process(const float* const* input, int num_channels, int n
   float peak = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     for (int i = 0; i < num_samples; ++i) {
+      peak = std::max(peak, std::abs(input[ch][i]));
       for (int phase = 0; phase < factor_; ++phase) {
         const float sample = interpolate_polyphase_sample(
             input[ch], static_cast<size_t>(num_samples), static_cast<size_t>(i), phase, fir_);

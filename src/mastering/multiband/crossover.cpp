@@ -539,10 +539,19 @@ void Crossover::rebuild_state(int num_channels) {
   // filter_sections() allocates temporary vectors; recompute the stage count
   // only when the coefficients are dirty (config/sample-rate change) or it has
   // not been cached yet, so steady-state blocks never allocate here.
-  if (coeffs_dirty_ || cached_section_count_ == 0) {
-    cached_section_count_ = filter_sections(config_.slope, config_.mode).size();
+  if (coeffs_dirty_ || cached_section_count_ == 0 || cached_compensation_section_count_ == 0) {
+    const size_t section_count = filter_sections(config_.slope, config_.mode).size();
+    cached_section_count_ = section_count;
+    // An LR split is two cascaded copies of a half-order Butterworth filter.
+    // Its summed low/high response therefore has the phase of ONE half-order
+    // denominator. Applying every duplicated LR section as an all-pass rotates
+    // lower bands twice and creates deep notches in three-way+ recombination.
+    cached_compensation_section_count_ = uses_linkwitz_riley_compensation(config_.mode)
+                                             ? std::max<size_t>(1, section_count / 2)
+                                             : section_count;
   }
   const size_t stages = cached_section_count_;
+  const size_t compensation_stages = cached_compensation_section_count_;
   const bool shape_matches =
       states_.size() == splits &&
       (splits == 0 || states_[0].size() >= static_cast<size_t>(num_channels)) &&
@@ -551,7 +560,9 @@ void Crossover::rebuild_state(int num_channels) {
       compensation_states_.size() == bands &&
       (bands == 0 || compensation_states_[0].size() >= static_cast<size_t>(num_channels)) &&
       (bands == 0 || num_channels == 0 ||
-       compensation_states_[0][0].allpass_by_split.size() == splits);
+       (compensation_states_[0][0].allpass_by_split.size() == splits &&
+        (splits == 0 ||
+         compensation_states_[0][0].allpass_by_split[0].size() == compensation_stages)));
   if (!shape_matches) {
     states_.assign(splits, std::vector<SplitChannelState>(static_cast<size_t>(num_channels)));
     for (auto& split_states : states_) {
@@ -564,7 +575,7 @@ void Crossover::rebuild_state(int num_channels) {
         bands, std::vector<CompensationChannelState>(static_cast<size_t>(num_channels)));
     for (auto& band_states : compensation_states_) {
       for (auto& channel_states : band_states) {
-        channel_states.allpass_by_split.assign(splits, std::vector<Biquad>(stages));
+        channel_states.allpass_by_split.assign(splits, std::vector<Biquad>(compensation_stages));
       }
     }
   }

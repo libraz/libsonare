@@ -89,20 +89,15 @@ TEST_CASE("MasteringChain stereo LRA uses channel summing, not a phase-cancellin
   REQUIRE(result.output_lra > 1.0f);
 }
 
-TEST_CASE(
-    "MasteringChain reports a finite true peak for an unsupported oversample with loudness off",
-    "[mastering][chain]") {
-  // With loudness disabled, an unsupported true-peak oversample factor (not
-  // 1/2/4/8/16) must not reach the meter and throw at the end of the chain; the
-  // reported true peak is measured at a coerced supported factor instead.
+TEST_CASE("MasteringChain rejects unsupported true-peak oversampling before processing",
+          "[mastering][chain]") {
   MasteringChainConfig config;
   config.loudness.enabled = false;
   config.loudness.true_peak_oversample = 3;  // unsupported
-  MasteringChain chain(config);
-  std::vector<float> samples(4096, 0.1f);
-  MonoChainResult result;
-  REQUIRE_NOTHROW(result = chain.process_mono(samples.data(), samples.size(), 44100));
-  REQUIRE(std::isfinite(result.output_true_peak_dbtp));
+  REQUIRE_THROWS_AS(MasteringChain(config), SonareException);
+
+  Param params[] = {{"loudness.truePeakOversample", 3.0}};
+  REQUIRE_THROWS_AS(parse_chain_config_params(params, 1), SonareException);
 }
 
 TEST_CASE("parse_chain_config_params builds nested config from flat params", "[mastering][chain]") {
@@ -200,6 +195,24 @@ TEST_CASE("Stereo chain LUFS uses BS1770 channel summing", "[mastering][chain][l
   const auto named_result = apply_named_processor_stereo(
       "stereo.stereoBalance", left.data(), right.data(), left.size(), sample_rate, {});
   REQUIRE_THAT(named_result.input_lufs, WithinAbs(expected_lufs, 1.0e-5f));
+}
+
+TEST_CASE("MasteringChain reports when peak headroom limits the LUFS target",
+          "[mastering][chain][loudness]") {
+  constexpr int sample_rate = 48000;
+  std::vector<float> samples(static_cast<size_t>(sample_rate));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = 0.8f * std::sin(2.0f * 3.14159265358979323846f * 440.0f * static_cast<float>(i) /
+                                 sample_rate);
+  }
+  MasteringChainConfig config;
+  config.loudness.enabled = true;
+  config.loudness.target_lufs = -2.0f;
+  config.loudness.ceiling_db = -1.0f;
+  const auto result =
+      MasteringChain(config).process_mono(samples.data(), samples.size(), sample_rate);
+  REQUIRE(result.loudness_target_limited);
+  REQUIRE(result.output_lufs < config.loudness.target_lufs - 0.5f);
 }
 
 TEST_CASE("Named stereo fallback processes mono processors per channel", "[mastering][chain]") {

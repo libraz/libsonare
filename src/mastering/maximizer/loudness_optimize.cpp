@@ -29,7 +29,9 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   }
 
   const float input_lufs = common::measure_lufs(audio);
-  float gain_db = std::isfinite(input_lufs) ? config.target_lufs - input_lufs : 0.0f;
+  const float requested_gain_db =
+      std::isfinite(input_lufs) ? config.target_lufs - input_lufs : 0.0f;
+  float gain_db = requested_gain_db;
   const float peak_db = common::measure_true_peak_dbtp(audio, config.true_peak_oversample);
   if (std::isfinite(peak_db)) {
     // Headroom toward the ceiling estimated from the true (inter-sample) peak so
@@ -61,6 +63,8 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   result.input_lufs = input_lufs;
   result.output_lufs = common::measure_lufs(result.audio);
   result.applied_gain_db = linear_to_db(gain);
+  result.loudness_target_limited =
+      std::isfinite(input_lufs) && gain_db < requested_gain_db - 1.0e-4f;
   // The returned audio is time-aligned: the limiter's look-ahead latency was
   // streamed and dropped above, so no downstream compensation is
   // needed. Report zero rather than the internal limiter latency, which would

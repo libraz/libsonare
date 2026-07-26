@@ -27,6 +27,23 @@ using sonare::test::peak_abs;
 using sonare::test::process;
 using sonare::test::rms_tail;
 
+float projected_amplitude(const std::vector<float>& samples, float frequency_hz, int sample_rate,
+                          size_t skip) {
+  double sin_sum = 0.0;
+  double cos_sum = 0.0;
+  size_t count = 0;
+  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
+    const double phase =
+        sonare::constants::kTwoPiD * frequency_hz * static_cast<double>(i) / sample_rate;
+    sin_sum += static_cast<double>(samples[i]) * std::sin(phase);
+    cos_sum += static_cast<double>(samples[i]) * std::cos(phase);
+    ++count;
+  }
+  return count == 0 ? 0.0f
+                    : static_cast<float>(2.0 * std::sqrt(sin_sum * sin_sum + cos_sum * cos_sum) /
+                                         static_cast<double>(count));
+}
+
 struct LegacyJaState {
   float M = 0.0f;
   float H_prev = 0.0f;
@@ -488,6 +505,30 @@ TEST_CASE("Exciter focuses harmonic generation around resonant band", "[masterin
   process(exciter, low);
 
   REQUIRE(rms_tail(center, 4096) / center_before > rms_tail(low, 4096) / low_before);
+}
+
+TEST_CASE("Exciter even branch generates a second harmonic without DC", "[mastering][saturation]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 48000;
+  constexpr float kFundamentalHz = 1000.0f;
+  auto signal = generate_sine_samples(kFundamentalHz, kSampleRate, kSamples, 0.25f);
+
+  Exciter exciter({kFundamentalHz, 12.0f, 1.0f, 1.0f, 0.0f});
+  exciter.prepare(kSampleRate, kSamples);
+  process(exciter, signal);
+
+  constexpr size_t kSkip = 4800;
+  const float fundamental = projected_amplitude(signal, kFundamentalHz, kSampleRate, kSkip);
+  const float second = projected_amplitude(signal, 2.0f * kFundamentalHz, kSampleRate, kSkip);
+  const float third = projected_amplitude(signal, 3.0f * kFundamentalHz, kSampleRate, kSkip);
+  double dc = 0.0;
+  for (size_t i = kSkip; i < signal.size(); ++i) dc += signal[i];
+  dc /= static_cast<double>(signal.size() - kSkip);
+
+  CAPTURE(fundamental, second, third, dc);
+  REQUIRE(second > fundamental * 0.05f);
+  REQUIRE(second > third * 10.0f);
+  REQUIRE(std::abs(dc) < 1.0e-4);
 }
 
 TEST_CASE("Exciter set_config preserves filter history", "[mastering][saturation]") {

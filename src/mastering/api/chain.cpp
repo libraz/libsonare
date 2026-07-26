@@ -38,6 +38,10 @@ namespace {
 using internal::run_processor_mono;
 using internal::run_processor_stereo;
 
+bool valid_true_peak_oversample(int factor) noexcept {
+  return factor == 1 || factor == 2 || factor == 4 || factor == 8 || factor == 16;
+}
+
 // Returns the per-band gain reduction with the largest magnitude (most-reduced
 // band). Returns 0.0f for an empty vector.
 float max_abs_gain_reduction(const std::vector<float>& gain_reductions_db) {
@@ -54,31 +58,17 @@ float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
   return common::measure_lufs(samples.data(), samples.size(), sample_rate);
 }
 
-// Coerces an oversample factor to one the true-peak meter implements
-// (1, 2, 4, 8, 16), rounding down to the nearest supported factor. A supported
-// factor is returned unchanged, so a normal chain keeps its exact reported dBTP;
-// an odd/unsupported request (3, 5, 6, ...) still yields a valid measurement
-// instead of the meter throwing at the very end of the chain.
-int supported_true_peak_oversample(int oversample_factor) {
-  if (oversample_factor >= 16) return 16;
-  if (oversample_factor >= 8) return 8;
-  if (oversample_factor >= 4) return 4;
-  if (oversample_factor >= 2) return 2;
-  return 1;
-}
-
 // Oversample factor at which the chain's reported output true peak is measured.
 // It follows the peak-limiting stage the chain actually applied — the loudness
 // limiter when loudness is enabled, otherwise the maximizer true-peak limiter
 // when that ran — decoupled from a disabled loudness stage's configured factor,
-// and coerced to a factor the meter supports so the final measurement never
-// throws for an unsupported configured value.
+// after construction has rejected unsupported factors.
 int reported_true_peak_oversample(const MasteringChainConfig& config) {
   int factor = config.loudness.true_peak_oversample;
   if (!config.loudness.enabled && config.maximizer.true_peak_limiter.enabled) {
     factor = config.maximizer.true_peak_limiter.config.oversample_factor;
   }
-  return supported_true_peak_oversample(factor);
+  return factor;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +109,21 @@ int count_enabled_stereo_stages(const MasteringChainConfig& cfg) {
 // MasteringChain
 // ---------------------------------------------------------------------------
 
-MasteringChain::MasteringChain(MasteringChainConfig config) : config_(std::move(config)) {}
+void validate_mastering_chain_config(const MasteringChainConfig& config) {
+  SONARE_CHECK_MSG(valid_true_peak_oversample(config.loudness.true_peak_oversample),
+                   ErrorCode::InvalidParameter,
+                   "loudness.truePeakOversample must be one of 1, 2, 4, 8, or 16");
+  if (config.maximizer.true_peak_limiter.enabled) {
+    SONARE_CHECK_MSG(
+        valid_true_peak_oversample(config.maximizer.true_peak_limiter.config.oversample_factor),
+        ErrorCode::InvalidParameter,
+        "maximizer.truePeakLimiter.oversampleFactor must be one of 1, 2, 4, 8, or 16");
+  }
+}
+
+MasteringChain::MasteringChain(MasteringChainConfig config) : config_(std::move(config)) {
+  validate_mastering_chain_config(config_);
+}
 
 void MasteringChain::set_progress_callback(ProgressCallback callback) {
   progress_callback_ = std::move(callback);
@@ -277,6 +281,10 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     const float gain_db = detail::loudness_gain_db_with_ceiling(
         data, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
         config_.loudness.true_peak_oversample);
+    const float requested_gain_db =
+        config_.loudness.target_lufs - integrated_lufs(data, sample_rate);
+    result.loudness_target_limited =
+        std::isfinite(requested_gain_db) && gain_db < requested_gain_db - 1e-4f;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(data, gain_db);
       applied_gain_db += gain_db;
@@ -471,6 +479,10 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     const float gain_db = detail::loudness_gain_db_with_ceiling(
         left, right, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
         config_.loudness.true_peak_oversample);
+    const float requested_gain_db =
+        config_.loudness.target_lufs - detail::stereo_integrated_lufs(left, right, sample_rate);
+    result.loudness_target_limited =
+        std::isfinite(requested_gain_db) && gain_db < requested_gain_db - 1e-4f;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(left, right, gain_db);
       applied_gain_db += gain_db;

@@ -11,7 +11,7 @@ namespace sonare::rt {
 
 class Oversampler {
  public:
-  explicit Oversampler(int factor = 2);
+  explicit Oversampler(int factor = 2, int taps_per_phase = 12);
 
   void set_factor(int factor);
   int factor() const { return factor_; }
@@ -30,6 +30,7 @@ class Oversampler {
 
  private:
   int factor_ = 2;
+  int taps_per_phase_ = 12;
   PolyphaseFir fir_;
   std::vector<float> decimation_taps_;
 };

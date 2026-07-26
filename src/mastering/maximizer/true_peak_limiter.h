@@ -125,6 +125,9 @@ class TruePeakLimiter : public rt::ProcessorBase {
   float slow_attack_coeff_ = 0.0f;
   float release_coeff_ = 0.0f;
   float crest_coeff_ = 0.0f;
+  float adaptive_release_coeff_ = 0.0f;
+  unsigned int adaptive_release_counter_ = 0;
+  static constexpr unsigned int kReleaseControlInterval = 8;
   float last_gain_reduction_db_ = 0.0f;
 };
 

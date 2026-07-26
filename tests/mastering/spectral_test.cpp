@@ -8,6 +8,7 @@
 #include "mastering/spectral/presence_enhancer.h"
 #include "mastering/spectral/spectral_shaper.h"
 #include "support/audio_fixtures.h"
+#include "util/constants.h"
 
 using namespace sonare::mastering::spectral;
 
@@ -19,6 +20,23 @@ using sonare::test::process;
 using sonare::test::process_stereo;
 using sonare::test::rms;
 using sonare::test::rms_tail;
+
+float projected_amplitude(const std::vector<float>& samples, float frequency_hz, int sample_rate,
+                          size_t skip = 0) {
+  double sin_sum = 0.0;
+  double cos_sum = 0.0;
+  size_t count = 0;
+  for (size_t i = std::min(skip, samples.size()); i < samples.size(); ++i) {
+    const double phase =
+        sonare::constants::kTwoPiD * frequency_hz * static_cast<double>(i) / sample_rate;
+    sin_sum += static_cast<double>(samples[i]) * std::sin(phase);
+    cos_sum += static_cast<double>(samples[i]) * std::cos(phase);
+    ++count;
+  }
+  return count == 0 ? 0.0f
+                    : static_cast<float>(2.0 * std::sqrt(sin_sum * sin_sum + cos_sum * cos_sum) /
+                                         static_cast<double>(count));
+}
 
 }  // namespace
 
@@ -213,7 +231,7 @@ TEST_CASE("AirBand adds high-frequency detail", "[mastering][spectral]") {
 TEST_CASE("AirBand emphasizes high band more than low band", "[mastering][spectral]") {
   constexpr int sample_rate = 48000;
   AirBand air({0.6f, 10000.0f, -60.0f, 6.0f});
-  air.prepare(sample_rate, 1024);
+  air.prepare(sample_rate, sample_rate);
 
   auto low = generate_sine_samples(500.0f, sample_rate, sample_rate, 0.2f);
   auto high = generate_sine_samples(14000.0f, sample_rate, sample_rate, 0.2f);
@@ -229,33 +247,37 @@ TEST_CASE("AirBand emphasizes high band more than low band", "[mastering][spectr
   REQUIRE(high_gain > low_gain);
 }
 
-TEST_CASE("AirBand preserves previous sample across process blocks", "[mastering][spectral]") {
-  std::vector<float> full = {0.2f, -0.4f, 0.3f, -0.1f, 0.5f};
-  std::vector<float> first = {full[0], full[1]};
-  std::vector<float> second = {full[2], full[3], full[4]};
+TEST_CASE("AirBand preserves nonlinear state across process blocks", "[mastering][spectral]") {
+  auto full = generate_sine_samples(14000.0f, 48000, 256, 0.3f);
+  std::vector<float> first(full.begin(), full.begin() + 128);
+  std::vector<float> second(full.begin() + 128, full.end());
 
   AirBand one_shot({0.4f});
   AirBand split({0.4f});
-  one_shot.prepare(48000.0, 16);
-  split.prepare(48000.0, 16);
+  one_shot.prepare(48000.0, 256);
+  split.prepare(48000.0, 128);
 
   process(one_shot, full);
   process(split, first);
   process(split, second);
 
-  REQUIRE(first[0] == full[0]);
-  REQUIRE(first[1] == full[1]);
-  REQUIRE(second[0] == full[2]);
-  REQUIRE(second[1] == full[3]);
-  REQUIRE(second[2] == full[4]);
+  // The centered oversampling FIR is zero-padded at each call boundary, so
+  // compare outside its short boundary stencil. Detector/envelope state must
+  // otherwise make split processing match one-shot processing.
+  for (size_t i = 16; i < 112; ++i) {
+    REQUIRE(std::abs(first[i] - full[i]) < 1.0e-3f);
+  }
+  for (size_t i = 16; i < 112; ++i) {
+    REQUIRE(std::abs(second[i] - full[i + 128]) < 1.0e-3f);
+  }
 }
 
 TEST_CASE("AirBand preserves existing channel state when channel count grows",
           "[mastering][spectral]") {
   AirBand mono_path({0.4f});
   AirBand stereo_path({0.4f});
-  mono_path.prepare(48000.0, 1024);
-  stereo_path.prepare(48000.0, 1024);
+  mono_path.prepare(48000.0, 4096);
+  stereo_path.prepare(48000.0, 4096);
 
   auto warmup = generate_sine_samples(14000.0f, 48000, 4096, 0.3f);
   auto warmup_copy = warmup;
@@ -269,6 +291,54 @@ TEST_CASE("AirBand preserves existing channel state when channel count grows",
   process_stereo(stereo_path, actual_left, actual_right);
 
   REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
+}
+
+TEST_CASE("AirBand harmonic response is stable across sample rates", "[mastering][spectral]") {
+  constexpr float kFrequencyHz = 14000.0f;
+  std::vector<float> gains_db;
+  for (const int sample_rate : {44100, 48000, 96000}) {
+    auto signal = generate_sine_samples(kFrequencyHz, sample_rate, sample_rate, 0.3f);
+    const auto dry = signal;
+    const float input_amplitude = projected_amplitude(signal, kFrequencyHz, sample_rate, 4096);
+
+    AirBand air({0.7f, 10000.0f, -60.0f, 0.0f});
+    air.prepare(sample_rate, sample_rate);
+    process(air, signal);
+    for (size_t i = 0; i < signal.size(); ++i) {
+      signal[i] -= dry[i];
+    }
+
+    const float output_amplitude = projected_amplitude(signal, kFrequencyHz, sample_rate, 4096);
+    gains_db.push_back(20.0f * std::log10(output_amplitude / input_amplitude));
+  }
+
+  const auto [minimum, maximum] = std::minmax_element(gains_db.begin(), gains_db.end());
+  CAPTURE(gains_db[0], gains_db[1], gains_db[2], *maximum - *minimum);
+  REQUIRE(*maximum - *minimum < 0.5f);
+}
+
+TEST_CASE("AirBand oversampling suppresses high-tone alias products", "[mastering][spectral]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 48000;
+  constexpr float kInputHz = 17000.0f;
+  auto dry = generate_sine_samples(kInputHz, kSampleRate, kSamples, 0.8f);
+  auto wet = dry;
+
+  AirBand air({1.0f, 10000.0f, -60.0f, 0.0f});
+  air.prepare(kSampleRate, kSamples);
+  process(air, wet);
+  for (size_t i = 0; i < wet.size(); ++i) {
+    wet[i] -= dry[i];
+  }
+
+  const float harmonic_fundamental = projected_amplitude(wet, kInputHz, kSampleRate, 4096);
+  // tanh's third harmonic at 51 kHz would fold to 3 kHz at 48 kHz without
+  // oversampling and reconstruction filtering.
+  const float alias = projected_amplitude(wet, 3000.0f, kSampleRate, 4096);
+  const float alias_db = 20.0f * std::log10(alias / harmonic_fundamental);
+
+  CAPTURE(harmonic_fundamental, alias, alias_db);
+  REQUIRE(alias_db < -40.0f);
 }
 
 TEST_CASE("AirBand does not hard clip when processing is bypassed", "[mastering][spectral]") {
