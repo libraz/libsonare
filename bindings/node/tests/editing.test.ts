@@ -6,6 +6,7 @@ import {
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
+  pitchPyin,
   RealtimeVoiceChanger,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
@@ -37,11 +38,16 @@ function peak(samples: Float32Array): number {
 describe('editing effects', () => {
   const tone = generateSine(440, SR, 0.5);
 
-  it('pitchCorrectToMidi returns a non-empty Float32Array', () => {
+  it('pitchCorrectToMidi reaches the requested pitch with default settings', () => {
     // 440 Hz is MIDI 69 (A4); correct toward MIDI 71 (B4).
     const result = pitchCorrectToMidi(tone, SR, 69, 71);
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
+
+    const detected = pitchPyin(result, SR, 2048, 512, 100, 1000);
+    const expectedHz = 440 * 2 ** (2 / 12);
+    const centsError = 1200 * Math.log2(detected.medianF0 / expectedHz);
+    expect(Math.abs(centsError)).toBeLessThan(5);
   });
 
   it('rejects out-of-range MIDI / F0 instead of returning garbage', () => {
@@ -71,6 +77,33 @@ describe('editing effects', () => {
     const voicedProb = new Float32Array(nFrames).fill(1);
     const result2 = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced, voicedProb);
     expect(result2.length).toBe(tone.length);
+
+    // pYIN emits NaN F0 for unvoiced frames by default.
+    f0[0] = Number.NaN;
+    voiced[0] = 0;
+    const pyinResult = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced, voicedProb);
+    expect(pyinResult.every((x) => Number.isFinite(x))).toBe(true);
+  });
+
+  it('rejects mismatched pitch-track companion arrays before native reads', () => {
+    const hop = 512;
+    const nFrames = Math.floor(tone.length / hop) + 1;
+    const f0 = new Float32Array(nFrames).fill(440);
+    const shortVoiced = new Int32Array(nFrames - 1).fill(1);
+    const shortProb = new Float32Array(nFrames - 1).fill(1);
+
+    expect(() => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, shortVoiced)).toThrow(
+      /same length/,
+    );
+    expect(() =>
+      pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, shortProb),
+    ).toThrow(/same length/);
+    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: shortVoiced })).toThrow(
+      /same length/,
+    );
+    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb: shortProb })).toThrow(
+      /same length/,
+    );
   });
 
   it('pitchCorrectTimevarying supports scale mode and retune-strength knobs', () => {
@@ -101,6 +134,15 @@ describe('editing effects', () => {
       pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 2 }),
     ).toThrow();
     expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 200 })).toThrow();
+    expect(() =>
+      pitchCorrectTimevarying(tone, f0, SR, hop, { maxCorrectionSemitones: -1 }),
+    ).toThrow();
+    expect(() =>
+      pitchCorrectTimevarying(tone, f0, SR, hop, { retuneSpeedMs: Number.NaN }),
+    ).toThrow();
+    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { scaleModeMask: 0 })).toThrow();
+    expect(() => pitchCorrectTimevarying(tone, new Float32Array(), SR, hop)).toThrow();
+    expect(() => pitchCorrectTimevarying(tone, f0, SR, 0)).toThrow();
   });
 
   it('noteStretch returns a non-empty Float32Array', () => {
@@ -111,6 +153,15 @@ describe('editing effects', () => {
     });
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('noteStretch and noteMove default offset to the input length', () => {
+    const stretched = noteStretch(tone, SR);
+    const moved = noteMove(tone, SR);
+    expect(stretched).toBeInstanceOf(Float32Array);
+    expect(stretched.length).toBeGreaterThan(0);
+    expect(moved).toBeInstanceOf(Float32Array);
+    expect(moved.length).toBe(tone.length);
   });
 
   it('noteMove preserves output length', () => {

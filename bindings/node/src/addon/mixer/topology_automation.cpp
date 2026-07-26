@@ -139,6 +139,40 @@ Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
+Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 2 || !info[0].IsString() || !info[1].IsArray()) {
+    Napi::TypeError::New(env, "Expected (id: string, members: string[])")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const Napi::Array members = info[1].As<Napi::Array>();
+  std::vector<std::string> member_storage;
+  std::vector<const char*> member_ptrs;
+  member_storage.reserve(members.Length());
+  member_ptrs.reserve(members.Length());
+  for (uint32_t i = 0; i < members.Length(); ++i) {
+    const Napi::Value value = members.Get(i);
+    if (!value.IsString()) {
+      Napi::TypeError::New(env, "VCA group members must be strings").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    member_storage.push_back(value.As<Napi::String>().Utf8Value());
+  }
+  for (const auto& member : member_storage) member_ptrs.push_back(member.c_str());
+  const SonareError err = sonare_mixer_set_vca_group_members(
+      mixer_, id.c_str(), member_ptrs.empty() ? nullptr : member_ptrs.data(), member_ptrs.size());
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "failed to set VCA group members: ");
+  }
+  return env.Undefined();
+}
+
 Napi::Value MixerWrap::VcaGroupCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (mixer_ == nullptr) {

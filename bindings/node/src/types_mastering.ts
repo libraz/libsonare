@@ -114,7 +114,7 @@ export interface PitchCorrectOptions {
 export interface NoteStretchOptions {
   /** First sample of the note to stretch. Default 0. */
   onsetSample?: number;
-  /** Last sample of the note to stretch. Default 0. */
+  /** Last sample of the note to stretch. Defaults to the input length. */
   offsetSample?: number;
   /** Stretch ratio (1 = unchanged). Default 1. */
   stretchRatio?: number;
@@ -123,14 +123,21 @@ export interface NoteStretchOptions {
 /** Options for {@link noteMove}. */
 export interface NoteMoveOptions {
   onsetSample?: number;
+  /** Defaults to the input length. */
   offsetSample?: number;
   targetOnsetSample?: number;
 }
 
 export interface LufsResult {
   integratedLufs: number;
+  /** Final complete 400 ms window, not Max-M. */
   momentaryLufs: number;
+  /** Final complete 3 s window, not Max-S. */
   shortTermLufs: number;
+  /** Maximum 400 ms window (EBU R128 Max-M). */
+  maxMomentaryLufs: number;
+  /** Maximum 3 s window (EBU R128 Max-S). */
+  maxShortTermLufs: number;
   loudnessRange: number;
 }
 
@@ -257,6 +264,8 @@ export interface MasteringResult {
   inputLufs: number;
   outputLufs: number;
   appliedGainDb: number;
+  /** True when peak headroom prevented the requested LUFS target. */
+  loudnessTargetLimited?: boolean;
   latencySamples?: number;
 }
 
@@ -270,13 +279,8 @@ export interface MasteringStereoResult {
   latencySamples: number;
 }
 
-/**
- * A nested processor / parameter sub-tree of a {@link MasteringChainConfig}.
- * Leaf values are numbers or booleans; nest deeper for processor parameters.
- */
-export interface MasteringChainSection {
-  [key: string]: number | boolean | MasteringChainSection;
-}
+/** Generic traversal view used by chain-config tooling; public configs are fully typed below. */
+export type MasteringChainSection = Record<string, unknown>;
 
 /**
  * Nested mastering-chain configuration. Top-level keys are the processing
@@ -300,14 +304,200 @@ export interface MasteringChainSection {
  * effect; use `saturation: { tape: { enabled: true, driveDb: 6 } }`.
  */
 export interface MasteringChainConfig {
-  repair?: MasteringChainSection;
-  eq?: MasteringChainSection;
-  dynamics?: MasteringChainSection;
-  saturation?: MasteringChainSection;
-  spectral?: MasteringChainSection;
-  stereo?: MasteringChainSection;
-  maximizer?: MasteringChainSection;
-  loudness?: MasteringChainSection;
+  repair?: {
+    /** `boolean` is retained as a deprecated shorthand for `{ enabled }`. */
+    denoise?:
+      | boolean
+      | {
+          enabled?: boolean;
+          nFft?: number;
+          hopLength?: number;
+          ddAlpha?: number;
+          gainFloor?: number;
+          overSubtraction?: number;
+          spectralFloor?: number;
+          noiseEstimationQuantile?: number;
+          speechPresenceGain?: boolean;
+          gainSmoothing?: boolean;
+        };
+    nFft?: number;
+    hopLength?: number;
+    ddAlpha?: number;
+    gainFloor?: number;
+    declip?: {
+      enabled?: boolean;
+      clipThreshold?: number;
+      lpcOrder?: number;
+      iterations?: number;
+      lpcBlend?: number;
+    };
+    decrackle?: {
+      enabled?: boolean;
+      threshold?: number;
+      /** 0 = median, 1 = wavelet shrinkage. */
+      mode?: number;
+      levels?: number;
+    };
+    dehum?: {
+      enabled?: boolean;
+      fundamentalHz?: number;
+      harmonics?: number;
+      q?: number;
+      adaptive?: boolean;
+      searchRangeHz?: number;
+      adaptation?: number;
+      frameSize?: number;
+      pllBandwidth?: number;
+    };
+    declick?: {
+      enabled?: boolean;
+      threshold?: number;
+      neighborRatio?: number;
+      maxClickSamples?: number;
+      lpcOrder?: number;
+      residualRatio?: number;
+    };
+    dereverb?: {
+      enabled?: boolean;
+      threshold?: number;
+      attenuation?: number;
+      nFft?: number;
+      hopLength?: number;
+      t60Sec?: number;
+      lateDelayMs?: number;
+      overSubtraction?: number;
+      spectralFloor?: number;
+      wpeEnabled?: boolean;
+      wpeIterations?: number;
+      wpeTaps?: number;
+      wpeStrength?: number;
+    };
+  };
+  eq?: {
+    tilt?: {
+      enabled?: boolean;
+      tiltDb?: number;
+      pivotHz?: number;
+    };
+    /** @deprecated Use `eq.tilt.tiltDb`. */
+    tiltDb?: number;
+    /** @deprecated Use `eq.tilt.pivotHz`. */
+    pivotHz?: number;
+  };
+  dynamics?: {
+    compressor?: {
+      enabled?: boolean;
+      thresholdDb?: number;
+      ratio?: number;
+      attackMs?: number;
+      releaseMs?: number;
+      kneeDb?: number;
+      makeupGainDb?: number;
+      autoMakeup?: boolean;
+    };
+    deesser?: {
+      enabled?: boolean;
+      frequencyHz?: number;
+      thresholdDb?: number;
+      ratio?: number;
+      attackMs?: number;
+      releaseMs?: number;
+      rangeDb?: number;
+      bandpassQ?: number;
+    };
+    transientShaper?: {
+      enabled?: boolean;
+      attackGainDb?: number;
+      sustainGainDb?: number;
+      fastAttackMs?: number;
+      fastReleaseMs?: number;
+      slowAttackMs?: number;
+      slowReleaseMs?: number;
+      sensitivity?: number;
+      maxGainDb?: number;
+      gainSmoothingMs?: number;
+      lookaheadMs?: number;
+    };
+    multibandComp?: {
+      enabled?: boolean;
+      lowCutoffHz?: number;
+      highCutoffHz?: number;
+      lowThresholdDb?: number;
+      lowRatio?: number;
+      lowAttackMs?: number;
+      lowReleaseMs?: number;
+      midThresholdDb?: number;
+      midRatio?: number;
+      midAttackMs?: number;
+      midReleaseMs?: number;
+      highThresholdDb?: number;
+      highRatio?: number;
+      highAttackMs?: number;
+      highReleaseMs?: number;
+    };
+  };
+  saturation?: {
+    tape?: {
+      enabled?: boolean;
+      driveDb?: number;
+      saturation?: number;
+      hysteresis?: number;
+      outputGainDb?: number;
+      speedIps?: number;
+      headBumpDb?: number;
+      bias?: number;
+      gapLoss?: number;
+    };
+    exciter?: {
+      enabled?: boolean;
+      frequencyHz?: number;
+      driveDb?: number;
+      amount?: number;
+      q?: number;
+      evenOddMix?: number;
+    };
+  };
+  spectral?: {
+    airBand?: {
+      enabled?: boolean;
+      amount?: number;
+      shelfFrequencyHz?: number;
+      dynamicThresholdDb?: number;
+      dynamicRangeDb?: number;
+    };
+  };
+  stereo?: {
+    imager?: {
+      enabled?: boolean;
+      width?: number;
+      outputGainDb?: number;
+      decorrelationAmount?: number;
+      preserveEnergy?: boolean;
+    };
+    monoMaker?: {
+      enabled?: boolean;
+      amount?: number;
+      frequencyHz?: number;
+    };
+  };
+  maximizer?: {
+    truePeakLimiter?: {
+      enabled?: boolean;
+      ceilingDb?: number;
+      lookaheadMs?: number;
+      releaseMs?: number;
+      oversampleFactor?: number;
+      applyGainAtInputRate?: boolean;
+    };
+  };
+  loudness?: {
+    enabled?: boolean;
+    targetLufs?: number;
+    ceilingDb?: number;
+    truePeakOversample?: number;
+    releaseMs?: number;
+    applyGainAtInputRate?: boolean;
+  };
 }
 
 /** Gain reduction reported by a single dynamics/maximizer chain stage. */
@@ -337,6 +527,8 @@ export interface MasteringChainResult {
   outputTruePeakDbtp: number;
   /** EBU Tech 3342 Loudness Range of the output (LU). */
   outputLra: number;
+  /** True when peak headroom prevented the requested LUFS target. */
+  loudnessTargetLimited: boolean;
   /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
 }
@@ -352,6 +544,7 @@ export interface MasteringChainStereoResult {
   /** See {@link MasteringChainResult} for field semantics. */
   outputTruePeakDbtp: number;
   outputLra: number;
+  loudnessTargetLimited: boolean;
   stageGainReductions: StageGainReduction[];
 }
 

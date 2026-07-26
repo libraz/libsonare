@@ -69,6 +69,29 @@ function makeSysexSmf(): Buffer {
   return out;
 }
 
+function makeTruncatedSmf(): Buffer {
+  const body = Buffer.from([
+    0x00,
+    0x90,
+    0x3c,
+    0x64, // valid note-on
+    0x00,
+    0xff,
+    0x01,
+    0x7f, // text meta claims 127 missing payload bytes
+  ]);
+  const out = Buffer.alloc(22 + body.length);
+  out.write('MThd', 0, 'ascii');
+  out.writeUInt32BE(6, 4);
+  out.writeUInt16BE(0, 8);
+  out.writeUInt16BE(1, 10);
+  out.writeUInt16BE(480, 12);
+  out.write('MTrk', 14, 'ascii');
+  out.writeUInt32BE(body.length, 18);
+  body.copy(out, 22);
+  return out;
+}
+
 function danglingSourceJson(): string {
   return '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}';
 }
@@ -336,6 +359,37 @@ describe('Project native binding', () => {
     );
     sysexProject.destroy();
     restored.destroy();
+  });
+
+  it('preserves more than 512 events when baking MIDI FX', () => {
+    const project = Project.create();
+    const { clipId } = project.addMidiClip(0, 8);
+    const events = Array.from({ length: 600 }, (_, i) =>
+      Project.midiCc(i / 80, 0, 0, i % 128, (i * 3) % 128),
+    );
+    project.setMidiEvents(clipId, events);
+    project.bakeMidiFx(clipId, '{}');
+
+    const payload = JSON.parse(project.toJson()) as {
+      midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
+    };
+    expect(payload.midi_content[String(clipId)]).toEqual(events);
+
+    const round = Project.create();
+    const roundClip = round.importSmf(project.exportSmf());
+    round.bakeMidiFx(roundClip, '{}');
+    const roundPayload = JSON.parse(round.toJson()) as {
+      midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
+    };
+    expect(roundPayload.midi_content[String(roundClip)]).toHaveLength(600);
+    round.destroy();
+    project.destroy();
+  });
+
+  it('rejects a salvaged truncated SMF with its native diagnostic', () => {
+    const project = Project.create();
+    expect(() => project.importSmf(makeTruncatedSmf())).toThrow(/truncated/);
+    project.destroy();
   });
 
   it('validates MIDI event inputs before native conversion', () => {
@@ -648,6 +702,21 @@ describe('Project validateMidiNotes', () => {
     expect(result.ok).toBe(false);
     expect(result.unmatchedNoteOns).toBe(1);
     expect(result.unmatchedNoteOffs).toBe(1);
+    project.destroy();
+  });
+
+  it('validates the same half-open clip window used by SMF export', () => {
+    const project = Project.create();
+    const { clipId } = project.addMidiClip(0, 1);
+    project.setMidiEvents(clipId, [
+      Project.midiNoteOn(0, 0, 0, 60, 100),
+      Project.midiNoteOff(1, 0, 0, 60, 0),
+    ]);
+
+    const result = project.validateMidiNotes(clipId);
+    expect(result.ok).toBe(false);
+    expect(result.unmatchedNoteOns).toBe(1);
+    expect(result.unmatchedNoteOffs).toBe(0);
     project.destroy();
   });
 });

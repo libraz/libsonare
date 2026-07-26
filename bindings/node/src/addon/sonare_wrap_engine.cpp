@@ -236,6 +236,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::ClearMidiInstrument>("clearMidiInstrument"),
           InstanceMethod<&RealtimeEngineWrap::MidiInstrumentCount>("midiInstrumentCount"),
           InstanceMethod<&RealtimeEngineWrap::BindMidiCc>("bindMidiCc"),
+          InstanceMethod<&RealtimeEngineWrap::BindMidiCcBinding>("bindMidiCcBinding"),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiCcBindings>("clearMidiCcBindings"),
           InstanceMethod<&RealtimeEngineWrap::MidiCcBindingCount>("midiCcBindingCount"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiFx>("setMidiFx"),
@@ -606,7 +607,7 @@ Napi::Value RealtimeEngineWrap::SetMetronome(const Napi::CallbackInfo& info) {
                            : 0.7f;
   config.click_samples = obj.Has("clickSamples") && !obj.Get("clickSamples").IsUndefined()
                              ? obj.Get("clickSamples").As<Napi::Number>().Int32Value()
-                             : 96;
+                             : 0;
   config.click_seconds = obj.Has("clickSeconds") && !obj.Get("clickSeconds").IsUndefined()
                              ? obj.Get("clickSeconds").As<Napi::Number>().DoubleValue()
                              : 0.0;
@@ -814,6 +815,34 @@ Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
   const float max_value = info.Length() > 4 ? info[4].As<Napi::Number>().FloatValue() : 1.0f;
   ThrowIfError(env, sonare_engine_bind_midi_cc(engine_, channel, controller, param_id, min_value,
                                                max_value));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "Expected a MIDI CC binding object").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const Napi::Object object = info[0].As<Napi::Object>();
+  SonareMidiCcBinding binding{};
+  binding.cc_number = object.Get("ccNumber").As<Napi::Number>().Uint32Value();
+  binding.channel = object.Has("channel") && !object.Get("channel").IsNull()
+                        ? object.Get("channel").As<Napi::Number>().Uint32Value()
+                        : 0xffu;
+  binding.kind = object.Has("kind") ? object.Get("kind").As<Napi::Number>().Uint32Value() : 0u;
+  binding.cc_lsb_number =
+      object.Has("ccLsbNumber") ? object.Get("ccLsbNumber").As<Napi::Number>().Uint32Value() : 0u;
+  binding.selector_msb =
+      object.Has("selectorMsb") ? object.Get("selectorMsb").As<Napi::Number>().Uint32Value() : 0u;
+  binding.selector_lsb =
+      object.Has("selectorLsb") ? object.Get("selectorLsb").As<Napi::Number>().Uint32Value() : 0u;
+  binding.param_id = object.Get("paramId").As<Napi::Number>().Uint32Value();
+  binding.min_value =
+      object.Has("minValue") ? object.Get("minValue").As<Napi::Number>().FloatValue() : 0.0f;
+  binding.max_value =
+      object.Has("maxValue") ? object.Get("maxValue").As<Napi::Number>().FloatValue() : 1.0f;
+  ThrowIfError(env, sonare_engine_bind_midi_cc_binding(engine_, &binding));
   return env.Undefined();
 }
 

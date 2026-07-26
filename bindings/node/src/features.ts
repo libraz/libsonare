@@ -38,6 +38,7 @@ export interface MfccRequest extends MelSpectrogramRequest {
 }
 export interface ChromaRequest extends StftRequest {
   nChroma?: number;
+  binsPerOctave?: number;
 }
 export interface CqtRequest extends FeatureSamplesRequest {
   hopLength?: number;
@@ -78,6 +79,8 @@ export interface MfccToMelRequest {
   nMfcc: number;
   nFrames: number;
   nMels?: number;
+  /** Lifter used by the forward MFCC transform; zero means no liftering. */
+  lifter?: number;
 }
 export interface MfccToAudioRequest extends MfccToMelRequest {
   sampleRate?: number;
@@ -106,6 +109,7 @@ export interface PitchRequest extends FeatureSamplesRequest {
   fmin?: number;
   fmax?: number;
   threshold?: number;
+  /** pYIN: fill unvoiced f0 with zero. Retained but ignored by YIN, which always estimates f0. */
   fillNa?: boolean;
 }
 export interface DecomposeRequest {
@@ -197,7 +201,11 @@ export interface EmphasisRequest {
   zi?: number;
 }
 /** Input for NNLS chroma extraction. */
-export interface NnlsChromaRequest extends FeatureSamplesRequest {}
+export interface NnlsChromaRequest extends FeatureSamplesRequest {
+  enableStftBlend?: boolean;
+  stftBlendWeight?: number;
+  stftBlendNFft?: number;
+}
 /** Input for LUFS feature functions, including optional input validation control. */
 export interface LufsRequest extends FeatureSamplesRequest, ValidateOptions {}
 
@@ -342,14 +350,18 @@ export function chromaCens(
   sampleRate = 22050,
   hopLength = 512,
   nChroma = 12,
+  binsPerOctave = 36,
 ): ChromaResult {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, hopLength, nChroma } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, hopLength, nChroma, binsPerOctave }
+      : samples;
   return addon.chromaCens(
     request.samples,
     request.sampleRate ?? 22050,
     request.hopLength ?? 512,
     request.nChroma ?? 12,
+    request.binsPerOctave ?? 36,
   );
 }
 
@@ -359,14 +371,18 @@ export function chromaCqt(
   sampleRate = 22050,
   hopLength = 512,
   nChroma = 12,
+  binsPerOctave = 36,
 ): ChromaResult {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, hopLength, nChroma } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, hopLength, nChroma, binsPerOctave }
+      : samples;
   return addon.chromaCqt(
     request.samples,
     request.sampleRate ?? 22050,
     request.hopLength ?? 512,
     request.nChroma ?? 12,
+    request.binsPerOctave ?? 36,
   );
 }
 
@@ -459,7 +475,7 @@ export function hybridCqt(
   );
 }
 
-/** Compute the Variable-Q Transform magnitude (`gamma` controls Q). */
+/** Compute VQT magnitude (`gamma < 0` selects the automatic ERB-derived value). */
 export function vqt(request: CqtRequest): CqtResult;
 export function vqt(
   samples: Float32Array | CqtRequest,
@@ -468,7 +484,7 @@ export function vqt(
   fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
-  gamma = 0.0,
+  gamma = -1.0,
 ): CqtResult {
   const request =
     samples instanceof Float32Array
@@ -481,7 +497,7 @@ export function vqt(
     request.fmin ?? 32.70319566257483,
     request.nBins ?? 84,
     request.binsPerOctave ?? 12,
-    request.gamma ?? 0,
+    request.gamma ?? -1,
   );
 }
 
@@ -523,7 +539,7 @@ export function vqtToAudio(
   hopLength = 512,
   fmin = 32.70319566257483,
   binsPerOctave = 12,
-  gamma = 0,
+  gamma = -1,
   nIter = 32,
 ): Float32Array {
   const request =
@@ -608,9 +624,16 @@ export function mfccToMel(
   nMfcc = 0,
   nFrames = 0,
   nMels = 128,
+  lifter = 0,
 ): InverseMelResult {
-  const request = mfcc instanceof Float32Array ? { mfcc, nMfcc, nFrames, nMels } : mfcc;
-  return addon.mfccToMel(request.mfcc, request.nMfcc, request.nFrames, request.nMels ?? 128);
+  const request = mfcc instanceof Float32Array ? { mfcc, nMfcc, nFrames, nMels, lifter } : mfcc;
+  return addon.mfccToMel(
+    request.mfcc,
+    request.nMfcc,
+    request.nFrames,
+    request.nMels ?? 128,
+    request.lifter ?? 0,
+  );
 }
 
 /** Reconstruct audio from MFCCs via Griffin-Lim. */
@@ -627,10 +650,11 @@ export function mfccToAudio(
   fmax = 0,
   nIter = 32,
   htk = false,
+  lifter = 0,
 ): Float32Array {
   const request =
     mfcc instanceof Float32Array
-      ? { mfcc, nMfcc, nFrames, nMels, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk }
+      ? { mfcc, nMfcc, nFrames, nMels, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk, lifter }
       : mfcc;
   return addon.mfccToAudio(
     request.mfcc,
@@ -644,6 +668,7 @@ export function mfccToAudio(
     request.fmax ?? 0,
     request.nIter ?? 32,
     request.htk ?? false,
+    request.lifter ?? 0,
   );
 }
 
@@ -843,9 +868,16 @@ export function remix(
 /** Phase-vocoder time-scale modification (rate > 1 faster, < 1 slower). */
 export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
 export function phaseVocoder(
+  samples: Float32Array,
+  sampleRate: number,
+  rate: number,
+  nFft?: number,
+  hopLength?: number,
+): Float32Array;
+export function phaseVocoder(
   samples: Float32Array | PhaseVocoderRequest,
-  rate = Number.NaN,
   sampleRate = 22050,
+  rate = Number.NaN,
   nFft = 2048,
   hopLength = 512,
 ): Float32Array {
@@ -1033,7 +1065,7 @@ export function pitchYin(
   hopLength = 512,
   fmin = 65.0,
   fmax = 2093.0,
-  threshold = 0.3,
+  threshold = 0.1,
   fillNa = false,
 ): PitchResult {
   const request =
@@ -1048,7 +1080,7 @@ export function pitchYin(
     request.hopLength ?? 512,
     request.fmin ?? 65,
     request.fmax ?? 2093,
-    request.threshold ?? 0.3,
+    request.threshold ?? 0.1,
     request.fillNa ?? false,
   );
 }
@@ -1061,7 +1093,7 @@ export function pitchPyin(
   hopLength = 512,
   fmin = 65.0,
   fmax = 2093.0,
-  threshold = 0.3,
+  threshold = 0.1,
   fillNa = false,
 ): PitchResult {
   const request =
@@ -1075,7 +1107,7 @@ export function pitchPyin(
     request.hopLength ?? 512,
     request.fmin ?? 65,
     request.fmax ?? 2093,
-    request.threshold ?? 0.3,
+    request.threshold ?? 0.1,
     request.fillNa ?? false,
   );
 }
@@ -1382,12 +1414,12 @@ export function peakPick(
 ): Int32Array;
 export function peakPick(
   values: Float32Array,
-  preMax?: number,
-  postMax?: number,
-  preAvg?: number,
-  postAvg?: number,
-  delta?: number,
-  wait?: number,
+  preMax: number,
+  postMax: number,
+  preAvg: number,
+  postAvg: number,
+  delta: number,
+  wait: number,
 ): Int32Array;
 export function peakPick(
   values:
@@ -1401,9 +1433,9 @@ export function peakPick(
         wait: number;
       }),
   preMax = 0,
-  postMax = 0,
+  postMax = 1,
   preAvg = 0,
-  postAvg = 0,
+  postAvg = 1,
   delta = 0,
   wait = 0,
 ): Int32Array {
@@ -1697,13 +1729,21 @@ export function nnlsChroma(request: NnlsChromaRequest): {
 export function nnlsChroma(
   samples: Float32Array,
   sampleRate?: number,
+  options?: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'>,
 ): { nChroma: number; nFrames: number; data: Float32Array };
 export function nnlsChroma(
   samples: Float32Array | NnlsChromaRequest,
   sampleRate = 22050,
+  options: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'> = {},
 ): { nChroma: number; nFrames: number; data: Float32Array } {
-  const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
-  return addon.nnlsChroma(request.samples, request.sampleRate ?? 22050);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.nnlsChroma(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.enableStftBlend ?? true,
+    request.stftBlendWeight ?? 0.55,
+    request.stftBlendNFft ?? 4096,
+  );
 }
 
 /**

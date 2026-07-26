@@ -43,6 +43,24 @@ export interface AnalyzeWithProgressRequest extends SamplesRequest {
   onProgress: AnalysisProgressCallback;
 }
 
+export interface MusicAnalyzeOptions {
+  nFft?: number;
+  hopLength?: number;
+  bpmMin?: number;
+  bpmMax?: number;
+  startBpm?: number;
+  useTriadsOnly?: boolean;
+  useHpss?: boolean;
+  chromaHighpassHz?: number;
+  useBassWeighted?: boolean;
+  chromaHopMultiplier?: number;
+  useChordHmm?: boolean;
+  useChordKeyContext?: boolean;
+  chordHmmBeamWidth?: number;
+  detectChordInversions?: boolean;
+}
+export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
+
 export interface AnalyzeSectionsRequest extends AnalyzeSectionsOptions, SamplesRequest {}
 export interface AnalyzeMelodyRequest extends MelodyOptions, SamplesRequest {}
 export interface AnalyzeBpmRequest extends AnalyzeBpmOptions, SamplesRequest {}
@@ -126,14 +144,19 @@ export function detectOnsets(
   return addon.detectOnsets(request.samples, request.sampleRate ?? 22050);
 }
 
-export function analyze(request: SamplesRequest): AnalysisResult;
-export function analyze(samples: Float32Array, sampleRate?: number): AnalysisResult;
+export function analyze(request: MusicAnalyzeRequest): AnalysisResult;
 export function analyze(
-  samples: Float32Array | SamplesRequest,
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: MusicAnalyzeOptions,
+): AnalysisResult;
+export function analyze(
+  samples: Float32Array | MusicAnalyzeRequest,
   sampleRate = 22050,
+  options: MusicAnalyzeOptions = {},
 ): AnalysisResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
-  return addon.analyze(request.samples, request.sampleRate ?? 22050);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.analyze(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /**

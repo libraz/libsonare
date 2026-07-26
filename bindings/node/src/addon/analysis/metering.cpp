@@ -80,6 +80,8 @@ Napi::Value SonareWrap::Lufs(const Napi::CallbackInfo& info) {
   result.Set("integratedLufs", Napi::Number::New(env, lufs.integrated_lufs));
   result.Set("momentaryLufs", Napi::Number::New(env, lufs.momentary_lufs));
   result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
+  result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
+  result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
   result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
   return result;
 }
@@ -167,6 +169,8 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
   result.Set("integratedLufs", Napi::Number::New(env, lufs.integrated_lufs));
   result.Set("momentaryLufs", Napi::Number::New(env, lufs.momentary_lufs));
   result.Set("shortTermLufs", Napi::Number::New(env, lufs.short_term_lufs));
+  result.Set("maxMomentaryLufs", Napi::Number::New(env, lufs.max_momentary_lufs));
+  result.Set("maxShortTermLufs", Napi::Number::New(env, lufs.max_short_term_lufs));
   result.Set("loudnessRange", Napi::Number::New(env, lufs.loudness_range));
   return result;
 }
@@ -226,6 +230,33 @@ Napi::Value SonareWrap::MeteringRmsDb(const Napi::CallbackInfo& info) {
   return MeteringScalar(info, &sonare_metering_rms_db, "meteringRmsDb");
 }
 
+Napi::Value SonareWrap::MeteringSilenceRatio(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "meteringSilenceRatio: expected Float32Array argument")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto samples = info[0].As<Napi::Float32Array>();
+  const int sample_rate =
+      info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
+  const float threshold_db =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -45.0f;
+  const int frame_length =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 1024;
+  const int hop_length =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 256;
+  float ratio = 0.0f;
+  const SonareError err =
+      sonare_metering_silence_ratio(samples.Data(), samples.ElementLength(), sample_rate,
+                                    threshold_db, frame_length, hop_length, &ratio);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, ratio);
+}
+
 Napi::Value SonareWrap::MeteringCrestFactorDb(const Napi::CallbackInfo& info) {
   return MeteringScalar(info, &sonare_metering_crest_factor_db, "meteringCrestFactorDb");
 }
@@ -268,9 +299,14 @@ Napi::Value SonareWrap::MeteringDetectClipping(const Napi::CallbackInfo& info) {
       info.Length() >= 2 && info[1].IsNumber() ? info[1].As<Napi::Number>().Int32Value() : 22050;
   float threshold =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.999f;
-  size_t min_region = info.Length() >= 4 && info[3].IsNumber()
-                          ? static_cast<size_t>(info[3].As<Napi::Number>().Uint32Value())
-                          : 1u;
+  const int64_t min_region_value =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int64Value() : 1;
+  if (min_region_value < 0) {
+    Napi::RangeError::New(env, "minRegionSamples must be non-negative")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const size_t min_region = static_cast<size_t>(min_region_value);
   SonareClippingResult result{};
   SonareError err = sonare_metering_detect_clipping(typed.Data(), typed.ElementLength(), sr,
                                                     threshold, min_region, &result);

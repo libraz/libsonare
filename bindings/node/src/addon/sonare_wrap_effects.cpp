@@ -201,26 +201,10 @@ Napi::Value SonareWrap::PitchCorrectToMidi(const Napi::CallbackInfo& info) {
   float current_midi = info[2].As<Napi::Number>().FloatValue();
   float target_midi = info[3].As<Napi::Number>().FloatValue();
 
-  // current_midi is baked into the F0 track below, so the core cannot range-check
-  // it (midi_to_hz(200) is a valid-but-huge frequency). Validate it here exactly
-  // as the C ABI does; target_midi and the F0 track are validated by the core.
-  if (!std::isfinite(current_midi) || current_midi < 0.0f || current_midi > 127.0f) {
-    Napi::RangeError::New(env, "currentMidi must be finite and in [0, 127]")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   sonare::editing::pitch_editor::PitchCorrector corrector;
-  sonare::editing::pitch_editor::F0Track track;
-  track.sample_rate = sr;
-  track.hop_length = 512;
-  track.f0_hz = {sonare::editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
-  track.voiced = {true};
-  track.voiced_prob = {1.0f};
-  sonare::Audio result = corrector.correct_to_midi(audio, track, target_midi);
+  sonare::Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)
@@ -261,6 +245,12 @@ Napi::Value SonareWrap::PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& 
   Napi::Float32Array prob_arr;
   if (has_voiced) voiced_arr = info[5].As<Napi::Int32Array>();
   if (has_prob) prob_arr = info[6].As<Napi::Float32Array>();
+  if ((has_voiced && voiced_arr.ElementLength() != n_frames) ||
+      (has_prob && prob_arr.ElementLength() != n_frames)) {
+    Napi::RangeError::New(env, "voiced and voicedProb must match f0Hz length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   for (size_t i = 0; i < n_frames; ++i) {
     const bool is_voiced = has_voiced ? (voiced_arr[i] != 0) : true;
     track.voiced[i] = is_voiced;
@@ -326,11 +316,20 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
                                                                     config.vibrato_threshold_cents);
     if (opts.Has("voiced") && IsInt32Array(opts.Get("voiced"))) {
       auto arr = opts.Get("voiced").As<Napi::Int32Array>();
+      if (arr.ElementLength() != n_frames) {
+        Napi::RangeError::New(env, "voiced must match f0Hz length").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
       voiced.assign(arr.Data(), arr.Data() + arr.ElementLength());
       voiced_ptr = voiced.data();
     }
     if (opts.Has("voicedProb") && IsFloat32Array(opts.Get("voicedProb"))) {
       auto arr = opts.Get("voicedProb").As<Napi::Float32Array>();
+      if (arr.ElementLength() != n_frames) {
+        Napi::RangeError::New(env, "voicedProb must match f0Hz length")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
       voiced_prob.assign(arr.Data(), arr.Data() + arr.ElementLength());
       prob_ptr = voiced_prob.data();
     }

@@ -56,6 +56,7 @@ import { assertSamples } from './validation.js';
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
   private disposed = false;
+  private dataCache?: Float32Array;
 
   private constructor(native: InstanceType<typeof addon.Audio>) {
     this.native = native;
@@ -78,7 +79,12 @@ export class Audio {
   }
 
   getData(): Float32Array {
-    return this.native.getData();
+    // The native Audio handle is immutable. Cache its one JS snapshot so the
+    // feature/effect convenience methods below do not copy the full PCM buffer
+    // across N-API on every call.
+    const data = this.dataCache ?? this.native.getData();
+    this.dataCache = data;
+    return data;
   }
 
   getLength(): number {
@@ -98,6 +104,7 @@ export class Audio {
       return;
     }
     this.disposed = true;
+    this.dataCache = undefined;
     this.native.destroy();
   }
 
@@ -344,7 +351,7 @@ export class Audio {
     hopLength = 512,
     fmin = 65.0,
     fmax = 2093.0,
-    threshold = 0.3,
+    threshold = 0.1,
     fillNa = false,
   ): PitchResult {
     return addon.pitchYin(
@@ -364,7 +371,7 @@ export class Audio {
     hopLength = 512,
     fmin = 65.0,
     fmax = 2093.0,
-    threshold = 0.3,
+    threshold = 0.1,
     fillNa = false,
   ): PitchResult {
     return addon.pitchPyin(

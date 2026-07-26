@@ -29,6 +29,7 @@ import type {
   MidiCcBindOptions,
   PanLaw,
   PanMode,
+  ProjectMidiCcBinding,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   Sf2InstrumentConfig,
@@ -94,6 +95,7 @@ export class RealtimeEngine {
     this.native.seekPpq(ppq, renderFrame);
   }
 
+  /** Set a finite tempo in the range (0, 100000] BPM. */
   setTempo(bpm: number): void {
     this.native.setTempo(bpm);
   }
@@ -104,8 +106,8 @@ export class RealtimeEngine {
 
   /**
    * Installs a tempo map from ramp segments. Each segment needs a finite
-   * non-negative `startPpq` and a positive `bpm`; a non-zero `endBpm` ramps to
-   * that tempo. An empty array clears the map back to the single-tempo value.
+   * non-negative `startPpq` and a `bpm` in (0, 100000]; a non-zero `endBpm`
+   * uses the same range. An empty array clears the map to the single tempo.
    */
   setTempoSegments(segments: ReadonlyArray<ProjectTempoSegment>): void {
     this.native.setTempoSegments(segments);
@@ -175,6 +177,7 @@ export class RealtimeEngine {
     this.native.setLoopFromMarkers(startMarkerId, endMarkerId);
   }
 
+  /** Set a metronome config; click lengths are limited to one second. */
   setMetronome(config: EngineMetronomeConfig): void {
     this.native.setMetronome(config);
   }
@@ -477,6 +480,7 @@ export class RealtimeEngine {
     this.native.setCaptureSource(source);
   }
 
+  /** Positive values delay capture relative to the punch window. */
   setRecordOffsetSamples(offsetSamples: number): void {
     this.native.setRecordOffsetSamples(offsetSamples);
   }
@@ -699,6 +703,11 @@ export class RealtimeEngine {
       options.minValue ?? 0,
       options.maxValue ?? 1,
     );
+  }
+
+  /** Bind a 7/14-bit CC, RPN, or NRPN descriptor to a live parameter. */
+  bindMidiCcBinding(binding: ProjectMidiCcBinding): void {
+    this.native.bindMidiCcBinding(binding);
   }
 
   clearMidiCcBindings(): void {

@@ -164,7 +164,7 @@ describe('newly exposed Node functions', () => {
 
   it('phaseVocoder time-scales the signal', () => {
     const x = sine(0.5, 440);
-    const out = phaseVocoder(x, 2.0);
+    const out = phaseVocoder(x, SR, 2.0);
     expect(out.length).toBeGreaterThan(0);
     expect(out.length).toBeLessThan(x.length);
     expect(allFinite(out)).toBe(true);
@@ -195,10 +195,11 @@ describe('newly exposed Node functions', () => {
     expect(lra).toBeGreaterThanOrEqual(0);
   });
 
-  it('pitchYin fillNa controls the unvoiced value', () => {
+  it('pitchYin returns librosa-style estimates for unvoiced frames', () => {
     const silence = new Float32Array(SR); // fully unvoiced
     const nanRes = pitchYin(silence, SR, 2048, 512, 65, 2093, 0.3, false);
-    expect(nanRes.f0.some((v) => Number.isNaN(v))).toBe(true);
+    expect(nanRes.f0.every((v) => Number.isFinite(v))).toBe(true);
+    expect(nanRes.voicedFlag.every((v) => !v)).toBe(true);
 
     const filled = pitchYin(silence, SR, 2048, 512, 65, 2093, 0.3, true);
     expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
@@ -246,7 +247,7 @@ describe('newly exposed Node functions', () => {
 
   it('phaseVocoder rejects a non-number sampleRate', () => {
     const x = sine(0.1, 440);
-    expect(() => phaseVocoder(x, 2.0, 'bad' as unknown as number)).toThrow();
+    expect(() => phaseVocoder(x, 'bad' as unknown as number, 2.0)).toThrow();
   });
 
   it('analyzeTimbre exposes timbreOverTime', () => {

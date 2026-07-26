@@ -146,6 +146,9 @@ describe('Mixer runtime methods', () => {
     const postFader = mixer.meterTap('host', 'postFader');
     expect(Number.isFinite(preFader.peakDbL)).toBe(true);
     expect(Number.isFinite(postFader.peakDbL)).toBe(true);
+    const master = mixer.busMeter('master');
+    expect(master.channelCount).toBe(2);
+    expect(Number.isFinite(master.peakDb[0])).toBe(true);
   });
 
   it('stripMeter accepts an optional tap argument', () => {
@@ -318,9 +321,11 @@ describe('Mixer argument validation', () => {
     mixer.addVcaGroup('test-vca-group', -2, ['host', 'guest']);
     expect(mixer.vcaGroupCount()).toBe(before + 1);
     mixer.setVcaGroupGainDb('test-vca-group', -7);
+    mixer.setVcaGroupMembers('test-vca-group', ['guest']);
     const scene = JSON.parse(mixer.toSceneJson());
     const group = scene.vcaGroups.find((entry: { id: string }) => entry.id === 'test-vca-group');
     expect(group.gainDb).toBe(-7);
+    expect(group.members).toEqual(['guest']);
     mixer.removeVcaGroup('test-vca-group');
     expect(mixer.vcaGroupCount()).toBe(before);
     // members default to an empty group.

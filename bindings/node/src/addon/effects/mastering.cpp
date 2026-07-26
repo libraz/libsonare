@@ -47,6 +47,7 @@ void SetChainMetrics(Napi::Env env, Napi::Object out,
                      const sonare::mastering::api::ChainMetrics& metrics) {
   out.Set("outputTruePeakDbtp", Napi::Number::New(env, metrics.output_true_peak_dbtp));
   out.Set("outputLra", Napi::Number::New(env, metrics.output_lra));
+  out.Set("loudnessTargetLimited", Napi::Boolean::New(env, metrics.loudness_target_limited));
   Napi::Array reductions = Napi::Array::New(env, metrics.stage_gain_reductions.size());
   for (size_t i = 0; i < metrics.stage_gain_reductions.size(); ++i) {
     Napi::Object entry = Napi::Object::New(env);
@@ -107,6 +108,7 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -138,6 +140,7 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
   out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
+  out.Set("loudnessTargetLimited", Napi::Boolean::New(env, false));
   return out;
   SONARE_NODE_CATCH(env)
 }

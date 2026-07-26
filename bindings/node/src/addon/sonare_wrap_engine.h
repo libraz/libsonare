@@ -104,6 +104,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value ClearMidiInstrument(const Napi::CallbackInfo& info);
   Napi::Value MidiInstrumentCount(const Napi::CallbackInfo& info);
   Napi::Value BindMidiCc(const Napi::CallbackInfo& info);
+  Napi::Value BindMidiCcBinding(const Napi::CallbackInfo& info);
   Napi::Value ClearMidiCcBindings(const Napi::CallbackInfo& info);
   Napi::Value MidiCcBindingCount(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);

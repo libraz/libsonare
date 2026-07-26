@@ -246,8 +246,14 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err =
-      sonare_nnls_chroma(arr.Data(), arr.ElementLength(), sr, &out, &count, &n_frames);
+  const bool enable_blend =
+      info.Length() >= 3 && info[2].IsBoolean() ? info[2].As<Napi::Boolean>().Value() : true;
+  const float blend_weight =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().FloatValue() : 0.55f;
+  const int blend_n_fft =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 4096;
+  SonareError err = sonare_nnls_chroma_ex(arr.Data(), arr.ElementLength(), sr, enable_blend ? 1 : 0,
+                                          blend_weight, blend_n_fft, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   int n_chroma = n_frames > 0 ? static_cast<int>(count / static_cast<size_t>(n_frames)) : 12;
   Napi::Object result = Napi::Object::New(env);

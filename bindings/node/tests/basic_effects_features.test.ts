@@ -133,7 +133,15 @@ describe('effects', () => {
     expect(Number.isFinite(result.inputLufs)).toBe(true);
     expect(Number.isFinite(result.outputLufs)).toBe(true);
     expect(Number.isFinite(result.appliedGainDb)).toBe(true);
+    expect(typeof result.loudnessTargetLimited).toBe('boolean');
     expect(result.outputLufs).toBeCloseTo(-18.0, 1);
+
+    const ceilingLimited = mastering(quiet, SR, {
+      targetLufs: -2.0,
+      ceilingDb: -1.0,
+      truePeakOversample: 4,
+    });
+    expect(ceilingLimited.loudnessTargetLimited).toBe(true);
 
     const audio = Audio.fromBuffer(quiet, SR);
     try {
@@ -384,6 +392,19 @@ describe('features', () => {
     mfccCoeffs[7] = Number.POSITIVE_INFINITY;
     expect(() => mfccToMel(mfccCoeffs, 5, 4, 8)).toThrow(/NaN|Inf/);
     expect(() => mfccToAudio(mfccCoeffs, 5, 4, 8, SR, 256, 64, 0, 0, 2)).toThrow(/NaN|Inf/);
+  });
+
+  it('passes the forward lifter back to MFCC inversion', () => {
+    const lifted = new Float32Array(5 * 4);
+    for (let coefficient = 0; coefficient < 5; coefficient++) {
+      const lift = 1 + 11 * Math.sin((Math.PI * coefficient) / 22);
+      lifted.fill((0.2 + 0.1 * coefficient) * lift, coefficient * 4, coefficient * 4 + 4);
+    }
+    const restored = mfccToMel(lifted, 5, 4, 8, 22);
+    const untreated = mfccToMel(lifted, 5, 4, 8);
+    expect(
+      restored.power.some((value, index) => Math.abs(value - untreated.power[index]) > 1e-5),
+    ).toBe(true);
   });
 
   it('reconstructs CQT and VQT magnitudes with shape validation', () => {

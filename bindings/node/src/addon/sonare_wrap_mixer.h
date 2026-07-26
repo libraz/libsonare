@@ -72,6 +72,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
 
   // Metering.
   Napi::Value StripMeter(const Napi::CallbackInfo& info);
+  Napi::Value BusMeter(const Napi::CallbackInfo& info);
   Napi::Value MeterTap(const Napi::CallbackInfo& info);
   Napi::Value ReadGoniometerLatest(const Napi::CallbackInfo& info);
 
@@ -84,6 +85,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value BusCount(const Napi::CallbackInfo& info);
   Napi::Value AddVcaGroup(const Napi::CallbackInfo& info);
   Napi::Value SetVcaGroupGainDb(const Napi::CallbackInfo& info);
+  Napi::Value SetVcaGroupMembers(const Napi::CallbackInfo& info);
   Napi::Value RemoveVcaGroup(const Napi::CallbackInfo& info);
   Napi::Value VcaGroupCount(const Napi::CallbackInfo& info);
 

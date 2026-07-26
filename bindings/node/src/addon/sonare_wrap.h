@@ -68,6 +68,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   // Metering - basic / true-peak / clipping / dynamic range
   static Napi::Value MeteringPeakDb(const Napi::CallbackInfo& info);
   static Napi::Value MeteringRmsDb(const Napi::CallbackInfo& info);
+  static Napi::Value MeteringSilenceRatio(const Napi::CallbackInfo& info);
   static Napi::Value MeteringCrestFactorDb(const Napi::CallbackInfo& info);
   static Napi::Value MeteringDcOffset(const Napi::CallbackInfo& info);
   static Napi::Value MeteringTruePeakDb(const Napi::CallbackInfo& info);

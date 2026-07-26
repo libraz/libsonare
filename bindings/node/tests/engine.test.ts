@@ -52,8 +52,23 @@ describe('RealtimeEngine native binding', () => {
     // Invalid input is rejected (matching the C ABI and Python).
     expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 0 }])).toThrow();
     expect(() => engine.setTempoSegments([{ startPpq: Number.NaN, bpm: 120 }])).toThrow();
+    expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 100000.1 }])).toThrow();
+    expect(() => engine.setTempoSegments([{ startPpq: 0, bpm: 120, endBpm: 100000.1 }])).toThrow();
+    expect(() => engine.setTempo(100000)).not.toThrow();
+    expect(() => engine.setTempo(100000.1)).toThrow();
     expect(() =>
       engine.setTimeSignatureSegments([{ startPpq: 0, numerator: 0, denominator: 4 }]),
+    ).toThrow();
+  });
+
+  it('rejects hostile metronome click lengths', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setMetronome({ enabled: true, clickSamples: 2_000_000_000 })).toThrow();
+    expect(() =>
+      engine.setMetronome({ enabled: true, clickSamples: 0, clickSeconds: 2 }),
+    ).toThrow();
+    expect(() =>
+      engine.setMetronome({ enabled: true, clickSamples: 0, clickSeconds: Number.NaN }),
     ).toThrow();
   });
 
@@ -128,6 +143,8 @@ describe('RealtimeEngine native binding', () => {
     engine.setMetronome({ enabled: true, beatGain: 0.25, accentGain: 0.75, clickSamples: 16 });
     expect(engine.metronome().enabled).toBe(true);
     expect(engine.metronome().clickSamples).toBe(16);
+    engine.setMetronome({ enabled: true });
+    expect(engine.metronome().clickSamples).toBe(0);
     expect(engine.countInEndSample(0, 2)).toBe(288000);
     engine.setMetronome({ enabled: false });
     engine.addParameter({

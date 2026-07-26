@@ -6,6 +6,7 @@ import {
   fourierTempogram,
   lufs,
   masteringChain,
+  meteringSilenceRatio,
   momentaryLufs,
   nnlsChroma,
   onsetEnvelope,
@@ -70,6 +71,12 @@ describe('feature request-object compatibility', () => {
     expect(objectChroma.nChroma).toBe(chroma.nChroma);
     expect(objectChroma.nFrames).toBe(chroma.nFrames);
     expect(Array.from(objectChroma.data)).toEqual(Array.from(chroma.data));
+    const unblended = nnlsChroma(chromaInput, SR, {
+      enableStftBlend: false,
+      stftBlendWeight: 0,
+      stftBlendNFft: 2048,
+    });
+    expect(unblended.data.length).toBe(12 * unblended.nFrames);
 
     const loudnessInput = generateSine(440, 48000, 3.0);
     const positional = lufs(loudnessInput, 48000);
@@ -85,6 +92,12 @@ describe('feature request-object compatibility', () => {
       ebur128LoudnessRange(loudnessInput, 48000),
       10,
     );
+  });
+
+  it('exposes silence ratio metering', () => {
+    const samples = new Float32Array(2048);
+    samples.fill(1, 1024);
+    expect(meteringSilenceRatio(samples, SR, -45, 1024, 1024)).toBeCloseTo(0.5, 6);
   });
 });
 

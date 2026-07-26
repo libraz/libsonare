@@ -15,7 +15,7 @@ const char* SectionTypeName(SonareSectionType type) {
     case SONARE_SECTION_VERSE:
       return "Verse";
     case SONARE_SECTION_PRE_CHORUS:
-      return "PreChorus";
+      return "Pre-Chorus";
     case SONARE_SECTION_CHORUS:
       return "Chorus";
     case SONARE_SECTION_BRIDGE:
@@ -84,23 +84,10 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   }
 
   Napi::Object result = parsed.As<Napi::Object>();
-
-  Napi::Value beats_val = result.Get("beats");
-  if (beats_val.IsArray()) {
-    Napi::Array beats_arr = beats_val.As<Napi::Array>();
-    uint32_t n = beats_arr.Length();
-    auto beat_times = Napi::Float32Array::New(env, n);
-    for (uint32_t i = 0; i < n; ++i) {
-      Napi::Value beat = beats_arr.Get(i);
-      if (beat.IsObject()) {
-        Napi::Value t = beat.As<Napi::Object>().Get("time");
-        beat_times[i] =
-            t.IsNumber() ? static_cast<float>(t.As<Napi::Number>().DoubleValue()) : 0.0f;
-      }
-    }
-    result.Set("beatTimes", beat_times);
-  } else {
-    result.Set("beatTimes", Napi::Float32Array::New(env, 0));
+  Napi::Error enrich_error;
+  if (!sonare_node::EnrichFullAnalysisObject(env, result, &enrich_error)) {
+    enrich_error.ThrowAsJavaScriptException();
+    return env.Undefined();
   }
 
   return result;

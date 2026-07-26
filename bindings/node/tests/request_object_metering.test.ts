@@ -58,6 +58,12 @@ describe('metering request-object compatibility', () => {
     );
   });
 
+  it('rejects a negative clipping-region length before unsigned conversion', () => {
+    expect(() => meteringDetectClipping({ samples, sampleRate, minRegionSamples: -1 })).toThrow(
+      RangeError,
+    );
+  });
+
   it('preserves all stereo calls', () => {
     expect(meteringStereoCorrelation({ left, right, sampleRate })).toEqual(
       meteringStereoCorrelation(left, right, sampleRate),

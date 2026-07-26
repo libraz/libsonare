@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "analysis/music_analyzer.h"
@@ -239,8 +240,35 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
 
   int sample_rate = node_arg_int(info, 1, 22050);
-
-  return FullAnalysisJsonToObject(env, data, length, sample_rate);
+  SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+  const bool has_options = info.Length() >= 3 && info[2].IsObject();
+  if (has_options) {
+    const Napi::Object object = info[2].As<Napi::Object>();
+    auto number = [&](const char* key, auto& field) {
+      const Napi::Value value = object.Get(key);
+      if (value.IsNumber())
+        field = static_cast<std::decay_t<decltype(field)>>(value.As<Napi::Number>().DoubleValue());
+    };
+    auto boolean = [&](const char* key, int& field) {
+      const Napi::Value value = object.Get(key);
+      if (value.IsBoolean()) field = value.As<Napi::Boolean>().Value() ? 1 : 0;
+    };
+    number("nFft", options.n_fft);
+    number("hopLength", options.hop_length);
+    number("bpmMin", options.bpm_min);
+    number("bpmMax", options.bpm_max);
+    number("startBpm", options.start_bpm);
+    boolean("useTriadsOnly", options.use_triads_only);
+    boolean("useHpss", options.use_hpss);
+    number("chromaHighpassHz", options.chroma_highpass_hz);
+    boolean("useBassWeighted", options.use_bass_weighted);
+    number("chromaHopMultiplier", options.chroma_hop_multiplier);
+    boolean("useChordHmm", options.use_chord_hmm);
+    boolean("useChordKeyContext", options.use_chord_key_context);
+    number("chordHmmBeamWidth", options.chord_hmm_beam_width);
+    boolean("detectChordInversions", options.detect_chord_inversions);
+  }
+  return FullAnalysisJsonToObject(env, data, length, sample_rate, has_options ? &options : nullptr);
 }
 
 namespace {
@@ -723,6 +751,8 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
     std::string quality = ChordQualityName(analysis.chords[i].quality);
     chord.Set("root", Napi::String::New(env, root));
     chord.Set("bass", Napi::String::New(env, bass));
+    chord.Set("rootName", Napi::String::New(env, root));
+    chord.Set("bassName", Napi::String::New(env, bass));
     chord.Set("quality", Napi::String::New(env, quality));
     chord.Set("start", Napi::Number::New(env, analysis.chords[i].start));
     chord.Set("end", Napi::Number::New(env, analysis.chords[i].end));

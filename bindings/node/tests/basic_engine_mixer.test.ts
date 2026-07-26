@@ -25,7 +25,16 @@ describe('RealtimeEngine', () => {
     try {
       expect(engine.midiCcBindingCount()).toBe(0);
       engine.bindMidiCc(0, 74, 7, { minValue: -60, maxValue: 0 });
-      expect(engine.midiCcBindingCount()).toBe(1);
+      engine.bindMidiCcBinding({
+        ccNumber: 1,
+        ccLsbNumber: 33,
+        channel: 0,
+        kind: 1,
+        paramId: 8,
+        minValue: 0,
+        maxValue: 1,
+      });
+      expect(engine.midiCcBindingCount()).toBe(2);
       engine.clearMidiCcBindings();
       expect(engine.midiCcBindingCount()).toBe(0);
     } finally {

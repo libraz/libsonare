@@ -310,9 +310,10 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
 }
 
 Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t length,
-                                     int sample_rate) {
+                                     int sample_rate, const SonareMusicAnalyzeOptions* options) {
   char* json_str = nullptr;
-  SonareError err = sonare_analyze_json(data, length, sample_rate, &json_str);
+  SonareError err = options ? sonare_analyze_json_ex(data, length, sample_rate, options, &json_str)
+                            : sonare_analyze_json(data, length, sample_rate, &json_str);
   if (err != SONARE_OK) {
     Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
     return env.Undefined();

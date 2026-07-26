@@ -235,8 +235,9 @@ Napi::Value SonareWrap::ChromaFn(const Napi::CallbackInfo& info) {
 namespace {
 
 using ChromaFn = SonareError (*)(const float*, size_t, int, int, int, SonareChromaResult*);
+using ChromaExFn = SonareError (*)(const float*, size_t, int, int, int, int, SonareChromaResult*);
 
-Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn) {
+Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn, ChromaExFn ex_fn = nullptr) {
   Napi::Env env = info.Env();
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -245,10 +246,13 @@ Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn) {
   const int sr = node_arg_int(info, 1, 22050);
   const int hop_length = node_arg_int(info, 2, 512);
   const int n_chroma = node_arg_int(info, 3, 12);
+  const int bins_per_octave = node_arg_int(info, 4, 36);
 
   SonareChromaResult result{};
   const SonareError err =
-      fn(typed.Data(), typed.ElementLength(), sr, hop_length, n_chroma, &result);
+      ex_fn != nullptr ? ex_fn(typed.Data(), typed.ElementLength(), sr, hop_length, n_chroma,
+                               bins_per_octave, &result)
+                       : fn(typed.Data(), typed.ElementLength(), sr, hop_length, n_chroma, &result);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -278,11 +282,11 @@ Napi::Value ChromaVariant(const Napi::CallbackInfo& info, ChromaFn fn) {
 }  // namespace
 
 Napi::Value SonareWrap::ChromaCens(const Napi::CallbackInfo& info) {
-  return ChromaVariant(info, sonare_chroma_cens);
+  return ChromaVariant(info, nullptr, sonare_chroma_cens_ex);
 }
 
 Napi::Value SonareWrap::ChromaCqt(const Napi::CallbackInfo& info) {
-  return ChromaVariant(info, sonare_chroma_cqt);
+  return ChromaVariant(info, nullptr, sonare_chroma_cqt_ex);
 }
 
 Napi::Value SonareWrap::BassChroma(const Napi::CallbackInfo& info) {

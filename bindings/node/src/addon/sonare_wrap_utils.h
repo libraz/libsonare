@@ -119,7 +119,8 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
 ///
 /// @return The enriched JS object or env.Undefined() (exception already thrown).
 Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t length,
-                                     int sample_rate);
+                                     int sample_rate,
+                                     const SonareMusicAnalyzeOptions* options = nullptr);
 
 /// @brief Convert a JS object of {name -> number|boolean} into mastering API params.
 std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& object);

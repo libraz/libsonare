@@ -13,7 +13,7 @@ export function flattenChainConfig(config: MasteringChainConfig): Record<string,
       if (typeof value === 'number' || typeof value === 'boolean') {
         out[path] = value;
       } else if (value !== null && typeof value === 'object') {
-        walk(value, path);
+        walk(value as MasteringChainSection, path);
       }
     }
   };

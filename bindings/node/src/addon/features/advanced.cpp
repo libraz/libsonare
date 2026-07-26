@@ -127,7 +127,7 @@ Napi::Value SonareWrap::Vqt(const Napi::CallbackInfo& info) {
   const int bins_per_octave =
       info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 12;
   const float gamma =
-      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : 0.0f;
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().FloatValue() : -1.0f;
 
   SonareCqtResult result{};
   SonareError err = sonare_vqt(typed.Data(), typed.ElementLength(), sr, hop_length, fmin, n_bins,
@@ -197,7 +197,7 @@ Napi::Value SonareWrap::VqtToAudio(const Napi::CallbackInfo& info) {
   const int bins_per_octave =
       info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 12;
   const float gamma =
-      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.0f;
+      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : -1.0f;
   const int n_iter =
       info.Length() >= 9 && info[8].IsNumber() ? info[8].As<Napi::Number>().Int32Value() : 32;
   float* output = nullptr;
@@ -345,8 +345,10 @@ Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {
   if (!ValidateFiniteMatrix(env, "mfccToMel", typed)) return env.Undefined();
   const int n_mels =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 128;
+  const float lifter =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().FloatValue() : 0.0f;
 
-  std::vector<float> mel = sonare::mfcc_to_mel(typed.Data(), n_mfcc, n_frames, n_mels);
+  std::vector<float> mel = sonare::mfcc_to_mel(typed.Data(), n_mfcc, n_frames, n_mels, lifter);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("nMels", Napi::Number::New(env, n_mels));
@@ -394,6 +396,8 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
       info.Length() >= 10 && info[9].IsNumber() ? info[9].As<Napi::Number>().Int32Value() : 32;
   const bool htk =
       info.Length() >= 11 && info[10].IsBoolean() ? info[10].As<Napi::Boolean>().Value() : false;
+  const float lifter =
+      info.Length() >= 12 && info[11].IsNumber() ? info[11].As<Napi::Number>().FloatValue() : 0.0f;
 
   sonare::MelConfig config;
   config.n_fft = n_fft;
@@ -403,7 +407,8 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   config.fmax = fmax;
   config.htk = htk;
 
-  sonare::Audio result = sonare::mfcc_to_audio(typed.Data(), n_mfcc, n_frames, config, n_iter, sr);
+  sonare::Audio result =
+      sonare::mfcc_to_audio(typed.Data(), n_mfcc, n_frames, config, n_iter, sr, lifter);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)

@@ -18,6 +18,7 @@ import type {
 export interface NormalizeRequest {
   samples: Float32Array;
   sampleRate?: number;
+  /** Finite peak target at or below 0 dBFS. Default 0. */
   targetDb?: number;
 }
 
@@ -500,6 +501,8 @@ export interface MasteringInsertParamInfo {
   id: number;
   /** Whether the param can be changed live from the audio thread. */
   rtSafe: boolean;
+  /** Physical unit when the parameter is not unitless. */
+  unit?: string;
 }
 
 /**

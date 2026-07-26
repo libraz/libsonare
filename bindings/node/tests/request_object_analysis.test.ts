@@ -35,6 +35,21 @@ describe('analysis request-object compatibility', () => {
     expect(analyze({ samples, sampleRate })).toEqual(analyze(samples, sampleRate));
   });
 
+  it('accepts complete analyzer options', () => {
+    const result = analyze({
+      samples,
+      sampleRate,
+      bpmMin: 30,
+      bpmMax: 90,
+      startBpm: 55,
+      useHpss: false,
+      useChordHmm: true,
+      detectChordInversions: true,
+    });
+    expect(result.bpm).toBeGreaterThanOrEqual(30);
+    expect(result.bpm).toBeLessThanOrEqual(90);
+  });
+
   it('preserves key options', () => {
     const options = { useHpss: true, highPassHz: 80 };
     expect(detectKey({ samples, sampleRate, ...options })).toEqual(

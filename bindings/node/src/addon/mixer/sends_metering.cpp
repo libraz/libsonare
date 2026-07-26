@@ -137,6 +137,22 @@ Napi::Value MixerWrap::StripMeter(const Napi::CallbackInfo& info) {
   return MeterSnapshotToObject(env, snapshot);
 }
 
+Napi::Value MixerWrap::BusMeter(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (busId: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareMixMeterSnapshot snapshot{};
+  const std::string bus_id = info[0].As<Napi::String>().Utf8Value();
+  const SonareError err = sonare_mixer_bus_meter(mixer_, bus_id.c_str(), &snapshot);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "failed to read bus meter: ");
+    return env.Undefined();
+  }
+  return MeterSnapshotToObject(env, snapshot);
+}
+
 Napi::Value MixerWrap::MeterTap(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !info[1].IsNumber()) {

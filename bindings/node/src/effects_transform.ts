@@ -59,6 +59,19 @@ export interface PitchCorrectTimevaryingRequest extends EffectSamplesRequest, Pi
 export interface NoteStretchRequest extends EffectSamplesRequest, NoteStretchOptions {}
 export interface NoteMoveRequest extends EffectSamplesRequest, NoteMoveOptions {}
 
+function assertPitchTrackLengths(
+  f0Hz: Float32Array,
+  voiced?: Int32Array,
+  voicedProb?: Float32Array,
+): void {
+  if (voiced !== undefined && voiced.length !== f0Hz.length) {
+    throw new RangeError('voiced must have the same length as f0Hz');
+  }
+  if (voicedProb !== undefined && voicedProb.length !== f0Hz.length) {
+    throw new RangeError('voicedProb must have the same length as f0Hz');
+  }
+}
+
 // -- Effects --
 
 export function hpss(request: HpssRequest): HpssResult;
@@ -197,6 +210,12 @@ export function pitchShift(
   return addon.pitchShift(request.samples, request.sampleRate ?? 22050, request.semitones);
 }
 
+/**
+ * Apply one constant, immediate transpose from `currentMidi` to `targetMidi`.
+ *
+ * The result has exactly the input length. Use {@link pitchCorrectToMidiTimevarying}
+ * for a caller-supplied pitch contour and retune glide.
+ */
 export function pitchCorrectToMidi(request: PitchCorrectToMidiRequest): Float32Array;
 export function pitchCorrectToMidi(
   samples: Float32Array,
@@ -227,7 +246,8 @@ export function pitchCorrectToMidi(
  * the caller-supplied per-frame `f0Hz` contour and retunes every voiced frame
  * toward `targetMidi`, so vibrato/drift in the source is tracked rather than
  * flattened. `voiced` (non-zero = voiced) and `voicedProb` ([0,1]) are optional;
- * omitting them treats every frame as voiced.
+ * omitting them treats every frame as voiced. An `f0Hz` NaN is accepted only
+ * when the corresponding `voiced` entry is zero, matching pYIN output.
  */
 export function pitchCorrectToMidiTimevarying(
   request: PitchCorrectToMidiTimevaryingRequest,
@@ -262,6 +282,7 @@ export function pitchCorrectToMidiTimevarying(
           voicedProb,
         }
       : samples;
+  assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
   return addon.pitchCorrectToMidiTimevarying(
     request.samples,
     request.sampleRate ?? 22050,
@@ -282,6 +303,7 @@ export function pitchCorrectToMidiTimevarying(
  * between a fixed-MIDI target (`'midi'`, default) and scale quantisation
  * (`'scale'`), and the retune knobs (`retuneAmount`, `maxCorrectionSemitones`,
  * `retuneSpeedMs`, `vibratoThresholdCents`) shape natural-vs-robotic correction.
+ * An `f0Hz` NaN is accepted only for a frame marked unvoiced.
  */
 export function pitchCorrectTimevarying(request: PitchCorrectTimevaryingRequest): Float32Array;
 export function pitchCorrectTimevarying(
@@ -309,6 +331,7 @@ export function pitchCorrectTimevarying(
     hopLength: requestHopLength,
     ...requestOptions
   } = request;
+  assertPitchTrackLengths(requestF0Hz, requestOptions.voiced, requestOptions.voicedProb);
   return addon.pitchCorrectTimevarying(
     input,
     requestSampleRate ?? 22050,
@@ -334,7 +357,7 @@ export function noteStretch(
     request.samples,
     request.sampleRate ?? 22050,
     request.onsetSample ?? 0,
-    request.offsetSample ?? 0,
+    request.offsetSample ?? request.samples.length,
     request.stretchRatio ?? 1.0,
   );
 }
@@ -356,7 +379,7 @@ export function noteMove(
     request.samples,
     request.sampleRate ?? 22050,
     request.onsetSample ?? 0,
-    request.offsetSample ?? 0,
+    request.offsetSample ?? request.samples.length,
     request.targetOnsetSample ?? 0,
   );
 }

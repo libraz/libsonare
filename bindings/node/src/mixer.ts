@@ -121,7 +121,10 @@ export class Mixer {
     return new Mixer(new addon.Mixer(json, sampleRate, blockSize));
   }
 
-  /** Rebuild and compile the routing graph from the current scene topology. */
+  /**
+   * Rebuild and compile the routing graph without resetting its absolute
+   * automation sample position or queued strip automation.
+   */
   compile(): void {
     this.native.compile();
   }
@@ -243,6 +246,11 @@ export class Mixer {
   /** Set an existing VCA group's gain in dB. */
   setVcaGroupGainDb(id: string, gainDb: number): void {
     this.native.setVcaGroupGainDb(id, gainDb);
+  }
+
+  /** Replace an existing VCA group's strip membership. */
+  setVcaGroupMembers(id: string, members: string[]): void {
+    this.native.setVcaGroupMembers(id, members);
   }
 
   /** Remove a VCA group by id. */
@@ -372,6 +380,11 @@ export class Mixer {
       return this.native.stripMeter(strip);
     }
     return this.native.meterTap(strip, meterTapValue(tap));
+  }
+
+  /** Read the post-insert meter for a compiled bus, including the master bus. */
+  busMeter(busId: string): MixMeterSnapshot {
+    return this.native.busMeter(busId);
   }
 
   /** Read a strip's meter snapshot at the given tap point (`'preFader'` | `'postFader'`). */

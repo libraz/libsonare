@@ -34,6 +34,7 @@ import {
   masteringStereoAnalyze,
   masteringStreamingPreview,
   onsetStrengthMulti,
+  padCenter,
   pcen,
   peakPick,
   plp,
@@ -221,6 +222,10 @@ describe('standalone functions', () => {
 
     const chords = detectChords(tone, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
     expect(Array.isArray(chords.chords)).toBe(true);
+    for (const chord of chords.chords) {
+      expect(chord.rootName).toBe(chord.root);
+      expect(chord.bassName).toBe(chord.bass);
+    }
 
     // Roman-numeral labels: one per detected chord, all non-empty strings.
     const romans = chordFunctionalAnalysis(tone, 0, 0, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
@@ -348,6 +353,8 @@ describe('standalone functions', () => {
     expect(framed.nFrames).toBe(3);
     expect(Array.from(framed.frames)).toEqual([1, 2, 2, 3, 3, 4]);
     expect(Array.from(fixLength(new Float32Array([1, 2]), 4, -1))).toEqual([1, 2, -1, -1]);
+    expect(() => padCenter(new Float32Array([1, 2]), -1)).toThrow(RangeError);
+    expect(() => fixLength(new Float32Array([1, 2]), -1)).toThrow(RangeError);
     expect(Array.from(fixFrames(new Int32Array([2, 4]), 0, 5, true))).toEqual([0, 2, 4, 5]);
     // Matches librosa.util.peak_pick exactly (index 0 is a peak under its
     // first-frame rule: x[0] >= max/mean of the leading window).

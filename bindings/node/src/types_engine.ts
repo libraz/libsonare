@@ -21,7 +21,9 @@ export type EngineTelemetryError =
   | 13
   | 14
   | 15
-  | 16;
+  | 16
+  | 17
+  | 18;
 
 export interface EngineTelemetry {
   type: EngineTelemetryType;
@@ -98,7 +100,7 @@ export interface EngineExternalMidiEvent {
  * Per-plane meter telemetry record drained from
  * {@link RealtimeEngine.drainMeterTelemetryWide} for a surround target. The
  * `peakDb`/`rmsDb`/`truePeakDb` arrays carry `channelCount` planes in canonical
- * WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Lss Rss Ls Rs).
+ * WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss Rss).
  */
 export interface EngineMeterTelemetryWide {
   /** Meter tap target id (e.g. master/bus identifier). */
@@ -256,8 +258,9 @@ export interface EngineMetronomeConfig {
   enabled: boolean;
   beatGain?: number;
   accentGain?: number;
+  /** Explicit click length in samples (0..384000). Default 0 selects the sample-rate-derived duration. */
   clickSamples?: number;
-  /** Click duration in seconds; used when clickSamples is 0 to derive the click length from the sample rate. */
+  /** Click duration in seconds (0..1); used when clickSamples is 0. */
   clickSeconds?: number;
 }
 
@@ -280,7 +283,7 @@ export interface EngineClip {
 /**
  * Speaker bed layout for a bus or source, mirroring the C enum
  * `SonareChannelLayout`: `0` = mono, `1` = stereo, `2` = 5.1 (L R C LFE Ls Rs),
- * `3` = 7.1 (L R C LFE Lss Rss Ls Rs).
+ * `3` = 7.1 (L R C LFE Ls Rs Lss Rss).
  */
 export type ChannelLayout = 0 | 1 | 2 | 3;
 

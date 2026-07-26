@@ -97,11 +97,15 @@ Napi::Value SonareWrap::PadCenter(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   float pad_value =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
+  const int64_t target_size = info[1].As<Napi::Number>().Int64Value();
+  if (target_size < 0) {
+    Napi::RangeError::New(env, "size must be non-negative").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err =
-      sonare_pad_center(arr.Data(), arr.ElementLength(), info[1].As<Napi::Number>().Int64Value(),
-                        pad_value, &out, &count);
+  SonareError err = sonare_pad_center(arr.Data(), arr.ElementLength(),
+                                      static_cast<size_t>(target_size), pad_value, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
 }
@@ -115,11 +119,15 @@ Napi::Value SonareWrap::FixLength(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   float pad_value =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : 0.0f;
+  const int64_t target_size = info[1].As<Napi::Number>().Int64Value();
+  if (target_size < 0) {
+    Napi::RangeError::New(env, "size must be non-negative").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
-  SonareError err =
-      sonare_fix_length(arr.Data(), arr.ElementLength(), info[1].As<Napi::Number>().Int64Value(),
-                        pad_value, &out, &count);
+  SonareError err = sonare_fix_length(arr.Data(), arr.ElementLength(),
+                                      static_cast<size_t>(target_size), pad_value, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
 }

@@ -130,6 +130,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::WaveformPeakPyramid, "waveformPeakPyramid"));
   exports.Set("meteringRmsDb",
               Napi::Function::New(env, &SonareWrap::MeteringRmsDb, "meteringRmsDb"));
+  exports.Set("meteringSilenceRatio",
+              Napi::Function::New(env, &SonareWrap::MeteringSilenceRatio, "meteringSilenceRatio"));
   exports.Set("meteringCrestFactorDb", Napi::Function::New(env, &SonareWrap::MeteringCrestFactorDb,
                                                            "meteringCrestFactorDb"));
   exports.Set("meteringDcOffset",

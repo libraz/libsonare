@@ -235,6 +235,7 @@ describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
 
       const audio = Audio.fromFile(m4aPath);
       const samples = audio.getData();
+      expect(audio.getData()).toBe(samples);
       const sr = audio.getSampleRate();
       expect(sr).toBeGreaterThan(0);
       expect(samples).toBeInstanceOf(Float32Array);

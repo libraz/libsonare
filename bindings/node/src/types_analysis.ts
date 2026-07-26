@@ -503,6 +503,10 @@ export interface TimbreResult {
 export interface Chord {
   root: string;
   bass: string;
+  /** Canonical core spelling; stable across all language bindings. */
+  rootName: string;
+  /** Canonical core spelling; stable across all language bindings. */
+  bassName: string;
   quality:
     | 'major'
     | 'minor'
