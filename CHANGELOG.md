@@ -1,5 +1,63 @@
 # Changelog
 
+## v1.5.5 (2026-07-27)
+
+This release corrects a set of DSP and analysis defects across the surround, decode, mastering, metering and realtime paths, brings the pitch, constant-Q and rhythm transforms back in line with librosa, and exposes the core capabilities that had no binding entry point. Several analysis defaults and one JavaScript positional signature change with it — see Behavioural changes before upgrading.
+
+### New surfaces
+
+- Configuration-taking variants of the one-shot analysis entry points are available on every surface: `sonare_analyze_json_ex` (seeded by `sonare_music_analyze_options_default`), `sonare_chroma_cens_ex`, `sonare_chroma_cqt_ex`, `sonare_nnls_chroma_ex`, `sonare_mfcc_to_mel_ex` and `sonare_mfcc_to_audio_ex2` make the music-analyzer options, chroma bins-per-octave, NNLS STFT blending and the forward MFCC lifter configurable. The existing entry points forward with their previous defaults, so current calls are unaffected. Node and WASM expose them as additional request fields on `analyze`, `chromaCens`, `chromaCqt`, `nnlsChroma`, `mfccToMel` and `mfccToAudio`; Python takes them as keyword arguments.
+- Silence-ratio metering is exposed as `sonare_metering_silence_ratio`, mirrored as `meteringSilenceRatio` (Node, WASM) and `metering_silence_ratio` (Python).
+- The mixer gained compiled-bus metering and VCA group membership replacement — `sonare_mixer_bus_meter` and `sonare_mixer_set_vca_group_members` — mirrored as `busMeter` / `setVcaGroupMembers` (Node, WASM) and `bus_meter` / `set_vca_group_members` (Python).
+- The realtime engine accepts a full MIDI CC binding descriptor covering 7-bit, 14-bit, RPN and NRPN controllers through `sonare_engine_bind_midi_cc_binding`, mirrored as `bindMidiCcBinding` (Node, WASM) and `bind_midi_cc_binding` (Python).
+- Every LUFS result reports the EBU R128 maximum momentary and maximum short-term loudness alongside the final windows, and mastering results flag `loudness_target_limited` when the true-peak ceiling prevented reaching the requested loudness target, across the C ABI, Node, Python and WASM.
+- The analysis result carries the core's canonical chord root and bass names on every surface, and Node types the mastering chain configuration concretely instead of a generic nested section.
+- The Python CLI gained `pitch-correct-timevarying`, `note-move` and `scale-quantize` subcommands.
+
+### Analysis compatibility
+
+- YIN and pYIN follow librosa's difference function, threshold sweep, trough selection and center padding. Voicing is reported from the threshold crossing while the global-minimum period is still returned, so an unvoiced frame keeps a usable f0 estimate instead of a placeholder.
+- `tempogram` uses librosa's zero-ended linear ramp padding and `fourier_tempogram` zero padding, and the centered onset frame offset is taken by floor division.
+- `pseudo_cqt` applies its per-bin length scaling internally, so `hybrid_cqt` no longer applies that scaling to the pseudo half a second time. `chroma_cqt` gates on absolute CQT magnitude rather than a fraction of the per-frame maximum.
+- VQT selects librosa's ERB-derived automatic gamma when `gamma` is negative or NaN.
+- Section analysis runs at a fixed 22.05 kHz and merges short sections into their neighbours, so results no longer shift with the source sample rate. Meter detection normalizes beat strengths and derives the audio-backed time signature from beat-local low-frequency energy, so an onset envelope above unity no longer changes the reported time signature.
+- Chord spelling prefers parallel-mode and flat Roman numerals over enharmonic sharps, and the final beat-synchronous chord ends at the chroma duration.
+
+### Bug fixes
+
+- The 7.1 speaker-role table is reordered to `L R C LFE Ls Rs Lss Rss`, matching the `WAVE_FORMAT_EXTENSIBLE` `0x63F` mask the writer already emitted. The side and back pairs were swapped in the plane roles, the downmix folds, the surround panner and the BS.1770 surround weighting.
+- FFmpeg decoding configures the resampler from the first decoded frame and rebuilds it when a stream renegotiates rate, format or layout, flushing the resampler delay first. Implicit HE-AAC streams advertise provisional stream parameters and previously decoded at half their real sample rate. `audio_channel_count` now reports the source channel count for containers only FFmpeg can open, instead of returning zero.
+- True-peak interpolation is a centered convolution — the polyphase taps were in reverse order — phase 0 is included in the search, and the sample peak is folded into the reported value. The limiter re-applies its ceiling after decimation so the output ceiling stays a hard invariant, and an unsupported oversample factor is rejected when the chain or a flat parameter set is built rather than silently rounded down at measurement time.
+- Linkwitz-Riley allpass compensation is applied once per split instead of once per duplicated section, removing the recombination notches around the crossovers of three-way and wider splits.
+- The stereo imager and the multiband imager use a signal-independent constant-power width gain in place of a per-sample mid/side energy ratio, so widening no longer injects intermodulation products; a non-finite width is rejected.
+- The air band is rebuilt around a 4x oversampled band-limited waveshaper with a control-rate interpolated shelf and an RMS-bounded harmonic level, so its added harmonics no longer track the sample rate and its aliases stay suppressed. The exciter's even-harmonic branch is a true even function with a per-channel DC blocker, and the mono maker collapses low frequencies through a crossover with a `frequencyHz` parameter.
+- Spectrum magnitudes are scaled to one-sided amplitude, so a full-scale sine reads 0 dBFS regardless of FFT size, and the dB output is clamped to the shared floor. The scope decimation bucket boundary is computed beyond 32-bit `size_t`, so a long buffer cannot wrap.
+- MIDI editing no longer discards user data: MIDI-FX baking processes bounded chunks instead of stopping past a fixed event count, same-timestamp events keep a canonical order, the exported clip window is validated, and a truncated SMF track is reported as truncated instead of ok.
+- `pitchCorrectToMidi` applies the full requested transposition. It previously applied only a fraction of it and varied with the sample rate; it now routes through the core constant-transpose path, which preserves the input length.
+- Realtime dispatch is ordered and bounded: clip, loop and pending MIDI-FX events are merged by render frame, so an arpeggiator or chord step can no longer leapfrog an earlier event from another clip; a quantized or humanized note-off reuses its note-on's frame shift and stays strictly after it, so a short note cannot collapse to off-before-on; MIDI clock stops scanning a block once its budget is reached; and both the clock and metronome overflows surface as telemetry error codes. Tempo values above 100000 BPM are rejected on the public control plane.
+- The metronome renders after metering, scope capture and output capture, only while the transport is playing, and is disabled during offline render, so the cue click stays out of recorded program audio.
+- Smoothed parameter and insert-automation slots keep their identity after settling and reset to their first value when newly claimed, so retargeting no longer glides from an unrelated parameter's last value. The record offset is applied to punch boundaries and the capture sink with saturating arithmetic, and the master scope is captured once per host block so an automation split no longer changes spectrum resolution.
+- A moved note region fades its tail down instead of reapplying the fade-in curve, which left a dropout and a click at the note offset. Adjacent spectral-edit regions no longer share a boundary frame, which made their combined result depend on application order, and the streaming phase vocoder keeps the two retained frames its interpolation reads.
+- Arguments that previously produced malformed output are rejected: odd or zero FFT sizes, non-positive peak-pick post windows, a single-frequency `wavelet_lengths` call with no explicit Q, a positive normalize target while clipping is enabled, negative pad, fix-length and clipping-region sizes, and a pitch track whose voiced array length does not match `f0Hz`. An empty audio slice and an empty resample result keep their requested sample rate instead of returning a rate-zero `Audio`.
+- The WASM path routes MIDI-FX JSON through the shared parser and streaming-chain configuration through the canonical flattener, and validates non-finite samples, negative sizes, out-of-range scale masks, metronome settings and clipping-region lengths in the native layer, so it no longer bypasses the C-ABI guards. `Audio.fromBuffer` copies and validates its buffer.
+- The compiled mixing graph applies the bus input trim, polarity and stereo width, keeps the absolute automation position across a recompile, and carries surround pan into the live strip. A non-monotonic automation timestamp is distinguishable from an exhausted lane.
+
+### Performance
+
+- CQT and VQT build a row-compressed sparse kernel by cumulative-L1 pruning instead of dense matrices, with explicit bounds on kernel elements, FFT length and inverse-transform inputs.
+- WAV decoding runs in bounded chunks and downmixes to mono in the same pass, dropping the full interleaved intermediate buffer. The IIR filterbank streams framed RMS through a bounded ring, NNLS solves all right-hand sides together with a projected FISTA that reuses `AtA` / `AtB`, and the inverse DCT writes into a caller-owned buffer.
+- The Node `Audio` PCM snapshot is cached, so the convenience accessors stop copying the whole buffer across N-API on every call, and the Python decode path avoids an intermediate copy of encoded buffers.
+- The compressor's program-dependent release coefficients are precomputed and the limiter's adaptive release refreshes at a control interval. Lane faders and bus gains are smoothed in the linear domain, only the delay lanes the host uses are prepared, and the meter's K-weighted energy history is stored as float while its running sums stay double.
+
+### Behavioural changes
+
+- The `phaseVocoder` positional signature on Node and WASM is `(samples, sampleRate, rate, nFft, hopLength)`; `sampleRate` and `rate` were previously the other way round. Both are numbers, so an existing positional call still type-checks and will silently pass the wrong values. Pass a request object, or swap the two arguments.
+- The 7.1 plane order changed to `L R C LFE Ls Rs Lss Rss`. Callers that compensated for the previous swapped side/back order must drop that compensation.
+- Analysis defaults changed to match librosa: the YIN and pYIN voicing threshold is `0.1` (was `0.3`), VQT `gamma` defaults to `-1.0` for the automatic ERB-derived value (was `0.0`, standard CQT), and `chroma_cqt` analyses 252 CQT bins at 36 bins per octave (was 84 bins at 12). `chroma_cqt`'s `threshold` is now an absolute magnitude rather than a fraction of the per-frame maximum, so an existing non-zero value means something different.
+- Other defaults moved to match the core: the peak-pick trailing windows `postMax` and `postAvg` default to `1` (was `0`, which suppressed the trailing comparison), note-edit offsets default to the input length, and the metronome click length is derived from the sample rate when left at zero.
+- Node and WASM reject inputs they previously accepted, matching the C ABI: negative pad, fix-length and clipping-region sizes, non-finite samples, out-of-range scale masks, and pitch tracks whose voiced array length does not match `f0Hz`.
+- The Node pre-chorus section label is spelled `Pre-Chorus` instead of `PreChorus`, so consumers matching on the previous spelling need updating.
+
 ## v1.5.4 (2026-07-22)
 
 This is a follow-up release to v1.5.3, adding a musical-beat playhead and configurable undo history to the realtime and project surfaces, a physically motivated air-absorption term for large-hall reverberation, and a round of realtime-safety, voice-changer and CLI/binding correctness fixes.
@@ -23,6 +81,8 @@ This is a follow-up release to v1.5.3, adding a musical-beat playhead and config
 - Arrangement editing restores split-MIDI order exactly and skips redundant store clones on undo; the composition assistant budgets its iterations by consumed count rather than slot count.
 - Direct-call bindings require an explicit sample rate and validate WASM inputs, and the Python CLI corrects its output handling and surfaces project diagnostics.
 - Streaming computes the per-frame smoothed chord once per frame.
+
+## v1.5.3 (2026-07-21)
 
 This release is a cross-surface input-validation and realtime-safety hardening pass over the offline, streaming, CLI and macOS-host paths, rounded out by a request-object call form for the one-shot JS facades and a handful of additive analysis, engine and mastering surfaces.
 
