@@ -148,6 +148,8 @@ print(f"{result.input_lufs:.1f} LUFS → {result.output_lufs:.1f} LUFS")
 
 The `sonare` command-line tool ships with the Python package
 (`sonare analyze song.mp3`, `sonare mastering …`, `sonare project …`).
+The separately released native CLI is named `sonare-cli`, so both commands can
+coexist on `PATH` without changing their behavior.
 
 ### C++
 

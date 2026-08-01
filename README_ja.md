@@ -145,6 +145,8 @@ print(f"{result.input_lufs:.1f} LUFS → {result.output_lufs:.1f} LUFS")
 
 `sonare` コマンドは Python パッケージに同梱されています
 （`sonare analyze song.mp3`、`sonare mastering …`、`sonare project …` など）。
+別配布の native CLI は `sonare-cli` なので、両者を `PATH` 上で共存させても挙動が
+変わりません。
 
 ### C++
 

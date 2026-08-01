@@ -74,6 +74,67 @@ jobs:
         working-directory: bindings/wasm
         run: npm publish --access public --provenance
 
+  release-cli:
+    needs: publish-npm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os: linux
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            os: linux
+            arch: aarch64
+          - runner: macos-latest
+            os: macos
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Eigen3 (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libeigen3-dev
+
+      - name: Install Eigen3 (macOS)
+        if: runner.os == 'macOS'
+        run: brew install eigen
+
+      - name: Build native CLI
+        run: |
+          cmake -B build-cli -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+                             -DSONARE_WITH_FFMPEG=OFF
+          cmake --build build-cli --target sonare --config Release --parallel
+
+      - name: Package native CLI
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          asset="sonare-cli-${version}-${{ matrix.os }}-${{ matrix.arch }}"
+          mkdir -p "release-assets/${asset}"
+          cp build-cli/bin/sonare-cli "release-assets/${asset}/"
+          cp tools/cli/release-README.txt "release-assets/${asset}/README.txt"
+          tar -czf "release-assets/${asset}.tar.gz" -C release-assets "${asset}"
+          (
+            cd release-assets
+            if command -v sha256sum >/dev/null; then
+              sha256sum "${asset}.tar.gz" > "${asset}.tar.gz.sha256"
+            else
+              shasum -a 256 "${asset}.tar.gz" > "${asset}.tar.gz.sha256"
+            fi
+          )
+
+      - name: Attach native CLI assets
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            release-assets/*.tar.gz
+            release-assets/*.tar.gz.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   python-wheels:
     strategy:
       fail-fast: false

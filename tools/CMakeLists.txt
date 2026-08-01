@@ -68,6 +68,7 @@ if(BUILD_ARRANGEMENT)
   endif()
 endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
+set_target_properties(sonare PROPERTIES OUTPUT_NAME sonare-cli)
 
 target_include_directories(sonare PRIVATE
   ${PROJECT_SOURCE_DIR}/include

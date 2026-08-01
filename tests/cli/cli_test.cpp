@@ -83,8 +83,9 @@ std::pair<int, std::string> exec_command(const std::string& cmd) {
 /// @brief Gets the path to the sonare CLI executable.
 std::string get_cli_path() {
   // Try common build paths
-  std::vector<std::string> paths = {"./build/bin/sonare", "./build-mastering-api/bin/sonare",
-                                    "./bin/sonare", "../bin/sonare"};
+  std::vector<std::string> paths = {"./build/bin/sonare-cli",
+                                    "./build-mastering-api/bin/sonare-cli", "./bin/sonare-cli",
+                                    "../bin/sonare-cli"};
 
   for (const auto& path : paths) {
     std::ifstream f(path);
@@ -94,7 +95,7 @@ std::string get_cli_path() {
   }
 
   // Default to assuming it's in build/bin
-  return "./build/bin/sonare";
+  return "./build/bin/sonare-cli";
 }
 
 /// @brief Generates a unique temp file path for this test process.
