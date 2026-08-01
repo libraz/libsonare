@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "c_api/eq_band_json.h"
+#include "mastering/eq/band_strings.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/match/match_eq.h"
 #include "mastering/match/reference_spectrum.h"
@@ -25,17 +26,9 @@ struct SonareEq {
 namespace {
 
 sonare::mastering::eq::PhaseMode parse_phase(int mode) {
-  using sonare::mastering::eq::PhaseMode;
-  switch (mode) {
-    case 1:
-      return PhaseMode::ZeroLatency;
-    case 2:
-      return PhaseMode::NaturalPhase;
-    case 3:
-      return PhaseMode::LinearPhase;
-    default:
-      throw SonareException(ErrorCode::InvalidParameter, "unknown EQ phase mode");
-  }
+  const auto parsed = sonare::mastering::eq::phase_mode_from_int(mode);
+  if (!parsed) throw SonareException(ErrorCode::InvalidParameter, "unknown EQ phase mode");
+  return *parsed;
 }
 
 }  // namespace

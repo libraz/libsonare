@@ -10,6 +10,7 @@
 #include "core/audio.h"
 #include "editing/voice_changer/realtime.h"
 #include "mastering/api/chain.h"
+#include "mastering/eq/band_strings.h"
 #include "mastering/eq/eq_band.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/spectrum_engine.h"
@@ -85,57 +86,33 @@ std::string StringKey(const Napi::Object& object, const char* key, const char* f
 }
 
 sonare::mastering::eq::EqBandType ParseBandType(const std::string& value) {
-  using sonare::mastering::eq::EqBandType;
-  if (value == "Peak" || value == "peak") return EqBandType::Peak;
-  if (value == "LowShelf" || value == "lowShelf") return EqBandType::LowShelf;
-  if (value == "HighShelf" || value == "highShelf") return EqBandType::HighShelf;
-  if (value == "LowPass" || value == "lowPass") return EqBandType::LowPass;
-  if (value == "HighPass" || value == "highPass") return EqBandType::HighPass;
-  if (value == "BandPass" || value == "bandPass") return EqBandType::BandPass;
-  if (value == "Notch" || value == "notch") return EqBandType::Notch;
-  if (value == "TiltShelf" || value == "tiltShelf") return EqBandType::TiltShelf;
-  if (value == "FlatTilt" || value == "flatTilt") return EqBandType::FlatTilt;
-  throw std::runtime_error("unknown EQ band type: " + value);
+  const auto parsed = sonare::mastering::eq::band_type_from_string(value);
+  if (!parsed) throw std::runtime_error("unknown EQ band type: " + value);
+  return *parsed;
 }
 
 sonare::mastering::eq::BiquadCoeffMode ParseCoeffMode(const std::string& value) {
-  using sonare::mastering::eq::BiquadCoeffMode;
-  if (value == "Rbj" || value == "RBJ" || value == "rbj") return BiquadCoeffMode::Rbj;
-  if (value == "Vicanek" || value == "vicanek") return BiquadCoeffMode::Vicanek;
-  throw std::runtime_error("unknown EQ coefficient mode: " + value);
+  const auto parsed = sonare::mastering::eq::coeff_mode_from_string(value);
+  if (!parsed) throw std::runtime_error("unknown EQ coefficient mode: " + value);
+  return *parsed;
 }
 
 sonare::mastering::eq::StereoPlacement ParsePlacement(const std::string& value) {
-  using sonare::mastering::eq::StereoPlacement;
-  if (value == "Stereo" || value == "stereo") return StereoPlacement::Stereo;
-  if (value == "Left" || value == "left") return StereoPlacement::Left;
-  if (value == "Right" || value == "right") return StereoPlacement::Right;
-  if (value == "Mid" || value == "mid") return StereoPlacement::Mid;
-  if (value == "Side" || value == "side") return StereoPlacement::Side;
-  throw std::runtime_error("unknown EQ placement: " + value);
+  const auto parsed = sonare::mastering::eq::placement_from_string(value);
+  if (!parsed) throw std::runtime_error("unknown EQ placement: " + value);
+  return *parsed;
 }
 
 sonare::mastering::eq::PhaseMode ParseBandPhase(const std::string& value) {
-  using sonare::mastering::eq::PhaseMode;
-  if (value == "Inherit" || value == "inherit") return PhaseMode::Inherit;
-  if (value == "ZeroLatency" || value == "zeroLatency") return PhaseMode::ZeroLatency;
-  if (value == "NaturalPhase" || value == "naturalPhase") return PhaseMode::NaturalPhase;
-  if (value == "LinearPhase" || value == "linearPhase") return PhaseMode::LinearPhase;
-  throw std::runtime_error("unknown EQ band phase mode: " + value);
+  const auto parsed = sonare::mastering::eq::phase_mode_from_string(value);
+  if (!parsed) throw std::runtime_error("unknown EQ band phase mode: " + value);
+  return *parsed;
 }
 
 sonare::mastering::eq::PhaseMode ParsePhaseModeInt(int mode) {
-  using sonare::mastering::eq::PhaseMode;
-  switch (mode) {
-    case 1:
-      return PhaseMode::ZeroLatency;
-    case 2:
-      return PhaseMode::NaturalPhase;
-    case 3:
-      return PhaseMode::LinearPhase;
-    default:
-      throw std::runtime_error("unknown EQ phase mode");
-  }
+  const auto parsed = sonare::mastering::eq::phase_mode_from_int(mode);
+  if (!parsed) throw std::runtime_error("unknown EQ phase mode");
+  return *parsed;
 }
 
 sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {

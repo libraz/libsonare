@@ -8,73 +8,57 @@
 
 #include "wasm/bindings/common/common.h"
 
+// Included after common.h, which opens `using namespace sonare` for the
+// unqualified `mastering::eq` spelling used throughout this file.
+#include "mastering/eq/band_strings.h"
+
 // ---------------------------------------------------------------------------
 // StreamingEqualizer wrapper (block-by-block streaming EqualizerProcessor).
 // Construct via createEqualizer(config) factory.
 // ---------------------------------------------------------------------------
 
 mastering::eq::EqBandType eqBandTypeFromString(const std::string& value) {
-  using mastering::eq::EqBandType;
-  if (value == "Peak" || value == "peak" || value == "Bell" || value == "bell") {
-    return EqBandType::Peak;
+  const auto parsed = mastering::eq::band_type_from_string(value);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown EQ band type: " + value);
   }
-  if (value == "LowShelf" || value == "lowShelf") return EqBandType::LowShelf;
-  if (value == "HighShelf" || value == "highShelf") return EqBandType::HighShelf;
-  if (value == "LowPass" || value == "lowPass" || value == "HighCut" || value == "highCut") {
-    return EqBandType::LowPass;
-  }
-  if (value == "HighPass" || value == "highPass" || value == "LowCut" || value == "lowCut") {
-    return EqBandType::HighPass;
-  }
-  if (value == "BandPass" || value == "bandPass") return EqBandType::BandPass;
-  if (value == "Notch" || value == "notch") return EqBandType::Notch;
-  if (value == "TiltShelf" || value == "tiltShelf") return EqBandType::TiltShelf;
-  if (value == "FlatTilt" || value == "flatTilt") return EqBandType::FlatTilt;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown EQ band type: " + value);
+  return *parsed;
 }
 
 mastering::eq::BiquadCoeffMode eqCoeffModeFromString(const std::string& value) {
-  using mastering::eq::BiquadCoeffMode;
-  if (value == "Rbj" || value == "RBJ" || value == "rbj") return BiquadCoeffMode::Rbj;
-  if (value == "Vicanek" || value == "vicanek") return BiquadCoeffMode::Vicanek;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown EQ coefficient mode: " + value);
+  const auto parsed = mastering::eq::coeff_mode_from_string(value);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown EQ coefficient mode: " + value);
+  }
+  return *parsed;
 }
 
 mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value) {
-  using mastering::eq::StereoPlacement;
-  if (value == "Stereo" || value == "stereo") return StereoPlacement::Stereo;
-  if (value == "Left" || value == "left") return StereoPlacement::Left;
-  if (value == "Right" || value == "right") return StereoPlacement::Right;
-  if (value == "Mid" || value == "mid") return StereoPlacement::Mid;
-  if (value == "Side" || value == "side") return StereoPlacement::Side;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown EQ placement: " + value);
+  const auto parsed = mastering::eq::placement_from_string(value);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown EQ placement: " + value);
+  }
+  return *parsed;
 }
 
 mastering::eq::PhaseMode eqBandPhaseFromString(const std::string& value) {
-  using mastering::eq::PhaseMode;
-  if (value == "Inherit" || value == "inherit") return PhaseMode::Inherit;
-  if (value == "ZeroLatency" || value == "zeroLatency") return PhaseMode::ZeroLatency;
-  if (value == "NaturalPhase" || value == "naturalPhase") return PhaseMode::NaturalPhase;
-  if (value == "LinearPhase" || value == "linearPhase") return PhaseMode::LinearPhase;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown EQ band phase mode: " + value);
+  const auto parsed = mastering::eq::phase_mode_from_string(value);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown EQ band phase mode: " + value);
+  }
+  return *parsed;
 }
 
 mastering::eq::PhaseMode eqPhaseFromInt(int mode) {
-  using mastering::eq::PhaseMode;
-  switch (mode) {
-    case 1:
-      return PhaseMode::ZeroLatency;
-    case 2:
-      return PhaseMode::NaturalPhase;
-    case 3:
-      return PhaseMode::LinearPhase;
-    default:
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ phase mode");
+  const auto parsed = mastering::eq::phase_mode_from_int(mode);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ phase mode");
   }
+  return *parsed;
 }
 
 mastering::eq::EqBand eqBandFromVal(val band) {

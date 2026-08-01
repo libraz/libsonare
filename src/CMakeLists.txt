@@ -366,6 +366,7 @@ if(BUILD_MASTERING)
     mastering/stereo/stereo_balance.cpp
     mastering/eq/api_style.cpp
     mastering/eq/band_pass.cpp
+    mastering/eq/band_strings.cpp
     mastering/eq/cut_filter.cpp
     mastering/eq/dynamic_eq.cpp
     mastering/eq/equalizer.cpp

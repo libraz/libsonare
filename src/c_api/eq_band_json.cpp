@@ -3,6 +3,7 @@
 #include <cmath>
 #include <string>
 
+#include "mastering/eq/band_strings.h"
 #include "sonare_c_internal.h"
 #include "util/json.h"
 
@@ -72,49 +73,27 @@ std::string json_string_any(const JsonValue& object, const char* first_key, cons
 }
 
 sonare::mastering::eq::EqBandType parse_band_type(const std::string& value) {
-  using sonare::mastering::eq::EqBandType;
-  if (value == "Peak" || value == "peak" || value == "Bell" || value == "bell") {
-    return EqBandType::Peak;
-  }
-  if (value == "LowShelf" || value == "lowShelf") return EqBandType::LowShelf;
-  if (value == "HighShelf" || value == "highShelf") return EqBandType::HighShelf;
-  if (value == "LowPass" || value == "lowPass" || value == "HighCut" || value == "highCut") {
-    return EqBandType::LowPass;
-  }
-  if (value == "HighPass" || value == "highPass" || value == "LowCut" || value == "lowCut") {
-    return EqBandType::HighPass;
-  }
-  if (value == "BandPass" || value == "bandPass") return EqBandType::BandPass;
-  if (value == "Notch" || value == "notch") return EqBandType::Notch;
-  if (value == "TiltShelf" || value == "tiltShelf") return EqBandType::TiltShelf;
-  if (value == "FlatTilt" || value == "flatTilt") return EqBandType::FlatTilt;
-  invalid_eq_json("unknown EQ band type: " + value);
+  const auto parsed = sonare::mastering::eq::band_type_from_string(value);
+  if (!parsed) invalid_eq_json("unknown EQ band type: " + value);
+  return *parsed;
 }
 
 sonare::mastering::eq::BiquadCoeffMode parse_coeff_mode(const std::string& value) {
-  using sonare::mastering::eq::BiquadCoeffMode;
-  if (value == "Rbj" || value == "RBJ" || value == "rbj") return BiquadCoeffMode::Rbj;
-  if (value == "Vicanek" || value == "vicanek") return BiquadCoeffMode::Vicanek;
-  invalid_eq_json("unknown EQ coefficient mode: " + value);
+  const auto parsed = sonare::mastering::eq::coeff_mode_from_string(value);
+  if (!parsed) invalid_eq_json("unknown EQ coefficient mode: " + value);
+  return *parsed;
 }
 
 sonare::mastering::eq::StereoPlacement parse_placement(const std::string& value) {
-  using sonare::mastering::eq::StereoPlacement;
-  if (value == "Stereo" || value == "stereo") return StereoPlacement::Stereo;
-  if (value == "Left" || value == "left") return StereoPlacement::Left;
-  if (value == "Right" || value == "right") return StereoPlacement::Right;
-  if (value == "Mid" || value == "mid") return StereoPlacement::Mid;
-  if (value == "Side" || value == "side") return StereoPlacement::Side;
-  invalid_eq_json("unknown EQ placement: " + value);
+  const auto parsed = sonare::mastering::eq::placement_from_string(value);
+  if (!parsed) invalid_eq_json("unknown EQ placement: " + value);
+  return *parsed;
 }
 
 sonare::mastering::eq::PhaseMode parse_band_phase(const std::string& value) {
-  using sonare::mastering::eq::PhaseMode;
-  if (value == "Inherit" || value == "inherit") return PhaseMode::Inherit;
-  if (value == "ZeroLatency" || value == "zeroLatency") return PhaseMode::ZeroLatency;
-  if (value == "NaturalPhase" || value == "naturalPhase") return PhaseMode::NaturalPhase;
-  if (value == "LinearPhase" || value == "linearPhase") return PhaseMode::LinearPhase;
-  invalid_eq_json("unknown EQ band phase mode: " + value);
+  const auto parsed = sonare::mastering::eq::phase_mode_from_string(value);
+  if (!parsed) invalid_eq_json("unknown EQ band phase mode: " + value);
+  return *parsed;
 }
 
 }  // namespace
