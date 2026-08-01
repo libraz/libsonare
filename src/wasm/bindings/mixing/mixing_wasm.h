@@ -200,10 +200,14 @@ class MixerWasm {
   // frames. Returns { left, right, sampleRate } mirroring processStereo.
   val drainTailStereo(double num_samples);
 
+  // Converts a C-ABI mix-meter snapshot to the JS meter object (same shape as
+  // meterSnapshotToVal / Node's MixMeterToObject). Depends on no instance
+  // state, so the free mixing entry points share it rather than carrying their
+  // own copy.
+  static val mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot);
+
  private:
   static void checkStripError(SonareError err, const char* what);
-
-  static val mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot);
 
   SonareMixer* mixer_ = nullptr;
   int sample_rate_ = 48000;

@@ -300,31 +300,6 @@ void checkOneShotSetter(SonareError err, const char* what) {
   }
 }
 
-// Converts a C-ABI mix-meter snapshot to the JS meter object (same shape as
-// meterSnapshotToVal / Node's MixMeterToObject).
-val mixMeterSnapshotToValFree(const SonareMixMeterSnapshot& snapshot) {
-  val out = val::object();
-  out.set("peakDbL", snapshot.peak_db_l);
-  out.set("peakDbR", snapshot.peak_db_r);
-  out.set("rmsDbL", snapshot.rms_db_l);
-  out.set("rmsDbR", snapshot.rms_db_r);
-  out.set("correlation", snapshot.correlation);
-  out.set("monoCompatWidth", snapshot.mono_compat_width);
-  out.set("monoCompatPeak", snapshot.mono_compat_peak);
-  out.set("monoCompatSideRms", snapshot.mono_compat_side_rms);
-  out.set("likelyMonoCompatible", snapshot.likely_mono_compatible != 0);
-  out.set("momentaryLufs", snapshot.momentary_lufs);
-  out.set("shortTermLufs", snapshot.short_term_lufs);
-  out.set("integratedLufs", snapshot.integrated_lufs);
-  out.set("gainReductionDb", snapshot.gain_reduction_db);
-  out.set("truePeakDbL", snapshot.true_peak_db_l);
-  out.set("truePeakDbR", snapshot.true_peak_db_r);
-  out.set("maxTruePeakDb", snapshot.max_true_peak_db);
-  out.set("seq", static_cast<double>(snapshot.seq));
-  setPerPlaneMeters(out, snapshot.peak_db, snapshot.rms_db, snapshot.true_peak_db,
-                    snapshot.channel_count);
-  return out;
-}
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
 
 }  // namespace
@@ -435,7 +410,7 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
     for (size_t index = 0; index < strips.size(); ++index) {
       SonareMixMeterSnapshot snapshot{};
       sonare_strip_meter(strips[index], &snapshot);
-      meters.call<void>("push", mixMeterSnapshotToValFree(snapshot));
+      meters.call<void>("push", MixerWasm::mixMeterSnapshotToVal(snapshot));
     }
   } catch (...) {
     sonare_mixer_destroy(mixer);
