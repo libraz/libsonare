@@ -37,7 +37,7 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
   std::array<const float*, kMaxSidechainChannels> shifted{};
   run_insert_chain(inserts_, insert_spo_, insert_sidechains_, channels, num_channels, num_samples,
                    /*first_insert_index=*/0, /*sidechain_offset=*/0, shifted.data(),
-                   kMaxSidechainChannels);
+                   kMaxSidechainChannels, lfe_index(layout_));
   meter_.process(channels, num_channels, num_samples);
 }
 

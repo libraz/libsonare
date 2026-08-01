@@ -97,12 +97,23 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
   // Reuse the preallocated scratch (sized in prepare()) instead of allocating a
   // fresh vector each block; only the first num_channels entries are read.
   std::fill(delayed_.begin(), delayed_.begin() + num_channels, 0.0f);
+  const int excluded_channel = detector_excluded_channel(num_channels);
   for (int i = 0; i < num_samples; ++i) {
     float peak = 0.0f;
-    for (int ch = 0; ch < num_channels; ++ch) {
-      delayed_[static_cast<size_t>(ch)] =
-          lookahead_[static_cast<size_t>(ch)].process(channels[ch][i]);
-      peak = std::max(peak, lookahead_[static_cast<size_t>(ch)].peak());
+    if (excluded_channel < 0) {
+      for (int ch = 0; ch < num_channels; ++ch) {
+        delayed_[static_cast<size_t>(ch)] =
+            lookahead_[static_cast<size_t>(ch)].process(channels[ch][i]);
+        peak = std::max(peak, lookahead_[static_cast<size_t>(ch)].peak());
+      }
+    } else {
+      for (int ch = 0; ch < num_channels; ++ch) {
+        delayed_[static_cast<size_t>(ch)] =
+            lookahead_[static_cast<size_t>(ch)].process(channels[ch][i]);
+        if (ch != excluded_channel) {
+          peak = std::max(peak, lookahead_[static_cast<size_t>(ch)].peak());
+        }
+      }
     }
 
     const float target_gain = peak > ceiling && peak > 0.0f ? ceiling / peak : 1.0f;

@@ -126,6 +126,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       if (!state.bus) {
         state.bus = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
       }
+      state.bus->set_channel_layout(bus_configs_[index].layout);
       if (max_block_size_ > 0) {
         state.bus->prepare(sample_rate_, max_block_size_);
       }
@@ -264,6 +265,7 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   if (!state) return false;
   const size_t bus_index = static_cast<size_t>(state - bus_states_.data());
   auto fx = std::make_unique<mixing::FxBus>(static_cast<int>(kMaxTrackLanes));
+  fx->set_channel_layout(bus_configs_[bus_index].layout);
   try {
     for (const auto& insert : bus.inserts) {
       auto processor =

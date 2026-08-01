@@ -113,7 +113,9 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   last_detector_mode_ = cfg.detector;
   detector_mode_initialized_ = true;
 
-  const float inv_channels = 1.0f / static_cast<float>(num_channels);
+  const int excluded_channel = detector_excluded_channel(num_channels);
+  const int detector_channels = num_channels - (excluded_channel >= 0 ? 1 : 0);
+  const float inv_channels = 1.0f / static_cast<float>(detector_channels);
   float max_reduction = 0.0f;
   for (int i = 0; i < num_samples; ++i) {
     // Linked detection: derive a single detector level from all channels each
@@ -124,17 +126,33 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     // not, leaving the two paths inconsistent).
     float peak_lin = 0.0f;
     float power_sum = 0.0f;
-    for (int ch = 0; ch < num_channels; ++ch) {
-      float s = channels[ch][i];
-      if (cfg.sidechain_hpf_enabled) {
-        const auto idx = static_cast<size_t>(ch);
-        const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
-        hpf_x1_[idx] = s;
-        hpf_y1_[idx] = y;
-        s = y;
+    if (excluded_channel < 0) {
+      for (int ch = 0; ch < num_channels; ++ch) {
+        float s = channels[ch][i];
+        if (cfg.sidechain_hpf_enabled) {
+          const auto idx = static_cast<size_t>(ch);
+          const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
+          hpf_x1_[idx] = s;
+          hpf_y1_[idx] = y;
+          s = y;
+        }
+        peak_lin = std::max(peak_lin, std::abs(s));
+        power_sum += s * s;
       }
-      peak_lin = std::max(peak_lin, std::abs(s));
-      power_sum += s * s;
+    } else {
+      for (int ch = 0; ch < num_channels; ++ch) {
+        if (ch == excluded_channel) continue;
+        float s = channels[ch][i];
+        if (cfg.sidechain_hpf_enabled) {
+          const auto idx = static_cast<size_t>(ch);
+          const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
+          hpf_x1_[idx] = s;
+          hpf_y1_[idx] = y;
+          s = y;
+        }
+        peak_lin = std::max(peak_lin, std::abs(s));
+        power_sum += s * s;
+      }
     }
     const float power_lin = power_sum * inv_channels;
 

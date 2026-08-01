@@ -59,15 +59,22 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
   const VocalRiderConfig& cfg = *adopt_snapshot_for_block();
 
   float largest_abs_gain = 0.0f;
-  for (int ch = 0; ch < num_channels; ++ch) {
-  }
   const float smoothing = time_to_coefficient(sample_rate_, cfg.gain_smoothing_ms);
   if (cfg.linked_detection) {
+    const int excluded_channel = detector_excluded_channel(num_channels);
     for (int i = 0; i < num_samples; ++i) {
       float linked_level = 0.0f;
-      for (int ch = 0; ch < num_channels; ++ch) {
-        linked_level =
-            std::max(linked_level, followers_[static_cast<size_t>(ch)].process(channels[ch][i]));
+      if (excluded_channel < 0) {
+        for (int ch = 0; ch < num_channels; ++ch) {
+          linked_level =
+              std::max(linked_level, followers_[static_cast<size_t>(ch)].process(channels[ch][i]));
+        }
+      } else {
+        for (int ch = 0; ch < num_channels; ++ch) {
+          if (ch == excluded_channel) continue;
+          linked_level =
+              std::max(linked_level, followers_[static_cast<size_t>(ch)].process(channels[ch][i]));
+        }
       }
       const float level_db = linear_to_db(linked_level);
       float ride_db = 0.0f;

@@ -20,6 +20,7 @@ void DuckingProcessor::prepare(double sample_rate, int max_block_size) {
 
 void DuckingProcessor::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
+  router_.set_detector_excluded_channel(detector_excluded_channel(num_channels));
   router_.process(channels, num_channels, num_samples);
 }
 

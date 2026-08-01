@@ -146,10 +146,21 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
                                           true_peak_scratch_);
 
   std::fill_n(linked_abs_.begin(), static_cast<std::ptrdiff_t>(oversampled_samples), 0.0f);
-  for (int ch = 0; ch < num_channels; ++ch) {
-    const auto& channel = oversampled_buffers_[static_cast<size_t>(ch)];
-    for (size_t i = 0; i < oversampled_samples; ++i) {
-      linked_abs_[i] = std::max(linked_abs_[i], std::abs(channel[i]));
+  const int excluded_channel = detector_excluded_channel(num_channels);
+  if (excluded_channel < 0) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      const auto& channel = oversampled_buffers_[static_cast<size_t>(ch)];
+      for (size_t i = 0; i < oversampled_samples; ++i) {
+        linked_abs_[i] = std::max(linked_abs_[i], std::abs(channel[i]));
+      }
+    }
+  } else {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      const auto& channel = oversampled_buffers_[static_cast<size_t>(ch)];
+      for (size_t i = 0; i < oversampled_samples; ++i) {
+        linked_abs_[i] = std::max(linked_abs_[i], std::abs(channel[i]));
+      }
     }
   }
 
@@ -201,8 +212,16 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
   // reconstructed base-rate block with the same all-phase interpolator and
   // apply one linked correction so the public true-peak ceiling remains a hard
   // output invariant after downsampling as well.
-  const float reconstructed_peak =
-      true_peak_filter_.process(input_ptrs_.data(), num_channels, num_samples);
+  float reconstructed_peak = 0.0f;
+  if (excluded_channel < 0) {
+    reconstructed_peak = true_peak_filter_.process(input_ptrs_.data(), num_channels, num_samples);
+  } else {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      reconstructed_peak = std::max(
+          reconstructed_peak, true_peak_filter_.process(input_ptrs_.data() + ch, 1, num_samples));
+    }
+  }
   if (reconstructed_peak > ceiling && reconstructed_peak > 0.0f) {
     const float reconstruction_gain = ceiling / reconstructed_peak;
     for (int ch = 0; ch < num_channels; ++ch) {
@@ -232,10 +251,21 @@ void TruePeakLimiter::process_polyphase_detect_only(float* const* channels, int 
                                           true_peak_scratch_);
 
   std::fill_n(linked_abs_.begin(), static_cast<std::ptrdiff_t>(oversampled_samples), 0.0f);
-  for (int ch = 0; ch < num_channels; ++ch) {
-    const auto& channel = oversampled_buffers_[static_cast<size_t>(ch)];
-    for (size_t i = 0; i < oversampled_samples; ++i) {
-      linked_abs_[i] = std::max(linked_abs_[i], std::abs(channel[i]));
+  const int excluded_channel = detector_excluded_channel(num_channels);
+  if (excluded_channel < 0) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      const auto& channel = oversampled_buffers_[static_cast<size_t>(ch)];
+      for (size_t i = 0; i < oversampled_samples; ++i) {
+        linked_abs_[i] = std::max(linked_abs_[i], std::abs(channel[i]));
+      }
+    }
+  } else {
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      const auto& channel = oversampled_buffers_[static_cast<size_t>(ch)];
+      for (size_t i = 0; i < oversampled_samples; ++i) {
+        linked_abs_[i] = std::max(linked_abs_[i], std::abs(channel[i]));
+      }
     }
   }
 

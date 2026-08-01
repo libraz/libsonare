@@ -55,14 +55,20 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
   const ParallelCompConfig& cfg = *adopt_snapshot_for_block();
 
   float max_reduction = 0.0f;
-  for (int ch = 0; ch < num_channels; ++ch) {
-  }
   const float ceiling = db_to_linear(cfg.output_ceiling_db);
   if (cfg.linked_detection) {
+    const int excluded_channel = detector_excluded_channel(num_channels);
     for (int i = 0; i < num_samples; ++i) {
       float linked_level = 0.0f;
-      for (int ch = 0; ch < num_channels; ++ch) {
-        linked_level = std::max(linked_level, std::abs(channels[ch][i]));
+      if (excluded_channel < 0) {
+        for (int ch = 0; ch < num_channels; ++ch) {
+          linked_level = std::max(linked_level, std::abs(channels[ch][i]));
+        }
+      } else {
+        for (int ch = 0; ch < num_channels; ++ch) {
+          if (ch == excluded_channel) continue;
+          linked_level = std::max(linked_level, std::abs(channels[ch][i]));
+        }
       }
       const float level = followers_[0].process(linked_level);
       const float reduction_db = gain_reduction_db(linear_to_db(level), cfg);

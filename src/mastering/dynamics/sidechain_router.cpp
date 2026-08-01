@@ -232,6 +232,10 @@ float SidechainRouter::detector_sample(float* const* channels, int num_channels,
     return 0.0f;
   }
   const int source_channels = use_external ? sidechain_num_channels_ : num_channels;
+  // An external key owns its own channel layout, so only the bus's internal
+  // detector excludes its LFE plane. Applying the bus plane index to an
+  // unrelated key would silently discard a valid sidechain channel.
+  const int excluded_channel = use_external ? -1 : detector_excluded_channel(num_channels);
 
   // Fold the source down to a single linked detector value, applying the
   // per-channel HPF once per source channel per sample. Because the one-pole
@@ -240,24 +244,43 @@ float SidechainRouter::detector_sample(float* const* channels, int num_channels,
   // sharing HPF state across output channels.
   float abs_sum = 0.0f;
   float peak = 0.0f;
-  for (int ch = 0; ch < source_channels; ++ch) {
-    float s = use_external ? sidechain_channels_[ch][sample] : channels[ch][sample];
-    if (cfg.sidechain_hpf_enabled) {
-      const auto idx = static_cast<size_t>(ch);
-      const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
-      hpf_x1_[idx] = s;
-      hpf_y1_[idx] = y;
-      s = y;
+  int included_channels = 0;
+  if (excluded_channel < 0) {
+    for (int ch = 0; ch < source_channels; ++ch) {
+      float s = use_external ? sidechain_channels_[ch][sample] : channels[ch][sample];
+      if (cfg.sidechain_hpf_enabled) {
+        const auto idx = static_cast<size_t>(ch);
+        const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
+        hpf_x1_[idx] = s;
+        hpf_y1_[idx] = y;
+        s = y;
+      }
+      // Sum magnitudes, not signed amplitudes: a signed sum collapses toward zero
+      // for an anti-correlated (out-of-phase) stereo key, making a loud key read
+      // as silence and the ducking fail to trigger. The mean of |s| stays
+      // representative regardless of inter-channel phase.
+      abs_sum += std::abs(s);
+      peak = std::max(peak, std::abs(s));
+      ++included_channels;
     }
-    // Sum magnitudes, not signed amplitudes: a signed sum collapses toward zero
-    // for an anti-correlated (out-of-phase) stereo key, making a loud key read
-    // as silence and the ducking fail to trigger. The mean of |s| stays
-    // representative regardless of inter-channel phase.
-    abs_sum += std::abs(s);
-    peak = std::max(peak, std::abs(s));
+  } else {
+    for (int ch = 0; ch < source_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      float s = use_external ? sidechain_channels_[ch][sample] : channels[ch][sample];
+      if (cfg.sidechain_hpf_enabled) {
+        const auto idx = static_cast<size_t>(ch);
+        const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
+        hpf_x1_[idx] = s;
+        hpf_y1_[idx] = y;
+        s = y;
+      }
+      abs_sum += std::abs(s);
+      peak = std::max(peak, std::abs(s));
+      ++included_channels;
+    }
   }
   if (cfg.mono_summing) {
-    return abs_sum / static_cast<float>(std::max(source_channels, 1));
+    return abs_sum / static_cast<float>(std::max(included_channels, 1));
   }
   return peak;
 }

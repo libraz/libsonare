@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "mastering/api/insert_factory.h"
+#include "mastering/dynamics/compressor.h"
 #include "mixing_test_helpers.h"
 #include "util/exception.h"
 
@@ -49,6 +50,54 @@ TEST_CASE("BusProcessor publishes post-insert meter snapshot", "[mixing]") {
   REQUIRE(snapshot.seq == 1);
   REQUIRE_THAT(snapshot.correlation, WithinAbs(1.0f, 0.0001f));
   REQUIRE(snapshot.peak_db[0] > sonare::constants::kFloorDb);
+}
+
+TEST_CASE("surround bus linked dynamics exclude only the LFE plane from detection",
+          "[mixing][surround][dynamics]") {
+  constexpr int kFrames = 64;
+
+  const auto render = [](sonare::ChannelLayout layout, int channels, float lfe_level) {
+    std::array<std::array<float, kFrames>, 8> planes{};
+    std::array<float*, 8> pointers{};
+    for (int ch = 0; ch < channels; ++ch) {
+      planes[static_cast<size_t>(ch)].fill(0.05f);
+      pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+    }
+    planes[3].fill(lfe_level);
+
+    sonare::mastering::dynamics::CompressorConfig config;
+    config.threshold_db = -20.0f;
+    config.ratio = 20.0f;
+    config.attack_ms = 0.0f;
+    config.release_ms = 0.0f;
+    config.detector = sonare::mastering::dynamics::DetectorMode::Peak;
+    sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+    bus.set_channel_layout(layout);
+    bus.add_insert(std::make_unique<sonare::mastering::dynamics::Compressor>(config));
+    bus.prepare(48000.0, kFrames);
+    bus.process(pointers.data(), channels, kFrames);
+    return planes;
+  };
+
+  // 5.1 and 7.1 use the same canonical LFE index. Raising that plane must not
+  // change their shared gain envelope, while the LFE itself still receives the
+  // shared gain calculated from the program channels.
+  for (const auto [layout, channels] : {std::pair{sonare::ChannelLayout::FivePointOne, 6},
+                                        std::pair{sonare::ChannelLayout::SevenPointOne, 8}}) {
+    const auto quiet_lfe = render(layout, channels, 0.0f);
+    const auto loud_lfe = render(layout, channels, 0.95f);
+    for (int ch = 0; ch < channels; ++ch) {
+      if (ch == 3) continue;
+      REQUIRE(loud_lfe[static_cast<size_t>(ch)] == quiet_lfe[static_cast<size_t>(ch)]);
+    }
+  }
+
+  // The same six-plane buffer with the legacy stereo context intentionally
+  // detects every plane, proving the surround layout is what supplies the LFE
+  // exclusion rather than an unconditional channel-3 special case.
+  const auto surround = render(sonare::ChannelLayout::FivePointOne, 6, 0.95f);
+  const auto legacy = render(sonare::ChannelLayout::Stereo, 6, 0.95f);
+  REQUIRE(surround[0].back() > legacy[0].back() * 2.0f);
 }
 
 TEST_CASE("GainProcessor applies fader and VCA offset", "[mixing]") {

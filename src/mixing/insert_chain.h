@@ -49,7 +49,7 @@ inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& in
                              const std::vector<InsertSidechain>& sidechains, float* const* channels,
                              int num_channels, int num_samples, size_t first_insert_index,
                              int sidechain_offset, const float** shifted_scratch,
-                             int max_forward_rows) {
+                             int max_forward_rows, int detector_excluded_channel = -1) {
   for (size_t local = 0; local < inserts.size(); ++local) {
     const size_t index = first_insert_index + local;
     const InsertSidechain* key = index < sidechains.size() ? &sidechains[index] : nullptr;
@@ -80,6 +80,10 @@ inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& in
     // it requires. At num_channels <= 2 this is the legacy full-buffer call.
     const bool spo = local < stereo_pair_only.size() && stereo_pair_only[local] != 0;
     const int insert_channels = (spo && num_channels > 2) ? 2 : num_channels;
+    // A surround bus owns the only layout-aware detector context in the mixer.
+    // A StereoPairOnly insert gets only L/R, so its LFE exclusion is necessarily
+    // disabled by ProcessorBase's range check.
+    inserts[local]->set_detector_excluded_channel(detector_excluded_channel);
     inserts[local]->process(channels, insert_channels, num_samples);
   }
 }

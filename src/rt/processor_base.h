@@ -30,18 +30,28 @@ class ProcessorBase {
  public:
   ProcessorBase() = default;
   ProcessorBase(const ProcessorBase& other)
-      : bypassed_(other.bypassed_.load(std::memory_order_acquire)) {}
+      : bypassed_(other.bypassed_.load(std::memory_order_acquire)),
+        detector_excluded_channel_(
+            other.detector_excluded_channel_.load(std::memory_order_acquire)) {}
   ProcessorBase& operator=(const ProcessorBase& other) {
     if (this != &other) {
       bypassed_.store(other.bypassed_.load(std::memory_order_acquire), std::memory_order_release);
+      detector_excluded_channel_.store(
+          other.detector_excluded_channel_.load(std::memory_order_acquire),
+          std::memory_order_release);
     }
     return *this;
   }
   ProcessorBase(ProcessorBase&& other) noexcept
-      : bypassed_(other.bypassed_.load(std::memory_order_acquire)) {}
+      : bypassed_(other.bypassed_.load(std::memory_order_acquire)),
+        detector_excluded_channel_(
+            other.detector_excluded_channel_.load(std::memory_order_acquire)) {}
   ProcessorBase& operator=(ProcessorBase&& other) noexcept {
     if (this != &other) {
       bypassed_.store(other.bypassed_.load(std::memory_order_acquire), std::memory_order_release);
+      detector_excluded_channel_.store(
+          other.detector_excluded_channel_.load(std::memory_order_acquire),
+          std::memory_order_release);
     }
     return *this;
   }
@@ -151,6 +161,13 @@ class ProcessorBase {
   }
   virtual void clear_sidechain() {}
 
+  /// Configures one main-input plane that linked detectors must ignore. Hosts
+  /// set this per processing context; -1 (the default) leaves legacy detector
+  /// behavior intact. Processors that do not share a detector simply ignore it.
+  void set_detector_excluded_channel(int channel) noexcept {
+    detector_excluded_channel_.store(channel, std::memory_order_release);
+  }
+
   // Set a processor-specific scalar parameter by id. Returns false if the id is
   // not recognized. Default: no automatable parameters. Implementations must be
   // RT-safe (no allocation, no blocking).
@@ -201,8 +218,18 @@ class ProcessorBase {
     return false;
   }
 
+ protected:
+  /// Returns a valid excluded detector plane for this block, or -1 when every
+  /// plane participates. Keeping the range check here lets processors retain
+  /// their existing behavior for mono/stereo and arbitrary direct calls.
+  int detector_excluded_channel(int num_channels) const noexcept {
+    const int channel = detector_excluded_channel_.load(std::memory_order_acquire);
+    return channel >= 0 && channel < num_channels ? channel : -1;
+  }
+
  private:
   std::atomic<bool> bypassed_{false};
+  std::atomic<int> detector_excluded_channel_{-1};
 };
 
 }  // namespace sonare::rt

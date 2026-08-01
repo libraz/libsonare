@@ -65,6 +65,7 @@ void BrickwallLimiter::process(float* const* channels, int num_channels, int num
   // changes its current() value inside acquire(), and we already called it.
   const BrickwallLimiterConfig& cfg = *adopt_snapshot_for_block();
 
+  limiter_.set_detector_excluded_channel(detector_excluded_channel(num_channels));
   limiter_.process(channels, num_channels, num_samples);
 
   const float ceiling = db_to_linear(cfg.ceiling_db);

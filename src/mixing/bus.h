@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "core/channel_layout.h"
 #include "mixing/insert_chain.h"
 #include "mixing/meter.h"
 #include "rt/processor_base.h"
@@ -67,6 +68,11 @@ class BusProcessor : public rt::ProcessorBase {
 
   BusRole role() const noexcept { return role_; }
   int max_inputs() const noexcept { return max_inputs_; }
+  /// Declares the bus speaker layout for linked detector routing. Direct bus
+  /// users keep the stereo default; the realtime mixer sets this from its
+  /// TrackBusConfig before rendering a surround group bus.
+  void set_channel_layout(ChannelLayout layout) noexcept { layout_ = layout; }
+  ChannelLayout channel_layout() const noexcept { return layout_; }
 
   // Upper bound on inserts per bus. Reserved at construction so add_insert
   // never reallocates inserts_ / insert_sidechains_ while the audio thread
@@ -77,6 +83,7 @@ class BusProcessor : public rt::ProcessorBase {
  private:
   BusRole role_ = BusRole::Subgroup;
   int max_inputs_ = 0;
+  ChannelLayout layout_ = ChannelLayout::Stereo;
   std::vector<std::unique_ptr<rt::ProcessorBase>> inserts_;
   // Parallel to inserts_: 1 marks a StereoPairOnly insert (front-pair-only on a
   // surround bus). Reserved at construction alongside inserts_ so add_insert

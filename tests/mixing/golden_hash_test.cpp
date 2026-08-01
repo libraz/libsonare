@@ -14,6 +14,8 @@
 #include <tuple>
 #include <vector>
 
+#include "mastering/dynamics/compressor.h"
+#include "mixing/bus.h"
 #include "mixing/channel_strip.h"
 #include "util/constants.h"
 
@@ -96,6 +98,56 @@ std::vector<std::tuple<std::string, std::string, std::string>> compute_rows() {
   return rows;
 }
 
+std::vector<std::tuple<std::string, std::string, std::string>> compute_surround_bus_rows() {
+  constexpr int kChannels[] = {6, 8};
+  constexpr sonare::ChannelLayout kLayouts[] = {sonare::ChannelLayout::FivePointOne,
+                                                sonare::ChannelLayout::SevenPointOne};
+  std::vector<std::tuple<std::string, std::string, std::string>> rows;
+  for (size_t layout_index = 0; layout_index < 2; ++layout_index) {
+    const int channels = kChannels[layout_index];
+    std::array<std::vector<float>, 8> planes;
+    std::array<float*, 8> pointers{};
+    for (int ch = 0; ch < channels; ++ch) {
+      planes[static_cast<size_t>(ch)].resize(kSamples);
+      pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+      for (int i = 0; i < kSamples; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(kSampleRate);
+        planes[static_cast<size_t>(ch)][static_cast<size_t>(i)] =
+            0.07f * std::sin(2.0f * kPi * static_cast<float>(180 + 35 * ch) * t);
+      }
+    }
+    // Plane 3 is the LFE for both supported surround layouts. It is deliberately
+    // far louder than the program planes so this fixture catches any regression
+    // that lets it drive the linked compressor's shared envelope.
+    for (int i = 0; i < kSamples; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(kSampleRate);
+      planes[3][static_cast<size_t>(i)] = 0.9f * std::sin(2.0f * kPi * 55.0f * t);
+    }
+
+    sonare::mastering::dynamics::CompressorConfig config;
+    config.threshold_db = -20.0f;
+    config.ratio = 8.0f;
+    config.attack_ms = 2.0f;
+    config.release_ms = 40.0f;
+    config.detector = sonare::mastering::dynamics::DetectorMode::Rms;
+    mixing::BusProcessor bus(mixing::BusRole::Subgroup);
+    bus.set_channel_layout(kLayouts[layout_index]);
+    bus.add_insert(std::make_unique<sonare::mastering::dynamics::Compressor>(config));
+    bus.prepare(kSampleRate, kSamples);
+    bus.process(pointers.data(), channels, kSamples);
+
+    uint64_t hash = 1469598103934665603ull;
+    for (int ch = 0; ch < channels; ++ch) {
+      for (float sample : planes[static_cast<size_t>(ch)]) {
+        sonare::test::golden_fnv_accumulate(hash, sonare::test::golden_quantize(sample));
+      }
+    }
+    rows.emplace_back(sonare::channel_layout_to_string(kLayouts[layout_index]), "lfe-heavy",
+                      hex64(hash));
+  }
+  return rows;
+}
+
 std::map<std::string, std::string> load_manifest(const std::filesystem::path& path) {
   std::ifstream file(path);
   REQUIRE(file.is_open());
@@ -124,6 +176,15 @@ void write_manifest(const std::filesystem::path& path) {
   }
 }
 
+void write_surround_bus_manifest(const std::filesystem::path& path) {
+  std::filesystem::create_directories(path.parent_path());
+  std::ofstream file(path);
+  file << "# layout\tsignal\tfnv1a_quantized_multichannel_hash\n";
+  for (const auto& [layout, signal, hash] : compute_surround_bus_rows()) {
+    file << layout << '\t' << signal << '\t' << hash << '\n';
+  }
+}
+
 }  // namespace
 
 TEST_CASE("built-in mixing strip golden hashes stay stable", "[.][mixing][golden]") {
@@ -135,6 +196,24 @@ TEST_CASE("built-in mixing strip golden hashes stay stable", "[.][mixing][golden
   const auto expected = load_manifest(manifest);
   const auto rows = compute_rows();
   REQUIRE(rows.size() == 9);
+  REQUIRE(expected.size() == rows.size());
+
+  for (const auto& [scenario, signal, hash] : rows) {
+    const std::string key = scenario + "/" + signal;
+    CAPTURE(key);
+    REQUIRE(expected.at(key) == hash);
+  }
+}
+
+TEST_CASE("surround bus linked-dynamics golden hashes stay stable", "[.][mixing][golden]") {
+  const std::filesystem::path manifest = "tests/mixing/golden/surround_bus_hashes.tsv";
+  if (std::getenv("SONARE_UPDATE_MIXING_GOLDEN") != nullptr) {
+    write_surround_bus_manifest(manifest);
+  }
+
+  const auto expected = load_manifest(manifest);
+  const auto rows = compute_surround_bus_rows();
+  REQUIRE(rows.size() == 2);
   REQUIRE(expected.size() == rows.size());
 
   for (const auto& [scenario, signal, hash] : rows) {
