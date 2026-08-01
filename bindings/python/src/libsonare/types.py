@@ -37,6 +37,9 @@ from ._types_analysis import (
     BpmCandidate as BpmCandidate,
 )
 from ._types_analysis import (
+    BpmHypothesis as BpmHypothesis,
+)
+from ._types_analysis import (
     Capabilities as Capabilities,
 )
 from ._types_analysis import (

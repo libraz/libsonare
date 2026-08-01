@@ -348,6 +348,15 @@ class Beat:
 
 
 @dataclass(frozen=True, slots=True)
+class BpmHypothesis:
+    """A tempo hypothesis retained by the unified music analysis."""
+
+    value: float
+    confidence: float
+    relation: Literal["primary", "half", "double", "other"]
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisDynamics:
     """Dynamics summary embedded in :class:`AnalysisResult`."""
 
@@ -466,6 +475,8 @@ class AnalysisResult:
     # so they can guarantee presence; Python cannot without dropping the
     # fallback. Guard with `is not None` before use.
     beat_strengths: list[float] = dataclasses.field(default_factory=list)
+    bpm_candidates: list[BpmHypothesis] = dataclasses.field(default_factory=list)
+    time_signature_candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
     chords: list[Chord] = dataclasses.field(default_factory=list)
     sections: list[Section] = dataclasses.field(default_factory=list)
     timbre: AnalysisTimbre | None = None
@@ -481,6 +492,14 @@ class AnalysisResult:
     @property
     def timeSignature(self) -> TimeSignature:  # noqa: N802
         return self.time_signature
+
+    @property
+    def bpmCandidates(self) -> list[BpmHypothesis]:  # noqa: N802
+        return self.bpm_candidates
+
+    @property
+    def timeSignatureCandidates(self) -> list[TimeSignature]:  # noqa: N802
+        return self.time_signature_candidates
 
     @property
     def beatTimes(self) -> list[float]:  # noqa: N802

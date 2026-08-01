@@ -24,6 +24,8 @@ struct MeterResult {
   TimeSignature time_signature{4, 4, 0.0f};
   int downbeat_phase = 0;
   std::vector<float> candidate_scores;
+  /// @brief Candidate signatures in descending existing multi-comb score order.
+  std::vector<TimeSignature> candidates;
 };
 
 /// @brief Estimates meter from beat-aligned onset strengths using a multi-comb score.

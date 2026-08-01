@@ -60,6 +60,16 @@ class SonareTimeSignature(ctypes.Structure):
     ]
 
 
+class SonareAnalysisBpmCandidate(ctypes.Structure):
+    """Maps to SonareAnalysisBpmCandidate in sonare_c.h."""
+
+    _fields_ = [
+        ("value", ctypes.c_float),
+        ("confidence", ctypes.c_float),
+        ("relation", ctypes.c_int32),
+    ]
+
+
 class SonareAnalysisResult(ctypes.Structure):
     """Maps to SonareAnalysisResult in sonare_c.h."""
 
@@ -70,6 +80,10 @@ class SonareAnalysisResult(ctypes.Structure):
         ("time_signature", SonareTimeSignature),
         ("beat_times", ctypes.POINTER(ctypes.c_float)),
         ("beat_count", ctypes.c_size_t),
+        ("bpm_candidates", ctypes.POINTER(SonareAnalysisBpmCandidate)),
+        ("bpm_candidate_count", ctypes.c_size_t),
+        ("time_signature_candidates", ctypes.POINTER(SonareTimeSignature)),
+        ("time_signature_candidate_count", ctypes.c_size_t),
     ]
 
 

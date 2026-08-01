@@ -62,6 +62,13 @@ export interface TimeSignature {
   confidence: number;
 }
 
+/** Existing tempo-estimator hypothesis retained by unified analysis. */
+export interface BpmHypothesis {
+  value: number;
+  confidence: number;
+  relation: 'primary' | 'half' | 'double' | 'other';
+}
+
 /** A single detected beat in {@link AnalysisResult.beats}. */
 export interface AnalysisBeat {
   /** Beat time in seconds. */
@@ -155,8 +162,10 @@ export interface AnalysisMelody {
 export interface AnalysisResult {
   bpm: number;
   bpmConfidence: number;
+  bpmCandidates: BpmHypothesis[];
   key: Key;
   timeSignature: TimeSignature;
+  timeSignatureCandidates: TimeSignature[];
   /**
    * Beat times as a `Float32Array` for backward compatibility. Derived from
    * `beats[].time`.

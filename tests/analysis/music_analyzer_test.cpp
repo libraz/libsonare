@@ -195,8 +195,12 @@ TEST_CASE("MusicAnalyzer analyze", "[.][slow][music_analyzer]") {
   REQUIRE(result.bpm > 0.0f);
   REQUIRE(result.bpm_confidence >= 0.0f);
   REQUIRE(result.bpm_confidence <= 1.0f);
+  REQUIRE_FALSE(result.bpm_candidates.empty());
+  REQUIRE(result.bpm_candidates.front().relation == BpmCandidateRelation::Primary);
+  REQUIRE(result.bpm_candidates.front().value == result.bpm);
   REQUIRE(result.key.confidence >= 0.0f);
   REQUIRE(result.time_signature.numerator > 0);
+  REQUIRE_FALSE(result.time_signature_candidates.empty());
   REQUIRE(result.timbre.brightness >= 0.0f);
   REQUIRE(result.dynamics.dynamic_range_db >= 0.0f);
   REQUIRE(!result.form.empty());
@@ -289,14 +293,17 @@ TEST_CASE("AnalysisResult struct", "[music_analyzer]") {
 
   result.bpm = 120.0f;
   result.bpm_confidence = 0.9f;
+  result.bpm_candidates.push_back({120.0f, 0.9f, BpmCandidateRelation::Primary});
   result.key.root = PitchClass::C;
   result.key.mode = Mode::Major;
   result.key.confidence = 0.8f;
   result.time_signature.numerator = 4;
   result.time_signature.denominator = 4;
+  result.time_signature_candidates.push_back({4, 4, 0.8f});
   result.form = "IABABCO";
 
   REQUIRE(result.bpm == 120.0f);
+  REQUIRE(result.bpm_candidates.front().relation == BpmCandidateRelation::Primary);
   REQUIRE(result.key.root == PitchClass::C);
   REQUIRE(result.form == "IABABCO");
 }

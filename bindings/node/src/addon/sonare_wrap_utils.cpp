@@ -243,6 +243,19 @@ Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysi
   Napi::Object result = Napi::Object::New(env);
   result.Set("bpm", Napi::Number::New(env, static_cast<double>(analysis.bpm)));
   result.Set("bpmConfidence", Napi::Number::New(env, static_cast<double>(analysis.bpm_confidence)));
+  Napi::Array bpm_candidates = Napi::Array::New(env, analysis.bpm_candidate_count);
+  for (size_t i = 0; i < analysis.bpm_candidate_count; ++i) {
+    Napi::Object candidate = Napi::Object::New(env);
+    candidate.Set("value", Napi::Number::New(env, analysis.bpm_candidates[i].value));
+    candidate.Set("confidence", Napi::Number::New(env, analysis.bpm_candidates[i].confidence));
+    static constexpr const char* kRelations[] = {"primary", "half", "double", "other"};
+    const int relation = analysis.bpm_candidates[i].relation;
+    candidate.Set("relation", Napi::String::New(env, relation >= 0 && relation < 4
+                                                           ? kRelations[relation]
+                                                           : "other"));
+    bpm_candidates.Set(static_cast<uint32_t>(i), candidate);
+  }
+  result.Set("bpmCandidates", bpm_candidates);
   result.Set("key",
              KeyToObject(env, analysis.key.root, analysis.key.mode, analysis.key.confidence));
 
@@ -252,6 +265,17 @@ Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysi
   ts.Set("confidence",
          Napi::Number::New(env, static_cast<double>(analysis.time_signature.confidence)));
   result.Set("timeSignature", ts);
+  Napi::Array time_signature_candidates =
+      Napi::Array::New(env, analysis.time_signature_candidate_count);
+  for (size_t i = 0; i < analysis.time_signature_candidate_count; ++i) {
+    const SonareTimeSignature& candidate = analysis.time_signature_candidates[i];
+    Napi::Object value = Napi::Object::New(env);
+    value.Set("numerator", Napi::Number::New(env, candidate.numerator));
+    value.Set("denominator", Napi::Number::New(env, candidate.denominator));
+    value.Set("confidence", Napi::Number::New(env, candidate.confidence));
+    time_signature_candidates.Set(static_cast<uint32_t>(i), value);
+  }
+  result.Set("timeSignatureCandidates", time_signature_candidates);
 
   auto beat_times = Napi::Float32Array::New(env, analysis.beat_count);
   Napi::Array beats = Napi::Array::New(env, analysis.beat_count);

@@ -165,6 +165,25 @@ SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult*
       out->beat_times[i] = result.beats[i].time;
     }
   }
+  out->bpm_candidate_count = result.bpm_candidates.size();
+  if (!result.bpm_candidates.empty()) {
+    out->bpm_candidates = new SonareAnalysisBpmCandidate[result.bpm_candidates.size()];
+    for (size_t i = 0; i < result.bpm_candidates.size(); ++i) {
+      const auto& candidate = result.bpm_candidates[i];
+      out->bpm_candidates[i] = {candidate.value, candidate.confidence,
+                                static_cast<SonareBpmCandidateRelation>(candidate.relation)};
+    }
+  }
+  out->time_signature_candidate_count = result.time_signature_candidates.size();
+  if (!result.time_signature_candidates.empty()) {
+    out->time_signature_candidates =
+        new SonareTimeSignature[result.time_signature_candidates.size()];
+    for (size_t i = 0; i < result.time_signature_candidates.size(); ++i) {
+      const auto& candidate = result.time_signature_candidates[i];
+      out->time_signature_candidates[i] = {candidate.numerator, candidate.denominator,
+                                           candidate.confidence};
+    }
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 }

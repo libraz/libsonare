@@ -80,6 +80,11 @@ class BeatAnalyzer {
   /// @brief Returns estimated time signature.
   TimeSignature time_signature() const { return time_signature_; }
 
+  /// @brief Returns meter candidates retained from the time-signature estimate.
+  const std::vector<TimeSignature>& time_signature_candidates() const {
+    return time_signature_candidates_;
+  }
+
   /// @brief Returns number of detected beats.
   size_t count() const { return beats_.size(); }
 
@@ -103,6 +108,7 @@ class BeatAnalyzer {
   std::vector<float> onset_strength_;
   float bpm_;
   TimeSignature time_signature_;
+  std::vector<TimeSignature> time_signature_candidates_;
   int downbeat_phase_ = 0;
   int sr_;
   int hop_length_;

@@ -28,6 +28,7 @@ export type {
   AutomationCurve,
   BpmAnalysisResult,
   BpmCandidate,
+  BpmHypothesis,
   BuiltinInstrumentConfig,
   BuiltinSynthConfig,
   Capabilities,

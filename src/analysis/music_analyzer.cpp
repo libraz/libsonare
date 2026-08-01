@@ -390,6 +390,21 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   }
   result.bpm = bpm_analyzer().bpm();
   result.bpm_confidence = bpm_analyzer().confidence();
+  result.bpm_candidates.push_back(
+      {result.bpm, result.bpm_confidence, BpmCandidateRelation::Primary});
+  for (const BpmCandidate& candidate : bpm_analyzer().candidates()) {
+    const float distance = std::abs(candidate.bpm - result.bpm);
+    const float primary_scale = std::max(1.0f, std::abs(result.bpm));
+    if (distance <= primary_scale * 0.01f) continue;
+
+    BpmCandidateRelation relation = BpmCandidateRelation::Other;
+    if (std::abs(candidate.bpm * 2.0f - result.bpm) <= primary_scale * 0.03f) {
+      relation = BpmCandidateRelation::Half;
+    } else if (std::abs(candidate.bpm - result.bpm * 2.0f) <= primary_scale * 0.06f) {
+      relation = BpmCandidateRelation::Double;
+    }
+    result.bpm_candidates.push_back({candidate.bpm, candidate.confidence, relation});
+  }
 
   // Key (15-25%) - initial detection from chroma
   report_progress(0.15f, "key");
@@ -405,6 +420,7 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   }
   result.beats = beat_analyzer().beats();
   result.time_signature = beat_analyzer().time_signature();
+  result.time_signature_candidates = beat_analyzer().time_signature_candidates();
 
   // Chords (40-55%)
   report_progress(0.40f, "chords");

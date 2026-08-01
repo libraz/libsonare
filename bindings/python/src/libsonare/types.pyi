@@ -186,6 +186,17 @@ class Beat:
     strength: float | None
     def __init__(self, time: float, strength: float | None = None) -> None: ...
 
+class BpmHypothesis:
+    value: float
+    confidence: float
+    relation: Literal["primary", "half", "double", "other"]
+    def __init__(
+        self,
+        value: float,
+        confidence: float,
+        relation: Literal["primary", "half", "double", "other"],
+    ) -> None: ...
+
 class AnalysisDynamics:
     dynamic_range_db: float
     peak_db: float
@@ -283,6 +294,8 @@ class AnalysisResult:
     time_signature: TimeSignature
     beat_times: list[float]
     beat_strengths: list[float]
+    bpm_candidates: list[BpmHypothesis]
+    time_signature_candidates: list[TimeSignature]
     chords: list[Chord]
     sections: list[Section]
     timbre: AnalysisTimbre | None
@@ -298,6 +311,8 @@ class AnalysisResult:
         time_signature: TimeSignature,
         beat_times: list[float],
         beat_strengths: list[float] = ...,
+        bpm_candidates: list[BpmHypothesis] = ...,
+        time_signature_candidates: list[TimeSignature] = ...,
         chords: list[Chord] = ...,
         sections: list[Section] = ...,
         timbre: AnalysisTimbre | None = None,
@@ -310,6 +325,10 @@ class AnalysisResult:
     def bpmConfidence(self) -> float: ...
     @property
     def timeSignature(self) -> TimeSignature: ...
+    @property
+    def bpmCandidates(self) -> list[BpmHypothesis]: ...
+    @property
+    def timeSignatureCandidates(self) -> list[TimeSignature]: ...
     @property
     def beatTimes(self) -> list[float]: ...
     @property

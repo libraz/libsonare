@@ -41,12 +41,31 @@ using ProgressCallback = std::function<void(float progress, const char* stage)>;
 /// @return true when the current analysis should stop at the next progress boundary.
 using CancelCallback = std::function<bool()>;
 
+/// @brief Relationship between a tempo hypothesis and the selected BPM.
+enum class BpmCandidateRelation {
+  Primary,
+  Half,
+  Double,
+  Other,
+};
+
+/// @brief A BPM hypothesis retained from the tempo estimator.
+struct BpmCandidateHypothesis {
+  float value = 0.0f;                           ///< Candidate BPM
+  float confidence = 0.0f;                      ///< Candidate confidence [0, 1]
+  BpmCandidateRelation relation = BpmCandidateRelation::Other;
+};
+
 /// @brief Complete music analysis result.
 struct AnalysisResult {
   float bpm = 0.0f;               ///< Detected BPM
   float bpm_confidence = 0.0f;    ///< BPM detection confidence
+  /// @brief Tempo hypotheses from the existing tempogram estimator.
+  std::vector<BpmCandidateHypothesis> bpm_candidates;
   Key key;                        ///< Detected key
   TimeSignature time_signature;   ///< Detected time signature
+  /// @brief Meter hypotheses from the existing multi-comb meter estimator.
+  std::vector<TimeSignature> time_signature_candidates;
   std::vector<Beat> beats;        ///< Beat positions
   std::vector<Chord> chords;      ///< Chord progression
   std::vector<Section> sections;  ///< Song sections

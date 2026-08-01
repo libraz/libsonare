@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal, cast
 
 from ._ffi_types_core import (
     SonareKey,
@@ -25,6 +25,7 @@ from .types import (
     AnalysisResult,
     AnalysisRhythm,
     AnalysisTimbre,
+    BpmHypothesis,
     Chord,
     Key,
     KeyCandidate,
@@ -312,6 +313,28 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         confidence=float(ts_d.get("confidence", 0.0)),
     )
 
+    bpm_candidates: list[BpmHypothesis] = []
+    for candidate in data.get("bpmCandidates", []):
+        relation = str(candidate.get("relation", "other"))
+        if relation not in {"primary", "half", "double", "other"}:
+            relation = "other"
+        bpm_candidates.append(
+            BpmHypothesis(
+                value=float(candidate.get("value", 0.0)),
+                confidence=float(candidate.get("confidence", 0.0)),
+                relation=cast(Literal["primary", "half", "double", "other"], relation),
+            )
+        )
+
+    time_signature_candidates = [
+        TimeSignature(
+            numerator=int(candidate.get("numerator", 4)),
+            denominator=int(candidate.get("denominator", 4)),
+            confidence=float(candidate.get("confidence", 0.0)),
+        )
+        for candidate in data.get("timeSignatureCandidates", [])
+    ]
+
     # Beats (list of {time, strength})
     beats_raw = data.get("beats", [])
     beat_times = [float(b.get("time", 0.0)) for b in beats_raw]
@@ -446,6 +469,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         time_signature=time_signature,
         beat_times=beat_times,
         beat_strengths=beat_strengths,
+        bpm_candidates=bpm_candidates,
+        time_signature_candidates=time_signature_candidates,
         chords=chords,
         sections=sections,
         timbre=timbre,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Literal, cast
 
 from ._analysis_detection import _parse_analysis_json
 from ._cancellation import CancellationState, make_cancel_trampoline
@@ -30,6 +30,7 @@ from .types import (
     AnalysisResult,
     BpmAnalysisResult,
     BpmCandidate,
+    BpmHypothesis,
     DynamicsResult,
     Key,
     Mode,
@@ -141,6 +142,7 @@ def analyze(
     _check(rc)
     try:
         beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
+        relation_names = ("primary", "half", "double", "other")
         return AnalysisResult(
             bpm=float(out.bpm),
             bpm_confidence=float(out.bpm_confidence),
@@ -155,6 +157,27 @@ def analyze(
                 confidence=float(out.time_signature.confidence),
             ),
             beat_times=beat_times,
+            bpm_candidates=[
+                BpmHypothesis(
+                    value=float(out.bpm_candidates[i].value),
+                    confidence=float(out.bpm_candidates[i].confidence),
+                    relation=cast(
+                        Literal["primary", "half", "double", "other"],
+                        relation_names[out.bpm_candidates[i].relation]
+                        if 0 <= out.bpm_candidates[i].relation < len(relation_names)
+                        else "other",
+                    ),
+                )
+                for i in range(out.bpm_candidate_count)
+            ],
+            time_signature_candidates=[
+                TimeSignature(
+                    numerator=int(out.time_signature_candidates[i].numerator),
+                    denominator=int(out.time_signature_candidates[i].denominator),
+                    confidence=float(out.time_signature_candidates[i].confidence),
+                )
+                for i in range(out.time_signature_candidate_count)
+            ],
         )
     finally:
         lib.sonare_free_result(ctypes.byref(out))

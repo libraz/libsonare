@@ -94,6 +94,35 @@ def _generate_test_signal(sample_rate: int = 22050, duration: float = 4.0) -> li
     return out
 
 
+def test_parse_analysis_json_retains_tempo_and_meter_hypotheses() -> None:
+    """The rich JSON decoder keeps the existing estimator candidates intact."""
+    from libsonare._analysis_detection import _parse_analysis_json
+
+    result = _parse_analysis_json(
+        {
+            "bpm": 120.0,
+            "bpmConfidence": 0.9,
+            "bpmCandidates": [
+                {"value": 120.0, "confidence": 0.9, "relation": "primary"},
+                {"value": 60.0, "confidence": 0.4, "relation": "half"},
+            ],
+            "key": {},
+            "timeSignature": {"numerator": 4, "denominator": 4, "confidence": 0.8},
+            "timeSignatureCandidates": [
+                {"numerator": 4, "denominator": 4, "confidence": 0.7},
+                {"numerator": 3, "denominator": 4, "confidence": 0.3},
+            ],
+            "beats": [],
+        }
+    )
+
+    assert [(candidate.value, candidate.relation) for candidate in result.bpm_candidates] == [
+        (120.0, "primary"),
+        (60.0, "half"),
+    ]
+    assert [str(candidate) for candidate in result.time_signature_candidates] == ["4/4", "3/4"]
+
+
 @pytest.fixture(scope="module")
 def analyze_result():
     """One full analyze() pass shared by every shape/type assertion below.

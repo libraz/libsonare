@@ -493,6 +493,7 @@ void BeatAnalyzer::track_beats() {
 void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_strength_observations) {
   if (beats_.size() < 8) {
     time_signature_ = {4, 4, 0.5f};  // Default to 4/4 with low confidence
+    time_signature_candidates_ = {time_signature_};
     downbeat_phase_ = 0;
     DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, 0);
     downbeat_indices_ = std::move(downbeat_result.beat_indices);
@@ -516,6 +517,7 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_streng
     meter = estimate_meter(onset_strength_, beats_);
   }
   time_signature_ = meter.time_signature;
+  time_signature_candidates_ = std::move(meter.candidates);
   downbeat_phase_ = meter.downbeat_phase;
   DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, downbeat_phase_);
   downbeat_indices_ = std::move(downbeat_result.beat_indices);

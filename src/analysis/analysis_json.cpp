@@ -18,12 +18,30 @@ Value time_signature_to_value(const TimeSignature& ts) {
   return Value(std::move(o));
 }
 
+const char* bpm_candidate_relation_name(BpmCandidateRelation relation) {
+  switch (relation) {
+    case BpmCandidateRelation::Primary:
+      return "primary";
+    case BpmCandidateRelation::Half:
+      return "half";
+    case BpmCandidateRelation::Double:
+      return "double";
+    case BpmCandidateRelation::Other:
+      return "other";
+  }
+  return "other";
+}
+
 }  // namespace
 
 const std::vector<std::string>& analysis_result_schema_paths() {
   static const std::vector<std::string> paths = {
       "bpm",
       "bpmConfidence",
+      "bpmCandidates",
+      "bpmCandidates[].value",
+      "bpmCandidates[].confidence",
+      "bpmCandidates[].relation",
       "key",
       "key.root",
       "key.mode",
@@ -34,6 +52,10 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "timeSignature.numerator",
       "timeSignature.denominator",
       "timeSignature.confidence",
+      "timeSignatureCandidates",
+      "timeSignatureCandidates[].numerator",
+      "timeSignatureCandidates[].denominator",
+      "timeSignatureCandidates[].confidence",
       "beats",
       "beats[].time",
       "beats[].strength",
@@ -92,6 +114,18 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   Object root;
   root["bpm"] = Value(result.bpm);
   root["bpmConfidence"] = Value(result.bpm_confidence);
+  {
+    Array candidates;
+    candidates.reserve(result.bpm_candidates.size());
+    for (const auto& candidate : result.bpm_candidates) {
+      Object value;
+      value["value"] = Value(candidate.value);
+      value["confidence"] = Value(candidate.confidence);
+      value["relation"] = Value(bpm_candidate_relation_name(candidate.relation));
+      candidates.push_back(Value(std::move(value)));
+    }
+    root["bpmCandidates"] = Value(std::move(candidates));
+  }
 
   // Key
   {
@@ -105,6 +139,14 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   }
 
   root["timeSignature"] = time_signature_to_value(result.time_signature);
+  {
+    Array candidates;
+    candidates.reserve(result.time_signature_candidates.size());
+    for (const auto& candidate : result.time_signature_candidates) {
+      candidates.push_back(time_signature_to_value(candidate));
+    }
+    root["timeSignatureCandidates"] = Value(std::move(candidates));
+  }
 
   // Beats (time + strength) — strength is dropped by the flat C struct.
   {

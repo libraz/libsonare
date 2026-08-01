@@ -115,6 +115,28 @@ val analysisResultToVal(const AnalysisResult& result) {
   // BPM
   out.set("bpm", result.bpm);
   out.set("bpmConfidence", result.bpm_confidence);
+  val bpmCandidates = val::array();
+  for (const auto& candidate : result.bpm_candidates) {
+    val value = val::object();
+    value.set("value", candidate.value);
+    value.set("confidence", candidate.confidence);
+    switch (candidate.relation) {
+      case BpmCandidateRelation::Primary:
+        value.set("relation", "primary");
+        break;
+      case BpmCandidateRelation::Half:
+        value.set("relation", "half");
+        break;
+      case BpmCandidateRelation::Double:
+        value.set("relation", "double");
+        break;
+      case BpmCandidateRelation::Other:
+        value.set("relation", "other");
+        break;
+    }
+    bpmCandidates.call<void>("push", value);
+  }
+  out.set("bpmCandidates", bpmCandidates);
 
   // Key
   val key = val::object();
@@ -131,6 +153,15 @@ val analysisResultToVal(const AnalysisResult& result) {
   timeSig.set("denominator", result.time_signature.denominator);
   timeSig.set("confidence", result.time_signature.confidence);
   out.set("timeSignature", timeSig);
+  val timeSignatureCandidates = val::array();
+  for (const auto& candidate : result.time_signature_candidates) {
+    val value = val::object();
+    value.set("numerator", candidate.numerator);
+    value.set("denominator", candidate.denominator);
+    value.set("confidence", candidate.confidence);
+    timeSignatureCandidates.call<void>("push", value);
+  }
+  out.set("timeSignatureCandidates", timeSignatureCandidates);
 
   // Beats
   val beats = val::array();
@@ -441,10 +472,12 @@ val js_analysis_result_schema_fixture() {
   AnalysisResult result;
   result.bpm = 120.0f;
   result.bpm_confidence = 0.9f;
+  result.bpm_candidates.push_back({120.0f, 0.9f, BpmCandidateRelation::Primary});
   result.key.root = PitchClass::C;
   result.key.mode = Mode::Major;
   result.key.confidence = 0.8f;
   result.time_signature = {4, 4, 0.7f};
+  result.time_signature_candidates.push_back({4, 4, 0.7f});
   result.beats.push_back({0.25f, 0, 0.6f});
   result.chords.push_back({PitchClass::C, ChordQuality::Major, 0.0f, 1.0f, 0.8f, PitchClass::C});
   result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});

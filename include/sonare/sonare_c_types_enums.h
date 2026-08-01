@@ -117,6 +117,20 @@ typedef struct {
   float confidence;
 } SonareTimeSignature;
 
+/* Relationship between a tempo candidate and SonareAnalysisResult.bpm. */
+typedef enum {
+  SONARE_BPM_CANDIDATE_PRIMARY = 0,
+  SONARE_BPM_CANDIDATE_HALF = 1,
+  SONARE_BPM_CANDIDATE_DOUBLE = 2,
+  SONARE_BPM_CANDIDATE_OTHER = 3
+} SonareBpmCandidateRelation;
+
+typedef struct {
+  float value;
+  float confidence;
+  SonareBpmCandidateRelation relation;
+} SonareAnalysisBpmCandidate;
+
 // Flat analysis result structure. Producing this result runs the full quick
 // analysis pipeline because the flat result still includes meter/beat data;
 // use sonare_detect_bpm/key/beats for cheaper single-purpose queries.
@@ -127,6 +141,10 @@ typedef struct {
   SonareTimeSignature time_signature;
   float* beat_times;
   size_t beat_count;
+  SonareAnalysisBpmCandidate* bpm_candidates;
+  size_t bpm_candidate_count;
+  SonareTimeSignature* time_signature_candidates;
+  size_t time_signature_candidate_count;
 } SonareAnalysisResult;
 
 #ifdef __cplusplus

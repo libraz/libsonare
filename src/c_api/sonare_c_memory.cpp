@@ -80,6 +80,12 @@ void sonare_free_result(SonareAnalysisResult* result) {
     delete[] result->beat_times;
     result->beat_times = nullptr;
     result->beat_count = 0;
+    delete[] result->bpm_candidates;
+    result->bpm_candidates = nullptr;
+    result->bpm_candidate_count = 0;
+    delete[] result->time_signature_candidates;
+    result->time_signature_candidates = nullptr;
+    result->time_signature_candidate_count = 0;
   }
 }
 

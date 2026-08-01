@@ -432,6 +432,7 @@ export type {
   AnalyzeTimbreOptions,
   AutomationCurve,
   Beat,
+  BpmHypothesis,
   Chord,
   ChordAnalysisResult,
   ChordDetectionOptions,

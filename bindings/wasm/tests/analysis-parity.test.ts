@@ -62,9 +62,15 @@ describe('WASM wave3 analysis parity', () => {
       expect(actual).toEqual(expected);
     });
 
-    it('exposes peak/RMS dynamics, rhythm stability + time signature, and a melody contour', () => {
+    it('exposes tempo/meter hypotheses, dynamics, rhythm stability, and a melody contour', () => {
       const samples = makeSine(4, 261.63); // C4
       const result = analyze(samples, SR);
+
+      expect(Array.isArray(result.bpmCandidates)).toBe(true);
+      expect(result.bpmCandidates[0]?.relation).toBe('primary');
+      expect(result.bpmCandidates[0]?.value).toBe(result.bpm);
+      expect(Array.isArray(result.timeSignatureCandidates)).toBe(true);
+      expect(result.timeSignatureCandidates.length).toBeGreaterThan(0);
 
       // Dynamics: peakDb / rmsDb were previously omitted.
       expect(Number.isFinite(result.dynamics.peakDb)).toBe(true);

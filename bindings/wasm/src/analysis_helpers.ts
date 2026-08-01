@@ -137,6 +137,11 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
   return {
     bpm: wasm.bpm,
     bpmConfidence: wasm.bpmConfidence,
+    bpmCandidates: wasm.bpmCandidates.map((candidate) => ({
+      value: candidate.value,
+      confidence: candidate.confidence,
+      relation: candidate.relation,
+    })),
     key: {
       root: wasm.key.root as PitchClass,
       mode: wasm.key.mode as Mode,
@@ -145,6 +150,7 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
       shortName: wasm.key.shortName,
     },
     timeSignature: wasm.timeSignature,
+    timeSignatureCandidates: wasm.timeSignatureCandidates,
     beatTimes,
     beats: wasm.beats,
     chords: wasm.chords.map((c) => ({

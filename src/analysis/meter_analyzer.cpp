@@ -71,6 +71,7 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
 
   if (beats.size() < 8 || config_.candidate_numerators.empty()) {
     result_.time_signature.confidence = 0.5f;
+    result_.candidates = {result_.time_signature};
     return;
   }
 
@@ -211,6 +212,45 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
 
   result_.time_signature = {best_numerator, denominator, confidence};
   result_.downbeat_phase = best_phase;
+
+  // Preserve the scores already calculated by the multi-comb estimator. The
+  // normalized values deliberately express relative candidate support; no new
+  // meter inference is performed here.
+  const float score_sum = std::accumulate(
+      result_.candidate_scores.begin(), result_.candidate_scores.end(), 0.0f,
+      [](float sum, float score) { return sum + std::max(0.0f, score); });
+  for (size_t i = 0; i < config_.candidate_numerators.size(); ++i) {
+    const int numerator = config_.candidate_numerators[i];
+    if (numerator <= 1) continue;
+    const float score = std::max(0.0f, result_.candidate_scores[i]);
+    const int candidate_denominator =
+        numerator == 6 && (onset_strength.empty() ||
+                           compound_score >= config_.compound_subdivision_threshold)
+            ? 8
+            : config_.denominator;
+    result_.candidates.push_back(
+        {numerator, candidate_denominator, score_sum > kEpsilon ? score / score_sum : 0.0f});
+  }
+
+  std::stable_sort(result_.candidates.begin(), result_.candidates.end(),
+                   [primary = result_.time_signature](const TimeSignature& lhs,
+                                                        const TimeSignature& rhs) {
+                     const bool lhs_primary = lhs.numerator == primary.numerator &&
+                                              lhs.denominator == primary.denominator;
+                     const bool rhs_primary = rhs.numerator == primary.numerator &&
+                                              rhs.denominator == primary.denominator;
+                     if (lhs_primary != rhs_primary) return lhs_primary;
+                     return lhs.confidence > rhs.confidence;
+                   });
+
+  const bool has_primary = std::any_of(
+      result_.candidates.begin(), result_.candidates.end(), [this](const TimeSignature& candidate) {
+        return candidate.numerator == result_.time_signature.numerator &&
+               candidate.denominator == result_.time_signature.denominator;
+      });
+  if (!has_primary) {
+    result_.candidates.insert(result_.candidates.begin(), result_.time_signature);
+  }
 }
 
 MeterResult estimate_meter(const std::vector<float>& onset_strength, const std::vector<Beat>& beats,

@@ -35,6 +35,9 @@ TEST_CASE("MeterAnalyzer detects 4/4 from accented beats", "[meter_analyzer]") {
   REQUIRE(analyzer.time_signature().numerator == 4);
   REQUIRE(analyzer.time_signature().denominator == 4);
   REQUIRE(analyzer.time_signature().confidence > 0.5f);
+  REQUIRE_FALSE(analyzer.result().candidates.empty());
+  REQUIRE(analyzer.result().candidates.front().numerator == 4);
+  REQUIRE(analyzer.result().candidates.front().denominator == 4);
 }
 
 TEST_CASE("MeterAnalyzer normalizes onset strengths above unity", "[meter_analyzer]") {
@@ -111,4 +114,13 @@ TEST_CASE("MeterAnalyzer promotes 3-beat compound subdivisions to 6/8", "[meter_
   REQUIRE(analyzer.time_signature().numerator == 6);
   REQUIRE(analyzer.time_signature().denominator == 8);
   REQUIRE(analyzer.time_signature().confidence > 0.5f);
+}
+
+TEST_CASE("MeterAnalyzer retains its existing candidate signatures", "[meter_analyzer]") {
+  const auto beats = make_beats(4, 8);
+  MeterAnalyzer analyzer({}, beats);
+
+  REQUIRE(analyzer.result().candidates.size() == 3);
+  REQUIRE(analyzer.result().candidates.front().numerator == 4);
+  REQUIRE(analyzer.result().candidates.front().confidence >= 0.0f);
 }

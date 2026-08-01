@@ -565,6 +565,9 @@ from .types import (
 from .types import (
     BpmCandidate as BpmCandidate,
 )
+from .types import (
+    BpmHypothesis as BpmHypothesis,
+)
 from .types import Capabilities as Capabilities
 from .types import CapabilitiesAbi as CapabilitiesAbi
 from .types import CapabilitiesDecode as CapabilitiesDecode

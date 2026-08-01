@@ -138,8 +138,10 @@ export interface WasmMelodyContourResult {
 export interface WasmAnalysisResult {
   bpm: number;
   bpmConfidence: number;
+  bpmCandidates: WasmBpmHypothesis[];
   key: WasmKeyResult;
   timeSignature: WasmTimeSignatureResult;
+  timeSignatureCandidates: WasmTimeSignatureResult[];
   beats: WasmBeatResult[];
   chords: WasmChordResult[];
   sections: WasmSectionResult[];
@@ -148,6 +150,12 @@ export interface WasmAnalysisResult {
   rhythm: WasmRhythmResult;
   melody: WasmMelodyContourResult;
   form: string;
+}
+
+export interface WasmBpmHypothesis {
+  value: number;
+  confidence: number;
+  relation: 'primary' | 'half' | 'double' | 'other';
 }
 
 export interface WasmBpmCandidate {

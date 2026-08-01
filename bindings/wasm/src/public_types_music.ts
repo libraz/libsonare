@@ -315,6 +315,13 @@ export interface TimeSignature {
   confidence: number;
 }
 
+/** Existing tempo-estimator hypothesis retained by unified analysis. */
+export interface BpmHypothesis {
+  value: number;
+  confidence: number;
+  relation: 'primary' | 'half' | 'double' | 'other';
+}
+
 /**
  * Rhythm features
  */
@@ -343,8 +350,10 @@ export interface MelodyContour {
 export interface AnalysisResult {
   bpm: number;
   bpmConfidence: number;
+  bpmCandidates: BpmHypothesis[];
   key: Key;
   timeSignature: TimeSignature;
+  timeSignatureCandidates: TimeSignature[];
   beatTimes: Float32Array;
   beats: Beat[];
   chords: Chord[];

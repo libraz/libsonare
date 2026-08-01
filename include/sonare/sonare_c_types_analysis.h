@@ -440,6 +440,9 @@ static_assert(offsetof(SonareAnalysisResult, beat_times) ==
 static_assert(offsetof(SonareAnalysisResult, beat_count) ==
                   offsetof(SonareAnalysisResult, beat_times) + sizeof(float*),
               "SonareAnalysisResult tail layout changed");
+static_assert(offsetof(SonareAnalysisResult, bpm_candidates) ==
+                  offsetof(SonareAnalysisResult, beat_count) + sizeof(size_t),
+              "SonareAnalysisResult candidate layout changed");
 
 static_assert(SONARE_SYNTH_ENGINE_FREE_REED + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "SonareSynthEngineMode count changed");
