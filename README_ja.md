@@ -85,10 +85,9 @@ npm install @libraz/libsonare   # JavaScript / TypeScript（WASM、Float32Array 
 pip install libsonare            # Python（WAV/MP3。M4A/AAC などは「対応フォーマット」参照）
 ```
 
-Node.js でファイルをネイティブにデコードしたい場合は、
-[`@libraz/libsonare-native`](bindings/node/) をソースからビルドします（pkg-config で
-FFmpeg を自動検出します）。ネイティブビルドや FFmpeg まわりの詳細は
-[インストールガイド](https://libsonare.libraz.net/ja/docs/installation)を参照してください。
+[`@libraz/libsonare-native`](bindings/node/) は npm に公開していません。リポジトリを
+clone してローカル依存として使ってください。ネイティブビルドと FFmpeg の詳細は
+同パッケージの README にあります。
 
 ## クイックスタート
 
@@ -229,8 +228,9 @@ make release               # 最適化ビルド
 
 libsonare はアプリケーションではなくヘッドレスなエンジンです。UI や DAW ワークフロー、
 サードパーティのプラグインホスティング（VST/CLAP）、クロスプラットフォームのリアルタイム
-I/O 抽象化、サンプルデータの同梱、深層学習モデルは意図的に含みません。オーディオコールバックと
-UI は呼び出し側が所有します（I/O 境界の唯一の例外が、オプトイン・非公開の実験的 macOS
+I/O 抽象化、サンプルデータの同梱、深層学習モデルは意図的に含みません。Windows は非対応で、
+Linux・macOS・WebAssembly または WSL2 を利用してください。オーディオコールバックと UI は
+呼び出し側が所有します（I/O 境界の唯一の例外が、オプトイン・非公開の実験的 macOS
 バックエンドです）。この線引きが、依存ゼロと Apache-2.0 の純度を保ちます。背景は
 [Non-goals](https://libsonare.libraz.net/ja/docs/architecture)を参照してください。
 

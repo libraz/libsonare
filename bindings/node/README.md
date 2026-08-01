@@ -23,8 +23,8 @@ mixing, and editing APIs match the C, Python, CLI, and WASM surfaces.
 
 ## Installation
 
-This binding is distributed as source (it is **not published to npm**); build it
-from the repository and consume it as a local / workspace dependency. `yarn build`
+This binding has no npm package. Clone the repository and consume it as a local /
+workspace dependency; npm cannot install `@libraz/libsonare-native`. `yarn build`
 runs `cmake-js compile` then `tsc`, auto-detecting FFmpeg via pkg-config.
 
 ```bash

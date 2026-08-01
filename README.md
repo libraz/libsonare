@@ -88,10 +88,9 @@ npm install @libraz/libsonare   # JavaScript / TypeScript (WASM, takes Float32Ar
 pip install libsonare            # Python (WAV/MP3 — see "Audio formats" for M4A/AAC etc.)
 ```
 
-For Node.js with native file decoding, build
-[`@libraz/libsonare-native`](bindings/node/) from source (it auto-detects FFmpeg
-via pkg-config). See the [installation guide](https://libsonare.libraz.net/docs/installation)
-for native builds and FFmpeg options.
+[`@libraz/libsonare-native`](bindings/node/) is not published to npm. Clone this
+repository and use it as a local dependency; its README covers the native build
+and FFmpeg options.
 
 ## Quick start
 
@@ -235,9 +234,10 @@ Full docs and browser-local demos live at
 libsonare is the headless engine, not an application. It intentionally does not
 include a UI or DAW workflow, third-party plugin hosting (VST/CLAP), a
 cross-platform real-time I/O abstraction, bundled sample data, or deep-learning
-models. Callers own the audio callback and the UI; the experimental macOS
-backends are the only (opt-in, unpublished) exception to the I/O boundary. These
-limits keep the library dependency-free and Apache-2.0 pure. See
+models. Windows is not supported; use Linux, macOS, WebAssembly, or WSL2. Callers
+own the audio callback and the UI; the experimental macOS backends are the only
+(opt-in, unpublished) exception to the I/O boundary. These limits keep the library
+dependency-free and Apache-2.0 pure. See
 [Non-goals](https://libsonare.libraz.net/docs/architecture) for the rationale.
 
 ## License

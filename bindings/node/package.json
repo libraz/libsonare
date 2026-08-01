@@ -1,6 +1,7 @@
 {
   "name": "@libraz/libsonare-native",
   "version": "1.5.5",
+  "private": true,
   "description": "Audio analysis, mastering, mixing, and MIDI synthesis — native Node.js (N-API)",
   "type": "module",
   "main": "dist/index.js",

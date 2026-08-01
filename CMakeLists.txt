@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(libsonare VERSION 1.5.5 LANGUAGES C CXX)
 
+if(WIN32)
+  message(FATAL_ERROR
+    "Windows is not a supported platform. Supported: Linux, macOS, WebAssembly. "
+    "On Windows, build under WSL2.")
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -126,7 +132,7 @@ if(NOT Eigen3_FOUND)
   # Eigen's own ~880 unit tests into our CTest (they fail as "Unable to find
   # executable" because we never build them) and pull in its targets. A bare
   # populate + manual INTERFACE target avoids that on every platform that lacks
-  # a system Eigen (Windows and macOS CI, WASM). SYSTEM marks the headers so
+  # a system Eigen (macOS CI, WASM). SYSTEM marks the headers so
   # MSVC /W4 /WX and -Wall -Werror do not error on warnings inside Eigen.
   if(POLICY CMP0169)
     cmake_policy(PUSH)
