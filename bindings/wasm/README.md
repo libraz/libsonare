@@ -87,6 +87,43 @@ const audio = Audio.fromBuffer(decoded.getChannelData(0), decoded.sampleRate);
 const { bpm, key } = audio.analyze();
 ```
 
+### Offline Worker for longer audio
+
+For audio longer than roughly 30 seconds, use `OfflineWorkerClient` to keep
+analysis or preset mastering off the UI thread. The published `./worker`
+subpath is resolved automatically. It intentionally exposes only one-shot
+value APIs (`analyze`, BPM/key/chord detection, and `masterAudio`): native
+handles such as `Project`, `Mixer`, and realtime engines stay in their owning
+JavaScript realm.
+
+```typescript
+import { OfflineWorkerClient } from '@libraz/libsonare';
+
+const offline = new OfflineWorkerClient();
+const task = offline.analyze(
+  { samples, sampleRate },
+  {
+    onProgress: ({ progress, stage }) => updateProgress(progress, stage),
+    // copy: true, // retain `samples`; the default transfers and detaches it
+  },
+);
+
+cancelButton.onclick = () => task.cancel();
+try {
+  const result = await task;
+  console.log(result.bpm, result.key.name);
+} finally {
+  offline.dispose();
+}
+```
+
+By default the input `Float32Array` is transferred, so its buffer is detached
+on the calling thread. Pass `{ copy: true }` when it must remain usable. Prompt
+cancellation of a running synchronous WASM call uses `SharedArrayBuffer`; serve
+the page with cross-origin isolation (COOP/COEP) when a cancel button must take
+effect immediately. `workerUrl` lets a host point the client at a separately
+hosted copy of `@libraz/libsonare/worker`.
+
 ### Loading the `.wasm` file
 
 Bundlers that don't auto-resolve the `.wasm` asset need its URL. Pass a

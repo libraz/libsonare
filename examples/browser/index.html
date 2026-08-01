@@ -3,22 +3,40 @@
   <meta charset="utf-8">
   <title>libsonare browser analysis</title>
   <input id="file" type="file" accept="audio/*">
+  <button id="cancel" type="button" disabled>Cancel analysis</button>
   <pre id="result">Choose an audio file.</pre>
   <script type="module">
-    import { Audio, init } from '../../bindings/wasm/dist/index.js';
+    import { Audio, init, OfflineWorkerClient } from '../../bindings/wasm/dist/index.js';
 
     await init();
     const input = document.querySelector('#file');
+    const cancel = document.querySelector('#cancel');
     const result = document.querySelector('#result');
+    const offline = new OfflineWorkerClient();
+    let currentTask;
+
+    cancel.addEventListener('click', () => currentTask?.cancel());
     input.addEventListener('change', async () => {
       const file = input.files?.[0];
       if (!file) return;
       result.textContent = 'Analyzing…';
+      cancel.disabled = false;
       try {
         const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array(await file.arrayBuffer()));
-        result.textContent = JSON.stringify(audio.analyze(), null, 2);
+        currentTask = offline.analyze(
+          { samples: audio.data, sampleRate: audio.sampleRate },
+          {
+            onProgress: ({ progress, stage }) => {
+              result.textContent = `Analyzing ${Math.round(progress * 100)}% (${stage})…`;
+            },
+          },
+        );
+        result.textContent = JSON.stringify(await currentTask, null, 2);
       } catch (error) {
         result.textContent = error instanceof Error ? error.message : String(error);
+      } finally {
+        currentTask = undefined;
+        cancel.disabled = true;
       }
     });
   </script>

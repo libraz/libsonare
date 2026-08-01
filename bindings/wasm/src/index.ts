@@ -629,6 +629,13 @@ export type {
   WebMidiInputInfo,
 } from './web_midi';
 export { bindWebMidi, isWebMidiAvailable } from './web_midi';
+export type {
+  OfflineWorker,
+  OfflineWorkerCallOptions,
+  OfflineWorkerClientOptions,
+  OfflineWorkerProgress,
+} from './worker_client';
+export { OfflineWorkerClient, OfflineWorkerTask } from './worker_client';
 
 /** Row-major 2-D matrix as a flat buffer plus its dimensions. */
 export type Matrix2dResult = WasmMatrix2dResult;

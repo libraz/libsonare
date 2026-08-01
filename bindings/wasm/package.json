@@ -15,6 +15,10 @@
       "types": "./dist/worklet.d.ts",
       "import": "./dist/worklet.js"
     },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
     "./wasm": "./dist/sonare.wasm",
     "./package.json": "./package.json"
   },
@@ -35,6 +39,7 @@
     "format": "biome format --write src/ tests/",
     "test": "vitest run",
     "test:browser": "node scripts/audio-worklet-smoke.mjs",
+    "test:browser:worker": "node scripts/offline-worker-smoke.mjs",
     "test:browser:audit": "node scripts/audit-boundary-smoke.mjs",
     "test:watch": "vitest",
     "prepublishOnly": "yarn clean && cp ../../LICENSE LICENSE && yarn build && yarn lint && yarn test"

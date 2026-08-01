@@ -17,4 +17,5 @@ const common = {
 export default defineConfig([
   { ...common, entry: ['src/index.ts'] },
   { ...common, entry: ['src/worklet.ts'] },
+  { ...common, entry: ['src/worker.ts'] },
 ]);
