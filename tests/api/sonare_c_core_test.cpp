@@ -31,8 +31,7 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
   sonare::AnalysisResult result;
   result.bpm = 120.0f;
   result.bpm_confidence = 0.9f;
-  result.bpm_candidates.push_back(
-      {120.0f, 0.9f, sonare::BpmCandidateRelation::Primary});
+  result.bpm_candidates.push_back({120.0f, 0.9f, sonare::BpmCandidateRelation::Primary});
   result.key.root = sonare::PitchClass::C;
   result.key.mode = sonare::Mode::Major;
   result.key.confidence = 0.8f;
@@ -806,8 +805,8 @@ TEST_CASE("sonare_analyze", "[.][slow][c_api]") {
     SonareAnalysisResult result = {};
     result.beat_times = new float[2]{0.1f, 0.2f};
     result.beat_count = 2;
-    result.bpm_candidates = new SonareAnalysisBpmCandidate[1]{
-        {120.0f, 0.9f, SONARE_BPM_CANDIDATE_PRIMARY}};
+    result.bpm_candidates =
+        new SonareAnalysisBpmCandidate[1]{{120.0f, 0.9f, SONARE_BPM_CANDIDATE_PRIMARY}};
     result.bpm_candidate_count = 1;
     result.time_signature_candidates = new SonareTimeSignature[1]{{4, 4, 0.8f}};
     result.time_signature_candidate_count = 1;

@@ -112,13 +112,13 @@ from ._types_analysis import (
     MasteringChainStereoResult as MasteringChainStereoResult,
 )
 from ._types_analysis import (
-    MasteringLoudnessSummary as MasteringLoudnessSummary,
-)
-from ._types_analysis import (
     MasteringChannelPolicy as MasteringChannelPolicy,
 )
 from ._types_analysis import (
     MasteringInsertParamInfo as MasteringInsertParamInfo,
+)
+from ._types_analysis import (
+    MasteringLoudnessSummary as MasteringLoudnessSummary,
 )
 from ._types_analysis import (
     MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry,

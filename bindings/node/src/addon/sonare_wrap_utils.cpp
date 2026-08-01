@@ -250,9 +250,9 @@ Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysi
     candidate.Set("confidence", Napi::Number::New(env, analysis.bpm_candidates[i].confidence));
     static constexpr const char* kRelations[] = {"primary", "half", "double", "other"};
     const int relation = analysis.bpm_candidates[i].relation;
-    candidate.Set("relation", Napi::String::New(env, relation >= 0 && relation < 4
-                                                           ? kRelations[relation]
-                                                           : "other"));
+    candidate.Set(
+        "relation",
+        Napi::String::New(env, relation >= 0 && relation < 4 ? kRelations[relation] : "other"));
     bpm_candidates.Set(static_cast<uint32_t>(i), candidate);
   }
   result.Set("bpmCandidates", bpm_candidates);
