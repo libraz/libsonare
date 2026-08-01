@@ -38,6 +38,8 @@ SonareError map_sonare_exception(const SonareException& e) {
       return SONARE_ERROR_NOT_SUPPORTED;
     case sonare::ErrorCode::InvalidState:
       return SONARE_ERROR_INVALID_STATE;
+    case sonare::ErrorCode::Cancelled:
+      return SONARE_ERROR_CANCELLED;
     default:
       return SONARE_ERROR_UNKNOWN;
   }

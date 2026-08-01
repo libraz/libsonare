@@ -101,6 +101,8 @@ const char* sonare_error_message(SonareError error) {
       return "Not supported in this build";
     case SONARE_ERROR_INVALID_STATE:
       return "Invalid state";
+    case SONARE_ERROR_CANCELLED:
+      return "Cancelled";
     case SONARE_ERROR_UNKNOWN:
       return "Unknown error";
   }

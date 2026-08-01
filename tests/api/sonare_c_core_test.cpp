@@ -883,6 +883,31 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     sonare_free_string(json2);
   }
 
+  SECTION("cancels after a reported progress boundary without producing JSON") {
+    struct CancelState {
+      int progress_calls = 0;
+      float last_progress = -1.0f;
+      bool should_cancel = false;
+    } state;
+    auto progress = [](float value, const char* /*stage*/, void* user_data) {
+      auto* current = static_cast<CancelState*>(user_data);
+      ++current->progress_calls;
+      current->last_progress = value;
+      current->should_cancel = value > 0.5f;
+    };
+    auto cancel = [](void* user_data) {
+      return static_cast<CancelState*>(user_data)->should_cancel ? 1 : 0;
+    };
+
+    char* json = nullptr;
+    REQUIRE(sonare_analyze_json_with_progress_ex(samples.data(), samples.size(), 22050, progress,
+                                                 &state, &json, cancel,
+                                                 &state) == SONARE_ERROR_CANCELLED);
+    REQUIRE(state.progress_calls > 0);
+    REQUIRE(state.last_progress > 0.5f);
+    REQUIRE(json == nullptr);
+  }
+
   SECTION("rejects a null out pointer") {
     REQUIRE(sonare_analyze_json(samples.data(), samples.size(), 22050, nullptr) ==
             SONARE_ERROR_INVALID_PARAMETER);

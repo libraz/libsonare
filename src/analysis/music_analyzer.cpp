@@ -37,6 +37,10 @@ void MusicAnalyzer::set_progress_callback(ProgressCallback callback) {
   progress_callback_ = std::move(callback);
 }
 
+void MusicAnalyzer::set_cancel_callback(CancelCallback should_cancel) {
+  cancel_callback_ = std::move(should_cancel);
+}
+
 void MusicAnalyzer::report_progress(float progress, const char* stage) {
 #ifndef __EMSCRIPTEN__
   std::lock_guard<std::mutex> lock(progress_mutex_);
@@ -368,29 +372,34 @@ void MusicAnalyzer::precompute_features() {
 #endif
 }
 
-AnalysisResult MusicAnalyzer::analyze() {
+std::optional<AnalysisResult> MusicAnalyzer::analyze_impl(bool check_cancel) {
   AnalysisResult result;
 
   // Eagerly precompute feature caches (parallel on native, sequential on WASM)
   report_progress(0.0f, "features");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   precompute_features();
 
   // BPM and tempo
   report_progress(0.15f, "bpm");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   result.bpm = bpm_analyzer().bpm();
   result.bpm_confidence = bpm_analyzer().confidence();
 
   // Key (15-25%) - initial detection from chroma
   report_progress(0.15f, "key");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   Key chroma_key = key_analyzer().key();
 
   // Beats and time signature (25-40%)
   report_progress(0.25f, "beats");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   result.beats = beat_analyzer().beats();
   result.time_signature = beat_analyzer().time_signature();
 
   // Chords (40-55%)
   report_progress(0.40f, "chords");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   result.chords = chord_analyzer().chords();
 
   // Refine key using chord progression analysis
@@ -398,29 +407,39 @@ AnalysisResult MusicAnalyzer::analyze() {
 
   // Sections (55-70%)
   report_progress(0.55f, "sections");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   result.sections = section_analyzer().sections();
   result.form = section_analyzer().form();
 
   // Timbre (70-80%)
   report_progress(0.70f, "timbre");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   result.timbre = timbre_analyzer().timbre();
 
   // Dynamics (80-90%)
   report_progress(0.80f, "dynamics");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   result.dynamics = dynamics_analyzer().dynamics();
 
   // Rhythm (90-95%)
   report_progress(0.90f, "rhythm");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   result.rhythm = rhythm_analyzer().features();
 
   // Melody / pitch contour (95-100%)
   report_progress(0.95f, "melody");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
   result.melody = melody_analyzer().contour();
 
   // Complete
   report_progress(1.0f, "complete");
+  if (check_cancel && cancel_callback_ && cancel_callback_()) return std::nullopt;
 
   return result;
 }
+
+AnalysisResult MusicAnalyzer::analyze() { return *analyze_impl(false); }
+
+std::optional<AnalysisResult> MusicAnalyzer::analyze_cancellable() { return analyze_impl(true); }
 
 }  // namespace sonare

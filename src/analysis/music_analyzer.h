@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,10 @@ namespace sonare {
 /// @param progress Progress value (0.0 to 1.0)
 /// @param stage Current analysis stage name
 using ProgressCallback = std::function<void(float progress, const char* stage)>;
+
+/// @brief Callback type for cooperative analysis cancellation.
+/// @return true when the current analysis should stop at the next progress boundary.
+using CancelCallback = std::function<bool()>;
 
 /// @brief Complete music analysis result.
 struct AnalysisResult {
@@ -85,6 +90,10 @@ class MusicAnalyzer {
   /// @brief Sets progress callback for analysis progress reporting.
   /// @param callback Callback function receiving (progress, stage) parameters
   void set_progress_callback(ProgressCallback callback);
+
+  /// @brief Sets the cooperative cancellation callback used by @ref analyze_cancellable.
+  /// @param should_cancel Callback returning true to stop after a progress report.
+  void set_cancel_callback(CancelCallback should_cancel);
 
   // Quick access methods
   /// @brief Returns estimated BPM.
@@ -144,6 +153,11 @@ class MusicAnalyzer {
   /// @brief Performs complete analysis and returns result.
   AnalysisResult analyze();
 
+  /// @brief Performs complete analysis and returns no result when cancelled.
+  /// @details Cancellation is checked immediately after each existing progress
+  ///          report. The regular @ref analyze path remains unchanged.
+  std::optional<AnalysisResult> analyze_cancellable();
+
   /// @brief Returns the input audio.
   const Audio& audio() const { return audio_; }
 
@@ -154,6 +168,9 @@ class MusicAnalyzer {
   /// @brief Reports progress to callback if set.
   void report_progress(float progress, const char* stage);
 
+  /// @brief Performs the analysis, optionally checking cooperative cancellation.
+  std::optional<AnalysisResult> analyze_impl(bool check_cancel);
+
   /// @brief Eagerly precomputes feature caches in parallel on native builds.
   void precompute_features();
 
@@ -162,6 +179,7 @@ class MusicAnalyzer {
   int analysis_sr_;       ///< Sample rate of analysis_audio_
   MusicAnalyzerConfig config_;
   ProgressCallback progress_callback_;
+  CancelCallback cancel_callback_;
 
 #ifndef __EMSCRIPTEN__
   std::mutex progress_mutex_;

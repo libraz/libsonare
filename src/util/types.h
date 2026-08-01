@@ -60,6 +60,8 @@ enum class ErrorCode : int {
   /// @brief The component is not in a state where the call is allowed
   ///        (e.g. @c process_block before @c prepare, configuration mismatch).
   InvalidState,
+  /// @brief A cooperative cancellation callback requested an early stop.
+  Cancelled,
 };
 
 /// @brief Pitch class (0-11, C=0).
@@ -183,6 +185,8 @@ inline const char* error_message(ErrorCode code) {
       return "Not implemented";
     case ErrorCode::InvalidState:
       return "Invalid state";
+    case ErrorCode::Cancelled:
+      return "Cancelled";
     default:
       return "Unknown error";
   }

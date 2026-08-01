@@ -129,8 +129,14 @@ void MasteringChain::set_progress_callback(ProgressCallback callback) {
   progress_callback_ = std::move(callback);
 }
 
-MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t length,
-                                             int sample_rate) {
+void MasteringChain::set_cancel_callback(CancelCallback should_cancel) {
+  cancel_callback_ = std::move(should_cancel);
+}
+
+std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* samples,
+                                                                 std::size_t length,
+                                                                 int sample_rate,
+                                                                 bool check_cancel) {
   // Centralized offline-input validation so every surface (C ABI, Node, WASM,
   // Python) rejects empty / out-of-range-rate / non-finite input identically.
   // The realtime block path (process_block) intentionally does not funnel here.
@@ -151,6 +157,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     if (progress_callback_ && total > 0) {
       progress_callback_(static_cast<float>(done) / static_cast<float>(total), stage_name);
     }
+    return !check_cancel || !cancel_callback_ || !cancel_callback_();
   };
 
   // 1. repair.declick
@@ -158,7 +165,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
       return mastering::repair::declick(in, config_.repair.declick.config);
     });
-    report("repair.declick");
+    if (!report("repair.declick")) return std::nullopt;
   }
 
   // 2. repair.declip
@@ -166,7 +173,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
       return mastering::repair::declip(in, config_.repair.declip.config);
     });
-    report("repair.declip");
+    if (!report("repair.declip")) return std::nullopt;
   }
 
   // 3. repair.decrackle
@@ -174,7 +181,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
       return mastering::repair::decrackle(in, config_.repair.decrackle.config);
     });
-    report("repair.decrackle");
+    if (!report("repair.decrackle")) return std::nullopt;
   }
 
   // 4. repair.dehum
@@ -182,7 +189,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
       return mastering::repair::dehum(in, config_.repair.dehum.config);
     });
-    report("repair.dehum");
+    if (!report("repair.dehum")) return std::nullopt;
   }
 
   // 5. repair.dereverb
@@ -190,7 +197,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
       return mastering::repair::dereverb_classical(in, config_.repair.dereverb.config);
     });
-    report("repair.dereverb");
+    if (!report("repair.dereverb")) return std::nullopt;
   }
 
   // 6. repair.denoise
@@ -198,7 +205,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
       return mastering::repair::denoise_classical(in, config_.repair.denoise.config);
     });
-    report("repair.denoise");
+    if (!report("repair.denoise")) return std::nullopt;
   }
 
   // 7. eq.tilt
@@ -207,7 +214,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     tilt.set_tilt_db(config_.eq.tilt.tilt_db);
     tilt.set_pivot_hz(config_.eq.tilt.pivot_hz);
     run_processor_mono(tilt, data, sample_rate);
-    report("eq.tilt");
+    if (!report("eq.tilt")) return std::nullopt;
   }
 
   // 8. dynamics.deesser
@@ -216,14 +223,14 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
         {"dynamics.deesser", processor.last_gain_reduction_db()});
-    report("dynamics.deesser");
+    if (!report("dynamics.deesser")) return std::nullopt;
   }
 
   // 9. dynamics.transientShaper
   if (config_.dynamics.transient_shaper.enabled) {
     mastering::dynamics::TransientShaper processor(config_.dynamics.transient_shaper.config);
     run_processor_mono(processor, data, sample_rate);
-    report("dynamics.transientShaper");
+    if (!report("dynamics.transientShaper")) return std::nullopt;
   }
 
   // 10. dynamics.compressor
@@ -232,7 +239,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
         {"dynamics.compressor", processor.last_gain_reduction_db()});
-    report("dynamics.compressor");
+    if (!report("dynamics.compressor")) return std::nullopt;
   }
 
   // 11. dynamics.multibandComp
@@ -241,28 +248,28 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
         {"dynamics.multibandComp", max_abs_gain_reduction(processor.last_gain_reductions_db())});
-    report("dynamics.multibandComp");
+    if (!report("dynamics.multibandComp")) return std::nullopt;
   }
 
   // 12. saturation.tape
   if (config_.saturation.tape.enabled) {
     mastering::saturation::Tape processor(config_.saturation.tape.config);
     run_processor_mono(processor, data, sample_rate);
-    report("saturation.tape");
+    if (!report("saturation.tape")) return std::nullopt;
   }
 
   // 13. saturation.exciter
   if (config_.saturation.exciter.enabled) {
     mastering::saturation::Exciter processor(config_.saturation.exciter.config);
     run_processor_mono(processor, data, sample_rate);
-    report("saturation.exciter");
+    if (!report("saturation.exciter")) return std::nullopt;
   }
 
   // 14. spectral.airBand
   if (config_.spectral.air_band.enabled) {
     mastering::spectral::AirBand processor(config_.spectral.air_band.config);
     run_processor_mono(processor, data, sample_rate);
-    report("spectral.airBand");
+    if (!report("spectral.airBand")) return std::nullopt;
   }
 
   // 15. maximizer.truePeakLimiter
@@ -271,7 +278,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
         {"maximizer.truePeakLimiter", processor.last_gain_reduction_db()});
-    report("maximizer.truePeakLimiter");
+    if (!report("maximizer.truePeakLimiter")) return std::nullopt;
   }
 
   // 16. loudness (mono path: manual gain + TruePeakLimiter pass, mirrors stereo)
@@ -297,7 +304,7 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
         {"loudness.optimize", processor.last_gain_reduction_db()});
-    report("loudness.optimize");
+    if (!report("loudness.optimize")) return std::nullopt;
   }
 
   result.output_lufs = integrated_lufs(data, sample_rate);
@@ -312,8 +319,11 @@ MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t l
   return result;
 }
 
-StereoChainResult MasteringChain::process_stereo(const float* left_in, const float* right_in,
-                                                 std::size_t length, int sample_rate) {
+std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float* left_in,
+                                                                     const float* right_in,
+                                                                     std::size_t length,
+                                                                     int sample_rate,
+                                                                     bool check_cancel) {
   // Centralized offline-input validation for both channels (see process_mono).
   validate_offline_audio_input(left_in, length, sample_rate);
   validate_offline_audio_input(right_in, length, sample_rate);
@@ -335,6 +345,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     if (progress_callback_ && total > 0) {
       progress_callback_(static_cast<float>(done) / static_cast<float>(total), stage_name);
     }
+    return !check_cancel || !cancel_callback_ || !cancel_callback_();
   };
 
   // 1. repair.declick (per-channel)
@@ -342,7 +353,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
       return mastering::repair::declick(in, config_.repair.declick.config);
     });
-    report("repair.declick");
+    if (!report("repair.declick")) return std::nullopt;
   }
 
   // 2. repair.declip (per-channel)
@@ -350,7 +361,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
       return mastering::repair::declip(in, config_.repair.declip.config);
     });
-    report("repair.declip");
+    if (!report("repair.declip")) return std::nullopt;
   }
 
   // 3. repair.decrackle (per-channel)
@@ -358,7 +369,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
       return mastering::repair::decrackle(in, config_.repair.decrackle.config);
     });
-    report("repair.decrackle");
+    if (!report("repair.decrackle")) return std::nullopt;
   }
 
   // 4. repair.dehum (per-channel)
@@ -366,7 +377,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     detail::apply_independent_repair(left, right, sample_rate, [this](const Audio& in) {
       return mastering::repair::dehum(in, config_.repair.dehum.config);
     });
-    report("repair.dehum");
+    if (!report("repair.dehum")) return std::nullopt;
   }
 
   // 5. repair.dereverb
@@ -374,7 +385,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     detail::apply_shared_mono_transfer_repair(left, right, sample_rate, [this](const Audio& audio) {
       return mastering::repair::dereverb_classical(audio, config_.repair.dereverb.config);
     });
-    report("repair.dereverb");
+    if (!report("repair.dereverb")) return std::nullopt;
   }
 
   // 6. repair.denoise
@@ -382,7 +393,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     detail::apply_shared_mono_transfer_repair(left, right, sample_rate, [this](const Audio& audio) {
       return mastering::repair::denoise_classical(audio, config_.repair.denoise.config);
     });
-    report("repair.denoise");
+    if (!report("repair.denoise")) return std::nullopt;
   }
 
   // 7. eq.tilt
@@ -391,7 +402,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     tilt.set_tilt_db(config_.eq.tilt.tilt_db);
     tilt.set_pivot_hz(config_.eq.tilt.pivot_hz);
     run_processor_stereo(tilt, left, right, sample_rate);
-    report("eq.tilt");
+    if (!report("eq.tilt")) return std::nullopt;
   }
 
   // 8. dynamics.deesser
@@ -400,14 +411,14 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
         {"dynamics.deesser", processor.last_gain_reduction_db()});
-    report("dynamics.deesser");
+    if (!report("dynamics.deesser")) return std::nullopt;
   }
 
   // 9. dynamics.transientShaper
   if (config_.dynamics.transient_shaper.enabled) {
     mastering::dynamics::TransientShaper processor(config_.dynamics.transient_shaper.config);
     run_processor_stereo(processor, left, right, sample_rate);
-    report("dynamics.transientShaper");
+    if (!report("dynamics.transientShaper")) return std::nullopt;
   }
 
   // 10. dynamics.compressor
@@ -416,7 +427,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
         {"dynamics.compressor", processor.last_gain_reduction_db()});
-    report("dynamics.compressor");
+    if (!report("dynamics.compressor")) return std::nullopt;
   }
 
   // 11. dynamics.multibandComp
@@ -425,42 +436,42 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
         {"dynamics.multibandComp", max_abs_gain_reduction(processor.last_gain_reductions_db())});
-    report("dynamics.multibandComp");
+    if (!report("dynamics.multibandComp")) return std::nullopt;
   }
 
   // 12. saturation.tape
   if (config_.saturation.tape.enabled) {
     mastering::saturation::Tape processor(config_.saturation.tape.config);
     run_processor_stereo(processor, left, right, sample_rate);
-    report("saturation.tape");
+    if (!report("saturation.tape")) return std::nullopt;
   }
 
   // 13. saturation.exciter
   if (config_.saturation.exciter.enabled) {
     mastering::saturation::Exciter processor(config_.saturation.exciter.config);
     run_processor_stereo(processor, left, right, sample_rate);
-    report("saturation.exciter");
+    if (!report("saturation.exciter")) return std::nullopt;
   }
 
   // 14. spectral.airBand
   if (config_.spectral.air_band.enabled) {
     mastering::spectral::AirBand processor(config_.spectral.air_band.config);
     run_processor_stereo(processor, left, right, sample_rate);
-    report("spectral.airBand");
+    if (!report("spectral.airBand")) return std::nullopt;
   }
 
   // 15. stereo.imager
   if (config_.stereo.imager.enabled) {
     mastering::stereo::Imager processor(config_.stereo.imager.config);
     run_processor_stereo(processor, left, right, sample_rate);
-    report("stereo.imager");
+    if (!report("stereo.imager")) return std::nullopt;
   }
 
   // 16. stereo.monoMaker
   if (config_.stereo.mono_maker.enabled) {
     mastering::stereo::MonoMaker processor(config_.stereo.mono_maker.config);
     run_processor_stereo(processor, left, right, sample_rate);
-    report("stereo.monoMaker");
+    if (!report("stereo.monoMaker")) return std::nullopt;
   }
 
   // 17. maximizer.truePeakLimiter
@@ -469,7 +480,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
         {"maximizer.truePeakLimiter", processor.last_gain_reduction_db()});
-    report("maximizer.truePeakLimiter");
+    if (!report("maximizer.truePeakLimiter")) return std::nullopt;
   }
 
   // 18. loudness (stereo path: manual gain + TruePeakLimiter pass)
@@ -495,7 +506,7 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
         {"loudness.optimize", processor.last_gain_reduction_db()});
-    report("loudness.optimize");
+    if (!report("loudness.optimize")) return std::nullopt;
   }
 
   result.output_lufs = detail::stereo_integrated_lufs(left, right, sample_rate);
@@ -516,5 +527,28 @@ StereoChainResult MasteringChain::process_stereo(const float* left_in, const flo
   result.left = std::move(left);
   result.right = std::move(right);
   return result;
+}
+
+MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t length,
+                                             int sample_rate) {
+  return *process_mono_impl(samples, length, sample_rate, false);
+}
+
+StereoChainResult MasteringChain::process_stereo(const float* left, const float* right,
+                                                 std::size_t length, int sample_rate) {
+  return *process_stereo_impl(left, right, length, sample_rate, false);
+}
+
+std::optional<MonoChainResult> MasteringChain::process_mono_cancellable(const float* samples,
+                                                                        std::size_t length,
+                                                                        int sample_rate) {
+  return process_mono_impl(samples, length, sample_rate, true);
+}
+
+std::optional<StereoChainResult> MasteringChain::process_stereo_cancellable(const float* left,
+                                                                            const float* right,
+                                                                            std::size_t length,
+                                                                            int sample_rate) {
+  return process_stereo_impl(left, right, length, sample_rate, true);
 }
 }  // namespace sonare::mastering::api

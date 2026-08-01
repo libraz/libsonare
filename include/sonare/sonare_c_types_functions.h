@@ -81,6 +81,10 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
    stage label. user_data is the opaque pointer passed to the analyze call. */
 typedef void (*SonareAnalyzeProgressCallback)(float progress, const char* stage, void* user_data);
 
+/* Cooperative cancellation callback for long-running offline operations.
+   Return nonzero to stop after the current progress-report boundary. */
+typedef int (*SonareCancelCallback)(void* user_data);
+
 /* Full analysis serialized to a camelCase JSON object. Unlike sonare_analyze
    (which fills only the flat bpm/key/beats struct), this returns the complete
    result: chords, sections, timbre, dynamics, rhythm, melody and form, with
@@ -114,6 +118,12 @@ SonareError sonare_analyze_json_ex(const float* samples, size_t length, int samp
 SonareError sonare_analyze_json_with_progress(const float* samples, size_t length, int sample_rate,
                                               SonareAnalyzeProgressCallback callback,
                                               void* user_data, char** out_json);
+
+/* Cancellation-capable equivalent of sonare_analyze_json_with_progress. When
+   cancelled, returns SONARE_ERROR_CANCELLED and leaves *out_json NULL. */
+SonareError sonare_analyze_json_with_progress_ex(
+    const float* samples, size_t length, int sample_rate, SonareAnalyzeProgressCallback callback,
+    void* user_data, char** out_json, SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 // Memory management
 void sonare_free_floats(float* ptr);

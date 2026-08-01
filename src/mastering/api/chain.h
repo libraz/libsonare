@@ -7,6 +7,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -213,11 +214,16 @@ class MasteringChain {
   /// @brief Progress callback. `progress` is 0.0..1.0 across the whole chain;
   /// `stage` is the stage identifier just completed (e.g. "dynamics.compressor").
   using ProgressCallback = std::function<void(float progress, const char* stage)>;
+  /// @brief Cooperative cancellation callback for offline processing.
+  using CancelCallback = std::function<bool()>;
 
   explicit MasteringChain(MasteringChainConfig config);
 
   /// @brief Set callback invoked after each enabled stage completes.
   void set_progress_callback(ProgressCallback callback);
+
+  /// @brief Set callback checked after each completed stage by cancellable calls.
+  void set_cancel_callback(CancelCallback should_cancel);
 
   /// @brief Process mono audio through the configured chain.
   MonoChainResult process_mono(const float* samples, std::size_t length, int sample_rate);
@@ -226,12 +232,27 @@ class MasteringChain {
   StereoChainResult process_stereo(const float* left, const float* right, std::size_t length,
                                    int sample_rate);
 
+  /// @brief Process mono audio and return no result when cooperatively cancelled.
+  std::optional<MonoChainResult> process_mono_cancellable(const float* samples, std::size_t length,
+                                                          int sample_rate);
+
+  /// @brief Process stereo audio and return no result when cooperatively cancelled.
+  std::optional<StereoChainResult> process_stereo_cancellable(const float* left, const float* right,
+                                                              std::size_t length, int sample_rate);
+
   /// @brief Returns the active configuration.
   const MasteringChainConfig& config() const noexcept { return config_; }
 
  private:
+  std::optional<MonoChainResult> process_mono_impl(const float* samples, std::size_t length,
+                                                   int sample_rate, bool check_cancel);
+  std::optional<StereoChainResult> process_stereo_impl(const float* left, const float* right,
+                                                       std::size_t length, int sample_rate,
+                                                       bool check_cancel);
+
   MasteringChainConfig config_;
   ProgressCallback progress_callback_;
+  CancelCallback cancel_callback_;
 };
 
 // ---------------------------------------------------------------------------

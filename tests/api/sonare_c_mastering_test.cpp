@@ -640,4 +640,60 @@ TEST_CASE("sonare_mastering pair _ex accepts differing reference length", "[c_ap
   REQUIRE(std::strstr(json, "referenceLufs") != nullptr);
   sonare_free_string(json);
 }
+
+TEST_CASE("cancellation-capable mastering C APIs leave outputs empty", "[c_api][mastering]") {
+  auto samples = generate_sine(440.0f, 22050, 1.0f);
+  struct CancelState {
+    float last_progress = -1.0f;
+    bool should_cancel = false;
+  } state;
+  const auto progress = [](float value, const char* /*stage*/, void* user_data) {
+    auto* current = static_cast<CancelState*>(user_data);
+    current->last_progress = value;
+    current->should_cancel = value > 0.5f;
+  };
+  const auto cancel = [](void* user_data) {
+    return static_cast<CancelState*>(user_data)->should_cancel ? 1 : 0;
+  };
+  const SonareMasteringParam chain_params[] = {{"eq.tilt.enabled", 1.0},
+                                               {"dynamics.compressor.enabled", 1.0},
+                                               {"saturation.tape.enabled", 1.0}};
+
+  SonareMasteringChainResult chain_mono{};
+  REQUIRE(sonare_mastering_chain_with_progress_ex(samples.data(), samples.size(), 22050,
+                                                  chain_params, 3, progress, &state, &chain_mono,
+                                                  cancel, &state) == SONARE_ERROR_CANCELLED);
+  REQUIRE(state.last_progress > 0.5f);
+  REQUIRE(chain_mono.samples == nullptr);
+  REQUIRE(chain_mono.stages == nullptr);
+
+  state = {};
+  SonareMasteringChainStereoResult chain_stereo{};
+  REQUIRE(sonare_mastering_chain_stereo_with_progress_ex(
+              samples.data(), samples.data(), samples.size(), 22050, chain_params, 3, progress,
+              &state, &chain_stereo, cancel, &state) == SONARE_ERROR_CANCELLED);
+  REQUIRE(state.last_progress > 0.5f);
+  REQUIRE(chain_stereo.left == nullptr);
+  REQUIRE(chain_stereo.right == nullptr);
+  REQUIRE(chain_stereo.stages == nullptr);
+
+  state = {};
+  SonareMasteringChainResult preset_mono{};
+  REQUIRE(sonare_master_audio_with_progress_ex("pop", samples.data(), samples.size(), 22050,
+                                               nullptr, 0, progress, &state, &preset_mono, cancel,
+                                               &state) == SONARE_ERROR_CANCELLED);
+  REQUIRE(state.last_progress > 0.5f);
+  REQUIRE(preset_mono.samples == nullptr);
+  REQUIRE(preset_mono.stages == nullptr);
+
+  state = {};
+  SonareMasteringChainStereoResult preset_stereo{};
+  REQUIRE(sonare_master_audio_stereo_with_progress_ex(
+              "pop", samples.data(), samples.data(), samples.size(), 22050, nullptr, 0, progress,
+              &state, &preset_stereo, cancel, &state) == SONARE_ERROR_CANCELLED);
+  REQUIRE(state.last_progress > 0.5f);
+  REQUIRE(preset_stereo.left == nullptr);
+  REQUIRE(preset_stereo.right == nullptr);
+  REQUIRE(preset_stereo.stages == nullptr);
+}
 #endif

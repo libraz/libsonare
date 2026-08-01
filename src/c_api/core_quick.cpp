@@ -305,6 +305,13 @@ SonareError sonare_analyze_json(const float* samples, size_t length, int sample_
 SonareError sonare_analyze_json_with_progress(const float* samples, size_t length, int sample_rate,
                                               SonareAnalyzeProgressCallback callback,
                                               void* user_data, char** out_json) {
+  return sonare_analyze_json_with_progress_ex(samples, length, sample_rate, callback, user_data,
+                                              out_json, nullptr, nullptr);
+}
+
+SonareError sonare_analyze_json_with_progress_ex(
+    const float* samples, size_t length, int sample_rate, SonareAnalyzeProgressCallback callback,
+    void* user_data, char** out_json, SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
@@ -316,8 +323,16 @@ SonareError sonare_analyze_json_with_progress(const float* samples, size_t lengt
         callback(progress, stage, user_data);
       });
     }
-    AnalysisResult result = analyzer.analyze();
-    *out_json = copy_string(analysis_result_to_json(result));
+    if (cancel_cb != nullptr) {
+      analyzer.set_cancel_callback(
+          [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
+      auto result = analyzer.analyze_cancellable();
+      if (!result) return SONARE_ERROR_CANCELLED;
+      *out_json = copy_string(analysis_result_to_json(*result));
+    } else {
+      AnalysisResult result = analyzer.analyze();
+      *out_json = copy_string(analysis_result_to_json(result));
+    }
     return SONARE_OK;
   });
 }

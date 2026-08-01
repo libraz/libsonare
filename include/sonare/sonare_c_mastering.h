@@ -168,6 +168,14 @@ SonareError sonare_mastering_chain_with_progress(const float* samples, size_t le
                                                  SonareMasteringProgressCallback callback,
                                                  void* user_data, SonareMasteringChainResult* out);
 
+/// @brief Cancellation-capable equivalent of @ref sonare_mastering_chain_with_progress.
+/// @details When @p cancel_cb returns nonzero after a progress report, returns
+///          @c SONARE_ERROR_CANCELLED and leaves @p out without allocated output buffers.
+SonareError sonare_mastering_chain_with_progress_ex(
+    const float* samples, size_t length, int sample_rate, const SonareMasteringParam* params,
+    size_t param_count, SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
+
 /// @brief Same as sonare_mastering_chain_stereo but reports per-stage progress.
 SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const float* right,
                                                         size_t length, int sample_rate,
@@ -176,6 +184,15 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
                                                         SonareMasteringProgressCallback callback,
                                                         void* user_data,
                                                         SonareMasteringChainStereoResult* out);
+
+/// @brief Cancellation-capable equivalent of
+///        @ref sonare_mastering_chain_stereo_with_progress.
+/// @details On cancellation, @p out has no allocated output buffers.
+SonareError sonare_mastering_chain_stereo_with_progress_ex(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count,
+    SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 /// @brief Returns built-in preset identifiers, separated by '\n'.
 /// @details Backed by thread-local storage filled on first use; the pointer is
@@ -207,12 +224,29 @@ SonareError sonare_master_audio_with_progress(const char* preset_name, const flo
                                               SonareMasteringProgressCallback callback,
                                               void* user_data, SonareMasteringChainResult* out);
 
+/// @brief Cancellation-capable equivalent of @ref sonare_master_audio_with_progress.
+/// @details On cancellation, @p out has no allocated output buffers.
+SonareError sonare_master_audio_with_progress_ex(
+    const char* preset_name, const float* samples, size_t length, int sample_rate,
+    const SonareMasteringParam* overrides, size_t override_count,
+    SonareMasteringProgressCallback callback, void* user_data, SonareMasteringChainResult* out,
+    SonareCancelCallback cancel_cb, void* cancel_user_data);
+
 /// @brief Same as sonare_master_audio_stereo but reports per-stage progress.
 SonareError sonare_master_audio_stereo_with_progress(
     const char* preset_name, const float* left, const float* right, size_t length, int sample_rate,
     const SonareMasteringParam* overrides, size_t override_count,
     SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out);
+
+/// @brief Cancellation-capable equivalent of
+///        @ref sonare_master_audio_stereo_with_progress.
+/// @details On cancellation, @p out has no allocated output buffers.
+SonareError sonare_master_audio_stereo_with_progress_ex(
+    const char* preset_name, const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* overrides, size_t override_count,
+    SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 const char* sonare_mastering_processor_names(void);
 const char* sonare_mastering_pair_processor_names(void);

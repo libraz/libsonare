@@ -94,12 +94,10 @@ SonareError sonare_mastering_chain_stereo(const float* left, const float* right,
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_chain_with_progress(const float* samples, size_t length,
-                                                 int sample_rate,
-                                                 const SonareMasteringParam* params,
-                                                 size_t param_count,
-                                                 SonareMasteringProgressCallback callback,
-                                                 void* user_data, SonareMasteringChainResult* out) {
+SonareError sonare_mastering_chain_with_progress_ex(
+    const float* samples, size_t length, int sample_rate, const SonareMasteringParam* params,
+    size_t param_count, SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   SonareError err = validate_audio_params(samples, length, sample_rate);
@@ -126,6 +124,14 @@ SonareError sonare_mastering_chain_with_progress(const float* samples, size_t le
       callback(progress, stage, user_data);
     });
   }
+  if (cancel_cb) {
+    chain.set_cancel_callback(
+        [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
+    auto result = chain.process_mono_cancellable(samples, length, sample_rate);
+    if (!result) return SONARE_ERROR_CANCELLED;
+    fill_mono_chain_result(*result, out);
+    return SONARE_OK;
+  }
   auto result = chain.process_mono(samples, length, sample_rate);
 
   out->length = result.samples.size();
@@ -142,13 +148,11 @@ SonareError sonare_mastering_chain_with_progress(const float* samples, size_t le
   SONARE_C_CATCH
 }
 
-SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const float* right,
-                                                        size_t length, int sample_rate,
-                                                        const SonareMasteringParam* params,
-                                                        size_t param_count,
-                                                        SonareMasteringProgressCallback callback,
-                                                        void* user_data,
-                                                        SonareMasteringChainStereoResult* out) {
+SonareError sonare_mastering_chain_stereo_with_progress_ex(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count,
+    SonareMasteringProgressCallback callback, void* user_data,
+    SonareMasteringChainStereoResult* out, SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   // Match the mono paths: reject non-finite samples and out-of-range
@@ -180,6 +184,14 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
       callback(progress, stage, user_data);
     });
   }
+  if (cancel_cb) {
+    chain.set_cancel_callback(
+        [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
+    auto result = chain.process_stereo_cancellable(left, right, length, sample_rate);
+    if (!result) return SONARE_ERROR_CANCELLED;
+    fill_stereo_chain_result(*result, out);
+    return SONARE_OK;
+  }
   auto result = chain.process_stereo(left, right, length, sample_rate);
 
   out->length = result.left.size();
@@ -195,6 +207,28 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
   set_chain_metrics(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_chain_with_progress(const float* samples, size_t length,
+                                                 int sample_rate,
+                                                 const SonareMasteringParam* params,
+                                                 size_t param_count,
+                                                 SonareMasteringProgressCallback callback,
+                                                 void* user_data, SonareMasteringChainResult* out) {
+  return sonare_mastering_chain_with_progress_ex(samples, length, sample_rate, params, param_count,
+                                                 callback, user_data, out, nullptr, nullptr);
+}
+
+SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const float* right,
+                                                        size_t length, int sample_rate,
+                                                        const SonareMasteringParam* params,
+                                                        size_t param_count,
+                                                        SonareMasteringProgressCallback callback,
+                                                        void* user_data,
+                                                        SonareMasteringChainStereoResult* out) {
+  return sonare_mastering_chain_stereo_with_progress_ex(left, right, length, sample_rate, params,
+                                                        param_count, callback, user_data, out,
+                                                        nullptr, nullptr);
 }
 
 void sonare_free_mastering_chain_result(SonareMasteringChainResult* result) {
