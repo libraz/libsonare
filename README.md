@@ -44,8 +44,8 @@ the browser to see what libsonare can power.
   IR-based RT60/EDT/C50/C80/D50). Where it overlaps librosa, defaults match and
   are validated against librosa reference values in CI — so results port over
   without surprises.
-- **Mastering** — 75 distinct named DSP processors (EQ, dynamics, multiband,
-  stereo, saturation, repair, maximizer, reference matching), or 67 with
+- **Mastering** — 88 distinct named DSP processors (EQ, dynamics, multiband,
+  stereo, saturation, repair, maximizer, reference matching), or 71 with
   `BUILD_FX=OFF` (the creative streaming effects are omitted), built against
   published
   references: ITU-R BS.1770-4 loudness and true-peak limiting, Linkwitz-Riley

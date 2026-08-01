@@ -2,6 +2,7 @@ import { addon } from './native.js';
 import type {
   AutomationCurve,
   Capabilities,
+  CapabilityCatalog,
   GoniometerPoint,
   MeterTap,
   MixerProcessResult,
@@ -44,6 +45,14 @@ export function abiVersion(): number {
  */
 export function capabilities(): Capabilities {
   return addon.capabilities() as Capabilities;
+}
+
+/**
+ * Return the loaded native library's processors, parameter descriptors, and
+ * built-in presets as one machine-readable catalog.
+ */
+export function capabilityCatalog(): CapabilityCatalog {
+  return JSON.parse(addon.capabilityCatalog()) as CapabilityCatalog;
 }
 
 /**

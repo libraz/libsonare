@@ -10,6 +10,7 @@ import {
   analyzeTimbre,
   analyzeWithProgress,
   capabilities,
+  capabilityCatalog,
   chordFunctionalAnalysis,
   cqt,
   dbToAmplitude,
@@ -98,6 +99,19 @@ describe('standalone functions', () => {
     expect(Array.isArray(report.decode.ffmpeg)).toBe(true);
     expect(report.simd).toEqual(expect.any(String));
     expect(report.hardwareConcurrency).toBeGreaterThan(0);
+  });
+
+  it('capabilityCatalog aggregates processors and built-in presets', () => {
+    const catalog = capabilityCatalog();
+    expect(catalog.version).toBe(version());
+    expect(catalog.abi.project).toBe(1);
+    expect(catalog.processors.length).toBeGreaterThan(0);
+    expect(catalog.presets.mastering).toContain('pop');
+    const compressor = catalog.processors.find(({ id }) => id === 'dynamics.compressor');
+    expect(compressor).toMatchObject({ category: 'dynamics', realtimeInsertable: true });
+    expect(compressor?.params[0]).toEqual(
+      expect.objectContaining({ name: expect.any(String), type: expect.any(String) }),
+    );
   });
 
   it('detectBpm returns a number', () => {

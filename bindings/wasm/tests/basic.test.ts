@@ -8,6 +8,7 @@ import {
   amplitudeToDb,
   analyze,
   capabilities,
+  capabilityCatalog,
   dbToAmplitude,
   dbToPower,
   deemphasis,
@@ -112,6 +113,16 @@ describe('Sonare WASM Module', () => {
       });
       expect(capabilities().abi.project).toBeGreaterThan(0);
       expect(capabilities().hardwareConcurrency).toBeGreaterThanOrEqual(1);
+    });
+
+    it('aggregates processors and built-in presets in the capability catalog', () => {
+      const catalog = capabilityCatalog();
+      expect(catalog.version).toBe(version());
+      expect(catalog.abi.project).toBeGreaterThan(0);
+      expect(catalog.processors.length).toBeGreaterThan(0);
+      expect(catalog.presets.mastering).toContain('pop');
+      const compressor = catalog.processors.find(({ id }) => id === 'dynamics.compressor');
+      expect(compressor).toMatchObject({ category: 'dynamics', realtimeInsertable: true });
     });
 
     it('should return engine ABI version', () => {

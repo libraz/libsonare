@@ -9,7 +9,6 @@ inventory so the migration plan can be completed without losing functions.
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
 
@@ -19,8 +18,15 @@ SURFACES = {
     "wasm": ROOT / "bindings/wasm/src",
 }
 EXCLUDED = {
-    "_chain_config.ts", "errors.ts", "native.ts", "validation.ts", "value_coercion.ts",
-    "codes.ts", "module_state.ts", "project_internal.ts", "analysis_helpers.ts",
+    "_chain_config.ts",
+    "errors.ts",
+    "native.ts",
+    "validation.ts",
+    "value_coercion.ts",
+    "codes.ts",
+    "module_state.ts",
+    "project_internal.ts",
+    "analysis_helpers.ts",
 }
 # These are public exports, but deliberately outside the request-object policy:
 # scalar/unit conversion helpers, discovery/version metadata, and factories for
@@ -28,24 +34,60 @@ EXCLUDED = {
 # one-shot audio operation must either gain a *Request overload or be reviewed
 # here with a reason.
 EXEMPT_FILES = {
-    "project.ts", "project_synth.ts", "realtime_engine.ts", "realtime_voice_changer.ts",
-    "opfs_clip_pages.ts", "scale.ts", "stream_analyzer.ts", "web_midi.ts",
+    "project.ts",
+    "project_synth.ts",
+    "realtime_engine.ts",
+    "realtime_voice_changer.ts",
+    "opfs_clip_pages.ts",
+    "scale.ts",
+    "stream_analyzer.ts",
+    "web_midi.ts",
 }
 SCALAR_HELPERS = {
-    "hzToMel", "melToHz", "hzToMidi", "midiToHz", "hzToNote", "noteToHz",
-    "framesToTime", "timeToFrames", "framesToSamples", "samplesToFrames",
-    "dbToPower", "dbToAmplitude", "fixFrames", "tonnetz",
-    "scaleQuantizeMidi", "scaleCorrectionSemitones", "scalePitchClassEnabled",
+    "hzToMel",
+    "melToHz",
+    "hzToMidi",
+    "midiToHz",
+    "hzToNote",
+    "noteToHz",
+    "framesToTime",
+    "timeToFrames",
+    "framesToSamples",
+    "samplesToFrames",
+    "dbToPower",
+    "dbToAmplitude",
+    "fixFrames",
+    "tonnetz",
+    "scaleQuantizeMidi",
+    "scaleCorrectionSemitones",
+    "scalePitchClassEnabled",
 }
 METADATA_HELPERS = {
-    "version", "capabilities", "abiVersion", "engineAbiVersion", "voiceChangerAbiVersion",
-    "projectAbiVersion", "hasFfmpegSupport", "isInitialized", "engineCapabilities",
-    "masteringPresetNames", "masteringProcessorNames", "masteringPairProcessorNames",
-    "masteringPairAnalysisNames", "masteringStereoAnalysisNames", "masteringInsertNames",
-    "masteringInsertParamNames", "masteringInsertParamInfo", "masteringProcessorCatalog",
-    "mixingScenePresetNames", "mixingScenePresetJson",
-    "realtimeVoiceChangerPresetNames", "realtimeVoiceChangerPresetJson",
-    "validateRealtimeVoiceChangerPresetJson", "voiceCharacterPresetId",
+    "version",
+    "capabilities",
+    "capabilityCatalog",
+    "abiVersion",
+    "engineAbiVersion",
+    "voiceChangerAbiVersion",
+    "projectAbiVersion",
+    "hasFfmpegSupport",
+    "isInitialized",
+    "engineCapabilities",
+    "masteringPresetNames",
+    "masteringProcessorNames",
+    "masteringPairProcessorNames",
+    "masteringPairAnalysisNames",
+    "masteringStereoAnalysisNames",
+    "masteringInsertNames",
+    "masteringInsertParamNames",
+    "masteringInsertParamInfo",
+    "masteringProcessorCatalog",
+    "mixingScenePresetNames",
+    "mixingScenePresetJson",
+    "realtimeVoiceChangerPresetNames",
+    "realtimeVoiceChangerPresetJson",
+    "validateRealtimeVoiceChangerPresetJson",
+    "voiceCharacterPresetId",
     "realtimeVoiceChangerPresetConfig",
 }
 # These two functions were already object-shaped before this migration.  They
@@ -180,7 +222,9 @@ def main() -> int:
         print(f"MISSING {marker}")
 
     unexported = unexported_from_entry()
-    print(f"entry-export coverage: {len(unexported)} request types unexported from entry")
+    print(
+        f"entry-export coverage: {len(unexported)} request types unexported from entry"
+    )
     for marker in unexported:
         print(f"UNEXPORTED {marker}")
 

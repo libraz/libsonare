@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -32,11 +32,21 @@ class Capabilities(TypedDict):
     simd: str
     hardwareConcurrency: int
 
+class CapabilityCatalogPresets(TypedDict):
+    mastering: list[str]
+    synth: list[str]
+    mixingScene: list[str]
+    voiceChanger: list[str]
+
 class MasteringInsertParamInfo(TypedDict):
     name: str
     id: int
     rtSafe: bool
-    unit: NotRequired[str]
+    type: Literal["boolean", "number"]
+    min: float | None
+    max: float | None
+    default: float | bool | None
+    unit: str | None
 
 class MasteringProcessorCatalogEntry(TypedDict):
     id: str
@@ -46,6 +56,14 @@ class MasteringProcessorCatalogEntry(TypedDict):
     latencySamples: int
     tailSamples: int
     channelPolicy: MasteringChannelPolicy
+    category: str
+    params: list[MasteringInsertParamInfo]
+
+class CapabilityCatalog(TypedDict):
+    version: str
+    abi: CapabilitiesAbi
+    processors: list[MasteringProcessorCatalogEntry]
+    presets: CapabilityCatalogPresets
 
 class PitchClass(IntEnum):
     C = 0

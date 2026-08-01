@@ -9,7 +9,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 if TYPE_CHECKING:
     import numpy as np
@@ -63,7 +63,27 @@ class MasteringInsertParamInfo(TypedDict):
     name: str
     id: int
     rtSafe: bool
-    unit: NotRequired[str]
+    type: Literal["boolean", "number"]
+    min: float | None
+    max: float | None
+    default: float | bool | None
+    unit: str | None
+
+
+MasteringProcessorCategory = Literal[
+    "dynamics",
+    "effects",
+    "eq",
+    "final",
+    "maximizer",
+    "multiband",
+    "other",
+    "reference",
+    "repair",
+    "saturation",
+    "spectral",
+    "stereo",
+]
 
 
 class MasteringProcessorCatalogEntry(TypedDict):
@@ -76,6 +96,26 @@ class MasteringProcessorCatalogEntry(TypedDict):
     latencySamples: int
     tailSamples: int
     channelPolicy: MasteringChannelPolicy
+    category: MasteringProcessorCategory
+    params: list[MasteringInsertParamInfo]
+
+
+class CapabilityCatalogPresets(TypedDict):
+    """Built-in preset identifiers grouped by public feature family."""
+
+    mastering: list[str]
+    synth: list[str]
+    mixingScene: list[str]
+    voiceChanger: list[str]
+
+
+class CapabilityCatalog(TypedDict):
+    """Machine-readable catalog returned by :func:`capability_catalog`."""
+
+    version: str
+    abi: CapabilitiesAbi
+    processors: list[MasteringProcessorCatalogEntry]
+    presets: CapabilityCatalogPresets
 
 
 class PitchClass(IntEnum):

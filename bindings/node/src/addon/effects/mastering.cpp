@@ -918,6 +918,19 @@ Napi::Value SonareWrap::MasteringProcessorCatalog(const Napi::CallbackInfo& info
   return Napi::String::New(env, json != nullptr ? json : "[]");
 }
 
+Napi::Value SonareWrap::CapabilityCatalog(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // The aggregate C API owns this program-lifetime JSON string; the TypeScript
+  // facade parses it so each language receives the same catalog shape.
+  const char* json = sonare_capability_catalog_json();
+  if (json == nullptr) {
+    Napi::Error::New(env, "Native capability catalog JSON is unavailable")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return Napi::String::New(env, json);
+}
+
 Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||

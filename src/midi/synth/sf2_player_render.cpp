@@ -16,7 +16,9 @@ namespace sonare::midi::synth {
 
 namespace {
 
+#if defined(SONARE_MIDI_WITH_FX)
 constexpr float kCcSendDepth = 0.35f;
+#endif
 
 }  // namespace
 

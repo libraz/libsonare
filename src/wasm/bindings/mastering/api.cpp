@@ -6,6 +6,11 @@
 
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/presets.h"
+#include "midi/synth/synth_presets.h"
+#include "mixing/api/presets.h"
+#include "sonare.h"
+#include "util/json.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/mastering/chain_result.h"
 
@@ -54,6 +59,66 @@ std::string js_mastering_insert_param_info(std::string name) {
 // facade parses it; lets a host filter a processor picker by realtime
 // insertability instead of offering ids the realtime strip would reject.
 std::string js_mastering_processor_catalog() { return mastering::api::processor_catalog_json(); }
+
+namespace {
+
+sonare::util::json::Array catalog_name_array(const std::vector<std::string>& names) {
+  sonare::util::json::Array values;
+  values.reserve(names.size());
+  for (const auto& name : names) values.emplace_back(name);
+  return values;
+}
+
+sonare::util::json::Array catalog_synth_preset_names() {
+  sonare::util::json::Array values;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const size_t count = midi::synth::synth_preset_count();
+  values.reserve(count);
+  for (size_t index = 0; index < count; ++index) {
+    if (const auto* preset = midi::synth::synth_preset_at(index); preset != nullptr) {
+      values.emplace_back(preset->name);
+    }
+  }
+#endif
+  return values;
+}
+
+sonare::util::json::Array catalog_voice_changer_preset_names() {
+  sonare::util::json::Array values;
+#if defined(SONARE_WITH_VOICE_CHANGER)
+  return catalog_name_array(editing::voice_changer::realtime_voice_changer_preset_names());
+#else
+  return values;
+#endif
+}
+
+}  // namespace
+
+// The WASM target deliberately does not link the aggregate C-ABI TU. Build the
+// identical schema from the same core registries that back that ABI instead.
+std::string js_capability_catalog() {
+  namespace json = sonare::util::json;
+
+  json::Object catalog;
+  catalog["version"] = SONARE_VERSION_STRING;
+  json::Object abi;
+  abi["project"] = static_cast<int>(SONARE_PROJECT_ABI_VERSION);
+  abi["engine"] = static_cast<int>(sonare::rt::kEngineAbiVersion);
+  catalog["abi"] = std::move(abi);
+  catalog["processors"] = json::parse_strict(mastering::api::processor_catalog_json());
+
+  json::Object presets;
+  presets["mastering"] = catalog_name_array(mastering::api::preset_names());
+  presets["synth"] = catalog_synth_preset_names();
+#if defined(SONARE_WITH_MIXING)
+  presets["mixingScene"] = catalog_name_array(mixing::api::scene_preset_names());
+#else
+  presets["mixingScene"] = json::Array{};
+#endif
+  presets["voiceChanger"] = catalog_voice_changer_preset_names();
+  catalog["presets"] = std::move(presets);
+  return json::dump(json::Value(std::move(catalog)));
+}
 
 // ---------------------------------------------------------------------------
 // Mastering presets (high-level master_audio API).
@@ -377,6 +442,7 @@ void registerMasteringApiBindings() {
   function("masteringInsertParamNames", &js_mastering_insert_param_names);
   function("masteringInsertParamInfo", &js_mastering_insert_param_info);
   function("masteringProcessorCatalog", &js_mastering_processor_catalog);
+  function("capabilityCatalog", &js_capability_catalog);
   function("masteringPairProcessorNames", &js_mastering_pair_processor_names);
   function("masteringPairAnalysisNames", &js_mastering_pair_analysis_names);
   function("masteringStereoAnalysisNames", &js_mastering_stereo_analysis_names);

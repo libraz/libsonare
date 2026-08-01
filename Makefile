@@ -1,6 +1,7 @@
 .PHONY: all build release test test-slow test-optional-fixtures test-librosa-live clean rebuild format lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance abi-layout abi-layout-check check-abi-version ci-local \
+       test-python test-python-slow test-node test-wasm parity conformance abi-layout abi-layout-check check-abi-version \
+       capability-catalog capability-catalog-check ci-local \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm
 
 BUILD_DIR := build
@@ -93,6 +94,14 @@ build-shared:
 ifeq ($(UNAME_S),Darwin)
 	-install_name_tool -id @loader_path/libsonare.dylib $(PYTHON_SHARED_LIB)
 endif
+
+# Regenerate the checked-in runtime processor and preset catalog from the C
+# ABI. The check variant leaves the worktree untouched and fails on drift.
+capability-catalog: build-shared
+	python3 tools/generate_capability_catalog.py --library $(SHARED_LIB)
+
+capability-catalog-check: build-shared
+	python3 tools/generate_capability_catalog.py --library $(SHARED_LIB) --check
 
 build-node:
 	cd bindings/node && yarn install && yarn build

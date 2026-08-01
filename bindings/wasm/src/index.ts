@@ -20,6 +20,7 @@
 
 import { setSonareModule } from './module_state';
 import type {
+  CapabilityCatalog,
   RealtimeVoiceChangerPodConfig,
   SonareCapabilities,
   VoicePresetId,
@@ -711,6 +712,14 @@ export function capabilities(): SonareCapabilities {
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.capabilities();
+}
+
+/** Return the initialized module's processors, parameters, and presets. */
+export function capabilityCatalog(): CapabilityCatalog {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return JSON.parse(module.capabilityCatalog()) as CapabilityCatalog;
 }
 
 /**

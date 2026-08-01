@@ -174,6 +174,7 @@ from ._features import (
 from ._mastering import (
     StreamingEqualizer,
     StreamingMasteringChain,
+    capability_catalog,
     master_audio,
     master_audio_stereo,
     mastering,
@@ -266,6 +267,7 @@ __all__ = [
     "mastering_audio_profile",
     "mastering_chain",
     "mastering_chain_stereo",
+    "capability_catalog",
     "mastering_insert_names",
     "mastering_insert_param_info",
     "mastering_insert_param_names",

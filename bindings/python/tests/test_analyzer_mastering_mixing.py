@@ -154,6 +154,23 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     assert by_id["stereo.phaseAlign"]["tailSamples"] == 0
 
 
+def test_capability_catalog_aggregates_processors_and_presets() -> None:
+    """The aggregate catalog retains native version, ABI, and processor metadata."""
+    import libsonare
+
+    catalog = libsonare.capability_catalog()
+
+    assert catalog["version"] == libsonare.version()
+    assert catalog["abi"]["project"] == 1
+    assert catalog["processors"]
+    assert "pop" in catalog["presets"]["mastering"]
+    compressor = next(
+        entry for entry in catalog["processors"] if entry["id"] == "dynamics.compressor"
+    )
+    assert compressor["category"] == "dynamics"
+    assert {"name", "type", "min", "max", "default", "unit"} <= set(compressor["params"][0])
+
+
 def test_mastering_pair_accepts_differing_reference_length() -> None:
     """Pair process/analyze accept a reference that differs in length from source."""
     import libsonare

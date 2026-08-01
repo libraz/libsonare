@@ -19,6 +19,7 @@ from ._ffi import (
 )
 from ._runtime import _check, _get_lib, _to_c_float_array
 from .types import (
+    CapabilityCatalog,
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringInsertParamInfo,
@@ -220,6 +221,21 @@ def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
         return []
     parsed = json.loads(raw.decode("utf-8"))
     return cast("list[MasteringProcessorCatalogEntry]", parsed)
+
+
+def capability_catalog() -> CapabilityCatalog:
+    """Return the loaded library's complete processor and preset catalog.
+
+    Parameter bounds and defaults are ``None`` where the underlying processor
+    has no published descriptor, rather than guessed by this binding.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_capability_catalog_json"):
+        raise RuntimeError("libsonare was built without capability catalog support")
+    raw = lib.sonare_capability_catalog_json()
+    if not raw:
+        raise RuntimeError("native capability catalog JSON is unavailable")
+    return cast("CapabilityCatalog", json.loads(raw.decode("utf-8")))
 
 
 def mastering_process(

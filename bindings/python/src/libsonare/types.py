@@ -49,6 +49,12 @@ from ._types_analysis import (
     CapabilitiesFeatures as CapabilitiesFeatures,
 )
 from ._types_analysis import (
+    CapabilityCatalog as CapabilityCatalog,
+)
+from ._types_analysis import (
+    CapabilityCatalogPresets as CapabilityCatalogPresets,
+)
+from ._types_analysis import (
     ChannelLayout as ChannelLayout,
 )
 from ._types_analysis import (
@@ -110,6 +116,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry,
+)
+from ._types_analysis import (
+    MasteringProcessorCategory as MasteringProcessorCategory,
 )
 from ._types_analysis import (
     MasteringProcessorKind as MasteringProcessorKind,

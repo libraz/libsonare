@@ -27,6 +27,47 @@ export interface SonareCapabilities {
   hardwareConcurrency: number;
 }
 
+/** One parameter descriptor in the cross-surface capability catalog. */
+export interface CapabilityCatalogParameter {
+  name: string;
+  id: number;
+  rtSafe: boolean;
+  type: 'boolean' | 'number';
+  min: number | null;
+  max: number | null;
+  default: boolean | number | null;
+  unit: string | null;
+}
+
+/** One named mastering processor and its host-facing capabilities. */
+export interface CapabilityCatalogProcessor {
+  id: string;
+  kind: 'realtime' | 'offline' | 'pair';
+  realtimeInsertable: boolean;
+  stereoOnly: boolean;
+  latencySamples: number;
+  tailSamples: number;
+  channelPolicy: 'multichannel' | 'stereoPairOnly' | 'perChannel' | 'passthrough';
+  category: string;
+  params: CapabilityCatalogParameter[];
+}
+
+/** Built-in preset names grouped by feature family. */
+export interface CapabilityCatalogPresets {
+  mastering: string[];
+  synth: string[];
+  mixingScene: string[];
+  voiceChanger: string[];
+}
+
+/** Complete runtime catalog exposed by {@link capabilityCatalog}. */
+export interface CapabilityCatalog {
+  version: string;
+  abi: SonareCapabilities['abi'];
+  processors: CapabilityCatalogProcessor[];
+  presets: CapabilityCatalogPresets;
+}
+
 /** Return `false` to cancel at the next native progress boundary. */
 // biome-ignore lint/suspicious/noConfusingVoidType: preserves legacy void callbacks while allowing false.
 export type ProgressCallback = (progress: number, stage: string) => void | boolean;

@@ -102,6 +102,7 @@ using detail::f;
 using detail::limiter_config;
 using detail::ParamMap;
 
+#ifdef SONARE_HAVE_FX
 std::vector<float> parse_ir_f32_base64_json(const std::string& json_params) {
   if (json_params.empty()) return {};
   const auto root = sonare::util::json::parse_strict(json_params);
@@ -139,6 +140,7 @@ std::vector<float> parse_ir_f32_base64_json(const std::string& json_params) {
   }
   return ir;
 }
+#endif
 
 std::vector<Param> parse_insert_params_json(const std::string& json_params) {
   try {
@@ -671,6 +673,11 @@ namespace {
 
 std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params,
                                         const std::string* json_params = nullptr) {
+#ifndef SONARE_HAVE_FX
+  // The JSON form is consumed only by the optional convolution-reverb insert.
+  // Keep the feature-off build warning-free without changing its API shape.
+  (void)json_params;
+#endif
   if (auto p = build_dynamics(name, params)) return p;
   if (auto p = build_eq(name, params)) return p;
   if (auto p = build_saturation(name, params)) return p;

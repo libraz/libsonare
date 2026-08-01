@@ -61,6 +61,9 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
         if hasattr(lib, "sonare_mastering_processor_catalog"):
             lib.sonare_mastering_processor_catalog.restype = ctypes.c_char_p
             lib.sonare_mastering_processor_catalog.argtypes = []
+        if hasattr(lib, "sonare_capability_catalog_json"):
+            lib.sonare_capability_catalog_json.restype = ctypes.c_char_p
+            lib.sonare_capability_catalog_json.argtypes = []
         lib.sonare_mastering_apply_pair_processor.restype = ctypes.c_int32
         lib.sonare_mastering_apply_pair_processor.argtypes = [
             ctypes.c_char_p,

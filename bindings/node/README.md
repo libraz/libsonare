@@ -9,7 +9,7 @@
 **Turn audio into data and back, natively in Node.js.** Analyze songs (BPM, key,
 chords, loudness), master and mix to broadcast loudness, and render MIDI through
 built-in instruments — a native N-API addon on the libsonare C++ core. Mastering
-ships 76 named DSP processors implemented against published references (ITU-R
+ships 88 named DSP processors implemented against published references (ITU-R
 BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers, Vicanek matched-Z
 biquads, ADAA-antialiased saturation); analysis defaults match librosa where the
 two overlap. Apache-2.0, no model weights.
@@ -101,7 +101,7 @@ Every area below has runnable examples and the full API in the
 [documentation](https://libsonare.libraz.net/docs/native-bindings).
 
 - **Analysis** — BPM, key (+ candidates), chords, downbeats, sections, melody, tuning; pitch (YIN / pYIN), timbre, and the full spectral feature set (STFT, mel, MFCC, chroma, CQT/VQT, spectral contrast); metering (true-peak, LUFS, correlation, vectorscope, waveform peaks). → [Python/JS API](https://libsonare.libraz.net/docs/native-bindings)
-- **Mastering** — 76 named DSP processors, the configurable `masteringChain`, 25 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — 88 named DSP processors, the configurable `masteringChain`, 25 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mixStereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
 - **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, RIR synthesis, room estimation and morphing. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)

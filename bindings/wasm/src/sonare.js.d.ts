@@ -1188,6 +1188,7 @@ export interface SonareModule {
   hasFfmpegSupport: () => boolean;
   version: () => string;
   capabilities: () => SonareCapabilities;
+  capabilityCatalog: () => string;
   abiVersion: () => number;
   engineAbiVersion: () => number;
   voiceChangerAbiVersion: () => number;

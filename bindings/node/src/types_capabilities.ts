@@ -26,3 +26,44 @@ export interface Capabilities {
   /** Hardware thread count reported by the native runtime. */
   hardwareConcurrency: number;
 }
+
+/** One parameter descriptor in the cross-surface capability catalog. */
+export interface CapabilityCatalogParameter {
+  name: string;
+  id: number;
+  rtSafe: boolean;
+  type: 'boolean' | 'number';
+  min: number | null;
+  max: number | null;
+  default: boolean | number | null;
+  unit: string | null;
+}
+
+/** One named mastering processor and its host-facing capabilities. */
+export interface CapabilityCatalogProcessor {
+  id: string;
+  kind: 'realtime' | 'offline' | 'pair';
+  realtimeInsertable: boolean;
+  stereoOnly: boolean;
+  latencySamples: number;
+  tailSamples: number;
+  channelPolicy: 'multichannel' | 'stereoPairOnly' | 'perChannel' | 'passthrough';
+  category: string;
+  params: CapabilityCatalogParameter[];
+}
+
+/** Built-in preset names grouped by feature family. */
+export interface CapabilityCatalogPresets {
+  mastering: string[];
+  synth: string[];
+  mixingScene: string[];
+  voiceChanger: string[];
+}
+
+/** Complete runtime catalog exposed by {@link capabilityCatalog}. */
+export interface CapabilityCatalog {
+  version: string;
+  abi: Capabilities['abi'];
+  processors: CapabilityCatalogProcessor[];
+  presets: CapabilityCatalogPresets;
+}

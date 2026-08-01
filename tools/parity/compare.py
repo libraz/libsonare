@@ -160,6 +160,7 @@ def _is_lifecycle_key(key: str) -> bool:
 _ALIAS_COVERAGE = {
     # C ABI returns a JSON document; facades parse it into the public descriptor.
     "capabilities_json": ("capabilities",),
+    "capability_catalog_json": ("capability_catalog",),
     # Accessors exposed as bare properties or get-prefixed getters.
     "audio_data": ("data", "get_data"),
     "audio_length": ("length", "get_length"),
@@ -465,7 +466,12 @@ def build_report(
         if s == "c":
             continue
         for key, sig in indexed.get(s, {}).items():
-            if key in c_index:
+            # A C JSON getter can deliberately become a parsed, idiomatic
+            # facade name. The forward alias above credits C coverage; this
+            # reverse check keeps that same facade name out of surface-only
+            # findings. Keep it explicit rather than stripping every `_json`.
+            is_c_alias = any(key in aliases for aliases in _ALIAS_COVERAGE.values())
+            if key in c_index or is_c_alias:
                 continue
             rep.surface_only[s].append(key)
             allowlisted = allow.surface_only_ok(key, s)

@@ -78,6 +78,9 @@ from .analyzer import (
     capabilities as capabilities,
 )
 from .analyzer import (
+    capability_catalog as capability_catalog,
+)
+from .analyzer import (
     chord_functional_analysis as chord_functional_analysis,
 )
 from .analyzer import (
@@ -566,6 +569,8 @@ from .types import Capabilities as Capabilities
 from .types import CapabilitiesAbi as CapabilitiesAbi
 from .types import CapabilitiesDecode as CapabilitiesDecode
 from .types import CapabilitiesFeatures as CapabilitiesFeatures
+from .types import CapabilityCatalog as CapabilityCatalog
+from .types import CapabilityCatalogPresets as CapabilityCatalogPresets
 from .types import (
     ChannelLayout as ChannelLayout,
 )
@@ -680,6 +685,7 @@ from .types import (
 from .types import MasteringChannelPolicy as MasteringChannelPolicy
 from .types import MasteringInsertParamInfo as MasteringInsertParamInfo
 from .types import MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry
+from .types import MasteringProcessorCategory as MasteringProcessorCategory
 from .types import MasteringProcessorKind as MasteringProcessorKind
 from .types import (
     MasteringResult as MasteringResult,

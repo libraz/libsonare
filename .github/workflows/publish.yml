@@ -104,8 +104,15 @@ jobs:
       - name: Build native CLI
         run: |
           cmake -B build-cli -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
-                             -DSONARE_WITH_FFMPEG=OFF
-          cmake --build build-cli --target sonare --config Release --parallel
+                             -DBUILD_SHARED=ON -DSONARE_WITH_FFMPEG=OFF
+          cmake --build build-cli --target sonare sonare_shared --config Release --parallel
+
+      - name: Generate capability catalog release asset
+        if: matrix.os == 'linux' && matrix.arch == 'x86_64'
+        run: |
+          python3 tools/generate_capability_catalog.py \
+            --library build-cli/lib/libsonare.so \
+            --output release-assets/capability-catalog.json
 
       - name: Package native CLI
         shell: bash
@@ -132,6 +139,15 @@ jobs:
           files: |
             release-assets/*.tar.gz
             release-assets/*.tar.gz.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach capability catalog
+        if: matrix.os == 'linux' && matrix.arch == 'x86_64'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: release-assets/capability-catalog.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
