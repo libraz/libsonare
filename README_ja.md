@@ -94,34 +94,33 @@ clone してローカル依存として使ってください。ネイティブ�
 以下は代表的な機能だけを示したものです。ランタイムごとの完全な API は
 ドキュメントサイトにあります。
 
-> **どのランタイムを選ぶ？ ファイル読み込みは効く？** WASM は `Float32Array` を渡す方式、
-> Python と Node ネイティブアドオンはファイルを直接読み込めます。→
+> **どのランタイムを選ぶ？ ファイル読み込みは効く？** WASM は WAV/MP3 をデコードし、
+> その他のブラウザ対応形式はブラウザのコーデックへフォールバックします。Python と Node
+> ネイティブアドオンはファイルを直接読み込めます。→
 > [利用環境を選ぶ](https://libsonare.libraz.net/ja/docs/getting-started#利用環境を選ぶ)
 
 ### JavaScript / TypeScript (WASM)
 
-`@libraz/libsonare` はデコード済みの `Float32Array` を受け取ります（Web Audio API や
-JS デコーダで用意してください）。
+まずエンコード済みのバイト列を渡します。`Audio.fromMemoryWithBrowserFallback()` は内蔵の
+WAV/MP3 デコーダを試し、M4A・AAC・FLAC・OGG などはブラウザの `decodeAudioData()` へ
+フォールバックします。
 
 トップレベルの一括 API はリクエストオブジェクトを正準形として受け取ります。位置引数の
 呼び出しも互換性のため引き続き利用でき、ステートフルなメソッドや小さなスカラーヘルパーは
 本来の形を保ちます。
 
 ```typescript
-import { init, analyze, detectKey, masterAudio } from '@libraz/libsonare';
+import { Audio, init } from '@libraz/libsonare';
 
 await init();
 
-const result = analyze({ samples, sampleRate });   // BPM・キー・コード・セクションなど
-const key = detectKey({ samples, sampleRate });     // { name: "C major", confidence: 0.95 }
+const bytes = new Uint8Array(await file.arrayBuffer());
+const audio = await Audio.fromMemoryWithBrowserFallback(bytes);
+const result = audio.analyze(); // BPM・キー・コード・セクションなど
+console.log(result.key.name);
 
-// 名前付きプリセットで一括マスタリング。
-const mastered = masterAudio({
-  samples,
-  sampleRate,
-  preset: 'aiMusic',
-  overrides: { loudness: { targetLufs: -13 } },
-});
+// すでにデコード済みなら、Float32Array を直接渡せます。
+const decoded = Audio.fromBuffer(samples, sampleRate);
 ```
 
 → [JavaScript API](https://libsonare.libraz.net/ja/docs/js-api) · [ブラウザ / WASM](https://libsonare.libraz.net/ja/docs/wasm)
@@ -189,9 +188,9 @@ SoundFont を読み込めば、GS 互換の SF2 プレーヤー経由でも鳴�
 
 | フォーマット | デフォルト¹ | FFmpeg あり² | WASM (`@libraz/libsonare`) |
 |--------------|-------------|--------------|----------------------------|
-| WAV (PCM 16/24/32, float32) | ✅ | ✅ | n/a（sample を直接渡す） |
-| MP3 | ✅ | ✅ | n/a |
-| M4A / AAC / FLAC / OGG / Opus / WMA / … | ❌（明示エラー） | ✅ | n/a（Web Audio API を使用） |
+| WAV (PCM 16/24/32, float32) | ✅ | ✅ | 内蔵デコーダ |
+| MP3 | ✅ | ✅ | 内蔵デコーダ |
+| M4A / AAC / FLAC / OGG / Opus / WMA / … | ❌（明示エラー） | ✅ | ブラウザ対応時はコーデックフォールバック |
 
 ¹ **デフォルト**: PyPI ホイールと、FFmpeg dev libs が無い環境でのソースビルド。ホイールは
 このモードに固定されているため、インストールがユーザの `libavformat` の有無に左右されません。
@@ -200,8 +199,9 @@ SoundFont を読み込めば、GS 互換の SF2 プレーヤー経由でも鳴�
 （`-DSONARE_WITH_FFMPEG=AUTO`）。Python: `SONARE_FFMPEG=1 pip install libsonare --no-binary
 libsonare`、Node ネイティブ: `SONARE_FFMPEG=1 yarn build`。
 
-WASM は設計上ファイルデコーダを同梱しません。Web Audio API などでデコードした
-`Float32Array` を渡してください。
+WASM バンドルには大きなコーデックライブラリを意図的に含めません。小さな内蔵 WAV/MP3
+デコーダとブラウザの `decodeAudioData()` フォールバックが通常の入口で、すでにデコード済み
+なら `Float32Array` を渡せます。
 
 ## ソースからビルド
 

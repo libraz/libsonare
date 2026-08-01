@@ -36,12 +36,10 @@ npm install @libraz/libsonare
 `init()` loads the WASM module once; every API is available afterwards. Top-level
 one-shot functions accept a request object (recommended) or positional arguments.
 
-> **Audio input:** analysis works on decoded `Float32Array` mono samples.
-> `Audio.fromMemory` decodes WAV from an in-memory buffer, but the WebAssembly
-> build bundles no decoder for compressed formats — use the Web Audio API
-> (`decodeAudioData`) for MP3 / M4A / AAC / Opus / FLAC, or the native N-API
-> package [`@libraz/libsonare-native`](https://github.com/libraz/libsonare/tree/main/bindings/node)
-> to read files from disk.
+> **Audio input:** start with `Audio.fromMemoryWithBrowserFallback(bytes)`. It
+> decodes WAV/MP3 in WASM, then uses the browser's `decodeAudioData` for other
+> browser-supported formats. Pass a decoded mono `Float32Array` only when one is
+> already available.
 
 > **Platform constraints:** the WebAssembly build is single-threaded (analysis
 > runs to completion on the calling thread — there is no non-blocking variant)
@@ -49,17 +47,14 @@ one-shot functions accept a request object (recommended) or positional arguments
 > to keep the UI responsive.
 
 ```typescript
-import { init, analyze, masterAudio } from '@libraz/libsonare';
+import { Audio, init } from '@libraz/libsonare';
 
 await init();
 
-// Analyze decoded Float32Array mono samples
-const { bpm, key } = analyze({ samples, sampleRate });
+const bytes = new Uint8Array(await file.arrayBuffer());
+const audio = await Audio.fromMemoryWithBrowserFallback(bytes);
+const { bpm, key } = audio.analyze();
 console.log(`BPM: ${bpm}  Key: ${key.name}`);
-
-// Master toward a target loudness with a named preset
-const mastered = masterAudio({ samples, sampleRate, preset: 'streaming' });
-console.log(mastered.outputLufs, mastered.appliedGainDb);
 ```
 
 Render a MIDI arrangement through a built-in instrument with the headless
@@ -83,14 +78,13 @@ try {
 }
 ```
 
-### Decoding audio in the browser
+### Using already-decoded audio
 
-The WASM build takes decoded samples, so decode with the Web Audio API first:
+Use `Float32Array` directly when another API already decoded the audio:
 
 ```typescript
-const buf = await fetch('song.m4a').then((r) => r.arrayBuffer());
-const decoded = await new AudioContext().decodeAudioData(buf);
-const { bpm, key } = analyze({ samples: decoded.getChannelData(0), sampleRate: decoded.sampleRate });
+const audio = Audio.fromBuffer(decoded.getChannelData(0), decoded.sampleRate);
+const { bpm, key } = audio.analyze();
 ```
 
 ### Loading the `.wasm` file

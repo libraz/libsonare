@@ -97,34 +97,33 @@ and FFmpeg options.
 The snippets below cover the headline capabilities; the docs site has the full,
 per-runtime API.
 
-> **Which runtime, and does it decode files for you?** WASM takes `Float32Array`;
+> **Which runtime, and does it decode files for you?** WASM decodes WAV/MP3 and
+> falls back to the browser codec stack for other browser-supported formats;
 > Python and the Node native addon read files directly. →
 > [Choose your runtime](https://libsonare.libraz.net/docs/getting-started#choose-your-runtime)
 
 ### JavaScript / TypeScript (WASM)
 
-`@libraz/libsonare` accepts decoded `Float32Array` samples (use the Web Audio API
-or a JS decoder to obtain them).
+Start with encoded audio bytes. `Audio.fromMemoryWithBrowserFallback()` uses the
+built-in WAV/MP3 decoder first, then `AudioContext.decodeAudioData()` for formats
+such as M4A, AAC, FLAC, and OGG that the browser supports.
 
 Top-level one-shot APIs use a request object as their documented form. Positional
 calls remain supported for compatibility; stateful methods and small scalar helpers
 keep their natural forms.
 
 ```typescript
-import { init, analyze, detectKey, masterAudio } from '@libraz/libsonare';
+import { Audio, init } from '@libraz/libsonare';
 
 await init();
 
-const result = analyze({ samples, sampleRate });   // BPM, key, chords, sections, ...
-const key = detectKey({ samples, sampleRate });    // { name: "C major", confidence: 0.95 }
+const bytes = new Uint8Array(await file.arrayBuffer());
+const audio = await Audio.fromMemoryWithBrowserFallback(bytes);
+const result = audio.analyze(); // BPM, key, chords, sections, ...
+console.log(result.key.name);
 
-// One-shot mastering with a named preset.
-const mastered = masterAudio({
-  samples,
-  sampleRate,
-  preset: 'aiMusic',
-  overrides: { loudness: { targetLufs: -13 } },
-});
+// If samples are already decoded, pass a Float32Array directly instead.
+const decoded = Audio.fromBuffer(samples, sampleRate);
 ```
 
 → [JavaScript API](https://libsonare.libraz.net/docs/js-api) · [Browser / WASM](https://libsonare.libraz.net/docs/wasm)
@@ -192,9 +191,9 @@ SoundFont to render through the GS-compatible SF2 player instead.
 
 | Format | Default¹ | With FFmpeg² | WASM (`@libraz/libsonare`) |
 |--------|----------|--------------|----------------------------|
-| WAV (PCM 16/24/32, float32) | ✅ | ✅ | n/a (samples in) |
-| MP3 | ✅ | ✅ | n/a |
-| M4A / AAC / FLAC / OGG / Opus / WMA / … | ❌ (clear error) | ✅ | n/a (use Web Audio API) |
+| WAV (PCM 16/24/32, float32) | ✅ | ✅ | built-in decoder |
+| MP3 | ✅ | ✅ | built-in decoder |
+| M4A / AAC / FLAC / OGG / Opus / WMA / … | ❌ (clear error) | ✅ | browser codec fallback where supported |
 
 ¹ **Default**: the PyPI wheel and source builds without FFmpeg dev libs. Wheels
 are pinned to this mode so installation never depends on your `libavformat`.
@@ -203,8 +202,9 @@ are pinned to this mode so installation never depends on your `libavformat`.
 pkg-config (`-DSONARE_WITH_FFMPEG=AUTO`). Python: `SONARE_FFMPEG=1 pip install
 libsonare --no-binary libsonare`; Node native: `SONARE_FFMPEG=1 yarn build`.
 
-WASM bundles no file decoder by design — pass `Float32Array` samples from the Web
-Audio API or another JS decoder.
+The WASM bundle intentionally excludes large codec libraries. Its small built-in
+WAV/MP3 decoder and browser `decodeAudioData()` fallback cover the normal browser
+entry point; pass a `Float32Array` when samples are already decoded.
 
 ## Build from source
 
