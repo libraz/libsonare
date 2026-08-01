@@ -205,6 +205,40 @@ class SonareProjectClipDesc(ctypes.Structure):
     ]
 
 
+class SonareExternalStemDesc(ctypes.Structure):
+    """Maps to SonareExternalStemDesc in sonare_c_project.h."""
+
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("role", ctypes.c_char_p),
+        ("layout", ctypes.c_uint32),
+        ("planar_samples", ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+        ("frame_count", ctypes.c_int64),
+        ("start_frame", ctypes.c_int64),
+    ]
+
+
+class SonareExternalStemImportRequest(ctypes.Structure):
+    """Maps to SonareExternalStemImportRequest in sonare_c_project.h."""
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int),
+        ("sample_rate", ctypes.c_int),
+        ("stems", ctypes.POINTER(SonareExternalStemDesc)),
+        ("stem_count", ctypes.c_size_t),
+    ]
+
+
+class SonareExternalStemImportResult(ctypes.Structure):
+    """Maps to SonareExternalStemImportResult in sonare_c_project.h."""
+
+    _fields_ = [
+        ("track_ids", ctypes.POINTER(ctypes.c_uint32)),
+        ("clip_ids", ctypes.POINTER(ctypes.c_uint32)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
 class SonareProjectWarpAnchor(ctypes.Structure):
     """Maps to SonareProjectWarpAnchor in sonare_c_project.h."""
 
@@ -430,14 +464,15 @@ class SonareSf2ProgramStatus(ctypes.Structure):
 class SonareSf2InstrumentConfig(ctypes.Structure):
     """Maps to SonareSf2InstrumentConfig in sonare_c_project.h.
 
-    Versioned struct: struct_version 0 is treated as the current version 1;
-    every other field uses "0 => default".
+    Versioned struct: struct_version 0/1 preserve version 1; version 2 adds
+    ``prefer_model_for_modeled_families``.
     """
 
     _fields_ = [
         ("struct_version", ctypes.c_int),
         ("gain", ctypes.c_float),
         ("polyphony", ctypes.c_int),
+        ("prefer_model_for_modeled_families", ctypes.c_int),
     ]
 
 

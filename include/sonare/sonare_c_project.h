@@ -52,5 +52,6 @@
 #include "sonare_c_project_annotate.h"
 #include "sonare_c_project_core.h"
 #include "sonare_c_project_edit.h"
+#include "sonare_c_project_external_stems.h"
 #include "sonare_c_project_instruments.h"
 #include "sonare_c_project_midi.h"

@@ -154,6 +154,17 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_uint32),
         ]
 
+        lib.sonare_project_import_external_stems.restype = ctypes.c_int32
+        lib.sonare_project_import_external_stems.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareExternalStemImportRequest),
+            ctypes.POINTER(SonareExternalStemImportResult),
+        ]
+        lib.sonare_free_external_stem_import_result.restype = None
+        lib.sonare_free_external_stem_import_result.argtypes = [
+            ctypes.POINTER(SonareExternalStemImportResult)
+        ]
+
         lib.sonare_project_add_loop_recording_takes.restype = ctypes.c_int32
         lib.sonare_project_add_loop_recording_takes.argtypes = [
             ctypes.c_void_p,

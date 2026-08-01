@@ -21,6 +21,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetSampleRate>("setSampleRate"),
           InstanceMethod<&ProjectWrap::AddTrack>("addTrack"),
           InstanceMethod<&ProjectWrap::AddClip>("addClip"),
+          InstanceMethod<&ProjectWrap::ImportExternalStems>("importExternalStems"),
           InstanceMethod<&ProjectWrap::AddLoopRecordingTakes>("addLoopRecordingTakes"),
           InstanceMethod<&ProjectWrap::AddMidiClip>("addMidiClip"),
           InstanceMethod<&ProjectWrap::SplitClip>("splitClip"),

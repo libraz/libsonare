@@ -1,6 +1,8 @@
 import { addon } from './native.js';
 import type {
   BuiltinInstrumentConfig,
+  ExternalSeparatedStemImportRequest,
+  ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
@@ -430,6 +432,23 @@ export class Project {
     return this.native.addClip(desc);
   }
 
+  /**
+   * Import host-separated PCM as ordinary audio tracks and clips. Input PCM is
+   * copied; the native layer never resamples, retimes, phase-aligns, or adds
+   * hidden gain compensation.
+   */
+  importExternalStems(
+    request: ExternalSeparatedStemImportRequest,
+  ): ExternalSeparatedStemImportResult {
+    return this.native.importExternalStems({
+      ...request,
+      stems: request.stems.map((stem) => ({
+        ...stem,
+        layout: stem.layout === 'mono' ? 1 : stem.layout === 'stereo' ? 2 : stem.layout,
+      })),
+    });
+  }
+
   /** Split captured loop-recording audio into takes and add one clip. */
   addLoopRecordingTakes(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingResult {
     return this.native.addLoopRecordingTakes(desc);
@@ -480,7 +499,16 @@ export class Project {
     this.native.removeWarpMap(warpRefId);
   }
 
-  /** Route a track's MIDI clips to a host/instrument destination id. */
+  /**
+   * Route a track's MIDI clips to a host/instrument destination id.
+   *
+   * Builtin, NativeSynth, and SF2 instruments retain source-track provenance
+   * inside a shared destination voice pool. With only zero-latency instruments
+   * bound, live lanes and channel-strip bounces remain aligned. Configure a
+   * live lane per source track that needs strip processing. A shared opaque or
+   * latency-bearing instrument cannot be separated back into strip inputs; its
+   * channel-strip bounce throws `NOT_SUPPORTED`.
+   */
   setTrackMidiDestination(trackId: number, destinationId: number): void {
     this.native.setTrackMidiDestination(trackId, destinationId);
   }

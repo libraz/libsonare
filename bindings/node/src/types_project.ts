@@ -71,6 +71,33 @@ export interface ProjectClipDesc {
   sourceUri?: string;
 }
 
+/** One decoded output of an external source-separation model. */
+export interface ExternalSeparatedStem {
+  /** Non-empty, unique host label. It is used as the new track name. */
+  name: string;
+  /** Optional semantic metadata such as `'vocals'`; it has no DSP effect. */
+  role?: string;
+  /** Mono or stereo layout. */
+  layout: 'mono' | 'stereo' | 1 | 2;
+  /** One Float32Array per layout channel, all with the same frame count. */
+  planarSamples: Float32Array[];
+  /** Absolute project-rate frame where the stem begins (default 0). */
+  startFrame?: number;
+}
+
+/** Request for {@link Project.importExternalStems}. */
+export interface ExternalSeparatedStemImportRequest {
+  /** Must exactly equal the target project's sample rate; no resampling occurs. */
+  sampleRate: number;
+  stems: ExternalSeparatedStem[];
+}
+
+/** Stable ids created by {@link Project.importExternalStems}. */
+export interface ExternalSeparatedStemImportResult {
+  trackIds: number[];
+  clipIds: number[];
+}
+
 /** Descriptor for {@link Project.addLoopRecordingTakes}. */
 export interface ProjectLoopRecordingDesc {
   trackId: number;
@@ -273,6 +300,8 @@ export interface Sf2InstrumentConfig {
   gain?: number;
   /** Max simultaneous voices; 0 / omit => 48, clamped to [1, 64]. */
   polyphony?: number;
+  /** Prefer dedicated physical models for covered melodic GM programs. Defaults to false; drums stay SF2-first. */
+  preferModelForModeledFamilies?: boolean;
 }
 
 export const SYNTH_ENGINE_MODES = [

@@ -156,6 +156,56 @@ def test_project_abi_version_matches_expected() -> None:
     assert project_abi_version() > 0
 
 
+def test_import_external_stems_creates_normal_audio_tracks() -> None:
+    project = Project()
+    try:
+        project.set_sample_rate(48000)
+        track_ids, clip_ids = project.import_external_stems(
+            sample_rate=48000,
+            stems=[
+                {
+                    "name": "vocals",
+                    "role": "lead",
+                    "layout": "stereo",
+                    "planar_samples": [
+                        np.array([1.0, 0.0, 0.0], dtype=np.float32),
+                        np.array([-0.5, 0.0, 0.0], dtype=np.float32),
+                    ],
+                    "start_frame": 113,
+                },
+                {
+                    "name": "drums",
+                    "layout": "mono",
+                    "planar_samples": [np.array([0.25, 0.0, 0.0], dtype=np.float32)],
+                },
+            ],
+        )
+        assert len(track_ids) == 2
+        assert len(clip_ids) == 2
+        assert project.track_count() == 2
+        assert project.clip_count() == 2
+        with pytest.raises(RuntimeError):
+            project.import_external_stems(
+                48000,
+                [
+                    {
+                        "name": "duplicate",
+                        "layout": "mono",
+                        "planar_samples": [np.array([0.0], dtype=np.float32)],
+                    },
+                    {
+                        "name": "duplicate",
+                        "layout": "mono",
+                        "planar_samples": [np.array([0.0], dtype=np.float32)],
+                    },
+                ],
+            )
+        assert project.track_count() == 2
+        assert project.clip_count() == 2
+    finally:
+        project.close()
+
+
 # --- serialization ---------------------------------------------------------
 
 

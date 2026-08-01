@@ -347,6 +347,7 @@ endif()
 if(BUILD_ARRANGEMENT)
   target_sources(sonare_tests PRIVATE
     arrangement/edit_model_test.cpp
+    arrangement/external_stems_test.cpp
     arrangement/edit_command_history_test.cpp
     arrangement/edit_compiler_golden_test.cpp
     arrangement/c_abi_edit_ops_test.cpp
@@ -397,6 +398,7 @@ if(BUILD_ARRANGEMENT)
     bindings/binding_project_midi_test.cpp
     bindings/binding_project_soundfont_test.cpp
     bindings/binding_synth_patch_test.cpp
+    arrangement/c_abi_external_stems_test.cpp
   )
   # The headless-project C ABI sources are compiled into the test binary so the
   # parity test drives the real C surface, like the engine/voice-changer TUs.
@@ -406,6 +408,7 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_track.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_clip.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp

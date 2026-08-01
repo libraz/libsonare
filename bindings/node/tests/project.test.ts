@@ -102,6 +102,44 @@ describe('Project native binding', () => {
     expect(projectAbiVersion()).toBeGreaterThan(0);
   });
 
+  it('imports external planar stems through the project C ABI', () => {
+    const project = Project.create();
+    project.setSampleRate(48000);
+    const result = project.importExternalStems({
+      sampleRate: 48000,
+      stems: [
+        {
+          name: 'vocals',
+          role: 'lead',
+          layout: 'stereo',
+          planarSamples: [new Float32Array([1, 0, 0]), new Float32Array([-0.5, 0, 0])],
+          startFrame: 113,
+        },
+        {
+          name: 'drums',
+          layout: 'mono',
+          planarSamples: [new Float32Array([0.25, 0, 0])],
+        },
+      ],
+    });
+    expect(result.trackIds).toHaveLength(2);
+    expect(result.clipIds).toHaveLength(2);
+    expect(project.trackCount()).toBe(2);
+    expect(project.clipCount()).toBe(2);
+    expect(() =>
+      project.importExternalStems({
+        sampleRate: 48000,
+        stems: [
+          { name: 'duplicate', layout: 'mono', planarSamples: [new Float32Array([0])] },
+          { name: 'duplicate', layout: 'mono', planarSamples: [new Float32Array([0])] },
+        ],
+      }),
+    ).toThrow();
+    expect(project.trackCount()).toBe(2);
+    expect(project.clipCount()).toBe(2);
+    project.destroy();
+  });
+
   it('round-trips toJson -> fromJson -> toJson byte-for-byte', () => {
     const project = buildProject();
     const json = project.toJson();

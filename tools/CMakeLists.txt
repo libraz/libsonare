@@ -44,6 +44,7 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_track.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_clip.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_memory.cpp

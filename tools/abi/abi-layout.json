@@ -2093,6 +2093,102 @@
     ],
     "size": 24
   },
+  "SonareExternalStemDesc": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "name",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "role",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "layout",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "planar_samples",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "frame_count",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "start_frame",
+        "offset": 40,
+        "size": 8
+      }
+    ],
+    "size": 48
+  },
+  "SonareExternalStemImportRequest": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "sample_rate",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "stems",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "stem_count",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
+  "SonareExternalStemImportResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "track_ids",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "clip_ids",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "count",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
   "SonareGateConfig": {
     "align": 4,
     "fields": [
@@ -3496,6 +3592,90 @@
       }
     ],
     "size": 12
+  },
+  "SonareNoteSegment": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "frame_start",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "frame_end",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "start_seconds",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "end_seconds",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "median_cents",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
+  "SonareNoteSegmenterConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "segmentation_threshold_cents",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_note_ms",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reference_hz",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
+  "SonareNoteSegmentsResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "segments",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "count",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
   },
   "SonareParameterInfo": {
     "align": 4,
@@ -5160,10 +5340,10 @@
         "kind": "aggregate",
         "name": "config",
         "offset": 4,
-        "size": 12
+        "size": 16
       }
     ],
-    "size": 16
+    "size": 20
   },
   "SonareSf2InstrumentConfig": {
     "align": 4,
@@ -5185,9 +5365,15 @@
         "name": "polyphony",
         "offset": 8,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "prefer_model_for_modeled_families",
+        "offset": 12,
+        "size": 4
       }
     ],
-    "size": 12
+    "size": 16
   },
   "SonareSf2ProgramStatus": {
     "align": 4,

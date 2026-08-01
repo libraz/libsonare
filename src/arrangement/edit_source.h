@@ -46,6 +46,9 @@ struct AudioSourceRef {
   /// it as a non-interpreted string and only round-trips it. Kept absent from
   /// serialized output when empty so existing projects stay byte-identical.
   std::string content_hash;
+  /// Optional semantic role supplied by an external stem separator. The core
+  /// preserves it as metadata only; it never changes routing, gain, or DSP.
+  std::string external_stem_role;
 };
 
 /// Reference to MIDI content. Reserved: only the stable id and minimal

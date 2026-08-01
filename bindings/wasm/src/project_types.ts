@@ -25,6 +25,29 @@ export interface ProjectBounceOptions {
   instrumentLatencySamples?: number;
 }
 
+/** One decoded output from a host-owned source-separation model. */
+export interface ExternalSeparatedStem {
+  name: string;
+  /** Optional host metadata; it does not change DSP. */
+  role?: string;
+  layout: 'mono' | 'stereo' | 1 | 2;
+  planarSamples: Float32Array[];
+  /** Absolute project-rate frame at which this stem begins. */
+  startFrame?: number;
+}
+
+/** Request for {@link Project.importExternalStems}. */
+export interface ExternalSeparatedStemImportRequest {
+  sampleRate: number;
+  stems: ExternalSeparatedStem[];
+}
+
+/** Ids of the normal tracks and clips created by the import. */
+export interface ExternalSeparatedStemImportResult {
+  trackIds: number[];
+  clipIds: number[];
+}
+
 /**
  * Marker kind ordinals. Mirrors `SonareMarkerKind` in `src/sonare_c_types.h`;
  * the values are part of the ABI and must not be renumbered.
@@ -111,6 +134,8 @@ export interface Sf2InstrumentConfig {
   gain?: number;
   /** Max simultaneous voices (0 => 48, clamped to [1, 64]). */
   polyphony?: number;
+  /** Prefer dedicated physical models for covered melodic GM programs. Defaults to false; drums stay SF2-first. */
+  preferModelForModeledFamilies?: boolean;
 }
 
 /** Source backend a resolved MIDI program renders through. */

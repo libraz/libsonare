@@ -178,6 +178,9 @@ Value source_to_json(const arrangement::ClipSource& src) {
     if (!audio->content_hash.empty()) {
       o["content_hash"] = audio->content_hash;
     }
+    if (!audio->external_stem_role.empty()) {
+      o["external_stem_role"] = audio->external_stem_role;
+    }
   } else {
     const auto& m = std::get<arrangement::MidiSourceRef>(src);
     o["kind"] = static_cast<int>(arrangement::SourceKind::kMidi);

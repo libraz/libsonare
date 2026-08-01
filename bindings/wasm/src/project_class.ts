@@ -9,6 +9,8 @@ import {
 } from './project_internal';
 import type {
   BuiltinSynthBinding,
+  ExternalSeparatedStemImportRequest,
+  ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
   ProjectAssistSidecar,
   ProjectAutomationLaneDesc,
@@ -337,6 +339,19 @@ export class Project {
     return this.native.addClip(desc);
   }
 
+  /** Import host-separated PCM through the normal audio-track/clip path. */
+  importExternalStems(
+    request: ExternalSeparatedStemImportRequest,
+  ): ExternalSeparatedStemImportResult {
+    return this.native.importExternalStems({
+      ...request,
+      stems: request.stems.map((stem) => ({
+        ...stem,
+        layout: stem.layout === 'mono' ? 1 : stem.layout === 'stereo' ? 2 : stem.layout,
+      })),
+    });
+  }
+
   /** Split captured loop-recording audio into takes and add one clip. */
   addLoopRecordingTakes(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingResult {
     return this.native.addLoopRecordingTakes(desc);
@@ -391,7 +406,11 @@ export class Project {
    * Route a track's MIDI to host-instrument `destinationId` (0 = default). The
    * compiler stamps every MIDI clip on the track with this id so the engine
    * dispatches its events to the instrument registered for that destination.
-   * Routes through an undoable edit command.
+   * Routes through an undoable edit command. Builtin, NativeSynth, and SF2
+   * instruments retain source-track provenance inside a shared destination
+   * voice pool. With only zero-latency instruments bound, live lanes and
+   * channel-strip bounces remain aligned. Configure one live lane per source
+   * track that needs strip processing.
    */
   setTrackMidiDestination(trackId: number, destinationId: number): void {
     this.native.setTrackMidiDestination(trackId, destinationId);

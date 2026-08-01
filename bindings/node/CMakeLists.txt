@@ -53,6 +53,7 @@ set(ADDON_SOURCES
   src/addon/engine/graph_offline.cpp
   src/addon/sonare_wrap_project.cpp
   src/addon/project/edit.cpp
+  src/addon/project/external_stems.cpp
   src/addon/project/midi_mir.cpp
   src/addon/project/render.cpp
   src/addon/sonare_wrap.cpp
@@ -104,6 +105,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/project_core.cpp
   ${SONARE_ROOT}/src/c_api/project_edit_track.cpp
   ${SONARE_ROOT}/src/c_api/project_edit_clip.cpp
+  ${SONARE_ROOT}/src/c_api/project_external_stems.cpp
   ${SONARE_ROOT}/src/c_api/project_midi.cpp
   ${SONARE_ROOT}/src/c_api/project_mir.cpp
   ${SONARE_ROOT}/src/c_api/project_soundfont.cpp

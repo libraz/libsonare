@@ -207,6 +207,7 @@ arrangement::ClipSource source_from_json(const Value& v) {
   a.storage_handle_id = uint_or(v, "storage_handle_id", 0);
   // Gated read: absent content_hash (older documents) loads as empty.
   a.content_hash = str_or(v, "content_hash", "");
+  a.external_stem_role = str_or(v, "external_stem_role", "");
   return a;
 }
 

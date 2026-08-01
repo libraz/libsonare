@@ -43,6 +43,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   // -- edit --
   Napi::Value AddTrack(const Napi::CallbackInfo& info);
   Napi::Value AddClip(const Napi::CallbackInfo& info);
+  Napi::Value ImportExternalStems(const Napi::CallbackInfo& info);
   Napi::Value AddLoopRecordingTakes(const Napi::CallbackInfo& info);
   Napi::Value AddMidiClip(const Napi::CallbackInfo& info);
   Napi::Value SplitClip(const Napi::CallbackInfo& info);

@@ -86,6 +86,7 @@ void registerProjectBindings() {
       .function("toJson", &ProjectWasm::toJson)
       .function("setSampleRate", &ProjectWasm::setSampleRate);
   registerProjectArrange(cls);
+  registerProjectExternalStems(cls);
   registerProjectEdit(cls);
   registerProjectMidi(cls);
   registerProjectBounce(cls);

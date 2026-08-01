@@ -41,6 +41,7 @@ export interface WasmProject {
   setSampleRate: (sampleRate: number) => void;
   addTrack: (desc: { kind?: number | string; name?: string }) => number;
   addClip: (desc: ProjectClipDesc) => number;
+  importExternalStems: (request: unknown) => { trackIds: number[]; clipIds: number[] };
   addLoopRecordingTakes: (desc: ProjectLoopRecordingDesc) => ProjectLoopRecordingResult;
   addMidiClip: (startPpq: number, lengthPpq: number) => ProjectMidiClipResult;
   splitClip: (clipId: number, splitPpq: number) => number;

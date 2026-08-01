@@ -142,6 +142,7 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_core.cpp
   c_api/project_edit_track.cpp
   c_api/project_edit_clip.cpp
+  c_api/project_external_stems.cpp
   c_api/project_midi.cpp
   c_api/project_mir.cpp
   c_api/project_soundfont.cpp
@@ -727,6 +728,7 @@ if(BUILD_ARRANGEMENT)
 
   add_library(sonare_arrangement STATIC
     arrangement/edit_model.cpp
+    arrangement/external_stems.cpp
     arrangement/edit_command_track.cpp
     arrangement/edit_command_clip.cpp
     arrangement/edit_command_source_timeline.cpp
@@ -1017,6 +1019,7 @@ if(BUILD_WASM)
       wasm/bindings/effects/offline_dynamics_editing.cpp
       wasm/bindings/project/project.cpp
       wasm/bindings/project/project_arrange.cpp
+      wasm/bindings/project/project_external_stems.cpp
       wasm/bindings/project/project_edit.cpp
       wasm/bindings/project/project_midi.cpp
       wasm/bindings/project/project_bounce.cpp
@@ -1056,7 +1059,11 @@ if(BUILD_WASM)
   if(NOT SONARE_WASM_ANALYSIS_ONLY)
     target_link_libraries(sonare PRIVATE sonare_engine)
   endif()
-  if(BUILD_PITCH_EDITOR AND NOT SONARE_WASM_ANALYSIS_ONLY)
+  # `sonare_note_segments` is part of the public feature surface, including
+  # the analysis-only WASM bundle. Its C-ABI implementation lives in
+  # sonare_core but calls NoteSegmenter from this target, so both bundle shapes
+  # must link the implementation library.
+  if(BUILD_PITCH_EDITOR)
     target_link_libraries(sonare PRIVATE sonare_pitch_editor)
   endif()
   if(BUILD_VOICE_CHANGER AND NOT SONARE_WASM_ANALYSIS_ONLY)

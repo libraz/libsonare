@@ -24,6 +24,9 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    SonareExternalStemDesc,
+    SonareExternalStemImportRequest,
+    SonareExternalStemImportResult,
     SonareProjectClipCompSegment,
     SonareProjectClipDesc,
     SonareProjectClipFade,
@@ -32,6 +35,7 @@ from ._runtime import (
     SonareProjectTrackDesc,
     SonareProjectWarpAnchor,
     SonareProjectWarpMapDesc,
+    _as_float32_buffer,
     _check,
     _get_lib,
     _to_c_float_array,
@@ -124,6 +128,77 @@ class _ProjectEditMixin:
         # `backing` is kept alive until the call returns above.
         del backing
         return int(out_id.value)
+
+    def import_external_stems(
+        self,
+        sample_rate: int,
+        stems: Sequence[Mapping[str, object]],
+    ) -> tuple[list[int], list[int]]:
+        """Import host-separated planar PCM as normal audio tracks and clips.
+
+        Each mapping supplies ``name``, ``layout`` (``"mono"``/``"stereo"``
+        or 1/2), ``planar_samples`` (one float array per channel), and optional
+        ``role`` / ``start_frame``. Input is copied by the native project; it
+        is never resampled, retimed, phase-aligned, or gain-compensated.
+        """
+        descs: list[SonareExternalStemDesc] = []
+        names: list[bytes] = []
+        roles: list[bytes | None] = []
+        sample_arrays: list[list[np.ndarray]] = []
+        plane_arrays: list[ctypes.Array[ctypes.POINTER(ctypes.c_float)]] = []
+        for stem in stems:
+            name = stem.get("name")
+            layout = stem.get("layout")
+            planes = stem.get("planar_samples")
+            if not isinstance(name, str) or not isinstance(planes, Sequence):
+                raise TypeError("each stem needs string name and planar_samples")
+            layout_value = {"mono": 1, "stereo": 2}.get(layout, layout)
+            if layout_value not in (1, 2) or len(planes) != layout_value:
+                raise ValueError("planar_samples must match mono or stereo layout")
+            arrays = [_as_float32_buffer(plane) for plane in planes]
+            if not arrays or any(array.size != arrays[0].size for array in arrays):
+                raise ValueError("all planar_samples entries must have equal length")
+            names.append(name.encode("utf-8"))
+            role = stem.get("role")
+            if role is not None and not isinstance(role, str):
+                raise TypeError("stem role must be a string when supplied")
+            roles.append(None if role is None else role.encode("utf-8"))
+            sample_arrays.append(arrays)
+            c_planes = (ctypes.POINTER(ctypes.c_float) * int(layout_value))(
+                *(array.ctypes.data_as(ctypes.POINTER(ctypes.c_float)) for array in arrays)
+            )
+            plane_arrays.append(c_planes)
+            descs.append(
+                SonareExternalStemDesc(
+                    name=names[-1],
+                    role=roles[-1],
+                    layout=int(layout_value),
+                    planar_samples=c_planes,
+                    frame_count=int(arrays[0].size),
+                    start_frame=int(stem.get("start_frame", 0)),
+                )
+            )
+        c_descs = (SonareExternalStemDesc * len(descs))(*descs)
+        request = SonareExternalStemImportRequest(
+            struct_version=0,
+            sample_rate=int(sample_rate),
+            stems=c_descs,
+            stem_count=len(descs),
+        )
+        result = SonareExternalStemImportResult()
+        lib = _get_lib()
+        _check(
+            lib.sonare_project_import_external_stems(
+                self._require_handle(), ctypes.byref(request), ctypes.byref(result)
+            )
+        )
+        try:
+            return (
+                [int(result.track_ids[index]) for index in range(result.count)],
+                [int(result.clip_ids[index]) for index in range(result.count)],
+            )
+        finally:
+            lib.sonare_free_external_stem_import_result(ctypes.byref(result))
 
     def add_loop_recording_takes(
         self,
@@ -350,6 +425,14 @@ class _ProjectEditMixin:
         The compiler stamps every MIDI clip on the track with this id so the
         engine dispatches the clip's events to the instrument registered for that
         destination. Routes through an undoable edit command.
+
+        Builtin, NativeSynth, and SF2 instruments retain source-track
+        provenance in a shared destination voice pool. With only zero-latency
+        instruments bound, live lanes and channel-strip bounces remain aligned.
+        Configure one live lane per source track that needs strip processing.
+        A shared opaque or latency-bearing instrument cannot be separated back
+        into strip inputs; its channel-strip bounce raises ``SonareError`` with
+        ``NOT_SUPPORTED``.
         """
         _check(
             _get_lib().sonare_project_set_track_midi_destination(
