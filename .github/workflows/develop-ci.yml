@@ -76,3 +76,26 @@ jobs:
         run: python3 tools/scripts/k_weighting_reference.py
       - name: Test
         run: ctest --test-dir build --output-on-failure --parallel
+
+  python-wheel:
+    name: Python wheel (manylinux x86_64)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build, audit, and test wheel
+        # The manylinux image has no system Eigen package; the top-level CMake
+        # FetchContent fallback supplies its header-only dependency.
+        run: |
+          cmake -B build-wheel -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
+                                -DBUILD_TESTING=OFF -DBUILD_CLI=OFF \
+                                -DSONARE_WITH_FFMPEG=OFF
+          cmake --build build-wheel --target sonare_shared --config Release --parallel
+          cp build-wheel/lib/libsonare.so bindings/python/src/libsonare/
+          cd bindings/python
+          /opt/python/cp313-cp313/bin/python -m pip install wheel hatchling auditwheel pytest
+          /opt/python/cp313-cp313/bin/python -m pip wheel . --no-deps -w dist-raw/
+          auditwheel repair dist-raw/*.whl -w dist/ --plat manylinux_2_28_x86_64
+          auditwheel show dist/*.whl
+          /opt/python/cp313-cp313/bin/python -m pip install dist/*.whl
+          /opt/python/cp313-cp313/bin/python -c "import libsonare; libsonare.version()"

@@ -81,42 +81,53 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: x86_64
-            plat_tag: manylinux_2_17_x86_64
+            container: quay.io/pypa/manylinux_2_28_x86_64
             lib_name: libsonare.so
           - os: ubuntu-24.04-arm
             arch: aarch64
-            plat_tag: manylinux_2_17_aarch64
+            container: quay.io/pypa/manylinux_2_28_aarch64
             lib_name: libsonare.so
           - os: macos-latest
             arch: arm64
-            plat_tag: macosx_11_0_arm64
+            container: null
             lib_name: libsonare.dylib
           # macOS x86_64 omitted: GitHub no longer provides Intel macOS runners
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Eigen3 (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libeigen3-dev
 
       - name: Install Eigen3 (macOS)
         if: runner.os == 'macOS'
         run: brew install eigen
 
       - uses: actions/setup-python@v6
+        if: runner.os == 'macOS'
         with:
           python-version: '3.13'
 
-      - name: Build shared library
+      - name: Build shared library (Linux)
+        if: runner.os == 'Linux'
         # Pin SONARE_WITH_FFMPEG=OFF for deterministic wheels: PyPI artifacts
         # must not depend on libavformat being present on the user's machine.
         # m4a/AAC users can rebuild from source with SONARE_FFMPEG=1.
+        # Eigen resolves through CMake's header-only FetchContent fallback in
+        # the manylinux image, which deliberately has no system Eigen package.
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
                          -DBUILD_TESTING=OFF -DBUILD_CLI=OFF \
                          -DSONARE_WITH_FFMPEG=OFF
-          cmake --build build --config Release -j
+          cmake --build build --target sonare_shared --config Release -j
+
+      - name: Build shared library (macOS)
+        if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '11.0'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
+                         -DBUILD_TESTING=OFF -DBUILD_CLI=OFF \
+                         -DSONARE_WITH_FFMPEG=OFF
+          cmake --build build --target sonare_shared --config Release -j
 
       - name: Copy shared library
         run: cp build/lib/${{ matrix.lib_name }} bindings/python/src/libsonare/
@@ -125,27 +136,61 @@ jobs:
         if: runner.os == 'macOS'
         run: install_name_tool -id @loader_path/libsonare.dylib bindings/python/src/libsonare/libsonare.dylib
 
-      - name: Build wheel
+      - name: Build wheel (Linux)
+        if: runner.os == 'Linux'
         run: |
           cd bindings/python
-          pip install wheel hatchling
-          pip wheel . --no-deps -w dist/
-          python3 -m wheel tags --platform-tag ${{ matrix.plat_tag }} --remove dist/*.whl
+          /opt/python/cp313-cp313/bin/python -m pip install wheel hatchling auditwheel
+          /opt/python/cp313-cp313/bin/python -m pip wheel . --no-deps -w dist-raw/
+          auditwheel repair dist-raw/*.whl -w dist/ --plat manylinux_2_28_${{ matrix.arch }}
+          auditwheel show dist/*.whl
 
-      - name: Test wheel
+      - name: Build wheel (macOS)
+        if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '11.0'
         run: |
-          pip install bindings/python/dist/*.whl pytest
-          python3 -c "import libsonare; print(f'Version: {libsonare.version()}')"
-          cd bindings/python && python3 -m pytest tests/ -x -q
+          cd bindings/python
+          python -m pip install wheel hatchling
+          python -m pip wheel . --no-deps -w dist/
+          python -m wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
+
+      - name: Test wheel (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          /opt/python/cp313-cp313/bin/python -m pip install bindings/python/dist/*.whl pytest
+          /opt/python/cp313-cp313/bin/python -c "import libsonare; print(f'Version: {libsonare.version()}')"
+          cd bindings/python && /opt/python/cp313-cp313/bin/python -m pytest tests/ -x -q
+
+      - name: Test wheel (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python -m pip install bindings/python/dist/*.whl pytest
+          python -c "import libsonare; print(f'Version: {libsonare.version()}')"
+          cd bindings/python && python -m pytest tests/ -x -q
 
       - uses: actions/upload-artifact@v6
         with:
           name: wheel-${{ matrix.os }}-${{ matrix.arch }}
           path: bindings/python/dist/*.whl
 
-  publish-pypi:
+  wheel-compat-check:
     needs: [python-wheels]
-    if: always() && needs.python-wheels.result == 'success'
+    runs-on: ubuntu-latest
+    container: python:3.11-slim-bullseye
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: wheel-ubuntu-latest-x86_64
+          path: dist/
+      - name: Import the wheel on glibc 2.31
+        run: |
+          pip install dist/*.whl
+          python -c "import libsonare; libsonare.version()"
+
+  publish-pypi:
+    needs: [python-wheels, wheel-compat-check]
+    if: always() && needs.python-wheels.result == 'success' && needs.wheel-compat-check.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: pypi

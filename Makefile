@@ -88,7 +88,7 @@ lint:
 # Binding targets
 build-shared:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON
-	$(CMAKE) --build $(BUILD_DIR) -j
+	$(CMAKE) --build $(BUILD_DIR) --target sonare_shared -j
 	cp -L $(SHARED_LIB) $(PYTHON_SHARED_LIB)
 ifeq ($(UNAME_S),Darwin)
 	-install_name_tool -id @loader_path/libsonare.dylib $(PYTHON_SHARED_LIB)
