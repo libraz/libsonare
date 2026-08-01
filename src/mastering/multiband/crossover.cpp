@@ -6,6 +6,7 @@
 #include "core/window.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
+#include "rt/processor_base.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -107,24 +108,8 @@ void Crossover::prepare(double sample_rate, int max_block_size) {
 namespace {
 
 void validate_split_args(bool prepared, float* const* channels, int num_channels, int num_samples) {
-  if (!prepared) {
-    throw SonareException(ErrorCode::InvalidState, "Crossover must be prepared before processing");
-  }
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
-    return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
-  }
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
-  }
+  sonare::rt::ProcessorBase::ensure_prepared(prepared, "Crossover");
+  sonare::rt::ProcessorBase::validate_process_buffers(channels, num_channels, num_samples);
 }
 
 }  // namespace

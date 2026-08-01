@@ -46,20 +46,8 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
 void DynamicEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "DynamicEq");
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
-  }
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
   }
 
   validate_sidechain(num_samples);

@@ -61,6 +61,44 @@ class ProcessorBase {
     }
   }
 
+  /// @brief Validates the block shape every @c process() receives: rejects
+  ///        negative sizes and reports whether there is any audio to process.
+  /// @return false when the block is empty (@p num_channels or @p num_samples
+  ///         is zero) and the caller has nothing to do.
+  /// @throws SonareException (InvalidParameter) on a negative size.
+  static bool validate_block_size(int num_channels, int num_samples) {
+    if (num_channels < 0 || num_samples < 0) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "num_channels and num_samples must be non-negative");
+    }
+    return num_channels != 0 && num_samples != 0;
+  }
+
+  /// @brief Throws @c SonareException (InvalidParameter) if the channel array or
+  ///        any of its first @p num_channels buffers is null.
+  static void validate_channel_buffers(float* const* channels, int num_channels) {
+    if (channels == nullptr) {
+      throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
+    }
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] == nullptr) {
+        throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
+      }
+    }
+  }
+
+  /// @brief Full argument check for @c process(): block shape plus every channel
+  ///        buffer. Centralises the guard each derived processor repeats.
+  /// @return false when the block is empty and the caller should return without
+  ///         processing; the channel buffers are not inspected in that case.
+  static bool validate_process_buffers(float* const* channels, int num_channels, int num_samples) {
+    if (!validate_block_size(num_channels, num_samples)) {
+      return false;
+    }
+    validate_channel_buffers(channels, num_channels);
+    return true;
+  }
+
   virtual void prepare(double sample_rate, int max_block_size) = 0;
   /// @brief Prepare with the maximum number of channels the caller will pass to
   /// process().

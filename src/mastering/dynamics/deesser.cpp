@@ -54,15 +54,8 @@ void DeEsser::prepare(double sample_rate, int max_block_size) {
 void DeEsser::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "DeEsser");
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   ensure_state(num_channels);
@@ -74,10 +67,6 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
 
   float max_reduction = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
-
     auto& filter = bandpass_[static_cast<size_t>(ch)];
     auto& filter2 = bandpass2_[static_cast<size_t>(ch)];
     auto& follower = followers_[static_cast<size_t>(ch)];

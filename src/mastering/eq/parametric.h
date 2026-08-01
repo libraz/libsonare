@@ -12,6 +12,13 @@
 
 namespace sonare::mastering::eq {
 
+/// @brief Builds the band parameter descriptors shared by every equalizer that
+///        exposes the parametric block-of-3 layout: band `b` occupies ids
+///        `3*b .. 3*b+2` under the keys `band<b>.frequencyHz`, `band<b>.gainDb`
+///        and `band<b>.q`. The keys mirror the construction-time band prefix
+///        (configure_parametric).
+std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count);
+
 class ParametricEq : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = 24;

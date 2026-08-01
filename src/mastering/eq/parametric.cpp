@@ -24,6 +24,18 @@ float safe_q(float q) {
 
 }  // namespace
 
+std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count) {
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(band_count * 3u);
+  for (unsigned int b = 0; b < band_count; ++b) {
+    const std::string prefix = "band" + std::to_string(b) + ".";
+    descriptors.push_back({prefix + "frequencyHz", b * 3u + 0u});
+    descriptors.push_back({prefix + "gainDb", b * 3u + 1u});
+    descriptors.push_back({prefix + "q", b * 3u + 2u});
+  }
+  return descriptors;
+}
+
 void ParametricEq::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
@@ -59,15 +71,8 @@ void ParametricEq::prepare_channels(int num_channels) {
 void ParametricEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared();
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   // Per-channel biquad state is preallocated to kRealtimePreparedChannels in
@@ -76,12 +81,6 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
   if (num_channels_ < num_channels) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_channels exceeds prepared ParametricEq state");
-  }
-
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
   }
 
   for (size_t band_index = 0; band_index < kMaxBands; ++band_index) {
@@ -155,16 +154,7 @@ bool ParametricEq::set_parameter(unsigned int param_id, float value) {
 }
 
 std::vector<rt::ParamDescriptor> ParametricEq::parameter_descriptors() const {
-  std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(kMaxBands * 3u);
-  // Keys mirror the construction-time band prefix (configure_parametric): band<b>.<field>.
-  for (unsigned int b = 0; b < kMaxBands; ++b) {
-    const std::string prefix = "band" + std::to_string(b) + ".";
-    descriptors.push_back({prefix + "frequencyHz", b * 3u + 0u});
-    descriptors.push_back({prefix + "gainDb", b * 3u + 1u});
-    descriptors.push_back({prefix + "q", b * 3u + 2u});
-  }
-  return descriptors;
+  return band_parameter_descriptors(kMaxBands);
 }
 
 void ParametricEq::clear_band(size_t index) {

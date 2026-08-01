@@ -53,15 +53,8 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
 void SidechainRouter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "SidechainRouter");
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   // Adopt the latest published configuration once per block. The returned
@@ -69,11 +62,6 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
   // changes its current() value inside acquire(), and we already called it.
   const SidechainRouterConfig& cfg = *adopt_snapshot_for_block();
 
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
-  }
   // Per-channel main delay lines and per-source-channel HPF state are
   // preallocated in prepare(); verify the block (and the external sidechain, if
   // any) fit the prepared state instead of resizing on the audio thread.

@@ -40,15 +40,8 @@ void Expander::prepare(double sample_rate, int max_block_size) {
 void Expander::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Expander");
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   ensure_followers(num_channels);
@@ -57,12 +50,6 @@ void Expander::process(float* const* channels, int num_channels, int num_samples
   // pointer is stable for the entire per-sample loop — RtPublisher only
   // changes its current() value inside acquire(), and we already called it.
   const ExpanderConfig& cfg = *adopt_snapshot_for_block();
-
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
-  }
 
   // Linked detection: derive a single detector envelope from the loudest
   // channel each sample and apply the same gain to every channel. Independent

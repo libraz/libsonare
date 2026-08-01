@@ -38,16 +38,11 @@ void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
 void AdaptiveRelease::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "AdaptiveRelease");
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_block_size(num_channels, num_samples)) {
     limiter_.process(channels, num_channels, num_samples);
     return;
   }
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
+  validate_channel_buffers(channels, num_channels);
 
   current_crest_factor_ = compute_crest_factor(channels, num_channels, num_samples);
 

@@ -52,15 +52,8 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
 void TransientShaper::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "TransientShaper");
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   // Adopt the latest published configuration once per block. The returned
@@ -71,10 +64,6 @@ void TransientShaper::process(float* const* channels, int num_channels, int num_
   ensure_followers(num_channels);
   float largest_abs_gain = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
-
     auto& fast = fast_followers_[static_cast<size_t>(ch)];
     auto& slow = slow_followers_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {

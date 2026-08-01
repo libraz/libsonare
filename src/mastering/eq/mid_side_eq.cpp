@@ -23,11 +23,7 @@ void MidSideEq::prepare(double sample_rate, int max_block_size) {
 
 void MidSideEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_block_size(num_channels, num_samples)) {
     return;
   }
   if (num_channels != 2) {

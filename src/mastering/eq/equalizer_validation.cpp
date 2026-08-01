@@ -35,21 +35,7 @@ size_t iir_cut_stage_count(const EqBand& band) {
 
 void EqualizerProcessor::validate_process_args(float* const* channels, int num_channels,
                                                int num_samples) {
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
-    return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
-  }
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-    }
-  }
+  validate_process_buffers(channels, num_channels, num_samples);
 }
 
 void EqualizerProcessor::validate_band_index(size_t index) {

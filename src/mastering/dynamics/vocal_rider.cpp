@@ -47,15 +47,8 @@ void VocalRider::prepare(double sample_rate, int max_block_size) {
 void VocalRider::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "VocalRider");
-  if (num_channels < 0 || num_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels and num_samples must be non-negative");
-  }
-  if (num_channels == 0 || num_samples == 0) {
+  if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
-  }
-  if (channels == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   }
 
   ensure_followers(num_channels);
@@ -67,8 +60,6 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
 
   float largest_abs_gain = 0.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
   }
   const float smoothing = time_to_coefficient(sample_rate_, cfg.gain_smoothing_ms);
   if (cfg.linked_detection) {
