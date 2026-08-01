@@ -1,4 +1,4 @@
-.PHONY: all build release test test-slow test-optional-fixtures test-librosa-live clean rebuild format lint wasm coverage \
+.PHONY: all build release test test-slow test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check ci-local \
@@ -72,7 +72,7 @@ rebuild: clean build
 # left (e.g. unused imports, an unsafe fix biome will not auto-apply) surfaces in
 # the final `lint` step for manual resolution.
 format:
-	git ls-files -z --cached --others --exclude-standard -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' | python3 -c 'import os, sys; paths = [p for p in sys.stdin.buffer.read().split(b"\0") if p and os.path.exists(os.fsdecode(p))]; sys.stdout.buffer.write(b"\0".join(paths) + (b"\0" if paths else b""))' | xargs -0 clang-format -i
+	git ls-files -z --cached --others --exclude-standard -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | python3 -c 'import os, sys; paths = [p for p in sys.stdin.buffer.read().split(b"\0") if p and os.path.exists(os.fsdecode(p))]; sys.stdout.buffer.write(b"\0".join(paths) + (b"\0" if paths else b""))' | xargs -0 clang-format -i
 	cd bindings/wasm && yarn lint:fix
 	cd bindings/node && yarn lint:fix
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
@@ -85,6 +85,10 @@ lint:
 	cd bindings/node && yarn lint
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check bindings/python/src bindings/python/tests
+
+format-check:
+	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror
+	$(MAKE) lint
 
 # Binding targets
 build-shared:
@@ -187,9 +191,7 @@ check-abi-version:
 # checks first, then the compiler-backed layout snapshot check (needs a C++
 # compiler, not a full build).
 ci-local:
-	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' | \
-		xargs -0 clang-format --dry-run --Werror
-	$(MAKE) lint
+	$(MAKE) format-check
 	$(MAKE) parity
 	$(MAKE) check-abi-version
 	$(MAKE) abi-layout-check

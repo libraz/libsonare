@@ -37,7 +37,7 @@ jobs:
           sudo apt-get install -y clang-format
       - name: Check formatting
         run: |
-          git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' ':!:third_party/**' |
+          git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' |
             xargs -0 clang-format --dry-run --Werror
 
   lint:
