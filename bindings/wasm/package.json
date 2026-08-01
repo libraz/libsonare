@@ -2,7 +2,7 @@
   "name": "@libraz/libsonare",
   "version": "1.5.5",
   "type": "module",
-  "packageManager": "yarn@4.15.0",
+  "packageManager": "yarn@4.18.0",
   "description": "Audio analysis, mastering, mixing, and MIDI synthesis in WebAssembly",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -79,9 +79,5 @@
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
-  },
-  "volta": {
-    "node": "22.22.3",
-    "yarn": "4.15.0"
   }
 }
