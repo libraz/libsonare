@@ -255,8 +255,9 @@ const char* sonare_mastering_stereo_analysis_names(void);
 
 /// @brief Machine-readable classification catalog for every named processor id.
 /// @return A JSON array string whose entries contain `id`, `kind`,
-///   `realtimeInsertable`, `stereoOnly`, `latencySamples`, `tailSamples`, and
-///   `channelPolicy` (UTF-8). `kind` is one of "realtime" / "offline" / "pair"
+///   `realtimeInsertable`, `stereoOnly`, `latencySamples`, `tailSamples`,
+///   `channelPolicy`, `category`, and `params` (UTF-8). `kind` is one of
+///   "realtime" / "offline" / "pair"
 ///   (pair > realtime > offline precedence); `realtimeInsertable` is true exactly
 ///   for the ids in @ref sonare_mastering_insert_names. Timing values come from
 ///   one prepared default 48 kHz / 512-sample probe and are representative for
@@ -270,6 +271,16 @@ const char* sonare_mastering_stereo_analysis_names(void);
 ///          after the producing thread exits, and do NOT free it (mirrors
 ///          @ref sonare_mastering_processor_names).
 const char* sonare_mastering_processor_catalog(void);
+
+/// @brief Returns the complete host-facing capability catalog as UTF-8 JSON.
+/// @details Aggregates the processor catalog (including existing parameter
+///   descriptors) with the built-in mastering, synth, mixing-scene, and
+///   realtime voice-changer preset name lists. `version` and `abi` use the same
+///   values as @ref sonare_capabilities_json. A parameter's `min`, `max`, or
+///   `default` is JSON null when the underlying descriptor does not publish that
+///   fact; callers must not infer a range. Backed by thread-local storage and
+///   valid until the next call on the same thread. Do NOT free the pointer.
+const char* sonare_capability_catalog_json(void);
 
 /// @brief Returns the channel-strip insert / FX processor names that
 ///        sonare_mixing scene inserts can build, separated by '\n'. Includes the

@@ -850,9 +850,33 @@ std::string insert_param_info_json(const std::string& name) {
       out += std::to_string(descriptors[index].id);
       out += ",\"rtSafe\":";
       out += processor->parameter_is_realtime_safe(descriptors[index].id) ? "true" : "false";
+      out += ",\"type\":\"";
+      const bool is_boolean =
+          descriptors[index].key.size() >= 7 &&
+          descriptors[index].key.compare(descriptors[index].key.size() - 7, 7, "Enabled") == 0;
+      out += is_boolean ? "boolean" : "number";
+      // The registry currently publishes no generic bounds/default interface.
+      // Preserve that distinction rather than inventing values by heuristic;
+      // null is an explicit part of the catalog contract for unavailable data.
+      out += "\",\"min\":null,\"max\":null,\"default\":null,\"unit\":";
       if ((name == "effects.reverb.plate" || name == "effects.reverb.dattorro") &&
           descriptors[index].key == "modDepthSamples") {
-        out += ",\"unit\":\"referenceSamples@29761Hz\"";
+        out += "\"referenceSamples@29761Hz\"";
+      } else if (descriptors[index].key.size() >= 2 &&
+                 descriptors[index].key.compare(descriptors[index].key.size() - 2, 2, "Db") == 0) {
+        out += "\"dB\"";
+      } else if (descriptors[index].key.size() >= 2 &&
+                 descriptors[index].key.compare(descriptors[index].key.size() - 2, 2, "Hz") == 0) {
+        out += "\"Hz\"";
+      } else if (descriptors[index].key.size() >= 2 &&
+                 descriptors[index].key.compare(descriptors[index].key.size() - 2, 2, "Ms") == 0) {
+        out += "\"ms\"";
+      } else if (descriptors[index].key.size() >= 7 &&
+                 descriptors[index].key.compare(descriptors[index].key.size() - 7, 7, "Samples") ==
+                     0) {
+        out += "\"samples\"";
+      } else {
+        out += "null";
       }
       out += '}';
     }

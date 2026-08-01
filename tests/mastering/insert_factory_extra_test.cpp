@@ -488,6 +488,18 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
     REQUIRE(entry.contains("realtimeInsertable"));
     REQUIRE(entry.contains("latencySamples"));
     REQUIRE(entry.contains("tailSamples"));
+    REQUIRE(entry.contains("category"));
+    REQUIRE(entry["category"].is_string());
+    REQUIRE(entry.contains("params"));
+    REQUIRE(entry["params"].is_array());
+    for (const auto& param : entry["params"].as_array()) {
+      REQUIRE(param.contains("name"));
+      REQUIRE(param.contains("type"));
+      REQUIRE(param.contains("min"));
+      REQUIRE(param.contains("max"));
+      REQUIRE(param.contains("default"));
+      REQUIRE(param.contains("unit"));
+    }
     const int latency = entry["latencySamples"].as_int();
     const int tail = entry["tailSamples"].as_int();
     REQUIRE(latency >= 0);
@@ -533,7 +545,8 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   // inherently-stereo processor, so its channelPolicy is "stereoPairOnly".
   REQUIRE(json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
                     "\"stereoOnly\":true,\"latencySamples\":0,\"tailSamples\":0,"
-                    "\"channelPolicy\":\"stereoPairOnly\"}") != std::string::npos);
+                    "\"channelPolicy\":\"stereoPairOnly\",\"category\":\"eq\",\"params\":") !=
+          std::string::npos);
 
   // Delay-like stereo tools publish their prepared audible tail through the
   // same probe used for latency. Default Haas is 12 ms at 48 kHz; default

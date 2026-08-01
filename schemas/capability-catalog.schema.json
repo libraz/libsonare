@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://libsonare.local/schemas/capability-catalog.schema.json",
+  "title": "libsonare Capability Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "abi", "processors", "presets"],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "abi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "engine"],
+      "properties": {
+        "project": { "type": "integer", "minimum": 0 },
+        "engine": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "processors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "realtimeInsertable",
+          "stereoOnly",
+          "latencySamples",
+          "tailSamples",
+          "channelPolicy",
+          "category",
+          "params"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["realtime", "offline", "pair"] },
+          "realtimeInsertable": { "type": "boolean" },
+          "stereoOnly": { "type": "boolean" },
+          "latencySamples": { "type": "integer", "minimum": 0 },
+          "tailSamples": { "type": "integer", "minimum": 0 },
+          "channelPolicy": {
+            "enum": ["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
+          },
+          "category": { "type": "string", "pattern": "^[a-z]+$" },
+          "params": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "id", "rtSafe", "type", "min", "max", "default", "unit"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "id": { "type": "integer", "minimum": 0 },
+                "rtSafe": { "type": "boolean" },
+                "type": { "enum": ["number", "boolean"] },
+                "min": { "type": ["number", "null"] },
+                "max": { "type": ["number", "null"] },
+                "default": { "type": ["number", "boolean", "null"] },
+                "unit": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "presets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mastering", "synth", "mixingScene", "voiceChanger"],
+      "properties": {
+        "mastering": { "$ref": "#/$defs/nameList" },
+        "synth": { "$ref": "#/$defs/nameList" },
+        "mixingScene": { "$ref": "#/$defs/nameList" },
+        "voiceChanger": { "$ref": "#/$defs/nameList" }
+      }
+    }
+  },
+  "$defs": {
+    "nameList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  }
+}

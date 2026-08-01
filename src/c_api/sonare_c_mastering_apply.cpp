@@ -12,10 +12,27 @@
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
+#include "util/json.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
 using namespace sonare_c_mastering_detail;
+
+namespace {
+
+sonare::util::json::Array newline_name_array(const char* names) {
+  sonare::util::json::Array values;
+  if (names == nullptr) return values;
+
+  std::istringstream input(names);
+  std::string name;
+  while (std::getline(input, name)) {
+    if (!name.empty()) values.emplace_back(std::move(name));
+  }
+  return values;
+}
+
+}  // namespace
 
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,
                                      const SonareMasteringConfig* config,
@@ -183,6 +200,33 @@ const char* sonare_mastering_processor_catalog(void) {
     built = true;
   }
   return catalog.c_str();
+}
+
+const char* sonare_capability_catalog_json(void) {
+  namespace json = sonare::util::json;
+
+  json::Object catalog;
+  catalog["version"] = sonare_version();
+  json::Object abi;
+  abi["project"] = static_cast<int>(SONARE_PROJECT_ABI_VERSION);
+  abi["engine"] = static_cast<int>(sonare_engine_abi_version());
+  catalog["abi"] = std::move(abi);
+  catalog["processors"] = json::parse_strict(sonare_mastering_processor_catalog());
+
+  json::Object presets;
+  presets["mastering"] = newline_name_array(sonare_mastering_preset_names());
+  presets["synth"] = newline_name_array(sonare_synth_preset_names());
+#if defined(SONARE_WITH_MIXING)
+  presets["mixingScene"] = newline_name_array(sonare_mixing_scene_preset_names());
+#else
+  presets["mixingScene"] = json::Array{};
+#endif
+  presets["voiceChanger"] = newline_name_array(sonare_realtime_voice_changer_preset_names());
+  catalog["presets"] = std::move(presets);
+
+  static thread_local std::string serialized;
+  serialized = json::dump(json::Value(std::move(catalog)));
+  return serialized.c_str();
 }
 
 const char* sonare_mastering_insert_param_names(const char* name) {

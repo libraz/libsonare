@@ -213,6 +213,24 @@ InsertTiming insert_timing(const std::string& id) {
   }
 }
 
+// Stable UI group for the first segment of a named processor id. `match.*`
+// processors are reference-analysis/application tools, so their public group
+// spells that role rather than leaking the implementation namespace.
+const char* catalog_category(const std::string& id) {
+  if (id.rfind("match.", 0) == 0) return "reference";
+  if (id.rfind("eq.", 0) == 0) return "eq";
+  if (id.rfind("dynamics.", 0) == 0) return "dynamics";
+  if (id.rfind("multiband.", 0) == 0) return "multiband";
+  if (id.rfind("stereo.", 0) == 0) return "stereo";
+  if (id.rfind("saturation.", 0) == 0) return "saturation";
+  if (id.rfind("repair.", 0) == 0) return "repair";
+  if (id.rfind("maximizer.", 0) == 0) return "maximizer";
+  if (id.rfind("effects.", 0) == 0) return "effects";
+  if (id.rfind("spectral.", 0) == 0) return "spectral";
+  if (id.rfind("final.", 0) == 0) return "final";
+  return "other";
+}
+
 }  // namespace
 
 std::string processor_catalog_json() {
@@ -260,6 +278,10 @@ std::string processor_catalog_json() {
     out += ",\"channelPolicy\":\"";
     out += channel_policy_to_string(channel_policy(id));
     out += '"';
+    out += ",\"category\":\"";
+    out += catalog_category(id);
+    out += "\",\"params\":";
+    out += realtime_insertable ? insert_param_info_json(id) : "[]";
     out += '}';
   }
   out += ']';

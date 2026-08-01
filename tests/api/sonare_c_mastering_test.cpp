@@ -2,6 +2,7 @@
 /// @brief Mastering C API tests.
 
 #include "sonare_c_test_helpers.h"
+#include "util/json.h"
 
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
@@ -560,6 +561,39 @@ TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
   REQUIRE(catalog != nullptr);
   REQUIRE(std::strstr(catalog, "\"latencySamples\":") != nullptr);
   REQUIRE(std::strstr(catalog, "\"tailSamples\":") != nullptr);
+}
+
+TEST_CASE("sonare_capability_catalog_json aggregates processors and presets",
+          "[c_api][mastering]") {
+  const char* json = sonare_capability_catalog_json();
+  REQUIRE(json != nullptr);
+  const auto catalog = sonare::util::json::parse_strict(json);
+
+  REQUIRE(catalog["version"].as_string() == sonare_version());
+  REQUIRE(catalog["abi"]["project"].as_int() == SONARE_PROJECT_ABI_VERSION);
+  REQUIRE(catalog["abi"]["engine"].as_int() == static_cast<int>(sonare_engine_abi_version()));
+  REQUIRE(catalog["processors"].is_array());
+  REQUIRE_FALSE(catalog["processors"].as_array().empty());
+  REQUIRE(catalog["presets"].is_object());
+  for (const char* name : {"mastering", "synth", "mixingScene", "voiceChanger"}) {
+    REQUIRE(catalog["presets"].contains(name));
+    REQUIRE(catalog["presets"][name].is_array());
+  }
+
+  const auto processor = std::find_if(
+      catalog["processors"].as_array().begin(), catalog["processors"].as_array().end(),
+      [](const auto& entry) { return entry["id"].as_string() == "dynamics.compressor"; });
+  REQUIRE(processor != catalog["processors"].as_array().end());
+  REQUIRE((*processor)["category"].as_string() == "dynamics");
+  REQUIRE((*processor)["params"].is_array());
+  REQUIRE_FALSE((*processor)["params"].as_array().empty());
+  const auto& param = (*processor)["params"][0];
+  REQUIRE(param.contains("name"));
+  REQUIRE(param.contains("type"));
+  REQUIRE(param.contains("min"));
+  REQUIRE(param.contains("max"));
+  REQUIRE(param.contains("default"));
+  REQUIRE(param.contains("unit"));
 }
 
 TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
